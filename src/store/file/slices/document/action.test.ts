@@ -13,8 +13,6 @@ import { type ResourceItem } from '@/types/resource';
 import { useFileStore as useStore } from '../../store';
 import { getResourceQueryKey } from '../resource/utils';
 
-vi.mock('zustand/traditional');
-
 vi.mock('@/services/document', () => ({
   documentService: {
     createDocument: vi.fn(),
@@ -184,8 +182,7 @@ describe('DocumentAction', () => {
     const existingResource = createResourceFixture();
 
     let resolveUpdate:
-      | ((value: { historyAppended: boolean; id: string; savedAt?: string }) => void)
-      | undefined;
+      ((value: { historyAppended: boolean; id: string; savedAt?: string }) => void) | undefined;
     vi.mocked(documentService.updateDocument).mockImplementation(
       () =>
         new Promise((resolve) => {

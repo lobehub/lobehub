@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LOBE_ERROR_KEY } from '../../core/streams';
 import { AgentRuntimeErrorType } from '../../types/error';
+import type { ModelRuntimeDiagnostics } from '../../types/providerDiagnostics';
 import * as debugStreamModule from '../../utils/debugStream';
 import {
   createSignatureChannelId,
@@ -86,6 +87,43 @@ describe('LobeGoogleAI', () => {
 
       // Assert
       expect(result).toBeInstanceOf(Response);
+    });
+
+    it('captures provider-native responses before Google protocol transformation', async () => {
+      const providerChunk = {
+        candidates: [{ content: { parts: [{ text: '' }] }, finishReason: 'STOP' }],
+        modelVersion: 'gemini-3.8-flash',
+        responseId: 'response-1',
+        usageMetadata: { candidatesTokenCount: 147 },
+      } as unknown as GenerateContentResponse;
+      vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(
+        (async function* () {
+          yield providerChunk;
+        })(),
+      );
+      const diagnostics: ModelRuntimeDiagnostics = {};
+
+      const response = await instance.chat(
+        {
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'gemini-3.8-flash',
+        },
+        { diagnostics },
+      );
+      await response.text();
+
+      expect(diagnostics.providerResponse).toMatchObject({
+        apiMode: 'google_generate_content',
+        eventCount: 1,
+        hasNonWhitespaceText: false,
+        model: 'gemini-3.8-flash',
+        rawEvents: [providerChunk],
+        requestId: 'response-1',
+        stopReason: 'STOP',
+        terminalEventReceived: true,
+        textChars: 0,
+        usage: { candidatesTokenCount: 147 },
+      });
     });
 
     it('should use mapped model id for upstream chat requests while keeping pricing on logical model', async () => {
@@ -292,10 +330,14 @@ describe('LobeGoogleAI', () => {
     });
 
     it('should handle text messages correctly', async () => {
-      // Mock Google AI SDK's generateContentStream method to return a successful response stream
       const mockStream = new ReadableStream({
         start(controller) {
-          controller.enqueue('Hello, world!');
+          controller.enqueue({
+            candidates: [
+              { content: { parts: [{ text: 'Hello, world!' }], role: 'model' }, index: 0 },
+            ],
+            text: 'Hello, world!',
+          });
           controller.close();
         },
       });
@@ -310,7 +352,17 @@ describe('LobeGoogleAI', () => {
       });
 
       expect(result).toBeInstanceOf(Response);
-      // Additional assertions can be added, such as verifying the returned stream content
+
+      const reader = result.body!.getReader();
+      let sse = '';
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        sse += new TextDecoder().decode(value as Uint8Array);
+      }
+
+      expect(sse).toContain('event: text');
+      expect(sse).toContain('"Hello, world!"');
     });
 
     it.each([
@@ -946,6 +998,7 @@ describe('sampling params compatibility', () => {
   it.each([
     'gemini-3.6-flash',
     'gemini-3.7-flash',
+    'gemini-3.8-flash',
     'gemini-3.5-flash-lite',
     'gemini-flash-latest',
     'gemini-flash-lite-latest',

@@ -1,6 +1,7 @@
 'use client';
 
-import { Icon, Tag, Tooltip } from '@lobehub/ui';
+import { Icon, Tooltip } from '@lobehub/ui';
+import { Tag } from '@lobehub/ui/base-ui';
 import { EyeIcon, PlayIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

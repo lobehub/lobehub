@@ -1,4 +1,5 @@
-import { Flexbox, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
 import { type FC, type ReactNode } from 'react';
 

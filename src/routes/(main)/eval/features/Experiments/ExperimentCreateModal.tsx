@@ -6,9 +6,9 @@ import {
   ModalFooter,
   type ModalInstance,
   Select,
+  toast,
   useModalContext,
 } from '@lobehub/ui/base-ui';
-import { toast } from '@lobehub/ui/base-ui';
 import { Form, Input } from 'antd';
 import { t } from 'i18next';
 import { memo, useEffect } from 'react';

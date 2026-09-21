@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, MaterialFileTypeIcon, Text } from '@lobehub/ui';
-import { Alert } from '@lobehub/ui/base-ui';
+import { Flexbox, MaterialFileTypeIcon } from '@lobehub/ui';
+import { Alert, Text } from '@lobehub/ui/base-ui';
 import { Descriptions } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
@@ -123,7 +123,10 @@ const FileCard = memo<FileCardProps>(({ file }) => {
               label: 'Chars',
             },
             {
-              children: file.totalLineCount?.toLocaleString(),
+              children:
+                file.startLine && file.endLine && (file.truncated || file.startLine > 1)
+                  ? `${file.startLine.toLocaleString()}-${file.endLine.toLocaleString()} / ${file.totalLineCount?.toLocaleString()}`
+                  : file.totalLineCount?.toLocaleString(),
               label: 'Lines',
             },
           ]}

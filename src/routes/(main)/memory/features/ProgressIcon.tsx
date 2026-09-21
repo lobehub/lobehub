@@ -1,4 +1,5 @@
-import { Flexbox, Text, Tooltip } from '@lobehub/ui';
+import { Flexbox, Tooltip } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { type ProgressProps } from 'antd';
 import { Progress } from 'antd';
 import { cssVar } from 'antd-style';

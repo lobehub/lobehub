@@ -11,7 +11,8 @@ import {
 } from '@lobechat/types';
 import type { TFunction } from 'i18next';
 
-import { getEffortLabelKeys, getModeLabelKey, getModelLabel, getTriggerText } from './labels';
+import type { TriggerLabel } from './labels';
+import { getEffortLabelKeys, getModeLabelKey, getModelLabel, getTriggerLabel } from './labels';
 import { getStaticModelOptions } from './modelOptions';
 
 type Translate = TFunction<'chat'>;
@@ -39,7 +40,7 @@ export interface SelectorView {
   isCatalogModel: boolean;
   isFastSpeed: boolean;
   model: string;
-  triggerText: string;
+  triggerLabel: TriggerLabel;
 }
 
 export type SelectorShape =
@@ -214,11 +215,14 @@ export const buildSelectorView = ({
     isCatalogModel,
     isFastSpeed,
     model,
-    triggerText: isModeOnly
-      ? mode === HETEROGENEOUS_AGENT_DEFAULT_SELECTION
-        ? t('heteroAgent.modelSelector.defaultConfig')
-        : (modeLabel ?? defaultLabel)
-      : getTriggerText({
+    triggerLabel: isModeOnly
+      ? {
+          text:
+            mode === HETEROGENEOUS_AGENT_DEFAULT_SELECTION
+              ? t('heteroAgent.modelSelector.defaultConfig')
+              : (modeLabel ?? defaultLabel),
+        }
+      : getTriggerLabel({
           defaultConfigLabel: t('heteroAgent.modelSelector.defaultConfig'),
           defaultModelLabel: t('heteroAgent.modelSelector.defaultModel'),
           defaultReasoningLabel: t('heteroAgent.modelSelector.defaultReasoning'),

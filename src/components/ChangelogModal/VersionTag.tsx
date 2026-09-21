@@ -1,6 +1,6 @@
 'use client';
 
-import { Tag } from '@lobehub/ui';
+import { Tag } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 

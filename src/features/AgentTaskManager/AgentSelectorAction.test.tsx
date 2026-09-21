@@ -39,11 +39,10 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  Center: ({ children }: { children: ReactNode }) => (
-    <div data-testid="selector-trigger">{children}</div>
-  ),
-  Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+// The real Popover only mounts its content after an open interaction; the
+// assertions read the selector list synchronously.
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   Popover: ({
     children,
     content,
@@ -60,19 +59,6 @@ vi.mock('@lobehub/ui', () => ({
       <div data-testid="popover-content">{content}</div>
     </div>
   ),
-}));
-
-vi.mock('antd-style', () => ({
-  createStaticStyles: () => ({
-    chevron: 'chevron',
-    container: 'container',
-  }),
-  cx: (...classes: string[]) => classes.filter(Boolean).join(' '),
-}));
-
-vi.mock('lucide-react', () => ({
-  ChevronsUpDownIcon: () => <span data-testid="chevron" />,
-  Circle: () => <span data-testid="circle" />,
 }));
 
 vi.mock('react-i18next', () => ({

@@ -12,6 +12,7 @@ const addedDescriptionKeys = [
   'lobehub.gemini-3.1-flash-image.description',
   'lobehub.gemini-3.1-flash-image:image.description',
   'lobehub.gemini-3.7-flash.description',
+  'lobehub.glm-5.3-flash.description',
   'lobehub.qwen3.8-max.description',
   'lobehub.grok-4.6.description',
 ] as const;

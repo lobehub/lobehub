@@ -1,6 +1,6 @@
 ---
 name: docs-changelog
-description: 'Write website changelog pages under docs/changelog/*.mdx. Use for EN/ZH product update posts, changelog posts, update-log copy, or docs changelog edits; not GitHub Release notes.'
+description: 'Use for EN/ZH website product changelogs in docs/changelog/*.mdx. Excludes GitHub Release notes.'
 ---
 
 # Docs Changelog Writing Guide

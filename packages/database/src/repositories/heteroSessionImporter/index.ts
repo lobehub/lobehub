@@ -6,6 +6,8 @@ import type {
 } from '@lobechat/types';
 import { and, count, eq, inArray, isNotNull, like, or, sql } from 'drizzle-orm';
 
+import { clampToolIdentifier } from '@/utils/clampToolIdentifier';
+
 import { agents, messagePlugins, messages, threads, topics } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { idGenerator } from '../../utils/idGenerator';
@@ -302,11 +304,11 @@ export class HeteroSessionImporterRepo {
     const pluginRows = fresh
       .filter((m) => m.plugin || m.toolCallId)
       .map((m) => ({
-        apiName: m.plugin?.apiName ?? null,
+        apiName: clampToolIdentifier(m.plugin?.apiName) ?? null,
         arguments: m.plugin?.arguments ?? null,
         clientId: m.clientId,
         id: clientIdToDbId.get(m.clientId)!,
-        identifier: m.plugin?.identifier ?? null,
+        identifier: clampToolIdentifier(m.plugin?.identifier) ?? null,
         state: m.pluginState ?? null,
         toolCallId: m.toolCallId ?? null,
         type: m.plugin?.type ?? null,

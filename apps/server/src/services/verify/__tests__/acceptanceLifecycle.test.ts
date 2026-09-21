@@ -1,10 +1,13 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as AcceptanceServiceModule from '../acceptanceService';
 import { instantiateVerifyPlanOnStart } from '../planInstantiation';
 import { createRepairRunner } from '../repairService';
 
 const mocks = vi.hoisted(() => ({
+  goalFind: vi.fn(),
+  loadRounds: vi.fn(),
   acceptanceAttachPolicyRun: vi.fn(),
   acceptanceEnsureForSubject: vi.fn(),
   acceptanceUpdate: vi.fn(),
@@ -13,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   ensureForOperation: vi.fn(),
   generateDraftPlan: vi.fn(),
   operationFindById: vi.fn(),
+  resolveModelConfig: vi.fn(),
   runFindByOperation: vi.fn(),
   setMetadata: vi.fn(),
   setPlan: vi.fn(),
@@ -20,56 +24,100 @@ const mocks = vi.hoisted(() => ({
   taskAcceptanceResolve: vi.fn(),
 }));
 
-vi.mock('../goalLoop', () => ({
-  maybeContinueGoalLoop: vi.fn().mockResolvedValue('spawn-failed'),
-  syncGoalToolState: vi.fn(),
+vi.mock('@/database/models/goal', () => ({
+  GoalModel: vi.fn(function () {
+    return { findByGraphTask: mocks.goalFind };
+  }),
 }));
-vi.mock('../acceptanceService', () => ({
-  AcceptanceService: vi.fn(() => ({
-    acceptanceModel: { update: mocks.acceptanceUpdate },
-    attachPolicyRun: mocks.acceptanceAttachPolicyRun,
-    ensureForSubject: mocks.acceptanceEnsureForSubject,
-  })),
+
+vi.mock('../acceptanceService', async (original) => ({
+  ...(await original<typeof AcceptanceServiceModule>()),
+  AcceptanceService: vi.fn(function () {
+    return {
+      loadRounds: mocks.loadRounds,
+      acceptanceModel: { update: mocks.acceptanceUpdate },
+      attachPolicyRun: mocks.acceptanceAttachPolicyRun,
+      ensureForSubject: mocks.acceptanceEnsureForSubject,
+    };
+  }),
 }));
 
 vi.mock('../planGenerator', () => ({
-  VerifyPlanGeneratorService: vi.fn(() => ({
-    generateDraftPlan: mocks.generateDraftPlan,
-  })),
+  VerifyPlanGeneratorService: vi.fn(function () {
+    return {
+      generateDraftPlan: mocks.generateDraftPlan,
+    };
+  }),
 }));
 
 vi.mock('../taskAcceptance', () => ({
   resolveTaskAcceptance: mocks.taskAcceptanceResolve,
 }));
 
+vi.mock('../modelConfig', () => ({
+  resolveVerifyModelConfig: mocks.resolveModelConfig,
+}));
+
 vi.mock('@/database/models/task', () => ({
-  TaskModel: vi.fn(() => ({
-    findById: mocks.taskFindById,
-  })),
+  TaskModel: vi.fn(function () {
+    return {
+      findById: mocks.taskFindById,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/verifyRun', () => ({
-  VerifyRunModel: vi.fn(() => ({
-    confirmPlan: mocks.confirmPlan,
-    ensureForOperation: mocks.ensureForOperation,
-    findByOperation: mocks.runFindByOperation,
-    setMetadata: mocks.setMetadata,
-    setPlan: mocks.setPlan,
-  })),
+  VerifyRunModel: vi.fn(function () {
+    return {
+      confirmPlan: mocks.confirmPlan,
+      ensureForOperation: mocks.ensureForOperation,
+      findByOperation: mocks.runFindByOperation,
+      setMetadata: mocks.setMetadata,
+      setPlan: mocks.setPlan,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/agentOperation', () => ({
-  AgentOperationModel: vi.fn(() => ({ findById: mocks.operationFindById })),
+  AgentOperationModel: vi.fn(function () {
+    return { findById: mocks.operationFindById };
+  }),
 }));
 
 vi.mock('@/server/services/aiAgent', () => ({
-  AiAgentService: vi.fn(() => ({ execAgent: mocks.agentExec })),
+  AiAgentService: vi.fn(function () {
+    return { execAgent: mocks.agentExec };
+  }),
 }));
 
 const db = {} as any;
 const plan = [{ id: 'check-1', required: true }];
 
 describe('Verify acceptance lifecycle', () => {
+  it('reuses the Goal acceptance checklist and supplemental check ids on a repair attempt', async () => {
+    mocks.goalFind.mockResolvedValue({ id: 'goal-1' });
+    mocks.taskAcceptanceResolve.mockResolvedValue({
+      acceptance: { id: 'a1' },
+      config: { enabled: true },
+      requirement: 'Deliver the report',
+    });
+    mocks.taskFindById.mockResolvedValue({ name: 'Report' });
+    const previousPlan = [
+      { id: 'original', title: 'Report', required: true },
+      { id: 'supplement', title: 'Evidence', required: true },
+    ];
+    mocks.loadRounds.mockResolvedValue({
+      runs: [{ id: 'r1', roundIndex: 1, plan: previousPlan }],
+      results: [],
+    });
+    mocks.ensureForOperation.mockResolvedValue({ id: 'retry' });
+    await instantiateVerifyPlanOnStart(db, 'u1', { operationId: 'op2', taskId: 't1' });
+    expect(mocks.setPlan).toHaveBeenCalledWith('retry', previousPlan);
+    expect(mocks.confirmPlan).toHaveBeenCalledWith('retry');
+    expect(mocks.acceptanceAttachPolicyRun).toHaveBeenCalledWith('retry', 'a1');
+    expect(mocks.generateDraftPlan).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
   });
@@ -98,6 +146,25 @@ describe('Verify acceptance lifecycle', () => {
     expect(mocks.acceptanceAttachPolicyRun).toHaveBeenCalledWith('run-1', 'acceptance-1');
   });
 
+  it('skips instantiation for a recurring task, even when an Acceptance policy exists', async () => {
+    // A failed acceptance pauses the task, and `paused` is permanently off the
+    // cron — so a recurring task must never get a verify plan in the first place.
+    mocks.taskFindById.mockResolvedValue({ automationMode: 'schedule', id: 'task-1' });
+    mocks.taskAcceptanceResolve.mockResolvedValue({
+      acceptance: { id: 'acceptance-1' },
+      config: { enabled: true, verifyRubricId: 'rubric-1' },
+    });
+
+    await instantiateVerifyPlanOnStart(db, 'user-1', {
+      operationId: 'operation-1',
+      taskId: 'task-1',
+    });
+
+    expect(mocks.taskAcceptanceResolve).not.toHaveBeenCalled();
+    expect(mocks.generateDraftPlan).not.toHaveBeenCalled();
+    expect(mocks.confirmPlan).not.toHaveBeenCalled();
+  });
+
   it('keeps an empty Acceptance opted out of verification', async () => {
     mocks.taskAcceptanceResolve.mockResolvedValue({
       acceptance: { id: 'acceptance-1' },
@@ -110,6 +177,60 @@ describe('Verify acceptance lifecycle', () => {
     });
 
     expect(mocks.generateDraftPlan).not.toHaveBeenCalled();
+  });
+
+  it('AI-decomposes an undecomposed requirement into named criteria, holistic as fallback', async () => {
+    mocks.taskAcceptanceResolve.mockResolvedValue({
+      acceptance: { id: 'acceptance-1' },
+      config: { enabled: true, verifierAgentId: 'verifier-1' },
+      requirement: 'Deliver a runnable repro under ~/WikiSkill-Repro',
+    });
+    mocks.taskFindById.mockResolvedValue({ instruction: 'Build the repro', name: 'Repro' });
+    mocks.resolveModelConfig.mockResolvedValue({ model: 'model-1', provider: 'provider-1' });
+    mocks.runFindByOperation
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'run-1', plan });
+
+    await instantiateVerifyPlanOnStart(db, 'user-1', {
+      operationId: 'operation-1',
+      taskId: 'task-1',
+    });
+
+    expect(mocks.resolveModelConfig).toHaveBeenCalledWith(
+      db,
+      'user-1',
+      { verifierAgentId: 'verifier-1' },
+      undefined,
+    );
+    expect(mocks.generateDraftPlan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: 'Deliver a runnable repro under ~/WikiSkill-Repro',
+        enableAiGeneration: true,
+        holisticFallback: true,
+        modelConfig: { model: 'model-1', provider: 'provider-1' },
+      }),
+    );
+  });
+
+  it('does not spend an AI call when the task already picked its criteria', async () => {
+    mocks.taskAcceptanceResolve.mockResolvedValue({
+      acceptance: { id: 'acceptance-1' },
+      config: { enabled: true, verifyRubricId: 'rubric-1' },
+    });
+    mocks.taskFindById.mockResolvedValue({ name: 'Repro' });
+    mocks.runFindByOperation
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'run-1', plan });
+
+    await instantiateVerifyPlanOnStart(db, 'user-1', {
+      operationId: 'operation-1',
+      taskId: 'task-1',
+    });
+
+    expect(mocks.resolveModelConfig).not.toHaveBeenCalled();
+    expect(mocks.generateDraftPlan).toHaveBeenCalledWith(
+      expect.objectContaining({ enableAiGeneration: false, holisticFallback: false }),
+    );
   });
 
   it('attaches an auto-repair verify run as the next round of the same acceptance', async () => {
@@ -143,3 +264,5 @@ describe('Verify acceptance lifecycle', () => {
     expect(mocks.acceptanceAttachPolicyRun).toHaveBeenCalledWith('repair-run', 'acceptance-1');
   });
 });
+
+vi.mock('@/server/services/task', () => ({ TaskService: vi.fn() }));

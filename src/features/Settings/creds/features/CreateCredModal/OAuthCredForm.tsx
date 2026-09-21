@@ -1,9 +1,9 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Button, Select } from '@lobehub/ui/base-ui';
+import { Avatar, Button, Select } from '@lobehub/ui/base-ui';
 import { useMutation } from '@tanstack/react-query';
-import { Avatar, Empty, Form, Input, Spin } from 'antd';
+import { Empty, Form, Input, Spin } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -58,7 +58,7 @@ const OAuthCredForm: FC<OAuthCredFormProps> = ({ credsApi, disabled, onBack, onS
     return {
       label: (
         <span className={styles.connectionOption}>
-          {conn.avatar && <Avatar size="small" src={conn.avatar} />}
+          {conn.avatar && <Avatar avatar={conn.avatar} size={24} />}
           <span>
             <span className={styles.provider}>{provider}</span>
             {displayName && <span className={styles.username}> - {displayName}</span>}

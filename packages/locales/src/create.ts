@@ -4,16 +4,9 @@ import resourcesToBackend from 'i18next-resources-to-backend';
 import { initReactI18next } from 'react-i18next';
 import { isRtlLang } from 'rtl-detect';
 
-import chat from '@/../locales/en-US/chat.json';
-import common from '@/../locales/en-US/common.json';
-import error from '@/../locales/en-US/error.json';
-import home from '@/../locales/en-US/home.json';
 import { DEFAULT_LANG } from '@/const/locale';
 import { getDebugConfig } from '@/envs/debug';
 // Sync load bundled fallback resources without Suspense on first render.
-// Use src/locales/default/*.ts as the runtime fallback source, then overlay
-// locales/en-US/*.json so dev-preview JSON can still customize English copy
-// without dropping newly added default keys.
 import defaultChat from '@/locales/default/chat';
 import defaultCommon from '@/locales/default/common';
 import defaultError from '@/locales/default/error';
@@ -23,20 +16,33 @@ import { isOnServerSide } from '@/utils/env';
 import { unwrapESMModule } from '@/utils/esm/unwrapESMModule';
 import { loadI18nNamespaceModule } from '@/utils/i18n/loadI18nNamespaceModule';
 
-const mergeNamespace = (
-  fallbackResources: Record<string, unknown>,
-  localeResources: Record<string, unknown>,
-) => ({
-  ...fallbackResources,
-  ...localeResources,
+const createBundledResources = () => ({
+  chat: defaultChat,
+  common: defaultCommon,
+  error: defaultError,
+  home: defaultHome,
 });
 
-const createBundledResources = () => ({
-  chat: mergeNamespace(defaultChat, chat),
-  common: mergeNamespace(defaultCommon, common),
-  error: mergeNamespace(defaultError, error),
-  home: mergeNamespace(defaultHome, home),
-});
+// locales/en-US/*.json mirrors src/default/*.ts, so production ships only the
+// source. In dev the JSON is overlaid asynchronously so a preview edit to the
+// English copy still shows up without a rebuild.
+const overlayDevEnglishCopy = async (instance: typeof i18n) => {
+  if (process.env.NODE_ENV !== 'development') return;
+
+  const overlays = {
+    chat: import('@/../locales/en-US/chat.json'),
+    common: import('@/../locales/en-US/common.json'),
+    error: import('@/../locales/en-US/error.json'),
+    home: import('@/../locales/en-US/home.json'),
+  };
+
+  for (const [ns, loading] of Object.entries(overlays)) {
+    instance.addResourceBundle(DEFAULT_LANG, ns, unwrapESMModule(await loading), true, true);
+  }
+  // Consumers are not bound to the store (see react.bindI18nStore below), so
+  // one refresh after every overlay landed is what makes an edit visible.
+  instance.emit('languageChanged', instance.language);
+};
 
 const defaultResources = createBundledResources();
 const bundledNamespaces = Object.keys(defaultResources);
@@ -100,10 +106,13 @@ export const createI18nNext = (lang?: string) => {
         interpolation: {
           escapeValue: false,
         },
-        // Re-render components when new language resources are loaded from backend,
-        // so preloaded en-US fallback gets replaced by the user's actual language.
         react: {
-          bindI18nStore: 'added',
+          // NOT `bindI18nStore: 'added'`: that subscribes every `useTranslation` consumer
+          // to every lazily-loaded bundle, so each namespace arrival re-renders the whole
+          // app — ~30 full-tree passes during boot. Components waiting on their own
+          // namespace are already covered by react-i18next's `!ready` path; the only
+          // event that must reach everyone is the one-time en-US -> user-language swap,
+          // emitted once after `reloadResources` below.
           useSuspense: false,
         },
         keySeparator: false,
@@ -113,9 +122,14 @@ export const createI18nNext = (lang?: string) => {
         showSupportNotice: false,
       });
 
+      void initPromise.then(() => overlayDevEnglishCopy(instance));
+
       if (initialLang !== DEFAULT_LANG) {
-        initPromise.then(() => {
-          void instance.reloadResources([initialLang], bundledNamespaces);
+        initPromise.then(async () => {
+          await instance.reloadResources([initialLang], bundledNamespaces);
+          // One refresh for the whole tree instead of one per bundle: `bindI18n`
+          // defaults to `languageChanged`, which every `useTranslation` already binds.
+          instance.emit('languageChanged', instance.language);
         });
       }
 

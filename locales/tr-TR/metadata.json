@@ -1,8 +1,8 @@
 {
   "changelog.description": "{{appName}} uygulamasındaki yeni özellikler ve iyileştirmelerden haberdar olun",
   "changelog.title": "Sürüm Notları",
-  "chat.description": "{{appName}}, sizinle birlikte büyüyen temsilci ekiplerini bulabileceğiniz, oluşturabileceğiniz ve iş birliği yapabileceğiniz bir iş ve yaşam alanıdır.",
-  "chat.title": "{{appName}} · Sizinle birlikte büyüyen temsilci ekipleri",
+  "chat.description": "{{appName}}, sizinle birlikte büyüyen ajan ekiplerini bulabileceğiniz, oluşturabileceğiniz ve iş birliği yapabileceğiniz bir iş ve yaşam alanıdır.",
+  "chat.title": "{{appName}} · Sizinle birlikte büyüyen ajan ekipleri",
   "discover.assistants.description": "İçerik, Soru-Cevap, görseller, video, ses, iş akışları—Topluluk'tan Ajanları keşfedin ve ekleyin.",
   "discover.assistants.title": "Ajan Topluluğu",
   "discover.description": "Ajanları, Yetenekleri, Sağlayıcıları, modelleri ve MCP Sunucularını keşfedin.",

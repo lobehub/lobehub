@@ -1,5 +1,4 @@
 import { cleanup, render, screen } from '@testing-library/react';
-import { type ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useUserStore } from '@/store/user';
@@ -17,16 +16,8 @@ vi.hoisted(() => {
   });
 });
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
 vi.mock('react-router', () => ({
   useParams: () => ({}),
-}));
-
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Button: ({ children }: { children: ReactNode }) => <button>{children}</button>,
 }));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
@@ -39,10 +30,6 @@ vi.mock('@/components/404', () => ({
 
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => vi.fn(),
-}));
-
-vi.mock('@/hooks/usePermission', () => ({
-  usePermission: () => ({ allowed: true }),
 }));
 
 vi.mock('@/libs/trpc/client', () => ({

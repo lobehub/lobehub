@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/consistent-type-imports */
 import type { HeadlessLiteXMLOperation } from '@lobehub/editor/headless';
+import { createHeadlessEditor } from '@lobehub/editor/headless';
 import type { SerializedEditorState, SerializedLexicalNode } from 'lexical';
 
 import { EMPTY_EDITOR_STATE } from '@/libs/editor/constants';
@@ -103,8 +103,29 @@ interface LoadEditorStateParams {
   fallbackContent?: string;
 }
 
+// @lobehub/editor's headless Lexical runtime keeps process-global node state while
+// hydrating snapshots with stable ids. Concurrent document reads can therefore
+// corrupt one another (or observe a partially initialized HeadlessEditor). Keep
+// the complete create/hydrate/export/destroy lifecycle serialized.
+let headlessEditorTail: Promise<void> = Promise.resolve();
+
+const withHeadlessEditorLock = async <T>(run: () => Promise<T> | T): Promise<T> => {
+  const previous = headlessEditorTail;
+  let release: () => void = () => {};
+  headlessEditorTail = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+
+  await previous;
+  try {
+    return await run();
+  } finally {
+    release();
+  }
+};
+
 const exportSnapshot = (
-  editor: ReturnType<(typeof import('@lobehub/editor/headless'))['createHeadlessEditor']>,
+  editor: ReturnType<typeof createHeadlessEditor>,
   litexml = false,
 ): AgentDocumentEditorSnapshot => {
   const snapshot = editor.export({ litexml });
@@ -117,7 +138,7 @@ const exportSnapshot = (
 };
 
 const hydrateMarkdownOrEmptyState = (
-  editor: ReturnType<(typeof import('@lobehub/editor/headless'))['createHeadlessEditor']>,
+  editor: ReturnType<typeof createHeadlessEditor>,
   content: string,
   options?: { keepId?: boolean },
 ) => {
@@ -133,10 +154,10 @@ const hydrateMarkdownOrEmptyState = (
 };
 
 const createEditorWithState = (
-  createHeadlessEditor: (typeof import('@lobehub/editor/headless'))['createHeadlessEditor'],
+  createEditor: typeof createHeadlessEditor,
   { editorData, fallbackContent = '' }: LoadEditorStateParams,
 ) => {
-  let editor = createHeadlessEditor();
+  let editor = createEditor();
 
   if (isValidEditorData(editorData)) {
     try {
@@ -159,7 +180,7 @@ const createEditorWithState = (
     // editor at an empty root. Recreate the editor before hydrating Markdown so
     // no partially parsed Lexical state can leak into the fallback snapshot.
     editor.destroy();
-    editor = createHeadlessEditor();
+    editor = createEditor();
   }
 
   hydrateMarkdownOrEmptyState(editor, fallbackContent, { keepId: true });
@@ -168,32 +189,32 @@ const createEditorWithState = (
 
 export const createMarkdownEditorSnapshot = async (
   content: string,
-): Promise<AgentDocumentEditorSnapshot> => {
-  const { createHeadlessEditor } = await import('@lobehub/editor/headless');
-  const editor = createHeadlessEditor();
+): Promise<AgentDocumentEditorSnapshot> =>
+  withHeadlessEditorLock(() => {
+    const editor = createHeadlessEditor();
 
-  try {
-    hydrateMarkdownOrEmptyState(editor, content);
-    return exportSnapshot(editor);
-  } finally {
-    editor.destroy();
-  }
-};
+    try {
+      hydrateMarkdownOrEmptyState(editor, content);
+      return exportSnapshot(editor);
+    } finally {
+      editor.destroy();
+    }
+  });
 
 export const exportEditorDataSnapshot = async (
   params: LoadEditorStateParams & { litexml?: boolean },
-): Promise<AgentDocumentEditorSnapshot> => {
-  const { createHeadlessEditor } = await import('@lobehub/editor/headless');
-  const { editor, recoveredFromMarkdown } = createEditorWithState(createHeadlessEditor, params);
+): Promise<AgentDocumentEditorSnapshot> =>
+  withHeadlessEditorLock(() => {
+    const { editor, recoveredFromMarkdown } = createEditorWithState(createHeadlessEditor, params);
 
-  try {
-    const snapshot = exportSnapshot(editor, params.litexml);
+    try {
+      const snapshot = exportSnapshot(editor, params.litexml);
 
-    return recoveredFromMarkdown ? { ...snapshot, recoveredFromMarkdown: true } : snapshot;
-  } finally {
-    editor.destroy();
-  }
-};
+      return recoveredFromMarkdown ? { ...snapshot, recoveredFromMarkdown: true } : snapshot;
+    } finally {
+      editor.destroy();
+    }
+  });
 
 export const applyLiteXMLOperations = async ({
   editorData,
@@ -201,29 +222,29 @@ export const applyLiteXMLOperations = async ({
   operations,
 }: LoadEditorStateParams & {
   operations: AgentDocumentLiteXMLOperation[];
-}): Promise<AgentDocumentEditSnapshot> => {
-  const { createHeadlessEditor } = await import('@lobehub/editor/headless');
-  const { editor } = createEditorWithState(createHeadlessEditor, { editorData, fallbackContent });
+}): Promise<AgentDocumentEditSnapshot> =>
+  withHeadlessEditorLock(async () => {
+    const { editor } = createEditorWithState(createHeadlessEditor, { editorData, fallbackContent });
 
-  try {
-    const beforeSnapshot = exportSnapshot(editor, true);
-    await editor.applyLiteXML(orderLiteXMLOperations(operations).map(toHeadlessLiteXMLOperation));
-    const snapshot = exportSnapshot(editor, true);
+    try {
+      const beforeSnapshot = exportSnapshot(editor, true);
+      await editor.applyLiteXML(orderLiteXMLOperations(operations).map(toHeadlessLiteXMLOperation));
+      const snapshot = exportSnapshot(editor, true);
 
-    if (fallbackContent?.trim().length && snapshot.content.trim().length === 0) {
-      throw new Error('Agent document node edit unexpectedly produced empty content');
+      if (fallbackContent?.trim().length && snapshot.content.trim().length === 0) {
+        throw new Error('Agent document node edit unexpectedly produced empty content');
+      }
+
+      if (
+        operations.length > 0 &&
+        JSON.stringify(snapshot.editorData) === JSON.stringify(beforeSnapshot.editorData) &&
+        snapshot.litexml === beforeSnapshot.litexml
+      ) {
+        throw new Error('Agent document node edit did not change the document');
+      }
+
+      return { ...snapshot, previousEditorData: beforeSnapshot.editorData };
+    } finally {
+      editor.destroy();
     }
-
-    if (
-      operations.length > 0 &&
-      JSON.stringify(snapshot.editorData) === JSON.stringify(beforeSnapshot.editorData) &&
-      snapshot.litexml === beforeSnapshot.litexml
-    ) {
-      throw new Error('Agent document node edit did not change the document');
-    }
-
-    return { ...snapshot, previousEditorData: beforeSnapshot.editorData };
-  } finally {
-    editor.destroy();
-  }
-};
+  });

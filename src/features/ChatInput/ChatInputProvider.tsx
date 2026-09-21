@@ -1,11 +1,11 @@
 import { useEditor } from '@lobehub/editor/react';
-import { type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { memo, useRef } from 'react';
 
 import ReasoningConfigLoader from './ReasoningConfigLoader';
 import { createStore, Provider } from './store';
 import { DEFAULT_CHAT_INPUT_FEATURE } from './store/initialState';
-import { type StoreUpdaterProps } from './StoreUpdater';
+import type { StoreUpdaterProps } from './StoreUpdater';
 import StoreUpdater from './StoreUpdater';
 
 interface ChatInputProviderProps extends StoreUpdaterProps {

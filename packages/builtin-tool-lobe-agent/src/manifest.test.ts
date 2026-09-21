@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { LobeAgentManifest } from './manifest';
+import { LobeAgentApiName } from './types';
 
 describe('LobeAgentManifest', () => {
   it('should keep the package metadata generic for future Lobe Agent capabilities', () => {
@@ -36,11 +37,43 @@ describe('LobeAgentManifest', () => {
     );
   });
 
+  it('should route local media through file refs instead of local URLs or base64 text', () => {
+    const analyzeMedia = LobeAgentManifest.api[0];
+    const { refs, urls } = analyzeMedia.parameters.properties;
+
+    expect(analyzeMedia.description).toContain('local filesystem');
+    expect(analyzeMedia.description).toContain('base64 text');
+    expect(refs.description).toContain('local file-reading tools');
+    expect(urls.description).toContain('Local filesystem paths and file:// URLs are unsupported');
+    expect(LobeAgentManifest.systemRole).toContain(
+      'Never pass local filesystem paths or `file://` URLs to `analyzeMedia.urls`',
+    );
+    expect(LobeAgentManifest.systemRole).toContain('stable ref');
+  });
+
   it('should keep media analysis parameters compatible with strict tool schema validators', () => {
     const parameters = LobeAgentManifest.api[0].parameters;
 
     expect(parameters).not.toHaveProperty('oneOf');
     expect(parameters).not.toHaveProperty('allOf');
     expect(parameters).not.toHaveProperty('anyOf');
+  });
+
+  it('should expose a restrained vent API for reporting platform friction', () => {
+    const ventApi = LobeAgentManifest.api.find((api) => api.name === LobeAgentApiName.vent);
+
+    expect(ventApi).toBeDefined();
+    expect(ventApi!.parameters.required).toEqual(['category', 'severity', 'summary', 'details']);
+    expect(Object.keys(ventApi!.parameters.properties)).toEqual([
+      'category',
+      'severity',
+      'summary',
+      'details',
+      'attempts',
+      'toolName',
+      'evidenceRefs',
+    ]);
+    expect(ventApi!.description).toContain('at most one vent per task');
+    expect(LobeAgentManifest.systemRole).toContain('<vent>');
   });
 });

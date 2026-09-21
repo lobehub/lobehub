@@ -4,6 +4,7 @@ import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { memo } from 'react';
 
+import { devDockPanelStyles } from '@/features/DevDock/panelStyles';
 import { useElectronStore } from '@/store/electron';
 
 import { type TabRouterRow, useTabRouterDebug } from './useTabRouterDebug';
@@ -38,8 +39,11 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorBgContainer};
   `,
   legend: css`
+    flex-shrink: 0;
+
     padding-block: 8px 12px;
     padding-inline: 12px;
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 
     font-size: 10px;
     line-height: 1.6;
@@ -76,6 +80,11 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   rowActive: css`
     background: ${cssVar.colorFillTertiary};
+  `,
+  rows: css`
+    overflow: auto;
+    flex: 1;
+    min-height: 0;
   `,
   summary: css`
     flex-shrink: 0;
@@ -157,7 +166,7 @@ const TabRouters = memo(() => {
       : null;
 
   return (
-    <Flexbox height={'100%'}>
+    <Flexbox className={devDockPanelStyles.root}>
       <div className={styles.summary}>
         scope <b>{scopeKey}</b> · tabs <b>{rows.length}</b> · live routers{' '}
         <b className={liveCount > cap ? styles.drift : undefined}>
@@ -170,7 +179,7 @@ const TabRouters = memo(() => {
       {rows.length === 0 ? (
         <div className={styles.empty}>No tabs in this scope.</div>
       ) : (
-        <div>
+        <div className={styles.rows}>
           <div className={cx(styles.row, styles.head)}>
             <span>#</span>
             <span>tab id</span>

@@ -22,9 +22,9 @@ vi.mock('@/auth', () => ({
 vi.mock('@/database/models/aiProvider', () => {
   const mockGetAiProviderById = vi.fn();
   return {
-    AiProviderModel: vi.fn().mockImplementation(() => ({
-      getAiProviderById: mockGetAiProviderById,
-    })),
+    AiProviderModel: vi.fn(function () {
+      return { getAiProviderById: mockGetAiProviderById };
+    }),
   };
 });
 

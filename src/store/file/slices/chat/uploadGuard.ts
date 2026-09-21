@@ -80,6 +80,8 @@ const SUPPORTED_CHAT_DOCUMENT_EXTENSIONS = new Set([
   'ts',
   'tsx',
   'txt',
+  'v',
+  'sv',
   'vue',
   'xls',
   'xlsx',

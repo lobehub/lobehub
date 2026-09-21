@@ -2,19 +2,9 @@
  * @vitest-environment happy-dom
  */
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import VisibilityConfirmContent from './index';
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
-vi.mock('@lobehub/ui', () => ({
-  Icon: ({ size }: { icon: unknown; size?: number }) => (
-    <span data-icon-size={size} data-testid="icon" />
-  ),
-}));
 
 describe('VisibilityConfirmContent', () => {
   it('renders 3 makePrivate items in escalation order with an irreversible suffix on the last', () => {

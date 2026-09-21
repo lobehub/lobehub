@@ -19,15 +19,6 @@ vi.mock('electron', () => ({
   },
 }));
 
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  }),
-}));
-
 // Mock child_process for the shared package
 vi.mock('node:child_process', () => ({
   execFile: vi.fn(),

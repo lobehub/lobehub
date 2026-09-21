@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mockLocalSystem = vi.hoisted(() => ({
+  getExternalAssetForPublishUrl: vi.fn(),
   getLocalFilePreviewUrl: vi.fn(),
 }));
 
@@ -191,5 +192,37 @@ describe('localFileService', () => {
       bytes: new Uint8Array([10, 20, 30]),
       contentType: 'font/woff2',
     });
+  });
+
+  it('uses the dedicated publish IPC channel for external bytes', async () => {
+    const { localFileService } = await import('./localFileService');
+    mockLocalSystem.getExternalAssetForPublishUrl.mockResolvedValue({
+      success: true,
+      url: 'localfile://publish/font.woff2',
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          ({
+            arrayBuffer: vi.fn(async () => new Uint8Array([10, 20]).buffer),
+            headers: { get: vi.fn(() => 'font/woff2') },
+            ok: true,
+          }) as unknown as Response,
+      ),
+    );
+
+    await expect(
+      localFileService.readExternalAssetForPublish({
+        path: '/outside/font.woff2',
+        workingDirectory: '/repo',
+      }),
+    ).resolves.toEqual({ bytes: new Uint8Array([10, 20]), contentType: 'font/woff2' });
+
+    expect(mockLocalSystem.getExternalAssetForPublishUrl).toHaveBeenCalledWith({
+      path: '/outside/font.woff2',
+      workingDirectory: '/repo',
+    });
+    expect(mockLocalSystem.getLocalFilePreviewUrl).not.toHaveBeenCalled();
   });
 });

@@ -1,8 +1,8 @@
 'use client';
 
 import { type GridProps } from '@lobehub/ui';
-import { Block, Center, Grid, Text } from '@lobehub/ui';
-import { Select } from '@lobehub/ui/base-ui';
+import { Block, Center, Grid } from '@lobehub/ui';
+import { Select, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { type ReactNode } from 'react';
 import { memo } from 'react';

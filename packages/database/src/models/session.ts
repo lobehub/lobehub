@@ -10,23 +10,32 @@ import type { PartialDeep } from 'type-fest';
 
 import { merge } from '@/utils/merge';
 
+import type { FtsSearchCandidateSource } from '../repositories/ftsSearch';
 import type { AgentItem, NewAgent, NewSession, SessionItem } from '../schemas';
 import { agents, agentsToSessions, sessionGroups, sessions } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { sanitizeBm25Query } from '../utils/bm25';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
+import { inJsonStringArray } from '../utils/inJsonStringArray';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export class SessionModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private ftsSearchCandidateSource?: FtsSearchCandidateSource;
   private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    ftsSearchCandidateSource?: FtsSearchCandidateSource,
+  ) {
     this.userId = userId;
     this.db = db;
     this.workspaceId = workspaceId;
+    this.ftsSearchCandidateSource = ftsSearchCandidateSource;
   }
 
   private ownership = () =>
@@ -604,6 +613,44 @@ export class SessionModel {
   }) => {
     const { keyword, pageSize = 9999, current = 0 } = params;
     const offset = current * pageSize;
+
+    if (this.ftsSearchCandidateSource?.ftsSearchCandidateEnabled) {
+      const { candidates } = await this.ftsSearchCandidateSource.ftsSearchCandidates({
+        entity: 'agents',
+        filters: {},
+        pagination: {},
+        query: { fields: ['title', 'description'], text: keyword },
+      });
+      const candidateIds = candidates.map(({ id }) => id);
+      if (candidateIds.length === 0) return [];
+
+      const matchingAgents = await this.db
+        .select({ id: agents.id })
+        .from(agents)
+        .where(and(this.agentsOwnership(), inJsonStringArray(agents.id, candidateIds)))
+        .orderBy(asc(agents.id))
+        .limit(pageSize)
+        .offset(offset);
+      const matchingAgentIds = matchingAgents.map(({ id }) => id);
+      if (matchingAgentIds.length === 0) return [];
+
+      const agentSessions = await this.db
+        .select({ agentId: agentsToSessions.agentId, session: sessions })
+        .from(agentsToSessions)
+        .leftJoin(sessions, eq(agentsToSessions.sessionId, sessions.id))
+        .where(inArray(agentsToSessions.agentId, matchingAgentIds));
+      const firstSessionByAgentId = new Map<string, SessionItem>();
+
+      for (const { agentId, session } of agentSessions) {
+        if (session && !firstSessionByAgentId.has(agentId)) {
+          firstSessionByAgentId.set(agentId, session as SessionItem);
+        }
+      }
+
+      return matchingAgents
+        .map(({ id }) => firstSessionByAgentId.get(id))
+        .filter((session): session is SessionItem => session !== undefined);
+    }
 
     try {
       const bm25Query = sanitizeBm25Query(keyword);

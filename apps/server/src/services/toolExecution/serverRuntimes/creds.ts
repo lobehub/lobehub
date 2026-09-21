@@ -14,13 +14,29 @@ const log = debug('lobe-server:creds-runtime');
  * Server-side Creds Service implementation
  * Wraps MarketService.market.creds to provide ICredsService interface
  */
-class ServerCredsService implements ICredsService {
+export class ServerCredsService implements ICredsService {
   private marketService: MarketService;
   private workspaceId?: string;
 
-  constructor(marketService: MarketService, workspaceId?: string) {
+  private isShareVisitor: boolean;
+
+  constructor(
+    marketService: MarketService,
+    workspaceId?: string,
+    /**
+     * Belt-and-braces guard: true for an Agent Share visitor's run
+     * (`context.agentShareVisitor` set). `lobe-creds` is already absent from
+     * `AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS`, so this runtime should never
+     * be constructed for a visitor in the first place — but `injectCreds`
+     * refuses again here too, so the guarantee that the creator's decrypted
+     * credentials never land in a sandbox a visitor controls doesn't rest on
+     * the allowlist alone.
+     */
+    isShareVisitor = false,
+  ) {
     this.marketService = marketService;
     this.workspaceId = workspaceId;
+    this.isShareVisitor = isShareVisitor;
   }
 
   /**
@@ -110,8 +126,26 @@ class ServerCredsService implements ICredsService {
   }> {
     log('injectCreds: keys=%O, topicId=%s', params.keys, params.topicId);
 
+    // Refuse before the Market call, not after: Market's inject endpoint
+    // writes the creator's REAL credentials into the sandbox's ~/.creds/env
+    // server-side as part of handling the request (see the comment below),
+    // so for a share visitor the only safe place to stop is here.
+    if (this.isShareVisitor) {
+      throw new Error(
+        'Credential injection into the sandbox is unavailable in shared conversations.',
+      );
+    }
+
     // Market's generic inject endpoint resolves organization credentials from
-    // the workspaceId signed into this service's trusted-client token.
+    // the workspaceId signed into this service's trusted-client token, and —
+    // when `sandbox` is true (the default) — already writes the *real*
+    // (unmasked) values into the sandbox's ~/.creds/env server-side before
+    // responding. The `credentials.env` map in that response is masked for
+    // safe display to the model, so it must never be written into the
+    // sandbox again here: an earlier version of this method did exactly
+    // that, appending a masked `export` line after market's real one. Since
+    // re-sourcing ~/.creds/env applies `export`s in file order, the masked
+    // line silently shadowed the real credential for every later command.
     const result = await this.marketService.market.creds.inject({
       keys: params.keys,
       sandbox: params.sandbox,
@@ -200,7 +234,12 @@ export const credsRuntime: ServerRuntimeRegistration = {
       accessToken,
       userInfo: { userId: context.userId, workspaceId: context.workspaceId },
     });
-    const credsService = new ServerCredsService(marketService, context.workspaceId);
+
+    const credsService = new ServerCredsService(
+      marketService,
+      context.workspaceId,
+      Boolean(context.agentShareVisitor),
+    );
 
     return new CredsExecutionRuntime(credsService, {
       topicId: context.topicId,

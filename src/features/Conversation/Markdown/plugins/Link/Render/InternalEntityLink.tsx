@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { memo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { shouldHardNavigateToWorkbench } from '@/libs/next/workbenchNavigation';
@@ -21,17 +22,29 @@ import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocu
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 
-import type { InternalLinkReference } from '../internalLink';
-import { InternalEntityPreview } from './InternalEntityPreview';
+import { type InternalLinkReference, isBareLinkLabel } from '../internalLink';
+import {
+  getPreviewData,
+  InternalEntityPreview,
+  internalEntityPreviewKey,
+} from './InternalEntityPreview';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  icon: css`
+    margin-inline-end: 4px;
+    color: ${cssVar.colorTextSecondary};
+    vertical-align: -0.15em;
+  `,
   link: css`
-    display: inline-flex;
-    gap: 4px;
-    align-items: center;
+    /* Keep the label on the surrounding text baseline instead of the icon's flex baseline. */
+    display: inline;
 
     color: ${cssVar.colorText} !important;
-    text-decoration-color: ${cssVar.colorBorder};
+
+    /* Tertiary, not colorBorder: on a dark background colorBorder sits so
+       close to the bubble that the underline vanishes and the link reads as
+       plain text — findability is the underline's whole job here. */
+    text-decoration-color: ${cssVar.colorTextTertiary};
     text-decoration-line: underline;
     text-decoration-thickness: 1px;
     text-underline-offset: 3px;
@@ -49,11 +62,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       border-radius: 2px;
       outline: 2px solid ${cssVar.colorPrimaryBorder};
       outline-offset: 2px;
-    }
-
-    > svg {
-      flex: none;
-      color: ${cssVar.colorTextSecondary};
     }
   `,
 }));
@@ -73,6 +81,7 @@ interface InternalEntityLinkProps {
 }
 
 export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, reference }) => {
+  const { t } = useTranslation('chat');
   const navigate = useWorkspaceAwareNavigate();
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const [openAcceptance, openAgentDetail, openDocument, openTaskDetail, openVerifyReport] =
@@ -83,6 +92,23 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
       s.openTaskDetail,
       s.openVerifyReport,
     ]);
+  // A pasted URL says nothing about what it points to, so resolve the entity's
+  // own title and show that instead — the same read the hover preview makes,
+  // under the same key, so the eager fetch also makes the hover card instant.
+  // Bare links are sparse in real messages, which is why prefetching the full
+  // preview beats a dedicated title read. Cross-workspace links are skipped:
+  // the ambient client resolves against the ACTIVE scope, where a
+  // workspace-unique id like T-198 can name a different entity entirely.
+  // Authored link text is never replaced; a failed read just leaves the URL.
+  const shouldResolveTitle =
+    reference.type !== 'route' && !reference.workspaceSlug && isBareLinkLabel(label, href);
+  const { data: entity } = useClientDataSWR(
+    shouldResolveTitle ? internalEntityPreviewKey(reference) : null,
+    () => getPreviewData(reference, t),
+    { revalidateOnFocus: false },
+  );
+  const displayLabel = (shouldResolveTitle && entity?.title) || label;
+
   const linkedAgentId = reference.type === 'document' ? reference.agentId : undefined;
   const shouldResolveAgentDocument = !!linkedAgentId && linkedAgentId === activeAgentId;
   const { data: agentDocuments, mutate: resolveAgentDocuments } = useClientDataSWR(
@@ -196,15 +222,15 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
       target="_blank"
       onClick={handleClick}
     >
-      {icon && <Icon icon={icon} size={14} />}
-      {label}
+      {icon && <Icon className={styles.icon} icon={icon} size={14} />}
+      {displayLabel}
     </a>
   );
 
   if (reference.type === 'route' || reference.workspaceSlug) return link;
 
   return (
-    <InternalEntityPreview fallbackTitle={label} reference={reference}>
+    <InternalEntityPreview fallbackTitle={displayLabel} reference={reference}>
       {link}
     </InternalEntityPreview>
   );

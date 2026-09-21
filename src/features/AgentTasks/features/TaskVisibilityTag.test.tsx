@@ -7,7 +7,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import TaskVisibilityTag from './TaskVisibilityTag';
 
-vi.mock('@lobehub/ui', () => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   DropdownMenu: ({
     children,
     items,
@@ -25,15 +26,6 @@ vi.mock('@lobehub/ui', () => ({
     </>
   ),
   Icon: () => <span data-testid="menu-extra-icon" />,
-  Tooltip: ({ children }: { children: ReactNode }) => children,
-}));
-
-vi.mock('antd-style', () => ({
-  createStaticStyles: () => ({ trigger: 'trigger', triggerDisabled: 'trigger-disabled' }),
-  cssVar: {
-    colorTextDescription: '#999',
-    colorTextSecondary: '#666',
-  },
 }));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({

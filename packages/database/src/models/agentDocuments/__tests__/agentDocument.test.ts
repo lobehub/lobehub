@@ -4,6 +4,7 @@ import {
   AGENT_DOCUMENT_SOURCE_TYPE,
   AGENT_SIGNAL_SOURCE_TYPE,
 } from '@lobechat/const';
+import { agentShareDocumentAccessScope } from '@lobechat/types';
 import { and, eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 
@@ -342,6 +343,85 @@ describe('AgentDocumentModel', () => {
       });
 
       expect(first.documentId).not.toBe(second.documentId);
+    });
+
+    it('stamps server-owned share provenance and isolates the document from ordinary access', async () => {
+      const shareModel = new AgentDocumentModel(
+        serverDB,
+        userId,
+        undefined,
+        agentShareDocumentAccessScope({
+          shareId: 'share-a',
+          topicId: 'topic-a',
+          visitorUserId: 'visitor-a',
+        }),
+      );
+
+      const created = await shareModel.create(agentId, 'visitor-note.md', 'draft', {
+        metadata: {
+          agentShare: {
+            shareId: 'forged-share',
+            topicId: 'forged-topic',
+            visitorUserId: 'forged-visitor',
+          },
+          purpose: 'handoff',
+        },
+      });
+
+      expect(created.metadata).toEqual({
+        agentShare: {
+          shareId: 'share-a',
+          topicId: 'topic-a',
+          visitorUserId: 'visitor-a',
+        },
+        purpose: 'handoff',
+      });
+      await expect(agentDocumentModel.findById(created.id)).resolves.toBeUndefined();
+      await expect(agentDocumentModel.findByAgent(agentId)).resolves.toEqual([]);
+      await expect(shareModel.findById(created.id)).resolves.toMatchObject({ content: 'draft' });
+    });
+
+    it('isolates share documents by share, visitor, and topic', async () => {
+      const scope = (shareId: string, visitorUserId: string, topicId: string) =>
+        new AgentDocumentModel(
+          serverDB,
+          userId,
+          undefined,
+          agentShareDocumentAccessScope({ shareId, topicId, visitorUserId }),
+        );
+      const owner = scope('share-a', 'visitor-a', 'topic-a');
+      const created = await owner.create(agentId, 'scoped.md', 'private to this run');
+
+      await expect(
+        scope('share-b', 'visitor-a', 'topic-a').findById(created.id),
+      ).resolves.toBeUndefined();
+      await expect(
+        scope('share-a', 'visitor-b', 'topic-a').findById(created.id),
+      ).resolves.toBeUndefined();
+      await expect(
+        scope('share-a', 'visitor-a', 'topic-b').findById(created.id),
+      ).resolves.toBeUndefined();
+
+      await owner.update(created.id, { content: 'updated in scope' });
+      await expect(owner.findById(created.id)).resolves.toMatchObject({
+        content: 'updated in scope',
+      });
+    });
+
+    it('strips caller-supplied share provenance from ordinary documents', async () => {
+      const created = await agentDocumentModel.create(agentId, 'ordinary.md', 'ordinary', {
+        metadata: {
+          agentShare: {
+            shareId: 'forged-share',
+            topicId: 'forged-topic',
+            visitorUserId: 'forged-visitor',
+          },
+          purpose: 'ordinary',
+        },
+      });
+
+      expect(created.metadata).toEqual({ purpose: 'ordinary' });
+      await expect(agentDocumentModel.findById(created.id)).resolves.toBeDefined();
     });
   });
 

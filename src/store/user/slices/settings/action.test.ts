@@ -1,7 +1,7 @@
 import { DEFAULT_SETTINGS } from '@lobechat/config';
 import { act, renderHook } from '@testing-library/react';
 import type { PartialDeep } from 'type-fest';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { userService } from '@/services/user';
 import { useUserStore } from '@/store/user';
@@ -9,11 +9,10 @@ import type { LobeAgentSettings } from '@/types/session';
 import type { UserSettings } from '@/types/user/settings';
 import { merge } from '@/utils/merge';
 
-vi.mock('zustand/traditional');
-
 // Mock userService
 vi.mock('@/services/user', () => ({
   userService: {
+    updateToolIntervention: vi.fn(),
     updateUserSettings: vi.fn(),
     resetUserSettings: vi.fn(),
   },
@@ -108,6 +107,56 @@ describe('SettingsAction', () => {
       );
     });
 
+    it('should only send the columns touched by this call (multi-tab clobber regression)', async () => {
+      const { result } = renderHook(() => useUserStore());
+
+      // Simulate a tab whose in-memory settings hold a stale `tool` column
+      // (e.g. approvalMode was changed to auto-run from another tab afterwards)
+      act(() => {
+        useUserStore.setState({
+          settings: { tool: { humanIntervention: { approvalMode: 'manual' } } } as any,
+        });
+      });
+
+      // An unrelated write (like the hourly market token refresh) must not
+      // carry the stale `tool` column and revert other tabs' changes
+      await act(async () => {
+        await result.current.setSettings({ general: { fontSize: 16 } });
+      });
+
+      const payload = vi.mocked(userService.updateUserSettings).mock.lastCall?.[0];
+      expect(payload).toEqual({ general: { fontSize: 16 } });
+      expect(payload).not.toHaveProperty('tool');
+    });
+
+    it('should resend a column whose write was aborted by a later call', async () => {
+      const { result } = renderHook(() => useUserStore());
+
+      // First write (e.g. the market token refresh) never reaches the server:
+      // it rejects when the next call's internal_createSignal aborts it.
+      vi.mocked(userService.updateUserSettings).mockImplementationOnce(
+        (_value, signal) =>
+          new Promise((_resolve, reject) => {
+            signal?.addEventListener('abort', () => reject(new Error('aborted')));
+          }),
+      );
+
+      const first = result.current
+        .setSettings({ market: { accessToken: 'tok-1' } as any })
+        .catch(() => {});
+
+      await act(async () => {
+        await result.current.setSettings({ general: { fontSize: 17 } });
+        await first;
+      });
+
+      // The aborted `market` column must ride along on the second payload —
+      // otherwise the token refresh would silently never persist.
+      const payload = vi.mocked(userService.updateUserSettings).mock.lastCall?.[0] as any;
+      expect(payload.general).toEqual(expect.objectContaining({ fontSize: 17 }));
+      expect(payload.market).toEqual(expect.objectContaining({ accessToken: 'tok-1' }));
+    });
+
     it('should keep legacy scalar system agent fields unchanged', async () => {
       const { result } = renderHook(() => useUserStore());
       const settingsWithLegacySystemAgent = {
@@ -124,6 +173,66 @@ describe('SettingsAction', () => {
         settingsWithLegacySystemAgent,
         expect.any(AbortSignal),
       );
+    });
+  });
+
+  describe('updateHumanIntervention', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('should write through the server-side merge endpoint instead of setSettings', async () => {
+      const { result } = renderHook(() => useUserStore());
+
+      await act(async () => {
+        await result.current.updateHumanIntervention({ approvalMode: 'auto-run' });
+      });
+
+      expect(userService.updateToolIntervention).toHaveBeenCalledWith({
+        approvalMode: 'auto-run',
+      });
+      // Must NOT go through the whole-settings diff channel: that would replace
+      // the full `tool` column with this tab's possibly-stale snapshot
+      expect(userService.updateUserSettings).not.toHaveBeenCalled();
+
+      // Optimistic local update
+      expect(result.current.settings.tool?.humanIntervention?.approvalMode).toBe('auto-run');
+    });
+  });
+
+  describe('addToolToAllowList', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('should append via the server-side merge endpoint and update local state', async () => {
+      const { result } = renderHook(() => useUserStore());
+
+      await act(async () => {
+        await result.current.addToolToAllowList('bash/bash');
+      });
+
+      expect(userService.updateToolIntervention).toHaveBeenCalledWith({
+        appendAllowList: ['bash/bash'],
+      });
+      expect(userService.updateUserSettings).not.toHaveBeenCalled();
+      expect(result.current.settings.tool?.humanIntervention?.allowList).toEqual(['bash/bash']);
+    });
+
+    it('should skip when the tool is already in the allow list', async () => {
+      const { result } = renderHook(() => useUserStore());
+
+      act(() => {
+        useUserStore.setState({
+          settings: { tool: { humanIntervention: { allowList: ['bash/bash'] } } } as any,
+        });
+      });
+
+      await act(async () => {
+        await result.current.addToolToAllowList('bash/bash');
+      });
+
+      expect(userService.updateToolIntervention).not.toHaveBeenCalled();
     });
   });
 

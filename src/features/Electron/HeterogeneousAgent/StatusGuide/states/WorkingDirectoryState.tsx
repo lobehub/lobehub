@@ -1,4 +1,4 @@
-import { Text } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { FolderX } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 

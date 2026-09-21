@@ -13,10 +13,6 @@ vi.mock('@/business/client/hooks/useFileTransferMenuItem', () => ({
   useFileTransferMenuItem: mocks.useFileTransferMenuItem,
 }));
 
-vi.mock('@/hooks/usePermission', () => ({
-  usePermission: () => ({ allowed: true }),
-}));
-
 vi.mock('../../ItemDropdown/DropdownMenu', () => ({
   default: () => null,
 }));

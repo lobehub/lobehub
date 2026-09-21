@@ -7,6 +7,7 @@ import {
   MarkdownPlugin,
   moment,
 } from '@lobehub/editor';
+import type { Mock } from 'vitest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { EditorRuntime } from '../EditorRuntime';
@@ -17,8 +18,8 @@ import removeThenAddFixture from './fixtures/remove-then-add.json';
 describe('EditorRuntime - Real Cases', () => {
   let runtime: EditorRuntime;
   let editor: IEditor;
-  let mockTitleSetter: ReturnType<typeof vi.fn>;
-  let mockTitleGetter: ReturnType<typeof vi.fn>;
+  let mockTitleSetter: Mock<(title: string) => void>;
+  let mockTitleGetter: Mock<() => string>;
 
   beforeEach(() => {
     editor = new Kernel() as unknown as IEditor;

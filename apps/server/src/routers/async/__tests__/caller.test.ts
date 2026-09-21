@@ -16,7 +16,9 @@ const mockAppEnv: { APP_URL?: string; INTERNAL_APP_URL?: string | null | undefin
 // Mock dependencies before importing the module under test
 vi.mock('@trpc/client', () => ({
   createTRPCClient: vi.fn(),
-  httpLink: vi.fn((options) => options),
+  httpLink: vi.fn(function (options) {
+    return options;
+  }),
 }));
 
 vi.mock('@/envs/app', () => ({

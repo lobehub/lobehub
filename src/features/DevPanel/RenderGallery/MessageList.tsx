@@ -2,7 +2,7 @@
 
 import { LOADING_FLAT } from '@lobechat/const';
 import type { ChatToolPayload, UIChatMessage } from '@lobechat/types';
-import { Text } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, useMemo } from 'react';
 
@@ -26,12 +26,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   thread: css`
     width: 100%;
-    max-width: 820px;
-    margin-inline: auto;
     padding-block: 8px 48px;
     padding-inline: 12px;
-    border-radius: 14px;
-
     background: ${cssVar.colorBgContainer};
   `,
 }));

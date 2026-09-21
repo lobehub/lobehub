@@ -2,7 +2,8 @@
 
 import data from '@emoji-mart/data';
 import Picker from '@emoji-mart/react';
-import { ActionIcon, Flexbox, Tooltip } from '@lobehub/ui';
+import { Flexbox, Tooltip } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { Popover } from 'antd';
 import { createStaticStyles, useTheme } from 'antd-style';
 import { PlusIcon, SmilePlus } from 'lucide-react';

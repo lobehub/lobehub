@@ -25,8 +25,10 @@ export const ClearTodosInspector = memo<BuiltinInspectorProps<ClearTodosParams, 
 
     if (isArgumentsStreaming && !mode) {
       return (
-        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-          <span>{t('builtins.lobe-agent.apiName.clearTodos')}</span>
+        <div className={inspectorTextStyles.root}>
+          <span className={shinyTextStyles.shinyText}>
+            {t('builtins.lobe-agent.apiName.clearTodos')}
+          </span>
         </div>
       );
     }

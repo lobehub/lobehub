@@ -1,6 +1,5 @@
 import { AGENT_DOCUMENT_CATEGORY, CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
 import { act, fireEvent, render, waitFor } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { useRef } from 'react';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
@@ -15,19 +14,6 @@ import ExplorerTree, { getItemPathFromEventPath } from './ExplorerTree';
 
 const showContextMenu = vi.hoisted(() => vi.fn());
 
-vi.mock('@lobehub/ui', () => ({
-  ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) => (
-    <button aria-label={title} onClick={onClick}>
-      {title}
-    </button>
-  ),
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  genCdnUrl: () => '',
-  Icon: () => <span />,
-  showContextMenu,
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-}));
-
 vi.mock('@/libs/contextMenu', () => ({
   showContextMenu,
 }));
@@ -36,12 +22,8 @@ vi.mock('@lobehub/ui/icons', () => ({
   SkillsIcon: () => null,
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  confirmModal: vi.fn(),
-  DropdownMenu: ({ children }: { children: ReactNode }) => children,
-}));
-
-vi.mock('antd', () => ({
+vi.mock('antd', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   App: {
     useApp: () => ({
       message: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
@@ -58,12 +40,6 @@ vi.mock('@/services/agentDocument', () => ({
 
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => vi.fn(),
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
 }));
 
 const dispatchRealContextMenuEventRetargetedPastShadowRoot = (

@@ -31,6 +31,7 @@ describe('AgentDocumentsExecutionRuntime', () => {
       {
         content: 'steps',
         hintIsSkill: true,
+        parentId: 'folder-doc-1',
         title: 'Reusable Procedure',
       },
       { agentId: 'agent-1' },
@@ -40,6 +41,7 @@ describe('AgentDocumentsExecutionRuntime', () => {
       agentId: 'agent-1',
       content: 'steps',
       hintIsSkill: true,
+      parentId: 'folder-doc-1',
       title: 'Reusable Procedure',
     });
     expect(result.state).toMatchObject({

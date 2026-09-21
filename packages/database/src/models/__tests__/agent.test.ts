@@ -3273,6 +3273,36 @@ describe('AgentModel', () => {
       expect(ids).not.toContain('virtual-agent');
     });
 
+    // Share-visitor topics live under the creator's userId with a non-null
+    // senderId; they reflect the visitor's usage, not the creator's, so they
+    // must neither inflate a count nor reorder the ranking.
+    it('should not count share-visitor topics', async () => {
+      await serverDB.insert(agents).values([
+        { id: 'shared', title: 'Shared', userId },
+        { id: 'own', title: 'Own', userId },
+        { id: 'visitor-only', title: 'Visitor only', userId },
+      ]);
+      await serverDB.insert(topics).values([
+        // `shared`: one creator topic + three visitor topics → count 1
+        { agentId: 'shared', id: 'sv0', userId },
+        { agentId: 'shared', id: 'sv1', senderId: userId2, userId },
+        { agentId: 'shared', id: 'sv2', senderId: userId2, userId },
+        { agentId: 'shared', id: 'sv3', senderId: userId2, userId },
+        // `own`: two creator topics → count 2, ranks above `shared`
+        { agentId: 'own', id: 'ov1', userId },
+        { agentId: 'own', id: 'ov2', userId },
+        // `visitor-only`: visitor topics only → excluded like a topicless agent
+        { agentId: 'visitor-only', id: 'vo1', senderId: userId2, userId },
+      ]);
+
+      const result = await agentModel.rank();
+
+      expect(result.map((r) => ({ count: r.count, id: r.id }))).toEqual([
+        { count: 2, id: 'own' },
+        { count: 1, id: 'shared' },
+      ]);
+    });
+
     it('should only rank the current user agents', async () => {
       await serverDB.insert(agents).values([
         { id: 'mine', title: 'Mine', userId },

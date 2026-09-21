@@ -1,4 +1,5 @@
-import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { PlusIcon } from 'lucide-react';
 import { memo, type ReactNode, useMemo } from 'react';
 
@@ -16,7 +17,7 @@ import { HOME_INPUT_BODY_HEIGHT } from './constants';
 import ModeSelect from './ModeSelect';
 
 const leftActions: ActionKeys[] = ['plus'];
-const rightActions: ActionKeys[] = ['modelLabel'];
+const rightActions: ActionKeys[] = ['model'];
 
 const CONTAINER_RADIUS = 20;
 /** Clearance from the container edge to the round controls sitting in its corners. */

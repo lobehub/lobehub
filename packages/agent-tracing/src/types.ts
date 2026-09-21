@@ -2,7 +2,13 @@ export interface ExecutionSnapshot {
   agentId?: string;
   completedAt?: number;
   completionReason?:
-    'done' | 'error' | 'interrupted' | 'max_steps' | 'cost_limit' | 'waiting_for_human';
+    | 'done'
+    | 'error'
+    | 'interrupted'
+    | 'max_steps'
+    | 'cost_limit'
+    | 'tool_call_repeat_limit'
+    | 'waiting_for_human';
   error?: { type: string; message: string };
   externalRetryCount?: number;
   model?: string;
@@ -108,6 +114,16 @@ export interface StepSnapshot {
   toolsetBaseline?: any;
   toolsResult?: Array<{
     apiName: string;
+    /**
+     * Wall time the tool took on the DEVICE, by its own clock — present only
+     * for calls dispatched to one, and only when the device and gateway are new
+     * enough to report it. `executionTimeMs - deviceExecutionTimeMs` is the
+     * dispatch overhead: how much of a device tool call is transport rather
+     * than work.
+     */
+    deviceExecutionTimeMs?: number;
+    /** Wall time the server observed for the call, dispatch included. */
+    executionTimeMs?: number;
     identifier: string;
     isSuccess?: boolean;
     output?: string;

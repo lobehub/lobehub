@@ -1,12 +1,14 @@
 'use client';
 
 import type { DeviceListItem, DeviceVisibility } from '@lobechat/types';
-import { Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
 import {
   Button,
   confirmModal,
   createModal,
   Select,
+  Tag,
+  Text,
   toast,
   useModalContext,
 } from '@lobehub/ui/base-ui';

@@ -17,8 +17,10 @@ import type {
   ToolDiscoveryConfig,
   TopicReferenceItem,
   UserMemoryData,
+  ProjectInstructionFile,
+  WorkspaceContext,
 } from '@lobechat/context-engine';
-import type { PageContentContext } from '@lobechat/prompts';
+import type { AgentIdentityContext, PageContentContext } from '@lobechat/prompts';
 import type {
   ExpertiseContextSnapshot,
   RuntimeAdditionalContextFragment,
@@ -105,11 +107,17 @@ export interface ServerMessagesEngineParams {
   capabilities?: ServerModelCapabilities;
   /** Bot platform context for injecting platform capabilities (e.g. markdown support) */
   botPlatformContext?: BotPlatformContext;
+  /** App origin + workspace slug so the model writes links that resolve to the right scope */
+  workspaceContext?: WorkspaceContext;
   /** Discord context for injecting channel/guild info */
   discordContext?: DiscordContext;
   // ========== Eval context ==========
   /** Eval context for injecting environment prompts into system message */
+  /** Borrowed-connector attribution, injected into the system message. */
+  connectorOwnershipNote?: string;
   evalContext?: EvalContext;
+  /** A project's root instruction files, injected into the system message. */
+  projectInstructions?: ProjectInstructionFile[];
   // ========== Onboarding context ==========
   /** Onboarding context for injecting phase guidance and documents */
   onboardingContext?: OnboardingContext;
@@ -163,6 +171,9 @@ export interface ServerMessagesEngineParams {
 
   /** System role */
   systemRole?: string;
+
+  /** The agent's identity (personal name + role title) for self-introduction */
+  agentIdentity?: AgentIdentityContext;
 
   // ========== Skills ==========
   /** Skills configuration for <available_skills> injection */

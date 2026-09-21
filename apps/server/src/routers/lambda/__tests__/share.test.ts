@@ -1,7 +1,59 @@
+import type * as BusinessConst from '@lobechat/business-const';
 import { TRPCError } from '@trpc/server';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AgentShareModel } from '@/database/models/agentShare';
 import { TopicShareModel } from '@/database/models/topicShare';
+import { createContextInner } from '@/libs/trpc/lambda/context';
+
+vi.mock('@/database/models/agentShare', () => ({
+  AgentShareModel: {
+    assertShareAccess: vi.fn(),
+    findBySlugOrId: vi.fn(),
+    incrementUserViewCount: vi.fn(),
+  },
+}));
+
+const countShareVisitors = vi.fn();
+const topicModelConstructor = vi.fn();
+
+vi.mock('@/database/models/topic', () => ({
+  TopicModel: class {
+    constructor(...args: unknown[]) {
+      topicModelConstructor(...args);
+    }
+    countShareVisitors = countShareVisitors;
+  },
+}));
+
+const loadModelsMock = vi.hoisted(() => vi.fn());
+const findByIdAndProviderMock = vi.hoisted(() => vi.fn());
+const aiModelModelConstructor = vi.hoisted(() => vi.fn());
+
+vi.mock('@/business/client/model-bank/loadModels', () => ({
+  loadModels: loadModelsMock,
+}));
+
+vi.mock('@/database/models/aiModel', () => ({
+  AiModelModel: class {
+    constructor(...args: unknown[]) {
+      aiModelModelConstructor(...args);
+    }
+    findByIdAndProvider = findByIdAndProviderMock;
+  },
+}));
+
+const resolveModelSelectionMock = vi.hoisted(() => vi.fn());
+const agentServiceConstructor = vi.hoisted(() => vi.fn());
+
+vi.mock('@/server/services/agent', () => ({
+  AgentService: class {
+    constructor(...args: unknown[]) {
+      agentServiceConstructor(...args);
+    }
+    resolveModelSelection = resolveModelSelectionMock;
+  },
+}));
 
 vi.mock('@/database/models/topicShare', () => ({
   TopicShareModel: {
@@ -10,11 +62,344 @@ vi.mock('@/database/models/topicShare', () => ({
   },
 }));
 
+vi.mock('@/database/core/db-adaptor', () => ({
+  getServerDB: vi.fn(() => ({})),
+}));
+
 vi.mock('@/database/server', () => ({
   getServerDB: vi.fn(),
 }));
 
+// The availability gate (cloud-only const + visitor grayscale flag) has its
+// own suite (`_helpers/__tests__/agentShareFeatureGate.test.ts`) plus a
+// dedicated "visitor capability" block below; elsewhere it is pinned open so
+// the read-path behavior under test is reachable.
+const mocks = vi.hoisted(() => ({
+  businessConst: { ENABLE_BUSINESS_FEATURES: true },
+}));
+vi.mock('@lobechat/business-const', async () => {
+  const actual = await vi.importActual<typeof BusinessConst>('@lobechat/business-const');
+  return {
+    ...actual,
+    // `packages/utils/src/apiKey.ts` reads this dynamically (`import * as
+    // businessConst`), pulled in transitively via the unmocked
+    // `createContextInner` -> `ApiKeyModel` chain below. `actual` here
+    // resolves to the cloud override, which omits this key entirely (see
+    // that file's own doc comment), so vitest's mock-export validation has
+    // no own property to find unless it is listed explicitly.
+    API_KEY_PREFIX: (actual as Record<string, unknown>).API_KEY_PREFIX,
+    // A getter (not a static spread) so per-test mutation of
+    // `mocks.businessConst.ENABLE_BUSINESS_FEATURES` is observed by every
+    // subsequent read, including inside the already-imported gate helper.
+    get ENABLE_BUSINESS_FEATURES() {
+      return mocks.businessConst.ENABLE_BUSINESS_FEATURES;
+    },
+  };
+});
+
+const mockGetFeatureFlagsState = vi.fn();
+vi.mock('@/server/featureFlags', () => ({
+  getServerFeatureFlagsStateFromRuntimeConfig: (...args: unknown[]) =>
+    mockGetFeatureFlagsState(...args),
+}));
+
+const { shareRouter } = await import('../share');
+
 describe('shareRouter', () => {
+  describe('getSharedAgent', () => {
+    const agentShare = {
+      agentAvatar: 'avatar.png',
+      agentBackgroundColor: '#ffffff',
+      agentDescription: 'A shared agent',
+      agentId: 'agent-1',
+      agentModel: 'gpt-4o',
+      agentName: 'Alice',
+      agentOpeningQuestions: ['What can you do?'],
+      agentProvider: 'openai',
+      agentTags: ['research'],
+      agentTitle: 'Research Assistant',
+      ownerId: 'owner-user',
+      ownerAvatar: 'owner.png',
+      ownerFullName: 'Owner Person',
+      ownerUsername: 'owner',
+      shareConfig: {
+        maxTopicsPerVisitor: 5,
+        maxTurnsPerTopic: 20,
+        slug: 'shared-agent',
+        toolGrants: [{ apis: ['search'], identifier: 'lobe-web-browsing' }],
+      },
+      shareId: 'agent-share-1',
+      userViewCount: 42,
+      visibility: 'link',
+    };
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      mocks.businessConst.ENABLE_BUSINESS_FEATURES = true;
+      mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShare: true });
+      vi.mocked(AgentShareModel.findBySlugOrId).mockResolvedValue(agentShare as any);
+      vi.mocked(AgentShareModel.assertShareAccess).mockReturnValue(undefined);
+      vi.mocked(AgentShareModel.incrementUserViewCount).mockResolvedValue(undefined);
+      countShareVisitors.mockResolvedValue({ topicCount: 12, visitorCount: 7 });
+      loadModelsMock.mockResolvedValue([
+        {
+          abilities: { audio: false, video: false, vision: true },
+          id: 'gpt-4o',
+          providerId: 'openai',
+        },
+      ]);
+      findByIdAndProviderMock.mockResolvedValue(undefined);
+      resolveModelSelectionMock.mockResolvedValue({ model: 'gpt-4o', provider: 'openai' });
+    });
+
+    it('requires authentication without resolving or counting the share', async () => {
+      const caller = shareRouter.createCaller(await createContextInner());
+
+      await expect(caller.getSharedAgent({ slugOrId: 'shared-agent' })).rejects.toMatchObject({
+        code: 'UNAUTHORIZED',
+      });
+      expect(AgentShareModel.findBySlugOrId).not.toHaveBeenCalled();
+      expect(AgentShareModel.incrementUserViewCount).not.toHaveBeenCalled();
+    });
+
+    it('resolves by slug, returns only visitor-safe metadata, and counts the view', async () => {
+      const caller = shareRouter.createCaller(await createContextInner({ userId: 'visitor-user' }));
+
+      const result = await caller.getSharedAgent({ slugOrId: 'shared-agent' });
+
+      expect(result).toEqual({
+        agentId: 'agent-1',
+        agentMeta: {
+          avatar: 'avatar.png',
+          backgroundColor: '#ffffff',
+          description: 'A shared agent',
+          name: 'Alice',
+          openingQuestions: ['What can you do?'],
+          tags: ['research'],
+          title: 'Research Assistant',
+        },
+        creator: { avatar: 'owner.png', name: 'Owner Person' },
+        isOwner: false,
+        shareId: 'agent-share-1',
+        slug: 'shared-agent',
+        stats: { conversations: 12, views: 42, visitors: 7 },
+        terms: {
+          allowCreatorViewSessions: false,
+          maxFileStorage: 512 * 1024 * 1024,
+          maxTopicsPerVisitor: 5,
+          maxTurnsPerTopic: 20,
+        },
+        // Identifier only: the granted API list is owner-facing configuration.
+        toolGrants: ['lobe-web-browsing'],
+        // Derived from the agent's model abilities; the model itself stays hidden.
+        uploadAbility: { audio: false, image: true, video: false },
+        visibility: 'link',
+      });
+      expect(result).not.toHaveProperty('agentModel');
+      expect(result).not.toHaveProperty('agentProvider');
+      expect(result).not.toHaveProperty('ownerId');
+      expect(result).not.toHaveProperty('shareConfig');
+      expect(result).not.toHaveProperty('userViewCount');
+      // Visitor topics live under the creator's account, so the counter has to
+      // run as the owner rather than the caller.
+      expect(topicModelConstructor).toHaveBeenCalledWith(expect.anything(), 'owner-user');
+      expect(AgentShareModel.findBySlugOrId).toHaveBeenCalledWith(
+        expect.anything(),
+        'shared-agent',
+      );
+      expect(AgentShareModel.assertShareAccess).toHaveBeenCalledWith(agentShare, 'visitor-user');
+      expect(AgentShareModel.incrementUserViewCount).toHaveBeenCalledWith(
+        expect.anything(),
+        'agent-share-1',
+      );
+    });
+
+    describe('uploadAbility', () => {
+      const resolve = async () => {
+        const caller = shareRouter.createCaller(
+          await createContextInner({ userId: 'visitor-user' }),
+        );
+        return (await caller.getSharedAgent({ slugOrId: 'shared-agent' })).uploadAbility;
+      };
+
+      it('looks the model up as the OWNER, whose overrides the run itself honours', async () => {
+        await resolve();
+
+        expect(agentServiceConstructor).toHaveBeenCalledWith(expect.anything(), 'owner-user');
+        expect(resolveModelSelectionMock).toHaveBeenCalledWith({
+          model: 'gpt-4o',
+          provider: 'openai',
+        });
+        expect(aiModelModelConstructor).toHaveBeenCalledWith(expect.anything(), 'owner-user');
+        expect(findByIdAndProviderMock).toHaveBeenCalledWith('gpt-4o', 'openai');
+      });
+
+      it("prefers the owner's stored ability override over the bundled list", async () => {
+        findByIdAndProviderMock.mockResolvedValue({
+          abilities: { audio: true, video: true, vision: false },
+        });
+
+        await expect(resolve()).resolves.toEqual({ audio: true, image: false, video: true });
+      });
+
+      it("gates on the OWNER's effective model when the agent has none configured", async () => {
+        // The run merges the owner's default agent config over the global
+        // default, so an agent with no model of its own answers with the
+        // owner's default model — the gate must look at that one, not at the
+        // global constant.
+        vi.mocked(AgentShareModel.findBySlugOrId).mockResolvedValue({
+          ...agentShare,
+          agentModel: null,
+          agentProvider: null,
+        } as any);
+        resolveModelSelectionMock.mockResolvedValue({
+          model: 'claude-sonnet-4',
+          provider: 'anthropic',
+        });
+        loadModelsMock.mockResolvedValue([
+          {
+            abilities: { audio: false, video: false, vision: true },
+            id: 'gpt-4o',
+            providerId: 'openai',
+          },
+          {
+            abilities: { audio: true, video: false, vision: false },
+            id: 'claude-sonnet-4',
+            providerId: 'anthropic',
+          },
+        ]);
+
+        await expect(resolve()).resolves.toEqual({ audio: true, image: false, video: false });
+        expect(resolveModelSelectionMock).toHaveBeenCalledWith({ model: null, provider: null });
+        expect(findByIdAndProviderMock).toHaveBeenCalledWith('claude-sonnet-4', 'anthropic');
+      });
+
+      it('fails closed when the effective model cannot be resolved', async () => {
+        resolveModelSelectionMock.mockRejectedValue(new Error('settings unavailable'));
+
+        await expect(resolve()).resolves.toEqual({ audio: false, image: false, video: false });
+        expect(findByIdAndProviderMock).not.toHaveBeenCalled();
+      });
+
+      it('fails closed (no media) when the capability lookup throws', async () => {
+        loadModelsMock.mockRejectedValue(new Error('bundle missing'));
+
+        await expect(resolve()).resolves.toEqual({ audio: false, image: false, video: false });
+      });
+
+      it('fails closed when the model is unknown to both the owner and the bundle', async () => {
+        loadModelsMock.mockResolvedValue([]);
+
+        await expect(resolve()).resolves.toEqual({ audio: false, image: false, video: false });
+      });
+    });
+
+    it('does not count owner views', async () => {
+      const caller = shareRouter.createCaller(await createContextInner({ userId: 'owner-user' }));
+
+      await expect(caller.getSharedAgent({ slugOrId: 'shared-agent' })).resolves.toMatchObject({
+        isOwner: true,
+      });
+      expect(AgentShareModel.incrementUserViewCount).not.toHaveBeenCalled();
+    });
+
+    it('resolves by raw share id', async () => {
+      const caller = shareRouter.createCaller(await createContextInner({ userId: 'visitor-user' }));
+
+      await caller.getSharedAgent({ slugOrId: 'agent-share-1' });
+
+      expect(AgentShareModel.findBySlugOrId).toHaveBeenCalledWith(
+        expect.anything(),
+        'agent-share-1',
+      );
+    });
+
+    it('allows the owner to resolve a private share', async () => {
+      vi.mocked(AgentShareModel.findBySlugOrId).mockResolvedValue({
+        ...agentShare,
+        visibility: 'private',
+      } as any);
+      const caller = shareRouter.createCaller(await createContextInner({ userId: 'owner-user' }));
+
+      await expect(caller.getSharedAgent({ slugOrId: 'shared-agent' })).resolves.toMatchObject({
+        isOwner: true,
+        visibility: 'private',
+      });
+    });
+
+    it('still resolves the share when the view counter fails', async () => {
+      vi.mocked(AgentShareModel.incrementUserViewCount).mockRejectedValue(new Error('db down'));
+      const caller = shareRouter.createCaller(await createContextInner({ userId: 'visitor-user' }));
+
+      await expect(caller.getSharedAgent({ slugOrId: 'shared-agent' })).resolves.toMatchObject({
+        isOwner: false,
+        shareId: 'agent-share-1',
+      });
+    });
+
+    it('returns NOT_FOUND without counting a view when the slug/id does not resolve', async () => {
+      vi.mocked(AgentShareModel.findBySlugOrId).mockResolvedValue(null);
+      const caller = shareRouter.createCaller(await createContextInner({ userId: 'visitor-user' }));
+
+      await expect(caller.getSharedAgent({ slugOrId: 'no-such-slug' })).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+      expect(AgentShareModel.incrementUserViewCount).not.toHaveBeenCalled();
+    });
+
+    it('does not count a failed FORBIDDEN access', async () => {
+      const code = 'FORBIDDEN';
+      vi.mocked(AgentShareModel.assertShareAccess).mockImplementation(() => {
+        throw new TRPCError({ code, message: 'This share is private' });
+      });
+      const caller = shareRouter.createCaller(await createContextInner({ userId: 'visitor-user' }));
+
+      await expect(caller.getSharedAgent({ slugOrId: 'shared-agent' })).rejects.toMatchObject({
+        code,
+      });
+      expect(AgentShareModel.incrementUserViewCount).not.toHaveBeenCalled();
+    });
+
+    describe('visitor capability', () => {
+      it('rejects on a deployment without business features, even for the owner', async () => {
+        mocks.businessConst.ENABLE_BUSINESS_FEATURES = false;
+        const caller = shareRouter.createCaller(await createContextInner({ userId: 'owner-user' }));
+
+        await expect(caller.getSharedAgent({ slugOrId: 'shared-agent' })).rejects.toMatchObject({
+          code: 'FORBIDDEN',
+        });
+        expect(AgentShareModel.findBySlugOrId).not.toHaveBeenCalled();
+      });
+
+      it.each([false, undefined])(
+        'admits a non-owner visitor when the agent share flag is %s',
+        async (enableAgentShare) => {
+          mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShare });
+          const caller = shareRouter.createCaller(
+            await createContextInner({ userId: 'visitor-user' }),
+          );
+
+          await expect(caller.getSharedAgent({ slugOrId: 'shared-agent' })).resolves.toMatchObject({
+            isOwner: false,
+          });
+          expect(mockGetFeatureFlagsState).not.toHaveBeenCalled();
+          expect(AgentShareModel.incrementUserViewCount).toHaveBeenCalled();
+        },
+      );
+
+      it('still lets the owner preview their own share when the agent share flag is off', async () => {
+        mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShare: false });
+        const caller = shareRouter.createCaller(await createContextInner({ userId: 'owner-user' }));
+
+        await expect(caller.getSharedAgent({ slugOrId: 'shared-agent' })).resolves.toMatchObject({
+          isOwner: true,
+        });
+        // The owner path never consults the agent share flag at all.
+        expect(mockGetFeatureFlagsState).not.toHaveBeenCalled();
+      });
+    });
+  });
+
   describe('getSharedTopic', () => {
     it('should return shared topic data for valid share', async () => {
       const mockShare = {

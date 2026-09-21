@@ -1,6 +1,13 @@
-import { type MessageSender } from '@lobechat/types';
+import { type BotSenderMetadata, type MessageSender, RequestTrigger } from '@lobechat/types';
+
+import { parseSpeakerTag } from '@/store/chat/utils/parseSpeakerTag';
 
 interface ResolveSenderIdentityOptions {
+  /**
+   * Real platform author of a bot-channel message. Wins over `sender`, which
+   * for such rows is the bot OWNER's account rather than who actually typed.
+   */
+  botSender?: BotSenderMetadata | null;
   /** Viewer's user id, used to detect their own messages. */
   currentUserId?: string | null;
   /** Viewer's avatar, applied only to their own messages. */
@@ -22,12 +29,21 @@ interface ResolveSenderIdentityOptions {
  * misattribute their messages to whoever is looking.
  */
 export const resolveSenderIdentity = ({
+  botSender,
   currentUserId,
   selfAvatar,
   selfTitle,
   sender,
   unknownLabel,
 }: ResolveSenderIdentityOptions) => {
+  if (botSender) {
+    return {
+      avatar: botSender.avatar || undefined,
+      isOwn: false,
+      title: botSender.fullName || botSender.username || unknownLabel,
+    };
+  }
+
   const isOwn = !sender || sender.id === currentUserId;
   const senderName = sender?.fullName || sender?.username || '';
   const title = isOwn ? senderName || selfTitle || '' : senderName || unknownLabel;
@@ -38,3 +54,14 @@ export const resolveSenderIdentity = ({
 
   return { avatar, isOwn, title };
 };
+
+/**
+ * Bot-channel sender for a user message: the structured block written by the
+ * server, falling back to the `<speaker>` tag older rows still carry inline.
+ */
+export const getBotSender = (message: {
+  content?: string | null;
+  metadata?: { botSender?: BotSenderMetadata | null; trigger?: RequestTrigger } | null;
+}): BotSenderMetadata | undefined =>
+  message.metadata?.botSender ??
+  (message.metadata?.trigger === RequestTrigger.Bot ? parseSpeakerTag(message.content) : undefined);

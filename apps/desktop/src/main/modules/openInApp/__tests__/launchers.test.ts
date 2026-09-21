@@ -6,15 +6,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { launchApp } from '../launchers';
 
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
-}));
-
 vi.mock('node:fs/promises', () => ({
   access: vi.fn(),
 }));

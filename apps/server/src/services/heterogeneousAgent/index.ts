@@ -6,10 +6,15 @@ import {
   isHeteroStatusGuideErrorData,
   type LocalHeterogeneousAgentType,
 } from '@lobechat/heterogeneous-agents';
+import { normalizeHeterogeneousMessageError } from '@lobechat/heterogeneous-agents/errors';
 import { ThreadStatus } from '@lobechat/types';
 import debug from 'debug';
 
-import { AgentOperationModel } from '@/database/models/agentOperation';
+import {
+  AgentOperationModel,
+  type HeteroIngestRejectionMarker,
+  type HeteroIngestRejectionReason,
+} from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
@@ -43,6 +48,20 @@ export interface HeterogeneousIngestParams {
   topicId: string;
 }
 
+/**
+ * Outcome of one ingest batch, reported back to the producer.
+ *
+ * A refused batch is NOT an error the producer should retry — the operation it
+ * belongs to is over as far as the server is concerned, and every later batch
+ * will be refused too. It IS, however, a failure of the run: the producer's
+ * output is not being persisted, so it must stop pushing and finish as failed
+ * rather than exit 0 on an empty turn.
+ */
+export interface HeterogeneousIngestResult {
+  accepted: boolean;
+  reason?: HeteroIngestRejectionReason;
+}
+
 export interface HeterogeneousFinishParams {
   agentType: HeterogeneousAgentType;
   /** Initial assistant placeholder supplied by the producer. This remains
@@ -57,6 +76,8 @@ export interface HeterogeneousFinishParams {
   error?: { body?: Record<string, unknown>; message: string; type: string };
   operationId: string;
   result: HeterogeneousFinishResult;
+  /** True only when the producer proved the requested native session unusable. */
+  resumeSessionInvalidated?: boolean;
   /**
    * Native CLI session id (e.g. CC's per-cwd session). Used in phase 2c to
    * persist on `topic.metadata` so a subsequent `lh hetero exec` run can
@@ -79,7 +100,18 @@ export const normalizeHeterogeneousFinishError = (
   agentType: HeterogeneousAgentType,
   error: HeterogeneousFinishError | undefined,
 ): HeterogeneousFinishError | undefined => {
-  if (!error || isHeteroStatusGuideErrorData(error.body)) return error;
+  if (!error) return error;
+  const normalized = normalizeHeterogeneousMessageError(
+    { ...error, type: 'AgentRuntimeError' },
+    agentType,
+  );
+  if (normalized.errorRef)
+    return {
+      ...normalized,
+      message: normalized.message ?? error.message,
+      type: 'AgentRuntimeError',
+    };
+  if (isHeteroStatusGuideErrorData(error.body)) return error;
 
   const body = error.body;
   const bodyDetails = body
@@ -92,14 +124,36 @@ export const normalizeHeterogeneousFinishError = (
 
   if (!classified) return error;
 
-  return {
+  return normalizeHeterogeneousMessageError({
     body: { ...classified },
     message: classified.message,
     type: 'AgentRuntimeError',
-  };
+  }) as HeterogeneousFinishError;
 };
 
+/**
+ * User-facing failure for a run whose events ingest refused. Deliberately not a
+ * status-guide code: nothing is wrong with the user's machine, credentials or
+ * the CLI — the turn simply has to be re-sent.
+ */
+const buildIngestRejectionError = (
+  rejection: HeteroIngestRejectionMarker,
+): HeterogeneousFinishError => ({
+  body: {
+    droppedEvents: rejection.droppedEvents,
+    reason: rejection.reason,
+    rejectedAt: rejection.at,
+  },
+  message:
+    rejection.reason === 'stale-operation'
+      ? 'This run was replaced while it was still working, so its output was not saved. Send the message again.'
+      : 'This run had already been closed when its output arrived, so nothing was saved. Send the message again.',
+  type: 'AgentRuntimeError',
+});
+
 export interface HeterogeneousAgentServiceOptions {
+  /** Inject a pre-built operation model (used by tests). */
+  agentOperationModel?: AgentOperationModel;
   /** Inject a pre-built persistence handler (used by tests). */
   persistenceHandler?: HeterogeneousPersistenceHandler;
   /** Inject a snapshot store (used by tests); defaults to the env-resolved store. */
@@ -128,6 +182,7 @@ export interface HeterogeneousAgentServiceOptions {
  * `topic.metadata.heterogeneousSessions`.
  */
 export class HeterogeneousAgentService {
+  private readonly agentOperationModel: AgentOperationModel;
   private readonly db: LobeChatDatabase;
   private readonly messageModel: MessageModel;
   private readonly persistenceHandler: HeterogeneousPersistenceHandler;
@@ -146,6 +201,8 @@ export class HeterogeneousAgentService {
     this.userId = userId;
     const workspaceId = options.workspaceId;
     this.workspaceId = workspaceId;
+    this.agentOperationModel =
+      options.agentOperationModel ?? new AgentOperationModel(db, userId, workspaceId);
     this.messageModel = new MessageModel(db, userId, workspaceId);
     this.streamEventManager = options.streamEventManager ?? createStreamEventManager();
     this.topicModel = options.topicModel ?? new TopicModel(db, userId, workspaceId);
@@ -158,10 +215,12 @@ export class HeterogeneousAgentService {
         messageModel: this.messageModel,
         threadModel: new ThreadModel(db, userId, workspaceId),
         topicModel: this.topicModel,
+        userId,
+        workspaceId,
       });
   }
 
-  async heteroIngest(params: HeterogeneousIngestParams): Promise<void> {
+  async heteroIngest(params: HeterogeneousIngestParams): Promise<HeterogeneousIngestResult> {
     const { agentType, assistantMessageId, events, operationId, topicId } = params;
 
     log(
@@ -172,6 +231,12 @@ export class HeterogeneousAgentService {
       agentType,
       events.length,
     );
+
+    const leaseRefreshed = await this.agentOperationModel.touchRunning(operationId);
+    if (!leaseRefreshed) {
+      log('heteroIngest: ignore terminal or missing operation op=%s', operationId);
+      return this.rejectIngest(operationId, 'operation-not-running', events.length);
+    }
 
     // Persist FIRST, then publish — the renderer's gateway handler triggers
     // `fetchAndReplaceMessages` on stream_start / tool_end / step_complete,
@@ -189,7 +254,7 @@ export class HeterogeneousAgentService {
           operationId,
           err.message,
         );
-        return;
+        return this.rejectIngest(operationId, 'stale-operation', events.length);
       }
       throw err;
     }
@@ -231,6 +296,60 @@ export class HeterogeneousAgentService {
     if (unpublished.length > 0) {
       await this.traceRecorder.appendBatch(operationId, events);
     }
+
+    return { accepted: true };
+  }
+
+  /**
+   * Turn a discarded batch into a durable, reportable refusal.
+   *
+   * Two consumers, because either can be missing: the return value lets a
+   * current producer stop and finish as failed, while the row marker covers the
+   * producers that predate that contract (and any that die before finishing) —
+   * `heteroFinish` reads it back and refuses to settle the run as a clean turn.
+   * Best-effort on the write: losing the marker must not turn a refusal into a
+   * silent acceptance for the producer that CAN act on it.
+   */
+  private async rejectIngest(
+    operationId: string,
+    reason: HeteroIngestRejectionReason,
+    droppedEvents: number,
+  ): Promise<HeterogeneousIngestResult> {
+    const marker: HeteroIngestRejectionMarker = {
+      at: new Date().toISOString(),
+      droppedEvents,
+      reason,
+    };
+
+    try {
+      await this.agentOperationModel.recordHeteroIngestRejection(operationId, marker);
+    } catch (err) {
+      log('heteroIngest: failed to record rejection op=%s (non-fatal): %O', operationId, err);
+    }
+
+    return { accepted: false, reason };
+  }
+
+  /**
+   * Read back the refusal {@link rejectIngest} stamped, if any. Never throws: a
+   * failed read must leave the producer's own verdict standing rather than
+   * fabricate a failure for a run that was fine.
+   */
+  private async readIngestRejection(
+    operationId: string,
+  ): Promise<HeteroIngestRejectionMarker | undefined> {
+    try {
+      const operation = await this.agentOperationModel.findById(operationId);
+      const marker = (operation?.metadata as Record<string, unknown> | null | undefined)
+        ?.heteroIngestRejection;
+
+      return marker && typeof marker === 'object'
+        ? (marker as HeteroIngestRejectionMarker)
+        : undefined;
+    } catch (err) {
+      log('heteroFinish: failed to read ingest rejection op=%s (non-fatal): %O', operationId, err);
+      return undefined;
+    }
   }
 
   async heteroFinish(params: HeterogeneousFinishParams): Promise<void> {
@@ -238,11 +357,35 @@ export class HeterogeneousAgentService {
       agentType,
       assistantMessageId: seedAssistantMessageId,
       operationId,
-      result,
+      result: reportedResult,
+      resumeSessionInvalidated,
       sessionId,
       topicId,
     } = params;
-    const error = normalizeHeterogeneousFinishError(agentType, params.error);
+
+    // A producer only sees HTTP acks, so it reports success for a run whose
+    // output ingest discarded — the CLI did exit 0, it just has no idea none of
+    // its work was persisted. That turn is a failure from the user's side: the
+    // assistant placeholder never fills in, and settling it as `done` retires
+    // the topic/task as if it had been answered. Downgrade it here, where the
+    // refusal was recorded, so every terminal consumer below (error bubble,
+    // operation row, completion hooks, bot callback) agrees it failed.
+    const rejection =
+      reportedResult === 'success' ? await this.readIngestRejection(operationId) : undefined;
+    const result: HeterogeneousFinishResult = rejection ? 'error' : reportedResult;
+    const error = rejection
+      ? buildIngestRejectionError(rejection)
+      : normalizeHeterogeneousFinishError(agentType, params.error);
+
+    if (rejection) {
+      log(
+        'heteroFinish: downgrading success to error topic=%s op=%s reason=%s dropped=%d',
+        topicId,
+        operationId,
+        rejection.reason,
+        rejection.droppedEvents,
+      );
+    }
 
     log(
       'heteroFinish: user=%s topic=%s op=%s type=%s result=%s sessionId=%s',
@@ -265,20 +408,15 @@ export class HeterogeneousAgentService {
       );
     }
 
-    // Drain any pending state in the persistence handler — flushes trailing
-    // accumulated content / reasoning that the in-stream `agent_runtime_end`
-    // already wrote (no-op when state is clean), persists the CLI's native
-    // session id for next-turn resume, and frees the per-operation memory.
-    // `topicId` lets finish() bootstrap state for a run that failed before
-    // producing any stream event (spawn ENOENT / auth-on-stderr): the terminal
-    // error must be written HERE, before the `agent_runtime_end` publish below
-    // triggers the client's message refetch.
+    // Flush operation-scoped message state before clearing the topic marker.
+    // Zero-event failures bootstrap their assistant message from that marker,
+    // so settlement must happen afterwards. Topic-level session binding is
+    // deferred until ownership has been checked below.
     await this.persistenceHandler.finish({
       assistantMessageId: seedAssistantMessageId,
       error,
       operationId,
       result,
-      sessionId,
       topicId,
     });
 
@@ -286,6 +424,23 @@ export class HeterogeneousAgentService {
     let assistantMessageId = seedAssistantMessageId;
     let isolationThreadId: string | undefined;
     let orchestrationRole: 'member' | 'supervisor' | undefined;
+    let staleActiveOperationId: string | undefined;
+
+    // The operation row is the durable lifecycle owner. The frontend may have
+    // already consumed the in-stream terminal event and cleared the topic's
+    // runningOperation marker before this explicit finish callback arrives.
+    try {
+      const operation = await this.agentOperationModel.findById(operationId);
+      const metadata = operation?.metadata as Record<string, unknown> | null | undefined;
+      const operationHooks = metadata?._hooks;
+      if (Array.isArray(operationHooks)) serializedHooks = operationHooks as SerializedHook[];
+      if (typeof metadata?.assistantMessageId === 'string') {
+        assistantMessageId = metadata.assistantMessageId;
+      }
+      isolationThreadId = operation?.threadId ?? undefined;
+    } catch (err) {
+      log('heteroFinish: failed to load operation lifecycle metadata (non-fatal): %O', err);
+    }
 
     // `cancelled` is only an intermediate process signal. Keep the marker for
     // the following success/error terminal callback, which owns completion.
@@ -293,23 +448,66 @@ export class HeterogeneousAgentService {
       try {
         const settled = await this.topicModel.settleRunningOperation(topicId, operationId);
         if (settled.status === 'conflict') {
-          log(
-            'heteroFinish: ignore stale finish topic=%s op=%s; current operation is %s',
-            topicId,
-            operationId,
-            settled.activeOperationId,
-          );
-          return;
-        }
-
-        assistantMessageId = settled.assistantMessageId ?? assistantMessageId;
-        if (settled.status === 'settled') {
-          serializedHooks = settled.hooks as SerializedHook[] | undefined;
-          isolationThreadId = settled.threadId;
-          orchestrationRole = settled.orchestrationRole;
+          staleActiveOperationId = settled.activeOperationId;
+        } else {
+          assistantMessageId = settled.assistantMessageId ?? assistantMessageId;
+          if (settled.status === 'settled') {
+            serializedHooks ??= settled.hooks as SerializedHook[] | undefined;
+            isolationThreadId = settled.threadId ?? isolationThreadId;
+            orchestrationRole = settled.orchestrationRole;
+          }
         }
       } catch (err) {
         log('heteroFinish: failed to settle runningOperation (non-fatal): %O', err);
+      }
+    }
+
+    if (staleActiveOperationId) {
+      log(
+        'heteroFinish: settle stale finish topic=%s op=%s; current operation is %s',
+        topicId,
+        operationId,
+        staleActiveOperationId,
+      );
+
+      // The topic marker belongs to the replacement and must remain intact,
+      // but this operation still owns its durable row and stream. Settle those
+      // independent resources instead of leaving the old row `running`.
+      try {
+        await this.agentOperationModel.settleRunning(
+          operationId,
+          result === 'success' ? 'done' : 'error',
+        );
+      } catch (err) {
+        log('heteroFinish: failed to settle stale operation row (non-fatal): %O', err);
+      }
+      await this.streamEventManager.publishStreamEvent(operationId, {
+        data: {
+          agentType,
+          error,
+          operationId,
+          reason: result,
+          sessionId,
+        },
+        stepIndex: 0,
+        type: 'agent_runtime_end',
+      });
+      return;
+    }
+
+    const resumeBindingUpdate = sessionId
+      ? { heteroSessionId: sessionId }
+      : result === 'error' && resumeSessionInvalidated
+        ? { heteroSessionId: undefined }
+        : undefined;
+    if (resumeBindingUpdate) {
+      try {
+        // Only the producer can distinguish a missing native session from a
+        // transient pre-init error such as Codex's "already has an active writer".
+        // Clearing every error without a new id would fork the next turn empty.
+        await this.topicModel.updateMetadata(topicId, resumeBindingUpdate);
+      } catch (err) {
+        log('heteroFinish: update resume session binding failed (non-fatal): %O', err);
       }
     }
 

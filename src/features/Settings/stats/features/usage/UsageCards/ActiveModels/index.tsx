@@ -1,11 +1,12 @@
-import { ModelIcon, ProviderIcon } from '@lobehub/icons';
-import { ActionIcon, Avatar, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, Avatar } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { MaximizeIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ImperativeModal from '@/components/ImperativeModal';
+import { ModelIcon, ProviderIcon } from '@/components/LobeIcons';
 import StatisticCard from '@/components/StatisticCard';
 import TitleWithPercentage from '@/components/StatisticCard/TitleWithPercentage';
 import { type UsageLog } from '@/types/usage/usageRecord';

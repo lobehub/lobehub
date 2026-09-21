@@ -77,7 +77,7 @@ interface CanonicalAskQuestionArgs {
   questions: Array<{
     header: string;
     multiSelect: boolean;
-    options: Array<{ label: string }>;
+    options: Array<{ id?: string; label: string }>;
     question: string;
   }>;
 }
@@ -105,7 +105,7 @@ export const normalizeCursorQuestion = (
   questions: request.questions.map((question) => ({
     header: request.title ?? '',
     multiSelect: question.allowMultiple === true,
-    options: question.options.map(({ label }) => ({ label })),
+    options: question.options.map(({ id, label }) => ({ id, label })),
     question: question.prompt,
   })),
 });
@@ -224,6 +224,7 @@ export class CursorAcpSession extends AcpAgentSession<
       const request = this.parsePermissionRequest(message.params);
       const selected = await this.selectBridgeOption({
         header: 'Permission required',
+        interactionKind: 'permission',
         options: request.options.map(({ name, optionId }) => ({ id: optionId, label: name })),
         question: request.toolCall.title,
         toolCallId: this.buildInterventionToolCallId(
@@ -256,6 +257,7 @@ export class CursorAcpSession extends AcpAgentSession<
       if (!this.options.askUserBridge) return { outcome: { outcome: 'cancelled' } };
       const answer = await this.options.askUserBridge.pending({
         arguments: args,
+        interactionKind: 'question',
         toolCallId: request.toolCallId,
       });
       return this.buildQuestionResponse(request, answer);
@@ -266,6 +268,7 @@ export class CursorAcpSession extends AcpAgentSession<
       const question = [request.overview, request.plan].filter(Boolean).join('\n\n');
       const selected = await this.selectBridgeOption({
         header: request.name ?? 'Plan approval',
+        interactionKind: 'plan',
         options: [
           { id: 'accepted', label: 'Accept' },
           { id: 'rejected', label: 'Reject' },
@@ -366,11 +369,13 @@ export class CursorAcpSession extends AcpAgentSession<
 
   private async selectBridgeOption({
     header,
+    interactionKind,
     options,
     question,
     toolCallId,
   }: {
     header: string;
+    interactionKind: 'permission' | 'plan';
     options: CursorBridgeOption[];
     question: string;
     toolCallId: string;
@@ -382,7 +387,7 @@ export class CursorAcpSession extends AcpAgentSession<
         {
           header,
           multiSelect: false,
-          options: options.map(({ label }) => ({ label })),
+          options: options.map(({ id, label }) => ({ id, label })),
           question,
         },
       ],
@@ -396,6 +401,7 @@ export class CursorAcpSession extends AcpAgentSession<
     });
     const answer = await this.options.askUserBridge.pending({
       arguments: arguments_,
+      interactionKind,
       toolCallId,
     });
     await this.pushToPipeline({
@@ -405,7 +411,10 @@ export class CursorAcpSession extends AcpAgentSession<
       toolCallId,
     });
     const selections = this.getAnswerSelections(answer, question);
-    return options.find(({ id, label }) => selections.includes(id) || selections.includes(label));
+    // Provider-owned permission/plan choices must round-trip the exact stable
+    // option id. Labels are display-only and may be duplicated or localized;
+    // accepting a label here could approve the wrong provider decision.
+    return options.find(({ id }) => selections.includes(id));
   }
 
   private buildInterventionToolCallId(

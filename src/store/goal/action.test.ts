@@ -2,13 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { goalService } from '@/services/goal';
-import { taskService } from '@/services/task';
 
 import { useGoalStore } from './index';
 
 vi.mock('@/libs/swr', () => ({ mutate: vi.fn(), useClientDataSWR: vi.fn() }));
-vi.mock('@/services/goal', () => ({ goalService: { list: vi.fn() } }));
-vi.mock('@/services/task', () => ({ taskService: { deleteGoal: vi.fn() } }));
+vi.mock('@/services/goal', () => ({
+  goalService: { delete: vi.fn(), list: vi.fn() },
+}));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -24,6 +24,86 @@ beforeEach(() => {
 });
 
 describe('GoalAction', () => {
+  describe('useFetchGoalGraph', () => {
+    const refreshIntervalFor = (status: string) => {
+      useGoalStore.getState().useFetchGoalGraph('goal-1');
+      const options = vi.mocked(useClientDataSWR).mock.calls.at(-1)?.[2] as {
+        refreshInterval: (graph?: { goal: { status: string } }) => number;
+      };
+      return options.refreshInterval({ goal: { status } });
+    };
+
+    it.each(['planning', 'running', 'verifying'])(
+      'keeps re-reading a %s goal the server is still advancing',
+      (status) => {
+        // The goal advances from server events now; without this the page would
+        // sit on its first snapshot until the tab lost and regained focus.
+        expect(refreshIntervalFor(status)).toBeGreaterThan(0);
+      },
+    );
+
+    it.each(['review', 'paused', 'achieved', 'failed', 'canceled'])(
+      'stops polling a %s goal',
+      (status) => {
+        // Nothing on the server will move these — the next change comes from a
+        // person, and the action that makes it refreshes the snapshot itself.
+        expect(refreshIntervalFor(status)).toBe(0);
+      },
+    );
+
+    it('does not poll before the first snapshot arrives', () => {
+      useGoalStore.getState().useFetchGoalGraph('goal-1');
+      const options = vi.mocked(useClientDataSWR).mock.calls.at(-1)?.[2] as {
+        refreshInterval: (graph?: unknown) => number;
+      };
+
+      expect(options.refreshInterval(undefined)).toBe(0);
+    });
+  });
+
+  describe('useFetchTopicGoals', () => {
+    it('reads the goals created from the topic under a topic-scoped key', () => {
+      useGoalStore.getState().useFetchTopicGoals('tpc-1');
+      const [key, fetcher] = vi.mocked(useClientDataSWR).mock.calls[0];
+
+      expect(key).toEqual(['goal:topicGoals', 'tpc-1']);
+      void (fetcher as () => unknown)();
+      expect(goalService.list).toHaveBeenCalledWith({ limit: 20, topicId: 'tpc-1' });
+    });
+
+    it('does not fetch without a topic', () => {
+      useGoalStore.getState().useFetchTopicGoals(undefined);
+
+      expect(vi.mocked(useClientDataSWR).mock.calls[0][0]).toBeNull();
+    });
+
+    it('polls only while one of the goals is still advancing on the server', () => {
+      useGoalStore.getState().useFetchTopicGoals('tpc-1');
+      const options = vi.mocked(useClientDataSWR).mock.calls[0][2] as {
+        refreshInterval: (result?: { goals: Array<{ goal: { status: string } }> }) => number;
+      };
+      const withStatuses = (...statuses: string[]) => ({
+        goals: statuses.map((status) => ({ goal: { status } })),
+      });
+
+      expect(options.refreshInterval(withStatuses('achieved', 'running'))).toBeGreaterThan(0);
+      expect(options.refreshInterval(withStatuses('review', 'paused'))).toBe(0);
+      expect(options.refreshInterval(undefined)).toBe(0);
+    });
+
+    it('polls while the conversation is generating, before any goal exists', () => {
+      // A CLI agent's /goal run creates the goal mid-run: the first read finds
+      // nothing, and without polling the tray stayed empty until a page reload.
+      useGoalStore.getState().useFetchTopicGoals('tpc-1', true);
+      const options = vi.mocked(useClientDataSWR).mock.calls[0][2] as {
+        refreshInterval: (result?: { goals: Array<{ goal: { status: string } }> }) => number;
+      };
+
+      expect(options.refreshInterval(undefined)).toBeGreaterThan(0);
+      expect(options.refreshInterval({ goals: [] })).toBeGreaterThan(0);
+    });
+  });
+
   it('stores goal lists independently for each agent', () => {
     useGoalStore.getState().useFetchGoals('agent-1');
     const options = vi.mocked(useClientDataSWR).mock.calls[0][2] as {
@@ -122,23 +202,18 @@ describe('GoalAction', () => {
     });
   });
 
-  it('deletes a goal subtree through the goal endpoint and removes it from local state', async () => {
+  it('deletes a goal through the goal endpoint and removes it from local state', async () => {
     useGoalStore.getState().useFetchGoals('agent-1');
     const options = vi.mocked(useClientDataSWR).mock.calls[0][2] as {
-      onSuccess: (value: { goals: Array<{ id: string; identifier: string }> }) => void;
+      onSuccess: (value: { goals: Array<{ goal: { id: string } }> }) => void;
     };
-    options.onSuccess({
-      goals: [
-        { id: 'goal-1', identifier: 'GOAL-1' },
-        { id: 'goal-2', identifier: 'GOAL-2' },
-      ],
-    });
+    options.onSuccess({ goals: [{ goal: { id: 'goal-1' } }, { goal: { id: 'goal-2' } }] });
 
-    await useGoalStore.getState().deleteGoal('agent-1', 'GOAL-1');
+    await useGoalStore.getState().deleteGoal('agent-1', 'goal-1');
 
-    expect(taskService.deleteGoal).toHaveBeenCalledWith('GOAL-1');
+    expect(goalService.delete).toHaveBeenCalledWith('goal-1');
     expect(useGoalStore.getState().goalListByAgentId['agent-1']).toEqual([
-      { id: 'goal-2', identifier: 'GOAL-2' },
+      { goal: { id: 'goal-2' } },
     ]);
   });
 });

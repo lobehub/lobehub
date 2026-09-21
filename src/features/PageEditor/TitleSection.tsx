@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Icon, Skeleton, TextArea } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, TextArea } from '@lobehub/ui';
+import { Button, Skeleton } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { SmilePlus } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -114,7 +114,7 @@ const TitleSection = memo(() => {
 
       {/* Title Input */}
       {showTitleSkeleton ? (
-        <Skeleton.Button active style={{ height: 44, width: 320 }} />
+        <Skeleton height={44} width={320} />
       ) : (
         <TextArea
           autoSize={{ minRows: 1 }}

@@ -26,6 +26,11 @@ class DeviceService {
     return lambdaClient.device.statPath.query({ deviceId, path });
   }
 
+  /** Browse folders on the execution device, including cursor pagination. */
+  browseDirectory(input: Parameters<DeviceClient['browseDirectory']['query']>[0]) {
+    return lambdaClient.device.browseDirectory.query(input);
+  }
+
   /** Probe whether an agent platform (openclaw / hermes) is available on a device. */
   checkCapability(input: Parameters<DeviceClient['checkCapability']['query']>[0]) {
     return lambdaClient.device.checkCapability.query(input);

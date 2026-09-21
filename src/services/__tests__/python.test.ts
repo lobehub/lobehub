@@ -16,7 +16,12 @@ const stubInterpreter = (result = { result: '42', stdout: '', stderr: '' }) => {
     uploadFiles: vi.fn().mockResolvedValue(undefined),
   };
 
-  return { ctor: vi.fn().mockImplementation(() => Promise.resolve(interpreter)), interpreter };
+  return {
+    ctor: vi.fn(function () {
+      return Promise.resolve(interpreter);
+    }),
+    interpreter,
+  };
 };
 
 describe('PythonService', () => {

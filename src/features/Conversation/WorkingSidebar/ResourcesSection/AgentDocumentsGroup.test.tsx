@@ -4,7 +4,6 @@ import {
   AGENT_DOCUMENT_SKILL_CATEGORY,
   AGENT_SIGNAL_SOURCE_TYPE,
 } from '@lobechat/const';
-import type { ErrorBoundary as LobeErrorBoundary } from '@lobehub/ui';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type * as ReactRouterDom from 'react-router';
@@ -23,58 +22,12 @@ const removeDocumentMock = vi.hoisted(() => vi.fn());
 const useParamsMock = vi.hoisted(() => vi.fn());
 const documentExplorerShouldThrow = vi.hoisted(() => ({ current: false }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Alert: ({ message, title }: { message?: ReactNode; title?: ReactNode }) => (
-    <div role="alert">
-      <div>{title}</div>
-      <div>{message}</div>
-    </div>
-  ),
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ...(await import('~base-ui-stubs')).baseUiStubs,
   confirmModal: modalConfirm,
   toast: { error: messageError, success: messageSuccess },
 }));
-
-vi.mock('@lobehub/ui', async (importOriginal) => {
-  const actual = await importOriginal<{ ErrorBoundary: typeof LobeErrorBoundary }>();
-  return {
-    Accordion: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-    AccordionItem: ({ children, title }: { children?: ReactNode; title?: ReactNode }) => (
-      <div>
-        {title}
-        {children}
-      </div>
-    ),
-    ActionIcon: ({
-      onClick,
-      title,
-    }: {
-      onClick?: (e: React.MouseEvent) => void;
-      title?: string;
-    }) => (
-      <button aria-label={title} onClick={onClick}>
-        {title}
-      </button>
-    ),
-    Center: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-    Empty: ({ description }: { description?: ReactNode }) => <div>{description}</div>,
-    ErrorBoundary: actual.ErrorBoundary,
-    Flexbox: ({
-      children,
-      onClick,
-      ...props
-    }: {
-      children?: ReactNode;
-      onClick?: () => void;
-      [key: string]: unknown;
-    }) => (
-      <div onClick={onClick} {...props}>
-        {children}
-      </div>
-    ),
-    Highlighter: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-    Text: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  };
-});
 
 vi.mock('@/components/NeuralNetworkLoading', () => ({
   default: () => <div data-testid="neural-network-loading" />,
@@ -398,6 +351,42 @@ describe('AgentDocumentsGroup', () => {
     expect(screen.getByTestId('skill-section-Device skills')).toBeInTheDocument();
     expect(screen.getByText('project-writer')).toBeInTheDocument();
     expect(screen.getByText('device-writer')).toBeInTheDocument();
+  });
+
+  it('keeps the filesystem skill scan inert while the pane is disabled', () => {
+    const projectItem = {
+      description: 'writes things',
+      fileCount: 2,
+      files: [],
+      id: 'project-skill',
+      name: 'project-writer',
+      scope: 'project' as const,
+    };
+    useProjectSkillsMock.mockReturnValue({
+      deviceItems: [],
+      error: undefined,
+      getRowActions: () => [],
+      isLoading: false,
+      items: [projectItem],
+      mutate: vi.fn(),
+      onOpenFile: () => undefined,
+      onOpenSkill: () => undefined,
+      projectItems: [projectItem],
+      raw: undefined,
+    });
+    useClientDataSWR.mockReturnValue({
+      data: [],
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    render(<AgentDocumentsGroup showLocalProjectSkills enabled={false} workingDirectory="/repo" />);
+
+    // `undefined` workingDirectory is the hook's documented inert mode: no scan fires.
+    expect(useProjectSkillsMock).toHaveBeenCalledWith(undefined, undefined);
+    expect(screen.queryByTestId('skills-list')).not.toBeInTheDocument();
+    expect(screen.queryByText('project-writer')).not.toBeInTheDocument();
   });
 
   it('opens the SKILL.md document in the portal when clicking a skill bundle row', () => {

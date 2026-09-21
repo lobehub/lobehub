@@ -90,6 +90,67 @@ describe('LobeQwenAI - custom features', () => {
       expect(calledPayload.thinking_budget).toBeUndefined();
     });
 
+    it('should forward enable_thinking and reasoning_effort for qwen3.8-max', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'qwen3.8-max',
+        reasoning_effort: 'medium',
+        thinking: {
+          type: 'enabled',
+        },
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+
+      expect(calledPayload.enable_thinking).toBe(true);
+      expect(calledPayload.reasoning_effort).toBe('medium');
+    });
+
+    it.each(['qwen3.8-max', 'qwen3.8-max-preview', 'qwen3.8-max-0902'])(
+      'should prefer reasoning effort over the thinking budget for %s',
+      async (model) => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model,
+          reasoning_effort: 'medium',
+          thinking: { budget_tokens: 4096, type: 'enabled' },
+        });
+
+        const calledPayload = vi.mocked(instance['client'].chat.completions.create).mock
+          .calls[0][0];
+        expect(calledPayload).toMatchObject({ enable_thinking: true, reasoning_effort: 'medium' });
+        expect(JSON.stringify(calledPayload)).not.toContain('"thinking_budget":');
+      },
+    );
+
+    it('should retain a Qwen3.8 budget when no effort is supplied', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'qwen3.8-max',
+        thinking: { budget_tokens: 4096, type: 'enabled' },
+      });
+
+      const calledPayload = vi.mocked(instance['client'].chat.completions.create).mock.calls[0][0];
+      expect(calledPayload).toMatchObject({ enable_thinking: true, thinking_budget: 4096 });
+      expect(JSON.stringify(calledPayload)).not.toContain('"reasoning_effort":');
+    });
+
+    it('should drop reasoning_effort when qwen3.8-max thinking is disabled', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'qwen3.8-max',
+        reasoning_effort: 'xhigh',
+        thinking: {
+          type: 'disabled',
+        },
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+
+      expect(calledPayload.enable_thinking).toBe(false);
+      expect(calledPayload.reasoning_effort).toBeUndefined();
+    });
+
     it('should only send thinking_budget for budget-only non-thinking models', async () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
@@ -108,7 +169,7 @@ describe('LobeQwenAI - custom features', () => {
     it('should force enable_thinking even when thinking is disabled for thinking-forced models', async () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
-        model: 'qwen3.8-max-preview',
+        model: 'qwen3.9-max',
         thinking: {
           budget_tokens: 0,
           type: 'disabled',
@@ -124,7 +185,7 @@ describe('LobeQwenAI - custom features', () => {
     it('should keep thinking_budget for thinking-forced models when thinking is enabled', async () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
-        model: 'qwen3.8-max-preview',
+        model: 'qwen3.9-max',
         thinking: {
           budget_tokens: 4096,
           type: 'enabled',
@@ -135,6 +196,22 @@ describe('LobeQwenAI - custom features', () => {
 
       expect(calledPayload.enable_thinking).toBe(true);
       expect(calledPayload.thinking_budget).toBe(4096);
+    });
+
+    it('should allow enable_thinking false for hybrid qwen3.8-max-preview', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'qwen3.8-max-preview',
+        reasoning_effort: 'xhigh',
+        thinking: {
+          type: 'disabled',
+        },
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+
+      expect(calledPayload.enable_thinking).toBe(false);
+      expect(calledPayload.reasoning_effort).toBeUndefined();
     });
 
     it('should still force enable_thinking for dedicated thinking models', async () => {

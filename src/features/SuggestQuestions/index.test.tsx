@@ -2,17 +2,12 @@
  * @vitest-environment happy-dom
  */
 import { render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import SuggestQuestions from './index';
 
 const permissionMock = vi.hoisted(() => ({
   allowed: true,
-}));
-
-vi.mock('@lobehub/ui', () => ({
-  Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 
 vi.mock('@/hooks/usePermission', () => ({

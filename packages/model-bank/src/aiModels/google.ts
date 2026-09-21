@@ -79,22 +79,25 @@ const googleChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_048_576 + 65_536,
-    description: 'Points to gemini-3.7-flash',
+    description: 'Points to gemini-3.8-flash',
     displayName: 'Gemini Flash Latest',
     family: 'gemini',
     id: 'gemini-flash-latest',
     knowledgeCutoff: '2026-03',
     maxOutput: 65_536,
+    // Introductory pricing, in effect through 2026-12-31. From 2027-01-01 standard rates apply:
+    // input 1.5 / output 7.5 / cacheRead 0.15 / cacheWrite lookup { '1h': 1 } (per million tokens).
+    // See https://ai.google.dev/gemini-api/docs/pricing
     pricing: {
       units: [
-        { name: 'textInput_cacheRead', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'imageInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'videoInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'audioInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 7.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.075, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'videoInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3.75, strategy: 'fixed', unit: 'millionTokens' },
         {
-          lookup: { prices: { '1h': 1 }, pricingParams: ['ttl'] },
+          lookup: { prices: { '1h': 0.5 }, pricingParams: ['ttl'] },
           name: 'textInput_cacheWrite',
           strategy: 'lookup',
           unit: 'millionTokens',
@@ -162,9 +165,56 @@ const googleChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576 + 65_536,
     description:
+      "Gemini 3.8 Flash is Google's most intelligent Flash model, engineered for long-horizon software engineering, autonomous agents, and complex enterprise workflows.",
+    displayName: 'Gemini 3.8 Flash',
+    enabled: true,
+    family: 'gemini',
+    generation: 'gemini-3.8',
+    id: 'gemini-3.8-flash',
+    knowledgeCutoff: '2026-03',
+    maxOutput: 65_536,
+    /** Introductory rates through 2026-12-31; standard token rates double afterward.
+     * @see https://ai.google.dev/gemini-api/docs/pricing
+     */
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.075, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'videoInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3.75, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: { prices: { '1h': 0.5 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-09-02',
+    settings: {
+      disabledParams: ['temperature', 'top_p'],
+      extendParams: ['thinkingLevel3', 'urlContext'],
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      audio: true,
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_048_576 + 65_536,
+    description:
       'Gemini 3.7 Flash is the next iteration in the Gemini 3 series of highly-capable, natively multimodal, reasoning models, with support for computer use and file search.',
     displayName: 'Gemini 3.7 Flash',
-    enabled: true,
     family: 'gemini',
     generation: 'gemini-3.7',
     id: 'gemini-3.7-flash',
@@ -920,108 +970,6 @@ const googleChatModels: AIChatModelCard[] = [
     },
     type: 'chat',
   },
-  {
-    abilities: {
-      functionCall: true,
-      search: true,
-      vision: true,
-    },
-    contextWindowTokens: 1_048_576 + 8192,
-    description:
-      'Gemini 2.0 Flash delivers next-gen features including exceptional speed, native tool use, multimodal generation, and a 1M-token context window.',
-    displayName: 'Gemini 2.0 Flash',
-    family: 'gemini',
-    generation: 'gemini-2.0',
-    id: 'gemini-2.0-flash',
-    knowledgeCutoff: '2024-08',
-    maxOutput: 8192,
-    pricing: {
-      units: [
-        { name: 'textInput_cacheRead', rate: 0.025, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-02-05',
-    settings: {
-      extendParams: ['urlContext'],
-      searchImpl: 'params',
-      searchProvider: 'google',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      search: true,
-      vision: true,
-    },
-    contextWindowTokens: 1_048_576 + 8192,
-    description:
-      'Gemini 2.0 Flash delivers next-gen features including exceptional speed, native tool use, multimodal generation, and a 1M-token context window.',
-    displayName: 'Gemini 2.0 Flash 001',
-    family: 'gemini',
-    generation: 'gemini-2.0',
-    id: 'gemini-2.0-flash-001',
-    knowledgeCutoff: '2024-08',
-    maxOutput: 8192,
-    pricing: {
-      units: [
-        { name: 'textInput_cacheRead', rate: 0.025, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-02-05',
-    settings: {
-      extendParams: ['urlContext'],
-      searchImpl: 'params',
-      searchProvider: 'google',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      vision: true,
-    },
-    contextWindowTokens: 1_048_576 + 8192,
-    description: 'A Gemini 2.0 Flash variant optimized for cost efficiency and low latency.',
-    displayName: 'Gemini 2.0 Flash-Lite',
-    family: 'gemini',
-    generation: 'gemini-2.0',
-    id: 'gemini-2.0-flash-lite',
-    knowledgeCutoff: '2024-08',
-    maxOutput: 8192,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.075, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-02-05',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      vision: true,
-    },
-    contextWindowTokens: 1_048_576 + 8192,
-    description: 'A Gemini 2.0 Flash variant optimized for cost efficiency and low latency.',
-    displayName: 'Gemini 2.0 Flash-Lite 001',
-    family: 'gemini',
-    generation: 'gemini-2.0',
-    id: 'gemini-2.0-flash-lite-001',
-    knowledgeCutoff: '2024-08',
-    maxOutput: 8192,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.075, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-02-05',
-    type: 'chat',
-  },
 ];
 
 // Common parameters for Imagen models
@@ -1057,7 +1005,6 @@ const googleImageModels: AIImageModelCard[] = [
     displayName: 'Nano Banana 2',
     id: 'gemini-3.1-flash-image-preview:image',
     type: 'image',
-    enabled: true,
     description:
       "Gemini 3.1 Flash Image (Nano Banana 2) is Google's fastest native image generation model with thinking support, conversational image generation and editing.",
     releasedAt: '2026-02-26',
@@ -1123,45 +1070,6 @@ const googleImageModels: AIImageModelCard[] = [
         { name: 'textOutput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'imageOutput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
       ],
-    },
-  },
-  {
-    displayName: 'Imagen 4',
-    id: 'imagen-4.0-generate-001',
-    enabled: true,
-    type: 'image',
-    description: 'Imagen fourth-generation text-to-image model family.',
-    organization: 'Deepmind',
-    releasedAt: '2025-08-15',
-    parameters: imagenGenParameters,
-    pricing: {
-      units: [{ name: 'imageGeneration', rate: 0.04, strategy: 'fixed', unit: 'image' }],
-    },
-  },
-  {
-    displayName: 'Imagen 4 Ultra',
-    id: 'imagen-4.0-ultra-generate-001',
-    enabled: true,
-    type: 'image',
-    description: 'Imagen fourth-generation text-to-image Ultra variant.',
-    organization: 'Deepmind',
-    releasedAt: '2025-08-15',
-    parameters: imagenGenParameters,
-    pricing: {
-      units: [{ name: 'imageGeneration', rate: 0.06, strategy: 'fixed', unit: 'image' }],
-    },
-  },
-  {
-    displayName: 'Imagen 4 Fast',
-    id: 'imagen-4.0-fast-generate-001',
-    enabled: true,
-    type: 'image',
-    description: 'Imagen fourth-generation text-to-image fast variant.',
-    organization: 'Deepmind',
-    releasedAt: '2025-08-15',
-    parameters: imagenGenParameters,
-    pricing: {
-      units: [{ name: 'imageGeneration', rate: 0.02, strategy: 'fixed', unit: 'image' }],
     },
   },
 ];

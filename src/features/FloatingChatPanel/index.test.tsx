@@ -16,7 +16,26 @@ const sheetHandlers = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ActionIcon: ({
+    onClick,
+    title,
+    ...rest
+  }: {
+    onClick?: () => void;
+    title?: string;
+    [key: string]: unknown;
+  }) => (
+    <button
+      data-testid={(rest as any)['data-testid']}
+      title={title}
+      type="button"
+      onClick={onClick}
+    >
+      {title}
+    </button>
+  ),
   FloatingSheet: ({
     children,
     dismissible,
@@ -57,28 +76,6 @@ vi.mock('@lobehub/ui/base-ui', () => ({
       </div>
     );
   },
-}));
-
-vi.mock('@lobehub/ui', () => ({
-  ActionIcon: ({
-    onClick,
-    title,
-    ...rest
-  }: {
-    onClick?: () => void;
-    title?: string;
-    [key: string]: unknown;
-  }) => (
-    <button
-      data-testid={(rest as any)['data-testid']}
-      title={title}
-      type="button"
-      onClick={onClick}
-    >
-      {title}
-    </button>
-  ),
-  Icon: ({ icon }: { icon: () => void }) => <span data-icon={icon.name} />,
 }));
 
 const mergedHooksCaptured = vi.hoisted(() => ({

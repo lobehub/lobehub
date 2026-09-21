@@ -1,3 +1,4 @@
+import { createMediaFileRef } from '@lobechat/const/mediaRef';
 import { filesPrompts } from '@lobechat/prompts';
 import type { ChatAudioItem, MessageContentPart } from '@lobechat/types';
 import { normalizeAudioDurationMs } from '@lobechat/utils/audio';
@@ -29,6 +30,33 @@ const log = debug('context-engine:processor:MessageContentProcessor');
  */
 export const VISION_DOWNGRADE_PLACEHOLDER =
   '[image omitted: native vision is not supported. Do not infer or describe the image. If the request depends on it, use an available visual-analysis tool before answering; otherwise state that the image cannot be inspected.]';
+
+/**
+ * AVIF must stay as a media ref even when the active model supports vision.
+ * Model capability flags do not describe per-format support, while Analyze Media
+ * normalizes AVIF at its request boundary.
+ */
+const requiresVisualAnalysis = (mediaType: unknown): boolean =>
+  typeof mediaType === 'string' && mediaType.split(';', 1)[0].trim().toLowerCase() === 'image/avif';
+
+/**
+ * Heterogeneous-agent image uploads mirror each persisted image URL into tool
+ * text as `![mediaType](url)`. Non-vision models must receive only the opaque
+ * media ref, otherwise they can copy the signed URL into a later tool call.
+ */
+const stripUploadedImageMarkdown = (
+  content: string,
+  images: Array<{ mediaType?: unknown; url: string }>,
+): string => {
+  let sanitized = content;
+
+  for (const image of images) {
+    if (typeof image.mediaType !== 'string') continue;
+    sanitized = sanitized.replaceAll(`![${image.mediaType}](${image.url})`, '');
+  }
+
+  return sanitized.trim();
+};
 
 /**
  * Deserialize content string to message content parts
@@ -476,13 +504,14 @@ export class MessageContentProcessor extends BaseProcessor {
   private async processToolMessage(message: any): Promise<any> {
     const rawImages = message.pluginState?.images;
 
-    // Only forward entries with a durable, fetchable URL. Pre-upload entries
-    // (base64 `data`, no `url`) must never reach the LLM payload, and legacy
-    // non-http(s) URLs (e.g. desktop-only `localfile://` previews) can't be
-    // fetched by the send path.
+    // Forward provider-readable HTTP(S) and inline image URLs to vision models.
+    // Pre-upload entries (`data` without `url`) and legacy non-http(s) URLs
+    // (e.g. desktop-only `localfile://` previews) cannot reach the send path.
     const images = Array.isArray(rawImages)
-      ? rawImages.filter(
-          (image: any) => typeof image?.url === 'string' && /^(?:data:|https?:)/.test(image.url),
+      ? rawImages.flatMap((image: any, index: number) =>
+          typeof image?.url === 'string' && /^(?:data:image\/|https?:)/i.test(image.url)
+            ? [{ ...image, sourceIndex: index }]
+            : [],
         )
       : [];
 
@@ -490,6 +519,12 @@ export class MessageContentProcessor extends BaseProcessor {
     if (images.length === 0) return message;
 
     const canUseVision = !!this.config.isCanUseVision?.(this.config.model, this.config.provider);
+    const fallbackImages = canUseVision
+      ? images.filter((image) => requiresVisualAnalysis(image.mediaType))
+      : images;
+    const visionImages = canUseVision
+      ? images.filter((image) => !requiresVisualAnalysis(image.mediaType))
+      : [];
 
     // Normalize text content (historical messages may already be multimodal).
     let textContent = '';
@@ -502,25 +537,42 @@ export class MessageContentProcessor extends BaseProcessor {
         .join('\n\n');
     }
 
-    // Vision not supported: drop the image parts but surface a placeholder so
-    // the model still knows the tool produced an image it can't inspect.
-    if (!canUseVision) {
-      const placeholders = Array.from(
-        { length: images.length },
-        () => VISION_DOWNGRADE_PLACEHOLDER,
-      ).join('\n');
-      const content = textContent ? `${textContent}\n\n${placeholders}` : placeholders;
+    // Native vision unavailable or image format unsupported: surface stable
+    // opaque refs so the model can call the visual-analysis fallback.
+    // The signed URL stays out of model-visible text, which prevents the model
+    // from copying opaque image data between tool calls.
+    let processedTextContent = textContent;
+    if (fallbackImages.length > 0) {
+      const fallbackTextContent = stripUploadedImageMarkdown(textContent, fallbackImages);
+      const placeholders = fallbackImages
+        .map(({ sourceIndex, url }) => {
+          // Inline image data is safe to send as a structured vision input but
+          // must never be copied into text or exposed as a reusable media ref.
+          if (!message.id || !/^https?:/i.test(url)) return VISION_DOWNGRADE_PLACEHOLDER;
 
-      return { ...message, content };
+          const ref = createMediaFileRef({
+            index: sourceIndex,
+            messageId: message.id,
+            type: 'image',
+          });
+
+          return `[image omitted: native vision is not supported. Media ref: ${ref}. Do not infer or describe the image. Use an available visual-analysis tool with this ref before answering.]`;
+        })
+        .join('\n');
+      processedTextContent = fallbackTextContent
+        ? `${fallbackTextContent}\n\n${placeholders}`
+        : placeholders;
     }
+
+    if (visionImages.length === 0) return { ...message, content: processedTextContent };
 
     const contentParts: UserMessageContentPart[] = [];
 
-    if (textContent) {
-      contentParts.push({ text: textContent, type: 'text' });
+    if (processedTextContent) {
+      contentParts.push({ text: processedTextContent, type: 'text' });
     }
 
-    contentParts.push(...(await this.processImageList(images)));
+    contentParts.push(...(await this.processImageList(visionImages)));
 
     return { ...message, content: contentParts };
   }

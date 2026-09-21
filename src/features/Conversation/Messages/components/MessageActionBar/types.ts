@@ -25,9 +25,23 @@ export interface MessageActionDefinition {
 }
 
 /**
- * Slot in a bar/menu list. A string is an action key; `'divider'` inserts a
- * divider.
+ * A submenu: one entry in the menu that opens a nested list of actions.
+ *
+ * The children are ordinary action keys, so a grouped action stays a normal
+ * registry entry — grouping is a property of the menu that shows it, not of
+ * the action.
  */
-export type MessageActionSlot = string;
+export interface MessageActionGroupSlot {
+  /** Action keys to nest, in order. */
+  children: string[];
+  /** Registry key of the action that provides the submenu's label and icon. */
+  key: string;
+}
+
+/**
+ * Slot in a bar/menu list. A string is an action key; `'divider'` inserts a
+ * divider; an object nests its children in a submenu.
+ */
+export type MessageActionSlot = string | MessageActionGroupSlot;
 
 export const DIVIDER_KEY = 'divider';

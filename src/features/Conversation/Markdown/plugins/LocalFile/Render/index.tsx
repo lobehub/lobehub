@@ -15,7 +15,13 @@ interface LocalFileProps {
 const Render = memo<MarkdownElementProps<LocalFileProps>>(({ node }) => {
   // Extract properties from node.properties
   const { name, path, isDirectory } = node?.properties || {};
-  const isSharePage = useConversationStore((s) => !!s.context.topicShareId);
+  // Both share surfaces are read-only for the viewer. On the agent-share
+  // visitor page this also matters on Electron: an interactive chip would let
+  // a model/creator-controlled `<local_file path>` open a path on the
+  // VISITOR's machine via `shell.openPath`.
+  const isSharePage = useConversationStore(
+    (s) => !!s.context.topicShareId || !!s.context.agentShareId,
+  );
 
   if (!name || !path) {
     // If required properties are missing, render an error or null

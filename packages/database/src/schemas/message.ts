@@ -19,7 +19,7 @@ import {
 import { createInsertSchema } from 'drizzle-zod';
 
 import { idGenerator } from '../utils/idGenerator';
-import { timestamps, varchar255 } from './_helpers';
+import { softDeleteColumns, timestamps, varchar255 } from './_helpers';
 import { agents } from './agent';
 import { chatGroups } from './chatGroup';
 import { files } from './file';
@@ -150,6 +150,8 @@ export const messages = pgTable(
       onDelete: 'cascade',
     }),
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+    /** Recycle bin — see `schemas/trash.ts`. */
+    ...softDeleteColumns(),
     ...timestamps,
   },
   (table) => [

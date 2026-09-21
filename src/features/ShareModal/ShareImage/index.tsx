@@ -71,7 +71,7 @@ const ShareImage = memo<{ mobile?: boolean }>(() => {
     {
       children: <Tabs items={imageTypeOptions} />,
       label: t('shareModal.imageType'),
-      layout: 'horizontal',
+      layout: 'vertical',
       minWidth: undefined,
       name: 'imageType',
       valuePropName: 'activeKey',

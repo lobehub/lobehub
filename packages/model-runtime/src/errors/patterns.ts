@@ -401,6 +401,18 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
     match: sub('The free quota has been exhausted'),
   },
 
+  // Harvested from the UpstreamHttpError / bare-500 residue (2026-09 triage):
+  // BYOK proxies phrase balance exhaustion without the `, please recharge` tail
+  // that the narrower pattern above requires.
+  {
+    code: AgentRuntimeErrorType.InsufficientQuota,
+    match: sub('account balance is insufficient', { caseInsensitive: true }),
+  },
+  {
+    code: AgentRuntimeErrorType.InsufficientQuota,
+    match: sub('no credits remaining'),
+  },
+
   // ─────────────────────────────────────────────────────────────────────────
   // RateLimitExceeded — short-window rate limit (transient, retryable)
   // ─────────────────────────────────────────────────────────────────────────
@@ -559,6 +571,23 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   },
   { code: AgentRuntimeErrorType.ProviderServiceUnavailable, match: sub('服务器问题调试中') },
   { code: AgentRuntimeErrorType.ProviderServiceUnavailable, match: sub('undergoing an upgrade') },
+
+  {
+    code: AgentRuntimeErrorType.ProviderServiceUnavailable,
+    match: sub('provider temporarily unavailable. Error id:'),
+    note: 'Aggregator proxies wrap a transient upstream outage in a bare 500.',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // RemoteMediaDownloadTimeout — provider-side remote media fetch
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    code: AgentRuntimeErrorType.RemoteMediaDownloadTimeout,
+    match: sub('Unable to download content from the provided URL before the timeout', {
+      caseInsensitive: true,
+    }),
+    note: 'OpenAI-compatible remote media fetch timed out before inference.',
+  },
 
   // ─────────────────────────────────────────────────────────────────────────
   // ProviderNetworkError — connection / timeout
@@ -727,6 +756,17 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
     match: sub('Unknown Model, please check the model code'),
   },
 
+  {
+    code: AgentRuntimeErrorType.ModelNotFound,
+    match: sub('is not supported by any configured account'),
+    note: 'Router/aggregator has no account able to serve the requested model.',
+  },
+  {
+    code: AgentRuntimeErrorType.ModelNotFound,
+    match: sub('is no longer available to new users'),
+    note: 'Gemini retires a model for accounts that never called it before.',
+  },
+
   // ─────────────────────────────────────────────────────────────────────────
   // InvalidVertexCredentials
   // ─────────────────────────────────────────────────────────────────────────
@@ -780,6 +820,11 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   {
     code: AgentRuntimeErrorType.InvalidProviderAPIKey,
     match: sub('No active credentials for provider'),
+  },
+
+  {
+    code: AgentRuntimeErrorType.InvalidProviderAPIKey,
+    match: sub('bound service account is deleted or disabled'),
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -897,6 +942,16 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
     match: sub('The model rejected this request. It may not support the input you sent'),
   },
 
+  {
+    code: AgentRuntimeErrorType.CapabilityNotSupported,
+    match: sub('only available through the Batch API'),
+  },
+  {
+    code: AgentRuntimeErrorType.CapabilityNotSupported,
+    match: sub('不支持请求中的能力'),
+    note: 'Chinese aggregators reject unsupported image / PDF / tools / thinking capabilities.',
+  },
+
   // ─────────────────────────────────────────────────────────────────────────
   // ContentModeration
   // ─────────────────────────────────────────────────────────────────────────
@@ -947,6 +1002,29 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
     code: AgentRuntimeErrorType.ContentModeration,
     match: sub('Output data may contain inappropriate content'),
     note: 'sensenova output-side',
+  },
+
+  {
+    code: AgentRuntimeErrorType.ContentModeration,
+    match: sub('data_inspection_failed'),
+    note: 'Alibaba/Qwen content-safety rejection, delivered as a JSON error code.',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // RequestBodyTooLarge — serialized request exceeded an upstream body limit
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    code: AgentRuntimeErrorType.RequestBodyTooLarge,
+    match: { kind: 'regex', value: /failed to buffer (?:the )?request body/i },
+    note: 'Observed from DeepSeek Anthropic-compatible HTTP 413 responses.',
+  },
+  {
+    code: AgentRuntimeErrorType.RequestBodyTooLarge,
+    match: sub('Request body too large for', { caseInsensitive: true }),
+  },
+  {
+    code: AgentRuntimeErrorType.RequestBodyTooLarge,
+    match: sub('413 Request Entity Too Large', { caseInsensitive: true }),
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1098,7 +1176,6 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
     match: sub('function_declarations'),
     note: 'custom gemini proxies mangle tool schema; lobehub-native schema bug fixed in #14740',
   },
-  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('Request body too large for') },
   {
     code: AgentRuntimeErrorType.InvalidRequestFormat,
     match: sub('error getting file type: failed to download file'),
@@ -1223,7 +1300,6 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   { code: AgentRuntimeErrorType.UpstreamHttpError, match: sub('400 status code') },
   { code: AgentRuntimeErrorType.UpstreamHttpError, match: sub('403 status code') },
   { code: AgentRuntimeErrorType.UpstreamHttpError, match: sub('404 status code') },
-  { code: AgentRuntimeErrorType.UpstreamHttpError, match: sub('413 Request Entity Too Large') },
 
   // ─────────────────────────────────────────────────────────────────────────
   // ProviderBizError — generic upstream wrappers that don't fit elsewhere. The

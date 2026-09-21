@@ -1,5 +1,5 @@
 import { agentDisplayName } from '@lobechat/types';
-import { Text } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -22,7 +22,7 @@ const Title = memo<TitleProps>(({ showTitle, time, avatar, titleAddon }) => {
   return (
     <>
       {showTitle && (
-        <Text fontSize={14} weight={500}>
+        <Text fontSize={14} style={{ whiteSpace: 'nowrap' }} weight={500}>
           {title}
         </Text>
       )}

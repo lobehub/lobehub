@@ -19,7 +19,9 @@ const mocks = vi.hoisted(() => {
   return {
     buildDeviceLhEnv: vi.fn(),
     checkHash: vi.fn(),
-    createSandboxService: vi.fn(() => sandboxService),
+    createSandboxService: vi.fn(function () {
+      return sandboxService;
+    }),
     executeToolCall: vi.fn(),
     fileService: {
       getFullFileUrl: vi.fn(),
@@ -46,47 +48,63 @@ vi.mock('@lobechat/builtin-skills', () => ({
 }));
 
 vi.mock('@/database/models/agent', () => ({
-  AgentModel: vi.fn(() => ({
-    getAgentConfigById: mocks.getAgentConfigById,
-  })),
+  AgentModel: vi.fn(function () {
+    return {
+      getAgentConfigById: mocks.getAgentConfigById,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/agentSkill', () => ({
-  AgentSkillModel: vi.fn(() => ({
-    findAll: mocks.findAll,
-    findById: mocks.findById,
-    findByName: mocks.findByName,
-  })),
+  AgentSkillModel: vi.fn(function () {
+    return {
+      findAll: mocks.findAll,
+      findById: mocks.findById,
+      findByName: mocks.findByName,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/file', () => ({
-  FileModel: vi.fn(() => ({
-    checkHash: mocks.checkHash,
-  })),
+  FileModel: vi.fn(function () {
+    return {
+      checkHash: mocks.checkHash,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/user', () => ({
-  UserModel: vi.fn(() => ({
-    getUserSettings: mocks.getUserSettings,
-  })),
+  UserModel: vi.fn(function () {
+    return {
+      getUserSettings: mocks.getUserSettings,
+    };
+  }),
 }));
 
 vi.mock('@/helpers/skillFilters', () => ({
-  filterBuiltinSkills: vi.fn((skills: unknown) => skills),
+  filterBuiltinSkills: vi.fn(function (skills: unknown) {
+    return skills;
+  }),
 }));
 
 vi.mock('@/server/services/agentDocuments', () => ({
-  AgentDocumentsService: vi.fn(() => ({
-    getAgentSkills: mocks.getAgentSkills,
-  })),
+  AgentDocumentsService: vi.fn(function () {
+    return {
+      getAgentSkills: mocks.getAgentSkills,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn(() => mocks.fileService),
+  FileService: vi.fn(function () {
+    return mocks.fileService;
+  }),
 }));
 
 vi.mock('@/server/services/market', () => ({
-  MarketService: vi.fn(() => mocks.marketService),
+  MarketService: vi.fn(function () {
+    return mocks.marketService;
+  }),
 }));
 
 vi.mock('@/server/services/sandbox', async () => {
@@ -99,9 +117,11 @@ vi.mock('@/server/services/sandbox', async () => {
 });
 
 vi.mock('@/server/services/skill/resource', () => ({
-  SkillResourceService: vi.fn(() => ({
-    readResource: mocks.readResource,
-  })),
+  SkillResourceService: vi.fn(function () {
+    return {
+      readResource: mocks.readResource,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/toolExecution/preprocessLhCommand', () => ({
@@ -112,9 +132,13 @@ vi.mock('@/server/services/toolExecution/preprocessLhCommand', () => ({
 
 vi.mock('@/server/services/deviceGateway', () => ({
   deviceGateway: {
-    executeToolCall: mocks.executeToolCall,
     prepareSkillDirectory: mocks.prepareSkillDirectory,
   },
+}));
+
+vi.mock('@/server/services/deviceGateway/authorizedToolCall', () => ({
+  executeAuthorizedDeviceToolCall: (_serverDB: unknown, ...args: unknown[]) =>
+    mocks.executeToolCall(...args),
 }));
 
 vi.mock('../resolveWorkspaceScope', () => ({
@@ -123,6 +147,76 @@ vi.mock('../resolveWorkspaceScope', () => ({
 }));
 
 describe('skillsRuntime', () => {
+  it.each(
+    (['runCommand', 'execScript', 'exportFile'] as const).flatMap((api) =>
+      (['returned', 'thrown', 'stderr'] as const)
+        .filter((mode) => api !== 'exportFile' || mode !== 'stderr')
+        .map((mode) => ({ api, mode })),
+    ),
+  )(
+    'preserves sandbox $mode errors through the $api execution pipeline',
+    async ({ api, mode }) => {
+      const { skillsRuntime } = await import('../skills');
+      const { ToolExecutionService } = await import('../../index');
+      const error = { name: 'MarketAPIError', message: 'Forbidden' };
+      mocks.sandboxService.callTool.mockResolvedValue({ error, result: null, success: false });
+      mocks.sandboxService.exportAndUploadFile.mockResolvedValue({
+        error,
+        filename: 'page.html',
+        success: false,
+      });
+      if (mode === 'thrown') {
+        const thrown = Object.assign(new Error('Forbidden'), { status: 403 });
+        mocks.sandboxService.callTool.mockRejectedValue(thrown);
+        mocks.sandboxService.exportAndUploadFile.mockRejectedValue(thrown);
+      } else if (mode === 'stderr') {
+        mocks.sandboxService.callTool.mockResolvedValue({
+          success: true,
+          result: { success: false, exitCode: 1, stdout: '', stderr: 'Forbidden' },
+        });
+      }
+      const runtime = await skillsRuntime.factory({
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+      const execute = () =>
+        api === 'exportFile'
+          ? runtime.exportFile({ path: '/page.html', filename: 'page.html' })
+          : runtime[api]({ command: 'echo example', description: 'Example' });
+      const service = new ToolExecutionService({
+        builtinToolsExecutor: { execute } as never,
+        mcpService: {} as never,
+      });
+      const result = await service.executeTool(
+        {
+          apiName: api,
+          arguments: '{}',
+          id: 'refusal',
+          identifier: 'lobe-skills',
+          type: 'builtin',
+        },
+        { toolManifestMap: {} },
+      );
+      expect(result.success).toBe(false);
+      if (mode === 'stderr') {
+        expect(result.content).toContain('Forbidden');
+        expect(result.content).not.toContain('Do not retry');
+        expect(result.error?.code).not.toBe('FORBIDDEN');
+        return;
+      }
+      expect(JSON.parse(result.content).error).toMatchObject({
+        code: 'FORBIDDEN',
+        kind: 'stop',
+        message: 'Forbidden',
+        hint: expect.stringContaining('Do not retry'),
+      });
+      expect(result.error).toMatchObject({ code: 'FORBIDDEN', kind: 'stop' });
+    },
+    30_000,
+  );
+
   beforeEach(() => {
     vi.clearAllMocks();
 
@@ -656,9 +750,9 @@ describe('skillsRuntime', () => {
       // Hold both prepares pending to prove the second RPC fires before the
       // first resolves (a sequential await chain would deadlock this test).
       const resolvers: ((value: { extractedDir: string; success: boolean }) => void)[] = [];
-      mocks.prepareSkillDirectory.mockImplementation(
-        () => new Promise((resolve) => resolvers.push(resolve)),
-      );
+      mocks.prepareSkillDirectory.mockImplementation(function () {
+        return new Promise((resolve) => resolvers.push(resolve));
+      });
       mocks.executeToolCall.mockResolvedValue({
         content: 'ok',
         state: { exitCode: 0, stdout: 'ok', success: true },
@@ -984,5 +1078,43 @@ describe('skillsRuntime', () => {
     expect(filterBuiltinSkills).toHaveBeenLastCalledWith(expect.anything(), {
       canExecuteOnDevice: true,
     });
+  });
+
+  // Regression guard for the split-sandbox bug: the sandbox session is keyed by
+  // the acting account, which is derived from the trusted-client token. Without
+  // `workspaceId` this runtime acted as the personal account while `lobe-creds`
+  // and `lobe-cloud-sandbox` (which pass it) acted as the workspace, so
+  // credentials injected for a workspace topic were invisible to every command
+  // run here.
+  it('scopes the market identity to the run workspace so sandbox calls share one session', async () => {
+    const { MarketService } = await import('@/server/services/market');
+    const { skillsRuntime } = await import('../skills');
+
+    await skillsRuntime.factory({
+      serverDB: {} as never,
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    });
+
+    expect(MarketService).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        userInfo: { userId: 'user-1', workspaceId: 'workspace-1' },
+      }),
+    );
+
+    await skillsRuntime.factory({
+      serverDB: {} as never,
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    expect(MarketService).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        userInfo: { userId: 'user-1', workspaceId: undefined },
+      }),
+    );
   });
 });

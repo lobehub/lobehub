@@ -16,6 +16,13 @@ const ToolResultBodySchema = z.object({
       type: z.string().optional(),
     })
     .optional(),
+  /**
+   * Wall time the tool took on the DEVICE, by its own clock. `z.object` strips
+   * unknown keys, so this has to be declared to survive at all — and it is
+   * optional because it only arrives when both the device and the gateway are
+   * new enough to send it.
+   */
+  executionTimeMs: z.number().nonnegative().optional(),
   state: z.record(z.string(), z.any()).optional(),
   success: z.boolean(),
   toolCallId: z.string().min(1),

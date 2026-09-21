@@ -1,3 +1,4 @@
+import { createMediaFileRef } from '@lobechat/const/mediaRef';
 import type { ChatAudioItem, ChatImageItem, ChatVideoItem, UIChatMessage } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -383,10 +384,135 @@ describe('MessageContentProcessor', () => {
 
       const result = await processor.process(createContext(messages));
 
-      // Non-vision provider: image parts are dropped, a placeholder signals the
-      // tool produced an image, and the textual result + tool_call_id survive.
-      expect(result.messages[0].content).toBe(`1 result\n\n${VISION_DOWNGRADE_PLACEHOLDER}`);
+      const imageRef = createMediaFileRef({ index: 0, messageId: 'tool-1', type: 'image' });
+      const content = result.messages[0].content as string;
+
+      expect(content).toContain(imageRef);
+      expect(content).toContain('visual-analysis tool');
+      expect(content).not.toContain('http://example.com/screenshot.png');
       expect(result.messages[0].tool_call_id).toBe('call_abc');
+    });
+
+    it('should keep AVIF as a media ref while forwarding supported tool images', async () => {
+      mockIsCanUseVision.mockReturnValue(true);
+
+      const processor = new MessageContentProcessor({
+        model: 'gpt-4-vision',
+        provider: 'openai',
+        isCanUseVision: mockIsCanUseVision,
+        fileContext: { enabled: false },
+      });
+      const avifUrl = 'https://example.com/f/image-id.avif?signature=secret';
+      const pngUrl = 'https://example.com/f/image-id.png?signature=secret';
+      const messages: UIChatMessage[] = [
+        {
+          content: 'Read image results',
+          id: 'tool-avif',
+          pluginState: {
+            images: [
+              { mediaType: 'image/avif', url: avifUrl },
+              { mediaType: 'image/png', url: pngUrl },
+            ],
+          },
+          role: 'tool',
+          tool_call_id: 'call_avif',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        } as any,
+      ];
+
+      const result = await processor.process(createContext(messages));
+      const content = result.messages[0].content;
+
+      expect(content).toBeInstanceOf(Array);
+      const contentParts = content as Array<{
+        image_url?: { detail: string; url: string };
+        text?: string;
+        type: string;
+      }>;
+      const textContent = contentParts.find((part) => part.type === 'text')?.text;
+
+      expect(textContent).toContain(
+        createMediaFileRef({ index: 0, messageId: 'tool-avif', type: 'image' }),
+      );
+      expect(textContent).toContain('visual-analysis tool');
+      expect(textContent).not.toContain(avifUrl);
+      expect(contentParts).toContainEqual({
+        image_url: { detail: 'auto', url: pngUrl },
+        type: 'image_url',
+      });
+      expect(result.messages[0].tool_call_id).toBe('call_avif');
+    });
+
+    it('should remove uploaded image markdown URLs before adding a media ref', async () => {
+      mockIsCanUseVision.mockReturnValue(false);
+
+      const processor = new MessageContentProcessor({
+        model: 'any-model',
+        provider: 'any-provider',
+        isCanUseVision: mockIsCanUseVision,
+        fileContext: { enabled: false },
+      });
+      const imageUrl = 'https://example.com/f/image-id?signature=secret';
+      const messages: UIChatMessage[] = [
+        {
+          content: `Read image result\n![image/png](${imageUrl})`,
+          id: 'tool-uploaded-image',
+          pluginState: { images: [{ mediaType: 'image/png', url: imageUrl }] },
+          role: 'tool',
+          tool_call_id: 'call_uploaded_image',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        } as any,
+      ];
+
+      const result = await processor.process(createContext(messages));
+      const content = result.messages[0].content as string;
+
+      expect(content).toContain('Read image result');
+      expect(content).toContain(
+        createMediaFileRef({ index: 0, messageId: 'tool-uploaded-image', type: 'image' }),
+      );
+      expect(content).not.toContain(imageUrl);
+      expect(content).not.toContain('![image/png]');
+    });
+
+    it('should keep inline tool images as structured input only for vision models', async () => {
+      mockIsCanUseVision.mockReturnValue(true);
+
+      const processor = new MessageContentProcessor({
+        model: 'gpt-4-vision',
+        provider: 'openai',
+        isCanUseVision: mockIsCanUseVision,
+        fileContext: { enabled: false },
+      });
+      const dataUrl = 'data:image/png;base64,AAAA';
+      const messages: UIChatMessage[] = [
+        {
+          content: 'inline image',
+          id: 'tool-inline',
+          pluginState: { images: [{ mediaType: 'image/png', url: dataUrl }] },
+          role: 'tool',
+          tool_call_id: 'call_inline',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        } as any,
+      ];
+
+      const result = await processor.process(createContext(messages));
+
+      expect(result.messages[0].content).toEqual([
+        { text: 'inline image', type: 'text' },
+        { image_url: { detail: 'auto', url: dataUrl }, type: 'image_url' },
+      ]);
+
+      mockIsCanUseVision.mockReturnValue(false);
+      const downgraded = await processor.process(createContext(messages));
+
+      expect(downgraded.messages[0].content).toBe(
+        `inline image\n\n${VISION_DOWNGRADE_PLACEHOLDER}`,
+      );
+      expect(downgraded.messages[0].content).not.toContain(dataUrl);
     });
 
     it('should pass through tool messages without images unchanged', async () => {

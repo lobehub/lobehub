@@ -3,7 +3,7 @@ export {
   type PlanDocument,
   type PlanRuntimeContext,
   type PlanRuntimeService,
-} from './client/executor/PlanRuntime';
+} from './PlanRuntime';
 export * from './manifest';
 export * from './media';
 export * from './resolveManifest';

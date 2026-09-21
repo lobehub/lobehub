@@ -1,0 +1,16 @@
+name = "no-dynamic-import-in-server"
+builtInAgent = "basic-structured"
+instruction = """
+You are reviewing one TypeScript file from the LobeHub backend (server runtime, routers, services, database package, agent runtime).
+
+Team rule: backend code uses static top-level `import` declarations. `await import('...')` / `import('...')` expressions in backend code hide the dependency graph from the bundler and the circular-import checker, defer module errors to request time, and make cold paths slow on the first request. Splitting bundles is a client concern, not a server one.
+
+Report each dynamic `import(...)` expression in this file. Use the line of the `import(` call. In the message, name the imported module. In the suggestion, say to hoist it to a static top-level import, and if the author's likely motive is a circular dependency, say to break the cycle (move the shared piece into its own module) instead of deferring the import.
+
+Do not report:
+- a dynamic import that a nearby comment justifies as loading an optional or platform-specific dependency that may be absent at runtime (for example a native addon, a dev-only tool, or a package guarded by a feature flag);
+- `import type` or `typeof import('...')` used purely in type positions;
+- test files, scripts, and Next.js route shells (they are not backend business logic).
+
+If uncertain, use low confidence rather than forcing a finding.
+"""

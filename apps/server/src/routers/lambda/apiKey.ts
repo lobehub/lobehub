@@ -101,7 +101,9 @@ export const apiKeyRouter = router({
       }
 
       const scopes = normalizeScopes(input.scopes);
-      const result = await ctx.apiKeyModel.create({ ...input, scopes });
+      // Plaintext goes back to the creator exactly once so the UI can show a
+      // copy-now step; list/detail reads keep returning the stored record.
+      const result = await ctx.apiKeyModel.createWithPlaintext({ ...input, scopes });
       await recordApiKeyAudit(ctx, {
         action: 'api_key.created',
         metadata: { expiresAt: result.expiresAt, name: result.name, scopes: result.scopes ?? null },

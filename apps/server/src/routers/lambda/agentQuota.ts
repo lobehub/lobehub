@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { cloudWorkspaceAuth } from '@/business/server/trpc-middlewares/workspaceAuth';
 import {
   AgentAccountBindingModel,
   AgentProviderAccountModel,
@@ -9,12 +10,16 @@ import { DeviceModel } from '@/database/models/device';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentQuotaService } from '@/server/services/agentQuota';
+import { deviceGateway } from '@/server/services/deviceGateway';
+
+import { assertWorkspaceDeviceVisible } from './deviceWorkspaceGuard';
 
 const quotaProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   const workspaceId = ctx.workspaceId ?? undefined;
   return opts.next({
     ctx: {
+      deviceModel: new DeviceModel(ctx.serverDB, ctx.userId, workspaceId),
       accountModel: new AgentProviderAccountModel(ctx.serverDB, ctx.userId, workspaceId),
       bindingModel: new AgentAccountBindingModel(ctx.serverDB, ctx.userId, workspaceId),
       quotaService: new AgentQuotaService(ctx.serverDB, ctx.userId, workspaceId),
@@ -23,10 +28,12 @@ const quotaProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   });
 });
 
-const providerSchema = z.enum(['claude-code', 'codex']);
+const providerSchema = z.enum(['claude-code', 'codex', 'kimi-code']);
 
 const readingSchema = z.object({
   capturedAt: z.number(),
+  windowMinutes: z.number().int().positive().optional(),
+  limitName: z.string().nullable().optional(),
   isActive: z.boolean().optional(),
   limitType: z.string(),
   rateLimited: z.boolean().optional(),
@@ -37,11 +44,126 @@ const readingSchema = z.object({
 });
 
 export const agentQuotaRouter = router({
+  /** Refresh on the execution device and publish its sample to the account quota layer. */
+  refreshCodexQuota: quotaProcedure
+    .use(cloudWorkspaceAuth)
+    .input(
+      z.object({
+        command: z.string().optional(),
+        deviceId: z.string(),
+        env: z.record(z.string(), z.string()).optional(),
+        force: z.boolean().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.workspaceId) await assertWorkspaceDeviceVisible(ctx.deviceModel, input.deviceId);
+      const snapshot = await deviceGateway.codexQuota({
+        ...input,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+      if (
+        snapshot?.status !== 'ok' ||
+        !snapshot.identity?.externalAccountId ||
+        !snapshot.readings?.length
+      )
+        return snapshot ?? null;
+      const account = await ctx.accountModel.findByExternalId(
+        'codex',
+        snapshot.identity.externalAccountId,
+      );
+      const latest = account ? await ctx.quotaService.listLatestReadings(account.id) : [];
+      const readings = snapshot.readings.filter(
+        (reading) =>
+          !latest.some(
+            (previous) =>
+              previous.limitType === reading.limitType &&
+              previous.scopeKey === reading.scopeKey &&
+              previous.capturedAt >= reading.capturedAt,
+          ),
+      );
+      if (readings.length) {
+        const device =
+          (ctx.workspaceId
+            ? await ctx.deviceModel.findWorkspaceDeviceById(input.deviceId)
+            : undefined) ?? (await ctx.deviceModel.findByDeviceId(input.deviceId));
+        await ctx.quotaService.ingestSnapshot({
+          deviceId: device?.id,
+          identity: snapshot.identity,
+          provider: 'codex',
+          readings,
+        });
+      }
+      return snapshot;
+    }),
+
+  /** Refresh on the execution device and publish its sample to the account quota layer. */
+  refreshKimiCodeQuota: quotaProcedure
+    .use(cloudWorkspaceAuth)
+    .input(
+      z.object({
+        deviceId: z.string(),
+        env: z.record(z.string(), z.string()).optional(),
+        force: z.boolean().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.workspaceId) await assertWorkspaceDeviceVisible(ctx.deviceModel, input.deviceId);
+      const snapshot = await deviceGateway.kimiCodeQuota({
+        ...input,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+      if (
+        snapshot?.status !== 'ok' ||
+        !snapshot.identity?.externalAccountId ||
+        !snapshot.readings?.length
+      )
+        return snapshot ?? null;
+      const account = await ctx.accountModel.findByExternalId(
+        'kimi-code',
+        snapshot.identity.externalAccountId,
+      );
+      const latest = account ? await ctx.quotaService.listLatestReadings(account.id) : [];
+      const readings = snapshot.readings.filter(
+        (reading) =>
+          !latest.some(
+            (previous) =>
+              previous.limitType === reading.limitType &&
+              previous.scopeKey === reading.scopeKey &&
+              previous.capturedAt >= reading.capturedAt,
+          ),
+      );
+      if (readings.length) {
+        const device =
+          (ctx.workspaceId
+            ? await ctx.deviceModel.findWorkspaceDeviceById(input.deviceId)
+            : undefined) ?? (await ctx.deviceModel.findByDeviceId(input.deviceId));
+        await ctx.quotaService.ingestSnapshot({
+          deviceId: device?.id,
+          identity: snapshot.identity,
+          provider: 'kimi-code',
+          readings,
+        });
+      }
+      return snapshot;
+    }),
+
   // ── ingestion (desktop sampler → DB) ──────────────────────────────────────
   ingestSnapshot: quotaProcedure
     .input(
       z.object({
         deviceId: z.string().optional(),
+        extraUsage: z
+          .object({
+            balanceCents: z.number(),
+            currency: z.string(),
+            monthlyChargeLimitCents: z.number(),
+            monthlyChargeLimitEnabled: z.boolean(),
+            monthlyUsedCents: z.number(),
+            totalCents: z.number(),
+          })
+          .nullish(),
         identity: z.object({
           displayName: z.string().optional(),
           email: z.string().optional(),
@@ -78,6 +200,7 @@ export const agentQuotaRouter = router({
       return ctx.quotaService.ingestSnapshot({
         credentialRef: { origin: 'keychain' },
         deviceId: deviceRow?.id,
+        extraUsage: input.extraUsage,
         identity: input.identity,
         provider: input.provider,
         readings: input.readings,

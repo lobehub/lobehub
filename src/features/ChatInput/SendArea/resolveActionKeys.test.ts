@@ -19,6 +19,13 @@ describe('resolveSendAreaActionKeys', () => {
     ).toEqual(['promptTransform', 'contextWindow']);
   });
 
+  it('omits an active audio control when its action belongs to another region', () => {
+    expect(resolveSendAreaActionKeys(['voiceMessage'], true, 'dictation')).toEqual([]);
+    expect(resolveSendAreaActionKeys(['voiceMessage'], true, 'voiceMessage')).toEqual([
+      'voiceMessage',
+    ]);
+  });
+
   it('handles undefined rightActions', () => {
     expect(resolveSendAreaActionKeys(undefined, true)).toEqual([]);
     expect(resolveSendAreaActionKeys(undefined, false)).toEqual([]);

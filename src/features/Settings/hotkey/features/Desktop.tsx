@@ -1,8 +1,8 @@
 'use client';
 
 import { type FormGroupItemType } from '@lobehub/ui';
-import { Form, HotkeyInput, Icon, Skeleton } from '@lobehub/ui';
-import { toast } from '@lobehub/ui/base-ui';
+import { Form, HotkeyInput, Icon } from '@lobehub/ui';
+import { Skeleton, toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { Loader2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -33,7 +33,7 @@ const HotkeySetting = memo(() => {
 
   const [loading, setLoading] = useState(false);
 
-  if (!isHotkeysInit) return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
+  if (!isHotkeysInit) return <Skeleton.Text rows={5} />;
 
   const updateHotkey = async (id: DesktopHotkeyItem['id'], value: string) => {
     setLoading(true);

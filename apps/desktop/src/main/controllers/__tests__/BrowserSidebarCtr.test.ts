@@ -33,10 +33,6 @@ const { fromIdMock, ipcHandlers, ipcMainHandleMock, sessionFromPartitionMock } =
   };
 });
 
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({ debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() }),
-}));
-
 vi.mock('electron', () => ({
   ipcMain: { handle: ipcMainHandleMock },
   session: { fromPartition: sessionFromPartitionMock },

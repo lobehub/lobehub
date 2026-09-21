@@ -18,10 +18,10 @@ import {
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { buildSelectorSubmenu } from './buildSelectorSubmenu';
+import { buildSelectorSubmenu } from '../../components/buildSelectorSubmenu';
+import Trigger from '../../components/SelectorTrigger';
 import { ModelCatalogSelector } from './ModelCatalogSelector';
 import { buildSelectorView, resolveModelSwitchSelection } from './selectorView';
-import Trigger from './Trigger';
 
 interface SelectorMenuProps {
   agentId?: string;
@@ -73,7 +73,12 @@ const SelectorMenu = memo<SelectorMenuProps>(
     return (
       <DropdownMenuRoot>
         <DropdownMenuTrigger nativeButton={false}>
-          <Trigger ariaLabel={view.ariaLabel} fast={view.isFastSpeed} text={view.triggerText} />
+          <Trigger
+            ariaLabel={view.ariaLabel}
+            fast={view.isFastSpeed}
+            secondaryText={view.triggerLabel.secondaryText}
+            text={view.triggerLabel.text}
+          />
         </DropdownMenuTrigger>
         <DropdownMenuPortal>
           {/* The trigger label changes width as selections change, and it sits in the

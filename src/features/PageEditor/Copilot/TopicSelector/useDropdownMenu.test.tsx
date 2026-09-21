@@ -13,21 +13,12 @@ const permissionMock = vi.hoisted(() => ({
   edit_own_content: true,
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
-}));
-
-vi.mock('@lobehub/ui', () => ({
-  Icon: () => null,
-}));
-
 vi.mock('@/features/DeleteTopicConfirm', () => ({
   confirmRemoveTopic: confirmRemoveTopicMock,
 }));
 
-vi.mock('antd', () => ({
+vi.mock('antd', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   App: {
     useApp: () => ({
       message: {

@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./manifests": "./src/manifests.ts"
   },
   "main": "./src/index.ts",
   "dependencies": {

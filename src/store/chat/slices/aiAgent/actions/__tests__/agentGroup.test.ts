@@ -5,9 +5,6 @@ import { lambdaClient } from '@/libs/trpc/client';
 import { agentRuntimeClient } from '@/services/agentRuntime';
 import { useChatStore } from '@/store/chat/store';
 
-// Keep zustand mock as it's needed globally
-vi.mock('zustand/traditional');
-
 // Mock lambdaClient
 vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: {

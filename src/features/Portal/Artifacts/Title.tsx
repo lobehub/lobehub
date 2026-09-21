@@ -1,6 +1,6 @@
 import { ArtifactType } from '@lobechat/types';
-import { ActionIcon, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Tabs, Text } from '@lobehub/ui/base-ui';
 import { ConfigProvider } from 'antd';
 import { cx } from 'antd-style';
 import { ArrowLeft, CodeIcon, EyeIcon } from 'lucide-react';

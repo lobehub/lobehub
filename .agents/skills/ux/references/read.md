@@ -176,15 +176,6 @@ _each_ against the full set, not just the search input.
 > can occur here. (This is why the surface's only read-side gap is failure handling, not
 > query correctness.)
 
-> ❌ The Pages "all pages" drawer filters `displayDocuments` with a client-side
-> `title/content.includes(keyword)` over the loaded set **and disables load-more while
-> searching**, so searching for a page past the loaded window returns "no results" though it
-> exists (`AllPagesDrawer/Content.tsx`). ✅ Send the keyword to the server query and page
-> through matches.
-> ✅ **Memory** (记忆) does it right: each list tab passes `q` straight into the paginated
-> `queryMemories` server call (`memory/contexts/index.tsx:57-62`, mirrored per tab), so search spans
-> the whole set — no false "no results" for unfetched rows.
-
 **Checklist**
 
 - [ ] List designed across 1 → 10k rows (plain → pagination → virtual scroll). _(Certainty)_
@@ -457,7 +448,7 @@ UX consequence — a bespoke row is a visible consistency + craft regression.)
 > inside `Accordion` groups via one shared `GroupedAccordion` engine (by-project / by-status /
 > by-time), `Block variant='filled'` for the active row, and spacing as `Flexbox` / `Block`
 > props — every row aligns to its highlight and matches every other panel in the app.
-> ❌ **Verify report sidebar** (`features/Verify/Workspace/ReportListPanel.tsx`) hand-rolls the
+> ❌ **Verify report sidebar** (the since-removed `features/Verify/Workspace/ReportListPanel.tsx`) hand-rolls the
 > entire panel: a raw grid `<div className={styles.item}>` row with `data-active` +
 > `colorFillSecondary` (instead of `NavItem` / `Block variant`), a bordered `<label>` + `<input>`
 > search box, a raw `<input>` inline-rename, an `opacity`-toggled action reveal re-implemented in

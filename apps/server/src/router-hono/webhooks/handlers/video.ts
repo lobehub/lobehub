@@ -165,6 +165,7 @@ export const videoWebhook = async (c: Context<BlankEnv, '/video/:provider'>) => 
         await chargeAfterGenerate({
           isError: true,
           metadata: {
+            ...metadata?.spendOrigin,
             asyncTaskId: asyncTask.id,
             generationBatchId: generation.generationBatchId!,
             topicId: batch?.generationTopicId,
@@ -244,6 +245,7 @@ export const videoWebhook = async (c: Context<BlankEnv, '/video/:provider'>) => 
         },
         latency: duration,
         metadata: {
+          ...metadata?.spendOrigin,
           asyncTaskId: asyncTask.id,
           generationBatchId: generation.generationBatchId!,
           topicId: batch?.generationTopicId,
@@ -283,7 +285,12 @@ export const videoWebhook = async (c: Context<BlankEnv, '/video/:provider'>) => 
       try {
         await chargeAfterGenerate({
           isError: true,
-          metadata: { asyncTaskId: asyncTaskId ?? '', generationBatchId: '', modelId: '' },
+          metadata: {
+            ...asyncTaskMetadata.spendOrigin,
+            asyncTaskId: asyncTaskId ?? '',
+            generationBatchId: '',
+            modelId: '',
+          },
           model: '',
           prechargeResult: asyncTaskMetadata.precharge as any,
           provider,

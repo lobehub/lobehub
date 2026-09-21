@@ -4,6 +4,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 
 import { agentDocuments } from '../../schemas/agentDocuments';
 import { type DocumentItem, documents } from '../../schemas/file';
+import { notAgentShareDocument } from '../../utils/documentVisibility';
 import { agentDocumentOwnership, documentOwnership, type WorkContext } from './context';
 import { createDisplayWorkAdapter } from './displayWork';
 import { truncateSummaryText, type WorkDisplayColumns } from './internal';
@@ -43,7 +44,13 @@ const resolveDocument = async (
   const [doc] = await ctx.db
     .select()
     .from(documents)
-    .where(and(documentOwnership(ctx), eq(documents.id, params.documentId)))
+    .where(
+      and(
+        documentOwnership(ctx),
+        eq(documents.id, params.documentId),
+        notAgentShareDocument(documents.metadata),
+      ),
+    )
     .limit(1);
 
   if (!doc) return null;

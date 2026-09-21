@@ -4,6 +4,8 @@ import { Flexbox } from '@lobehub/ui';
 import { memo, useCallback, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router';
 
+import AsyncError from '@/components/AsyncError';
+import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { type ComposerTarget, createComposerTarget } from '@/features/Conversation/types';
 import FloatingChatPanel from '@/features/FloatingChatPanel';
 import { useDocumentChatTopic } from '@/features/FloatingChatPanel/useDocumentChatTopic';
@@ -34,6 +36,7 @@ const AgentDocumentPage = memo<AgentDocumentPageProps>(({ documentId }) => {
   const navigate = useWorkspaceAwareNavigate();
   const {
     error: itemError,
+    isLoading,
     isNotFound,
     item,
     mutate,
@@ -116,6 +119,10 @@ const AgentDocumentPage = memo<AgentDocumentPageProps>(({ documentId }) => {
   // redirect effect above sends the user to the docs index, instead of flashing
   // a 404 for a doc that simply moved to the empty-state landing.
   if (isNotFound) return null;
+
+  if (isLoading) return <RouteLoading />;
+  if (itemError && !item)
+    return <AsyncError error={itemError} variant={'page'} onRetry={() => void mutate()} />;
 
   return (
     <Flexbox

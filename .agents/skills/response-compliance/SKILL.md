@@ -1,6 +1,6 @@
 ---
 name: response-compliance
-description: 'OpenResponses API compliance testing. Use for Response API endpoint tests, compliance runs, schema debugging, response api test, or openresponses test tasks.'
+description: 'Use for OpenResponses/Response API compliance tests, endpoint schema failures and test runs.'
 ---
 
 # OpenResponses Compliance Test

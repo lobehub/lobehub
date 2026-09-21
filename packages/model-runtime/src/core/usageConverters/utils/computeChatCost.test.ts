@@ -1225,9 +1225,9 @@ describe('computeChatPricing', () => {
   });
 
   describe('Anthropic', () => {
-    it('handles lookup pricing with TTL for Claude Opus 4.1', () => {
+    it('handles lookup pricing with TTL for Claude Opus 4.6', () => {
       const pricing = anthropicChatModels.find(
-        (model: { id: string }) => model.id === 'claude-opus-4-1-20250805',
+        (model: { id: string }) => model.id === 'claude-opus-4-6',
       )?.pricing;
       expect(pricing).toBeDefined();
 
@@ -1241,19 +1241,19 @@ describe('computeChatPricing', () => {
       const result = computeChatCost(pricing, usage, { lookupParams: { ttl: '5m' } });
       expect(result).toBeDefined();
       expect(result?.issues).toHaveLength(0);
-      expect(result?.totalCredits).toBe(58_425);
-      expect(result?.totalCost).toBeCloseTo(0.058425, 10);
+      expect(result?.totalCredits).toBe(19_475);
+      expect(result?.totalCost).toBeCloseTo(0.019475, 10);
 
       const cacheWrite = result?.breakdown.find(
         (item) => item.unit.name === 'textInput_cacheWrite',
       );
       expect(cacheWrite?.lookupKey).toBe('5m');
-      expect(cacheWrite?.credits).toBe(5_625);
+      expect(cacheWrite?.credits).toBe(1_875);
     });
 
     it('handles lookup pricing with missing key and adds issue', () => {
       const pricing = anthropicChatModels.find(
-        (model: { id: string }) => model.id === 'claude-opus-4-1-20250805',
+        (model: { id: string }) => model.id === 'claude-opus-4-6',
       )?.pricing;
       expect(pricing).toBeDefined();
 
@@ -1279,7 +1279,7 @@ describe('computeChatPricing', () => {
 
     it('handles lookup pricing with missing lookup params and adds issue', () => {
       const pricing = anthropicChatModels.find(
-        (model: { id: string }) => model.id === 'claude-opus-4-1-20250805',
+        (model: { id: string }) => model.id === 'claude-opus-4-6',
       )?.pricing;
       expect(pricing).toBeDefined();
 
@@ -1304,7 +1304,7 @@ describe('computeChatPricing', () => {
 
     it('handles lookup pricing with undefined lookup params and adds issue', () => {
       const pricing = anthropicChatModels.find(
-        (model: { id: string }) => model.id === 'claude-opus-4-1-20250805',
+        (model: { id: string }) => model.id === 'claude-opus-4-6',
       )?.pricing;
       expect(pricing).toBeDefined();
 

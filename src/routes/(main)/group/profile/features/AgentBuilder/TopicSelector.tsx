@@ -1,5 +1,6 @@
 import { type DropdownMenuCheckboxItem } from '@lobehub/ui';
-import { ActionIcon, DropdownMenu, Tag } from '@lobehub/ui';
+import { DropdownMenu } from '@lobehub/ui';
+import { ActionIcon, Tag } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { Clock3Icon, PlusIcon } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
@@ -7,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import NavHeader from '@/features/NavHeader';
+import { useFetchAgentChatTopics } from '@/hooks/useFetchChatTopics';
 import { useQueryState } from '@/hooks/useQueryParam';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
@@ -34,7 +36,7 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId, disabled }) => {
   const { t } = useTranslation('topic');
 
   // Fetch topics for the group agent builder
-  useChatStore((s) => s.useFetchTopics)(true, { agentId });
+  useFetchAgentChatTopics(agentId);
 
   // Use activeTopicId from chatStore (synced from URL query 'bt' via ProfileHydration)
   const activeTopicId = useChatStore((s) => s.activeTopicId);

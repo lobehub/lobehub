@@ -16,7 +16,8 @@ import { getSessionStoreState } from '@/store/session';
 import { useUserStore } from '@/store/user';
 
 // Mock dependencies
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   toast: {
     error: vi.fn(),
     loading: vi.fn(() => ({ close: vi.fn() })),

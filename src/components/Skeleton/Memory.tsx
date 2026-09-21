@@ -13,14 +13,16 @@ const MemorySkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => (
     {chrome !== 'body' && <NavHeader />}
     <Flexbox height={'100%'} style={{ overflow: 'hidden' }} width={'100%'}>
       <WideScreenContainer gap={32} paddingBlock={48}>
-        <Flexbox align={'center'} gap={16} paddingBlock={'18vh 0'}>
-          <SkeletonBar height={44} radius={'50%'} width={44} />
-          <Flexbox align={'center'} gap={10} width={'min(520px, 80%)'}>
-            <SkeletonBar height={24} width={132} />
-            <SkeletonBar height={14} width={'88%'} />
-            <SkeletonBar height={14} width={'64%'} />
-            <SkeletonBar height={32} width={128} />
-          </Flexbox>
+        <SkeletonBar height={400} radius={12} />
+        <Flexbox gap={16}>
+          <SkeletonBar height={32} width={120} />
+          <SkeletonBar height={64} radius={8} />
+        </Flexbox>
+        <Flexbox gap={16}>
+          <SkeletonBar height={44} width={160} />
+          <SkeletonBar height={16} />
+          <SkeletonBar height={16} width={'92%'} />
+          <SkeletonBar height={16} width={'60%'} />
         </Flexbox>
       </WideScreenContainer>
     </Flexbox>

@@ -2,23 +2,9 @@
  * @vitest-environment happy-dom
  */
 import { render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import TaskVisibilityChipLabel from './TaskVisibilityChipLabel';
-
-vi.mock('@lobehub/ui', () => ({
-  Block: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  Icon: () => <span />,
-  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-}));
-
-vi.mock('antd-style', () => ({
-  cssVar: {
-    colorTextDescription: '#999',
-    colorTextSecondary: '#666',
-  },
-}));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({

@@ -1,6 +1,7 @@
 import type { WriteLocalFileParams } from '@lobechat/electron-client-ipc';
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Flexbox, Icon, Markdown, PatchDiff, Skeleton } from '@lobehub/ui';
+import { Flexbox, Icon, Markdown, PatchDiff } from '@lobehub/ui';
+import { Skeleton } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
 import path from 'path-browserify-esm';
@@ -38,7 +39,7 @@ type WriteFileArgs = WriteLocalFileParams & {
 };
 
 const WriteFile = memo<BuiltinRenderProps<WriteFileArgs>>(({ args }) => {
-  if (!args) return <Skeleton active />;
+  if (!args) return <Skeleton.Text rows={4} />;
 
   const filePath = args.path || args.filePath || args.file_path || '';
   const { base, dir } = path.parse(filePath);

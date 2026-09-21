@@ -1,0 +1,94 @@
+name: Business Overlay
+description: >-
+  Clone the private business-overlay repository and overlay it around this
+  checkout so the workspace parent becomes the overlay root with this repo as
+  its `lobehub/` submodule. Same layout as desktop-build-setup's overlay,
+  extracted so non-desktop workflows (share verify) can build with the business
+  overlay without desktop's install steps.
+
+inputs:
+  overlay-repository:
+    description: Overlay repository to clone (owner/name)
+    required: true
+  overlay-ref:
+    description: Optional overlay repository ref (defaults to its default branch)
+    required: false
+    default: ''
+  overlay-token:
+    description: GitHub token with permission to read the overlay repository
+    required: true
+
+outputs:
+  overlay-ref:
+    description: The resolved overlay commit that was applied
+    value: ${{ steps.overlay.outputs.overlay_ref }}
+
+runs:
+  using: composite
+  steps:
+    - name: Overlay business repository
+      id: overlay
+      shell: bash
+      env:
+        OVERLAY_CHECKOUT: ${{ runner.temp }}/business-overlay
+        OVERLAY_REF_INPUT: ${{ inputs.overlay-ref }}
+        OVERLAY_REPOSITORY: ${{ inputs.overlay-repository }}
+        OVERLAY_ROOT: ${{ github.workspace }}/..
+        OVERLAY_TOKEN: ${{ inputs.overlay-token }}
+      run: |
+        set -euo pipefail
+
+        overlay_root="$(cd "$GITHUB_WORKSPACE/.." && pwd)"
+        overlay_checkout="$RUNNER_TEMP/business-overlay"
+
+        rm -rf "$overlay_checkout"
+
+        git clone --depth 1 --no-checkout "https://x-access-token:${OVERLAY_TOKEN}@github.com/${OVERLAY_REPOSITORY}.git" "$overlay_checkout"
+        if [ -n "$OVERLAY_REF_INPUT" ]; then
+          git -C "$overlay_checkout" fetch --depth 1 origin "$OVERLAY_REF_INPUT"
+          git -C "$overlay_checkout" checkout --detach FETCH_HEAD
+        else
+          git -C "$overlay_checkout" checkout --detach
+        fi
+
+        resolved_overlay_ref="$(git -C "$overlay_checkout" rev-parse HEAD)"
+        echo "overlay_ref=$resolved_overlay_ref" >> "$GITHUB_OUTPUT"
+        echo "OVERLAY_REF=$resolved_overlay_ref" >> "$GITHUB_ENV"
+
+        node <<'NODE'
+        const fs = require('node:fs');
+        const path = require('node:path');
+
+        const source = process.env.OVERLAY_CHECKOUT;
+        const target = process.env.OVERLAY_ROOT;
+        const skip = new Set(['.git', 'lobehub', 'node_modules']);
+
+        const copy = (from, to) => {
+          const stat = fs.lstatSync(from);
+          if (stat.isSymbolicLink()) {
+            const link = fs.readlinkSync(from);
+            fs.rmSync(to, { force: true, recursive: true });
+            fs.symlinkSync(link, to);
+            return;
+          }
+
+          if (stat.isDirectory()) {
+            fs.mkdirSync(to, { recursive: true });
+            for (const entry of fs.readdirSync(from)) {
+              if (skip.has(entry)) continue;
+              copy(path.join(from, entry), path.join(to, entry));
+            }
+            return;
+          }
+
+          fs.mkdirSync(path.dirname(to), { recursive: true });
+          fs.copyFileSync(from, to);
+        };
+
+        for (const entry of fs.readdirSync(source)) {
+          if (skip.has(entry)) continue;
+          copy(path.join(source, entry), path.join(target, entry));
+        }
+        NODE
+
+        echo "✅ Overlay repository $resolved_overlay_ref applied at $overlay_root"

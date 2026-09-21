@@ -6,6 +6,7 @@ import {
   ReactImagePlugin,
   ReactLinkPlugin,
   ReactLiteXmlPlugin,
+  ReactMentionPlugin,
   ReactTablePlugin,
   ReactToolbarPlugin,
 } from '@lobehub/editor';
@@ -17,11 +18,14 @@ import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { createChatInputRichPlugins } from '@/features/ChatInput/InputEditor/plugins';
+import { writeTopicCommentMentionMarkdown } from '@/features/Portal/TopicComments/editorUtils';
 
 import { type EditorCanvasProps } from './EditorCanvas';
 import InlineToolbar from './InlineToolbar';
 import LinearFilePlugin from './LinearFilePlugin';
 import { registerAttachmentClickOpen } from './registerAttachmentClickOpen';
+import { registerBlockDecoratorCaretGuard } from './registerBlockDecoratorCaretGuard';
+import { needsImageRehost, rehostImage } from './rehostImage';
 import { useFileUpload, useImageUpload } from './useImageUpload';
 
 const IMAGE_FILTERS = [
@@ -45,6 +49,12 @@ const fileNodeStyles = createStaticStyles(({ css }) => ({
 const STATIC_PLUGINS = [
   ReactLiteXmlPlugin,
   ...createChatInputRichPlugins({ linkPlugin: ReactLinkPlugin }),
+  // The kernel reads a plugin's config once at init, and `mentionOption` can
+  // arrive later (workspace pages resolve their member source asynchronously),
+  // so pin the member chip's markdown form here rather than relying on
+  // `mentionOption.markdownWriter` being present at mount. Same writer as the
+  // comment editors, so a chip serialises identically in every canvas.
+  Editor.withProps(ReactMentionPlugin, { markdownWriter: writeTopicCommentMentionMarkdown }),
   ReactTablePlugin,
 ];
 
@@ -98,17 +108,23 @@ export interface InternalEditorProps extends EditorCanvasProps {
  */
 const InternalEditor = memo<InternalEditorProps>(
   ({
+    blockImageCaretGuard = false,
+    className,
     contentChangeLockRef,
+    contentStyle,
     disabled,
     editable = true,
     editor,
     extraPlugins,
     floatingToolbar = true,
+    getPopupContainer,
+    mentionOption,
     onContentChange,
     onInit,
     onPressEnter,
     placeholder,
     plugins: customPlugins,
+    readonlySelectionItems,
     slashItems,
     style,
     toolbarExtraItems,
@@ -151,7 +167,10 @@ const InternalEditor = memo<InternalEditorProps>(
 
       const imagePlugin = Editor.withProps(ReactImagePlugin, {
         defaultBlockImage: true,
+        handleRehost: rehostImage,
         handleUpload: handleImageUpload,
+        needRehost: (url: string) =>
+          !!editor.getLexicalEditor?.()?.isEditable() && needsImageRehost(url),
         onPickFile: isDesktop ? handlePickFile : undefined,
       });
 
@@ -165,10 +184,12 @@ const InternalEditor = memo<InternalEditorProps>(
         ? [...extraPlugins, ...STATIC_PLUGINS, imagePlugin, filePlugin]
         : [...STATIC_PLUGINS, imagePlugin, filePlugin];
 
-      // Add toolbar only when the editor is actually editable — a locked /
-      // read-only page must not surface the floating formatting toolbar on
-      // text selection (its buttons would dispatch commands that never save).
-      if (floatingToolbar && editable && !disabled) {
+      if (!floatingToolbar || disabled) return basePlugins;
+
+      // The formatting toolbar only when the editor is actually editable — a
+      // locked / read-only page must not surface it on text selection (its
+      // buttons would dispatch commands that never save).
+      if (editable) {
         return [
           ...basePlugins,
           Editor.withProps(ReactToolbarPlugin, {
@@ -178,6 +199,26 @@ const InternalEditor = memo<InternalEditorProps>(
                 editor={editor}
                 editorState={editorState}
                 extraItems={toolbarExtraItems}
+              />
+            ),
+          }),
+        ];
+      }
+
+      // A read-only body can still be selected; selection-scoped actions that
+      // never edit (comment on it, ask about it) stay reachable through a
+      // toolbar that carries nothing else.
+      if (readonlySelectionItems?.length) {
+        return [
+          ...basePlugins,
+          Editor.withProps(ReactToolbarPlugin, {
+            children: (
+              <InlineToolbar
+                floating
+                selectionOnly
+                editor={editor}
+                editorState={editorState}
+                extraItems={readonlySelectionItems}
               />
             ),
           }),
@@ -196,6 +237,7 @@ const InternalEditor = memo<InternalEditorProps>(
       handleFileUpload,
       handleImageUpload,
       handlePickFile,
+      readonlySelectionItems,
       toolbarExtraItems,
     ]);
 
@@ -216,6 +258,15 @@ const InternalEditor = memo<InternalEditorProps>(
       const unregister = registerAttachmentClickOpen(editor);
       return () => unregister?.();
     }, [editor]);
+
+    // Opt-in (comment editors): keep the caret out of the root node around
+    // block images by pushing an empty paragraph next to the image instead of
+    // showing Lexical's horizontal root-level caret.
+    useEffect(() => {
+      if (!editor || !blockImageCaretGuard) return;
+      const unregister = registerBlockDecoratorCaretGuard(editor);
+      return () => unregister?.();
+    }, [blockImageCaretGuard, editor]);
 
     const onInitRef = useRef(onInit);
     const initializedEditorRef = useRef<IEditor | null>(null);
@@ -303,6 +354,7 @@ const InternalEditor = memo<InternalEditorProps>(
 
     return (
       <div
+        className={className}
         style={wrapperStyle}
         onClick={(e) => {
           e.stopPropagation();
@@ -313,6 +365,8 @@ const InternalEditor = memo<InternalEditorProps>(
           content={''}
           editable={editable && !disabled}
           editor={editor}
+          getPopupContainer={getPopupContainer}
+          mentionOption={mentionOption}
           placeholder={finalPlaceholder}
           plugins={plugins}
           slashOption={slashItems ? { items: slashItems } : undefined}
@@ -320,6 +374,7 @@ const InternalEditor = memo<InternalEditorProps>(
           style={{
             paddingBottom: 32,
             ...style,
+            ...contentStyle,
           }}
           {...(onPressEnter ? { onPressEnter } : {})}
         />

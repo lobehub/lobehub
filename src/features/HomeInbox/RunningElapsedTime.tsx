@@ -1,5 +1,5 @@
 import { formatElapsedClockTime } from '@lobechat/utils';
-import { Text } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { memo, useEffect, useState } from 'react';
 
 interface RunningElapsedTimeProps {

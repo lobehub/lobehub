@@ -1,7 +1,7 @@
 'use client';
 
-import { ActionIcon, Avatar, DropdownMenu, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Avatar, confirmModal, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
 import {

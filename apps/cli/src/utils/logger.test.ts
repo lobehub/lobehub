@@ -2,6 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { log, setVerbose } from './logger';
 
+// This suite exercises the real logger, so opt out of the global stub in
+// `tests/setup.ts`.
+vi.unmock('./logger');
+
 describe('logger', () => {
   const consoleSpy = {
     error: vi.spyOn(console, 'error').mockImplementation(() => {}),

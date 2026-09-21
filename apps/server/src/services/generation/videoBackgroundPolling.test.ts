@@ -13,7 +13,9 @@ vi.mock('@/database/models/asyncTask');
 vi.mock('@/database/models/generation');
 vi.mock('@/server/services/generation/video');
 vi.mock('@/utils/sanitizeFileName', () => ({
-  sanitizeFileName: vi.fn((...args) => args.join('-')),
+  sanitizeFileName: vi.fn(function (...args) {
+    return args.join('-');
+  }),
 }));
 
 vi.mock('debug', () => ({
@@ -69,9 +71,15 @@ describe('videoBackgroundPolling', () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
 
-    vi.mocked(AsyncTaskModel).mockImplementation(() => mockAsyncTaskModel as any);
-    vi.mocked(GenerationModel).mockImplementation(() => mockGenerationModel as any);
-    vi.mocked(VideoGenerationService).mockImplementation(() => mockVideoService as any);
+    vi.mocked(AsyncTaskModel).mockImplementation(function () {
+      return mockAsyncTaskModel as any;
+    });
+    vi.mocked(GenerationModel).mockImplementation(function () {
+      return mockGenerationModel as any;
+    });
+    vi.mocked(VideoGenerationService).mockImplementation(function () {
+      return mockVideoService as any;
+    });
     vi.mocked(initModelRuntimeFromDB).mockResolvedValue(mockModelRuntime as any);
   });
 

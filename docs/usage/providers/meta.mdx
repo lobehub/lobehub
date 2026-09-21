@@ -1,0 +1,42 @@
+---
+title: Using Meta in LobeHub
+description: Configure the official Meta Model API in LobeHub to chat with Muse Spark.
+tags:
+  - LobeHub
+  - Meta
+  - Muse Spark
+  - API Key
+---
+
+# Using Meta in LobeHub
+
+[Meta Model API](https://dev.meta.ai/) provides API access to Muse Spark. You need a Meta Model API key to use this provider. API usage is billed separately by Meta; see the current [pricing and rate limits](https://dev.meta.ai/docs/pricing-rate-limits).
+
+<Steps>
+  ### Step 1: Create an API key
+
+  - Log in to the [Model API dashboard](https://dev.meta.ai/) with an account that has API access.
+  - Open **API keys**, click **Create API key**, give the key a name, and click **Create**.
+  - Copy the key and store it securely. Meta displays it only once. See the [authentication guide](https://dev.meta.ai/docs/authentication) for key management.
+
+  ### Step 2: Configure Meta in LobeHub
+
+  - Open **Settings → AI Providers**, find **Meta**, and enable it.
+  - Enter your API key. If your self-hosted administrator has already configured a server key, you can use that configuration without entering a personal key.
+  - Keep the default API base URL, `https://api.meta.ai/v1`, unless you use a compatible proxy.
+  - Run the connection check, then select an available Muse Spark model for your assistant and send a short message.
+</Steps>
+
+## API compatibility
+
+LobeHub's Meta integration uses the **Responses API** for chat and structured output. A custom proxy must support `/responses` relative to its base URL; do not enter the full `/v1/responses` endpoint as the base URL. Requests go through the LobeHub server, so that server must be able to reach the API. Direct browser requests are disabled for this provider.
+
+Meta also offers other API formats. See [Choosing an API](https://dev.meta.ai/docs/protocols) for their differences. Available models depend on your API access; consult the [official model catalog](https://dev.meta.ai/docs/models).
+
+## Self-hosting and troubleshooting
+
+Administrators can set `META_API_KEY` on the server to enable Meta with a shared key. `META_PROXY_URL` overrides the base URL, and `META_MODEL_LIST` customizes the model list. See the [Meta environment variables](/docs/self-hosting/environment-variables/model-provider#meta).
+
+- If authentication fails, check that the key is a valid Meta Model API key and has not been revoked.
+- If a connection check fails, verify the selected model is available to your account and that your server or proxy can reach the Responses API.
+- If Meta returns HTTP 429, reduce concurrent requests and retry after a delay. Rate limits are shared by the team, even when using different API keys.

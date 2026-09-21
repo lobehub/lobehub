@@ -3,6 +3,7 @@ import type {
   AgentInterventionResponseData,
   AgentStreamEvent,
 } from '@lobechat/agent-gateway-client';
+import { stripGoalCommand, withConversationGoalPrompt } from '@lobechat/builtin-tool-goal';
 import type { HeterogeneousAgentSessionError } from '@lobechat/electron-client-ipc';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import {
@@ -11,6 +12,7 @@ import {
   isHeterogeneousAgentAuthRequired,
   isHeterogeneousProviderBindingSupported,
   isLocalHeterogeneousType,
+  isServerDefaultHeterogeneousAgentType,
   type MainAgentIntent,
   type MainAgentReduceCtx,
   type MainAgentRunState,
@@ -20,6 +22,7 @@ import {
   type SubagentIntent,
   type SubagentRunSnapshot,
 } from '@lobechat/heterogeneous-agents';
+import { normalizeHeterogeneousMessageError } from '@lobechat/heterogeneous-agents/errors';
 import { formatContextSelections, formatPageSelections } from '@lobechat/prompts';
 import type {
   ChatMessageError,
@@ -61,6 +64,7 @@ import {
   type MessageQueryContext,
   messageService,
 } from '@/services/message';
+import { hydrateProjectedToolMessages } from '@/services/message/hydrateProjectedTools';
 import { threadService } from '@/services/thread';
 import { workService } from '@/services/work';
 import { topicSelectors } from '@/store/chat/selectors';
@@ -83,7 +87,7 @@ import { getNativeHeteroSessionBindingKey } from './heteroResume';
 import { createMessageWriteBatcher, type ToolMessageUpdateOperation } from './messageWriteBatcher';
 import { createPendingCreateLedger } from './pendingCreateLedger';
 import { resolveQuotaAccountSpawnPlan } from './resolveQuotaAccountEnv';
-import { buildResumeReplayMessages } from './resumeReplay';
+import { buildResumeReplayMessages, shouldHydrateResumeReplay } from './resumeReplay';
 import { buildLobeHubSessionEnv } from './sessionEnv';
 
 /** Mirrors `idGenerator('threads', 16)` on the server so sync-allocated ids have the same shape. */
@@ -137,7 +141,10 @@ const shouldSuppressTerminalErrorEcho = (content: string, error: ChatMessageErro
   return !!normalizedContent && !!normalizedRawError && normalizedContent === normalizedRawError;
 };
 
-const toHeterogeneousAgentMessageError = (error: unknown, agentType?: string): ChatMessageError => {
+const toRawHeterogeneousAgentMessageError = (
+  error: unknown,
+  agentType?: string,
+): ChatMessageError => {
   const authRequiredError = maybeClassifyCliAuthRequiredError(error, agentType);
   if (authRequiredError) {
     return {
@@ -196,6 +203,12 @@ const toHeterogeneousAgentMessageError = (error: unknown, agentType?: string): C
     type: AgentRuntimeErrorType.AgentRuntimeError,
   };
 };
+
+const toHeterogeneousAgentMessageError = (error: unknown, agentType?: string): ChatMessageError =>
+  normalizeHeterogeneousMessageError(
+    toRawHeterogeneousAgentMessageError(error, agentType),
+    agentType,
+  );
 
 const isRecoverableResumeError = (
   error: unknown,
@@ -324,14 +337,14 @@ const subscribeBroadcasts = (
     if (data.sessionId === sessionId) callbacks.onError(data.error);
   };
 
-  ipc.on('heteroAgentEvent' as any, onStreamEvent);
-  ipc.on('heteroAgentSessionComplete' as any, onComplete);
-  ipc.on('heteroAgentSessionError' as any, onError);
+  const unsubscribeStreamEvent = ipc.on('heteroAgentEvent' as any, onStreamEvent);
+  const unsubscribeComplete = ipc.on('heteroAgentSessionComplete' as any, onComplete);
+  const unsubscribeError = ipc.on('heteroAgentSessionError' as any, onError);
 
   return () => {
-    ipc.removeListener('heteroAgentEvent' as any, onStreamEvent);
-    ipc.removeListener('heteroAgentSessionComplete' as any, onComplete);
-    ipc.removeListener('heteroAgentSessionError' as any, onError);
+    unsubscribeStreamEvent();
+    unsubscribeComplete();
+    unsubscribeError();
   };
 };
 
@@ -1852,21 +1865,6 @@ export const executeHeterogeneousAgent = async (
       : undefined;
   const serverDefaultBindingActive = !!serverDefaultApiConfig;
   const userProviderBindingActive = !!providerApiConfig;
-  // The Labs flag gates every API-mode path, including the server-default
-  // binding: with the flag off, an api-auth agent must behave exactly as it
-  // did before the feature existed — blocked with a pointer to Labs.
-  if (
-    providerBindingActive &&
-    !labPreferSelectors.enableAgentProviderBinding(useUserStore.getState())
-  ) {
-    await persistTerminalError(
-      toHeterogeneousAgentMessageError(
-        new Error(t('heteroAgent.apiMode.labDisabled.title', { ns: 'chat' })),
-        adapterType,
-      ),
-    );
-    return;
-  }
   if (providerBindingActive && !serverDefaultBindingActive && !userProviderBindingActive) {
     await persistTerminalError(
       toHeterogeneousAgentMessageError(
@@ -1892,8 +1890,7 @@ export const executeHeterogeneousAgent = async (
 
   if (
     serverDefaultBindingActive &&
-    (!serverDefaultApiConfig.model.trim() ||
-      (adapterType !== 'claude-code' && adapterType !== 'codex'))
+    (!serverDefaultApiConfig.model.trim() || !isServerDefaultHeterogeneousAgentType(adapterType))
   ) {
     await persistTerminalError(
       toHeterogeneousAgentMessageError(
@@ -1952,7 +1949,8 @@ export const executeHeterogeneousAgent = async (
       cwd: workingDirectory,
       env: sessionEnv,
       initialModel:
-        adapterType === 'trae' &&
+        (adapterType === 'devin' || adapterType === 'droid' || adapterType === 'trae') &&
+        !providerBindingActive &&
         heterogeneousProvider.model &&
         heterogeneousProvider.model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION
           ? heterogeneousProvider.model
@@ -1990,8 +1988,15 @@ export const executeHeterogeneousAgent = async (
     // framework calls this; we SIGINT the CC process via the main-process IPC
     // so the CLI exits instead of running to completion off-screen.
     const sidForCancel = ipcRunSessionId;
-    get().onOperationCancel?.(operationId, () => {
-      heterogeneousAgentService.cancelSession(sidForCancel).catch(() => {});
+    get().onOperationCancel?.(operationId, async () => {
+      try {
+        await heterogeneousAgentService.cancelSession(sidForCancel);
+      } catch (error) {
+        // Let the operation layer report an unconfirmed cancellation so a
+        // replacement turn cannot start while the native writer may still live.
+        console.error('[HeterogeneousAgent] IPC session cancellation failed:', error);
+        throw error;
+      }
     });
 
     // ─── Debug tracing (dev only) ───
@@ -2377,6 +2382,7 @@ export const executeHeterogeneousAgent = async (
               runId: operationId,
               runScope,
               runtimeType: 'hetero',
+              status: 'completed',
             });
 
             // Shell Work scan for this LOCAL run: no server operation exists, so
@@ -2466,7 +2472,9 @@ export const executeHeterogeneousAgent = async (
     });
 
     const systemContext = buildLocalHeterogeneousSystemContext({
-      agentSystemContext: heterogeneousProvider.systemContext,
+      // `/goal` reaches a hetero agent as instructions, not a tool: it creates
+      // and plans the goal through `lh` in this same run.
+      agentSystemContext: withConversationGoalPrompt(heterogeneousProvider.systemContext, message),
       contextSelections,
       pageSelections,
     });
@@ -2476,10 +2484,31 @@ export const executeHeterogeneousAgent = async (
     // it, `--resume <staleId>` dies with "No conversation found with session ID".
     // Raw rows first: the display map collapses history into virtual
     // `assistantGroup` rows, which carry no replayable turn.
+    const replaySource = (get().dbMessagesMap?.[messageMapKey(context)] ??
+      get().messagesMap?.[messageMapKey(context)]) as UIChatMessage[] | undefined;
+
+    // Tool bodies the read path projected away are restored first: this
+    // transcript is written to disk and resumed from, so an emptied tool result
+    // would persist as "this tool returned nothing" for every later turn.
+    //
+    // Only for Claude Code. Main consumes `resumeReplayMessages` in exactly one
+    // place (`HeterogeneousAgentImpl`'s `ensureClaudeCodeResumeTranscript`),
+    // which is gated on `agentType === 'claude-code'` and no-ops when the
+    // transcript is still on disk. Restoring for the other adapters would spend
+    // one authenticated round trip per historical tool, every turn, on a
+    // payload nothing reads.
     const resumeReplayMessages = resumeSessionId
       ? buildResumeReplayMessages(
-          (get().dbMessagesMap?.[messageMapKey(context)] ??
-            get().messagesMap?.[messageMapKey(context)]) as UIChatMessage[] | undefined,
+          shouldHydrateResumeReplay(heterogeneousProvider.type)
+            ? // A degraded transcript still resumes; a thrown error would lose
+              // the prompt, so `missing` is deliberately not acted on here.
+              (
+                await hydrateProjectedToolMessages(
+                  replaySource,
+                  messageService.getToolResultPayloads,
+                )
+              ).messages
+            : replaySource,
           message,
         )
       : undefined;
@@ -2489,7 +2518,9 @@ export const executeHeterogeneousAgent = async (
       agentId: context.agentId,
       imageList,
       operationId,
-      prompt: message,
+      // `/goal` travels as system-context instructions; the CLI gets only the
+      // request so its own `/goal` command does not take the message over.
+      prompt: stripGoalCommand(message),
       ...(resumeReplayMessages?.length ? { resumeReplayMessages } : {}),
       sessionId: ipcRunSessionId,
       systemContext: systemContext || undefined,
@@ -2575,7 +2606,7 @@ export const executeHeterogeneousAgent = async (
               files: mergedFiles,
               ...(merged.forceRuntime ? { forceRuntime: merged.forceRuntime } : {}),
               message: merged.content,
-              metadata: merged.metadata,
+              metadata: { ...merged.metadata, steer: true },
             })
             .catch((e: unknown) => {
               console.error(

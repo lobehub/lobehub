@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { TRPCClientError } from '@trpc/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getDraft, removeDraft } from '@/features/ChatInput/draftStorage';
 import { agentService } from '@/services/agent';
 import { aiAgentService } from '@/services/aiAgent';
 import { aiChatService } from '@/services/aiChat';
@@ -10,6 +11,8 @@ import { chatService } from '@/services/chat';
 import * as skillPreload from '@/services/chat/mecha/skillPreload';
 import { messageService } from '@/services/message';
 import * as agentGroupStore from '@/store/agentGroup';
+import { useAiInfraStore } from '@/store/aiInfra';
+import { aiModelSelectors } from '@/store/aiInfra/slices/aiModel/selectors';
 import { setPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import type {
@@ -29,9 +32,6 @@ import { useUserStore } from '@/store/user';
 import { useChatStore } from '../../../../store';
 import { createMockAgentConfig, createMockMessage, TEST_CONTENT, TEST_IDS } from './fixtures';
 import { resetTestEnvironment, setupMockSelectors, spyOnMessageService } from './helpers';
-
-// Keep zustand mock as it's needed globally
-vi.mock('zustand/traditional');
 
 const executeHeterogeneousAgentMock = vi.hoisted(() => vi.fn());
 const mockConstEnv = vi.hoisted(() => ({ isDesktop: false }));
@@ -54,8 +54,21 @@ vi.mock('../transports/hetero/heterogeneousAgentExecutor', () => ({
   executeHeterogeneousAgent: (...args: any[]) => executeHeterogeneousAgentMock(...args),
 }));
 
+const getGeneralAccessMock = vi.hoisted(() => vi.fn());
+vi.mock('@/services/resourcePermission', () => ({
+  resourcePermissionService: { getGeneralAccess: getGeneralAccessMock },
+}));
+
 vi.mock('@/services/electron/localFileService', () => ({
   localFileService: mockLocalFileService,
+}));
+
+vi.mock('@/store/tool/slices/builtin/loadBuiltinSkills', () => ({
+  loadBuiltinSkill: async (identifier: string) =>
+    toolStoreModule
+      .getToolStoreState()
+      .builtinSkills.find((skill: any) => skill.identifier === identifier),
+  loadBuiltinSkills: async () => toolStoreModule.getToolStoreState().builtinSkills,
 }));
 
 // Mock lambdaClient to prevent network requests
@@ -493,6 +506,83 @@ describe('ConversationLifecycle actions', () => {
 
         expect(setJSONState).toHaveBeenCalledWith(inputEditorState);
         expect(sendMessageOperation?.metadata.inputSendErrorMsg).toBeTruthy();
+      });
+
+      it.each(['unchanged', 'edited', 'cleared'] as const)(
+        'preserves the %s live draft when a cancelled first send rolls back asynchronously',
+        async (change) => {
+          const context = createTestContext();
+          const draftKey = messageMapKey(context);
+          const snapshot = {
+            root: { children: [{ text: 'Cancelled first message' }], type: 'root' },
+          };
+          const latestDraft = {
+            root: {
+              children:
+                change === 'cleared' ? [] : [{ text: 'Cancelled first message with edits' }],
+              type: 'root',
+            },
+          };
+          let editorState = snapshot;
+          const editor = {
+            getJSONState: vi.fn(() => editorState),
+            setJSONState: vi.fn((state) => {
+              editorState = state;
+            }),
+          };
+          removeDraft(draftKey);
+          const executeGatewayAgent = vi.fn().mockImplementation(async (params) => {
+            const store = useChatStore.getState();
+            store.cancelOperation(params.parentOperationId);
+            store.cancelSendMessageInServer(params.messageContext, editor as any);
+            expect(editorState).toEqual(snapshot);
+            // User edits after restoration, before the aborted request unwinds.
+            await Promise.resolve();
+            if (change !== 'unchanged') editorState = latestDraft;
+            throw new DOMException('Stopped before dispatch', 'AbortError');
+          });
+          useChatStore.setState({ executeGatewayAgent, isGatewayModeEnabled: () => true });
+
+          await useChatStore.getState().sendMessage({
+            context,
+            editorData: snapshot as any,
+            inputEditor: editor as any,
+            message: 'Cancelled first message',
+          });
+
+          expect(executeGatewayAgent).toHaveBeenCalledOnce();
+          expect(getDraft(draftKey)).toEqual(change === 'unchanged' ? snapshot : latestDraft);
+          removeDraft(draftKey);
+        },
+      );
+
+      it('does not restore an accepted gateway message when stopped during setup', async () => {
+        const context = { ...createTestContext(), topicId: TEST_IDS.TOPIC_ID };
+        const setJSONState = vi.fn();
+        const editor = {
+          getJSONState: vi.fn().mockReturnValue({ content: 'already sent' }),
+          setDocument: vi.fn(),
+          setJSONState,
+        };
+        const executeGatewayAgent = vi.fn().mockImplementation(async (params) => {
+          params.onMessageAccepted();
+          useChatStore.getState().cancelSendMessageInServer(context, editor as any);
+          throw new DOMException('Stopped', 'AbortError');
+        });
+        useChatStore.setState({
+          executeGatewayAgent,
+          isGatewayModeEnabled: () => true,
+          mainInputEditor: editor as any,
+        });
+
+        await useChatStore.getState().sendMessage({
+          context,
+          editorData: { content: 'already sent' } as any,
+          message: 'already sent',
+        });
+
+        expect(executeGatewayAgent).toHaveBeenCalledOnce();
+        expect(setJSONState).not.toHaveBeenCalled();
       });
 
       it('should not restore the composer when gateway setup fails after message acceptance', async () => {
@@ -1515,6 +1605,18 @@ describe('ConversationLifecycle actions', () => {
       it('should snapshot the agent model onto the newTopic (top-level) when the send creates the topic', async () => {
         const { result } = renderHook(() => useChatStore());
         const agentId = TEST_IDS.SESSION_ID;
+        vi.spyOn(aiModelSelectors, 'isModelHasReasoningExtendParams').mockReturnValue(() => true);
+        let loaded = false;
+        vi.spyOn(aiModelSelectors, 'isModelReasoningConfigLoaded').mockReturnValue(() => loaded);
+        vi.spyOn(useAiInfraStore.getState(), 'ensureModelReasoningConfig').mockImplementation(
+          async () => {
+            await Promise.resolve();
+            loaded = true;
+          },
+        );
+        vi.spyOn(aiModelSelectors, 'modelReasoningConfig').mockReturnValue(() => ({
+          reasoningEffort: 'high',
+        }));
         const newTopicId = TEST_IDS.NEW_TOPIC_ID;
 
         act(() => {
@@ -1558,12 +1660,45 @@ describe('ConversationLifecycle actions', () => {
         expect(sendMessageInServerSpy).toHaveBeenCalledWith(
           expect.objectContaining({
             newTopic: expect.objectContaining({
+              metadata: expect.objectContaining({ reasoningConfig: { reasoningEffort: 'high' } }),
               model: expect.any(String),
               provider: expect.any(String),
             }),
           }),
           expect.any(AbortController),
         );
+      });
+
+      it('reports an isolated gateway topic at acceptance and returns its ID', async () => {
+        const onTopicCreated = vi.fn();
+        const executeGatewayAgent = vi.fn().mockImplementation(async (params) => {
+          await params.onTopicCreated?.(TEST_IDS.NEW_TOPIC_ID);
+          expect(onTopicCreated).toHaveBeenCalledWith(TEST_IDS.NEW_TOPIC_ID);
+          useChatStore.getState().completeOperation(params.parentOperationId);
+          return {
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            topicId: TEST_IDS.NEW_TOPIC_ID,
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          };
+        });
+        useChatStore.setState({
+          executeGatewayAgent,
+          isGatewayModeEnabled: () => true,
+        });
+
+        const result = await useChatStore.getState().sendMessage({
+          context: {
+            agentId: TEST_IDS.SESSION_ID,
+            isNew: true,
+            isolatedTopic: true,
+            scope: 'main',
+          },
+          message: 'Continue the forwarded work',
+          onTopicCreated,
+        });
+
+        expect(onTopicCreated).toHaveBeenCalledTimes(1);
+        expect(result?.createdTopicId).toBe(TEST_IDS.NEW_TOPIC_ID);
       });
 
       it('should stop the sidebar spinner after a gateway send creates the topic', async () => {
@@ -1806,6 +1941,114 @@ describe('ConversationLifecycle actions', () => {
         await act(async () => {
           resolveExecutor();
           await sendPromise;
+          // Let the fire-and-forget afterUserMessagePersisted title task settle
+          // inside this test instead of leaking into the next one.
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+
+        expect(operationSelectors.isTopicVisiblyRunning(newTopicId)(useChatStore.getState())).toBe(
+          false,
+        );
+      });
+
+      it('notifies an isolated hetero caller before execution and returns its created topic', async () => {
+        mockConstEnv.isDesktop = true;
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              heterogeneousProvider: { command: 'codex', type: 'codex' },
+            },
+          },
+        });
+
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const topicKey = topicMapKey({ agentId });
+        const newTopicId = TEST_IDS.NEW_TOPIC_ID;
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: undefined,
+            summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
+            topicDataMap: {
+              [topicKey]: {
+                currentPage: 0,
+                hasMore: false,
+                isExpandingPageSize: false,
+                isLoadingMore: false,
+                items: [],
+                pageSize: 20,
+                total: 0,
+              },
+            },
+          });
+        });
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          isCreateNewTopic: true,
+          messages: [
+            createMockMessage({
+              id: TEST_IDS.USER_MESSAGE_ID,
+              role: 'user',
+              topicId: newTopicId,
+            }),
+            createMockMessage({
+              id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+              role: 'assistant',
+              topicId: newTopicId,
+            }),
+          ],
+          topicId: newTopicId,
+          topics: { items: [{ id: newTopicId, title: 'Server Topic' }], total: 1 },
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+
+        let resolveExecutor!: () => void;
+        executeHeterogeneousAgentMock.mockImplementation(
+          (_getStore: unknown, opts: { operationId: string }) =>
+            new Promise<void>((resolve) => {
+              resolveExecutor = () => {
+                // The real executor settles its execHeterogeneousAgent op at
+                // the terminal; without this the leaked running op would keep
+                // the spinner on (and pollute later tests).
+                useChatStore.getState().completeOperation(opts.operationId);
+                resolve();
+              };
+            }),
+        );
+
+        const onTopicCreated = vi.fn();
+        const switchTopic = vi.spyOn(useChatStore.getState(), 'switchTopic');
+        let sendPromise!: ReturnType<typeof result.current.sendMessage>;
+        act(() => {
+          sendPromise = result.current.sendMessage({
+            context: { agentId, isNew: true, isolatedTopic: true, scope: 'main' },
+            onTopicCreated,
+            message: 'hello',
+          });
+        });
+
+        await waitFor(() => expect(executeHeterogeneousAgentMock).toHaveBeenCalled());
+
+        expect(onTopicCreated).toHaveBeenCalledWith(newTopicId);
+        expect(switchTopic).not.toHaveBeenCalled();
+
+        // The executor only writes the persisted `status === 'running'` (the
+        // run spinner's other driver) after startSession resolves — the running
+        // execHeterogeneousAgent operation must keep the spinner on while the
+        // executor starts up, or it blanks during a slow CLI startup.
+        expect(operationSelectors.isTopicVisiblyRunning(newTopicId)(useChatStore.getState())).toBe(
+          true,
+        );
+
+        await act(async () => {
+          resolveExecutor();
+          expect(await sendPromise).toEqual(
+            expect.objectContaining({ createdTopicId: newTopicId }),
+          );
           // Let the fire-and-forget afterUserMessagePersisted title task settle
           // inside this test instead of leaking into the next one.
           await Promise.resolve();
@@ -2203,6 +2446,16 @@ describe('ConversationLifecycle actions', () => {
           // The desktop/home fallback is always available for a hetero CLI, so
           // every case below has something to lose to.
           window.__LOBE_GLOBAL_AGENT_CONTEXT__ = { desktopPath: DESKTOP_PATH };
+        });
+
+        it('snapshots the heterogeneous effort into the first-send topic', async () => {
+          const sendSpy = setupHeteroRun({
+            heterogeneousProvider: { command: 'codex', effort: 'high', type: 'codex' },
+          });
+          await sendHeteroMessage();
+          expect(sendSpy.mock.calls[0][0].newTopic?.metadata).toMatchObject({
+            heteroEffort: 'high',
+          });
         });
 
         it('prefers the bound device defaultCwd over the desktop fallback', async () => {
@@ -3563,6 +3816,87 @@ describe('ConversationLifecycle actions', () => {
           }),
           expect.any(AbortController),
         );
+        expect(sendMessageInServerSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            newTopic: expect.objectContaining({ model: 'default', provider: 'codex' }),
+          }),
+          expect.any(AbortController),
+        );
+      });
+
+      it('overrides the heterogeneous runtime with the active topic model', async () => {
+        mockConstEnv.isDesktop = true;
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              heterogeneousProvider: {
+                args: ['--model', 'global-model', '--mode', 'plan'],
+                model: 'global-model',
+                type: 'cursor',
+              },
+            },
+          },
+        });
+        const context = {
+          agentId: TEST_IDS.SESSION_ID,
+          threadId: null,
+          topicId: TEST_IDS.TOPIC_ID,
+        };
+        const topicKey = topicMapKey({ agentId: TEST_IDS.SESSION_ID });
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: TEST_IDS.SESSION_ID,
+            activeTopicId: TEST_IDS.TOPIC_ID,
+            topicDataMap: {
+              [topicKey]: {
+                currentPage: 0,
+                hasMore: false,
+                items: [
+                  {
+                    createdAt: Date.now(),
+                    id: TEST_IDS.TOPIC_ID,
+                    model: 'topic-model',
+                    provider: 'cursor',
+                    title: 'Topic A',
+                    updatedAt: Date.now(),
+                  },
+                ],
+                pageSize: 20,
+                total: 1,
+              },
+            },
+          });
+        });
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          messages: [
+            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+          ],
+          topicId: TEST_IDS.TOPIC_ID,
+          topics: [],
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+        executeHeterogeneousAgentMock.mockResolvedValue(undefined);
+        const { result } = renderHook(() => useChatStore());
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context,
+            message: TEST_CONTENT.USER_MESSAGE,
+          });
+        });
+
+        expect(executeHeterogeneousAgentMock).toHaveBeenCalledWith(
+          expect.any(Function),
+          expect.objectContaining({
+            heterogeneousProvider: {
+              args: ['--mode', 'plan'],
+              model: 'topic-model',
+              type: 'cursor',
+            },
+          }),
+        );
       });
 
       it('routes a legacy bare Qoder model to the desktop heterogeneous runtime without gateway mode', async () => {
@@ -3621,6 +3955,92 @@ describe('ConversationLifecycle actions', () => {
           useChatStore.setState({
             executeGatewayAgent,
             isGatewayModeEnabled: () => true,
+          });
+        });
+
+        const { result } = renderHook(() => useChatStore());
+        await act(async () => {
+          await result.current.sendMessage({
+            message: TEST_CONTENT.USER_MESSAGE,
+            context: createTestContext(),
+          });
+        });
+
+        expect(executeGatewayAgent).toHaveBeenCalledTimes(1);
+        expect(executeHeterogeneousAgentMock).not.toHaveBeenCalled();
+        expect(result.current.executeClientAgent).not.toHaveBeenCalled();
+      });
+
+      it('routes Android Codex device execution to the gateway instead of the Provider API', async () => {
+        // Regression: Android (isDesktop=false) selected a remote macOS device
+        // for a Codex agent whose agencyConfig only carried the legacy
+        // `model: 'codex'` identity. Without recovering the hetero provider,
+        // selectRuntimeType fell through to `client` and POST /webapi/chat/codex
+        // returned InvalidProviderAPIKey.
+        mockConstEnv.isDesktop = false;
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              boundDeviceId: 'macos-device',
+              executionTarget: 'device',
+            },
+            model: 'codex',
+          },
+        });
+
+        const executeGatewayAgent = vi.fn().mockImplementation(async (params) => {
+          useChatStore.getState().completeOperation(params.parentOperationId);
+          return {
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            operationId: 'gateway-operation',
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          };
+        });
+        act(() => {
+          useChatStore.setState({
+            executeGatewayAgent,
+            isGatewayModeEnabled: () => false,
+          });
+        });
+
+        const { result } = renderHook(() => useChatStore());
+        await act(async () => {
+          await result.current.sendMessage({
+            message: TEST_CONTENT.USER_MESSAGE,
+            context: createTestContext(),
+          });
+        });
+
+        expect(executeGatewayAgent).toHaveBeenCalledTimes(1);
+        expect(executeHeterogeneousAgentMock).not.toHaveBeenCalled();
+        expect(result.current.executeClientAgent).not.toHaveBeenCalled();
+      });
+
+      it('routes Android Codex with a configured heterogeneousProvider to the gateway', async () => {
+        mockConstEnv.isDesktop = false;
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              boundDeviceId: 'macos-device',
+              executionTarget: 'device',
+              heterogeneousProvider: { command: 'codex', type: 'codex' },
+            },
+            model: 'codex',
+          },
+        });
+
+        const executeGatewayAgent = vi.fn().mockImplementation(async (params) => {
+          useChatStore.getState().completeOperation(params.parentOperationId);
+          return {
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            operationId: 'gateway-operation',
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          };
+        });
+        act(() => {
+          useChatStore.setState({
+            executeGatewayAgent,
+            isGatewayModeEnabled: () => false,
           });
         });
 
@@ -3738,13 +4158,17 @@ describe('ConversationLifecycle actions', () => {
         expect(executeHeterogeneousAgentMock).not.toHaveBeenCalled();
       });
 
-      it('uses the owner target and ignores a retained member override for a private Workspace Agent', async () => {
+      // The owner's own `local` pick lives in the per-user override even on a
+      // private Workspace Agent (the shared row must never reference a
+      // personal device — the server rejects it), so a `local` override must
+      // keep routing the owner's run to the in-process desktop runtime.
+      it("applies the owner's own local override for a private Workspace Agent", async () => {
         mockConstEnv.isDesktop = true;
         setupMockSelectors({
           agentConfig: {
             agencyConfig: {
-              boundDeviceId: 'owner-device',
-              executionTarget: 'local',
+              boundDeviceId: 'shared-workspace-device',
+              executionTarget: 'device',
               executionTargetSelectionPolicy: 'fixed',
               heterogeneousProvider: { command: 'codex', type: 'codex' },
             },
@@ -3755,8 +4179,8 @@ describe('ConversationLifecycle actions', () => {
           workspaceUserPreference: {
             agentDeviceOverrides: {
               [TEST_IDS.SESSION_ID]: {
-                boundDeviceId: 'stale-workspace-device',
-                executionTarget: 'device',
+                boundDeviceId: 'owner-desktop',
+                executionTarget: 'local',
               },
             },
           },
@@ -3788,6 +4212,146 @@ describe('ConversationLifecycle actions', () => {
 
         expect(executeHeterogeneousAgentMock).toHaveBeenCalledTimes(1);
         expect(executeGatewayAgent).not.toHaveBeenCalled();
+      });
+
+      // A workspace admin who is not the author can store a personal `local`
+      // override (the picker and server both recognize management access), and
+      // runtime resolution must honor it even under a `fixed` selection
+      // policy — otherwise the send silently routes to the gateway instead of
+      // the admin's own desktop.
+      it("applies a workspace admin's local override under a fixed selection policy", async () => {
+        mockConstEnv.isDesktop = true;
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              boundDeviceId: 'shared-workspace-device',
+              executionTarget: 'device',
+              executionTargetSelectionPolicy: 'fixed',
+              heterogeneousProvider: { command: 'codex', type: 'codex' },
+            },
+          },
+        });
+        const { agentByIdSelectors } = await import('@/store/agent/selectors');
+        vi.spyOn(agentByIdSelectors, 'getAgentById').mockReturnValue(
+          () =>
+            ({ userId: 'author-user', visibility: 'public', workspaceId: 'workspace-1' }) as any,
+        );
+        const { rememberAgentManagementAccess, clearAgentManagementAccessCache } =
+          await import('@/helpers/agentManagementAccess');
+        useUserStore.setState({
+          user: { id: 'admin-user' } as any,
+          workspaceUserPreference: {
+            agentDeviceOverrides: {
+              [TEST_IDS.SESSION_ID]: {
+                boundDeviceId: 'admin-desktop',
+                executionTarget: 'local',
+              },
+            },
+          },
+        });
+        rememberAgentManagementAccess('admin-user', TEST_IDS.SESSION_ID, true);
+
+        const executeGatewayAgent = vi.fn().mockResolvedValue(undefined);
+        act(() => {
+          useChatStore.setState({ executeGatewayAgent });
+        });
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          messages: [
+            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+          ],
+          topicId: TEST_IDS.TOPIC_ID,
+          topics: [],
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+        executeHeterogeneousAgentMock.mockResolvedValue(undefined);
+
+        try {
+          const { result } = renderHook(() => useChatStore());
+          await act(async () => {
+            await result.current.sendMessage({
+              message: TEST_CONTENT.USER_MESSAGE,
+              context: createTestContext(),
+            });
+          });
+
+          expect(executeHeterogeneousAgentMock).toHaveBeenCalledTimes(1);
+          expect(executeGatewayAgent).not.toHaveBeenCalled();
+        } finally {
+          clearAgentManagementAccessCache();
+          useUserStore.setState({ user: undefined as any });
+        }
+      });
+
+      // Same scenario on a COLD cache: the picker's hook never ran, so the
+      // send path must resolve management access from the server itself
+      // before choosing a runtime.
+      it("resolves an unprimed admin's access from the server before dispatch", async () => {
+        mockConstEnv.isDesktop = true;
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              boundDeviceId: 'shared-workspace-device',
+              executionTarget: 'device',
+              executionTargetSelectionPolicy: 'fixed',
+              heterogeneousProvider: { command: 'codex', type: 'codex' },
+            },
+          },
+        });
+        const { agentByIdSelectors } = await import('@/store/agent/selectors');
+        vi.spyOn(agentByIdSelectors, 'getAgentById').mockReturnValue(
+          () =>
+            ({ userId: 'author-user', visibility: 'public', workspaceId: 'workspace-1' }) as any,
+        );
+        const { clearAgentManagementAccessCache } = await import('@/helpers/agentManagementAccess');
+        clearAgentManagementAccessCache();
+        getGeneralAccessMock.mockResolvedValue({ canManage: true });
+        useUserStore.setState({
+          user: { id: 'admin-user' } as any,
+          workspaceUserPreference: {
+            agentDeviceOverrides: {
+              [TEST_IDS.SESSION_ID]: {
+                boundDeviceId: 'admin-desktop',
+                executionTarget: 'local',
+              },
+            },
+          },
+        });
+
+        const executeGatewayAgent = vi.fn().mockResolvedValue(undefined);
+        act(() => {
+          useChatStore.setState({ executeGatewayAgent });
+        });
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          messages: [
+            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+          ],
+          topicId: TEST_IDS.TOPIC_ID,
+          topics: [],
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+        executeHeterogeneousAgentMock.mockResolvedValue(undefined);
+
+        try {
+          const { result } = renderHook(() => useChatStore());
+          await act(async () => {
+            await result.current.sendMessage({
+              message: TEST_CONTENT.USER_MESSAGE,
+              context: createTestContext(),
+            });
+          });
+
+          expect(getGeneralAccessMock).toHaveBeenCalledWith('agent', TEST_IDS.SESSION_ID);
+          expect(executeHeterogeneousAgentMock).toHaveBeenCalledTimes(1);
+          expect(executeGatewayAgent).not.toHaveBeenCalled();
+        } finally {
+          clearAgentManagementAccessCache();
+          getGeneralAccessMock.mockReset();
+          useUserStore.setState({ user: undefined as any });
+        }
       });
 
       it('should route new-topic heterogeneous streaming updates to the persisted topic key', async () => {
@@ -5182,10 +5746,13 @@ describe('ConversationLifecycle actions', () => {
         });
 
         // switchTopic should be called with the new topicId and clearNewKey option
-        expect(switchTopicSpy).toHaveBeenCalledWith(newTopicId, {
-          clearNewKey: true,
-          skipRefreshMessage: true,
-        });
+        expect(switchTopicSpy).toHaveBeenCalledWith(
+          newTopicId,
+          expect.objectContaining({
+            clearNewKey: true,
+            skipRefreshMessage: true,
+          }),
+        );
 
         // After new topic creation, the _new key should be cleared
         const messagesInNewKey = useChatStore.getState().messagesMap[newKey];

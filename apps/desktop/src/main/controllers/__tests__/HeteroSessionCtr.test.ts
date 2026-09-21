@@ -17,15 +17,6 @@ vi.mock('electron', () => ({
   ipcMain: { handle: ipcMainHandleMock },
 }));
 
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
-}));
-
 vi.mock('node:os', async (importOriginal) => {
   const actual: Record<string, unknown> = await importOriginal();
   return { ...actual, homedir: homedirMock };

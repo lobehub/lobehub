@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto';
 
-import { isParkedStatus } from '@lobechat/agent-runtime';
 import { SkillsIdentifier } from '@lobechat/builtin-tool-skills';
 import {
   classifyEditedFile,
@@ -72,6 +71,8 @@ export interface RegisterWorksForOperationParams {
  * also fold in the shell Work scan (see `registerShellWorks`).
  */
 export interface WorksRegistrationOutcome {
+  /** Assistant message successfully anchored by the shell scan, including its fallback. */
+  anchorMessageId?: string;
   /** Entity files + shell-scanned external entities this completion tried to register. */
   attempted: number;
   /** How many of `attempted` did not end up registered this round. */
@@ -314,7 +315,7 @@ export const registerWorksForOperation = async (
   // scan, so the parent will never scan again and the repair's edits would be
   // lost. Distinguish by the parent's status:
   //   - parent still active (idle / running / parked — waiting_for_human or
-  //     waiting_for_async_tool, per isParkedStatus) → it will scan the whole
+  //     waiting_for_async_tool) → it will scan the whole
   //     subtree on its own completion, so no-op here to avoid the duplicate.
   //   - parent already terminal (done / error / interrupted) → register this
   //     op's OWN edits (a legitimately new version for the repair), scanning
@@ -327,7 +328,8 @@ export const registerWorksForOperation = async (
       !parentStatus ||
       parentStatus === 'idle' ||
       parentStatus === 'running' ||
-      isParkedStatus(parentStatus);
+      parentStatus === 'waiting_for_human' ||
+      parentStatus === 'waiting_for_async_tool';
     if (parentActive) {
       log(
         '[%s] Skipping file Work registration: parent operation is still active (%s)',
@@ -421,6 +423,7 @@ export const registerWorksForOperation = async (
   // runs — without the stamp a registered Work never renders below the message.
   // `messageModel.update` deep-merges metadata, so re-stamping an anchor the
   // finalizer already wrote (same rootOperationId) is a no-op.
+  let stampedAnchorMessageId: string | undefined;
   if (shellOutcome.registered > 0) {
     let anchorMessageId = params.assistantMessageId ?? null;
     if (!anchorMessageId && shellOutcome.anchorCandidateMessageId) {
@@ -449,6 +452,8 @@ export const registerWorksForOperation = async (
       if (!stamp.success) {
         shellOutcome.failed += 1;
         log('[%s] Failed to stamp work anchor on %s', operationId, anchorMessageId);
+      } else {
+        stampedAnchorMessageId = anchorMessageId;
       }
     } else {
       // No resolvable anchor at all: the Work row exists but nothing would
@@ -516,7 +521,11 @@ export const registerWorksForOperation = async (
   );
   if (entities.length === 0) {
     log('[%s] Skipping file Work registration: no sandbox-backed entity candidates', operationId);
-    return { attempted: shellOutcome.attempted, failed: shellOutcome.failed };
+    return {
+      ...(stampedAnchorMessageId ? { anchorMessageId: stampedAnchorMessageId } : {}),
+      attempted: shellOutcome.attempted,
+      failed: shellOutcome.failed,
+    };
   }
 
   // The sandbox is derived from userId + topicId and outlives the operation, so
@@ -660,6 +669,7 @@ export const registerWorksForOperation = async (
     (result) => result.status === 'rejected' || result.value === 'failed',
   ).length;
   return {
+    ...(stampedAnchorMessageId ? { anchorMessageId: stampedAnchorMessageId } : {}),
     attempted: entities.length + shellOutcome.attempted,
     failed: failed + shellOutcome.failed,
   };

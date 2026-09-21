@@ -1,4 +1,4 @@
-import { CUSTOM_DOCUMENT_FILE_TYPE } from '@lobechat/const';
+import { PAGE_DOCUMENT_FILE_TYPES, PAGE_DOCUMENT_SOURCE_TYPES } from '@lobechat/const';
 import { type DocumentItem } from '@lobechat/database/schemas';
 import { type SWRResponse } from 'swr';
 
@@ -36,8 +36,12 @@ const documentItemToLobeDocument = (document: DocumentItem): LobeDocument => ({
 
 const n = setNamespace('page/list');
 
-const ALLOWED_PAGE_SOURCE_TYPES = new Set(['editor', 'file', 'api']);
-const ALLOWED_PAGE_FILE_TYPES = new Set([CUSTOM_DOCUMENT_FILE_TYPE, 'application/pdf']);
+// EDITOR is a client-only stamp on in-memory drafts; DB rows never carry it.
+const ALLOWED_PAGE_SOURCE_TYPES = new Set([
+  DocumentSourceType.EDITOR as string,
+  ...PAGE_DOCUMENT_SOURCE_TYPES,
+]);
+const ALLOWED_PAGE_FILE_TYPES = new Set(PAGE_DOCUMENT_FILE_TYPES);
 
 /**
  * Check if a page should be displayed in the page list

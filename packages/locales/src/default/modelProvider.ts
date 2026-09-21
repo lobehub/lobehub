@@ -276,6 +276,8 @@ export default {
     'For GPT-5.2 series; controls reasoning intensity.',
   'providerModels.item.modelConfig.extendParams.options.gpt5_6ReasoningEffort.hint':
     'For GPT-5.6 series; controls reasoning intensity from None through Max.',
+  'providerModels.item.modelConfig.extendParams.options.gpt6ReasoningEffort.hint':
+    'For GPT-6 series; controls reasoning intensity from Low through Max. Reasoning cannot be disabled.',
   'providerModels.item.modelConfig.extendParams.options.glm5_2ReasoningEffort.hint':
     'For GLM-5.2; controls reasoning effort with High and Max levels.',
   'providerModels.item.modelConfig.extendParams.options.glm5_3ReasoningEffort.hint':
@@ -296,6 +298,8 @@ export default {
     'For DeepSeek V4 GA thinking mode; controls reasoning intensity. Adds a `low` tier on top of the original V4 levels. `high` is the default, `max` unlocks the deepest reasoning used by complex agent workflows.',
   'providerModels.item.modelConfig.extendParams.options.deepseekV4ReasoningEffort.hint':
     'For DeepSeek V4 thinking mode; controls reasoning intensity. `high` is the default, `max` unlocks the deepest reasoning used by complex agent workflows.',
+  'providerModels.item.modelConfig.extendParams.options.qwen38ReasoningEffort.hint':
+    'For Qwen3.8 Max hybrid thinking; controls reasoning intensity. `none` disables thinking; `low`/`medium` trade depth for speed and cost; `xhigh` is the API default for complex analysis.',
   'providerModels.item.modelConfig.extendParams.options.imageAspectRatio.hint':
     'For Gemini image generation models; controls aspect ratio of generated images.',
   'providerModels.item.modelConfig.extendParams.options.imageAspectRatio2.hint':
@@ -437,6 +441,9 @@ export default {
   'sortModal.success': 'Sort update successful',
   'sortModal.title': 'Custom Order',
   'sortModal.update': 'Update',
+  'unsloth.checker.guidance':
+    'For browser network errors, check that Studio allows this page through CORS. For authentication errors, enter a real Studio API key; keyless terminal access does not grant browser access.',
+  'unsloth.checker.setupGuide': 'Unsloth connection setup guide',
   'updateAiProvider.confirmDelete': 'Delete this AI provider?',
   'updateAiProvider.confirmDeleteDescription':
     'Once deleted, this AI provider cannot be recovered.',

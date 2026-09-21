@@ -8,6 +8,8 @@ import { DocumentLoadPosition, getDocumentTemplate, PolicyLoad } from '@lobechat
 import { buildAgentSkillIdentifier } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { DOCUMENT_FOLDER_TYPE } from '@lobechat/database/schemas';
+import type { DocumentAccessScope } from '@lobechat/types';
+import { ordinaryDocumentAccessScope } from '@lobechat/types';
 
 import type {
   AgentDocument,
@@ -65,6 +67,7 @@ interface UpsertDocumentParams {
 
 interface CreateAgentDocumentOptions {
   hintIsSkill?: boolean;
+  parentId?: string;
 }
 
 type AgentDocumentWithLiteXML = AgentDocument & { litexml?: string };
@@ -151,13 +154,20 @@ export class AgentDocumentsService {
     userId: string,
     workspaceId?: string,
     callerAgentVisibility?: 'private' | 'public' | null,
+    documentAccessScope: DocumentAccessScope = ordinaryDocumentAccessScope,
   ) {
-    this.agentDocumentModel = new AgentDocumentModel(db, userId, workspaceId);
+    this.agentDocumentModel = new AgentDocumentModel(db, userId, workspaceId, documentAccessScope);
     // Public-agent gate flows through DocumentService → DocumentModel so
     // agentDocuments list / attach / read cannot see the caller's own
     // private documents when the invoking agent itself is workspace-public.
-    this.documentService = new DocumentService(db, userId, workspaceId, callerAgentVisibility);
-    this.topicDocumentModel = new TopicDocumentModel(db, userId, workspaceId);
+    this.documentService = new DocumentService(
+      db,
+      userId,
+      workspaceId,
+      callerAgentVisibility,
+      documentAccessScope,
+    );
+    this.topicDocumentModel = new TopicDocumentModel(db, userId, workspaceId, documentAccessScope);
   }
 
   private async projectDocumentContent<T extends ProjectableAgentDocument>(doc: T): Promise<T>;
@@ -236,6 +246,7 @@ export class AgentDocumentsService {
       loadPosition?: DocumentLoadPosition;
       loadRules?: DocumentLoadRules;
       metadata?: Record<string, unknown>;
+      parentId?: string;
       policy?: AgentDocumentPolicy;
       templateId?: string;
     },
@@ -245,7 +256,13 @@ export class AgentDocumentsService {
     let filename = baseFilename;
     let suffix = 2;
 
-    while (await this.agentDocumentModel.findByFilename(agentId, filename)) {
+    while (
+      await this.agentDocumentModel.findByParentAndFilename(
+        agentId,
+        params?.parentId ?? null,
+        filename,
+      )
+    ) {
       if (suffix > MAX_UNIQUE_FILENAME_ATTEMPTS) {
         throw new Error(
           `Unable to generate a unique filename for "${title}" after ${MAX_UNIQUE_FILENAME_ATTEMPTS} attempts.`,
@@ -516,6 +533,14 @@ export class AgentDocumentsService {
     content: string,
     options: CreateAgentDocumentOptions = {},
   ) {
+    if (options.parentId) {
+      const parent = await this.agentDocumentModel.findByDocumentId(agentId, options.parentId);
+      if (!parent) throw new Error(`Parent folder not found: ${options.parentId}`);
+      if (parent.fileType !== DOCUMENT_FOLDER_TYPE) {
+        throw new Error(`Parent document is not a folder: ${options.parentId}`);
+      }
+    }
+
     const { title: extractedTitle, content: strippedContent } = extractMarkdownH1Title(content);
     const finalTitle = extractedTitle || title;
     const metadata = options.hintIsSkill
@@ -527,12 +552,10 @@ export class AgentDocumentsService {
         }
       : undefined;
 
-    return this.createWithUniqueFilename(
-      agentId,
-      finalTitle,
-      strippedContent,
-      metadata ? { metadata } : undefined,
-    );
+    return this.createWithUniqueFilename(agentId, finalTitle, strippedContent, {
+      ...(metadata ? { metadata } : {}),
+      ...(options.parentId ? { parentId: options.parentId } : {}),
+    });
   }
 
   async createForTopic(

@@ -17,12 +17,12 @@ import {
  * `getBuiltinRenderDisplayControl` as a fallback.
  */
 const FixedClaudeCodeRenderDisplayControls: Record<string, RenderDisplayControl> = {
-  [ClaudeCodeApiName.Edit]: 'expand',
+  [ClaudeCodeApiName.Edit]: 'collapsed',
   [ClaudeCodeApiName.SendMessage]: 'expand',
   [ClaudeCodeApiName.TaskList]: 'expand',
   [ClaudeCodeApiName.TaskUpdate]: 'expand',
   [ClaudeCodeApiName.TodoWrite]: 'expand',
-  [ClaudeCodeApiName.Write]: 'expand',
+  [ClaudeCodeApiName.Write]: 'collapsed',
   ...Object.fromEntries(
     LINEAR_MCP_TOOL_NAMES.map((tool) => [`${LINEAR_MCP_PREFIX}${tool}`, 'expand']),
   ),

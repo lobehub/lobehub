@@ -1,9 +1,8 @@
 'use client';
 
 import type { AgentEvalExperimentDetail } from '@lobechat/types';
-import { Flexbox, Text } from '@lobehub/ui';
-import { Button, type DropdownItem, DropdownMenu } from '@lobehub/ui/base-ui';
-import { toast } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Button, type DropdownItem, DropdownMenu, Text, toast } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Ellipsis, Pencil, Trash2 } from 'lucide-react';

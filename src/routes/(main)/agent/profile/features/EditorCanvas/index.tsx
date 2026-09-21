@@ -3,8 +3,8 @@
 import type { IEditor } from '@lobehub/editor';
 import { ReactMentionPlugin, ReactTablePlugin, ReactToolbarPlugin } from '@lobehub/editor';
 import { Editor } from '@lobehub/editor/react';
-import { ActionIcon, Flexbox } from '@lobehub/ui';
-import { toast } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { CodeXmlIcon, LetterTextIcon } from 'lucide-react';

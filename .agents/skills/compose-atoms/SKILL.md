@@ -1,6 +1,6 @@
 ---
 name: compose-atoms
-description: 'Decompose a heavy domain feature into mountable capability atoms. Use when a Viewer/Page/index.tsx owns fetch, filters, mutations, modals, and host integrations together; a visual split still leaves store calls and actions on the page; a portal, embed, share, mobile, or micro-app needs a subset of the same domain; or a new capability is landing as another `readOnly`/`mode`/`variant` flag. Triggers on `compose-atoms`, sink state, 状态下沉, 重业务拆分, 拆成原子, 原子组件, 组装, god component, fat viewer, module graph, slot composition, host seam.'
+description: 'Use for splitting heavy domains into capabilities (原子组件) across page, portal, share or micro-app hosts, sinking state (状态下沉) and replacing mode/readOnly flags. Simple component splits: react.'
 user-invocable: false
 ---
 
@@ -165,14 +165,14 @@ The feature barrel may export the **full** assembler for in-app use. Light hosts
 
 ```bash
 # example: light host must not import a write atom
-WORKBENCH_TRACE_MODULE=features/Verify/Acceptance/AcceptanceDecision bun run build:rr
+WORKBENCH_TRACE_MODULE=features/Acceptance/Viewer/Review/AcceptanceDecision bun run build:rr
 ```
 
 If the light assembler appears on the importer chain, a static import still exists — usually a barrel, a leftover flag, or actions left on the page.
 
 ## Example
 
-`src/features/Verify/Acceptance/` is one application of this kit, not the template to copy file-for-file.
+`src/features/Acceptance/Viewer/` is one application of this kit, not the template to copy file-for-file.
 
 | Host                          | Mounts                                                                    |
 | ----------------------------- | ------------------------------------------------------------------------- |

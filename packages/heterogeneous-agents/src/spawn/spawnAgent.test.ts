@@ -14,6 +14,7 @@ let nextFakeProc: any = null;
 const tempDirs: string[] = [];
 
 const platformMock = vi.mocked(os.platform);
+const originalPlatform = process.platform;
 const execFileMock = vi.mocked(childProcess.execFile);
 const detectHeterogeneousCliCommandMock = vi.mocked(
   resolveCliCommand.detectHeterogeneousCliCommand,
@@ -178,11 +179,17 @@ const createGrokAcpProc = ({
 
 const createFakeAcpProc = ({
   promptAutoComplete = true,
-}: { promptAutoComplete?: boolean } = {}) => {
+  responseText = 'TRAE response',
+  sessionId = 'trae-session-1',
+}: { promptAutoComplete?: boolean; responseText?: string; sessionId?: string } = {}) => {
   const proc = new EventEmitter() as any;
   const stdout = new PassThrough();
   const stderr = new PassThrough();
-  const requests: Array<{ id?: number; method?: string }> = [];
+  const requests: Array<{
+    id?: number;
+    method?: string;
+    params?: Record<string, unknown>;
+  }> = [];
   const send = (message: Record<string, unknown>) =>
     stdout.write(`${JSON.stringify({ jsonrpc: '2.0', ...message })}\n`);
   proc.stdout = stdout;
@@ -193,7 +200,11 @@ const createFakeAcpProc = ({
   proc.stdin = {
     once: vi.fn(),
     write: vi.fn((chunk: string) => {
-      const message = JSON.parse(chunk.trim()) as { id?: number; method?: string };
+      const message = JSON.parse(chunk.trim()) as {
+        id?: number;
+        method?: string;
+        params?: Record<string, unknown>;
+      };
       requests.push(message);
       queueMicrotask(() => {
         switch (message.method) {
@@ -217,11 +228,14 @@ const createFakeAcpProc = ({
                     currentValue: 'seed-2.0-code',
                     id: 'model',
                     name: 'Model',
-                    options: [{ name: 'GPT 5.4', value: 'gpt-5.4' }],
+                    options: [
+                      { name: 'GPT 5.4', value: 'gpt-5.4' },
+                      { name: 'Sonnet', value: 'sonnet' },
+                    ],
                     type: 'select',
                   },
                 ],
-                sessionId: 'trae-session-1',
+                sessionId,
               },
             });
             return;
@@ -235,9 +249,9 @@ const createFakeAcpProc = ({
             send({
               method: 'session/update',
               params: {
-                sessionId: 'trae-session-1',
+                sessionId,
                 update: {
-                  content: { text: 'TRAE response', type: 'text' },
+                  content: { text: responseText, type: 'text' },
                   sessionUpdate: 'agent_message_chunk',
                 },
               },
@@ -332,11 +346,16 @@ describe('spawnAgent', () => {
     nextFakeProc = null;
     platformMock.mockReturnValue('linux');
     execFileMock.mockReset();
+    // ACP/stdio sessions read `process.platform` directly (unlike the CLI
+    // spawn plan which uses `os.platform()`), so pin it too — otherwise the
+    // signal-path tests exercise the win32 taskkill branch on Windows hosts.
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' });
     detectHeterogeneousCliCommandMock.mockResolvedValue({ available: true, path: 'traecli' });
   });
 
   afterEach(async () => {
     nextFakeProc = null;
+    Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform });
     await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { force: true, recursive: true })));
   });
 
@@ -381,6 +400,32 @@ describe('spawnAgent', () => {
     // Events flow through the pipeline (session id extracted by adapter).
     expect(events.length).toBeGreaterThan(0);
     for (const event of events) expect(event.operationId).toBe('op-1');
+  });
+
+  it('inherits an outer wrapper process group instead of detaching again', async () => {
+    const fake = createFakeProc({ stdoutChunks: [ccInit] });
+    nextFakeProc = fake.proc;
+    const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    const { spawnAgent } = await import('./spawnAgent');
+    const handle = await spawnAgent({
+      agentType: 'claude-code',
+      detached: false,
+      operationId: 'op-inherited-group',
+      prompt: 'do a thing',
+    });
+
+    expect(spawnCalls[0].options.detached).toBe(false);
+    handle.kill('SIGKILL');
+    expect(fake.proc.kill).toHaveBeenCalledWith('SIGKILL');
+    expect(processKill).not.toHaveBeenCalled();
+
+    fake.start();
+    for await (const _event of handle.events) {
+      // Drain the adapted stream so the fake process can settle cleanly.
+    }
+    await handle.exit;
+    processKill.mockRestore();
   });
 
   it('runs Grok Build through ACP and exposes its native session to CLI callers', async () => {
@@ -564,6 +609,94 @@ describe('spawnAgent', () => {
     killSpy.mockRestore();
   });
 
+  it('runs Devin through ACP behind the standard handle contract', async () => {
+    const fake = createFakeAcpProc({
+      responseText: 'Devin response',
+      sessionId: 'devin-session-1',
+    });
+    nextFakeProc = fake.proc;
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    try {
+      const { spawnAgent } = await import('./spawnAgent');
+      const handle = await spawnAgent({
+        agentType: 'devin',
+        extraArgs: ['--model', 'sonnet'],
+        initialModel: 'sonnet',
+        operationId: 'op-devin',
+        prompt: 'do a thing',
+      });
+      const events = [];
+      for await (const event of handle.events) events.push(event);
+
+      await expect(handle.exit).resolves.toEqual({ code: 0, signal: null });
+      expect(spawnCalls[0]).toMatchObject({
+        args: ['acp', '--model', 'sonnet'],
+        command: 'devin',
+      });
+      expect(fake.requests.map(({ method }) => method).filter(Boolean)).toEqual([
+        'initialize',
+        'session/new',
+        'session/set_config_option',
+        'session/prompt',
+      ]);
+      expect(
+        fake.requests.find(({ method }) => method === 'session/set_config_option')?.params,
+      ).toEqual({
+        configId: 'model',
+        sessionId: 'devin-session-1',
+        value: 'sonnet',
+      });
+      expect(handle.sessionId).toBe('devin-session-1');
+      expect(events).toContainEqual(expect.objectContaining({ type: 'agent_runtime_end' }));
+    } finally {
+      killSpy.mockRestore();
+    }
+  });
+
+  it('applies a permission mode through ACP session/set_config_option', async () => {
+    const fake = createFakeAcpProc({
+      responseText: 'Devin response',
+      sessionId: 'devin-session-1',
+    });
+    nextFakeProc = fake.proc;
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    try {
+      const { spawnAgent } = await import('./spawnAgent');
+      const handle = await spawnAgent({
+        agentType: 'devin',
+        extraArgs: ['--model', 'sonnet'],
+        initialModel: 'sonnet',
+        operationId: 'op-devin',
+        permissionMode: 'bypass',
+        prompt: 'do a thing',
+      });
+      const events = [];
+      for await (const event of handle.events) events.push(event);
+
+      await expect(handle.exit).resolves.toEqual({ code: 0, signal: null });
+      expect(spawnCalls[0]).toMatchObject({
+        args: ['acp', '--model', 'sonnet'],
+        command: 'devin',
+      });
+      const setConfigRequests = fake.requests.filter(
+        ({ method }) => method === 'session/set_config_option',
+      );
+      expect(setConfigRequests).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            params: { configId: 'mode', sessionId: 'devin-session-1', value: 'bypass' },
+          }),
+        ]),
+      );
+      expect(handle.sessionId).toBe('devin-session-1');
+      expect(events).toContainEqual(expect.objectContaining({ type: 'agent_runtime_end' }));
+    } finally {
+      killSpy.mockRestore();
+    }
+  });
+
   it('runs TRAE through ACP behind the standard handle contract', async () => {
     const fake = createFakeAcpProc();
     nextFakeProc = fake.proc;
@@ -607,6 +740,50 @@ describe('spawnAgent', () => {
             event.data?.content === 'TRAE response',
         ),
       ).toBe(true);
+    } finally {
+      killSpy.mockRestore();
+    }
+  });
+
+  it('runs Factory Droid through its fixed safe ACP invocation', async () => {
+    const fake = createFakeAcpProc();
+    nextFakeProc = fake.proc;
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    try {
+      const { spawnAgent } = await import('./spawnAgent');
+      const handle = await spawnAgent({
+        agentType: 'droid',
+        extraArgs: ['--tag', 'lobe'],
+        initialModel: 'gpt-5.4',
+        operationId: 'op-droid',
+        prompt: 'do a thing',
+      });
+
+      const events: any[] = [];
+      for await (const event of handle.events) events.push(event);
+
+      await expect(handle.exit).resolves.toEqual({ code: 0, signal: null });
+      expect(spawnCalls[0]).toMatchObject({
+        args: ['exec', '--output-format', 'acp', '--tag', 'lobe'],
+        command: 'droid',
+      });
+      expect(fake.requests.map((request) => request.method)).toEqual([
+        'initialize',
+        'session/new',
+        'session/set_config_option',
+        'session/prompt',
+      ]);
+      expect(handle.sessionId).toBe('trae-session-1');
+      expect(
+        events.some(
+          (event) =>
+            event.type === 'stream_chunk' &&
+            event.data?.chunkType === 'text' &&
+            event.data?.content === 'TRAE response',
+        ),
+      ).toBe(true);
+      expect(events.find((event) => event.type === 'stream_start')?.data?.provider).toBe('droid');
     } finally {
       killSpy.mockRestore();
     }
@@ -1079,35 +1256,18 @@ describe('spawnAgent', () => {
     ]);
   });
 
-  it('spawns Pi in JSON mode, resumes its native session, and sends images as @path args', async () => {
-    const dir = await mkdtemp(path.join(os.tmpdir(), 'lobe-pi-spawn-'));
-    tempDirs.push(dir);
-    const imagePath = path.join(dir, 'input.png');
-    await writeFile(imagePath, 'image');
-    nextFakeProc = createFakeProc().proc;
+  it('rejects spawning Pi via the legacy CLI path — pi is RPC-only', async () => {
     const { spawnAgent } = await import('./spawnAgent');
-    await spawnAgent({
-      agentType: 'pi',
-      extraArgs: ['--provider', 'anthropic'],
-      operationId: 'op-pi',
-      prompt: [
-        { text: 'continue', type: 'text' },
-        { source: { path: imagePath, type: 'path' }, type: 'image' },
-      ],
-      resumeSessionId: 'pi-session-previous',
-    });
-
-    expect(spawnCalls[0]).toMatchObject({ command: 'pi' });
-    expect(spawnCalls[0].args).toEqual([
-      '--mode',
-      'json',
-      '--session-id',
-      'pi-session-previous',
-      `@${imagePath}`,
-      '--provider',
-      'anthropic',
-    ]);
-    expect((nextFakeProc as any).stdin.write.mock.calls[0][0]).toBe('continue');
+    await expect(
+      spawnAgent({
+        agentType: 'pi',
+        extraArgs: ['--provider', 'anthropic'],
+        operationId: 'op-pi',
+        prompt: 'continue',
+        resumeSessionId: 'pi-session-previous',
+      }),
+    ).rejects.toThrow(/RPC transport only/);
+    expect(spawnCalls).toHaveLength(0);
   });
 
   it('seeds a real Codex resumed stream with the previous cumulative usage from the session file', async () => {

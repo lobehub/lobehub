@@ -1,7 +1,7 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Text } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { cssVar, cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,30 +23,32 @@ export const SearchUserMemoryInspector = memo<
   // Initial streaming state
   if (isArgumentsStreaming && !query) {
     return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-user-memory.apiName.searchUserMemory')}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-user-memory.apiName.searchUserMemory')}
+        </span>
       </div>
     );
   }
 
-  // pluginState is SearchMemoryResult directly.
-  const resultCount = pluginState
-    ? (pluginState.activities?.length ?? 0) +
-      (pluginState.contexts?.length ?? 0) +
-      (pluginState.experiences?.length ?? 0) +
-      (pluginState.identities?.length ?? 0) +
-      (pluginState.preferences?.length ?? 0)
-    : 0;
+  // pluginState is SearchMemoryResult directly — except once the read path has
+  // projected it, when the buckets are gone and their total is pinned instead.
+  const resultCount =
+    pluginState?.resultCount ??
+    (pluginState
+      ? (pluginState.activities?.length ?? 0) +
+        (pluginState.contexts?.length ?? 0) +
+        (pluginState.experiences?.length ?? 0) +
+        (pluginState.identities?.length ?? 0) +
+        (pluginState.preferences?.length ?? 0)
+      : 0);
   const hasResults = resultCount > 0;
 
   return (
-    <div
-      className={cx(
-        inspectorTextStyles.root,
-        (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-      )}
-    >
-      <span>{t('builtins.lobe-user-memory.apiName.searchUserMemory')}: </span>
+    <div className={inspectorTextStyles.root}>
+      <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+        {t('builtins.lobe-user-memory.apiName.searchUserMemory')}:{' '}
+      </span>
       {query && <span className={highlightTextStyles.primary}>{query}</span>}
       {!isLoading &&
         !isArgumentsStreaming &&

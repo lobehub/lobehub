@@ -48,7 +48,7 @@ describe('Goal Graph schema', () => {
         seq: 1,
       })
       .returning();
-    const [problemNode, workNode, findingNode, decisionNode] = await serverDB
+    const [problemNode, taskNode, findingNode, decisionNode] = await serverDB
       .insert(goalNodes)
       .values([
         {
@@ -59,7 +59,7 @@ describe('Goal Graph schema', () => {
         },
         {
           goalId: goal.id,
-          kind: 'work',
+          kind: 'task',
           status: 'active',
           taskId: task.id,
           title: 'Implement the minimal training loop',
@@ -78,13 +78,13 @@ describe('Goal Graph schema', () => {
       {
         goalId: goal.id,
         kind: 'investigates',
-        sourceNodeId: workNode.id,
+        sourceNodeId: taskNode.id,
         targetNodeId: problemNode.id,
       },
       {
         goalId: goal.id,
         kind: 'produces',
-        sourceNodeId: workNode.id,
+        sourceNodeId: taskNode.id,
         targetNodeId: findingNode.id,
       },
       {
@@ -168,7 +168,7 @@ describe('Goal Graph schema', () => {
     ).resolves.toHaveLength(1);
   });
 
-  it('enforces the Work node to responsible Task one-to-one invariant', async () => {
+  it('enforces that one task belongs to at most one node', async () => {
     const goal = await createGoal();
     const [task] = await serverDB
       .insert(tasks)
@@ -180,18 +180,12 @@ describe('Goal Graph schema', () => {
       })
       .returning();
 
-    await expect(
-      serverDB.insert(goalNodes).values({
-        goalId: goal.id,
-        kind: 'problem',
-        taskId: task.id,
-        title: 'Invalid task binding',
-      }),
-    ).rejects.toThrow();
-
+    // Which kinds may own a task is `bindTask`'s job, not the database's — see
+    // the model test. The uniqueness below is the part no single write can
+    // check for itself, so it stays here.
     await serverDB.insert(goalNodes).values({
       goalId: goal.id,
-      kind: 'work',
+      kind: 'task',
       taskId: task.id,
       title: 'Evaluate task generation strategy',
     });
@@ -199,7 +193,7 @@ describe('Goal Graph schema', () => {
     await expect(
       serverDB.insert(goalNodes).values({
         goalId: goal.id,
-        kind: 'work',
+        kind: 'task',
         taskId: task.id,
         title: 'Duplicate responsible task',
       }),

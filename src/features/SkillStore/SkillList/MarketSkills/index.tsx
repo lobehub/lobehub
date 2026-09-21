@@ -1,7 +1,7 @@
 'use client';
 
-import { Center, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Center, Flexbox, Icon } from '@lobehub/ui';
+import { Button, Text } from '@lobehub/ui/base-ui';
 import { uniqBy } from 'es-toolkit/compat';
 import { ServerCrash } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';

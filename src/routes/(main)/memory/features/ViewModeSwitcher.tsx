@@ -1,13 +1,14 @@
 'use client';
 
-import { ActionIcon } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { CalendarDaysIcon, LayoutDashboardIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
+import { type ViewMode } from '@/features/Memory';
 
-export type ViewMode = 'timeline' | 'grid';
+export type { ViewMode } from '@/features/Memory';
 
 interface ViewModeSwitcherProps {
   onChange: (mode: ViewMode) => void;

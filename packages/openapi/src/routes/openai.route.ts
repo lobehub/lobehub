@@ -20,7 +20,7 @@ import {
 
 const app = new Hono();
 
-app.post('/v1/responses', requireHeteroModelInvocation, async (c) => {
+app.post('/v1/responses', requireHeteroModelInvocation('openai-responses'), async (c) => {
   const request = await c.req.json().catch(() => null);
   if (!isRecord(request)) throw new HTTPException(400, { message: 'Invalid JSON request' });
   const context = c as Context;
@@ -35,6 +35,7 @@ app.post('/v1/responses', requireHeteroModelInvocation, async (c) => {
     throw new HTTPException(400, { message: 'server-default Responses requests must stream' });
   }
   const workspaceId = context.get('workspaceId');
+  const agentType = context.get('heteroAgentType');
   const requestModel = formatServerDefaultHeterogeneousModel(claims.model);
 
   // Same reasoning as the Anthropic relay: an escaping runtime rejection reaches
@@ -42,7 +43,7 @@ app.post('/v1/responses', requireHeteroModelInvocation, async (c) => {
   let body: ReadableStream<Uint8Array> | null;
   try {
     const { response } = await invokeServerDefaultModel({
-      agentType: 'codex',
+      agentType,
       model: claims.model,
       payload: normalizeResponsesRequest(request, SERVER_DEFAULT_MODEL_ALIAS),
       signal: c.req.raw.signal,

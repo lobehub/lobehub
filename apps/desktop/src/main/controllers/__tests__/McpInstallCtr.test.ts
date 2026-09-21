@@ -4,16 +4,6 @@ import type { App } from '@/core/App';
 
 import McpInstallController from '../McpInstallCtr';
 
-// Mock logger
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
-}));
-
 // Mock browserManager
 const mockBrowserManager = {
   broadcastToWindow: vi.fn(),

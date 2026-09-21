@@ -1,4 +1,10 @@
+import { parsePluginEntry } from '@lobechat/types';
+
 import type {
+  AgentEvalDatasetItem,
+  AgentEvalRunItem,
+  AgentEvalRunTopicItem,
+  AgentEvalTestCaseItem,
   AgentItem,
   AiModelSelectItem,
   AiProviderSelectItem,
@@ -220,7 +226,61 @@ export const PUBLIC_PERMISSION_FIELDS = [
   'updatedAt',
 ] as const satisfies readonly (keyof PermissionItem)[];
 
-export type PublicAgent = Pick<AgentItem, (typeof PUBLIC_AGENT_FIELDS)[number]>;
+export const PUBLIC_EVAL_RUN_FIELDS = [
+  'config',
+  'createdAt',
+  'datasetId',
+  'experimentId',
+  'id',
+  'metrics',
+  'name',
+  'parentRunId',
+  'startedAt',
+  'status',
+  'targetAgentId',
+  'updatedAt',
+] as const satisfies readonly (keyof AgentEvalRunItem)[];
+
+export const PUBLIC_EVAL_DATASET_FIELDS = [
+  'benchmarkId',
+  'createdAt',
+  'description',
+  'evalConfig',
+  'evalMode',
+  'id',
+  'identifier',
+  'metadata',
+  'name',
+  'sourceExperimentId',
+  'updatedAt',
+] as const satisfies readonly (keyof AgentEvalDatasetItem)[];
+
+export const PUBLIC_EVAL_TEST_CASE_FIELDS = [
+  'content',
+  'createdAt',
+  'datasetId',
+  'evalConfig',
+  'evalMode',
+  'id',
+  'metadata',
+  'sortOrder',
+  'updatedAt',
+] as const satisfies readonly (keyof AgentEvalTestCaseItem)[];
+
+export const PUBLIC_EVAL_RUN_TOPIC_FIELDS = [
+  'createdAt',
+  'evalResult',
+  'passed',
+  'runId',
+  'score',
+  'status',
+  'testCaseId',
+  'topicId',
+] as const satisfies readonly (keyof AgentEvalRunTopicItem)[];
+
+export type PublicAgent = Pick<AgentItem, (typeof PUBLIC_AGENT_FIELDS)[number]> & {
+  plugins: ReturnType<typeof parsePluginEntry>[];
+};
 export type PublicUser = Pick<UserItem, (typeof PUBLIC_USER_FIELDS)[number]>;
 export type PublicProvider = Pick<AiProviderSelectItem, (typeof PUBLIC_PROVIDER_FIELDS)[number]>;
 export type PublicModel = Pick<AiModelSelectItem, (typeof PUBLIC_MODEL_FIELDS)[number]>;
@@ -233,11 +293,26 @@ export type PublicAgentGroup = Pick<SessionGroupItem, (typeof PUBLIC_AGENT_GROUP
 export type PublicSession = Pick<SessionItem, (typeof PUBLIC_SESSION_FIELDS)[number]>;
 export type PublicTopic = Pick<TopicItem, (typeof PUBLIC_TOPIC_FIELDS)[number]>;
 export type PublicMessage = Pick<MessageItem, (typeof PUBLIC_MESSAGE_FIELDS)[number]>;
+export type PublicEvalRun = Pick<AgentEvalRunItem, (typeof PUBLIC_EVAL_RUN_FIELDS)[number]>;
+export type PublicEvalDataset = Pick<
+  AgentEvalDatasetItem,
+  (typeof PUBLIC_EVAL_DATASET_FIELDS)[number]
+>;
+export type PublicEvalTestCase = Pick<
+  AgentEvalTestCaseItem,
+  (typeof PUBLIC_EVAL_TEST_CASE_FIELDS)[number]
+>;
+export type PublicEvalRunTopic = Pick<
+  AgentEvalRunTopicItem,
+  (typeof PUBLIC_EVAL_RUN_TOPIC_FIELDS)[number]
+>;
 export type PublicRole = Pick<RoleItem, (typeof PUBLIC_ROLE_FIELDS)[number]>;
 export type PublicPermission = Pick<PermissionItem, (typeof PUBLIC_PERMISSION_FIELDS)[number]>;
 
-export const projectPublicAgent = (value: AgentItem): PublicAgent =>
-  pickPublicFields(value, PUBLIC_AGENT_FIELDS);
+export const projectPublicAgent = (value: AgentItem): PublicAgent => ({
+  ...pickPublicFields(value, PUBLIC_AGENT_FIELDS),
+  plugins: (value.plugins ?? []).map(parsePluginEntry),
+});
 
 export const projectPublicUser = (value: UserItem): PublicUser =>
   pickPublicFields(value, PUBLIC_USER_FIELDS);
@@ -265,6 +340,20 @@ export const projectPublicTopic = (value: TopicItem): PublicTopic =>
 
 export const projectPublicMessage = (value: MessageItem): PublicMessage =>
   pickPublicFields(value, PUBLIC_MESSAGE_FIELDS);
+
+export const projectPublicEvalRun = (value: AgentEvalRunItem): PublicEvalRun =>
+  pickPublicFields(value, PUBLIC_EVAL_RUN_FIELDS);
+
+export const projectPublicEvalDataset = (value: AgentEvalDatasetItem): PublicEvalDataset =>
+  pickPublicFields(value, PUBLIC_EVAL_DATASET_FIELDS);
+
+export const projectPublicEvalTestCase = (value: AgentEvalTestCaseItem): PublicEvalTestCase =>
+  pickPublicFields(value, PUBLIC_EVAL_TEST_CASE_FIELDS);
+
+// Accepts any row that carries the public columns (e.g. joined run-topic rows
+// without userId/workspaceId), while still projecting only the public fields.
+export const projectPublicEvalRunTopic = (value: PublicEvalRunTopic): PublicEvalRunTopic =>
+  pickPublicFields(value, PUBLIC_EVAL_RUN_TOPIC_FIELDS);
 
 export const projectPublicRole = (value: RoleItem): PublicRole =>
   pickPublicFields(value, PUBLIC_ROLE_FIELDS);

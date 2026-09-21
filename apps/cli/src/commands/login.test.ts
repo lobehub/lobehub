@@ -20,15 +20,6 @@ vi.mock('../settings', () => ({
   saveSettings: vi.fn(),
 }));
 
-vi.mock('../utils/logger', () => ({
-  log: {
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  },
-}));
-
 // Mock child_process to prevent browser opening
 vi.mock('node:child_process', () => ({
   default: {

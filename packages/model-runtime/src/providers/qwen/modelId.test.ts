@@ -52,9 +52,12 @@ describe('parseQwenModelId', () => {
 });
 
 describe('isThinkingForcedQwenModel', () => {
-  it('should force thinking for qwen-max from 3.8 onwards', () => {
-    expect(isThinkingForcedQwenModel('qwen3.8-max')).toBe(true);
-    expect(isThinkingForcedQwenModel('qwen3.8-max-preview')).toBe(true);
+  it('should not force thinking for hybrid Qwen3.8 Max models', () => {
+    expect(isThinkingForcedQwenModel('qwen3.8-max')).toBe(false);
+    expect(isThinkingForcedQwenModel('qwen3.8-max-preview')).toBe(false);
+  });
+
+  it('should force thinking for newer qwen-max versions until confirmed hybrid', () => {
     expect(isThinkingForcedQwenModel('qwen3.9-max')).toBe(true);
     expect(isThinkingForcedQwenModel('qwen4-max')).toBe(true);
   });

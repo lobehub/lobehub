@@ -11,6 +11,7 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 
 import { useShareData } from '../ShareDataProvider';
 import { styles } from '../style';
+import { useExportMessages } from '../useExportMessages';
 import Preview from './Preview';
 import { generateMarkdown } from './template';
 import { type FieldType } from './type';
@@ -62,9 +63,16 @@ const ShareText = memo(() => {
   ];
 
   const { displayMessages, systemRole, title } = useShareData();
+  // Markdown serializes each tool's `content` too, so the same omitted rows
+  // would export as empty code blocks — see `useExportMessages`.
+  const {
+    isHydrating,
+    isIncomplete,
+    messages: exportMessages,
+  } = useExportMessages(displayMessages);
   const content = generateMarkdown({
     ...fieldValue,
-    messages: displayMessages,
+    messages: exportMessages,
     systemRole: systemRole ?? '',
     title,
   }).replaceAll('\n\n\n', '\n');
@@ -75,7 +83,9 @@ const ShareText = memo(() => {
     <>
       <Button
         block
+        disabled={isHydrating || isIncomplete}
         icon={CopyIcon}
+        loading={isHydrating}
         size={isMobile ? undefined : 'large'}
         type={'primary'}
         onClick={async () => {
@@ -87,6 +97,7 @@ const ShareText = memo(() => {
       </Button>
       <Button
         block
+        disabled={isHydrating || isIncomplete}
         size={isMobile ? undefined : 'large'}
         onClick={() => {
           exportFile(content, `${title}.md`);

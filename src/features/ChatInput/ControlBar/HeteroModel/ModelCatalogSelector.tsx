@@ -3,8 +3,9 @@
 import { getHeterogeneousTypeLabel } from '@lobechat/heterogeneous-agents';
 import type { HeterogeneousAgentModel, ListHeterogeneousAgentModelsParams } from '@lobechat/types';
 import { HETEROGENEOUS_AGENT_DEFAULT_SELECTION } from '@lobechat/types';
-import { ActionIcon, Icon, Input, Tooltip } from '@lobehub/ui';
+import { Icon, Input, Tooltip } from '@lobehub/ui';
 import {
+  ActionIcon,
   Button,
   DropdownMenuGroup,
   DropdownMenuGroupLabel,

@@ -1,7 +1,8 @@
 'use client';
 
 import { APP_WINDOW_MIN_SIZE } from '@lobechat/desktop-bridge';
-import { Flexbox, Skeleton } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Skeleton } from '@lobehub/ui/base-ui';
 import { memo, Suspense, useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
 
@@ -222,14 +223,10 @@ const DesktopOnboardingPage = memo(() => {
           fallback={
             <Flexbox gap={8}>
               <Skeleton.Avatar size={48} />
-              <Skeleton
-                paragraph={{
-                  rows: 8,
-                }}
-                title={{
-                  fontSize: 24,
-                }}
-              />
+              <Flexbox gap={16} width={'100%'}>
+                <Skeleton.Text fontSize={24} width={'60%'} />
+                <Skeleton.Text rows={8} />
+              </Flexbox>
             </Flexbox>
           }
         >

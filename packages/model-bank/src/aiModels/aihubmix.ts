@@ -1115,43 +1115,6 @@ const aihubmixChatModels: AIChatModelCard[] = [
       structuredOutput: true,
       vision: true,
     },
-    contextWindowTokens: 200_000,
-    description:
-      'Claude Opus 4.1 is Anthropic’s newest and most powerful model for highly complex tasks, excelling in performance, intelligence, fluency, and comprehension.',
-    displayName: 'Claude Opus 4.1',
-    family: 'claude-opus',
-    generation: 'claude-4.1',
-    id: 'claude-opus-4-1-20250805',
-    knowledgeCutoff: '2025-01',
-    maxOutput: 32_000,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 16.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 82.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        {
-          lookup: { prices: { '5m': 20.625 }, pricingParams: ['ttl'] },
-          name: 'textInput_cacheWrite',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-      ],
-    },
-    releasedAt: '2025-08-05',
-    settings: {
-      extendParams: ['disableContextCaching', 'enableReasoning', 'reasoningBudgetToken'],
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
-      structuredOutput: true,
-      vision: true,
-    },
     contextWindowTokens: 1_000_000,
     description: 'Claude Sonnet 4.6 is Anthropic’s best combination of speed and intelligence.',
     displayName: 'Claude Sonnet 4.6',

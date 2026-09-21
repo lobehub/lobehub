@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Button, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { CheckCircle2Icon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';

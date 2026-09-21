@@ -1,13 +1,11 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { act, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_USER_AVATAR_URL } from '@/const/meta';
 import { useUserStore } from '@/store/user';
 
 import UserAvatar from '../UserAvatar';
-
-vi.mock('zustand/traditional');
 
 describe('UserAvatar', () => {
   it('should show the username and avatar are displayed when the user is logged in', async () => {

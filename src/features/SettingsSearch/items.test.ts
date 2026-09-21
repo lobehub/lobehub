@@ -15,7 +15,6 @@ const webContext: SettingsSearchContext = {
   enableBusinessFeatures: true,
   enableComposio: true,
   enableGatewayMode: true,
-  enableSTT: true,
   hasEmail: true,
   hideDocs: false,
   isDesktop: false,
@@ -46,6 +45,12 @@ describe('settings search index', () => {
     expect(SETTINGS_SEARCH_ITEMS.some((item) => item.anchor === 'notification-inbox')).toBe(true);
   });
 
+  it('does not offer the retired TTS setting in search', () => {
+    expect(SETTINGS_SEARCH_ITEMS.some((item) => item.anchor === 'service-model-tts')).toBe(false);
+    expect(TAB_SEARCH_EN_KEYWORDS[SettingsTabs.ServiceModel]).not.toContain('tts');
+    expect(TAB_SEARCH_EN_KEYWORDS[SettingsTabs.ServiceModel]).not.toContain('tts settings');
+  });
+
   it('keeps an English floor for labs and oauth apps tabs', () => {
     expect(TAB_SEARCH_EN_KEYWORDS[SettingsTabs.Labs]).toContain('experiment');
     expect(TAB_SEARCH_EN_KEYWORDS[SettingsTabs.OAuthApps]).toContain('oauth');
@@ -63,7 +68,7 @@ describe('settings search index', () => {
       expect.arrayContaining(['telegram', 'slack', 'discord', 'wechat']),
     );
     expect(TAB_SEARCH_EN_KEYWORDS[SettingsTabs.ServiceModel]).toEqual(
-      expect.arrayContaining(['search', 'tts settings']),
+      expect.arrayContaining(['search', 'model assignment']),
     );
     expect(TAB_SEARCH_EN_KEYWORDS[SettingsTabs.Storage]).toEqual(
       expect.arrayContaining(['knowledge base']),

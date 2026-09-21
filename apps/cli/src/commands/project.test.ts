@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { registerProjectCommand } from './project';
 
-const { mockClient } = vi.hoisted(() => ({
+const { mockClient, mockResolveWorkspaceId } = vi.hoisted(() => ({
   mockClient: {
     project: {
       acceptCompletion: { mutate: vi.fn() },
@@ -23,14 +23,17 @@ const { mockClient } = vi.hoisted(() => ({
       updateStatus: { mutate: vi.fn() },
     },
     task: { create: { mutate: vi.fn() } },
+    workspace: { getById: { query: vi.fn() } },
   },
+  mockResolveWorkspaceId: vi.fn(),
 }));
 
 vi.mock('../api/client', () => ({ getTrpcClient: vi.fn().mockResolvedValue(mockClient) }));
+vi.mock('../api/workspace', () => ({ resolveWorkspaceId: mockResolveWorkspaceId }));
+vi.mock('../settings', () => ({ resolveServerUrl: () => 'https://app.example.com' }));
 vi.mock('../utils/logger', () => ({
   log: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
-
 function createProgram() {
   const program = new Command();
   program.exitOverride();
@@ -41,6 +44,7 @@ function createProgram() {
 describe('project command', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockResolveWorkspaceId.mockReturnValue(undefined);
     vi.spyOn(console, 'log').mockImplementation(() => {});
   });
 
@@ -63,6 +67,9 @@ describe('project command', () => {
       name: 'Apollo',
       visibility: 'private',
     });
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining('https://app.example.com/project/prj_1'),
+    );
   });
 
   it('binds an agent with its project role', async () => {
@@ -86,7 +93,11 @@ describe('project command', () => {
   });
 
   it('creates a task directly in the project', async () => {
-    mockClient.task.create.mutate.mockResolvedValue({ data: { identifier: 'T-1' } });
+    mockResolveWorkspaceId.mockReturnValue('ws-1');
+    mockClient.workspace.getById.query.mockResolvedValue({ id: 'ws-1', slug: 'lobehub' });
+    mockClient.task.create.mutate.mockResolvedValue({
+      data: { identifier: 'T-1' },
+    });
     await createProgram().parseAsync([
       'node',
       'test',
@@ -106,6 +117,9 @@ describe('project command', () => {
       parentTaskId: undefined,
       projectId: 'prj_1',
     });
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining('https://app.example.com/lobehub/task/T-1'),
+    );
   });
 
   it('requests and accepts human completion review', async () => {

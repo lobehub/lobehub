@@ -1,5 +1,6 @@
 'use client';
 
+import { type IThreadType, type UIChatMessage } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { memo, Suspense, useCallback, useMemo } from 'react';
 
@@ -35,48 +36,67 @@ import { useThreadActionsBarConfig } from './useThreadActionsBarConfig';
  */
 interface ThreadChatContentProps {
   composerWritable: boolean;
+  /** The message this thread forked from — its anchor in the main conversation. */
+  forkMessageId?: string;
   isHeterogeneousAgent: boolean;
   readOnly: boolean;
+  threadType?: IThreadType;
 }
 
 const ThreadChatContent = memo<ThreadChatContentProps>(
-  ({ composerWritable, isHeterogeneousAgent, readOnly }) => {
+  ({ composerWritable, forkMessageId, isHeterogeneousAgent, readOnly, threadType }) => {
     const inputMode = getThreadInputMode({
       isExternallyOwnedThread: readOnly,
       isHeterogeneousAgent,
     });
     const displayMessages = useConversationStore(conversationSelectors.displayMessages);
 
-    const threadSourceInfo = useMemo(() => {
-      let sourceMessageIndex = -1;
-      let sourceMessageId: string | undefined;
+    // The portal knows its own fork point (`threadStartMessageId` while the
+    // thread is being created, `thread.sourceMessageId` once it exists), so take
+    // it from there rather than deriving it from the list. Deriving it as "the
+    // last message without a threadId" breaks for the ~2s optimistic window
+    // after send: the just-sent rows have no threadId yet either (the thread row
+    // does not exist), so the scan walked past the fork point onto the assistant
+    // placeholder. Kept as a fallback for callers that have neither.
+    const sourceMessageId = useMemo(
+      () => forkMessageId ?? displayMessages.findLast((msg) => !msg.threadId)?.id,
+      [forkMessageId, displayMessages],
+    );
 
-      for (const [i, msg] of displayMessages.entries()) {
-        if (!msg.threadId) {
-          sourceMessageIndex = i;
-          sourceMessageId = msg.id;
-        }
-      }
+    // Render the fork message and everything after it — the inherited main chat
+    // above it is one click away and re-rendering it here just duplicates it.
+    // The data layer keeps the full history, so AI context inheritance is
+    // unchanged. Cutting by position (rather than by `threadId`) is what keeps
+    // the user's own message visible during the optimistic window.
+    const visibleIds = useMemo(() => {
+      if (!sourceMessageId) return;
+      const forkIndex = displayMessages.findIndex((msg) => msg.id === sourceMessageId);
+      // Anchor not in this list (a bucket swap mid-flight): show everything
+      // rather than blanking the panel.
+      if (forkIndex < 0) return;
+      return new Set(displayMessages.slice(forkIndex).map((msg) => msg.id));
+    }, [displayMessages, sourceMessageId]);
 
-      return { sourceMessageId, sourceMessageIndex };
-    }, [displayMessages]);
+    const filterItem = useCallback(
+      (msg: UIChatMessage) => !visibleIds || visibleIds.has(msg.id),
+      [visibleIds],
+    );
 
     const itemContent = useCallback(
       (index: number, id: string) => {
-        const enableThreadDivider = threadSourceInfo.sourceMessageId === id;
-        const isParentMessage = index <= threadSourceInfo.sourceMessageIndex;
+        const isSourceMessage = id === sourceMessageId;
 
         return (
           <MessageItem
             inPortalThread
-            disableEditing={readOnly || isParentMessage}
-            endRender={enableThreadDivider ? <ThreadDivider /> : undefined}
+            disableEditing={readOnly || isSourceMessage}
+            endRender={isSourceMessage ? <ThreadDivider threadType={threadType} /> : undefined}
             id={id}
             index={index}
           />
         );
       },
-      [threadSourceInfo.sourceMessageId, threadSourceInfo.sourceMessageIndex, readOnly],
+      [sourceMessageId, readOnly, threadType],
     );
 
     return (
@@ -93,14 +113,19 @@ const ThreadChatContent = memo<ThreadChatContentProps>(
             style={{ overflowX: 'hidden', overflowY: 'auto', position: 'relative' }}
             width={'100%'}
           >
-            <ChatList itemContent={itemContent} />
+            <ChatList filterItem={filterItem} itemContent={itemContent} />
           </Flexbox>
         </Suspense>
         {composerWritable && inputMode === 'heterogeneous' && <HeterogeneousChatInput />}
         {composerWritable && inputMode === 'default' && (
           <ChatInput
-            leftActions={['typo']}
-            rightActions={['voiceDictation', 'voiceMessage', 'contextWindow']}
+            leftActions={['typo', 'voiceDictation']}
+            rightActions={['voiceMessage', 'contextWindow']}
+            // A subtopic runs on the conversation it forked from: mode, device,
+            // working directory and approval all come from there and are not
+            // separately settable here. Rendering the bar anyway put a row of
+            // controls under the panel that only restated the parent's state.
+            showControlBar={false}
           />
         )}
       </>
@@ -262,8 +287,10 @@ const ThreadChat = memo(() => {
     >
       <ThreadChatContent
         composerWritable={composerTarget.writable}
+        forkMessageId={threadStartMessageId ?? portalThread?.sourceMessageId ?? undefined}
         isHeterogeneousAgent={isHeterogeneousAgent}
         readOnly={!composerTarget.writable}
+        threadType={isCreatingNewThread ? newThreadMode : portalThread?.type}
       />
     </ConversationProvider>
   );

@@ -1,8 +1,7 @@
 'use client';
 
-import { ModelIcon } from '@lobehub/icons';
-import { ActionIconGroup, Block, Flexbox, Markdown, Tag, Text } from '@lobehub/ui';
-import { toast } from '@lobehub/ui/base-ui';
+import { ActionIconGroup, Block, Flexbox, Markdown } from '@lobehub/ui';
+import { Tag, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
 import { CopyIcon, RotateCcwSquareIcon, Trash2 } from 'lucide-react';
@@ -12,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import useRenderBusinessVideoBatchItem from '@/business/client/hooks/useRenderBusinessVideoBatchItem';
+import { ModelIcon } from '@/components/LobeIcons';
 import { GenerationInvalidAPIKey } from '@/routes/(main)/(create)/features/GenerationInput';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useVideoStore } from '@/store/video';

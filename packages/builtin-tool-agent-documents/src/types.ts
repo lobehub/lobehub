@@ -12,9 +12,24 @@ export const AgentDocumentsApiName = {
   updateLoadRule: 'updateLoadRule',
 } as const;
 
+/**
+ * Document APIs a shared-agent visitor may use after the owner grants this tool.
+ * The server still scopes every call to the exact share, visitor, and topic.
+ */
+export const AGENT_SHARE_DOCUMENT_API_NAMES = new Set<string>([
+  AgentDocumentsApiName.createDocument,
+  AgentDocumentsApiName.listDocuments,
+  AgentDocumentsApiName.modifyNodes,
+  AgentDocumentsApiName.readDocument,
+  AgentDocumentsApiName.renameDocument,
+  AgentDocumentsApiName.replaceDocumentContent,
+]);
+
 export interface CreateDocumentArgs {
   content: string;
   hintIsSkill?: boolean;
+  /** Parent folder's underlying `documents.id`, as returned by listDocuments.documentId. */
+  parentId?: string;
   scope?: 'agent' | 'currentTopic';
   title: string;
 }
@@ -24,6 +39,8 @@ export interface CreateDocumentState {
   /** Owning agent id — used to attribute the created document's Work. */
   agentId?: string;
   documentId?: string;
+  /** The caller may preview/copy this result but must not open the owner-only editor. */
+  readonly?: boolean;
 }
 
 export interface ReadDocumentArgs {
@@ -201,5 +218,11 @@ export interface ListDocumentsArgs {
 }
 
 export interface ListDocumentsState {
+  /**
+   * How many rows `documents` held, pinned by the read-path projector before it
+   * drops them. The inspector chip is the only surface that reads this state,
+   * and a count is all it shows.
+   */
+  documentCount?: number;
   documents: { documentId?: string; filename: string; id: string; title?: string }[];
 }

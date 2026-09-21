@@ -2,7 +2,6 @@
  * @vitest-environment happy-dom
  */
 import { render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConnectorSourceType } from '@/database/schemas';
@@ -55,33 +54,6 @@ vi.mock('@lobechat/const', () => ({
 // tests, and it drags heavy module graphs into the unit env.
 vi.mock('@/hooks/useResourceManageable', () => ({
   useResourceManageable: () => true,
-}));
-
-vi.mock('@lobehub/ui', () => ({
-  Tooltip: ({ children }: { children: ReactNode }) => children,
-}));
-
-vi.mock('antd', () => ({
-  App: { useApp: () => ({ message: { error: vi.fn() } }) },
-}));
-
-// Stub the base-ui Button to a native button — it needs a MotionProvider the
-// app sets up globally but the unit env doesn't.
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Button: ({
-    children,
-    disabled,
-    onClick,
-  }: {
-    children?: ReactNode;
-    disabled?: boolean;
-    onClick?: () => void;
-  }) => (
-    <button disabled={disabled} type="button" onClick={onClick}>
-      {children}
-    </button>
-  ),
-  confirmModal: vi.fn(),
 }));
 
 vi.mock('@/store/tool', () => ({

@@ -2,7 +2,7 @@
 
 import { type Client, type ClientMeta, formDataBodySerializer, type Options as Options2, type RequestResult, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { DeleteApiV1AgentGroupsByIdData, DeleteApiV1AgentGroupsByIdErrors, DeleteApiV1AgentGroupsByIdResponses, DeleteApiV1AgentsByIdData, DeleteApiV1AgentsByIdErrors, DeleteApiV1AgentsByIdResponses, DeleteApiV1ApiKeysByIdData, DeleteApiV1ApiKeysByIdErrors, DeleteApiV1ApiKeysByIdResponses, DeleteApiV1FilesByIdData, DeleteApiV1FilesByIdErrors, DeleteApiV1FilesByIdResponses, DeleteApiV1KnowledgeBasesByIdData, DeleteApiV1KnowledgeBasesByIdErrors, DeleteApiV1KnowledgeBasesByIdFilesBatchData, DeleteApiV1KnowledgeBasesByIdFilesBatchErrors, DeleteApiV1KnowledgeBasesByIdFilesBatchResponses, DeleteApiV1KnowledgeBasesByIdResponses, DeleteApiV1McpServersByIdData, DeleteApiV1McpServersByIdErrors, DeleteApiV1McpServersByIdResponses, DeleteApiV1MessagesByIdData, DeleteApiV1MessagesByIdErrors, DeleteApiV1MessagesByIdResponses, DeleteApiV1MessagesData, DeleteApiV1MessagesErrors, DeleteApiV1MessagesResponses, DeleteApiV1MessageTranslationsByMessageIdData, DeleteApiV1MessageTranslationsByMessageIdErrors, DeleteApiV1MessageTranslationsByMessageIdResponses, DeleteApiV1PermissionsByIdData, DeleteApiV1PermissionsByIdErrors, DeleteApiV1PermissionsByIdResponses, DeleteApiV1ProvidersByIdData, DeleteApiV1ProvidersByIdErrors, DeleteApiV1ProvidersByIdResponses, DeleteApiV1RolesByIdData, DeleteApiV1RolesByIdErrors, DeleteApiV1RolesByIdPermissionsData, DeleteApiV1RolesByIdPermissionsErrors, DeleteApiV1RolesByIdPermissionsResponses, DeleteApiV1RolesByIdResponses, DeleteApiV1TopicsByIdData, DeleteApiV1TopicsByIdErrors, DeleteApiV1TopicsByIdResponses, DeleteApiV1UsersByIdData, DeleteApiV1UsersByIdErrors, DeleteApiV1UsersByIdResponses, DeleteApiV1UsersByIdRolesData, DeleteApiV1UsersByIdRolesErrors, DeleteApiV1UsersByIdRolesResponses, GetApiV1AgentGroupsByIdData, GetApiV1AgentGroupsByIdErrors, GetApiV1AgentGroupsByIdResponses, GetApiV1AgentGroupsData, GetApiV1AgentGroupsErrors, GetApiV1AgentGroupsResponses, GetApiV1AgentsByIdData, GetApiV1AgentsByIdErrors, GetApiV1AgentsByIdResponses, GetApiV1AgentsData, GetApiV1AgentsErrors, GetApiV1AgentsResponses, GetApiV1ApiKeysByIdData, GetApiV1ApiKeysByIdErrors, GetApiV1ApiKeysByIdResponses, GetApiV1ApiKeysData, GetApiV1ApiKeysErrors, GetApiV1ApiKeysResponses, GetApiV1EvalRunsByIdData, GetApiV1EvalRunsByIdErrors, GetApiV1EvalRunsByIdResponses, GetApiV1EvalRunsByIdResultsData, GetApiV1EvalRunsByIdResultsErrors, GetApiV1EvalRunsByIdResultsResponses, GetApiV1FilesByIdChunksData, GetApiV1FilesByIdChunksErrors, GetApiV1FilesByIdChunksResponses, GetApiV1FilesByIdData, GetApiV1FilesByIdErrors, GetApiV1FilesByIdResponses, GetApiV1FilesByIdUrlData, GetApiV1FilesByIdUrlErrors, GetApiV1FilesByIdUrlResponses, GetApiV1FilesData, GetApiV1FilesErrors, GetApiV1FilesResponses, GetApiV1HealthData, GetApiV1HealthErrors, GetApiV1HealthResponses, GetApiV1KnowledgeBasesByIdData, GetApiV1KnowledgeBasesByIdErrors, GetApiV1KnowledgeBasesByIdFilesData, GetApiV1KnowledgeBasesByIdFilesErrors, GetApiV1KnowledgeBasesByIdFilesResponses, GetApiV1KnowledgeBasesByIdResponses, GetApiV1KnowledgeBasesData, GetApiV1KnowledgeBasesErrors, GetApiV1KnowledgeBasesResponses, GetApiV1McpServersByIdData, GetApiV1McpServersByIdErrors, GetApiV1McpServersByIdResponses, GetApiV1McpServersData, GetApiV1McpServersErrors, GetApiV1McpServersResponses, GetApiV1MessagesByIdData, GetApiV1MessagesByIdErrors, GetApiV1MessagesByIdResponses, GetApiV1MessagesCountData, GetApiV1MessagesCountErrors, GetApiV1MessagesCountResponses, GetApiV1MessagesData, GetApiV1MessagesErrors, GetApiV1MessagesResponses, GetApiV1MessageTranslationsByMessageIdData, GetApiV1MessageTranslationsByMessageIdErrors, GetApiV1MessageTranslationsByMessageIdResponses, GetApiV1ModelsByProviderIdByModelIdData, GetApiV1ModelsByProviderIdByModelIdErrors, GetApiV1ModelsByProviderIdByModelIdResponses, GetApiV1ModelsData, GetApiV1ModelsErrors, GetApiV1ModelsResponses, GetApiV1PermissionsByIdData, GetApiV1PermissionsByIdErrors, GetApiV1PermissionsByIdResponses, GetApiV1PermissionsData, GetApiV1PermissionsErrors, GetApiV1PermissionsResponses, GetApiV1ProvidersByIdData, GetApiV1ProvidersByIdErrors, GetApiV1ProvidersByIdResponses, GetApiV1ProvidersData, GetApiV1ProvidersErrors, GetApiV1ProvidersResponses, GetApiV1RolesByIdData, GetApiV1RolesByIdErrors, GetApiV1RolesByIdPermissionsData, GetApiV1RolesByIdPermissionsErrors, GetApiV1RolesByIdPermissionsResponses, GetApiV1RolesByIdResponses, GetApiV1RolesData, GetApiV1RolesErrors, GetApiV1RolesResponses, GetApiV1TopicsByIdData, GetApiV1TopicsByIdErrors, GetApiV1TopicsByIdResponses, GetApiV1TopicsData, GetApiV1TopicsErrors, GetApiV1TopicsResponses, GetApiV1UsageData, GetApiV1UsageErrors, GetApiV1UsageResponses, GetApiV1UsersByIdData, GetApiV1UsersByIdErrors, GetApiV1UsersByIdResponses, GetApiV1UsersByIdRolesData, GetApiV1UsersByIdRolesErrors, GetApiV1UsersByIdRolesResponses, GetApiV1UsersData, GetApiV1UsersErrors, GetApiV1UsersMeData, GetApiV1UsersMeErrors, GetApiV1UsersMeResponses, GetApiV1UsersResponses, PatchApiV1AgentGroupsByIdData, PatchApiV1AgentGroupsByIdErrors, PatchApiV1AgentGroupsByIdResponses, PatchApiV1AgentsByIdData, PatchApiV1AgentsByIdErrors, PatchApiV1AgentsByIdResponses, PatchApiV1ApiKeysByIdData, PatchApiV1ApiKeysByIdErrors, PatchApiV1ApiKeysByIdResponses, PatchApiV1FilesByIdData, PatchApiV1FilesByIdErrors, PatchApiV1FilesByIdResponses, PatchApiV1KnowledgeBasesByIdData, PatchApiV1KnowledgeBasesByIdErrors, PatchApiV1KnowledgeBasesByIdResponses, PatchApiV1McpServersByIdData, PatchApiV1McpServersByIdErrors, PatchApiV1McpServersByIdResponses, PatchApiV1MessageTranslationsByMessageIdData, PatchApiV1MessageTranslationsByMessageIdErrors, PatchApiV1MessageTranslationsByMessageIdResponses, PatchApiV1ModelsByProviderIdByModelIdData, PatchApiV1ModelsByProviderIdByModelIdErrors, PatchApiV1ModelsByProviderIdByModelIdResponses, PatchApiV1PermissionsByIdData, PatchApiV1PermissionsByIdErrors, PatchApiV1PermissionsByIdResponses, PatchApiV1ProvidersByIdData, PatchApiV1ProvidersByIdErrors, PatchApiV1ProvidersByIdResponses, PatchApiV1RolesByIdData, PatchApiV1RolesByIdErrors, PatchApiV1RolesByIdPermissionsData, PatchApiV1RolesByIdPermissionsErrors, PatchApiV1RolesByIdPermissionsResponses, PatchApiV1RolesByIdResponses, PatchApiV1TopicsByIdData, PatchApiV1TopicsByIdErrors, PatchApiV1TopicsByIdResponses, PatchApiV1UsersByIdData, PatchApiV1UsersByIdErrors, PatchApiV1UsersByIdResponses, PatchApiV1UsersByIdRolesData, PatchApiV1UsersByIdRolesErrors, PatchApiV1UsersByIdRolesResponses, PostApiV1AgentGroupsData, PostApiV1AgentGroupsErrors, PostApiV1AgentGroupsResponses, PostApiV1AgentsData, PostApiV1AgentsErrors, PostApiV1AgentsResponses, PostApiV1ApiKeysData, PostApiV1ApiKeysErrors, PostApiV1ApiKeysResponses, PostApiV1ChatData, PostApiV1ChatErrors, PostApiV1ChatGenerateReplyData, PostApiV1ChatGenerateReplyErrors, PostApiV1ChatGenerateReplyResponses, PostApiV1ChatResponses, PostApiV1ChatTranslateData, PostApiV1ChatTranslateErrors, PostApiV1ChatTranslateResponses, PostApiV1EvalRunsData, PostApiV1EvalRunsErrors, PostApiV1EvalRunsResponses, PostApiV1FilesBatchesData, PostApiV1FilesBatchesErrors, PostApiV1FilesBatchesResponses, PostApiV1FilesByIdChunksData, PostApiV1FilesByIdChunksErrors, PostApiV1FilesByIdChunksResponses, PostApiV1FilesByIdParsesData, PostApiV1FilesByIdParsesErrors, PostApiV1FilesByIdParsesResponses, PostApiV1FilesData, PostApiV1FilesErrors, PostApiV1FilesQueriesData, PostApiV1FilesQueriesErrors, PostApiV1FilesQueriesResponses, PostApiV1FilesResponses, PostApiV1KnowledgeBasesByIdFilesBatchData, PostApiV1KnowledgeBasesByIdFilesBatchErrors, PostApiV1KnowledgeBasesByIdFilesBatchResponses, PostApiV1KnowledgeBasesByIdFilesMoveData, PostApiV1KnowledgeBasesByIdFilesMoveErrors, PostApiV1KnowledgeBasesByIdFilesMoveResponses, PostApiV1KnowledgeBasesData, PostApiV1KnowledgeBasesErrors, PostApiV1KnowledgeBasesResponses, PostApiV1McpServersByIdSyncData, PostApiV1McpServersByIdSyncErrors, PostApiV1McpServersByIdSyncResponses, PostApiV1McpServersData, PostApiV1McpServersErrors, PostApiV1McpServersResponses, PostApiV1MessagesData, PostApiV1MessagesErrors, PostApiV1MessagesRepliesData, PostApiV1MessagesRepliesErrors, PostApiV1MessagesRepliesResponses, PostApiV1MessagesResponses, PostApiV1MessageTranslationsByMessageIdData, PostApiV1MessageTranslationsByMessageIdErrors, PostApiV1MessageTranslationsByMessageIdResponses, PostApiV1ModelsData, PostApiV1ModelsErrors, PostApiV1ModelsResponses, PostApiV1PermissionsData, PostApiV1PermissionsErrors, PostApiV1PermissionsResponses, PostApiV1ProvidersData, PostApiV1ProvidersErrors, PostApiV1ProvidersResponses, PostApiV1ResponsesData, PostApiV1ResponsesErrors, PostApiV1ResponsesResponses, PostApiV1RolesData, PostApiV1RolesErrors, PostApiV1RolesResponses, PostApiV1TopicsData, PostApiV1TopicsErrors, PostApiV1TopicsResponses, PostApiV1UsersData, PostApiV1UsersErrors, PostApiV1UsersResponses } from './types.gen';
+import type { DeleteApiV1AgentGroupsByIdData, DeleteApiV1AgentGroupsByIdErrors, DeleteApiV1AgentGroupsByIdResponses, DeleteApiV1AgentsByIdData, DeleteApiV1AgentsByIdErrors, DeleteApiV1AgentsByIdResponses, DeleteApiV1ApiKeysByIdData, DeleteApiV1ApiKeysByIdErrors, DeleteApiV1ApiKeysByIdResponses, DeleteApiV1EvalBenchmarksByIdData, DeleteApiV1EvalBenchmarksByIdErrors, DeleteApiV1EvalBenchmarksByIdResponses, DeleteApiV1EvalDatasetsByIdData, DeleteApiV1EvalDatasetsByIdErrors, DeleteApiV1EvalDatasetsByIdResponses, DeleteApiV1EvalTestCasesByIdData, DeleteApiV1EvalTestCasesByIdErrors, DeleteApiV1EvalTestCasesByIdResponses, DeleteApiV1FilesByIdData, DeleteApiV1FilesByIdErrors, DeleteApiV1FilesByIdResponses, DeleteApiV1KnowledgeBasesByIdData, DeleteApiV1KnowledgeBasesByIdErrors, DeleteApiV1KnowledgeBasesByIdFilesBatchData, DeleteApiV1KnowledgeBasesByIdFilesBatchErrors, DeleteApiV1KnowledgeBasesByIdFilesBatchResponses, DeleteApiV1KnowledgeBasesByIdResponses, DeleteApiV1McpServersByIdData, DeleteApiV1McpServersByIdErrors, DeleteApiV1McpServersByIdResponses, DeleteApiV1MessagesByIdData, DeleteApiV1MessagesByIdErrors, DeleteApiV1MessagesByIdResponses, DeleteApiV1MessagesData, DeleteApiV1MessagesErrors, DeleteApiV1MessagesResponses, DeleteApiV1MessageTranslationsByMessageIdData, DeleteApiV1MessageTranslationsByMessageIdErrors, DeleteApiV1MessageTranslationsByMessageIdResponses, DeleteApiV1PermissionsByIdData, DeleteApiV1PermissionsByIdErrors, DeleteApiV1PermissionsByIdResponses, DeleteApiV1ProvidersByIdData, DeleteApiV1ProvidersByIdErrors, DeleteApiV1ProvidersByIdResponses, DeleteApiV1RolesByIdData, DeleteApiV1RolesByIdErrors, DeleteApiV1RolesByIdPermissionsData, DeleteApiV1RolesByIdPermissionsErrors, DeleteApiV1RolesByIdPermissionsResponses, DeleteApiV1RolesByIdResponses, DeleteApiV1TopicsByIdData, DeleteApiV1TopicsByIdErrors, DeleteApiV1TopicsByIdResponses, DeleteApiV1UsersByIdData, DeleteApiV1UsersByIdErrors, DeleteApiV1UsersByIdResponses, DeleteApiV1UsersByIdRolesData, DeleteApiV1UsersByIdRolesErrors, DeleteApiV1UsersByIdRolesResponses, GetApiV1AgentGroupsByIdData, GetApiV1AgentGroupsByIdErrors, GetApiV1AgentGroupsByIdResponses, GetApiV1AgentGroupsData, GetApiV1AgentGroupsErrors, GetApiV1AgentGroupsResponses, GetApiV1AgentsByIdData, GetApiV1AgentsByIdErrors, GetApiV1AgentsByIdResponses, GetApiV1AgentsData, GetApiV1AgentsErrors, GetApiV1AgentsResponses, GetApiV1ApiKeysByIdData, GetApiV1ApiKeysByIdErrors, GetApiV1ApiKeysByIdResponses, GetApiV1ApiKeysData, GetApiV1ApiKeysErrors, GetApiV1ApiKeysResponses, GetApiV1EvalBenchmarksByIdData, GetApiV1EvalBenchmarksByIdErrors, GetApiV1EvalBenchmarksByIdResponses, GetApiV1EvalBenchmarksData, GetApiV1EvalBenchmarksErrors, GetApiV1EvalBenchmarksResponses, GetApiV1EvalDatasetsByDatasetIdTestCasesData, GetApiV1EvalDatasetsByDatasetIdTestCasesErrors, GetApiV1EvalDatasetsByDatasetIdTestCasesResponses, GetApiV1EvalDatasetsByIdData, GetApiV1EvalDatasetsByIdErrors, GetApiV1EvalDatasetsByIdResponses, GetApiV1EvalDatasetsData, GetApiV1EvalDatasetsErrors, GetApiV1EvalDatasetsResponses, GetApiV1EvalRunsByIdData, GetApiV1EvalRunsByIdErrors, GetApiV1EvalRunsByIdResponses, GetApiV1EvalRunsByIdResultsData, GetApiV1EvalRunsByIdResultsErrors, GetApiV1EvalRunsByIdResultsResponses, GetApiV1EvalRunsByIdTopicsData, GetApiV1EvalRunsByIdTopicsErrors, GetApiV1EvalRunsByIdTopicsResponses, GetApiV1EvalRunsData, GetApiV1EvalRunsErrors, GetApiV1EvalRunsResponses, GetApiV1EvalTestCasesByIdData, GetApiV1EvalTestCasesByIdErrors, GetApiV1EvalTestCasesByIdResponses, GetApiV1FilesByIdChunksData, GetApiV1FilesByIdChunksErrors, GetApiV1FilesByIdChunksResponses, GetApiV1FilesByIdData, GetApiV1FilesByIdErrors, GetApiV1FilesByIdResponses, GetApiV1FilesByIdUrlData, GetApiV1FilesByIdUrlErrors, GetApiV1FilesByIdUrlResponses, GetApiV1FilesData, GetApiV1FilesErrors, GetApiV1FilesResponses, GetApiV1HealthData, GetApiV1HealthErrors, GetApiV1HealthResponses, GetApiV1KnowledgeBasesByIdData, GetApiV1KnowledgeBasesByIdErrors, GetApiV1KnowledgeBasesByIdFilesData, GetApiV1KnowledgeBasesByIdFilesErrors, GetApiV1KnowledgeBasesByIdFilesResponses, GetApiV1KnowledgeBasesByIdResponses, GetApiV1KnowledgeBasesData, GetApiV1KnowledgeBasesErrors, GetApiV1KnowledgeBasesResponses, GetApiV1McpServersByIdData, GetApiV1McpServersByIdErrors, GetApiV1McpServersByIdResponses, GetApiV1McpServersData, GetApiV1McpServersErrors, GetApiV1McpServersResponses, GetApiV1MessagesByIdData, GetApiV1MessagesByIdErrors, GetApiV1MessagesByIdResponses, GetApiV1MessagesCountData, GetApiV1MessagesCountErrors, GetApiV1MessagesCountResponses, GetApiV1MessagesData, GetApiV1MessagesErrors, GetApiV1MessagesResponses, GetApiV1MessageTranslationsByMessageIdData, GetApiV1MessageTranslationsByMessageIdErrors, GetApiV1MessageTranslationsByMessageIdResponses, GetApiV1ModelsByProviderIdByModelIdData, GetApiV1ModelsByProviderIdByModelIdErrors, GetApiV1ModelsByProviderIdByModelIdResponses, GetApiV1ModelsData, GetApiV1ModelsErrors, GetApiV1ModelsResponses, GetApiV1PermissionsByIdData, GetApiV1PermissionsByIdErrors, GetApiV1PermissionsByIdResponses, GetApiV1PermissionsData, GetApiV1PermissionsErrors, GetApiV1PermissionsResponses, GetApiV1PluginsData, GetApiV1PluginsErrors, GetApiV1PluginsResponses, GetApiV1ProvidersByIdData, GetApiV1ProvidersByIdErrors, GetApiV1ProvidersByIdResponses, GetApiV1ProvidersData, GetApiV1ProvidersErrors, GetApiV1ProvidersResponses, GetApiV1RolesByIdData, GetApiV1RolesByIdErrors, GetApiV1RolesByIdPermissionsData, GetApiV1RolesByIdPermissionsErrors, GetApiV1RolesByIdPermissionsResponses, GetApiV1RolesByIdResponses, GetApiV1RolesData, GetApiV1RolesErrors, GetApiV1RolesResponses, GetApiV1TopicsByIdData, GetApiV1TopicsByIdErrors, GetApiV1TopicsByIdResponses, GetApiV1TopicsByTopicIdThreadsData, GetApiV1TopicsByTopicIdThreadsErrors, GetApiV1TopicsByTopicIdThreadsResponses, GetApiV1TopicsData, GetApiV1TopicsErrors, GetApiV1TopicsResponses, GetApiV1UsageData, GetApiV1UsageErrors, GetApiV1UsageResponses, GetApiV1UsersByIdData, GetApiV1UsersByIdErrors, GetApiV1UsersByIdResponses, GetApiV1UsersByIdRolesData, GetApiV1UsersByIdRolesErrors, GetApiV1UsersByIdRolesResponses, GetApiV1UsersData, GetApiV1UsersErrors, GetApiV1UsersMeData, GetApiV1UsersMeErrors, GetApiV1UsersMeResponses, GetApiV1UsersResponses, PatchApiV1AgentGroupsByIdData, PatchApiV1AgentGroupsByIdErrors, PatchApiV1AgentGroupsByIdResponses, PatchApiV1AgentsByIdData, PatchApiV1AgentsByIdErrors, PatchApiV1AgentsByIdResponses, PatchApiV1ApiKeysByIdData, PatchApiV1ApiKeysByIdErrors, PatchApiV1ApiKeysByIdResponses, PatchApiV1EvalBenchmarksByIdData, PatchApiV1EvalBenchmarksByIdErrors, PatchApiV1EvalBenchmarksByIdResponses, PatchApiV1EvalDatasetsByIdData, PatchApiV1EvalDatasetsByIdErrors, PatchApiV1EvalDatasetsByIdResponses, PatchApiV1EvalRunsByIdStatusData, PatchApiV1EvalRunsByIdStatusErrors, PatchApiV1EvalRunsByIdStatusResponses, PatchApiV1EvalTestCasesByIdData, PatchApiV1EvalTestCasesByIdErrors, PatchApiV1EvalTestCasesByIdResponses, PatchApiV1FilesByIdData, PatchApiV1FilesByIdErrors, PatchApiV1FilesByIdResponses, PatchApiV1KnowledgeBasesByIdData, PatchApiV1KnowledgeBasesByIdErrors, PatchApiV1KnowledgeBasesByIdResponses, PatchApiV1McpServersByIdData, PatchApiV1McpServersByIdErrors, PatchApiV1McpServersByIdResponses, PatchApiV1MessageTranslationsByMessageIdData, PatchApiV1MessageTranslationsByMessageIdErrors, PatchApiV1MessageTranslationsByMessageIdResponses, PatchApiV1ModelsByProviderIdByModelIdData, PatchApiV1ModelsByProviderIdByModelIdErrors, PatchApiV1ModelsByProviderIdByModelIdResponses, PatchApiV1PermissionsByIdData, PatchApiV1PermissionsByIdErrors, PatchApiV1PermissionsByIdResponses, PatchApiV1ProvidersByIdData, PatchApiV1ProvidersByIdErrors, PatchApiV1ProvidersByIdResponses, PatchApiV1RolesByIdData, PatchApiV1RolesByIdErrors, PatchApiV1RolesByIdPermissionsData, PatchApiV1RolesByIdPermissionsErrors, PatchApiV1RolesByIdPermissionsResponses, PatchApiV1RolesByIdResponses, PatchApiV1TopicsByIdData, PatchApiV1TopicsByIdErrors, PatchApiV1TopicsByIdResponses, PatchApiV1UsersByIdData, PatchApiV1UsersByIdErrors, PatchApiV1UsersByIdResponses, PatchApiV1UsersByIdRolesData, PatchApiV1UsersByIdRolesErrors, PatchApiV1UsersByIdRolesResponses, PostApiV1AgentGroupsData, PostApiV1AgentGroupsErrors, PostApiV1AgentGroupsResponses, PostApiV1AgentsByIdDuplicateData, PostApiV1AgentsByIdDuplicateErrors, PostApiV1AgentsByIdDuplicateResponses, PostApiV1AgentsData, PostApiV1AgentsErrors, PostApiV1AgentsResponses, PostApiV1ApiKeysData, PostApiV1ApiKeysErrors, PostApiV1ApiKeysResponses, PostApiV1ChatData, PostApiV1ChatErrors, PostApiV1ChatGenerateReplyData, PostApiV1ChatGenerateReplyErrors, PostApiV1ChatGenerateReplyResponses, PostApiV1ChatResponses, PostApiV1ChatTranslateData, PostApiV1ChatTranslateErrors, PostApiV1ChatTranslateResponses, PostApiV1EvalBenchmarksData, PostApiV1EvalBenchmarksErrors, PostApiV1EvalBenchmarksResponses, PostApiV1EvalDatasetsByDatasetIdTestCasesData, PostApiV1EvalDatasetsByDatasetIdTestCasesErrors, PostApiV1EvalDatasetsByDatasetIdTestCasesResponses, PostApiV1EvalDatasetsData, PostApiV1EvalDatasetsErrors, PostApiV1EvalDatasetsResponses, PostApiV1EvalRunsByIdClaimData, PostApiV1EvalRunsByIdClaimErrors, PostApiV1EvalRunsByIdClaimResponses, PostApiV1EvalRunsByIdResultsData, PostApiV1EvalRunsByIdResultsErrors, PostApiV1EvalRunsByIdResultsResponses, PostApiV1EvalRunsByIdRetryErrorsData, PostApiV1EvalRunsByIdRetryErrorsErrors, PostApiV1EvalRunsByIdRetryErrorsResponses, PostApiV1EvalRunsData, PostApiV1EvalRunsErrors, PostApiV1EvalRunsResponses, PostApiV1FilesBatchesData, PostApiV1FilesBatchesErrors, PostApiV1FilesBatchesResponses, PostApiV1FilesByIdChunksData, PostApiV1FilesByIdChunksErrors, PostApiV1FilesByIdChunksResponses, PostApiV1FilesByIdParsesData, PostApiV1FilesByIdParsesErrors, PostApiV1FilesByIdParsesResponses, PostApiV1FilesData, PostApiV1FilesErrors, PostApiV1FilesQueriesData, PostApiV1FilesQueriesErrors, PostApiV1FilesQueriesResponses, PostApiV1FilesResponses, PostApiV1KnowledgeBasesByIdFilesBatchData, PostApiV1KnowledgeBasesByIdFilesBatchErrors, PostApiV1KnowledgeBasesByIdFilesBatchResponses, PostApiV1KnowledgeBasesByIdFilesMoveData, PostApiV1KnowledgeBasesByIdFilesMoveErrors, PostApiV1KnowledgeBasesByIdFilesMoveResponses, PostApiV1KnowledgeBasesData, PostApiV1KnowledgeBasesErrors, PostApiV1KnowledgeBasesResponses, PostApiV1McpServersByIdSyncData, PostApiV1McpServersByIdSyncErrors, PostApiV1McpServersByIdSyncResponses, PostApiV1McpServersData, PostApiV1McpServersErrors, PostApiV1McpServersResponses, PostApiV1MessagesData, PostApiV1MessagesErrors, PostApiV1MessagesRepliesData, PostApiV1MessagesRepliesErrors, PostApiV1MessagesRepliesResponses, PostApiV1MessagesResponses, PostApiV1MessageTranslationsByMessageIdData, PostApiV1MessageTranslationsByMessageIdErrors, PostApiV1MessageTranslationsByMessageIdResponses, PostApiV1ModelsData, PostApiV1ModelsErrors, PostApiV1ModelsResponses, PostApiV1PermissionsData, PostApiV1PermissionsErrors, PostApiV1PermissionsResponses, PostApiV1ProvidersData, PostApiV1ProvidersErrors, PostApiV1ProvidersResponses, PostApiV1ResponsesData, PostApiV1ResponsesErrors, PostApiV1ResponsesResponses, PostApiV1RolesData, PostApiV1RolesErrors, PostApiV1RolesResponses, PostApiV1TopicsData, PostApiV1TopicsErrors, PostApiV1TopicsResponses, PostApiV1UsersData, PostApiV1UsersErrors, PostApiV1UsersResponses, PutApiV1EvalRunsByRunIdTopicsByTopicIdResultData, PutApiV1EvalRunsByRunIdTopicsByTopicIdResultErrors, PutApiV1EvalRunsByRunIdTopicsByTopicIdResultResponses } from './types.gen';
 
 const mergeMethodHeaders = (
     defaults: Record<string, unknown>,
@@ -163,6 +163,18 @@ export class Agents extends HeyApiClient {
             headers: mergeMethodHeaders({ 'Content-Type': 'application/json' }, options.headers)
         });
     }
+    
+    /**
+     * Duplicate agent
+     */
+    public createDuplicate<ThrowOnError extends boolean = false>(options: Options<PostApiV1AgentsByIdDuplicateData, ThrowOnError>): RequestResult<PostApiV1AgentsByIdDuplicateResponses, PostApiV1AgentsByIdDuplicateErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1AgentsByIdDuplicateResponses, PostApiV1AgentsByIdDuplicateErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/agents/{id}/duplicate',
+            ...options,
+            headers: mergeMethodHeaders({ 'Content-Type': 'application/json' }, options.headers)
+        });
+    }
 }
 
 export class ApiKeys extends HeyApiClient {
@@ -243,6 +255,17 @@ export class Chat extends HeyApiClient {
 
 export class Eval extends HeyApiClient {
     /**
+     * List eval runs
+     */
+    public listRuns<ThrowOnError extends boolean = false>(options?: Options<GetApiV1EvalRunsData, ThrowOnError>): RequestResult<GetApiV1EvalRunsResponses, GetApiV1EvalRunsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetApiV1EvalRunsResponses, GetApiV1EvalRunsErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/eval/runs',
+            ...options
+        });
+    }
+    
+    /**
      * Create an eval run
      *
      * Queues an asynchronous QStash-backed evaluation run and returns immediately.
@@ -253,6 +276,17 @@ export class Eval extends HeyApiClient {
             url: '/api/v1/eval/runs',
             ...options,
             headers: mergeMethodHeaders({ 'Content-Type': 'application/json' }, options.headers)
+        });
+    }
+    
+    /**
+     * List topic results of an eval run
+     */
+    public listRunsTopics<ThrowOnError extends boolean = false>(options: Options<GetApiV1EvalRunsByIdTopicsData, ThrowOnError>): RequestResult<GetApiV1EvalRunsByIdTopicsResponses, GetApiV1EvalRunsByIdTopicsErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetApiV1EvalRunsByIdTopicsResponses, GetApiV1EvalRunsByIdTopicsErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/eval/runs/{id}/topics',
+            ...options
         });
     }
     
@@ -268,6 +302,288 @@ export class Eval extends HeyApiClient {
         return (options.client ?? this.client).get<GetApiV1EvalRunsByIdResultsResponses, GetApiV1EvalRunsByIdResultsErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/eval/runs/{id}/results',
+            ...options
+        });
+    }
+    
+    /**
+     * reportBatch
+     *
+     * Claim: one pending worker succeeds, others receive 409. Reports: identical replays succeed; different results conflict. Batches are atomic. External workers can supply testCaseId to associate their own topic with a dataset case on first report. Retry: only terminal runs, concurrent repeats conflict.
+     */
+    public createRunsResults<ThrowOnError extends boolean = false>(options: Options<PostApiV1EvalRunsByIdResultsData, ThrowOnError>): RequestResult<PostApiV1EvalRunsByIdResultsResponses, PostApiV1EvalRunsByIdResultsErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1EvalRunsByIdResultsResponses, PostApiV1EvalRunsByIdResultsErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/eval/runs/{id}/results',
+            ...options,
+            headers: mergeMethodHeaders({ 'Content-Type': 'application/json' }, options.headers)
+        });
+    }
+    
+    /**
+     * listBenchmarks
+     *
+     * Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.
+     */
+    public listBenchmarks<ThrowOnError extends boolean = false>(options?: Options<GetApiV1EvalBenchmarksData, ThrowOnError>): RequestResult<GetApiV1EvalBenchmarksResponses, GetApiV1EvalBenchmarksErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetApiV1EvalBenchmarksResponses, GetApiV1EvalBenchmarksErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/eval/benchmarks',
+            ...options
+        });
+    }
+    
+    /**
+     * createBenchmark
+     *
+     * Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.
+     */
+    public createBenchmarks<ThrowOnError extends boolean = false>(options: Options<PostApiV1EvalBenchmarksData, ThrowOnError>): RequestResult<PostApiV1EvalBenchmarksResponses, PostApiV1EvalBenchmarksErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1EvalBenchmarksResponses, PostApiV1EvalBenchmarksErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/eval/benchmarks',
+            ...options,
+            headers: mergeMethodHeaders({ 'Content-Type': 'application/json' }, options.headers)
+        });
+    }
+    
+    /**
+     * deleteBenchmark
+     *
+     * Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.
+     */
+    public deleteBenchmarks<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1EvalBenchmarksByIdData, ThrowOnError>): RequestResult<DeleteApiV1EvalBenchmarksByIdResponses, DeleteApiV1EvalBenchmarksByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DeleteApiV1EvalBenchmarksByIdResponses, DeleteApiV1EvalBenchmarksByIdErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/eval/benchmarks/{id}',
+            ...options
+        });
+    }
+    
+    /**
+     * getBenchmark
+     *
+     * Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.
+     */
+    public getBenchmarks<ThrowOnError extends boolean = false>(options: Options<GetApiV1EvalBenchmarksByIdData, ThrowOnError>): RequestResult<GetApiV1EvalBenchmarksByIdResponses, GetApiV1EvalBenchmarksByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetApiV1EvalBenchmarksByIdResponses, GetApiV1EvalBenchmarksByIdErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/eval/benchmarks/{id}',
+            ...options
+        });
+    }
+    
+    /**
+     * updateBenchmark
+     *
+     * Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.
+     */
+    public updateBenchmarks<ThrowOnError extends boolean = false>(options: Options<PatchApiV1EvalBenchmarksByIdData, ThrowOnError>): RequestResult<PatchApiV1EvalBenchmarksByIdResponses, PatchApiV1EvalBenchmarksByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<PatchApiV1EvalBenchmarksByIdResponses, PatchApiV1EvalBenchmarksByIdErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/eval/benchmarks/{id}',
+            ...options,
+            headers: mergeMethodHeaders({ 'Content-Type': 'application/json' }, options.headers)
+        });
+    }
+    
+    /**
+     * listDatasets
+     *
+     * Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.
+     */
+    public listDatasets<ThrowOnError extends boolean = false>(options?: Options<GetApiV1EvalDatasetsData, ThrowOnError>): RequestResult<GetApiV1EvalDatasetsResponses, GetApiV1EvalDatasetsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetApiV1EvalDatasetsResponses, GetApiV1EvalDatasetsErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/eval/datasets',
+            ...options
+        });
+    }
+    
+    /**
+     * createDataset
+     *
+     * Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.
+     */
+    public createDatasets<ThrowOnError extends boolean = false>(options: Options<PostApiV1EvalDatasetsData, ThrowOnError>): RequestResult<PostApiV1EvalDatasetsResponses, PostApiV1EvalDatasetsErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1EvalDatasetsResponses, PostApiV1EvalDatasetsErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/eval/datasets',
+            ...options,
+            headers: mergeMethodHeaders({ 'Content-Type': 'application/json' }, options.headers)
+        });
+    }
+    
+    /**
+     * deleteDataset
+     *
+     * Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.
+     */
+    public deleteDatasets<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1EvalDatasetsByIdData, ThrowOnError>): RequestResult<DeleteApiV1EvalDatasetsByIdResponses, DeleteApiV1EvalDatasetsByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DeleteApiV1EvalDatasetsByIdResponses, DeleteApiV1EvalDatasetsByIdErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/eval/datasets/{id}',
+            ...options
+        });
+    }
+    
+    /**
+     * getDataset
+     *
+     * Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.
+     */
+    public getDatasets<ThrowOnError extends boolean = false>(options: Options<GetApiV1EvalDatasetsByIdData, ThrowOnError>): RequestResult<GetApiV1EvalDatasetsByIdResponses, GetApiV1EvalDatasetsByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetApiV1EvalDatasetsByIdResponses, GetApiV1EvalDatasetsByIdErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/eval/datasets/{id}',
+            ...options
+        });
+    }
+    
+    /**
+     * updateDataset
+     *
+     * Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.
+     */
+    public updateDatasets<ThrowOnError extends boolean = false>(options: Options<PatchApiV1EvalDatasetsByIdData, ThrowOnError>): RequestResult<PatchApiV1EvalDatasetsByIdResponses, PatchApiV1EvalDatasetsByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<PatchApiV1EvalDatasetsByIdResponses, PatchApiV1EvalDatasetsByIdErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/eval/datasets/{id}',
+            ...options,
+            headers: mergeMethodHeaders({ 'Content-Type': 'application/json' }, options.headers)
+        });
+    }
+    
+    /**
+     * listTestCases
+     *
+     * Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.
+     */
+    public listDatasetsTestCases<ThrowOnError extends boolean = false>(options: Options<GetApiV1EvalDatasetsByDatasetIdTestCasesData, ThrowOnError>): RequestResult<GetApiV1EvalDatasetsByDatasetIdTestCasesResponses, GetApiV1EvalDatasetsByDatasetIdTestCasesErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetApiV1EvalDatasetsByDatasetIdTestCasesResponses, GetApiV1EvalDatasetsByDatasetIdTestCasesErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/eval/datasets/{datasetId}/test-cases',
+            ...options
+        });
+    }
+    
+    /**
+     * createTestCase
+     *
+     * Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.
+     */
+    public createDatasetsTestCases<ThrowOnError extends boolean = false>(options: Options<PostApiV1EvalDatasetsByDatasetIdTestCasesData, ThrowOnError>): RequestResult<PostApiV1EvalDatasetsByDatasetIdTestCasesResponses, PostApiV1EvalDatasetsByDatasetIdTestCasesErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1EvalDatasetsByDatasetIdTestCasesResponses, PostApiV1EvalDatasetsByDatasetIdTestCasesErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/eval/datasets/{datasetId}/test-cases',
+            ...options,
+            headers: mergeMethodHeaders({ 'Content-Type': 'application/json' }, options.headers)
+        });
+    }
+    
+    /**
+     * deleteTestCase
+     *
+     * Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.
+     */
+    public deleteTestCases<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1EvalTestCasesByIdData, ThrowOnError>): RequestResult<DeleteApiV1EvalTestCasesByIdResponses, DeleteApiV1EvalTestCasesByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DeleteApiV1EvalTestCasesByIdResponses, DeleteApiV1EvalTestCasesByIdErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/eval/test-cases/{id}',
+            ...options
+        });
+    }
+    
+    /**
+     * getTestCase
+     *
+     * Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.
+     */
+    public getTestCases<ThrowOnError extends boolean = false>(options: Options<GetApiV1EvalTestCasesByIdData, ThrowOnError>): RequestResult<GetApiV1EvalTestCasesByIdResponses, GetApiV1EvalTestCasesByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetApiV1EvalTestCasesByIdResponses, GetApiV1EvalTestCasesByIdErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/eval/test-cases/{id}',
+            ...options
+        });
+    }
+    
+    /**
+     * updateTestCase
+     *
+     * Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.
+     */
+    public updateTestCases<ThrowOnError extends boolean = false>(options: Options<PatchApiV1EvalTestCasesByIdData, ThrowOnError>): RequestResult<PatchApiV1EvalTestCasesByIdResponses, PatchApiV1EvalTestCasesByIdErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<PatchApiV1EvalTestCasesByIdResponses, PatchApiV1EvalTestCasesByIdErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/eval/test-cases/{id}',
+            ...options,
+            headers: mergeMethodHeaders({ 'Content-Type': 'application/json' }, options.headers)
+        });
+    }
+    
+    /**
+     * claim
+     *
+     * Claim: one pending worker succeeds, others receive 409. Reports: identical replays succeed; different results conflict. Batches are atomic. External workers can supply testCaseId to associate their own topic with a dataset case on first report. Retry: only terminal runs, concurrent repeats conflict.
+     */
+    public createRunsClaim<ThrowOnError extends boolean = false>(options: Options<PostApiV1EvalRunsByIdClaimData, ThrowOnError>): RequestResult<PostApiV1EvalRunsByIdClaimResponses, PostApiV1EvalRunsByIdClaimErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1EvalRunsByIdClaimResponses, PostApiV1EvalRunsByIdClaimErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/eval/runs/{id}/claim',
+            ...options
+        });
+    }
+    
+    /**
+     * setStatus
+     *
+     * Claim: one pending worker succeeds, others receive 409. Reports: identical replays succeed; different results conflict. Batches are atomic. External workers can supply testCaseId to associate their own topic with a dataset case on first report. Retry: only terminal runs, concurrent repeats conflict.
+     */
+    public updateRunsStatus<ThrowOnError extends boolean = false>(options: Options<PatchApiV1EvalRunsByIdStatusData, ThrowOnError>): RequestResult<PatchApiV1EvalRunsByIdStatusResponses, PatchApiV1EvalRunsByIdStatusErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<PatchApiV1EvalRunsByIdStatusResponses, PatchApiV1EvalRunsByIdStatusErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/eval/runs/{id}/status',
+            ...options,
+            headers: mergeMethodHeaders({ 'Content-Type': 'application/json' }, options.headers)
+        });
+    }
+    
+    /**
+     * retryErrors
+     *
+     * Claim: one pending worker succeeds, others receive 409. Reports: identical replays succeed; different results conflict. Batches are atomic. External workers can supply testCaseId to associate their own topic with a dataset case on first report. Retry: only terminal runs, concurrent repeats conflict.
+     */
+    public createRunsRetryErrors<ThrowOnError extends boolean = false>(options: Options<PostApiV1EvalRunsByIdRetryErrorsData, ThrowOnError>): RequestResult<PostApiV1EvalRunsByIdRetryErrorsResponses, PostApiV1EvalRunsByIdRetryErrorsErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1EvalRunsByIdRetryErrorsResponses, PostApiV1EvalRunsByIdRetryErrorsErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/eval/runs/{id}/retry-errors',
+            ...options
+        });
+    }
+    
+    /**
+     * report
+     *
+     * Claim: one pending worker succeeds, others receive 409. Reports: identical replays succeed; different results conflict. Batches are atomic. External workers can supply testCaseId to associate their own topic with a dataset case on first report. Retry: only terminal runs, concurrent repeats conflict.
+     */
+    public updateRunsTopicsResult<ThrowOnError extends boolean = false>(options: Options<PutApiV1EvalRunsByRunIdTopicsByTopicIdResultData, ThrowOnError>): RequestResult<PutApiV1EvalRunsByRunIdTopicsByTopicIdResultResponses, PutApiV1EvalRunsByRunIdTopicsByTopicIdResultErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<PutApiV1EvalRunsByRunIdTopicsByTopicIdResultResponses, PutApiV1EvalRunsByRunIdTopicsByTopicIdResultErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/eval/runs/{runId}/topics/{topicId}/result',
+            ...options,
+            headers: mergeMethodHeaders({ 'Content-Type': 'application/json' }, options.headers)
+        });
+    }
+}
+
+export class Plugins extends HeyApiClient {
+    /**
+     * List installed plugins in the current workspace or personal scope
+     */
+    public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1PluginsData, ThrowOnError>): RequestResult<GetApiV1PluginsResponses, GetApiV1PluginsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetApiV1PluginsResponses, GetApiV1PluginsErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/plugins',
             ...options
         });
     }
@@ -859,6 +1175,17 @@ export class Topics extends HeyApiClient {
             headers: mergeMethodHeaders({ 'Content-Type': 'application/json' }, options.headers)
         });
     }
+    
+    /**
+     * List topic threads
+     */
+    public listThreads<ThrowOnError extends boolean = false>(options: Options<GetApiV1TopicsByTopicIdThreadsData, ThrowOnError>): RequestResult<GetApiV1TopicsByTopicIdThreadsResponses, GetApiV1TopicsByTopicIdThreadsErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetApiV1TopicsByTopicIdThreadsResponses, GetApiV1TopicsByTopicIdThreadsErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/topics/{topicId}/threads',
+            ...options
+        });
+    }
 }
 
 export class Users extends HeyApiClient {
@@ -993,6 +1320,11 @@ export class LobeHub extends HeyApiClient {
     private _eval?: Eval;
     get eval(): Eval {
         return this._eval ??= new Eval({ client: this.client });
+    }
+    
+    private _plugins?: Plugins;
+    get plugins(): Plugins {
+        return this._plugins ??= new Plugins({ client: this.client });
     }
     
     private _files?: Files;

@@ -49,7 +49,9 @@ export const TaskAgentProvider = memo<TaskAgentProviderProps>((props) => {
     scopeAgentId: preferredAgentId,
   }));
 
-  const detailMatch = useMatch('/task/:taskId');
+  // `:slug?` is the readable title tail the detail route appends; it never
+  // participates in resolution, so the match must tolerate it being absent.
+  const detailMatch = useMatch('/task/:taskId/:slug?');
   const resolvedViewedTaskId = viewedTaskId || detailMatch?.params.taskId;
 
   const scopedSelectedAgentId =
