@@ -29,7 +29,10 @@ interface ProjectStore {
   projectDetails: Record<string, Record<string, ProjectDetail>>;
   projectLists: Record<string, ProjectListItem[]>;
   refreshProjectList: () => Promise<void>;
-  updateProject: (id: string, input: { name: string }) => Promise<ProjectListItem>;
+  updateProject: (
+    id: string,
+    input: Parameters<typeof projectService.update>[1],
+  ) => Promise<ProjectListItem>;
   useFetchProjectDetail: (id?: string) => SWRResponse<ProjectDetailResponse>;
   useFetchProjectList: (enabled?: boolean) => SWRResponse<ProjectListResponse>;
 }
@@ -77,7 +80,18 @@ export const useProjectStore = createWithEqualityFn<ProjectStore>()(
         false,
         'updateProject/success',
       );
-      await get().refreshProjectList();
+      await Promise.all([
+        get().refreshProjectList(),
+        ...Object.entries(get().projectDetails[getCacheScope()] ?? {})
+          .filter(([, detail]) => detail.project.id === id)
+          .map(([reference, detail]) =>
+            mutate(
+              detailKey(getCacheScope(), reference),
+              { data: detail, success: true },
+              { revalidate: false },
+            ),
+          ),
+      ]);
       return project;
     },
     useFetchProjectDetail: (id) => {

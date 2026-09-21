@@ -1,4 +1,112 @@
 export default {
+  'directories.currentFolder': 'Current folder',
+  'settings.reuseEnvironmentDescription':
+    'Already created an environment? Select it to link its repository configuration to this project, then add a working directory for this project.',
+  'settings.startDirectoryConversation': 'New conversation here',
+  'settings.configureDirectory': 'Add a working directory',
+  'settings.reuseEnvironment': 'Add an existing environment to this project',
+  'settings.addDirectoryFailed': 'Could not add working directory',
+  'settings.identifier': 'Project identifier',
+  'settings.identifierDescription':
+    'Used in task references. This identifier is set when the project is created.',
+  'settings.slugDescription':
+    'Used in the project URL. Changing it updates the address; leave blank to use the project ID.',
+  'settings.description': 'Description',
+  'settings.generalDescription': 'Manage the project name, address, and description.',
+  'settings.workLocations': 'Working directories',
+  'settings.directoryDescription':
+    'Choose a folder and start a conversation. The Agent will work with files in that folder on the connected device.',
+  'settings.environmentDescription':
+    'Keep repository sources together in an environment, then add a folder on your device to start working.',
+  'settings.allEnvironments': 'All environments',
+  'settings.viewDirectories': 'View folders ({{count}})',
+  'directories.noEnvironment': 'No environment linked',
+  'directories.sourceSummary': 'Existing directory',
+  'directories.keepFiles':
+    'Files stay on {{device}}. Linking only organizes the conversations in this directory.',
+  'directories.bindFailed': 'Could not link directory',
+  'topics.associateFailed': 'Could not add conversation to project',
+  'topics.chooseLocation': 'Choose a working directory',
+  'topics.addLocation': 'Add a working directory (optional)',
+
+  'topics.complete': 'Mark completed',
+  'topics.resume': 'Resume work',
+  'topics.gatewayUnavailable': 'Enable Agent Gateway before using this project work location.',
+
+  'settings.deviceOnline': 'Device connected',
+  'settings.deviceOffline': 'Device disconnected',
+  'topics.title': 'Topics',
+  'topics.groupBy': 'Group topics',
+  'topics.group.status': 'By status',
+  'topics.group.all': 'All topics',
+  'topics.group.agent': 'By agent',
+  'topics.all': 'All topics',
+  'topics.executionContext': 'Work location',
+  'topics.conversationOnly': 'Conversation only, without a working directory',
+  'topics.chooseTopic': 'Choose a topic in the sidebar, or create one to start working',
+  'topics.notFound': 'This topic does not belong to this project, or you do not have access',
+  'topics.viewProject': 'View project',
+  'topics.settings': 'Settings',
+  'topics.status.active': 'Active',
+  'topics.status.running': 'Running',
+  'topics.status.waitingForHuman': 'Needs your input',
+  'topics.status.scheduled': 'Scheduled',
+  'topics.status.failed': 'Failed',
+  'topics.status.completed': 'Completed',
+  'topics.status.archived': 'Archived',
+  'topics.status.unread': 'New results',
+  'settings.addDirectory': 'Add folder',
+  'settings.addDirectoryDescription':
+    'Select an environment and a connected device, then enter the full path of an existing folder. Files stay on that device.',
+  'settings.directoryUnavailable':
+    'The device is disconnected or the directory is unavailable. Connect the device and check the path, then retry.',
+
+  'directories.autoFileTopics': 'All {{count}} existing topics will be linked to this project.',
+  'settings.general': 'General',
+  'settings.noRepository': 'No GitHub repository linked',
+  'settings.noDirectories':
+    'No folders in this environment yet. Add an existing folder on a connected device to start working.',
+  'settings.title': 'Project settings',
+  'settings.environments': 'Environments',
+  'settings.addEnvironment': 'Add environment',
+  'settings.noEnvironments': 'No environments associated yet',
+  'directories.environmentName': 'Environment name',
+  'directories.editEnvironment': 'Configure environment',
+
+  'directories.coordinator': 'Project coordinator',
+  'directories.environment': 'Environment',
+  'directories.newEnvironment': 'Create environment',
+
+  'directories.boundRoot':
+    'This conversation is bound to a project directory. Start a new conversation to use a different directory.',
+  'directories.detectRepository': 'Detect GitHub repository',
+  'directories.unavailable':
+    'Device is offline or the directory is unavailable. Reconnect and retry.',
+
+  'directories.title': 'Working directories',
+  'directories.add': 'Add working directory',
+  'directories.bind': 'Link to project',
+  'directories.bindDescription':
+    'Link the folder below to a project so you can continue working from that project. Files stay on the current device.',
+  'directories.project': 'Select project',
+  'directories.device': 'Select device',
+  'directories.path': 'Absolute directory path',
+  'directories.name': 'Directory name',
+  'directories.repository': 'GitHub repository URL (optional)',
+  'directories.repositoryHint':
+    'This records the source repository. It does not clone or synchronize files. Do not include credentials.',
+  'directories.fileTopics': 'Also file these {{count}} conversations under this project and device',
+  'directories.createProject': 'Create a project',
+  'directories.empty': 'Link a device directory to start working with an Agent in this project.',
+  'directories.start': 'Start work here',
+  'directories.chooseAgent': 'Choose Agent',
+  'directories.conversations': 'Conversations',
+  'directories.noConversations': 'No conversations in this project yet.',
+  'directories.untitled': 'Untitled conversation',
+  'directories.openProject': 'Open project: {{name}}',
+  'directories.startInProject': 'Start work in {{name}}',
+  'directories.projectBinding': 'Project links',
+
   'acceptance.actions.accept': 'Accept completion',
   'acceptance.actions.reject': 'Request changes',
   'acceptance.actions.reopen': 'Reopen project',

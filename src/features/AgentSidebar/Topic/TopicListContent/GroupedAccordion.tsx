@@ -21,6 +21,7 @@ import { type GroupedTopic } from '@/types/topic';
 import { useAgentTopicGroupMode } from '../hooks/useAgentTopicGroupMode';
 import { useScrollActiveTopicIntoView } from '../hooks/useScrollActiveTopicIntoView';
 import { useNavigateToAgentTopics } from '../hooks/useTopicNavigation';
+import { useScopedSidebarTopics } from '../useScopedTopics';
 
 export interface GroupItemComponentProps {
   expanded: boolean;
@@ -39,7 +40,7 @@ const GroupedAccordion = memo<GroupedAccordionProps>(({ GroupItem }) => {
   const topicIncludeCompleted = useUserStore(preferenceSelectors.topicIncludeCompleted);
   const { topicGroupMode } = useAgentTopicGroupMode();
 
-  const [hasMore, isExpandingPageSize, activeAgentId, activeTopicId] = useChatStore((s) => [
+  const [hasMore, isExpandingPageSize, activeAgentId, agentActiveTopicId] = useChatStore((s) => [
     topicSelectors.hasMoreTopicsForSidebar(s),
     topicSelectors.isExpandingPageSize(s),
     s.activeAgentId,
@@ -56,8 +57,16 @@ const GroupedAccordion = memo<GroupedAccordionProps>(({ GroupItem }) => {
       ),
     [topicPageSize, topicSortBy, topicGroupMode, topicIncludeCompleted],
   );
-  const groupTopics = useChatStore(groupSelector, isEqual);
+  const agentGroups = useChatStore(groupSelector, isEqual);
+  const scoped = useScopedSidebarTopics(
+    topicPageSize,
+    topicSortBy,
+    topicGroupMode,
+    topicIncludeCompleted,
+  );
+  const groupTopics = scoped.scope ? scoped.groups : agentGroups;
 
+  const activeTopicId = scoped.scope ? scoped.activeTopicId : agentActiveTopicId;
   const groupIds = useMemo(() => groupTopics.map((group) => group.id), [groupTopics]);
   const { expandedKeys, setExpandedKeys } = useTopicGroupCollapse(topicGroupMode, groupIds);
   const activeGroupId = useMemo(
@@ -100,8 +109,11 @@ const GroupedAccordion = memo<GroupedAccordionProps>(({ GroupItem }) => {
           <GroupItem expanded={expandedKeys.includes(group.id)} group={group} key={group.id} />
         ))}
       </AccordionRoot>
-      {isExpandingPageSize && <SkeletonList rows={3} />}
-      {hasMore && !isExpandingPageSize && activeAgentId && (
+      {scoped.scope && scoped.hasMore && (
+        <NavItem icon={MoreHorizontal} title={t('topic.viewAll')} onClick={scoped.loadMore} />
+      )}
+      {!scoped.scope && isExpandingPageSize && <SkeletonList rows={3} />}
+      {!scoped.scope && hasMore && !isExpandingPageSize && activeAgentId && (
         <NavItem
           icon={MoreHorizontal}
           title={t('topic.viewAll')}

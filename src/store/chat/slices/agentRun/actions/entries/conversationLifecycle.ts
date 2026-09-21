@@ -50,6 +50,7 @@ import { chatService } from '@/services/chat';
 import { resolveSelectedSkillsWithContent } from '@/services/chat/mecha/skillPreload';
 import { resolveSelectedToolsWithContent } from '@/services/chat/mecha/toolPreload';
 import { messageService } from '@/services/message';
+import { projectWorkingDirectoryService } from '@/services/projectWorkingDirectory';
 import { topicService } from '@/services/topic';
 import { getAgentStoreState } from '@/store/agent';
 import {
@@ -462,12 +463,33 @@ export class ConversationLifecycleActionImpl {
     // Runtime selection must use the same per-user device override as the
     // switcher. A workspace-local pick is intentionally private to this member
     // and is therefore safe to execute in-process on their desktop.
-    const agencyConfig = resolveAgentAgencyConfig(agentConfig?.agencyConfig, deviceOverride, {
+    let agencyConfig = resolveAgentAgencyConfig(agentConfig?.agencyConfig, deviceOverride, {
       canManage,
       visibility: agent?.visibility,
       workspaceId: agent?.workspaceId,
     });
     const isGatewayMode = this.#get().isGatewayModeEnabled(agentId);
+    const boundTopic = context.topicId
+      ? topicSelectors.getTopicById(context.topicId)(this.#get())
+      : undefined;
+    if (boundTopic?.projectWorkingDirectoryId) {
+      const { data: directory } = await projectWorkingDirectoryService.resolve(
+        boundTopic.projectWorkingDirectoryId,
+      );
+      if (!isGatewayMode)
+        throw new Error('Enable Gateway Mode to run in a project working directory');
+      if (
+        agencyConfig?.executionTargetSelectionPolicy === 'fixed' &&
+        agencyConfig.boundDeviceId !== directory.deviceId
+      )
+        throw new Error('Agent is fixed to another execution target');
+      agencyConfig = {
+        ...agencyConfig,
+        boundDeviceId: directory.deviceId,
+        executionTarget: 'device',
+      };
+    }
+
     // Legacy agents may only carry `model: '<cli-type>'`. Keep gateway routing
     // unchanged when it is available. Recover the provider when gateway mode is
     // off so desktop can still spawn locally and non-desktop (Android/web) still

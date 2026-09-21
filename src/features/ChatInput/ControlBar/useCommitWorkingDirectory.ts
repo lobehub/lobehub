@@ -81,7 +81,7 @@ const toAgentWorkingDirConfig = (entry: WorkingDirEntry): WorkingDirConfig => ({
  * the same metadata write — same as the legacy pickers.
  */
 export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string | null) => {
-  const { t } = useTranslation(['plugin', 'chat']);
+  const { t } = useTranslation(['plugin', 'chat', 'project']);
 
   // The RAW shared config — every write below spreads it back into
   // `agents.agencyConfig`, so it must never contain this member's per-user
@@ -235,6 +235,8 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
   // Clear whichever precedence level currently supplies the cwd, so the picker
   // falls back to the next level (agent default → device default → "not set").
   const clearCwd = useCallback(async () => {
+    if (activeTopic?.projectWorkingDirectoryId)
+      throw new Error(t('directories.boundRoot', { ns: 'project' }));
     // A topic override (when present) is the effective source — drop it first so
     // we fall back to the agent default rather than nuking everything.
     if (activeTopicId && activeTopic?.metadata?.workingDirectory) {
@@ -276,6 +278,7 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
     updateAgentConfigById,
     updateAgentRuntimeEnvConfigById,
     updateTopicMetadata,
+    t,
   ]);
 
   /** Pick a directory (with the CC-session-reset guard). */
@@ -285,6 +288,13 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
       const effectivePath = getWorkingDirEffectivePath(normalizedEntry);
       if (!normalizedEntry || !effectivePath) return;
 
+      if (activeTopic?.projectWorkingDirectoryId) {
+        const source = getWorkingDirSourcePath(
+          activeTopic.metadata?.workingDirectoryConfig ?? activeTopic.metadata?.workingDirectory,
+        );
+        if (getWorkingDirSourcePath(normalizedEntry) !== source)
+          throw new Error(t('directories.boundRoot', { ns: 'project' }));
+      }
       const run = () => writeCwd(normalizedEntry, options);
 
       // Warn about losing the CLI session only when the SESSION cwd changes.

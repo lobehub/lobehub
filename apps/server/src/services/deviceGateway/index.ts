@@ -1591,7 +1591,10 @@ export class DeviceGateway {
     timeout?: number;
     userId: string;
     workspaceId?: string;
-  }): Promise<{ exists: boolean; isDirectory: boolean; repoType?: 'git' | 'github' } | undefined> {
+  }): Promise<
+    | { exists: boolean; isDirectory: boolean; repositoryUrl?: string; repoType?: 'git' | 'github' }
+    | undefined
+  > {
     const { userId, deviceId, path, timeout = 8000, workspaceId } = params;
     const client = this.getClient();
     if (!client) return undefined;

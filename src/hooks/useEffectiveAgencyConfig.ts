@@ -5,6 +5,8 @@ import { useAgentManagementAccess } from '@/features/ResourcePermission/useAgent
 import { resolveWorkspaceScoped } from '@/helpers/executionTarget';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useChatStore } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/selectors';
 import { useUserStore } from '@/store/user';
 
 export interface UseEffectiveAgencyConfigResult {
@@ -50,7 +52,10 @@ export interface UseEffectiveAgencyConfigResult {
  * Self-populates the workspace preference cache (SWR dedupes across callers;
  * personal mode short-circuits without a network call).
  */
-export const useEffectiveAgencyConfig = (agentId?: string): UseEffectiveAgencyConfigResult => {
+export const useEffectiveAgencyConfig = (
+  agentId?: string,
+  options?: { ignoreTopic?: boolean },
+): UseEffectiveAgencyConfigResult => {
   const sharedAgencyConfig = useAgentStore((s) =>
     agentId ? agentByIdSelectors.getAgencyConfigById(agentId)(s) : undefined,
   );
@@ -75,11 +80,23 @@ export const useEffectiveAgencyConfig = (agentId?: string): UseEffectiveAgencyCo
   const storePreference = useUserStore((s) => s.workspaceUserPreference);
   const preference = fetchedPreference === undefined ? storePreference : (fetchedPreference ?? {});
   const override = agentId ? preference.agentDeviceOverrides?.[agentId] : undefined;
-  const agencyConfig = resolveAgentAgencyConfig(sharedAgencyConfig, override, {
+  const resolvedAgencyConfig = resolveAgentAgencyConfig(sharedAgencyConfig, override, {
     canManage: canManageAgent,
     visibility: agent?.visibility,
     workspaceId: agent?.workspaceId,
   });
+  const topicBoundDeviceId = useChatStore((s) =>
+    !options?.ignoreTopic && s.activeAgentId === agentId
+      ? topicSelectors.currentTopicMetadata(s)?.boundDeviceId
+      : undefined,
+  );
+  const agencyConfig = topicBoundDeviceId
+    ? {
+        ...resolvedAgencyConfig,
+        boundDeviceId: topicBoundDeviceId,
+        executionTarget: 'device' as const,
+      }
+    : resolvedAgencyConfig;
   // Managers and private-agent owners also keep their `local` pick in the
   // per-user override, so any workspace agent must wait for the preference
   // fetch — not just the member-selection case.
@@ -89,7 +106,10 @@ export const useEffectiveAgencyConfig = (agentId?: string): UseEffectiveAgencyCo
     agencyConfig,
     canDisplayExecutionTarget: !!agentId && !isPreferenceLoading,
     canSelectExecutionTarget:
-      !!agentId && !isPreferenceLoading && agencyConfig?.executionTargetSelectionPolicy !== 'fixed',
+      !!agentId &&
+      !topicBoundDeviceId &&
+      !isPreferenceLoading &&
+      agencyConfig?.executionTargetSelectionPolicy !== 'fixed',
     isPreferenceLoading,
     workspaceScoped: resolveWorkspaceScoped(usesWorkspaceMemberSelection, override),
   };
