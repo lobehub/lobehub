@@ -167,6 +167,52 @@ describe('useFetchDocument onData', () => {
     });
   });
 
+  it('ignores a replayed cached row that is older than the version saved since', async () => {
+    const editor = createEditor();
+    const onData = captureOnData('doc-1', editor, { sourceType: 'notebook' });
+    vi.mocked(documentService.updateDocument).mockResolvedValueOnce({
+      historyAppended: false,
+      id: 'doc-1',
+      updatedAt: '2026-01-02T00:00:00.000Z',
+    });
+
+    act(() => {
+      useDocumentStore.getState().initDocumentWithEditor({
+        content: '# Old',
+        documentId: 'doc-1',
+        editor: editor as any,
+        editorData: baseEditorData,
+        sourceType: 'notebook',
+        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      });
+      useDocumentStore.getState().handleContentChange();
+    });
+    await act(async () => {
+      await useDocumentStore.getState().performSave('doc-1');
+    });
+    expect(useDocumentStore.getState().documents['doc-1']).toMatchObject({
+      content: '# Draft',
+      isDirty: false,
+      lastUpdatedTime: new Date('2026-01-02T00:00:00.000Z'),
+    });
+
+    act(() => {
+      onData({
+        content: '# Old',
+        editorData: baseEditorData,
+        id: 'doc-1',
+        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      });
+    });
+
+    expect(useDocumentStore.getState().documents['doc-1']).toMatchObject({
+      content: '# Draft',
+      isDirty: false,
+      lastSavedContent: '# Draft',
+      lastUpdatedTime: new Date('2026-01-02T00:00:00.000Z'),
+    });
+  });
+
   it('mirrors page metadata into the page store on the reconcile path', () => {
     const upsertDocument = vi.fn();
     vi.mocked(usePageStore.getState).mockReturnValue({ upsertDocument } as any);

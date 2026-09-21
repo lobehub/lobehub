@@ -73,6 +73,49 @@ describe('useHighlightSave', () => {
     });
   });
 
+  it('pins the next save to the version the previous save committed before the prop catches up', async () => {
+    const updatedAt = new Date('2024-01-01T00:00:00.000Z');
+    mockUpdateDocument.mockResolvedValue({ updatedAt: '2024-01-02T00:00:00.000Z' });
+    const onSaved = vi.fn();
+
+    const { result } = renderHook(() =>
+      useHighlightSave({ content: 'before', documentId: 'doc-1', onSaved, updatedAt }),
+    );
+
+    act(() => result.current.handleChange('after'));
+    await act(() => result.current.handleSave());
+    act(() => result.current.handleChange('after again'));
+    await act(() => result.current.handleSave());
+
+    expect(mockUpdateDocument).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        content: 'after again',
+        expectedUpdatedAt: new Date('2024-01-02T00:00:00.000Z'),
+      }),
+    );
+  });
+
+  it('follows a new updatedAt prop after a save', async () => {
+    mockUpdateDocument.mockResolvedValue({ updatedAt: '2024-01-02T00:00:00.000Z' });
+    const onSaved = vi.fn();
+
+    const { result, rerender } = renderHook(
+      ({ updatedAt }: { updatedAt: Date }) =>
+        useHighlightSave({ content: 'before', documentId: 'doc-1', onSaved, updatedAt }),
+      { initialProps: { updatedAt: new Date('2024-01-01T00:00:00.000Z') } },
+    );
+
+    act(() => result.current.handleChange('after'));
+    await act(() => result.current.handleSave());
+    rerender({ updatedAt: new Date('2024-01-03T00:00:00.000Z') });
+    act(() => result.current.handleChange('after again'));
+    await act(() => result.current.handleSave());
+
+    expect(mockUpdateDocument).toHaveBeenLastCalledWith(
+      expect.objectContaining({ expectedUpdatedAt: new Date('2024-01-03T00:00:00.000Z') }),
+    );
+  });
+
   it('invalidates the document caches and toasts on CONFLICT', async () => {
     const updatedAt = new Date('2024-01-01T00:00:00.000Z');
     mockUpdateDocument.mockRejectedValue({ data: { code: 'CONFLICT' } });

@@ -41,11 +41,15 @@ export const useHighlightSave = ({
   const documentIdRef = useRef(documentId);
   const onSavedRef = useRef(onSaved);
   const expectedUpdatedAtRef = useRef(updatedAt);
+  const updatedAtPropRef = useRef(updatedAt);
   const tRef = useRef(t);
   bufferRef.current = buffer;
   documentIdRef.current = documentId;
   onSavedRef.current = onSaved;
-  expectedUpdatedAtRef.current = updatedAt;
+  if (updatedAtPropRef.current?.getTime() !== updatedAt?.getTime()) {
+    updatedAtPropRef.current = updatedAt;
+    expectedUpdatedAtRef.current = updatedAt;
+  }
   tRef.current = t;
 
   const writeBuffer = useCallback(async (source: 'manual' | 'autosave') => {
@@ -60,6 +64,7 @@ export const useHighlightSave = ({
           ? { expectedUpdatedAt: expectedUpdatedAtRef.current }
           : {}),
       });
+      if (result?.updatedAt) expectedUpdatedAtRef.current = new Date(result.updatedAt);
       onSavedRef.current(toWrite, result?.updatedAt);
       if (bufferRef.current === toWrite) setBuffer(undefined);
     } catch (error) {

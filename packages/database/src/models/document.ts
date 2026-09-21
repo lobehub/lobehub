@@ -348,9 +348,9 @@ export class DocumentModel {
     const [row] = await this.db
       .update(documents)
       .set({
-        updatedAt: new Date(),
         ...patch,
         ...(metadata !== undefined && { metadata: this.scopeMetadata(metadata) }),
+        updatedAt: patch.updatedAt ?? new Date(),
       })
       .where(and(this.readScope(), eq(documents.id, id)))
       .returning({ updatedAt: documents.updatedAt });

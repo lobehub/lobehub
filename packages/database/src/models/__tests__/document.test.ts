@@ -553,6 +553,20 @@ describe('DocumentModel', () => {
       expect(updatedAt).toEqual(explicitUpdatedAt);
     });
 
+    it('should still bump updatedAt when the patch carries an explicit undefined', async () => {
+      const { documentId } = await createTestDocument(documentModel, fileModel, 'Original content');
+      const past = new Date('2020-01-01T00:00:00.000Z');
+      await documentModel.update(documentId, { updatedAt: past });
+
+      const updatedAt = await documentModel.update(documentId, {
+        content: 'Updated content',
+        updatedAt: undefined,
+      });
+
+      expect(updatedAt).toBeInstanceOf(Date);
+      expect(updatedAt!.getTime()).toBeGreaterThan(past.getTime());
+    });
+
     it('should return undefined when the row does not belong to the caller', async () => {
       const { documentId } = await createTestDocument(documentModel, fileModel, 'Original content');
 
@@ -701,6 +715,7 @@ describe('DocumentModel', () => {
 
       const { id: firstId } = await documentModel.create({
         content: 'First document',
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
         fileId: file.id,
         fileType: 'text/plain',
         source: file.url,
@@ -711,6 +726,7 @@ describe('DocumentModel', () => {
 
       await documentModel.create({
         content: 'Second document',
+        createdAt: new Date('2026-01-01T00:00:01.000Z'),
         fileId: file.id,
         fileType: 'text/plain',
         source: file.url,

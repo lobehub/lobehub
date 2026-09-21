@@ -200,7 +200,7 @@ export class EditorActionImpl {
     if (!doc) return 'unchanged';
 
     const updatedAt = row.updatedAt instanceof Date ? row.updatedAt : new Date(row.updatedAt);
-    if (doc.lastUpdatedTime && updatedAt.getTime() === doc.lastUpdatedTime.getTime()) {
+    if (doc.lastUpdatedTime && updatedAt.getTime() <= doc.lastUpdatedTime.getTime()) {
       return 'unchanged';
     }
 
@@ -320,6 +320,11 @@ export class EditorActionImpl {
     // Skip save if neither document content nor metadata changed
     if (!doc.isDirty && !hasMetadataChanges) return;
 
+    if (doc.saveStatus === 'saving') {
+      this.#get().triggerDebouncedSave(id);
+      return;
+    }
+
     // Update save status
     internal_dispatchDocument({ id, type: 'updateDocument', value: { saveStatus: 'saving' } });
 
@@ -379,6 +384,12 @@ export class EditorActionImpl {
           saveStatus: 'saved',
         },
       });
+
+      const latestMarkdown = (editor.getDocument('markdown') as unknown as string) || '';
+      if (this.getPersistedMarkdown(id, latestMarkdown) !== currentContent) {
+        internal_dispatchDocument({ id, type: 'updateDocument', value: { isDirty: true } });
+        if (doc.autoSave !== false) this.#get().triggerDebouncedSave(id);
+      }
     } catch (error) {
       const errorCode = (error as { data?: { code?: string } })?.data?.code;
       const conflicted = errorCode === 'CONFLICT';
@@ -399,6 +410,9 @@ export class EditorActionImpl {
           saveStatus: adoptedRemote ? 'saved' : 'idle',
         },
       });
+      if (conflicted && !lockBlocked && live?.isDirty && live.autoSave !== false) {
+        this.#get().triggerDebouncedSave(id);
+      }
     }
   };
 
