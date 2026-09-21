@@ -752,10 +752,14 @@ describe('UserMemoryModel', () => {
 
       expect(result.activities.map(({ id }) => id)).toEqual([activity.id]);
       expect(result.contexts.map(({ id }) => id)).toEqual([context.id]);
-      expect(result.experiences.map(({ id }) => id)).toEqual([experience.id]);
+      // Experience memory is retired: the layer is never searched, even when asked for.
+      expect(result.experiences).toEqual([]);
       expect(result.identities.map(({ id }) => id)).toEqual([identity.id]);
       expect(result.preferences.map(({ id }) => id)).toEqual([preference.id]);
-      expect(ftsSearchCandidates).toHaveBeenCalledTimes(5);
+      expect(ftsSearchCandidates).toHaveBeenCalledTimes(4);
+      expect(ftsSearchCandidates).not.toHaveBeenCalledWith(
+        expect.objectContaining({ entity: 'memoryExperiences' }),
+      );
     });
 
     it('boosts short-term related memories with matching tags and category during hybrid ranking', async () => {
@@ -861,7 +865,7 @@ describe('UserMemoryModel', () => {
         tags: [tag],
         title: 'Atlas context',
       });
-      const { experience } = await createExperiencePair({
+      await createExperiencePair({
         action: 'Investigated incident',
         possibleOutcome: 'Resolved faster next time',
         reasoning: 'Compared multiple logs',
@@ -895,10 +899,8 @@ describe('UserMemoryModel', () => {
       ]);
       expect(result.contexts[0].associatedSubjects).toEqual([{ name: 'Alice', type: 'person' }]);
 
-      expect(result.experiences).toHaveLength(1);
-      expect(result.experiences[0].id).toBe(experience.id);
-      expect(result.experiences[0].reasoning).toBe('Compared multiple logs');
-      expect(result.experiences[0].possibleOutcome).toBe('Resolved faster next time');
+      // Experience memory is retired: the row exists but the search never returns it.
+      expect(result.experiences).toEqual([]);
 
       expect(result.preferences).toHaveLength(1);
       expect(result.preferences[0].id).toBe(preference.id);
