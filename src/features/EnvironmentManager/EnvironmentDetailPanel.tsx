@@ -4,13 +4,14 @@ import { Github } from '@lobehub/icons';
 import { Flexbox, Icon } from '@lobehub/ui';
 import { ActionIcon, Avatar, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ContainerIcon, LockIcon, XIcon } from 'lucide-react';
+import { ContainerIcon, LayersIcon, LockIcon, XIcon } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import EnvironmentForm from './EnvironmentForm';
 import InstanceFileBrowser from './InstanceFileBrowser';
 import InstanceSection from './InstanceSection';
+import PanelSection from './PanelSection';
 import { repositoryPath } from './repository';
 import { useCanEditEnvironment } from './useCanEditEnvironment';
 import { type SandboxEnvironment, useEnvironmentActions, useInstances } from './useEnvironmentData';
@@ -37,10 +38,6 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextSecondary};
 
     background: ${cssVar.colorFillTertiary};
-  `,
-  section: css`
-    padding-block-start: 20px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
 }));
 
@@ -160,7 +157,12 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(
               </Flexbox>
             )}
 
-            <Flexbox className={styles.section}>
+            <PanelSection
+              desc={t('environments.instances.desc')}
+              icon={LayersIcon}
+              last={!canEdit}
+              title={t('environments.instances.title')}
+            >
               <InstanceSection
                 adding={adding}
                 editable={canEdit}
@@ -168,10 +170,10 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(
                 onAddingChange={onAddingChange}
                 onBrowse={setBrowsing}
               />
-            </Flexbox>
+            </PanelSection>
 
             {canEdit && (
-              <Flexbox className={styles.section}>
+              <Flexbox>
                 <EnvironmentForm
                   environment={environment}
                   onSave={({ configuration, description, name }) =>
