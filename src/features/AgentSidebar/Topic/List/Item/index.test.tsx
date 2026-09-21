@@ -30,14 +30,15 @@ vi.mock('@lobehub/ui', async (importOriginal) => ({
 
 vi.mock('motion/react', () => ({
   AnimatePresence: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  m: {
-    div: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
-      <div {...props}>{children}</div>
-    ),
-    span: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
-      <span {...props}>{children}</span>
-    ),
-  },
+}));
+
+vi.mock('motion/react-m', () => ({
+  div: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
+    <div {...props}>{children}</div>
+  ),
+  span: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
+    <span {...props}>{children}</span>
+  ),
 }));
 
 vi.mock('@/const/version', () => ({ isDesktop: false }));
@@ -218,6 +219,59 @@ describe('TopicItem active state', () => {
     expect(screen.getByText('00:33')).toBeInTheDocument();
   });
 
+  // After a page refresh only the ACTIVE topic is reconnected into the
+  // in-memory operation store; every other running row has no local
+  // operation and its timer must fall back to the server-list's
+  // `runStartedAt` or it renders nothing (the arrow-pointed rows in the bug
+  // report's screenshot).
+  it('falls back to the server runStartedAt when no local operation exists', () => {
+    vi.useFakeTimers();
+    const now = Date.UTC(2026, 0, 1, 0, 2, 37);
+    vi.setSystemTime(now);
+    runningStartTimeMock.value = undefined;
+    useTopicNavigationMock.mockReturnValue({
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: false,
+      navigateToTopic: vi.fn(),
+      routeTopicId: undefined,
+    });
+
+    render(
+      <TopicItem
+        id="tpc_test"
+        runStartedAt={new Date(now - 157_000).toISOString()}
+        status="running"
+        title="Topic"
+      />,
+    );
+
+    expect(screen.getByText('02:37')).toBeInTheDocument();
+  });
+
+  it('prefers the local operation start over the server runStartedAt', () => {
+    vi.useFakeTimers();
+    const now = Date.UTC(2026, 0, 1, 0, 0, 33);
+    vi.setSystemTime(now);
+    runningStartTimeMock.value = now - 33_000;
+    useTopicNavigationMock.mockReturnValue({
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: false,
+      navigateToTopic: vi.fn(),
+      routeTopicId: undefined,
+    });
+
+    render(
+      <TopicItem
+        id="tpc_test"
+        runStartedAt={new Date(now - 157_000).toISOString()}
+        status="running"
+        title="Topic"
+      />,
+    );
+
+    expect(screen.getByText('00:33')).toBeInTheDocument();
+  });
+
   it('preserves the masked running-tail icon state for the active topic', () => {
     activeTopicIdMock.value = 'tpc_test';
     agentRuntimeRunningMock.value = true;
@@ -233,6 +287,40 @@ describe('TopicItem active state', () => {
 
     expect(screen.queryByTestId('ring-loading')).not.toBeInTheDocument();
     expect(screen.queryByTestId('topic-item-icon')).not.toBeInTheDocument();
+  });
+
+  // Same masked tail, now with the server fallback in play: the answer is
+  // visibly complete (ring masked) while the operation finishes its terminal
+  // bookkeeping, which on the server routinely runs for seconds. `runStartedAt`
+  // only knows the persisted `running` status, so it stays set across that
+  // whole window — without the ring's own gate the row kept counting next to a
+  // finished answer.
+  it('hides the running elapsed time during the masked running tail', () => {
+    vi.useFakeTimers();
+    const now = Date.UTC(2026, 0, 1, 0, 2, 37);
+    vi.setSystemTime(now);
+    runningStartTimeMock.value = undefined;
+    activeTopicIdMock.value = 'tpc_test';
+    agentRuntimeRunningMock.value = true;
+    useTopicNavigationMock.mockReturnValue({
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: true,
+      navigateToTopic: vi.fn(),
+      routeTopicId: 'tpc_test',
+      urlTopicId: 'tpc_test',
+    });
+
+    render(
+      <TopicItem
+        id="tpc_test"
+        runStartedAt={new Date(now - 157_000).toISOString()}
+        status="running"
+        title="Topic"
+      />,
+    );
+
+    expect(screen.queryByTestId('ring-loading')).not.toBeInTheDocument();
+    expect(screen.queryByText('02:37')).not.toBeInTheDocument();
   });
 
   it('keeps idle topics iconless', () => {

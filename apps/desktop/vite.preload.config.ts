@@ -44,6 +44,7 @@ export default defineConfig(async (env) => {
     publicDir: false,
     resolve: {
       alias: mainProcessAlias,
+      dedupe: ['@sentry/electron'],
     },
     root: __dirname,
     ssr: {

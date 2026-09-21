@@ -107,7 +107,7 @@ describe('SearchService', () => {
       const testSearchImpl = new TestSearchImpl();
       vi.mocked(createSearchServiceImpl).mockReturnValue(testSearchImpl as any);
       searchService = new SearchService();
-      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(function () {});
 
       const result = await searchService.query('test query');
 
@@ -548,7 +548,9 @@ describe('SearchService', () => {
       const mockCrawler = {
         crawl: vi.fn().mockResolvedValue(mockCrawlResult),
       };
-      vi.mocked(Crawler).mockImplementation(() => mockCrawler as any);
+      vi.mocked(Crawler).mockImplementation(function () {
+        return mockCrawler as any;
+      });
 
       searchService = new SearchService();
 
@@ -572,7 +574,9 @@ describe('SearchService', () => {
       const mockCrawler = {
         crawl: vi.fn().mockResolvedValue(mockSuccessResult),
       };
-      vi.mocked(Crawler).mockImplementation(() => mockCrawler as any);
+      vi.mocked(Crawler).mockImplementation(function () {
+        return mockCrawler as any;
+      });
 
       searchService = new SearchService();
 
@@ -590,7 +594,9 @@ describe('SearchService', () => {
       const mockCrawler = {
         crawl: vi.fn().mockResolvedValue(mockSuccessResult),
       };
-      vi.mocked(Crawler).mockImplementation(() => mockCrawler as any);
+      vi.mocked(Crawler).mockImplementation(function () {
+        return mockCrawler as any;
+      });
 
       searchService = new SearchService();
 
@@ -615,7 +621,9 @@ describe('SearchService', () => {
           originalUrl: 'https://example.com',
         }),
       };
-      vi.mocked(Crawler).mockImplementation(() => mockCrawler as any);
+      vi.mocked(Crawler).mockImplementation(function () {
+        return mockCrawler as any;
+      });
 
       searchService = new SearchService();
       const urls = ['https://a.com', 'https://b.com'];
@@ -642,7 +650,9 @@ describe('SearchService', () => {
       const mockCrawler = {
         crawl: vi.fn().mockResolvedValueOnce(failedResult).mockResolvedValueOnce(successResult),
       };
-      vi.mocked(Crawler).mockImplementation(() => mockCrawler as any);
+      vi.mocked(Crawler).mockImplementation(function () {
+        return mockCrawler as any;
+      });
 
       searchService = new SearchService();
       const result = await searchService.crawlPages({ urls: ['https://example.com'] });
@@ -663,7 +673,9 @@ describe('SearchService', () => {
       const mockCrawler = {
         crawl: vi.fn().mockResolvedValue(failedResult),
       };
-      vi.mocked(Crawler).mockImplementation(() => mockCrawler as any);
+      vi.mocked(Crawler).mockImplementation(function () {
+        return mockCrawler as any;
+      });
 
       searchService = new SearchService();
       const result = await searchService.crawlPages({ urls: ['https://example.com'] });
@@ -689,7 +701,9 @@ describe('SearchService', () => {
       const mockCrawler = {
         crawl: vi.fn().mockResolvedValue(deadLink),
       };
-      vi.mocked(Crawler).mockImplementation(() => mockCrawler as any);
+      vi.mocked(Crawler).mockImplementation(function () {
+        return mockCrawler as any;
+      });
 
       searchService = new SearchService();
       const result = await searchService.crawlPages({ urls: [deadLink.originalUrl] });
@@ -710,7 +724,9 @@ describe('SearchService', () => {
       const mockCrawler = {
         crawl: vi.fn().mockResolvedValue(failedResult),
       };
-      vi.mocked(Crawler).mockImplementation(() => mockCrawler as any);
+      vi.mocked(Crawler).mockImplementation(function () {
+        return mockCrawler as any;
+      });
 
       searchService = new SearchService();
       const result = await searchService.crawlPages({ urls: ['https://example.com'] });
@@ -725,7 +741,9 @@ describe('SearchService', () => {
       const mockCrawler = {
         crawl: vi.fn().mockRejectedValue(new Error('Network error')),
       };
-      vi.mocked(Crawler).mockImplementation(() => mockCrawler as any);
+      vi.mocked(Crawler).mockImplementation(function () {
+        return mockCrawler as any;
+      });
 
       searchService = new SearchService();
       const result = await searchService.crawlPages({ urls: ['https://example.com'] });
@@ -749,7 +767,9 @@ describe('SearchService', () => {
       const mockCrawler = {
         crawl: vi.fn().mockResolvedValue(successResult),
       };
-      vi.mocked(Crawler).mockImplementation(() => mockCrawler as any);
+      vi.mocked(Crawler).mockImplementation(function () {
+        return mockCrawler as any;
+      });
 
       searchService = new SearchService();
       const result = await searchService.crawlPages({ urls: ['https://example.com'] });

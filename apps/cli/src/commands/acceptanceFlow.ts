@@ -1,9 +1,10 @@
 import { readFile } from 'node:fs/promises';
 
 import type { Command } from 'commander';
+import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
-import { outputJson } from '../utils/format';
+import { confirm, outputJson } from '../utils/format';
 
 /** Agent entry point: author a graph before exercising the product, then append real visits. */
 export function attachAcceptanceFlowCommands(acceptance: Command) {
@@ -22,6 +23,29 @@ export function attachAcceptanceFlowCommands(acceptance: Command) {
     const client = await getTrpcClient();
     outputJson((await client.acceptance.getBundle.query({ id })).flows);
   });
+  flow
+    .command('delete <acceptanceId>')
+    .description('Delete a graph that has never been verified')
+    .requiredOption('--flow <id>')
+    .option('-y, --yes', 'Skip the confirmation prompt')
+    .option('--json [fields]', 'Output JSON')
+    .action(
+      async (id: string, options: { flow: string; json?: boolean | string; yes?: boolean }) => {
+        const client = await getTrpcClient();
+        if (!options.yes) {
+          const ok = await confirm(
+            `Delete flow ${pc.bold(options.flow)} and drop it from any planned round? This cannot be undone.`,
+          );
+          if (!ok) return void console.log('Aborted.');
+        }
+        const result = await client.acceptance.deleteFlow.mutate({ id, flowId: options.flow });
+        if (options.json !== undefined) {
+          outputJson(result, typeof options.json === 'string' ? options.json : undefined);
+          return;
+        }
+        console.log(`${pc.green('✓')} Deleted flow ${pc.bold(result.title)}`);
+      },
+    );
   flow
     .command('plan <acceptanceId>')
     .alias('start')

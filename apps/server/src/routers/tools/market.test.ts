@@ -6,9 +6,11 @@ import { marketRouter } from './market';
 const mockPreprocessLhCommand = vi.hoisted(() => vi.fn());
 const mockSandboxCallTool = vi.hoisted(() => vi.fn());
 const mockCreateSandboxService = vi.hoisted(() =>
-  vi.fn(() => ({
-    callTool: mockSandboxCallTool,
-  })),
+  vi.fn(function () {
+    return {
+      callTool: mockSandboxCallTool,
+    };
+  }),
 );
 const mockMarketSDK = vi.hoisted(() => ({
   skills: {
@@ -19,25 +21,35 @@ const mockMarketSDK = vi.hoisted(() => ({
 }));
 
 vi.mock('@/libs/trpc/lambda/middleware', () => ({
-  marketUserInfo: vi.fn((opts: any) => opts.next({ ctx: opts.ctx })),
-  serverDatabase: vi.fn((opts: any) => opts.next({ ctx: opts.ctx })),
-  telemetry: vi.fn((opts: any) => opts.next({ ctx: opts.ctx })),
+  marketUserInfo: vi.fn(function (opts: any) {
+    return opts.next({ ctx: opts.ctx });
+  }),
+  serverDatabase: vi.fn(function (opts: any) {
+    return opts.next({ ctx: opts.ctx });
+  }),
+  telemetry: vi.fn(function (opts: any) {
+    return opts.next({ ctx: opts.ctx });
+  }),
 }));
 
 vi.mock('@/libs/trpc/lambda/middleware/marketSDK', () => ({
-  marketSDK: vi.fn((opts: any) =>
-    opts.next({
+  marketSDK: vi.fn(function (opts: any) {
+    return opts.next({
       ctx: {
         ...opts.ctx,
         marketSDK: mockMarketSDK,
       },
-    }),
-  ),
-  requireMarketAuth: vi.fn((opts: any) => opts.next({ ctx: opts.ctx })),
+    });
+  }),
+  requireMarketAuth: vi.fn(function (opts: any) {
+    return opts.next({ ctx: opts.ctx });
+  }),
 }));
 
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn(() => ({})),
+  FileService: vi.fn(function () {
+    return {};
+  }),
 }));
 
 vi.mock('@/server/services/sandbox', () => ({
@@ -49,7 +61,9 @@ vi.mock('@/server/services/toolExecution/preprocessLhCommand', () => ({
 }));
 
 vi.mock('debug', () => ({
-  default: vi.fn(() => vi.fn()),
+  default: vi.fn(function () {
+    return vi.fn();
+  }),
 }));
 
 describe('tools marketRouter', () => {

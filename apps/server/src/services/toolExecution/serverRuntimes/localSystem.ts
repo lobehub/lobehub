@@ -4,7 +4,7 @@ import {
   LocalSystemManifest,
 } from '@lobechat/builtin-tool-local-system';
 
-import { deviceGateway } from '@/server/services/deviceGateway';
+import { executeAuthorizedDeviceToolCall } from '@/server/services/deviceGateway/authorizedToolCall';
 import { buildDeviceLhEnv } from '@/server/services/toolExecution/preprocessLhCommand';
 
 import { buildNoActiveDeviceResult, REMOTE_DEVICE_TOOL_IDENTIFIER } from './noActiveDevice';
@@ -151,7 +151,8 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
           }
         }
 
-        return deviceGateway.executeToolCall(
+        return executeAuthorizedDeviceToolCall(
+          context.serverDB,
           {
             deviceId: context.activeDeviceId!,
             operationId: context.operationId,

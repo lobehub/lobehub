@@ -277,8 +277,13 @@ const hasValidAnswers = (
     }
     if (definition.multi) {
       if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) return false;
+      // A multi-select question with "write your own" enabled carries the typed
+      // answer as one more entry in the array, exactly as the single-select
+      // branch below carries it as the scalar value. Whitelist the options only
+      // when the question forbids custom answers.
       if (
         definition.options.size > 0 &&
+        !definition.allowCustomAnswer &&
         value.some((item) => !definition.options.has(item as string))
       ) {
         return false;

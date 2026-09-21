@@ -40,6 +40,8 @@ const hasEnteredStreamEndState = (
 };
 
 export interface AgentRuntimeCoordinatorOptions {
+  /** Whether terminal reconciliation is delivered by protocol-v2 message patches. */
+  messagePatchModeResolver?: (state: AgentState) => Promise<boolean>;
   /**
    * Custom state manager implementation
    * Defaults to automatic selection based on Redis availability
@@ -75,11 +77,13 @@ export interface AgentRuntimeCoordinatorOptions {
  * Supports dependency injection, allowing custom implementations to be passed in
  */
 export class AgentRuntimeCoordinator {
+  private messagePatchModeResolver?: (state: AgentState) => Promise<boolean>;
   private stateManager: IAgentStateManager;
   private streamEventManager: IStreamEventManager;
   private uiMessagesResolver?: (state: AgentState) => Promise<UIChatMessage[] | undefined>;
 
   constructor(options?: AgentRuntimeCoordinatorOptions) {
+    this.messagePatchModeResolver = options?.messagePatchModeResolver;
     this.stateManager = options?.stateManager ?? createAgentStateManager();
     this.streamEventManager = options?.streamEventManager ?? createStreamEventManager();
     this.uiMessagesResolver = options?.uiMessagesResolver;
@@ -150,6 +154,16 @@ export class AgentRuntimeCoordinator {
     }
   }
 
+  private async resolveMessagePatchMode(state: AgentState): Promise<boolean> {
+    if (!this.messagePatchModeResolver) return false;
+    try {
+      return await this.messagePatchModeResolver(state);
+    } catch (error) {
+      console.error('Failed to resolve message patch mode:', error);
+      return false;
+    }
+  }
+
   private async publishVisibleOutputEnd(
     operationId: string,
     state: AgentState,
@@ -182,11 +196,13 @@ export class AgentRuntimeCoordinator {
       // Send a terminal event once the operation first enters a terminal state.
       if (hasEnteredStreamEndState(previousState?.status, state.status)) {
         const stepIndex = state.stepCount ?? previousState?.stepCount ?? 0;
+        const messagePatchMode = await this.resolveMessagePatchMode(state);
         if (!hasVisibleOutputEndPublished(state)) {
           await this.publishVisibleOutputEnd(operationId, state, stepIndex);
         }
         await this.streamEventManager.publishAgentRuntimeEnd({
           finalState: state,
+          ...(messagePatchMode && { messagePatchMode: true, messageRevision: stepIndex + 1 }),
           operationId,
           reason: state.status,
           stepIndex,
@@ -218,11 +234,13 @@ export class AgentRuntimeCoordinator {
         // but suppress visible_output_end once the operation marker exists.
         const stepIndex =
           stepResult.stepIndex ?? stepResult.newState.stepCount ?? previousState?.stepCount ?? 0;
+        const messagePatchMode = await this.resolveMessagePatchMode(stepResult.newState);
         if (!hasVisibleOutputEndPublished(stepResult.newState)) {
           await this.publishVisibleOutputEnd(operationId, stepResult.newState, stepIndex);
         }
         await this.streamEventManager.publishAgentRuntimeEnd({
           finalState: stepResult.newState,
+          ...(messagePatchMode && { messagePatchMode: true, messageRevision: stepIndex + 1 }),
           operationId,
           reason: stepResult.newState.status,
           stepIndex,
@@ -260,6 +278,20 @@ export class AgentRuntimeCoordinator {
    */
   async isInterrupted(operationId: string): Promise<boolean> {
     return this.stateManager.isInterrupted(operationId);
+  }
+
+  /**
+   * Record whether the client holds user messages queued behind the operation.
+   */
+  async setQueuedMessages(operationId: string, pending: boolean): Promise<void> {
+    return this.stateManager.setQueuedMessages(operationId, pending);
+  }
+
+  /**
+   * Check the client's queued-messages flag.
+   */
+  async hasQueuedMessages(operationId: string): Promise<boolean> {
+    return this.stateManager.hasQueuedMessages(operationId);
   }
 
   /**
@@ -316,6 +348,45 @@ export class AgentRuntimeCoordinator {
    */
   async cleanupExpiredOperations(): Promise<number> {
     return this.stateManager.cleanupExpiredOperations();
+  }
+
+  /**
+   * Park the envelope for the step an inline loop is about to run. This stands in
+   * for the queue message that the loop chose not to publish, so a redelivery
+   * that arrives after the loop died resumes from the step it actually reached
+   * instead of being dismissed as a stale duplicate.
+   */
+  async saveInlineResume<T>(operationId: string, envelope: T): Promise<boolean> {
+    return this.stateManager.saveInlineResume(operationId, JSON.stringify(envelope));
+  }
+
+  /**
+   * Read a parked inline envelope. Returns null when there is none.
+   *
+   * A read failure propagates, so the delivery is retried rather than treated as
+   * "no envelope" — see `loadInlineResume` on the state manager. A value that no
+   * longer parses is different: retrying cannot fix it, so it is reported and
+   * treated as absent instead of looping the delivery into the DLQ.
+   */
+  async loadInlineResume<T>(operationId: string): Promise<null | T> {
+    const serialized = await this.stateManager.loadInlineResume(operationId);
+    if (!serialized) return null;
+
+    try {
+      return JSON.parse(serialized) as T;
+    } catch (error) {
+      console.error(`Unparseable inline resume envelope for ${operationId}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Drop a parked inline envelope once the queue owns the next step again.
+   * Scoped to the lock owner, so a worker that lost the race cannot delete the
+   * envelope of the worker that is still running.
+   */
+  async clearInlineResume(operationId: string, ownerId: string): Promise<void> {
+    return this.stateManager.clearInlineResume(operationId, ownerId);
   }
 
   /**

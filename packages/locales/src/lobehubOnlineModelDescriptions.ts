@@ -30,6 +30,8 @@ export const lobeHubOnlineModelDescriptions = {
     "Claude Sonnet 5 is Anthropic's most agentic Sonnet model, built for sustained coding, tool use, and long-context workflows with Sonnet-tier speed and efficiency.",
   'lobehub.dall-e-3.description':
     'The latest DALL·E model, released in November 2023, supports more realistic, accurate image generation with stronger detail.',
+  'lobehub.deepseek-flash.description':
+    'Native vision and stronger agent performance than V4 Pro, with lower input and cache costs for long-running workflows.',
   'lobehub.deepseek-v4-flash-vision-exp.description':
     'DeepSeek V4 Flash Vision Exp is an experimental multimodal model that matches V4 Flash on text capabilities and adds image understanding for visual agent workflows.',
   'lobehub.deepseek-v4-flash.description':

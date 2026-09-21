@@ -28,6 +28,30 @@ const CORE_CUT_MIN = 2;
 
 export type ExpertiseTier = 'core' | 'niche' | 'unused';
 
+/**
+ * Where a domain is mounted. Ownership (`expertise_domains.user_id` / `workspace_id`) is a
+ * separate axis: a project never owns a domain, it only mounts one, so the same standard can be
+ * mounted by several projects at once.
+ */
+export type ExpertiseCarrier =
+  { id: string; type: 'agent' } | { id: string; type: 'project' } | { type: 'user' };
+
+/**
+ * The single carrier column a binding sets. `user` resolves to the workspace when one is in
+ * scope, so a workspace member's always-on standards reach their teammates rather than only
+ * themselves — the same arm `listDomainsBoundTo` reads back.
+ */
+const carrierColumns = (
+  carrier: ExpertiseCarrier,
+  owner: { userId: string; workspaceId?: string },
+) => {
+  if (carrier.type === 'agent') return { agentId: carrier.id };
+  if (carrier.type === 'project') return { projectId: carrier.id };
+  return owner.workspaceId
+    ? { boundWorkspaceId: owner.workspaceId }
+    : { boundUserId: owner.userId };
+};
+
 export class ExpertiseModel {
   private db: LobeChatDatabase;
   private userId: string;
@@ -61,6 +85,26 @@ export class ExpertiseModel {
       .limit(1);
     if (!agent) return [];
 
+    return this.listDomainsBoundTo(eq(expertiseBindings.agentId, agentId));
+  };
+
+  /**
+   * Lists the expertise mounted on one project, plus the caller's own always-on domains.
+   *
+   * Deliberately does not verify the project row: the caller reaches this through an acceptance
+   * it already owns, and `scopeWhere` still confines the result to domains in scope.
+   */
+  listDomainsForProject = async (projectId: string) =>
+    this.listDomainsBoundTo(eq(expertiseBindings.projectId, projectId));
+
+  /** The caller's always-on domains only — the scope an acceptance without a project falls back to. */
+  listDomainsForOwner = async () => this.listDomainsBoundTo();
+
+  private listDomainsBoundTo = async (carrierWhere?: ReturnType<typeof eq>) => {
+    const ownerWhere = this.workspaceId
+      ? eq(expertiseBindings.boundWorkspaceId, this.workspaceId)
+      : eq(expertiseBindings.boundUserId, this.userId);
+
     const rows = await this.db
       .select({
         binding: {
@@ -78,12 +122,7 @@ export class ExpertiseModel {
           eq(expertiseBindings.enabled, true),
           isNotNull(expertiseDomains.anchorChosenAt),
           this.scopeWhere(),
-          or(
-            eq(expertiseBindings.agentId, agentId),
-            this.workspaceId
-              ? eq(expertiseBindings.boundWorkspaceId, this.workspaceId)
-              : eq(expertiseBindings.boundUserId, this.userId),
-          ),
+          carrierWhere ? or(carrierWhere, ownerWhere) : ownerWhere,
         ),
       )
       .orderBy(asc(expertiseBindings.sortOrder));
@@ -404,13 +443,13 @@ export class ExpertiseModel {
   // Writes
 
   /**
-   * Persists a reviewed anchor and binds it to the selected agent.
+   * Persists a reviewed anchor and mounts it on the selected carrier.
    * The chosen candidate is also kept in anchorCandidates so the alternative can be revisited.
    */
   createDomain = async (params: {
-    agentId: string;
     brief: string;
     canonEntries?: ExpertiseCanonEntry[];
+    carrier: ExpertiseCarrier;
     domainFilter: string;
     layerCanonRef?: string;
     layerSource?: 'canonical' | 'invented';
@@ -459,9 +498,9 @@ export class ExpertiseModel {
       });
       await tx.insert(expertiseBindings).values({
         addedByUserId: this.userId,
-        agentId: params.agentId,
         domainId: id,
         workspaceId: this.workspaceId,
+        ...carrierColumns(params.carrier, { userId: this.userId, workspaceId: this.workspaceId }),
       });
     });
     return id;

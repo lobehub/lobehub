@@ -1,16 +1,19 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
-import { RequestTrigger } from '@lobechat/types';
+import { type ExecAgentResult, RequestTrigger } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as ConstVersion from '@/const/version';
+import { getPendingInterventions } from '@/features/Conversation/store/slices/data/pendingInterventions';
 import { aiAgentService } from '@/services/aiAgent';
 import { messageService } from '@/services/message';
 import { shareChatService } from '@/services/shareChat';
 import { topicService } from '@/services/topic';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import * as serverConfigStore from '@/store/serverConfig';
 
 import type { GatewayConnection } from '../transports/gateway/gateway';
 import { GatewayActionImpl } from '../transports/gateway/gateway';
+import { createMockMessage } from './fixtures';
 
 vi.mock('@/services/aiAgent', () => ({
   aiAgentService: {
@@ -65,6 +68,8 @@ vi.mock('@/store/user', () => ({
 }));
 
 vi.mock('@/store/user/selectors', () => ({
+  // Lab flag off: this suite pins the v1 per-operation socket path.
+  labPreferSelectors: { enableGatewayMux: () => false },
   settingsSelectors: {
     defaultAgentConfig: () => ({
       chatConfig: { disableGatewayMode: mockUserDefaultConfig.disableGatewayMode },
@@ -241,6 +246,21 @@ describe('GatewayActionImpl', () => {
       });
 
       expect(action.isGatewayModeEnabled('agent-1')).toBe(false);
+    });
+
+    it('reads serverConfig from the module store when window.global_serverConfigStore is missing', () => {
+      // Android / React Native hydrates createServerConfigStore but does not
+      // always attach it to `window`. Dispatch must still see ENABLE_AGENT_GATEWAY.
+      const { action } = createTestAction();
+      (globalThis as any).window = {};
+      vi.spyOn(serverConfigStore, 'getServerConfigStoreState').mockReturnValue({
+        serverConfig: {
+          agentGatewayUrl: 'wss://gateway.test.com',
+          enableGatewayMode: true,
+        },
+      } as ReturnType<typeof serverConfigStore.getServerConfigStoreState>);
+
+      expect(action.isGatewayModeEnabled('agent-1')).toBe(true);
     });
   });
 
@@ -619,6 +639,313 @@ describe('GatewayActionImpl', () => {
       delete (globalThis as any).window;
     });
 
+    it('acknowledges an isolated topic before UI hydration without switching topics', async () => {
+      const { action, switchTopic, connectToGateway } = createExecuteTestAction();
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+        agentId: 'target-agent',
+        assistantMessageId: 'assistant-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        message: 'ok',
+        operationId: 'server-op-1',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'token',
+        topicId: 'target-topic',
+        userMessageId: 'user-1',
+      });
+      const events: string[] = [];
+      const onTopicCreated = vi.fn(() => {
+        events.push('accepted');
+      });
+      vi.mocked(messageService.getMessages).mockImplementationOnce(async () => {
+        events.push('hydrate');
+        return [];
+      });
+
+      const result = await action.executeGatewayAgent({
+        context: { agentId: 'target-agent', isolatedTopic: true, scope: 'main' },
+        message: 'Continue the forwarded work',
+        onTopicCreated,
+      });
+
+      expect(result.topicId).toBe('target-topic');
+      expect(events).toEqual(['accepted', 'hydrate']);
+      expect(onTopicCreated).toHaveBeenCalledWith('target-topic');
+      expect(onTopicCreated).toHaveBeenCalledTimes(1);
+      expect(switchTopic).not.toHaveBeenCalled();
+      expect(connectToGateway).toHaveBeenCalled();
+    });
+
+    const precreatedInterventionResult: ExecAgentResult = {
+      agentId: 'agent-1',
+      assistantMessageId: 'ast-resumed',
+      autoStarted: true,
+      createdAt: '2026-09-19T00:00:00.000Z',
+      message: 'ok',
+      operationId: 'server-op-resumed',
+      status: 'created',
+      success: true,
+      timestamp: '2026-09-19T00:00:00.000Z',
+      token: 'test-token',
+      topicId: 'topic-1',
+      userMessageId: 'user-1',
+    };
+
+    it.each(['approved', 'rejected'] as const)(
+      'removes a %s question from pending interventions before connecting the precreated continuation',
+      async (status) => {
+        const { action, connectToGateway, replaceMessages } = createExecuteTestAction();
+        const context = {
+          agentId: 'agent-1',
+          scope: 'thread' as const,
+          threadId: 'thread-1',
+          topicId: 'topic-1',
+        };
+        const question = createMockMessage({
+          id: 'question-1',
+          plugin: {
+            apiName: 'askUserQuestion',
+            arguments: '{}',
+            identifier: 'lobe-agent',
+            type: 'default',
+          },
+          pluginIntervention: { status: 'pending' },
+          role: 'tool',
+          tool_call_id: 'call-question',
+        });
+        let displayedMessages = [question];
+        const resolvedMessages = [
+          { ...question, pluginIntervention: { status } },
+          createMockMessage({ id: 'ast-resumed', role: 'assistant' }),
+        ];
+        vi.mocked(messageService.getMessages).mockResolvedValueOnce(resolvedMessages);
+        replaceMessages.mockImplementation((messages) => {
+          displayedMessages = messages;
+        });
+        connectToGateway.mockImplementation(() => {
+          // No continuation events have arrived: the answer alone must dismiss the form.
+          expect(getPendingInterventions(displayedMessages)).toEqual([]);
+        });
+        const executionsBefore = vi.mocked(aiAgentService.execAgentTask).mock.calls.length;
+        expect(getPendingInterventions(displayedMessages)).toHaveLength(1);
+
+        await action.executeGatewayAgent({
+          context,
+          message: '',
+          parentMessageId: question.id,
+          precreatedResult: precreatedInterventionResult,
+        });
+
+        expect(connectToGateway).toHaveBeenCalledOnce();
+        expect(messageService.getMessages).toHaveBeenLastCalledWith({
+          ...context,
+          skipWorks: true,
+        });
+        expect(displayedMessages).toEqual(resolvedMessages);
+        expect(aiAgentService.execAgentTask).toHaveBeenCalledTimes(executionsBefore);
+      },
+    );
+
+    it('still connects the accepted continuation when its initial message refresh fails', async () => {
+      const { action, connectToGateway, replaceMessages } = createExecuteTestAction();
+      const error = new Error('message refresh unavailable');
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.mocked(messageService.getMessages).mockRejectedValueOnce(error);
+
+      await action.executeGatewayAgent({
+        context: { agentId: 'agent-1', topicId: 'topic-1' },
+        message: '',
+        precreatedResult: precreatedInterventionResult,
+      });
+
+      expect(connectToGateway).toHaveBeenCalledOnce();
+      expect(replaceMessages).not.toHaveBeenCalled();
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '[Gateway] Failed to refresh messages after intervention resolution:',
+        error,
+      );
+    });
+
+    it.each([
+      {
+        expectedEnabled: true,
+        expectedUrl: 'https://module-gateway.test.com',
+        hasWindow: true,
+        moduleEnabled: true,
+        name: 'module config without a window store',
+      },
+      {
+        expectedEnabled: true,
+        expectedUrl: 'https://module-gateway.test.com',
+        hasWindow: false,
+        moduleEnabled: true,
+        name: 'module config without window',
+      },
+      {
+        expectedEnabled: true,
+        expectedUrl: 'https://window-gateway.test.com',
+        hasWindow: true,
+        moduleEnabled: false,
+        name: 'enabled window config over disabled module config',
+        windowConfig: {
+          agentGatewayUrl: 'https://window-gateway.test.com',
+          enableGatewayMode: true,
+        },
+      },
+      {
+        expectedEnabled: false,
+        expectedUrl: 'https://window-gateway.test.com',
+        hasWindow: true,
+        moduleEnabled: true,
+        name: 'explicit execution with disabled window config',
+        windowConfig: {
+          agentGatewayUrl: 'https://window-gateway.test.com',
+          enableGatewayMode: false,
+        },
+      },
+      {
+        expectedEnabled: false,
+        expectedUrl: 'https://module-gateway.test.com',
+        hasWindow: true,
+        moduleEnabled: false,
+        name: 'explicit execution with disabled module config',
+      },
+      {
+        disableGatewayMode: true,
+        expectedEnabled: false,
+        expectedUrl: 'https://module-gateway.test.com',
+        hasWindow: true,
+        moduleEnabled: true,
+        name: 'explicit execution with the user default disabled',
+      },
+    ])(
+      'executes and reconnects using $name',
+      async ({
+        disableGatewayMode,
+        expectedEnabled,
+        expectedUrl,
+        hasWindow,
+        moduleEnabled,
+        windowConfig,
+      }) => {
+        const { action, connectToGateway, mockClient, state } = createExecuteTestAction();
+        state.messagesMap = {};
+        connectToGateway.mockImplementation(action.connectToGateway);
+        if (hasWindow) {
+          Reflect.set(globalThis, 'window', {
+            global_serverConfigStore: windowConfig
+              ? { getState: () => ({ serverConfig: windowConfig }) }
+              : undefined,
+          });
+        } else Reflect.deleteProperty(globalThis, 'window');
+        mockUserDefaultConfig.disableGatewayMode = disableGatewayMode;
+        vi.spyOn(serverConfigStore, 'getServerConfigStoreState').mockReturnValue({
+          serverConfig: {
+            agentGatewayUrl: 'https://module-gateway.test.com',
+            enableGatewayMode: moduleEnabled,
+          },
+        } as ReturnType<typeof serverConfigStore.getServerConfigStoreState>);
+        vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+          agentId: 'agent-1',
+          assistantMessageId: 'ast-1',
+          autoStarted: true,
+          createdAt: new Date().toISOString(),
+          message: 'ok',
+          operationId: 'server-op-1',
+          status: 'created',
+          success: true,
+          timestamp: new Date().toISOString(),
+          token: 'execute-token',
+          topicId: 'topic-1',
+          userMessageId: 'usr-1',
+        });
+        vi.mocked(aiAgentService.refreshGatewayToken).mockResolvedValue({ token: 'resume-token' });
+
+        expect(action.isGatewayModeEnabled('agent-1')).toBe(expectedEnabled);
+        await action.executeGatewayAgent({
+          context: { agentId: 'agent-1', scope: 'main', threadId: null, topicId: 'topic-1' },
+          message: 'Run Codex on the bound device',
+        });
+
+        expect(aiAgentService.execAgentTask).toHaveBeenCalledOnce();
+        expect(action.createClient).toHaveBeenLastCalledWith({
+          gatewayUrl: expectedUrl,
+          operationId: 'server-op-1',
+          resumeOnConnect: undefined,
+          token: 'execute-token',
+        });
+        expect(mockClient.connect).toHaveBeenCalledOnce();
+
+        action.disconnectFromGateway('server-op-1');
+        await action.reconnectToGatewayOperation({
+          agentId: 'agent-1',
+          assistantMessageId: 'ast-1',
+          operationId: 'server-op-1',
+          topicId: 'topic-1',
+        });
+
+        expect(aiAgentService.refreshGatewayToken).toHaveBeenCalledWith('topic-1');
+        expect(action.createClient).toHaveBeenLastCalledWith({
+          gatewayUrl: expectedUrl,
+          operationId: 'server-op-1',
+          resumeOnConnect: true,
+          token: 'resume-token',
+        });
+        expect(mockClient.connect).toHaveBeenCalledTimes(2);
+      },
+    );
+
+    it.each(['no config', 'window config without URL'])(
+      'fails before execution and skips reconnect with %s',
+      async (source) => {
+        const { action, connectToGateway, startOperation } = createExecuteTestAction();
+        connectToGateway.mockImplementation(action.connectToGateway);
+        const getModuleState = vi.spyOn(serverConfigStore, 'getServerConfigStoreState');
+        if (source === 'no config') {
+          Reflect.deleteProperty(globalThis, 'window');
+          getModuleState.mockReturnValue(undefined);
+        } else {
+          Reflect.set(globalThis, 'window', {
+            global_serverConfigStore: {
+              getState: () => ({ serverConfig: { enableGatewayMode: true } }),
+            },
+          });
+          getModuleState.mockReturnValue({
+            serverConfig: {
+              agentGatewayUrl: 'https://module-gateway.test.com',
+              enableGatewayMode: true,
+            },
+          } as ReturnType<typeof serverConfigStore.getServerConfigStoreState>);
+        }
+
+        expect(action.isGatewayModeEnabled('agent-1')).toBe(false);
+        await expect(
+          action.executeGatewayAgent({
+            context: { agentId: 'agent-1', scope: 'main', threadId: null, topicId: 'topic-1' },
+            message: 'Run Codex on the bound device',
+          }),
+        ).rejects.toThrow(
+          '[Gateway] Cannot execute agent: serverConfig.agentGatewayUrl is missing',
+        );
+        await expect(
+          action.reconnectToGatewayOperation({
+            agentId: 'agent-1',
+            assistantMessageId: 'ast-1',
+            operationId: 'server-op-1',
+            topicId: 'topic-1',
+          }),
+        ).resolves.toBeUndefined();
+
+        expect(aiAgentService.execAgentTask).not.toHaveBeenCalled();
+        expect(aiAgentService.refreshGatewayToken).not.toHaveBeenCalled();
+        expect(startOperation).not.toHaveBeenCalled();
+        expect(action.createClient).not.toHaveBeenCalled();
+        expect(topicService.settleRunningOperation).not.toHaveBeenCalled();
+      },
+    );
+
     it('should forward parentMessageId to execAgentTask for regeneration', async () => {
       const { action } = createExecuteTestAction();
 
@@ -902,6 +1229,39 @@ describe('GatewayActionImpl', () => {
           prompt: 'Hello',
           trigger: 'onboarding',
         }),
+        expect.anything(),
+      );
+    });
+
+    // Regression: a queued follow-up lost its steer mark on the gateway path, so
+    // the row the server persisted rendered as a new turn instead of a
+    // continuation of the interrupted one.
+    it('should forward the steer mark of a queued follow-up to execAgentTask', async () => {
+      const { action } = createExecuteTestAction();
+
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+        agentId: 'agent-1',
+        assistantMessageId: 'ast-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        message: 'ok',
+        operationId: 'server-op-1',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'test-token',
+        topicId: 'topic-1',
+        userMessageId: 'usr-1',
+      });
+
+      await action.executeGatewayAgent({
+        context: { agentId: 'agent-1', topicId: 'topic-1', threadId: null, scope: 'main' },
+        message: 'Follow up',
+        metadata: { steer: true },
+      });
+
+      expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
+        expect.objectContaining({ prompt: 'Follow up', steer: true }),
         expect.anything(),
       );
     });
@@ -1478,11 +1838,15 @@ describe('GatewayActionImpl', () => {
         expect.objectContaining({
           value: expect.objectContaining({
             metadata: expect.objectContaining({
-              runningOperation: {
+              runningOperation: expect.objectContaining({
                 assistantMessageId: 'ast-1',
                 heteroType: null,
                 operationId: 'server-op-1',
-              },
+                // Server op createdAt echoed onto the optimistic marker so a
+                // refresh-time reconnect can anchor elapsed time without the
+                // messages list having loaded.
+                startedAt: expect.any(String),
+              }),
             }),
           }),
         }),
@@ -2127,6 +2491,71 @@ describe('GatewayActionImpl', () => {
       expect(startOperation).toHaveBeenCalledWith(
         expect.objectContaining({
           metadata: expect.not.objectContaining({ startTime: expect.anything() }),
+        }),
+      );
+    });
+
+    // Cold-boot reconnect races the messages-list fetch: when it wins, the
+    // assistant message isn't in messagesMap yet and the old createdAt anchor
+    // resolved to undefined → startOperation stamped Date.now(), resetting the
+    // elapsed-time displays to 00:00 on every refresh. The marker's
+    // server-written startedAt stamp must win over the message lookup so the
+    // anchor survives regardless of which fetch lands first.
+    it('prefers the marker startedAt over the assistant message when messagesMap is empty', async () => {
+      const markerStartedAtMs = 1_700_000_000_000;
+      const { action, startOperation } = createReconnectTestAction(null);
+
+      await action.reconnectToGatewayOperation({
+        assistantMessageId: 'ast-1',
+        operationId: 'server-op-1',
+        startedAt: new Date(markerStartedAtMs).toISOString(),
+        topicId: 'topic-1',
+      });
+
+      expect(startOperation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({ startTime: markerStartedAtMs }),
+        }),
+      );
+    });
+
+    it('prefers the marker startedAt over a later assistant-message createdAt', async () => {
+      const markerStartedAtMs = 1_700_000_000_000;
+      const { action, startOperation } = createReconnectTestAction({
+        createdAt: markerStartedAtMs + 5_000,
+        id: 'ast-1',
+      });
+
+      await action.reconnectToGatewayOperation({
+        assistantMessageId: 'ast-1',
+        operationId: 'server-op-1',
+        startedAt: new Date(markerStartedAtMs).toISOString(),
+        topicId: 'topic-1',
+      });
+
+      expect(startOperation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({ startTime: markerStartedAtMs }),
+        }),
+      );
+    });
+
+    it('falls back to the assistant message when the marker carries no startedAt', async () => {
+      const createdAtMs = 1_700_000_000_000;
+      const { action, startOperation } = createReconnectTestAction({
+        createdAt: createdAtMs,
+        id: 'ast-1',
+      });
+
+      await action.reconnectToGatewayOperation({
+        assistantMessageId: 'ast-1',
+        operationId: 'server-op-1',
+        topicId: 'topic-1',
+      });
+
+      expect(startOperation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({ startTime: createdAtMs }),
         }),
       );
     });

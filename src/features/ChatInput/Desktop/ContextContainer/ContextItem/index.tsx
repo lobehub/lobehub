@@ -89,13 +89,16 @@ const ContextItem = memo<FileItemProps>((props) => {
   const detail = (
     <Flexbox gap={4}>
       <span>{file.name}</span>
-      <UploadDetail
-        error={error}
-        size={file.size}
-        status={status}
-        tasks={tasks}
-        uploadState={uploadState}
-      />
+      {status === 'error' && error ? (
+        <Flexbox horizontal align={'flex-start'} gap={4} style={{ color: cssVar.colorError }}>
+          <Flexbox align={'center'} justify={'center'} style={{ height: '1lh' }}>
+            <Icon icon={CircleAlertIcon} size={12} />
+          </Flexbox>
+          <span>{error}</span>
+        </Flexbox>
+      ) : (
+        <UploadDetail size={file.size} status={status} tasks={tasks} uploadState={uploadState} />
+      )}
     </Flexbox>
   );
 

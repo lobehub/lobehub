@@ -15,7 +15,7 @@ import {
   type RendererTreeFile,
   sha256File,
 } from '../manifest';
-import { readPointer } from '../pointer';
+import { emptyPointer, readPointer, writePointer } from '../pointer';
 
 const { privateKey, publicKey } = generateKeyPairSync('ed25519');
 const PUBLIC_KEY_PEM = publicKey.export({ format: 'pem', type: 'spki' }).toString();
@@ -27,7 +27,7 @@ let userDataDir: string;
 let builtinDir: string;
 const { loggerMock, updaterConfigMock } = vi.hoisted(() => ({
   loggerMock: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
-  updaterConfigMock: { buildChannel: 'stable' },
+  updaterConfigMock: { buildChannel: 'stable', isDev: false },
 }));
 
 vi.mock('@/utils/logger', () => ({ createLogger: () => loggerMock }));
@@ -39,7 +39,11 @@ vi.mock('@/const/dir', () => ({
     return builtinDir;
   },
 }));
-vi.mock('@/const/env', () => ({ isDev: false }));
+vi.mock('@/const/env', () => ({
+  get isDev() {
+    return updaterConfigMock.isDev;
+  },
+}));
 vi.mock('@/modules/updater/configs', () => ({
   get BUILD_CHANNEL() {
     return updaterConfigMock.buildChannel;
@@ -54,7 +58,8 @@ const makeApp = () => ({
   storeManager: { get: vi.fn(() => 'stable') },
 });
 
-const channelDir = (channel = 'stable') => path.join(userDataDir, 'renderer-ota-v2', channel);
+const channelDir = (channel = 'stable') =>
+  path.join(userDataDir, 'renderer-ota-v2', channel, APP_VERSION);
 
 const signManifest = (unsigned: Omit<RendererManifest, 'signature'>): RendererManifest => ({
   ...unsigned,
@@ -167,6 +172,7 @@ const loadManager = async (app: ReturnType<typeof makeApp>) => {
 beforeEach(() => {
   vi.clearAllMocks();
   updaterConfigMock.buildChannel = 'stable';
+  updaterConfigMock.isDev = false;
   userDataDir = mkdtempSync(path.join(tmpdir(), 'ota-user-'));
   builtinDir = mkdtempSync(path.join(tmpdir(), 'ota-builtin-'));
   mkdirSync(path.join(builtinDir, 'apps', 'desktop'), { recursive: true });
@@ -183,6 +189,52 @@ afterEach(() => {
 });
 
 describe('RendererUpdateManager V2 lifecycle', () => {
+  it.each(['', '0.9.0'])(
+    'ignores prior full-release state with the same mainHash (%s)',
+    async (version) => {
+      const oldDir = path.join(userDataDir, 'renderer-ota-v2', 'stable', version);
+      const oldEntry = path.join(oldDir, 'versions', 'r9', 'apps', 'desktop', 'index.html');
+      mkdirSync(path.dirname(oldEntry), { recursive: true });
+      writeFileSync(oldEntry, '<html>previous full release</html>');
+      writePointer(oldDir, {
+        ...emptyPointer(MAIN_HASH),
+        blacklist: ['r1'],
+        current: 'r9',
+        staged: 'r9',
+      });
+
+      const app = makeApp();
+      const manager = await loadManager(app);
+      manager.initialize();
+      expect(app.rendererUrlManager.setActiveRendererDir).toHaveBeenLastCalledWith(null);
+      expect(manager.getStatus()).toMatchObject({ current: null, staged: null });
+      expect(readFileSync(oldEntry, 'utf8')).toContain('previous full release');
+
+      stubFetch(
+        buildFeed('r0', {
+          'apps/desktop/index.html': entryHtml('builtin'),
+          'assets/entry-e2e.js': 'console.log("builtin")',
+        }),
+      );
+      await manager.checkForUpdates();
+      expect(app.browserManager.broadcastToAllWindows).not.toHaveBeenCalled();
+      expect(fetch).toHaveBeenCalledTimes(1);
+
+      stubFetch(
+        buildFeed('r1', {
+          'apps/desktop/index.html': entryHtml('new patch'),
+          'assets/entry-e2e.js': 'console.log("new patch")',
+        }),
+      );
+      await manager.checkForUpdates();
+      expect(manager.getStatus().staged).toBe('r1');
+      expect(app.browserManager.broadcastToAllWindows).toHaveBeenCalledWith('updateReady', {
+        kind: 'renderer',
+        version: `${APP_VERSION}.r1`,
+      });
+    },
+  );
+
   it('records both compatibility hashes and rejects the patch before downloading', async () => {
     const app = makeApp();
     const manager = await loadManager(app);
@@ -207,6 +259,18 @@ describe('RendererUpdateManager V2 lifecycle', () => {
     expect(loggerMock.error).toHaveBeenCalledWith(
       'Renderer OTA check failed:',
       expect.objectContaining({ message: 'Manifest mainHash mismatch' }),
+      expect.objectContaining({ reason: 'hash-mismatch', checkId: expect.any(String) }),
+    );
+    expect(loggerMock.info).toHaveBeenCalledWith(
+      'Renderer OTA check finished',
+      expect.objectContaining({
+        outcome: 'failed',
+        reason: 'hash-mismatch',
+        localMainHash: MAIN_HASH,
+        remoteMainHash: 'b'.repeat(64),
+        remoteVersion: 'r1',
+        state: 'idle',
+      }),
     );
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(manager.getStatus()).toMatchObject({ current: null, staged: null, state: 'idle' });
@@ -218,7 +282,7 @@ describe('RendererUpdateManager V2 lifecycle', () => {
     const app = makeApp();
     const reloadIgnoringCache = vi.fn();
     app.browserManager.browsers.set('app', {
-      browserWindow: { webContents: { reloadIgnoringCache } },
+      reloadIgnoringCache,
     });
     const manager = await loadManager(app);
     manager.initialize();
@@ -233,9 +297,16 @@ describe('RendererUpdateManager V2 lifecycle', () => {
 
     const otaDir = channelDir();
     expect(readPointer(otaDir, MAIN_HASH).staged).toBe('r1');
+    expect(loggerMock.info).toHaveBeenCalledWith(
+      'Renderer OTA check finished',
+      expect.objectContaining({ outcome: 'staged', reason: 'staged', staged: 'r1' }),
+    );
+    expect(loggerMock.info.mock.calls.some(([name]) => name === 'Renderer OTA apply result')).toBe(
+      false,
+    );
     expect(app.browserManager.broadcastToAllWindows).toHaveBeenCalledWith('updateReady', {
       kind: 'renderer',
-      version: APP_VERSION,
+      version: `${APP_VERSION}.r1`,
     });
     const fetchedUrls = (fetch as ReturnType<typeof vi.fn>).mock.calls.map((call) => call[0]);
     expect(fetchedUrls).toEqual([
@@ -245,11 +316,19 @@ describe('RendererUpdateManager V2 lifecycle', () => {
     expect(fetchedUrls.some((url: string) => url.includes('/renderer/files/'))).toBe(false);
 
     expect(manager.applyStagedNow()).toBe(true);
-    expect(reloadIgnoringCache).toHaveBeenCalledOnce();
+    expect(reloadIgnoringCache).toHaveBeenCalledWith(true);
     expect(
       readFileSync(path.join(otaDir, 'versions', 'r1', 'apps', 'desktop', 'index.html'), 'utf8'),
     ).toBe(entryHtml('v1'));
+    expect(loggerMock.info).toHaveBeenCalledWith(
+      'Renderer OTA apply result',
+      expect.objectContaining({ outcome: 'pending', reason: 'boot-check-pending' }),
+    );
     manager.handleBootPing();
+    expect(loggerMock.info).toHaveBeenCalledWith(
+      'Renderer OTA apply result',
+      expect.objectContaining({ outcome: 'applied', reason: 'boot-confirmed', current: 'r1' }),
+    );
     expect(readPointer(otaDir, MAIN_HASH)).toMatchObject({
       current: 'r1',
       pendingBootCheck: false,
@@ -357,6 +436,10 @@ describe('RendererUpdateManager V2 lifecycle', () => {
 
     expect(readPointer(channelDir(), MAIN_HASH).staged).toBeNull();
     expect(existsSync(path.join(channelDir(), 'staging'))).toBe(false);
+    expect(loggerMock.info).toHaveBeenCalledWith(
+      'Renderer OTA check finished',
+      expect.objectContaining({ reason: 'download-failed', outcome: 'failed' }),
+    );
   });
 
   it('rejects a manifest signed by a foreign key', async () => {
@@ -379,6 +462,10 @@ describe('RendererUpdateManager V2 lifecycle', () => {
 
     expect(readPointer(channelDir(), MAIN_HASH).staged).toBeNull();
     expect(app.browserManager.broadcastToAllWindows).not.toHaveBeenCalled();
+    expect(loggerMock.info).toHaveBeenCalledWith(
+      'Renderer OTA check finished',
+      expect.objectContaining({ reason: 'signature-invalid', outcome: 'failed' }),
+    );
   });
 
   it('clears the complete V1 root without migrating its state', async () => {
@@ -470,6 +557,15 @@ describe('RendererUpdateManager V2 lifecycle', () => {
       blacklist: ['r1'],
       current: null,
     });
+    expect(loggerMock.warn).toHaveBeenCalledWith(
+      'Renderer OTA apply result',
+      expect.objectContaining({
+        reason: 'load-timeout',
+        outcome: 'rolled-back',
+        failedVersion: 'r1',
+        current: 'r0',
+      }),
+    );
   });
 
   it('keeps V2 patch state independent across update channels', async () => {
@@ -490,6 +586,99 @@ describe('RendererUpdateManager V2 lifecycle', () => {
     expect(readPointer(channelDir(), MAIN_HASH).staged).toBe('r1');
     expect(readPointer(channelDir('canary'), MAIN_HASH).staged).toBe('r1');
   });
+
+  it.each([
+    [404, 'feed-not-found', 'skipped'],
+    [503, 'manifest-fetch-failed', 'failed'],
+    [200, 'manifest-invalid', 'failed'],
+  ])('reports HTTP %s with one final reason %s', async (status, reason, outcome) => {
+    const manager = await loadManager(makeApp());
+    manager.initialize();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json({}, { status })),
+    );
+    await manager.checkForUpdates();
+    const finished = loggerMock.info.mock.calls.filter(
+      ([name]) => name === 'Renderer OTA check finished',
+    );
+    expect(finished).toHaveLength(1);
+    expect(finished[0][1]).toMatchObject({
+      reason,
+      outcome,
+      httpStatus: status,
+      localMainHash: MAIN_HASH,
+      appVersion: APP_VERSION,
+      channel: 'stable',
+      state: 'idle',
+    });
+  });
+
+  it('explains disabled, busy and superseded checks without reporting an update', async () => {
+    updaterConfigMock.isDev = true;
+    const disabled = await loadManager(makeApp());
+    await disabled.checkForUpdates();
+    expect(loggerMock.info).toHaveBeenCalledWith(
+      'Renderer OTA check finished',
+      expect.objectContaining({ reason: 'disabled', disabledReasons: ['development-build'] }),
+    );
+    updaterConfigMock.isDev = false;
+    const manager = await loadManager(makeApp());
+    manager.initialize();
+    let respond!: (response: Response) => void;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            respond = resolve;
+          }),
+      ),
+    );
+    const checking = manager.checkForUpdates();
+    await manager.checkForUpdates();
+    manager.switchChannel('canary');
+    respond(new Response('', { status: 404 }));
+    await checking;
+    const finished = loggerMock.info.mock.calls.filter(
+      ([name]) => name === 'Renderer OTA check finished',
+    );
+    expect(finished.map(([, detail]) => detail.reason)).toEqual(['disabled', 'busy', 'superseded']);
+    expect(new Set(finished.map(([, detail]) => detail.checkId)).size).toBe(3);
+    expect(finished[2][1]).toMatchObject({
+      channel: 'stable',
+      state: 'superseded',
+      outcome: 'skipped',
+    });
+  });
+
+  it.each(['already-current', 'blacklisted', 'already-staged'])(
+    'explains %s without downloading',
+    async (reason) => {
+      const manager = await loadManager(makeApp());
+      const pointer = emptyPointer(MAIN_HASH);
+      if (reason === 'blacklisted') pointer.blacklist = ['r1'];
+      if (reason === 'already-staged') pointer.staged = 'r1';
+      mkdirSync(channelDir(), { recursive: true });
+      writePointer(channelDir(), pointer);
+      manager.initialize();
+      const feed = buildFeed(reason === 'already-current' ? 'r0' : 'r1', {
+        'apps/desktop/index.html': entryHtml('v1'),
+        'assets/entry-e2e.js': 'console.log("v1")',
+      });
+      stubFetch(feed);
+      await manager.checkForUpdates();
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(loggerMock.info).toHaveBeenCalledWith(
+        'Renderer OTA check finished',
+        expect.objectContaining({
+          reason,
+          outcome: 'skipped',
+          remoteVersion: feed.manifest.version,
+        }),
+      );
+    },
+  );
 
   it('uses the dedicated V2 beta feed for beta binaries', async () => {
     updaterConfigMock.buildChannel = 'beta';

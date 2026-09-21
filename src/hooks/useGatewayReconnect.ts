@@ -10,6 +10,7 @@ interface RunningOperation {
   heteroType?: string | null;
   operationId: string;
   scope?: string;
+  startedAt?: string;
   threadId?: string | null;
 }
 
@@ -60,6 +61,7 @@ export const useGatewayReconnect = (
         heteroType: runningOperation.heteroType,
         operationId: runningOperation.operationId,
         scope: runningOperation.scope,
+        startedAt: runningOperation.startedAt,
         threadId: runningOperation.threadId,
         topicId,
       });

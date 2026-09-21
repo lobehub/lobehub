@@ -18,7 +18,6 @@ const styles = createStaticStyles(({ css }) => ({
     border: 0;
 
     font: inherit;
-    font-size: 14px;
     color: ${cssVar.colorTextSecondary};
 
     background: none;

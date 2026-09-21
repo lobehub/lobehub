@@ -28,7 +28,7 @@ jobs:
       USE_OVERLAY: ${{ github.event.pull_request.head.repo.full_name == github.repository && vars.OVERLAY_REPOSITORY != '' && secrets.LOBEHUB_CLOUD_TOKEN != '' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 

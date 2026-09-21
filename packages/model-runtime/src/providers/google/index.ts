@@ -9,6 +9,12 @@ import debug from 'debug';
 
 import type { LobeRuntimeAI } from '../../core/BaseAI';
 import { buildGoogleMessages, buildGoogleTools } from '../../core/contextBuilders/google';
+import {
+  finalizeProviderResponse,
+  initializeProviderDiagnostics,
+  observeProviderAsyncIterable,
+  recordProviderError,
+} from '../../core/providerDiagnostics';
 import { GoogleGenerativeAIStream } from '../../core/streams';
 import { LOBE_ERROR_KEY } from '../../core/streams/google';
 import type {
@@ -24,6 +30,7 @@ import type {
 } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import type { CreateImagePayload, CreateImageResponse } from '../../types/image';
+import type { ProviderResponseDiagnostics } from '../../types/providerDiagnostics';
 import type { CreateVideoPayload, CreateVideoResponse } from '../../types/video';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
@@ -50,6 +57,7 @@ import {
   shouldUseGoogleImageSearchTypes,
   supportsGoogleSearchOnImageResponseModel,
 } from './modelId';
+import { recordGoogleGenerateContentResponse } from './providerDiagnostics';
 import { resolveGoogleThinkingConfig } from './thinkingResolver';
 import { createGoogleTranscription } from './transcribe';
 
@@ -148,6 +156,8 @@ export class LobeGoogleAI implements LobeRuntimeAI {
   }
 
   async chat(rawPayload: ChatStreamPayload, options?: ChatMethodOptions) {
+    let providerResponseDiagnostics: ProviderResponseDiagnostics | undefined;
+
     try {
       const payload = this.buildPayload(rawPayload);
       const { model, thinkingBudget, thinkingLevel, imageAspectRatio, imageResolution } = payload;
@@ -253,6 +263,13 @@ export class LobeGoogleAI implements LobeRuntimeAI {
       const key = this.isVertexAi
         ? 'DEBUG_VERTEX_AI_CHAT_COMPLETION'
         : 'DEBUG_GOOGLE_CHAT_COMPLETION';
+      providerResponseDiagnostics = initializeProviderDiagnostics({
+        apiMode: this.isVertexAi ? 'vertex_generate_content' : 'google_generate_content',
+        diagnostics: options?.diagnostics,
+        endpoint: this.baseURL,
+        payload: finalPayload,
+        sentAt: Date.now(),
+      });
 
       if (process.env[key] === '1') {
         log('[requestPayload]');
@@ -260,11 +277,19 @@ export class LobeGoogleAI implements LobeRuntimeAI {
       }
 
       const geminiStreamResponse = await this.client.models.generateContentStream(finalPayload);
+      const observedGeminiStream = observeProviderAsyncIterable(
+        geminiStreamResponse,
+        providerResponseDiagnostics,
+        recordGoogleGenerateContentResponse,
+        controller.signal,
+      );
 
-      const googleStream = this.createEnhancedStream(geminiStreamResponse, controller.signal);
-      const [prod, useForDebug] = googleStream.tee();
+      const googleStream = this.createEnhancedStream(observedGeminiStream, controller.signal);
+      let prod = googleStream;
 
       if (process.env[key] === '1') {
+        const [productionStream, useForDebug] = googleStream.tee();
+        prod = productionStream;
         debugStream(useForDebug).catch();
       }
 
@@ -281,6 +306,8 @@ export class LobeGoogleAI implements LobeRuntimeAI {
       return StreamingResponse(stream, { headers: options?.headers });
     } catch (e) {
       const err = e as Error;
+      recordProviderError(providerResponseDiagnostics, err);
+      await finalizeProviderResponse(providerResponseDiagnostics, options?.signal);
 
       // Remove previous silent handling, throw error uniformly
       if (isAbortError(err)) {

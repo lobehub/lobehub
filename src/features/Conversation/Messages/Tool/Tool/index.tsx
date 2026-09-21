@@ -1,6 +1,6 @@
 import { getBuiltinRender } from '@lobechat/builtin-tools/renders';
-import { Accordion, AccordionItem, Flexbox } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Accordion, Skeleton } from '@lobehub/ui/base-ui';
 import { type CSSProperties } from 'react';
 import { memo, useState } from 'react';
 
@@ -62,6 +62,7 @@ const Tool = memo<InspectorProps>(
     const result = toolMessage
       ? {
           content: toolMessage.content,
+          contentLength: toolMessage.contentLength,
           error: toolMessage.error,
           id: toolCallId,
           state: toolMessage.pluginState,
@@ -75,16 +76,13 @@ const Tool = memo<InspectorProps>(
 
     return (
       <Accordion
-        expandedKeys={expand ? ['tool'] : []}
         gap={8}
-        onExpandedChange={(keys) => setExpand(keys.length > 0)}
-      >
-        <AccordionItem
-          itemKey={'tool'}
-          paddingBlock={4}
-          paddingInline={4}
-          action={
-            !disableEditing && (
+        indicatorPlacement="inline"
+        styles={{ trigger: { paddingBlock: 4, paddingInline: 4 } }}
+        value={expand ? ['tool'] : []}
+        items={[
+          {
+            action: !disableEditing && (
               <Actions
                 assistantMessageId={messageId}
                 canToggleCustomToolRender={hasCustomRender}
@@ -94,42 +92,49 @@ const Tool = memo<InspectorProps>(
                 showCustomToolRender={showCustomToolRender}
                 showDebug={showDebug}
               />
-            )
-          }
-          title={
-            <Inspectors
-              apiName={apiName}
-              identifier={identifier}
-              result={result}
-              toolCallId={toolCallId}
-            />
-          }
-        >
-          <Flexbox gap={8} paddingBlock={8}>
-            {showDebug && !disableEditing && (
-              <Debug
+            ),
+            children: (
+              <Flexbox gap={8} paddingBlock={8}>
+                {showDebug && !disableEditing && (
+                  <Debug
+                    apiName={apiName}
+                    identifier={identifier}
+                    requestArgs={requestArgs}
+                    result={result}
+                    toolCallId={toolCallId}
+                    toolMessageId={toolMessage?.id}
+                    type={type}
+                  />
+                )}
+                <Detail
+                  apiName={apiName}
+                  arguments={requestArgs}
+                  disableEditing={disableEditing}
+                  identifier={identifier}
+                  messageId={messageId}
+                  result={result}
+                  showCustomToolRender={showCustomToolRender}
+                  toolCallId={toolCallId}
+                  // Without this the render has no row to fetch a projected
+                  // body back from, and the expanded card stays empty.
+                  toolMessageId={toolMessage?.id}
+                  type={type}
+                />
+              </Flexbox>
+            ),
+            key: 'tool',
+            title: (
+              <Inspectors
                 apiName={apiName}
                 identifier={identifier}
-                requestArgs={requestArgs}
                 result={result}
                 toolCallId={toolCallId}
-                type={type}
               />
-            )}
-            <Detail
-              apiName={apiName}
-              arguments={requestArgs}
-              disableEditing={disableEditing}
-              identifier={identifier}
-              messageId={messageId}
-              result={result}
-              showCustomToolRender={showCustomToolRender}
-              toolCallId={toolCallId}
-              type={type}
-            />
-          </Flexbox>
-        </AccordionItem>
-      </Accordion>
+            ),
+          },
+        ]}
+        onValueChange={(value) => setExpand(value.length > 0)}
+      />
     );
   },
 );

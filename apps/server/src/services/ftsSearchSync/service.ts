@@ -38,6 +38,7 @@ interface FtsSearchSyncOperation {
   bytes: number;
   /** Number of Elasticsearch bulk items in this action. */
   items: number;
+  messageTombstone: boolean;
   work: FtsSearchSyncWork;
 }
 
@@ -76,6 +77,8 @@ export interface FtsSearchSyncBulkRequestSample {
   durationMs: number;
   entities: Partial<Record<FtsSearchSyncWork['entity'], FtsSearchSyncBulkEntitySample>>;
   items: number;
+  /** Bounded eligibility signal; no message IDs or content enter telemetry. */
+  messageTombstoneItems?: number;
   result: FtsSearchSyncBulkRequestResult;
 }
 
@@ -121,7 +124,13 @@ const buildOperations = (
       },
     };
     const body = `${JSON.stringify(metadata)}\n${JSON.stringify(projected)}\n`;
-    return { body, bytes: Buffer.byteLength(body), items: 1, work };
+    return {
+      body,
+      bytes: Buffer.byteLength(body),
+      items: 1,
+      messageTombstone: work.entity === 'messages' && source.fts_search_sync_deleted === true,
+      work,
+    };
   });
 };
 
@@ -275,6 +284,10 @@ export class FtsSearchSyncService {
       const requestBody = operations.map((operation) => operation.body).join('');
       const requestBytes = bulkBytes;
       const requestItems = operations.reduce((total, operation) => total + operation.items, 0);
+      const messageTombstoneItems = operations.filter(
+        (operation) => operation.messageTombstone,
+      ).length;
+      const messageTombstoneSample = messageTombstoneItems > 0 ? { messageTombstoneItems } : {};
       bulk = [];
       bulkBytes = 0;
       result.bulkBytes += requestBytes;
@@ -290,6 +303,7 @@ export class FtsSearchSyncService {
           bytes: requestBytes,
           durationMs: Date.now() - startedAt,
           entities: summarizeBulkEntities(operations, 'request_error'),
+          ...messageTombstoneSample,
           items: requestItems,
           result: 'request_error',
         });
@@ -307,6 +321,7 @@ export class FtsSearchSyncService {
           bytes: requestBytes,
           durationMs: Date.now() - startedAt,
           entities: summarizeBulkEntities(operations, 'response_error'),
+          ...messageTombstoneSample,
           items: requestItems,
           result: 'response_error',
         });
@@ -398,6 +413,7 @@ export class FtsSearchSyncService {
         bytes: requestBytes,
         durationMs: Date.now() - startedAt,
         entities: summarizeBulkEntities(operations, bulkResult, new Set(failures.map(workKey))),
+        ...messageTombstoneSample,
         items: requestItems,
         result: bulkResult,
       });

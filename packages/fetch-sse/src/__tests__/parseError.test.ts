@@ -50,6 +50,22 @@ beforeEach(() => {
 });
 
 describe('getMessageError', () => {
+  it('classifies a generic quota response before choosing its translated message', async () => {
+    const response = Response.json(
+      {
+        body: { error: { message: 'insufficient quota' } },
+        errorType: 'ProviderBizError',
+      },
+      { status: 429 },
+    );
+    const error = await getMessageError(response);
+    expect(error).toMatchObject({
+      attribution: 'user',
+      message: 'translated_InsufficientQuota',
+      type: 'InsufficientQuota',
+    });
+  });
+
   it('should handle business error correctly', async () => {
     const mockErrorResponse: ErrorResponse = {
       body: 'Error occurred',

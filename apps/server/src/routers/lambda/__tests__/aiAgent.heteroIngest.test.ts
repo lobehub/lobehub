@@ -1,7 +1,7 @@
 // @vitest-environment node
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { type LobeChatDatabase } from '@lobechat/database';
-import { topics, workspaceMembers, workspaces } from '@lobechat/database/schemas';
+import { agentOperations, topics, workspaceMembers, workspaces } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { LOCAL_HETEROGENEOUS_AGENT_TYPES } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
@@ -13,7 +13,9 @@ import { cleanupTestUser, createTestUser } from './integration/setup';
 // Mock getServerDB to return our test database instance
 let testDB: LobeChatDatabase;
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => testDB),
+  getServerDB: vi.fn(function () {
+    return testDB;
+  }),
 }));
 
 const mockHeteroIngest = vi.fn();
@@ -22,22 +24,35 @@ const mockHeteroFinish = vi.fn();
 // Stub the service so we can assert on procedure → service wiring without
 // pulling in the real Redis-backed StreamEventManager.
 vi.mock('@/server/services/heterogeneousAgent', () => ({
-  HeterogeneousAgentService: vi.fn().mockImplementation(() => ({
-    heteroFinish: mockHeteroFinish,
-    heteroIngest: mockHeteroIngest,
-  })),
+  HeterogeneousAgentService: vi.fn().mockImplementation(function () {
+    return {
+      heteroFinish: mockHeteroFinish,
+      heteroIngest: mockHeteroIngest,
+    };
+  }),
 }));
 
 // AgentRuntimeService and AiChatService are constructed by the procedure
 // middleware too — stub to keep the test isolated.
 vi.mock('@/server/services/agentRuntime', () => ({
-  AgentRuntimeService: vi.fn().mockImplementation(() => ({})),
+  AgentRuntimeService: vi.fn().mockImplementation(function () {
+    return {};
+  }),
 }));
 vi.mock('@/server/services/aiChat', () => ({
-  AiChatService: vi.fn().mockImplementation(() => ({})),
+  AiChatService: vi.fn().mockImplementation(function () {
+    return {};
+  }),
 }));
 
-const buildEvent = (type: AgentStreamEvent['type'], stepIndex: number): AgentStreamEvent => ({
+type HeterogeneousAgentStreamEvent = Omit<AgentStreamEvent, 'type'> & {
+  type: Exclude<AgentStreamEvent['type'], 'message_patch'>;
+};
+
+const buildEvent = (
+  type: HeterogeneousAgentStreamEvent['type'],
+  stepIndex: number,
+): HeterogeneousAgentStreamEvent => ({
   data: {},
   operationId: 'op-1',
   stepIndex,
@@ -254,6 +269,97 @@ describe('aiAgentRouter.heteroIngest / heteroFinish', () => {
         await serverDB.delete(workspaces).where(eq(workspaces.id, workspace.id));
         await cleanupTestUser(serverDB, creatorId);
       }
+    });
+  });
+
+  /**
+   * Regression: an operation-token producer whose run had already been settled
+   * was turned away at the auth guard with CONFLICT. The ingester then burned
+   * its whole retry budget on a refusal that can never succeed, nothing recorded
+   * that the output had been dropped, and `heteroFinish` was rejected by the
+   * same guard — so the turn kept its unresolved assistant placeholder.
+   */
+  describe('callbacks on a terminal operation', () => {
+    const terminalOperationId = 'op-terminal';
+
+    const operationTokenCaller = (capabilities: string[]) =>
+      aiAgentRouter.createCaller({
+        jwtPayload: { userId },
+        oidcAuth: {
+          aud: 'urn:lobehub:hetero-operation',
+          capabilities,
+          exp: 2_000_000_000,
+          iat: 1_700_000_000,
+          iss: 'urn:lobehub:internal',
+          jti: 'jti-terminal',
+          operation_id: terminalOperationId,
+          purpose: 'hetero-operation',
+          sub: userId,
+        },
+        userId,
+      } as any);
+
+    beforeEach(async () => {
+      await serverDB.insert(agentOperations).values({
+        completionReason: 'done',
+        id: terminalOperationId,
+        status: 'done',
+        topicId: 'topic-1',
+        userId,
+      });
+    });
+
+    afterEach(async () => {
+      await serverDB.delete(agentOperations).where(eq(agentOperations.id, terminalOperationId));
+    });
+
+    it('reaches the service so the refusal and the outcome are reported', async () => {
+      mockHeteroIngest.mockResolvedValue({
+        accepted: false,
+        reason: 'operation-not-running',
+      });
+      const caller = operationTokenCaller(['hetero:ingest', 'hetero:finish']);
+
+      await expect(
+        caller.heteroIngest({
+          agentType: 'claude-code',
+          events: [buildEvent('stream_chunk', 0)],
+          operationId: terminalOperationId,
+          topicId: 'topic-1',
+        }),
+      ).resolves.toEqual({ accepted: false, ack: true, reason: 'operation-not-running' });
+
+      await expect(
+        caller.heteroFinish({
+          agentType: 'claude-code',
+          operationId: terminalOperationId,
+          result: 'success',
+          topicId: 'topic-1',
+        }),
+      ).resolves.toEqual({ ack: true });
+
+      expect(mockHeteroIngest).toHaveBeenCalledOnce();
+      expect(mockHeteroFinish).toHaveBeenCalledOnce();
+    });
+
+    it('does not extend the allowance to token renewal', async () => {
+      await expect(
+        operationTokenCaller(['hetero:ingest']).refreshHeteroOperationToken({
+          operationId: terminalOperationId,
+        }),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+    });
+
+    it('still rejects a token scoped to a different operation', async () => {
+      await expect(
+        operationTokenCaller(['hetero:ingest']).heteroIngest({
+          agentType: 'claude-code',
+          events: [buildEvent('stream_chunk', 0)],
+          operationId: 'op-1',
+          topicId: 'topic-1',
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(mockHeteroIngest).not.toHaveBeenCalled();
     });
   });
 

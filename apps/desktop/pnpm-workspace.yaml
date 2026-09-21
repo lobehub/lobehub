@@ -4,6 +4,7 @@ packages:
   - '../../packages/agent-tracing'
   - '../../packages/chat-adapter-imessage'
   - '../../packages/heterogeneous-agents'
+  - '../../packages/html-artifact'
   - '../../packages/const'
   - '../../packages/eval-rubric'
   - '../../packages/electron-server-ipc'
@@ -11,6 +12,7 @@ packages:
   - '../../packages/electron-mac-notifications'
   - '../../packages/napi-loader'
   - '../../packages/file-loaders'
+  - '../../packages/html-artifact'
   - '../../packages/desktop-bridge'
   - '../../packages/device-control'
   - '../../packages/device-sandbox'
@@ -45,6 +47,7 @@ publicHoistPattern:
   - 'pdfjs-dist'
 
 allowBuilds:
+  '@sentry/cli': true
   electron: true
   electron-builder: true
   electron-winstaller: false
@@ -57,7 +60,8 @@ overrides:
   node-gyp: ^12.4.0
   react: 19.2.7
   react-dom: 19.2.7
-  vitest: 3.2.6
+  vitest: 5.0.0
+  'zod@^4': 4.5.4
 minimumReleaseAgeExclude:
   - '@auv-js/api-client@0.0.16'
   - '@auv-js/cli-darwin-arm64@0.0.16'

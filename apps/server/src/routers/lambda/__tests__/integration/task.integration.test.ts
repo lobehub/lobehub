@@ -20,7 +20,9 @@ import {
 // Mock getServerDB
 let testDB: LobeChatDatabase;
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => testDB),
+  getServerDB: vi.fn(function () {
+    return testDB;
+  }),
 }));
 
 // Mock AiAgentService
@@ -31,24 +33,30 @@ const mockExecAgent = vi.fn().mockResolvedValue({
 });
 const mockInterruptTask = vi.fn().mockResolvedValue({ success: true });
 vi.mock('@/server/services/aiAgent', () => ({
-  AiAgentService: vi.fn().mockImplementation(() => ({
-    execAgent: mockExecAgent,
-    interruptTask: mockInterruptTask,
-  })),
+  AiAgentService: vi.fn().mockImplementation(function () {
+    return {
+      execAgent: mockExecAgent,
+      interruptTask: mockInterruptTask,
+    };
+  }),
 }));
 
 // Mock TaskLifecycleService
 vi.mock('@/server/services/taskLifecycle', () => ({
-  TaskLifecycleService: vi.fn().mockImplementation(() => ({
-    onTopicComplete: vi.fn(),
-  })),
+  TaskLifecycleService: vi.fn().mockImplementation(function () {
+    return {
+      onTopicComplete: vi.fn(),
+    };
+  }),
 }));
 
 // Mock TaskReviewService
 vi.mock('@/server/services/taskReview', () => ({
-  TaskReviewService: vi.fn().mockImplementation(() => ({
-    review: vi.fn(),
-  })),
+  TaskReviewService: vi.fn().mockImplementation(function () {
+    return {
+      review: vi.fn(),
+    };
+  }),
 }));
 
 // Mock initModelRuntimeFromDB
@@ -952,6 +960,42 @@ describe('Task Router Integration', () => {
       expect(found.data.status).toBe('paused');
       expect(found.data.error).toContain('LLM failed');
     });
+
+    it('does not book a running topic when execAgent reports a dispatch failure', async () => {
+      // A heterogeneous dispatch or operation startup failure comes back as a
+      // result (`success: false`) rather than a throw: the topic and its error
+      // bubble already exist. Booking that dead operation as a running run left
+      // the Task in flight forever, with a goal coordinator recording a start.
+      mockExecAgent.mockResolvedValueOnce({
+        error:
+          'Heterogeneous agent provider binding is only supported for Desktop local execution.',
+        message: 'Heterogeneous agent provider binding requires Desktop local execution',
+        operationId: 'op_dead',
+        status: 'error',
+        success: false,
+        topicId: testTopicId,
+      });
+
+      const task = await caller.create({
+        assigneeAgentId: testAgentId,
+        instruction: 'Test',
+      });
+
+      await expect(caller.run({ id: task.data.id })).rejects.toThrow();
+
+      const found = await caller.find({ id: task.data.id });
+      expect(found.data.status).toBe('paused');
+      expect(found.data.error).toContain('Desktop local execution');
+
+      // The attempt stays visible, but as a failed run — never a running one.
+      const runs = await new TaskTopicModel(serverDB, userId).findByTaskId(task.data.id);
+      expect(runs.map((run) => [run.topicId, run.operationId, run.status])).toEqual([
+        [testTopicId, 'op_dead', 'failed'],
+      ]);
+      // ...so a fresh run is allowed instead of "already has a running topic".
+      await caller.run({ id: task.data.id });
+      expect((await caller.detail({ id: task.data.id })).data?.status).toBe('running');
+    });
   });
 
   describe('clearAll', () => {
@@ -1606,6 +1650,53 @@ describe('Task Router Integration', () => {
 
       const all = await wsCaller.list({});
       expect(all.total).toBe(3);
+    });
+
+    it('should narrow the grouped board to the same slice as the list', async () => {
+      otherUserId = await createTestUser(serverDB);
+      const workspaceId = 'task-group-scope-workspace';
+      const { workspaces, workspaceMembers } = await import('@/database/schemas');
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Task Group Scope Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'owner', userId, workspaceId },
+        { role: 'member', userId: otherUserId!, workspaceId },
+      ]);
+      const wsCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
+      const wsOtherCaller = taskRouter.createCaller({
+        ...createTestContext(otherUserId),
+        workspaceId,
+      });
+
+      const mineForOther = await wsCaller.create({
+        assigneeUserId: otherUserId,
+        instruction: 'Mine for other',
+        name: 'Mine for other',
+      });
+      const othersForMe = await wsOtherCaller.create({
+        assigneeUserId: userId,
+        instruction: 'Others for me',
+        name: 'Others for me',
+      });
+      await wsOtherCaller.create({ instruction: 'Others unassigned', name: 'Others unassigned' });
+
+      const groups = () => ({ groups: [{ key: 'backlog', statuses: ['backlog'] }] });
+      const idsIn = (result: { data: Array<{ tasks: Array<{ id: string }> }> }) =>
+        result.data.flatMap((group) => group.tasks.map((task) => task.id));
+
+      // The board is the same rows as the list, only grouped — a scope the
+      // board ignored would quietly widen "My tasks" on the view switch.
+      expect(idsIn(await wsCaller.groupList({ ...groups(), scope: 'assigned' }))).toEqual([
+        othersForMe.data.id,
+      ]);
+      expect(idsIn(await wsCaller.groupList({ ...groups(), scope: 'created' }))).toEqual([
+        mineForOther.data.id,
+      ]);
+      expect(idsIn(await wsCaller.groupList(groups()))).toHaveLength(3);
     });
   });
 

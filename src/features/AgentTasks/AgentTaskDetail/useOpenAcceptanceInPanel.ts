@@ -10,7 +10,7 @@ import { useGlobalStore } from '@/store/global';
  * Deliberately not a route change: the standalone `/acceptance/:id` page is a
  * public, workspace-less route, and navigating there from a workspace task
  * drops the slug from the URL so `useWorkspaceUrlSync` flips the whole app
- * back to the personal scope (LOBE-13898).
+ * back to the personal scope.
  */
 export const useOpenAcceptanceInPanel = () => {
   const openAcceptance = useChatStore((state) => state.openAcceptance);

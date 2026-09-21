@@ -12,6 +12,7 @@ import RunningGlyph from '@/features/Home/components/RunningGlyph';
 import { shinyTextStyles } from '@/styles';
 
 import type { GoalGraphNodeKind } from '../../Experiments/model';
+import AssigneeProfileAvatar from '../AssigneeProfileAvatar';
 import { coordinatorNodeTitleKey } from '../coordinatorCopy';
 import type { GoalNodeView } from '../goalGraphViewModel';
 import { KIND_COLOR, KIND_ICON } from '../shared';
@@ -317,14 +318,11 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
                 <span className={styles.human}>@</span>
               </Tooltip>
             )}
-            {/* Top-right corner: this Task carries its own verifier. Icon only —
-                the word added nothing the hover hint doesn't say better. */}
-            {isTask && node.taskId && (
-              <Tooltip title={t('goalProcess.node.verifierTooltip')}>
-                <span style={{ display: 'inline-flex', marginInlineStart: 'auto' }}>
-                  <Icon color={cssVar.colorTextTertiary} icon={ShieldCheck} size={13} />
-                </span>
-              </Tooltip>
+            {/* Top-right corner: who is doing this Task, with their profile on hover. */}
+            {isTask && view.assigneeAgentId && (
+              <span style={{ display: 'inline-flex', marginInlineStart: 'auto' }}>
+                <AssigneeProfileAvatar agentId={view.assigneeAgentId} size={16} />
+              </span>
             )}
           </div>
         )}
@@ -347,6 +345,15 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
         )}
         {isTask && (
           <div className={styles.metrics}>
+            {/* This Task carries its own verifier. Icon only — the word added
+                nothing the hover hint doesn't say better. */}
+            {node.taskId && (
+              <Tooltip title={t('goalProcess.node.verifierTooltip')}>
+                <span className={styles.metric}>
+                  <Icon icon={ShieldCheck} size={13} />
+                </span>
+              </Tooltip>
+            )}
             <Tooltip title={t('goalProcess.node.attemptsTooltip', { count: attempts })}>
               <span className={styles.metric}>
                 <Icon icon={Repeat2} size={13} />

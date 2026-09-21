@@ -21,9 +21,31 @@ import type {
  */
 export const ALL_AGENTS_LIST_KEY = '__all__';
 const PROJECT_LIST_KEY_PREFIX = '__project__:';
+/**
+ * Scope key of the Tasks page's "My tasks" board. Shaped like the project
+ * prefix so one `listAgentId` slot keeps every board scope apart: the SWR key,
+ * the scope-change reset and the refresh helpers all derive from it, and the
+ * `assigned` / `created` sub-views can never serve each other's groups.
+ */
+const MINE_LIST_KEY_PREFIX = '__mine__:';
 
 const projectIdFromListKey = (key?: string) =>
   key?.startsWith(PROJECT_LIST_KEY_PREFIX) ? key.slice(PROJECT_LIST_KEY_PREFIX.length) : undefined;
+
+const isMineListKey = (key?: string) => !!key?.startsWith(MINE_LIST_KEY_PREFIX);
+
+/**
+ * Visibility the grouped query actually runs with. "My tasks" is not offered
+ * the visibility chip and its list view (`useFetchMyTaskList`) sends no
+ * visibility at all, so its board has to ignore the chip too — otherwise a
+ * value left over from the ordinary tab would silently change the row set on
+ * the list ↔ board switch. Shared with the refresh helpers so the key they
+ * rebuild is the key the fetch registered.
+ */
+const effectiveGroupVisibility = (
+  listKey: string | undefined,
+  visibility: TaskListVisibilityFilter,
+): TaskListVisibilityFilter => (isMineListKey(listKey) ? 'all' : visibility);
 
 // Default kanban groups: 5 columns
 // 'scheduled' shares the 'running' column — both represent "automation in
@@ -101,7 +123,7 @@ export class TaskListSliceActionImpl {
     await mutate(
       taskKeys.groupList(
         listAgentId,
-        listVisibility,
+        effectiveGroupVisibility(listAgentId, listVisibility),
         listGroupBy,
         listGroupExcludeStatuses,
         projectIdFromListKey(listAgentId),
@@ -161,7 +183,7 @@ export class TaskListSliceActionImpl {
       mutate(
         taskKeys.groupList(
           listAgentId,
-          listVisibility,
+          effectiveGroupVisibility(listAgentId, listVisibility),
           listGroupBy,
           listGroupExcludeStatuses,
           projectId,
@@ -204,6 +226,11 @@ export class TaskListSliceActionImpl {
       excludeStatuses?: readonly TaskStatus[];
       groupBy?: TaskKanbanGroupBy;
       projectId?: string;
+      /**
+       * "My tasks" board: the caller's own slice of the workspace, narrowed
+       * server-side exactly like `useFetchMyTaskList` narrows its list.
+       */
+      scope?: 'assigned' | 'created';
     } = {},
   ) => {
     const {
@@ -214,12 +241,15 @@ export class TaskListSliceActionImpl {
       excludeStatuses,
       groupBy = 'status',
       projectId,
+      scope,
     } = options;
-    const effectiveKey = projectId
-      ? `${PROJECT_LIST_KEY_PREFIX}${projectId}`
-      : allAgents
-        ? ALL_AGENTS_LIST_KEY
-        : agentId;
+    const effectiveKey = scope
+      ? `${MINE_LIST_KEY_PREFIX}${scope}`
+      : projectId
+        ? `${PROJECT_LIST_KEY_PREFIX}${projectId}`
+        : allAgents
+          ? ALL_AGENTS_LIST_KEY
+          : agentId;
     const excludeStatusesSignature = excludeStatuses?.length
       ? [...excludeStatuses].sort().join(',')
       : undefined;
@@ -268,7 +298,7 @@ export class TaskListSliceActionImpl {
         'useFetchTaskGroupList/syncQueryScope',
       );
     }, [automated, effectiveKey, excludeStatusesSignature, groupBy]);
-    const listVisibility = this.#get().listVisibility;
+    const listVisibility = effectiveGroupVisibility(effectiveKey, this.#get().listVisibility);
 
     const swr = useClientDataSWR(
       enabled && effectiveKey
@@ -283,11 +313,12 @@ export class TaskListSliceActionImpl {
         : null,
       async () => {
         return taskService.groupList({
-          assigneeAgentId: allAgents ? undefined : agentId,
+          assigneeAgentId: allAgents || scope ? undefined : agentId,
           ...(automated === undefined ? {} : { automated }),
           excludeStatuses: excludeStatuses?.length ? [...excludeStatuses] : undefined,
           ...(groupBy === 'status' ? { groups: DEFAULT_KANBAN_GROUPS } : { groupBy }),
           projectId,
+          scope,
           visibility: filterToServerVisibility(listVisibility),
         });
       },
@@ -299,7 +330,7 @@ export class TaskListSliceActionImpl {
             current.groupListQueryAutomated !== automated ||
             current.listGroupBy !== groupBy ||
             current.listGroupExcludeStatuses !== excludeStatusesSignature ||
-            current.listVisibility !== listVisibility
+            effectiveGroupVisibility(effectiveKey, current.listVisibility) !== listVisibility
           ) {
             return;
           }
@@ -451,7 +482,14 @@ export class TaskListSliceActionImpl {
     // not temporarily inherit a previously initialized private/workspace list,
     // nor the Tasks page a list narrowed by Home's automation/status filters,
     // nor the list view a single kanban page posing as the complete list.
+    //
+    // Only an ENABLED query claims the scope. `listAgentId` is one shared slot
+    // and `useFetchTaskGroupList` writes it too, so a disabled list query that
+    // still claimed it would fight the board that is actually fetching: on the
+    // "My tasks" board this page keeps its (disabled) all-agents list mounted,
+    // and the two hooks alternately reset `taskGroups` to [] every render.
     if (
+      enabled &&
       effectiveKey &&
       (listAgentId !== effectiveKey ||
         listQueryVisibility !== listVisibility ||

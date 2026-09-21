@@ -2,9 +2,23 @@ import { ModelEmptyError, ModelRefusalError } from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType, ChatErrorType } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { formatErrorForState } from './formatErrorForState';
+import { formatErrorForState, readErrorBudgetContext } from './formatErrorForState';
 
 describe('formatErrorForState', () => {
+  it('classifies an already-wrapped error using its nested provider message', () => {
+    const error = {
+      body: { error: { message: 'insufficient quota' }, provider: 'openai' },
+      type: AgentRuntimeErrorType.ProviderBizError,
+    };
+    const result = formatErrorForState(error);
+    expect(result).toMatchObject({
+      attribution: 'user',
+      body: error.body,
+      type: AgentRuntimeErrorType.InsufficientQuota,
+    });
+    expect(formatErrorForState(result)).toEqual(result);
+  });
+
   describe('input normalization', () => {
     it('handles ChatCompletionErrorPayload — extracts errorType and message', () => {
       const result = formatErrorForState({
@@ -432,5 +446,63 @@ describe('formatErrorForState', () => {
       expect(result.message).toBe('plain string failure');
       expect(result.body).toEqual({ message: 'plain string failure' });
     });
+  });
+});
+
+// The cost-admission gate attaches `budget` to the thrown payload, and
+// `formatErrorForState` copies it onto `body` verbatim — `body` is `any`, so
+// reading it back has to narrow rather than cast.
+describe('readErrorBudgetContext', () => {
+  it('reads the budget context an admission gate attached', () => {
+    const formatted = formatErrorForState({
+      budget: {
+        availableCredits: 7_242_747,
+        budgetTypeAtError: 'workspace_member',
+        requiredCredits: 197_391,
+        shortfallCredits: 0,
+      },
+      error: { message: 'Workspace budget exceeded' },
+      errorType: ChatErrorType.InsufficientBudgetForModel,
+      provider: 'lobehub',
+    });
+
+    expect(readErrorBudgetContext(formatted)).toEqual({
+      availableCredits: 7_242_747,
+      budgetTypeAtError: 'workspace_member',
+      requiredCredits: 197_391,
+      shortfallCredits: 0,
+    });
+  });
+
+  it('drops fields of the wrong shape instead of forwarding them to a renderer', () => {
+    const formatted = formatErrorForState({
+      budget: {
+        availableCredits: '7242747',
+        budgetTypeAtError: 'workspace',
+        requiredCredits: Number.NaN,
+      },
+      error: { message: 'Workspace budget exceeded' },
+      errorType: ChatErrorType.InsufficientBudgetForModel,
+    });
+
+    expect(readErrorBudgetContext(formatted)).toEqual({
+      availableCredits: undefined,
+      budgetTypeAtError: 'workspace',
+      requiredCredits: undefined,
+      shortfallCredits: undefined,
+    });
+  });
+
+  it('returns undefined when there is no usable budget context', () => {
+    expect(readErrorBudgetContext(undefined)).toBeUndefined();
+    expect(readErrorBudgetContext(formatErrorForState(new Error('boom')))).toBeUndefined();
+    expect(
+      readErrorBudgetContext(
+        formatErrorForState({
+          budget: { pricingBasis: 'unknown' },
+          errorType: ChatErrorType.InsufficientBudgetForModel,
+        }),
+      ),
+    ).toBeUndefined();
   });
 });

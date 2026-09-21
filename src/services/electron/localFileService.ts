@@ -178,6 +178,19 @@ const fetchLocalFilePreview = async (
   return { contentType, type: 'binary' };
 };
 
+const fetchLocalFileBytes = async (
+  url: string,
+): Promise<{ bytes: Uint8Array; contentType: string } | undefined> => {
+  const response = await fetch(url);
+  if (!response.ok) return;
+
+  return {
+    bytes: new Uint8Array(await response.arrayBuffer()),
+    contentType:
+      normalizeContentType(response.headers.get('content-type')) || 'application/octet-stream',
+  };
+};
+
 class LocalFileService {
   // File Operations
   async listLocalFiles(params: ListLocalFileParams): Promise<ListLocalFilesResult> {
@@ -256,14 +269,25 @@ class LocalFileService {
 
     if (!result.success || !result.url) return;
 
-    const response = await fetch(result.url);
-    if (!response.ok) return;
+    return fetchLocalFileBytes(result.url);
+  }
 
-    return {
-      bytes: new Uint8Array(await response.arrayBuffer()),
-      contentType:
-        normalizeContentType(response.headers.get('content-type')) || 'application/octet-stream',
-    };
+  async readExternalAssetForPublish(params: {
+    path: string;
+    workingDirectory: string;
+  }): Promise<{ bytes: Uint8Array; contentType: string } | undefined> {
+    const result = await ensureElectronIpc().localSystem.getExternalAssetForPublishUrl(params);
+    if (!result.success || !result.url) return;
+
+    return fetchLocalFileBytes(result.url);
+  }
+
+  async copyAssetForPublish(params: {
+    from: string;
+    to: string;
+    workingDirectory: string;
+  }): Promise<{ error?: string; success: boolean }> {
+    return ensureElectronIpc().localSystem.copyAssetForPublish(params);
   }
 
   async prepareSkillDirectory(

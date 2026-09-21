@@ -2,7 +2,7 @@
 
 Use this reference when changing Elasticsearch field definitions or operating index generations.
 For initial provider cutover and complete environment setup, use
-`docs/self-hosting/advanced/elasticsearch-migration.mdx` from the OSS repository root.
+`docs/self-hosting/advanced/neon-pg-search-migration.mdx` from the OSS repository root.
 
 ## Choose the operation
 
@@ -20,6 +20,10 @@ For initial provider cutover and complete environment setup, use
   not scanned again. Other entrypoints retain explicit operator control.
 - Rebuild into a new generation for field type/analyzer changes, removals, or when rollback matters.
   Only entities whose declared version changes need a new generation.
+- Rebuild the current schema generation after a projection, eligibility, or capture behavior change
+  with `--apply --rebuild-current --entity=<entity> --yes`. This reads PostgreSQL through the current
+  document builder into `<alias>-v<n>-r<runId>` while sync dual-writes all open generations. It does
+  not bump `schemaVersion`; do not use it for a physical mapping change.
 - Before removing or renaming a field, retain its Zod definition, builder output and old property
   in `FTS_SEARCH_RETAINED_SOURCE_PROPERTIES` until every index needing it is closed. New index writes
   omit retained source-only fields. Sync, apply and promotion reject incompatible open targets;
@@ -42,6 +46,23 @@ For explicit operator control, use `bun run fts-search:reindex -- --apply --enti
 target entity and confirmation. See `scripts/elasticsearchReindex/commandOptions.ts` for supported
 combinations and `runtime/generationService.ts` for the operation gates.
 
+For a current-version rebuild, deploy the code that recognizes run-suffixed generations to every
+application and sync worker first. Then run:
+
+```bash
+bun run fts-search:reindex -- --apply --rebuild-current --entity=$ENTITY --yes
+# If interrupted, reuse the run ID printed above:
+bun run fts-search:reindex -- --apply --rebuild-current --run-id=$RUN_ID --entity=$ENTITY --yes
+# After backfill completes and the entity Outbox is idle:
+bun run fts-search:reindex -- --promote --entity=$ENTITY --generation=$INDEX --yes
+```
+
+The rebuild starts only from `in_sync` with an identical live mapping. A second unfinished
+same-version candidate blocks creation; resume its checkpoint instead of allocating another. Keep
+the old generation open through the observation window for alias rollback. Promotion stamps the old
+generation with the replacing run ID before moving the alias; only that relationship makes a detached
+same-version generation eligible for ordinary `--retire` and later `--purge`.
+
 - Configure the intended `DATABASE_URL`, `ES_INDEX_NAMESPACE`, `ES_URL`, and endpoint authentication
   (`ES_API_KEY` for authenticated endpoints; the explicit insecure-HTTP opt-in for an appropriate
   local target). Preserve a durable `ES_REINDEX_STATE_DIR` through every step. In containers, mount
@@ -56,10 +77,10 @@ combinations and `runtime/generationService.ts` for the operation gates.
 - Rollback is an optional recovery branch: select a retained, open older generation first, then
   redeploy matching older code. Older sync code rejects a live generation newer than it declares.
   Unlike forward promotion, rollback may accept an older stamped generation without its checkpoint.
-- Retire only while the declared generation is serving and rollback is no longer needed. `--retire`
-  only closes eligible old indexes. Explicit `--purge` installs and verifies an exact-index template
-  with `allow_auto_create: false` before deletion, requiring `manage_index_templates`. Keep these
-  protection templates; conflicts fail closed. An empty Outbox is not a fence against paused workers.
+- Retire or purge only while the declared generation is serving and rollback is no longer needed.
+  `--purge` protects each eligible open or closed index with an exact `allow_auto_create: false`
+  template before direct deletion. `--retire` is optional and only works where `_close` is supported;
+  skip it on Elastic Cloud Serverless. Keep protection templates; conflicts fail closed.
 - Mutating commands acquire a non-expiring lock in `<namespace>-fts-search-control`. Status reads
   `migrationLock` without acquiring one. Failed/interrupted commands may retain the lock; stop the
   old process and resolve uncertain requests before `--release-lock=<owner> --yes`. Never use timeout
@@ -75,14 +96,16 @@ combinations and `runtime/generationService.ts` for the operation gates.
 The completed-run behavior below assumes the generation still covers the same entities. Adding an
 entity to an existing generation reopens its checkpoint for that entity's backfill.
 
-| Situation                                       | Actual behavior and operator action                                                                                                                 |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Same namespace/version, completed checkpoint    | Backfill returns without scanning or bulk-writing again. Preparation/status work can still run.                                                     |
-| Same checkpoint, incomplete run                 | Reuses run ID, skips completed entities, and continues after saved cursors. An uncheckpointed batch may be replayed.                                |
-| Missing checkpoint, existing indexes            | A new run can be rejected by `_meta.reindex_run_id`; restore the matching checkpoint. This is not a safe way to restart or adopt an existing index. |
-| New empty target                                | Only this initial installation uses `--apply --fresh-run --yes`. Do not use it to resume or override a conflict.                                    |
-| Two workers, same checkpoint directory          | The Elasticsearch namespace lock rejects the second migration owner.                                                                                |
-| Two workers, different directories, same target | The same namespace lock still rejects the second owner, including different source databases targeting that ES namespace.                           |
+| Situation                                       | Actual behavior and operator action                                                                                                                               |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Same namespace/version, completed checkpoint    | Backfill returns without scanning or bulk-writing again. Preparation/status work can still run.                                                                   |
+| Same checkpoint, incomplete run                 | Reuses run ID, skips completed entities, and continues after saved cursors. An uncheckpointed batch may be replayed.                                              |
+| Current-version rebuild interrupted             | Resume with both `--rebuild-current` and the printed `--run-id`; omitting it requests a distinct physical generation and fails if an unfinished candidate exists. |
+| Current-version rebuild promoted                | The alias and `_meta.schema_version` remain stable; only the physical name gains `-r<runId>`. Select rollback and promotion targets by exact generation.          |
+| Missing checkpoint, existing indexes            | A new run can be rejected by `_meta.reindex_run_id`; restore the matching checkpoint. This is not a safe way to restart or adopt an existing index.               |
+| New empty target                                | Only this initial installation uses `--apply --fresh-run --yes`. Do not use it to resume or override a conflict.                                                  |
+| Two workers, same checkpoint directory          | The Elasticsearch namespace lock rejects the second migration owner.                                                                                              |
+| Two workers, different directories, same target | The same namespace lock still rejects the second owner, including different source databases targeting that ES namespace.                                         |
 
 Repeating `--promote` for a valid already-live target returns `already_live`, without a new Outbox
 idle gate. Repeating `--retire` never advances to deletion; use `--purge` explicitly. If in-place
@@ -96,6 +119,18 @@ indexed. Measure a representative payload and real resource limits; a fast small
 does not establish production duration. Use bounded `--batch-size`, `--bulk-max-bytes`, and concurrency
 options in `scripts/elasticsearchReindex/options.ts`. `--max-batches-per-entity` bounds a rehearsal or pause; exit
 code zero alone does not mean the backfill is complete.
+
+- Never use production to test or tune migration parameters.
+- Exercise migration-script changes through the real workflow in both Docker and Dev PostgreSQL plus
+  Dev Elastic Cloud before production. Give every rehearsal an explicit timeout and the smallest
+  dataset or batch count that proves the behavior; never run a full large-table backfill just to test.
+- Design Elasticsearch scripts for Docker and Elastic Cloud compatibility; verify every API and
+  setting used instead of assuming the two environments support the same capabilities.
+- For large production migrations, consider Vercel Sandbox as an isolated execution environment to
+  improve throughput.
+- Minimize production impact: scope work to selected entities and their source tables. Reserve and
+  fence the base revision only when creating a checkpoint; resume it without another table lock.
+  Never lock unrelated capture tables for a single-entity migration.
 
 For Docker self-hosting, startup migration is a blocking maintenance step, not an image-build step.
 The application and manual migration tool must share the same durable `ES_REINDEX_STATE_DIR`.

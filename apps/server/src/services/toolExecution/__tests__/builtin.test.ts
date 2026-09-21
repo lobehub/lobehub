@@ -19,12 +19,16 @@ vi.mock('../serverRuntimes', () => ({
 }));
 
 vi.mock('@/server/services/composio', () => ({
-  ComposioService: vi.fn().mockImplementation(() => ({})),
+  ComposioService: vi.fn().mockImplementation(function () {
+    return {};
+  }),
 }));
 vi.mock('@/server/services/market', () => ({
-  MarketService: vi.fn().mockImplementation(() => ({
-    executeLobehubSkill: mocks.executeLobehubSkill,
-  })),
+  MarketService: vi.fn().mockImplementation(function () {
+    return {
+      executeLobehubSkill: mocks.executeLobehubSkill,
+    };
+  }),
 }));
 
 // The runtime mock above only exposes `createDocument`, but the manifest is the

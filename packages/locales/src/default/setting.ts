@@ -1,15 +1,32 @@
 export default {
+  'marketSubmission.entry': 'Publish',
+  'marketSubmission.title': 'Publish to Market',
+  'marketSubmission.submit': 'Publish',
+  'marketSubmission.confirm':
+    '“{{name}}” will become a public agent when published to Market. Make sure its profile and prompt contain no private information or secrets.',
+  'marketSubmission.required': 'Add an agent name and prompt before publishing.',
+  'marketSubmission.success':
+    'Submitted. Your agent is under review and will appear in Market after approval.',
+  'marketSubmission.failed': 'Could not submit. Please try again.',
+  'marketSubmission.linkFailed':
+    'Submitted, but could not save the Market link locally ({{identifier}}). Keep this identifier and avoid resubmitting as a new agent.',
+  'marketPublish.status.published': 'Published',
+  'marketPublish.status.unpublished': 'Unpublished',
+  'marketPublish.status.archived': 'Archived',
+  'marketPublish.status.deprecated': 'Deprecated',
   'completionSound.title': 'In-app completion sound',
   'completionSound.enabled': 'Play completion sound',
   'completionSound.desc':
     'Play a chime when a chat finishes while LobeHub is in the foreground. The sound, volume and imports stay on this device and are not synced.',
   'completionSound.sound': 'Sound',
-  'completionSound.default': 'LobeHub chime',
-  'completionSound.import': 'Import sound',
+  'completionSound.builtin.lobehub': 'LobeHub chime',
+  'completionSound.builtin.glassBell': 'Glass bell',
+  'completionSound.builtin.softTone': 'Soft tone',
+  'completionSound.builtin.xylophone': 'Xylophone',
+  'completionSound.import': 'Import sound…',
   'completionSound.importHint':
     'Choose WAV, MP3 or OGG (up to 1 MB), or openpeon.json from an extracted OpenPeon pack. Only task completion sounds are imported.',
   'completionSound.preview': 'Preview',
-  'completionSound.reset': 'Use default',
   'completionSound.volume': 'Volume',
   'completionSound.error':
     'Could not load, save or play the sound. Check the audio file or OpenPeon pack and try again.',
@@ -682,6 +699,8 @@ export default {
   'devices.share.visibilityTag.public': 'Workspace',
   'devices.status.offline': 'Offline',
   'devices.status.online': 'Online',
+  'devices.status.onlineConnections_one': 'Online · {{count}} connection',
+  'devices.status.onlineConnections_other': 'Online · {{count}} connections',
   'devices.title': 'My Devices',
   'devices.visibility.publish': 'Publish to Workspace',
   'devices.visibility.publishConfirmTitle': 'Publish this device to the workspace?',
@@ -1342,7 +1361,7 @@ export default {
   'settingsSearch.tabKeywords.proxy': 'proxy, network, connection, proxy settings',
   'settingsSearch.tabKeywords.referral': 'referral, invite, rewards, bonus',
   'settingsSearch.tabKeywords.serviceModel':
-    'service model, model assignment, topic naming, translation, tts, tts settings, voice, speech, image, image generation, embedding, prompt rewrite, suggestion, search, search model',
+    'service model, model assignment, topic naming, translation, image, image generation, embedding, prompt rewrite, suggestion, search, search model',
   'settingsSearch.tabKeywords.skill': 'skills, plugins, tools',
   'settingsSearch.tabKeywords.stats': 'analytics, statistics, stats',
   'settingsSearch.tabKeywords.storage':
@@ -1864,6 +1883,8 @@ When I am ___, I need ___
   'workspace.billingPage.billing.change.currentPlanWithInterval': 'Current plan',
   'workspace.billingPage.billing.change.immediateChangeSeatReductionHint':
     'Reduce seats separately after this immediate plan change.',
+  'workspace.billingPage.billing.change.minPurchasedSeatsHintWithPending':
+    'This workspace has {{members}} billable members and {{pending}} pending invites, using {{used}} seats — at least {{count}} extra seats are required. Revoke a pending invite to go lower.',
   'workspace.billingPage.billing.change.minPurchasedSeatsHint':
     'This workspace currently has {{members}} billable members and requires at least {{count}} extra seats.',
   'workspace.billingPage.billing.change.preview': '{{seats}} seats · {{interval}} billing preview',
@@ -1875,6 +1896,8 @@ When I am ___, I need ___
     'One-time upgrades require a higher tier or a longer duration.',
   'workspace.billingPage.billing.change.memberLimitReached':
     'This workspace currently has {{count}} billable members. Remove members or change them to {{viewerRole}} before reducing seats further.',
+  'workspace.billingPage.billing.change.seatFloorPending':
+    'This workspace has {{members}} billable members and {{pending}} pending invites, using {{used}} seats. Revoke a pending invite before reducing seats further.',
   'workspace.billingPage.billing.change.seatReductionHint':
     'Reducing seats takes effect on the next billing cycle. The current cycle is not refunded.',
   'workspace.billingPage.billing.change.title': 'Adjust plan',
@@ -1895,6 +1918,8 @@ When I am ___, I need ___
   'workspace.billingPage.billing.upgradePlanModal.increaseSeats': 'Increase seats',
   'workspace.billingPage.billing.upgradePlanModal.purchasedSeatFloorSummary':
     'You already have {{count}} purchased extra seats — this change cannot go below that.',
+  'workspace.billingPage.billing.upgradePlanModal.memberSeatSummaryWithPending':
+    'This workspace has {{members}} billable members and {{pending}} pending invites, using {{used}} seats. At least {{count}} extra seats are required.',
   'workspace.billingPage.billing.upgradePlanModal.memberSeatSummary':
     'This workspace has {{members}} billable members. At least {{count}} extra seats are required.',
   'workspace.billingPage.billing.upgradePlanModal.noChargeToday': 'No charge today',
@@ -2957,6 +2982,12 @@ When I am ___, I need ___
   'workspace.members.invite.freePlanAskOwnerToUpgrade':
     'This Free workspace can’t invite more members. Ask the workspace owner to upgrade to Pro, or invite viewers instead (they don’t take a seat).',
   'workspace.members.invite.upgradePlanCta': 'Upgrade plan',
+  'workspace.members.invite.seatLimitReached':
+    'All seats are in use. Buy more seats to keep inviting, or invite viewers instead (they don’t take a seat).',
+  'workspace.members.invite.seatLimitReachedFreePlan':
+    'All seats on your Free workspace are in use. Upgrade to Pro for more seats, or invite viewers instead (they don’t take a seat).',
+  'workspace.members.invite.seatLimitReachedNoBuy':
+    'All seats are in use. Ask the workspace owner to buy more seats, or invite viewers instead (they don’t take a seat).',
   'workspace.members.invite.roleLabel': 'Role',
   'workspace.members.invite.submit': 'Invite',
   'workspace.members.invite.addAnother': 'Add another',
@@ -2987,6 +3018,12 @@ When I am ___, I need ___
   'workspace.members.pending.revokeFailed': 'Failed to revoke invitation',
   'workspace.members.seatChange.memberJoinBlocked':
     'Current members have reached the scheduled seat limit, so new paid members may not be able to join this workspace',
+  'workspace.members.seatBreakdown':
+    '{{members}} billable members + {{pending}} pending invites = {{used}} of {{capacity}} seats used. Viewers don’t take a seat.',
+  'workspace.members.seatBreakdownNoPending':
+    '{{members}} billable members use {{used}} of {{capacity}} seats. Viewers don’t take a seat.',
+  'workspace.members.seatPending_one': '{{count}} invite pending',
+  'workspace.members.seatPending_other': '{{count}} invites pending',
   'workspace.members.seatUsage_one': '{{used}} / {{capacity}} seat',
   'workspace.members.seatUsage_other': '{{used}} / {{capacity}} seats',
   'workspace.members.subtitle': 'Manage workspace members and invitations',

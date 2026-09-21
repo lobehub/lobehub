@@ -15,7 +15,7 @@ describe('buildGoalManagerPrompt', () => {
         requirement,
         token: 'test-token',
       });
-      expect(GOAL_MANAGER_PROMPT_VERSION).toBe('v3');
+      expect(GOAL_MANAGER_PROMPT_VERSION).toBe('v5');
       expect(prompt).toContain(`Requirement: ${requirement}`);
       expect(prompt).toContain('Use the language of the Goal requirement');
       expect(prompt).toContain(
@@ -29,4 +29,47 @@ describe('buildGoalManagerPrompt', () => {
       );
     },
   );
+
+  /**
+   * Regression: a takeover turn has to know what it is taking over. Without the
+   * problem the coordinator hands over, the main Agent reads an ordinary planning
+   * turn and re-plans work that is already in flight.
+   */
+  it('states the handed-over problem and the answers that move the goal', () => {
+    const prompt = buildGoalManagerPrompt({
+      feedback: '[]',
+      goalId: 'goal_1',
+      problem: 'Task attempt budget was exhausted',
+      requirement: 'Find the training scheme closest to my rejections',
+      token: 't',
+    });
+    expect(prompt).toContain('Task attempt budget was exhausted');
+    expect(prompt).toContain('this Goal stops on a person');
+    expect(prompt).toContain('escalate with the specific question');
+  });
+
+  /**
+   * Regression: without dependsOn every planned task hung directly off the
+   * problem node, so a four-round Goal rendered as one flat row.
+   */
+  it('asks each planned task to declare what it builds on', () => {
+    const prompt = buildGoalManagerPrompt({
+      feedback: '[]',
+      goalId: 'goal_1',
+      requirement: 'Research how agents can manage a database',
+      token: 't',
+    });
+    expect(prompt).toContain('"dependsOn":["task node ID from an earlier round", 0]');
+    expect(prompt).toContain('Never depend on a retired or rejected node');
+  });
+
+  it('says nothing about a takeover on an ordinary planning turn', () => {
+    const prompt = buildGoalManagerPrompt({
+      feedback: '[]',
+      goalId: 'goal_1',
+      requirement: 'Find the training scheme closest to my rejections',
+      token: 't',
+    });
+    expect(prompt).not.toContain('taking over a problem');
+  });
 });

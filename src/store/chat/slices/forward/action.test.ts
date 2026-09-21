@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { agentService } from '@/services/agent';
 import { messageService } from '@/services/message';
+import { topicService } from '@/services/topic';
 import { useAgentStore } from '@/store/agent';
 
 import { ChatForwardActionImpl } from './action';
@@ -16,10 +17,80 @@ describe('ChatForwardAction', () => {
     vi.spyOn(agentService, 'getAgentConfigById').mockImplementation(
       async (id) => ({ id }) as never,
     );
+    vi.spyOn(messageService, 'getMessages').mockResolvedValue([]);
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('does not start a target when the dispatcher already owns the source', async () => {
+    vi.spyOn(topicService, 'cancelRateLimitContinuation').mockRejectedValue(new Error('claimed'));
+    const sendMessage = vi.fn();
+    const action = new ChatForwardActionImpl(vi.fn() as never, () => ({ sendMessage }) as never);
+
+    await expect(
+      action.forwardTopic({
+        cancelSourceContinuation: true,
+        header: 'Forwarded',
+        roleLabel: (role) => role,
+        sourceAgentId: 'source-agent',
+        targets: [{ id: 'target-agent' }],
+        topicId: 'source-topic',
+      }),
+    ).rejects.toThrow('claimed');
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])(
+    'keeps the source paused after an ambiguous send (%s)',
+    async (accepted) => {
+      const receipt = { metadata: { scheduledRun: null } };
+      const cancel = vi
+        .spyOn(topicService, 'cancelRateLimitContinuation')
+        .mockResolvedValue(receipt);
+      const sendMessage = vi.fn().mockImplementation(async ({ onTopicCreated }) => {
+        expect(cancel).toHaveBeenCalledWith('source-topic');
+        if (accepted) await onTopicCreated('target-topic');
+        throw new Error('execution failed');
+      });
+      const action = new ChatForwardActionImpl(
+        vi.fn() as never,
+        () =>
+          ({
+            internal_dispatchTopic: vi.fn(),
+            sendMessage,
+          }) as never,
+      );
+
+      const result = await action.forwardTopic({
+        cancelSourceContinuation: true,
+        header: 'Forwarded',
+        roleLabel: (role) => role,
+        sourceAgentId: 'source-agent',
+        targets: [{ id: 'target-agent' }],
+        topicId: 'source-topic',
+      });
+      expect(result.sourceSchedulePaused).toBe(!accepted);
+    },
+  );
+
+  it('leaves the source schedule alone when context preparation fails', async () => {
+    vi.mocked(messageService.getMessages).mockRejectedValue(new Error('history unavailable'));
+    const cancel = vi.spyOn(topicService, 'cancelRateLimitContinuation');
+    const sendMessage = vi.fn();
+    const action = new ChatForwardActionImpl(vi.fn() as never, () => ({ sendMessage }) as never);
+    const result = await action.forwardTopic({
+      cancelSourceContinuation: true,
+      header: 'Forwarded',
+      roleLabel: (role) => role,
+      sourceAgentId: 'source',
+      targets: [{ id: 'target' }],
+      topicId: 'source-topic',
+    });
+    expect(result.failed).toHaveLength(1);
+    expect(cancel).not.toHaveBeenCalled();
+    expect(sendMessage).not.toHaveBeenCalled();
   });
 
   it('forwards only user and assistant text into isolated topics', async () => {
@@ -90,16 +161,65 @@ describe('ChatForwardAction', () => {
     expect(result.failed[0].agentId).toBe('missing-agent');
   });
 
-  it('loads topic messages before forwarding them', async () => {
-    vi.spyOn(messageService, 'getMessages').mockResolvedValue([message('user', 'from topic')]);
-    const sendMessage = vi.fn().mockResolvedValue({ createdTopicId: 'new-topic' });
+  it('includes transcript fallback for a heterogeneous target without LobeHub CLI access', async () => {
+    vi.mocked(messageService.getMessages).mockResolvedValueOnce([
+      message('user', 'question'),
+      message('tool', 'private tool output'),
+      message('assistant', 'answer'),
+    ]);
+    vi.mocked(agentService.getAgentConfigById).mockResolvedValueOnce({
+      agencyConfig: { heterogeneousProvider: { type: 'codex' } },
+      id: 'target-agent',
+    } as never);
+    const onTopicCreated = vi.fn();
+    const sendMessage = vi.fn().mockImplementation(async ({ onTopicCreated: notify }) => {
+      notify('new-topic');
+      return { createdTopicId: 'new-topic' };
+    });
     const action = new ChatForwardActionImpl(vi.fn() as never, () => ({ sendMessage }) as never);
 
     const result = await action.forwardTopic({
       header: 'Forwarded topic',
+      note: 'Finish the review',
+      onTopicCreated,
       roleLabel: (role) => role,
       sourceAgentId: 'source-agent',
       targets: [{ id: 'target-agent' }],
+      topicId: 'source-topic',
+    });
+
+    expect(onTopicCreated).toHaveBeenCalledWith({ id: 'target-agent' }, 'new-topic');
+    expect(sendMessage.mock.calls[0][0].message).toContain('lh topic view source-topic -L 500');
+    expect(sendMessage.mock.calls[0][0].message).toContain('Finish the review');
+    expect(sendMessage.mock.calls[0][0].context).toEqual({
+      agentId: 'target-agent',
+      isNew: true,
+      isolatedTopic: true,
+      scope: 'main',
+    });
+    expect(result.succeeded).toEqual([{ agentId: 'target-agent', topicId: 'new-topic' }]);
+    expect(sendMessage.mock.calls[0][0].message).toContain('question');
+    expect(sendMessage.mock.calls[0][0].message).toContain('answer');
+    expect(sendMessage.mock.calls[0][0].message).not.toContain('private tool output');
+  });
+
+  it('keeps transcript context when the target agent cannot use the LobeHub CLI', async () => {
+    vi.mocked(messageService.getMessages).mockResolvedValueOnce([
+      message('user', 'question'),
+      message('assistant', 'answer'),
+    ]);
+    const sendMessage = vi.fn().mockImplementation(async ({ onTopicCreated: notify }) => {
+      notify('new-topic');
+      return { createdTopicId: 'new-topic' };
+    });
+    const action = new ChatForwardActionImpl(vi.fn() as never, () => ({ sendMessage }) as never);
+
+    await action.forwardTopic({
+      header: 'Forwarded topic',
+      note: 'Continue carefully',
+      roleLabel: (role) => role,
+      sourceAgentId: 'source-agent',
+      targets: [{ id: 'plain-agent' }],
       topicId: 'source-topic',
     });
 
@@ -107,6 +227,9 @@ describe('ChatForwardAction', () => {
       agentId: 'source-agent',
       topicId: 'source-topic',
     });
-    expect(result.succeeded).toEqual([{ agentId: 'target-agent', topicId: 'new-topic' }]);
+    expect(sendMessage.mock.calls[0][0].message).toBe(
+      'Forwarded topic\n\n---\n\n**user**\n\nquestion\n\n---\n\n**assistant**\n\nanswer\n\nContinue carefully',
+    );
+    expect(sendMessage.mock.calls[0][0].message).not.toContain('lh topic view');
   });
 });

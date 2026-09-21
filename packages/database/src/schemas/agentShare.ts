@@ -16,6 +16,13 @@ export interface AgentShareConfig {
    * a shared conversation. Defaults to `false`.
    */
   allowReadMemory?: boolean;
+  /**
+   * Total bytes this share's visitor uploads may occupy on the creator's
+   * account (settled files plus in-flight reservations). Mandatory like
+   * `monthlySpendLimit` — normalized to a default, never cleared; `0` turns
+   * visitor attachments off entirely. Enforced by `shareChat.createUploadUrl`.
+   */
+  maxFileStorage?: number;
   /** Maximum number of topics each signed-in visitor can create for this share. */
   maxTopicsPerVisitor?: number;
   /** Maximum number of message turns allowed in each shared topic. */
@@ -65,7 +72,10 @@ export interface AgentShareConfig {
  * is guaranteed present, so enforcement paths never have to re-derive a
  * default (and can never mistake a missing cap for "unlimited").
  */
-export type NormalizedAgentShareConfig = AgentShareConfig & { monthlySpendLimit: number };
+export type NormalizedAgentShareConfig = AgentShareConfig & {
+  maxFileStorage: number;
+  monthlySpendLimit: number;
+};
 
 /**
  * Client-owned config fields accepted by atomic server-side patch updates.

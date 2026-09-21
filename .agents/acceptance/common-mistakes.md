@@ -38,6 +38,7 @@ the next free number of that prefix.
 - **L-E17** Direct-mention routing is verified with a real tool call and the full persisted tree; no owner assistant, `callAgent`, or synthetic target-user row.
 - **L-E19** Markdown evidence: one paragraph per physical line; newline only where it is content.
 - **L-E20** Build fixtures through the same composition the product uses; compare an entity page against a canary-created sibling before publishing it as evidence.
+- **L-E21** Evidence for "A is unaffected by B" must be able to tell A from B: distinct content and the target echoed in the request line.
 - **L-E21** Publish against production even when the subject exists only locally; a local ingest may supplement, never replace.
 
 **Product and interaction contracts**
@@ -62,6 +63,9 @@ the next free number of that prefix.
 - **L-S19** `plan[]` holds only what the user accepts or rejects, each id fulfilled by a case; a clean ingest prints `plan: N item(s)` with nothing after it.
 - **L-S20** Read the managed containers' host ports from `docker ps` and pass `DB_PORT`/`REDIS_PORT` to every `init-dev-env.sh` subcommand; `auth_failed` on migrate is a port mismatch.
 - **L-S21** In a worktree, invoke scripts by absolute path and prove the SPA's identity (Vite pid cwd, changed module from the Vite origin) before trusting any gate or evidence.
+- **L-S22** A per-account cap that a round consumes (artifact deployments) is cleared for the account the surface actually authenticates as, and re-cleared between rounds.
+- **L-S23** A hand-built `node_modules` symlink farm runs unit tests but cannot start the dev server; clone a working checkout's `node_modules` instead of a fresh install, which this lockfile-less repo resolves against a moving registry.
+- **L-S24** Read the dev server's URL from its own log, and treat "ready" as any status but `000` — `/` answers `302` to `/signin` when signed out.
 
 ## Entries
 
@@ -535,3 +539,70 @@ once and require its server call in the log. Before trusting any gate,
 `pwd`/`cd <worktree> &&` and confirm the NAME of the test you added appears in
 the runner output. Distinct from L-S7: that is a stale bundle from the right
 tree; this is a healthy bundle from the wrong tree.
+
+### L-E21 — Evidence that cannot distinguish the two things the case compares
+
+`since 2026-09-10` · `holds-while: a case asserts one artifact is unaffected by an operation on another`
+
+**Trap:** proving `--new` forks a separate site, the round published two sites
+whose pages were byte-identical (`contentHash` equal) and a request line that
+printed only the response, not the URL asked for. The artifact showed the
+expected string, so the case read as a pass — but curling the _new_ site would
+have printed exactly the same bytes. The claim rested on a hand-typed section
+header, not on anything in the output.
+
+**Rule:** when a case asserts "X still serves its own content" or any other
+independence between two objects, make the two distinguishable _before_
+capturing: different content per object, and each request echoing the URL or id
+it targeted. Ask of the artifact: if the wrong target had been requested, would
+this file look different? If not, the case proves nothing.
+
+### L-S22 — A per-account quota the round itself consumes, cleared for the wrong account
+
+`since 2026-09-10` · `holds-while: artifact deployments are capped per plan (Free = 3 active) and the CLI authenticates as a seeded runtime user`
+
+**Trap:** each publish leaves an active deployment, so the third run of a round
+fails with `ARTIFACT_DEPLOYMENT_CAPACITY_LIMIT_REACHED` — which reads as a
+regression in the code under test. The purge then ran against the smoke's
+default `user_artifact_e2e` and reported "active before: 0" while the CLI, which
+authenticates as the seeded runtime user, still held three.
+
+**Rule:** identify the account the surface actually authenticates as (for the CLI,
+the `user_id` on the seeded API key row) and clear the cap for _that_ id before
+and between rounds. A quota error mid-round is an environment fact until the
+account has been checked; do not debug it as product behaviour.
+
+### L-S23 — Substituting a symlink farm for an install in a fresh worktree
+
+`since 2026-09-18` · `holds-while: pnpm-workspace.yaml sets lockfile: false, and Turbopack resolves next/package.json from the workspace root it detects`
+
+**Trap:** a new worktree has no `node_modules`, and a farm of symlinks into a
+working checkout is quick and makes `vitest` and `tsgo` pass — so the tree looks
+ready. The dev server then dies on `Could not find the Next.js package
+(next/package.json)`, every route 500s, and the visible errors point elsewhere
+(`Failed to resolve import "anser"` from a package-level dependency the farm
+never linked). Falling back to `pnpm install` can fail outright: this repo
+commits no lockfile, so a fresh resolve hits whatever the registry holds today
+(seen: `No matching version found for @aws-sdk/token-providers@3.1134.0`).
+
+**Rule:** for anything that boots the app, copy a working checkout's
+`node_modules` — `cp -Rc` (APFS clonefile) takes \~100s and almost no disk for
+6.8 GB. Copy the per-package `node_modules` too (\~100 of them; the root tree
+alone leaves package-level deps unresolved), then symlink any workspace package
+the branch adds into `node_modules/@lobechat/`. The `@lobechat/*` links inside
+are relative and resolve to the worktree's own `packages/`, which is what keeps
+the code under test in the path. A farm is fine for unit tests only.
+
+### L-S24 — Waiting for a readiness code the server never returns
+
+`since 2026-09-18` · `holds-while: the dev script allocates a free port per run and the app redirects unauthenticated root requests`
+
+**Trap:** polling a remembered port (3010) for HTTP `200`. The script allocates a
+port per run and prints it (`🔁 Next server URL: http://localhost:<port>/`, plus
+a separate Vite port in the Debug Proxy line); and the app answers `/` with
+`302` to `/signin` until the surface is authenticated. Both mistakes read as
+"the server never came up" while it has been serving for minutes.
+
+**Rule:** take both URLs from the log, never from memory or a default. Probe with
+PROJECT.md's predicate as written — any code but `000` — and confirm health by
+following the redirect, not by demanding `200` at the root.

@@ -3,8 +3,8 @@
 import { memo, Suspense } from 'react';
 import { useParams } from 'react-router';
 
+import AgentShareSettingsPage from '@/business/client/AgentShareSettingsPage';
 import AgentShareSkeleton from '@/components/Skeleton/AgentShare';
-import AgentShareSettingsPage from '@/features/AgentShareSettings/Page';
 import ResourceConfigAccessGate from '@/features/ResourcePermission/ResourceConfigAccessGate';
 
 const AgentSharePage = memo(() => {

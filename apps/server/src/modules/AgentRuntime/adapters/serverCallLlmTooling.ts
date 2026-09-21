@@ -1,4 +1,4 @@
-import type { AgentState } from '@lobechat/agent-runtime';
+import { type AgentState, selectOperationToolSet } from '@lobechat/agent-runtime';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import {
   buildStepSkillDelta,
@@ -32,7 +32,7 @@ export interface ServerCallLlmTooling {
   activeDeviceId?: string;
   /**
    * The run's resolved execution target (`local`/`device`/`sandbox`/`auto`/
-   * `none`), straight from `state.metadata.executionPlan.target`. Exposed
+   * `none`), straight from `state.plan.execution.target`. Exposed
    * alongside `activeDeviceId` because `'auto'` is the one target where a
    * device can be routed (`activeDeviceId` set) while the cloud sandbox is
    * *also* reachable — see `AgentToolsEngine`'s `agentModeRules` gate for
@@ -57,15 +57,9 @@ export const resolveServerCallLlmTooling = (
   // enabled tools), so any id that reaches it WILL inject local-system.
   // `resolveRunActiveDeviceId` swallows the id whenever the plan/policy
   // forbids devices — the same filter the tool executors apply.
-  const activeDeviceId = resolveRunActiveDeviceId(state.metadata);
-  const executionTarget = (state.metadata?.executionPlan as ExecutionPlan | undefined)?.target;
-  const operationToolSet: OperationToolSet = state.operationToolSet ?? {
-    enabledToolIds: [],
-    executorMap: state.toolExecutorMap ?? {},
-    manifestMap: state.toolManifestMap ?? {},
-    sourceMap: state.toolSourceMap ?? {},
-    tools: state.tools ?? [],
-  };
+  const activeDeviceId = resolveRunActiveDeviceId(state);
+  const executionTarget = (state.plan?.execution as ExecutionPlan | undefined)?.target;
+  const operationToolSet: OperationToolSet = selectOperationToolSet(state);
 
   const stepDelta = buildStepToolDelta({
     activeDeviceId,
@@ -97,12 +91,8 @@ export const resolveServerCallLlmTooling = (
   // Resolve skills via SkillResolver (unified skill injection).
   const skillResolver = new SkillResolver();
   const stepSkillDelta = buildStepSkillDelta();
-  const resolvedSkills = state.metadata?.operationSkillSet
-    ? skillResolver.resolve(
-        state.metadata.operationSkillSet,
-        stepSkillDelta,
-        state.activatedStepSkills ?? [],
-      )
+  const resolvedSkills = state.plan?.skills
+    ? skillResolver.resolve(state.plan?.skills, stepSkillDelta, state.activatedStepSkills ?? [])
     : undefined;
 
   return {

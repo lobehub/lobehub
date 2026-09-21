@@ -123,7 +123,7 @@ runs:
         set -euo pipefail
         if [ "${CLOUD_DESKTOP:-}" = "1" ]; then
           cd ..
-          npm run install-isolated --prefix=./lobehub/apps/desktop
+          npm run install-isolated --prefix=./lobehub/apps/desktop -- --frozen-lockfile
         else
-          npm run install-isolated --prefix=./apps/desktop
+          npm run install-isolated --prefix=./apps/desktop -- --frozen-lockfile
         fi

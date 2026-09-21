@@ -66,7 +66,7 @@ export const createLLMGenerationTracingHook = (
       const tracing = parseTracingOptions(context.options?.tracing as Record<string, unknown>);
       // `trigger` is also read by ModelRuntime itself (timing logs) so it
       // legitimately lives on `metadata`. Honour the explicit `tracing.trigger`
-      // override but fall back to the cross-cutting `metadata.trigger`.
+      // override but fall back to the cross-cutting `origin.trigger`.
       const metadataTrigger = pickString(
         (context.options?.metadata as Record<string, unknown> | undefined)?.trigger,
       );

@@ -10,9 +10,11 @@ import { searchRouter } from './search';
 // Mock removed: XOR payload is no longer used for authentication
 
 vi.mock('@lobechat/web-crawler', () => ({
-  Crawler: vi.fn().mockImplementation(() => ({
-    crawl: vi.fn().mockResolvedValue({ content: 'test content' }),
-  })),
+  Crawler: vi.fn().mockImplementation(function () {
+    return {
+      crawl: vi.fn().mockResolvedValue({ content: 'test content' }),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/search/impls/searxng/client');
@@ -105,9 +107,11 @@ describe('searchRouter', () => {
         ],
       };
 
-      (SearXNGClient as any).mockImplementation(() => ({
-        search: vi.fn().mockResolvedValue(mockSearchResult),
-      }));
+      (SearXNGClient as any).mockImplementation(function () {
+        return {
+          search: vi.fn().mockResolvedValue(mockSearchResult),
+        };
+      });
 
       const caller = searchRouter.createCaller(mockContext as any);
 
@@ -142,9 +146,11 @@ describe('searchRouter', () => {
         ],
       };
 
-      (SearXNGClient as any).mockImplementation(() => ({
-        search: vi.fn().mockResolvedValue(mockSearchResult),
-      }));
+      (SearXNGClient as any).mockImplementation(function () {
+        return {
+          search: vi.fn().mockResolvedValue(mockSearchResult),
+        };
+      });
 
       const caller = searchRouter.createCaller(mockContext as any);
 
@@ -166,9 +172,11 @@ describe('searchRouter', () => {
     });
 
     it('should return error detail when search fails', async () => {
-      (SearXNGClient as any).mockImplementation(() => ({
-        search: vi.fn().mockRejectedValue(new Error('Search failed')),
-      }));
+      (SearXNGClient as any).mockImplementation(function () {
+        return {
+          search: vi.fn().mockRejectedValue(new Error('Search failed')),
+        };
+      });
 
       const caller = searchRouter.createCaller(mockContext as any);
 

@@ -132,12 +132,24 @@ describe('AgentDocumentsService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (AgentDocumentModel as any).mockImplementation(() => mockModel);
-    (AgentModel as any).mockImplementation(() => mockAgentModel);
-    (AgentSkillModel as any).mockImplementation(() => mockSkillModel);
-    (DocumentService as any).mockImplementation(() => mockDocumentService);
-    (SkillResourceService as any).mockImplementation(() => mockSkillResourceService);
-    (TopicDocumentModel as any).mockImplementation(() => mockTopicDocumentModel);
+    (AgentDocumentModel as any).mockImplementation(function () {
+      return mockModel;
+    });
+    (AgentModel as any).mockImplementation(function () {
+      return mockAgentModel;
+    });
+    (AgentSkillModel as any).mockImplementation(function () {
+      return mockSkillModel;
+    });
+    (DocumentService as any).mockImplementation(function () {
+      return mockDocumentService;
+    });
+    (SkillResourceService as any).mockImplementation(function () {
+      return mockSkillResourceService;
+    });
+    (TopicDocumentModel as any).mockImplementation(function () {
+      return mockTopicDocumentModel;
+    });
     vi.mocked(buildDocumentFilename).mockImplementation((title: string) => title);
     vi.mocked(extractMarkdownH1Title).mockImplementation((content: string) => ({ content }));
   });

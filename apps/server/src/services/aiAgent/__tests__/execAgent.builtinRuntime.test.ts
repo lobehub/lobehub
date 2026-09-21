@@ -48,33 +48,41 @@ vi.mock('@/libs/trusted-client', () => ({
 }));
 
 vi.mock('@/database/models/message', () => ({
-  MessageModel: vi.fn().mockImplementation(() => ({
-    create: mockMessageCreate,
-    getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
-    getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
-    query: mockMessageQuery,
-    update: vi.fn().mockResolvedValue({}),
-  })),
+  MessageModel: vi.fn().mockImplementation(function () {
+    return {
+      create: mockMessageCreate,
+      getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
+      getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
+      query: mockMessageQuery,
+      update: vi.fn().mockResolvedValue({}),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/aiModel', () => ({
-  AiModelModel: vi.fn().mockImplementation(() => ({
-    findByIdAndProvider: mockGetModelMetadata,
-  })),
+  AiModelModel: vi.fn().mockImplementation(function () {
+    return {
+      findByIdAndProvider: mockGetModelMetadata,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/agent', () => ({
-  AgentModel: vi.fn().mockImplementation(() => ({
-    getAgentConfig: vi.fn(),
-    getBuiltinAgent: mockGetBuiltinAgent,
-    queryAgents: vi.fn().mockResolvedValue([]),
-  })),
+  AgentModel: vi.fn().mockImplementation(function () {
+    return {
+      getAgentConfig: vi.fn(),
+      getBuiltinAgent: mockGetBuiltinAgent,
+      queryAgents: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/agent', () => ({
-  AgentService: vi.fn().mockImplementation(() => ({
-    getAgentConfig: mockGetAgentConfig,
-  })),
+  AgentService: vi.fn().mockImplementation(function () {
+    return {
+      getAgentConfig: mockGetAgentConfig,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/agentSignal/featureGate', () => ({
@@ -96,41 +104,51 @@ vi.mock('@/server/services/agentSignal', () => ({
 }));
 
 vi.mock('@/database/models/plugin', () => ({
-  PluginModel: vi.fn().mockImplementation(() => ({
-    query: vi.fn().mockResolvedValue([]),
-  })),
+  PluginModel: vi.fn().mockImplementation(function () {
+    return {
+      query: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/connector', () => ({
-  ConnectorModel: vi.fn().mockImplementation(() => ({
-    queryByIdentifiers: vi.fn().mockResolvedValue([]),
-    resolveByIdentifiers: vi.fn().mockResolvedValue([]),
-  })),
+  ConnectorModel: vi.fn().mockImplementation(function () {
+    return {
+      queryByIdentifiers: vi.fn().mockResolvedValue([]),
+      resolveByIdentifiers: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/connectorTool', () => ({
-  ConnectorToolModel: vi.fn().mockImplementation(() => ({
-    queryByConnector: vi.fn().mockResolvedValue([]),
-    queryByConnectorIds: vi.fn().mockResolvedValue([]),
-    queryAllByConnectorIds: vi.fn().mockResolvedValue([]),
-  })),
+  ConnectorToolModel: vi.fn().mockImplementation(function () {
+    return {
+      queryByConnector: vi.fn().mockResolvedValue([]),
+      queryByConnectorIds: vi.fn().mockResolvedValue([]),
+      queryAllByConnectorIds: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn().mockImplementation(() => ({
-    releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
-    tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
-    create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
-    findById: vi.fn().mockResolvedValue(null),
-  })),
+  TopicModel: vi.fn().mockImplementation(function () {
+    return {
+      releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
+      tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
+      create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
+      findById: vi.fn().mockResolvedValue(null),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/thread', () => ({
-  ThreadModel: vi.fn().mockImplementation(() => ({
-    create: vi.fn(),
-    findById: vi.fn(),
-    update: vi.fn(),
-  })),
+  ThreadModel: vi.fn().mockImplementation(function () {
+    return {
+      create: vi.fn(),
+      findById: vi.fn(),
+      update: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/user', () => ({
@@ -140,39 +158,51 @@ vi.mock('@/database/models/user', () => ({
 }));
 
 vi.mock('@/database/models/task', () => ({
-  TaskModel: vi.fn().mockImplementation(() => ({
-    resolve: mockResolveTask,
-  })),
+  TaskModel: vi.fn().mockImplementation(function () {
+    return {
+      resolve: mockResolveTask,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/agentRuntime', () => ({
-  AgentRuntimeService: vi.fn().mockImplementation(() => ({
-    createOperation: mockCreateOperation,
-  })),
+  AgentRuntimeService: vi.fn().mockImplementation(function () {
+    return {
+      createOperation: mockCreateOperation,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/market', () => ({
-  MarketService: vi.fn().mockImplementation(() => ({
-    getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
-  })),
+  MarketService: vi.fn().mockImplementation(function () {
+    return {
+      getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/composio', () => ({
-  ComposioService: vi.fn().mockImplementation(() => ({
-    getComposioManifests: vi.fn().mockResolvedValue([]),
-  })),
+  ComposioService: vi.fn().mockImplementation(function () {
+    return {
+      getComposioManifests: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({
-    getFullFileUrl: (path: string | null) => Promise.resolve(path || ''),
-    uploadFromUrl: vi.fn(),
-  })),
+  FileService: vi.fn().mockImplementation(function () {
+    return {
+      getFullFileUrl: (path: string | null) => Promise.resolve(path || ''),
+      uploadFromUrl: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('@/server/modules/Mecha', () => ({
   createServerAgentToolsEngine: vi.fn().mockReturnValue({
-    generateToolsDetailed: vi.fn().mockImplementation(() => ({ enabledToolIds: [], tools: [] })),
+    generateToolsDetailed: vi.fn().mockImplementation(function () {
+      return { enabledToolIds: [], tools: [] };
+    }),
     getEnabledPluginManifests: vi.fn().mockReturnValue(new Map()),
   }),
   serverMessagesEngine: vi.fn().mockResolvedValue([{ content: 'test', role: 'user' }]),
@@ -304,7 +334,9 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
 
     it('keeps an upstream runtime agent factory authoritative', () => {
       const upstreamAgent = { runner: vi.fn() };
-      const upstreamFactory = vi.fn(() => upstreamAgent);
+      const upstreamFactory = vi.fn(function () {
+        return upstreamAgent;
+      });
       service = new AiAgentService(mockDb, userId, {
         runtimeOptions: {
           agentFactory: upstreamFactory,
@@ -437,6 +469,12 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     expect(callArgs.agentConfig.systemRole).toBe(customSystemRole);
   });
 
+  // Regular agents get no builtin runtime prompt. They do get the user's reply
+  // language appended — the same rule the client runtime applies, now shared
+  // through `@lobechat/mecha`.
+  const REPLY_LANGUAGE_ONLY =
+    'Preferred reply language: en-US. Use this language unless the user explicitly asks to switch.';
+
   it('should not apply runtime config for non-builtin agents', async () => {
     mockGetAgentConfig.mockResolvedValue({
       chatConfig: {},
@@ -454,8 +492,8 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     });
 
     const callArgs = mockCreateOperation.mock.calls[0][0];
-    // Should remain empty - no runtime config applied
-    expect(callArgs.agentConfig.systemRole).toBe('');
+    // No runtime prompt applied — only the reply-language instruction.
+    expect(callArgs.agentConfig.systemRole).toBe(REPLY_LANGUAGE_ONLY);
   });
 
   it('should not apply runtime config for agents without slug', async () => {
@@ -474,7 +512,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     });
 
     const callArgs = mockCreateOperation.mock.calls[0][0];
-    expect(callArgs.agentConfig.systemRole).toBe('');
+    expect(callArgs.agentConfig.systemRole).toBe(REPLY_LANGUAGE_ONLY);
   });
 
   it('should persist request trigger metadata on the created user message', async () => {

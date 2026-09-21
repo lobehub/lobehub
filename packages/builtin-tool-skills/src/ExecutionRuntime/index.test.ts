@@ -105,7 +105,7 @@ describe('SkillsExecutionRuntime', () => {
 
         const result = await runtime.execScript(args);
 
-        expect(result.content).toBe('Command completed successfully.');
+        expect(result.content).toBe('Command completed successfully.\n\n(no output)');
       });
 
       it('should return success: false when execScript throws', async () => {

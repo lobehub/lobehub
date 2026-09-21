@@ -87,7 +87,11 @@ export const useTaskTemplateCreate = ({
       onCreated(template.id);
       if (createdTask?.identifier) {
         navigate(
-          taskDetailPath(createdTask.identifier, createdTask.assigneeAgentId ?? inboxAgentId),
+          taskDetailPath(
+            createdTask.identifier,
+            createdTask.assigneeAgentId ?? inboxAgentId,
+            createdTask.name,
+          ),
         );
       }
     } catch (error) {

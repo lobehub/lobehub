@@ -10,7 +10,13 @@ import type {
 import { describe, expect, it } from 'vitest';
 
 import { experimentRelations, graphNodeKind, isExperiment } from '../Experiments/model';
-import { buildGoalGraphView, hasReviewableResult, isTroubledTaskNode } from './goalGraphViewModel';
+import {
+  buildGoalGraphView,
+  hasReviewableResult,
+  isRunningNode,
+  isTroubledTaskNode,
+  opensOnResultSurface,
+} from './goalGraphViewModel';
 
 const T0 = new Date('2026-08-01T00:00:00Z');
 const at = (minutes: number) => new Date(T0.getTime() + minutes * 60_000);
@@ -191,6 +197,19 @@ describe('buildGoalGraphView', () => {
     // In flight, not something the reader has to deal with.
     expect(view.frontier[0]).toMatchObject({ kind: 'verifying', rank: 1 });
     expect(view.needsYou).toBe(0);
+  });
+
+  it('carries the assigned agent onto the task view, and nothing for an unassigned one', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        assignees: { w1: 'agt_exec' },
+        nodes: [node('w1', { taskId: 'task-1' }), node('w2')],
+      }),
+      NOW,
+    );
+
+    expect(view.byId.w1.assigneeAgentId).toBe('agt_exec');
+    expect(view.byId.w2).not.toHaveProperty('assigneeAgentId');
   });
 
   it('never calls a node lost while its own acceptance says it is being judged', () => {
@@ -570,6 +589,40 @@ describe('isTroubledTaskNode', () => {
   });
 });
 
+describe('isRunningNode', () => {
+  it('reads an active task as running', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        events: [event('w1', 'activated', 110)],
+        nodes: [node('w1', { status: 'active', updatedAt: at(115) })],
+      }),
+      NOW,
+    );
+
+    expect(isRunningNode(view.byId.w1)).toBe(true);
+  });
+
+  // An open question is not work in flight — the card already says it is
+  // unanswered, and a running chip there promises activity nobody is doing.
+  it('never reads a question as running', () => {
+    const view = buildGoalGraphView(
+      snapshot({ nodes: [node('p1', { kind: 'problem', status: 'active', updatedAt: at(115) })] }),
+      NOW,
+    );
+
+    expect(isRunningNode(view.byId.p1)).toBe(false);
+  });
+
+  it('does not read a stale task as running', () => {
+    const view = buildGoalGraphView(
+      snapshot({ nodes: [node('w1', { status: 'active', updatedAt: at(0) })] }),
+      NOW,
+    );
+
+    expect(isRunningNode(view.byId.w1)).toBe(false);
+  });
+});
+
 describe('hasReviewableResult', () => {
   // The graph drill-down routes on this: only a Task with a delivery to read
   // opens the result surface; everything else opens the original Task detail.
@@ -640,6 +693,57 @@ describe('hasReviewableResult', () => {
 
     expect(view.byId.w1.isStale).toBe(true);
     expect(hasReviewableResult(view.byId.w1)).toBe(false);
+  });
+});
+
+describe('opensOnResultSurface', () => {
+  it('opens a healthy running task on the result surface to watch the live run', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        events: [event('w1', 'activated', 110)],
+        nodes: [node('w1', { status: 'active', taskId: 'task-1', updatedAt: at(115) })],
+      }),
+      NOW,
+    );
+
+    expect(opensOnResultSurface(view.byId.w1)).toBe(true);
+  });
+
+  it('opens a settled task on the result surface', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        events: [event('w1', 'activated', 100), event('w1', 'resolved', 110)],
+        nodes: [
+          node('w1', {
+            resolvedAt: at(110),
+            status: 'resolved',
+            taskId: 'task-1',
+            updatedAt: at(110),
+          }),
+        ],
+      }),
+      NOW,
+    );
+
+    expect(opensOnResultSurface(view.byId.w1)).toBe(true);
+  });
+
+  it('keeps undispatched and stale tasks on the original task detail', () => {
+    const proposed = buildGoalGraphView(
+      snapshot({ nodes: [node('w1', { status: 'proposed', taskId: 'task-1' })] }),
+      NOW,
+    );
+    const stale = buildGoalGraphView(
+      snapshot({
+        events: [event('w1', 'activated', 30)],
+        nodes: [node('w1', { status: 'active', taskId: 'task-1', updatedAt: at(0) })],
+      }),
+      NOW,
+    );
+
+    expect(opensOnResultSurface(proposed.byId.w1)).toBe(false);
+    expect(stale.byId.w1.isStale).toBe(true);
+    expect(opensOnResultSurface(stale.byId.w1)).toBe(false);
   });
 });
 

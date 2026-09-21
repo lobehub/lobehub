@@ -70,7 +70,7 @@ interface UploadWithProgressResult {
   url: string;
 }
 
-const normalizeUploadedFileType = async (
+export const normalizeUploadedFileType = async (
   file: File,
 ): Promise<{ detectedMimeType?: string; file: File }> => {
   const { fileTypeFromBlob } = await import('file-type');

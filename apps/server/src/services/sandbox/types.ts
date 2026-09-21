@@ -62,7 +62,7 @@ export interface SandboxProviderFileExportRequest {
 }
 
 export interface SandboxProviderFileExportResult {
-  error?: { message: string; name?: string };
+  error?: SandboxExportFileResult['error'];
   mimeType?: string;
   result?: Record<string, unknown>;
   size?: number;

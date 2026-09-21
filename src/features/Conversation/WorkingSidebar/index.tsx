@@ -23,7 +23,8 @@ import {
   SquareTerminalIcon,
   XIcon,
 } from 'lucide-react';
-import { AnimatePresence, m } from 'motion/react';
+import { AnimatePresence } from 'motion/react';
+import * as m from 'motion/react-m';
 import {
   Activity,
   lazy,
@@ -42,6 +43,10 @@ import { useBusinessWorkingSidebarTabs } from '@/business/client/features/Workin
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { isDesktop } from '@/const/version';
+import {
+  getPullRequestState,
+  PR_STATE_VISUAL,
+} from '@/features/AgentSidebar/Topic/List/Item/metaCardData';
 import { useRepoType } from '@/features/ChatInput/ControlBar/useRepoType';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { getPortalViewWidth } from '@/features/Portal/portalWidth';
@@ -62,7 +67,12 @@ import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors, portalThreadSelectors, topicSelectors } from '@/store/chat/selectors';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
-import { deviceSelectors, useDeviceStore } from '@/store/device';
+import {
+  deviceSelectors,
+  useDeviceStore,
+  useFetchGitBranch,
+  useFetchGitLinkedPR,
+} from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -72,6 +82,7 @@ import Files from './Files';
 import { sidebarWidthBudget } from './fitsBesidePortal';
 import Overview from './Overview';
 import OverviewSlot from './OverviewSlot';
+import PullRequest from './PullRequest';
 import ResourcesSection from './ResourcesSection';
 import Review from './Review';
 import WorkspaceTab from './WorkspaceTab';
@@ -118,11 +129,6 @@ const styles = createStaticStyles(({ css }) => ({
     overflow-y: auto;
     min-height: 0;
   `,
-  overviewHeader: css`
-    flex-shrink: 0;
-    padding-block: 6px;
-    padding-inline: 12px 8px;
-  `,
   overviewPanel: css`
     overflow: hidden;
     display: flex;
@@ -132,7 +138,7 @@ const styles = createStaticStyles(({ css }) => ({
     max-height: calc(100% - 32px);
     margin: 16px;
     border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 20px;
+    border-radius: 16px;
 
     background: ${cssVar.colorBgContainer};
     box-shadow: ${cssVar.boxShadowTertiary};
@@ -148,15 +154,6 @@ const styles = createStaticStyles(({ css }) => ({
     @container agent-chat-layout (min-width: 1200px) {
       padding-block-start: 44px;
     }
-  `,
-  overviewTitle: css`
-    overflow: hidden;
-    flex: 1;
-
-    font-size: 14px;
-    font-weight: 600;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   `,
   tabs: css`
     overflow-anchor: none;
@@ -188,12 +185,7 @@ const REVIEW_TREE_STORAGE_KEY = 'lobechat-review-tree';
 const OPEN_TABS_STORAGE_KEY = 'lobechat-working-sidebar-open-tabs-v1';
 const PINNED_TABS_STORAGE_KEY = 'lobechat-working-sidebar-pinned-tabs-v1';
 const OVERVIEW_PANEL_WIDTH = 340;
-const OVERVIEW_SLOT_TRANSITION = { bounce: 0.1, duration: 0.4, type: 'spring' } as const;
-const OVERVIEW_CARD_TRANSITION = {
-  opacity: { bounce: 0, duration: 0.2, type: 'spring' },
-  scale: { bounce: 0.15, duration: 0.45, type: 'spring' },
-} as const;
-const OVERVIEW_CARD_EXIT_TRANSITION = { bounce: 0, duration: 0.15, type: 'spring' } as const;
+const OVERVIEW_TRANSITION = { duration: 0.25, ease: [0.32, 0.72, 0, 1] } as const;
 const MIN_PANEL_WIDTH = 300;
 const MAX_PANEL_WIDTH = 1200;
 // Two-pane Review (diff list + file-tree rail) is cramped below this.
@@ -259,6 +251,9 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     s.status.workingSidebarTab,
     s.status.workingSidebarTabRequest,
   ]);
+  const overviewExitTransition = showRightPanel
+    ? { ...OVERVIEW_TRANSITION, duration: 0.1 }
+    : OVERVIEW_TRANSITION;
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const workspaceId = useActiveWorkspaceId();
   const [
@@ -341,6 +336,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   const topicWorkingDirectoryConfig = useChatStore(
     (s) => topicSelectors.currentTopicMetadata(s)?.workingDirectoryConfig,
   );
+  const topicDeviceId = useChatStore((s) => topicSelectors.currentTopicMetadata(s)?.boundDeviceId);
   const deviceDirs = useDeviceStore(deviceSelectors.getDeviceWorkingDirs(targetDeviceId));
   const sourceWorkingDirectory = useMemo(() => {
     if (!workingDirectory) return undefined;
@@ -384,6 +380,33 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   // directory is irrelevant to the user, so hide the tab even when one resolves.
   const filesAvailable = !isChatMode && (isLocalExecution || isDeviceMode) && !!workingDirectory;
   const reviewAvailable = (isLocalExecution || isDeviceMode) && !!workingDirectory && !!repoType;
+  const snapshotConfig =
+    (topicDeviceId ? topicDeviceId === targetDeviceId : isLocalExecution) &&
+    getWorkingDirEffectivePath(topicWorkingDirectoryConfig) === workingDirectory
+      ? topicWorkingDirectoryConfig
+      : deviceDirs.find((entry) => getWorkingDirEffectivePath(entry) === workingDirectory);
+  const isGithub =
+    repoType === 'github' || (!repoType && !!snapshotConfig?.git?.github?.pullRequest);
+  const gitPath = filesystemEnvironmentAvailable && isGithub ? workingDirectory : undefined;
+  const { data: branchData } = useFetchGitBranch(remoteDeviceId, gitPath);
+  const { data: linkedPR } = useFetchGitLinkedPR(
+    remoteDeviceId,
+    gitPath,
+    branchData?.branch,
+    isGithub,
+  );
+  const snapshotPR =
+    !branchData || (snapshotConfig?.git?.branch === branchData.branch && !branchData.detached)
+      ? snapshotConfig?.git?.github?.pullRequest
+      : undefined;
+  // A settled empty lookup supersedes the snapshot; failures may keep displaying it.
+  const pullRequest =
+    filesystemEnvironmentAvailable && workingDirectory
+      ? linkedPR?.pullRequestStatus === 'ok'
+        ? linkedPR.pullRequest
+        : (linkedPR?.pullRequest ?? snapshotPR)
+      : undefined;
+  const prAvailable = !!pullRequest;
   const paramsAvailable = !isHetero;
   // The in-app browser pages are renderer-retained Electron webviews — desktop only.
   const browserAvailable = isDesktop;
@@ -430,6 +453,15 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
       ...(reviewAvailable
         ? [{ icon: ClipboardListIcon, key: 'review', label: t('workingPanel.review.title') }]
         : []),
+      ...(pullRequest
+        ? [
+            {
+              icon: PR_STATE_VISUAL[getPullRequestState(pullRequest)].icon,
+              key: 'pr',
+              label: `#${pullRequest.number}`,
+            },
+          ]
+        : []),
       ...(filesAvailable
         ? [{ icon: FilesIcon, key: 'files', label: t('workingPanel.files.title') }]
         : []),
@@ -458,6 +490,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
       filesAvailable,
       isHetero,
       paramsAvailable,
+      pullRequest,
       reviewAvailable,
       t,
     ],
@@ -885,6 +918,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
 
     const workspaceGroup = group('workspace', t('workingPanel.openMenu.workspace'), [
       'review',
+      'pr',
       'files',
       'works',
       'comments',
@@ -939,28 +973,26 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
           <m.div
             animate={{ width: overviewWidth + 32 }}
             className={styles.overviewSlot}
-            exit={{ width: 0 }}
+            exit={{ transition: overviewExitTransition, width: 0 }}
             initial={{ width: 0 }}
-            transition={OVERVIEW_SLOT_TRANSITION}
+            transition={OVERVIEW_TRANSITION}
           >
             <m.div
-              animate={{ opacity: 1, scale: 1 }}
+              animate={{ opacity: 1, x: 0 }}
               className={styles.overviewPanel}
-              exit={{ opacity: 0, scale: 0.8, transition: OVERVIEW_CARD_EXIT_TRANSITION }}
-              initial={{ opacity: 0, scale: 0.8 }}
+              exit={{ opacity: 0, transition: overviewExitTransition, x: 12 }}
+              initial={{ opacity: 0, x: 12 }}
               role={'complementary'}
-              style={{ transformOrigin: 'top right', width: overviewWidth }}
-              transition={OVERVIEW_CARD_TRANSITION}
+              style={{ width: overviewWidth }}
+              transition={OVERVIEW_TRANSITION}
             >
-              <Flexbox horizontal align={'center'} className={styles.overviewHeader} gap={8}>
-                <span className={styles.overviewTitle}>{t('workingPanel.overview.title')}</span>
-              </Flexbox>
               <Flexbox className={styles.overviewBody}>
                 <Overview
                   active
                   agentId={activeAgentId}
                   deviceId={remoteDeviceId}
                   environmentAvailable={filesystemEnvironmentAvailable}
+                  prAvailable={prAvailable}
                   repoType={environmentRepoType}
                   sourcePath={sourceWorkingDirectory}
                   workingDirectory={environmentWorkingDirectory}
@@ -978,7 +1010,6 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     <>
       {overviewPanel}
       <RightPanel
-        stableLayout
         collapseThreshold={320}
         defaultWidth={renderWidth}
         expand={Boolean(showRightPanel) && fits}
@@ -988,8 +1019,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
         width={renderWidth}
         onSizeChange={(size) => {
           if (!size?.width) return;
-          // DraggablePanel emits width as a `"420px"` string on drag-stop; parse it so
-          // the controlled width actually updates (otherwise the panel snaps back).
+          // The size type allows a string on either axis, so narrow before storing.
           const w = typeof size.width === 'string' ? Number.parseInt(size.width) : size.width;
           if (!Number.isFinite(w) || w === storedWidth) return;
           updateSystemStatus({ workingSidebarWidth: w });
@@ -1080,6 +1110,22 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                       onToggleTree={() => setShowReviewTree((v) => !v)}
                     />
                   </Flexbox>
+                )}
+                {pullRequest && workingDirectory && (
+                  <Activity mode={showRightPanel && activeTab === 'pr' ? 'visible' : 'hidden'}>
+                    <Flexbox className={styles.pane}>
+                      <PullRequest
+                        active={!!showRightPanel && activeTab === 'pr'}
+                        deviceId={remoteDeviceId}
+                        key={JSON.stringify([remoteDeviceId, workingDirectory, pullRequest.number])}
+                        number={pullRequest.number}
+                        summary={pullRequest}
+                        url={pullRequest.url}
+                        workingDirectory={workingDirectory}
+                        onOpenTab={openTab}
+                      />
+                    </Flexbox>
+                  </Activity>
                 )}
                 {filesAvailable && (
                   <Activity mode={showRightPanel && activeTab === 'files' ? 'visible' : 'hidden'}>

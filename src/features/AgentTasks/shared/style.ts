@@ -5,8 +5,6 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     &.ant-input {
       resize: none;
 
-      flex: 1;
-
       min-height: auto;
       padding: 0;
 
@@ -55,32 +53,8 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
 
-  subtaskTree: css`
-    .ant-tree-node-content-wrapper {
-      cursor: default;
-
-      overflow: hidden;
-      display: flex;
-      flex: 1;
-      gap: 4px;
-      align-items: center;
-
-      min-width: 0;
-      min-height: 36px;
-
-      color: ${cssVar.colorTextSecondary};
-    }
-
-    .ant-tree-title {
-      overflow: hidden;
-      flex: 1;
-      min-width: 0;
-    }
-
-    .ant-tree-switcher {
-      margin-inline-end: 0;
-      color: ${cssVar.colorTextDescription};
-    }
+  subtaskTreeTitle: css`
+    color: ${cssVar.colorTextSecondary};
   `,
 
   /**

@@ -14,18 +14,24 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: vi.fn().mockResolvedValue({}) }));
 vi.mock('@/database/models/document', () => ({
-  DocumentModel: vi.fn().mockImplementation(() => ({ create: mocks.create })),
+  DocumentModel: vi.fn().mockImplementation(function () {
+    return { create: mocks.create };
+  }),
 }));
 vi.mock('@/database/models/topicDocument', () => ({
-  TopicDocumentModel: vi.fn().mockImplementation(() => ({ associate: mocks.associate })),
+  TopicDocumentModel: vi.fn().mockImplementation(function () {
+    return { associate: mocks.associate };
+  }),
 }));
 vi.mock('@/database/models/agentOperation', () => ({
-  AgentOperationModel: vi
-    .fn()
-    .mockImplementation(() => ({ findOwnOperationById: mocks.findOwnOperationById })),
+  AgentOperationModel: vi.fn().mockImplementation(function () {
+    return { findOwnOperationById: mocks.findOwnOperationById };
+  }),
 }));
 vi.mock('@/database/models/work', () => ({
-  WorkModel: vi.fn().mockImplementation(() => ({ registerDocument: mocks.registerDocument })),
+  WorkModel: vi.fn().mockImplementation(function () {
+    return { registerDocument: mocks.registerDocument };
+  }),
 }));
 vi.mock('@/server/services/notebook', () => ({ NotebookRuntimeService: vi.fn() }));
 

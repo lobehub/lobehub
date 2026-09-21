@@ -8,7 +8,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { useChatStore } from '@/store/chat';
 import type { ForwardTarget } from '@/store/chat/slices/forward/action';
 
-import { useConversationStore } from '../store';
+import { messageStateSelectors, useConversationStore } from '../store';
 
 export type { ForwardTarget } from '@/store/chat/slices/forward/action';
 
@@ -27,10 +27,10 @@ export const useForwardMessages = () => {
 
   // The conversation store is context-scoped (no global getState), so read the
   // selected messages reactively. They're frozen while the picker is open.
-  const selectedMessages = useConversationStore((s) => {
-    const selected = new Set(s.selectedMessageIds);
-    return s.displayMessages.filter((m) => selected.has(m.id));
-  }, isEqual);
+  const selectedMessages = useConversationStore(
+    messageStateSelectors.forwardableSelectedMessages,
+    isEqual,
+  );
 
   return useCallback(
     async (targets: ForwardTarget[], note?: string) => {

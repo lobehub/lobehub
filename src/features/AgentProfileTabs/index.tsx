@@ -4,7 +4,7 @@ import { Segmented } from '@lobehub/ui/base-ui';
 import { type CSSProperties, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAgentShareSupported } from '@/features/AgentShareSettings/useAgentShareSupported';
+import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';

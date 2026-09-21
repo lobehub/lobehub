@@ -23,10 +23,6 @@ const styles = createStaticStyles(({ css }) => ({
     margin-block-start: 8px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
-
-    > [role='presentation'] > [role='presentation'] {
-      gap: 0;
-    }
   `,
   row: css`
     padding-block: 6px;

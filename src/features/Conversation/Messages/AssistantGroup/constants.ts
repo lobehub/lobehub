@@ -68,6 +68,9 @@ export const DURATION_SECONDS_PER_MINUTE = 60;
 /** Duration inputs are in milliseconds; convert to whole seconds for display. */
 export const TIME_MS_PER_SECOND = 1000;
 
+/** Minutes per hour; long turns roll up to "4h 11m" instead of "251m 49s". */
+export const DURATION_MINUTES_PER_HOUR = 60;
+
 // ─── apiName → i18n key for human-readable label (workflow summary & headlines) ─
 
 /** Translation keys for built-in / known tool api names. Unknown api names use title-cased fallback. */

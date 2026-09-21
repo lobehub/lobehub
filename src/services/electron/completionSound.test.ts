@@ -40,6 +40,13 @@ describe('completion sound playback', () => {
     expect(audio.volume).toBe(0.8);
   });
 
+  it('maps each built-in sound to its bundled file', async () => {
+    const { completionSoundService } = await import('./completionSound');
+    getPlayback.mockResolvedValue({ builtin: 'xylophone', play: true, volume: 0.4 });
+    await completionSoundService.play();
+    expect(AudioMock).toHaveBeenCalledWith('/sounds/xylophone.wav');
+  });
+
   it('stays silent when the main process declines playback', async () => {
     const { completionSoundService } = await import('./completionSound');
     getPlayback.mockResolvedValue({ play: false, volume: 1 });

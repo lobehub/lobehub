@@ -5,7 +5,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // serverDatabase middleware calls getServerDB(); stub it (the model mocks
 // ignore the db handle anyway).
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => ({})),
+  getServerDB: vi.fn(function () {
+    return {};
+  }),
 }));
 
 const mockFindById = vi.fn();
@@ -20,15 +22,17 @@ vi.mock('@/database/models/resourceTransferRequest', async (importOriginal) => {
   const actual = await importOriginal<any>();
   return {
     ...actual,
-    ResourceTransferRequestModel: vi.fn(() => ({
-      cancel: mockCancel,
-      decline: mockDecline,
-      findById: mockFindById,
-      findPendingByResource: mockFindPendingByResource,
-      invalidateForResources: mockInvalidate,
-      invalidateRequest: mockInvalidateRequest,
-      listPendingForUser: mockListPendingForUser,
-    })),
+    ResourceTransferRequestModel: vi.fn(function () {
+      return {
+        cancel: mockCancel,
+        decline: mockDecline,
+        findById: mockFindById,
+        findPendingByResource: mockFindPendingByResource,
+        invalidateForResources: mockInvalidate,
+        invalidateRequest: mockInvalidateRequest,
+        listPendingForUser: mockListPendingForUser,
+      };
+    }),
   };
 });
 

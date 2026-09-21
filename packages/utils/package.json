@@ -31,6 +31,7 @@
     "model-bank": "workspace:*",
     "nanoid": "^5.1.16",
     "numeral": "^2.0.6",
+    "partial-json": "^0.1.7",
     "pure-rand": "^7.0.1",
     "remark": "^15.0.1",
     "remark-gfm": "^4.0.1",

@@ -13,11 +13,13 @@ vi.mock('@lobechat/chat-adapter-feishu', async (importOriginal) => ({
   ...(await importOriginal<typeof FeishuAdapterModule>()),
   createLarkAdapter: mockCreateLarkAdapter,
   downloadMediaFromRawMessage: mockDownloadMediaFromRawMessage,
-  LarkApiClient: vi.fn().mockImplementation(() => ({
-    addReaction: mockAddReaction,
-    getTenantAccessToken: mockGetTenantAccessToken,
-    removeReaction: mockRemoveReaction,
-  })),
+  LarkApiClient: vi.fn().mockImplementation(function () {
+    return {
+      addReaction: mockAddReaction,
+      getTenantAccessToken: mockGetTenantAccessToken,
+      removeReaction: mockRemoveReaction,
+    };
+  }),
 }));
 
 // Keep `./reactionTracker` real — the key layout and the read-before-write
@@ -43,10 +45,12 @@ vi.mock('@/server/services/gateway/runtimeStatus', () => ({
 }));
 
 vi.mock('./gateway', () => ({
-  FeishuWSConnection: vi.fn().mockImplementation(() => ({
-    close: vi.fn(),
-    start: vi.fn().mockResolvedValue(undefined),
-  })),
+  FeishuWSConnection: vi.fn().mockImplementation(function () {
+    return {
+      close: vi.fn(),
+      start: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
 }));
 
 const { FeishuClientFactory } = await import('./client');
@@ -76,6 +80,7 @@ describe('FeishuWebhookClient.extractFiles', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockDownloadMediaFromRawMessage.mockReset();
   });
 
   afterEach(() => {
@@ -115,6 +120,7 @@ describe('FeishuWebhookClient.extractFiles', () => {
     expect(mockDownloadMediaFromRawMessage).toHaveBeenCalledWith(
       expect.anything(), // LarkApiClient instance
       raw,
+      expect.objectContaining({ warn: expect.any(Function) }),
     );
     expect(result).toEqual([
       { buffer, mimeType: 'image/jpeg', name: 'image.jpg', size: undefined },
@@ -214,6 +220,86 @@ describe('FeishuWebhookClient.extractFiles', () => {
       { buffer, mimeType: 'image/jpeg', name: 'image.jpg', size: undefined },
     ]);
   });
+
+  it('keeps post images across webhook parse + queue serialization + extractFiles', async () => {
+    const actualAdapter = await vi.importActual<typeof FeishuAdapterModule>(
+      '@lobechat/chat-adapter-feishu',
+    );
+    const { Message } = await import('chat');
+    const processMessage = vi.fn();
+    const adapter = new actualAdapter.LarkAdapter({
+      appId: 'cli_test_app',
+      appSecret: 'sec',
+      platform: 'feishu',
+    });
+    (adapter as any).chat = { processMessage };
+    (adapter as any).logger = { error: vi.fn(), info: vi.fn(), warn: vi.fn() };
+    vi.spyOn(adapter as any, 'resolveSenderName').mockResolvedValue('User');
+
+    const raw = {
+      chat_id: 'oc_test',
+      chat_type: 'group',
+      content: JSON.stringify({
+        content_v2: [
+          [
+            { tag: 'text', text: '请分析' },
+            { tag: 'img', image_key: 'img_first' },
+          ],
+          [{ tag: 'md', text: '补充图：![second](img_second)' }],
+        ],
+      }),
+      create_time: '1700000000000',
+      message_id: 'om_post',
+      message_type: 'post',
+    };
+    const request = new Request('http://localhost/webhook', {
+      body: JSON.stringify({
+        event: {
+          message: raw,
+          sender: { sender_id: { open_id: 'ou_user' }, sender_type: 'user' },
+        },
+        header: { event_type: 'im.message.receive_v1' },
+      }),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    });
+
+    await adapter.handleWebhook(request);
+    const messageFactory = processMessage.mock.calls[0][2];
+    const parsedMessage = await messageFactory();
+    const queuedMessage = Message.fromJSON(parsedMessage.toJSON());
+
+    const downloadResource = vi
+      .fn()
+      .mockResolvedValueOnce(Buffer.from('first'))
+      .mockResolvedValueOnce(Buffer.from('second'));
+    mockDownloadMediaFromRawMessage.mockImplementation(actualAdapter.downloadMediaFromRawMessage);
+    const client = createClient();
+    (client as any)._api = { downloadResource };
+
+    const result = await client.extractFiles!(queuedMessage);
+
+    expect(queuedMessage.text).toBe('请分析[image]\n补充图：[image]');
+    expect(queuedMessage.attachments).toHaveLength(2);
+    expect(downloadResource.mock.calls).toEqual([
+      ['om_post', 'img_first', 'image'],
+      ['om_post', 'img_second', 'image'],
+    ]);
+    expect(result).toEqual([
+      {
+        buffer: Buffer.from('first'),
+        mimeType: 'image/jpeg',
+        name: 'image-1.jpg',
+        size: undefined,
+      },
+      {
+        buffer: Buffer.from('second'),
+        mimeType: 'image/jpeg',
+        name: 'image-2.jpg',
+        size: undefined,
+      },
+    ]);
+  });
 });
 
 describe('Feishu messenger reactions', () => {
@@ -238,14 +324,13 @@ describe('Feishu messenger reactions', () => {
     // factory's constructor implementation — re-establish it here rather than
     // depending on describe ordering.
     const { LarkApiClient } = await import('@lobechat/chat-adapter-feishu');
-    vi.mocked(LarkApiClient).mockImplementation(
-      () =>
-        ({
-          addReaction: mockAddReaction,
-          getTenantAccessToken: mockGetTenantAccessToken,
-          removeReaction: mockRemoveReaction,
-        }) as any,
-    );
+    vi.mocked(LarkApiClient).mockImplementation(function () {
+      return {
+        addReaction: mockAddReaction,
+        getTenantAccessToken: mockGetTenantAccessToken,
+        removeReaction: mockRemoveReaction,
+      } as any;
+    });
   });
 
   it('sends the named emoji_type Feishu accepts, not the bridge unicode', async () => {

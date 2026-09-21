@@ -17,6 +17,7 @@ import { Message, parseMarkdown } from 'chat';
 
 import { LarkApiClient } from './api';
 import { decryptLarkEvent } from './crypto';
+import { flattenLarkMessageContent } from './docLinks';
 import { LarkFormatConverter } from './format-converter';
 import { toFeishuEmojiType } from './reactionEmoji';
 import type {
@@ -28,6 +29,13 @@ import type {
 } from './types';
 
 type WarnFn = (message: string, ...args: unknown[]) => void;
+
+/**
+ * Message types whose body is a media key rather than text. They go through
+ * the attachment pipeline (`extractMediaMetadata` / `downloadMediaFromRawMessage`)
+ * and carry no inline text worth parsing.
+ */
+const MEDIA_MESSAGE_TYPES = new Set(['image', 'file', 'audio', 'media', 'sticker']);
 
 /**
  * Encode a Lark/Feishu thread ID with optional inline chat type.
@@ -113,7 +121,19 @@ export function decodeLarkThreadId(
  */
 export function extractMediaMetadata(raw: LarkRawMessage): Attachment[] {
   const messageType = raw.message_type;
-  if (messageType === 'text' || messageType === 'post') return [];
+  if (messageType === 'text') return [];
+
+  if (messageType === 'post') {
+    return flattenLarkMessageContent(messageType, raw.content).imageKeys.map(
+      (imageKey, index) =>
+        ({
+          fetchMetadata: { imageKey },
+          mimeType: 'image/jpeg',
+          name: `image-${index + 1}.jpg`,
+          type: 'image',
+        }) as Attachment,
+    );
+  }
 
   let content: Record<string, string>;
   try {
@@ -174,7 +194,33 @@ export async function downloadMediaFromRawMessage(
   const warn: WarnFn = logger?.warn?.bind(logger) ?? (() => {});
 
   const messageType = raw.message_type;
-  if (messageType === 'text' || messageType === 'post') return [];
+  if (messageType === 'text') return [];
+
+  if (messageType === 'post') {
+    const { imageKeys } = flattenLarkMessageContent(messageType, raw.content);
+    const attachments: Attachment[] = [];
+
+    for (const [index, imageKey] of imageKeys.entries()) {
+      try {
+        const buffer = await api.downloadResource(raw.message_id, imageKey, 'image');
+        attachments.push({
+          buffer,
+          mimeType: 'image/jpeg',
+          name: `image-${index + 1}.jpg`,
+          type: 'image',
+        } as Attachment);
+      } catch (error) {
+        warn(
+          'Failed to download post image %s for message %s: %s',
+          imageKey,
+          raw.message_id,
+          error,
+        );
+      }
+    }
+
+    return attachments;
+  }
 
   let content: Record<string, string>;
   try {
@@ -395,30 +441,17 @@ export class LarkAdapter implements Adapter<LarkThreadId, LarkRawMessage> {
       this.p2pChatIds.add(message.chat_id);
     }
 
-    // Extract text content (for text messages) or media description
+    // Extract text content or a media marker. `text` is the only body that
+    // is a plain string; rich text (`post`), cards (`interactive`) and shares
+    // are flattened so a document link pasted with an @mention still reaches
+    // the bot instead of being dropped as "empty".
     const messageType = message.message_type;
-    let messageText = '';
-    let hasMedia = false;
-
-    try {
-      const content = JSON.parse(message.content);
-      switch (messageType) {
-        case 'text': {
-          messageText = content.text || '';
-          break;
-        }
-        case 'image':
-        case 'file':
-        case 'audio':
-        case 'media':
-        case 'sticker': {
-          hasMedia = true;
-          break;
-        }
-      }
-    } catch {
-      // malformed content
-    }
+    const hasStandaloneMedia = MEDIA_MESSAGE_TYPES.has(messageType);
+    const flattened = hasStandaloneMedia
+      ? undefined
+      : flattenLarkMessageContent(messageType, message.content);
+    const hasMedia = hasStandaloneMedia || Boolean(flattened?.imageKeys.length);
+    const messageText = flattened?.text ?? '';
 
     if (!messageText.trim() && !hasMedia) {
       return Response.json({ ok: true });
@@ -537,13 +570,9 @@ export class LarkAdapter implements Adapter<LarkThreadId, LarkRawMessage> {
   // ------------------------------------------------------------------
 
   parseMessage(raw: LarkRawMessage): Message<LarkRawMessage> {
-    let text = '';
-    try {
-      const content = JSON.parse(raw.content);
-      text = content.text || '';
-    } catch {
-      // malformed
-    }
+    const text = MEDIA_MESSAGE_TYPES.has(raw.message_type)
+      ? ''
+      : flattenLarkMessageContent(raw.message_type, raw.content).text;
 
     // Strip @mention markers
     const cleanText = text

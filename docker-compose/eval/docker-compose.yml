@@ -1,0 +1,141 @@
+name: ${EVAL_COMPOSE_PROJECT_NAME:-lobehub-eval}
+
+services:
+  postgresql:
+    image: paradedb/paradedb:latest-pg17
+    ports:
+      - '${EVAL_POSTGRES_PORT:-15433}:5432'
+    volumes:
+      - 'postgresql-data:/var/lib/postgresql/data'
+    command: ['postgres', '-c', 'shared_preload_libraries=pg_search']
+    environment:
+      POSTGRES_DB: ${EVAL_POSTGRES_DB:-lobechat}
+      POSTGRES_PASSWORD: ${EVAL_POSTGRES_PASSWORD:-postgres}
+    healthcheck:
+      test:
+        ['CMD-SHELL', 'pg_isready -U postgres -d ${EVAL_POSTGRES_DB:-lobechat}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - eval-network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '${EVAL_REDIS_PORT:-6380}:6379'
+    command: ['redis-server', '--save', '60', '1000', '--appendonly', 'yes']
+    volumes:
+      - 'redis-data:/data'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - eval-network
+
+  rustfs:
+    image: rustfs/rustfs:latest
+    ports:
+      - '${EVAL_RUSTFS_PORT:-9100}:9000'
+      - '${EVAL_RUSTFS_ADMIN_PORT:-9101}:9001'
+    environment:
+      RUSTFS_ACCESS_KEY: ${EVAL_RUSTFS_ACCESS_KEY:-admin}
+      RUSTFS_CONSOLE_ENABLE: 'true'
+      RUSTFS_SECRET_KEY: ${EVAL_RUSTFS_SECRET_KEY:-lobehub-eval-rustfs}
+    volumes:
+      - 'rustfs-data:/data'
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'wget -qO- http://localhost:9000/health >/dev/null 2>&1 || exit 1',
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    command:
+      [
+        '--access-key',
+        '${EVAL_RUSTFS_ACCESS_KEY:-admin}',
+        '--secret-key',
+        '${EVAL_RUSTFS_SECRET_KEY:-lobehub-eval-rustfs}',
+        '/data',
+      ]
+    restart: unless-stopped
+    networks:
+      - eval-network
+
+  rustfs-init:
+    image: rustfs/rc:latest
+    depends_on:
+      rustfs:
+        condition: service_healthy
+    volumes:
+      - './bucket.config.json:/bucket.config.json:ro'
+    entrypoint: /bin/sh
+    command: >-
+      -c 'set -eu;
+      rc alias set rustfs "http://rustfs:9000" "${EVAL_RUSTFS_ACCESS_KEY:-admin}" "${EVAL_RUSTFS_SECRET_KEY:-lobehub-eval-rustfs}";
+      rc mb "rustfs/${EVAL_RUSTFS_BUCKET:-lobe}" --ignore-existing;
+      rc anonymous set-json "/bucket.config.json" "rustfs/${EVAL_RUSTFS_BUCKET:-lobe}"'
+    restart: 'no'
+    networks:
+      - eval-network
+
+  # Host networking lets local QStash call an APP_URL on localhost without a tunnel.
+  # This eval stack targets the same Linux environment used by Harbor task containers.
+  qstash:
+    image: public.ecr.aws/upstash/qstash:2.37.18
+    network_mode: host
+    command:
+      [
+        'qstash',
+        'dev',
+        '-port=${EVAL_QSTASH_PORT:-8080}',
+        '-log-port=${EVAL_QSTASH_LOG_PORT:-8081}',
+      ]
+    restart: unless-stopped
+
+  # The unified image runs both gateways. Ports are intentionally swapped from
+  # its defaults to preserve the existing eval contract: device=8787, agent=8788.
+  gateway:
+    image: ghcr.io/lobehub/lobehub-gateway:0.3.2
+    depends_on:
+      rustfs-init:
+        condition: service_completed_successfully
+    ports:
+      - '${EVAL_DEVICE_GATEWAY_PORT:-8787}:8787'
+      - '${EVAL_AGENT_GATEWAY_PORT:-8788}:8788'
+    environment:
+      AGENT_PORT: 8788
+      DEVICE_PORT: 8787
+      JWKS_PUBLIC_KEY: ${EVAL_JWKS_PUBLIC_KEY:-}
+      LOBE_API_BASE_URL: ${EVAL_LOBE_API_BASE_URL:-http://host.docker.internal:3210}
+      SERVICE_TOKEN: ${EVAL_GATEWAY_SERVICE_TOKEN:-lobehub-eval-gateway-token}
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'wget -qO- http://127.0.0.1:8787/health >/dev/null && wget -qO- http://127.0.0.1:8788/health >/dev/null',
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    networks:
+      - eval-network
+
+volumes:
+  postgresql-data: {}
+  redis-data: {}
+  rustfs-data: {}
+
+networks:
+  eval-network:
+    driver: bridge

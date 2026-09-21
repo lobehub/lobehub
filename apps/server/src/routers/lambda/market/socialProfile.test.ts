@@ -10,18 +10,22 @@ const { mockMarketSDKHeaders } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/libs/trpc/lambda/middleware', () => ({
-  marketSDK: vi.fn((opts: any) =>
-    opts.next({
+  marketSDK: vi.fn(function (opts: any) {
+    return opts.next({
       ctx: {
         ...opts.ctx,
         marketSDK: {
           headers: mockMarketSDKHeaders,
         },
       },
-    }),
-  ),
-  marketUserInfo: vi.fn((opts: any) => opts.next({ ctx: opts.ctx })),
-  serverDatabase: vi.fn((opts: any) => opts.next({ ctx: opts.ctx })),
+    });
+  }),
+  marketUserInfo: vi.fn(function (opts: any) {
+    return opts.next({ ctx: opts.ctx });
+  }),
+  serverDatabase: vi.fn(function (opts: any) {
+    return opts.next({ ctx: opts.ctx });
+  }),
 }));
 
 describe('socialProfileRouter.submitRepo', () => {

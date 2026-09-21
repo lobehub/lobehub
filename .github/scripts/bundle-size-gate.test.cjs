@@ -4,7 +4,13 @@ const os = require('node:os');
 const path = require('node:path');
 const { test } = require('node:test');
 
-const { countJsFiles, measureEntryGraph, stripHash } = require('./bundle-size-gate.cjs');
+const {
+  countJsFiles,
+  diffResolvedDeps,
+  measureEntryGraph,
+  readResolvedDeps,
+  stripHash,
+} = require('./bundle-size-gate.cjs');
 
 const writeDist = (files) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'entry-graph-'));
@@ -95,8 +101,9 @@ const runCheck = ({ baselineGraphCount, baselineJsTotal, currentGraphCount, curr
     path.join(root, 'current.json'),
     '--baseline',
     path.join(root, 'baseline.json'),
+    '--js-chunk-percent',
+    '5',
   ];
-  args.push('--js-chunk-percent', '5');
 
   return spawnSync(process.execPath, args, { encoding: 'utf8' });
 };
@@ -130,4 +137,34 @@ test('reachable graph count increase alone does not fail the gate', () => {
     currentJsTotal: 100,
   });
   assert.equal(result.status, 0);
+});
+
+test('readResolvedDeps turns pnpm virtual store entries into name@version and drops peer suffixes', () => {
+  const store = writeDist({
+    '@scope+pkg@1.2.3_react@19.0.0/x': '',
+    'string_decoder@1.3.0/x': '',
+    'string_decoder@1.1.1_abc/x': '',
+    'lock.yaml': '',
+    'node_modules/x': '',
+  });
+
+  assert.deepEqual(readResolvedDeps(store), [
+    '@scope/pkg@1.2.3',
+    'string_decoder@1.1.1',
+    'string_decoder@1.3.0',
+  ]);
+});
+
+test('diffResolvedDeps reports changed, added and removed package versions only', () => {
+  const drift = diffResolvedDeps(
+    ['a@1.0.0', 'b@1.0.0', 'b@2.0.0', 'gone@1.0.0', 'same@1.0.0'],
+    ['a@1.1.0', 'b@1.0.0', 'new@0.1.0', 'same@1.0.0'],
+  );
+
+  assert.deepEqual(drift, [
+    { after: '1.1.0', before: '1.0.0', name: 'a' },
+    { after: '1.0.0', before: '1.0.0, 2.0.0', name: 'b' },
+    { after: '', before: '1.0.0', name: 'gone' },
+    { after: '0.1.0', before: '', name: 'new' },
+  ]);
 });

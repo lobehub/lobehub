@@ -28,7 +28,10 @@ export class ServerContextBuilder implements ContextBuilder {
 
     return {
       messages: result.processedMessages,
-      modelParameters: result.resolvedExtendParams,
+      modelParameters: {
+        ...result.resolvedExtendParams,
+        ...(typeof result.stream === 'boolean' && { stream: result.stream }),
+      },
       preserveThinking: result.preserveThinkingForPayload,
       replayAssistantReasoning: result.shouldReplayAssistantReasoning,
       resolvedTools: tooling.resolved,

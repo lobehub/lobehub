@@ -3,17 +3,19 @@ import { expect, it, vi } from 'vitest';
 
 import { attachAcceptanceFlowCommands } from './acceptanceFlow';
 
-const { startFlow, outputJson } = vi.hoisted(() => ({
+const { startFlow, deleteFlow, confirm, outputJson } = vi.hoisted(() => ({
   startFlow: vi.fn().mockResolvedValue({ id: 'flow-run' }),
+  deleteFlow: vi.fn().mockResolvedValue({ flowId: 'flow-id', title: 'First attempt' }),
+  confirm: vi.fn().mockResolvedValue(false),
   outputJson: vi.fn(),
 }));
 
 vi.mock('../api/client', () => ({
   getTrpcClient: async () => ({
-    acceptance: { startFlow: { mutate: startFlow } },
+    acceptance: { startFlow: { mutate: startFlow }, deleteFlow: { mutate: deleteFlow } },
   }),
 }));
-vi.mock('../utils/format', () => ({ outputJson }));
+vi.mock('../utils/format', () => ({ confirm, outputJson }));
 
 it('starts the requested flow version without triggering the root CLI version option', async () => {
   const program = new Command().version('0.0.52').exitOverride();
@@ -81,4 +83,28 @@ it('prepares a flow for review through the plan command', async () => {
     sourceRunId: undefined,
     verifyRunId: undefined,
   });
+});
+
+it('asks before deleting a flow and passes the confirmed request through', async () => {
+  const deleteArgs = [
+    'node',
+    'lh',
+    'acceptance',
+    'flow',
+    'delete',
+    'acceptance-id',
+    '--flow',
+    'flow-id',
+  ];
+  const program = new Command().exitOverride();
+  attachAcceptanceFlowCommands(program.command('acceptance'));
+  await program.parseAsync(deleteArgs);
+  expect(confirm).toHaveBeenCalled();
+  expect(deleteFlow).not.toHaveBeenCalled();
+
+  const confirmed = new Command().exitOverride();
+  attachAcceptanceFlowCommands(confirmed.command('acceptance'));
+  await confirmed.parseAsync([...deleteArgs, '--yes']);
+  expect(confirm).toHaveBeenCalledTimes(1);
+  expect(deleteFlow).toHaveBeenCalledWith({ id: 'acceptance-id', flowId: 'flow-id' });
 });

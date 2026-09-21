@@ -27,6 +27,7 @@ const status = (
     matchesDeclared: true,
     reindexRunId: 'run-id',
     state: 'open' as const,
+    supersededByReindexRunId: null,
     version,
   };
   return {

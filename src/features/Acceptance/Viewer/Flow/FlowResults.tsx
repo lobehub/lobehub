@@ -202,23 +202,18 @@ export function FlowResults({
   return (
     <Flexbox className={styles.panel}>
       <Flexbox horizontal align="center" className={styles.header} gap={12} justify="space-between">
-        <Flexbox gap={4}>
-          <Text fontSize={12} type="secondary">
-            {t(attempt ? 'flow.results' : 'flow.viewPlan')}
+        <Flexbox horizontal align="center" gap={10} wrap="wrap">
+          <Text strong fontSize={16}>
+            {node.title}
           </Text>
-          <Flexbox horizontal align="center" gap={10} wrap="wrap">
-            <Text strong fontSize={16}>
-              {node.title}
-            </Text>
-            {attempt && (
-              <Flexbox horizontal align="center" gap={4} style={{ flex: 'none' }}>
-                <Icon color={flowStateColor(attempt.verdict)} icon={ClipboardCheck} size={14} />
-                <Text fontSize={12} style={{ color: flowStateColor(attempt.verdict) }}>
-                  {t(`flow.state.${attempt.verdict}`)}
-                </Text>
-              </Flexbox>
-            )}
-          </Flexbox>
+          {attempt && (
+            <Flexbox horizontal align="center" gap={4} style={{ flex: 'none' }}>
+              <Icon color={flowStateColor(attempt.verdict)} icon={ClipboardCheck} size={14} />
+              <Text fontSize={12} style={{ color: flowStateColor(attempt.verdict) }}>
+                {t(`flow.state.${attempt.verdict}`)}
+              </Text>
+            </Flexbox>
+          )}
         </Flexbox>
         <ActionIcon
           aria-label={t('flow.closeResults')}

@@ -4,6 +4,25 @@ import type { DeviceModel } from '@/database/models/device';
 import { isPathWithinRoot } from '@/server/services/deviceGateway';
 
 /**
+ * In-memory cache of device-scoped skill preview roots, populated by
+ * `listProjectSkills` and consumed by `assertWorkspaceRootApproved` to
+ * authorize read-only file previews without persisting skill paths into
+ * the DB (which would leak into the UI's working-directory list).
+ */
+const deviceSkillRoots = new Map<string, Set<string>>();
+
+export const registerDeviceSkillRoots = (deviceId: string, roots: string[]) => {
+  if (roots.length === 0) return;
+  deviceSkillRoots.set(deviceId, new Set(roots));
+};
+
+const isWithinSkillRoots = (deviceId: string, workingDirectory: string): boolean => {
+  const roots = deviceSkillRoots.get(deviceId);
+  if (!roots) return false;
+  return [...roots].some((root) => isPathWithinRoot(root, workingDirectory));
+};
+
+/**
  * Validate that a client-supplied workspace root is actually one the user has
  * bound to this device.
  *
@@ -36,12 +55,14 @@ export const assertWorkspaceRootApproved = async (
 
   const device = await deviceModel.findByDeviceId(deviceId);
 
-  const approvedRoots = [
-    ...(device?.workingDirs ?? []).map((dir) => dir.path),
-    ...(device?.defaultCwd ? [device.defaultCwd] : []),
-  ].filter((root): root is string => Boolean(root));
+  const approvedRoots = (device?.workingDirs ?? [])
+    .flatMap((dir) => [dir.path, dir.git?.activeWorktree])
+    .concat(device?.defaultCwd ? [device.defaultCwd] : [])
+    .filter((root): root is string => Boolean(root));
 
-  const approved = approvedRoots.some((root) => isPathWithinRoot(root, workingDirectory));
+  const approved =
+    approvedRoots.some((root) => isPathWithinRoot(root, workingDirectory)) ||
+    isWithinSkillRoots(deviceId, workingDirectory);
 
   if (!approved) {
     throw new TRPCError({
@@ -62,15 +83,25 @@ export const assertWorkspaceRootApproved = async (
  * `deviceId` input: a workspace-scoped call against a device hidden from the
  * caller fails closed with the same NOT_FOUND an unknown device produces.
  *
- * Personal deviceIds are never in the hidden set (different hash domain), and
- * transient gateway-only devices (no DB row) are public by definition.
+ * The visible registry row is also the workspace execution authority. A live
+ * Gateway connection without that row can be a stale process that missed an
+ * Unshare RPC, so it must fail exactly like an unknown or private device.
+ *
+ * Use when:
+ * - A workspace-scoped RPC accepts a client-supplied logical device ID
+ *
+ * Expects:
+ * - `deviceModel` is already scoped to the authorized workspace and caller
+ *
+ * Returns:
+ * - Nothing for a visible registered device; otherwise throws `NOT_FOUND`
  */
 export const assertWorkspaceDeviceVisible = async (
   deviceModel: DeviceModel,
   deviceId: string,
 ): Promise<void> => {
-  const hiddenIds = await deviceModel.queryWorkspaceHiddenDeviceIds();
-  if (hiddenIds.includes(deviceId)) {
+  const device = await deviceModel.findWorkspaceDeviceById(deviceId);
+  if (!device) {
     throw new TRPCError({ code: 'NOT_FOUND', message: 'Workspace device not found.' });
   }
 };

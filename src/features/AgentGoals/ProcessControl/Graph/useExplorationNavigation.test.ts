@@ -64,6 +64,28 @@ describe('experiment navigation', () => {
     expect(result.current.path).toEqual([]);
     expect(result.current.collapsed.size).toBe(3);
   });
+  it('keeps the collapsed set identity across re-renders that do not change it', () => {
+    const { result, rerender } = renderHook((props) => useExplorationNavigation('g', props), {
+      initialProps: graph,
+    });
+    const initial = result.current.collapsed;
+    // A graph poll hands over a new snapshot with the same content.
+    rerender({ nodes: [...nodes], edges: [...edges] });
+    expect(result.current.collapsed).toBe(initial);
+
+    act(() => result.current.toggle('a'));
+    expect(result.current.collapsed).not.toBe(initial);
+  });
+  it('keeps an empty collapsed set stable for graphs without experiments', () => {
+    const plain = { nodes: [{ id: 't', kind: 'task' }] as GoalGraphNode[], edges: [] };
+    const { result, rerender } = renderHook((props) => useExplorationNavigation('g', props), {
+      initialProps: plain,
+    });
+    const initial = result.current.collapsed;
+    rerender({ ...plain, nodes: [...plain.nodes] });
+    expect(result.current.collapsed).toBe(initial);
+    expect(initial.size).toBe(0);
+  });
   it('bulk controls act on the current scope without collapsing its ancestor', () => {
     const { result } = renderHook(() => useExplorationNavigation('g', graph));
     act(() => result.current.expandAll(true));

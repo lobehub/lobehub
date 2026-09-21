@@ -12,6 +12,7 @@ import {
   Settings2Icon,
   Share2Icon,
   Trash,
+  UploadCloud,
   UserRound,
   UsersIcon,
 } from 'lucide-react';
@@ -23,10 +24,11 @@ import { useAgentTransferToMemberMenuItem } from '@/business/client/hooks/useAge
 import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
 import { useBusinessAgentImportMenuItem } from '@/business/client/hooks/useBusinessAgentImportMenuItem';
 import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
+import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
+import { useAgentMarketSubmission } from '@/features/AgentMarketSubmission/useAgentMarketSubmission';
 import AgentProfileTabs, { AGENT_PROFILE_TABS_CENTER_STYLE } from '@/features/AgentProfileTabs';
-import { useAgentShareSupported } from '@/features/AgentShareSettings/useAgentShareSupported';
 import NavHeader from '@/features/NavHeader';
 import { formatPageEditorInfoTime } from '@/features/PageEditor/formatPageEditorInfoTime';
 import AccessLevelTag from '@/features/ResourcePermission/AccessLevelTag';
@@ -45,7 +47,6 @@ import { sanitizeFileName } from '@/utils/sanitizeFileName';
 import { openAgentSettingsModal } from '../AgentSettings';
 import { selectors as profileSelectors, useProfileStore } from '../store';
 import AgentForkTag from './AgentForkTag';
-import AgentStatusTag from './AgentStatusTag';
 import AgentVersionReviewTag from './AgentVersionReviewTag';
 
 type HeaderTranslation = TFunction<
@@ -253,6 +254,19 @@ const Header = memo(() => {
   const { visible: shareVisible } = useAgentShareSupported(activeAgentId);
   const canShareAgent = shareVisible === true && canConfigure;
 
+  const showMarketSubmission = !!config && !isBuiltinAgent && !isHeterogeneous;
+  const canSubmitToMarket = showMarketSubmission && canManage && !lockedByOther && !lockPending;
+  const marketSubmission = useAgentMarketSubmission({
+    agentId: activeAgentId,
+    canSubmit: canSubmitToMarket,
+    getPrompt: () => ({
+      editorData: editor
+        ? (editor.getDocument('json') as LobeAgentConfig['editorData'])
+        : config?.editorData,
+      systemRole: editor ? (editor.getDocument('markdown') as unknown as string) : systemRole,
+    }),
+  });
+
   // Share settings are a sibling tab of the profile group, not a popup — the
   // shortcut just jumps to that tab.
   const handleOpenShare = useCallback(() => {
@@ -294,6 +308,15 @@ const Header = memo(() => {
           }
         : null,
       { type: 'divider' as const },
+      showMarketSubmission
+        ? {
+            disabled: !canSubmitToMarket || marketSubmission.isSubmitting,
+            icon: <Icon icon={UploadCloud} />,
+            key: 'submit-to-market',
+            label: t('marketSubmission.entry'),
+            onClick: marketSubmission.open,
+          }
+        : null,
       {
         children: [
           {
@@ -355,12 +378,16 @@ const Header = memo(() => {
     authorName,
     canConfigure,
     canManage,
+    canSubmitToMarket,
     createdAt,
     dateLocale,
     handleExportMarkdown,
     handleDelete,
     isInbox,
+    marketSubmission.isSubmitting,
+    marketSubmission.open,
     navigate,
+    showMarketSubmission,
     showPermissionPageEntry,
     t,
     importMenuItem,
@@ -376,8 +403,10 @@ const Header = memo(() => {
         <Flexbox horizontal align={'center'} gap={8}>
           {/* No section title — the Segmented beside it names the current tab. */}
           {activeAgentId && <AgentBreadcrumb agentId={activeAgentId} />}
-          <AgentStatusTag />
-          <AgentVersionReviewTag />
+          <AgentVersionReviewTag
+            key={`review-${activeAgentId}-${marketSubmission.revision}`}
+            submitted={marketSubmission.isUnderReview}
+          />
           <AgentForkTag />
           <AccessLevelTag
             resourceId={showPermissionsEntry ? (activeAgentId ?? undefined) : undefined}

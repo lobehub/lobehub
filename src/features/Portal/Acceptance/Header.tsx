@@ -1,4 +1,4 @@
-import { DESKTOP_HEADER_ICON_SMALL_SIZE, isDesktop } from '@lobechat/const';
+import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@lobechat/const';
 import { copyToClipboard, Flexbox, Icon } from '@lobehub/ui';
 import { ActionIcon, type DropdownItem, DropdownMenu, toast } from '@lobehub/ui/base-ui';
 import { Copy, ExternalLink, MoreHorizontal, RefreshCw } from 'lucide-react';
@@ -10,9 +10,9 @@ import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { mutate as globalMutate } from '@/libs/swr';
 import { verifyKeys } from '@/libs/swr/keys';
-import { electronSystemService } from '@/services/electron/system';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
+import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import Header from '../components/Header';
 import Title from './Title';
@@ -66,13 +66,7 @@ const AcceptanceHeader = memo(() => {
           title={t('report.actions.openInBrowser')}
           onClick={() => {
             if (!externalUrl) return;
-            // In Electron a `window.open` is denied by the window-open handler,
-            // so hand the URL to the system browser through the main process.
-            if (isDesktop) {
-              void electronSystemService.openExternalLink(externalUrl);
-              return;
-            }
-            window.open(externalUrl, '_blank', 'noopener,noreferrer');
+            openTrustedExternalUrl(externalUrl);
           }}
         />
       }

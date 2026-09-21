@@ -1,6 +1,7 @@
 import type { AppProcessMetrics, GpuStatus, MemoryDump } from '@lobechat/electron-client-ipc';
 import { app } from 'electron';
 
+import { collectRendererGarbage, startIdleRendererGc } from '@/utils/idleRendererGc';
 import { getIpcContext } from '@/utils/ipc';
 import { parseMemoryDump, type TraceEvent } from '@/utils/memoryDump';
 
@@ -58,11 +59,24 @@ export default class DevtoolsCtr extends ControllerModule {
     };
   }
 
+  private rendererSender(what: string) {
+    const contents = getIpcContext()?.sender;
+    if (!contents) throw new Error(`${what} needs a renderer sender`);
+    return contents;
+  }
+
+  @IpcMethod()
+  async collectRendererGarbage(): Promise<void> {
+    await collectRendererGarbage(this.rendererSender('garbage collection'));
+  }
+
+  afterFirstFrame() {
+    startIdleRendererGc();
+  }
+
   @IpcMethod()
   async captureMemoryDump(): Promise<MemoryDump> {
-    const contents = getIpcContext()?.sender;
-    if (!contents) throw new Error('memory dump needs a renderer sender');
-
+    const contents = this.rendererSender('memory dump');
     const dbg = contents.debugger;
     const attachedHere = !dbg.isAttached();
     if (attachedHere) dbg.attach('1.3');

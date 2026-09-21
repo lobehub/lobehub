@@ -3,10 +3,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { createEmailServiceImpl, EmailImplType } from './index';
 
 vi.mock('./nodemailer', () => ({
-  NodemailerImpl: vi.fn().mockImplementation(() => ({
-    sendMail: vi.fn().mockResolvedValue({ messageId: 'test-id' }),
-    verify: vi.fn().mockResolvedValue(true),
-  })),
+  NodemailerImpl: vi.fn().mockImplementation(function () {
+    return {
+      sendMail: vi.fn().mockResolvedValue({ messageId: 'test-id' }),
+      verify: vi.fn().mockResolvedValue(true),
+    };
+  }),
 }));
 
 describe('createEmailServiceImpl', () => {

@@ -1,6 +1,6 @@
 import { Icon, Tooltip } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { CircleDotDashed, Database, ImagePlus, MessageSquareText, Video } from 'lucide-react';
+import { CircleDotDashed, Database, ImagePlus, MessageSquareText, Mic, Video } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -13,12 +13,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   imageGeneration: css`
     color: ${cssVar.colorSuccess};
   `,
+  speechRecognition: css`
+    color: ${cssVar.colorInfo};
+  `,
   videoGeneration: css`
     color: ${cssVar.colorWarning};
   `,
 }));
 
-export type SpendTypeValue = 'chat' | 'embedding' | 'imageGeneration' | 'videoGeneration';
+export type SpendTypeValue =
+  'chat' | 'embedding' | 'imageGeneration' | 'speechRecognition' | 'videoGeneration';
 
 interface SpendTypeProps {
   /** The readable label — shown on hover, since the cell itself is icon-only. */
@@ -36,6 +40,9 @@ const getIcon = (type: string) => {
     }
     case 'imageGeneration': {
       return ImagePlus;
+    }
+    case 'speechRecognition': {
+      return Mic;
     }
     case 'videoGeneration': {
       return Video;

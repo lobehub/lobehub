@@ -1,7 +1,10 @@
 import type { CallLLMPayload } from '@lobechat/agent-runtime';
 import { MessagesEngine } from '@lobechat/context-engine';
+import { readFrozenModelFacts } from '@lobechat/mecha';
 import type { UIChatMessage } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { createServerModelParamsProviders } from '@/server/modules/Mecha/ModelParams/providers';
 
 import type { RuntimeExecutorContext } from '../context';
 import { resolveServerCallLlmContextHints } from './serverCallLlmContextHints';
@@ -33,9 +36,8 @@ vi.mock('@/database/models/topic', () => ({
   },
 }));
 
-const createCtx = (agentConfig: any): RuntimeExecutorContext =>
+const createCtx = (): RuntimeExecutorContext =>
   ({
-    agentConfig,
     messageModel: {} as RuntimeExecutorContext['messageModel'],
     operationId: 'operation-1',
     serverDB: {} as RuntimeExecutorContext['serverDB'],
@@ -96,7 +98,7 @@ describe('resolveServerCallLlmContextHints - user media capabilities', () => {
       }
       const hints = await resolveServerCallLlmContextHints({
         ctx: {
-          ...createCtx({}),
+          ...createCtx(),
           modelRuntimeConfig: {
             mediaCapabilities: { vision: true },
             model: 'custom-model',
@@ -118,7 +120,7 @@ describe('resolveServerCallLlmContextHints - user media capabilities', () => {
   ])('does not reuse a snapshot for $model/$provider', async ({ model, provider }) => {
     const hints = await resolveServerCallLlmContextHints({
       ctx: {
-        ...createCtx({}),
+        ...createCtx(),
         modelRuntimeConfig: {
           mediaCapabilities: { vision: true },
           model: 'custom-model',
@@ -137,7 +139,7 @@ describe('resolveServerCallLlmContextHints - user media capabilities', () => {
     findByIdAndProviderMock.mockResolvedValue({ abilities: { vision: true } });
     const hints = await resolveServerCallLlmContextHints({
       ctx: {
-        ...createCtx({}),
+        ...createCtx(),
         modelRuntimeConfig: {
           mediaCapabilities: {},
           model: 'custom-model',
@@ -157,7 +159,7 @@ describe('resolveServerCallLlmContextHints - user media capabilities', () => {
     const model = 'custom-vision-model';
     const provider = 'custom-provider';
     const hints = await resolveServerCallLlmContextHints({
-      ctx: createCtx({}),
+      ctx: createCtx(),
       llmPayload,
       model,
       provider,
@@ -200,7 +202,7 @@ describe('resolveServerCallLlmContextHints - user media capabilities', () => {
       ]);
       findByIdAndProviderMock.mockResolvedValue({ abilities: { [ability]: true } });
       const hints = await resolveServerCallLlmContextHints({
-        ctx: createCtx({}),
+        ctx: createCtx(),
         llmPayload,
         model: 'model',
         provider: 'provider',
@@ -227,7 +229,7 @@ describe('resolveServerCallLlmContextHints - user media capabilities', () => {
     ]);
     findByIdAndProviderMock.mockResolvedValue({ abilities });
     const hints = await resolveServerCallLlmContextHints({
-      ctx: createCtx({}),
+      ctx: createCtx(),
       llmPayload,
       model: 'model',
       provider: 'provider',
@@ -238,7 +240,7 @@ describe('resolveServerCallLlmContextHints - user media capabilities', () => {
   it('does not apply the active row to a different model under the same provider', async () => {
     findByIdAndProviderMock.mockResolvedValue({ abilities: { vision: true } });
     const hints = await resolveServerCallLlmContextHints({
-      ctx: createCtx({}),
+      ctx: createCtx(),
       llmPayload,
       model: 'custom-model',
       provider: 'custom-provider',
@@ -248,7 +250,7 @@ describe('resolveServerCallLlmContextHints - user media capabilities', () => {
 });
 
 describe('resolveServerCallLlmContextHints - topic reasoning pin', () => {
-  const ctxWithTopic = (agentConfig: any) => ({ ...createCtx(agentConfig), topicId: 'topic-1' });
+  const ctxWithTopic = () => ({ ...createCtx(), topicId: 'topic-1' });
 
   it.each([
     ['supervisor', 'high'],
@@ -263,7 +265,8 @@ describe('resolveServerCallLlmContextHints - topic reasoning pin', () => {
       provider: 'openai',
     });
     const hints = await resolveServerCallLlmContextHints({
-      ctx: ctxWithTopic({ id, chatConfig: {} }),
+      ctx: ctxWithTopic(),
+      world: { agent: { id, chatConfig: {} } },
       llmPayload,
       model: 'gpt-4',
       provider: 'openai',
@@ -280,7 +283,8 @@ describe('resolveServerCallLlmContextHints - topic reasoning pin', () => {
     });
 
     const hints = await resolveServerCallLlmContextHints({
-      ctx: ctxWithTopic({ chatConfig: {} }),
+      ctx: ctxWithTopic(),
+      world: { agent: { chatConfig: {} } },
       llmPayload,
       model: 'gpt-4',
       provider: 'openai',
@@ -299,7 +303,8 @@ describe('resolveServerCallLlmContextHints - topic reasoning pin', () => {
     });
 
     await resolveServerCallLlmContextHints({
-      ctx: ctxWithTopic({ chatConfig: {} }),
+      ctx: ctxWithTopic(),
+      world: { agent: { chatConfig: {} } },
       llmPayload,
       model: 'gpt-4',
       provider: 'openai',
@@ -323,7 +328,8 @@ describe('resolveServerCallLlmContextHints - topic reasoning pin', () => {
     });
 
     const hints = await resolveServerCallLlmContextHints({
-      ctx: ctxWithTopic({ chatConfig: {} }),
+      ctx: ctxWithTopic(),
+      world: { agent: { chatConfig: {} } },
       llmPayload,
       model: 'gpt-4',
       provider: 'openai',
@@ -342,7 +348,8 @@ describe('resolveServerCallLlmContextHints - topic reasoning pin', () => {
     });
 
     const hints = await resolveServerCallLlmContextHints({
-      ctx: ctxWithTopic({ chatConfig: {} }),
+      ctx: ctxWithTopic(),
+      world: { agent: { chatConfig: {} } },
       llmPayload,
       model: 'gpt-4',
       provider: 'openai',
@@ -357,7 +364,8 @@ describe('resolveServerCallLlmContextHints - topic reasoning pin', () => {
     findTopicByIdMock.mockResolvedValue({ metadata: {}, model: 'gpt-4', provider: 'openai' });
 
     const hints = await resolveServerCallLlmContextHints({
-      ctx: ctxWithTopic({ chatConfig: {} }),
+      ctx: ctxWithTopic(),
+      world: { agent: { chatConfig: {} } },
       llmPayload,
       model: 'gpt-4',
       provider: 'openai',
@@ -374,10 +382,13 @@ describe('resolveServerCallLlmContextHints - topic reasoning pin', () => {
     });
 
     const hints = await resolveServerCallLlmContextHints({
-      ctx: ctxWithTopic({
-        chatConfig: {},
-        subAgentChatConfigOverride: { reasoningEffort: 'medium' },
-      }),
+      ctx: ctxWithTopic(),
+      world: {
+        agent: {
+          chatConfig: {},
+          subAgentChatConfigOverride: { reasoningEffort: 'medium' },
+        },
+      },
       llmPayload,
       model: 'gpt-4',
       provider: 'openai',
@@ -388,7 +399,8 @@ describe('resolveServerCallLlmContextHints - topic reasoning pin', () => {
 
   it('should not read the topic for models without reasoning extend params', async () => {
     await resolveServerCallLlmContextHints({
-      ctx: ctxWithTopic({ chatConfig: {} }),
+      ctx: ctxWithTopic(),
+      world: { agent: { chatConfig: {} } },
       llmPayload,
       model: 'gpt-4o-mini',
       provider: 'openai',
@@ -430,7 +442,8 @@ describe('resolveServerCallLlmContextHints - model-instance reasoning config', (
         { content: 'Continue', id: 'user-2', role: 'user' },
       ];
       const hints = await resolveServerCallLlmContextHints({
-        ctx: createCtx({ chatConfig: { preserveThinking } }),
+        ctx: createCtx(),
+        world: { agent: { chatConfig: { preserveThinking } } },
         llmPayload: { messages } as unknown as CallLLMPayload,
         model,
         provider,
@@ -455,7 +468,8 @@ describe('resolveServerCallLlmContextHints - model-instance reasoning config', (
     getModelReasoningConfigMock.mockResolvedValue({ reasoningEffort: 'high' });
 
     const hints = await resolveServerCallLlmContextHints({
-      ctx: createCtx({ chatConfig: {} }),
+      ctx: createCtx(),
+      world: { agent: { chatConfig: {} } },
       llmPayload,
       model: 'gpt-4',
       provider: 'openai',
@@ -473,7 +487,8 @@ describe('resolveServerCallLlmContextHints - model-instance reasoning config', (
     getModelReasoningConfigMock.mockResolvedValue({ reasoningEffort: 'high' });
 
     const hints = await resolveServerCallLlmContextHints({
-      ctx: createCtx({ chatConfig: {} }),
+      ctx: createCtx(),
+      world: { agent: { chatConfig: {} } },
       llmPayload,
       model: 'my-custom-model',
       provider: 'custom-provider',
@@ -492,7 +507,8 @@ describe('resolveServerCallLlmContextHints - model-instance reasoning config', (
     getModelReasoningConfigMock.mockResolvedValue({ reasoningEffort: 'high' });
 
     const hints = await resolveServerCallLlmContextHints({
-      ctx: createCtx({ chatConfig: {} }),
+      ctx: createCtx(),
+      world: { agent: { chatConfig: {} } },
       llmPayload,
       model: 'gpt-4o-mini',
       provider: 'openai',
@@ -510,7 +526,8 @@ describe('resolveServerCallLlmContextHints - model-instance reasoning config', (
     getModelReasoningConfigMock.mockResolvedValue({ reasoningEffort: 'high' });
 
     const hints = await resolveServerCallLlmContextHints({
-      ctx: createCtx({ chatConfig: {} }),
+      ctx: createCtx(),
+      world: { agent: { chatConfig: {} } },
       llmPayload,
       model: 'gpt-4',
       provider: 'openai',
@@ -522,7 +539,8 @@ describe('resolveServerCallLlmContextHints - model-instance reasoning config', (
 
   it('should skip the reasoning config DB read for models without reasoning extend params', async () => {
     const hints = await resolveServerCallLlmContextHints({
-      ctx: createCtx({ chatConfig: {} }),
+      ctx: createCtx(),
+      world: { agent: { chatConfig: {} } },
       llmPayload,
       model: 'gpt-4o-mini',
       provider: 'openai',
@@ -534,7 +552,8 @@ describe('resolveServerCallLlmContextHints - model-instance reasoning config', (
 
   it('should ignore stale reasoning fields left in agent chatConfig', async () => {
     const hints = await resolveServerCallLlmContextHints({
-      ctx: createCtx({ chatConfig: { reasoningEffort: 'low' } }),
+      ctx: createCtx(),
+      world: { agent: { chatConfig: { reasoningEffort: 'low' } } },
       llmPayload,
       model: 'gpt-4',
       provider: 'openai',
@@ -547,7 +566,7 @@ describe('resolveServerCallLlmContextHints - model-instance reasoning config', (
     getModelReasoningConfigMock.mockResolvedValue({ reasoningEffort: 'medium' });
 
     const hints = await resolveServerCallLlmContextHints({
-      ctx: createCtx({}),
+      ctx: createCtx(),
       llmPayload,
       model: 'gpt-4',
       provider: 'openai',
@@ -560,10 +579,13 @@ describe('resolveServerCallLlmContextHints - model-instance reasoning config', (
     getModelReasoningConfigMock.mockResolvedValue({ reasoningEffort: 'low' });
 
     const hints = await resolveServerCallLlmContextHints({
-      ctx: createCtx({
-        chatConfig: {},
-        subAgentChatConfigOverride: { reasoningEffort: 'high' },
-      }),
+      ctx: createCtx(),
+      world: {
+        agent: {
+          chatConfig: {},
+          subAgentChatConfigOverride: { reasoningEffort: 'high' },
+        },
+      },
       llmPayload,
       model: 'gpt-4',
       provider: 'openai',
@@ -577,7 +599,8 @@ describe('resolveServerCallLlmContextHints - model-instance reasoning config', (
 
     const hints = await resolveServerCallLlmContextHints({
       // stale agent value says 'high', but the instance config opts out
-      ctx: createCtx({ chatConfig: { deepseekV4ReasoningEffort: 'high' } }),
+      ctx: createCtx(),
+      world: { agent: { chatConfig: { deepseekV4ReasoningEffort: 'high' } } },
       llmPayload,
       model: 'deepseek-v4-pro',
       provider: 'deepseek',
@@ -591,7 +614,8 @@ describe('resolveServerCallLlmContextHints - model-instance reasoning config', (
     getModelReasoningConfigMock.mockResolvedValue({ deepseekV4GAReasoningEffort: 'none' });
 
     const hints = await resolveServerCallLlmContextHints({
-      ctx: createCtx({ chatConfig: { deepseekV4GAReasoningEffort: 'high' } }),
+      ctx: createCtx(),
+      world: { agent: { chatConfig: { deepseekV4GAReasoningEffort: 'high' } } },
       llmPayload,
       model: 'deepseek-v4-flash',
       provider: 'deepseek',
@@ -611,7 +635,8 @@ describe('resolveServerCallLlmContextHints - model-instance reasoning config', (
     getModelReasoningConfigMock.mockResolvedValue({ deepseekV4ReasoningEffort: 'none' });
 
     const hints = await resolveServerCallLlmContextHints({
-      ctx: createCtx({ chatConfig: {} }),
+      ctx: createCtx(),
+      world: { agent: { chatConfig: {} } },
       llmPayload,
       model: 'deepseek-v4-flash',
       provider: 'deepseek',
@@ -623,7 +648,8 @@ describe('resolveServerCallLlmContextHints - model-instance reasoning config', (
 
   it('should keep DeepSeek V4 forced reasoning replay when no opt-out is saved', async () => {
     const hints = await resolveServerCallLlmContextHints({
-      ctx: createCtx({ chatConfig: {} }),
+      ctx: createCtx(),
+      world: { agent: { chatConfig: {} } },
       llmPayload,
       model: 'deepseek-v4-pro',
       provider: 'deepseek',
@@ -633,7 +659,7 @@ describe('resolveServerCallLlmContextHints - model-instance reasoning config', (
   });
 
   it('should not read the instance config when the ctx has no user scope', async () => {
-    const ctx = createCtx({ chatConfig: {} });
+    const ctx = createCtx();
     ctx.userId = undefined;
 
     await resolveServerCallLlmContextHints({
@@ -644,5 +670,133 @@ describe('resolveServerCallLlmContextHints - model-instance reasoning config', (
     });
 
     expect(getModelReasoningConfigMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('resolveServerCallLlmContextHints - frozen operation facts', () => {
+  const frozenCtx = (): RuntimeExecutorContext => ({
+    ...createCtx(),
+    modelRuntimeConfig: {
+      mediaCapabilities: { vision: true },
+      modelFacts: {
+        cards: [
+          {
+            abilities: { functionCall: true, vision: true },
+            displayName: 'GPT-4 (frozen)',
+            extendParams: ['reasoningEffort'],
+            id: 'gpt-4',
+            knowledgeCutoff: '2024-01',
+            providerId: 'openai',
+          },
+        ],
+        mediaCapabilities: { vision: true },
+        model: 'gpt-4',
+        provider: 'openai',
+        reasoningConfig: { reasoningEffort: 'low' },
+      },
+      model: 'gpt-4',
+      provider: 'openai',
+      topicId: undefined,
+    } as RuntimeExecutorContext['modelRuntimeConfig'],
+    topicId: 'tpc_1',
+  });
+
+  it('reads no model source on a step and keeps the effort the run started with', async () => {
+    // What the user changed after the run started — none of it may be read.
+    getModelReasoningConfigMock.mockResolvedValue({ reasoningEffort: 'high' });
+    findTopicByIdMock.mockResolvedValue({
+      metadata: { reasoningConfig: { reasoningEffort: 'high' } },
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    const hints = await resolveServerCallLlmContextHints({
+      ctx: frozenCtx(),
+      world: { agent: { chatConfig: {} } },
+      llmPayload,
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    expect(hints.resolvedExtendParams).toMatchObject({ reasoning_effort: 'low' });
+    expect(hints.modelDisplayName).toBe('GPT-4 (frozen)');
+    expect(hints.capabilities.isCanUseVision('gpt-4', 'openai')).toBe(true);
+    expect(loadModelsMock).not.toHaveBeenCalled();
+    expect(findByIdAndProviderMock).not.toHaveBeenCalled();
+    expect(getModelReasoningConfigMock).not.toHaveBeenCalled();
+    expect(findTopicByIdMock).not.toHaveBeenCalled();
+  });
+
+  it('resolves a step exactly as the live sources would have', async () => {
+    getModelReasoningConfigMock.mockResolvedValue({ reasoningEffort: 'high' });
+    findByIdAndProviderMock.mockResolvedValue({
+      abilities: { vision: true },
+      displayName: 'My GPT-4',
+      settings: { extendParams: ['reasoningEffort'] },
+    });
+    const ctx = createCtx();
+    const args = {
+      llmPayload,
+      model: 'gpt-4',
+      provider: 'openai',
+      world: { agent: { chatConfig: {} } },
+    };
+
+    const live = await resolveServerCallLlmContextHints({ ...args, ctx });
+    // Non-trivial to compare against: the user's row and reasoning config both
+    // reached the payload.
+    expect(live.resolvedExtendParams).toMatchObject({ reasoning_effort: 'high' });
+    expect(live.modelDisplayName).toBe('My GPT-4');
+
+    // What discovery freezes onto the operation, read through the same server
+    // providers the live path used.
+    const modelFacts = await readFrozenModelFacts(
+      { agent: {}, model: 'gpt-4', provider: 'openai', topicId: ctx.topicId },
+      createServerModelParamsProviders({
+        builtinModels: await loadModelsMock(),
+        serverDB: ctx.serverDB,
+        userId: ctx.userId,
+      }),
+    );
+    const frozen = await resolveServerCallLlmContextHints({
+      ...args,
+      ctx: { ...ctx, modelRuntimeConfig: { modelFacts, model: 'gpt-4', provider: 'openai' } },
+    });
+
+    expect(frozen.resolvedExtendParams).toEqual(live.resolvedExtendParams);
+    expect(frozen.modelDisplayName).toBe(live.modelDisplayName);
+    expect(frozen.modelKnowledgeCutoff).toBe(live.modelKnowledgeCutoff);
+    expect(frozen.preserveThinkingForPayload).toBe(live.preserveThinkingForPayload);
+    expect(frozen.shouldReplayAssistantReasoning).toBe(live.shouldReplayAssistantReasoning);
+    expect(frozen.capabilities.isCanUseVision('gpt-4', 'openai')).toBe(
+      live.capabilities.isCanUseVision('gpt-4', 'openai'),
+    );
+  });
+
+  it('resolves live for an attempt on another model', async () => {
+    await resolveServerCallLlmContextHints({
+      ctx: frozenCtx(),
+      world: { agent: { chatConfig: {} } },
+      llmPayload,
+      model: 'gpt-4o-mini',
+      provider: 'openai',
+    });
+
+    expect(loadModelsMock).toHaveBeenCalled();
+  });
+
+  it('resolves live for an operation created before the snapshot existed', async () => {
+    await resolveServerCallLlmContextHints({
+      ctx: {
+        ...createCtx(),
+        modelRuntimeConfig: { model: 'gpt-4', provider: 'openai' },
+      },
+      world: { agent: { chatConfig: {} } },
+      llmPayload,
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    expect(loadModelsMock).toHaveBeenCalled();
   });
 });

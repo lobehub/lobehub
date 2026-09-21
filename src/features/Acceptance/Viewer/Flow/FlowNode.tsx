@@ -10,7 +10,6 @@ import {
   CircleHelp,
   CirclePause,
   CircleX,
-  FileCheck2,
   Paperclip,
   Repeat2,
 } from 'lucide-react';
@@ -170,10 +169,6 @@ export function FlowNode({ data }: { data: FlowNodeData }) {
           <Flexbox horizontal align="center" gap={4}>
             <Icon icon={Paperclip} size={12} />
             {data.evidence}
-          </Flexbox>
-          <Flexbox horizontal align="center" gap={4} style={{ marginInlineStart: 'auto' }}>
-            <Icon icon={FileCheck2} size={12} />
-            {t(data.attempts ? 'flow.viewResults' : 'flow.viewPlan')}
           </Flexbox>
         </Flexbox>
       </div>

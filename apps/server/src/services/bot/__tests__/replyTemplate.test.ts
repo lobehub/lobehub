@@ -1,3 +1,4 @@
+import { ERROR_CODE_SPECS, formatErrorRef } from '@lobechat/model-runtime/errors';
 import { describe, expect, it } from 'vitest';
 
 import type { RenderStepParams } from '../replyTemplate';
@@ -21,6 +22,7 @@ import {
   renderStepProgress,
   renderStopped,
   renderToolExecuting,
+  renderWhoami,
   splitMessage,
   summarizeOutput,
 } from '../replyTemplate';
@@ -363,6 +365,72 @@ describe('replyTemplate', () => {
   // ==================== renderAgentError ====================
 
   describe('renderAgentError', () => {
+    it.each(Object.values(ERROR_CODE_SPECS).filter((spec) => !spec.isFallback))(
+      'renders actionable localized copy and a stable reference for $code',
+      (spec) => {
+        for (const locale of ['en-US', 'zh-CN'] as const) {
+          const output = renderAgentError(
+            spec.code,
+            'private upstream payload',
+            'op-known',
+            locale,
+          );
+          expect(output).toContain(formatErrorRef(spec.code));
+          expect(output).toContain('op-known');
+          expect(output).not.toContain('private upstream payload');
+          expect(output).not.toContain('{{');
+          expect(output.split('\n').length).toBeGreaterThanOrEqual(3);
+        }
+      },
+    );
+
+    it('renders a known request error instead of the attribution fallback', () => {
+      const output = renderAgentError(
+        'RequestBodyTooLarge',
+        'secret upstream payload',
+        'op-size',
+        'en-US',
+        'harness',
+      );
+      expect(output).toContain('request is too large');
+      expect(output).toContain('Error code: `E');
+      expect(output).toContain('op-size');
+      expect(output).not.toContain('Something went wrong on our side');
+      expect(output).not.toContain('secret upstream payload');
+    });
+
+    it('names the unreachable device instead of falling to the legacy tier', () => {
+      // A hetero dispatch failure (device offline / unregistered / no gateway)
+      // reaches the bot as `DeviceGatewayNotConfigured` with no attribution, so
+      // without its own mapping it rendered a bare "Agent Execution Failed".
+      const output = renderAgentError(
+        'DeviceGatewayNotConfigured',
+        '{"error":"DEVICE_NOT_FOUND","success":false}',
+        'op-device',
+      );
+      expect(output).toContain("Couldn't reach the device this agent runs on");
+      expect(output).toContain('op-device');
+      expect(output).not.toContain('Agent Execution Failed');
+      expect(output).not.toContain('DEVICE_NOT_FOUND');
+
+      const zh = renderAgentError('DeviceGatewayNotConfigured', undefined, 'op-device', 'zh-CN');
+      expect(zh).toContain('无法连接到运行该 Agent 的设备');
+      expect(zh).not.toContain('Agent 执行失败');
+    });
+
+    it('classifies a legacy envelope before choosing IM copy', () => {
+      const output = renderAgentError('ProviderBizError', 'insufficient quota', 'op-quota');
+      expect(output).toContain('Provider quota exhausted');
+      expect(output).toContain('Error code: `E');
+    });
+
+    it('renders a known request error in Chinese with a stable reference', () => {
+      const output = renderAgentError('RequestBodyTooLarge', undefined, 'op-size', 'zh-CN');
+      expect(output).toContain('错误码:');
+      expect(output).not.toContain('Something went wrong');
+      expect(output).not.toContain('RequestBodyTooLarge');
+    });
+
     it('returns the friendly NoAvailableProvider copy and appends the operation id footer', () => {
       const out = renderAgentError('NoAvailableProvider', undefined, 'op-abc');
       expect(out).toContain('No model provider configured');
@@ -414,12 +482,161 @@ describe('replyTemplate', () => {
       expect(zh).not.toContain('请检查你的输入');
     });
 
-    it('maps both QuotaLimitReached and InsufficientQuota to the same quota copy', () => {
+    // The admission gate emits one of three codes for the same "the allowance
+    // can't cover this" outcome; the plan-limit pair used to fall to the `user`
+    // tier and tell the user to check their input.
+    it('gives every budget-exhaustion code its own credits copy, not "check your input"', () => {
+      const expected: Record<string, string> = {
+        FreePlanLimit: 'Free plan limit reached',
+        InsufficientBudgetForModel: 'Not enough credits',
+        SubscriptionPlanLimit: 'Plan limit reached',
+      };
+
+      for (const [code, header] of Object.entries(expected)) {
+        const out = renderAgentError(code, 'Budget exceeded', 'op-1', 'en-US', 'user');
+
+        expect(out).toContain(header);
+        expect(out).not.toContain("couldn't be completed");
+      }
+    });
+
+    // Runs are billed to the bot owner, not to whoever mentioned the bot, so
+    // the copy must point at the owner / admin instead of calling the reader
+    // the payer.
+    it('addresses the bot owner rather than the reader on every budget tier', () => {
+      const scoped = ['workspace', 'workspace_member', undefined];
+      for (const code of ['FreePlanLimit', 'InsufficientBudgetForModel', 'SubscriptionPlanLimit']) {
+        for (const budgetTypeAtError of scoped) {
+          const out = renderAgentError(code, undefined, 'op-1', 'en-US', 'user', {
+            budgetTypeAtError,
+          });
+
+          expect(out).not.toMatch(/\byour\b/i);
+          expect(out).toMatch(/bot owner|workspace admin/);
+        }
+      }
+    });
+
+    // A workspace member's own allowance ran out and the reply told
+    // them to top up — which does nothing for that allowance — while the numbers
+    // that would have identified the real fault stayed in the trace.
+    describe('budget scope', () => {
+      const budget = {
+        availableCredits: 7_242_747,
+        budgetTypeAtError: 'workspace_member',
+        requiredCredits: 197_391,
+        shortfallCredits: 0,
+      };
+
+      it('names the member allowance instead of telling them to top up', () => {
+        const en = renderAgentError(
+          'InsufficientBudgetForModel',
+          'Workspace budget exceeded',
+          'op-1',
+          'en-US',
+          'user',
+          budget,
+        );
+
+        expect(en).toContain('Member budget in this workspace is used up');
+        expect(en).not.toContain('Not enough credits');
+        expect(en).toContain('Operation ID: `op-1`');
+
+        const zh = renderAgentError(
+          'InsufficientBudgetForModel',
+          'Workspace budget exceeded',
+          'op-1',
+          'zh-CN',
+          'user',
+          budget,
+        );
+
+        expect(zh).toContain('该工作区的成员预算已用尽');
+        expect(zh).not.toContain('积分余额不足');
+      });
+
+      // The workspace gate throws SubscriptionPlanLimit (not
+      // InsufficientBudgetForModel) when the run couldn't be priced upfront; the
+      // scope still wins over the per-code copy.
+      it('refines the plan-limit codes by scope too', () => {
+        const out = renderAgentError('SubscriptionPlanLimit', undefined, 'op-1', 'en-US', 'user', {
+          ...budget,
+          budgetTypeAtError: 'workspace_member',
+        });
+
+        expect(out).toContain('Member budget in this workspace is used up');
+        expect(out).not.toContain('Plan limit reached');
+      });
+
+      it('names the shared workspace pool for a workspace-scoped allowance', () => {
+        const en = renderAgentError(
+          'InsufficientBudgetForModel',
+          undefined,
+          'op-1',
+          'en-US',
+          'user',
+          { ...budget, budgetTypeAtError: 'workspace' },
+        );
+
+        expect(en).toContain('Workspace credits exhausted');
+
+        const zh = renderAgentError(
+          'InsufficientBudgetForModel',
+          undefined,
+          'op-1',
+          'zh-CN',
+          'user',
+          { ...budget, budgetTypeAtError: 'workspace' },
+        );
+
+        expect(zh).toContain('工作区额度已用尽');
+      });
+
+      it('keeps the personal credits copy for an unrecognized or absent scope', () => {
+        expect(
+          renderAgentError('InsufficientBudgetForModel', undefined, 'op-1', 'en-US', 'user', {
+            ...budget,
+            budgetTypeAtError: 'some_new_scope',
+          }),
+        ).toContain('Not enough credits');
+
+        expect(
+          renderAgentError('InsufficientBudgetForModel', undefined, 'op-1', 'en-US', 'user', {
+            availableCredits: 12,
+            requiredCredits: 34,
+          }),
+        ).toContain('Not enough credits');
+      });
+
+      // Runs mentioned from a shared channel are billed to the bot owner, so the
+      // reply must name the scope without publishing the owner's balance to
+      // everyone in the channel.
+      it('never quotes the allowance figures, only the scope', () => {
+        for (const lng of ['en-US', 'zh-CN'] as const) {
+          const out = renderAgentError(
+            'InsufficientBudgetForModel',
+            undefined,
+            'op-1',
+            lng,
+            'user',
+            budget,
+          );
+
+          expect(out).not.toContain('7.24M');
+          expect(out).not.toContain('7242747');
+          expect(out).not.toContain('197,391');
+          expect(out).not.toContain('197391');
+        }
+      });
+    });
+
+    it('resolves the legacy rate-limit alias separately from exhausted quota', () => {
       const a = renderAgentError('QuotaLimitReached', undefined, 'op-1');
       const b = renderAgentError('InsufficientQuota', undefined, 'op-1');
-      expect(a).toContain('quota');
+      expect(a).toContain('Too many requests');
       expect(b).toContain('quota');
-      expect(a).toBe(b);
+      expect(a).toContain('E3001');
+      expect(b).toContain('E2001');
     });
 
     it('uses friendly copy for command connection close failures wrapped as 500 errors', () => {
@@ -471,7 +688,7 @@ describe('replyTemplate', () => {
         'en-US',
         'system',
       );
-      expect(en).toContain('temporary system error');
+      expect(en).toContain('session state was unavailable');
       expect(en).not.toContain('model provider');
       expect(en).not.toMatch(/switch to a different model/i);
       expect(en).toContain('op-1');
@@ -483,7 +700,7 @@ describe('replyTemplate', () => {
         'zh-CN',
         'system',
       );
-      expect(zh).toContain('临时系统错误');
+      expect(zh).toContain('会话状态不可用');
     });
 
     it('still gives ProviderNetworkError the provider-specific network copy', () => {
@@ -536,7 +753,9 @@ describe('replyTemplate', () => {
       const unavailable = renderAgentError('ProviderServiceUnavailable', undefined, 'op-1');
       const noChannel = renderAgentError('NoAvailableChannel', undefined, 'op-1');
       expect(unavailable).toContain('temporarily unavailable');
-      expect(unavailable).toBe(noChannel);
+      expect(noChannel).toContain('temporarily unavailable');
+      expect(unavailable).toContain('E3002');
+      expect(noChannel).toContain('E3003');
 
       expect(renderAgentError('RateLimitExceeded', undefined, 'op-1')).toContain(
         'Too many requests',
@@ -747,6 +966,35 @@ describe('replyTemplate', () => {
       expect(renderCommandReply('cmdStopNotActive', 'zh-CN')).toContain('没有正在执行');
       expect(renderCommandReply('cmdStopRequested', 'zh-CN')).toBe('已发出停止请求。');
       expect(renderCommandReply('cmdStopUnable', 'zh-CN')).toContain('无法停止');
+    });
+  });
+
+  // ==================== renderWhoami ====================
+
+  describe('renderWhoami', () => {
+    it('echoes the caller ID, display name and the settings pointer in English', () => {
+      const text = renderWhoami({ isOperator: false, userId: 'ou_abc123', userName: 'Lin' });
+      expect(text).toContain('`ou_abc123`');
+      expect(text).toContain('Lin');
+      expect(text).toContain('Your Platform User ID');
+    });
+
+    it('omits the display name line when unknown and flags an already-configured operator', () => {
+      const text = renderWhoami({ isOperator: true, userId: 'ou_abc123' });
+      expect(text).toContain('`ou_abc123`');
+      expect(text).not.toContain('Display name');
+      expect(text).toContain('already set as the bot operator');
+    });
+
+    it('renders Chinese copy for zh-CN', () => {
+      const text = renderWhoami(
+        { isOperator: false, userId: 'ou_abc123', userName: '林' },
+        'zh-CN',
+      );
+      expect(text).toContain('你的平台用户 ID：`ou_abc123`');
+      expect(text).toContain('显示名称：林');
+      expect(text).toContain('高级设置');
+      expect(renderCommandReply('cmdWhoamiUnavailable', 'zh-CN')).toContain('无法');
     });
   });
 

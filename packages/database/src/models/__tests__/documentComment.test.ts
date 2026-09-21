@@ -93,6 +93,74 @@ describe('DocumentCommentModel', () => {
     expect(duplicate).toMatchObject({ isDuplicate: true, comment: { id: first.comment.id } });
   });
 
+  it('anchors a root comment to a body selection and never lets a reply carry its own', async () => {
+    const selectionAnchor = {
+      end: 9,
+      prefix: 'the ',
+      quote: 'quick',
+      start: 4,
+      suffix: ' brown fox',
+    };
+
+    const root = await authorModel.create({
+      clientId: 'anchored-root',
+      content: 'about this phrase',
+      documentId,
+      selectionAnchor,
+    });
+
+    expect(root.comment.selectionAnchor).toEqual(selectionAnchor);
+
+    // The thread's anchor lives on its root row, so an anchor sent with a reply
+    // is dropped rather than splitting the thread across two runs of the body.
+    const reply = await memberModel.create({
+      clientId: 'anchored-reply',
+      content: 'agreed',
+      documentId,
+      parentCommentId: root.comment.id,
+      selectionAnchor,
+    });
+
+    expect(reply.comment.parentCommentId).toBe(root.comment.id);
+    expect(reply.comment.selectionAnchor).toBeNull();
+
+    const [stored] = await serverDB
+      .select({ selectionAnchor: documentComments.selectionAnchor })
+      .from(documentComments)
+      .where(eq(documentComments.id, root.comment.id));
+    expect(stored.selectionAnchor).toEqual(selectionAnchor);
+
+    // The body paints from the document's full anchor set, independent of
+    // thread paging: roots only, anchored only, scoped to the workspace.
+    await memberModel.create({ clientId: 'plain-root', content: 'whole page', documentId });
+    expect(await authorModel.listAnchors(documentId)).toEqual([
+      { id: root.comment.id, selectionAnchor },
+    ]);
+    expect(await authorModel.listAnchors(secondDocumentId)).toEqual([]);
+    expect(await outsiderModel.listAnchors(documentId)).toEqual([]);
+
+    // Each surface pages its own subset: the gutter takes anchored roots, the
+    // list below the body takes document-level ones; no filter keeps them mixed.
+    const anchoredThreads = await authorModel.listThreads({ anchored: true, documentId });
+    expect(anchoredThreads.items.map(({ root: { clientId } }) => clientId)).toEqual([
+      'anchored-root',
+    ]);
+    const documentThreads = await authorModel.listThreads({ anchored: false, documentId });
+    expect(documentThreads.items.map(({ root: { clientId } }) => clientId)).toEqual(['plain-root']);
+    const allThreads = await authorModel.listThreads({ documentId });
+    expect(allThreads.items).toHaveLength(2);
+  });
+
+  it('leaves a comment made without a selection unanchored', async () => {
+    const root = await authorModel.create({
+      clientId: 'document-level',
+      content: 'about the whole page',
+      documentId,
+    });
+
+    expect(root.comment.selectionAnchor).toBeNull();
+  });
+
   it('rejects foreign parents and flattens replies to replies into the root thread', async () => {
     await expect(
       authorModel.create({ clientId: 'foreign', content: 'no', documentId: foreignDocumentId }),

@@ -192,6 +192,8 @@ export const AgentRuntimeErrorType = {
   ProviderServiceUnavailable: 'ProviderServiceUnavailable',
   /** Network timeout / connection drop talking to the provider. */
   ProviderNetworkError: 'ProviderNetworkError',
+  /** Provider timed out while downloading a remote image or file URL. */
+  RemoteMediaDownloadTimeout: 'RemoteMediaDownloadTimeout',
   /** Proxy/router has no channel for the requested model (key pool exhausted, no upstream). */
   NoAvailableChannel: 'NoAvailableChannel',
   /** Upstream content-moderation / safety filter rejected the input or output. */
@@ -200,6 +202,8 @@ export const AgentRuntimeErrorType = {
   CapabilityNotSupported: 'CapabilityNotSupported',
   /** Provider rejected the request as malformed (bad JSON, schema validation, etc.). */
   InvalidRequestFormat: 'InvalidRequestFormat',
+  /** Upstream rejected the serialized request body as too large (HTTP 413). */
+  RequestBodyTooLarge: 'RequestBodyTooLarge',
   /**
    * Upstream proxy / gateway layer failed (openresty, litellm, HTML 5xx,
    * Cloudflare 525) — distinct from the provider's own service. Split out of

@@ -1,6 +1,6 @@
 import { Flexbox, Icon } from '@lobehub/ui';
 import { Button, Text } from '@lobehub/ui/base-ui';
-import { Handle, Position } from '@xyflow/react';
+import { Handle, Position, useNodeId } from '@xyflow/react';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   CheckCircle2,
@@ -13,8 +13,10 @@ import {
   CircleX,
   Maximize2,
 } from 'lucide-react';
+import { use } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { FlowAnchorContext } from './flowAnchor';
 import type { FlowGraphData } from './flowGraph';
 import { flowStateBackground, flowStateColor } from './FlowNode';
 
@@ -35,6 +37,7 @@ const styles = createStaticStyles(({ css }) => ({
     background: transparent;
   `,
   collapsed: css`
+    cursor: pointer;
     height: 100%;
     padding-block: 12px;
     padding-inline: 12px;
@@ -77,6 +80,14 @@ const styles = createStaticStyles(({ css }) => ({
 
 export function FlowGroup({ data }: { data: FlowGraphData }) {
   const { t } = useTranslation('verify');
+  const anchor = use(FlowAnchorContext);
+  const nodeId = useNodeId();
+  // Name this group as the one to follow once the new layout lands.
+  const toggle = (event: { stopPropagation: () => void }) => {
+    event.stopPropagation();
+    anchor.current = nodeId;
+    data.onToggle?.();
+  };
   const statusIcon =
     data.state === 'passed'
       ? CheckCircle2
@@ -94,7 +105,14 @@ export function FlowGroup({ data }: { data: FlowGraphData }) {
       <Handle className={styles.handle} id="in" position={Position.Left} type="target" />
       <div className={styles.group}>
         {data.collapsed ? (
-          <Flexbox horizontal align="flex-start" className={styles.collapsed} gap={10}>
+          <Flexbox
+            horizontal
+            align="flex-start"
+            className={styles.collapsed}
+            gap={10}
+            role="button"
+            onClick={toggle}
+          >
             <div
               aria-label={t(`flow.state.${data.state ?? 'pending'}`)}
               className={styles.glyph}
@@ -121,10 +139,7 @@ export function FlowGroup({ data }: { data: FlowGraphData }) {
                   className="nodrag nopan"
                   size="small"
                   type="text"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    data.onToggle?.();
-                  }}
+                  onClick={toggle}
                 >
                   <Icon icon={ChevronRight} size={16} />
                 </Button>
@@ -153,10 +168,7 @@ export function FlowGroup({ data }: { data: FlowGraphData }) {
                 className="nodrag nopan"
                 size="small"
                 type="text"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  data.onToggle?.();
-                }}
+                onClick={toggle}
               >
                 <Icon icon={ChevronDown} size={16} />
               </Button>

@@ -98,6 +98,8 @@ type TopicPatchScope = {
   scope?: TopicMapScope;
 };
 
+type PendingTopicStatusSource = 'cache' | 'server';
+
 /**
  * Options for switchTopic action
  */
@@ -108,6 +110,41 @@ export interface SwitchTopicOptions {
    * @default false
    */
   clearNewKey?: boolean;
+  /**
+   * The conversation whose `_new` bucket the cleanup should target. Send
+   * flows pass the conversation the send started from: when the navigation
+   * guard drops the switch, the user may be viewing a different agent/group,
+   * and cleaning up by current view would wipe that view's blank bucket
+   * instead of the send's own. Omit to clean by the current view (legacy).
+   */
+  clearNewKeyContext?: {
+    agentId: string;
+    groupId?: string | null;
+    scope?: MessageMapScope;
+  };
+  /**
+   * Only apply the switch while the active agent still matches. Send flows
+   * pin the agent they started from: the topic guard cannot tell two blank
+   * views apart (both have `activeTopicId === null`), so without this a send
+   * from agent A's blank view would adopt its minted topic while the user is
+   * on agent B's blank view. Omit the option to skip the check.
+   */
+  onlyIfActiveAgentId?: string | null;
+  /**
+   * Only apply the switch while the active group still matches — the
+   * group-scope counterpart of `onlyIfActiveAgentId`.
+   */
+  onlyIfActiveGroupId?: string | null;
+  /**
+   * Only apply the switch while the user is still on one of these conversation
+   * buckets. Send flows pass every bucket their conversation can currently live
+   * under — the client-minted topic id before the server confirms it, the
+   * persisted id after the re-key — so a continuation whose await the user
+   * navigated away from skips the switch instead of yanking the UI (and the
+   * URL) back to the sent topic. Include `null` to allow the blank
+   * new-conversation view. Omit the option to always apply the switch.
+   */
+  onlyIfActiveTopicIn?: ReadonlyArray<string | null>;
   /**
    * Explicit scope for clearing new key data
    * If not provided, will be inferred from store state (activeGroupId)
@@ -425,7 +462,13 @@ export class ChatTopicActionImpl {
 
   updateTopicMetadata = async (id: string, metadata: Partial<ChatTopicMetadata>): Promise<void> => {
     const topic = topicSelectors.getTopicById(id)(this.#get());
-    if (!topic) return;
+    if (!topic) {
+      await topicService.updateTopicMetadata(id, metadata);
+      await this.#get()
+        .refreshTopic()
+        .catch(() => undefined);
+      return;
+    }
 
     // Optimistic update with merged metadata
     const mergedMetadata = { ...topic.metadata, ...metadata };
@@ -435,8 +478,19 @@ export class ChatTopicActionImpl {
       value: { metadata: mergedMetadata },
     });
 
-    await topicService.updateTopicMetadata(id, metadata);
-    await this.#get().refreshTopic();
+    try {
+      await topicService.updateTopicMetadata(id, metadata);
+    } catch (error) {
+      this.#get().internal_dispatchTopic({
+        type: 'updateTopic',
+        id,
+        value: { metadata: topic.metadata },
+      });
+      throw error;
+    }
+    await this.#get()
+      .refreshTopic()
+      .catch(() => undefined);
   };
 
   updateTopicTitle = async (id: string, title: string): Promise<void> => {
@@ -700,22 +754,47 @@ export class ChatTopicActionImpl {
    * Returns the row to trust: the fetched one, or the fetched one with the
    * pending status re-applied when it predates the write.
    */
-  #applyPendingStatusWrite = (item: ChatTopic): ChatTopic => {
+  #applyPendingStatusWrite = (item: ChatTopic, source: PendingTopicStatusSource): ChatTopic => {
     const pending = this.#pendingTopicStatusWrites.get(item.id);
     if (!pending) return item;
-    if (pending.expiresAt <= Date.now() || item.status === pending.status) {
+    if (pending.expiresAt <= Date.now()) {
       this.#pendingTopicStatusWrites.delete(item.id);
+      return item;
+    }
+    if (item.status === pending.status) {
+      if (source === 'server') this.#pendingTopicStatusWrites.delete(item.id);
       return item;
     }
     return { ...item, status: pending.status };
   };
 
-  #reconcileFetchedTopics = (items: ChatTopic[], currentItems?: ChatTopic[]): ChatTopic[] => {
-    let next = items;
+  /**
+   * Apply pending terminal statuses before a fetched topic list enters SWR.
+   *
+   * Reconciling only in `onData` keeps Zustand correct but is too late for the
+   * persisted cache: SWR has already accepted the older raw response and can
+   * flush `running` to IndexedDB. After the 15-second pin expires, remounting
+   * the sidebar restores that stale spinner. This step deliberately
+   * handles statuses only; client-only optimistic rows are still added later by
+   * {@link #reconcileFetchedTopics} and never enter the persisted response.
+   * Persisting the pin also means a failed write can survive until the next
+   * successful revalidation; that bounded, self-healing window is preferable to
+   * reintroducing an older response after a confirmed local terminal event.
+   */
+  #applyPendingStatusWrites = (
+    items: ChatTopic[],
+    source: PendingTopicStatusSource,
+  ): ChatTopic[] => {
+    if (this.#pendingTopicStatusWrites.size === 0) return items;
+    return items.map((item) => this.#applyPendingStatusWrite(item, source));
+  };
 
-    if (this.#pendingTopicStatusWrites.size > 0) {
-      next = next.map((item) => this.#applyPendingStatusWrite(item));
-    }
+  #reconcileFetchedTopics = (
+    items: ChatTopic[],
+    currentItems: ChatTopic[] | undefined,
+    source: PendingTopicStatusSource,
+  ): ChatTopic[] => {
+    let next = this.#applyPendingStatusWrites(items, source);
 
     // In-flight first-send optimistic rows are client-only, so any refetch
     // landing mid-send (e.g. the fire-and-forget refreshTopic after a previous
@@ -1029,7 +1108,7 @@ export class ChatTopicActionImpl {
     // (the button reading as a no-op until pressed a second time). The pin is
     // dropped when the persist fails, so a write that never reached the DB
     // still reverts here.
-    const fresh = this.#applyPendingStatusWrite(fetched);
+    const fresh = this.#applyPendingStatusWrite(fetched, 'server');
     if (fresh.status !== fetched.status) return false;
 
     // Server still parked — nothing to fold in.
@@ -1183,7 +1262,7 @@ export class ChatTopicActionImpl {
           this.#get().internal_updateTopicData(containerKey, { isExpandingPageSize: false });
         }
 
-        return result;
+        return { ...result, items: this.#applyPendingStatusWrites(result.items, 'server') };
       },
       {
         // onData: responsible for state updates (fires for both cached and fresh data)
@@ -1193,7 +1272,9 @@ export class ChatTopicActionImpl {
           const { total: totalCount } = result;
 
           const currentData = this.#get().topicDataMap[containerKey];
-          const topics = this.#reconcileFetchedTopics(result.items, currentData?.items);
+          // `result` can be a cached response or a list already normalized by
+          // the fetcher. Neither proves the server observed the pending write.
+          const topics = this.#reconcileFetchedTopics(result.items, currentData?.items, 'cache');
 
           // Fire BEFORE the no-change early return below: on a cold boot the
           // cached list arrives with no `currentData`, and that first delivery
@@ -1321,12 +1402,14 @@ export class ChatTopicActionImpl {
       async () => {
         if (!agentId) return { items: [], total: 0 };
 
-        return topicService.getTopics({
+        const result = await topicService.getTopics({
           agentId,
           current: 0,
           pageSize,
           withDetails,
         });
+
+        return { ...result, items: this.#applyPendingStatusWrites(result.items, 'server') };
       },
       {
         onData: (result) => {
@@ -1334,7 +1417,7 @@ export class ChatTopicActionImpl {
           const { total: totalCount } = result;
 
           const currentData = this.#get().agentTopicsViewMap[containerKey];
-          const topics = this.#reconcileFetchedTopics(result.items, currentData?.items);
+          const topics = this.#reconcileFetchedTopics(result.items, currentData?.items, 'cache');
 
           // Preserve appended pages on refresh — same convention as
           // `useFetchTopics` so the user keeps their scroll position after
@@ -1419,7 +1502,8 @@ export class ChatTopicActionImpl {
         withDetails,
       });
 
-      const nextItems = [...currentData.items, ...result.items];
+      const topics = this.#applyPendingStatusWrites(result.items, 'server');
+      const nextItems = [...currentData.items, ...topics];
       const hasMore = result.total > nextItems.length;
 
       this.#set(
@@ -1507,7 +1591,8 @@ export class ChatTopicActionImpl {
       });
 
       const currentTopics = currentData?.items || [];
-      const nextItems = [...currentTopics, ...result.items];
+      const topics = this.#applyPendingStatusWrites(result.items, 'server');
+      const nextItems = [...currentTopics, ...topics];
       const hasMore = result.total > nextItems.length;
 
       this.#set(
@@ -1570,7 +1655,10 @@ export class ChatTopicActionImpl {
           // pending status writes here too (no tmp-row re-prepend: optimistic
           // rows don't belong in search results).
           this.#set(
-            { searchTopics: this.#reconcileFetchedTopics(data), isSearchingTopic: false },
+            {
+              isSearchingTopic: false,
+              searchTopics: this.#reconcileFetchedTopics(data, undefined, 'server'),
+            },
             false,
             n('useSearchTopics(success)', { keywords }),
           );
@@ -1581,7 +1669,6 @@ export class ChatTopicActionImpl {
 
   switchTopic = async (id?: string | null, options?: SwitchTopicOptions): Promise<void> => {
     const opts = options ?? {};
-    const epoch = ++this.#switchTopicEpoch;
 
     const { activeAgentId, activeGroupId } = this.#get();
 
@@ -1590,26 +1677,68 @@ export class ChatTopicActionImpl {
     // 2. When clearNewKey option is explicitly true
     // This prevents stale data from previous conversations showing up
     // Note: Use == null to match both null and undefined
+    //
+    // Housekeeping runs BEFORE the navigation guard below: a send whose
+    // continuation is dropped because the user navigated away is still done
+    // with the blank conversation it came from — the cleanup targets that
+    // origin bucket (opts.clearNewKeyContext), never the view the user moved
+    // to. In the normal (unguarded) case origin and current view are the same
+    // conversation, so this is identical to cleaning up after the guard.
     const shouldClearNewKey = !id || opts.clearNewKey;
 
     if (shouldClearNewKey) {
       this.#get().clearPortalStack();
     }
 
-    if (shouldClearNewKey && activeAgentId) {
-      // Determine scope: use explicit scope from options, or infer from activeGroupId
-      const scope = opts.scope ?? (activeGroupId ? 'group' : 'main');
+    const cleanupAgentId = opts.clearNewKeyContext?.agentId ?? activeAgentId;
+    const cleanupGroupId = opts.clearNewKeyContext?.groupId ?? activeGroupId;
+
+    if (shouldClearNewKey && cleanupAgentId) {
+      // Determine scope: use explicit scope, or infer from the cleanup group
+      const scope =
+        opts.clearNewKeyContext?.scope ?? opts.scope ?? (cleanupGroupId ? 'group' : 'main');
 
       this.#get().replaceMessages([], {
         context: {
-          agentId: activeAgentId,
-          groupId: activeGroupId,
+          agentId: cleanupAgentId,
+          groupId: cleanupGroupId,
           scope,
           topicId: null,
         },
         action: n('clearNewKeyData'),
       });
     }
+
+    // Send-flow continuation guard: if the caller requires the user to still
+    // be on a specific conversation and they've navigated elsewhere while the
+    // send's awaits were in flight, drop the switch instead of yanking the UI
+    // (and the URL, via ChatHydration's route sync) back to the sent topic.
+    // The topic id alone cannot tell two blank views apart — a null origin and
+    // a null destination look identical — so send flows also pin the agent and
+    // group they started from. The epoch token below cannot catch any of this
+    // — the user's switch happened in between, but this call is still the
+    // newest one. Runs before the epoch bump: a skipped switch must not
+    // invalidate a concurrent switch's pending revalidation.
+    if (opts.onlyIfActiveTopicIn) {
+      // `activeTopicId` uses `null` for "no topic" but is typed `string` and can
+      // hold `undefined`/`''` from callers that never went through switchTopic,
+      // so normalize before comparing — an unset field must still match an
+      // explicit `null` expectation (the blank new-conversation view).
+      const activeTopicId = this.#get().activeTopicId || null;
+      if (!opts.onlyIfActiveTopicIn.includes(activeTopicId)) return;
+    }
+    if (
+      opts.onlyIfActiveAgentId !== undefined &&
+      (activeAgentId ?? null) !== opts.onlyIfActiveAgentId
+    )
+      return;
+    if (
+      opts.onlyIfActiveGroupId !== undefined &&
+      (activeGroupId ?? null) !== opts.onlyIfActiveGroupId
+    )
+      return;
+
+    const epoch = ++this.#switchTopicEpoch;
 
     this.#set(
       { activeTopicId: id || (null as any), activeThreadId: undefined },
@@ -1905,6 +2034,42 @@ export class ChatTopicActionImpl {
   };
 
   /**
+   * Mirror an optimistic topic patch into the PERSISTED topic-list cache.
+   *
+   * `topic:` keys are persisted to IndexedDB by the tiered SWR provider (see
+   * `CACHE_TIERS`), and that cached page is what the sidebar paints on a cold
+   * boot, before any revalidation lands. Optimistic dispatches only touched the
+   * Zustand maps, so the terminal status a run writes when it ends ('unread' /
+   * 'active') never reached the cache: the last FETCHED snapshot — taken while
+   * the run was still `running` — stayed there, and a reload repainted a
+   * finished topic with the running spinner until the revalidation corrected it
+   * a moment later (LOBE-14032). Same write-through idea as
+   * `#writeThroughMessageCache` in the message slice.
+   *
+   * Only `updateTopic` is mirrored. It patches a row a fetch already produced,
+   * so it cannot leak a client-only row into a cache that outlives the session
+   * — unlike an optimistic `addTopic` / `replaceTopicId`, whose placeholder is
+   * reconciled per session by `#reconcileFetchedTopics`. Deletions already go
+   * through `refreshTopic`, which revalidates the same keys.
+   */
+  #writeThroughTopicListCache = (containerKey: string, payload: ChatTopicDispatch): void => {
+    if (payload.type !== 'updateTopic') return;
+
+    void mutate(
+      (key) => Array.isArray(key) && key[0] === topicKeys.list.root && key[1] === containerKey,
+      (cached?: { items: ChatTopic[]; total: number }) => {
+        if (!cached?.items) return cached;
+
+        const items = topicReducer(cached.items, payload);
+        // `topicReducer` returns the same reference when the patch is a no-op
+        // (e.g. the row isn't on this cached page), so the entry stays untouched.
+        return items === cached.items ? cached : { ...cached, items };
+      },
+      { revalidate: false },
+    );
+  };
+
+  /**
    * Apply a topic reducer to a bucket in `topicDataMap`. Scope on the payload
    * (`agentId`/`groupId`) wins; otherwise falls back to the currently active
    * agent/group bucket. Pass scope on the payload when the write originates
@@ -1981,6 +2146,13 @@ export class ChatTopicActionImpl {
       };
     }
 
+    // Mirror the patch into the persisted topic-list cache too — see
+    // `#writeThroughTopicListCache`. Runs before the unchanged early-return
+    // below: the cache can hold rows this bucket never loaded (a cold boot
+    // paints from it before any bucket exists), so "nothing changed in the
+    // store" says nothing about the cached page.
+    this.#writeThroughTopicListCache(key, payload);
+
     // no need to update if all maps are unchanged
     const mainChanged = !isEqual(nextItems, currentData?.items);
     const detailChanged = nextDetailMap !== detailMap;
@@ -2053,6 +2225,7 @@ export class ChatTopicActionImpl {
     const items = this.#reconcileFetchedTopics(
       params.items,
       append ? undefined : currentData?.items,
+      'cache',
     );
 
     const nextItems = append ? [...(currentData?.items || []), ...items] : items;

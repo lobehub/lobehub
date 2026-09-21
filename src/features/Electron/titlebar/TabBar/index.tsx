@@ -119,12 +119,34 @@ const TabBar = () => {
   // Read during render, so it still holds the width the strip had on the previous commit
   // — which is exactly where a tab appended this commit should enter from.
   const previousTotal = useRef(0);
+  // Tabs restored at boot land in the strip's first populated commit; they should sit at
+  // their final geometry rather than spring in from nothing like a tab the user opened.
+  const hasPopulated = useRef(false);
+  const settleInstantly = !hasPopulated.current;
 
   useEffect(() => {
-    targetTotal.set(total);
-    targetDividerX.set(dividerX);
+    if (settleInstantly) {
+      targetTotal.jump(total);
+      springTotal.jump(total);
+      targetDividerX.jump(dividerX);
+      springDividerX.jump(dividerX);
+    } else {
+      targetTotal.set(total);
+      targetDividerX.set(dividerX);
+    }
     previousTotal.current = total;
-  }, [total, dividerX, targetTotal, targetDividerX]);
+    if (tabs.length > 0 && stripWidth > 0) hasPopulated.current = true;
+  }, [
+    total,
+    dividerX,
+    targetTotal,
+    springTotal,
+    targetDividerX,
+    springDividerX,
+    tabs.length,
+    stripWidth,
+    settleInstantly,
+  ]);
 
   const newTabUrl = useMemo(() => {
     const scope = resolveTabScope(location.pathname + location.search);
@@ -230,6 +252,11 @@ const TabBar = () => {
 
   if (tabs.length === 0) return null;
 
+  // The strip's width is only known after it is in the DOM. Mounting the tabs before that
+  // would seed every width spring at the minimum a zero-width strip allows, so the whole
+  // row would visibly widen from compact to full once the measurement lands.
+  const measured = stripWidth > 0;
+
   return (
     <Flexbox
       horizontal
@@ -239,79 +266,84 @@ const TabBar = () => {
       ref={stripRef}
       onPointerEnter={captureVisibleTabPreviews}
     >
-      <DndContext
-        collisionDetection={closestCenter}
-        modifiers={[restrictToHorizontalAxis]}
-        sensors={sensors}
-        onDragEnd={handleDragEnd}
-      >
-        <SortableContext items={tabIds} strategy={horizontalListSortingStrategy}>
-          {/* One keyed list for pinned and flowing tabs alike. Rendering them as two
+      {measured && (
+        <>
+          <DndContext
+            collisionDetection={closestCenter}
+            modifiers={[restrictToHorizontalAxis]}
+            sensors={sensors}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext items={tabIds} strategy={horizontalListSortingStrategy}>
+              {/* One keyed list for pinned and flowing tabs alike. Rendering them as two
               sibling arrays scoped their keys separately, so pinning unmounted the tab
               from one and mounted a fresh one in the other — losing its springs, which
               is why the tab used to pop rather than travel. */}
-          <m.div className={styles.strip} style={{ width: springTotal }}>
-            {placements.map((placement) => {
-              const tab = tabsById.get(placement.id);
-              if (!tab) return null;
+              <m.div className={styles.strip} style={{ width: springTotal }}>
+                {placements.map((placement) => {
+                  const tab = tabsById.get(placement.id);
+                  if (!tab) return null;
 
-              return (
-                <TabItem
-                  enterX={previousTotal.current}
-                  index={tabIds.indexOf(placement.id)}
-                  isActive={placement.id === activeTabId}
-                  item={tab}
-                  key={placement.id}
-                  pinnedCount={pinnedTabs.length}
-                  splitViewEnabled={splitViewEnabled}
-                  tier={resolveTabTier(placement.width)}
-                  totalCount={tabs.length}
-                  width={placement.width}
-                  x={placement.x}
-                  isSplitVisible={
-                    splitView?.primaryTabId === placement.id ||
-                    splitView?.secondaryTabId === placement.id
-                  }
-                  onActivate={handleActivate}
-                  onClose={handleClose}
-                  onCloseLeft={handleCloseLeft}
-                  onCloseOthers={handleCloseOthers}
-                  onCloseRight={handleCloseRight}
-                  onCloseSplitView={closeSplitView}
-                  onOpenInSplitView={openTabInSplitView}
-                  onTogglePin={handleTogglePin}
+                  return (
+                    <TabItem
+                      enterWidth={settleInstantly ? placement.width : 0}
+                      enterX={settleInstantly ? placement.x : previousTotal.current}
+                      index={tabIds.indexOf(placement.id)}
+                      isActive={placement.id === activeTabId}
+                      item={tab}
+                      key={placement.id}
+                      pinnedCount={pinnedTabs.length}
+                      splitViewEnabled={splitViewEnabled}
+                      tier={resolveTabTier(placement.width)}
+                      totalCount={tabs.length}
+                      width={placement.width}
+                      x={placement.x}
+                      isSplitVisible={
+                        splitView?.primaryTabId === placement.id ||
+                        splitView?.secondaryTabId === placement.id
+                      }
+                      onActivate={handleActivate}
+                      onClose={handleClose}
+                      onCloseLeft={handleCloseLeft}
+                      onCloseOthers={handleCloseOthers}
+                      onCloseRight={handleCloseRight}
+                      onCloseSplitView={closeSplitView}
+                      onOpenInSplitView={openTabInSplitView}
+                      onTogglePin={handleTogglePin}
+                    />
+                  );
+                })}
+                <m.span
+                  className={styles.pinnedDivider}
+                  style={{ opacity: pinnedTabs.length > 0 ? 1 : 0, x: springDividerX }}
                 />
-              );
-            })}
-            <m.span
-              className={styles.pinnedDivider}
-              style={{ opacity: pinnedTabs.length > 0 ? 1 : 0, x: springDividerX }}
-            />
-          </m.div>
-        </SortableContext>
-      </DndContext>
-      <ActionIcon
-        className={cx(electronStylish.nodrag, styles.newTabButton)}
-        disabled={!canCreate}
-        icon={Plus}
-        size="small"
-        title={canCreate ? t('tab.newTab') : reason}
-        onClick={canCreate ? () => handleNewTab() : undefined}
-      />
-      {layout.hiddenCount > 0 && (
-        <DropdownMenu items={overflowItems} placement={'bottomRight'}>
-          <Flexbox
-            horizontal
-            align={'center'}
-            className={cx(electronStylish.nodrag, styles.overflowButton)}
-            gap={2}
-            style={{ width: OVERFLOW_CONTROL_WIDTH }}
-            title={t('tab.overflow', { count: layout.hiddenCount })}
-          >
-            <ChevronDown size={12} />
-            {layout.hiddenCount}
-          </Flexbox>
-        </DropdownMenu>
+              </m.div>
+            </SortableContext>
+          </DndContext>
+          <ActionIcon
+            className={cx(electronStylish.nodrag, styles.newTabButton)}
+            disabled={!canCreate}
+            icon={Plus}
+            size="small"
+            title={canCreate ? t('tab.newTab') : reason}
+            onClick={canCreate ? () => handleNewTab() : undefined}
+          />
+          {layout.hiddenCount > 0 && (
+            <DropdownMenu items={overflowItems} placement={'bottomRight'}>
+              <Flexbox
+                horizontal
+                align={'center'}
+                className={cx(electronStylish.nodrag, styles.overflowButton)}
+                gap={2}
+                style={{ width: OVERFLOW_CONTROL_WIDTH }}
+                title={t('tab.overflow', { count: layout.hiddenCount })}
+              >
+                <ChevronDown size={12} />
+                {layout.hiddenCount}
+              </Flexbox>
+            </DropdownMenu>
+          )}
+        </>
       )}
     </Flexbox>
   );

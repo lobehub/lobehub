@@ -13,7 +13,7 @@ import { GitBranchIcon, GitForkIcon, GitPullRequest, RotateCcwIcon } from 'lucid
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { electronSystemService } from '@/services/electron/system';
+import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import { gitChipStyles } from './gitChipStyles';
 import { resolveStaleSnapshot } from './staleSnapshot';
@@ -87,7 +87,7 @@ const StaleGitSnapshot = memo<StaleGitSnapshotProps>(
 
     const handleOpenPr = useCallback(() => {
       if (pullRequest?.url) {
-        void electronSystemService.openExternalLink(pullRequest.url);
+        openTrustedExternalUrl(pullRequest.url);
       }
     }, [pullRequest?.url]);
 

@@ -1,3 +1,4 @@
+import FileLink from './FileLink';
 import ImageSearchRef from './ImageSearchRef';
 import Link from './Link';
 import LobeAgents from './LobeAgents';
@@ -28,5 +29,6 @@ export const markdownElements: MarkdownElement[] = [
   ImageSearchRef,
   LobeAgents,
   LocalFileLink,
+  FileLink,
   Link,
 ];

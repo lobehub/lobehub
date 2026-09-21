@@ -108,6 +108,47 @@ describe('resolveActiveHeteroOperationPrincipal', () => {
     ).rejects.toEqual(new HeteroOperationPrincipalError('Operation has already ended', 409));
   });
 
+  it('lets a terminal-tolerant callback through a settled operation, checks intact', async () => {
+    // The reporting callbacks (ingest refusal / finish) have to reach their
+    // handlers on a settled row — that row IS what they report on. Everything
+    // else about the token is still re-authorized.
+    await expect(
+      resolveActiveHeteroOperationPrincipal({
+        allowTerminalOperation: true,
+        capability: 'hetero:ingest',
+        claims: { ...claims, capabilities: ['hetero:ingest'] },
+        db: dbWithOperation(activeOperation({ status: 'done' })),
+        operationId: 'op-1',
+      }),
+    ).resolves.toMatchObject({ operationId: 'op-1', userId: 'user-1' });
+    expect(hasPermission).toHaveBeenCalledOnce();
+
+    // The allowance is opt-in per call site, never implied by the capability:
+    // token renewal asks for `hetero:ingest` too and must stay strict.
+    await expect(
+      resolveActiveHeteroOperationPrincipal({
+        capability: 'hetero:ingest',
+        claims: { ...claims, capabilities: ['hetero:ingest'] },
+        db: dbWithOperation(activeOperation({ status: 'done' })),
+        operationId: 'op-1',
+      }),
+    ).rejects.toEqual(new HeteroOperationPrincipalError('Operation has already ended', 409));
+  });
+
+  it('still rejects a terminal-tolerant callback whose token is out of scope', async () => {
+    await expect(
+      resolveActiveHeteroOperationPrincipal({
+        allowTerminalOperation: true,
+        capability: 'hetero:finish',
+        claims: { ...claims, capabilities: ['hetero:finish'] },
+        db: dbWithOperation(activeOperation({ status: 'done', userId: 'someone-else' })),
+        operationId: 'op-1',
+      }),
+    ).rejects.toEqual(
+      new HeteroOperationPrincipalError('Operation is outside the token scope', 403),
+    );
+  });
+
   it('rejects a model selection that no longer matches the operation', async () => {
     await expect(
       resolveActiveHeteroOperationPrincipal({

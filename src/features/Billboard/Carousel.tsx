@@ -5,7 +5,7 @@ import { ActionIcon, Button } from '@lobehub/ui/base-ui';
 import { Carousel as AntCarousel } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { X } from 'lucide-react';
-import { motion } from 'motion/react';
+import * as m from 'motion/react-m';
 import {
   type ComponentRef,
   memo,
@@ -283,7 +283,7 @@ const BillboardCarousel = memo<BillboardCarouselProps>(
     const cardDataProps = cardAttr ? { [cardAttr]: '' } : {};
 
     return (
-      <motion.div
+      <m.div
         {...cardDataProps}
         className={styles.card}
         initial={{ opacity: 0, scale: 0.92, y: 16 }}
@@ -339,7 +339,7 @@ const BillboardCarousel = memo<BillboardCarouselProps>(
             </Flexbox>
           </>
         )}
-      </motion.div>
+      </m.div>
     );
   },
 );

@@ -1,5 +1,6 @@
 import { type AgentStreamEventType } from '@lobechat/agent-gateway-client';
 import { type ChatToolPayload } from '@lobechat/types';
+import { isRecord } from '@lobechat/utils/object';
 import debug from 'debug';
 import { type Redis } from 'ioredis';
 
@@ -54,8 +55,10 @@ export const getDefaultReasonDetail = (finalState: any, reason?: string): string
  *   it (e.g. `execSubAgent.onComplete`) receive the full state
  *   via the local `HookContext` channel, not via the stream.
  * - `operationToolSet`, `toolManifestMap`, `toolSourceMap`, `tools`
- *   — operation-level snapshot; back-compat copies of one struct.
- * - `expertise` — immutable operation-level snapshot retained in working state.
+ *   — operation-level snapshot; the four top-level names are the legacy
+ *   mirrors of the slot, kept here for operations that still carry them.
+ * - `world.expertise` — immutable operation-level snapshot retained in working
+ *   state. The rest of `world` stays: the client renders from it.
  *
  * Mirrors the `done`-event strip in `OperationTraceRecorder.appendStep`;
  * keep the two lists in sync if either set changes.
@@ -71,14 +74,21 @@ const stripStateForStream = <T extends Record<string, any>>(
     toolManifestMap: _toolManifestMap,
     toolSourceMap: _toolSourceMap,
     tools: _tools,
+    world,
     ...rest
   } = state;
-  return rest as T;
+  // `world` had to be destructured to reach its expertise snapshot, so it must be
+  // put back: everything else on it (agent, group, channel …) has to survive.
+  if (!world || typeof world !== 'object') return rest as T;
+  if (!('expertise' in world)) return { ...rest, world } as unknown as T;
+  const { expertise: _worldExpertise, ...worldRest } = world as Record<string, unknown>;
+  return { ...rest, world: worldRest } as unknown as T;
 };
 
 /**
  * Chokepoint helper applied inside every stream-event publish site.
- * If the event `data` carries a `finalState`, strip `expertise`, `messages`,
+ * Step completion events omit finalState unless the persisted run host opts in.
+ * For other events carrying a `finalState`, strip `expertise`, `messages`,
  * and the tool-set group off it (see `stripStateForStream` for the rationale).
  *
  * Centralizing the strip here means new callers — including direct
@@ -89,9 +99,16 @@ const stripStateForStream = <T extends Record<string, any>>(
  * Returns the original reference when no stripping is needed so the
  * common path stays allocation-free.
  */
-export const stripFinalStateInEventData = (data: unknown): unknown => {
+export const stripFinalStateInEventData = (data: unknown, eventType?: unknown): unknown => {
   if (!data || typeof data !== 'object') return data;
   const record = data as Record<string, unknown>;
+  const state = record.finalState;
+  const includeFinalState =
+    isRecord(state) && isRecord(state.host) && state.host.includeFinalState === true;
+  if (eventType === 'step_complete' && !includeFinalState) {
+    const { finalState: _finalState, ...rest } = record;
+    return rest;
+  }
   const finalState = record.finalState;
   if (!finalState || typeof finalState !== 'object') return data;
   return { ...record, finalState: stripStateForStream(finalState as Record<string, any>) };
@@ -185,10 +202,10 @@ export class StreamEventManager {
     const eventData: StreamEvent = {
       ...event,
       // Chokepoint strip — every event passing through here gets its
-      // `data.finalState` trimmed (messages + tool-set fields) before
+      // `data.finalState` removed for step_complete, otherwise trimmed, before
       // serialization so a single xadd can't blow past Upstash's 10 MB
       // request limit on long topics.
-      data: stripFinalStateInEventData(event.data),
+      data: stripFinalStateInEventData(event.data, event.type),
       operationId,
       timestamp: Date.now(),
     };
@@ -273,6 +290,8 @@ export class StreamEventManager {
     operationId,
     stepIndex,
     finalState,
+    messagePatchMode,
+    messageRevision,
     reason,
     reasonDetail,
     uiMessages,
@@ -283,7 +302,8 @@ export class StreamEventManager {
     // so the error message remains available.
     return this.publishStreamEvent(operationId, {
       data: {
-        finalState,
+        ...(!messagePatchMode && { finalState }),
+        ...(messagePatchMode && { messagePatchMode: true, messageRevision }),
         operationId,
         phase: 'execution_complete',
         reason: reason || 'completed',

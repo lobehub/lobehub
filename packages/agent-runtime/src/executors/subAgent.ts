@@ -74,9 +74,9 @@ const executeTask = async (
   parentMessageId: string,
   task: SubAgentTask,
 ): Promise<TaskExecutionResult> => {
-  const agentId = host.operation.agentId ?? state.metadata?.agentId;
+  const agentId = host.operation.agentId ?? state.origin?.agentId;
   const targetAgentId = task.targetAgentId ?? agentId;
-  const topicId = host.operation.topicId ?? state.metadata?.topicId;
+  const topicId = host.operation.topicId ?? state.origin?.topicId;
 
   if (!agentId || !targetAgentId || !topicId) {
     return {
@@ -97,7 +97,7 @@ const executeTask = async (
   try {
     const execution = await host.transports.subAgent.execSubAgent({
       agentId: targetAgentId,
-      groupId: host.operation.groupId ?? state.metadata?.groupId ?? undefined,
+      groupId: host.operation.groupId ?? state.origin?.groupId ?? undefined,
       instruction: task.instruction,
       parentMessageId,
       parentOperationId: host.operation.operationId,
@@ -160,10 +160,10 @@ const formatBatchResultContent = (
 
 const queryMessages = (host: AgentRuntimeHost, state: AgentState) =>
   host.transports.messages.query({
-    agentId: host.operation.agentId ?? state.metadata?.agentId,
-    groupId: host.operation.groupId ?? state.metadata?.groupId ?? undefined,
-    threadId: host.operation.threadId ?? state.metadata?.threadId,
-    topicId: host.operation.topicId ?? state.metadata?.topicId,
+    agentId: host.operation.agentId ?? state.origin?.agentId,
+    groupId: host.operation.groupId ?? state.origin?.groupId ?? undefined,
+    threadId: host.operation.threadId ?? state.origin?.threadId,
+    topicId: host.operation.topicId ?? state.origin?.topicId,
   });
 
 export const execSubAgent =
@@ -174,7 +174,7 @@ export const execSubAgent =
     const events: AgentEvent[] = [];
     const { operationId } = host.operation;
 
-    if (state.metadata?.isSubAgent === true) {
+    if (state.origin?.lineage?.isSubAgent === true) {
       return {
         events,
         newState: state,
@@ -215,7 +215,7 @@ export const execSubAgents =
     const events: AgentEvent[] = [];
     const { operationId } = host.operation;
 
-    if (state.metadata?.isSubAgent === true) {
+    if (state.origin?.lineage?.isSubAgent === true) {
       return {
         events,
         newState: state,

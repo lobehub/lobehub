@@ -1,7 +1,10 @@
 import { AcceptanceEvidenceManifest } from '@lobechat/builtin-tool-acceptance-evidence';
 import { LobeActivatorManifest } from '@lobechat/builtin-tool-activator';
 import { AgentBuilderManifest } from '@lobechat/builtin-tool-agent-builder';
-import { AgentDocumentsManifest } from '@lobechat/builtin-tool-agent-documents';
+import {
+  AgentDocumentsManifest,
+  resolveAgentDocumentsRestrictedManifest,
+} from '@lobechat/builtin-tool-agent-documents';
 import {
   AgentManagementManifest,
   resolveAgentManagementManifest,
@@ -28,7 +31,7 @@ import {
   LocalSystemManifest,
   resolveLocalSystemManifest,
 } from '@lobechat/builtin-tool-local-system';
-import { MemoryManifest } from '@lobechat/builtin-tool-memory';
+import { MemoryManifest, resolveMemoryRestrictedManifest } from '@lobechat/builtin-tool-memory';
 import { MessageManifest, resolveMessageManifest } from '@lobechat/builtin-tool-message';
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
@@ -247,7 +250,8 @@ export const AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS = new Set<string>([
  * `apps/server/src/services/aiAgent/shareGate.ts`, for every API and no matter
  * what the share config says. There is no knowledge-base or agent-file grant
  * in `AgentShareConfig` at all (see `applyShareGateToAgentConfig`), so a
- * visitor run can never reach either store.
+ * visitor run can never reach the knowledge-base store. Agent Documents is
+ * separately narrowed to share-scoped authoring APIs.
  *
  * Memory is deliberately NOT here: its grant is conditional on
  * `allowReadMemory`, so the owner enabling that switch does change what a
@@ -262,7 +266,6 @@ export const AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS = new Set<string>([
  */
 export const AGENT_SHARE_NO_DATA_GRANT_BUILTIN_IDENTIFIERS = new Set<string>([
   KnowledgeBaseManifest.identifier,
-  AgentDocumentsManifest.identifier,
 ]);
 
 const builtinToolRegistry: LobeBuiltinTool[] = [
@@ -372,6 +375,7 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     hidden: true,
     identifier: MemoryManifest.identifier,
     manifest: MemoryManifest,
+    resolveRestrictedManifest: resolveMemoryRestrictedManifest,
     type: 'builtin',
   },
   {
@@ -389,6 +393,7 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
   {
     identifier: AgentDocumentsManifest.identifier,
     manifest: AgentDocumentsManifest,
+    resolveRestrictedManifest: resolveAgentDocumentsRestrictedManifest,
     type: 'builtin',
   },
   {

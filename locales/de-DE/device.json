@@ -13,6 +13,7 @@
   "workingDirectory.branchesLoadFailed": "Fehler beim Laden der Branches",
   "workingDirectory.branchesLoading": "Zweige werden geladen…",
   "workingDirectory.branchesNoMatch": "Keine passenden Zweige",
+  "workingDirectory.branchesTruncated": "{{count}} mehr — tippen, um zu filtern",
   "workingDirectory.browseDescription": "Wählen Sie einen Ordner auf dem verbundenen Gerät aus.",
   "workingDirectory.browseFolders": "Ordner durchsuchen",
   "workingDirectory.cancel": "Abbrechen",

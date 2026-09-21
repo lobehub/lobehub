@@ -36,6 +36,18 @@ export interface State {
    */
   currentViewItemId?: string;
   /**
+   * Resource shown in the explorer's inline right detail panel (list click).
+   * Kept apart from `currentViewItemId`/`mode`: the panel is an in-context
+   * preview dock, not a view mode, so opening it must not kick the user out
+   * of the list or fight the `?file=` deep-link restoration.
+   */
+  detailPanelId?: string;
+  /**
+   * Whether the detail panel item is a page (文稿). Pages have no file URL, so
+   * the panel previews their document content instead of the file viewer.
+   */
+  detailPanelIsPage: boolean;
+  /**
    * Current library ID
    */
   libraryId?: string;
@@ -110,6 +122,8 @@ export interface State {
 export const initialState: State = {
   category: FilesTabs.All,
   currentViewItemId: undefined,
+  detailPanelId: undefined,
+  detailPanelIsPage: false,
   libraryId: undefined,
   librarySearchQuery: '',
   // Personal mode keeps the historical neutral value; workspace mode hydrates

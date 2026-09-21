@@ -13,6 +13,17 @@ vi.mock('react-i18next', () => ({
 }));
 
 describe('ToolTitle', () => {
+  it.each([
+    { title: '沙盒交付链路问题' },
+    { description: '修复沙盒权限问题', title: '沙盒交付链路问题' },
+    { query: '沙盒权限' },
+    { path: '/docs/沙盒说明.md' },
+  ])('keeps the action label for CJK resource arguments: %j', (args) => {
+    render(<ToolTitle apiName={'create_issue'} args={args} identifier={'linear'} />);
+
+    expect(screen.getByText('create_issue')).toBeInTheDocument();
+  });
+
   describe('model-written description rendering', () => {
     it('renders a CJK description standalone — no action label, no code font', () => {
       render(

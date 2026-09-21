@@ -6,7 +6,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createContextInner } from '@/libs/trpc/lambda/context';
 
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => ({})),
+  getServerDB: vi.fn(function () {
+    return {};
+  }),
 }));
 
 // `assertAgentShareCreationEnabled` (`_helpers/agentShareFeatureGate.ts`) runs
@@ -43,18 +45,29 @@ const mockUpdateSlug = vi.fn();
 const mockUpdateVisibility = vi.fn();
 
 vi.mock('@/database/models/agentShare', () => ({
-  AgentShareModel: vi.fn(() => ({
-    create: mockCreate,
-    getByAgentId: mockGetByAgentId,
-    updateConfig: mockUpdateConfig,
-    updateSlug: mockUpdateSlug,
-    updateVisibility: mockUpdateVisibility,
-  })),
+  AgentShareModel: vi.fn(function () {
+    return {
+      create: mockCreate,
+      getByAgentId: mockGetByAgentId,
+      updateConfig: mockUpdateConfig,
+      updateSlug: mockUpdateSlug,
+      updateVisibility: mockUpdateVisibility,
+    };
+  }),
 }));
 
 const mockCountShareVisitors = vi.fn();
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn(() => ({ countShareVisitors: mockCountShareVisitors })),
+  TopicModel: vi.fn(function () {
+    return { countShareVisitors: mockCountShareVisitors };
+  }),
+}));
+
+const mockCountAgentShareUsage = vi.fn();
+vi.mock('@/database/models/file', () => ({
+  FileModel: vi.fn(function () {
+    return { countAgentShareUsage: mockCountAgentShareUsage };
+  }),
 }));
 
 const mockGetAgentShareMonthlySpend = vi.fn();
@@ -91,6 +104,7 @@ describe('agentShareRouter', () => {
     });
     mockUpdateVisibility.mockResolvedValue(share);
     mockCountShareVisitors.mockResolvedValue({ topicCount: 7, visitorCount: 3 });
+    mockCountAgentShareUsage.mockResolvedValue(0);
     mockGetAgentShareMonthlySpend.mockResolvedValue(null);
     mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShare: true });
   });
@@ -396,9 +410,13 @@ describe('agentShareRouter', () => {
         userViewCount: 42,
       });
       mockGetAgentShareMonthlySpend.mockResolvedValue(2.5);
+      mockCountAgentShareUsage.mockResolvedValue(3 * 1024 * 1024);
       const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
 
       await expect(caller.getShareStats({ agentId: 'agent-1' })).resolves.toEqual({
+        fileStorageUsed: 3 * 1024 * 1024,
+        // Cap missing from a share saved before the field existed → default.
+        maxFileStorage: 512 * 1024 * 1024,
         monthlySpend: 2.5,
         monthlySpendLimit: 10,
         topicCount: 7,
@@ -406,10 +424,25 @@ describe('agentShareRouter', () => {
         visitorCount: 3,
       });
       expect(mockCountShareVisitors).toHaveBeenCalledWith({ agentId: 'agent-1' });
+      // Keyed by the share INSTANCE, not the agent: a share that was turned
+      // off and re-created must not inherit the old instance's bytes.
+      expect(mockCountAgentShareUsage).toHaveBeenCalledWith('share-1');
       expect(mockGetAgentShareMonthlySpend).toHaveBeenCalledWith({
         agentId: 'agent-1',
         ownerUserId: 'user-1',
       });
+    });
+
+    it('reports the configured upload cap when the owner has set one', async () => {
+      mockGetByAgentId.mockResolvedValue({
+        ...share,
+        shareConfig: { ...share.shareConfig, maxFileStorage: 0 },
+      });
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+
+      const stats = await caller.getShareStats({ agentId: 'agent-1' });
+
+      expect(stats.maxFileStorage).toBe(0);
     });
 
     it('reports unknown spend as null rather than zero', async () => {

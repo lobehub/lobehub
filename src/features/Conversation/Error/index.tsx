@@ -1,12 +1,13 @@
 import { isDesktop } from '@lobechat/const';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
+import { readHeterogeneousErrorContext } from '@lobechat/heterogeneous-agents/errors';
 import { type ILobeAgentRuntimeErrorType } from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType, getErrorCodeSpec } from '@lobechat/model-runtime';
 import { type ChatMessageError, type ErrorType, type IToolErrorType } from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import { Block, Highlighter } from '@lobehub/ui';
-import { type AlertProps, Skeleton } from '@lobehub/ui/base-ui';
+import { type AlertProps, Skeleton, toast } from '@lobehub/ui/base-ui';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -15,7 +16,12 @@ import useBusinessErrorContent from '@/business/client/hooks/useBusinessErrorCon
 import useRenderBusinessChatErrorMessageExtra from '@/business/client/hooks/useRenderBusinessChatErrorMessageExtra';
 import ErrorContent from '@/features/Conversation/ChatItem/components/ErrorContent';
 import { useConversationResourceAccess } from '@/features/Conversation/hooks/useConversationResourceAccess';
-import { dataSelectors, useConversationStore } from '@/features/Conversation/store';
+import { createTopicForwardModal } from '@/features/Conversation/MessageForward/TopicForwardModal';
+import {
+  contextSelectors,
+  dataSelectors,
+  useConversationStore,
+} from '@/features/Conversation/store';
 import HeterogeneousAgentStatusGuide from '@/features/Electron/HeterogeneousAgent/StatusGuide';
 import type { HeterogeneousAgentScheduleState } from '@/features/Electron/HeterogeneousAgent/StatusGuide/types';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -274,6 +280,7 @@ interface ErrorExtraProps {
 const ErrorMessageExtra = memo<ErrorExtraProps>(
   ({ error: alertError, data, onRegenerate, retryScopeId }) => {
     const error = data.error;
+    const { t } = useTranslation('chat');
     const navigate = useWorkspaceAwareNavigate();
     const enableBusinessFeatures = useServerConfigStore(
       serverConfigSelectors.enableBusinessFeatures,
@@ -283,6 +290,9 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
     // access on top of the workspace-role capability.
     const { canUseResource } = useConversationResourceAccess();
     const canCreate = canCreateContent && canUseResource;
+    const conversationAgentId = useConversationStore(contextSelectors.agentId);
+    const conversationTopicId = useConversationStore(contextSelectors.topicId);
+    const isSharedTopic = useConversationStore((s) => !!s.context?.topicShareId);
     const sessionErrorBody = error?.body;
     const rawErrorMessage = getRawErrorMessage(error);
     const errorDetails = getErrorDetails(error);
@@ -383,29 +393,33 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
     // orchestration lives in the conversation store; this only binds the actions.
     const scheduleHeteroContinuation = useConversationStore((s) => s.scheduleHeteroContinuation);
     const cancelHeteroContinuation = useConversationStore((s) => s.cancelHeteroContinuation);
-    const activeTopicScheduled = useChatStore(
-      (s) => topicSelectors.currentActiveTopic(s)?.status === 'scheduled',
-    );
     const activeAgentId = useChatStore((s) => s.activeAgentId);
-    const scheduledResetsAt = useChatStore((s) => {
-      const scheduledRun = topicSelectors.currentActiveTopic(s)?.metadata?.scheduledRun;
-      return scheduledRun?.kind === 'resume_after_rate_limit'
+    const conversationTopic = useChatStore((s) =>
+      conversationTopicId ? topicSelectors.getTopicById(conversationTopicId)(s) : undefined,
+    );
+    const conversationTopicScheduled = conversationTopic?.status === 'scheduled';
+    const scheduledRun = conversationTopic?.metadata?.scheduledRun;
+    const scheduledResetsAt =
+      scheduledRun?.kind === 'resume_after_rate_limit'
         ? scheduledRun.rateLimit?.resetsAt
         : undefined;
-    });
 
     const isRateLimitError =
       canCreate &&
       isHeterogeneousAgentStatusGuideError(sessionErrorBody) &&
       sessionErrorBody.code === HeterogeneousAgentSessionErrorCode.RateLimit;
     const rateLimitInfo = isHeterogeneousAgentStatusGuideError(sessionErrorBody)
-      ? sessionErrorBody.rateLimitInfo
+      ? readHeterogeneousErrorContext({ type: 'AgentRuntimeError', body: sessionErrorBody })
       : undefined;
 
     const schedule: HeterogeneousAgentScheduleState | undefined = isRateLimitError
       ? {
-          isScheduled: activeTopicScheduled,
-          onCancel: () => void cancelHeteroContinuation(),
+          isScheduled: conversationTopicScheduled,
+          onCancel: () =>
+            void cancelHeteroContinuation(conversationTopicId).catch((error) => {
+              console.error('[ErrorMessageExtra] Failed to cancel scheduled continuation:', error);
+              toast.error(t('heteroRateLimit.cancelFailed'));
+            }),
           // Same fallback as the retry button: `onRegenerate` is absent on the
           // standalone surfaces, where a bare `onRegenerate?.()` was a no-op.
           onRunNow: handleManualRetry,
@@ -438,6 +452,17 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
                   ? `/agent/${activeAgentId}/profile`
                   : '/settings/credential',
             )
+          }
+          onTransfer={
+            isRateLimitError && conversationAgentId && conversationTopicId
+              ? () =>
+                  createTopicForwardModal({
+                    cancelSourceContinuation: true,
+                    sourceAgentId: conversationAgentId,
+                    topicId: conversationTopicId,
+                    topicTitle: conversationTopic?.title || '',
+                  })
+              : undefined
           }
         />
       );
@@ -505,8 +530,9 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
     // Show a report action for unknown or fallback-bucket traceable errors.
     // Specific known error types keep their dedicated localized message below.
     if (
-      enableBusinessFeatures &&
-      (error?.type === ChatErrorType.InternalServerError || shouldShowTraceIdError(error))
+      (enableBusinessFeatures &&
+        (error?.type === ChatErrorType.InternalServerError || shouldShowTraceIdError(error))) ||
+      (isSharedTopic && error?.type === ChatErrorType.InternalServerError)
     ) {
       const traceId =
         typeof error?.body?.traceId === 'string' ? (error.body.traceId as string) : undefined;
@@ -514,8 +540,9 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
       return (
         <TraceIdError
           id={data.id}
+          showRetry={!isSharedTopic}
           traceId={traceId}
-          onRetry={canRetry ? handleManualRetry : undefined}
+          onRetry={!isSharedTopic && canRetry ? handleManualRetry : undefined}
         />
       );
     }
@@ -526,16 +553,17 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
         error={{
           ...alertError,
           message: displayMessage,
-          extra: errorDetails ? (
-            <Highlighter
-              actionIconSize={'small'}
-              language={'json'}
-              padding={8}
-              variant={'borderless'}
-            >
-              {JSON.stringify(errorDetails, null, 2)}
-            </Highlighter>
-          ) : undefined,
+          extra:
+            !isSharedTopic && errorDetails ? (
+              <Highlighter
+                actionIconSize={'small'}
+                language={'json'}
+                padding={8}
+                variant={'borderless'}
+              >
+                {JSON.stringify(errorDetails, null, 2)}
+              </Highlighter>
+            ) : undefined,
         }}
         onRegenerate={canRetry ? handleManualRetry : undefined}
       />

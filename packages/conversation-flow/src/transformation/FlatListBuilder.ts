@@ -1042,6 +1042,11 @@ export class FlatListBuilder {
               content: toolMsg.content || '',
               id: toolMsg.id,
             };
+            // A projected tool has an empty body and its real length here; the
+            // completion checks read this instead of the body.
+            if (typeof toolMsg.contentLength === 'number') {
+              result.contentLength = toolMsg.contentLength;
+            }
             if (toolMsg.error) result.error = toolMsg.error;
             if (toolMsg.pluginError) result.error = toolMsg.pluginError;
             if (toolMsg.pluginState) result.state = toolMsg.pluginState;

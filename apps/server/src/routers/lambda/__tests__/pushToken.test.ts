@@ -17,13 +17,17 @@ vi.mock('@/business/server/notification/liveActivity', () => ({
 }));
 
 vi.mock('@/database/models/pushToken', () => ({
-  PushLiveActivityModel: vi.fn(() => ({
-    unregisterDevice: mockUnregisterLiveActivities,
-  })),
-  PushTokenModel: vi.fn(() => ({
-    unregister: mockUnregister,
-    upsert: mockUpsert,
-  })),
+  PushLiveActivityModel: vi.fn(function () {
+    return {
+      unregisterDevice: mockUnregisterLiveActivities,
+    };
+  }),
+  PushTokenModel: vi.fn(function () {
+    return {
+      unregister: mockUnregister,
+      upsert: mockUpsert,
+    };
+  }),
   deletePushTokenByExpoTokenAndDevice: (...args: unknown[]) =>
     mockDeleteByExpoTokenAndDevice(...args),
 }));
