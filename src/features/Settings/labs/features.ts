@@ -22,6 +22,7 @@ type LabFeatureI18nKey =
   | 'heteroSessionImport'
   | 'imessage'
   | 'inputMarkdown'
+  | 'integrations'
   | 'messageTextSelectionActions'
   | 'oauthApps'
   | 'projects'
@@ -100,6 +101,12 @@ export const LAB_FEATURES: LabFeatureItem[] = [
     i18nKey: 'oauthApps',
     searchKeywords: ['oauth', 'oauth apps'],
     stage: 'beta',
+  },
+  {
+    flag: 'enableIntegrations',
+    i18nKey: 'integrations',
+    searchKeywords: ['integrations', 'github', 'github app', 'pull request'],
+    stage: 'alpha',
   },
   {
     flag: 'enableArtifactDeployment',

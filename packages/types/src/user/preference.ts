@@ -194,6 +194,11 @@ export const UserLabSchema = z.object({
    */
   enableMessageTextSelectionActions: z.boolean().optional(),
   /**
+   * show the Integrations settings page (GitHub App and the coming-soon
+   * directory); hidden until the closed loop leaves alpha
+   */
+  enableIntegrations: z.boolean().optional(),
+  /**
    * show OAuth app management in personal and workspace settings
    */
   enableOAuthApps: z.boolean().optional(),
