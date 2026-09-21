@@ -1,6 +1,7 @@
 import { promises as dns } from 'node:dns';
 import { isIP } from 'node:net';
 
+import { resolveSSRFPolicy } from '@lobechat/ssrf-safe-fetch/policy';
 import debug from 'debug';
 import { Agent, EnvHttpProxyAgent, getGlobalDispatcher, ProxyAgent } from 'undici';
 
@@ -230,7 +231,15 @@ const resolveSafeUrl = async (
     }
   }
 
-  if (answers.length === 0 || answers.some((entry) => isPrivateAddress(entry.address))) {
+  // An explicit administrator exception applies to caller-supplied URLs too.
+  // Check every DNS answer and every redirect; keep pinning the vetted address.
+  const { allowIPAddressList = [] } = resolveSSRFPolicy({ allowPrivateIPAddress: false });
+  if (
+    answers.length === 0 ||
+    answers.some(
+      (entry) => isPrivateAddress(entry.address) && !allowIPAddressList.includes(entry.address),
+    )
+  ) {
     log('resolveSafeUrl: refusing %s — resolves to a private address', host);
     return undefined;
   }
