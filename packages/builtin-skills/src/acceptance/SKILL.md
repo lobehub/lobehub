@@ -1,6 +1,6 @@
 ---
 name: acceptance
-version: 0.4.3
+version: 0.4.4
 description: >
   End-to-end verification and self-evidence for a delivery in any repository,
   with or without a preconfigured verify plan. Discover an existing plan when
@@ -182,7 +182,26 @@ transitions or verification conditions. Do not move execution nodes or start a
 new round just to reorganize the checklist; those operations have different
 execution semantics.
 
-1. Use the named acceptance (or create one with `lh acceptance create --help`).
+1. Use the named acceptance, or create one before publishing the flow:
+
+   ```bash
+   lh acceptance create --title "Checkout recovery" \
+     --requirement "Customers can recover from a declined payment and complete checkout" --json
+   ```
+
+   `--requirement` is required; `--title` is an optional standalone display title.
+   Without `--subject`, each call creates a new standalone acceptance — no task,
+   topic, operation ID, or report is needed. Pass `--subject task:<id>`,
+   `topic:<id>`, `document:<id>`, or `standalone:<id>` only for a named subject;
+   this reuses its acceptance when present without overwriting its recorded goal
+   or title. Linked subjects keep their own title.
+   JSON returns `acceptanceId`, `acceptanceUrl`, `requirement`, `status`, and
+   `subject: { subjectType, subjectId }`; `--json acceptanceId,acceptanceUrl`
+   selects only the ID and link. Use **acceptanceId**, not subjectId, below.
+   Creation adds no verification round, results, or passing verdict, and does
+   not reopen an accepted or closed acceptance. `lh acceptance run create`
+   creates a round, not an acceptance, and is not a substitute for this step.
+
    Write a JSON file with `definition: { title, entryNodeId, nodes, edges }`.
    Give nodes and edges stable UUIDs. Each node has `id` and exactly one of
    `criterionId` (existing check asset), `check: { id, title, definition }`
@@ -190,6 +209,7 @@ execution semantics.
    `subFlowId` (another flow in this acceptance). Edges have `id`, `sourceNodeId`,
    `targetNodeId`, `trigger`, `required`, and optional `condition`. Every node must
    be reachable from the entry. Publish child flows before referencing them.
+
 2. `lh acceptance flow publish <acceptanceId> --file flow.json` saves the
    definition and returns `flowId`. To edit it, include that `flowId` and the
    current `expectedHash` in the file. `lh acceptance flow view <acceptanceId>`
@@ -200,6 +220,7 @@ execution semantics.
    one that never should have existed, and only while it has no verified
    history: it is refused once a settled round has run it, or while another
    flow invokes it as a subflow.
+
 3. `lh acceptance flow plan <acceptanceId> --flow <flowId>` creates a draft round
    with the graph and its plan. While the round is only planned it follows the
    live graph: publishing an edit refreshes its snapshot and plan in place, and
@@ -207,6 +228,7 @@ execution semantics.
    round. Add `--run <verifyRunId>` to attach another flow to the same draft. Read `lh acceptance run get <verifyRunId> --json` for
    the actual plan IDs: each branch and subflow invocation has its own
    `checkItemId`; never substitute the reusable asset ID.
+
 4. Share the acceptance link so the user can inspect the proposed nodes, branches
    and expected outcomes before implementation. Read and address any actionable
    feedback. Preparing a plan neither executes checks nor approves delivery;
@@ -215,12 +237,14 @@ execution semantics.
    For requested changes, publish the revised definition with its `flowId` and
    `expectedHash`; the draft round follows automatically. Never open another
    round or another flow just to revise a plan that has not executed.
+
 5. Implement the work and exercise the real product, then use
    `lh acceptance flow record <acceptanceId> --file result.json`, containing
    `verifyRunId`, `checkItemId`, `verdict` (`passed`, `failed`, `uncertain`, or
    `blocked`) and `observation`. Record only what was observed. Use the returned
    result ID to attach required artifacts through `lh acceptance run evidence`
    (inspect its `--help`), following the same evidence rules as checklist checks.
+
 6. After all required checks are recorded and passed, run
    `lh acceptance flow complete <acceptanceId> --run <verifyRunId>`. Completion
    settles verification; it does not accept the delivery on the user's behalf.

@@ -1,10 +1,14 @@
+import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 
+import { acceptanceSubjectTypes } from '@lobechat/const/verify';
 import type { AcceptanceCheckGroup } from '@lobechat/types';
 import type { Command } from 'commander';
+import { InvalidArgumentError } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
+import { resolveServerUrl } from '../settings';
 import { outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
 import { attachAcceptanceFlowCommands } from './acceptanceFlow';
@@ -71,6 +75,75 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
     );
 
   attachAcceptanceFlowCommands(acceptance);
+
+  acceptance
+    .command('create')
+    .description('Create or reuse an acceptance without creating a verification round or results')
+    .requiredOption(
+      '--requirement <text>',
+      'Durable business goal (preserved when reusing a subject)',
+    )
+    .option('-t, --title <text>', 'Display title for a standalone acceptance')
+    .option(
+      '--subject <type:id>',
+      'Reuse or create for task/topic/document/standalone; omit for a new standalone acceptance',
+    )
+    .option(
+      '--json [fields]',
+      'Output JSON, optionally select fields (acceptanceId, acceptanceUrl, requirement, status, subject)',
+    )
+    .action(
+      async (options: {
+        json?: boolean | string;
+        requirement: string;
+        subject?: string;
+        title?: string;
+      }) => {
+        const requirement = options.requirement.trim();
+        const title = options.title?.trim();
+        if (!requirement) throw new InvalidArgumentError('--requirement must not be empty');
+        if (title === '') throw new InvalidArgumentError('--title must not be empty');
+
+        const subject =
+          options.subject === undefined
+            ? { subjectId: randomUUID(), subjectType: 'standalone' as const }
+            : parseSubjectRef(options.subject);
+        if (!subject) {
+          throw new InvalidArgumentError(
+            `--subject must be one of ${acceptanceSubjectTypes.map((type) => `${type}:<id>`).join(' | ')}`,
+          );
+        }
+
+        const client = await getTrpcClient();
+        const result = await client.acceptance.ensure.mutate({ ...subject, requirement, title });
+        const acceptanceUrl = new URL(
+          `/acceptance/${encodeURIComponent(result.id)}`,
+          resolveServerUrl(),
+        ).toString();
+
+        if (options.json !== undefined) {
+          outputJson(
+            {
+              acceptanceId: result.id,
+              acceptanceUrl,
+              requirement: result.requirement,
+              status: result.status,
+              subject: { subjectId: result.subjectId, subjectType: result.subjectType },
+            },
+            typeof options.json === 'string' ? options.json : undefined,
+          );
+          return;
+        }
+
+        console.log(`${pc.bold('acceptance')}: ${result.id} (${result.status})`);
+        console.log(`${pc.bold('open acceptance')}: ${acceptanceUrl}`);
+        console.log(
+          pc.dim(
+            'No verification round or results created. Use `lh acceptance flow publish` to add a plan.',
+          ),
+        );
+      },
+    );
 
   acceptance
     .command('regroup <idOrSubject>')
