@@ -68,7 +68,6 @@ export class DocumentActionImpl {
   readonly #get: () => DocumentStore;
   readonly #set: Setter;
   readonly #debouncedSaves = new Map<string, ReturnType<typeof debounce>>();
-  readonly #saveEpoch = new Map<string, number>();
 
   constructor(set: Setter, get: () => DocumentStore, _api?: unknown) {
     void _api;
@@ -76,16 +75,8 @@ export class DocumentActionImpl {
     this.#get = get;
   }
 
-  getSaveEpoch = (documentId: string): number => this.#saveEpoch.get(documentId) ?? 0;
-
-  discardPendingSaves = (documentId?: string): void => {
-    const ids = documentId
-      ? [documentId]
-      : [...this.#debouncedSaves.keys(), ...this.#saveEpoch.keys()];
-    for (const id of new Set(ids)) {
-      this.#saveEpoch.set(id, this.getSaveEpoch(id) + 1);
-      this.#debouncedSaves.get(id)?.cancel();
-    }
+  cancelDebouncedSave = (documentId: string): void => {
+    this.#debouncedSaves.get(documentId)?.cancel();
   };
 
   #getOrCreateDebouncedSave = (documentId: string) => {
@@ -93,11 +84,7 @@ export class DocumentActionImpl {
       const debouncedFn = debounce(
         async () => {
           try {
-            const saveEpoch = this.getSaveEpoch(documentId);
-            await this.#get().performSave(documentId, undefined, {
-              saveEpoch,
-              saveSource: 'autosave',
-            });
+            await this.#get().performSave(documentId, undefined, { saveSource: 'autosave' });
           } catch (error) {
             console.error('[DocumentStore] Failed to auto-save:', error);
           }
@@ -116,7 +103,6 @@ export class DocumentActionImpl {
       fn.cancel();
       this.#debouncedSaves.delete(documentId);
     }
-    this.#saveEpoch.delete(documentId);
   };
 
   /**
@@ -200,20 +186,23 @@ export class DocumentActionImpl {
 
     // Update activeDocumentId and editor
     this.#set(
-      {
-        activeDocumentId: documentId,
-        editor,
-        ...(sourceType === 'notebook' && topicId
-          ? {
-              lastActiveTopicDocumentIdByTopicId: {
-                ...this.#get().lastActiveTopicDocumentIdByTopicId,
-                [topicId]: documentId,
-              },
-            }
-          : {}),
-      },
+      { activeDocumentId: documentId, editor },
       false,
       n('initDocumentWithEditor:setActive'),
+    );
+    if (sourceType === 'notebook' && topicId) this.#rememberTopicDocument(topicId, documentId);
+  };
+
+  #rememberTopicDocument = (topicId: string, documentId: string) => {
+    this.#set(
+      {
+        lastActiveTopicDocumentIdByTopicId: {
+          ...this.#get().lastActiveTopicDocumentIdByTopicId,
+          [topicId]: documentId,
+        },
+      },
+      false,
+      n('rememberTopicDocument'),
     );
   };
 
@@ -262,21 +251,16 @@ export class DocumentActionImpl {
             return;
           }
 
-          const existing = this.#get().documents[documentId];
-          if (existing && !existing.isDirty) {
-            this.#get().applyServerSnapshot(documentId, {
-              content: document.content ?? undefined,
-              editorData:
-                (document.editorData as Record<string, unknown> | null | undefined) ?? null,
-              updatedAt: document.updatedAt,
-            });
+          if (this.#get().documents[documentId]) {
+            this.#get().reconcileRemote(documentId, document);
+            if (sourceType === 'notebook' && topicId) {
+              this.#rememberTopicDocument(topicId, documentId);
+            }
             if (sourceType === 'page') {
               usePageStore.getState().upsertDocument(document);
             }
             return;
           }
-
-          if (existing?.isDirty) return;
 
           this.#get().initDocumentWithEditor({
             autoSave,

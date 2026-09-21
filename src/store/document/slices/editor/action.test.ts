@@ -895,7 +895,7 @@ name: skill-name
       expect(result.current.documents['doc-1'].saveStatus).toBe('idle');
     });
 
-    it('marks the document lock-blocked (keeping unsaved content) when another editor holds the lock', async () => {
+    it('keeps a personal doc dirty and unblocked when the rebased retry conflicts again', async () => {
       const { result } = renderHook(() => useDocumentStore());
       const mockEditor = createValidMockEditor() as any;
 
@@ -909,17 +909,20 @@ name: skill-name
         result.current.markDirty('doc-1');
       });
 
-      const lockError = Object.assign(new Error('Document is being edited by another user'), {
+      const conflict = Object.assign(new Error('Document has been updated by another session'), {
         data: { code: 'CONFLICT' },
       });
-      vi.mocked(documentService.updateDocument).mockRejectedValueOnce(lockError);
+      vi.mocked(documentService.updateDocument)
+        .mockRejectedValueOnce(conflict)
+        .mockRejectedValueOnce(conflict);
 
       await act(async () => {
         await result.current.performSave('doc-1');
       });
 
-      expect(result.current.documents['doc-1'].saveBlockedByLock).toBe(true);
-      // Unsaved content is preserved, not silently dropped.
+      expect(documentService.updateDocument).toHaveBeenCalledTimes(2);
+      expect(documentService.releaseDocumentLock).not.toHaveBeenCalled();
+      expect(result.current.documents['doc-1'].saveBlockedByLock).toBeFalsy();
       expect(result.current.documents['doc-1'].isDirty).toBe(true);
       expect(result.current.documents['doc-1'].saveStatus).toBe('idle');
     });
@@ -1027,6 +1030,7 @@ name: skill-name
       vi.mocked(documentService.getDocumentById).mockResolvedValueOnce({
         content: '# Collaborator version',
         id: 'doc-1',
+        updatedAt: new Date('2026-01-01T00:00:30.000Z'),
       } as any);
 
       await act(async () => {
@@ -1035,8 +1039,52 @@ name: skill-name
 
       expect(documentService.acquireDocumentLock).not.toHaveBeenCalled();
       expect(documentService.updateDocument).toHaveBeenCalledTimes(1);
-      expect(result.current.documents['doc-1'].saveBlockedByLock).toBe(true);
-      expect(result.current.documents['doc-1'].isDirty).toBe(true);
+      expect(result.current.documents['doc-1']).toMatchObject({
+        content: '# Collaborator version',
+        isDirty: false,
+        lastSavedContent: '# Collaborator version',
+        lastUpdatedTime: new Date('2026-01-01T00:00:30.000Z'),
+        saveBlockedByLock: true,
+        saveStatus: 'idle',
+      });
+    });
+
+    it('keeps the lock-block without reconciling when the server row carries no version', async () => {
+      const { result } = renderHook(() => useDocumentStore());
+      const mockEditor = createValidMockEditor() as any;
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          content: '# Test',
+          documentId: 'doc-1',
+          editor: mockEditor,
+          sourceType: 'page',
+        });
+        result.current.internal_dispatchDocument({
+          id: 'doc-1',
+          type: 'updateDocument',
+          value: { lockOwnerId: 'owner-1' },
+        });
+        result.current.markDirty('doc-1');
+      });
+
+      const lockError = Object.assign(new Error('locked'), { data: { code: 'CONFLICT' } });
+      vi.mocked(documentService.updateDocument).mockRejectedValueOnce(lockError);
+      vi.mocked(documentService.getDocumentById).mockResolvedValueOnce({
+        content: '# Collaborator version',
+        id: 'doc-1',
+      } as any);
+
+      await act(async () => {
+        await result.current.performSave('doc-1');
+      });
+
+      expect(documentService.updateDocument).toHaveBeenCalledTimes(1);
+      expect(result.current.documents['doc-1']).toMatchObject({
+        content: '# Test',
+        isDirty: true,
+        saveBlockedByLock: true,
+      });
     });
 
     it('does not retry a save that carries metadata (title/emoji cannot be version-checked)', async () => {
@@ -1281,7 +1329,7 @@ name: skill-name
       expect(result.current.documents['doc-1'].isDirty).toBe(true);
     });
 
-    it('does not attempt a lock reclaim when the document has no lock owner id', async () => {
+    it('rebases and retries once without a lock reclaim when the document has no lock owner id', async () => {
       const { result } = renderHook(() => useDocumentStore());
       const mockEditor = createValidMockEditor() as any;
 
@@ -1291,21 +1339,88 @@ name: skill-name
           documentId: 'doc-1',
           editor: mockEditor,
           sourceType: 'page',
+          updatedAt: new Date('2025-12-31T00:00:00.000Z'),
         });
         result.current.markDirty('doc-1');
       });
 
-      const lockError = Object.assign(new Error('Document is being edited by another user'), {
+      const conflict = Object.assign(new Error('Document has been updated by another session'), {
         data: { code: 'CONFLICT' },
       });
-      vi.mocked(documentService.updateDocument).mockRejectedValueOnce(lockError);
+      vi.mocked(documentService.updateDocument)
+        .mockRejectedValueOnce(conflict)
+        .mockResolvedValueOnce({
+          historyAppended: false,
+          id: 'doc-1',
+          updatedAt: '2026-01-02T00:00:00.000Z',
+        });
 
       await act(async () => {
         await result.current.performSave('doc-1');
       });
 
       expect(documentService.acquireDocumentLock).not.toHaveBeenCalled();
-      expect(result.current.documents['doc-1'].saveBlockedByLock).toBe(true);
+      expect(documentService.updateDocument).toHaveBeenCalledTimes(2);
+      expect(documentService.updateDocument).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ expectedUpdatedAt: new Date('2025-12-31T00:00:00.000Z') }),
+      );
+      expect(documentService.updateDocument).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ expectedUpdatedAt: new Date('2026-01-01T00:00:00.000Z') }),
+      );
+      expect(result.current.documents['doc-1']).toMatchObject({
+        isDirty: false,
+        lastUpdatedTime: new Date('2026-01-02T00:00:00.000Z'),
+        saveBlockedByLock: false,
+        saveStatus: 'saved',
+      });
+    });
+
+    it('adopts the remote body and reports saved when a personal doc conflicts with a newer row', async () => {
+      const { result } = renderHook(() => useDocumentStore());
+      const mockEditor = createValidMockEditor() as any;
+      const remoteEditorData = {
+        root: { children: [{ children: [{ text: 'Agent' }], type: 'paragraph' }], type: 'root' },
+      };
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          content: '# Test',
+          documentId: 'doc-1',
+          editor: mockEditor,
+          sourceType: 'page',
+          updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+        });
+        result.current.markDirty('doc-1');
+      });
+
+      const conflict = Object.assign(new Error('Document has been updated by another session'), {
+        data: { code: 'CONFLICT' },
+      });
+      vi.mocked(documentService.updateDocument).mockRejectedValueOnce(conflict);
+      vi.mocked(documentService.getDocumentById).mockResolvedValueOnce({
+        content: '# Agent write',
+        editorData: remoteEditorData,
+        id: 'doc-1',
+        updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+      } as any);
+
+      await act(async () => {
+        await result.current.performSave('doc-1');
+      });
+
+      expect(documentService.updateDocument).toHaveBeenCalledTimes(1);
+      expect(documentService.acquireDocumentLock).not.toHaveBeenCalled();
+      expect(result.current.documents['doc-1']).toMatchObject({
+        content: '# Agent write',
+        editorData: remoteEditorData,
+        isDirty: false,
+        lastSavedContent: '# Agent write',
+        lastUpdatedTime: new Date('2026-01-02T00:00:00.000Z'),
+        saveStatus: 'saved',
+      });
+      expect(result.current.documents['doc-1'].saveBlockedByLock).toBeFalsy();
     });
 
     it('clears the lock-blocked flag after the next successful save', async () => {
@@ -1319,11 +1434,20 @@ name: skill-name
           editor: mockEditor,
           sourceType: 'page',
         });
+        result.current.internal_dispatchDocument({
+          id: 'doc-1',
+          type: 'updateDocument',
+          value: { lockOwnerId: 'owner-1' },
+        });
         result.current.markDirty('doc-1');
       });
 
       const lockError = Object.assign(new Error('locked'), { data: { code: 'CONFLICT' } });
       vi.mocked(documentService.updateDocument).mockRejectedValueOnce(lockError);
+      vi.mocked(documentService.acquireDocumentLock).mockResolvedValueOnce({
+        holderId: 'user-2',
+        lockedByOther: true,
+      } as any);
       await act(async () => {
         await result.current.performSave('doc-1');
       });
@@ -1356,11 +1480,20 @@ name: skill-name
           editor: mockEditor,
           sourceType: 'page',
         });
+        result.current.internal_dispatchDocument({
+          id: 'doc-1',
+          type: 'updateDocument',
+          value: { lockOwnerId: 'owner-1' },
+        });
         result.current.markDirty('doc-1');
       });
 
       const lockError = Object.assign(new Error('locked'), { data: { code: 'CONFLICT' } });
       vi.mocked(documentService.updateDocument).mockRejectedValueOnce(lockError);
+      vi.mocked(documentService.acquireDocumentLock).mockResolvedValueOnce({
+        holderId: 'user-2',
+        lockedByOther: true,
+      } as any);
       await act(async () => {
         await result.current.performSave('doc-1');
       });
@@ -1584,64 +1717,150 @@ name: skill-name
     });
   });
 
-  describe('applyServerSnapshot', () => {
-    it('drops a pending autosave so it cannot overwrite the remote write', async () => {
-      vi.useFakeTimers();
-      const { result } = renderHook(() => useDocumentStore());
-      const mockEditor = createValidMockEditor() as any;
-      const remoteEditorData = {
-        root: { children: [{ children: [{ text: 'Agent' }], type: 'paragraph' }], type: 'root' },
-      };
-
+  describe('reconcileRemote', () => {
+    const baseEditorData = {
+      root: { children: [{ children: [], type: 'paragraph' }], type: 'root' },
+    };
+    const initDirtyDoc = (result: { current: ReturnType<typeof useDocumentStore.getState> }) => {
       act(() => {
         result.current.initDocumentWithEditor({
           content: '# Old',
           documentId: 'doc-1',
-          editor: mockEditor,
-          editorData: { root: { children: [{ children: [], type: 'paragraph' }], type: 'root' } },
+          editor: createValidMockEditor() as any,
+          editorData: baseEditorData,
           sourceType: 'page',
           updatedAt: new Date('2026-01-01T00:00:00.000Z'),
         });
         result.current.markDirty('doc-1');
         result.current.triggerDebouncedSave('doc-1');
       });
-
       vi.mocked(documentService.updateDocument).mockClear();
+    };
 
+    it('is a no-op when the row version matches the known version', async () => {
+      vi.useFakeTimers();
+      const { result } = renderHook(() => useDocumentStore());
+      initDirtyDoc(result);
+
+      let outcome: string | undefined;
       act(() => {
-        result.current.applyServerSnapshot('doc-1', {
+        outcome = result.current.reconcileRemote('doc-1', {
+          content: '# Something else',
+          updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+        });
+      });
+
+      expect(outcome).toBe('unchanged');
+      expect(result.current.documents['doc-1']).toMatchObject({ content: '# Old', isDirty: true });
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5000);
+      });
+      expect(documentService.updateDocument).toHaveBeenCalledTimes(1);
+      vi.useRealTimers();
+    });
+
+    it('rebases the version and keeps the draft + pending autosave when only metadata moved', async () => {
+      vi.useFakeTimers();
+      const { result } = renderHook(() => useDocumentStore());
+      initDirtyDoc(result);
+
+      let outcome: string | undefined;
+      act(() => {
+        outcome = result.current.reconcileRemote('doc-1', {
+          content: '# Old',
+          editorData: structuredClone(baseEditorData),
+          updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+        });
+      });
+
+      expect(outcome).toBe('rebased');
+      expect(result.current.documents['doc-1']).toMatchObject({
+        content: '# Old',
+        isDirty: true,
+        lastUpdatedTime: new Date('2026-01-02T00:00:00.000Z'),
+      });
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5000);
+      });
+      expect(documentService.updateDocument).toHaveBeenCalledTimes(1);
+      expect(documentService.updateDocument).toHaveBeenCalledWith(
+        expect.objectContaining({ expectedUpdatedAt: new Date('2026-01-02T00:00:00.000Z') }),
+      );
+      vi.useRealTimers();
+    });
+
+    it('treats null and undefined editorData as the same body', () => {
+      const { result } = renderHook(() => useDocumentStore());
+      act(() => {
+        result.current.initDocumentWithEditor({
+          content: '# Old',
+          documentId: 'doc-1',
+          editor: createValidMockEditor() as any,
+          sourceType: 'page',
+          updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+        });
+      });
+
+      let outcome: string | undefined;
+      act(() => {
+        outcome = result.current.reconcileRemote('doc-1', {
+          content: '# Old',
+          editorData: null,
+          updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+        });
+      });
+
+      expect(outcome).toBe('rebased');
+    });
+
+    it('adopts the remote body, clears dirty and cancels the pending autosave', async () => {
+      vi.useFakeTimers();
+      const { result } = renderHook(() => useDocumentStore());
+      initDirtyDoc(result);
+      const remoteEditorData = {
+        root: { children: [{ children: [{ text: 'Agent' }], type: 'paragraph' }], type: 'root' },
+      };
+
+      let outcome: string | undefined;
+      act(() => {
+        outcome = result.current.reconcileRemote('doc-1', {
           content: '# Agent write',
           editorData: remoteEditorData,
           updatedAt: new Date('2026-01-02T00:00:00.000Z'),
         });
       });
-
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(2000);
+        await vi.advanceTimersByTimeAsync(5000);
       });
 
+      expect(outcome).toBe('adopted');
       expect(documentService.updateDocument).not.toHaveBeenCalled();
       expect(result.current.documents['doc-1']).toMatchObject({
         content: '# Agent write',
+        editorData: remoteEditorData,
         isDirty: false,
         lastSavedContent: '# Agent write',
+        lastSavedEditorData: remoteEditorData,
+        lastUpdatedTime: new Date('2026-01-02T00:00:00.000Z'),
+        saveBlockedByLock: false,
+        saveStatus: 'saved',
       });
       vi.useRealTimers();
     });
+  });
 
-    it('sends the last known updatedAt so a slipped autosave cannot clobber a newer row', async () => {
+  describe('performSave versioning', () => {
+    it('sends the last known updatedAt as expectedUpdatedAt', async () => {
       const { result } = renderHook(() => useDocumentStore());
-      const mockEditor = createValidMockEditor() as any;
       const updatedAt = new Date('2026-01-01T00:00:00.000Z');
 
       act(() => {
         result.current.initDocumentWithEditor({
           content: '# Test',
           documentId: 'doc-1',
-          editor: mockEditor,
-          editorData: {
-            root: { children: [{ children: [], type: 'paragraph' }], type: 'root' },
-          },
+          editor: createValidMockEditor() as any,
           sourceType: 'page',
           updatedAt,
         });
@@ -1653,11 +1872,77 @@ name: skill-name
       });
 
       expect(documentService.updateDocument).toHaveBeenCalledWith(
-        expect.objectContaining({
-          expectedUpdatedAt: updatedAt,
-          id: 'doc-1',
-        }),
+        expect.objectContaining({ expectedUpdatedAt: updatedAt, id: 'doc-1' }),
       );
+    });
+
+    it('omits expectedUpdatedAt when no version is known and adopts the server version', async () => {
+      const { result } = renderHook(() => useDocumentStore());
+      vi.mocked(documentService.updateDocument).mockResolvedValueOnce({
+        historyAppended: false,
+        id: 'doc-1',
+        updatedAt: '2026-03-03T00:00:00.000Z',
+      });
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          content: '# Test',
+          documentId: 'doc-1',
+          editor: createValidMockEditor() as any,
+          sourceType: 'page',
+        });
+        result.current.markDirty('doc-1');
+      });
+      expect(result.current.documents['doc-1'].lastUpdatedTime).toBeNull();
+
+      await act(async () => {
+        await result.current.performSave('doc-1');
+      });
+
+      const params = vi.mocked(documentService.updateDocument).mock.calls[0][0];
+      expect('expectedUpdatedAt' in params).toBe(false);
+      expect(result.current.documents['doc-1'].lastUpdatedTime).toEqual(
+        new Date('2026-03-03T00:00:00.000Z'),
+      );
+    });
+
+    it('does not roll the store back when the save result is older than the current version', async () => {
+      const { result } = renderHook(() => useDocumentStore());
+      const remoteEditorData = {
+        root: { children: [{ children: [{ text: 'Agent' }], type: 'paragraph' }], type: 'root' },
+      };
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          content: '# Test',
+          documentId: 'doc-1',
+          editor: createValidMockEditor() as any,
+          sourceType: 'page',
+          updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+        });
+        result.current.markDirty('doc-1');
+      });
+
+      vi.mocked(documentService.updateDocument).mockImplementationOnce(async () => {
+        useDocumentStore.getState().reconcileRemote('doc-1', {
+          content: '# Agent write',
+          editorData: remoteEditorData,
+          updatedAt: new Date('2026-01-03T00:00:00.000Z'),
+        });
+        return { historyAppended: false, id: 'doc-1', updatedAt: '2026-01-02T00:00:00.000Z' };
+      });
+
+      await act(async () => {
+        await result.current.performSave('doc-1');
+      });
+
+      expect(result.current.documents['doc-1']).toMatchObject({
+        content: '# Agent write',
+        isDirty: false,
+        lastSavedContent: '# Agent write',
+        lastUpdatedTime: new Date('2026-01-03T00:00:00.000Z'),
+        saveStatus: 'saved',
+      });
     });
   });
 });
