@@ -13,6 +13,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-block: 14px;
     padding-inline: 16px;
     border-radius: ${cssVar.borderRadiusLG};
+
+    background: ${cssVar.colorFillQuaternary};
+
     transition:
       background 0.2s ease,
       border-color 0.2s ease;

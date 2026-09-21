@@ -1,4 +1,4 @@
-import { Figma, Notion, Vercel, Zapier } from '@lobehub/icons';
+import { Cloudflare, Notion, Railway, Vercel } from '@lobehub/icons';
 import type { ComponentType } from 'react';
 
 /** Stable id of an integration; doubles as its settings sub-route (`/settings/integrations/<id>`). */
@@ -31,8 +31,13 @@ export const findIntegration = (id: string | undefined): IntegrationDefinition |
 export const isIntegrationId = (value: string | undefined): value is IntegrationId =>
   !!value && INTEGRATIONS.some((item) => item.id === value);
 
-/** Integrations on the roadmap: shown in the directory as a hint, not openable. */
-export type UpcomingIntegrationId = 'figma' | 'notion' | 'vercel' | 'zapier';
+/**
+ * Integrations on the roadmap: shown in the directory as a hint, not
+ * openable. Chosen for the same reason GitHub came first — each is a
+ * platform that reports back on an agent's work (a failed deployment, a
+ * build error, a comment on a document) and can wake the agent with it.
+ */
+export type UpcomingIntegrationId = 'cloudflare' | 'notion' | 'railway' | 'vercel';
 
 export interface UpcomingIntegration {
   icon: IntegrationDefinition['icon'];
@@ -41,8 +46,8 @@ export interface UpcomingIntegration {
 }
 
 export const UPCOMING_INTEGRATIONS: UpcomingIntegration[] = [
-  { icon: Notion, id: 'notion', name: 'Notion' },
-  { icon: Figma, id: 'figma', name: 'Figma' },
   { icon: Vercel, id: 'vercel', name: 'Vercel' },
-  { icon: Zapier, id: 'zapier', name: 'Zapier' },
+  { icon: Railway, id: 'railway', name: 'Railway' },
+  { icon: Cloudflare, id: 'cloudflare', name: 'Cloudflare' },
+  { icon: Notion, id: 'notion', name: 'Notion' },
 ];

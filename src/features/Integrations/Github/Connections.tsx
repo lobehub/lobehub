@@ -13,6 +13,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-block: 2px;
     padding-inline: 16px;
     border-radius: ${cssVar.borderRadiusLG};
+    background: ${cssVar.colorFillQuaternary};
   `,
   dot: css`
     display: inline-block;

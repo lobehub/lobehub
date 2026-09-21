@@ -49,14 +49,14 @@
   "origin.provider.github": "GitHub",
   "overview.all": "全部集成",
   "overview.comingSoon": "即将支持",
-  "overview.description": "把 LobeHub 连接到你的智能体使用的工具",
+  "overview.description": "连接到你正在使用的平台",
   "overview.enabled": "已启用",
   "overview.status.comingSoon": "即将支持",
   "overview.status.enabled": "已启用",
   "overview.status.notConnected": "未连接",
   "overview.title": "集成",
-  "upcoming.figma.tagline": "把设计稿交给智能体，拿回实现",
+  "upcoming.cloudflare.tagline": "Workers / Pages 构建失败时通知智能体",
   "upcoming.notion.tagline": "自动同步 Notion 文档",
-  "upcoming.vercel.tagline": "在会话里看预览部署和构建结果",
-  "upcoming.zapier.tagline": "从上千个应用触发智能体"
+  "upcoming.railway.tagline": "部署失败或服务崩溃时通知智能体",
+  "upcoming.vercel.tagline": "部署失败时把构建日志送给智能体"
 }
