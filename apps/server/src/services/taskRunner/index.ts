@@ -3,6 +3,7 @@ import { AcceptanceEvidenceIdentifier } from '@lobechat/builtin-tool-acceptance-
 import { BriefIdentifier } from '@lobechat/builtin-tool-brief';
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import type { ExecAgentResult, TaskItem, TaskRunTrigger } from '@lobechat/types';
+import { readTaskExecutionConfig } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
@@ -16,6 +17,7 @@ import { AiAgentService } from '@/server/services/aiAgent';
 import { TaskLifecycleService } from '@/server/services/taskLifecycle';
 
 import { buildTaskPrompt } from './buildTaskPrompt';
+import { resolveTaskRunExecution } from './resolveRunExecution';
 
 const log = debug('task-runner');
 
@@ -213,6 +215,11 @@ export class TaskRunnerService {
         }
       }
 
+      // The execution selection the task itself carries — a pinned device and/or
+      // a working directory. Undefined when the task pins nothing, in which case
+      // the run keeps inheriting the assignee agent's target and cwd.
+      const runExecution = resolveTaskRunExecution(readTaskExecutionConfig(taskConfig));
+
       log('runTask: %s (continue=%s)', taskIdentifier, continueTopicId);
 
       const result = await aiAgentService.execAgent({
@@ -255,7 +262,25 @@ export class TaskRunnerService {
         title: extraPrompt ? extraPrompt.slice(0, 100) : task.name || task.identifier,
         trigger: TopicTrigger.RunTask,
         userInterventionConfig: { approvalMode: 'headless' },
-        ...(continueTopicId && { appContext: { topicId: continueTopicId } }),
+        // The task's own pin, when it has one. `deviceId` forces device routing
+        // unless the agent's selection policy is `fixed` (author-controlled
+        // targets stay authoritative — same rule the chat picker follows), and
+        // the directory rides into the topic this run creates.
+        ...(runExecution?.deviceId ? { deviceId: runExecution.deviceId } : {}),
+        ...(continueTopicId || runExecution?.initialTopicMetadata
+          ? {
+              appContext: {
+                ...(continueTopicId && { topicId: continueTopicId }),
+                // A continued topic keeps its own metadata (the server ignores
+                // this for an existing topic), so it is only meaningful on a
+                // fresh run — sent anyway so the task's intent is not lost if
+                // that ever changes.
+                ...(runExecution?.initialTopicMetadata && {
+                  initialTopicMetadata: runExecution.initialTopicMetadata,
+                }),
+              },
+            }
+          : {}),
       });
 
       if (!result.success) {

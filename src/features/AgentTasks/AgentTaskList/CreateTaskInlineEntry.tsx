@@ -1,7 +1,8 @@
 'use client';
 
 import { canWorkspaceRoleBeTaskAssignee } from '@lobechat/const/rbac';
-import type { TaskIntentAnalysis } from '@lobechat/types';
+import type { TaskExecutionConfig, TaskIntentAnalysis } from '@lobechat/types';
+import { readTaskExecutionConfig, toTaskExecutionConfigPatch } from '@lobechat/types';
 import { useEditor } from '@lobehub/editor/react';
 import { Block, DropdownMenu, Flexbox } from '@lobehub/ui';
 import { ActionIcon, Button, Text, toast } from '@lobehub/ui/base-ui';
@@ -34,6 +35,7 @@ import AssigneeAgentSelector from '../features/AssigneeAgentSelector';
 import AssigneeAvatar from '../features/AssigneeAvatar';
 import AssigneeMemberSelector from '../features/AssigneeMemberSelector';
 import AssigneeUserAvatar from '../features/AssigneeUserAvatar';
+import TaskExecutionControls from '../features/TaskExecutionControls';
 import TaskPriorityTag from '../features/TaskPriorityTag';
 import TaskVisibilityChipLabel from '../features/TaskVisibilityChipLabel';
 import TaskVisibilityTag from '../features/TaskVisibilityTag';
@@ -117,6 +119,10 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   const [assigneeUserId, setAssigneeUserId] = useState<string | undefined>();
   const [instruction, setInstruction] = useState('');
   const [hasAttachments, setHasAttachments] = useState(false);
+  // Where this task will run, if not simply wherever the assignee agent runs.
+  // Undefined = inherit; it is only sent when the user actually pinned
+  // something, so an untouched composer creates exactly what it used to.
+  const [execution, setExecution] = useState<TaskExecutionConfig | undefined>();
   // Default to workspace-visible (or the parent's visibility for subtasks).
   // In personal mode the chip is hidden and the value is never sent.
   const [visibility, setVisibility] = useState<'private' | 'public'>(defaultVisibility);
@@ -180,6 +186,19 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
 
   const handleAgentChange = useCallback((nextAgentId: string | null) => {
     setAssigneeAgentId(nextAgentId ?? undefined);
+    // The repo list is the assignee's own (its provider env), so a selection
+    // made for the previous agent must not silently carry over to another one.
+    // A pinned device is the user's machine and stays valid across agents.
+    setExecution((current) =>
+      current?.repos
+        ? {
+            ...current,
+            repos: undefined,
+            workingDirectory: undefined,
+            workingDirectoryConfig: undefined,
+          }
+        : current,
+    );
   }, []);
   const handleMemberChange = useCallback((nextUserId: string | null) => {
     setAssigneeUserId(nextUserId ?? undefined);
@@ -235,6 +254,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
       const draft = JSON.parse(raw) as {
         assigneeAgentId?: string;
         assigneeUserId?: string;
+        execution?: unknown;
         markdown?: string;
         priority?: number;
         visibility?: 'private' | 'public';
@@ -242,6 +262,10 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
       if (draft.markdown) editor.setDocument?.('markdown', draft.markdown);
       if (typeof draft.priority === 'number') setPriority(draft.priority);
       if (!lockAssignee && draft.assigneeAgentId) setAssigneeAgentId(draft.assigneeAgentId);
+      // Re-validated rather than trusted: the draft is a browser string that a
+      // previous release (or another tab) may have written in another shape, and
+      // a malformed run location must degrade to "inherit", never reach a create.
+      setExecution(readTaskExecutionConfig({ execution: draft.execution }));
       if (
         draft.assigneeUserId &&
         (!activeWorkspaceId || assignableMemberIds.has(draft.assigneeUserId))
@@ -280,6 +304,9 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
           // `lockAssignee` locks only the scoped Agent. The responsible
           // member remains an independent draft field and must survive reloads.
           assigneeUserId,
+          // `undefined` (the whole selection is `undefined`) drops the key, so
+          // an untouched composer writes the same draft shape as before.
+          execution,
           markdown,
           priority,
           visibility,
@@ -294,6 +321,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     draftHydratedKey,
     draftStorageKey,
     editor,
+    execution,
     instruction,
     lockAssignee,
     priority,
@@ -327,6 +355,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     setAssigneeAgentId(agentId);
     setAssigneeUserId(undefined);
     setInstruction('');
+    setExecution(undefined);
     setVisibility(defaultVisibility);
     setAnalysis(null);
     setIntentAnswers({});
@@ -391,6 +420,10 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
         const result = await createTask({
           assigneeAgentId,
           assigneeUserId,
+          // Only present when the user pinned a run location / directory. Left
+          // out otherwise so the task inherits the assignee agent entirely,
+          // which is what tasks did before they could carry a selection.
+          ...(execution ? { config: { execution: toTaskExecutionConfigPatch(execution) } } : {}),
           editorData: draft.editorJson,
           instruction: draft.instruction,
           name: draft.name,
@@ -463,6 +496,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
       assigneeAgentId,
       assigneeUserId,
       createTask,
+      execution,
       navigate,
       onCreated,
       parentTaskId,
@@ -808,6 +842,13 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
                 </Block>
               </AssigneeAgentSelector>
             )}
+
+            <TaskExecutionControls
+              assigneeAgentId={assigneeAgentId}
+              disabled={!canCreateTask}
+              value={execution}
+              onChange={setExecution}
+            />
 
             <ActionIcon
               icon={Paperclip}

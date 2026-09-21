@@ -92,7 +92,7 @@ export const tasks = pgTable(
 
     // Context & config (each task independent, no inheritance from parent)
     context: jsonb('context').default({}),
-    config: jsonb('config').default({}), // CheckpointConfig, ReviewConfig, etc.
+    config: jsonb('config').default({}), // CheckpointConfig, ReviewConfig, TaskExecutionConfig, etc.
     error: text('error'),
 
     // Visibility (mirrors agent.visibility semantics). Workspace-mode rows can be

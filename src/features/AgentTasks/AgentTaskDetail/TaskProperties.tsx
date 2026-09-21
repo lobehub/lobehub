@@ -1,17 +1,21 @@
 import type { TaskPriority, TaskStatus } from '@lobechat/types';
+import { applyTaskReposSelection, readTaskExecutionConfig } from '@lobechat/types';
 import { Block } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { memo } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { usePermission } from '@/hooks/usePermission';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
 import AssigneeMemberSelector from '../features/AssigneeMemberSelector';
 import AssigneeUserAvatar from '../features/AssigneeUserAvatar';
+import TaskDeviceChip from '../features/TaskDeviceChip';
 import TaskPriorityTag from '../features/TaskPriorityTag';
+import TaskRepoChip from '../features/TaskRepoChip';
 import TaskStatusTag from '../features/TaskStatusTag';
 import TaskTriggerTag from '../features/TaskTriggerTag';
 import { UnassignedAssigneeIcon } from '../features/UnassignedAssigneeIcon';
@@ -60,8 +64,31 @@ const TaskProperties = memo(() => {
   const automationMode = useTaskStore(taskDetailSelectors.activeTaskAutomationMode);
   const schedulePattern = useTaskStore(taskDetailSelectors.activeTaskSchedulePattern);
   const scheduleTimezone = useTaskStore(taskDetailSelectors.activeTaskScheduleTimezone);
+  const assigneeAgentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
+  const taskConfig = useTaskStore((s) => taskDetailSelectors.activeTaskDetail(s)?.config);
+  const updateTaskExecution = useTaskStore((s) => s.updateTaskExecution);
+  const { allowed: canEditTask } = usePermission('create_content');
   const memberMeta = useUserDisplayMeta(assigneeUserId);
   const activeWorkspaceId = useActiveWorkspaceId();
+
+  // Derived from the raw `config` reference so the reader runs once per config
+  // change: it builds a fresh object, which as a store selector would report a
+  // change on every unrelated update.
+  const execution = useMemo(() => readTaskExecutionConfig(taskConfig), [taskConfig]);
+
+  const handleDeviceChange = useCallback(
+    (deviceId?: string) => {
+      if (taskId) void updateTaskExecution(taskId, { ...execution, boundDeviceId: deviceId });
+    },
+    [execution, taskId, updateTaskExecution],
+  );
+
+  const handleReposChange = useCallback(
+    (repos?: string[]) => {
+      if (taskId) void updateTaskExecution(taskId, applyTaskReposSelection(execution, repos));
+    },
+    [execution, taskId, updateTaskExecution],
+  );
 
   if (!taskId) return null;
 
@@ -136,6 +163,27 @@ const TaskProperties = memo(() => {
             )}
           </Block>
         </AssigneeMemberSelector>
+      )}
+
+      {/* Where the runs go. Read-only members still see it — knowing the task is
+          pinned to another machine is exactly the context they need. */}
+      {assigneeAgentId && (
+        <TaskDeviceChip
+          agentId={assigneeAgentId}
+          className={styles.propertyItem}
+          disabled={!canEditTask}
+          value={execution?.boundDeviceId}
+          onChange={handleDeviceChange}
+        />
+      )}
+      {assigneeAgentId && (
+        <TaskRepoChip
+          agentId={assigneeAgentId}
+          className={styles.propertyItem}
+          disabled={!canEditTask}
+          value={execution?.repos}
+          onChange={handleReposChange}
+        />
       )}
 
       <TaskScheduleConfig>

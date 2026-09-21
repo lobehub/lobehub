@@ -3,7 +3,9 @@ import type {
   TaskAutomationMode,
   TaskAutomationSnapshot,
   TaskDetailData,
+  TaskExecutionConfig,
 } from '@lobechat/types';
+import { toTaskExecutionConfigPatch } from '@lobechat/types';
 
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
@@ -184,6 +186,44 @@ export class TaskConfigSliceActionImpl {
         saveToast(error, { retry: () => void this.#get().updateTaskModelConfig(id, modelConfig) });
       },
       // Best-effort toggle — the toast + refetch surface the failure, callers don't rethrow.
+      rethrow: false,
+      setStatus: (status) => this.#get().internal_setTaskSaveStatus(id, status),
+    });
+  };
+
+  /**
+   * Set where this task's runs execute — a pinned device and/or a working
+   * directory. `undefined` (or an axis set to `undefined`) returns that axis to
+   * inheritance, so a task that pins nothing runs wherever its assignee agent
+   * does.
+   *
+   * Written through `task.updateConfig`, which DEEP MERGES, and never through
+   * `task.update`: that one replaces the whole `config` column and would take
+   * model / brief / review / checkpoint down with it. `toTaskExecutionConfigPatch`
+   * therefore writes every axis explicitly, `null` for a cleared one — under a
+   * merge an omitted key keeps its previous value, which would leave the old
+   * device or directory in place while the control reads "follow the agent".
+   */
+  updateTaskExecution = async (id: string, execution?: TaskExecutionConfig): Promise<void> => {
+    const patch = toTaskExecutionConfigPatch(execution);
+    // Optimistic — the chip flips immediately; a failed save refreshes back.
+    this.#get().internal_dispatchTaskDetail({
+      id,
+      type: 'updateTaskDetail',
+      value: { config: { ...this.#get().taskDetailMap[id]?.config, execution: patch } },
+    });
+    await runMutation(this.#set, this.#get, {
+      mutate: async () => {
+        await taskService.updateConfig(id, { execution: patch });
+        await this.#get().internal_refreshTaskDetail(id);
+      },
+      name: 'updateTaskExecution',
+      onError: async (error) => {
+        console.error('[TaskStore] Failed to update task execution:', error);
+        await this.#get().internal_refreshTaskDetail(id);
+        saveToast(error, { retry: () => void this.#get().updateTaskExecution(id, execution) });
+      },
+      // Best-effort — the toast + refetch surface the failure, callers don't rethrow.
       rethrow: false,
       setStatus: (status) => this.#get().internal_setTaskSaveStatus(id, status),
     });
