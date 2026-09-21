@@ -185,7 +185,6 @@
   "topics.addLocation": "添加工作目录（可选）",
   "topics.all": "全部话题",
   "topics.associateFailed": "无法将对话归入项目",
-  "topics.bindingUnavailable": "项目目录关联已失效。请在项目设置中重新关联工作位置。",
   "topics.chooseLocation": "选择工作目录",
   "topics.chooseTopic": "从左侧选择话题，或新建话题开始工作",
   "topics.complete": "标记完成",

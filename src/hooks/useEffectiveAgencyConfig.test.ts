@@ -17,7 +17,7 @@ vi.mock('@/features/ResourcePermission/useAgentManagementAccess', () => ({
 
 const topicState = vi.hoisted(() => ({
   activeAgentId: 'agent-1',
-  metadata: {} as { projectExecution?: { deviceId: string } },
+  metadata: {} as { boundDeviceId?: string },
 }));
 vi.mock('@/store/chat', () => ({
   useChatStore: (selector: (s: typeof topicState) => unknown) => selector(topicState),
@@ -258,7 +258,7 @@ describe('useEffectiveAgencyConfig', () => {
 
   it('pins the conversation device without changing the agent default', () => {
     setupStores();
-    topicState.metadata = { projectExecution: { deviceId: 'project-device' } };
+    topicState.metadata = { boundDeviceId: 'project-device' };
     const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
     expect(result.current.agencyConfig?.boundDeviceId).toBe('project-device');
     expect(result.current.canSelectExecutionTarget).toBe(false);

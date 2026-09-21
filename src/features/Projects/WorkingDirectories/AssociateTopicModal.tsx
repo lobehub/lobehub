@@ -44,8 +44,7 @@ function AssociateTopicContent({ topicId, agentId }: { topicId: string; agentId?
   const source = getWorkingDirSourcePath(
     topic.data?.metadata?.workingDirectoryConfig ?? topic.data?.metadata?.workingDirectory,
   );
-  const deviceId =
-    topic.data?.metadata?.projectExecution?.deviceId ?? topic.data?.metadata?.boundDeviceId;
+  const deviceId = topic.data?.metadata?.boundDeviceId;
   const options = (directories.data?.data ?? []).filter(
     (d) =>
       !source ||

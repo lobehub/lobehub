@@ -85,15 +85,15 @@ export const useEffectiveAgencyConfig = (
     visibility: agent?.visibility,
     workspaceId: agent?.workspaceId,
   });
-  const projectExecution = useChatStore((s) =>
+  const topicBoundDeviceId = useChatStore((s) =>
     !options?.ignoreTopic && s.activeAgentId === agentId
-      ? topicSelectors.currentTopicMetadata(s)?.projectExecution
+      ? topicSelectors.currentTopicMetadata(s)?.boundDeviceId
       : undefined,
   );
-  const agencyConfig = projectExecution
+  const agencyConfig = topicBoundDeviceId
     ? {
         ...resolvedAgencyConfig,
-        boundDeviceId: projectExecution.deviceId,
+        boundDeviceId: topicBoundDeviceId,
         executionTarget: 'device' as const,
       }
     : resolvedAgencyConfig;
@@ -107,7 +107,7 @@ export const useEffectiveAgencyConfig = (
     canDisplayExecutionTarget: !!agentId && !isPreferenceLoading,
     canSelectExecutionTarget:
       !!agentId &&
-      !projectExecution &&
+      !topicBoundDeviceId &&
       !isPreferenceLoading &&
       agencyConfig?.executionTargetSelectionPolicy !== 'fixed',
     isPreferenceLoading,

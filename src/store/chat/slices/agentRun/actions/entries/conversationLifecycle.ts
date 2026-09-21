@@ -472,9 +472,7 @@ export class ConversationLifecycleActionImpl {
     const boundTopic = context.topicId
       ? topicSelectors.getTopicById(context.topicId)(this.#get())
       : undefined;
-    if (boundTopic?.projectWorkingDirectoryId || boundTopic?.metadata?.projectExecution) {
-      if (!boundTopic.projectWorkingDirectoryId)
-        throw new Error('Project directory binding no longer exists');
+    if (boundTopic?.projectWorkingDirectoryId) {
       const { data: directory } = await projectWorkingDirectoryService.resolve(
         boundTopic.projectWorkingDirectoryId,
       );

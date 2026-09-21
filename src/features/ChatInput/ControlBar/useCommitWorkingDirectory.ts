@@ -235,7 +235,7 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
   // Clear whichever precedence level currently supplies the cwd, so the picker
   // falls back to the next level (agent default → device default → "not set").
   const clearCwd = useCallback(async () => {
-    if (activeTopic?.projectWorkingDirectoryId || activeTopic?.metadata?.projectExecution)
+    if (activeTopic?.projectWorkingDirectoryId)
       throw new Error(t('directories.boundRoot', { ns: 'project' }));
     // A topic override (when present) is the effective source — drop it first so
     // we fall back to the agent default rather than nuking everything.
@@ -288,7 +288,7 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
       const effectivePath = getWorkingDirEffectivePath(normalizedEntry);
       if (!normalizedEntry || !effectivePath) return;
 
-      if (activeTopic?.projectWorkingDirectoryId || activeTopic?.metadata?.projectExecution) {
+      if (activeTopic?.projectWorkingDirectoryId) {
         const source = getWorkingDirSourcePath(
           activeTopic.metadata?.workingDirectoryConfig ?? activeTopic.metadata?.workingDirectory,
         );

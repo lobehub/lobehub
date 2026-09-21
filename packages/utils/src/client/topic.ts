@@ -168,7 +168,7 @@ export const groupTopicsByProject = (
 
   for (const topic of topics) {
     const normalized = getTopicWorkingDirectorySourcePath(topic) ?? '';
-    const deviceId = topic.metadata?.projectExecution?.deviceId ?? topic.metadata?.boundDeviceId;
+    const deviceId = topic.metadata?.boundDeviceId;
     const id = topic.projectWorkingDirectoryId
       ? `project-directory:${topic.projectWorkingDirectoryId}`
       : normalized

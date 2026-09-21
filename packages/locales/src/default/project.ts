@@ -32,8 +32,6 @@ export default {
   'topics.complete': 'Mark completed',
   'topics.resume': 'Resume work',
   'topics.gatewayUnavailable': 'Enable Agent Gateway before using this project work location.',
-  'topics.bindingUnavailable':
-    'The project directory binding no longer exists. Reconnect the work location in project settings.',
 
   'settings.deviceOnline': 'Device connected',
   'settings.deviceOffline': 'Device disconnected',

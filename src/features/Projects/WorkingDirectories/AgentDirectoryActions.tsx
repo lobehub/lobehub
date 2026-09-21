@@ -30,8 +30,7 @@ export function AgentDirectoryActions({
     ignoreTopic: true,
   });
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
-  const pinnedDevice =
-    topics[0]?.metadata?.projectExecution?.deviceId ?? topics[0]?.metadata?.boundDeviceId;
+  const pinnedDevice = topics[0]?.metadata?.boundDeviceId;
   const deviceId =
     pinnedDevice ?? resolveTargetDeviceId(agencyConfig, currentDeviceId, { workspaceScoped });
   const request = useProjectDirectoryStore((s) => s.useFetchDirectories)();
