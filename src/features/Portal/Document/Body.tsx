@@ -229,6 +229,26 @@ const HighlightEditor = memo<HighlightEditorProps>(
       updatedAt,
     });
 
+    // Mirror the live buffer into the document store so consumers outside this
+    // component (the portal footer's Export) read the text currently on screen,
+    // not the last persisted SWR copy. `addDocument` upserts: the highlight
+    // editor path never goes through `useFetchDocument`, so the record may not
+    // exist yet. `lastSavedContent` stays at the persisted value so this mirror
+    // never marks the document dirty or triggers a save on its own.
+    const dispatchDocument = useDocumentStore((s) => s.internal_dispatchDocument);
+    const docExists = useDocumentStore((s) => !!s.documents[documentId]);
+    useEffect(() => {
+      dispatchDocument(
+        docExists
+          ? { id: documentId, type: 'updateDocument', value: { content: editingValue } }
+          : {
+              id: documentId,
+              type: 'addDocument',
+              value: { content: editingValue, lastSavedContent: content, sourceType: 'notebook' },
+            },
+      );
+    }, [content, dispatchDocument, docExists, documentId, editingValue]);
+
     return (
       <CodeEditorPane
         showStatusBar

@@ -12,16 +12,6 @@ import CopyLinkMenuItem from './CopyLinkMenuItem';
 import { TITLE_MAX_LENGTH, usePortalDocumentTitle } from './usePortalDocumentHeader';
 
 const styles = createStaticStyles(({ css }) => ({
-  crumb: css`
-    cursor: pointer;
-    flex-shrink: 0;
-    font-size: 13px;
-    transition: color ${cssVar.motionDurationFast} ${cssVar.motionEaseInOut};
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
   root: css`
     flex: 1;
     min-width: 0;
@@ -48,7 +38,44 @@ const styles = createStaticStyles(({ css }) => ({
     text-align: start;
 
     background: transparent;
+
+    /* Keep a token-based focus ring for keyboard users; the native outline
+       is suppressed only in favor of this replacement. */
     outline: none;
+
+    &:focus-visible {
+      border-radius: ${cssVar.borderRadiusSM};
+      box-shadow: 0 0 0 2px ${cssVar.colorPrimaryBorder};
+    }
+  `,
+  crumbButton: css`
+    cursor: pointer;
+
+    flex-shrink: 0;
+
+    padding: 0;
+    border: none;
+
+    font-size: 13px;
+    color: ${cssVar.colorTextSecondary};
+
+    background: none;
+
+    transition: color ${cssVar.motionDurationFast} ${cssVar.motionEaseInOut};
+
+    &:hover {
+      color: ${cssVar.colorText};
+    }
+
+    &:focus-visible {
+      border-radius: ${cssVar.borderRadiusSM};
+      outline: none;
+      box-shadow: 0 0 0 2px ${cssVar.colorPrimaryBorder};
+    }
+  `,
+  crumbLabel: css`
+    flex-shrink: 0;
+    font-size: 13px;
   `,
 }));
 
@@ -92,7 +119,11 @@ const Header = memo<HeaderProps>(({ onOpenDocumentsIndex }) => {
         event.preventDefault();
         inputRef.current?.blur();
       } else if (event.key === 'Escape') {
+        // Restore the saved title AND leave edit mode — Escape is a cancel,
+        // so the input must not stay focused for further typing.
+        event.preventDefault();
         setDraft(savedTitle);
+        inputRef.current?.blur();
       }
     },
     [savedTitle, setDraft],
@@ -141,13 +172,17 @@ const Header = memo<HeaderProps>(({ onOpenDocumentsIndex }) => {
       width={'100%'}
     >
       <Flexbox horizontal align={'center'} flex={1} gap={4} style={{ minWidth: 0 }}>
-        <Text
-          className={styles.crumb}
-          color={cssVar.colorTextSecondary}
-          onClick={onOpenDocumentsIndex}
-        >
-          {t('menu.allPages', { ns: 'file' })}
-        </Text>
+        {/* Navigable crumb gets a real button (keyboard reachable); a plain
+            notebook document renders a noninteractive label with no affordance. */}
+        {onOpenDocumentsIndex ? (
+          <button className={styles.crumbButton} type={'button'} onClick={onOpenDocumentsIndex}>
+            {t('menu.allPages', { ns: 'file' })}
+          </button>
+        ) : (
+          <Text className={styles.crumbLabel} color={cssVar.colorTextQuaternary}>
+            {t('menu.allPages', { ns: 'file' })}
+          </Text>
+        )}
         <Icon className={styles.separator} icon={ChevronRight} size={14} />
         {editing ? (
           <input

@@ -128,6 +128,7 @@ const mockDocumentState = vi.hoisted(() => ({
     documents: {
       'document-1': {},
     },
+    internal_dispatchDocument: vi.fn(),
     performSave: vi.fn(),
     updateSkillFrontmatter: vi.fn(),
   },
@@ -138,7 +139,7 @@ vi.mock('@/store/document', () => ({
 }));
 
 describe('DocumentBody', () => {
-  /** @example A file-backed document previews its upload and retains document chat. */
+  /** @example A file-backed document previews its upload and keeps the portal actions. */
   it('shows the original upload without mounting either editor', () => {
     // ROOT CAUSE:
     // File-backed documents used the empty content field as an editable document.
@@ -147,10 +148,11 @@ describe('DocumentBody', () => {
     render(<DocumentBody />);
     /** @example The original file id reaches the read-only preview. */
     expect(screen.getByTestId('original-file-preview').dataset.fileId).toBe('file-original');
-    /** @example Neither editor mounts, while document chat stays available. */
+    /** @example Neither editor mounts. The portal footer (chat to edit / export)
+        replaces the inline conversation panel this PR's body used to render. */
     expect(screen.queryByTestId('highlight-editor')).toBeNull();
     expect(screen.queryByTestId('editor-canvas')).toBeNull();
-    expect(screen.getByTestId('floating-chat-panel')).toBeTruthy();
+    expect(screen.getByTestId('footer-actions')).toBeTruthy();
   });
 
   beforeEach(() => {
@@ -158,6 +160,7 @@ describe('DocumentBody', () => {
     mockChatState.current.portalStack[0].agentDocumentId = 'agent-document-1';
     mockDocumentMeta.current = { content: '', filename: 'doc.md' };
     mockUpdateDocument.mockClear();
+    mockDocumentState.current.internal_dispatchDocument.mockClear();
     vi.useFakeTimers();
   });
 
@@ -284,5 +287,34 @@ describe('DocumentBody', () => {
     });
 
     expect(mockUpdateDocument).not.toHaveBeenCalled();
+  });
+
+  it('mirrors the live highlight buffer into the document store for export', () => {
+    mockDocumentMeta.current = { content: 'before', filename: 'config.json' };
+
+    render(<DocumentBody />);
+    const editor = screen.getByTestId('highlight-editor');
+
+    // Initial mount mirrors the persisted content into the store record
+    // (the mock record already exists, so this is an update).
+    expect(mockDocumentState.current.internal_dispatchDocument).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'document-1',
+        type: 'updateDocument',
+        value: { content: 'before' },
+      }),
+    );
+
+    fireEvent.change(editor, { target: { value: 'after' } });
+
+    // The typed buffer becomes the store content immediately, so a concurrent
+    // Export downloads the text on screen instead of the last saved copy.
+    expect(mockDocumentState.current.internal_dispatchDocument).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'document-1',
+        type: 'updateDocument',
+        value: { content: 'after' },
+      }),
+    );
   });
 });
