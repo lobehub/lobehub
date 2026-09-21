@@ -1002,6 +1002,60 @@ name: skill-name
       expect(result.current.documents['doc-1'].saveStatus).toBe('saved');
     });
 
+    it('reclaims and retries a self conflict when the server row is still the known version', async () => {
+      const { result } = renderHook(() => useDocumentStore());
+      const mockEditor = createValidMockEditor() as any;
+      const knownVersion = new Date('2026-01-01T00:00:00.000Z');
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          content: '# Test',
+          documentId: 'doc-1',
+          editor: mockEditor,
+          sourceType: 'page',
+          updatedAt: knownVersion,
+        });
+        result.current.internal_dispatchDocument({
+          id: 'doc-1',
+          type: 'updateDocument',
+          value: { lockOwnerId: 'owner-1' },
+        });
+        result.current.markDirty('doc-1');
+      });
+
+      const lockError = Object.assign(new Error('Document is being edited by another user'), {
+        data: { code: 'CONFLICT' },
+      });
+      vi.mocked(documentService.updateDocument)
+        .mockRejectedValueOnce(lockError)
+        .mockResolvedValueOnce({
+          historyAppended: false,
+          id: 'doc-1',
+          updatedAt: '2026-01-01T00:00:05.000Z',
+        });
+      vi.mocked(documentService.getDocumentById).mockResolvedValueOnce({
+        content: '# Test',
+        id: 'doc-1',
+        updatedAt: knownVersion,
+      } as any);
+
+      await act(async () => {
+        await result.current.performSave('doc-1');
+      });
+
+      expect(documentService.acquireDocumentLock).toHaveBeenCalledWith('doc-1', 'owner-1');
+      expect(documentService.updateDocument).toHaveBeenCalledTimes(2);
+      expect(documentService.updateDocument).toHaveBeenLastCalledWith(
+        expect.objectContaining({ expectedUpdatedAt: knownVersion }),
+      );
+      expect(result.current.documents['doc-1']).toMatchObject({
+        isDirty: false,
+        lastUpdatedTime: new Date('2026-01-01T00:00:05.000Z'),
+        saveBlockedByLock: false,
+        saveStatus: 'saved',
+      });
+    });
+
     it('does not retry when the server holds a newer version (collaborator saved then released)', async () => {
       const { result } = renderHook(() => useDocumentStore());
       const mockEditor = createValidMockEditor() as any;
@@ -1789,6 +1843,25 @@ name: skill-name
         expect.objectContaining({ expectedUpdatedAt: new Date('2026-01-02T00:00:00.000Z') }),
       );
       vi.useRealTimers();
+    });
+
+    it('drops malformed remote editorData instead of adopting it', () => {
+      const { result } = renderHook(() => useDocumentStore());
+      initDirtyDoc(result);
+
+      act(() => {
+        result.current.reconcileRemote('doc-1', {
+          content: '# Agent write',
+          editorData: { root: { children: [], type: 'root' } },
+          updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+        });
+      });
+
+      expect(result.current.documents['doc-1']).toMatchObject({
+        content: '# Agent write',
+        editorData: null,
+        lastSavedEditorData: null,
+      });
     });
 
     it('treats null and undefined editorData as the same body', () => {

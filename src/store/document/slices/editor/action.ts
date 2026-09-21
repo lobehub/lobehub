@@ -205,7 +205,7 @@ export class EditorActionImpl {
     }
 
     const content = row.content ?? '';
-    const editorData = row.editorData ?? null;
+    const editorData = isValidEditorData(row.editorData) ? row.editorData : null;
     const sameBody =
       content === (doc.lastSavedContent ?? '') &&
       isEqual(editorData, doc.lastSavedEditorData ?? null);
@@ -441,7 +441,7 @@ export class EditorActionImpl {
     if (outcome === 'adopted') {
       void mutate(documentSWRKeys.editor(id), latest, { revalidate: false });
     }
-    if (outcome !== 'rebased' || !canRetry) throw error;
+    if (outcome === 'adopted' || !canRetry) throw error;
 
     // `baseDoc` is the store snapshot this request was built from; an
     // overlapping newer save from this tab may have moved the live base since,
