@@ -89,6 +89,16 @@ export interface PublicState {
    * Slash menu placement: 'bottom' for home page (input in center), 'top' for page input (at bottom)
    */
   slashPlacement?: SlashPlacement;
+  /**
+   * The topic this composer belongs to, as its host conversation resolves it —
+   * `null` when the host has a conversation with no topic (a page copilot
+   * embedded beside another chat, a not-yet-created topic). Left `undefined` by
+   * hosts that have no conversation of their own, which fall back to the global
+   * `activeTopicId` (see `useTopicId`). Never read the global id directly from
+   * a composer control: an embedded conversation can run against a different
+   * topic than the surrounding page.
+   */
+  topicId?: string | null;
 }
 
 export interface State extends PublicState {

@@ -36,12 +36,14 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     slashPlacement,
     getMessages,
     resolveSendBlocked,
+    topicId,
   }) => {
     const storeApi = useStoreApi();
     const useStoreUpdater = createStoreUpdater(storeApi);
     const editor = useChatInputEditor();
 
     useStoreUpdater('agentId', agentId);
+    useStoreUpdater('topicId', topicId);
     useStoreUpdater('canRecordVoiceMessage', canRecordVoiceMessage);
     useStoreUpdater('contextSelectionKey', contextSelectionKey);
     useStoreUpdater('contextWindowMessages', contextWindowMessages);

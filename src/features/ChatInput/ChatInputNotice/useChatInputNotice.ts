@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
 import { useAgentModelSelection } from '@/features/ChatInput/hooks/useAgentModelSelection';
 import { useChatInputResourceAccess } from '@/features/ChatInput/hooks/useChatInputResourceAccess';
+import { useTopicId } from '@/features/ChatInput/hooks/useTopicId';
 import {
   resolveEnableTargetProviderId,
   resolveStaleModelState,
@@ -125,13 +126,17 @@ export const useChatInputNotice = (): ChatInputNotice | undefined => {
   // actually runs (see `useEffectiveModel`). Judging the agent model here
   // warned "the current model is disabled" over a perfectly usable topic model,
   // and its Enable action then repaired the agent row nobody was using.
-  const activeTopicId = useChatStore((s) => s.activeTopicId);
-  const topicModel = useChatStore(topicSelectors.activeTopicModel);
+  // The topic comes from this composer's own conversation, never the global
+  // active topic — see `useTopicId`.
+  const topicId = useTopicId();
+  const topicModel = useChatStore((s) =>
+    topicId ? topicSelectors.getTopicModelById(topicId)(s) : undefined,
+  );
   const updateTopicModel = useChatStore((s) => s.updateTopicModel);
-  // An active topic whose row hasn't landed yet reads as "no pin" and would
-  // fall back to the agent default — same cold-load flash as above.
+  // A topic whose row hasn't landed yet reads as "no pin" and would fall back
+  // to the agent default — same cold-load flash as above.
   const isActiveTopicPending = useChatStore(
-    (s) => !!s.activeTopicId && !topicSelectors.getTopicById(s.activeTopicId)(s),
+    (s) => !!topicId && !topicSelectors.getTopicById(topicId)(s),
   );
   const model = topicModel?.model ?? agentModel;
   const provider = topicModel?.model ? topicModel.provider : agentProvider;
@@ -216,9 +221,9 @@ export const useChatInputNotice = (): ChatInputNotice | undefined => {
       if (providerId !== provider) {
         try {
           // Re-point the row the model actually came from, the way the model
-          // trigger's own switch routes: the active topic when there is one,
-          // the agent (or member override) otherwise.
-          if (activeTopicId) await updateTopicModel(activeTopicId, { model, provider: providerId });
+          // trigger's own switch routes: this conversation's topic when there
+          // is one, the agent (or member override) otherwise.
+          if (topicId) await updateTopicModel(topicId, { model, provider: providerId });
           else await selectModel({ model, provider: providerId });
         } catch (error) {
           console.error('Failed to select the enabled chat model provider:', error);
@@ -232,7 +237,6 @@ export const useChatInputNotice = (): ChatInputNotice | undefined => {
       setActionLoading(false);
     }
   }, [
-    activeTopicId,
     enableTargetProviderId,
     enabledChatModelList,
     model,
@@ -241,6 +245,7 @@ export const useChatInputNotice = (): ChatInputNotice | undefined => {
     t,
     toggleProviderEnabled,
     toggleProviderModelEnabled,
+    topicId,
     updateTopicModel,
   ]);
 
