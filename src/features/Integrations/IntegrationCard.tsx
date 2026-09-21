@@ -56,6 +56,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextTertiary};
     background: ${cssVar.colorFillQuaternary};
   `,
+  upcomingCard: css`
+    padding-block: 10px;
+    padding-inline: 14px;
+  `,
 }));
 
 type CardIntegration = IntegrationDefinition | UpcomingIntegration;
@@ -89,16 +93,24 @@ const IntegrationCard = memo<IntegrationCardProps>(
 
     return (
       <Block
-        className={cx(styles.card, compact && styles.compact, openable && styles.openable)}
         role={openable ? 'button' : undefined}
         variant={'filled'}
+        className={cx(
+          styles.card,
+          compact && styles.compact,
+          upcoming && styles.upcomingCard,
+          openable && styles.openable,
+        )}
         onClick={
           openable ? () => onOpen?.(integration.id as IntegrationDefinition['id']) : undefined
         }
       >
         <Flexbox horizontal align="center" gap={14}>
-          <span className={cx(styles.icon, upcoming && styles.upcoming)}>
-            <Icon size={24} />
+          <span
+            className={cx(styles.icon, upcoming && styles.upcoming)}
+            style={upcoming ? { height: 32, width: 32 } : undefined}
+          >
+            <Icon size={upcoming ? 18 : 24} />
           </span>
           <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
             <Text strong style={{ fontSize: 15 }} type={upcoming ? 'secondary' : undefined}>

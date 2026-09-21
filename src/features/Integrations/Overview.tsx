@@ -34,7 +34,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   upcoming: css`
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
+    gap: 8px;
 
     @media (width <= 720px) {
       grid-template-columns: 1fr;
@@ -60,7 +60,7 @@ const Overview = memo<OverviewProps>(({ onOpen }) => {
   const enabled = INTEGRATIONS.filter((item) => enabledById[item.id]);
 
   return (
-    <Flexbox gap={28}>
+    <Flexbox gap={24}>
       {enabled.length > 0 ? (
         <Flexbox gap={10}>
           <span className={styles.sectionLabel}>{t('overview.enabled')}</span>
