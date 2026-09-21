@@ -356,17 +356,17 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
                       <SizeSelect />
                     </Flexbox>
                   )}
-                  {isSupportThinkingLevel && (
-                    <Flexbox gap={6}>
-                      <Text fontSize={12}>{t('config.thinkingLevel.label')}</Text>
-                      <ThinkingLevelSelect />
-                    </Flexbox>
-                  )}
                   {showDimensionControl && <DimensionControlGroup />}
                   {isSupportSteps && (
                     <Flexbox gap={6}>
                       <Text fontSize={12}>{t('config.steps.label')}</Text>
                       <StepsSliderInput />
+                    </Flexbox>
+                  )}
+                  {isSupportThinkingLevel && (
+                    <Flexbox gap={6}>
+                      <Text fontSize={12}>{t('config.thinkingLevel.label')}</Text>
+                      <ThinkingLevelSelect />
                     </Flexbox>
                   )}
                   {isSupportCfg && (
