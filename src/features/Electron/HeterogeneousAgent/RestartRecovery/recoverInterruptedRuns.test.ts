@@ -53,6 +53,8 @@ vi.mock('@/store/agent', () => ({
 const chatStore = {
   completeOperation: vi.fn(),
   failOperation: vi.fn(),
+  refreshMessages: vi.fn(async (..._args: unknown[]) => {}),
+  replaceMessages: vi.fn(),
   startOperation: vi.fn(() => ({ operationId: 'wrap-op' })),
   updateTopicStatus: vi.fn(async () => {}),
 };
@@ -119,6 +121,16 @@ describe('recoverInterruptedHeteroRuns', () => {
     expect(mockEnsureAccess).toHaveBeenCalledWith('agent-1');
     // Only the interrupted turn's own rows go; earlier turns and thread rows stay.
     expect(mockRemoveMessages).toHaveBeenCalledWith(['a1', 't1'], {
+      agentId: 'agent-1',
+      topicId: 'topic-1',
+    });
+    // The surviving rows are seeded into the store before the run, so the user
+    // turn renders while the topic's own fetch is gated off by the running op.
+    expect(chatStore.replaceMessages).toHaveBeenCalledWith(
+      messages.filter((m) => m.id !== 'a1' && m.id !== 't1'),
+      { action: 'restartRecovery', context: { agentId: 'agent-1', topicId: 'topic-1' } },
+    );
+    expect(chatStore.refreshMessages).toHaveBeenCalledWith({
       agentId: 'agent-1',
       topicId: 'topic-1',
     });

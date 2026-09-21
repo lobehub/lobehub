@@ -99,7 +99,8 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
   }
 
   const context: ConversationContext = { agentId, topicId };
-  const mainChain = mainChainOf(await messageService.getMessages(context));
+  const allMessages = await messageService.getMessages(context);
+  const mainChain = mainChainOf(allMessages);
   const userTurn = mainChain.findLast((message) => message.role === 'user');
   if (!userTurn) {
     await settle();
@@ -118,6 +119,16 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
     )
     .map((message) => message.id);
   if (staleIds.length > 0) await messageService.removeMessages(staleIds, context);
+
+  // Seed the in-memory list ourselves: while the recovery op is running, the
+  // topic's own fetch is gated off (a mid-run snapshot would clobber streamed
+  // rows), so without this the surviving user turn never reaches the view
+  // and only the rows the executor dispatches would render.
+  const staleIdSet = new Set(staleIds);
+  chatStore.replaceMessages(
+    allMessages.filter((message) => !staleIdSet.has(message.id)),
+    { action: 'restartRecovery', context },
+  );
 
   const { operationId } = chatStore.startOperation({
     context: { ...context, messageId: userTurn.id },
@@ -165,6 +176,9 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
       reason: error instanceof Error ? error.message : String(error),
       topicId,
     };
+  } finally {
+    // Reconcile with the server snapshot now that nothing is streaming.
+    await chatStore.refreshMessages(context).catch(() => {});
   }
 };
 
