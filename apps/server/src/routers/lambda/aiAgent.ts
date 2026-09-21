@@ -513,6 +513,22 @@ const dispatchClaimedAgentIntervention = async (
     }
 
     if (dispatchProbe.state !== 'dispatched' && shouldDispatchRuntimeAction) {
+      // Device bindings are authoritative server state captured on the parked
+      // operation (its metadata records the execution plan's activeDeviceId).
+      // A continuation is the SAME run from the device's perspective: it must
+      // re-bind to the source device instead of re-resolving an unrouted plan,
+      // which would strip Local System / remote-device tools and strand the
+      // resumed run with 'activeDeviceId is required' errors. Never trusted
+      // from the resolution client — read back from the durable row.
+      const sourceOperation = await new AgentOperationModel(
+        ctx.serverDB,
+        resolution.ownerUserId,
+        resolution.workspaceId ?? ctx.workspaceId ?? undefined,
+      ).findById(runtimeAction.operationId);
+      const metadataDeviceId = sourceOperation?.metadata?.activeDeviceId;
+      const inheritedDeviceId =
+        typeof metadataDeviceId === 'string' && metadataDeviceId ? metadataDeviceId : undefined;
+
       switch (runtimeAction.type) {
         case 'execute_custom_interaction': {
           const customAction = runtimeAction.input.action;
@@ -542,6 +558,7 @@ const dispatchClaimedAgentIntervention = async (
               approvalResolutionRequestId: resolution.resolutionRequestId,
               approvalSourceOperationId: runtimeAction.operationId,
               appContext: runtimeAction.appContext,
+              deviceId: inheritedDeviceId,
               parentMessageId: runtimeAction.parentMessageId,
               prompt: '',
               replacesOperationId: runtimeAction.operationId,
@@ -574,6 +591,7 @@ const dispatchClaimedAgentIntervention = async (
             approvalResolutionRequestId: resolution.resolutionRequestId,
             approvalSourceOperationId: runtimeAction.operationId,
             appContext: runtimeAction.appContext,
+            deviceId: inheritedDeviceId,
             parentMessageId: runtimeAction.parentMessageId,
             prompt: '',
             replacesOperationId: runtimeAction.operationId,
@@ -592,6 +610,7 @@ const dispatchClaimedAgentIntervention = async (
             approvalResolutionRequestId: resolution.resolutionRequestId,
             approvalSourceOperationId: runtimeAction.operationId,
             appContext: runtimeAction.appContext,
+            deviceId: inheritedDeviceId,
             parentMessageId: runtimeAction.parentMessageId,
             prompt: '',
             replacesOperationId: runtimeAction.operationId,
