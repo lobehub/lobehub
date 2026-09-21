@@ -3,7 +3,7 @@
 import { isSafeSandboxCwd } from '@lobechat/builtin-tool-cloud-sandbox';
 import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { ActionIcon, Button, Input, Tag, Text, toast } from '@lobehub/ui/base-ui';
-import { PlusIcon, Trash2Icon } from 'lucide-react';
+import { FolderOpenIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -23,6 +23,8 @@ interface InstanceListProps {
   editable: boolean;
   instances: SandboxInstance[];
   onAddingChange: (adding: boolean) => void;
+  /** Open this instance's directory in the file browser. */
+  onBrowse: (workingDirectory: string) => void;
   onCreate: (params: { name: string; workingDirectory: string }) => Promise<void>;
   onRemove: (id: string) => Promise<void>;
   /** Sizes are missing rather than zero when the sandbox could not be reached. */
@@ -37,7 +39,16 @@ interface InstanceListProps {
  * have them overwrite each other's work.
  */
 const InstanceList = memo<InstanceListProps>(
-  ({ adding, editable, instances, onAddingChange, onCreate, onRemove, snapshotsUnavailable }) => {
+  ({
+    adding,
+    editable,
+    instances,
+    onAddingChange,
+    onBrowse,
+    onCreate,
+    onRemove,
+    snapshotsUnavailable,
+  }) => {
     const { t } = useTranslation('setting');
 
     const [name, setName] = useState('');
@@ -107,6 +118,15 @@ const InstanceList = memo<InstanceListProps>(
                   ? formatSize(instance.snapshot.bytes)
                   : t('environments.instances.unused')}
             </Text>
+            {/* Reading what an instance kept is not an edit, so it stays
+                available in an environment someone else published — that is
+                most of what having access to one is for. */}
+            <ActionIcon
+              icon={FolderOpenIcon}
+              size={'small'}
+              title={t('environments.files.browse')}
+              onClick={() => onBrowse(instance.workingDirectory)}
+            />
             {editable && (
               <ActionIcon
                 icon={Trash2Icon}

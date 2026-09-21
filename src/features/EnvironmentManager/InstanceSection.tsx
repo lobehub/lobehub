@@ -12,6 +12,7 @@ interface InstanceSectionProps {
   editable: boolean;
   environmentId: string;
   onAddingChange: (adding: boolean) => void;
+  onBrowse: (workingDirectory: string) => void;
 }
 
 /**
@@ -23,7 +24,7 @@ interface InstanceSectionProps {
  * made or discarded.
  */
 const InstanceSection = memo<InstanceSectionProps>(
-  ({ adding, editable, environmentId, onAddingChange }) => {
+  ({ adding, editable, environmentId, onAddingChange, onBrowse }) => {
     const { data } = useInstances();
     const actions = useEnvironmentActions();
 
@@ -39,6 +40,7 @@ const InstanceSection = memo<InstanceSectionProps>(
           instances={instances}
           snapshotsUnavailable={data?.snapshotsUnavailable ?? false}
           onAddingChange={onAddingChange}
+          onBrowse={onBrowse}
           onRemove={actions.removeInstance}
           onCreate={({ name, workingDirectory }) =>
             actions.createInstance({ environmentId, name, workingDirectory })
