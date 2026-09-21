@@ -406,7 +406,7 @@ const modelDetailPanelExpandedKeys = (s: GlobalState): ModelDetailPanelExpandedK
   return MODEL_DETAIL_PANEL_EXPANDABLE_KEYS.filter((key) => !collapsedKeys.includes(key));
 };
 const modelSwitchPanelGroupMode = (s: GlobalState) =>
-  s.status.modelSwitchPanelGroupMode || 'byProvider';
+  s.status.modelSwitchPanelGroupMode || 'byModel';
 const modelSwitchPanelWidth = (s: GlobalState) => s.status.modelSwitchPanelWidth || 460;
 const pageAgentPanelWidth = (s: GlobalState) => s.status.pageAgentPanelWidth || 360;
 const workingSidebarWidth = (s: GlobalState) => s.status.workingSidebarWidth || 360;

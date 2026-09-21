@@ -175,6 +175,25 @@ describe('systemStatusSelectors', () => {
     });
   });
 
+  describe('modelSwitchPanelGroupMode', () => {
+    it('should default to byModel so the everyday list looks unchanged before the user flips the switch', () => {
+      const s: GlobalState = {
+        ...initialState,
+        status: { ...initialState.status, modelSwitchPanelGroupMode: undefined },
+      };
+
+      expect(systemStatusSelectors.modelSwitchPanelGroupMode(s)).toBe('byModel');
+    });
+
+    it('should return the persisted byProvider preference', () => {
+      const s: GlobalState = merge(initialState, {
+        status: { modelSwitchPanelGroupMode: 'byProvider' },
+      });
+
+      expect(systemStatusSelectors.modelSwitchPanelGroupMode(s)).toBe('byProvider');
+    });
+  });
+
   describe('taskListViewMode', () => {
     it('should restore the persisted task board view', () => {
       const s: GlobalState = {

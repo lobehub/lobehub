@@ -47,16 +47,16 @@ export const PanelContent: FC<PanelContentProps> = ({
   const content = (
     <>
       <Toolbar
+        showGroupModeSwitch
         groupMode={groupMode}
         searchKeyword={searchKeyword}
-        showGroupModeSwitch={isDevMode}
         onGroupModeChange={handleGroupModeChange}
         onSearchKeywordChange={setSearchKeyword}
       />
       <List
         ModelItemComponent={ModelItemComponent}
         enabledList={enabledList}
-        groupMode={isDevMode ? groupMode : 'byModel'}
+        groupMode={groupMode}
         model={modelProp}
         pricingMode={pricingMode}
         provider={providerProp}
