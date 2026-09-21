@@ -10,9 +10,9 @@ interface GoalOverrides {
   goal?: Partial<GoalListItem['goal']>;
   id: string;
   pendingDecisions?: number;
+  taskDone?: number;
+  taskTotal?: number;
   title?: string;
-  workDone?: number;
-  workTotal?: number;
 }
 
 const goal = ({ agentId = 'agt_1', id, goal: overrides, ...rest }: GoalOverrides): GoalListItem =>
@@ -22,8 +22,8 @@ const goal = ({ agentId = 'agt_1', id, goal: overrides, ...rest }: GoalOverrides
     pendingDecisions: 0,
     totalRunCost: 0,
     totalRunDuration: 0,
-    workDone: 1,
-    workTotal: 3,
+    taskDone: 1,
+    taskTotal: 3,
     ...rest,
   }) as GoalListItem;
 
@@ -74,15 +74,15 @@ describe('buildHomeGoalEntries', () => {
   });
 
   it('carries the graph roll-up the row renders', () => {
-    const goals = [goal({ id: 'x', pendingDecisions: 2, workDone: 2, workTotal: 5 })];
+    const goals = [goal({ id: 'x', pendingDecisions: 2, taskDone: 2, taskTotal: 5 })];
 
     expect(buildHomeGoalEntries(goals)[0]).toMatchObject({
       agentId: 'agt_1',
       id: 'g-x',
       pendingDecisions: 2,
       title: 'goal x',
-      workDone: 2,
-      workTotal: 5,
+      taskDone: 2,
+      taskTotal: 5,
     });
   });
 });

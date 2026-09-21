@@ -1,7 +1,7 @@
 'use client';
 
 import type { DropdownItem } from '@lobehub/ui';
-import { Block, Flexbox, Icon } from '@lobehub/ui';
+import { Block, copyToClipboard, Flexbox, Icon } from '@lobehub/ui';
 import { confirmModal, type ModalInstance, Text, toast } from '@lobehub/ui/base-ui';
 import {
   Clock3Icon,
@@ -279,8 +279,8 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: () => DropdownIt
           icon: <Icon icon={Hash} />,
           key: 'copySessionId',
           label: t('actions.copySessionId', { ns: 'topic' }),
-          onClick: () => {
-            void navigator.clipboard.writeText(topicId);
+          onClick: async () => {
+            await copyToClipboard(topicId);
             toast.success(t('actions.copySessionIdSuccess', { ns: 'topic' }));
           },
         },

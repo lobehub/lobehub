@@ -4,6 +4,7 @@ import type { SandboxPolicy } from '@lobechat/device-sandbox';
 
 import type { RunCommandParams, RunCommandResult } from '../types';
 import type { ShellOutputFiles, ShellProcess, ShellProcessManager } from './process-manager';
+import { DEFAULT_OBSERVATION_TIMEOUT_MS } from './process-manager';
 import { detectWindowsShell, getShellConfig, normalizeEnvVarRefs } from './utils';
 
 export interface RunCommandOptions {
@@ -36,7 +37,7 @@ export async function runCommand(
     description,
     env: extraEnv,
     run_in_background,
-    timeout = 30_000,
+    timeout = DEFAULT_OBSERVATION_TIMEOUT_MS,
   }: RunCommandParams,
   { processManager, logger, onSandboxUnavailable, sandboxPolicy }: RunCommandOptions,
 ): Promise<RunCommandResult> {

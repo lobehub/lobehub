@@ -47,6 +47,9 @@ vi.mock('@lobehub/ui/base-ui', () => ({
 
 vi.mock('@lobehub/icons', () => ({
   LobeHub: { Morden: () => <span /> },
+}));
+
+vi.mock('@/components/LobeIcons', () => ({
   ModelIcon: () => <span />,
   ProviderIcon: () => <span />,
 }));
@@ -97,6 +100,25 @@ describe('MultipleProvidersModelItem', () => {
     render(<ModelItemRender audio id="gemini-audio" />);
 
     expect(screen.getByTestId('tooltip-ModelSelect.featureTag.audio')).toBeInTheDocument();
+  });
+
+  it('keeps spread model card fields off the DOM', async () => {
+    const { ModelItemRender } = await vi.importActual<typeof ModelSelectModule>(
+      '@/components/ModelSelect',
+    );
+    const modelCardProps = {
+      id: 'deepseek-v3',
+      knowledgeCutoff: '2025-01',
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+    };
+
+    const { container } = render(<ModelItemRender {...modelCardProps} />);
+
+    for (const attr of ['reasoning', 'search', 'structuredoutput', 'knowledgecutoff']) {
+      expect(container.querySelector(`[${attr}]`)).toBeNull();
+    }
   });
 
   it('renders model detail panel even when info tags are hidden', () => {

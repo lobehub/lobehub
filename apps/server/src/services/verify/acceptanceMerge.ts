@@ -70,7 +70,7 @@ export const countLogicalChecks = (
 
   for (const run of runs) {
     for (const item of (run.plan ?? []) as VerifyCheckItem[]) {
-      const id = item.sourceCriterionId ?? item.id;
+      const id = item.sourceFlowNode ? item.id : (item.sourceCriterionId ?? item.id);
       logicalByItemId.set(item.id, id);
       logical.add(id);
       for (const replaced of item.supersedes ?? []) superseded.add(replaced);

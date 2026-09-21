@@ -32,15 +32,11 @@ import DocumentExplorerToolbar from './DocumentExplorerToolbar';
 import { useDocumentTreeOps } from './hooks/useDocumentTreeOps';
 import type { AgentDocumentItem } from './types';
 import { isOrphanSkillBundleItem } from './types';
-import { usePanelBackground } from './usePanelBackground';
 import { canDropDocument } from './utils/canDrop';
 
 const SKILL_INDEX_FILENAME = 'SKILL.md';
 const FILE_TREE_HOST_TAG = 'file-tree-container';
 const RENAME_INPUT_SELECTOR = 'input[data-item-rename-input]';
-// Only used when every ancestor is transparent; the documents page is the
-// common case and paints colorBgLayout.
-const DEFAULT_PANEL_BACKGROUND = '#000';
 
 const DOCUMENT_TREE_UNSAFE_CSS = [
   DOCUMENT_TREE_ICON_CSS,
@@ -95,7 +91,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     /* Consumed by DOCUMENT_TREE_ICON_CSS inside the shadow root. */
     --explorer-tree-icon-fg: ${cssVar.colorTextDescription};
-
   `,
 }));
 
@@ -171,9 +166,6 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
       })),
     [documents, resolveNodeName, resolveParentRowId],
   );
-  // pierre's truncation marker masks the characters it overlays with this color;
-  // it has to be whatever the surrounding panel paints (see usePanelBackground).
-  const panelBackground = usePanelBackground(containerRef, DEFAULT_PANEL_BACKGROUND);
 
   const treeStyleVars = useMemo(
     () =>
@@ -185,10 +177,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
     [nodes],
   );
 
-  const treeStyle = useMemo(
-    () => ({ ...style, ...treeStyleVars, '--explorer-tree-panel-bg': panelBackground }),
-    [panelBackground, style, treeStyleVars],
-  );
+  const treeStyle = useMemo(() => ({ ...style, ...treeStyleVars }), [style, treeStyleVars]);
 
   const parentMap = useMemo(() => {
     const map = new Map<string, string | null>();

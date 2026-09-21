@@ -31,6 +31,21 @@ describe('parseLocalFileHref', () => {
     });
   });
 
+  it.each(['./src/client.ts:391', '../src/client.ts:391', '~/src/client.ts:391'])(
+    'recognizes explicit relative file reference %s without inventing a workspace',
+    (href) => {
+      expect(parseLocalFileHref(href)).toEqual({
+        filePath: href.replace(':391', ''),
+        line: 391,
+        workingDirectory: '',
+      });
+    },
+  );
+
+  it('keeps protocol-relative URLs as web links', () => {
+    expect(parseLocalFileHref('//home/example.ts')).toBeNull();
+  });
+
   it('ignores normal app routes and external URLs', () => {
     expect(parseLocalFileHref('/settings/profile')).toBeNull();
     expect(parseLocalFileHref('https://example.com/file.ts')).toBeNull();

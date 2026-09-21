@@ -59,12 +59,6 @@ export const useMediaUploadAbility = (model: string, provider: string, agentId?:
     supportToolUse,
   });
 
-  const heterogeneousAgentType = useAgentStore((s) =>
-    agentId
-      ? agentByIdSelectors.getAgencyConfigById(agentId)(s)?.heterogeneousProvider?.type
-      : undefined,
-  );
-
   // In agent mode (tool calls) or heterogeneous agents (Claude Code / Codex, etc.) the agent
   // can parse any file via scripts/terminal, so the upload should not be gated on the model's
   // own multimodal ability. Mirror the store's `enforceFileTypeWhitelist` bypass in
@@ -80,9 +74,7 @@ export const useMediaUploadAbility = (model: string, provider: string, agentId?:
   if (bypassMediaGate) {
     return {
       canUploadAudio: true,
-      // Kimi's one-shot `--prompt` mode has no attachment argument, and ReadMediaFile is only
-      // registered for vision-capable local models, which LobeHub cannot determine beforehand.
-      canUploadImage: heterogeneousAgentType !== 'kimi-code',
+      canUploadImage: true,
       canUploadVideo: true,
     };
   }

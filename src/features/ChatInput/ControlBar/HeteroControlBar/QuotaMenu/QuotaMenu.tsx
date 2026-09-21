@@ -1,8 +1,8 @@
 'use client';
 
 import type { HeteroQuotaWindow } from '@lobechat/electron-client-ipc';
-import { Flexbox, Icon, Popover, Skeleton, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Skeleton, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDownIcon, GaugeIcon, RefreshCwIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -585,9 +585,9 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
 
       {loading && !hasQuotaData ? (
         <Flexbox gap={8}>
-          <Skeleton.Button active block size="small" style={{ height: 18 }} />
-          <Skeleton.Button active block size="small" style={{ height: 18 }} />
-          <Skeleton.Button active block size="small" style={{ height: 18 }} />
+          <Skeleton height={18} />
+          <Skeleton height={18} />
+          <Skeleton height={18} />
         </Flexbox>
       ) : quota?.status === 'unavailable' ? (
         <div className={styles.emptyState}>

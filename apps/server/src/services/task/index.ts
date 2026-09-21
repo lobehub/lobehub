@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto';
 
+import { UNFINISHED_TASK_STATUSES } from '@lobechat/builtin-tool-task';
 import { TASK_ASSIGNEE_PERMISSION_CODES } from '@lobechat/const/rbac';
 import type {
+  TaskAssignmentKind,
+  TaskAutomationSnapshot,
   TaskContext,
   TaskDetailActivity,
   TaskDetailActivityAuthor,
@@ -19,7 +22,11 @@ import { TRPCError } from '@trpc/server';
 import { AgentModel } from '@/database/models/agent';
 import { ProjectModel } from '@/database/models/project';
 import { RbacModel } from '@/database/models/rbac';
-import { isTaskIdentifierUniqueViolation, TaskModel } from '@/database/models/task';
+import {
+  isTaskIdentifierUniqueViolation,
+  taskActivityActor,
+  TaskModel,
+} from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
@@ -35,10 +42,18 @@ import { type ReviewResult, TaskReviewService } from '../taskReview';
 import { TaskRunnerService } from '../taskRunner';
 import { createTaskSchedulerModule } from '../taskScheduler';
 import { resolveTaskAcceptance } from '../verify/taskAcceptance';
+import { collapseActivityLog } from './collapseActivityLog';
 
 const emptyWorkspace: WorkspaceData = { nodeMap: {}, tree: [] };
 const UNTITLED_TOPIC_TITLE = 'Untitled';
 const TASK_DETAIL_DIRECT_TOPIC_LIMIT = 100;
+/**
+ * Newest raw activity rows read per detail fetch, before collapsing. The
+ * detail page polls every few seconds while work is in flight, so it must not
+ * ship a long-lived task's whole append-only history each time; the table
+ * keeps everything for an audit view.
+ */
+const TASK_DETAIL_ACTIVITY_LIMIT = 200;
 const TASK_DETAIL_DESCENDANT_TOPIC_LIMIT = 300;
 
 type DirectTaskTopicActivityRow = Awaited<ReturnType<TaskTopicModel['findWithHandoff']>>[number];
@@ -87,6 +102,13 @@ export interface UpdateStatusResult {
   paused: string[];
   task: TaskItem;
   unlocked: string[];
+}
+
+export interface UpdateStatusCascadeResult {
+  paused: string[];
+  task: TaskItem;
+  unlocked: string[];
+  updatedSubtasks: string[];
 }
 
 export interface RunReadySubtasksResult {
@@ -268,6 +290,17 @@ export class TaskService {
     });
   }
 
+  private interruptTaskOperation = async (service: AiAgentService, operationId: string) => {
+    const result = await service.interruptTask({ operationId });
+    if (!result.success || result.deviceCancellationConfirmed === false) {
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message:
+          'Task interruption was not confirmed. The execution remains active; retry stopping it before starting another attempt.',
+      });
+    }
+  };
+
   /**
    * Cancel a running topic: interrupt the remote operation (if any), then
    * mark the topic as `canceled` and pause its parent task.
@@ -287,7 +320,7 @@ export class TaskService {
       const aiAgentService = new AiAgentService(this.db, this.userId, {
         workspaceId: this.workspaceId,
       });
-      await aiAgentService.interruptTask({ operationId: target.operationId });
+      await this.interruptTaskOperation(aiAgentService, target.operationId);
     }
 
     await this.taskTopicModel.updateStatus(target.taskId, topicId, 'canceled');
@@ -306,7 +339,7 @@ export class TaskService {
       const aiAgentService = new AiAgentService(this.db, this.userId, {
         workspaceId: this.workspaceId,
       });
-      await aiAgentService.interruptTask({ operationId: target.operationId });
+      await this.interruptTaskOperation(aiAgentService, target.operationId);
     }
 
     await this.taskTopicModel.remove(target.taskId, topicId);
@@ -376,11 +409,19 @@ export class TaskService {
    *   - entering `completed`: check parent checkpoint, count sibling
    *     completions, kick off any newly-unlocked downstream tasks.
    */
-  async updateStatus(input: {
-    error?: string;
-    id: string;
-    status: TaskStatus;
-  }): Promise<UpdateStatusResult> {
+  async updateStatus(
+    input: {
+      error?: string;
+      id: string;
+      status: TaskStatus;
+    },
+    /**
+     * Present only for a change a person or their agent made; its absence is
+     * how system transitions (runner / lifecycle / watchdog) opt out of the
+     * activity feed.
+     */
+    actor?: { agentId?: string | null; userId?: string | null },
+  ): Promise<UpdateStatusResult> {
     const { id, status, error: errorMsg } = input;
 
     if (errorMsg && status !== 'failed') {
@@ -405,14 +446,14 @@ export class TaskService {
         // to avoid desynchronizing DB state from a still-running operation.
         if (t.operationId) {
           try {
-            await aiAgentService.interruptTask({ operationId: t.operationId });
+            await this.interruptTaskOperation(aiAgentService, t.operationId);
           } catch (err) {
             console.error(
               '[TaskService.updateStatus] failed to interrupt topic %s:',
               t.topicId,
               err,
             );
-            continue;
+            throw err;
           }
         }
 
@@ -426,7 +467,9 @@ export class TaskService {
       extra.completedAt = new Date();
     if (errorMsg) extra.error = errorMsg;
 
-    const task = await this.taskModel.updateStatus(resolved.id, status, extra);
+    const task = actor
+      ? await this.taskModel.updateWithLog(resolved.id, { status, ...extra }, actor)
+      : await this.taskModel.updateStatus(resolved.id, status, extra);
     if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
 
     // Stamp the schedule run-count window each time the user (re)starts a
@@ -490,7 +533,11 @@ export class TaskService {
         // persistence was the failing step.
         if (tickMessageId) await scheduler.cancelScheduled(tickMessageId).catch(() => undefined);
         await this.taskModel.update(task.id, { context: resolved.context });
-        await this.taskModel.updateStatus(task.id, resolved.status);
+        // The logged transition really happened and is now being undone, so
+        // the undo is logged too (same actor, back to the same value): the
+        // audit trail stays truthful and the feed folds the pair away.
+        if (actor) await this.taskModel.updateWithLog(task.id, { status: resolved.status }, actor);
+        else await this.taskModel.updateStatus(task.id, resolved.status);
         throw error;
       }
 
@@ -527,6 +574,122 @@ export class TaskService {
       unlocked,
       ...(checkpointTriggered && { checkpointTriggered: true }),
       ...(allSubtasksDone && { allSubtasksDone: true, parentTaskId: task.parentTaskId }),
+    };
+  }
+
+  /**
+   * Transition a parent and every currently unfinished direct subtask as one
+   * database transaction. Completion side effects run only after the whole
+   * family has reached the target status, so dependency edges cannot start a
+   * sibling in the middle of the cascade.
+   */
+  async updateStatusCascade(
+    input: {
+      id: string;
+      status: 'canceled' | 'completed';
+    },
+    /** The person confirming "include subtasks"; absent for system callers. */
+    actor?: { agentId?: string | null; userId?: string | null },
+  ): Promise<UpdateStatusCascadeResult> {
+    const resolved = await this.resolveOrThrow(input.id);
+    const subtasks = await this.taskModel.findSubtasks(resolved.id);
+    const unfinishedStatuses = new Set<string>(UNFINISHED_TASK_STATUSES);
+    const openSubtasks = subtasks.filter((task) => unfinishedStatuses.has(task.status));
+    // Freeze the cascade to this snapshot: both the interrupt pass and the
+    // status update operate on the same id set, so a subtask created or
+    // transitioned after the confirmation dialog is never rewritten.
+    const targetTasks = [resolved, ...openSubtasks];
+    const targetIds = targetTasks.map((task) => task.id);
+
+    const aiAgentService = new AiAgentService(this.db, this.userId, {
+      workspaceId: this.workspaceId,
+    });
+
+    const runningTopics = await this.taskTopicModel.findRunningByTaskIds(targetIds);
+    if (runningTopics.length > 0) {
+      const settled = await Promise.allSettled(
+        runningTopics.map(async (topic) => {
+          if (topic.operationId) {
+            await this.interruptTaskOperation(aiAgentService, topic.operationId);
+          }
+        }),
+      );
+      const failure = settled.find((result) => result.status === 'rejected');
+      if (failure) {
+        // Persist the interrupts that did succeed before surfacing the error,
+        // so an actually-stopped operation is not left recorded as running.
+        for (const [index, topic] of runningTopics.entries()) {
+          if (settled[index].status !== 'fulfilled' || !topic.topicId) continue;
+          await this.taskTopicModel
+            .cancelIfRunning(topic.taskId, topic.topicId)
+            .catch(() => undefined);
+        }
+        throw failure.reason;
+      }
+    }
+
+    const completedAt = new Date();
+    let updatedTasks: TaskItem[] = [];
+    let canceledTopics: Awaited<ReturnType<TaskTopicModel['cancelRunningByTaskIds']>> = [];
+    await this.db.transaction(async (tx) => {
+      const taskModel = new TaskModel(tx, this.userId, this.workspaceId);
+      const taskTopicModel = new TaskTopicModel(tx, this.userId, this.workspaceId);
+
+      // Cancel by the frozen id set rather than the pre-read topic list, so a
+      // topic that started between the snapshot and this transaction is still
+      // closed together with the status update.
+      canceledTopics = await taskTopicModel.cancelRunningByTaskIds(targetIds);
+      // The pre-transaction snapshot only chose *which* tasks; what each one
+      // is leaving is read under the lock, so a collaborator's edit between
+      // the dialog and this write is logged as it really was.
+      const locked = actor ? await taskModel.lockForStatusChange(targetIds) : [];
+      updatedTasks = await taskModel.updateStatusForIds(targetIds, input.status, { completedAt });
+
+      // A person confirmed this for the whole family, so every member that
+      // moved gets its own row — one INSERT, not one per task.
+      if (actor) {
+        const { actorKind, ...actorColumns } = taskActivityActor(actor);
+        await taskModel.addActivities(
+          locked
+            .filter((before) => before.status !== input.status)
+            .map((before) => ({
+              ...actorColumns,
+              payload: { actorKind, from: before.status, to: input.status },
+              taskId: before.id,
+              type: 'status' as const,
+              visibility: before.visibility,
+            })),
+        );
+      }
+    });
+
+    // Best-effort: stop any operation discovered only inside the transaction.
+    const interruptedOperationIds = new Set(runningTopics.map((topic) => topic.operationId));
+    await Promise.allSettled(
+      canceledTopics
+        .filter((topic) => topic.operationId && !interruptedOperationIds.has(topic.operationId))
+        .map((topic) => aiAgentService.interruptTask({ operationId: topic.operationId! })),
+    );
+
+    const task = updatedTasks.find(({ id }) => id === resolved.id);
+    if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
+
+    const unlocked: string[] = [];
+    const paused: string[] = [];
+    if (input.status === 'completed') {
+      const runner = new TaskRunnerService(this.db, this.userId, this.workspaceId);
+      const cascade = await runner.cascadeOnCompletionMany(updatedTasks.map(({ id }) => id));
+      unlocked.push(...cascade.started);
+      paused.push(...cascade.paused);
+    }
+
+    return {
+      paused,
+      task,
+      unlocked,
+      updatedSubtasks: updatedTasks
+        .filter(({ parentTaskId }) => parentTaskId === resolved.id)
+        .map(({ identifier }) => identifier),
     };
   }
 
@@ -695,9 +858,10 @@ export class TaskService {
   async updateTaskWithAssigneeLock(
     taskId: string,
     data: Parameters<TaskModel['update']>[1],
+    actor: { agentId?: string | null; userId?: string | null } = {},
   ): Promise<TaskItem | null> {
     return this.withAssigneeUserLock(data.assigneeUserId, (db) =>
-      new TaskModel(db, this.userId, this.workspaceId).update(taskId, data),
+      new TaskModel(db, this.userId, this.workspaceId).updateWithLog(taskId, data, actor),
     );
   }
 
@@ -732,19 +896,29 @@ export class TaskService {
     // brief-type activities — the UI converges on Task Run. Briefs are therefore
     // not fetched/enriched here (see the omitted brief spread below). The brief
     // lifecycle, model and data are untouched; revert this to bring them back.
-    const [allDescendants, dependencies, directTopics, comments, workspace, acceptance] =
-      await Promise.all([
-        this.taskModel.findAllDescendants(task.id),
-        this.taskModel.getDependencies(task.id),
-        this.taskTopicModel
-          .findWithHandoff(task.id, TASK_DETAIL_DIRECT_TOPIC_LIMIT)
-          .catch(() => []),
-        this.taskModel.getComments(task.id).catch(() => []),
-        this.taskModel.getTreePinnedDocuments(task.id).catch(() => emptyWorkspace),
-        resolveTaskAcceptance(this.db, this.userId, task.id, this.workspaceId).catch(
-          () => undefined,
-        ),
-      ]);
+    const [
+      allDescendants,
+      dependencies,
+      directTopics,
+      comments,
+      activityLogs,
+      workspace,
+      acceptance,
+    ] = await Promise.all([
+      this.taskModel.findAllDescendants(task.id),
+      this.taskModel.getDependencies(task.id),
+      this.taskTopicModel.findWithHandoff(task.id, TASK_DETAIL_DIRECT_TOPIC_LIMIT).catch(() => []),
+      this.taskModel.getComments(task.id).catch(() => []),
+      this.taskModel.getActivities(task.id, TASK_DETAIL_ACTIVITY_LIMIT).catch(() => []),
+      this.taskModel.getTreePinnedDocuments(task.id).catch(() => emptyWorkspace),
+      resolveTaskAcceptance(this.db, this.userId, task.id, this.workspaceId).catch(() => undefined),
+    ]);
+
+    // What the reader is shown, not what was written: a burst of edits to one
+    // property by one person folds into a single "from A to C", and a value
+    // that ended up where it started is not shown at all. The rows themselves
+    // stay append-only.
+    const shownLogs = collapseActivityLog(activityLogs);
 
     const allDescendantIds = allDescendants.map((s) => s.id);
     const descendantTaskMap = new Map(allDescendants.map((s) => [s.id, s]));
@@ -944,6 +1118,16 @@ export class TaskService {
     // Creator of the task itself (agent takes precedence over user)
     if (task.createdByAgentId) agentIds.add(task.createdByAgentId);
     else if (task.createdByUserId) userIds.add(task.createdByUserId);
+    // Assignment events carry an actor plus both sides of the change; which
+    // set an id belongs to is decided by the event type, not by the column.
+    for (const log of shownLogs) {
+      if (log.actorAgentId) agentIds.add(log.actorAgentId);
+      if (log.actorUserId) userIds.add(log.actorUserId);
+      // Property events carry values, not participant ids.
+      if (log.type !== 'assignee_agent' && log.type !== 'assignee_user') continue;
+      const target = log.type === 'assignee_agent' ? agentIds : userIds;
+      for (const id of [log.payload?.fromId, log.payload?.toId]) if (id) target.add(id);
+    }
 
     const authorMap = await this.resolveAuthors(agentIds, userIds);
 
@@ -1022,6 +1206,70 @@ export class TaskService {
           id: c.id,
           time: toISO(c.createdAt),
           type: 'comment' as const,
+        };
+      }),
+      ...shownLogs.map((log): TaskDetailActivity => {
+        const stub = (id: string, type: 'agent' | 'user'): TaskDetailActivityAuthor => ({
+          id,
+          name: null,
+          type,
+          unresolved: true,
+        });
+        const actorKind = log.payload?.actorKind;
+        const author = log.actorAgentId
+          ? (authorMap.get(log.actorAgentId) ?? stub(log.actorAgentId, 'agent'))
+          : log.actorUserId
+            ? (authorMap.get(log.actorUserId) ?? stub(log.actorUserId, 'user'))
+            : actorKind === 'agent' || actorKind === 'user'
+              ? // Somebody did it but their row is gone: the actor columns are
+                // cleared on delete, and only the payload remembers there was
+                // a person. Must not read as the system.
+                stub('', actorKind)
+              : // Genuinely nobody: the runner's system fallback.
+                undefined;
+
+        if (log.type === 'status' || log.type === 'priority' || log.type === 'automation') {
+          const from = log.payload?.from ?? null;
+          const to = log.payload?.to ?? null;
+          const propertyChange: NonNullable<TaskDetailActivity['propertyChange']> =
+            log.type === 'status'
+              ? { field: 'status', from: from as TaskStatus | null, to: to as TaskStatus }
+              : log.type === 'priority'
+                ? { field: 'priority', from: from as number | null, to: to as number | null }
+                : {
+                    field: 'automation',
+                    from: from as TaskAutomationSnapshot | null,
+                    to: to as TaskAutomationSnapshot | null,
+                  };
+          return {
+            author,
+            id: log.id,
+            propertyChange,
+            time: toISO(log.createdAt),
+            type: 'property',
+          };
+        }
+
+        const kind: TaskAssignmentKind = log.type === 'assignee_agent' ? 'agent' : 'member';
+        // A missing author row means the participant is gone, or is private to
+        // another member and filtered out of this viewer's scope. Keep a stub
+        // instead of collapsing to `null`/`undefined`: `null` reads as
+        // "unassigned" (turning a reassignment into a removal) and an absent
+        // actor reads as the system (falsely crediting it for an agent's work).
+        const resolveSide = (id?: string | null): TaskDetailActivityAuthor | null => {
+          if (!id) return null;
+          return authorMap.get(id) ?? stub(id, kind === 'agent' ? 'agent' : 'user');
+        };
+        return {
+          assignment: {
+            from: resolveSide(log.payload?.fromId),
+            kind,
+            to: resolveSide(log.payload?.toId),
+          },
+          author,
+          id: log.id,
+          time: toISO(log.createdAt),
+          type: 'assignment' as const,
         };
       }),
     ].sort((a, b) => {
@@ -1106,11 +1354,14 @@ export class TaskService {
       UserModel.findByIds(this.db, [...userIds]),
     ]);
 
+    // Both display columns are nullable, so fall back to the other one the
+    // query already returns rather than letting a live participant render as
+    // nameless — the UI reserves its nameless labels for absent identities.
     for (const a of agentRows) {
-      map.set(a.id, { avatar: a.avatar, id: a.id, name: a.title, type: 'agent' });
+      map.set(a.id, { avatar: a.avatar, id: a.id, name: a.title || a.name, type: 'agent' });
     }
     for (const u of userRows) {
-      map.set(u.id, { avatar: u.avatar, id: u.id, name: u.fullName, type: 'user' });
+      map.set(u.id, { avatar: u.avatar, id: u.id, name: u.fullName || u.username, type: 'user' });
     }
 
     return map;

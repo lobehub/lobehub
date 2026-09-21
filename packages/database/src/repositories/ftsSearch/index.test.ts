@@ -419,6 +419,23 @@ describe.skipIf(!isServerDB)('FtsSearchRepo', () => {
         url: 'file://test-file.txt',
         userId,
       });
+
+      await serverDB.insert(files).values({
+        fileType: 'text/plain',
+        metadata: { agentShare: { shareId: 'share-1', visitorUserId: 'visitor-1' } },
+        name: 'visitor-secret-file.txt',
+        size: 100,
+        url: 'file://visitor-secret-file.txt',
+        userId,
+      });
+
+      await serverDB.insert(files).values({
+        fileType: 'text/plain',
+        name: 'visitor-secret-library-file.txt',
+        size: 100,
+        url: 'file://visitor-secret-library-file.txt',
+        userId,
+      });
     });
 
     it('should filter by agent type', async () => {
@@ -446,6 +463,12 @@ describe.skipIf(!isServerDB)('FtsSearchRepo', () => {
       results.forEach((result) => {
         expect(result.type).toBe('file');
       });
+    });
+
+    it('should exclude files carrying agent-share provenance', async () => {
+      const results = await ftsSearchRepo.search({ query: 'visitor secret', type: 'file' });
+
+      expect(results.map(({ title }) => title)).toEqual(['visitor-secret-library-file.txt']);
     });
   });
 
@@ -941,6 +964,35 @@ describe.skipIf(!isServerDB)('FtsSearchRepo', () => {
       expect(results[0].type).toBe('page');
     });
 
+    it('should not find a page derived from an agent-share file', async () => {
+      await serverDB.insert(files).values({
+        fileType: 'application/pdf',
+        id: 'page-agent-share-file',
+        metadata: { agentShare: { shareId: 'share-a', visitorUserId: 'visitor-a' } },
+        name: 'visitor.pdf',
+        size: 100,
+        url: 'file://page-agent-share-file',
+        userId,
+      });
+      await serverDB.insert(documents).values({
+        content: 'private visitor quantum phrase',
+        fileId: 'page-agent-share-file',
+        fileType: 'custom/document',
+        filename: 'visitor',
+        id: 'page-agent-share-document',
+        source: 'file://page-agent-share-file',
+        sourceType: 'file',
+        title: 'Visitor document',
+        totalCharCount: 30,
+        totalLineCount: 1,
+        userId,
+      });
+
+      const results = await ftsSearchRepo.search({ query: 'visitor quantum', type: 'page' });
+
+      expect(results).toEqual([]);
+    });
+
     it('should return correct page structure', async () => {
       const results = await ftsSearchRepo.search({ query: 'notes', type: 'page' });
 
@@ -1242,6 +1294,40 @@ describe.skipIf(!isServerDB)('FtsSearchRepo', () => {
         ]);
         expect(results).toEqual([]);
       });
+
+      it('does not surface a document derived from an agent-share file', async () => {
+        await serverDB.insert(files).values({
+          fileType: 'application/pdf',
+          id: 'kb-agent-share-file',
+          metadata: { agentShare: { shareId: 'share-a', visitorUserId: 'visitor-a' } },
+          name: 'visitor.pdf',
+          size: 100,
+          url: 'file://kb-agent-share-file',
+          userId,
+        });
+        await serverDB.insert(knowledgeBaseFiles).values({
+          fileId: 'kb-agent-share-file',
+          knowledgeBaseId: kbA,
+          userId,
+        });
+        await serverDB.insert(documents).values({
+          content: 'private visitor nebula phrase',
+          fileId: 'kb-agent-share-file',
+          fileType: 'application/pdf',
+          filename: 'visitor.pdf',
+          id: 'kb-agent-share-document',
+          source: 'file://kb-agent-share-file',
+          sourceType: 'file',
+          title: 'Visitor PDF',
+          totalCharCount: 29,
+          totalLineCount: 1,
+          userId,
+        });
+
+        const results = await ftsSearchRepo.searchKnowledgeBaseDocuments('visitor nebula', [kbA]);
+
+        expect(results).toEqual([]);
+      });
     });
   });
 
@@ -1444,6 +1530,60 @@ describe.skipIf(!isServerDB)('FtsSearchRepo', () => {
         expect(message.role).toBeDefined();
         expect(['user', 'assistant']).toContain(message.role);
       }
+    });
+  });
+
+  // Agent-share visitor conversations are persisted under the CREATOR's
+  // `userId` and are only distinguishable by `topics.senderId`, so the
+  // ownership/workspace scope alone would surface them in the creator's own
+  // full-text search.
+  describe('search - agent share visitor isolation', () => {
+    beforeEach(async () => {
+      await serverDB.insert(topics).values([
+        {
+          content: 'Visitor asked about quantum entanglement in depth',
+          id: 'fts-visitor-topic',
+          senderId: 'fts-visitor-user',
+          title: 'Visitor quantum session',
+          userId,
+        },
+        {
+          content: 'Creator notes about quantum entanglement',
+          id: 'fts-creator-topic',
+          title: 'Creator quantum session',
+          userId,
+        },
+      ]);
+      await serverDB.insert(messages).values([
+        {
+          content: 'my quantum password is hunter2',
+          id: 'fts-visitor-message',
+          role: 'user',
+          topicId: 'fts-visitor-topic',
+          userId,
+        },
+        {
+          content: 'my quantum notes are public',
+          id: 'fts-creator-message',
+          role: 'user',
+          topicId: 'fts-creator-topic',
+          userId,
+        },
+      ]);
+    });
+
+    it('does not return an agent-share visitor topic', async () => {
+      const results = await ftsSearchRepo.search({ query: 'quantum', type: 'topic' });
+
+      expect(results.map((result) => result.id)).toContain('fts-creator-topic');
+      expect(results.map((result) => result.id)).not.toContain('fts-visitor-topic');
+    });
+
+    it('does not return an agent-share visitor message', async () => {
+      const results = await ftsSearchRepo.search({ query: 'quantum', type: 'message' });
+
+      expect(results.map((result) => result.id)).toContain('fts-creator-message');
+      expect(results.map((result) => result.id)).not.toContain('fts-visitor-message');
     });
   });
 

@@ -1,7 +1,13 @@
 import type { AIChatModelCard } from '../types/aiModel';
 import { openaiChatModels } from './openai';
 
-const CHATGPT_MODEL_IDS = new Set(['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5']);
+const CHATGPT_MODEL_IDS = new Set([
+  'gpt-6-astra',
+  'gpt-5.6-sol',
+  'gpt-5.6-terra',
+  'gpt-5.6-luna',
+  'gpt-5.5',
+]);
 
 /**
  * Models available through ChatGPT subscription authentication use the Codex

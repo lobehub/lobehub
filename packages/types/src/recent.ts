@@ -9,6 +9,11 @@ export interface RecentItem {
   lastAssistantMessage?: string | null;
   metadata?: ChatTopicMetadata;
   routePath: string;
+  /**
+   * Slug source for a task link — `tasks.name` only. `title` may fall back to
+   * the instruction for display; a prompt body must never reach a URL.
+   */
+  slugTitle?: string | null;
   /** Task lifecycle status when `type === 'task'`; null for topic/document. */
   status: TaskStatus | null;
   title: string;

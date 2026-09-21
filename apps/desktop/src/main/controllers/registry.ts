@@ -1,11 +1,13 @@
 import type { CreateServicesResult, IpcServiceConstructor, MergeIpcService } from '@/utils/ipc';
 
 import AuthCtr from './AuthCtr';
+import AuvCtr from './AuvCtr';
 import BinaryCtr from './BinaryCtr';
 import BrowserControlCtr from './BrowserControlCtr';
 import BrowserSidebarCtr from './BrowserSidebarCtr';
 import BrowserWindowsCtr from './BrowserWindowsCtr';
 import CliCtr from './CliCtr';
+import CompletionSoundCtr from './CompletionSoundCtr';
 import DevtoolsCtr from './DevtoolsCtr';
 import GatewayConnectionCtr from './GatewayConnectionCtr';
 import GitCtr from './GitCtr';
@@ -26,6 +28,7 @@ import ScreenCaptureCtr from './ScreenCaptureCtr';
 import ShellCommandCtr from './ShellCommandCtr';
 import ShortcutController from './ShortcutCtr';
 import SystemController from './SystemCtr';
+import TabPreviewCtr from './TabPreviewCtr';
 import TerminalCtr from './TerminalCtr';
 import TrayMenuCtr from './TrayMenuCtr';
 import UpdaterCtr from './UpdaterCtr';
@@ -34,10 +37,12 @@ import WorkspaceCtr from './WorkspaceCtr';
 export const controllerIpcConstructors = [
   HeterogeneousAgentCtr,
   AuthCtr,
+  AuvCtr,
   BrowserControlCtr,
   BrowserSidebarCtr,
   BrowserWindowsCtr,
   CliCtr,
+  CompletionSoundCtr,
   DevtoolsCtr,
   GatewayConnectionCtr,
   GitCtr,
@@ -57,6 +62,7 @@ export const controllerIpcConstructors = [
   ShellCommandCtr,
   ShortcutController,
   SystemController,
+  TabPreviewCtr,
   TerminalCtr,
   BinaryCtr,
   TrayMenuCtr,

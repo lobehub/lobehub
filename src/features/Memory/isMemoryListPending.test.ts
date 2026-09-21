@@ -33,4 +33,15 @@ describe('isMemoryListPending', () => {
       isMemoryListPending({ error: new Error('failed'), initialized: true, loading: false }),
     ).toBe(false);
   });
+
+  it('lets a settled error surface even if the reset flag is still set', () => {
+    expect(
+      isMemoryListPending({
+        error: new Error('failed'),
+        initialized: true,
+        loading: false,
+        resetting: true,
+      }),
+    ).toBe(false);
+  });
 });

@@ -1,5 +1,5 @@
-import { Block, Flexbox, Icon, Skeleton } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Block, Flexbox, Icon } from '@lobehub/ui';
+import { Skeleton, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { SearchIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -53,7 +53,7 @@ const SearchBar = memo<SearchBarProps>(
         </Block>
 
         {searching ? (
-          <Skeleton.Block active style={{ height: 20, width: 40 }} />
+          <Skeleton height={20} width={40} />
         ) : (
           <Flexbox horizontal align={'center'} gap={4}>
             <EngineAvatarGroup engines={defaultEngines} />

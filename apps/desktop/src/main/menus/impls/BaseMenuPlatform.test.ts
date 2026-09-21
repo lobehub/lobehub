@@ -70,7 +70,11 @@ describe('BaseMenuPlatform', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(BrowserWindow).mockImplementation(() => createBrowserWindow({}));
+    // `BrowserWindow` is instantiated with `new` by the production code, so the
+    // implementation must be constructable (vitest 5 rejects arrow functions).
+    vi.mocked(BrowserWindow).mockImplementation(function () {
+      return createBrowserWindow({});
+    });
     vi.mocked(BrowserWindow.getAllWindows).mockReturnValue([]);
     vi.mocked(BrowserWindow.getFocusedWindow).mockReturnValue(null);
     menuPlatform = new TestMenuPlatform(mockApp);
@@ -100,7 +104,9 @@ describe('BaseMenuPlatform', () => {
 
     it('should create a managed DevTools window when the target window has no DevTools open', () => {
       const devToolsWindow = createBrowserWindow({});
-      vi.mocked(BrowserWindow).mockImplementation(() => devToolsWindow);
+      vi.mocked(BrowserWindow).mockImplementation(function () {
+        return devToolsWindow;
+      });
       const targetWindow = createBrowserWindow({ isDevToolsOpened: false });
       const item = devToolsMenuPlatform.buildDevToolsItem();
 
@@ -163,7 +169,9 @@ describe('BaseMenuPlatform', () => {
     it('should replace default DevTools with a managed DevTools window', () => {
       vi.useFakeTimers();
       const devToolsWindow = createBrowserWindow({});
-      vi.mocked(BrowserWindow).mockImplementation(() => devToolsWindow);
+      vi.mocked(BrowserWindow).mockImplementation(function () {
+        return devToolsWindow;
+      });
       const targetWindow = createBrowserWindow({
         isDevToolsFocused: false,
         isDevToolsOpened: true,

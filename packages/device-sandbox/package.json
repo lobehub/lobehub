@@ -16,6 +16,6 @@
     "@anthropic-ai/sandbox-runtime": "0.0.66"
   },
   "devDependencies": {
-    "vitest": "3.2.6"
+    "vitest": "5.0.0"
   }
 }

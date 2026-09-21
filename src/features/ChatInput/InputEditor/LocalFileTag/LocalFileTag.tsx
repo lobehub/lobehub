@@ -1,6 +1,6 @@
 import { isDesktop } from '@lobechat/const';
 import { Flexbox, Icon, Popover } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
+import { Button, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import type { LexicalEditor } from 'lexical';
 import { $createNodeSelection, $setSelection, CLICK_COMMAND, COMMAND_PRIORITY_LOW } from 'lexical';
@@ -41,7 +41,11 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   label: css`
     overflow: hidden;
-    font-weight: 500;
+    align-self: baseline;
+
+    min-width: 0;
+
+    font-weight: 400;
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
@@ -86,16 +90,25 @@ const styles = createStaticStyles(({ css }) => ({
     user-select: none;
 
     display: inline-flex;
-    gap: 4px;
+    gap: 6px;
     align-items: center;
 
-    max-width: 240px;
+    box-sizing: border-box;
+    max-width: min(240px, 100%);
+    height: 24px;
     margin-inline-end: ${TAG_MARGIN_INLINE_END}px;
-    padding-inline: 2px;
+    padding-block: 2px;
+    padding-inline: 8px;
     border-radius: ${cssVar.borderRadius};
 
-    color: ${cssVar.colorInfo};
+    font-size: inherit;
+    line-height: 20px;
+    color: ${cssVar.colorTextSecondary};
     vertical-align: baseline;
+
+    &:hover {
+      background: ${cssVar.colorFillSecondary};
+    }
 
     &.selected {
       outline: 2px solid ${cssVar.colorInfo};
@@ -194,9 +207,9 @@ const LocalFileTagTrigger = memo<LocalFileTagTriggerProps>(
     }, [editor, nodeKey, onClick]);
 
     return (
-      <span {...rest} className={cx(styles.tag, className)} ref={setSpanRef} title={title}>
+      <Tag {...rest} className={cx(styles.tag, className)} ref={setSpanRef} title={title}>
         {children}
-      </span>
+      </Tag>
     );
   },
 );
@@ -214,7 +227,7 @@ export const LocalFileTag = memo<LocalFileTagProps>(({ className, editor, file, 
   );
   const allowExternalFilePreview =
     !!parsed && (!workingDirectory || parsed.workingDirectory !== workingDirectory);
-  const canPreview = isDesktop && !file.isDirectory && !!parsed;
+  const canPreview = isDesktop && !file.isDirectory && !!parsed?.workingDirectory;
   const canRenderImagePreview = canPreview && isPreviewableImageFile(file);
 
   const { data: imagePreview } = useClientDataSWR<LocalFilePreview>(

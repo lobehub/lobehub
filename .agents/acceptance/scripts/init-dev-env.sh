@@ -10,6 +10,8 @@
 # Existing local config always wins.
 #
 # Usage:
+#   init-dev-env.sh [--env-file <file>] <command>
+#   --env-file is accepted only by env and seed-user for isolated harnesses.
 #   init-dev-env.sh env              # print shell exports
 #   init-dev-env.sh write [file]     # write a source-able env file
 #   init-dev-env.sh setup-db         # start local Postgres/Redis and run migrations
@@ -33,6 +35,26 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 ROOT_ENV_FILE="$REPO_ROOT/.env"
+EXPLICIT_ENV_FILE=""
+
+if [[ "${1:-}" == "--env-file" ]]; then
+  if [[ -z "${2:-}" || ! -f "$2" ]]; then
+    printf 'ERROR: --env-file requires an existing file.\n' >&2
+    exit 2
+  fi
+
+  EXPLICIT_ENV_FILE="$(cd "$(dirname "$2")" && pwd -P)/$(basename "$2")"
+  if [[ -e "$ROOT_ENV_FILE" && "$EXPLICIT_ENV_FILE" -ef "$ROOT_ENV_FILE" ]]; then
+    printf 'ERROR: --env-file cannot point to the repository root .env.\n' >&2
+    exit 2
+  fi
+
+  set -a
+  # shellcheck disable=SC1090
+  source "$EXPLICIT_ENV_FILE"
+  set +a
+  shift 2
+fi
 
 # Resolve the workspace root the SAME way test-env.sh does, so both scripts
 # read/write the ports file (and other .records artifacts) at the same path.
@@ -159,7 +181,7 @@ _qstash_reachable() {
 }
 
 guard_no_root_env() {
-  if [[ -f "$ROOT_ENV_FILE" ]]; then
+  if [[ -f "$ROOT_ENV_FILE" && -z "$EXPLICIT_ENV_FILE" ]]; then
     bad "root .env exists: $ROOT_ENV_FILE"
     note "Use the existing local configuration instead of init-dev-env.sh."
     note "Start normally from repo root, e.g. pnpm run dev:next or bun run dev."
@@ -788,6 +810,11 @@ usage() {
 }
 
 COMMAND="${1:-status}"
+
+if [[ -n "$EXPLICIT_ENV_FILE" && "$COMMAND" != "env" && "$COMMAND" != "seed-user" ]]; then
+  bad "--env-file is supported only by env and seed-user"
+  exit 2
+fi
 
 case "$COMMAND" in
   help|-h|--help) usage; exit 0 ;;

@@ -47,7 +47,8 @@
     "temp",
     ".temp",
     "e2e/**",
-    "knip.ts"
+    "knip.ts",
+    "packages/alint/fixtures/**"
   ],
   "include": [
     "src/**/*.d.ts",
@@ -64,6 +65,7 @@
     "scripts/elasticsearchReindex/**/*.ts",
     "scripts/elasticsearchSync/**/*.ts",
     "scripts/installFtsSearchSyncCapture/**/*.ts",
+    "scripts/pgSearchCleanup/**/*.ts",
     "*.ts",
     "*.mts",
     "*.cts",

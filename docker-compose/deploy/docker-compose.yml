@@ -18,8 +18,11 @@ services:
       - 'KEY_VAULTS_SECRET=${KEY_VAULTS_SECRET}'
       - 'AUTH_SECRET=${AUTH_SECRET}'
       - 'DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgresql:5432/${LOBE_DB_NAME}'
+      - 'ES_REINDEX_STATE_DIR=/app/.elasticsearch-reindex'
       - 'INTERNAL_APP_URL=http://localhost:3210'
       - 'S3_ENDPOINT=${S3_ENDPOINT}'
+      # S3_ENDPOINT is opened by browsers; server-side S3 requests stay on the Compose network
+      - 'S3_INTERNAL_ENDPOINT=http://rustfs:9000'
       - 'S3_BUCKET=${RUSTFS_LOBE_BUCKET}'
       - 'S3_ENABLE_PATH_STYLE=1'
       - 'S3_ACCESS_KEY=${RUSTFS_ACCESS_KEY}'
@@ -31,8 +34,38 @@ services:
       - 'REDIS_URL=redis://redis:6379'
       - 'REDIS_PREFIX=lobechat'
       - 'REDIS_TLS=0'
+      # Gateway Mode: agent runs execute on the server and stream to the browser
+      # through the gateway service below. The browser-facing AGENT_GATEWAY_URL
+      # comes from .env; server-to-gateway traffic stays on the Compose network.
+      - 'ENABLE_AGENT_GATEWAY=1'
+      - 'AGENT_GATEWAY_INTERNAL_URL=http://gateway:8787'
+      - 'AGENT_GATEWAY_SERVICE_TOKEN=${GATEWAY_SERVICE_TOKEN:-}'
+      - 'DEVICE_GATEWAY_SERVICE_TOKEN=${GATEWAY_SERVICE_TOKEN:-}'
     env_file:
       - .env
+    volumes:
+      - 'fts-search-reindex-state:/app/.elasticsearch-reindex'
+    restart: always
+    networks:
+      - lobe-network
+
+  # Single-instance LobeHub gateway (https://github.com/lobehub/lobehub-gateway):
+  # - 8787 agent gateway: relays Gateway Mode runs to browsers over WebSocket,
+  #   so AGENT_GATEWAY_URL in .env must be reachable from the browser.
+  # - 8788 device gateway: routes tool calls to devices joined with
+  #   `lh connect --gateway <url>`.
+  # State is kept in memory: runs in flight are lost when this container restarts.
+  gateway:
+    image: ghcr.io/lobehub/lobehub-gateway:0.3.2
+    container_name: lobe-gateway
+    ports:
+      - '${AGENT_GATEWAY_PORT:-8787}:8787'
+      - '${DEVICE_GATEWAY_PORT:-8788}:8788'
+    environment:
+      - 'SERVICE_TOKEN=${GATEWAY_SERVICE_TOKEN:-}'
+      # Public key only: the private JWKS_KEY stays in the lobe container
+      - 'JWKS_PUBLIC_KEY=${JWKS_PUBLIC_KEY:-}'
+      - 'LOBE_API_BASE_URL=http://lobe:3210'
     restart: always
     networks:
       - lobe-network
@@ -47,15 +80,22 @@ services:
       - '5432:5432'
     volumes:
       - './data:/var/lib/postgresql/data'
-    command: ['postgres', '-c', 'shared_preload_libraries=pg_search']
+    # Keep the image's default preload list: its first-start bootstrap creates the pg_cron
+    # extension and aborts initialization when pg_cron is missing from this list.
+    command: ['postgres', '-c', 'shared_preload_libraries=pg_search,pg_cron,pg_stat_statements']
     environment:
       - 'POSTGRES_DB=${LOBE_DB_NAME}'
       - 'POSTGRES_PASSWORD=${POSTGRES_PASSWORD}'
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      # Probe over TCP: during first-time initialization the image runs a temporary server that
+      # only listens on the Unix socket, so a socket probe reports ready while LobeHub's TCP
+      # connections are still refused.
+      test: ['CMD-SHELL', 'pg_isready -U postgres -h 127.0.0.1']
       interval: 5s
       timeout: 5s
       retries: 5
+      # TCP stays closed until initialization finishes, which can outlast the retries above
+      start_period: 60s
     restart: always
     networks:
       - lobe-network
@@ -108,7 +148,7 @@ services:
       - lobe-network
 
   rustfs-init:
-    image: minio/mc:latest
+    image: rustfs/rc:latest
     container_name: lobe-rustfs-init
     depends_on:
       rustfs:
@@ -116,7 +156,8 @@ services:
     volumes:
       - ./bucket.config.json:/bucket.config.json:ro
     entrypoint: /bin/sh
-    command: -c ' set -eux; echo "S3_ACCESS_KEY=${RUSTFS_ACCESS_KEY}, S3_SECRET_KEY=${RUSTFS_SECRET_KEY}"; mc --version; mc alias set rustfs "http://rustfs:9000" "${RUSTFS_ACCESS_KEY}" "${RUSTFS_SECRET_KEY}"; mc ls rustfs || true; mc mb "rustfs/lobe" --ignore-existing; mc admin info rustfs || true; mc anonymous set-json "/bucket.config.json" "rustfs/lobe"; '
+    # Browsers upload through presigned URLs on the RustFS origin, so the bucket also needs a CORS rule
+    command: -c ' set -eux; echo "S3_ACCESS_KEY=${RUSTFS_ACCESS_KEY}, S3_SECRET_KEY=${RUSTFS_SECRET_KEY}"; rc --version; rc alias set rustfs "http://rustfs:9000" "${RUSTFS_ACCESS_KEY}" "${RUSTFS_SECRET_KEY}"; rc ls rustfs || true; rc mb "rustfs/lobe" --ignore-existing; rc admin info cluster rustfs || true; rc anonymous set-json "/bucket.config.json" "rustfs/lobe"; printf "%s" "<CORSConfiguration><CORSRule><AllowedOrigin>*</AllowedOrigin><AllowedMethod>GET</AllowedMethod><AllowedMethod>PUT</AllowedMethod><AllowedMethod>HEAD</AllowedMethod><AllowedHeader>*</AllowedHeader><ExposeHeader>ETag</ExposeHeader><MaxAgeSeconds>3600</MaxAgeSeconds></CORSRule></CORSConfiguration>" | rc bucket cors set "rustfs/lobe" -; '
     restart: 'no'
     networks:
       - lobe-network
@@ -134,6 +175,123 @@ services:
     env_file:
       - .env
 
+  # ---------------------------------------------------------------------------
+  # Optional: self-hosted single-node Elasticsearch for LobeHub full-text search.
+  # Disabled by default; LobeHub keeps using PostgreSQL pg_search unless you opt in.
+  # Enable with COMPOSE_PROFILES in .env and follow the docs:
+  # https://lobehub.com/docs/self-hosting/advanced/full-text-search
+  #
+  # Resources: the JVM heap below (ES_JAVA_OPTS, default 1 GB) should stay at or
+  # below half of the memory available to this container; plan for at least 2 GB
+  # RAM for Elasticsearch alone. Linux hosts must set vm.max_map_count=262144.
+  #
+  # The image is built locally from ./elasticsearch/Dockerfile: the pinned
+  # official image plus the required analysis-icu plugin. The build runs once,
+  # the first time the profile is enabled, and needs outbound access to
+  # docker.elastic.co / artifacts.elastic.co; afterwards container recreation
+  # works offline. To upgrade, change the version in both `image` and
+  # `build.args` below, then run `docker compose up -d --build`.
+  # ---------------------------------------------------------------------------
+  elasticsearch:
+    image: lobehub-elasticsearch-icu:9.5.2
+    build:
+      context: ./elasticsearch
+      args:
+        ELASTICSEARCH_VERSION: 9.5.2
+    container_name: lobe-elasticsearch
+    # Only this profile starts the bundled node. The reindex and sync services
+    # below deliberately do not depend on it, so the same services also work
+    # against an external Elasticsearch (ES_URL + ES_API_KEY in .env) without
+    # building or starting a local node.
+    profiles: [elasticsearch]
+    # Intentionally no `ports`: security is disabled, so this node must stay
+    # reachable only from services on lobe-network. Never publish 9200.
+    environment:
+      - 'discovery.type=single-node'
+      - 'cluster.name=lobehub'
+      - 'xpack.security.enabled=false'
+      - 'xpack.ml.enabled=false'
+      - 'ingest.geoip.downloader.enabled=false'
+      - 'ES_JAVA_OPTS=${ES_JAVA_OPTS:--Xms1g -Xmx1g}'
+    volumes:
+      - 'elasticsearch-data:/usr/share/elasticsearch/data'
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          "curl -fsS 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s' >/dev/null || exit 1",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 90s
+    restart: always
+    networks:
+      - lobe-network
+
+  # One-off full backfill / status command for the optional Elasticsearch path.
+  # It never starts with `docker compose up`; run it explicitly, for example:
+  #   docker compose run --rm fts-search-reindex --status
+  #   docker compose run --rm fts-search-reindex --apply --fresh-run --yes
+  # The checkpoint lives in the fts-search-reindex-state volume so a later run
+  # with the same arguments (without --fresh-run) resumes instead of restarting.
+  # With the bundled node, start the stack with `docker compose up -d --wait`
+  # first so Elasticsearch is healthy before the backfill connects to it.
+  fts-search-reindex:
+    image: lobehub/lobehub
+    profiles: [elasticsearch-reindex]
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    environment:
+      - 'DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgresql:5432/${LOBE_DB_NAME}'
+      - 'ES_REINDEX_STATE_DIR=/app/.elasticsearch-reindex'
+    env_file:
+      - .env
+    volumes:
+      - 'fts-search-reindex-state:/app/.elasticsearch-reindex'
+    # The script lives in the entrypoint so that arguments given to
+    # `docker compose run fts-search-reindex ...` replace only `--status`.
+    entrypoint: ['/bin/node', '/app/fts-search-elasticsearch-reindex.cjs']
+    command: ['--status']
+    restart: 'no'
+    networks:
+      - lobe-network
+
+  # Long-running incremental sync worker for the optional Elasticsearch path.
+  # Start it only after the backfill status is ready_for_incremental_sync by
+  # adding the elasticsearch-sync profile to COMPOSE_PROFILES in .env. It keeps
+  # draining the PostgreSQL Outbox into Elasticsearch and exits non-zero (and is
+  # restarted) when it hits failed or dead-letter work, so check its logs. It
+  # also exits and is restarted until the Elasticsearch target is reachable.
+  fts-search-sync:
+    image: lobehub/lobehub
+    container_name: lobe-fts-search-sync
+    profiles: [elasticsearch-sync]
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    environment:
+      - 'DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgresql:5432/${LOBE_DB_NAME}'
+      - 'FTS_SEARCH_SYNC_ENABLED=true'
+      - 'MIGRATION_DB=1'
+    env_file:
+      - .env
+    entrypoint: ['/bin/node', '/app/fts-search-elasticsearch-sync.cjs']
+    command: ['--max-steps=8', '--interval-seconds=${FTS_SEARCH_SYNC_INTERVAL_SECONDS:-15}', '--yes']
+    # On SIGTERM the worker finishes only the current drain step (not all 8) and
+    # then exits, so the grace period has to cover one step: its bulk request may
+    # wait up to 20s plus database settlement. Compose's default of 10s would
+    # SIGKILL mid-step and leave claims to expire into retries.
+    stop_grace_period: 2m
+    restart: always
+    networks:
+      - lobe-network
+
 networks:
   lobe-network:
     driver: bridge
@@ -142,4 +300,9 @@ volumes:
   redis_data:
     driver: local
   rustfs-data:
+    driver: local
+  # Only created when an Elasticsearch profile is enabled.
+  elasticsearch-data:
+    driver: local
+  fts-search-reindex-state:
     driver: local

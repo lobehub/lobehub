@@ -95,6 +95,8 @@ vi.mock('@/store/agent/selectors', () => ({
 vi.mock('@/store/chat/selectors', () => ({
   topicSelectors: {
     getTopicById: () => () => mockTopic,
+    getTopicHeteroPinById: () => () =>
+      mockTopic?.model ? { model: mockTopic.model, provider: mockTopic.provider || '' } : undefined,
     getTopicModelById: () => () =>
       mockTopic?.model ? { model: mockTopic.model, provider: mockTopic.provider || '' } : undefined,
   },
@@ -110,10 +112,6 @@ vi.mock('@/store/user', () => ({
       agentDeviceOverrides: mockWorkspaceOverride ? { 'agent-1': mockWorkspaceOverride } : {},
     },
   }),
-}));
-
-vi.mock('@/components/AntdStaticMethods', () => ({
-  message: { info: vi.fn() },
 }));
 
 const mockChatDeleteMessage = vi.fn(async () => {});

@@ -1,3 +1,4 @@
+import type * as DeviceGatewayClientModule from '@lobechat/device-gateway-client';
 import { describe, expect, it, vi } from 'vitest';
 
 // Import after mocks are set up
@@ -18,13 +19,21 @@ const mockClient = vi.hoisted(() => ({
   queryDeviceStatus: vi.fn(),
 }));
 
-const MockGatewayHttpClient = vi.hoisted(() => vi.fn(() => mockClient));
+const MockGatewayHttpClient = vi.hoisted(() =>
+  vi.fn(function () {
+    return mockClient;
+  }),
+);
 
 vi.mock('@/envs/gateway', () => ({
   gatewayEnv: mockEnv,
 }));
 
-vi.mock('@lobechat/device-gateway-client', () => ({
+// Partial mock: only the HTTP client is swapped. The transport-failure
+// describers are pure functions the service calls to phrase its errors, and
+// stubbing them would test nothing.
+vi.mock('@lobechat/device-gateway-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof DeviceGatewayClientModule>()),
   GatewayHttpClient: MockGatewayHttpClient,
 }));
 
@@ -201,6 +210,42 @@ describe('DeviceGateway', () => {
       ]);
     });
 
+    it('absorbs a transient failure instead of reporting an empty pool', async () => {
+      // The online set decides which devices a run may reach, so one dropped
+      // connection must not read as "every device is offline".
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+      const connectedAt = Date.parse('2025-01-15T10:30:00Z');
+      mockClient.queryDeviceList
+        .mockRejectedValueOnce(new Error('fetch failed'))
+        .mockResolvedValueOnce([
+          { connectedAt, deviceId: 'dev-1', hostname: 'my-laptop', platform: 'darwin' },
+        ]);
+
+      const result = await new DeviceGateway().queryDeviceList('user-1');
+
+      expect(mockClient.queryDeviceList).toHaveBeenCalledTimes(2);
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({ deviceId: 'dev-1', online: true });
+    });
+
+    it('reports the fallback out loud when the gateway stays unreachable', async () => {
+      // The old bare `catch {}` made this failure invisible: a device-bound run
+      // degraded to the cloud sandbox with no breadcrumb in any log.
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+      mockClient.queryDeviceList.mockRejectedValue(new Error('fetch failed'));
+      const warn = vi.spyOn(console, 'warn').mockImplementation(function () {});
+
+      const result = await new DeviceGateway().queryDeviceList('user-1', 'ws-1');
+
+      expect(result).toEqual([]);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('queryDeviceList'),
+        expect.objectContaining({ error: 'fetch failed', userId: 'user-1', workspaceId: 'ws-1' }),
+      );
+    });
+
     it('should return empty array on error', async () => {
       mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
       mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
@@ -309,11 +354,11 @@ describe('DeviceGateway', () => {
       const proxy = new DeviceGateway();
       const result = await proxy.executeToolCall(params, toolCall);
 
-      expect(result).toEqual({
-        content: 'Device tool call error: connection refused',
-        error: 'connection refused',
-        success: false,
-      });
+      // `connection refused` is a network failure, so the model is told the call
+      // never ran rather than being handed the bare driver message.
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('Could not reach the device gateway');
+      expect(result.error).toBe('DEVICE_GATEWAY_UNREACHABLE: connection refused');
     });
 
     it('should handle non-Error exceptions', async () => {
@@ -324,11 +369,11 @@ describe('DeviceGateway', () => {
       const proxy = new DeviceGateway();
       const result = await proxy.executeToolCall(params, toolCall);
 
-      expect(result).toEqual({
-        content: 'Device tool call error: string error',
-        error: 'string error',
-        success: false,
-      });
+      // Unrecognised cause: describe the hop without claiming to know whether
+      // the device ran the call.
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('unclear whether the device ran it');
+      expect(result.error).toBe('DEVICE_GATEWAY_ERROR: string error');
     });
   });
 
@@ -391,11 +436,10 @@ describe('DeviceGateway', () => {
       const proxy = new DeviceGateway();
       const result = await proxy.executeMcpCall(mcpCall);
 
-      expect(result).toEqual({
-        content: 'Device MCP call error: connection refused',
-        error: 'connection refused',
-        success: false,
-      });
+      // Tunneled MCP calls ride the same relay, so they get the same phrasing.
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('Could not reach the device gateway');
+      expect(result.error).toBe('DEVICE_GATEWAY_UNREACHABLE: connection refused');
     });
   });
 
@@ -827,6 +871,79 @@ describe('DeviceGateway', () => {
       });
 
       expect(result).toEqual({ error: 'offline', success: false });
+    });
+  });
+
+  describe('readExternalAssetForPublish', () => {
+    it('invokes only the dedicated publish RPC method', async () => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+      const data = { base64: 'AQID', contentType: 'image/png', success: true };
+      mockClient.invokeRpc.mockResolvedValue({ data, success: true });
+
+      const proxy = new DeviceGateway();
+      const result = await proxy.readExternalAssetForPublish({
+        deviceId: 'dev-1',
+        path: '/outside/image.png',
+        userId: 'user-1',
+        workingDirectory: '/proj',
+      });
+
+      expect(result).toEqual(data);
+      expect(mockClient.invokeRpc).toHaveBeenCalledWith(
+        { deviceId: 'dev-1', timeout: 30_000, userId: 'user-1' },
+        {
+          method: 'readExternalAssetForPublish',
+          params: { path: '/outside/image.png', workingDirectory: '/proj' },
+        },
+      );
+    });
+  });
+
+  describe('copyAssetForPublish', () => {
+    it('invokes the copy RPC when the destination is inside the workspace', async () => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+      mockClient.invokeRpc.mockResolvedValue({ data: { success: true }, success: true });
+
+      const proxy = new DeviceGateway();
+      const result = await proxy.copyAssetForPublish({
+        deviceId: 'dev-1',
+        from: '/outside/image.png',
+        to: '/proj/.lobe-artifacts/site/image.png',
+        userId: 'user-1',
+        workingDirectory: '/proj',
+      });
+
+      expect(result).toEqual({ success: true });
+      expect(mockClient.invokeRpc).toHaveBeenCalledWith(
+        { deviceId: 'dev-1', timeout: 30_000, userId: 'user-1' },
+        {
+          method: 'copyAssetForPublish',
+          params: {
+            from: '/outside/image.png',
+            to: '/proj/.lobe-artifacts/site/image.png',
+            workingDirectory: '/proj',
+          },
+        },
+      );
+    });
+
+    it('throws without invoking the rpc when the destination escapes the workspace', async () => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+      const proxy = new DeviceGateway();
+
+      await expect(
+        proxy.copyAssetForPublish({
+          deviceId: 'dev-1',
+          from: '/outside/image.png',
+          to: '/proj/../image.png',
+          userId: 'user-1',
+          workingDirectory: '/proj',
+        }),
+      ).rejects.toThrow(/outside the approved workspace/);
+      expect(mockClient.invokeRpc).not.toHaveBeenCalled();
     });
   });
 

@@ -199,13 +199,13 @@ export class TaskLifecycleService {
       //    The agent-driven `createBrief` tool path stays the default until
       //    the GrowthBook flag flips. See for the rollout plan.
       //
-      //    Goal Work rounds are deliberately silent. The coordinator can run
-      //    many attempts on one Work before it converges, and a card per round
+      //    Goal Task rounds are deliberately silent. The coordinator can run
+      //    many attempts on one Task before it converges, and a card per round
       //    buries the one moment that actually needs the user — the decision
       //    gate the coordinator opens when the attempt budget runs out.
       const isGoalLoopRound =
         !!currentTask &&
-        !!(await new GoalModel(this.db, this.userId, this.workspaceId).findByWorkTask(
+        !!(await new GoalModel(this.db, this.userId, this.workspaceId).findByGraphTask(
           currentTask.id,
         ));
       if (

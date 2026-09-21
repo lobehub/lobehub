@@ -6,6 +6,7 @@ import {
   AlertTriangleIcon,
   CheckIcon,
   EyeOffIcon,
+  FolderIcon,
   InfoIcon,
   type LucideIcon,
   UsersIcon,
@@ -16,6 +17,13 @@ import { useTranslation } from 'react-i18next';
 export type VisibilityConfirmVariant = 'makePrivate' | 'publish';
 
 export interface VisibilityConfirmContentProps {
+  /**
+   * The resource sits in a library. Going private does not pull it out of one
+   * — the row stays filed where the author put it and simply stops resolving
+   * for everyone else — so the dialog has to say that, or the author is left
+   * guessing whether their library just lost an entry.
+   */
+  inLibrary?: boolean;
   variant: VisibilityConfirmVariant;
 }
 
@@ -30,8 +38,15 @@ interface Item {
 }
 
 interface VariantConfig {
-  items: readonly [Item, Item, Item];
+  items: readonly Item[];
 }
+
+/** Appended to `makePrivate` when the caller says the resource is filed in a library. */
+const LIBRARY_ITEM: Item = {
+  icon: FolderIcon,
+  key: 'visibilityConfirm.makePrivate.itemLibrary',
+  tone: 'info',
+};
 
 // 3 consequences per direction — the order matters (immediate → follow-on →
 // irreversible tail), and mirrors the tone escalation across the pair. Keep
@@ -152,14 +167,20 @@ const rowIconClass = (tone: Tone) => {
  * carried by the destructive vs primary button colour, so we don't need a
  * separate hero icon here.
  */
-const VisibilityConfirmContent = memo<VisibilityConfirmContentProps>(({ variant }) => {
+const VisibilityConfirmContent = memo<VisibilityConfirmContentProps>(({ inLibrary, variant }) => {
   const { t } = useTranslation('common');
   const config = CONFIG[variant];
   const irreversibleSuffix = t('visibilityConfirm.irreversible');
+  // Second-to-last, so the irreversible tail keeps the closing position it
+  // holds in both variants.
+  const items =
+    variant === 'makePrivate' && inLibrary
+      ? [...config.items.slice(0, -1), LIBRARY_ITEM, ...config.items.slice(-1)]
+      : config.items;
 
   return (
     <ul className={styles.list}>
-      {config.items.map((item) => {
+      {items.map((item) => {
         const ItemIcon = item.icon;
         return (
           <li className={styles.row} key={item.key}>

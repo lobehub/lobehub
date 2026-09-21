@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { buildHeteroExecStdinPayload } from './execStdinPayload';
+import { lobeHubCliGuide } from './lobeHubCliGuide';
 
 describe('buildHeteroExecStdinPayload', () => {
   it('returns a plain JSON string when no systemContext or images', () => {
@@ -63,6 +64,9 @@ describe('buildHeteroExecStdinPayload', () => {
           text: 'workspace rules\n\n<previous_conversation>history</previous_conversation>',
           type: 'text',
         },
+        // The fallback exists because native resume failed: the CLI is about to
+        // start a brand-new session that has never been told about `lh`.
+        { text: lobeHubCliGuide, type: 'text' },
         { text: 'continue', type: 'text' },
         { source: { id: 'file-1', type: 'url', url: 'https://x/a.png' }, type: 'image' },
       ],
@@ -70,6 +74,23 @@ describe('buildHeteroExecStdinPayload', () => {
     // Older CLIs already unwrap `{ content: [...] }`, so they safely run the
     // history-free primary prompt and ignore the unknown fallback field.
     expect(parsed.content[0].text).not.toContain('<previous_conversation>');
+  });
+
+  it('introduces the LobeHub CLI when the run opens a new session', () => {
+    const payload = buildHeteroExecStdinPayload({ isNewSession: true, prompt: 'hello' });
+
+    expect(JSON.parse(payload)).toEqual([
+      { text: lobeHubCliGuide, type: 'text' },
+      { text: 'hello', type: 'text' },
+    ]);
+  });
+
+  it('leaves the CLI introduction out of a resumed session', () => {
+    const payload = buildHeteroExecStdinPayload({ isNewSession: false, prompt: 'hello' });
+
+    // The first turn's copy is still in the CLI's native transcript — repeating
+    // it every turn would stack duplicates for the life of the conversation.
+    expect(payload).toBe(JSON.stringify('hello'));
   });
 
   it('treats an empty imageList like no images', () => {

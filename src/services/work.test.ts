@@ -10,8 +10,12 @@ vi.mock('@/libs/swr', () => ({
 
 // work.ts imports the lambda client at module load; stub it so the service
 // module resolves without a real tRPC client.
+const deleteWorkMutate = vi.fn();
+
 vi.mock('@/libs/trpc/client', () => ({
-  lambdaClient: { work: {} },
+  lambdaClient: {
+    work: { deleteWork: { mutate: (...args: unknown[]) => deleteWorkMutate(...args) } },
+  },
 }));
 
 // Imported after the mocks so the service binds to the stubbed `mutate`.
@@ -82,6 +86,14 @@ describe('didToolMutateWorkView', () => {
         workRegistration: false,
       }),
     ).toBe(false);
+  });
+});
+
+describe('workService.deleteWork', () => {
+  it('calls the deleteWork mutation with the work id', async () => {
+    deleteWorkMutate.mockResolvedValue(undefined);
+    await workService.deleteWork('work-1');
+    expect(deleteWorkMutate).toHaveBeenCalledWith({ id: 'work-1' });
   });
 });
 

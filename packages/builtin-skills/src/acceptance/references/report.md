@@ -14,7 +14,6 @@ never gets that rendering; the structured round does.
 ## Contents
 
 - [No operation ID needed](#no-operation-id-needed)
-- [Immutable rounds](#rounds-are-immutable)
 - [Directory layout](#directory-layout)
 - [Workflow](#workflow)
 - [result.json schema](#resultjson-schema)
@@ -64,28 +63,6 @@ lh acceptance run result submit --run "$RUN" --item "$CHECK_ITEM_ID" …
 Prefer **A**: per-criterion submits without a plan produce checks with no
 declared intent, so the page has nothing to pair the outcome against.
 
-## Rounds are immutable
-
-Each ingest creates a **new** round. After fixing something, never edit or
-re-submit into the previous round to make it look green — publish the
-re-verification as the next round. The acceptance
-(`/acceptance/<acceptanceId>`) aggregates the rounds in order, so the repair
-history is the point, not something to hide. Reuse the same `--subject` across
-rounds for a LobeHub object, or pass `--acceptance <acceptanceId>` after an
-external project's first standalone round.
-
-Before composing a repair round, read the aggregate:
-
-```bash
-lh acceptance view "$ACCEPTANCE_ID" --json
-```
-
-- Omit checks whose latest `userReview.action` is `accept` unless the repair can
-  regress them.
-- Address non-stale rejects and reuse their exact stable check ids.
-- A semantic replacement declares `supersedes: ["old-id"]`; every later round
-  reusing the successor id repeats its full `supersedes` chain.
-
 ## Directory layout
 
 Rounds live under `.acceptances/`, grouped by the delivery they belong to:
@@ -98,6 +75,7 @@ Rounds live under `.acceptances/`, grouped by the delivery they belong to:
     ├── acceptance.json            # which acceptance these rounds belong to
     └── <YYYYMMDD-HHMMSS>-<slug>/  # ONE round — never write into an existing one
         ├── result.json            # THE report — the page renders from this
+        ├── proposal.md            # what this round delivers, posted to the discussion
         ├── report.md              # narrative tail only (verdict, follow-ups, score)
         └── assets/                # evidence referenced from cases[].evidence
 ```
@@ -128,10 +106,16 @@ but then keeping it out of git is on you.
 supersedes? }`.
    A planned item that never produces a case renders as **未执行** rather than
    vanishing — cut coverage in the open.
-   **HARD RULE: every item must be an outcome the reader can judge.** Never
-   plan a programmatic gate (tests / type-check / lint / build) as a check —
-   ingest drops them, and a gates-only round fails to publish. See
-   [what is not an acceptance check](#hard-rule--what-is-not-an-acceptance-check).
+   Every item is an outcome the reader can judge — never a programmatic gate
+   ([what is not an acceptance check](#what-is-not-an-acceptance-check)).
+   **Copy the shapes in this file rather than reconstructing them**: a
+   plausible-but-wrong nested shape parses as JSON, is dropped on ingest, and
+   the round publishes green with its evidence silently degraded. Read every
+   ingest warning as a failed publish.
+   Before executing the **first round only**, send the draft for
+   [acceptance-checker plan review](acceptance-checker.md) and save the agreed plan and
+   requirement mapping after resolving material gaps. In follow-up rounds the
+   primary carries the agreed plan forward and inspects it itself.
 2. **Collect evidence into `assets/` as you test.** Screenshots must be
    **visually verified with the Read tool before being cited** — never cite an
    image you haven't looked at. For metrics, time series, model or benchmark
@@ -145,13 +129,37 @@ supersedes? }`.
    (`{ id, name, category, surface, status, observation, evidence }`), reusing
    the plan item's `id`. `status`: `pass` / `fail` / `blocked` (couldn't run —
    a blocked case is not a pass).
+   Keep `observation` brief and reviewer-facing; follow
+   [checklist explanation guidance](../SKILL.md#keep-checklist-explanations-brief).
+   Detailed reasoning and execution records belong in evidence attachments.
 4. **Set `title` and `summary.verdict`** (`pass` / `fail` / `partial`) — without
    them the run lists as "未命名验证" with a permanent amber "?" glyph. Write the
    one-paragraph verdict into `summary.conclusion`.
-5. **`report.md` is the narrative tail only** — this-round notes, follow-ups,
+5. **Write `proposal.md` — the round's own note to the reviewer.** What this
+   round delivers and where you want their eyes, the way a person writes a pull
+   request description: a few sentences, in the language the user is conversing
+   in. `ingest` posts it into the acceptance's discussion as a message on this
+   round, so it is the first thing a reviewer reads and they can answer it in
+   place. It is NOT the verification write-up — do not restate the checks or the
+   verdict, those are `result.json` and `report.md`. Every round gets one: the
+   first says what the delivery is, later ones say what changed since the
+   feedback. Skip it only when there is genuinely nothing to say beyond the
+   checks.
+6. **`report.md` is the narrative tail only** — this-round notes, follow-ups,
    score. Do NOT repeat the scope block or a case table; those double up on the
    page. Write it in the language the user is conversing in.
-6. **Publish:**
+7. **Review, then publish:** hand the completed plan, report, original evidence,
+   and an explicit file list with relevant diff text or prepared diff artifact
+   paths (including in-round repairs, base and tested revision, and affected case IDs)
+   to the acceptance-checker for a quick evidence review using [acceptance-checker.md](acceptance-checker.md)
+   (first round only, one quick check with no checker re-review after fixes;
+   the diff helps identify updates and affected agreed cases.
+   The acceptance-checker limits code reading to the supplied materials and must not run `git diff` or
+   expand the file list. It checks the report and artifacts, without reopening requirements
+   or expanding into code review. State repairs and affected cases in plain language). Resolve
+   findings and record review limitations in the narrative tail before declaring
+   a pass. The primary publishes; the acceptance-checker does not operate the product or
+   upload results.
 
    ```bash
    lh acceptance run ingest "$REPORT_DIR" --source agent-testing --json
@@ -167,12 +175,16 @@ supersedes? }`.
    Topic, or Document owns the work. To publish a repair into that same history, add
    `--acceptance <acceptanceId>` using the ID printed by the first ingest. The
    command uploads cases + evidence + report body and prints
-   `/acceptance/<acceptanceId>` plus its `?r=<roundIndex>` snapshot form. Include
-   only the full acceptance URL in your final reply; never expose local paths or
-   internal run-page paths. Never update a prior round after a fix; publish the
-   re-verification as the next round.
+   `/acceptance/<acceptanceId>` plus its `?r=<roundIndex>` snapshot form —
+   the only link the final reply exposes (SKILL.md, Final handoff).
 
 ## result.json schema
+
+Every `cases[].evidence` file entry must use `{ "path": "...", "description": "..." }`.
+Describe the file's contents and relevance to the criterion, following the
+[shared description requirements](evidence.md#file-versus-inline-content).
+Do not copy the legacy bare-path form: ingestion accepts it for compatibility,
+but its filename fallback does not satisfy the description requirement.
 
 ```json
 {
@@ -184,7 +196,12 @@ supersedes? }`.
       "surface": "cli",
       "status": "pass",
       "observation": "root returned 3 nested children, depth 2",
-      "evidence": ["assets/task-tree.txt"]
+      "evidence": [
+        {
+          "path": "assets/task-tree.txt",
+          "description": "Task tree command output showing the root and its 3 nested children at depth 2."
+        }
+      ]
     },
     {
       "id": "2",
@@ -193,7 +210,12 @@ supersedes? }`.
       "surface": "cli",
       "status": "pass",
       "observation": "average precision improved from 0.742 to 0.796",
-      "evidence": ["assets/evaluation.json"],
+      "evidence": [
+        {
+          "path": "assets/evaluation.json",
+          "description": "Evaluation results comparing baseline and candidate average precision, including the observed change from 0.742 to 0.796."
+        }
+      ],
       "datasets": [
         {
           "id": "model-metrics",
@@ -285,79 +307,26 @@ reference a field declared by that dataset.
 | `heatmap`           | `x`, `y`, `value`                                              | none                                                                                      |
 | `table`             | none; `encoding` itself may be omitted                         | non-empty `columns[]`; `highlights[]` entries require `field` and `mode` (`min` \| `max`) |
 
-Minimal valid encoding examples (replace every field-name string with a key
-declared in the referenced dataset):
+One shape for every renderer — `id`, `type`, `version: 1`, `dataset`, and an
+`encoding` whose field names are keys of that dataset (see the `line-chart`
+below; the other types differ only in the encoding keys listed above):
 
 ```json
-[
-  {
-    "id": "quality-delta",
-    "type": "metric-comparison",
-    "version": 1,
-    "dataset": "metrics",
-    "encoding": { "label": "metric", "before": "baseline", "after": "candidate" }
+{
+  "dataset": "training",
+  "encoding": {
+    "x": "step",
+    "series": [
+      { "field": "baselineLoss", "label": "Baseline", "style": "muted" },
+      { "field": "candidateLoss", "label": "Candidate", "style": "primary" }
+    ],
+    "xLabel": "Step",
+    "yLabel": "Loss"
   },
-  {
-    "id": "loss-over-time",
-    "type": "line-chart",
-    "version": 1,
-    "dataset": "training",
-    "encoding": {
-      "x": "step",
-      "series": [
-        { "field": "baselineLoss", "label": "Baseline", "style": "muted" },
-        { "field": "candidateLoss", "label": "Candidate", "style": "primary" }
-      ],
-      "xLabel": "Step",
-      "yLabel": "Loss"
-    }
-  },
-  {
-    "id": "scores-by-model",
-    "type": "bar-chart",
-    "version": 1,
-    "dataset": "scores",
-    "encoding": {
-      "category": "model",
-      "series": [{ "field": "score", "label": "Score" }],
-      "valueLabel": "Accuracy"
-    }
-  },
-  {
-    "id": "latency-quality",
-    "type": "scatter-plot",
-    "version": 1,
-    "dataset": "runs",
-    "encoding": {
-      "x": "latency",
-      "y": "quality",
-      "color": "model",
-      "label": "run",
-      "xLabel": "Latency (ms)",
-      "yLabel": "Quality"
-    }
-  },
-  {
-    "id": "error-matrix",
-    "type": "heatmap",
-    "version": 1,
-    "dataset": "errors",
-    "encoding": { "x": "predicted", "y": "actual", "value": "count" }
-  },
-  {
-    "id": "benchmark-table",
-    "type": "table",
-    "version": 1,
-    "dataset": "benchmarks",
-    "encoding": {
-      "columns": ["model", "latency", "score"],
-      "highlights": [
-        { "field": "latency", "mode": "min" },
-        { "field": "score", "mode": "max" }
-      ]
-    }
-  }
-]
+  "id": "loss-over-time",
+  "type": "line-chart",
+  "version": 1
+}
 ```
 
 Dataset field `type` is one of `boolean`, `category`, `number`, `string`, or
@@ -377,36 +346,13 @@ row limit is 10,000.
 `Rate-limit recovery`) — never a technical surface. `method` / `expected` stay
 free prose; they render under the check next to the outcome.
 
-### HARD RULE — what is not an acceptance check
+### What is not an acceptance check
 
-An acceptance check is something a **person decides about the delivery**. The
-repo's own automated gates are not that, and they are actively harmful on the
-page: twenty green "unit tests pass" rows bury the two checks that actually
-needed someone to look.
-
-**These MUST NOT appear as `plan[]` / `cases[]` items, under any phrasing:**
-
-| Not a check                                                | Where it belongs                                     |
-| ---------------------------------------------------------- | ---------------------------------------------------- |
-| Unit / integration / regression / snapshot tests, coverage | one line in `report.md` → **Verification**           |
-| `type-check`, `tsc`, `eslint`, lint, format, a clean build | same — a precondition of shipping, not a deliverable |
-| "the test suite is green", "CI passes"                     | same                                                 |
-
-This is enforced, not advisory. `lh acceptance run ingest` **drops every
-matching item** — matched on title, category, AND `method`, so writing
-"run `bun run test`" into `method` under a product-sounding title still
-matches — warns with the dropped ids, and recounts `summary` from the checks
-that remain. A round consisting **only** of such checks **fails to publish**.
-Either way, a gate written as a check is effort spent proving something nobody
-accepts: apply the rule at plan time, before the first case runs.
-
-The line is the _subject_ of the check, not who judged it: a CLI behavior check
-asserted by a command is a fine acceptance item (`verifier: "program"`). "Run
-`bun run test`" is not.
-
-**What IS an acceptance check:** what the user sees, hears, reads, or receives —
-a rendered screen, a produced file, an API response shape a client depends on,
-an audio clip that actually plays, a failure state that recovers.
+The repo's own gates — tests, coverage, `type-check`, lint, format, a clean
+build, "CI passes" — are never `plan[]` / `cases[]` items, under any phrasing;
+they are one line in `report.md` under **Verification**. Ingest drops matching
+items (matched on title, category, AND `method`), warns, and recounts `summary`;
+a gates-only round fails to publish. Full rule: SKILL.md.
 
 ### Before/after comparison pairs
 
@@ -419,8 +365,10 @@ measured delta on each side:
 ```json
 "evidence": [
   { "path": "assets/before.png",
+    "description": "Topic row before the change, showing the original 11px text size.",
     "comparison": { "id": "topic-row", "role": "before", "layout": "horizontal", "label": "before: 11px" } },
   { "path": "assets/after.png",
+    "description": "The same topic row after the change, showing the updated 12px text size.",
     "comparison": { "id": "topic-row", "role": "after", "layout": "horizontal", "label": "after: 12px" } }
 ]
 ```
@@ -445,9 +393,6 @@ flow are ordinary ordered evidence with captions, not a pair.
   reviewer-facing reasoning document and a separate audit-facing execution
   artifact containing the exact command/request and observed values. Neither
   unsupported prose nor an unexplained log dump is sufficient.
-- **Final handoff exposes only Acceptance** — use `/acceptance/<acceptanceId>` or
-  its `?r=<roundIndex>` snapshot. Never include images, local paths, local file
-  links, or internal run-page paths in chat.
 - **Report failures faithfully** — a failing case with clear evidence is a good
   report; a vague green one is not.
 - If coverage was cut, say so in `report.md` — silent truncation reads as

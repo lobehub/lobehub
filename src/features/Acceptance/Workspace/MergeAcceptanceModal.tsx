@@ -18,7 +18,7 @@ import { SkeletonList } from '@/features/NavPanel/components/SkeletonList';
 import type { AcceptanceListItem } from '@/services/verify';
 
 import { useAcceptanceList } from '../hooks';
-import { frostedModalStyles } from '../Viewer/modals';
+import { frostedModalStyles } from '../Viewer/Review/modals';
 
 /** A settled aggregate cannot receive checks — the server refuses it too. */
 const SETTLED_STATUSES = new Set(['accepted', 'closed']);

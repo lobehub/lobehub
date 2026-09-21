@@ -1,4 +1,4 @@
-import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
+import { analyticsClient } from '@/libs/analytics/client';
 
 import { resolveLandingClickId } from './landingClickId';
 
@@ -8,29 +8,18 @@ interface TrackLoginOrSignupClickedParams {
 }
 
 export const trackLoginOrSignupClicked = ({ provider, spm }: TrackLoginOrSignupClickedParams) => {
-  const analytics = getSingletonAnalyticsOptional();
-  if (!analytics) return Promise.resolve();
+  const lhCid = resolveLandingClickId();
 
-  const sendEvent = async () => {
-    const status = analytics.getStatus();
-
-    if (!status.initialized) {
-      await analytics.initialize();
-    }
-
-    const lhCid = resolveLandingClickId();
-
-    await analytics.track({
+  return analyticsClient
+    .track({
       name: 'login_or_signup_clicked',
       properties: {
         ...(lhCid && { lh_cid: lhCid }),
         ...(provider && { provider }),
         spm,
       },
+    })
+    .catch((error) => {
+      console.error('Failed to track login_or_signup_clicked:', error);
     });
-  };
-
-  return sendEvent().catch((error) => {
-    console.error('Failed to track login_or_signup_clicked:', error);
-  });
 };

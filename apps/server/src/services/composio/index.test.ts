@@ -15,27 +15,33 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/database/models/connector', () => ({
-  ConnectorModel: vi.fn().mockImplementation(() => ({
-    // Runtime resolution goes through the agent-aware resolvers; map them to the
-    // same fixtures (the priority/dedup logic itself is covered by the model's
-    // own connectorAgentScope tests).
-    resolveAll: mocks.connectorQuery,
-    resolveByIdentifiers: mocks.connectorQueryByIdentifiers,
-    markComposioConnectionUnavailable: mocks.markComposioUnavailable,
-  })),
+  ConnectorModel: vi.fn().mockImplementation(function () {
+    return {
+      // Runtime resolution goes through the agent-aware resolvers; map them to the
+      // same fixtures (the priority/dedup logic itself is covered by the model's
+      // own connectorAgentScope tests).
+      resolveAll: mocks.connectorQuery,
+      resolveByIdentifiers: mocks.connectorQueryByIdentifiers,
+      markComposioConnectionUnavailable: mocks.markComposioUnavailable,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/connectorTool', () => ({
-  ConnectorToolModel: vi.fn().mockImplementation(() => ({
-    queryAllByConnectorIds: mocks.connectorToolQueryAll,
-  })),
+  ConnectorToolModel: vi.fn().mockImplementation(function () {
+    return {
+      queryAllByConnectorIds: mocks.connectorToolQueryAll,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/plugin', () => ({
-  PluginModel: vi.fn().mockImplementation(() => ({
-    findById: mocks.pluginFindById,
-    query: mocks.pluginQuery,
-  })),
+  PluginModel: vi.fn().mockImplementation(function () {
+    return {
+      findById: mocks.pluginFindById,
+      query: mocks.pluginQuery,
+    };
+  }),
 }));
 
 vi.mock('@/libs/composio', () => ({
@@ -61,13 +67,14 @@ const activeConnectorRow = (overrides: Record<string, any> = {}) => ({
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.isClientAvailable.mockReturnValue(true);
-  mocks.isComposioNotFound.mockImplementation(
-    (error: unknown) =>
+  mocks.isComposioNotFound.mockImplementation(function (error: unknown) {
+    return (
       typeof error === 'object' &&
       error !== null &&
       'code' in error &&
-      error.code === 'CONNECTED_ACCOUNT_NOT_FOUND',
-  );
+      error.code === 'CONNECTED_ACCOUNT_NOT_FOUND'
+    );
+  });
   mocks.markComposioUnavailable.mockResolvedValue(false);
   mocks.connectorQuery.mockResolvedValue([]);
   mocks.connectorQueryByIdentifiers.mockResolvedValue([]);

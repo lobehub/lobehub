@@ -1,6 +1,6 @@
 import type { AnalyticsEvent, AnalyticsManager } from '@lobehub/analytics';
-import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
 
+import { analyticsClient } from '@/libs/analytics/client';
 import { getUserStoreState } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
@@ -17,14 +17,13 @@ export const trackProductUsageEvent = async (
 ) => {
   if (!isProductUsageEventEnabled()) return false;
 
-  const analytics = options.analytics ?? getSingletonAnalyticsOptional();
-  if (!analytics) return false;
-
   try {
-    const status = analytics.getStatus();
-    if (!status.initialized) return false;
-
-    await analytics.track(event);
+    if (options.analytics) {
+      if (!options.analytics.getStatus().initialized) return false;
+      await options.analytics.track(event);
+    } else {
+      await analyticsClient.track(event);
+    }
     return true;
   } catch (error) {
     console.error('Failed to track product usage event:', error);

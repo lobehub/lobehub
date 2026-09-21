@@ -1,9 +1,10 @@
-import { Flexbox, Skeleton } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Skeleton } from '@lobehub/ui/base-ui';
 
 const Loading = () => {
   return (
     <Flexbox padding={16}>
-      <Skeleton active paragraph={{ rows: 8 }} title={false} />
+      <Skeleton.Text rows={8} />
     </Flexbox>
   );
 };

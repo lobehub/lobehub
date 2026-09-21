@@ -343,6 +343,18 @@ describe('cliAgentBinaries', () => {
       });
     });
 
+    it('detects Devin through the shared version probe', async () => {
+      callExecFile('/Users/test/.local/bin/devin\n');
+      callExecFile('devin 3000.4.25 (7e8e528a)');
+
+      const { devinBinary } = await import('../cliAgentBinaries');
+      await expect(devinBinary.detect()).resolves.toMatchObject({
+        available: true,
+        path: '/Users/test/.local/bin/devin',
+        version: '3000.4.25',
+      });
+    });
+
     it('detects the official TRAE CLI by its ACP capability', async () => {
       callExecFile('/Users/test/.local/bin/traecli\n');
       callExecFile('trae-cli version 0.120.52');

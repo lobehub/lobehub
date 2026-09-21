@@ -72,7 +72,7 @@ export interface AgentHook {
 // ── Serialized Hook (for Redis persistence) ──────────────
 
 /**
- * Serialized hook config stored in AgentState.metadata._hooks (and on
+ * Serialized hook config stored in AgentState.host.hooks (and on
  * `topic.metadata.runningOperation.hooks`). Only contains webhook info —
  * handler functions can't be serialized.
  *

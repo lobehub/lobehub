@@ -36,6 +36,7 @@ import dynamic from '@/libs/next/dynamic';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import DesktopAutoOidcOnFirstOpen from './DesktopAutoOidcOnFirstOpen';
+import GatewayMuxWarmup from './GatewayMuxWarmup';
 import RegisterHotkeys from './RegisterHotkeys';
 import { styles } from './style';
 
@@ -55,11 +56,12 @@ const Layout: FC = () => {
 
   return (
     <HotkeysProvider initiallyActiveScopes={[HotkeyScopeEnum.Global]}>
+      <DesktopAutoOidcOnFirstOpen />
+      <AuthRequiredModal />
       <WorkspaceContextSlot>
         <ActiveConversationBridge />
         <TabCacheBridges />
         <Suspense fallback={null}>
-          <DesktopAutoOidcOnFirstOpen />
           <DesktopNavigationBridge />
           <DesktopFileMenuBridge />
           <DesktopBrowserGatewayBridge />
@@ -68,7 +70,6 @@ const Layout: FC = () => {
           <OverlayMessageDispatcher />
           {showCloudPromotion && <CloudBanner />}
         </Suspense>
-        <AuthRequiredModal />
         <ZoomHUD />
 
         <Suspense fallback={null}>
@@ -91,6 +92,7 @@ const Layout: FC = () => {
         </DndContextWrapper>
         <Suspense fallback={null}>
           <HotkeyHelperPanel />
+          <GatewayMuxWarmup />
           <RegisterHotkeys />
           <CmdkLazy />
           <GlobalApprovalNotification />

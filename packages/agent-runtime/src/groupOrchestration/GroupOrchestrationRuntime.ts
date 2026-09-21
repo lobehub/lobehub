@@ -169,7 +169,6 @@ export class GroupOrchestrationRuntime {
       messages: [],
       status: 'idle',
       stepCount: 0,
-      toolManifestMap: {},
       usage: {
         humanInteraction: {
           approvalRequests: 0,

@@ -60,8 +60,12 @@ describe('runHeartbeatTick', () => {
     vi.clearAllMocks();
     mockSelectTask.mockResolvedValue([]);
     mockBriefModel.hasUnresolvedUrgentByTask.mockResolvedValue(false);
-    (BriefModel as any).mockImplementation(() => mockBriefModel);
-    (TaskRunnerService as any).mockImplementation(() => mockRunner);
+    (BriefModel as any).mockImplementation(function () {
+      return mockBriefModel;
+    });
+    (TaskRunnerService as any).mockImplementation(function () {
+      return mockRunner;
+    });
   });
 
   it('runs the task and excludes transient error briefs from tick gating', async () => {

@@ -7,7 +7,7 @@ import {
   RecommendedSkillType,
   resolveConnectorCatalogItem,
 } from '@lobechat/const';
-import type { BuiltinSkill, LobeBuiltinTool } from '@lobechat/types';
+import type { BuiltinSkillManifest, LobeBuiltinTool } from '@lobechat/types';
 import { Center, Empty } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles } from 'antd-style';
@@ -175,7 +175,7 @@ const SkillList = memo<SkillListProps>(
     // 3. Custom MCP Tools (type === 'customPlugin')
     const { integrations, communityMCPs, customMCPs } = useMemo(() => {
       type IntegrationItem =
-        | { builtinAgentSkill: BuiltinSkill; type: 'builtinAgent' }
+        | { builtinAgentSkill: BuiltinSkillManifest; type: 'builtinAgent' }
         | { builtinTool: LobeBuiltinTool; type: 'builtin' }
         | { provider: LobehubSkillProviderType; type: 'lobehub' }
         | { serverType: ComposioAppType; type: 'composio' };

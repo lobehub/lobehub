@@ -1,6 +1,6 @@
 import { Flexbox, Icon } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { Check, Info, RefreshCw, Shield, ShieldCheck, X } from 'lucide-react';
+import { Info, Shield, ShieldAlert, ShieldCheck, ShieldX } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -8,19 +8,6 @@ import { useVerifyResults, useVerifyState } from '../hooks';
 import { countResults, type DockPhase, phaseFromStatus } from '../utils';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  badge: css`
-    display: inline-flex;
-    flex: none;
-    gap: 5px;
-    align-items: center;
-
-    padding-block: 4px;
-    padding-inline: 10px;
-    border-radius: 999px;
-
-    font-size: 12px;
-    font-weight: 600;
-  `,
   body: css`
     padding-block: 12px;
     padding-inline: 16px;
@@ -54,11 +41,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     display: flex;
     gap: 14px;
     align-items: flex-start;
-    justify-content: space-between;
 
     padding-block: 14px;
     padding-inline: 16px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+  `,
+  status: css`
+    font-size: 13px;
+    font-weight: 600;
   `,
   sub: css`
     margin-block-start: 4px;
@@ -75,7 +65,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 interface BadgeMeta {
   color: 'default' | 'success' | 'error' | 'warning';
-  icon: typeof Check;
+  /** Shield family only: the glyph is the block's identity AND its verdict. */
+  icon: typeof Shield;
   key: 'pending' | 'failed' | 'errored' | 'repairing' | 'passed';
 }
 
@@ -87,11 +78,11 @@ const phaseToResult: Record<DockPhase, { badge: BadgeMeta; subKey: string } | nu
   errored: {
     // Warning, not error: the verifier couldn't run, so the delivery was never
     // judged — never render it as a failed check.
-    badge: { color: 'warning', icon: Info, key: 'errored' },
+    badge: { color: 'warning', icon: ShieldAlert, key: 'errored' },
     subKey: 'result.errored.sub',
   },
   failed: {
-    badge: { color: 'error', icon: X, key: 'failed' },
+    badge: { color: 'error', icon: ShieldX, key: 'failed' },
     subKey: 'result.failed.sub',
   },
   idle: {
@@ -99,11 +90,11 @@ const phaseToResult: Record<DockPhase, { badge: BadgeMeta; subKey: string } | nu
     subKey: 'result.pending.sub',
   },
   passed: {
-    badge: { color: 'success', icon: Check, key: 'passed' },
+    badge: { color: 'success', icon: ShieldCheck, key: 'passed' },
     subKey: 'result.passed.sub',
   },
   repairing: {
-    badge: { color: 'warning', icon: RefreshCw, key: 'repairing' },
+    badge: { color: 'warning', icon: ShieldAlert, key: 'repairing' },
     subKey: 'result.repairing.sub',
   },
   verifying: {
@@ -149,27 +140,28 @@ const RunResult = memo<RunResultProps>(({ operationId, round = 1, embedded }) =>
     warning: cssVar.colorWarningTextActive,
   } as const;
 
+  // The verdict lives IN the title: the shield changes form and colour with the
+  // phase and the status text sits right after the round number, so the reader
+  // never has to travel to the far edge of the card — a pill there read as a
+  // separate control and left the title looking neutral on a failed round.
   const header = (
     <div className={styles.head}>
       <Flexbox>
         <Flexbox horizontal align="center" gap={7}>
-          <Icon icon={ShieldCheck} size={16} />
+          <Icon
+            color={meta.badge.color === 'default' ? undefined : badgeColorMap[meta.badge.color]}
+            icon={meta.badge.icon}
+            size={16}
+          />
           <span className={styles.title}>{t('result.title', { round })}</span>
+          <span className={styles.status} style={{ color: badgeTextMap[meta.badge.color] }}>
+            {t(`badge.${meta.badge.key}` as any)}
+          </span>
         </Flexbox>
         <div className={styles.sub}>
           {t(meta.subKey as any, { passed: counts.passed, total: counts.total } as any)}
         </div>
       </Flexbox>
-      <span
-        className={styles.badge}
-        style={{
-          background: `color-mix(in srgb, ${badgeColorMap[meta.badge.color]} 12%, transparent)`,
-          color: badgeTextMap[meta.badge.color],
-        }}
-      >
-        <Icon icon={meta.badge.icon} size={14} />
-        {t(`badge.${meta.badge.key}` as any)}
-      </span>
     </div>
   );
 

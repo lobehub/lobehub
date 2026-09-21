@@ -183,6 +183,7 @@ const Content = memo<ContentProps>(({ open, searchKeyword }) => {
             fav={topic.favorite}
             id={topic.id}
             metadata={topic.metadata}
+            runStartedAt={topic.runStartedAt}
             status={topic.status}
             title={topic.title}
             userId={topic.userId}

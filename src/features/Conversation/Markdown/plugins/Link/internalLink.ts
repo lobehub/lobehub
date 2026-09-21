@@ -74,6 +74,18 @@ const isInternalHost = (url: URL, currentOrigin?: string) => {
   }
 };
 
+/**
+ * Whether a link's visible text is just the pasted address rather than
+ * something a human wrote. Only such a label may be replaced by the entity's
+ * resolved title; authored link text is the author's choice and stays.
+ *
+ * Exact equality, not a URL-shaped prefix test: for an autolink the rehype
+ * pass sets the label to the canonical form, which for an internal link IS
+ * the href — while `[https://docs.example](/task/1)` is authored text that
+ * merely looks like a URL and must survive.
+ */
+export const isBareLinkLabel = (label: string, href: string) => label === href;
+
 /** Parse a LobeHub route into a semantic entity reference. */
 export const parseInternalLink = (
   href: string | undefined,

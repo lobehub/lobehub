@@ -10,7 +10,9 @@ import {
   Download,
   MoreHorizontal,
   Settings2Icon,
+  Share2Icon,
   Trash,
+  UploadCloud,
   UserRound,
   UsersIcon,
 } from 'lucide-react';
@@ -22,8 +24,10 @@ import { useAgentTransferToMemberMenuItem } from '@/business/client/hooks/useAge
 import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
 import { useBusinessAgentImportMenuItem } from '@/business/client/hooks/useBusinessAgentImportMenuItem';
 import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
+import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
+import { useAgentMarketSubmission } from '@/features/AgentMarketSubmission/useAgentMarketSubmission';
 import AgentProfileTabs, { AGENT_PROFILE_TABS_CENTER_STYLE } from '@/features/AgentProfileTabs';
 import NavHeader from '@/features/NavHeader';
 import { formatPageEditorInfoTime } from '@/features/PageEditor/formatPageEditorInfoTime';
@@ -43,10 +47,12 @@ import { sanitizeFileName } from '@/utils/sanitizeFileName';
 import { openAgentSettingsModal } from '../AgentSettings';
 import { selectors as profileSelectors, useProfileStore } from '../store';
 import AgentForkTag from './AgentForkTag';
-import AgentStatusTag from './AgentStatusTag';
 import AgentVersionReviewTag from './AgentVersionReviewTag';
 
-type HeaderTranslation = TFunction<readonly ['setting', 'chat', 'file', 'common'], undefined>;
+type HeaderTranslation = TFunction<
+  readonly ['setting', 'chat', 'file', 'common', 'agent'],
+  undefined
+>;
 
 const buildAgentProfileMarkdown = (params: {
   description?: string;
@@ -98,7 +104,7 @@ const buildAgentProfileMarkdown = (params: {
 };
 
 const Header = memo(() => {
-  const { i18n, t } = useTranslation(['setting', 'chat', 'file', 'common']);
+  const { i18n, t } = useTranslation(['setting', 'chat', 'file', 'common', 'agent']);
   const dateLocale = i18n?.resolvedLanguage || i18n?.language;
   const navigate = useWorkspaceAwareNavigate();
 
@@ -245,6 +251,29 @@ const Header = memo(() => {
     [],
   );
 
+  const { visible: shareVisible } = useAgentShareSupported(activeAgentId);
+  const canShareAgent = shareVisible === true && canConfigure;
+
+  const showMarketSubmission = !!config && !isBuiltinAgent && !isHeterogeneous;
+  const canSubmitToMarket = showMarketSubmission && canManage && !lockedByOther && !lockPending;
+  const marketSubmission = useAgentMarketSubmission({
+    agentId: activeAgentId,
+    canSubmit: canSubmitToMarket,
+    getPrompt: () => ({
+      editorData: editor
+        ? (editor.getDocument('json') as LobeAgentConfig['editorData'])
+        : config?.editorData,
+      systemRole: editor ? (editor.getDocument('markdown') as unknown as string) : systemRole,
+    }),
+  });
+
+  // Share settings are a sibling tab of the profile group, not a popup — the
+  // shortcut just jumps to that tab.
+  const handleOpenShare = useCallback(() => {
+    if (!activeAgentId) return;
+    navigate(`/agent/${activeAgentId}/share`);
+  }, [activeAgentId, navigate]);
+
   const menuItems = useMemo(() => {
     const businessTransferMenuItems = transferMenuItems ?? [];
 
@@ -279,6 +308,15 @@ const Header = memo(() => {
           }
         : null,
       { type: 'divider' as const },
+      showMarketSubmission
+        ? {
+            disabled: !canSubmitToMarket || marketSubmission.isSubmitting,
+            icon: <Icon icon={UploadCloud} />,
+            key: 'submit-to-market',
+            label: t('marketSubmission.entry'),
+            onClick: marketSubmission.open,
+          }
+        : null,
       {
         children: [
           {
@@ -340,12 +378,16 @@ const Header = memo(() => {
     authorName,
     canConfigure,
     canManage,
+    canSubmitToMarket,
     createdAt,
     dateLocale,
     handleExportMarkdown,
     handleDelete,
     isInbox,
+    marketSubmission.isSubmitting,
+    marketSubmission.open,
     navigate,
+    showMarketSubmission,
     showPermissionPageEntry,
     t,
     importMenuItem,
@@ -354,10 +396,35 @@ const Header = memo(() => {
   ]);
 
   return (
+    // `relative` anchors the absolutely-centered switcher below.
     <NavHeader
       style={{ position: 'relative' }}
+      left={
+        <Flexbox horizontal align={'center'} gap={8}>
+          {/* No section title — the Segmented beside it names the current tab. */}
+          {activeAgentId && <AgentBreadcrumb agentId={activeAgentId} />}
+          <AgentVersionReviewTag
+            key={`review-${activeAgentId}-${marketSubmission.revision}`}
+            submitted={marketSubmission.isUnderReview}
+          />
+          <AgentForkTag />
+          <AccessLevelTag
+            resourceId={showPermissionsEntry ? (activeAgentId ?? undefined) : undefined}
+            resourceType={'agent'}
+          />
+        </Flexbox>
+      }
       right={
         <Flexbox horizontal align={'center'} gap={4}>
+          {canShareAgent && (
+            <ActionIcon
+              icon={Share2Icon}
+              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+              title={t('share.entry', { ns: 'agent' })}
+              tooltipProps={{ placement: 'bottom' }}
+              onClick={handleOpenShare}
+            />
+          )}
           <DropdownMenu items={menuItems}>
             <ActionIcon icon={MoreHorizontal} size={DESKTOP_HEADER_ICON_SMALL_SIZE} />
           </DropdownMenu>
@@ -369,20 +436,6 @@ const Header = memo(() => {
               onToggle={() => toggleAgentBuilderPanel()}
             />
           )}
-        </Flexbox>
-      }
-      // `relative` anchors the absolutely-centered switcher below.
-      left={
-        <Flexbox horizontal align={'center'} gap={8}>
-          {/* No section title — the Segmented beside it names the current tab. */}
-          {activeAgentId && <AgentBreadcrumb agentId={activeAgentId} />}
-          <AgentStatusTag />
-          <AgentVersionReviewTag />
-          <AgentForkTag />
-          <AccessLevelTag
-            resourceId={showPermissionsEntry ? (activeAgentId ?? undefined) : undefined}
-            resourceType={'agent'}
-          />
         </Flexbox>
       }
       styles={{

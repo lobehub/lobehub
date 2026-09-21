@@ -17,9 +17,10 @@ export interface RunCommandResult {
   duration_ms?: number;
   error?: string;
   /**
-   * Present only after the command has exited.
+   * Present only after the command has exited *normally*.
    * `0` means success, non-zero means the command finished with an error.
-   * `undefined` means the command is still running.
+   * Absent while the command runs — but also when it was killed by a signal or
+   * never spawned, so it cannot stand in for liveness. Read `running`.
    */
   exit_code?: number;
   output?: string;
@@ -27,6 +28,11 @@ export interface RunCommandResult {
     stderr: { path: string; size: number; truncated: boolean };
     stdout: { path: string; size: number; truncated: boolean };
   };
+  /**
+   * Whether the command was still executing when the wait window closed.
+   * Absent for a `run_in_background` start, which returns before observing.
+   */
+  running?: boolean;
   /**
    * Whether this command was actually confined by the device sandbox.
    *
@@ -44,11 +50,13 @@ export interface RunCommandResult {
    * that can be resumed with `getCommandOutput`.
    */
   shell_id?: string;
+  /** The signal that terminated the command, when one did (POSIX). */
+  signal?: string;
   stderr?: string;
   stdout?: string;
   /**
    * True when the command/session request completed successfully.
-   * Use `exit_code` to determine whether the underlying command has exited.
+   * Use `running` to determine whether the underlying command has finished.
    */
   success: boolean;
 }
@@ -72,9 +80,10 @@ export interface GetCommandOutputResult {
   duration_ms?: number;
   error?: string;
   /**
-   * Present only after the command has exited.
+   * Present only after the command has exited *normally*.
    * `0` means success, non-zero means the command finished with an error.
-   * `undefined` means the command is still running.
+   * Absent while the command runs — but also when it was killed by a signal or
+   * never spawned, so it cannot stand in for liveness. Read `running`.
    */
   exit_code?: number;
   output: string;
@@ -82,11 +91,20 @@ export interface GetCommandOutputResult {
     stderr: { path: string; size: number; truncated: boolean };
     stdout: { path: string; size: number; truncated: boolean };
   };
+  /**
+   * Whether the command was still executing when this observation was taken.
+   * The authoritative liveness signal: the three ways a command can be finished
+   * (exited, signalled, failed to spawn) do not share a single field, and only
+   * this side can see all of them.
+   */
+  running: boolean;
+  /** The signal that terminated the command, when one did (POSIX). */
+  signal?: string;
   stderr: string;
   stdout: string;
   /**
    * True when the output request completed successfully.
-   * Use `exit_code` to determine whether the underlying command has exited.
+   * Use `running` to determine whether the underlying command has finished.
    */
   success: boolean;
 }

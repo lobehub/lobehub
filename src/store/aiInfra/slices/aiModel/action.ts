@@ -289,21 +289,23 @@ export class AiModelActionImpl {
   useFetchAiModelReasoningConfig = (
     id: string | undefined,
     provider: string | undefined,
-  ): SWRResponse<AiModelReasoningConfig | undefined> => {
-    return useClientDataSWR<AiModelReasoningConfig | undefined>(
+  ): SWRResponse<AiModelReasoningConfig | null> => {
+    return useClientDataSWR<AiModelReasoningConfig | null>(
       id && provider ? aiModelKeys.reasoningConfig(provider, id) : null,
-      ([, provider, id]) =>
-        aiModelService.getAiModelReasoningConfig(id as string, provider as string),
+      async ([, provider, id]) =>
+        (await aiModelService.getAiModelReasoningConfig(id as string, provider as string)) ?? null,
       {
         onSuccess: (data) => {
           const key = modelReasoningConfigKey(provider!, id!);
           // Don't clobber an in-flight optimistic value with a stale response
           if (this.#get().modelReasoningConfigUpdatingKeys.includes(key)) return;
-          if (isEqual(data, this.#get().modelReasoningConfigMap[key])) return;
+          // The store map keeps its `| undefined` shape — only SWR needs null.
+          const value = data ?? undefined;
+          if (isEqual(value, this.#get().modelReasoningConfigMap[key])) return;
 
           this.#set(
             (state) => ({
-              modelReasoningConfigMap: { ...state.modelReasoningConfigMap, [key]: data },
+              modelReasoningConfigMap: { ...state.modelReasoningConfigMap, [key]: value },
             }),
             false,
             `useFetchAiModelReasoningConfig/${key}`,

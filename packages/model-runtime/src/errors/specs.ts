@@ -51,6 +51,9 @@ export interface ErrorCodeSpec {
   /** Whether transport-level retry is allowed. */
   retryable: boolean;
 
+  /** Whether RouterRuntime may continue with a different route option. */
+  routeFallback?: boolean;
+
   severity: ErrorSeverity;
 }
 
@@ -282,6 +285,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
     attribution: 'user',
     httpStatus: 400,
     retryable: false,
+    routeFallback: false,
     countAsFailure: false,
     description: 'Prompt + tool payload exceeds the model context window.',
   },
@@ -315,8 +319,21 @@ export const ERROR_CODE_SPECS: SpecMap = {
     attribution: 'user',
     httpStatus: 400,
     retryable: false,
+    routeFallback: false,
     countAsFailure: false,
     description: 'Upstream rejected the request as malformed (bad JSON / schema / parameters).',
+  },
+  [AgentRuntimeErrorType.RequestBodyTooLarge]: {
+    code: AgentRuntimeErrorType.RequestBodyTooLarge,
+    numericId: 4006,
+    category: 'request',
+    severity: 'warning',
+    attribution: 'user',
+    httpStatus: 400,
+    retryable: false,
+    routeFallback: false,
+    countAsFailure: false,
+    description: 'Upstream rejected the serialized request body as too large.',
   },
   // —— Cloud-only (tier 9) ——
   [ChatErrorType.LobeHubModelDeprecated]: {
@@ -355,6 +372,18 @@ export const ERROR_CODE_SPECS: SpecMap = {
     retryable: true,
     countAsFailure: false,
     description: 'Connection timeout / network drop talking to the provider.',
+  },
+  [AgentRuntimeErrorType.RemoteMediaDownloadTimeout]: {
+    code: AgentRuntimeErrorType.RemoteMediaDownloadTimeout,
+    numericId: 6002,
+    category: 'network',
+    severity: 'warning',
+    attribution: 'system',
+    httpStatus: 504,
+    retryable: false,
+    routeFallback: true,
+    countAsFailure: false,
+    description: 'Provider timed out while downloading a remote image or file URL.',
   },
 
   // ─── 7xxx Stream / Runtime ────────────────────────────────────────────
@@ -492,6 +521,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
     attribution: 'provider',
     httpStatus: 471,
     retryable: false,
+    routeFallback: false,
     countAsFailure: true,
     description: 'Image-generation provider returned no image.',
   },
@@ -569,6 +599,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
     attribution: 'user',
     httpStatus: 471,
     retryable: false,
+    routeFallback: false,
     countAsFailure: false,
     description: 'Provider blocked the request or generated output due to content policy.',
   },

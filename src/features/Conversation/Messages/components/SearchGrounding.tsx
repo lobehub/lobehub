@@ -2,7 +2,8 @@ import { Flexbox, Icon, SearchResultCards } from '@lobehub/ui';
 import { Tag } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDown, ChevronRight, Globe, Images } from 'lucide-react';
-import { AnimatePresence, m } from 'motion/react';
+import { AnimatePresence } from 'motion/react';
+import * as m from 'motion/react-m';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

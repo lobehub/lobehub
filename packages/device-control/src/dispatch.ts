@@ -10,6 +10,10 @@ import {
   getGitWorkingTreePatches,
   getGitWorkingTreeStatus,
   getLinkedPullRequest,
+  getPullRequestActivity,
+  getPullRequestDetail,
+  getPullRequestMergeContext,
+  type GitPullRequestAction,
   listGitBranches,
   listGitRemoteBranches,
   listGitWorktrees,
@@ -18,23 +22,32 @@ import {
   removeGitWorktree,
   renameGitBranch,
   revertGitFile,
+  runPullRequestAction,
 } from '@lobechat/local-file-shell/git';
 
 import { getClaudeCodeQuota, type GetClaudeCodeQuotaParams } from './claudeCodeQuota';
+import { getCodexQuota, type GetCodexQuotaParams } from './codexQuota';
+import { defaultCopyAssetForPublish, defaultReadExternalAssetForPublish } from './filePreview';
+import { getKimiCodeQuota, type GetKimiCodeQuotaParams } from './kimiCodeQuota';
+import { defaultListProjectDirectory } from './projectFileIndex';
 import { prepareSkillDirectory } from './skillDirectory';
 import type {
+  BrowseDirectoryParams,
+  CopyAssetForPublishParams,
   DeviceControlDeps,
   EnrollWorkspaceParams,
+  ExternalAssetForPublishParams,
   InitWorkspaceParams,
   ListHeterogeneousAgentModelsParams,
   ListProjectSkillsParams,
   LocalFilePreviewUrlParams,
   PrepareSkillDirectoryParams,
+  ProjectDirectoryListParams,
   ProjectFileIndexParams,
   ProjectFileSearchParams,
   UnenrollWorkspaceParams,
 } from './types';
-import { initWorkspace, listProjectSkills, statPath } from './workspace';
+import { browseDirectory, initWorkspace, listProjectSkills, statPath } from './workspace';
 
 /**
  * Every method name the device-control RPC dispatcher understands. Mirrors the
@@ -48,17 +61,27 @@ export const DEVICE_RPC_METHODS = [
   'initWorkspace',
   'listHeterogeneousAgentModels',
   'getClaudeCodeQuota',
+  'getCodexQuota',
+  'getKimiCodeQuota',
   'listProjectSkills',
   'prepareSkillDirectory',
+  'browseDirectory',
   'statPath',
   'getProjectFileIndex',
+  'listProjectDirectory',
   'searchProjectFiles',
   'getLocalFilePreview',
+  'readExternalAssetForPublish',
+  'copyAssetForPublish',
   'moveLocalFiles',
   'renameLocalFile',
   'writeLocalFile',
   'getGitBranch',
   'getLinkedPullRequest',
+  'getPullRequestDetail',
+  'getPullRequestActivity',
+  'getPullRequestMergeContext',
+  'runPullRequestAction',
   'getGitWorkingTreeStatus',
   'getGitWorkingTreeFiles',
   'getGitWorkingTreePatches',
@@ -126,12 +149,24 @@ export const executeDeviceRpc = async (
       return getClaudeCodeQuota(params as GetClaudeCodeQuotaParams);
     }
 
+    case 'getCodexQuota': {
+      return getCodexQuota(params as GetCodexQuotaParams);
+    }
+
+    case 'getKimiCodeQuota': {
+      return getKimiCodeQuota(params as GetKimiCodeQuotaParams);
+    }
+
     case 'listProjectSkills': {
       return listProjectSkills(params as ListProjectSkillsParams, deps);
     }
 
     case 'prepareSkillDirectory': {
       return prepareSkillDirectory(params as PrepareSkillDirectoryParams, deps);
+    }
+
+    case 'browseDirectory': {
+      return browseDirectory(params as BrowseDirectoryParams);
     }
 
     case 'statPath': {
@@ -142,12 +177,28 @@ export const executeDeviceRpc = async (
       return deps.getProjectFileIndex(params as ProjectFileIndexParams);
     }
 
+    case 'listProjectDirectory': {
+      return defaultListProjectDirectory(params as ProjectDirectoryListParams);
+    }
+
     case 'searchProjectFiles': {
       return deps.searchProjectFiles(params as ProjectFileSearchParams);
     }
 
     case 'getLocalFilePreview': {
       return deps.getLocalFilePreview(params as LocalFilePreviewUrlParams);
+    }
+
+    case 'readExternalAssetForPublish': {
+      return (deps.readExternalAssetForPublish ?? defaultReadExternalAssetForPublish)(
+        params as ExternalAssetForPublishParams,
+      );
+    }
+
+    case 'copyAssetForPublish': {
+      return (deps.copyAssetForPublish ?? defaultCopyAssetForPublish)(
+        params as CopyAssetForPublishParams,
+      );
     }
 
     case 'moveLocalFiles': {
@@ -169,6 +220,31 @@ export const executeDeviceRpc = async (
     case 'getLinkedPullRequest': {
       return getLinkedPullRequest(
         params as { branch: string; path: string; pullRequestNumber?: number },
+      );
+    }
+
+    case 'getPullRequestDetail': {
+      return getPullRequestDetail(params as { coreOnly?: boolean; number: number; path: string });
+    }
+    case 'getPullRequestActivity': {
+      return getPullRequestActivity(params as { number: number; path: string });
+    }
+
+    case 'getPullRequestMergeContext': {
+      return getPullRequestMergeContext(
+        params as {
+          baseRefName: string;
+          headRefOid: string;
+          number: number;
+          path: string;
+          repo: { name: string; owner: string };
+        },
+      );
+    }
+
+    case 'runPullRequestAction': {
+      return runPullRequestAction(
+        params as { action: GitPullRequestAction; number: number; path: string },
       );
     }
 

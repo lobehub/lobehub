@@ -121,9 +121,16 @@ LobeHub 在部署时提供了一些额外的配置项，你可以使用环境变
 ### `AGENT_GATEWAY_URL`
 
 - 类型：可选
-- 描述：Agent Gateway 端点，用于让 Gateway Mode 通过后端运行支持的助理任务。
+- 描述：Agent Gateway 端点，用于让 Gateway Mode 通过后端运行支持的助理任务。浏览器会向该地址建立 WebSocket 连接，因此必须能被浏览器访问。
 - 默认值：-
 - 示例：`https://agent-gateway.example.com`
+
+### `AGENT_GATEWAY_INTERNAL_URL`
+
+- 类型：可选
+- 描述：服务端访问 Agent Gateway 使用的地址。当 LobeHub 服务端无法直接访问 `AGENT_GATEWAY_URL` 时配置，例如使用 Docker Compose 服务名。未设置时回退到 `AGENT_GATEWAY_URL`。
+- 默认值：-
+- 示例：`http://gateway:8787`
 
 ### `AGENT_GATEWAY_SERVICE_TOKEN`
 

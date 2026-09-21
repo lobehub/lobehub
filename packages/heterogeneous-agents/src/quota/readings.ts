@@ -9,7 +9,13 @@ import { windowSecondsForKind } from './types';
  */
 export type QuotaDisplayReading = Pick<
   QuotaLimitReading,
-  'capturedAt' | 'limitType' | 'resetsAt' | 'scopeKey' | 'utilization'
+  | 'capturedAt'
+  | 'limitType'
+  | 'resetsAt'
+  | 'scopeKey'
+  | 'utilization'
+  | 'windowMinutes'
+  | 'limitName'
 >;
 
 const clampPercent = (value: number) => Math.min(100, Math.max(0, Math.round(value)));
@@ -26,7 +32,11 @@ const clampPercent = (value: number) => Math.min(100, Math.max(0, Math.round(val
  */
 export const hasWindowRolledOver = (reading: QuotaDisplayReading, now: number): boolean =>
   reading.resetsAt == null
-    ? now - reading.capturedAt > windowSecondsForKind(reading.limitType) * 1000
+    ? now - reading.capturedAt >
+      (reading.windowMinutes == null
+        ? windowSecondsForKind(reading.limitType)
+        : reading.windowMinutes * 60) *
+        1000
     : reading.resetsAt <= now;
 
 /**
@@ -48,7 +58,7 @@ export const toQuotaWindow = (reading: QuotaDisplayReading, now: number): Hetero
   return {
     resetsAt: rolledOver ? null : (reading.resetsAt ?? null),
     usedPercent: rolledOver ? 0 : clampPercent(reading.utilization),
-    windowMinutes: windowSecondsForKind(reading.limitType) / 60,
+    windowMinutes: reading.windowMinutes ?? windowSecondsForKind(reading.limitType) / 60,
   };
 };
 

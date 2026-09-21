@@ -2,6 +2,8 @@ import type { MessageMetadata } from '@lobechat/types';
 import { getTableColumns, type SQL, sql } from 'drizzle-orm';
 import type { PgColumn, PgTable } from 'drizzle-orm/pg-core';
 
+import { MAX_TOOL_IDENTIFIER_LENGTH } from '@/utils/clampToolIdentifier';
+
 import {
   messageChunks,
   messageGroups,
@@ -272,7 +274,9 @@ export const copyMessagesInDatabase = async ({
   };
 
   await copyChildRows(messagePlugins, messagePlugins.id, {
+    apiName: sql`left(${messagePlugins.apiName}, ${MAX_TOOL_IDENTIFIER_LENGTH})`,
     id: newMessageId,
+    identifier: sql`left(${messagePlugins.identifier}, ${MAX_TOOL_IDENTIFIER_LENGTH})`,
     toolCallId: sql`case
       when ${messagePlugins.toolCallId} is null then null
       else ${remappedToolId(newMessageId, sql`${messagePlugins.toolCallId}`)}

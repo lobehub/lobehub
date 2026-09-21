@@ -1357,7 +1357,7 @@ describe('KnowledgeRepo', () => {
     });
   });
 
-  describe('acceptance evidence hiding', () => {
+  describe('non-library file hiding', () => {
     beforeEach(async () => {
       await serverDB.insert(files).values([
         {
@@ -1375,6 +1375,15 @@ describe('KnowledgeRepo', () => {
           size: 100,
           source: FileSource.Acceptance,
           url: 'evidence-url',
+          userId,
+        },
+        {
+          id: 'agent-share-file',
+          fileType: 'text/plain',
+          metadata: { agentShare: { shareId: 'share-a', visitorUserId: 'visitor-a' } },
+          name: 'visitor.txt',
+          size: 100,
+          url: 'visitor-url',
           userId,
         },
         {
@@ -1396,18 +1405,24 @@ describe('KnowledgeRepo', () => {
       expect(ids).toContain('library-file');
       expect(ids).toContain('generated-file');
       expect(ids).not.toContain('evidence-file');
+      expect(ids).not.toContain('agent-share-file');
     });
 
     it('should hide acceptance evidence from recent items', async () => {
       const result = await knowledgeRepo.queryRecent(50, 'file');
 
       expect(result.map((item) => item.fileId)).not.toContain('evidence-file');
+      expect(result.map((item) => item.fileId)).not.toContain('agent-share-file');
     });
 
     it('should still resolve acceptance evidence by id', async () => {
       const result = await knowledgeRepo.findById('evidence-file', 'file');
 
       expect(result?.name).toBe('payload-execution.txt');
+    });
+
+    it('should not resolve an agent-share file through the ordinary resource API', async () => {
+      await expect(knowledgeRepo.findById('agent-share-file', 'file')).resolves.toBeUndefined();
     });
   });
 

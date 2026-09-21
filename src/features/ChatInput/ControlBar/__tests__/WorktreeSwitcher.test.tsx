@@ -18,13 +18,6 @@ vi.mock('../useCommitWorkingDirectory', () => ({
   useCommitWorkingDirectory: () => ({ commit: commitMock }),
 }));
 
-vi.mock('@/components/AntdStaticMethods', () => ({
-  message: {
-    error: messageErrorMock,
-    success: messageSuccessMock,
-  },
-}));
-
 vi.mock('@/services/git', () => ({
   gitService: {
     removeGitWorktree: removeGitWorktreeMock,

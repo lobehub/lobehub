@@ -13,10 +13,14 @@ vi.mock('../auth/refresh', () => ({
 }));
 
 vi.mock('../settings', () => ({
+  loadActiveWorkspace: () => undefined,
   resolveServerUrl: () => 'https://app.lobehub.com',
 }));
 
-const headersOfLastLink = () => (mockHttpLink.mock.calls.at(-1)![0] as any).headers;
+const headersOfLastLink = () => {
+  const { headers } = mockHttpLink.mock.calls.at(-1)![0] as any;
+  return typeof headers === 'function' ? headers() : headers;
+};
 
 describe('api/client workspace scoping', () => {
   const originalJwt = process.env.LOBEHUB_JWT;
@@ -35,6 +39,21 @@ describe('api/client workspace scoping', () => {
 
     if (originalWorkspaceId === undefined) delete process.env.LOBEHUB_WORKSPACE_ID;
     else process.env.LOBEHUB_WORKSPACE_ID = originalWorkspaceId;
+  });
+
+  /**
+   * Regression: the env JWT was copied into the link once, when the client was
+   * built. `lh hetero exec` holds its client for the whole run, so a renewed
+   * operation token never reached it and every request after the original
+   * token's four hours was rejected.
+   */
+  it('sends a renewed LOBEHUB_JWT on requests from an existing client', async () => {
+    const { getTrpcClient } = await import('./client');
+    await getTrpcClient();
+    expect(headersOfLastLink()).toMatchObject({ 'Oidc-Auth': 'env-jwt' });
+
+    process.env.LOBEHUB_JWT = 'renewed-jwt';
+    expect(headersOfLastLink()).toMatchObject({ 'Oidc-Auth': 'renewed-jwt' });
   });
 
   // The tools router is workspace aware like lambda; without the header every

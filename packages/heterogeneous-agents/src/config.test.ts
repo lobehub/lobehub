@@ -20,6 +20,7 @@ describe('heterogeneous agent config', () => {
       'codex',
       'cursor',
       'droid',
+      'devin',
       'grok-build',
       'kimi-code',
       'opencode',
@@ -71,6 +72,15 @@ describe('heterogeneous agent config', () => {
       defaultCommand: 'amp',
       title: 'Amp',
       type: 'amp',
+    });
+    expect(getHeterogeneousAgentConfig('devin')).toMatchObject({
+      auth: { signInCommand: 'devin auth login' },
+      defaultCommand: 'devin',
+      install: {
+        commands: expect.arrayContaining(['irm https://static.devin.ai/cli/setup.ps1 | iex']),
+      },
+      title: 'Devin',
+      type: 'devin',
     });
     expect(getHeterogeneousAgentConfig('grok-build')).toMatchObject({
       auth: { signInCommand: 'grok login' },
@@ -135,6 +145,13 @@ describe('heterogeneous agent config', () => {
       command: 'kimi',
       message: 'Kimi Code could not authenticate. Run `kimi`, use `/login`, then retry.',
     });
+    expect(isHeterogeneousAgentAuthRequired('devin', 'Run devin auth login to continue')).toBe(
+      true,
+    );
+    expect(buildHeterogeneousAgentAuthRequiredError({ agentType: 'devin' })).toMatchObject({
+      command: 'devin',
+      message: 'Devin could not authenticate. Run `devin auth login`, then retry.',
+    });
     expect(isHeterogeneousAgentAuthRequired('cursor', 'Authentication required')).toBe(true);
     expect(buildHeterogeneousAgentAuthRequiredError({ agentType: 'cursor' })).toMatchObject({
       command: 'agent',
@@ -167,6 +184,7 @@ describe('heterogeneous agent config', () => {
       'codex': 'Codex',
       'cursor': 'Cursor',
       'droid': 'Factory Droid',
+      'devin': 'Devin',
       'grok-build': 'Grok Build',
       'hermes': 'Hermes',
       'kimi-code': 'Kimi Code',
@@ -191,6 +209,7 @@ describe('heterogeneous agent config', () => {
     expect(isRemoteHeterogeneousType('amp')).toBe(false);
     expect(isRemoteHeterogeneousType('codebuddy')).toBe(false);
     expect(isRemoteHeterogeneousType('droid')).toBe(false);
+    expect(isRemoteHeterogeneousType('devin')).toBe(false);
     expect(isRemoteHeterogeneousType('opencode')).toBe(false);
     expect(isRemoteHeterogeneousType('pi')).toBe(false);
     expect(isRemoteHeterogeneousType('qoder')).toBe(false);

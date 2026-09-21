@@ -7,7 +7,7 @@ import { Avatar, Tag } from '@lobehub/ui/base-ui';
 import { McpIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { AlertCircle, Loader2, Square, SquareCheckBig, X } from 'lucide-react';
+import { AlertCircle, Loader2, Square, SquareCheckBig, SquareMinus, X } from 'lucide-react';
 import React, { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -92,6 +92,14 @@ export interface PluginTagProps {
    */
   agentId?: string;
   disabled?: boolean;
+  /**
+   * Renders the `selectable` checkbox in the "some but not all" state (a minus
+   * box instead of a tick), the antd `indeterminate` / Gmail select-all
+   * convention. Only meaningful together with `selected`: the chip represents
+   * a container whose children are partially selected — e.g. an agent-share
+   * tool granted for some of its APIs but not all.
+   */
+  indeterminate?: boolean;
   onRemove?: (e: React.MouseEvent) => void;
   /** Fires when the checkbox/tag is toggled in `selectable` mode. */
   onSelect?: () => void;
@@ -137,6 +145,7 @@ const PluginTag = memo<PluginTagProps>(
     pluginId,
     onRemove,
     onSelect,
+    indeterminate = false,
     removable = true,
     selectable = false,
     selected = false,
@@ -392,7 +401,7 @@ const PluginTag = memo<PluginTagProps>(
           selectable ? (
             <Flexbox horizontal align={'center'} gap={6}>
               <Icon
-                icon={selected ? SquareCheckBig : Square}
+                icon={selected ? (indeterminate ? SquareMinus : SquareCheckBig) : Square}
                 size={14}
                 style={{ color: selected ? cssVar.colorPrimary : cssVar.colorTextQuaternary }}
               />

@@ -7,6 +7,7 @@
 ## 协议边界
 
 - V2 客户端只访问 `/<channel>/<appVersion>/renderer/v2`，本地状态只写入 `renderer-ota-v2`。
+- 本地状态按 `renderer-ota-v2/<channel>/<appVersion>` 隔离：full 升级即使 mainHash 相同，也从新版本内置的 r0 开始，不复用旧版本的 current/staged/blacklist。
 - `latest.json` / `versions/rN.json` 只负责选择 pack；目标文件 tree 与 delta 重建信息放在所选 ZIP 的 `meta.json` 中。
 - 新构建不包含 V1 manifest/CAS 解析、URL fallback 或 pointer 迁移。
 - 发布流程不会删除或覆盖远端既有 V1 feed/object；旧客户端继续停留在冻结的 V1 数据上。
@@ -64,7 +65,7 @@ node scripts/renderer-ota-test/serveOta.mjs /tmp/ota-feed 8787
 - serveOta 日志：每次检查只下载一个 `packs/<sha256>.zip`；pack 内 `meta.json` 携带目标 tree，增量 pack 另含新增对象与 zstd dictionary patch
 - 应用左下角出现「新版本已就绪，刷新即可使用」toast
 - 点「立即刷新」: 窗口 reload (应用不重启), 改动的文案出现
-- `~/Library/Application Support/<dev userData>/renderer-ota-v2/stable/pointer.json`:
+- `~/Library/Application Support/<dev userData>/renderer-ota-v2/stable/<appVersion>/pointer.json`:
   `current: "r1"`, 收到 boot ping 后 `pendingBootCheck: false`
 - `versions/` 只留 current (+previous)
 

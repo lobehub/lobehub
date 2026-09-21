@@ -86,6 +86,16 @@ describe('getMimeType', () => {
     it('should return correct MIME type for Vue files', () => {
       expect(getMimeType('App.vue')).toBe('text/x-vue');
     });
+
+    it('should return correct MIME type for Verilog files', () => {
+      expect(getMimeType('adder.v')).toBe('text/x-verilog');
+      expect(getMimeType('/rtl/top.v')).toBe('text/x-verilog');
+    });
+
+    it('should return correct MIME type for SystemVerilog files', () => {
+      expect(getMimeType('alu_top.sv')).toBe('text/x-systemverilog');
+      expect(getMimeType('/rtl/tb.sv')).toBe('text/x-systemverilog');
+    });
   });
 
   describe('case insensitivity for extensions', () => {
@@ -210,6 +220,16 @@ describe('resolveMimeType', () => {
     const py = Buffer.from('print("hi")\n');
     await expect(resolveMimeType('/repo/script.py', py)).resolves.toBe(
       'text/x-python; charset=utf-8',
+    );
+
+    // .v / .sv resolve to HDL text mimes with charset (not octet-stream).
+    const vSource = Buffer.from('module adder(); endmodule\n');
+    await expect(resolveMimeType('/repo/adder.v', vSource)).resolves.toBe(
+      'text/x-verilog; charset=utf-8',
+    );
+    const svSource = Buffer.from('package p; endpackage\n');
+    await expect(resolveMimeType('/repo/top.sv', svSource)).resolves.toBe(
+      'text/x-systemverilog; charset=utf-8',
     );
   });
 

@@ -3,7 +3,7 @@ import {
   AGENT_DOCUMENT_INJECTION_POSITIONS,
   type AgentContextDocument,
   type AgentDocumentInjectionPosition,
-} from '@lobechat/context-engine';
+} from '@lobechat/context-engine/agent-document';
 
 import type { AgentDocumentContextPayload } from '@/database/models/agentDocuments';
 

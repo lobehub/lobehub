@@ -31,3 +31,35 @@ export async function canManageAcceptance(
   );
   return member?.role === 'owner';
 }
+
+/**
+ * Batch twin of {@link canManageAcceptance} for sweep endpoints: same rule,
+ * but ONE membership lookup per distinct workspace instead of one per row —
+ * a 200-row sweep must not turn authorization into 200 serial queries.
+ */
+export async function filterManageableAcceptances<
+  T extends Pick<AcceptanceItem, 'userId' | 'workspaceId'>,
+>(ctx: AcceptanceScopeCtx, rows: T[]): Promise<T[]> {
+  if (!ctx.userId) return [];
+  const userId = ctx.userId;
+
+  const foreignWorkspaceIds = [
+    ...new Set(
+      rows
+        .filter((row) => row.userId !== userId && row.workspaceId)
+        .map((row) => row.workspaceId as string),
+    ),
+  ];
+  const owned = new Set<string>();
+  for (const workspaceId of foreignWorkspaceIds) {
+    const member = await new WorkspaceMemberModel(ctx.serverDB, userId).getMember(
+      workspaceId,
+      userId,
+    );
+    if (member?.role === 'owner') owned.add(workspaceId);
+  }
+
+  return rows.filter(
+    (row) => row.userId === userId || (row.workspaceId ? owned.has(row.workspaceId) : false),
+  );
+}

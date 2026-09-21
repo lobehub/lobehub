@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { taskService } from '@/services/task';
+import { useUserStore } from '@/store/user';
 
 import { useTaskStore } from '../../store';
 
@@ -97,6 +98,28 @@ describe('TaskLifecycleSliceAction', () => {
       await useTaskStore.getState().updateTaskStatus('T-1', 'paused');
 
       expect(taskService.updateStatus).toHaveBeenCalledWith('T-1', 'paused', undefined);
+    });
+
+    it('drops the synthesized feed row when the transition AND the rollback refetch fail', async () => {
+      useUserStore.setState({
+        isSignedIn: true,
+        user: { avatar: null, fullName: 'Me', id: 'user_me' } as any,
+      });
+      useTaskStore.setState({ taskDetailMap: { 'T-1': { ...mockDetail, activities: [] } } });
+      vi.mocked(taskService.updateStatus).mockRejectedValue(new Error('offline'));
+      const { mutate } = await import('@/libs/swr');
+      vi.mocked(mutate).mockRejectedValue(new Error('still offline'));
+
+      try {
+        await expect(useTaskStore.getState().updateTaskStatus('T-1', 'paused')).rejects.toThrow(
+          'offline',
+        );
+
+        // The transition never happened, so nothing may keep saying it did.
+        expect(useTaskStore.getState().taskDetailMap['T-1'].activities).toEqual([]);
+      } finally {
+        vi.mocked(mutate).mockReset();
+      }
     });
 
     it('should optimistically set status', async () => {

@@ -1,6 +1,6 @@
 ---
 name: debug-package
-description: 'LobeHub debug package and log namespace guide. Use when adding debug() logging, choosing lobe-* namespaces, troubleshooting DEBUG output, localStorage.debug, or log format specifiers.'
+description: 'Use for debug() logging, lobe-* namespaces, DEBUG/localStorage.debug configuration and log formatting.'
 user-invocable: false
 ---
 

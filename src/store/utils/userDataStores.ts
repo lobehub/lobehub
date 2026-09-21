@@ -3,6 +3,7 @@ import { unstable_batchedUpdates } from 'react-dom';
 import { useAgentStore } from '@/store/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat';
+import { resetGatewayMuxRegistry } from '@/store/chat/slices/agentRun/actions/transports/gateway/muxRegistry';
 import { useDiscoverStore } from '@/store/discover';
 import { useDocumentStore } from '@/store/document';
 import { useEvalStore } from '@/store/eval';
@@ -51,6 +52,9 @@ export interface StoreActions extends ResetableStore {}
 
 const createStoreActions = (stores: ResetableStoreApi[]): StoreActions => ({
   reset: () => {
+    // Drop the per-user gateway socket(s) before the stores they feed are
+    // wiped — a new data context must not inherit the old identity's socket.
+    resetGatewayMuxRegistry();
     unstable_batchedUpdates(() => {
       for (const store of stores) {
         store.getState().reset();

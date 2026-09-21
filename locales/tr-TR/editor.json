@@ -1,10 +1,10 @@
 {
-  "actionTag.category.agentSkill": "Temsilci becerisi",
+  "actionTag.category.agentSkill": "Ajan becerisi",
   "actionTag.category.command": "Komut",
   "actionTag.category.projectSkill": "Proje becerisi",
   "actionTag.category.skill": "Beceri",
   "actionTag.category.tool": "Araç",
-  "actionTag.tooltip.agentSkill": "Bu temsilcinin belgelerinden isteğe yönelik bir beceri paketi yükler.",
+  "actionTag.tooltip.agentSkill": "Bu ajanın belgelerinden isteğe yönelik bir beceri paketi yükler.",
   "actionTag.tooltip.clickToView": "Detayları görmek için tıklayın",
   "actionTag.tooltip.command": "Göndermeden önce istemci tarafında bir slash komutu çalıştırır.",
   "actionTag.tooltip.projectSkill": "Ajanın CLI'sinin eşleşen proje becerisini çalıştırması için bir eğik çizgi çağrısı olarak gönderilir.",

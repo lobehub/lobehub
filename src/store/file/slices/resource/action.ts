@@ -195,6 +195,35 @@ export class ResourceActionImpl {
     );
   };
 
+  /**
+   * The definite negative to `#isResourceVisibleInCurrentQuery`: that check
+   * says "no" whenever the open folder is addressed by slug and the parent is
+   * not cached, so a create must not gate on it or a fresh load inside a
+   * folder would never show the row it just created. This only reports rows
+   * that certainly belong elsewhere — another library, the root while a folder
+   * is open (or the reverse), or a cached parent whose slug is not the open one.
+   */
+  #isResourceOutsideCurrentQuery = (resource: ResourceItem): boolean => {
+    const { queryParams, resourceMap } = this.#get();
+
+    if (!queryParams) return false;
+
+    if (
+      queryParams.libraryId !== undefined &&
+      (resource.knowledgeBaseId ?? undefined) !== queryParams.libraryId
+    ) {
+      return true;
+    }
+
+    const inFolderView = queryParams.parentId != null;
+    if (!inFolderView) return !!resource.parentId;
+    if (!resource.parentId) return true;
+    if (resource.parentId === queryParams.parentId) return false;
+
+    const parentResource = resourceMap.get(resource.parentId);
+    return !!parentResource && parentResource.slug !== queryParams.parentId;
+  };
+
   #isResourceVisibleInCurrentQuery = (resource: ResourceItem): boolean => {
     const { queryParams, resourceMap } = this.#get();
 
@@ -346,9 +375,10 @@ export class ResourceActionImpl {
     const optimisticResource = this.#createOptimisticResource(params);
     const syncEngine = this.#getSyncEngine();
     const tx = syncEngine.createTransaction(`createResource(${optimisticResource.id})`);
+    const showInList = !this.#isResourceOutsideCurrentQuery(optimisticResource);
 
     tx.set((draft) => {
-      draft.resourceList.unshift(optimisticResource);
+      if (showInList) draft.resourceList.unshift(optimisticResource);
       draft.resourceMap.set(optimisticResource.id, optimisticResource);
       draft.syncingIds.add(optimisticResource.id);
     });
@@ -373,9 +403,13 @@ export class ResourceActionImpl {
     const optimisticResource = this.#createOptimisticResource(params);
     const syncEngine = this.#getSyncEngine();
     const tx = syncEngine.createTransaction(`createResourceAndSync(${optimisticResource.id})`);
+    // A row created for another folder (sidebar "+" at the root while a folder
+    // is open, a folder row's "+" while the root is open) must not surface in
+    // the list the Explorer is currently showing.
+    const showInList = !this.#isResourceOutsideCurrentQuery(optimisticResource);
 
     tx.set((draft) => {
-      draft.resourceList.unshift(optimisticResource);
+      if (showInList) draft.resourceList.unshift(optimisticResource);
       draft.resourceMap.set(optimisticResource.id, optimisticResource);
       draft.syncingIds.add(optimisticResource.id);
     });

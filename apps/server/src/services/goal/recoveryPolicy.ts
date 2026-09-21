@@ -1,6 +1,17 @@
 import type { GoalItem } from '@lobechat/types';
 
-const DEFAULT_MAX_ATTEMPTS_PER_WORK = 3;
+/**
+ * Attempts a Task gets before the coordinator opens a decision gate, when the
+ * goal does not set its own.
+ *
+ * Long-horizon Tasks spend attempts on more than rejected deliveries: a run that
+ * outlives its lease, a dispatch that never reached the device, a review that
+ * asks for one more piece of evidence. Three attempts ran out on exactly those —
+ * a Task whose work was finished still stopped the whole goal on a person — so
+ * the default leaves room for a few infrastructure retries plus real repair
+ * rounds. A goal can still set a lower `recovery.maxAttemptsPerTask`.
+ */
+const DEFAULT_MAX_ATTEMPTS_PER_TASK = 8;
 /**
  * Conservative on purpose: enough to stop independent Tasks queueing behind one
  * another, low enough that a goal cannot empty its budget in one fan-out before
@@ -14,11 +25,20 @@ const DEFAULT_OPERATION_LEASE_TIMEOUT_MS = 5 * 60 * 1000;
 // so a transient missed write cannot reclaim a healthy operation.
 export const MIN_OPERATION_LEASE_TIMEOUT_MS = 3 * 60 * 1000;
 
-/** How many attempts one Work gets before the coordinator opens a decision gate. */
+/**
+ * How long a delivered Task may sit with verification pending before the
+ * coordinator treats the delivery as abandoned and re-dispatches. The verify
+ * judge is a full agent run — tens of minutes on a large delivery — so this
+ * sits far above the operation lease, which is scaled to heartbeat gaps, not
+ * judgments.
+ */
+export const VERIFY_SETTLE_GRACE_MS = 60 * 60 * 1000;
+
+/** How many attempts one Task gets before the coordinator opens a decision gate. */
 export const resolveTaskAttemptBudget = (goal: GoalItem): number => {
   const configured = goal.config?.recovery?.maxAttemptsPerTask;
   if (typeof configured === 'number') return Math.max(1, configured);
-  return DEFAULT_MAX_ATTEMPTS_PER_WORK;
+  return DEFAULT_MAX_ATTEMPTS_PER_TASK;
 };
 
 /** How many of this goal's Tasks may run at once. */

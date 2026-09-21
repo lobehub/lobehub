@@ -5,12 +5,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // serverDatabase middleware calls getServerDB(); stub it (the model mocks
 // ignore the db handle anyway).
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => ({})),
+  getServerDB: vi.fn(function () {
+    return {};
+  }),
 }));
 
-const mockTopicFindById = vi.fn();
+const mockTopicFindOwnTopicById = vi.fn();
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn(() => ({ findById: mockTopicFindById })),
+  TopicModel: vi.fn(function () {
+    return { findOwnTopicById: mockTopicFindOwnTopicById };
+  }),
 }));
 
 const mockShareCreate = vi.fn();
@@ -18,22 +22,28 @@ const mockShareGetByTopicId = vi.fn();
 const mockShareUpdateVisibility = vi.fn();
 const mockShareDeleteByTopicId = vi.fn();
 vi.mock('@/database/models/topicShare', () => ({
-  TopicShareModel: vi.fn(() => ({
-    create: mockShareCreate,
-    deleteByTopicId: mockShareDeleteByTopicId,
-    getByTopicId: mockShareGetByTopicId,
-    updateVisibility: mockShareUpdateVisibility,
-  })),
+  TopicShareModel: vi.fn(function () {
+    return {
+      create: mockShareCreate,
+      deleteByTopicId: mockShareDeleteByTopicId,
+      getByTopicId: mockShareGetByTopicId,
+      updateVisibility: mockShareUpdateVisibility,
+    };
+  }),
 }));
 
 const mockAuditCreate = vi.fn();
 vi.mock('@/database/models/workspaceAuditLog', () => ({
-  WorkspaceAuditLogModel: vi.fn(() => ({ create: mockAuditCreate })),
+  WorkspaceAuditLogModel: vi.fn(function () {
+    return { create: mockAuditCreate };
+  }),
 }));
 
 const mockHasPermission = vi.fn();
 vi.mock('@/database/models/rbac', () => ({
-  RbacModel: vi.fn(() => ({ hasPermission: mockHasPermission })),
+  RbacModel: vi.fn(function () {
+    return { hasPermission: mockHasPermission };
+  }),
 }));
 
 const mockAssertCanUseTopicTargets = vi.fn();
@@ -57,7 +67,7 @@ const RESOLVED_CONVERSATION = [{ meta: {}, resourceId: 'agt_1', resourceType: 'a
 describe('topic share management gate', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockTopicFindById.mockResolvedValue({ id: topicId, userId: creatorId });
+    mockTopicFindOwnTopicById.mockResolvedValue({ id: topicId, userId: creatorId });
     mockShareGetByTopicId.mockResolvedValue(null);
     mockShareCreate.mockResolvedValue({ id: 'share-1', topicId, visibility: 'private' });
     mockShareUpdateVisibility.mockResolvedValue({ id: 'share-1', topicId, visibility: 'link' });
@@ -101,14 +111,28 @@ describe('topic share management gate', () => {
       expect(mockShareCreate).toHaveBeenCalledWith(topicId, undefined);
     });
 
-    it('skips the guard entirely in personal mode', async () => {
+    it('skips the workspace checks in personal mode but still resolves the topic', async () => {
       const caller = topicRouter.createCaller({ userId: memberId } as any);
 
       await caller.enableSharing({ topicId });
 
-      expect(mockTopicFindById).not.toHaveBeenCalled();
+      expect(mockTopicFindOwnTopicById).toHaveBeenCalledWith(topicId);
       expect(mockAssertCanUseTopicTargets).not.toHaveBeenCalled();
       expect(mockShareCreate).toHaveBeenCalledWith(topicId, undefined);
+    });
+
+    // Agent-share visitor topics live under the creator's userId and exist in
+    // personal mode too; publishing one would expose the visitor's title on
+    // the public share endpoint, so the exclusion must not hide behind the
+    // workspace short-circuit.
+    it('rejects an agent-share visitor topic in personal mode', async () => {
+      mockTopicFindOwnTopicById.mockResolvedValue(null);
+      const caller = topicRouter.createCaller({ userId: creatorId } as any);
+
+      await expect(caller.enableSharing({ topicId })).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+      expect(mockShareCreate).not.toHaveBeenCalled();
     });
 
     it('rejects a member on a topic that backs no conversation at all', async () => {
@@ -134,7 +158,7 @@ describe('topic share management gate', () => {
     });
 
     it('throws NOT_FOUND when the topic does not exist in the workspace', async () => {
-      mockTopicFindById.mockResolvedValue(null);
+      mockTopicFindOwnTopicById.mockResolvedValue(null);
       const caller = topicRouter.createCaller({ userId: memberId, workspaceId } as any);
 
       await expect(caller.enableSharing({ topicId })).rejects.toMatchObject({

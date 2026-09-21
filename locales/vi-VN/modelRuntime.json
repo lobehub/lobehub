@@ -38,6 +38,7 @@
   "ProviderServiceUnavailable": "Nhà cung cấp tạm thời quá tải hoặc không khả dụng. Vui lòng thử lại sau.",
   "QuotaLimitReached": "Rất tiếc, việc sử dụng token hoặc số lượng yêu cầu đã đạt đến giới hạn hạn mức cho khóa này. Vui lòng tăng hạn mức của khóa hoặc thử lại sau.",
   "RateLimitExceeded": "Rất tiếc, việc sử dụng token hoặc số lượng yêu cầu đã đạt đến giới hạn tốc độ cho khóa này. Vui lòng thử lại sau hoặc tăng hạn mức của khóa.",
+  "RequestBodyTooLarge": "Yêu cầu này quá lớn đối với nhà cung cấp mô hình. Hãy thu gọn cuộc trò chuyện hoặc giảm nội dung đính kèm, sau đó thử lại.",
   "StateStorePersistError": "Một vấn đề tạm thời với kho lưu trữ trạng thái hội thoại đã làm gián đoạn hoạt động này. Vui lòng thử lại; nếu vấn đề vẫn tiếp diễn, hãy liên hệ với bộ phận hỗ trợ.",
   "StateStoreReadError": "Không thể tiếp tục thao tác này vì trạng thái phiên không khả dụng. Vui lòng mở lại cuộc trò chuyện để tiếp tục; nếu vấn đề vẫn xảy ra, hãy liên hệ với bộ phận hỗ trợ.",
   "StreamChunkError": "Lỗi phân tích đoạn tin nhắn của yêu cầu streaming. Vui lòng kiểm tra xem giao diện API hiện tại có tuân thủ các tiêu chuẩn quy định hay không, hoặc liên hệ với nhà cung cấp API của bạn để được hỗ trợ.",

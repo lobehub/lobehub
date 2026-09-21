@@ -275,6 +275,41 @@ export function registerBotMessageCommands(bot: Command) {
       },
     );
 
+  // ── doc ─────────────────────────────────────────────────
+
+  message
+    .command('doc <botId>')
+    .description('Read a cloud document linked in the chat (Feishu/Lark docx / wiki)')
+    .option('--url <url>', 'Document URL as it appears in the chat')
+    .option('--document-id <id>', 'Document token, when you have no URL')
+    .option('--json', 'Output JSON')
+    .action(
+      async (botId: string, options: { documentId?: string; json?: boolean; url?: string }) => {
+        if (!options.url && !options.documentId) {
+          log.error('Pass --url <url> or --document-id <id>');
+          process.exit(1);
+        }
+        const client = await getTrpcClient();
+        const result = await client.botMessage.readDocument.query({
+          botId,
+          documentId: options.documentId,
+          url: options.url,
+        });
+
+        if (options.json) {
+          outputJson(result);
+          return;
+        }
+
+        const r = result as any;
+        if (r.title) console.log(pc.bold(r.title));
+        if (r.url) console.log(pc.dim(r.url));
+        console.log();
+        console.log(r.content || '(empty document)');
+        if (r.truncated) console.log(pc.dim('\n[content truncated]'));
+      },
+    );
+
   // ── edit ────────────────────────────────────────────────
 
   message

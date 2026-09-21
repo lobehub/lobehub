@@ -1,4 +1,5 @@
 import { TaskIdentifier as TaskSkillIdentifier } from '@lobechat/builtin-skills';
+import { AcceptanceEvidenceIdentifier } from '@lobechat/builtin-tool-acceptance-evidence';
 import { BriefIdentifier } from '@lobechat/builtin-tool-brief';
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import type { ExecAgentResult, TaskItem, TaskRunTrigger } from '@lobechat/types';
@@ -100,7 +101,11 @@ export class TaskRunnerService {
         // fallback must stay ephemeral — persisting it would silently replace
         // the member assignment on the first run.
         if (!task.assigneeUserId) {
-          await this.taskModel.update(task.id, { assigneeAgentId: inboxAgent.id });
+          // Goes through the logging path like every other assignee write: the
+          // chip visibly flips from unassigned to the inbox agent, so the feed
+          // has to be able to say who did it. No actor — nobody asked for this
+          // one, the runner needed an agent to execute with.
+          await this.taskModel.updateWithLog(task.id, { assigneeAgentId: inboxAgent.id }, {});
         }
         task.assigneeAgentId = inboxAgent.id;
       }
@@ -133,7 +138,11 @@ export class TaskRunnerService {
         }
       }
 
-      const { fileIds: attachmentFileIds, prompt } = await buildTaskPrompt(
+      const {
+        acceptanceEnabled,
+        fileIds: attachmentFileIds,
+        prompt,
+      } = await buildTaskPrompt(
         task,
         {
           briefModel: this.briefModel,
@@ -184,6 +193,11 @@ export class TaskRunnerService {
       if (briefMode === 'agent' && !reviewConfig?.enabled && checkpoint.onAgentRequest !== false) {
         pluginIds.push(BriefIdentifier);
       }
+      // The Acceptance runs inside the Task, so the builder needs listCriteria +
+      // submitEvidence for the whole run — not only in the post-run evidence
+      // turn, which mounts this tool exclusively and therefore can only ever
+      // restate text it already wrote.
+      if (acceptanceEnabled) pluginIds.push(AcceptanceEvidenceIdentifier);
 
       const taskConfig = (task.config ?? {}) as Record<string, unknown>;
 
@@ -243,6 +257,29 @@ export class TaskRunnerService {
         userInterventionConfig: { approvalMode: 'headless' },
         ...(continueTopicId && { appContext: { topicId: continueTopicId } }),
       });
+
+      if (!result.success) {
+        // execAgent reports a dispatch or startup failure as a result rather
+        // than a throw (`startOperation`, `heteroDispatch`): the assistant
+        // bubble already carries the error and the run's lifecycle hooks have
+        // fired. Booking that dead operation as a running topic would leave
+        // the Task looking in flight — a goal coordinator would even record a
+        // `started_run` for it — with nothing left to ever settle it. Keep the
+        // attempt visible as a failed run, then fail the kickoff like any other.
+        if (result.topicId && !continueTopicId) {
+          await this.taskModel.incrementTopicCount(task.id);
+          await this.taskModel.updateCurrentTopic(task.id, result.topicId);
+          await this.taskTopicModel.add(task.id, result.topicId, {
+            operationId: result.operationId,
+            seq: (task.totalTopics || 0) + 1,
+            trigger,
+          });
+        }
+        if (result.topicId) {
+          await this.taskTopicModel.updateStatus(task.id, result.topicId, 'failed');
+        }
+        throw new Error(result.error || result.message || 'Agent run failed to start');
+      }
 
       if (result.topicId) {
         if (continueTopicId) {
@@ -316,7 +353,17 @@ export class TaskRunnerService {
    *   with the error recorded — the same fallback used by the runner itself.
    */
   async cascadeOnCompletion(completedTaskId: string): Promise<CascadeResult> {
-    const unlocked = await this.taskModel.getUnlockedTasks(completedTaskId);
+    return this.cascadeOnCompletionMany([completedTaskId]);
+  }
+
+  /**
+   * Batched variant of {@link cascadeOnCompletion} for family-wide status
+   * cascades: dependents are discovered across all completed ids in one pass,
+   * so completing N tasks costs a constant number of discovery queries instead
+   * of N dependency walks.
+   */
+  async cascadeOnCompletionMany(completedTaskIds: string[]): Promise<CascadeResult> {
+    const unlocked = await this.taskModel.getUnlockedTasksForMany(completedTaskIds);
     if (unlocked.length === 0) return TaskRunnerService.cascadeEmpty();
 
     const result: CascadeResult = { failed: [], paused: [], started: [] };

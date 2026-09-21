@@ -1,6 +1,7 @@
 import {
   type DeleteDocumentWorkParams,
   type DeleteTaskWorkParams,
+  type DeleteWorkParams,
   isWorkSkillProvider,
   type RegisterDocumentWorkParams,
   type RegisterExternalWorkParams,
@@ -114,6 +115,8 @@ export class WorkModel {
 
   deleteTaskWork = (params: DeleteTaskWorkParams): Promise<void> =>
     writes.deleteTaskWork(this.ctx, params);
+
+  deleteWork = (params: DeleteWorkParams): Promise<void> => writes.deleteWork(this.ctx, params);
 
   listByRootOperation = (params: {
     includeFileWorks?: boolean;

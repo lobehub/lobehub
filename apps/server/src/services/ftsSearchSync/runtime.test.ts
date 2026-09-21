@@ -49,11 +49,15 @@ describe('full-text search sync runtime', () => {
     vi.resetModules();
     mocks.ftsSearchEnv.FTS_SEARCH_SYNC_ENABLED = undefined;
     mocks.loadElasticsearchFtsSearchConfig.mockReturnValue(config);
-    mocks.elasticsearchClient.mockImplementation(() => ({
-      assertFtsSearchSyncAliases: mocks.assertFtsSearchSyncAliases,
-      bulk: vi.fn(),
-    }));
-    mocks.searchDocumentBuilder.mockImplementation(() => ({ buildByIds: vi.fn() }));
+    mocks.elasticsearchClient.mockImplementation(function () {
+      return {
+        assertFtsSearchSyncAliases: mocks.assertFtsSearchSyncAliases,
+        bulk: vi.fn(),
+      };
+    });
+    mocks.searchDocumentBuilder.mockImplementation(function () {
+      return { buildByIds: vi.fn() };
+    });
   });
 
   it('reports incremental sync as enabled only when the flag and configuration are present', async () => {

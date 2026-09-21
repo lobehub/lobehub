@@ -1,11 +1,21 @@
 'use client';
 
+import { Popover } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { memo, useEffect, useState } from 'react';
+import { memo, useState } from 'react';
 
-import { formatSize } from '@/utils/format';
+import { DOCK_Z_INDEX } from '../const';
+import { barButtonStyles } from './BarButton';
+import { formatCompactSize } from './memoryFormat';
+import MemoryPopover from './MemoryPopover';
+import { isMemorySamplingSupported, useMemorySamples } from './memorySamples';
+import { isMemoryHigh } from './metricUtils';
 
 const styles = createStaticStyles(({ css }) => ({
+  active: css`
+    color: ${cssVar.colorText};
+    background: ${cssVar.colorFillSecondary};
+  `,
   high: css`
     color: ${cssVar.colorError};
   `,
@@ -20,73 +30,46 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-interface HeapSample {
-  jsHeapLimitBytes: number;
-  jsHeapUsedBytes: number;
-  privateBytes?: number;
-}
-
-const readHeap = (): HeapSample | null => {
-  const memory = (
-    performance as Performance & {
-      memory?: { jsHeapSizeLimit: number; usedJSHeapSize: number };
-    }
-  ).memory;
-  if (!memory) return null;
-  return {
-    jsHeapLimitBytes: memory.jsHeapSizeLimit,
-    jsHeapUsedBytes: memory.usedJSHeapSize,
-  };
-};
-
 const MemoryWidget = memo(() => {
-  const [memory, setMemory] = useState<HeapSample | null>(null);
+  const samples = useMemorySamples();
+  const [open, setOpen] = useState(false);
 
-  useEffect(() => {
-    if (!readHeap()) return;
-    const getRendererMemoryInfo = window.electronAPI?.getRendererMemoryInfo;
+  if (!isMemorySamplingSupported() || !samples) return null;
 
-    let disposed = false;
-    const update = async () => {
-      let privateBytes: number | undefined;
-
-      try {
-        privateBytes = (await getRendererMemoryInfo?.())?.privateBytes;
-      } catch {
-        /* native process metrics unavailable — JS heap remains useful */
-      }
-
-      const heap = readHeap();
-      if (heap && !disposed) setMemory({ ...heap, privateBytes });
-    };
-
-    void update();
-    const timer = setInterval(update, 2000);
-    return () => {
-      disposed = true;
-      clearInterval(timer);
-    };
-  }, []);
-
-  if (!memory) return null;
-
-  const percent = (memory.jsHeapUsedBytes / memory.jsHeapLimitBytes) * 100;
+  const { jsHeapUsedBytes, jsHeapLimitBytes, renderer } = samples.latest;
+  const percent = (jsHeapUsedBytes / jsHeapLimitBytes) * 100;
+  const high = isMemoryHigh(percent, renderer?.privateBytes);
 
   return (
-    <span
-      className={cx(
-        styles.text,
-        percent >= 90 ? styles.high : percent >= 70 ? styles.mid : undefined,
-      )}
-      title={
-        memory.privateBytes === undefined
-          ? 'JS heap used / limit'
-          : 'Renderer private memory · JS heap used / limit'
-      }
+    <Popover
+      arrow={false}
+      content={<MemoryPopover />}
+      open={open}
+      placement={'topRight'}
+      positionerProps={{ sideOffset: 6 }}
+      styles={{ content: { padding: 0 } }}
+      trigger={'click'}
+      zIndex={DOCK_Z_INDEX + 1}
+      onOpenChange={setOpen}
     >
-      {memory.privateBytes !== undefined && `Renderer ${formatSize(memory.privateBytes)} · `}
-      JS {formatSize(memory.jsHeapUsedBytes)} · {percent.toFixed(1)}%
-    </span>
+      <button
+        type={'button'}
+        className={cx(
+          barButtonStyles.button,
+          styles.text,
+          high ? styles.high : percent >= 70 ? styles.mid : undefined,
+          open && styles.active,
+        )}
+        title={
+          renderer
+            ? 'R = Renderer private footprint (red at 1 GiB) · J = JS heap used — click for the full breakdown'
+            : 'J = JS heap used — click for the full breakdown'
+        }
+      >
+        {renderer && `R${formatCompactSize(renderer.privateBytes)} · `}J
+        {formatCompactSize(jsHeapUsedBytes)}
+      </button>
+    </Popover>
   );
 });
 

@@ -1,12 +1,6 @@
 ---
 name: agent-testing-bot
-description: >
-  Bot-channel end-to-end verification for LobeHub — drives the real native chat
-  apps (Discord / Slack / Telegram / WeChat / Lark / QQ / iMessage) via osascript
-  or the iMessage bridge, on macOS. Extends the generic acceptance skill for
-  bot surfaces. Triggers on 'test bot', 'bot test', 'test in discord',
-  'test in telegram', 'test in slack', 'test in wechat', 'test in weixin',
-  'test in lark', 'test in feishu', 'test in qq'.
+description: 'Use for real bot-channel acceptance in Discord, Slack, Telegram, WeChat/Weixin, Lark/Feishu, QQ or iMessage on macOS. Extends acceptance with native chat apps.'
 ---
 
 # Agent Testing — Bot Channels (LobeHub project skill)

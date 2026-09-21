@@ -1,6 +1,6 @@
 import { createIoRedisState } from '@chat-adapter/state-ioredis';
-import { DEFAULT_BOT_DEBOUNCE_MS } from '@lobechat/const';
-import { Chat, ConsoleLogger, type Message, type MessageContext } from 'chat';
+import type { Message, MessageContext, WebhookOptions } from 'chat';
+import { Chat, ConsoleLogger } from 'chat';
 import debug from 'debug';
 
 import { getBotFeatureAccessState } from '@/business/server/bot/featureAccess';
@@ -18,6 +18,7 @@ import { AiAgentService } from '@/server/services/aiAgent';
 
 import { AgentBridgeService } from './AgentBridgeService';
 import { buildBotContext } from './buildBotContext';
+import { replayDeferredBotMessages } from './deferredMessages';
 import {
   createOrGetPairingRequest,
   deletePairingRequest,
@@ -25,6 +26,8 @@ import {
   releasePairingClaim,
 } from './dmPairingStore';
 import { submitBotFeedback } from './feedbackSubmit';
+import { buildReplayMessages, getSameSenderMessages, mergeBotMessages } from './mergeMessages';
+import { patchSenderBatches } from './patchSenderBatches';
 import {
   type BotPlatformRuntimeContext,
   type BotReplyLocale,
@@ -33,35 +36,44 @@ import {
   type DmSettings,
   extractDmSettings,
   extractGroupSettings,
+  extractGuestSettings,
   extractUserAllowlist,
   extractWatchKeywordEntries,
   findMatchingWatchKeywordEntries,
   getBotReplyLocale,
   type GroupSettings,
+  type GuestDecision,
+  type GuestSettings,
   messageMatchesWatchKeyword,
   normalizeAllowFromEntries,
   normalizeBotReplyLocale,
   type PlatformClient,
   type PlatformDefinition,
   platformRegistry,
+  resolveBotConcurrency,
   resolveBotProviderConfig,
   shouldAllowSender,
   shouldHandleDm,
   shouldHandleGroup,
+  shouldHandleGuest,
   type UserAllowlist,
   type WatchKeywordEntry,
 } from './platforms';
+import { isGuestTelegramThreadId } from './platforms/telegram/threadId';
+import { renderThrownAgentError } from './renderThrownError';
 import {
   renderApproveSuccess,
   renderCommandReply,
   renderDmPairing,
   renderDmRejected,
-  renderError,
   renderFeedbackSubmitted,
   renderGroupRejected,
+  renderGuestPairing,
+  renderGuestRejected,
   renderInlineError,
   renderModeStatus,
   renderSenderRejected,
+  renderWhoami,
 } from './replyTemplate';
 
 /** Minimum gap between two webhook re-registrations for the same bot. */
@@ -111,6 +123,8 @@ interface ResolvedAgentInfo {
 }
 
 interface RegisteredBot {
+  /** Chat SDK adapters keyed by platform id, as passed to the `Chat` config. */
+  adapters: Record<string, any>;
   agentInfo: ResolvedAgentInfo;
   chatBot: Chat<any>;
   client: PlatformClient;
@@ -162,6 +176,14 @@ interface CommandContext {
 /** A single bot command definition.
  *  Add new entries to `buildCommands()` to register additional commands. */
 interface BotCommand {
+  /**
+   * Skip the allowFrom / DM-policy / group-policy gate for this command.
+   * Reserved for commands with no side effects that only reveal the
+   * caller's own data (e.g. `/whoami`), so an operator who hasn't filled in
+   * `settings.userId` yet can still discover it under a `pairing` /
+   * `allowlist` / `disabled` DM policy that would otherwise lock them out.
+   */
+  bypassGate?: boolean;
   description: string;
   handler: (ctx: CommandContext) => Promise<void>;
   name: string;
@@ -211,8 +233,11 @@ export class BotMessageRouter {
    * Get the webhook handler for a given platform + appId.
    * Returns a function compatible with Next.js Route Handler: `(req: Request) => Promise<Response>`
    */
-  getWebhookHandler(platform: string, appId?: string): (req: Request) => Promise<Response> {
-    return async (req: Request) => {
+  getWebhookHandler(
+    platform: string,
+    appId?: string,
+  ): (req: Request, options?: WebhookOptions) => Promise<Response> {
+    return async (req: Request, options?: WebhookOptions) => {
       const entry = platformRegistry.getPlatform(platform);
       if (!entry) {
         return new Response('No bot configured for this platform', { status: 404 });
@@ -222,7 +247,7 @@ export class BotMessageRouter {
         return new Response(`Missing appId for ${platform} webhook`, { status: 400 });
       }
 
-      return this.handleWebhook(req, platform, appId);
+      return this.handleWebhook(req, platform, appId, options);
     };
   }
 
@@ -243,7 +268,12 @@ export class BotMessageRouter {
   // Webhook handling
   // ------------------------------------------------------------------
 
-  private async handleWebhook(req: Request, platform: string, appId: string): Promise<Response> {
+  private async handleWebhook(
+    req: Request,
+    platform: string,
+    appId: string,
+    options?: WebhookOptions,
+  ): Promise<Response> {
     log('handleWebhook: platform=%s, appId=%s', platform, appId);
 
     const bot = await this.getOrCreateBot(platform, appId);
@@ -252,7 +282,7 @@ export class BotMessageRouter {
     }
 
     if (bot.chatBot.webhooks && platform in bot.chatBot.webhooks) {
-      const response: Response = await (bot.chatBot.webhooks as any)[platform](req);
+      const response: Response = await (bot.chatBot.webhooks as any)[platform](req, options);
       if (response.status === 401)
         await this.reconcileWebhookAfterRejection(platform, appId, bot.client);
       return response;
@@ -418,12 +448,12 @@ export class BotMessageRouter {
     const client = entry.clientFactory.createClient(providerConfig, runtimeContext);
     const adapters = client.createAdapter();
 
-    // dmSettings + operatorUserId are needed by `/approve` (to enforce the
-    // owner-only gate and to know whether pairing is even enabled), and by
-    // the DM pairing branch in registerHandlers. Extract once, share with
-    // both — registerHandlers re-derives from `settings` to keep its own
-    // closure-internal contract self-contained.
+    // Access settings + operatorUserId are needed by `/approve` (to enforce
+    // the owner-only gate and to know whether pairing is enabled), and by
+    // registerHandlers. Extract once, share with commands; registerHandlers
+    // re-derives from `settings` to keep its closure self-contained.
     const dmSettings: DmSettings = extractDmSettings(settings);
+    const guestSettings: GuestSettings = extractGuestSettings(settings);
     const operatorUserId =
       typeof settings.userId === 'string'
         ? (settings.userId as string).trim() || undefined
@@ -434,6 +464,7 @@ export class BotMessageRouter {
       applicationId,
       client,
       dmSettings,
+      guestSettings,
       operatorUserId,
       platform,
       providerId: provider.id,
@@ -441,19 +472,22 @@ export class BotMessageRouter {
       workspaceId: workspaceId ?? undefined,
     });
 
-    // Default to 'queue' for legacy providers that don't have `concurrency`
-    // in their saved settings. Historically this defaulted to 'debounce', but
-    // chat-sdk's debounce semantics are "drop all but the latest" (Lodash-style),
-    // which silently evicts media messages when followed by a quick text query.
-    // 'queue' preserves all pending messages and merges them via
-    // `mergeSkippedMessages`, which is the right default for chat UX.
-    const concurrencyStrategy = (settings.concurrency as string) || 'queue';
-    const debounceMs = (settings.debounceMs as number) || DEFAULT_BOT_DEBOUNCE_MS;
+    // 'queue' stays the fallback for channels that never picked a strategy:
+    // it preserves every pending message and merges them via
+    // `mergeSkippedMessages`. Platforms that split one logical turn across
+    // several messages need the window BEFORE the first dispatch instead —
+    // see `resolveBotConcurrency`, which also rescues channels created before
+    // 'burst' existed in chat-sdk 4.29.
+    const { debounceMs, strategy } = resolveBotConcurrency(platform, settings);
     const chatBot = this.createChatBot(
       adapters,
       `agent-${agentId}`,
-      concurrencyStrategy,
+      strategy,
       debounceMs,
+      (message) => {
+        const text = client.sanitizeUserInput?.(message.text ?? '') ?? message.text;
+        return BotMessageRouter.dispatchTextCommand(text, commands) !== null;
+      },
     );
     this.registerHandlers(chatBot, serverDB, client, commands, {
       agentId,
@@ -479,6 +513,7 @@ export class BotMessageRouter {
     }
 
     const registered: RegisteredBot = {
+      adapters,
       agentInfo: { agentId, userId, workspaceId: workspaceId ?? undefined },
       chatBot,
       client,
@@ -535,11 +570,19 @@ export class BotMessageRouter {
     label: string,
     concurrencyStrategy: string,
     debounceMs: number,
+    isCommand: (message: Message) => boolean,
   ): Chat<any> {
     const config: any = {
       adapters,
+      // `burst` and `debounce` both wait `debounceMs` before dispatching; they
+      // differ in what happens to the earlier messages in that window. `burst`
+      // hands them to the handler as `context.skipped`, which
+      // `mergeSkippedMessages` folds into one turn; `debounce` drops them.
+      // Anything else keeps the plain queue, which dispatches immediately.
       concurrency:
-        concurrencyStrategy === 'debounce' ? { debounceMs, strategy: 'debounce' } : 'queue',
+        concurrencyStrategy === 'burst' || concurrencyStrategy === 'debounce'
+          ? { debounceMs, strategy: concurrencyStrategy }
+          : 'queue',
       userName: `lobehub-bot-${label}`,
     };
 
@@ -552,7 +595,9 @@ export class BotMessageRouter {
       });
     }
 
-    return new Chat(config);
+    const bot = new Chat(config);
+    patchSenderBatches(bot, isCommand);
+    return bot;
   }
 
   /**
@@ -564,19 +609,35 @@ export class BotMessageRouter {
     message: Message,
     context?: { skipped?: Message[] },
   ): Message {
-    if (!context?.skipped?.length) return message;
-
     // context.skipped is chronological; current message is the latest
-    const allMessages = [...context.skipped, message];
-    const mergedText = allMessages
-      .map((m) => m.text)
-      .filter(Boolean)
-      .join('\n');
-    const mergedAttachments = allMessages.flatMap((m) => (m as any).attachments || []);
+    return mergeBotMessages(message, context?.skipped);
+  }
 
-    return Object.assign(Object.create(Object.getPrototypeOf(message)), message, {
-      attachments: mergedAttachments,
-      text: mergedText,
+  /**
+   * Re-dispatch the messages that `AgentBridgeService` parked while this
+   * thread's topic was still running. Called by `BotCallbackService` once the
+   * completion callback lands, so the follow-up ("one sentence" after "one
+   * image" on WeChat) becomes the next turn instead of a failed start.
+   *
+   * Each original message goes through `Chat.processMessage`, i.e. the same
+   * subscription / mention / command routing as a live webhook delivery.
+   */
+  async replayDeferredMessages(
+    platform: string,
+    applicationId: string,
+    platformThreadId: string,
+  ): Promise<void> {
+    await replayDeferredBotMessages(applicationId, platformThreadId, async (entries) => {
+      const bot = await this.getOrCreateBot(platform, applicationId);
+      const adapter = bot?.adapters[platform];
+      if (!bot || !adapter) throw new Error(`Bot adapter unavailable for ${platform}`);
+      const results = await Promise.allSettled(
+        buildReplayMessages(entries).map((message) =>
+          bot.chatBot.processMessage(adapter, platformThreadId, message),
+        ),
+      );
+      const failure = results.find((result) => result.status === 'rejected');
+      if (failure?.status === 'rejected') throw failure.reason;
     });
   }
 
@@ -632,6 +693,7 @@ export class BotMessageRouter {
     const charLimit = (info.settings?.charLimit as number) || undefined;
     const displayToolCalls = info.settings?.displayToolCalls === true;
     const dmSettings: DmSettings = extractDmSettings(info.settings);
+    const guestSettings: GuestSettings = extractGuestSettings(info.settings);
     const groupSettings: GroupSettings = extractGroupSettings(info.settings);
     const userAllowlist: UserAllowlist = extractUserAllowlist(info.settings);
     /**
@@ -737,6 +799,18 @@ export class BotMessageRouter {
         userAllowlist,
       });
 
+    const passesGuestPolicy = (
+      thread: { id: string },
+      message: { author?: { userId?: string } },
+    ): GuestDecision =>
+      shouldHandleGuest({
+        authorUserId: message.author?.userId,
+        guestSettings,
+        isGuest: platform === 'telegram' && isGuestTelegramThreadId(thread.id),
+        operatorUserId,
+        userAllowlist,
+      });
+
     /**
      * Gate inbound events on group policy. DM threads pass through — they
      * are governed by `passesDmPolicy` instead. Non-DM threads are blocked
@@ -756,8 +830,11 @@ export class BotMessageRouter {
      * not the parent operators pasted. `extraGroupAllowlistChannels`
      * surfaces the parent so either ID lets the message through.
      */
-    const passesGroupPolicy = (thread: { id: string; isDM?: boolean }): boolean =>
-      shouldHandleGroup({
+    const passesGroupPolicy = (thread: { id: string; isDM?: boolean }): boolean => {
+      // Guest Mode has its own user-scoped policy. It remains separate from
+      // Group Policy because the bot has not joined the source chat.
+      if (platform === 'telegram' && isGuestTelegramThreadId(thread.id)) return true;
+      return shouldHandleGroup({
         candidateChannelIds: [
           client.extractChatId(thread.id),
           ...(client.extraGroupAllowlistChannels?.(thread.id) ?? []),
@@ -765,6 +842,7 @@ export class BotMessageRouter {
         groupSettings,
         isDM: thread.isDM === true,
       });
+    };
 
     /**
      * Handle a sender that the global `allowFrom` rejected. Posts the
@@ -807,7 +885,7 @@ export class BotMessageRouter {
       replyLocale: BotReplyLocale,
     ): Promise<void> => {
       // 'open' and 'pairing' should never reach here ('pairing' has its own
-      // flow via triggerDmPairing), but guard anyway so we never post the
+      // flow via triggerPairing), but guard anyway so we never post the
       // wrong copy if shouldHandleDm grows another false branch.
       if (dmSettings.policy !== 'allowlist' && dmSettings.policy !== 'disabled') return;
       try {
@@ -834,28 +912,42 @@ export class BotMessageRouter {
       }
     };
 
+    const notifyGuestRejected = async (
+      thread: { post: (text: string) => Promise<unknown> },
+      replyLocale: BotReplyLocale,
+    ): Promise<void> => {
+      if (guestSettings.policy !== 'allowlist' && guestSettings.policy !== 'disabled') return;
+      try {
+        await thread.post(renderGuestRejected(guestSettings.policy, replyLocale));
+      } catch (error) {
+        log('notifyGuestRejected: failed to post rejection notice: %O', error);
+      }
+    };
+
     /**
-     * Pairing branch of the DM gate: stranger DMed a bot in `pairing` mode.
-     * Issue (or recycle, when the same applicant DMed within the TTL) a
-     * one-time code, persist a pending entry to Redis so `/approve <code>`
-     * can later append the applicant to `allowFrom`, and post the code in
-     * the applicant's DM thread.
+     * Pairing branch shared by DM and Telegram Guest policies. Issue (or
+     * recycle, when the same applicant retries within the TTL) a one-time
+     * code, persist a pending entry to Redis so `/approve <code>` can later
+     * append the applicant to `allowFrom`, and post the code on the original
+     * request surface.
      *
      * Best-effort: if Redis is unwired (`'redis-unavailable'`) or the
      * per-bot pending cap is hit (`'capacity-exceeded'`), surface a useful
      * status string to the applicant rather than silently dropping them —
      * silent drops look broken and operators waste time debugging.
      */
-    const triggerDmPairing = async (
+    const triggerPairing = async (
       thread: { id: string; post: (text: string) => Promise<unknown> },
       author: { userId?: string; userName?: string },
       replyLocale: BotReplyLocale,
+      scope: 'dm' | 'guest',
     ): Promise<void> => {
       if (!author.userId) {
         log(
-          'triggerDmPairing: missing author userId, cannot pair (agent=%s, platform=%s)',
+          'triggerPairing: missing author userId, cannot pair (agent=%s, platform=%s, scope=%s)',
           agentId,
           platform,
+          scope,
         );
         return;
       }
@@ -872,16 +964,25 @@ export class BotMessageRouter {
       });
       let text: string;
       if (result.status === 'created' || result.status === 'reused') {
-        text = renderDmPairing('code', replyLocale, { code: result.code });
+        text =
+          scope === 'guest'
+            ? renderGuestPairing('code', replyLocale, { code: result.code })
+            : renderDmPairing('code', replyLocale, { code: result.code });
       } else if (result.status === 'capacity-exceeded') {
-        text = renderDmPairing('capacity-exceeded', replyLocale);
+        text =
+          scope === 'guest'
+            ? renderGuestPairing('capacity-exceeded', replyLocale)
+            : renderDmPairing('capacity-exceeded', replyLocale);
       } else {
-        text = renderDmPairing('unavailable', replyLocale);
+        text =
+          scope === 'guest'
+            ? renderGuestPairing('unavailable', replyLocale)
+            : renderDmPairing('unavailable', replyLocale);
       }
       try {
         await thread.post(text);
       } catch (error) {
-        log('triggerDmPairing: failed to post pairing notice: %O', error);
+        log('triggerPairing: failed to post pairing notice: %O', error);
       }
     };
 
@@ -900,10 +1001,17 @@ export class BotMessageRouter {
       text: string | undefined,
       author: { userId?: string; userName?: string } | undefined,
       replyLocale: BotReplyLocale,
+      /**
+       * `ungatedOnly` restricts dispatch to `bypassGate` commands. Callers
+       * run it once BEFORE `passGatesOrNotify` (so `/whoami` answers even
+       * when the sender would be rejected) and once after for the rest.
+       */
+      options?: { ungatedOnly?: boolean },
     ): Promise<boolean> => {
       const sanitized = client.sanitizeUserInput?.(text ?? '') ?? text;
       const result = BotMessageRouter.dispatchTextCommand(sanitized, commands);
       if (!result) return false;
+      if (options?.ungatedOnly && !result.command.bypassGate) return false;
       await result.command.handler({
         args: result.args,
         authorUserId: author?.userId,
@@ -1036,18 +1144,13 @@ export class BotMessageRouter {
       if (operatorUserId && author.userId === operatorUserId) {
         return finishFeatureAccess();
       }
-      // Pairing redefines what `allowFrom` means: it's the *post-approval*
-      // list (managed by `/approve`), not a hard identity gate. A stranger
-      // DMing a pairing bot must reach the DM gate's `'pair'` branch so we
-      // can issue them a code — but the global allowFrom gate would
-      // otherwise short-circuit them out at step 1 (since they're not yet
-      // approved). Skip the global gate for DM threads under pairing so
-      // the DM gate alone governs user filtering. Other policies are
-      // unaffected: `open` keeps allowFrom as an extra lockdown layer,
-      // `allowlist` resolves to the same list either way, `disabled`
-      // rejects regardless.
+      // Pairing redefines what `allowFrom` means: it's the post-approval
+      // list. Pairing applicants must reach their scope gate so it can issue
+      // a code instead of being short-circuited by the global allowlist.
+      const isGuest = platform === 'telegram' && isGuestTelegramThreadId(thread.id);
       const isPairingDm = thread.isDM === true && dmSettings.policy === 'pairing';
-      if (!isPairingDm && !passesGlobalAllowlist({ author })) {
+      const isPairingGuest = isGuest && guestSettings.policy === 'pairing';
+      if (!isPairingDm && !isPairingGuest && !passesGlobalAllowlist({ author })) {
         log(
           '%s: sender blocked by allowFrom, agent=%s, platform=%s, thread=%s, author=%s',
           caller,
@@ -1058,6 +1161,26 @@ export class BotMessageRouter {
         );
         await ensureRejectionVisible();
         await handleSenderRejected(thread, replyLocale);
+        return false;
+      }
+      const guestDecision = passesGuestPolicy(thread, { author });
+      if (guestDecision !== 'allow') {
+        log(
+          '%s: Guest gate=%s, agent=%s, platform=%s, thread=%s, author=%s, policy=%s',
+          caller,
+          guestDecision,
+          agentId,
+          platform,
+          thread.id,
+          author.userName ?? author.userId,
+          guestSettings.policy,
+        );
+        await ensureRejectionVisible();
+        if (guestDecision === 'pair') {
+          await triggerPairing(thread, author, replyLocale, 'guest');
+        } else {
+          await notifyGuestRejected(thread, replyLocale);
+        }
         return false;
       }
       if (!passesGroupPolicy(thread)) {
@@ -1088,7 +1211,7 @@ export class BotMessageRouter {
         dmSettings.policy,
       );
       if (dmDecision === 'pair') {
-        await triggerDmPairing(thread, author, replyLocale);
+        await triggerPairing(thread, author, replyLocale, 'dm');
       } else {
         await notifyDmRejected(thread, replyLocale);
       }
@@ -1141,13 +1264,37 @@ export class BotMessageRouter {
       return { count: participants.length + 1, isNewParticipant: true };
     };
 
+    const trackThreadParticipants = async (
+      thread: { id: string; isDM?: boolean },
+      messages: readonly Message[],
+    ): Promise<{ count: number; isNewParticipant: boolean }> => {
+      let count = 0;
+      let isNewParticipant = false;
+      for (const candidate of messages) {
+        const tracked = await trackThreadParticipant(thread, candidate);
+        count = Math.max(count, tracked.count);
+        isNewParticipant ||= tracked.isNewParticipant;
+      }
+      return { count, isNewParticipant };
+    };
+
     bot.onNewMention(async (thread, message, context?: MessageContext) => {
       const replyLocale = detectReplyLocale(message);
       // Record the original @mentioner so the first follow-up in
       // `onSubscribedMessage` recognises them as participant #1 instead of
       // a "newcomer" — otherwise count would be 0 at that moment and the
       // single-user-relaxation logic wouldn't kick in.
-      await trackThreadParticipant(thread, message);
+      await trackThreadParticipants(thread, [...(context?.skipped ?? []), message]);
+
+      // Side-effect-free `bypassGate` commands (`/whoami`) answer before the
+      // gate so a not-yet-configured operator can discover their own ID.
+      if (
+        await tryDispatch(thread, message.text, message.author, replyLocale, {
+          ungatedOnly: true,
+        })
+      ) {
+        return;
+      }
 
       // Gate first — must run before tryDispatch so a /command from a
       // non-allowlisted sender can't slip through and side-effect.
@@ -1231,7 +1378,7 @@ export class BotMessageRouter {
           error,
         );
         try {
-          await thread.post({ markdown: renderError(operationId, replyLocale) });
+          await thread.post({ markdown: renderThrownAgentError(error, operationId, replyLocale) });
         } catch {
           // best-effort notification
         }
@@ -1239,6 +1386,14 @@ export class BotMessageRouter {
     });
 
     bot.onSubscribedMessage(async (thread, message, context?: MessageContext) => {
+      // Queue/debounce only dispatches the latest message as `message`; every
+      // earlier arrival is preserved in `context.skipped`. Track all of them
+      // before any early return so bot primaries and ignored chatter cannot
+      // hide human participants from the mention-only transition.
+      const { count: humanCount } = await trackThreadParticipants(thread, [
+        ...(context?.skipped ?? []),
+        message,
+      ]);
       if (message.author.isBot === true) return;
       const replyLocale = detectReplyLocale(message);
 
@@ -1253,18 +1408,41 @@ export class BotMessageRouter {
       // type `/new` directly without mentioning the bot), but they are NOT exempt
       // from the access gates below.
       //
-      // a subscribed channel thread with only one human follower
-      // is functionally a private 1:1 with the bot, so the @mention
-      // requirement is dropped while `count <= 1`. Tracked + counted here
-      // regardless of which exemption ultimately fires so the
-      // 1-human-vs-many transition is visible to the announcement gate.
-      const { count: humanCount } = await trackThreadParticipant(thread, message);
-      const isSingleHumanThread = humanCount <= 1;
-      const isAddressedToBot =
+      // A conversation holding only the operator and this bot is a private 1:1
+      // in all but name, so the @mention requirement is dropped there. Ask the
+      // platform when it can answer from real membership; only fall back to
+      // "how many distinct humans have SPOKEN here" when it can't.
+      //
+      // That fallback is a poor proxy and must not be trusted where the
+      // subscribed thread is an entire group chat: silent members are never
+      // counted, so a quiet 30-person group reads as private and the bot
+      // answers everything the one talkative person says — including messages
+      // @-ing a different bot. It survives only for platforms whose subscribed
+      // threads really are narrow sub-conversations (Discord/Slack), where
+      // speakers and participants are close to the same set.
+      //
+      // Participants are tracked either way so the announcement gate below can
+      // still see the 1-human-vs-many transition.
+      const isExplicitlyAddressed =
         thread.isDM ||
         message.isMention === true ||
-        context?.skipped?.some((m) => m.isMention === true) === true ||
-        isSingleHumanThread;
+        getSameSenderMessages(message, context?.skipped).some((m) => m.isMention === true) === true;
+      // Only consult membership when it can change the outcome: a DM or an
+      // @-mention is addressed to the bot regardless, and the platform lookup
+      // behind `isSoloBotConversation` is a network round-trip whenever its
+      // cache has lapsed — not something a direct message should wait on.
+      const isSoloBotConversation =
+        !isExplicitlyAddressed &&
+        (client.isSoloBotConversation
+          ? await client.isSoloBotConversation(thread.id).catch((error) => {
+              // Fail closed: an unprovable chat stays mention-only.
+              log('onSubscribedMessage: isSoloBotConversation failed: %O', error);
+              return false;
+            })
+          : humanCount <= 1);
+      const isAddressedToBot = isExplicitlyAddressed || isSoloBotConversation;
+      const platformReportsShared =
+        !isExplicitlyAddressed && !!client.isSoloBotConversation && !isSoloBotConversation;
       const isCommand = looksLikeCommand(message.text);
       // operator-configured keyword match also wakes the bot in a
       // subscribed group thread. Skipped (debounced) siblings are inspected
@@ -1273,8 +1451,9 @@ export class BotMessageRouter {
       const matchesWatchKeyword =
         watchKeywords.length > 0 &&
         (messageMatchesWatchKeyword(message.text, watchKeywords) ||
-          context?.skipped?.some((m) => messageMatchesWatchKeyword(m.text, watchKeywords)) ===
-            true);
+          getSameSenderMessages(message, context?.skipped).some((m) =>
+            messageMatchesWatchKeyword(m.text, watchKeywords),
+          ) === true);
 
       if (!isAddressedToBot && !isCommand && !matchesWatchKeyword) {
         log(
@@ -1287,7 +1466,7 @@ export class BotMessageRouter {
         // first skip in this thread → tell participants the bot
         // is now mention-only so newcomers don't think it broke. Dedupe by
         // thread id so we never announce more than once.
-        if (!thread.isDM && humanCount >= 2) {
+        if (!thread.isDM && (humanCount >= 2 || platformReportsShared)) {
           try {
             const fresh = await bot
               .getState()
@@ -1314,6 +1493,16 @@ export class BotMessageRouter {
           thread.id,
           watchKeywords,
         );
+      }
+
+      // Side-effect-free `bypassGate` commands (`/whoami`) answer before the
+      // gate so a not-yet-configured operator can discover their own ID.
+      if (
+        await tryDispatch(thread, message.text, message.author, replyLocale, {
+          ungatedOnly: true,
+        })
+      ) {
+        return;
       }
 
       // Gate before tryDispatch so a /command from a non-allowlisted sender
@@ -1419,7 +1608,7 @@ export class BotMessageRouter {
           error,
         );
         try {
-          await thread.post({ markdown: renderError(operationId, replyLocale) });
+          await thread.post({ markdown: renderThrownAgentError(error, operationId, replyLocale) });
         } catch {
           // best-effort notification
         }
@@ -1478,8 +1667,9 @@ export class BotMessageRouter {
           !isDM &&
           keywordCatchAllEnabled &&
           (messageMatchesWatchKeyword(message.text, watchKeywords) ||
-            context?.skipped?.some((m) => messageMatchesWatchKeyword(m.text, watchKeywords)) ===
-              true);
+            getSameSenderMessages(message, context?.skipped).some((m) =>
+              messageMatchesWatchKeyword(m.text, watchKeywords),
+            ) === true);
 
         // If neither path applies, return so the regex doesn't act as a
         // channel-wide hijack. DMs still need the dmCatchAllEnabled gate
@@ -1656,7 +1846,7 @@ export class BotMessageRouter {
    * and handler. To add a new command, just append to this array.
    *
    * Handlers close over `info` so they can reach services and the bot's
-   * own configuration (DM policy, owner identity, applicationId) without
+   * own configuration (access policies, owner identity, applicationId) without
    * needing every command entry threaded through CommandContext.
    */
   private buildCommands(
@@ -1669,6 +1859,7 @@ export class BotMessageRouter {
        *  the applicant's notification has to land in the applicant's DM. */
       client: PlatformClient;
       dmSettings: DmSettings;
+      guestSettings: GuestSettings;
       operatorUserId?: string;
       platform: string;
       /** DB row id of the agent_bot_providers row for this bot — used by
@@ -1683,6 +1874,7 @@ export class BotMessageRouter {
       applicationId,
       client,
       dmSettings,
+      guestSettings,
       operatorUserId,
       platform,
       providerId,
@@ -1825,7 +2017,7 @@ export class BotMessageRouter {
             ctx.authorUserName ?? ctx.authorUserId,
           );
 
-          if (dmSettings.policy !== 'pairing') {
+          if (dmSettings.policy !== 'pairing' && guestSettings.policy !== 'pairing') {
             await ctx.post(renderCommandReply('cmdApproveDisabled', ctx.replyLocale));
             return;
           }
@@ -1919,8 +2111,9 @@ export class BotMessageRouter {
             redis,
           });
 
-          // Notify the applicant in their own DM thread, in the locale
-          // they originally DMed in (owner's locale may differ).
+          // Notify the applicant on the surface where they requested access,
+          // in their original locale. Telegram Guest Mode can update its
+          // one-shot inline response through the Guest messenger.
           try {
             const messenger = client.getMessenger(entry.threadId);
             await messenger.createMessage(
@@ -1974,6 +2167,38 @@ export class BotMessageRouter {
           await reply(renderFeedbackSubmitted(result.issueUrl, ctx.replyLocale));
         },
         name: 'feedback',
+      },
+      {
+        // Ungated on purpose: the whole point is to let the operator learn
+        // the value for `settings.userId` before it is configured, and the
+        // reply contains nothing but the caller's own identity.
+        bypassGate: true,
+        description: 'Show your platform user ID for the bot settings',
+        handler: async (ctx) => {
+          log(
+            'command /whoami: agent=%s, platform=%s, author=%s',
+            agentId,
+            platform,
+            ctx.authorUserName ?? ctx.authorUserId,
+          );
+          const reply = ctx.postEphemeral ?? ctx.post;
+          const callerId = ctx.authorUserId?.trim();
+          if (!callerId) {
+            await reply(renderCommandReply('cmdWhoamiUnavailable', ctx.replyLocale));
+            return;
+          }
+          await reply(
+            renderWhoami(
+              {
+                isOperator: !!operatorUserId && callerId === operatorUserId,
+                userId: callerId,
+                userName: ctx.authorUserName,
+              },
+              ctx.replyLocale,
+            ),
+          );
+        },
+        name: 'whoami',
       },
     ];
   }
@@ -2040,7 +2265,10 @@ export class BotMessageRouter {
           userName: event.user?.userName,
         };
         const replyLocale = locale.fallback;
-        if (!(await gate(threadLike, authorLike, replyLocale, `onSlashCommand /${cmd.name}`))) {
+        if (
+          !cmd.bypassGate &&
+          !(await gate(threadLike, authorLike, replyLocale, `onSlashCommand /${cmd.name}`))
+        ) {
           return;
         }
         await cmd.handler({
@@ -2085,6 +2313,7 @@ export class BotMessageRouter {
       if (!result) return;
       const replyLocale = locale.detectFromMessage(message);
       if (
+        !result.command.bypassGate &&
         !(await gate(thread, message.author, replyLocale, `onNewMessage /${result.command.name}`))
       ) {
         return;

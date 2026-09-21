@@ -25,9 +25,7 @@ export const deriveInitialGoalCriterionTitle = (
 ): string => requirement?.trim() || instruction.trim();
 
 /**
- * The budget half of the goal-creation payload. The criteria half is built by
- * `buildGoalRequirement` in `@lobechat/builtin-tool-goal`, so the modal and the
- * `/goal` tool write the same acceptance requirement.
+ * Normalize the budget and optional requirement for goal creation.
  */
 export const buildGoalCreateInput = ({
   costBudget,
@@ -38,4 +36,10 @@ export const buildGoalCreateInput = ({
   // as uncapped, so an empty / non-positive input maps back to `null`.
   maxTotalCost: typeof costBudget === 'number' && costBudget > 0 ? costBudget : null,
   requirement: requirement?.trim() || instruction.trim(),
+});
+
+/** Keep the reviewed description in both the planning context and goal document. */
+export const buildReviewedGoalContent = (instruction: string) => ({
+  problemDescription: instruction,
+  requirement: instruction,
 });

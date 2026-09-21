@@ -80,6 +80,11 @@ export const useMenu = (options: UseMenuOptions = {}): { menuItems: any[] } => {
     transferLabel: t('pageEditor.menu.move'),
   }) as DropdownItem[] | null;
 
+  // Set when the page is open from the library overlay; the metadata stamp
+  // covers the same page reached from the Pages route.
+  const openedFromLibraryId = usePageEditorStore((s) => s.knowledgeBaseId);
+  const isInLibrary = Boolean(openedFromLibraryId || pageDocument?.metadata?.knowledgeBaseId);
+
   const publishPageToWorkspace = usePageStore((s) => s.publishPageToWorkspace);
   const setPageVisibility = usePageStore((s) => s.setPageVisibility);
   const canPublish = Boolean(
@@ -155,7 +160,7 @@ export const useMenu = (options: UseMenuOptions = {}): { menuItems: any[] } => {
     if (!canMakePrivate || !documentId) return;
     confirmModal({
       cancelText: t('cancel', { ns: 'common' }),
-      content: <VisibilityConfirmContent variant="makePrivate" />,
+      content: <VisibilityConfirmContent inLibrary={isInLibrary} variant="makePrivate" />,
       okButtonProps: { danger: true },
       okText: t('continue', { ns: 'common' }),
       onOk: async () => {
@@ -169,7 +174,7 @@ export const useMenu = (options: UseMenuOptions = {}): { menuItems: any[] } => {
       },
       title: t('makePrivate.confirm.title', { ns: 'common' }),
     });
-  }, [canMakePrivate, documentId, setPageVisibility, t]);
+  }, [canMakePrivate, documentId, isInLibrary, setPageVisibility, t]);
 
   const handleExportMarkdown = useCallback(async () => {
     const state = storeApi.getState();

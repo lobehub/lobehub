@@ -92,6 +92,11 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   }
 
   @IpcMethod()
+  async getKimiCodeQuota(...args: Parameters<Implementation['getKimiCodeQuota']>) {
+    return (await this.getImplementation()).getKimiCodeQuota(...args);
+  }
+
+  @IpcMethod()
   async cancelSession(...args: Parameters<Implementation['cancelSession']>) {
     return (await this.getImplementation()).cancelSession(...args);
   }

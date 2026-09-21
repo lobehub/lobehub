@@ -8,7 +8,54 @@ export type TaskStatus =
 
 export type TaskPriority = 0 | 1 | 2 | 3 | 4;
 
-export type TaskActivityType = 'brief' | 'comment' | 'created' | 'topic';
+export type TaskActivityType =
+  'assignment' | 'brief' | 'comment' | 'created' | 'property' | 'topic';
+
+/**
+ * Persisted event kinds in `task_activities`. Kept as a plain union (the column
+ * is `text`) so onboarding a new event — status, priority, … — is a type-only
+ * change with no migration.
+ */
+export type TaskActivityLogType =
+  'assignee_agent' | 'assignee_user' | 'automation' | 'priority' | 'status';
+
+/**
+ * Payload of a `task_activities` row: what the slot moved between.
+ * Assignee events carry ids (`fromId` / `toId`); a status event carries the
+ * status strings themselves (`from` / `to`).
+ */
+export interface TaskActivityLogPayload {
+  /**
+   * Who kind of party made the change, recorded at write time. The actor
+   * columns are `ON DELETE SET NULL` foreign keys, so once the user or agent
+   * is deleted this is the only trace that somebody — not the system — did
+   * it. Absent on rows written before it was introduced; treated as system.
+   */
+  actorKind?: 'agent' | 'system' | 'user';
+  from?: TaskActivityValue;
+  fromId?: string | null;
+  to?: TaskActivityValue;
+  toId?: string | null;
+}
+
+/**
+ * The automation columns as one logical value. Turning a schedule on rewrites
+ * mode + pattern + timezone in a single save; logging each column would put
+ * three lines in the feed for one decision.
+ */
+export interface TaskAutomationSnapshot {
+  heartbeatInterval: number | null;
+  /** `config.schedule.maxExecutions`; null = unlimited. Part of the schedule a user edits. */
+  maxExecutions: number | null;
+  mode: TaskAutomationMode | null;
+  schedulePattern: string | null;
+  scheduleTimezone: string | null;
+}
+
+export type TaskActivityValue = number | string | TaskAutomationSnapshot | null;
+
+/** Which assignee slot an `assignment` activity describes. */
+export type TaskAssignmentKind = 'agent' | 'member';
 
 // null = no automation
 export type TaskAutomationMode = 'heartbeat' | 'schedule';
@@ -27,6 +74,47 @@ export type TaskAutomationMode = 'heartbeat' | 'schedule';
  *                 Like `manual`, it never counts against automation quotas.
  */
 export type TaskRunTrigger = 'manual' | 'schedule' | 'heartbeat' | 'goal';
+
+/**
+ * A clarifying question the intent reader wants answered before an agent
+ * starts. Only raised when different answers change what gets delivered.
+ */
+export interface TaskIntentClarification {
+  /** What concretely changes depending on the answer. */
+  impact?: string;
+  /** Enumerable candidate answers, offered as one-tap chips. */
+  options?: string[];
+  question: string;
+}
+
+/**
+ * What the intent reader understood from the raw text typed into the task
+ * composer. Purely advisory — nothing here is persisted until the user (or the
+ * auto path, for an unambiguous request) confirms it.
+ */
+export interface TaskIntentAnalysis {
+  clarifications: TaskIntentClarification[];
+  /** How sure the reader is the brief can go to an executor as-is. */
+  confidence: 'high' | 'medium' | 'low';
+  /** Whether this is a single delivery or a standing goal. */
+  kind: 'task' | 'goal';
+  kindReason?: string;
+  /** The request rewritten as a full brief, without added scope. */
+  refinedInstruction: string;
+  /** One sentence, addressed to the user: the outcome that was understood. */
+  summary: string;
+  title: string;
+}
+
+/**
+ * The brief produced after the user answers, replacing the pre-answer reading.
+ * A second pass is needed because the first one was written while those details
+ * were still open, so it names them as gaps the answers have since closed.
+ */
+export interface TaskInstructionSynthesis {
+  instruction: string;
+  title: string;
+}
 
 // ── Config types ──
 
@@ -377,6 +465,13 @@ export interface TaskDetailActivityAuthor {
   id: string;
   name?: string | null;
   type: 'agent' | 'user';
+  /**
+   * The id is recorded but no live row backs it — deleted, or owned by someone
+   * else and filtered out of this viewer's scope. Distinct from a resolved row
+   * whose display name happens to be empty, and from no author at all (which
+   * means the system acted). Collapsing the three misattributes history.
+   */
+  unresolved?: boolean;
 }
 
 export interface TaskDetailActivityAgent {
@@ -394,6 +489,16 @@ export interface TaskDetailActivity {
   agent?: TaskDetailActivityAgent | null;
   agentId?: string | null;
   artifacts?: BriefArtifacts | null;
+  /**
+   * Assignment-only: which assignee slot changed and what it moved between.
+   * `null` on either side means "unassigned"; `author` carries who made the
+   * change.
+   */
+  assignment?: {
+    from?: TaskDetailActivityAuthor | null;
+    kind: TaskAssignmentKind;
+    to?: TaskDetailActivityAuthor | null;
+  };
   author?: TaskDetailActivityAuthor;
   briefType?: string;
   /**
@@ -420,6 +525,19 @@ export interface TaskDetailActivity {
    */
   operationId?: string | null;
   priority?: string | null;
+  /**
+   * Property-only: a field a person (or an agent acting for them) changed.
+   * System transitions — the runner starting or finishing a run — are not
+   * logged; the run row already carries them.
+   */
+  propertyChange?:
+    | {
+        field: 'automation';
+        from: TaskAutomationSnapshot | null;
+        to: TaskAutomationSnapshot | null;
+      }
+    | { field: 'priority'; from: number | null; to: number | null }
+    | { field: 'status'; from: TaskStatus | null; to: TaskStatus };
   readAt?: string | null;
   resolvedAction?: string | null;
   resolvedAt?: string | null;

@@ -151,6 +151,17 @@ const config = {
     await copyNativeModulesToSource();
     await copyExternalRuntimeModulesToSource();
 
+    // Keep the AUV daemon version locked to @auv-js/sdk. The CLI package
+    // resolves the platform-specific executable without running postinstall,
+    // then we stage that real file outside app.asar for child_process.spawn().
+    const { binaryPath: resolveAuvBinaryPath } = await import('@auv-js/cli/binary');
+    const auvSource = resolveAuvBinaryPath();
+    const auvExecutable = process.platform === 'win32' ? 'auv.exe' : 'auv';
+    const auvDestination = path.resolve(__dirname, 'resources/bin', auvExecutable);
+    await fs.mkdir(path.dirname(auvDestination), { recursive: true });
+    await fs.copyFile(auvSource, auvDestination);
+    if (process.platform !== 'win32') await fs.chmod(auvDestination, 0o755);
+
     // agent-browser is no longer bundled in the installer — BinaryManager
     // lazily downloads it on first use into the per-user cache dir. See
     // apps/desktop/src/main/modules/binaries/agentBrowserBinaries.ts.
@@ -257,6 +268,13 @@ const config = {
     'dist/renderer/**/*',
     '!resources/locales',
     '!resources/dmg.png',
+    // NOTICE:
+    // AUV must execute from the external bin directory, so its ASAR copy is unnecessary.
+    // The resources glob otherwise duplicates the binary copied by extraResources below.
+    // Source: PR #19051 ASAR Size Gate; resources/bin is staged in beforePack above.
+    // Remove these exclusions only if AUV no longer ships through extraResources.
+    '!resources/bin/auv',
+    '!resources/bin/auv.exe',
     // Exclude all node_modules first
     '!node_modules',
     // Then explicitly include native modules using object form (handles pnpm symlinks)
@@ -272,7 +290,10 @@ const config = {
     target: ['AppImage', 'snap', 'deb', 'rpm', 'tar.gz'],
   },
   mac: {
-    binaries: ['Contents/Resources/app.asar.unpacked/node_modules/font-list/libs/darwin/fontlist'],
+    binaries: [
+      'Contents/Resources/app.asar.unpacked/node_modules/font-list/libs/darwin/fontlist',
+      'Contents/Resources/bin/auv',
+    ],
     compression: 'maximum',
     entitlementsInherit: 'build/entitlements.mac.plist',
     ...(macCommunicationEntitlements

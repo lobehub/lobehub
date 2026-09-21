@@ -1830,6 +1830,7 @@ export class MemoryExtractionExecutor {
             sessionDate: topic.updatedAt.toISOString(),
             // TODO: make topK configurable
             topK: 10,
+            topicId: topic.id,
             username:
               userState.fullName || `${userState.firstName} ${userState.lastName}`.trim() || 'User',
           });

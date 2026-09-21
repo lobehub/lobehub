@@ -1,4 +1,5 @@
 export default {
+  'FilePreview.actions.download': 'Download source file',
   'FilePreview.tabs.chunk': 'Chunk',
   'FilePreview.tabs.file': 'File',
   'Plugins': 'Skills',

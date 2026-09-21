@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { useEvalStore } from '@/store/eval';
 import { isTrpcErrorCode } from '@/utils/trpcError';
 
@@ -34,6 +35,7 @@ const Page = memo(() => {
       errorVariant={'page'}
       isEmpty={isMissing || !testCase}
       isLoading={isLoading}
+      loading={<RouteLoading />}
       empty={
         <Center flex={1}>
           <Text type="secondary">{t('testCaseDetail.notFound')}</Text>

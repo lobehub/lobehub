@@ -1,10 +1,11 @@
-import { execSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import dotenv from 'dotenv';
 
 import { uploadAssets } from '../../../scripts/mobileSpaWorkflow/upload';
+import { localOperator, workerDeployAnnotationArgs } from '../../../scripts/workerDeployAnnotations';
 
 const workbenchRoot = resolve(__dirname, '..');
 const repoRoot = resolve(workbenchRoot, '../..');
@@ -62,10 +63,16 @@ async function main() {
   });
 
   console.log('\n=== Step 3: Deploy worker ===');
-  execSync('node_modules/.bin/wrangler deploy --config build/server/wrangler.json', {
-    cwd: workbenchRoot,
-    stdio: 'inherit',
-  });
+  execFileSync(
+    'node_modules/.bin/wrangler',
+    [
+      'deploy',
+      '--config',
+      'build/server/wrangler.json',
+      ...workerDeployAnnotationArgs(process.env, localOperator(workbenchRoot)),
+    ],
+    { cwd: workbenchRoot, stdio: 'inherit' },
+  );
 
   console.log('\n=== Deploy complete ===');
 }

@@ -14,15 +14,15 @@ const toolMessage = (apiName: string, kind: string, data: Record<string, unknown
   tool_call_id: `${apiName}_call`,
 });
 
-const buildState = (metadata: Record<string, unknown>, extra: Record<string, unknown> = {}) => ({
+const buildState = (origin: Record<string, unknown>, extra: Record<string, unknown> = {}) => ({
   messages: [],
-  metadata,
+  origin,
   ...extra,
 });
 
 const reviewMetadata = {
   agentId: 'agent_user_1',
-  agentSignal: { agentId: 'agent_user_1', kind: 'nightly-review', sourceId: 'src_1' },
+  signal: { agentId: 'agent_user_1', kind: 'nightly-review', sourceId: 'src_1' },
   userId: 'user_1',
 };
 
@@ -36,7 +36,7 @@ describe('extractSelfIterationCompletionPayload', () => {
   it('returns undefined without a userId', () => {
     expect(
       extractSelfIterationCompletionPayload(
-        buildState({ agentId: 'agent_x', agentSignal: { kind: 'nightly-review' } }),
+        buildState({ agentId: 'agent_x', signal: { kind: 'nightly-review' } }),
       ),
     ).toBeUndefined();
   });
@@ -64,7 +64,7 @@ describe('extractSelfIterationCompletionPayload', () => {
       buildState(
         {
           agentId: 'agent_user_1',
-          agentSignal: { kind: 'memory', sourceId: 'mem-src_1' },
+          signal: { kind: 'memory', sourceId: 'mem-src_1' },
           userId: 'user_1',
         },
         {
@@ -133,7 +133,7 @@ describe('extractSelfIterationCompletionPayload', () => {
       buildState(
         {
           agentId: 'agent_user_1',
-          agentSignal: { kind: 'memory', sourceId: 'mem-src_fallback' },
+          signal: { kind: 'memory', sourceId: 'mem-src_fallback' },
           userId: 'user_1',
         },
         {
@@ -166,7 +166,7 @@ describe('extractSelfIterationCompletionPayload', () => {
       buildState(
         {
           agentId: 'agent_user_1',
-          agentSignal: { kind: 'memory', sourceId: 'mem-src_2' },
+          signal: { kind: 'memory', sourceId: 'mem-src_2' },
           userId: 'user_1',
         },
         { status: 'finished', usage: { tools: { byTool: [] } } },

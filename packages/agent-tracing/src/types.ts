@@ -2,7 +2,13 @@ export interface ExecutionSnapshot {
   agentId?: string;
   completedAt?: number;
   completionReason?:
-    'done' | 'error' | 'interrupted' | 'max_steps' | 'cost_limit' | 'waiting_for_human';
+    | 'done'
+    | 'error'
+    | 'interrupted'
+    | 'max_steps'
+    | 'cost_limit'
+    | 'tool_call_repeat_limit'
+    | 'waiting_for_human';
   error?: { type: string; message: string };
   externalRetryCount?: number;
   model?: string;

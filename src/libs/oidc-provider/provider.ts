@@ -30,7 +30,9 @@ export const oidcArtifactTTL = {
   BackchannelAuthenticationRequest: 10 * MINUTE_SECONDS,
   ClientCredentials: 10 * MINUTE_SECONDS,
   DeviceCode: 10 * MINUTE_SECONDS,
-  Grant: 14 * DAY_SECONDS,
+  // oidc-provider never extends Grant.exp on refresh, so this is the absolute cap on a
+  // signed-in session no matter how often the refresh token rotates.
+  Grant: 365 * DAY_SECONDS,
   IdToken: HOUR_SECONDS,
   Interaction: HOUR_SECONDS,
   RefreshToken: 30 * DAY_SECONDS,
@@ -279,20 +281,18 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
     },
 
     // 12. Other configuration
+    // Errors the provider will not redirect back to the client with (an
+    // unregistered redirect_uri, an unknown client, malformed parameters) land
+    // on a dedicated page instead of a raw JSON dump. Only the spec-defined
+    // `error` and `error_description` travel along; `state` stays behind.
     renderError: async (ctx, out, error) => {
-      ctx.type = 'html';
-      ctx.body = `
-        <html>
-          <head>
-            <title>LobeHub OIDC Error</title>
-          </head>
-          <body>
-            <h1>LobeHub OIDC Error</h1>
-            <p>${JSON.stringify(error, null, 2)}</p>
-            <p>${JSON.stringify(out, null, 2)}</p>
-          </body>
-        </html>
-      `;
+      logProvider('renderError: %O', error);
+
+      const params = new URLSearchParams();
+      if (out.error) params.set('error', String(out.error));
+      if (out.error_description) params.set('error_description', String(out.error_description));
+
+      ctx.redirect(`/oauth/error?${params.toString()}`);
     },
 
     // Added: enable refresh token rotation

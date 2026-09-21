@@ -64,7 +64,12 @@ const createFakePersistenceHandler = () => {
   return handler as unknown as HeterogeneousPersistenceHandler & typeof handler;
 };
 
-const createFakeAgentOperationModel = () => ({ touchRunning: vi.fn(async () => true) });
+const createFakeAgentOperationModel = () => ({
+  findById: vi.fn(async (): Promise<any> => null),
+  recordHeteroIngestRejection: vi.fn(async () => true),
+  settleRunning: vi.fn(async () => true),
+  touchRunning: vi.fn(async () => true),
+});
 
 const buildEvent = (
   type: AgentStreamEvent['type'],
@@ -103,6 +108,20 @@ const createService = (
 
 describe('HeterogeneousAgentService', () => {
   describe('normalizeHeterogeneousFinishError', () => {
+    it('enriches a flattened weekly limit with the stable quota fields', () => {
+      expect(
+        normalizeHeterogeneousFinishError('claude-code', {
+          message: "You've hit your weekly limit · resets 10pm (Asia/Shanghai)",
+          type: 'AgentRuntimeError',
+        }),
+      ).toMatchObject({
+        errorRef: 'H2001',
+        attribution: 'user',
+        retryable: false,
+        body: { agentType: 'claude-code', code: 'rate_limit', details: { kind: 'usage_limit' } },
+      });
+    });
+
     it('classifies a flattened Claude Code login failure for the frontend status guide', () => {
       expect(
         normalizeHeterogeneousFinishError('claude-code', {
@@ -115,6 +134,7 @@ describe('HeterogeneousAgentService', () => {
           code: 'auth_required',
           stderr: 'Not logged in · Please run /login',
         },
+        errorRef: 'H1001',
         type: 'AgentRuntimeError',
       });
     });
@@ -140,7 +160,7 @@ describe('HeterogeneousAgentService', () => {
         type: 'AgentRuntimeError',
       };
 
-      expect(normalizeHeterogeneousFinishError('claude-code', error)).toBe(error);
+      expect(normalizeHeterogeneousFinishError('claude-code', error)).toMatchObject(error);
     });
   });
 
@@ -157,21 +177,58 @@ describe('HeterogeneousAgentService', () => {
 
       expect(agentOperationModel.touchRunning).toHaveBeenCalledWith('op-1');
       expect(persistenceHandler.ingest).toHaveBeenCalledOnce();
+      expect(agentOperationModel.recordHeteroIngestRejection).not.toHaveBeenCalled();
     });
 
-    it('ignores delayed batches after the operation lost its lease', async () => {
+    it('acknowledges an accepted batch so the producer can tell it from a discarded one', async () => {
+      const { service } = createService();
+
+      await expect(
+        service.heteroIngest({
+          agentType: 'codex',
+          events: [buildEvent('stream_chunk', 0)],
+          operationId: 'op-1',
+          topicId: 'topic-1',
+        }),
+      ).resolves.toEqual({ accepted: true });
+    });
+
+    it('reports and records a refusal when the operation lost its lease', async () => {
       const { agentOperationModel, manager, persistenceHandler, service } = createService();
       agentOperationModel.touchRunning.mockResolvedValue(false);
 
-      await service.heteroIngest({
-        agentType: 'claude-code',
-        events: [buildEvent('stream_chunk', 0)],
-        operationId: 'op-reclaimed',
-        topicId: 'topic-1',
-      });
+      // Discarding the batch is right — the operation is over. Doing it behind a
+      // bare 200 was not: the producer read that as delivery and kept working.
+      await expect(
+        service.heteroIngest({
+          agentType: 'claude-code',
+          events: [buildEvent('stream_chunk', 0), buildEvent('stream_chunk', 1)],
+          operationId: 'op-reclaimed',
+          topicId: 'topic-1',
+        }),
+      ).resolves.toEqual({ accepted: false, reason: 'operation-not-running' });
 
       expect(persistenceHandler.ingest).not.toHaveBeenCalled();
       expect(manager.publishStreamEvent).not.toHaveBeenCalled();
+      expect(agentOperationModel.recordHeteroIngestRejection).toHaveBeenCalledWith(
+        'op-reclaimed',
+        expect.objectContaining({ droppedEvents: 2, reason: 'operation-not-running' }),
+      );
+    });
+
+    it('still refuses the batch when the rejection marker cannot be written', async () => {
+      const { agentOperationModel, service } = createService();
+      agentOperationModel.touchRunning.mockResolvedValue(false);
+      agentOperationModel.recordHeteroIngestRejection.mockRejectedValue(new Error('db down'));
+
+      await expect(
+        service.heteroIngest({
+          agentType: 'claude-code',
+          events: [buildEvent('stream_chunk', 0)],
+          operationId: 'op-reclaimed',
+          topicId: 'topic-1',
+        }),
+      ).resolves.toEqual({ accepted: false, reason: 'operation-not-running' });
     });
 
     it('republishes every event through the stream manager preserving ordering', async () => {
@@ -403,7 +460,7 @@ describe('HeterogeneousAgentService', () => {
       expect(manager.publishStreamEvent).not.toHaveBeenCalled();
     });
 
-    it('ignores stale operation batches without publishing or throwing', async () => {
+    it('refuses stale operation batches without publishing or throwing', async () => {
       const manager: Partial<IStreamEventManager> = {
         publishStreamEvent: vi.fn(),
       };
@@ -413,8 +470,9 @@ describe('HeterogeneousAgentService', () => {
           throw new StaleHeteroOperationError('stale old batch');
         }),
       } as unknown as HeterogeneousPersistenceHandler;
+      const agentOperationModel = createFakeAgentOperationModel();
       const service = new HeterogeneousAgentService({} as any, 'user-test', {
-        agentOperationModel: createFakeAgentOperationModel() as any,
+        agentOperationModel: agentOperationModel as any,
         persistenceHandler,
         streamEventManager: manager as IStreamEventManager,
       });
@@ -426,8 +484,12 @@ describe('HeterogeneousAgentService', () => {
           operationId: 'op-old',
           topicId: 'topic-1',
         }),
-      ).resolves.toBeUndefined();
+      ).resolves.toEqual({ accepted: false, reason: 'stale-operation' });
       expect(manager.publishStreamEvent).not.toHaveBeenCalled();
+      expect(agentOperationModel.recordHeteroIngestRejection).toHaveBeenCalledWith(
+        'op-old',
+        expect.objectContaining({ reason: 'stale-operation' }),
+      );
     });
   });
 
@@ -452,6 +514,73 @@ describe('HeterogeneousAgentService', () => {
         reason: 'success',
         sessionId: 'cc-session-abc',
       });
+    });
+
+    it('settles a success whose output ingest discarded as a failed turn', async () => {
+      // The producer's receipt is honest about its own process (the CLI did exit
+      // 0) and blind to the only thing that matters here: none of its output was
+      // persisted. Trusting it leaves the user on an assistant placeholder that
+      // never fills in, with the topic/task retired as answered.
+      const { agentOperationModel, persistenceHandler, published, service } = createService();
+      agentOperationModel.findById.mockResolvedValue({
+        metadata: {
+          heteroIngestRejection: {
+            at: '2026-09-18T04:44:38.923Z',
+            droppedEvents: 12,
+            reason: 'stale-operation',
+          },
+        },
+      });
+
+      await service.heteroFinish({
+        agentType: 'claude-code',
+        assistantMessageId: 'asst-1',
+        operationId: 'op-dropped',
+        result: 'success',
+        topicId: 'topic-1',
+      });
+
+      expect(persistenceHandler.finish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: expect.objectContaining({
+            body: expect.objectContaining({ droppedEvents: 12, reason: 'stale-operation' }),
+          }),
+          result: 'error',
+        }),
+      );
+      expect(published[0].event.data.reason).toBe('error');
+      expect(published[0].event.data.error.message).toMatch(/not saved/);
+    });
+
+    it('leaves a clean success alone', async () => {
+      const { persistenceHandler, published, service } = createService();
+
+      await service.heteroFinish({
+        agentType: 'claude-code',
+        assistantMessageId: 'asst-1',
+        operationId: 'op-clean',
+        result: 'success',
+        topicId: 'topic-1',
+      });
+
+      expect(persistenceHandler.finish).toHaveBeenCalledWith(
+        expect.objectContaining({ error: undefined, result: 'success' }),
+      );
+      expect(published[0].event.data.reason).toBe('success');
+    });
+
+    it('keeps the producer verdict when the rejection marker cannot be read', async () => {
+      const { agentOperationModel, published, service } = createService();
+      agentOperationModel.findById.mockRejectedValue(new Error('db down'));
+
+      await service.heteroFinish({
+        agentType: 'claude-code',
+        operationId: 'op-unreadable',
+        result: 'success',
+        topicId: 'topic-1',
+      });
+
+      expect(published[0].event.data.reason).toBe('success');
     });
 
     it('forwards classified error details when the run failed', async () => {
@@ -820,19 +949,28 @@ describe('HeterogeneousAgentService', () => {
       },
     };
 
-    const makeService = (hooks: SerializedHook[] | undefined) => {
+    const makeService = (
+      hooks: SerializedHook[] | undefined,
+      options: { operationHooks?: SerializedHook[]; topicStatus?: 'missing' | 'settled' } = {},
+    ) => {
       const topicModel = {
-        // Mirror what execAgent persisted at dispatch: the serialized hooks live
-        // under runningOperation. heteroFinish must read them from here.
+        // Keep covering the legacy topic mirror used by partially upgraded runs.
         settleRunningOperation: vi.fn(async () => ({
           assistantMessageId: undefined,
           hooks,
-          status: 'settled' as const,
+          status: options.topicStatus ?? ('settled' as const),
           threadId: undefined,
         })),
       } as any;
       const { manager } = createFakeStreamManager();
+      const agentOperationModel = createFakeAgentOperationModel();
+      agentOperationModel.findById.mockResolvedValue({
+        metadata: options.operationHooks
+          ? { _hooks: options.operationHooks, assistantMessageId: 'asst-op' }
+          : undefined,
+      } as any);
       const service = new HeterogeneousAgentService({} as any, 'user-test', {
+        agentOperationModel: agentOperationModel as any,
         persistenceHandler: createFakePersistenceHandler(),
         snapshotStore: null,
         streamEventManager: manager,
@@ -875,6 +1013,26 @@ describe('HeterogeneousAgentService', () => {
         hookType: 'onComplete',
         reason: 'done',
         taskId: 'task_q',
+        topicId: 'topic-q',
+      });
+    });
+
+    it('delivers hooks from the operation when the stream terminal already cleared the topic', async () => {
+      const { service } = makeService(undefined, {
+        operationHooks: [taskHook],
+        topicStatus: 'missing',
+      });
+
+      await service.heteroFinish({
+        agentType: 'claude-code',
+        operationId: 'op-q',
+        result: 'success',
+        topicId: 'topic-q',
+      });
+
+      expect(mockPublishJSON).toHaveBeenCalledTimes(1);
+      expect(mockPublishJSON.mock.calls[0][0].body).toMatchObject({
+        hookId: 'task-on-complete',
         topicId: 'topic-q',
       });
     });

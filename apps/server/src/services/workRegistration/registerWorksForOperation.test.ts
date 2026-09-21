@@ -28,30 +28,44 @@ const {
 }));
 
 vi.mock('@/database/models/agentOperation', () => ({
-  AgentOperationModel: vi.fn(() => ({
-    findById: mockFindById,
-    listOperationTree: mockListOperationTree,
-  })),
+  AgentOperationModel: vi.fn(function () {
+    return {
+      findById: mockFindById,
+      listOperationTree: mockListOperationTree,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/message', () => ({
-  MessageModel: vi.fn(() => ({
-    findById: mockFindMessageById,
-    listMessagePluginsForOperation: mockListPlugins,
-    update: mockUpdateMessage,
-  })),
+  MessageModel: vi.fn(function () {
+    return {
+      findById: mockFindMessageById,
+      listMessagePluginsForOperation: mockListPlugins,
+      update: mockUpdateMessage,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/work', () => ({
-  WorkModel: vi.fn(() => ({
-    findFileVersionByToolCall: mockFindFileVersionByToolCall,
-    registerFile: mockRegisterFile,
-    registerShellGithubResult: mockRegisterShellGithubResult,
-  })),
+  WorkModel: vi.fn(function () {
+    return {
+      findFileVersionByToolCall: mockFindFileVersionByToolCall,
+      registerFile: mockRegisterFile,
+      registerShellGithubResult: mockRegisterShellGithubResult,
+    };
+  }),
 }));
 
-vi.mock('@/server/services/file', () => ({ FileService: vi.fn(() => ({})) }));
-vi.mock('@/server/services/market', () => ({ MarketService: vi.fn(() => ({})) }));
+vi.mock('@/server/services/file', () => ({
+  FileService: vi.fn(function () {
+    return {};
+  }),
+}));
+vi.mock('@/server/services/market', () => ({
+  MarketService: vi.fn(function () {
+    return {};
+  }),
+}));
 vi.mock('@/server/services/sandbox', () => ({
   createSandboxService: mockCreateSandboxService,
 }));
@@ -987,7 +1001,7 @@ describe('registerWorksForOperation · shell github works', () => {
     expect(mockUpdateMessage).toHaveBeenCalledWith('msg-assistant', {
       metadata: { work: { rootOperationId: 'op-1' } },
     });
-    expect(outcome).toEqual({ attempted: 1, failed: 0 });
+    expect(outcome).toEqual({ anchorMessageId: 'msg-assistant', attempted: 1, failed: 0 });
   });
 
   it('counts a failed anchor stamp so the completion backstop retries', async () => {
@@ -1097,7 +1111,7 @@ describe('registerWorksForOperation · shell github works', () => {
     expect(mockUpdateMessage).toHaveBeenCalledWith('msg-owner-assistant', {
       metadata: { work: { rootOperationId: 'op-1' } },
     });
-    expect(outcome).toEqual({ attempted: 1, failed: 0 });
+    expect(outcome).toEqual({ anchorMessageId: 'msg-owner-assistant', attempted: 1, failed: 0 });
   });
 
   it('counts a missing anchor as failed so the completion marker is withheld', async () => {

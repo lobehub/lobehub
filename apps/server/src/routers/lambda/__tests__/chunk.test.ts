@@ -36,14 +36,30 @@ describe('chunkRouter.getFileContents — ID branching', () => {
     fileModelMock = { findById: vi.fn() };
     documentServiceMock = { parseFile: vi.fn() };
 
-    vi.mocked(DocumentModel).mockImplementation(() => documentModelMock);
-    vi.mocked(FileModel).mockImplementation(() => fileModelMock);
-    vi.mocked(DocumentService).mockImplementation(() => documentServiceMock);
-    vi.mocked(AsyncTaskModel).mockImplementation(() => ({}) as any);
-    vi.mocked(ChunkModel).mockImplementation(() => ({}) as any);
-    vi.mocked(EmbeddingModel).mockImplementation(() => ({}) as any);
-    vi.mocked(MessageModel).mockImplementation(() => ({}) as any);
-    vi.mocked(ChunkService).mockImplementation(() => ({}) as any);
+    vi.mocked(DocumentModel).mockImplementation(function () {
+      return documentModelMock;
+    });
+    vi.mocked(FileModel).mockImplementation(function () {
+      return fileModelMock;
+    });
+    vi.mocked(DocumentService).mockImplementation(function () {
+      return documentServiceMock;
+    });
+    vi.mocked(AsyncTaskModel).mockImplementation(function () {
+      return {} as any;
+    });
+    vi.mocked(ChunkModel).mockImplementation(function () {
+      return {} as any;
+    });
+    vi.mocked(EmbeddingModel).mockImplementation(function () {
+      return {} as any;
+    });
+    vi.mocked(MessageModel).mockImplementation(function () {
+      return {} as any;
+    });
+    vi.mocked(ChunkService).mockImplementation(function () {
+      return {} as any;
+    });
 
     mockCtx = {
       userId,

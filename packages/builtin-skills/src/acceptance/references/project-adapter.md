@@ -6,8 +6,8 @@ surfaces it has, and how to jump straight into app state — lives in a per-proj
 adapter at `.agents/acceptance/PROJECT.md`. The skill reads it; it never guesses the
 project's commands.
 
-A repository that verifies itself often has more than commands to share: an
-approval gate before touching the environment, a teardown discipline, a publish
+A repository that verifies itself often has more than commands to share: a
+plan gate owned by the acceptance-checker once environment readiness is established, a teardown discipline, a publish
 target, a report directory convention. Those live beside the adapter in
 `.agents/acceptance/PROCESS.md`. **When that file exists it owns the run process,
 and this skill supplies the acceptance contract** — plan, evidence, report,

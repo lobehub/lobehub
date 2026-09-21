@@ -17,7 +17,9 @@ const fileServiceMocks = vi.hoisted(() => {
   };
 
   return {
-    FileService: vi.fn(() => instance),
+    FileService: vi.fn(function () {
+      return instance;
+    }),
     instance,
   };
 });

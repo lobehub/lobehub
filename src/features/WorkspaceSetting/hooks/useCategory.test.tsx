@@ -1,6 +1,8 @@
 import { cleanup, renderHook } from '@testing-library/react';
+import { type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { initServerConfigStore, Provider } from '@/store/serverConfig/store';
 import { useUserStore } from '@/store/user';
 import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
 
@@ -35,10 +37,16 @@ vi.mock('@/hooks/usePermission', () => ({
   }),
 }));
 
+// The hook reads feature flags (`hideDocs`) from the server-config store,
+// which only exists behind its Provider.
+const wrapper = ({ children }: { children: ReactNode }) => (
+  <Provider createStore={() => initServerConfigStore({})}>{children}</Provider>
+);
+
 const initialUserStoreState = useUserStore.getState();
 
 const getItemKeys = () => {
-  const { result } = renderHook(() => useWorkspaceSettingCategory());
+  const { result } = renderHook(() => useWorkspaceSettingCategory(), { wrapper });
 
   return result.current.flatMap((group) => group.items.map((item) => item.key));
 };
@@ -55,6 +63,50 @@ afterEach(() => {
 });
 
 describe('workspace settings useCategory', () => {
+  // Account-level tabs follow the user, not the workspace, so they are shown
+  // to every role — including viewers with no workspace permissions.
+  it('mirrors the account-level tabs in a leading Account group for every role', () => {
+    mocks.canCreateContent = false;
+    mocks.canManageWorkspace = false;
+    mocks.canViewBilling = false;
+
+    const { result } = renderHook(() => useWorkspaceSettingCategory(), { wrapper });
+    const accountGroup = result.current.find(
+      (group) => group.key === WorkspaceSettingsGroupKey.Account,
+    );
+    const generalGroup = result.current.find(
+      (group) => group.key === WorkspaceSettingsGroupKey.General,
+    );
+
+    expect(result.current[0]?.key).toBe(WorkspaceSettingsGroupKey.Account);
+    expect(accountGroup?.items.map((item) => item.key)).toEqual([
+      WorkspaceSettingsTabs.Profile,
+      WorkspaceSettingsTabs.Appearance,
+      WorkspaceSettingsTabs.Hotkey,
+      WorkspaceSettingsTabs.Messenger,
+    ]);
+    expect(generalGroup?.items.map((item) => item.key)).not.toContain(
+      WorkspaceSettingsTabs.Profile,
+    );
+  });
+
+  it('shows About in a System group for every role', () => {
+    mocks.canCreateContent = false;
+    mocks.canManageWorkspace = false;
+    mocks.canViewBilling = false;
+
+    const { result } = renderHook(() => useWorkspaceSettingCategory(), { wrapper });
+    const systemGroup = result.current.find(
+      (group) => group.key === WorkspaceSettingsGroupKey.System,
+    );
+
+    expect(systemGroup?.items.map((item) => item.key)).toEqual([WorkspaceSettingsTabs.About]);
+    expect(result.current.map((group) => group.key).slice(-2)).toEqual([
+      WorkspaceSettingsGroupKey.System,
+      WorkspaceSettingsGroupKey.Developer,
+    ]);
+  });
+
   it('hides OAuth Apps by default', () => {
     expect(getItemKeys()).not.toContain(WorkspaceSettingsTabs.OAuthApps);
   });
@@ -67,7 +119,7 @@ describe('workspace settings useCategory', () => {
       },
     });
 
-    const { result } = renderHook(() => useWorkspaceSettingCategory());
+    const { result } = renderHook(() => useWorkspaceSettingCategory(), { wrapper });
     const developerGroup = result.current.find(
       (group) => group.key === WorkspaceSettingsGroupKey.Developer,
     );
@@ -84,7 +136,7 @@ describe('workspace settings useCategory', () => {
   });
 
   it('places API Key in the Developer group', () => {
-    const { result } = renderHook(() => useWorkspaceSettingCategory());
+    const { result } = renderHook(() => useWorkspaceSettingCategory(), { wrapper });
     const adminGroup = result.current.find(
       (group) => group.key === WorkspaceSettingsGroupKey.Admin,
     );
@@ -100,7 +152,7 @@ describe('workspace settings useCategory', () => {
     mocks.canManageWorkspace = false;
 
     const itemKeys = getItemKeys();
-    const { result } = renderHook(() => useWorkspaceSettingCategory());
+    const { result } = renderHook(() => useWorkspaceSettingCategory(), { wrapper });
 
     expect(result.current.some((group) => group.key === WorkspaceSettingsGroupKey.Admin)).toBe(
       false,
@@ -110,21 +162,22 @@ describe('workspace settings useCategory', () => {
 
   // Viewers hold no `API_KEY_*` grant, so the tab would open onto a list
   // request that immediately 403s.
-  it('hides API Key from viewers, and drops the empty Developer group', () => {
+  it('hides API Key from viewers but keeps Advanced and Labs in the Developer group', () => {
     mocks.canCreateContent = false;
     mocks.canManageWorkspace = false;
 
-    const { result } = renderHook(() => useWorkspaceSettingCategory());
+    const { result } = renderHook(() => useWorkspaceSettingCategory(), { wrapper });
+    const developerGroup = result.current.find(
+      (group) => group.key === WorkspaceSettingsGroupKey.Developer,
+    );
 
-    expect(result.current.flatMap((group) => group.items.map((item) => item.key))).not.toContain(
-      WorkspaceSettingsTabs.APIKey,
-    );
-    expect(result.current.some((group) => group.key === WorkspaceSettingsGroupKey.Developer)).toBe(
-      false,
-    );
+    expect(developerGroup?.items.map((item) => item.key)).toEqual([
+      WorkspaceSettingsTabs.Advanced,
+      WorkspaceSettingsTabs.Labs,
+    ]);
   });
 
-  it('keeps the Developer group for viewers when OAuth Apps is enabled', () => {
+  it('adds OAuth Apps to the viewer Developer group when the Labs preference is enabled', () => {
     mocks.canCreateContent = false;
     mocks.canManageWorkspace = false;
     useUserStore.setState({
@@ -134,13 +187,15 @@ describe('workspace settings useCategory', () => {
       },
     });
 
-    const { result } = renderHook(() => useWorkspaceSettingCategory());
+    const { result } = renderHook(() => useWorkspaceSettingCategory(), { wrapper });
     const developerGroup = result.current.find(
       (group) => group.key === WorkspaceSettingsGroupKey.Developer,
     );
 
     expect(developerGroup?.items.map((item) => item.key)).toEqual([
+      WorkspaceSettingsTabs.Advanced,
       WorkspaceSettingsTabs.OAuthApps,
+      WorkspaceSettingsTabs.Labs,
     ]);
   });
 

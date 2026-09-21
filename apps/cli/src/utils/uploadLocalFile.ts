@@ -50,44 +50,60 @@ export const uploadFileBuffer = async (
   };
 
   let pathname: string;
+  let reservedPathname: string | undefined;
   if (existing?.isExist && existing.url) {
     pathname = existing.url;
   } else {
     // 2. Get a pre-signed upload URL and PUT the bytes to S3
     pathname = ext ? `files/${date}/${hash}.${ext}` : `files/${date}/${hash}`;
-    const presigned = await client.upload.createS3PreSignedUrl.mutate({
-      pathname,
-      size: buffer.length,
-    });
+    reservedPathname = pathname;
+    try {
+      const presigned = await client.upload.createS3PreSignedUrl.mutate({
+        pathname,
+        size: buffer.length,
+      });
 
-    const presignedUrl = typeof presigned === 'string' ? presigned : (presigned as any).url;
-    const uploadRes = await fetch(presignedUrl, {
-      body: buffer,
-      headers: { 'Content-Type': fileType },
-      method: 'PUT',
-    });
-    if (!uploadRes.ok) {
-      throw new Error(`Upload failed: ${uploadRes.status} ${uploadRes.statusText}`);
+      const presignedUrl = typeof presigned === 'string' ? presigned : (presigned as any).url;
+      const uploadRes = await fetch(presignedUrl, {
+        body: buffer,
+        headers: { 'Content-Type': fileType },
+        method: 'PUT',
+      });
+      if (!uploadRes.ok) {
+        throw new Error(`Upload failed: ${uploadRes.status} ${uploadRes.statusText}`);
+      }
+    } catch (error) {
+      await client.upload.abortS3Upload.mutate({ pathname }).catch(() => undefined);
+      throw error;
     }
   }
 
   // 3. Create the file record
-  return await client.file.createFile.mutate({
-    fileType,
-    hash,
-    knowledgeBaseId: options.knowledgeBaseId,
-    metadata: {
-      date,
-      dirname: '',
-      filename: fileName,
-      path: pathname,
-      ...dimensions,
-    },
-    name: fileName,
-    parentId: options.parentId,
-    size: buffer.length,
-    url: pathname,
-  });
+  try {
+    return await client.file.createFile.mutate({
+      fileType,
+      hash,
+      knowledgeBaseId: options.knowledgeBaseId,
+      metadata: {
+        date,
+        dirname: '',
+        filename: fileName,
+        path: pathname,
+        ...dimensions,
+      },
+      name: fileName,
+      parentId: options.parentId,
+      size: buffer.length,
+      url: pathname,
+    });
+  } catch (error) {
+    if (reservedPathname) {
+      await client.upload.abortS3Upload
+        .mutate({ pathname: reservedPathname })
+        .catch(() => undefined);
+    }
+    throw error;
+  }
 };
 
 /**

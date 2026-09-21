@@ -84,6 +84,7 @@ export const agentLabelAssignments = pgTable(
   (t) => [
     uniqueIndex('agent_label_assignments_label_id_agent_id_unique').on(t.labelId, t.agentId),
     index('agent_label_assignments_agent_id_idx').on(t.agentId),
+    index('agent_label_assignments_user_id_idx').on(t.userId),
     index('agent_label_assignments_workspace_id_idx').on(t.workspaceId),
   ],
 );

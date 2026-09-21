@@ -18,6 +18,7 @@ import {
   type Decision,
   DECISIONS,
   deriveReportVerdict,
+  evidenceDescriptionForFile,
   evidenceTypeForFile,
   genericContextFromResult,
   inlineTextEvidenceForFile,
@@ -347,7 +348,7 @@ async function submitAction(options: SubmitOptions): Promise<void> {
         {
           capturedBy: options.by as any,
           content: inlineContent,
-          description: options.desc,
+          description: evidenceDescriptionForFile(options.desc, options.file),
           fileId,
           type: options.type as any,
         },
@@ -420,7 +421,7 @@ async function evidenceUploadAction(options: EvidenceUploadOptions): Promise<voi
     capturedBy: options.by as any,
     checkResultId: options.check,
     content: inlineContent,
-    description: options.desc,
+    description: evidenceDescriptionForFile(options.desc, options.file),
     fileId,
     type: options.type as any,
   });
@@ -589,6 +590,20 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   const reportMdPath = path.join(dir, 'report.md');
   const content = existsSync(reportMdPath) ? readFileSync(reportMdPath, 'utf8') : undefined;
 
+  // What this round is, said to the person who has to accept it, in their
+  // language — the delivery's own note, not the verification write-up. It
+  // posts into the discussion as a message from whoever ran the ingest, so a
+  // reviewer reads it where the conversation already is rather than behind a
+  // report link.
+  const proposalMdPath = path.join(dir, 'proposal.md');
+  const proposal = (
+    existsSync(proposalMdPath)
+      ? readFileSync(proposalMdPath, 'utf8')
+      : typeof result.proposal === 'string'
+        ? result.proposal
+        : ''
+  ).trim();
+
   // What kind of delivery this report verified (default: coding).
   const scenario = scenarioFromResult(result);
 
@@ -620,7 +635,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
 
   // What the run set out to check, written before it ran. Paired with the
   // results by `id`, so the report can show a planned item that never ran.
-  const plan = planFromResult(result, droppedIds);
+  let plan = planFromResult(result, droppedIds);
 
   const goal = options.goal ?? (typeof result.focus === 'string' ? result.focus : undefined);
   const title = options.title ?? result.title;
@@ -672,6 +687,14 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   if (requestedAcceptanceId) {
     const bundle = await client.acceptance.getBundle.query({ id: requestedAcceptanceId });
     acceptance = bundle.acceptance;
+    plan = plan?.map((item) => ({
+      ...item,
+      sourceCriterionId:
+        item.sourceCriterionId ??
+        bundle.checks?.find((check) => check.id === item.id || check.planItem?.id === item.id)
+          ?.planItem?.sourceCriterionId ??
+        undefined,
+    }));
     subject = {
       ref: {
         subjectId: acceptance.subjectId,
@@ -705,8 +728,9 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
     process.exit(1);
   }
 
-  // Every ingest is a new immutable verification snapshot. A repair or
-  // re-verification is represented by another run on the same acceptance.
+  // Every ingest is an immutable verification snapshot. A repair or
+  // re-verification is another round on the same acceptance, unless the
+  // acceptance still holds a draft round: the server folds this run into it.
   const run = await client.verify.createRun.mutate({
     context,
     goal,
@@ -717,13 +741,15 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
     source: options.source as any,
     title,
   });
-  const runId = run.id;
-
   // 1c. Chain the session onto its subject's acceptance as the next round
   //     BEFORE the report lands, so the report-time status rollup already
-  //     sees the aggregate.
+  //     sees the aggregate. Results and the report go to the round the server
+  //     returns, which is the draft round when this run was folded into one.
   const acceptanceId = acceptance.id;
-  const attached = await client.acceptance.attachRun.mutate({ acceptanceId, verifyRunId: runId });
+  const attached = await client.acceptance.attachRun.mutate({ acceptanceId, verifyRunId: run.id });
+  const runId = attached?.id ?? run.id;
+  if (runId !== run.id)
+    console.log(pc.dim(`Folded into the acceptance's draft round ${attached.roundIndex ?? ''}`));
   // The chained round's index — `?r=<roundIndex>` on the acceptance URL
   // deep-links this round's report as the fixed snapshot view.
   const roundIndex = attached?.roundIndex ?? null;
@@ -777,7 +803,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
           // The filename, not the case title — the title already heads the
           // check card, so reusing it here just triples the same text.
           content: inlineContent,
-          description: evidenceInput.description ?? path.basename(abs),
+          description: evidenceDescriptionForFile(evidenceInput.description, abs),
           fileId: file?.id,
           metadata: evidenceInput.comparison ? { comparison: evidenceInput.comparison } : undefined,
           type,
@@ -833,6 +859,33 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
     verifyRunId: runId,
   });
 
+  // 4. Post the round's note. It renders as part of the round rather than as
+  //    another message, so the discussion reads "<agent> shipped round N"
+  //    followed by what it says. Last, and never fatal: the round itself is
+  //    the deliverable, and a failed comment must not strand a published round
+  //    behind an aborted ingest.
+  let proposalPosted = false;
+  if (proposal) {
+    try {
+      await client.acceptanceComment.create.mutate({
+        acceptanceId,
+        // Signed by the agent that produced the round, not by whoever's
+        // credentials carried the ingest. Absent outside an agent run, and
+        // then it falls back to the account.
+        authorAgentId: process.env.LOBEHUB_AGENT_ID || undefined,
+        // Derived from the round, so re-ingesting the same round edits nothing
+        // and duplicates nothing.
+        clientId: `proposal:${runId}`,
+        content: proposal,
+        contextRunId: runId,
+        kind: 'proposal',
+      });
+      proposalPosted = true;
+    } catch (e) {
+      log.warn(`proposal not posted to the discussion: ${String(e)}`);
+    }
+  }
+
   // A case with no matching plan item means the run checked something it
   // never planned — worth saying out loud, but not a failure. Only
   // meaningful against a plan that actually names something: with no plan
@@ -852,6 +905,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
         inlined,
         origin,
         planItems: plan?.length ?? 0,
+        proposalPosted,
         pullRequest,
         roundIndex,
         roundUrl,
@@ -878,6 +932,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
         `${unplanned.length > 0 ? pc.dim(` — ${unplanned.length} unplanned case(s)`) : ''}`,
     );
   }
+  if (proposalPosted) console.log(`${pc.bold('proposal')}: posted to the discussion`);
   if (pullRequest?.url) console.log(`${pc.bold('pr')}: ${pullRequest.url}`);
   if (origin?.topicId) console.log(`${pc.bold('origin topic')}: ${origin.topicId}`);
   console.log(`${pc.bold('verifyRunId')}: ${runId} ${pc.dim('(immutable snapshot)')}`);
@@ -1036,7 +1091,7 @@ export function attachAcceptanceRunCommands(acceptance: Command): void {
     run
       .command('ingest <reportDir>')
       .description(
-        'Ingest a local agent-testing report (result.json + report.md + assets) as a new round',
+        'Ingest a local agent-testing report (result.json + report.md + proposal.md + assets) as a new round',
       ),
   ).action(ingestReportAction);
 

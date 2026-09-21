@@ -3,7 +3,7 @@ import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { Button, Text, toast } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { Check, SquarePen, Workflow } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { lazy, memo, Suspense, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
 
@@ -11,8 +11,9 @@ import { useBriefStore } from '@/store/brief';
 import { useTaskStore } from '@/store/task';
 
 import { BriefActionLink } from './BriefActionLink';
-import CommentInput from './CommentInput';
 import { styles } from './style';
+
+const CommentInput = lazy(() => import('./CommentInput'));
 
 export interface BriefCardActionsProps {
   /** Brief actions from the brief payload — falls back to DEFAULT_BRIEF_ACTIONS by type. */
@@ -241,7 +242,11 @@ const BriefCardActions = memo<BriefCardActionsProps>(
       );
     }
     if (commentMode) {
-      return <CommentInput onCancel={() => setCommentMode(null)} onSubmit={handleCommentSubmit} />;
+      return (
+        <Suspense fallback={null}>
+          <CommentInput onCancel={() => setCommentMode(null)} onSubmit={handleCommentSubmit} />
+        </Suspense>
+      );
     }
 
     const commentActions = actions.find((a) => a.type === 'comment');

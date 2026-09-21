@@ -11,7 +11,6 @@ import { Link, useParams } from 'react-router';
 import urlJoin from 'url-join';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
-import Loading from '@/components/Loading/BrandTextLoading';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
@@ -62,7 +61,7 @@ const SelfLearning = memo(() => {
     [first.data],
   );
   const warmup = useHistoryWarmup(activeAgentId ?? undefined, learnedTotal);
-  const { data, error, isLoading, mutate } = useExpertiseOverview(
+  const { data, error, mutate } = useExpertiseOverview(
     activeAgentId ?? undefined,
     warmup.refreshInterval,
   );
@@ -273,8 +272,6 @@ const SelfLearning = memo(() => {
             error={error}
             errorVariant={'page'}
             isEmpty={!error && allDomains.length === 0}
-            isLoading={isLoading}
-            loading={<Loading debugId="SelfLearning" />}
             empty={
               <Center height={'100%'} style={{ minHeight: '50vh' }} width={'100%'}>
                 <Empty

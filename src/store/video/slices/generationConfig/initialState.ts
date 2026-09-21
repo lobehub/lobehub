@@ -1,12 +1,12 @@
 /* eslint-disable perfectionist/sort-interfaces */
+import { ModelProvider } from 'model-bank/modelProvider';
 import {
   extractVideoDefaultValues,
-  ModelProvider,
   PRESET_VIDEO_ASPECT_RATIOS,
   PRESET_VIDEO_RESOLUTIONS,
   type RuntimeVideoGenParams,
   type VideoModelParamsSchema,
-} from 'model-bank';
+} from 'model-bank/standardParameters';
 
 export const DEFAULT_AI_VIDEO_PROVIDER = ModelProvider.LobeHub;
 export const DEFAULT_AI_VIDEO_MODEL = 'dreamina-seedance-2-0-260128';

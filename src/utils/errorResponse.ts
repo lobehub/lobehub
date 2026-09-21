@@ -1,5 +1,5 @@
 import { AUTH_REQUIRED_HEADER } from '@lobechat/desktop-bridge';
-import { getErrorCodeSpec } from '@lobechat/model-runtime/errors';
+import { getErrorCodeSpec } from '@lobechat/model-runtime/errors/specs';
 import type { ILobeAgentRuntimeErrorType } from '@lobechat/model-runtime/types/error';
 import type { ErrorResponse, ErrorType } from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';

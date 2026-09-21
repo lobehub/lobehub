@@ -24,7 +24,9 @@ vi.mock('@/database/models/task', () => ({
 // dynamic import the brief service performs after auto-completing a task.
 const cascadeOnCompletion = vi.fn().mockResolvedValue({ failed: [], paused: [], started: [] });
 vi.mock('@/server/services/taskRunner', () => ({
-  TaskRunnerService: vi.fn().mockImplementation(() => ({ cascadeOnCompletion })),
+  TaskRunnerService: vi.fn().mockImplementation(function () {
+    return { cascadeOnCompletion };
+  }),
 }));
 
 describe('BriefService', () => {
@@ -56,9 +58,15 @@ describe('BriefService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (AgentModel as any).mockImplementation(() => mockAgentModel);
-    (BriefModel as any).mockImplementation(() => mockBriefModel);
-    (TaskModel as any).mockImplementation(() => mockTaskModel);
+    (AgentModel as any).mockImplementation(function () {
+      return mockAgentModel;
+    });
+    (BriefModel as any).mockImplementation(function () {
+      return mockBriefModel;
+    });
+    (TaskModel as any).mockImplementation(function () {
+      return mockTaskModel;
+    });
     // Default: no downstream tasks unlocked. Specific tests can override.
     mockTaskModel.getUnlockedTasks.mockResolvedValue([]);
     mockBriefModel.findById.mockResolvedValue(null);

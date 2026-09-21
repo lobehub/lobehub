@@ -106,7 +106,7 @@ describe('ChatGPT subscription models', () => {
       (model) => model.providerId === ModelProvider.ChatGPT,
     );
 
-    expect(models).toHaveLength(4);
+    expect(models).toHaveLength(5);
     expect(
       models.every((model) => model.settings?.extendParams?.includes('preserveThinking')),
     ).toBe(true);
@@ -120,6 +120,33 @@ describe('OpenAI audio models', () => {
     );
 
     expect(gptAudio?.abilities.audio).toBe(true);
+  });
+});
+
+describe('OpenCode Go models', () => {
+  it('registers the Muse Spark Contributor series', () => {
+    const models = LOBE_DEFAULT_MODEL_LIST.filter(
+      (model) =>
+        model.providerId === ModelProvider.OpenCodeCodingPlan && model.id.startsWith('muse-spark-'),
+    );
+
+    expect(models.map(({ id }) => id)).toEqual([
+      'muse-spark-1.2-contributor',
+      'muse-spark-1.3-contributor',
+    ]);
+    expect(models.find(({ id }) => id === 'muse-spark-1.3-contributor')).toEqual(
+      expect.objectContaining({
+        abilities: expect.objectContaining({
+          functionCall: true,
+          reasoning: true,
+          structuredOutput: true,
+          vision: true,
+        }),
+        contextWindowTokens: 1_048_576,
+        enabled: true,
+        maxOutput: 131_072,
+      }),
+    );
   });
 });
 
@@ -206,15 +233,17 @@ describe('Google rolling model aliases', () => {
   it('tracks the current Flash and Flash-Lite model versions', () => {
     const googleModels = LOBE_DEFAULT_MODEL_LIST.filter((model) => model.providerId === 'google');
     const flashLatest = googleModels.find((model) => model.id === 'gemini-flash-latest');
+    const flash = googleModels.find((model) => model.id === 'gemini-3.8-flash');
     const flashLiteLatest = googleModels.find((model) => model.id === 'gemini-flash-lite-latest');
     const flashLite = googleModels.find((model) => model.id === 'gemini-3.5-flash-lite');
 
     expect(flashLatest).toEqual(
       expect.objectContaining({
-        description: 'Points to gemini-3.7-flash',
+        description: 'Points to gemini-3.8-flash',
         knowledgeCutoff: '2026-03',
       }),
     );
+    expect(flashLatest?.pricing).toEqual(flash?.pricing);
     expect(flashLatest?.settings?.disabledParams).toEqual(['temperature', 'top_p']);
 
     expect(flashLiteLatest).toEqual(
@@ -258,7 +287,7 @@ describe('Google Gemini 3.1 Flash Image models', () => {
           type: 'chat',
         }),
         expect.objectContaining({
-          enabled: true,
+          enabled: false,
           id: 'gemini-3.1-flash-image-preview:image',
           releasedAt: '2026-02-26',
           type: 'image',
@@ -273,5 +302,92 @@ describe('Google Gemini 3.1 Flash Image models', () => {
         expect.objectContaining({ name: 'imageOutput', rate: 60 }),
       ]),
     );
+  });
+});
+
+describe('vendor provider cards', () => {
+  it('advertises native search, image and video input for GLM-5.3-Flash', () => {
+    // Without `video: true` the chat pipeline falls back to media analysis instead of sending
+    // video to the model natively, even though the official card lists video input.
+    const glm53Flash = LOBE_DEFAULT_MODEL_LIST.find(
+      (m) => m.providerId === 'zhipu' && m.id === 'glm-5.3-flash',
+    );
+
+    expect(glm53Flash?.abilities).toEqual(
+      expect.objectContaining({ reasoning: true, search: true, video: true, vision: true }),
+    );
+    expect(glm53Flash?.settings?.searchImpl).toBe('params');
+  });
+});
+
+describe('recent direct-provider models', () => {
+  it.each(['qwen3.8-max', 'qwen3.8-max-0902'])(
+    'exposes exactly one %s card with effort and thinking preservation controls',
+    (id) => {
+      const models = LOBE_DEFAULT_MODEL_LIST.filter(
+        (entry) => entry.providerId === 'qwen' && entry.id === id,
+      );
+      expect(models).toHaveLength(1);
+      expect(models[0].settings?.extendParams).toEqual([
+        'qwen38ReasoningEffort',
+        'preserveThinking',
+      ]);
+    },
+  );
+
+  it.each([
+    ['openai', 'gpt-6-astra', 'gpt6ReasoningEffort'],
+    ['google', 'gemini-3.8-flash', 'thinkingLevel3'],
+    ['vertexai', 'gemini-3.8-flash', 'thinkingLevel3'],
+    ['xai', 'grok-4.6', 'grok4_6ReasoningEffort'],
+    ['qwen', 'qwen3.8-max', 'qwen38ReasoningEffort'],
+    ['qwen', 'qwen3.8-max-0902', 'qwen38ReasoningEffort'],
+  ])('exposes %s/%s with its reasoning controls', (providerId, id, reasoningParam) => {
+    const model = LOBE_DEFAULT_MODEL_LIST.find(
+      (entry) => entry.providerId === providerId && entry.id === id,
+    );
+
+    expect(model).toMatchObject({
+      abilities: { functionCall: true, reasoning: true, vision: true },
+      enabled: true,
+      type: 'chat',
+    });
+    expect(model?.settings?.extendParams).toContain(reasoningParam);
+  });
+});
+
+describe('Gemini 3.8 introductory pricing', () => {
+  it.each(['google', 'vertexai'])('uses the published output rate for %s', (providerId) => {
+    const model = LOBE_DEFAULT_MODEL_LIST.find(
+      (entry) => entry.providerId === providerId && entry.id === 'gemini-3.8-flash',
+    );
+    expect(model?.pricing?.units).toContainEqual({
+      name: 'textOutput',
+      rate: 3.75,
+      strategy: 'fixed',
+      unit: 'millionTokens',
+    });
+  });
+});
+
+describe('subscription model catalogs', () => {
+  it.each([
+    ['chatgpt', 'gpt-6-astra', 'gpt6ReasoningEffort'],
+    ['supergrok', 'grok-4.6', 'grok4_6ReasoningEffort'],
+  ])('exposes %s/%s without usage-based pricing', (providerId, id, reasoningParam) => {
+    const model = LOBE_DEFAULT_MODEL_LIST.find(
+      (entry) => entry.providerId === providerId && entry.id === id,
+    );
+    expect(model).toMatchObject({ enabled: true, type: 'chat' });
+    expect(model?.pricing).toBeUndefined();
+    expect(model?.settings?.extendParams).toContain(reasoningParam);
+  });
+
+  it('keeps the ChatGPT context cap and thinking preservation', () => {
+    const model = LOBE_DEFAULT_MODEL_LIST.find(
+      (entry) => entry.providerId === 'chatgpt' && entry.id === 'gpt-6-astra',
+    );
+    expect(model?.contextWindowTokens).toBe(272_000);
+    expect(model?.settings?.extendParams).toContain('preserveThinking');
   });
 });

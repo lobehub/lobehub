@@ -281,7 +281,6 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
         hideUnread,
         needsYouCount: needsYou.length,
         preferUnread: isMain,
-        runningCount: runningTopics.length,
         unreadCount: unreadTopics.length,
       })
     : null;
@@ -407,14 +406,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   if (!hideRunning && !isRail && runningTopics.length > 0)
     sections.push({
       key: 'running',
-      node: (
-        <RunningTasksCard
-          action={placeToggle('running')}
-          bare={isRail}
-          running={runningTopics}
-          showAuthor={teamView}
-        />
-      ),
+      node: <RunningTasksCard bare={isRail} running={runningTopics} showAuthor={teamView} />,
     });
 
   // A first-load failure of the day feed must not make the whole section

@@ -110,6 +110,17 @@ const getAuthorizationStatus = () => {
   });
 };
 
+const SOUND_SETTING = ['unsupported', 'disabled', 'enabled'];
+
+const getSoundSetting = () => {
+  if (!binding) return Promise.resolve('unsupported');
+  return new Promise((resolve) => {
+    binding.getAuthorizationStatus((_status, sound) => {
+      resolve(SOUND_SETTING[sound] || 'unsupported');
+    });
+  });
+};
+
 const requestAuthorization = () => {
   if (!ensureSetup()) return Promise.resolve(false);
   return new Promise((resolve) => {
@@ -119,6 +130,7 @@ const requestAuthorization = () => {
 
 module.exports = {
   getAuthorizationStatus,
+  getSoundSetting,
   isSupported,
   onNotificationEvent,
   requestAuthorization,

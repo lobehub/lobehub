@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as nonStreamToStreamModule from '../../core/openaiCompatibleFactory/nonStreamToStream';
 import * as streamsModule from '../../core/streams';
+import { AgentRuntimeErrorType } from '../../types/error';
 import * as debugStreamModule from '../../utils/debugStream';
 import * as getModelPricingModule from '../../utils/getModelPricing';
 import { LobeAzureOpenAI } from './index';
@@ -154,6 +155,31 @@ describe('LobeAzureOpenAI', () => {
           mode: 'pro',
           summary: 'auto',
         });
+      });
+
+      it('should prune the sampling params GPT-6 Astra rejects on the Responses API', async () => {
+        const mockStream = new ReadableStream() as any;
+        vi.spyOn(instance['client'].responses, 'create').mockResolvedValue(mockStream);
+        vi.spyOn(getModelPricingModule, 'getModelPricing').mockResolvedValue(undefined);
+        vi.spyOn(streamsModule, 'OpenAIResponsesStream').mockReturnValue(new ReadableStream());
+
+        await instance.chat({
+          messages: [{ content: 'Review this migration.', role: 'system' }],
+          model: 'gpt-6-astra',
+          reasoning_effort: 'xhigh',
+          stream: true,
+          temperature: 0.7,
+          top_p: 0.9,
+        } as any);
+
+        const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
+
+        expect(createCall.model).toBe('gpt-6-astra');
+        expect(createCall.reasoning).toEqual({ effort: 'xhigh', summary: 'auto' });
+        expect(createCall.input[0].role).toBe('developer');
+        expect(createCall.temperature).toBeUndefined();
+        expect(createCall.top_logprobs).toBeUndefined();
+        expect(createCall.top_p).toBeUndefined();
       });
 
       it('should use deploymentName for Azure Responses API requests while keeping logical model for pricing', async () => {
@@ -353,6 +379,41 @@ describe('LobeAzureOpenAI', () => {
     });
 
     describe('Error', () => {
+      it('should classify a Responses API remote media download timeout as retryable', async () => {
+        const message =
+          'Unable to download content from the provided URL before the timeout. Check that the URL is publicly accessible and responds promptly, or upload the file and provide a file_id instead.';
+        const apiError = new OpenAI.APIError(
+          400,
+          {
+            code: 'invalid_value',
+            error: {
+              code: 'invalid_value',
+              message,
+              param: 'url',
+              type: 'invalid_request_error',
+            },
+            param: 'url',
+            status: 400,
+            type: 'invalid_request_error',
+          },
+          message,
+          new Headers(),
+        );
+
+        (instance['client'].responses.create as Mock).mockRejectedValue(apiError);
+
+        await expect(
+          instance.chat({
+            messages: [{ content: 'Describe this image', role: 'user' }],
+            model: 'gpt-5.4-mini',
+            temperature: 0,
+          }),
+        ).rejects.toMatchObject({
+          errorType: AgentRuntimeErrorType.RemoteMediaDownloadTimeout,
+          provider: 'azure',
+        });
+      });
+
       it('should return AzureBizError with DeploymentNotFound error', async () => {
         // Arrange
         const error = {
