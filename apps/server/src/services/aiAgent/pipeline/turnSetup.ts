@@ -604,7 +604,7 @@ export const setupTurn = async (
       // (config source of truth), NOT in metadata.
       const existingTopic = await deps.topicModel.findById(topicId);
       topicEditingGroupId = existingTopic?.metadata?.editingGroupId ?? undefined;
-      if (existingTopic?.projectWorkingDirectoryId || existingTopic?.metadata?.projectExecution) {
+      if (existingTopic?.projectWorkingDirectoryId) {
         if (shareGate || (botContext && !resolveDeviceAccessPolicy({ botContext }).canUseDevice))
           throw new Error('Project directory access denied');
         const directory = await new ProjectWorkingDirectoryModel(
@@ -694,7 +694,6 @@ export const setupTurn = async (
       if (
         !requestedDeviceId &&
         !existingTopic?.projectWorkingDirectoryId &&
-        !existingTopic?.metadata?.projectExecution &&
         topicPinnedDeviceId &&
         !isFixedExecutionTargetSelection &&
         agentConfig.agencyConfig?.executionTarget !== 'auto'

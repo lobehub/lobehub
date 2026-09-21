@@ -6,9 +6,7 @@ import { projectWorkingDirectoryService } from '@/services/projectWorkingDirecto
 
 /** UI preflight only; the runtime revalidates the binding before every execution. */
 export async function checkProjectExecution(topic: ChatTopic | undefined, gatewayEnabled: boolean) {
-  if (!topic?.projectWorkingDirectoryId && !topic?.metadata?.projectExecution) return;
-  if (!topic.projectWorkingDirectoryId)
-    throw new Error(t('topics.bindingUnavailable', { ns: 'project' }));
+  if (!topic?.projectWorkingDirectoryId) return;
   if (!gatewayEnabled) throw new Error(t('topics.gatewayUnavailable', { ns: 'project' }));
   const { data: directory } = await projectWorkingDirectoryService.resolve(
     topic.projectWorkingDirectoryId,

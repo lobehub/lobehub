@@ -185,7 +185,6 @@
   "topics.addLocation": "Add a working directory (optional)",
   "topics.all": "All topics",
   "topics.associateFailed": "Could not add conversation to project",
-  "topics.bindingUnavailable": "The project directory binding no longer exists. Reconnect the work location in project settings.",
   "topics.chooseLocation": "Choose a working directory",
   "topics.chooseTopic": "Choose a topic in the sidebar, or create one to start working",
   "topics.complete": "Mark completed",
