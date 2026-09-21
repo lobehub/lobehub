@@ -389,7 +389,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     repoType === 'github' || (!repoType && !!snapshotConfig?.git?.github?.pullRequest);
   const gitPath = filesystemEnvironmentAvailable && isGithub ? workingDirectory : undefined;
   const { data: branchData } = useFetchGitBranch(remoteDeviceId, gitPath);
-  const { data: linkedPR } = useFetchGitLinkedPR(
+  const { data: linkedPR, mutate: refreshPullRequest } = useFetchGitLinkedPR(
     remoteDeviceId,
     gitPath,
     branchData?.branch,
@@ -406,7 +406,6 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
         ? linkedPR.pullRequest
         : (linkedPR?.pullRequest ?? snapshotPR)
       : undefined;
-  const prAvailable = !!pullRequest;
   const paramsAvailable = !isHetero;
   // The in-app browser pages are renderer-retained Electron webviews — desktop only.
   const browserAvailable = isDesktop;
@@ -992,11 +991,12 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                   agentId={activeAgentId}
                   deviceId={remoteDeviceId}
                   environmentAvailable={filesystemEnvironmentAvailable}
-                  prAvailable={prAvailable}
+                  pullRequest={pullRequest}
                   repoType={environmentRepoType}
                   sourcePath={sourceWorkingDirectory}
                   workingDirectory={environmentWorkingDirectory}
                   onOpenTab={openTab}
+                  onRefreshPullRequest={refreshPullRequest}
                 />
               </Flexbox>
             </m.div>

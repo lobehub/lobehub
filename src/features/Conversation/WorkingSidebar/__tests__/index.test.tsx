@@ -205,16 +205,23 @@ vi.mock('../Overview', () => ({
   default: ({
     environmentAvailable,
     onOpenTab,
+    pullRequest,
     workingDirectory,
   }: {
     environmentAvailable: boolean;
     onOpenTab: (tab: string) => void;
+    pullRequest?: { number: number };
     workingDirectory?: string;
   }) => (
     <>
       <button type="button" onClick={() => onOpenTab('review')}>
         Open Review from Overview
       </button>
+      {pullRequest && (
+        <button type="button" onClick={() => onOpenTab('pr')}>
+          Open Pull Request from Overview
+        </button>
+      )}
       {environmentAvailable && <span>Workspace environment</span>}
       {workingDirectory && <span>{workingDirectory}</span>}
     </>
@@ -535,6 +542,21 @@ describe('AgentWorkingSidebar — controlled panel width', () => {
     rerender(<AgentWorkingSidebar availableWidth={1601} />);
     expect(screen.getByLabelText('PR draft')).toHaveValue('');
   });
+
+  it('opens a linked pull request from Overview in the Working Sidebar tab', () => {
+    reviewState.repoType = 'github';
+    reviewState.workingDirectory = '/repo';
+    linkedPR.number = 42;
+    linkedPR.status = 'ok';
+
+    render(<AgentWorkingSidebar />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Pull Request from Overview' }));
+
+    expect(globalStore.openWorkingSidebar).toHaveBeenCalledWith('pr');
+    expect(screen.getByRole('button', { name: '#42' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('seeds the RightPanel with the default width', () => {
     render(<AgentWorkingSidebar />);
 

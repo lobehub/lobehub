@@ -1,5 +1,6 @@
 'use client';
 
+import type { DeviceGitLinkedPullRequest } from '@lobechat/types';
 import { Empty, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { Button, Skeleton, toast } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
@@ -38,11 +39,9 @@ import { dbMessageSelectors } from '@/store/chat/selectors';
 import {
   useFetchGitAheadBehind,
   useFetchGitBranch,
-  useFetchGitLinkedPR,
   useFetchGitWorktrees,
   useReviewPatches,
 } from '@/store/device';
-import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import ProgressSection from '../ProgressSection';
 import { collectChangeStats, isLinkedWorktreeCheckout, shouldShowCiLabel } from './overviewData';
@@ -66,7 +65,9 @@ interface OverviewProps {
   deviceId?: string;
   environmentAvailable: boolean;
   onOpenTab: (tab: string) => void;
-  prAvailable?: boolean;
+  onRefreshPullRequest: () => Promise<unknown>;
+  /** Parent-owned so the Overview row and the on-demand PR tab cannot disagree. */
+  pullRequest?: DeviceGitLinkedPullRequest | null;
   repoType?: string;
   sourcePath?: string;
   workingDirectory?: string;
@@ -81,7 +82,8 @@ const Overview = memo<OverviewProps>(
     deviceId,
     environmentAvailable,
     onOpenTab,
-    prAvailable,
+    onRefreshPullRequest,
+    pullRequest,
     repoType,
     sourcePath,
     workingDirectory,
@@ -121,13 +123,6 @@ const Overview = memo<OverviewProps>(
       deviceId,
       gitPath,
     );
-    const { data: prData, mutate: mutatePR } = useFetchGitLinkedPR(
-      deviceId,
-      gitPath,
-      branch,
-      isGithub,
-    );
-
     const [switcherOpen, setSwitcherOpen] = useState(false);
     const [pulling, setPulling] = useState(false);
     const [pushing, setPushing] = useState(false);
@@ -148,9 +143,9 @@ const Overview = memo<OverviewProps>(
         mutateAheadBehind(),
         mutateReview(),
         mutateWorktrees(),
-        mutatePR(),
+        onRefreshPullRequest(),
       ]);
-    }, [mutateBranch, mutateAheadBehind, mutateReview, mutateWorktrees, mutatePR]);
+    }, [mutateBranch, mutateAheadBehind, mutateReview, mutateWorktrees, onRefreshPullRequest]);
 
     // Flip the displayed branch instantly on checkout; the switcher's
     // onAfterCheckout reconciles once the checkout lands (same as GitStatus).
@@ -203,7 +198,6 @@ const Overview = memo<OverviewProps>(
       }
     }, [deviceId, refreshGit, syncBusy, tDevice, workingDirectory]);
 
-    const pullRequest = prData?.pullRequest;
     const ciStatus = pullRequest?.ciStatus;
     const ci = pullRequest ? getCiVisual(ciStatus) : undefined;
     const prVisual = pullRequest ? PR_STATE_VISUAL[getPullRequestState(pullRequest)] : undefined;
@@ -358,13 +352,7 @@ const Overview = memo<OverviewProps>(
                     {pullRequest.title}
                   </>
                 }
-                onClick={
-                  prAvailable
-                    ? () => onOpenTab('pr')
-                    : pullRequest.url
-                      ? () => openTrustedExternalUrl(pullRequest.url)
-                      : undefined
-                }
+                onClick={() => onOpenTab('pr')}
               />
             </div>
           </Tooltip>
