@@ -5,10 +5,11 @@ import { Flexbox, Icon } from '@lobehub/ui';
 import { ActionIcon, Avatar, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ContainerIcon, LockIcon, XIcon } from 'lucide-react';
-import { memo, type ReactNode } from 'react';
+import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import EnvironmentForm from './EnvironmentForm';
+import InstanceFileBrowser from './InstanceFileBrowser';
 import InstanceSection from './InstanceSection';
 import { repositoryPath } from './repository';
 import { useCanEditEnvironment } from './useCanEditEnvironment';
@@ -79,6 +80,10 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(
     const actions = useEnvironmentActions();
     const { data } = useInstances();
     const canEdit = useCanEditEnvironment()(environment);
+    // Which instance's files are open, by its directory. The browser takes the
+    // whole panel below the header rather than nesting inside the instance
+    // list: a tree at list-row width is a tree nobody can read.
+    const [browsing, setBrowsing] = useState<string | undefined>();
 
     const repository = repositoryPath(environment.configuration);
     const creator =
@@ -118,53 +123,69 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(
           />
         </Flexbox>
 
-        <Flexbox horizontal gap={32}>
-          <Flexbox gap={8}>
-            <FieldLabel>{t('environments.meta.creator')}</FieldLabel>
-            <Flexbox horizontal align={'center'} gap={8}>
-              {/* Name as the avatar value — see EnvironmentItem for why `title` alone does not reach the fallback text. */}
-              <Avatar avatar={environment.creator?.avatar || creator} size={24} title={creator} />
-              <Text>{creator}</Text>
-            </Flexbox>
-          </Flexbox>
-          <Flexbox gap={8}>
-            <FieldLabel>{t('environments.meta.created')}</FieldLabel>
-            {/* The absolute time here, the relative one in the row: the list is
+        {browsing ? (
+          <InstanceFileBrowser root={browsing} onClose={() => setBrowsing(undefined)} />
+        ) : (
+          <>
+            <Flexbox horizontal gap={32}>
+              <Flexbox gap={8}>
+                <FieldLabel>{t('environments.meta.creator')}</FieldLabel>
+                <Flexbox horizontal align={'center'} gap={8}>
+                  {/* Name as the avatar value — see EnvironmentItem for why `title` alone does not reach the fallback text. */}
+                  <Avatar
+                    avatar={environment.creator?.avatar || creator}
+                    size={24}
+                    title={creator}
+                  />
+                  <Text>{creator}</Text>
+                </Flexbox>
+              </Flexbox>
+              <Flexbox gap={8}>
+                <FieldLabel>{t('environments.meta.created')}</FieldLabel>
+                {/* The absolute time here, the relative one in the row: the list is
                 scanned for "is this recent", the panel is read for "when". */}
-            <Text>{new Date(environment.createdAt).toLocaleString()}</Text>
-          </Flexbox>
-        </Flexbox>
+                <Text>{new Date(environment.createdAt).toLocaleString()}</Text>
+              </Flexbox>
+            </Flexbox>
 
-        {/* Said plainly, rather than letting someone discover it by typing into
+            {/* Said plainly, rather than letting someone discover it by typing into
             a field whose save would be refused. A published environment is one
             you can run in; reshaping it stays with whoever made it. */}
-        {!canEdit && (
-          <Flexbox horizontal align={'center'} gap={8}>
-            <Icon icon={LockIcon} size={14} style={{ color: cssVar.colorTextTertiary }} />
-            <Text fontSize={12} type={'secondary'}>
-              {t('environments.visibility.readonlyHint')}
-            </Text>
-          </Flexbox>
-        )}
+            {!canEdit && (
+              <Flexbox horizontal align={'center'} gap={8}>
+                <Icon icon={LockIcon} size={14} style={{ color: cssVar.colorTextTertiary }} />
+                <Text fontSize={12} type={'secondary'}>
+                  {t('environments.visibility.readonlyHint')}
+                </Text>
+              </Flexbox>
+            )}
 
-        <Flexbox className={styles.section}>
-          <InstanceSection
-            adding={adding}
-            editable={canEdit}
-            environmentId={environment.id}
-            onAddingChange={onAddingChange}
-          />
-        </Flexbox>
+            <Flexbox className={styles.section}>
+              <InstanceSection
+                adding={adding}
+                editable={canEdit}
+                environmentId={environment.id}
+                onAddingChange={onAddingChange}
+                onBrowse={setBrowsing}
+              />
+            </Flexbox>
 
-        {canEdit && (
-          <Flexbox className={styles.section}>
-            <EnvironmentForm
-              environment={environment}
-              onSave={({ configuration, description, name }) =>
-                actions.updateEnvironment({ configuration, description, id: environment.id, name })
-              }
-            />
-          </Flexbox>
+            {canEdit && (
+              <Flexbox className={styles.section}>
+                <EnvironmentForm
+                  environment={environment}
+                  onSave={({ configuration, description, name }) =>
+                    actions.updateEnvironment({
+                      configuration,
+                      description,
+                      id: environment.id,
+                      name,
+                    })
+                  }
+                />
+              </Flexbox>
+            )}
+          </>
         )}
       </Flexbox>
     );

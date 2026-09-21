@@ -52,6 +52,7 @@ vi.mock('@/database/models/environmentInstance', () => ({
 
 const mockCopyEnvironment = vi.fn();
 const mockDeleteEnvironment = vi.fn();
+const mockWriteFile = vi.fn();
 
 vi.mock('@/server/services/market', () => ({
   MarketService: vi.fn(function () {
@@ -59,6 +60,7 @@ vi.mock('@/server/services/market', () => ({
       getSandboxWorkspaceClient: () => ({
         copyEnvironment: mockCopyEnvironment,
         deleteEnvironment: mockDeleteEnvironment,
+        writeFile: mockWriteFile,
       }),
     };
   }),
@@ -166,6 +168,38 @@ describe('sandboxWorkspaceRouter', () => {
       ).rejects.toMatchObject({ code: 'CONFLICT' });
 
       expect(mockInstanceDelete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('writeFile', () => {
+    it('passes the contents through to the execution plane', async () => {
+      mockWriteFile.mockResolvedValue({ path: 'work/notes.md' });
+
+      await sandboxWorkspaceRouter
+        .createCaller(ctx)
+        .writeFile({ content: '# notes', path: 'work/notes.md' });
+
+      expect(mockWriteFile).toHaveBeenCalledWith({ content: '# notes', path: 'work/notes.md' });
+    });
+
+    it('refuses a path that climbs out of the workspace', async () => {
+      await expect(
+        sandboxWorkspaceRouter
+          .createCaller(ctx)
+          .writeFile({ content: 'x', path: '../../etc/passwd' }),
+      ).rejects.toThrow();
+
+      expect(mockWriteFile).not.toHaveBeenCalled();
+    });
+
+    it('refuses a body past the size ceiling before it reaches the plane', async () => {
+      await expect(
+        sandboxWorkspaceRouter
+          .createCaller(ctx)
+          .writeFile({ content: 'x'.repeat(1024 * 1024 + 1), path: 'work/big.txt' }),
+      ).rejects.toThrow();
+
+      expect(mockWriteFile).not.toHaveBeenCalled();
     });
   });
 

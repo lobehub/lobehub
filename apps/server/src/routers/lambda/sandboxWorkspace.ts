@@ -35,6 +35,13 @@ const relativePathSchema = z.string().refine(isSafeSandboxCwd, {
 const topicIdSchema = z.string().min(1).max(255).optional();
 
 /**
+ * Ceiling on a single write. Generous for anything a person edits by hand and
+ * small enough that a runaway body is refused before it is buffered — this is
+ * an editor's save path, not a bulk upload.
+ */
+const MAX_FILE_CONTENT_BYTES = 1024 * 1024;
+
+/**
  * "You have not connected GitHub" travels as an error from the connector layer,
  * but for the picker it is an answer, not a failure — the one it is there to
  * help the user fix.
@@ -586,6 +593,24 @@ export const sandboxWorkspaceRouter = router({
   readFile: entitledProcedure
     .input(z.object({ path: relativePathSchema, topicId: topicIdSchema }))
     .query(async ({ ctx, input }) => ctx.client.readFile(input).catch(mapWorkspaceError)),
+
+  /**
+   * Write a file's whole contents, creating it and its parents if needed.
+   *
+   * Text only, because the execution plane's endpoint carries the body as a
+   * JSON string with no encoding field. The cap is this layer's own: the
+   * endpoint declares none, and an unbounded string arrives in memory on both
+   * sides before anything touches a disk.
+   */
+  writeFile: entitledProcedure
+    .input(
+      z.object({
+        content: z.string().max(MAX_FILE_CONTENT_BYTES),
+        path: relativePathSchema,
+        topicId: topicIdSchema,
+      }),
+    )
+    .mutation(async ({ ctx, input }) => ctx.client.writeFile(input).catch(mapWorkspaceError)),
 
   /** Refused while instances still reference it — those go first. */
   removeEnvironment: environmentProcedure
