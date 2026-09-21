@@ -872,6 +872,113 @@ describe('createRouterRuntime', () => {
       );
     });
 
+    it('keeps one request task alive through a fallback started during stream consumption', async () => {
+      let requestOpen = true;
+      let releaseSecondStart!: () => void;
+      let releaseSecondFinish!: () => void;
+      const secondStart = new Promise<void>((resolve) => (releaseSecondStart = resolve));
+      const secondFinish = new Promise<void>((resolve) => (releaseSecondFinish = resolve));
+      let requestSettled!: Promise<void>;
+      let calls = 0;
+      const returned = vi.fn((result: { optionIndex: number; routeRequestManaged?: boolean }) => {
+        expect(result.routeRequestManaged).toBe(true);
+        expect(requestOpen || result.optionIndex === 1).toBe(true);
+        return result.optionIndex === 1 ? secondStart : Promise.resolve();
+      });
+      const finished = vi.fn((result: { optionIndex: number; routeRequestManaged?: boolean }) => {
+        expect(result.routeRequestManaged).toBe(true);
+        return result.optionIndex === 1 ? secondFinish : Promise.resolve();
+      });
+      class MockRuntime implements LobeRuntimeAI {
+        chat = async (_payload: unknown, options?: ChatMethodOptions) => {
+          calls += 1;
+          return calls === 1
+            ? createChatResponse(options, { final: { text: '' } })
+            : createChatResponse(options, { final: { text: 'answer' }, text: 'answer' });
+        };
+      }
+      const scheduleRouteRequestSettled = vi.fn((settled: Promise<void>) => {
+        expect(requestOpen).toBe(true);
+        requestSettled = settled;
+      });
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        onRouteAttempt: returned,
+        onRouteAttemptFinished: finished,
+        routers: [
+          { apiType: 'openai', models: ['gpt-4'], options: [{}, {}], runtime: MockRuntime },
+        ],
+        scheduleRouteRequestSettled,
+        shouldFallbackChatAttempt: () => true,
+      });
+
+      const response = await new Runtime().chat({ messages: [], model: 'gpt-4' });
+      requestOpen = false;
+      expect(await response.text()).toBe('answer');
+      expect(scheduleRouteRequestSettled).toHaveBeenCalledOnce();
+      expect(returned).toHaveBeenCalledTimes(2);
+      expect(finished).toHaveBeenCalledTimes(2);
+
+      let settled = false;
+      void requestSettled.then(() => (settled = true));
+      await Promise.resolve();
+      expect(settled).toBe(false);
+      releaseSecondStart();
+      await Promise.resolve();
+      expect(settled).toBe(false);
+      releaseSecondFinish();
+      await requestSettled;
+      expect(settled).toBe(true);
+    });
+
+    it('settles request work when the streamed response is cancelled', async () => {
+      let requestSettled!: Promise<void>;
+      class MockRuntime implements LobeRuntimeAI {
+        chat = async () => new Response(new ReadableStream());
+      }
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        onRouteAttemptFinished: vi.fn(),
+        routers: [{ apiType: 'openai', models: ['gpt-4'], options: {}, runtime: MockRuntime }],
+        scheduleRouteRequestSettled: (settled) => {
+          requestSettled = settled;
+        },
+        shouldFallbackChatAttempt: () => true,
+      });
+
+      const response = await new Runtime().chat({ messages: [], model: 'gpt-4' });
+      await response.body!.cancel();
+      await expect(requestSettled).resolves.toBeUndefined();
+    });
+
+    it('settles request work when every provider fails before returning a response', async () => {
+      let requestSettled!: Promise<void>;
+      const returned = vi.fn().mockResolvedValue(undefined);
+      class MockRuntime implements LobeRuntimeAI {
+        chat = async () => {
+          throw new Error('provider unavailable');
+        };
+      }
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        onRouteAttempt: returned,
+        onRouteAttemptFinished: vi.fn(),
+        routers: [
+          { apiType: 'openai', models: ['gpt-4'], options: [{}, {}], runtime: MockRuntime },
+        ],
+        scheduleRouteRequestSettled: (settled) => {
+          requestSettled = settled;
+        },
+        shouldFallbackChatAttempt: () => true,
+      });
+
+      await expect(new Runtime().chat({ messages: [], model: 'gpt-4' })).rejects.toThrow(
+        'provider unavailable',
+      );
+      await expect(requestSettled).resolves.toBeUndefined();
+      expect(returned).toHaveBeenCalledTimes(2);
+    });
+
     it('returns a non-streaming JSON response without retrying another route', async () => {
       const finished = vi.fn();
       const returned = vi.fn().mockResolvedValue(undefined);
