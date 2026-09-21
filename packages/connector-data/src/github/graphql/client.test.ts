@@ -34,6 +34,7 @@ const createTransport = (
   request: GitHubConnectorTransport['request'],
 ): GitHubConnectorTransport => ({
   getAuthenticatedUser: async () => ({ id: 1, login: 'neko' }),
+  listAccessibleRepositories: async () => [],
   listRepositoryContributors: async () => [],
   listUserOrganizations: async () => [],
   request,
