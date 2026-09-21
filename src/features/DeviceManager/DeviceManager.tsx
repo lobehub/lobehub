@@ -63,13 +63,6 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorBgContainer};
   `,
-  // The personal page renders inside a settings form card, so the list and the
-  // onboarding state drop their own card chrome — one frame, not two nested.
-  plainCol: css`
-    overflow: hidden;
-    min-width: 0;
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
   emptyHero: css`
     padding-block: 40px;
     padding-inline: 32px;
@@ -244,9 +237,9 @@ const Capabilities = memo(() => {
 
 // Loading placeholder that reuses the list-card chrome and only skeletonises the
 // row text — loading → loaded is a content swap, not a relayout (ux §4.1).
-const ListSkeleton = memo<{ bordered?: boolean }>(({ bordered }) => (
-  <Flexbox className={bordered ? styles.listCol : styles.plainCol} flex={1}>
-    <Flexbox padding={bordered ? 4 : 0}>
+const ListSkeleton = memo(() => (
+  <Flexbox className={styles.listCol} flex={1}>
+    <Flexbox padding={4}>
       <SharedListSkeleton />
     </Flexbox>
   </Flexbox>
@@ -307,7 +300,7 @@ const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope, visibility }
   const isPrivatePool = isWorkspace && visibility === 'private';
   const emptyState = (
     <Flexbox gap={32}>
-      <Flexbox className={isWorkspace ? styles.emptyCard : styles.plainCol}>
+      <Flexbox className={styles.emptyCard}>
         <Flexbox align={'center'} className={styles.emptyHero} gap={12}>
           <span className={styles.heroIcon}>
             <Icon icon={isWorkspace && !isPrivatePool ? ServerIcon : MonitorDownIcon} size={28} />
@@ -364,12 +357,12 @@ const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope, visibility }
       errorVariant={'block'}
       isEmpty={devices.length === 0}
       isLoading={isLoading}
-      loading={<ListSkeleton bordered={isWorkspace} />}
+      loading={<ListSkeleton />}
       onRetry={() => mutate()}
     >
       <Flexbox horizontal align={'flex-start'} gap={16}>
-        <Flexbox className={isWorkspace ? styles.listCol : styles.plainCol} flex={1}>
-          <Flexbox className={styles.listScroll} gap={2} padding={isWorkspace ? 4 : 0}>
+        <Flexbox className={styles.listCol} flex={1}>
+          <Flexbox className={styles.listScroll} gap={2} padding={4}>
             {devices.map((device) => (
               <DeviceItem
                 device={device}

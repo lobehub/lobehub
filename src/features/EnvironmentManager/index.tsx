@@ -1,8 +1,8 @@
 'use client';
 
 import type { EnvironmentVisibility } from '@lobechat/types';
-import { Center, Empty, Flexbox, FormGroup, Icon } from '@lobehub/ui';
-import { ActionIcon, Button, Text } from '@lobehub/ui/base-ui';
+import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
+import { Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ContainerIcon, PlusIcon, RefreshCwIcon } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
@@ -27,16 +27,11 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorBgContainer};
   `,
   /**
-   * Inside a settings group the list drops its own frame: the group is already
-   * a card, and a bordered card within it draws two nested rectangles around
-   * one list. The device manager makes the same call for the same reason.
+   * One frame around the list, on the page's own surface. A settings group
+   * would nest a card inside a card and inset every row by its own padding,
+   * which left each row's hover and selection background floating in a gutter
+   * instead of filling the panel.
    */
-  plainCol: css`
-    overflow: hidden;
-    min-width: 0;
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  /** The standalone frame, for the page that has no group to sit in. */
   listCol: css`
     overflow: hidden;
 
@@ -138,25 +133,20 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
         </Text>
       )}
       <Button
+        icon={<Icon icon={RefreshCwIcon} />}
+        loading={isValidating || instancesValidating}
+        title={t('environments.refresh')}
+        onClick={refresh}
+      />
+      <Button
         icon={<Icon icon={PlusIcon} />}
-        size={'small'}
+        type={'primary'}
         onClick={() => openCreateEnvironmentModal(visibility)}
       >
         {t('environments.create')}
       </Button>
-      <ActionIcon
-        icon={RefreshCwIcon}
-        loading={isValidating || instancesValidating}
-        size={'small'}
-        title={t('environments.refresh')}
-        onClick={refresh}
-      />
     </Flexbox>
   );
-
-  // A group brings its own card, so the list only frames itself when it is the
-  // outermost thing on the page.
-  const frame = tabs ? styles.listCol : styles.plainCol;
 
   const list = (
     <AsyncBoundary
@@ -169,7 +159,7 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
         // Inside the same frame the rows land in, sized to the skeleton's
         // rows: loading, empty and loaded are one surface whose contents
         // change, not three surfaces of three different heights.
-        <Flexbox className={frame}>
+        <Flexbox className={styles.listCol}>
           <Center style={{ minHeight: LIST_MIN_HEIGHT }} width={'100%'}>
             <Empty
               description={t('environments.desc')}
@@ -192,8 +182,8 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
         </Flexbox>
       }
       loading={
-        <Flexbox className={frame}>
-          <Flexbox padding={tabs ? 4 : 0}>
+        <Flexbox className={styles.listCol}>
+          <Flexbox padding={4}>
             <ListSkeleton />
           </Flexbox>
         </Flexbox>
@@ -201,11 +191,8 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
       onRetry={refresh}
     >
       <Flexbox horizontal align={'flex-start'} gap={16}>
-        <Flexbox className={frame} flex={1}>
-          {/* Padding only inside the standalone frame, to keep the rows off its
-              border. In a group the body already insets its contents, and
-              adding to it pushed every row visibly away from the card. */}
-          <Flexbox className={styles.listScroll} gap={2} padding={tabs ? 4 : 0}>
+        <Flexbox className={styles.listCol} flex={1}>
+          <Flexbox className={styles.listScroll} gap={2} padding={4}>
             {environments.map((environment) => (
               <EnvironmentItem
                 environment={environment}
@@ -239,35 +226,22 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
   );
 
   /**
-   * Two frames, one for each page that mounts this.
-   *
-   * With more than one pool, the tabs are the header and they sit on the row
-   * with the actions — the shape the workspace device page draws. With one
-   * pool there is nothing to switch, so the section names itself instead, the
-   * way the personal device page does: a titled group with the actions in its
-   * corner and the list inside it.
+   * One layout for both pages. What sits on the left of the header is the only
+   * difference: tabs where there is a pool to choose, and the section's own
+   * name where there is not.
    */
-  if (tabs)
-    return (
-      <Flexbox gap={16}>
-        <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
-          {tabs}
-          {actions}
-        </Flexbox>
-        {list}
-      </Flexbox>
-    );
-
   return (
-    <FormGroup
-      collapsible={false}
-      extra={actions}
-      gap={16}
-      title={t('environments.mine')}
-      variant={'filled'}
-    >
+    <Flexbox gap={16}>
+      <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
+        {tabs ?? (
+          <Text fontSize={16} weight={600}>
+            {t('environments.mine')}
+          </Text>
+        )}
+        {actions}
+      </Flexbox>
       {list}
-    </FormGroup>
+    </Flexbox>
   );
 });
 
