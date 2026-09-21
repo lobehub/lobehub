@@ -113,36 +113,27 @@ const GithubIntegration = memo<GithubIntegrationProps>(({ onBack }) => {
     } else if (error) toast.error(t('github.installResult.error.unknown', { code: error }));
 
     // An installation that reached the callback without our state (started
-    // on github.com) is not bound until the user confirms it here, in a
-    // signed-in request of their own. One the user already connected needs
-    // no confirmation: a fresh read (not the cached list) decides.
-    if (pending)
-      void (async () => {
-        const installations = await scmService.listInstallations().catch(() => []);
-        if (installations.some((item) => item.installationId === pending)) {
-          toast.success(t('github.installResult.updated'));
-          data.mutate();
-          return;
-        }
-        confirmModal({
-          cancelText: t('cancel', { ns: 'common' }),
-          content: t('github.pending.content', { account: account ?? pending }),
-          okText: t('github.pending.confirm'),
-          onOk: async () => {
-            try {
-              const bound = await scmService.connectInstallation({
-                installationId: pending,
-                provider: 'github',
-              });
-              toast.success(t('github.installResult.success', { account: bound.accountLogin }));
-              data.mutate();
-            } catch {
-              toast.error(t('github.pending.failed'));
-            }
-          },
-          title: t('github.pending.title'),
-        });
-      })();
+    // on github.com) is not bound until the user confirms it here. `pending`
+    // is the single-use claim that callback minted, not an installation id;
+    // the server only issues one for an installation this user does not
+    // already have, so a connected account never reaches this dialog.
+    if (pending) {
+      confirmModal({
+        cancelText: t('cancel', { ns: 'common' }),
+        content: t('github.pending.content', { account: account ?? '' }),
+        okText: t('github.pending.confirm'),
+        onOk: async () => {
+          try {
+            const bound = await scmService.connectInstallation({ claim: pending });
+            toast.success(t('github.installResult.success', { account: bound.accountLogin }));
+            data.mutate();
+          } catch {
+            toast.error(t('github.pending.failed'));
+          }
+        },
+        title: t('github.pending.title'),
+      });
+    }
 
     for (const key of ['installed', 'error', 'account', 'pending']) url.searchParams.delete(key);
     window.history.replaceState({}, '', url.pathname + (url.search ? `?${url.searchParams}` : ''));

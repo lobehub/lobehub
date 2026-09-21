@@ -1,7 +1,8 @@
 import { lambdaClient } from '@/libs/trpc/client';
 
 class ScmService {
-  connectInstallation = async (params: { installationId: string; provider: 'github' }) =>
+  /** Redeem the single-use claim the install callback handed to the page. */
+  connectInstallation = async (params: { claim: string }) =>
     lambdaClient.scm.connectInstallation.mutate(params);
 
   getConfig = async () => lambdaClient.scm.getConfig.query();
