@@ -379,9 +379,11 @@ export class EditorActionImpl {
         result = await this.retrySaveAfterReconcile(id, doc, error, requestSave, canRetry);
       }
 
-      const savedAt = new Date(result.updatedAt);
+      // Old servers omit updatedAt. Keep the known token; conflict reconciliation
+      // refreshes it on the next save without trusting the history-only savedAt.
+      const savedAt = result.updatedAt ? new Date(result.updatedAt) : undefined;
       const current = this.#get().documents[id];
-      if (current?.lastUpdatedTime && savedAt < current.lastUpdatedTime) {
+      if (savedAt && current?.lastUpdatedTime && savedAt < current.lastUpdatedTime) {
         internal_dispatchDocument({ id, type: 'updateDocument', value: { saveStatus: 'saved' } });
         return;
       }
@@ -394,7 +396,7 @@ export class EditorActionImpl {
             current?.content !== currentContent || !isEqual(current?.editorData, currentEditorData),
           lastSavedContent: currentContent,
           lastSavedEditorData: structuredClone(currentEditorData),
-          lastUpdatedTime: savedAt,
+          ...(savedAt ? { lastUpdatedTime: savedAt } : {}),
           saveBlockedByLock: false,
           saveStatus: 'saved',
         },
