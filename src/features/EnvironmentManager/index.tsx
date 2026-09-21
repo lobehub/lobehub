@@ -1,8 +1,8 @@
 'use client';
 
 import type { EnvironmentVisibility } from '@lobechat/types';
-import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
-import { Button, Skeleton, Text } from '@lobehub/ui/base-ui';
+import { Center, Empty, Flexbox, FormGroup, Icon } from '@lobehub/ui';
+import { ActionIcon, Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ContainerIcon, PlusIcon, RefreshCwIcon } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
@@ -97,17 +97,6 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
 
   const environments = data?.environments ?? [];
   const instances = instanceData?.instances ?? [];
-  /**
-   * With nothing to act on, the empty card below is the whole page: it carries
-   * the icon, the explanation and its own create button. A row above it would
-   * add a second create, a refresh with nothing to refresh, and a count of zero
-   * beside a heading that already says there are none.
-   *
-   * Tabs are the exception and the reason this is not simply "hide when empty":
-   * an empty pool still has another pool to switch back to, and that control
-   * lives here.
-   */
-  const showToolbar = !!tabs || !data || environments.length > 0;
   const selected = selectedId
     ? environments.find((environment) => environment.id === selectedId)
     : undefined;
@@ -130,118 +119,143 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
     void refreshInstances();
   };
 
-  return (
-    <Flexbox gap={16}>
-      {/* Whatever narrows the list on the left, whatever acts on it on the
-          right. */}
-      {showToolbar && (
-        <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
-          {/* The count, which is the one fact about the list that the list does
-            not state about itself. It never reads zero: the row it sits in is
-            gone by then. Before the first result the number is unknown rather
-            than zero, so a placeholder of the same width holds the slot and
-            nothing shifts when the count lands. */}
-          {tabs ??
-            (data ? (
-              <Text fontSize={12} type={'secondary'} weight={500}>
-                {t('environments.total', { count: environments.length })}
-              </Text>
-            ) : (
-              <Skeleton height={14} width={72} />
-            ))}
-          <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
-            <Button
-              icon={<Icon icon={RefreshCwIcon} />}
-              loading={isValidating || instancesValidating}
-              title={t('environments.refresh')}
-              onClick={refresh}
+  /**
+   * The count, the way to add one, and the way to refetch. Shared by both
+   * layouts because they are the same three things wherever they sit; only the
+   * frame around them differs. The count is dropped at zero — the empty state
+   * right below already says there are none.
+   */
+  const actions = (
+    <Flexbox horizontal align={'center'} gap={8}>
+      {environments.length > 0 && (
+        <Text fontSize={12} type={'secondary'} weight={500}>
+          {t('environments.total', { count: environments.length })}
+        </Text>
+      )}
+      <Button
+        icon={<Icon icon={PlusIcon} />}
+        size={'small'}
+        onClick={() => openCreateEnvironmentModal(visibility)}
+      >
+        {t('environments.create')}
+      </Button>
+      <ActionIcon
+        icon={RefreshCwIcon}
+        loading={isValidating || instancesValidating}
+        size={'small'}
+        title={t('environments.refresh')}
+        onClick={refresh}
+      />
+    </Flexbox>
+  );
+
+  const list = (
+    <AsyncBoundary
+      data={data}
+      error={error}
+      errorVariant={'block'}
+      isEmpty={environments.length === 0}
+      isLoading={isLoading}
+      empty={
+        // Inside the same frame the rows land in, sized to the skeleton's
+        // rows: loading, empty and loaded are one surface whose contents
+        // change, not three surfaces of three different heights.
+        <Flexbox className={styles.listCol}>
+          <Center style={{ minHeight: LIST_MIN_HEIGHT }} width={'100%'}>
+            <Empty
+              description={t('environments.desc')}
+              descriptionProps={{ fontSize: 13 }}
+              icon={ContainerIcon}
+              style={{ maxWidth: 360 }}
+              action={
+                <Button
+                  icon={<Icon icon={PlusIcon} />}
+                  onClick={() => openCreateEnvironmentModal(visibility)}
+                >
+                  {t('environments.create')}
+                </Button>
+              }
+              title={t(
+                visibility === 'public' ? 'environments.emptyPublished' : 'environments.empty',
+              )}
             />
-            <Button
-              icon={<Icon icon={PlusIcon} />}
-              type={'primary'}
-              onClick={() => openCreateEnvironmentModal(visibility)}
-            >
-              {t('environments.create')}
-            </Button>
+          </Center>
+        </Flexbox>
+      }
+      loading={
+        <Flexbox className={styles.listCol}>
+          <Flexbox padding={4}>
+            <ListSkeleton />
           </Flexbox>
         </Flexbox>
-      )}
-
-      <AsyncBoundary
-        data={data}
-        error={error}
-        errorVariant={'block'}
-        isEmpty={environments.length === 0}
-        isLoading={isLoading}
-        empty={
-          // Inside the same frame the rows land in, sized to the skeleton's
-          // rows: loading, empty and loaded are one surface whose contents
-          // change, not three surfaces of three different heights.
-          <Flexbox className={styles.listCol}>
-            <Center style={{ minHeight: LIST_MIN_HEIGHT }} width={'100%'}>
-              <Empty
-                description={t('environments.desc')}
-                descriptionProps={{ fontSize: 13 }}
-                icon={ContainerIcon}
-                style={{ maxWidth: 360 }}
-                action={
-                  <Button
-                    icon={<Icon icon={PlusIcon} />}
-                    onClick={() => openCreateEnvironmentModal(visibility)}
-                  >
-                    {t('environments.create')}
-                  </Button>
+      }
+      onRetry={refresh}
+    >
+      <Flexbox horizontal align={'flex-start'} gap={16}>
+        <Flexbox className={styles.listCol} flex={1}>
+          <Flexbox className={styles.listScroll} gap={2} padding={4}>
+            {environments.map((environment) => (
+              <EnvironmentItem
+                environment={environment}
+                key={environment.id}
+                selected={environment.id === selectedId}
+                instanceCount={
+                  instances.filter((instance) => instance.environmentId === environment.id).length
                 }
-                title={t(
-                  visibility === 'public' ? 'environments.emptyPublished' : 'environments.empty',
-                )}
+                onCreateInstance={() => createInstance(environment.id)}
+                onSelect={() => select(environment.id)}
               />
-            </Center>
+            ))}
           </Flexbox>
-        }
-        loading={
-          <Flexbox className={styles.listCol}>
-            <Flexbox padding={4}>
-              <ListSkeleton />
-            </Flexbox>
-          </Flexbox>
-        }
-        onRetry={refresh}
-      >
-        <Flexbox horizontal align={'flex-start'} gap={16}>
-          <Flexbox className={styles.listCol} flex={1}>
-            <Flexbox className={styles.listScroll} gap={2} padding={4}>
-              {environments.map((environment) => (
-                <EnvironmentItem
-                  environment={environment}
-                  key={environment.id}
-                  selected={environment.id === selectedId}
-                  instanceCount={
-                    instances.filter((instance) => instance.environmentId === environment.id).length
-                  }
-                  onCreateInstance={() => createInstance(environment.id)}
-                  onSelect={() => select(environment.id)}
-                />
-              ))}
-            </Flexbox>
-          </Flexbox>
-          {selected && (
-            <Flexbox className={styles.detailCol} flex={1}>
-              {/* Keyed on the environment so the form's draft state resets when
+        </Flexbox>
+        {selected && (
+          <Flexbox className={styles.detailCol} flex={1}>
+            {/* Keyed on the environment so the form's draft state resets when
                   the selection changes — a description typed for one
                   environment must not survive into another. */}
-              <EnvironmentDetailPanel
-                adding={adding}
-                environment={selected}
-                key={selected.id}
-                onAddingChange={setAdding}
-                onClose={() => setSelectedId(undefined)}
-              />
-            </Flexbox>
-          )}
+            <EnvironmentDetailPanel
+              adding={adding}
+              environment={selected}
+              key={selected.id}
+              onAddingChange={setAdding}
+              onClose={() => setSelectedId(undefined)}
+            />
+          </Flexbox>
+        )}
+      </Flexbox>
+    </AsyncBoundary>
+  );
+
+  /**
+   * Two frames, one for each page that mounts this.
+   *
+   * With more than one pool, the tabs are the header and they sit on the row
+   * with the actions — the shape the workspace device page draws. With one
+   * pool there is nothing to switch, so the section names itself instead, the
+   * way the personal device page does: a titled group with the actions in its
+   * corner and the list inside it.
+   */
+  if (tabs)
+    return (
+      <Flexbox gap={16}>
+        <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
+          {tabs}
+          {actions}
         </Flexbox>
-      </AsyncBoundary>
-    </Flexbox>
+        {list}
+      </Flexbox>
+    );
+
+  return (
+    <FormGroup
+      collapsible={false}
+      extra={actions}
+      gap={16}
+      title={t('environments.mine')}
+      variant={'filled'}
+    >
+      {list}
+    </FormGroup>
   );
 });
 
