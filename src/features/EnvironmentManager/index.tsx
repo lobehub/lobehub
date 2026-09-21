@@ -193,7 +193,7 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
       }
       loading={
         <Flexbox className={frame}>
-          <Flexbox padding={4}>
+          <Flexbox padding={tabs ? 4 : 0}>
             <ListSkeleton />
           </Flexbox>
         </Flexbox>
@@ -202,7 +202,10 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
     >
       <Flexbox horizontal align={'flex-start'} gap={16}>
         <Flexbox className={frame} flex={1}>
-          <Flexbox className={styles.listScroll} gap={2} padding={4}>
+          {/* Padding only inside the standalone frame, to keep the rows off its
+              border. In a group the body already insets its contents, and
+              adding to it pushed every row visibly away from the card. */}
+          <Flexbox className={styles.listScroll} gap={2} padding={tabs ? 4 : 0}>
             {environments.map((environment) => (
               <EnvironmentItem
                 environment={environment}
