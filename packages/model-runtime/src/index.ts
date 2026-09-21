@@ -40,6 +40,7 @@ export { LobeAkashChatAI } from './providers/akashchat';
 export { LobeAntGroupAI } from './providers/antgroup';
 export { LobeAnthropicAI } from './providers/anthropic';
 export * from './providers/anthropic/modelId';
+export { LobeAvalAI } from './providers/avalai';
 export { LobeAzureAI } from './providers/azureai';
 export { LobeAzureOpenAI } from './providers/azureOpenai';
 export { LobeBailianCodingPlanAI } from './providers/bailianCodingPlan';
