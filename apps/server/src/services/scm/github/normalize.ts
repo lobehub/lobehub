@@ -1,11 +1,11 @@
 import type {
   ScmChangeRequestEventKind,
+  ScmChangeRequestSnapshot,
   ScmChangeRequestState,
   ScmCheck,
   ScmInstallationRepository,
+  ScmInstallationSnapshot,
 } from '@lobechat/types';
-
-import type { ScmChangeRequestSnapshot, ScmInstallationSnapshot } from '@/database/models/scm';
 
 import type { ScmActor, ScmInboundEvent } from '../types';
 

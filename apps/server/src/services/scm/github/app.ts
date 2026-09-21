@@ -1,8 +1,7 @@
-import type { ScmInstallationRepository } from '@lobechat/types';
+import type { ScmInstallationRepository, ScmInstallationSnapshot } from '@lobechat/types';
 import debug from 'debug';
 import { App, Octokit } from 'octokit';
 
-import type { ScmInstallationSnapshot } from '@/database/models/scm';
 import { scmEnv } from '@/envs/scm';
 
 const log = debug('lobe-server:scm:github-app');

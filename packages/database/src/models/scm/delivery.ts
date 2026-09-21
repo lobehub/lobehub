@@ -1,19 +1,13 @@
-import type { ScmProvider, ScmWebhookDeliveryStatus } from '@lobechat/types';
+import type {
+  ScmClaimDeliveryParams,
+  ScmProvider,
+  ScmWebhookDeliveryStatus,
+} from '@lobechat/types';
 import { and, eq, lt } from 'drizzle-orm';
 
 import type { ScmWebhookDeliveryItem } from '../../schemas';
 import { scmWebhookDeliveries } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-
-export interface ClaimScmDeliveryParams {
-  action?: string | null;
-  deliveryId: string;
-  event: string;
-  installationId?: string | null;
-  number?: number | null;
-  provider: ScmProvider;
-  repoFullName?: string | null;
-}
 
 /**
  * The idempotency gate for inbound webhooks. `claim` inserts the delivery id
@@ -23,7 +17,7 @@ export interface ClaimScmDeliveryParams {
 export class ScmWebhookDeliveryModel {
   static claim = async (
     db: LobeChatDatabase,
-    params: ClaimScmDeliveryParams,
+    params: ScmClaimDeliveryParams,
   ): Promise<ScmWebhookDeliveryItem | null> => {
     const [row] = await db
       .insert(scmWebhookDeliveries)

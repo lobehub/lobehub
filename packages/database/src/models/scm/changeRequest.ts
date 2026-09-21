@@ -1,71 +1,19 @@
 import type {
+  ScmApplyChecksParams,
+  ScmApplyChecksResult,
   ScmChangeRequestEventKind,
-  ScmChangeRequestMetadata,
-  ScmChangeRequestState,
+  ScmChangeRequestLinks,
   ScmCheck,
   ScmCiStatus,
   ScmProvider,
   ScmReviewDecision,
+  ScmUpsertChangeRequestParams,
 } from '@lobechat/types';
 import { and, desc, eq, isNull } from 'drizzle-orm';
 
 import type { ScmChangeRequestItem } from '../../schemas';
 import { scmChangeRequests } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-
-/** Provider facts about a change request, as normalized from a webhook payload or API read. */
-export interface ScmChangeRequestSnapshot {
-  authorExternalId?: string | null;
-  authorExternalLogin?: string | null;
-  baseRef?: string | null;
-  closedAt?: Date | null;
-  externalId?: string | null;
-  headRef?: string | null;
-  headSha?: string | null;
-  isDraft?: boolean;
-  mergedAt?: Date | null;
-  mergedByExternalId?: string | null;
-  mergeStateStatus?: string | null;
-  metadata?: ScmChangeRequestMetadata;
-  number: number;
-  provider: ScmProvider;
-  repoExternalId?: string | null;
-  repoFullName: string;
-  state: ScmChangeRequestState;
-  title?: string | null;
-  url: string;
-}
-
-export interface ScmChangeRequestLinks {
-  acceptanceId?: string | null;
-  installationId?: string | null;
-  taskId?: string | null;
-  topicId?: string | null;
-  workId?: string | null;
-}
-
-export interface UpsertScmChangeRequestParams extends ScmChangeRequestSnapshot {
-  eventAt?: Date;
-  eventKind?: ScmChangeRequestEventKind;
-  links?: ScmChangeRequestLinks;
-  userId: string;
-  workspaceId?: string | null;
-}
-
-export interface ApplyChecksParams {
-  checks: ScmCheck[];
-  /** Commit the checks describe; a mismatch with the row's head is dropped as stale. */
-  headSha: string;
-  /** When true, `checks` replaces the stored set instead of merging by id. */
-  replace?: boolean;
-}
-
-export interface ApplyChecksResult {
-  applied: boolean;
-  ciStatus: ScmCiStatus | null;
-  previousCiStatus: ScmCiStatus | null;
-  row: ScmChangeRequestItem;
-}
 
 /** Conclusions that make the rollup a failure. Cancelled and skipped runs are neutral. */
 const FAILING_CONCLUSIONS = new Set(['action_required', 'failure', 'startup_failure', 'timed_out']);
@@ -202,7 +150,7 @@ export class ScmChangeRequestModel {
    */
   static upsert = async (
     db: LobeChatDatabase,
-    params: UpsertScmChangeRequestParams,
+    params: ScmUpsertChangeRequestParams,
   ): Promise<ScmChangeRequestItem> => {
     const existing = await ScmChangeRequestModel.findByIdentity(
       db,
@@ -323,8 +271,8 @@ export class ScmChangeRequestModel {
   static applyChecks = async (
     db: LobeChatDatabase,
     id: string,
-    params: ApplyChecksParams,
-  ): Promise<ApplyChecksResult | null> =>
+    params: ScmApplyChecksParams,
+  ): Promise<ScmApplyChecksResult<ScmChangeRequestItem> | null> =>
     // Deliveries for the jobs of one commit arrive together and are handled
     // concurrently; each merges its own check into the stored set, so the
     // read and the write must not interleave or the last writer drops the

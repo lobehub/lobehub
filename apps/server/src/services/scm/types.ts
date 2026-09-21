@@ -1,11 +1,11 @@
 import type {
   ScmChangeRequestEventKind,
+  ScmChangeRequestSnapshot,
   ScmCheck,
   ScmInstallationRepository,
+  ScmInstallationSnapshot,
   ScmProvider,
 } from '@lobechat/types';
-
-import type { ScmChangeRequestSnapshot, ScmInstallationSnapshot } from '@/database/models/scm';
 
 /** A provider user as it appears on an event. */
 export interface ScmActor {

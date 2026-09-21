@@ -1,4 +1,9 @@
-import type { ScmIdentityMetadata, ScmProvider } from '@lobechat/types';
+import type {
+  ScmDecryptedIdentity,
+  ScmIdentityCredentials,
+  ScmProvider,
+  ScmUpsertIdentityParams,
+} from '@lobechat/types';
 import { and, eq } from 'drizzle-orm';
 
 import type { ScmIdentityItem } from '../../schemas';
@@ -8,28 +13,6 @@ import type { LobeChatDatabase } from '../../type';
 interface GateKeeper {
   decrypt: (ciphertext: string) => Promise<{ plaintext: string }>;
   encrypt: (plaintext: string) => Promise<string>;
-}
-
-/** Plaintext shape stored (encrypted) in `scm_identities.credentials`. */
-export interface ScmIdentityCredentials {
-  accessToken: string;
-  refreshToken?: string;
-  refreshTokenExpiresAt?: string;
-}
-
-export interface UpsertScmIdentityParams {
-  /** Plaintext credentials; encrypted before writing. Omit to keep the stored ones. */
-  credentials?: ScmIdentityCredentials | null;
-  externalLogin: string;
-  externalUserId: string;
-  metadata?: ScmIdentityMetadata;
-  provider: ScmProvider;
-  tokenExpiresAt?: Date | null;
-  userId: string;
-}
-
-export interface DecryptedScmIdentity extends Omit<ScmIdentityItem, 'credentials'> {
-  credentials: ScmIdentityCredentials | null;
 }
 
 /**
@@ -59,7 +42,7 @@ export class ScmIdentityModel {
     provider: ScmProvider,
     userId: string,
     gateKeeper?: GateKeeper,
-  ): Promise<DecryptedScmIdentity | null> => {
+  ): Promise<ScmDecryptedIdentity<ScmIdentityItem> | null> => {
     const [row] = await db
       .select()
       .from(scmIdentities)
@@ -79,7 +62,7 @@ export class ScmIdentityModel {
    */
   static upsert = async (
     db: LobeChatDatabase,
-    params: UpsertScmIdentityParams,
+    params: ScmUpsertIdentityParams,
     gateKeeper?: GateKeeper,
   ): Promise<ScmIdentityItem> => {
     const encrypted =
@@ -123,7 +106,7 @@ const encryptCredentials = async (
 const decryptRow = async (
   row: ScmIdentityItem,
   gateKeeper?: GateKeeper,
-): Promise<DecryptedScmIdentity> => {
+): Promise<ScmDecryptedIdentity<ScmIdentityItem>> => {
   if (!row.credentials) return { ...row, credentials: null };
 
   const plaintext = gateKeeper

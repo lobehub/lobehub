@@ -1,6 +1,6 @@
+import type { ScmChangeRequestLinks } from '@lobechat/types';
 import { and, desc, eq, isNotNull, isNull, type SQL, sql } from 'drizzle-orm';
 
-import type { ScmChangeRequestLinks } from '@/database/models/scm';
 import { acceptances, verifyRuns, works } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 

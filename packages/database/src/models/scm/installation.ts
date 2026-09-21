@@ -1,35 +1,14 @@
 import type {
-  ScmInstallationAccountType,
-  ScmInstallationMetadata,
+  ScmBindInstallationParams,
   ScmInstallationRepository,
+  ScmInstallationSnapshot,
   ScmProvider,
-  ScmRepositorySelection,
 } from '@lobechat/types';
 import { and, desc, eq, isNull, ne } from 'drizzle-orm';
 
 import type { ScmInstallationItem } from '../../schemas';
 import { scmInstallations } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-
-/** Provider facts about an installation, as normalized from the provider API or webhook. */
-export interface ScmInstallationSnapshot {
-  accountExternalId: string;
-  accountLogin: string;
-  accountType: ScmInstallationAccountType;
-  installationId: string;
-  metadata?: ScmInstallationMetadata;
-  provider: ScmProvider;
-  repositories?: ScmInstallationRepository[];
-  repositorySelection: ScmRepositorySelection;
-  suspendedAt?: Date | null;
-}
-
-export interface BindScmInstallationParams extends ScmInstallationSnapshot {
-  installedByExternalLogin?: string | null;
-  installedByExternalUserId?: string | null;
-  userId: string;
-  workspaceId?: string | null;
-}
 
 /**
  * CRUD for `scm_installations`. Callers are server-side (webhook ingest, the
@@ -89,7 +68,7 @@ export class ScmInstallationModel {
    */
   static bind = async (
     db: LobeChatDatabase,
-    params: BindScmInstallationParams,
+    params: ScmBindInstallationParams,
   ): Promise<ScmInstallationItem> => {
     const values = {
       accountExternalId: params.accountExternalId,
