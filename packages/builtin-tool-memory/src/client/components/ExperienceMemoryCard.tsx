@@ -1,13 +1,12 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Accordion, Avatar, Tag, Text } from '@lobehub/ui/base-ui';
+import { Accordion, Avatar, Spin, Tag, Text } from '@lobehub/ui/base-ui';
 import { Steps } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
 
 import BubblesLoading from '@/components/BubblesLoading';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import StreamingMarkdown from '@/components/StreamingMarkdown';
 import { highlightTextStyles } from '@/styles';
 
@@ -114,7 +113,7 @@ export const ExperienceMemoryCard = memo<ExperienceMemoryCardProps>(({ data, loa
         <Flexbox flex={1}>
           <div className={styles.title}>{title || 'Experience Memory'}</div>
         </Flexbox>
-        {loading && <NeuralNetworkLoading size={20} />}
+        {loading && <Spin size="middle" variant="network" />}
       </Flexbox>
 
       {/* When has STAR content: collapse summary */}

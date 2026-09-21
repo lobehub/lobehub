@@ -1,5 +1,6 @@
 import { type ToolIntervention } from '@lobechat/types';
 import { Block, Icon, Tooltip } from '@lobehub/ui';
+import { Spin } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import {
   AlertTriangle,
@@ -13,8 +14,6 @@ import {
 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 
 import { hasToolResultBody } from '../toolResultBody';
 
@@ -79,7 +78,7 @@ const StatusIndicator = memo<StatusIndicatorProps>(
     } else if (hasResult || isToolComplete) {
       icon = <Icon color={cssVar.colorSuccess} icon={successIcon ?? Check} />;
     } else {
-      icon = <NeuralNetworkLoading size={16} />;
+      icon = <Spin size="small" variant="network" />;
     }
 
     return (

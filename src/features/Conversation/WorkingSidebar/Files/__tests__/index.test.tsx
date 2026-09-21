@@ -249,10 +249,6 @@ vi.mock('antd-style', async (importOriginal) => {
   };
 });
 
-vi.mock('@/components/NeuralNetworkLoading', () => ({
-  default: () => <div />,
-}));
-
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 const setReveal = (path: string, nonce: number) => {

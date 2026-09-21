@@ -29,10 +29,6 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
   toast: { error: messageError, success: messageSuccess },
 }));
 
-vi.mock('@/components/NeuralNetworkLoading', () => ({
-  default: () => <div data-testid="neural-network-loading" />,
-}));
-
 vi.mock('@/components/AsyncError', () => ({
   default: ({ onRetry }: { onRetry?: () => void }) => (
     <button data-testid="async-error" onClick={onRetry}>

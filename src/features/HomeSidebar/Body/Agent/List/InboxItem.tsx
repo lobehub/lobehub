@@ -2,10 +2,8 @@
 
 import { DEFAULT_INBOX_AVATAR } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import { Icon } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui/base-ui';
+import { Avatar, Spin } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { Loader2 } from 'lucide-react';
 import { type CSSProperties } from 'react';
 import { memo } from 'react';
 
@@ -83,7 +81,7 @@ const InboxItem = memo<InboxItemProps>(({ className, style }) => {
             <span className={styles.wrapper}>
               {avatarNode}
               <span className={styles.runningBadge}>
-                <Icon spin icon={Loader2} size={9} />
+                <Spin size={9} />
               </span>
             </span>
           ) : (

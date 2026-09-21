@@ -1,7 +1,7 @@
 'use client';
 
 import { Center, Flexbox, TextArea } from '@lobehub/ui';
-import { Button, Tag, Text } from '@lobehub/ui/base-ui';
+import { Button, Spin, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { SendHorizontalIcon, SparklesIcon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -9,7 +9,6 @@ import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { getProjectConversationStartPath } from '@/features/Projects/Layout/navigation';
 import ProjectDisabled from '@/features/Projects/ProjectDisabled';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -100,7 +99,7 @@ const ProjectWorkspace = memo(() => {
   if (isLoading || !detail)
     return (
       <Center height={'100%'}>
-        <NeuralNetworkLoading />
+        <Spin size="small" />
       </Center>
     );
 

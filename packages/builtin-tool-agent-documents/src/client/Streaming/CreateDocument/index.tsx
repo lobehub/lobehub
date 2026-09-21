@@ -2,12 +2,12 @@
 
 import type { BuiltinStreamingProps } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
+import { Spin } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { FileTextIcon } from 'lucide-react';
 import { memo } from 'react';
 
 import BubblesLoading from '@/components/BubblesLoading';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import StreamingMarkdown from '@/components/StreamingMarkdown';
 
 import type { CreateDocumentArgs } from '../../../types';
@@ -54,7 +54,7 @@ export const CreateDocumentStreaming = memo<BuiltinStreamingProps<CreateDocument
           <Flexbox flex={1}>
             <div className={styles.title}>{title}</div>
           </Flexbox>
-          <NeuralNetworkLoading size={20} />
+          <Spin size="middle" variant="network" />
         </Flexbox>
         {!content ? (
           <Flexbox paddingBlock={16} paddingInline={12}>

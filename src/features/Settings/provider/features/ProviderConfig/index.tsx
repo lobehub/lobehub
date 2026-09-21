@@ -4,11 +4,11 @@ import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { AES_GCM_URL, BASE_PROVIDER_DOC_URL, FORM_STYLE } from '@lobechat/const';
 import { type FormGroupItemType, type FormItemProps } from '@lobehub/ui';
 import { Center, Flexbox, Form, Icon, stopPropagation, Tooltip } from '@lobehub/ui';
-import { Avatar, Skeleton, Switch } from '@lobehub/ui/base-ui';
+import { Avatar, Skeleton, Spin, Switch } from '@lobehub/ui/base-ui';
 import { useDebounceFn } from 'ahooks';
 import { Form as AntdForm } from 'antd';
 import { createStaticStyles, cssVar, cx, responsive } from 'antd-style';
-import { InfoIcon, Loader2Icon, LockIcon } from 'lucide-react';
+import { InfoIcon, LockIcon } from 'lucide-react';
 import { AiProviderBaseURLSchema } from 'model-bank/aiProvider';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useLayoutEffect, useRef } from 'react';
@@ -287,7 +287,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
                   placeholder={t('providerModels.config.apiKey.placeholder', { name })}
                   suffix={
                     configUpdating && (
-                      <Icon spin icon={Loader2Icon} style={{ color: cssVar.colorTextTertiary }} />
+                      <Spin size="small" style={{ color: cssVar.colorTextTertiary }} />
                     )
                   }
                 />
@@ -350,9 +350,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
                 t('providerModels.config.baseURL.placeholder')
               }
               suffix={
-                configUpdating && (
-                  <Icon spin icon={Loader2Icon} style={{ color: cssVar.colorTextTertiary }} />
-                )
+                configUpdating && <Spin size="small" style={{ color: cssVar.colorTextTertiary }} />
               }
             />
           ),

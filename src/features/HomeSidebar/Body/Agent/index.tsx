@@ -8,6 +8,7 @@ import {
   accordionStyles,
   AccordionTrigger,
   ActionIcon,
+  Spin,
   Text,
 } from '@lobehub/ui/base-ui';
 import { cx } from 'antd-style';
@@ -16,7 +17,6 @@ import React, { memo, type MouseEvent, Suspense, useCallback, useMemo } from 're
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useFetchAgentLabels } from '@/hooks/useFetchAgentLabels';
@@ -77,18 +77,18 @@ const Agent = memo<AgentProps>(({ itemKey }) => {
               <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
                 {t(titleKey)}
               </Text>
-              {isRevalidating && <NeuralNetworkLoading size={14} />}
+              {isRevalidating && <Spin size="small" />}
             </Flexbox>
           </AccordionTrigger>
           <Flexbox
             horizontal
             align="center"
+            gap={2}
             className={cx(
               'accordion-action',
               accordionStyles.action,
               accordionStyles.actionBorderless,
             )}
-            gap={2}
           >
             {/* The flat view-all page adapts per mode: workspace gets the
                 workspace/private segments + per-user pin + author column;

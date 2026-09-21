@@ -2,7 +2,7 @@
 
 import type { ProjectFileIndexEntry } from '@lobechat/electron-client-ipc';
 import { Center, copyToClipboard, Empty, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
-import { ActionIcon, Button, DropdownMenu, Input, toast } from '@lobehub/ui/base-ui';
+import { ActionIcon, Button, DropdownMenu, Input, Spin, toast } from '@lobehub/ui/base-ui';
 import type { GitStatusEntry } from '@pierre/trees';
 import { createStaticStyles } from 'antd-style';
 import {
@@ -20,7 +20,6 @@ import type { DragEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { startWorkspaceFileDrag } from '@/features/ChatInput/InputEditor/workspaceFileDragData';
 import type { ExplorerTreeNode } from '@/features/ExplorerTree';
 import {
@@ -568,7 +567,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
   if (!data && isLoading) {
     return (
       <Center flex={1}>
-        <NeuralNetworkLoading size={48} />
+        <Spin size="large" />
       </Center>
     );
   }
@@ -630,7 +629,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
       </div>
       {isEmpty && isFiltering && isSearching ? (
         <Center flex={1}>
-          <NeuralNetworkLoading size={32} />
+          <Spin size="large" />
         </Center>
       ) : isEmpty ? (
         <Center flex={1} gap={8} paddingBlock={24}>

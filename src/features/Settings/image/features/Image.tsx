@@ -2,9 +2,8 @@
 
 import { type UserImageConfig } from '@lobechat/types';
 import { type FormGroupItemType } from '@lobehub/ui';
-import { Form, Icon } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui/base-ui';
-import { Loader2Icon } from 'lucide-react';
+import { Form } from '@lobehub/ui';
+import { Skeleton, Spin } from '@lobehub/ui/base-ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -47,9 +46,7 @@ const ImageSettings = memo(() => {
           tooltip: reason,
         },
       ],
-      extra: isUpdating ? (
-        <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.6 }} />
-      ) : undefined,
+      extra: isUpdating ? <Spin size="small" style={{ opacity: 0.6 }} /> : undefined,
       title: (
         <SettingsSearchAnchor id={'service-model-image'}>
           {t('settingImage.defaultCount.title')}

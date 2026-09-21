@@ -13,9 +13,9 @@ import type {
   HeterogeneousProviderConfig,
 } from '@lobechat/types';
 import { CopyButton, Flexbox, Icon, Input, Tooltip, TooltipGroup } from '@lobehub/ui';
-import { ActionIcon, Button, Segmented, Select, Tag, Text } from '@lobehub/ui/base-ui';
+import { ActionIcon, Button, Segmented, Select, Spin, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { Loader2Icon, PencilLine, RefreshCw, XCircle } from 'lucide-react';
+import { PencilLine, RefreshCw, XCircle } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -567,7 +567,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
       if (detecting) {
         return (
           <Flexbox horizontal align="center" gap={8}>
-            <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.6 }} />
+            <Spin size="small" style={{ opacity: 0.6 }} />
             <Text className={styles.metaText}>
               {t('heterogeneousStatus.detecting', { name: displayName })}
             </Text>

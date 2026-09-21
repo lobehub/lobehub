@@ -8,6 +8,7 @@ import {
   DropdownMenuPositioner,
   DropdownMenuRoot,
   DropdownMenuTrigger,
+  Spin,
   toast,
 } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -16,7 +17,6 @@ import {
   FolderPlusIcon,
   GitBranchIcon,
   GitForkIcon,
-  LoaderCircleIcon,
   RefreshCwIcon,
   SearchIcon,
   Trash2Icon,
@@ -745,7 +745,7 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
                           </div>
                           <div className={styles.actionCell}>
                             {removing ? (
-                              <Icon spin icon={LoaderCircleIcon} size={13} />
+                              <Spin size={13} />
                             ) : worktree.current ? (
                               <Icon className={styles.check} icon={CheckIcon} size={14} />
                             ) : (

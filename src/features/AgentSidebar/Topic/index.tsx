@@ -7,13 +7,13 @@ import {
   AccordionPanel,
   accordionStyles,
   AccordionTrigger,
+  Spin,
   Text,
 } from '@lobehub/ui/base-ui';
 import { cx } from 'antd-style';
 import React, { memo, Suspense, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useFetchChatTopics } from '@/hooks/useFetchChatTopics';
 import { useChatStore } from '@/store/chat';
@@ -59,7 +59,7 @@ const Topic = memo<TopicProps>(({ expanded, itemKey }) => {
                   {topicCount}
                 </Text>
               )}
-              {isRevalidating && <NeuralNetworkLoading size={14} />}
+              {isRevalidating && <Spin size="small" />}
             </Flexbox>
           </AccordionTrigger>
           <div

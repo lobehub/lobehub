@@ -6,10 +6,11 @@ import {
   AccordionPanel,
   accordionStyles,
   AccordionTrigger,
+  Spin,
   Text,
 } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
-import { HashIcon, Loader2 } from 'lucide-react';
+import { HashIcon } from 'lucide-react';
 import React, { memo, useCallback, useMemo, useState } from 'react';
 
 import { useHomeStore } from '@/store/home';
@@ -51,7 +52,7 @@ const GroupItem = memo<SidebarGroup>(({ items, id, name, visibility }) => {
 
   const groupIcon = useMemo(() => {
     if (isUpdating) {
-      return <Icon spin icon={Loader2} style={{ opacity: 0.5 }} />;
+      return <Spin size="small" style={{ opacity: 0.5 }} />;
     }
     return <Icon icon={HashIcon} style={{ opacity: 0.5 }} />;
   }, [isUpdating]);

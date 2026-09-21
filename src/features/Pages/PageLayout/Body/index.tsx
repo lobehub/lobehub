@@ -8,6 +8,7 @@ import {
   AccordionRoot,
   accordionStyles,
   AccordionTrigger,
+  Spin,
   Text,
 } from '@lobehub/ui/base-ui';
 import { cx } from 'antd-style';
@@ -17,7 +18,6 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import AsyncBoundary from '@/components/AsyncBoundary';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import PageEmpty from '@/features/PageEmpty';
 import { usePermission } from '@/hooks/usePermission';
@@ -128,7 +128,7 @@ const Body = memo(() => {
                 {section.title}
                 {section.count > 0 && ` ${section.count}`}
               </Text>
-              {isValidating && <NeuralNetworkLoading size={14} />}
+              {isValidating && <Spin size="small" />}
             </Flexbox>
           </AccordionTrigger>
           <Flexbox

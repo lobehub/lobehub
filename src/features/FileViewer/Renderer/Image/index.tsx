@@ -1,9 +1,8 @@
 'use client';
 
 import { Center } from '@lobehub/ui';
+import { Spin } from '@lobehub/ui/base-ui';
 import { memo, useState } from 'react';
-
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 
 interface ImageViewerProps {
   fileId: string;
@@ -17,8 +16,8 @@ const ImageViewer = memo<ImageViewerProps>(({ url }) => {
 
   return (
     <Center height={'100%'} width={'100%'}>
-      {!isLoaded && <NeuralNetworkLoading size={36} />}
-      { }
+      {!isLoaded && <Spin size="large" />}
+      {}
       <img
         alt="Image preview"
         src={url}

@@ -2,12 +2,11 @@
 
 import type { VerifyAgentPlanConfig } from '@lobechat/types';
 import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
-import { Button, Tag, Text, toast } from '@lobehub/ui/base-ui';
+import { Button, Spin, Tag, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import {
   checkHeadMeta,
   type CheckReviewInput,
@@ -75,7 +74,7 @@ const Body = memo(() => {
   if (isLoading) {
     return (
       <Center height={'100%'}>
-        <NeuralNetworkLoading size={40} />
+        <Spin size="large" />
       </Center>
     );
   }

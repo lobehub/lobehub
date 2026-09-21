@@ -5,7 +5,7 @@ import {
 } from '@lobechat/const';
 import { resolveEffectiveReasoningChatConfig } from '@lobechat/model-runtime/utils/modelExtendParams';
 import { Flexbox, Icon, TextArea } from '@lobehub/ui';
-import { Select, SliderWithInput, Switch } from '@lobehub/ui/base-ui';
+import { Select, SliderWithInput, Spin, Switch } from '@lobehub/ui/base-ui';
 import { Form as AntdForm } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { debounce } from 'es-toolkit/compat';
@@ -18,7 +18,6 @@ import { useTranslation } from 'react-i18next';
 import type { PartialDeep } from 'type-fest';
 
 import InfoTooltip from '@/components/InfoTooltip';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import ModelSelect from '@/features/ModelSelect';
 import ControlsForm from '@/features/ModelSwitchPanel/components/ControlsForm';
 import { usePermission } from '@/hooks/usePermission';
@@ -845,7 +844,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
           <span className={styles.headerTitle}>{panelTitle}</span>
           {updating && (
             <div className={styles.headerLoading}>
-              <NeuralNetworkLoading size={18} />
+              <Spin size="small" />
             </div>
           )}
         </div>

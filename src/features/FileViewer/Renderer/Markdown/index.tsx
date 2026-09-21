@@ -1,14 +1,13 @@
 'use client';
 
 import { Center, Flexbox, Highlighter, Icon, Markdown } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
+import { Spin, Tabs } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CodeIcon, EyeIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 
 import { useTextFileLoader } from '../../hooks/useTextFileLoader';
 import NotSupport from '../../NotSupport';
@@ -73,7 +72,7 @@ const MarkdownViewer = memo<MarkdownViewerProps>(({ url }) => {
   if (loading || fileData === null)
     return (
       <Center height={'100%'} width={'100%'}>
-        <NeuralNetworkLoading size={36} />
+        <Spin size="large" />
       </Center>
     );
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, Icon, Input, TextArea } from '@lobehub/ui';
-import { ActionIcon, Button, Popover, Text, toast } from '@lobehub/ui/base-ui';
+import { ActionIcon, Button, Popover, Spin, Text, toast } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
@@ -19,7 +19,6 @@ import { Link, useParams } from 'react-router';
 import urlJoin from 'url-join';
 
 import GeneratingBorder from '@/components/GeneratingBorder';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import { useResolvedAgentRouteId } from '@/features/AgentRoute/useResolvedAgentRouteId';
 import NavHeader from '@/features/NavHeader';
@@ -460,7 +459,7 @@ const CreateDomainPage = memo(() => {
                         justify={'space-between'}
                       >
                         <Flexbox horizontal align={'center'} gap={8}>
-                          <NeuralNetworkLoading size={18} />
+                          <Spin size="small" variant="network" />
                           <div
                             aria-label={t('create.generating')}
                             className={styles.generatingTextViewport}

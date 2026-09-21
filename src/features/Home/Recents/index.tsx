@@ -7,6 +7,7 @@ import {
   accordionStyles,
   AccordionTrigger,
   ActionIcon,
+  Spin,
   Text,
 } from '@lobehub/ui/base-ui';
 import { cx } from 'antd-style';
@@ -23,7 +24,6 @@ import { memo, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { openCustomizeSidebarModal } from '@/features/HomeSidebar/Body/CustomizeSidebarModal';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useCacheScope } from '@/libs/swr/useCacheScope';
@@ -140,7 +140,7 @@ const Recents = memo<RecentsProps>(({ itemKey }) => {
               <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
                 {t('recents')}
               </Text>
-              {syncStatus?.isValidating && query && <NeuralNetworkLoading size={14} />}
+              {syncStatus?.isValidating && query && <Spin size="small" />}
             </Flexbox>
           </AccordionTrigger>
           <div

@@ -1,6 +1,7 @@
 import { Icon } from '@lobehub/ui';
+import { Spin } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { CheckIcon, CircleX, Loader2 } from 'lucide-react';
+import { CheckIcon, CircleX } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -19,7 +20,7 @@ const ServerStatusControl = memo<ServerStatusControlProps>(
 
     // Loading states
     if (isConnecting || isWaitingAuth) {
-      return <Icon spin color={cssVar.colorTextDescription} icon={Loader2} />;
+      return <Spin size="small" style={{ color: cssVar.colorTextDescription }} />;
     }
 
     // No server yet - show nothing (click to connect)

@@ -6,7 +6,6 @@ import { Avatar, Button, Button as LobeButton, confirmModal } from '@lobehub/ui/
 import { cssVar } from 'antd-style';
 import {
   CircleCheck,
-  Loader2,
   MoreHorizontalIcon,
   RotateCcw,
   SquareArrowOutUpRight,
@@ -247,7 +246,7 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
     const renderAction = () => {
       if (isConnecting || isWaitingAuth) {
         return (
-          <Button disabled icon={<Icon spin icon={Loader2} />} type="default">
+          <Button disabled loading type="default">
             {t('tools.composio.connect', { defaultValue: 'Connect' })}
           </Button>
         );
@@ -338,7 +337,7 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
     // users can tell what is connected instead of hitting a blank detail panel.
     const renderNavExtra = () => {
       if (isConnecting || isWaitingAuth) {
-        return <Button disabled icon={<Icon spin icon={Loader2} />} size="small" type="text" />;
+        return <Button disabled loading size="small" type="text" />;
       }
       if (isConnected) {
         return (

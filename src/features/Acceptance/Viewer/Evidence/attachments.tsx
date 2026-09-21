@@ -2,9 +2,9 @@
 
 import type { AcceptanceAttachment } from '@lobechat/types';
 import { Flexbox, Icon, Image } from '@lobehub/ui';
-import { Button, toast, Upload } from '@lobehub/ui/base-ui';
+import { Button, Spin, toast, Upload } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx, useResponsive } from 'antd-style';
-import { ImagePlus, Loader2, X } from 'lucide-react';
+import { ImagePlus, X } from 'lucide-react';
 import { type ClipboardEvent, memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -222,7 +222,7 @@ export const AttachmentStrip = memo<AttachmentStripProps>(
         ))}
         {uploading && (
           <div className={cx(styles.thumb, styles.thumbLoading)}>
-            <Icon spin icon={Loader2} size={16} />
+            <Spin size="small" />
           </div>
         )}
       </Flexbox>

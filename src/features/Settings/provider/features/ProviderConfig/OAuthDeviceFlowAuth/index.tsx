@@ -3,10 +3,10 @@
 import { CheckCircleFilled } from '@ant-design/icons';
 import { MAX_WIDTH } from '@lobechat/const';
 import { CopyButton, Flexbox, Icon } from '@lobehub/ui';
-import { Avatar, Button, confirmModal, Modal } from '@lobehub/ui/base-ui';
+import { Avatar, Button, confirmModal, Modal, Spin } from '@lobehub/ui/base-ui';
 import { Typography } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { Loader2Icon, LogOutIcon, UnplugIcon } from 'lucide-react';
+import { LogOutIcon, UnplugIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -234,7 +234,7 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
       if (state === 'requesting' || !deviceCodeInfo)
         return (
           <div className={styles.content}>
-            <Icon spin icon={Loader2Icon} size={24} />
+            <Spin size="middle" />
             <Text type="secondary">{t('providerModels.config.oauth.connecting')}</Text>
           </div>
         );
@@ -278,7 +278,7 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
           </Flexbox>
 
           <div className={styles.pollingHint}>
-            <Icon spin icon={Loader2Icon} />
+            <Spin size="small" />
             <span>{t('providerModels.config.oauth.polling')}</span>
           </div>
         </div>

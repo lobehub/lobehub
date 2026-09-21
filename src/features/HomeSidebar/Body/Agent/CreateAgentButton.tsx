@@ -1,13 +1,12 @@
 'use client';
 
 import { Block, Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { ActionIcon, DropdownMenu, Text } from '@lobehub/ui/base-ui';
+import { ActionIcon, DropdownMenu, Spin, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDownIcon, PlusIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { usePermission } from '@/hooks/usePermission';
 import { SessionDefaultGroup } from '@/types/session';
 
@@ -123,11 +122,7 @@ const CreateAgentButton = memo<CreateAgentButtonProps>(({ groupId, className, vi
       onClick={handleClick}
     >
       <Center flex={'none'} height={28} width={28}>
-        {isMutatingAgent ? (
-          <NeuralNetworkLoading size={14} />
-        ) : (
-          <Icon icon={PlusIcon} size={'small'} />
-        )}
+        {isMutatingAgent ? <Spin size="small" /> : <Icon icon={PlusIcon} size={'small'} />}
       </Center>
       <Text style={{ flex: 1 }} type={'secondary'}>
         {t('addAgent')}

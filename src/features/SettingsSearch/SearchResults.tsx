@@ -1,9 +1,8 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Spin, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { Loader2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -58,7 +57,7 @@ const SearchResults = memo<SearchResultsProps>(({ isIndexing, query, results }) 
         {isIndexing ? (
           // A zero-result answer is not authoritative while the pinyin dict is
           // still loading — show a spinner instead of a false empty state.
-          <Icon spin color={cssVar.colorTextSecondary} icon={Loader2Icon} />
+          <Spin size="small" style={{ color: cssVar.colorTextSecondary }} />
         ) : (
           <Text fontSize={12} type={'secondary'}>
             {t('settingsSearch.empty', { keyword })}

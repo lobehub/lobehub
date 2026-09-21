@@ -1,10 +1,9 @@
 import { Center, Flexbox } from '@lobehub/ui';
-import { Accordion, Text } from '@lobehub/ui/base-ui';
+import { Accordion, Spin, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, type ReactNode, useState } from 'react';
 
 import AsyncError from '@/components/AsyncError';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 
 export interface SkillSectionHeader {
   /** Wrap the section in a collapsible Accordion. Defaults to true. */
@@ -93,7 +92,7 @@ const Body = memo<BodyProps>(({ children, emptyText, error, isEmpty, isLoading, 
   if (isLoading) {
     return (
       <Center paddingBlock={12}>
-        <NeuralNetworkLoading size={24} />
+        <Spin size="middle" />
       </Center>
     );
   }

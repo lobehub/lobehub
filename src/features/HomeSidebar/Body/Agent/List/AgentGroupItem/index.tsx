@@ -1,9 +1,9 @@
 import { GROUP_CHAT_URL } from '@lobechat/const';
 import { type SidebarAgentItem } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Tag } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, Spin, Tag } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { Loader2, PinIcon } from 'lucide-react';
+import { PinIcon } from 'lucide-react';
 import { type CSSProperties, type DragEvent } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -84,7 +84,7 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className, onNavigate }) 
   // Memoize avatar icon (show loader when updating)
   const avatarIcon = useMemo(() => {
     if (isUpdating) {
-      return <Icon spin color={cssVar.colorTextDescription} icon={Loader2} size={18} />;
+      return <Spin size="small" style={{ color: cssVar.colorTextDescription }} />;
     }
 
     // If avatar is a string, it's a custom group avatar

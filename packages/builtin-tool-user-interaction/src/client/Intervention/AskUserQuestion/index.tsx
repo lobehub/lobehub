@@ -9,11 +9,10 @@ import {
 } from '@lobechat/shared-tool-ui/ask-user';
 import type { BuiltinInterventionProps } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { Alert, Button, Text } from '@lobehub/ui/base-ui';
+import { Alert, Button, Spin, Text } from '@lobehub/ui/base-ui';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useConversationStore } from '@/features/Conversation/store';
 import { dataSelectors } from '@/features/Conversation/store/slices/data/selectors';
 import { useChatStore } from '@/store/chat';
@@ -81,7 +80,7 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
   if (submissionPhase === 'submitting' || submissionPhase === 'checking') {
     return (
       <Flexbox horizontal align="center" gap={8} padding={8} role="status">
-        <NeuralNetworkLoading size={16} />
+        <Spin size="small" variant="network" />
         <Text type="secondary">
           {t(
             submissionPhase === 'submitting'

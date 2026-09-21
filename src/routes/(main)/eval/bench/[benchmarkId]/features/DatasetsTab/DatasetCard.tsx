@@ -1,12 +1,11 @@
 import { DropdownMenu, Flexbox } from '@lobehub/ui';
-import { ActionIcon, Button, confirmModal, Tag, toast } from '@lobehub/ui/base-ui';
+import { ActionIcon, Button, confirmModal, Spin, Tag, toast } from '@lobehub/ui/base-ui';
 import { Card } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ArrowRight, ChevronRight, Database, Ellipsis, Pencil, Play, Trash2 } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { agentEvalService } from '@/services/agentEval';
 
@@ -264,7 +263,7 @@ const DatasetCard = memo<DatasetCardProps>(
           <div className={styles.expandedSection}>
             {loading ? (
               <Flexbox align="center" justify="center" style={{ padding: '48px 24px' }}>
-                <NeuralNetworkLoading size={48} />
+                <Spin size="large" />
               </Flexbox>
             ) : total === 0 ? (
               <TestCaseEmptyState onAddCase={onAddCase} onImport={onImport} />

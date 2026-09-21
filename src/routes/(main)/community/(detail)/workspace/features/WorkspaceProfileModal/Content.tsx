@@ -2,10 +2,10 @@
 
 import { OFFICIAL_URL } from '@lobechat/const';
 import { Center, Flexbox, Icon, Input, TextArea, Tooltip } from '@lobehub/ui';
-import { Accordion, Button, Text, toast, Upload, useModalContext } from '@lobehub/ui/base-ui';
+import { Accordion, Button, Spin, Text, toast, Upload, useModalContext } from '@lobehub/ui/base-ui';
 import { Form, Input as AntInput } from 'antd';
 import { cssVar } from 'antd-style';
-import { CircleHelp, Globe, ImagePlus, Loader2, Trash2 } from 'lucide-react';
+import { CircleHelp, Globe, ImagePlus, Trash2 } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -108,7 +108,7 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
     }[namespaceAvailability];
     return (
       <Flexbox horizontal align="center" gap={6} style={{ color, fontSize: 12 }}>
-        {namespaceAvailability === 'checking' && <Icon spin icon={Loader2} size={13} />}
+        {namespaceAvailability === 'checking' && <Spin size={13} />}
         {t(`user.workspaceProfile.fields.namespace.${namespaceAvailability}` as any)}
       </Flexbox>
     );

@@ -2,12 +2,11 @@
 
 import { type BlockProps, type GenericItemType, type IconProps } from '@lobehub/ui';
 import { Block, Center, ContextMenuTrigger, Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Spin, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { type FocusEvent, type PointerEvent, type ReactNode } from 'react';
 import { memo } from 'react';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { isModifierClick } from '@/utils/navigation';
 
 import { type LazyActions, useLazyActions } from './useLazyActions';
@@ -197,7 +196,7 @@ const NavItem = memo<NavItemProps>(
             width={28}
           >
             {loading ? (
-              <NeuralNetworkLoading size={iconSize} />
+              <Spin size={iconSize} />
             ) : (
               <Icon color={iconColor} icon={icon} size={iconSize} />
             )}

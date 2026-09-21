@@ -1,7 +1,8 @@
 import { SiReact } from '@icons-pack/react-simple-icons';
 import { Icon } from '@lobehub/ui';
+import { Spin } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { CodeXml, GlobeIcon, ImageIcon, Loader2, OrigamiIcon } from 'lucide-react';
+import { CodeXml, GlobeIcon, ImageIcon, OrigamiIcon } from 'lucide-react';
 import { memo } from 'react';
 
 interface ArtifactProps {
@@ -10,8 +11,7 @@ interface ArtifactProps {
 
 const SIZE = 28;
 const ArtifactIcon = memo<ArtifactProps>(({ type }) => {
-  if (!type)
-    return <Icon spin icon={Loader2} size={SIZE} style={{ color: cssVar.colorTextSecondary }} />;
+  if (!type) return <Spin size={SIZE} style={{ color: cssVar.colorTextSecondary }} />;
 
   switch (type) {
     case 'application/lobe.artifacts.code': {

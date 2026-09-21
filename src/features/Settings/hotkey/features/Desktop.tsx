@@ -1,10 +1,9 @@
 'use client';
 
 import { type FormGroupItemType } from '@lobehub/ui';
-import { Form, HotkeyInput, Icon } from '@lobehub/ui';
-import { Skeleton, toast } from '@lobehub/ui/base-ui';
+import { Form, HotkeyInput } from '@lobehub/ui';
+import { Skeleton, Spin, toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
-import { Loader2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -71,7 +70,7 @@ const HotkeySetting = memo(() => {
 
   const desktop: FormGroupItemType = {
     children: DESKTOP_HOTKEYS_REGISTRATION.map((item) => mapHotkeyItem(item)),
-    extra: loading && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />,
+    extra: loading && <Spin size="small" style={{ opacity: 0.5 }} />,
     title: (
       <SettingsSearchAnchor id={'hotkey-desktop'}>{t('hotkey.group.desktop')}</SettingsSearchAnchor>
     ),

@@ -3,8 +3,8 @@
 import { type BinaryStatus } from '@lobechat/electron-client-ipc';
 import { type FormGroupItemType } from '@lobehub/ui';
 import { CopyButton, Flexbox, Form, Icon, Tooltip } from '@lobehub/ui';
-import { Button, Tag, Text } from '@lobehub/ui/base-ui';
-import { CheckCircle2, Loader2Icon, RefreshCw, XCircle } from 'lucide-react';
+import { Button, Spin, Tag, Text } from '@lobehub/ui/base-ui';
+import { CheckCircle2, RefreshCw, XCircle } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -81,7 +81,7 @@ const ToolStatusDisplay = memo<ToolStatusDisplayProps>(({ status, isDetecting })
   if (isDetecting) {
     return (
       <Flexbox horizontal align="center" gap={8}>
-        <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />
+        <Spin size="small" style={{ opacity: 0.5 }} />
         <Text type="secondary">{t('settingSystemTools.detecting')}</Text>
       </Flexbox>
     );

@@ -1,12 +1,11 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Progress, Tag, Text } from '@lobehub/ui/base-ui';
+import { Progress, Spin, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
 import BubblesLoading from '@/components/BubblesLoading';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import StreamingMarkdown from '@/components/StreamingMarkdown';
 
 import type { IdentityMemoryViewModel } from './identityMemoryViewModel';
@@ -65,7 +64,7 @@ export const IdentityMemoryCard = memo<IdentityMemoryCardProps>(
           </Flexbox>
           {identityType && <Tag>{identityType}</Tag>}
           {relationship && <Tag color={'info'}>{relationship}</Tag>}
-          {loading && <NeuralNetworkLoading size={20} />}
+          {loading && <Spin size="middle" variant="network" />}
         </Flexbox>
 
         {hasIdentityContent ? (

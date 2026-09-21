@@ -1,12 +1,11 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Progress, Tag, Text } from '@lobehub/ui/base-ui';
+import { Progress, Spin, Tag, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
 
 import BubblesLoading from '@/components/BubblesLoading';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import StreamingMarkdown from '@/components/StreamingMarkdown';
 
 import type { AddContextMemoryParams } from '../../types';
@@ -72,7 +71,7 @@ export const ContextMemoryCard = memo<ContextMemoryCardProps>(({ data, loading }
         </Flexbox>
         {contextType && <Tag>{contextType}</Tag>}
         {status && <Tag color={STATUS_COLORS[status] || 'default'}>{status.replace('_', ' ')}</Tag>}
-        {loading && <NeuralNetworkLoading size={20} />}
+        {loading && <Spin size="middle" variant="network" />}
       </Flexbox>
 
       {hasContextContent ? (

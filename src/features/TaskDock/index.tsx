@@ -1,11 +1,10 @@
 import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Text } from '@lobehub/ui/base-ui';
+import { ActionIcon, Spin, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   CheckIcon,
   ChevronDownIcon,
   CircleSlashIcon,
-  LoaderCircleIcon,
   TriangleAlertIcon,
   XIcon,
 } from 'lucide-react';
@@ -165,7 +164,7 @@ const TaskDock = memo(() => {
         return <Icon color={cssVar.colorTextDescription} icon={CircleSlashIcon} size={16} />;
       }
       default: {
-        return <Icon spin icon={LoaderCircleIcon} size={16} />;
+        return <Spin size="small" />;
       }
     }
   }, [status]);

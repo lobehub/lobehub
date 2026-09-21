@@ -64,8 +64,6 @@ vi.mock('antd', async (importOriginal) => ({
   App: { useApp: () => ({ message: { error: vi.fn() } }) },
 }));
 
-vi.mock('@/components/NeuralNetworkLoading', () => ({ default: () => <div>loading</div> }));
-
 vi.mock('@/features/Acceptance', async () => ({
   // The real row/list primitives: the assertions cover the shared grammar.
   ...(await vi.importActual('@/features/Acceptance/CriterionList')),
