@@ -32,6 +32,7 @@ import {
   currentWindow,
   dayKeyOf,
   type DaySpend,
+  discoverSessionBuckets,
   formatCost,
   formatTokens,
   isCalendarMonthAvailable,
@@ -813,9 +814,14 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId, provider })
     };
   }, [externalAccountId, provider]);
 
-  // The 5-hour session window comes first: it is the window an agent actually
-  // works inside, and the one that stops a run mid-task.
+  // The session window comes first: it is the window an agent actually
+  // works inside, and the one that stops a run mid-task. Codex reports one
+  // primary bucket per rate-limit scope, so each discovered bucket gets its
+  // own series instead of folding into the base session view.
   const seriesOptions = useMemo(() => {
+    const sessionBuckets = discoverSessionBuckets(readings).filter(
+      (bucket) => bucket.scopeKey !== '',
+    );
     const scoped = [
       ...new Set(
         readings
@@ -829,6 +835,10 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId, provider })
 
     return [
       { label: t('heteroAgent.claudeQuota.calendar.sessionWindow'), value: 'session:' },
+      ...sessionBuckets.map((bucket) => ({
+        label: bucket.limitName ?? bucket.scopeKey,
+        value: `session:${bucket.scopeKey}`,
+      })),
       { label: t('heteroAgent.quota.weekly'), value: 'weekly:' },
       ...scoped.map((key) => ({
         label: t('heteroAgent.claudeQuota.scopedWeekly', { model: key }),

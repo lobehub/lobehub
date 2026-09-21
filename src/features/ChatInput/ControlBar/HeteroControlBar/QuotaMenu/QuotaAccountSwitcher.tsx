@@ -72,9 +72,18 @@ const QuotaAccountSwitcher = memo<{
           }
         />
       </Flexbox>
-      <Button size={'small'} style={{ flex: 'none' }} onClick={openManager}>
-        {t('heteroAgent.claudeQuota.manage.entry')}
-      </Button>
+      {/*
+       * The account manager edits provider-blind agent bindings and runtime
+       * routing only honors them for claude-code, so offering it from another
+       * provider's panel could pin a foreign account onto Claude runs. Until
+       * management and routing are provider-scoped end to end, the other
+       * providers get a calendar-only header.
+       */}
+      {provider === 'claude-code' && (
+        <Button size={'small'} style={{ flex: 'none' }} onClick={openManager}>
+          {t('heteroAgent.claudeQuota.manage.entry')}
+        </Button>
+      )}
     </Flexbox>
   );
 });

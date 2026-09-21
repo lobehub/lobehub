@@ -1,12 +1,16 @@
+import type { QuotaLimitReading } from '@lobechat/heterogeneous-agents/quota';
 import dayjs from 'dayjs';
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildBurnSeries,
+  buildDailyBurn,
   buildDailyHeatLevels,
   buildDailySpend,
   buildSessionGrid,
   buildWindowStats,
   currentWindow,
+  discoverSessionBuckets,
   formatTokens,
   isCalendarMonthAvailable,
   matchesSeries,
@@ -16,6 +20,7 @@ import {
   selectProviderQuotaAccount,
   selectQuotaAccount,
   seriesId,
+  SESSION_SERIES,
   shouldShowHeatDot,
   trackedCostOf,
   utilizationLevelOf,
@@ -263,6 +268,136 @@ describe('monthly quota series', () => {
       resetsAt,
       windowStartAt: resetsAt - MONTHLY_WINDOW_MS,
     });
+  });
+});
+
+describe('scoped session buckets (codex)', () => {
+  const OTHER_SERIES: QuotaSeriesKey = { scopeKey: 'codex_other', type: 'session' };
+
+  const sessionReading = (
+    scopeKey: string,
+    capturedAt: number,
+    resetsAt: number | null,
+    utilization: number,
+    windowMinutes = 300,
+    limitName: string | null = null,
+  ): QuotaLimitReading => ({
+    capturedAt,
+    limitName,
+    limitType: 'session',
+    resetsAt,
+    scopeKey,
+    utilization,
+    windowMinutes,
+  });
+
+  it('keeps session buckets with distinct scopeKeys apart', () => {
+    const baseReading = sessionReading('', 0, null, 40);
+    const scopedReading = sessionReading('codex_other', 0, null, 40);
+
+    expect(matchesSeries(baseReading, SESSION_SERIES)).toBe(true);
+    expect(matchesSeries(scopedReading, SESSION_SERIES)).toBe(false);
+    expect(matchesSeries(scopedReading, OTHER_SERIES)).toBe(true);
+    expect(matchesSeries(baseReading, OTHER_SERIES)).toBe(false);
+    // Claude's legacy alias still lands in the base session series.
+    expect(matchesSeries({ ...baseReading, limitType: 'five_hour' }, SESSION_SERIES)).toBe(true);
+  });
+
+  it('buckets session windows by scopeKey instead of merging them', () => {
+    expect(windowSeriesIdOf('session', '')).toBe('session:');
+    expect(windowSeriesIdOf('session', 'codex_other')).toBe('session:codex_other');
+    expect(windowSeriesIdOf('five_hour', 'codex_other')).toBe('session:codex_other');
+  });
+
+  it('sizes a bucket window from its own windowMinutes, not the 5-hour default', () => {
+    const now = at('2026-08-09T12:00:00');
+    const resetsAt = at('2026-08-09T12:40:00');
+
+    const live = currentWindow(
+      [sessionReading('codex_other', now - 60_000, resetsAt, 55, 60)],
+      OTHER_SERIES,
+      now,
+    );
+
+    expect(live).toMatchObject({ resetsAt, windowStartAt: resetsAt - hour });
+  });
+
+  it('finds the live window per bucket, not across buckets', () => {
+    const now = at('2026-08-09T12:00:00');
+    const baseResetsAt = at('2026-08-09T15:00:00');
+    const otherResetsAt = at('2026-08-09T13:00:00');
+    const readings = [
+      sessionReading('', now - 60_000, baseResetsAt, 30),
+      sessionReading('codex_other', now - 30_000, otherResetsAt, 70, 60),
+    ];
+
+    expect(currentWindow(readings, SESSION_SERIES, now)).toMatchObject({
+      resetsAt: baseResetsAt,
+      windowStartAt: baseResetsAt - 5 * hour,
+    });
+    expect(currentWindow(readings, OTHER_SERIES, now)).toMatchObject({
+      resetsAt: otherResetsAt,
+      windowStartAt: otherResetsAt - hour,
+    });
+  });
+
+  it('burns each bucket from its own consecutive samples', () => {
+    const t0 = at('2026-08-09T08:00:00');
+    const baseResetsAt = at('2026-08-09T13:00:00');
+    const readings = [
+      sessionReading('', t0, baseResetsAt, 10),
+      sessionReading('codex_other', t0 + 10 * 60_000, at('2026-08-09T09:00:00'), 60, 60),
+      sessionReading('', t0 + 20 * 60_000, baseResetsAt, 30),
+    ];
+
+    // 10 -> 30 inside one window: 20 points, unpolluted by the other bucket's 60.
+    expect(buildDailyBurn(readings, SESSION_SERIES)).toEqual(new Map([['2026-08-09', 20]]));
+    // A single sample has no delta to attribute.
+    expect(buildDailyBurn(readings, OTHER_SERIES).size).toBe(0);
+  });
+
+  it("drops deltas spanning more than the bucket's own window", () => {
+    const t0 = at('2026-08-09T08:00:00');
+    const readings = [
+      sessionReading('codex_other', t0, t0 + hour, 80, 60),
+      sessionReading('codex_other', t0 + 2 * hour, t0 + 3 * hour, 20, 60),
+    ];
+
+    // A 2-hour gap inside a 60-minute bucket can hide entire windows.
+    expect(buildDailyBurn(readings, OTHER_SERIES).size).toBe(0);
+  });
+
+  it('draws the burn curve from one bucket only', () => {
+    const resetsAt = at('2026-08-09T15:00:00');
+    const window: QuotaWindowSpan = {
+      peakUtilization: 40,
+      rateLimitedAt: null,
+      resetsAt,
+      windowStartAt: resetsAt - 5 * hour,
+    };
+    const readings = [
+      sessionReading('', resetsAt - 4 * hour, resetsAt, 20),
+      sessionReading('codex_other', resetsAt - 3 * hour, resetsAt, 90, 60),
+      sessionReading('', resetsAt - 2 * hour, resetsAt, 40),
+    ];
+
+    expect(buildBurnSeries(readings, SESSION_SERIES, window).map((p) => p.utilization)).toEqual([
+      0, 20, 40,
+    ]);
+  });
+
+  it('enumerates one series option per session bucket, base first', () => {
+    const buckets = discoverSessionBuckets([
+      sessionReading('codex_other', 0, null, 10, 60, 'GPT-5 Codex'),
+      sessionReading('', 0, null, 20),
+      sessionReading('codex_spark', 0, null, 30, 60),
+    ]);
+
+    expect(buckets).toEqual([
+      { limitName: null, scopeKey: '' },
+      { limitName: 'GPT-5 Codex', scopeKey: 'codex_other' },
+      { limitName: null, scopeKey: 'codex_spark' },
+    ]);
   });
 });
 

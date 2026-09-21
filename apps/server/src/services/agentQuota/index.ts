@@ -409,7 +409,7 @@ export class AgentQuotaService {
    */
   selectForAgent = async (
     agentId: string,
-    options: { modelScope?: string; now?: number } = {},
+    options: { modelScope?: string; now?: number; provider?: string } = {},
   ): Promise<{
     accountId: string;
     credentialMode: string;
@@ -434,9 +434,19 @@ export class AgentQuotaService {
 
   private selectAccountId = async (
     agentId: string,
-    options: { modelScope?: string; now?: number },
+    options: { modelScope?: string; now?: number; provider?: string },
   ): Promise<{ accountId: string; reason: 'pinned' | 'balanced' } | null> => {
-    const bindings = (await this.bindings.listByAgent(agentId)).filter((b) => b.enabled);
+    let bindings = (await this.bindings.listByAgent(agentId)).filter((b) => b.enabled);
+    // Bindings are written provider-blind; a caller that names its provider
+    // must never be routed onto another provider's account, pinned or pooled.
+    if (options.provider) {
+      const candidates = await Promise.all(
+        bindings.map((binding) => this.accounts.findById(binding.accountId)),
+      );
+      bindings = bindings.filter(
+        (binding, index) => candidates[index]?.provider === options.provider,
+      );
+    }
     const pinned = bindings.find((b) => b.role === QuotaBindingRole.pinned);
     if (pinned) return { accountId: pinned.accountId, reason: 'pinned' };
 

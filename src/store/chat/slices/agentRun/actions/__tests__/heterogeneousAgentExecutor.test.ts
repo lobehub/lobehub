@@ -4889,6 +4889,43 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(codexLedgerCall![0].externalAccountId).toBe('chatgpt-acc-1');
     });
 
+    // A fast first turn must not beat a slow sampler: the ledger row is
+    // permanent, so it waits for the identity read instead of landing
+    // unattributed (Codex review on PR #19770).
+    it('holds the codex ledger write until the sampler identity settles', async () => {
+      let resolveIdentity!: (value: unknown) => void;
+      mockGetCodexQuota.mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveIdentity = resolve;
+        }),
+      );
+
+      await runWithEvents(
+        [
+          codexSessionConfigured('gpt-5.3-codex'),
+          codexThreadStarted(),
+          codexTurnStarted(),
+          codexAgentMessage('item_0', 'Done.'),
+          codexTurnCompleted({ input_tokens: 100, output_tokens: 50 }),
+        ],
+        {
+          params: {
+            heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+          },
+        },
+      );
+
+      // The turn already completed, but the identity read is still pending.
+      expect(mockRecordQuotaUsage).not.toHaveBeenCalled();
+
+      resolveIdentity({ identity: { externalAccountId: 'chatgpt-acc-slow' } });
+      await vi.waitFor(() => expect(mockRecordQuotaUsage).toHaveBeenCalled());
+      const codexLedgerCall = mockRecordQuotaUsage.mock.calls.find(
+        ([p]: any) => p.provider === 'codex',
+      );
+      expect(codexLedgerCall![0].externalAccountId).toBe('chatgpt-acc-slow');
+    });
+
     // kimi-code must stay out of the ledger: its adapter emits no usage, and
     // even if a usage-bearing turn_metadata event arrived, the gate only
     // ledgers subscription-billed providers (claude-code, codex).
