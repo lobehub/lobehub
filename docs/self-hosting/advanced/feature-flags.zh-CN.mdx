@@ -12,6 +12,10 @@ tags:
 
 除了基础的环境变量配置外，LobeHub 还提供了一些特性标志（Feature Flags），用于控制是否全局启用某个功能，或者根据需要对特定用户群体或环境启用或禁用功能。
 
+## 核对部署版本
+
+开关名称和默认值可能随版本变化。应检查所部署版本的定义，不能只依赖最新 `main` 分支。[功能状态标签](/zh/docs/usage/feature-status)用于描述开放范围，不是开关名称。本页不提供未经核验的交互式助理分享开关。
+
 ## 特性标志环境变量 `FEATURE_FLAGS`
 
 - 类型：可选
@@ -19,7 +23,7 @@ tags:
 - 默认值：`-`
 - 示例：`"-welcome_suggest"`
 
-所有的功能统一以特性标志 `FEATURE_FLAGS` 作为唯一的配置变量。
+`FEATURE_FLAGS` 控制这里列出的布尔开关，不能替代服务配置、权限、凭据或部署要求。仅打开一个开关，不代表功能已经可用。
 
 你可以通过上述配置语法来实现更多的功能组合。所有的功能配置项都是布尔类型，通过 `+` 来启用，通过 `-` 来关闭。
 
@@ -35,6 +39,7 @@ tags:
 | `openai_api_key`         | 允许用户自定义 OpenAI API Key。              | 开启  |
 | `openai_proxy_url`       | 允许用户自定义 OpenAI 代理 URL。               | 开启  |
 | `api_key_manage`         | 控制 API 密钥管理页面 (/profile/apikey) 的访问。 | 关闭  |
+| `agent_share`            | 控制新建或重新启用交互式助理分享；还需部署支持，详见下文边界。 | 关闭  |
 | `edit_agent`             | 允许用户编辑助手。                            | 开启  |
 | `ai_image`               | 控制 AI 图像生成功能和页面 (/image)。            | 开启  |
 | `speech_to_text`         | 启用语音转文本功能。                           | 开启  |
@@ -47,5 +52,28 @@ tags:
 | `cloud_promotion`        | 控制用户菜单中云服务推广链接的显示。                   | 关闭  |
 | `commercial_hide_github` | 隐藏设置页面底部的 GitHub 相关链接（需要商业授权）。       | 关闭  |
 | `commercial_hide_docs`   | 隐藏文档和帮助菜单，包括更新日志、文档和反馈（需要商业授权）。      | 关闭  |
+
+## 交互式助理分享：部署与灰度边界
+
+以下行为已按提交 `659db0780b263f023019337a48f23e17e77e260d` 核验，其他版本可能不同。
+
+[`agent_share` 定义](https://github.com/lobehub/lobehub/blob/659db0780b263f023019337a48f23e17e77e260d/packages/app-config/src/featureFlags/schema.ts)的默认值为 `false`。它控制创建者的灰度开放范围，不控制访客对已有分享的访问。
+
+[服务端门控](https://github.com/lobehub/lobehub/blob/659db0780b263f023019337a48f23e17e77e260d/apps/server/src/routers/lambda/_helpers/agentShareFeatureGate.ts)分别检查两层条件：
+
+1. 部署支持：`ENABLE_BUSINESS_FEATURES` 必须为 `true`。否则，新建分享和访客访问均返回 `FORBIDDEN`，不会进入灰度开关判断。
+2. 创建者灰度：新建或重新启用分享还要求创建者的 `enableAgentShare === true`。值为 `false` 或未定义均拒绝。运行时配置中的数组值表示获准创建者的用户 ID，不是访客名单。
+
+<Callout type={'warning'}>
+  在已核验的开源代码中，`ENABLE_BUSINESS_FEATURES` 是值为 `false` 的代码常量，
+  不是环境变量。`FEATURE_FLAGS="+agent_share"` 无法绕过这层部署门控，
+  不能使标准自托管部署获得交互式助理分享功能。
+</Callout>
+
+[商用功能常量](https://github.com/lobehub/lobehub/blob/659db0780b263f023019337a48f23e17e77e260d/packages/business/const/src/index.ts)定义了这层边界。本指南不提供修改代码绕过边界的操作步骤。
+
+在支持该功能的部署中，将创建者移出灰度范围，本身不会撤销已有分享。访客访问已有分享或通过它聊天，不要求访客拥有该开关。所有者仍可管理、预览或撤销已有分享；这些操作仍受各自既有的授权检查约束。
+
+[分享路由](https://github.com/lobehub/lobehub/blob/659db0780b263f023019337a48f23e17e77e260d/apps/server/src/routers/lambda/agentShare.ts)在 `enableShare` 和将 `updateVisibility` 设为 `link` 时检查创建者门控。改为 `private` 不要求灰度开关，但会阻止访客访问。因此，关闭 `agent_share` 不能替代关闭某个具体分享。
 
 你可以随时检查 [featureFlags](https://github.com/lobehub/lobehub/blob/main/packages/app-config/src/featureFlags/schema.ts) 以获取最新的特性标志列表。

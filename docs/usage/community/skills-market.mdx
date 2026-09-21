@@ -1,0 +1,159 @@
+---
+title: Skills Marketplace
+description: Discover and install SKILL.md packages that add reusable working methods to your Agents.
+tags:
+  - LobeHub
+  - Skills
+  - Skills Marketplace
+  - SKILL.md
+  - Community
+  - Agent Capabilities
+---
+
+# Skills Marketplace
+
+The Skills Marketplace brings together Skill packages published by the community. A Skill tells an Agent how to complete a task, such as creating a presentation, reviewing code, researching a topic, or processing a document.
+
+Each Skill starts with `SKILL.md` and can also include references, templates, scripts, and other files.
+
+## Open the Skills Marketplace
+
+Open **Community** from the LobeHub sidebar, then select **Skills**. You can also browse the public marketplace at [lobehub.com/skills](https://lobehub.com/skills).
+
+The marketplace includes:
+
+- **Search** by Skill name, description, or keyword
+- **Categories** for coding, web development, research, productivity, documents, media generation, security, and more
+- **Sorting** by downloads, creation date, update time, name, or GitHub Stars
+- **Skill cards** with name, author, description, category, update time, downloads, rating, and review count
+
+Marketplace counts and rankings change over time. The current values appear on the page.
+
+## View Skill Details
+
+Select a Skill card to open its detail page. The header shows its icon, name, author, category, update date, install action, and community activity.
+
+The detail page contains four tabs:
+
+| Tab | Contents |
+| --- | --- |
+| **Overview** | Summary, `SKILL.md`, features, changelog, and related Skills |
+| **Install** | Agent prompt, CLI commands, installation directory, download action, and file list |
+| **Reviews** | Average rating, rating distribution, and community reviews |
+| **Info** | Publisher, category, version, update date, license, installs, and source link |
+
+The information shown can vary by Skill.
+
+## Read SKILL.md
+
+`SKILL.md` explains how the Skill works. It can include:
+
+- Use cases
+- Task steps
+- Inputs and outputs
+- Examples and references
+- Scripts, commands, and runtime conditions
+- Ways to use tools or MCP servers
+
+You can expand `SKILL.md` before installation to see whether the Skill fits your task.
+
+## Install in LobeHub
+
+1. Open the target Skill from **Community → Skills**.
+2. Select **Install** in the upper-right corner.
+3. After installation, the button changes to **Installed**.
+
+Open the menu beside **Installed** to uninstall the Skill. A confirmation prompt appears before the action runs.
+
+If the Install button is unavailable, view whether the current account or workspace permits community installations.
+
+## Ask an Agent to Install It
+
+Under **Install → I’m an Agent**, the page creates an installation prompt. The Agent uses it to:
+
+1. Open the marketplace installation guide for the Skill.
+2. Install the Skill.
+3. Read `SKILL.md` from the installed directory.
+4. Follow its instructions to complete the task.
+
+Select **Use on LobeAI** to send the installation prompt directly to LobeAI.
+
+## Install for an External Agent
+
+Under **Install → I’m a Human**, you can select:
+
+- Claude Code
+- Codex
+- Cursor
+- VS Code
+- Cline
+
+The page generates the matching installation command, for example:
+
+```bash
+npx -y @lobehub/market-cli skills install <identifier> --agent codex
+```
+
+The page also shows the installation directory and a **Download Skill** action. After installation, you can restart the external Agent or start a new session so it loads the new Skill.
+
+## View Package Files
+
+The **Install** tab lists package files and sizes, including `SKILL.md`, scripts, templates, and references.
+
+If the Skill includes other files, you can open them to learn more about their purpose and runtime conditions.
+
+## View Reviews and Source
+
+Under **Reviews**, you can view:
+
+- Average rating and rating count
+- Rating distribution from one to five stars
+- Reviews from other users
+
+Under **Info**, you can view the publisher, version, update date, license, installs, and source link. GitHub sources include a **View on GitHub** action.
+
+## Skills, Connectors, and MCP
+
+| Type | What it does | Example |
+| --- | --- | --- |
+| **Skill** | Tells an Agent how to complete a task | Writing guide, review checklist, or report template |
+| **Connector** | Connects a built-in capability or external service | GitHub, image generation, or a database MCP |
+| **Tool** | Performs a specific action | Read an issue, query data, or send a message |
+
+A Skill can explain how an Agent uses a tool. External service connections, account authorization, and tool permissions are configured in [Connectors](/docs/usage/agent/connectors).
+
+## Publish a Skill
+
+If you want to share a Skill, create a public GitHub repository with `SKILL.md` and its related files. You can add purpose, inputs and outputs, dependencies, and command notes to help others understand and use it.
+
+See [Become a Creator](/docs/usage/community/become-a-creator) for the publishing steps.
+
+## Helpful Tips
+
+- Browse `SKILL.md` and package files before installation
+- For Skills with scripts, open the commands and runtime conditions
+- Keep API keys and tokens in credential settings
+- Choose project-level installation when only one project uses the Skill
+- Try an unfamiliar Skill with test data first
+
+## Troubleshooting
+
+**The Skill does not appear after installation**
+
+- View whether installation completed
+- View whether the target platform and installation directory are correct
+- For an external Agent, restart the client or start a new session
+
+**The Skill loads but does not complete the task**
+
+- View the runtime conditions and dependencies in `SKILL.md`
+- View whether the required Connectors and account authorization are configured
+- View whether the current execution device can access the required files, commands, and network services
+
+<Cards>
+  <Card href={'/docs/usage/community/overview'} title={'Marketplace Overview'} />
+
+  <Card href={'/docs/usage/community/mcp-market'} title={'MCP Marketplace'} />
+
+  <Card href={'/docs/usage/community/become-a-creator'} title={'Become a Creator'} />
+</Cards>

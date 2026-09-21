@@ -11,49 +11,49 @@ tags:
 
 # Lobe AI
 
-No API keys. No configuration. No "getting started" friction. Open LobeHub and Lobe AI is already there, a full-featured Agent ready to work with you from the first second.
-
-Think of it as the teammate who's always online. Drop in a question at 2 AM, paste a 500-line error log, ask it to outline a presentation you've been dreading. No setup needed. It just works.
+Lobe AI is LobeHub's built-in Agent. Open LobeHub and start a conversation without entering API keys or configuring an Agent. You can ask a question, get help with an error, or draft a presentation outline.
 
 ## What You Can Do
 
 **Code**
 
-It's 11 PM, a deploy just broke, and the stack trace points to a module you've never touched. Paste the error in. Lobe AI reads the code, explains what went wrong, and walks you through the fix, faster than searching Stack Overflow.
+Share the relevant code and error message. Lobe AI can explain the problem and walk you through a fix.
 
 **Research**
 
-You need to compare three cloud providers for a migration decision by tomorrow. Ask once. Lobe AI searches the web in real time, compiles a comparison with pricing, limits, and trade-offs, and cites every source so you can verify, not just trust.
+Ask Lobe AI to compare three cloud providers for a migration. It can search the web, compare pricing and limits, explain trade-offs, and cite sources for you to check.
 
 **Write**
 
-A client email that needs the right tone. A blog post outline that won't write itself. A cover letter you've been putting off for a week. Describe the goal and the audience. Lobe AI drafts it, and you refine from there.
+Describe the goal and audience for an email, blog post, or cover letter. Lobe AI can draft it and help you revise the wording.
 
 **Analyze**
 
-You have a spreadsheet of survey results but no time to build charts. Lobe AI processes the data, surfaces patterns, and renders visualizations as Artifacts right in the conversation. Ready to export or screenshot.
+Lobe AI can analyze spreadsheet data, identify patterns, and show visualizations as Artifacts in the conversation. You can export the result or take a screenshot.
 
 **Create**
 
-Need a hero image for a landing page, a diagram for documentation, or a quick audio clip for a demo? Lobe AI generates images, audio, and rich visual Artifacts without switching tools.
+You can ask Lobe AI to generate images, audio, and visual Artifacts, such as a landing-page image, a documentation diagram, or a demo audio clip.
 
-## Built-in Skills
+## Tools, Skills, and Connectors
 
-Lobe AI shares the same Skill ecosystem as every custom Agent you build. Toggle any Skill on mid-conversation to unlock new capabilities. No restart, no re-prompting:
+You can add tools and skills to Lobe AI in the same way as custom Agents. Use [Connectors](/docs/usage/agent/connectors) to add tools and skills, check authorization, and choose Pinned, Auto, or Disabled. Web search and execution environments also have their own controls.
 
-| Skill                                      | What it does                                                                 |
-| ------------------------------------------ | ---------------------------------------------------------------------------- |
-| [Web Search](/docs/usage/agent/web-search) | Pull in real-time information from across the internet                       |
-| [Artifacts](/docs/usage/agent/artifacts)   | Render code, charts, diagrams, and interactive content inline                |
-| [Notebook](/docs/usage/agent/notebook)     | Capture key takeaways and organize notes as you go                           |
-| [GTD](/docs/usage/agent/gtd)               | Turn conversations into structured tasks with the Getting Things Done method |
-| [Sandbox](/docs/usage/agent/sandbox)       | Write, run, and test code in an isolated environment                         |
+| Capability | Purpose |
+| --- | --- |
+| [Connectors](/docs/usage/agent/connectors) | Explore LobeHub built-in capabilities, community skills, MCP integrations, and services |
+| [Task Tools](/docs/usage/agent/connectors#task-tools) | Manage tasks, dependencies, and execution configuration through chat |
+| [Documents](/docs/usage/agent/connectors#documents) | Create and maintain agent documents |
+| [Artifacts](/docs/usage/agent/connectors#artifacts) | Create previewable pages, SVG graphics, and interactive components |
+| [Image Generation](/docs/usage/agent/connectors#image-generation) | Use available image-generation models |
+| [Web Search](/docs/usage/agent/web-search) | Retrieve information from the web |
+| [Sandbox](/docs/usage/agent/sandbox) | Run code in an available isolated environment |
 
 ## When to Create a Custom Agent
 
-Lobe AI is the fastest way to get value from LobeHub. But at some point you'll notice a pattern: you keep explaining your coding style, re-pasting your brand guidelines, or re-enabling the same Skills every session.
+If you often reuse the same coding style, brand guidelines, or Skills, a custom Agent can keep those settings ready for future work.
 
-That's the signal to [create a custom Agent](/docs/usage/getting-started/agent). A custom Agent locks in your system prompt, your knowledge base, your preferred Skills, and your Memory, so every conversation picks up right where the last one left off.
+When you [create a custom Agent](/docs/usage/getting-started/agent), you can save its system prompt, knowledge base, preferred Skills, and Memory for use across conversations.
 
 |                    | Lobe AI               | Custom Agent                              |
 | ------------------ | --------------------- | ----------------------------------------- |
@@ -62,7 +62,7 @@ That's the signal to [create a custom Agent](/docs/usage/getting-started/agent).
 | **Knowledge base** | Shared                | Dedicated per Agent                       |
 | **Memory**         | Shared                | Per-Agent, persistent                     |
 | **Skills**         | Toggle on demand      | Pre-configured, always on                 |
-| **Sharing**        | —                     | Shareable with your team or the Community |
+| **Sharing**        | —                     | Publishable to the Community |
 
 <Cards>
   <Card href={'/docs/usage/getting-started/agent'} title={'Create a Custom Agent'} />

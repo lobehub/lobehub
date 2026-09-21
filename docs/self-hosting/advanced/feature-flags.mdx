@@ -15,6 +15,10 @@ tags:
 
 In addition to basic environment variable configuration, LobeHub also offers feature flags to control whether a feature is enabled globally, or to enable or disable features for specific user groups or environments as needed.
 
+## Check Your Deployment Version
+
+Flag names and defaults can change between releases. Check the schema at your deployed version, not only the latest `main` branch. [Feature status labels](/docs/usage/feature-status) describe availability; they are not flag names. This guide does not provide an unverified flag for interactive Agent sharing.
+
 ## Feature Flags Environment Variable `FEATURE_FLAGS`
 
 - Type: Optional
@@ -22,7 +26,7 @@ In addition to basic environment variable configuration, LobeHub also offers fea
 - Default: `-`
 - Example: `"-welcome_suggest"`
 
-All features are controlled by the `FEATURE_FLAGS` variable as the sole configuration variable.
+`FEATURE_FLAGS` controls the Boolean flags listed here. It does not replace service settings, permissions, credentials, or deployment requirements. An enabled flag alone does not guarantee that a feature is available.
 
 You can achieve various feature combinations using the above configuration syntax. All feature flags are Boolean values, enabled with `+` and disabled with `-`.
 
@@ -39,6 +43,7 @@ You can achieve various feature combinations using the above configuration synta
 | `openai_api_key`         | Allows users to customize the OpenAI API Key.                                                            | Enabled       |
 | `openai_proxy_url`       | Allows users to customize the OpenAI proxy URL.                                                          | Enabled       |
 | `api_key_manage`         | Controls access to API key management page (/profile/apikey).                                            | Disabled      |
+| `agent_share`            | Gates new or re-enabled interactive Agent shares. Requires deployment support; see the boundary below.    | Disabled      |
 | `edit_agent`             | Allows users to edit assistants.                                                                         | Enabled       |
 | `ai_image`               | Controls AI image generation feature and page (/image).                                                  | Enabled       |
 | `speech_to_text`         | Enables speech-to-text functionality.                                                                    | Enabled       |
@@ -51,5 +56,28 @@ You can achieve various feature combinations using the above configuration synta
 | `cloud_promotion`        | Controls cloud service promotion link display in user menu.                                              | Disabled      |
 | `commercial_hide_github` | Hides GitHub-related links in settings footer (requires commercial license).                             | Disabled      |
 | `commercial_hide_docs`   | Hides documentation and help menu including changelog, docs, and feedback (requires commercial license). | Disabled      |
+
+## Interactive Agent Sharing: Deployment and Rollout Boundaries
+
+The following behavior is verified against commit `659db0780b263f023019337a48f23e17e77e260d`. Other versions can differ.
+
+The [`agent_share` schema](https://github.com/lobehub/lobehub/blob/659db0780b263f023019337a48f23e17e77e260d/packages/app-config/src/featureFlags/schema.ts) sets the default to `false`. This flag controls rollout for creators, not visitor access to existing shares.
+
+The [server gate](https://github.com/lobehub/lobehub/blob/659db0780b263f023019337a48f23e17e77e260d/apps/server/src/routers/lambda/_helpers/agentShareFeatureGate.ts) applies two separate checks:
+
+1. Deployment support: `ENABLE_BUSINESS_FEATURES` must be `true`. Without it, both creation and visitor access fail with `FORBIDDEN` before the server evaluates the rollout flag.
+2. Creator rollout: New or re-enabled shares also require `enableAgentShare === true` for the creator. A false or undefined value fails closed. Array values in runtime configuration identify permitted creators, not visitors.
+
+<Callout type={'warning'}>
+  In the verified open-source code, `ENABLE_BUSINESS_FEATURES` is a code constant set to `false`,
+  not an environment variable. `FEATURE_FLAGS="+agent_share"` cannot bypass this deployment gate.
+  This flag does not enable interactive Agent sharing on a standard self-hosted deployment.
+</Callout>
+
+The [business constant](https://github.com/lobehub/lobehub/blob/659db0780b263f023019337a48f23e17e77e260d/packages/business/const/src/index.ts) defines this boundary. This guide does not prescribe a code change to bypass it.
+
+On a supported deployment, removal from the creator rollout does not itself revoke existing shares. Visitors do not need the rollout flag to access or chat through an existing share. Owners can still manage, preview, or revoke existing shares. These operations remain subject to their existing authorization checks.
+
+The [share router](https://github.com/lobehub/lobehub/blob/659db0780b263f023019337a48f23e17e77e260d/apps/server/src/routers/lambda/agentShare.ts) checks the creator gate for `enableShare` and `updateVisibility` to `link`. A change to `private` does not require the rollout flag and blocks visitor access. Thus, disabling `agent_share` is not a substitute for disabling an individual share.
 
 You can always check the [featureFlags](https://github.com/lobehub/lobehub/blob/main/packages/app-config/src/featureFlags/schema.ts) to get the latest list of feature flags.
