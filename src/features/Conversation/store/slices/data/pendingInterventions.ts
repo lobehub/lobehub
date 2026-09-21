@@ -1,6 +1,7 @@
 import {
   type ChatToolPayloadWithResult,
   classifyToolInterventionPresentation,
+  isHeterogeneousInterventionExpired,
   type ToolIntervention,
   type UIChatMessage,
 } from '@lobechat/types';
@@ -38,7 +39,11 @@ export const getPendingInterventions = (
       msg.role === 'tool' &&
       msg.pluginIntervention?.status === 'pending' &&
       msg.plugin &&
-      !msg.id.startsWith('tmp_')
+      !msg.id.startsWith('tmp_') &&
+      // Past the producer's own deadline nobody is waiting for this answer.
+      // Keeping it in the pending list would put an unanswerable card in front
+      // of the user on every surface that reads this list.
+      !isHeterogeneousInterventionExpired(msg.pluginState)
     ) {
       pending.push({
         apiName: msg.plugin.apiName,
@@ -141,7 +146,10 @@ const collectPendingTools = (
     if (
       tool.intervention?.status === 'pending' &&
       tool.result_msg_id &&
-      !tool.result_msg_id.startsWith('tmp_')
+      !tool.result_msg_id.startsWith('tmp_') &&
+      // Same rule as the standalone tool row; the folded entry mirrors the
+      // producer's deadline onto `result.state`.
+      !isHeterogeneousInterventionExpired(tool.result?.state)
     ) {
       pending.push({
         apiName: tool.apiName,

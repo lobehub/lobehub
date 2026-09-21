@@ -56,6 +56,7 @@ drive / probe / capture / publish. Skip a row only when its surface AND runtime 
 | P32 | web, electron | hetero          | fixture        | Dispatch a temp assistant message and attach an `AgentRuntimeError` guide code                                                                               |
 | P33 | web, electron | any             | fixture        | Backfill `pluginState` from each tool message's result after Agent Mock playback                                                                             |
 | P34 | web, electron | any             | fixture        | Dispatch an assistant+tool pair into an empty conversation; truncate args to reach the Streaming render                                                      |
+| P87 | web, electron | any             | fixture        | Render a pending intervention card: explicit dispatch context, `messagesInit`, `intervention` on BOTH projections, a registered operation                    |
 | P35 | web           | gateway         | probe          | Step-boundary `uiMessages` snapshots overwrite the bucket; record `replaceMessages` stacks, A/B with `disableGatewayMode`                                    |
 | P36 | web           | gateway         | env            | Run the JWT handshake probe after every gateway restart; `/health` 200 proves nothing                                                                        |
 | P37 | any           | gateway         | env            | QStash / s3rver on fixed ports may belong to a sibling session; read the start log before stopping anything                                                  |
@@ -1172,6 +1173,46 @@ fixture** and drops the conversation back to its welcome state. For a before/aft
 code A/B, re-dispatch after each edit rather than expecting react-refresh to keep
 the messages — and re-run the identical dispatch + expand + scroll sequence on both
 sides so the two frames differ only by the change.
+
+#### P87 · Rendering a pending intervention card: four gates, not one dispatch
+
+**applies-to:** surface=web, electron · runtime=any · phase=fixture
+
+**Situation:** verifying the AskUserQuestion / approval card (the InterventionBar
+and the global approval island) without driving a real agent run.
+
+**Doesn't work:** the P34 assistant+tool dispatch alone. The pair lands in the
+store and still nothing renders, or it renders but every submit silently
+early-returns, because four separate gates each fail quietly:
+
+1. **`activeAgentId` is empty until the route settles.** `internal_dispatchMessage`
+   with no context reads global state, so the pair lands in `main__new` and no
+   surface ever looks there. Pass an explicit
+   `{ context: { agentId, threadId, topicId } }`.
+2. **`messagesInit === false` keeps the conversation on its welcome state**, so a
+   correctly-bucketed pair renders nothing. Gate the seed on it, not on
+   `networkidle`.
+3. **`getPendingInterventions` reads two projections.** The tool row needs
+   `pluginIntervention.status === 'pending'`, and the parent assistant's
+   `tools[i]` needs its own `intervention: { status: 'pending' }` — the display
+   pipeline folds the tool row into an `assistantGroup`, after which only the
+   `children[].tools` copy is reachable. Stamping one of the two renders nothing.
+4. **A submit needs a registered operation or it never reaches a transport.**
+   With no `messageOperationMap` entry, `submitHeteroIntervention` warns
+   `no operationId` and returns — the card's own spinner still resolves, so it
+   looks like a successful submit while the whole store path was skipped. Register
+   it the way the product does: `startOperation({ context: { messageId: <assistantId> } })`,
+   with `type: 'execServerAgentRuntime'` for the remote/gateway branch (an
+   `execHeterogeneousAgent` op takes the local Electron IPC branch instead).
+
+**Also useful:** switching cards in the tab strip is a genuine remount —
+`InterventionBar` renders `InterventionContent` with `key={toolCallId}` — so two
+seeded cards give you a remount probe without a reload that would drop the
+in-memory fixture. In-SPA navigation away and back does NOT work: it refetches
+messages and wipes the pair. And `setInterventionAnswers` will log
+`persist failed: Plugin not found` for a store-only fixture; that is expected and
+is swallowed by design, not a defect — treat it as confirmation the flow reached
+the real transport.
 
 #### P35 · A client bucket that keeps reverting mid-run is the gateway `uiMessages` snapshot, not your write
 

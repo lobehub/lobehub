@@ -1,5 +1,9 @@
 import { getBuiltinStreaming } from '@lobechat/builtin-tools/streamings';
-import { type ChatToolResult, type ToolIntervention } from '@lobechat/types';
+import {
+  type ChatToolResult,
+  isHeterogeneousInterventionExpired,
+  type ToolIntervention,
+} from '@lobechat/types';
 import { safeParsePartialJSON } from '@lobechat/utils';
 import { Flexbox } from '@lobehub/ui';
 import { memo, Suspense } from 'react';
@@ -50,9 +54,20 @@ const Render = memo<RenderProps>(
     isToolCalling,
     showCustomToolRender,
   }) => {
+    // A question whose producer stopped waiting is no longer offered as a card
+    // (`getPendingInterventions` drops it), so the inline row is the only place
+    // left to say what happened — returning null here would leave a silent gap
+    // where the tool call was.
+    const timedOut =
+      intervention?.status === 'pending' && isHeterogeneousInterventionExpired(result?.state);
+
     // Pending interventions are rendered in the bottom InterventionBar, not inline
-    if (toolMessageId && intervention?.status === 'pending' && !disableEditing) {
+    if (!timedOut && toolMessageId && intervention?.status === 'pending' && !disableEditing) {
       return null;
+    }
+
+    if (timedOut) {
+      return <RejectedResponse timedOut apiName={apiName} />;
     }
 
     if (intervention?.status === 'rejected') {

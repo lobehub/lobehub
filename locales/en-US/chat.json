@@ -2052,6 +2052,7 @@
   "tool.intervention.optionApproveRemember": "Approve, and don't ask again for similar actions",
   "tool.intervention.pending": "Pending",
   "tool.intervention.questionSkipped": "You skipped this question",
+  "tool.intervention.questionTimedOut": "This question timed out before it was answered",
   "tool.intervention.reject": "Reject",
   "tool.intervention.rejectOnly": "Reject",
   "tool.intervention.rejectReasonPlaceholder": "Tell the agent what you'd like instead",

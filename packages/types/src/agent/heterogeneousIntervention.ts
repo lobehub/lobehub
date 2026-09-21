@@ -74,3 +74,37 @@ export interface HeterogeneousAgentInterventionResolutionPayload {
   /** Question text (or a reserved form key) to freeform text or exact option values. */
   result?: HeterogeneousAgentInterventionResult;
 }
+
+/**
+ * Producer-stamped wall-clock deadline (unix ms) carried on the tool row's
+ * `pluginState.heterogeneousIntervention`, and mirrored onto the folded tool
+ * entry as `result.state`. Both shapes are read the same way.
+ */
+export const readHeterogeneousInterventionDeadline = (state: unknown): number | undefined => {
+  const deadline = (
+    state as { heterogeneousIntervention?: { deadline?: unknown } } | null | undefined
+  )?.heterogeneousIntervention?.deadline;
+  return typeof deadline === 'number' ? deadline : undefined;
+};
+
+/**
+ * True once the producer has stopped waiting for this answer.
+ *
+ * The deadline is the producer's own: its ask-user bridge deletes the pending
+ * entry at exactly that instant and its long-poll stops listening with it, so
+ * past the deadline "nobody is waiting for this answer" is a fact, not a guess.
+ * A question in that state must never be offered as answerable — submitting
+ * into it cannot be received, and asking the user to act on it is asking for
+ * work that will be thrown away.
+ *
+ * Unknown deadline (local desktop runs, rows written before the producer
+ * stamped one) returns false: without the producer's clock we cannot claim it
+ * gave up.
+ */
+export const isHeterogeneousInterventionExpired = (
+  state: unknown,
+  now: number = Date.now(),
+): boolean => {
+  const deadline = readHeterogeneousInterventionDeadline(state);
+  return deadline !== undefined && now >= deadline;
+};
