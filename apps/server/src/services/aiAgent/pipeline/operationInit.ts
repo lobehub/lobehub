@@ -12,8 +12,16 @@ import type { ComposioService } from '@/server/services/composio';
 import type { MarketService } from '@/server/services/market';
 
 import type { ExecRunContext, InternalExecAgentParams } from '../types';
-import { buildApprovalResumeContext } from './approvalResume';
-import { type OperationPrepResult, prepareOperation } from './operationPrep';
+import {
+  type ApprovedToolEntry,
+  buildApprovalResumeContext,
+  type ClaimedApprovalResume,
+} from './approvalResume';
+import {
+  type OperationPrepDeps,
+  type OperationPrepResult,
+  prepareOperation,
+} from './operationPrep';
 import { discoverTools, type ToolDiscoveryResult } from './toolDiscovery';
 import type { RunAttachments } from './turnSetup';
 
@@ -31,7 +39,8 @@ export interface OperationInitRequest {
   additionalPluginIds?: string[];
   agentSlug?: string | null;
   approvalOwnerAssistantId?: string;
-  approvedToolEntries: Parameters<typeof buildApprovalResumeContext>[0]['approvedToolEntries'];
+  /** Narrowed from the claim: the entries there carry a `Date` that JSON would flatten. */
+  approvedToolEntries: ApprovedToolEntry[];
   attachedFileIds?: string[];
   botContext?: InternalExecAgentParams['botContext'];
   botPlatformContext?: InternalExecAgentParams['botPlatformContext'];
@@ -68,11 +77,8 @@ export interface OperationInitRequest {
 export interface OperationInitDeps {
   agentDocumentsService: AgentDocumentsService;
   agentModel: AgentModel;
-  bindTopicWorkingDirectory: (params: {
-    agentId: string;
-    deviceId?: string;
-    topicId: string;
-  }) => Promise<unknown>;
+  /** Same contract `prepareOperation` calls with — `{ config, currentWorkingDirectory, topicId }`. */
+  bindTopicWorkingDirectory: OperationPrepDeps['bindTopicWorkingDirectory'];
   composioService: ComposioService;
   connectorModel: ConnectorModel;
   connectorToolModel: ConnectorToolModel;
@@ -101,13 +107,22 @@ export interface OperationInitResult {
  * deferred one.
  */
 export const buildOperationInitRequest = (
-  input: Omit<OperationInitRequest, 'externalFileTypes'> & {
+  input: Omit<OperationInitRequest, 'approvedToolEntries' | 'externalFileTypes'> & {
+    /** The claim's entries, `createdAt` and all — dropped here. */
+    approvedToolEntries: ClaimedApprovalResume['approvedToolEntries'];
     files?: InternalExecAgentParams['files'];
   },
 ): OperationInitRequest => {
-  const { files, ...rest } = input;
+  const { approvedToolEntries, files, ...rest } = input;
   return {
     ...rest,
+    // Keep only what the resume context reads. The claim orders the batch by
+    // `createdAt`, a `Date` that JSON would turn into a string — and this
+    // request has to survive that round trip byte for byte.
+    approvedToolEntries: approvedToolEntries.map(({ plugin, toolMessageId }) => ({
+      plugin,
+      toolMessageId,
+    })),
     ...(files && { externalFileTypes: files.map((file) => file.mimeType ?? '') }),
   };
 };
@@ -175,7 +190,7 @@ export const runOperationInit = async (
     {
       agentDocumentsService: deps.agentDocumentsService,
       agentModel: deps.agentModel,
-      bindTopicWorkingDirectory: deps.bindTopicWorkingDirectory as any,
+      bindTopicWorkingDirectory: deps.bindTopicWorkingDirectory,
       db: deps.db,
       topicModel: deps.topicModel,
       userId: deps.userId,

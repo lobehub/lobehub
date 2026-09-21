@@ -6,7 +6,21 @@ const fullInput = (): Parameters<typeof buildOperationInitRequest>[0] => ({
   additionalPluginIds: ['lobe-task'],
   agentSlug: 'my-agent',
   approvalOwnerAssistantId: 'msg-assistant',
-  approvedToolEntries: [],
+  // A batch approval resume: the claim pairs each decision with its plugin row
+  // and a `createdAt` used only to order the batch.
+  approvedToolEntries: [
+    {
+      createdAt: new Date('2026-09-20T10:00:00.000Z'),
+      plugin: {
+        apiName: 'runCommand',
+        arguments: '{"command":"ls"}',
+        identifier: 'lobe-local-system',
+        toolCallId: 'call-1',
+        type: 'default',
+      },
+      toolMessageId: 'msg-tool-1',
+    },
+  ] as any,
   attachedFileIds: ['file-1'],
   botContext: { platform: 'discord' } as any,
   botPlatformContext: { platformName: 'discord', supportsMarkdown: false } as any,
@@ -51,6 +65,25 @@ describe('buildOperationInitRequest', () => {
 
     expect(request.externalFileTypes).toEqual(['image/png', '']);
     expect('files' in request).toBe(false);
+  });
+
+  it('keeps only what the resume context reads from an approved batch entry', () => {
+    const request = buildOperationInitRequest(fullInput());
+
+    expect(request.approvedToolEntries).toEqual([
+      {
+        plugin: {
+          apiName: 'runCommand',
+          arguments: '{"command":"ls"}',
+          identifier: 'lobe-local-system',
+          toolCallId: 'call-1',
+          type: 'default',
+        },
+        toolMessageId: 'msg-tool-1',
+      },
+    ]);
+    // The claim's ordering key is a `Date`; JSON would flatten it to a string.
+    expect('createdAt' in request.approvedToolEntries[0]).toBe(false);
   });
 
   // A deferred init (LOBE-13745) has to carry this request on the operation
