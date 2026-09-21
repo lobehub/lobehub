@@ -6,6 +6,7 @@ import {
   BubblesIcon,
   CalendarClockIcon,
   HeartPulseIcon,
+  ScaleIcon,
   SearchIcon,
   SignatureIcon,
 } from 'lucide-react';
@@ -34,6 +35,7 @@ enum MemoryTabKey {
   Home = 'home',
   Identities = 'identities',
   Preferences = 'preferences',
+  Rules = 'rules',
 }
 
 const useActiveTabKey = () => {
@@ -49,9 +51,10 @@ const Nav = memo(() => {
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
 
   /**
-   * Groups separated by space rather than rules: what the whole section is (home), who the
-   * person is (identity, preferences), and what is going on around them (contexts, activities).
-   * Search sits above all of them because it is an action, not a destination.
+   * Four groups, separated by space rather than rules: what the whole section is (home), what it
+   * requires of a delivery (rules), who the person is (identity, preferences), and what is
+   * going on around them (contexts, activities). Search sits above all of them because it is an
+   * action, not a destination.
    */
   const groups: Item[][] = useMemo(
     () => [
@@ -71,6 +74,14 @@ const Nav = memo(() => {
           key: MemoryTabKey.Home,
           title: t('tab.home'),
           url: '/memory',
+        },
+      ],
+      [
+        {
+          icon: ScaleIcon,
+          key: MemoryTabKey.Rules,
+          title: t('tab.rules'),
+          url: '/memory/rules',
         },
       ],
       [

@@ -13,6 +13,8 @@ import {
   expertiseRuns,
   topics,
   users,
+  verifyCheckResults,
+  verifyRuns,
   workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
@@ -307,5 +309,123 @@ describe('ExpertiseModel', () => {
 
     expect(insights.map(({ id }) => id)).toEqual([workspaceOneInsightId]);
     expect(foreignInsight.status).toBe('active');
+  });
+  it("lists the standards distilled into the owner's own domains", async () => {
+    const otherUserId = 'expertise-standards-other-user';
+    await serverDB.insert(users).values({ id: otherUserId });
+    await serverDB.insert(expertiseDomains).values([
+      {
+        anchorChosenAt: new Date(),
+        domainFilter: '交付标准',
+        id: 'standards-domain',
+        slug: 'standards-domain',
+        title: '我的交付标准',
+        userId,
+      },
+      {
+        anchorChosenAt: new Date(),
+        domainFilter: '别人的标准',
+        id: 'standards-foreign-domain',
+        slug: 'standards-foreign-domain',
+        title: 'Foreign standards',
+        userId: otherUserId,
+      },
+    ]);
+    await serverDB.insert(expertiseBindings).values([
+      { boundUserId: userId, domainId: 'standards-domain' },
+      { boundUserId: otherUserId, domainId: 'standards-foreign-domain' },
+    ]);
+    await serverDB.insert(expertiseLessons).values([
+      {
+        code: 'P-01',
+        domainId: 'standards-domain',
+        hitCount: 2,
+        id: '0d3e1a5c-6f52-4c2e-8f2a-9f2d3f26b101',
+        polarity: 'rule',
+        sections: [{ body: '颜色取自设计系统变量', key: 'rule' }],
+        title: '颜色取自设计系统变量',
+      },
+      {
+        code: 'P-02',
+        domainId: 'standards-domain',
+        hitCount: 7,
+        id: '0d3e1a5c-6f52-4c2e-8f2a-9f2d3f26b102',
+        polarity: 'rule',
+        sections: [{ body: '证据要拍成功路径', key: 'rule' }],
+        title: '证据要拍成功路径',
+      },
+      {
+        code: 'P-01',
+        domainId: 'standards-foreign-domain',
+        id: '0d3e1a5c-6f52-4c2e-8f2a-9f2d3f26b103',
+        polarity: 'rule',
+        sections: [{ body: 'Foreign standard', key: 'rule' }],
+        title: 'Foreign standard',
+      },
+    ]);
+
+    const groups = await new ExpertiseModel(serverDB, userId).listStandards();
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0].domain.title).toBe('我的交付标准');
+    // Most violated first — that is the reviewer's own measure of what keeps costing a round.
+    expect(groups[0].standards.map(({ code }) => code)).toEqual(['P-02', 'P-01']);
+  });
+
+  it('counts only the rejected rounds no distillation run has read', async () => {
+    await serverDB.insert(expertiseDomains).values({
+      anchorChosenAt: new Date(),
+      domainFilter: '交付标准',
+      id: 'backlog-domain',
+      slug: 'backlog-domain',
+      title: '我的交付标准',
+      userId,
+    });
+    const readRunId = 'a3f9b0c6-6d0e-4f2e-9b1a-2c4d5e6f7a01';
+    const unreadRunId = 'a3f9b0c6-6d0e-4f2e-9b1a-2c4d5e6f7a02';
+    const acceptedRunId = 'a3f9b0c6-6d0e-4f2e-9b1a-2c4d5e6f7a03';
+    await serverDB.insert(verifyRuns).values([
+      { id: readRunId, userId },
+      { id: unreadRunId, userId },
+      { id: acceptedRunId, userId },
+    ]);
+    await serverDB.insert(verifyCheckResults).values([
+      {
+        checkItemId: 'chk-read',
+        userDecision: 'rejected',
+        userId,
+        verifierType: 'llm',
+        verifyRunId: readRunId,
+      },
+      {
+        checkItemId: 'chk-unread',
+        userDecision: 'rejected',
+        userId,
+        verifierType: 'llm',
+        verifyRunId: unreadRunId,
+      },
+      {
+        checkItemId: 'chk-accepted',
+        userDecision: 'accepted',
+        userId,
+        verifierType: 'llm',
+        verifyRunId: acceptedRunId,
+      },
+    ]);
+    await serverDB.insert(expertiseRuns).values({
+      actorId: userId,
+      actorType: 'user',
+      domainId: 'backlog-domain',
+      id: 'a3f9b0c6-6d0e-4f2e-9b1a-2c4d5e6f7a04',
+      reflectionKey: `acceptance:some-acceptance:run:${readRunId}`,
+      runIndex: 1,
+      subjectId: 'some-topic',
+      subjectType: 'topic',
+      userId,
+    });
+
+    await expect(
+      new ExpertiseModel(serverDB, userId).countUndistilledRejectionRounds(),
+    ).resolves.toBe(1);
   });
 });

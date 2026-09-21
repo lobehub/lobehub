@@ -221,6 +221,34 @@ export const expertiseRouter = router({
       return { hits, lesson };
     }),
 
+  /**
+   * The reviewer's own delivery standards, plus how many rejected rounds are still waiting to be
+   * read. The backlog travels with the list because an empty page has to say *why* it is empty —
+   * distillation only fires when a later round lands, so old rejections never arrive on their own.
+   */
+  listStandards: expertiseProcedure.query(async ({ ctx }) => {
+    const [groups, backlogRounds] = await Promise.all([
+      ctx.expertiseModel.listStandards(),
+      ctx.expertiseModel.countUndistilledRejectionRounds(),
+    ]);
+    return { backlogRounds, groups };
+  }),
+
+  /** The rejections one standard was distilled from, linked back to the acceptance round. */
+  standardSources: expertiseProcedure
+    .input(z.object({ lessonId: z.string() }))
+    .query(async ({ ctx, input }) => ctx.expertiseModel.listLessonSources(input.lessonId)),
+
+  /** The edits one standard has been through, so a reader can see who narrowed it and when. */
+  standardRevisions: expertiseProcedure
+    .input(z.object({ lessonId: z.string() }))
+    .query(async ({ ctx, input }) => ctx.expertiseModel.listLessonRevisions(input.lessonId)),
+
+  /** Puts an archived standard back into practice. */
+  restoreLesson: expertiseWriteProcedure
+    .input(z.object({ lessonId: z.string() }))
+    .mutation(async ({ ctx, input }) => ctx.expertiseModel.restoreLesson(input.lessonId)),
+
   /** Step 1 of creation: interpret the brief into an editable draft. Nothing is persisted. */
   draftDomain: expertiseWriteProcedure
     .input(
