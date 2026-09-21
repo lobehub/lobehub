@@ -4,6 +4,8 @@ import pc from 'picocolors';
 import { getTrpcClient } from '../../api/client';
 import { getAuthInfo } from '../../api/http';
 import { streamAgentEvents } from '../../utils/agentStream';
+import { resolveLocalDeviceId } from '../../utils/device';
+import { outputJson } from '../../utils/format';
 import { log } from '../../utils/logger';
 
 export function registerLifecycleCommands(task: Command) {
@@ -95,10 +97,14 @@ export function registerLifecycleCommands(task: Command) {
     .description('Run a task — trigger agent execution')
     .option('-p, --prompt <text>', 'Additional context for the agent')
     .option('-c, --continue <topicId>', 'Continue running on an existing topic')
+    .option(
+      '--device <target>',
+      'Target device ID, or use "local" for the current connected device',
+    )
     .option('-f, --follow', 'Follow agent output in real-time (default: run in background)')
     .option('--topics <n>', 'Run N topics in sequence (default: 1, implies --follow)', '1')
     .option('--delay <s>', 'Delay between topics in seconds', '0')
-    .option('--json', 'Output full JSON event stream')
+    .option('--json', 'Output startup result as JSON, or full event stream with --follow')
     .option('-v, --verbose', 'Show detailed tool call info')
     .action(
       async (
@@ -106,6 +112,7 @@ export function registerLifecycleCommands(task: Command) {
         options: {
           continue?: string;
           delay?: string;
+          device?: string;
           follow?: boolean;
           json?: boolean;
           prompt?: string;
@@ -115,6 +122,20 @@ export function registerLifecycleCommands(task: Command) {
       ) => {
         const topicCount = Number.parseInt(options.topics || '1', 10);
         const delaySec = Number.parseInt(options.delay || '0', 10);
+
+        let deviceId: string | undefined;
+        if (options.device === 'local') {
+          deviceId = resolveLocalDeviceId();
+          if (!deviceId) {
+            log.error(
+              "No local device found. Run 'lh connect' first, then retry with --device local.",
+            );
+            process.exitCode = 1;
+            return;
+          }
+        } else {
+          deviceId = options.device;
+        }
 
         // --topics > 1 implies --follow
         const shouldFollow = options.follow || topicCount > 1;
@@ -143,6 +164,7 @@ export function registerLifecycleCommands(task: Command) {
           // Only pass extra prompt and continue on first topic
           const result = (await client.task.run.mutate({
             id,
+            ...(deviceId && { deviceId }),
             ...(i === 0 && options.prompt && { prompt: options.prompt }),
             ...(i === 0 && options.continue && { continueTopicId: options.continue }),
           })) as any;
@@ -153,6 +175,17 @@ export function registerLifecycleCommands(task: Command) {
           }
 
           const operationId = result.operationId;
+          if (!shouldFollow && options.json) {
+            outputJson({
+              autoStarted: result.autoStarted,
+              operationId,
+              status: result.status,
+              taskId: result.taskId,
+              taskIdentifier: result.taskIdentifier,
+              topicId: result.topicId,
+            });
+            return;
+          }
           if (i === 0) {
             log.info(`Task ${pc.bold(result.taskIdentifier)} running`);
           }
