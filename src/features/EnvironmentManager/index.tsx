@@ -2,7 +2,7 @@
 
 import type { EnvironmentVisibility } from '@lobechat/types';
 import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ContainerIcon, PlusIcon, RefreshCwIcon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -114,15 +114,10 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ visibility }) => {
 
   return (
     <Flexbox gap={16}>
-      <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
-        {/* What an environment IS, in one line. The header bar above gives the
-            page its name, which names the thing without saying what it is —
-            and "environment" is a word every tool spends differently. The
-            caveat that used to sit here now sits with the fields it is about,
-            because it was never true of the whole page. */}
-        <Text fontSize={12} style={{ minWidth: 0 }} type={'secondary'}>
-          {t('environments.desc')}
-        </Text>
+      {/* Actions only. What an environment is belongs where someone is deciding
+          whether to make one — the empty state says it, and a page that already
+          has a list is answering a different question. */}
+      <Flexbox horizontal align={'center'} gap={16} justify={'flex-end'}>
         <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
           <Button
             icon={<Icon icon={RefreshCwIcon} />}
