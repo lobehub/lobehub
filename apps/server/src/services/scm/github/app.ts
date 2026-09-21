@@ -1,4 +1,8 @@
-import type { ScmInstallationRepository, ScmInstallationSnapshot } from '@lobechat/types';
+import type {
+  ScmActorAssociation,
+  ScmInstallationRepository,
+  ScmInstallationSnapshot,
+} from '@lobechat/types';
 import debug from 'debug';
 import { App, Octokit } from 'octokit';
 
@@ -196,7 +200,22 @@ export const fetchGitHubJobLogTail = async (params: {
   }
 };
 
+const ASSOCIATIONS = new Set<ScmActorAssociation>([
+  'collaborator',
+  'contributor',
+  'member',
+  'none',
+  'owner',
+]);
+
+const normalizeAssociation = (value: unknown): ScmActorAssociation => {
+  const lowered = String(value ?? '').toLowerCase() as ScmActorAssociation;
+  return ASSOCIATIONS.has(lowered) ? lowered : 'unknown';
+};
+
 export interface GitHubReviewFeedback {
+  /** Repository relationship GitHub reported for the author. */
+  association: ScmActorAssociation;
   author: string;
   body: string;
   line?: number | null;
@@ -244,6 +263,7 @@ export const fetchGitHubReviewFeedback = async (params: {
       if (!review.body || !review.submitted_at) continue;
       if (new Date(review.submitted_at).getTime() < sinceMs) continue;
       feedback.push({
+        association: normalizeAssociation(review.author_association),
         author: review.user?.login ?? 'unknown',
         body: review.body,
         state: review.state,
@@ -253,6 +273,7 @@ export const fetchGitHubReviewFeedback = async (params: {
     }
     for (const comment of comments.data) {
       feedback.push({
+        association: normalizeAssociation(comment.author_association),
         author: comment.user?.login ?? 'unknown',
         body: comment.body,
         line: comment.line ?? comment.original_line ?? null,

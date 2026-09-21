@@ -1,13 +1,13 @@
 import type { GithubIntegrationPreference } from '@lobechat/types';
-import { RequestTrigger } from '@lobechat/types';
+import { RequestTrigger, SCM_TRUSTED_ASSOCIATIONS } from '@lobechat/types';
 import debug from 'debug';
 import { eq } from 'drizzle-orm';
 
-import { ScmChangeRequestModel, ScmInstallationModel } from '@/database/models/scm';
+import { isFailingCheck, ScmChangeRequestModel, ScmInstallationModel } from '@/database/models/scm';
 import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import type { ScmChangeRequestItem } from '@/database/schemas';
-import { acceptances, works } from '@/database/schemas';
+import { acceptances, works, workspaces } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { appEnv } from '@/envs/app';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
@@ -65,7 +65,15 @@ export type ScmControlOutcome =
 export class ScmControlService {
   constructor(private db: LobeChatDatabase) {}
 
-  handle = async ({ event, kind, row }: ScmControlEvent): Promise<ScmControlOutcome> => {
+  handle = async (params: ScmControlEvent): Promise<ScmControlOutcome> => {
+    const outcome = await this.route(params);
+    // A failure the debounce window swallowed rides along with the next
+    // event, whatever that event was.
+    if (outcome.outcome !== 'woken') await this.flushPendingWake(params.row.id);
+    return outcome;
+  };
+
+  private route = async ({ event, kind, row }: ScmControlEvent): Promise<ScmControlOutcome> => {
     switch (kind) {
       case 'opened':
       case 'ready_for_review':
@@ -93,6 +101,14 @@ export class ScmControlService {
         // feedback to act on.
         if (event.type === 'review' && event.actor?.login === row.authorExternalLogin) {
           return { detail: 'self comment', outcome: 'skipped' };
+        }
+        // Review text becomes the prompt of an unattended run with tools, so
+        // only someone the repository already trusts may steer it. Anyone
+        // else is still free to comment; their words just do not become
+        // instructions.
+        const association = event.type === 'review' ? event.actor?.association : undefined;
+        if (!association || !SCM_TRUSTED_ASSOCIATIONS.has(association)) {
+          return { detail: `reviewer is ${association ?? 'unknown'}`, outcome: 'skipped' };
         }
         if (!(await this.isEnabled(row, 'wakeOnReview'))) {
           return { detail: 'wakeOnReview is off', outcome: 'skipped' };
@@ -230,9 +246,12 @@ export class ScmControlService {
         row.workspaceId ?? undefined,
       ).findById(row.topicId);
       if (topic?.agentId) {
+        // A workspace agent only resolves under its workspace prefix; the
+        // acceptance link stays global.
+        const slug = row.workspaceId ? await this.workspaceSlug(row.workspaceId) : null;
         conversation = {
           title: topic.title,
-          url: `${origin}/agent/${topic.agentId}/${row.topicId}`,
+          url: `${origin}${slug ? `/${slug}` : ''}/agent/${topic.agentId}/${row.topicId}`,
         };
       }
     }
@@ -296,6 +315,26 @@ export class ScmControlService {
     return outcome;
   };
 
+  /**
+   * Deliver a wake the debounce window swallowed. Called after every event
+   * on a change request, so the last failure of a burst reaches the agent
+   * on the next delivery instead of waiting for an unrelated one. The wake
+   * itself re-reads the row, so the prompt carries every failing check by
+   * then — not just the one that was dropped.
+   */
+  private flushPendingWake = async (rowId: string): Promise<void> => {
+    const fresh = await ScmChangeRequestModel.findById(this.db, rowId);
+    const pending = fresh?.metadata.pendingWake;
+    if (!fresh || !pending) return;
+
+    const outcome = await this.wake(fresh, pending.reason as ScmWakeReason);
+    // Still inside the window: leave the marker for the next delivery.
+    if (outcome.outcome === 'skipped' && outcome.detail === 'debounced') return;
+
+    await ScmChangeRequestModel.clearPendingWake(this.db, rowId);
+    if (outcome.outcome === 'woken') await this.refreshComment(rowId);
+  };
+
   private wake = async (
     row: ScmChangeRequestItem,
     reason: ScmWakeReason,
@@ -307,6 +346,10 @@ export class ScmControlService {
       return { detail: `wake cap (${SCM_MAX_WAKES}) reached`, outcome: 'skipped' };
     }
     if (!(await this.claimWakeWindow(row.id))) {
+      // The burst is collapsed into the wake already in flight, but the
+      // prompt was built before this event landed. Remember it so the next
+      // delivery on this pull request carries it rather than dropping it.
+      await ScmChangeRequestModel.markPendingWake(this.db, row.id, reason);
       return { detail: 'debounced', outcome: 'skipped' };
     }
 
@@ -370,7 +413,7 @@ export class ScmControlService {
       if (row.installationId) {
         const installationId = await this.providerInstallationId(row.installationId);
         for (const check of row.checks ?? []) {
-          if (check.status !== 'completed' || check.conclusion === 'success') continue;
+          if (!isFailingCheck(check)) continue;
           const jobId = check.externalId.startsWith('check_run:')
             ? check.externalId.slice('check_run:'.length)
             : null;
@@ -398,7 +441,22 @@ export class ScmControlService {
           since: new Date(Date.now() - REVIEW_LOOKBACK_MS),
         })
       : [];
-    return buildReviewPrompt({ feedback, reason, row });
+    // The window may also hold comments from people the repository does not
+    // trust; the agent is told about the trusted ones only.
+    return buildReviewPrompt({
+      feedback: feedback.filter((item) => SCM_TRUSTED_ASSOCIATIONS.has(item.association)),
+      reason,
+      row,
+    });
+  };
+
+  /** Slug the workspace-aware routes are mirrored under, for links we hand to GitHub. */
+  private workspaceSlug = async (workspaceId: string): Promise<string | null> => {
+    const [row] = await this.db
+      .select({ slug: workspaces.slug })
+      .from(workspaces)
+      .where(eq(workspaces.id, workspaceId));
+    return row?.slug ?? null;
   };
 
   /** Provider-side installation id for a `scm_installations` row id. */

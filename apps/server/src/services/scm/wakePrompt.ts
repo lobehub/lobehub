@@ -1,6 +1,6 @@
 import { SCM_EVENT_TAG } from '@lobechat/const';
-import type { ScmCheck } from '@lobechat/types';
 
+import { isFailingCheck } from '@/database/models/scm';
 import type { ScmChangeRequestItem } from '@/database/schemas';
 
 import type { GitHubReviewFeedback } from './github/app';
@@ -65,9 +65,9 @@ export const buildCiFailurePrompt = (params: {
   row: ScmChangeRequestItem;
 }): string => {
   const { row, logs } = params;
-  const failing = (row.checks ?? []).filter(
-    (check: ScmCheck) => check.status === 'completed' && check.conclusion !== 'success',
-  );
+  // `cancelled`, `skipped` and `neutral` are completed but not failures;
+  // listing them would ask the agent to fix a check that never ran.
+  const failing = (row.checks ?? []).filter((check) => isFailingCheck(check));
 
   const lines = [openTag(row, 'ci_failed')];
   for (const check of failing) {

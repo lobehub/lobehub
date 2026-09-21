@@ -20,6 +20,24 @@ export type ScmInstallationAccountType = 'organization' | 'user';
 /** Whether the installation covers every repository of the account or a chosen subset. */
 export type ScmRepositorySelection = 'all' | 'selected';
 
+/**
+ * How the provider relates an actor to the repository. GitHub's
+ * `author_association`, lower-cased; `none` covers a passer-by.
+ */
+export type ScmActorAssociation =
+  'collaborator' | 'contributor' | 'member' | 'none' | 'owner' | 'unknown';
+
+/**
+ * Associations whose word is trusted enough to steer an unattended agent.
+ * Anyone below this bar can still comment; their text simply does not
+ * become an instruction with tools behind it.
+ */
+export const SCM_TRUSTED_ASSOCIATIONS: ReadonlySet<ScmActorAssociation> = new Set([
+  'collaborator',
+  'member',
+  'owner',
+]);
+
 /** One repository granted to an installation. Snapshot maintained from provider events. */
 export interface ScmInstallationRepository {
   externalId: string;
@@ -130,14 +148,19 @@ export interface ScmChangeRequestMetadata {
    */
   pendingChecks?: { checks: ScmCheck[]; sha: string };
   /**
+   * A wake the debounce window swallowed. The next event on this change
+   * request delivers it, so the last failure of a burst is not lost.
+   */
+  pendingWake?: { reason: string; since: string };
+  /** Whether the repository is private, when the provider said. Drives the comment switches. */
+  repoPrivate?: boolean;
+  /**
    * Latest effective verdict per reviewer, keyed by provider user id. The
    * change request's `reviewDecision` is the rollup of these: one
    * outstanding "changes requested" outweighs any number of approvals,
    * whatever order the deliveries arrive in.
    */
   reviewers?: Record<string, { at?: string; decision: 'approved' | 'changes_requested' }>;
-  /** Whether the repository is private, when the provider said. Drives the comment switches. */
-  repoPrivate?: boolean;
 }
 
 /** Processing state of one inbound webhook delivery. */

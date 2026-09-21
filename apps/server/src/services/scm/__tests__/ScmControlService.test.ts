@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { getTestDB } from '@lobechat/database/test-utils';
+import type { ScmActorAssociation } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -78,9 +79,9 @@ const checksEvent: Extract<ScmInboundEvent, { type: 'checks' }> = {
   type: 'checks',
 };
 
-const reviewEvent = (login: string) =>
+const reviewEvent = (login: string, association: ScmActorAssociation = 'collaborator') =>
   ({
-    actor: { externalId: '1', login },
+    actor: { association, externalId: '1', login },
     installationId: '90001',
     kind: 'review_commented',
     number: 5,
@@ -332,11 +333,6 @@ describe('ScmControlService — wake', () => {
       }),
     ).toMatchObject({ outcome: 'skipped', detail: 'self comment' });
 
-    mocks.redisSet.mockResolvedValueOnce(null);
-    expect(
-      await control().handle({ event: checksEvent, kind: 'ci_failed', row: linked }),
-    ).toMatchObject({ outcome: 'skipped', detail: 'debounced' });
-
     expect(
       await control().handle({
         event: checksEvent,
@@ -346,6 +342,68 @@ describe('ScmControlService — wake', () => {
     ).toMatchObject({ outcome: 'skipped', detail: expect.stringContaining('wake cap') });
 
     expect(mocks.execAgent).not.toHaveBeenCalled();
+  });
+
+  it('ignores review feedback from someone the repository does not trust', async () => {
+    const topic = await createTopic();
+    const row = await ScmChangeRequestModel.upsert(serverDB, {
+      ...baseRow,
+      links: { topicId: topic.id },
+    });
+
+    for (const association of ['none', 'contributor', 'unknown'] as const) {
+      expect(
+        await control().handle({
+          event: reviewEvent('drive-by', association),
+          kind: 'review_changes_requested',
+          row,
+        }),
+      ).toMatchObject({ detail: `reviewer is ${association}`, outcome: 'skipped' });
+    }
+    expect(mocks.execAgent).not.toHaveBeenCalled();
+
+    // A collaborator's feedback still wakes the agent.
+    expect(
+      await control().handle({
+        event: reviewEvent('maintainer', 'member'),
+        kind: 'review_changes_requested',
+        row,
+      }),
+    ).toMatchObject({ outcome: 'woken' });
+  });
+
+  it('delivers a failure the debounce window swallowed on the next event', async () => {
+    const topic = await createTopic();
+    const row = await ScmChangeRequestModel.upsert(serverDB, {
+      ...baseRow,
+      links: { topicId: topic.id },
+    });
+
+    // Second job of the burst: the window is still held by the first wake,
+    // so nothing is sent — not by this event, and not by the flush either.
+    mocks.redisSet.mockResolvedValue(null);
+    expect(await control().handle({ event: checksEvent, kind: 'ci_failed', row })).toMatchObject({
+      detail: 'debounced',
+      outcome: 'skipped',
+    });
+    expect(mocks.execAgent).not.toHaveBeenCalled();
+    expect(
+      (await ScmChangeRequestModel.findById(serverDB, row.id))?.metadata.pendingWake?.reason,
+    ).toBe('ci_failed');
+
+    // Once the window frees up, any later delivery carries it and the
+    // marker is cleared.
+    mocks.redisSet.mockResolvedValue('OK');
+    const fresh = (await ScmChangeRequestModel.findById(serverDB, row.id))!;
+    await control().handle({
+      event: changeRequestEvent('opened'),
+      kind: 'synchronized',
+      row: fresh,
+    });
+    expect(mocks.execAgent).toHaveBeenCalledTimes(1);
+    expect(
+      (await ScmChangeRequestModel.findById(serverDB, row.id))?.metadata.pendingWake,
+    ).toBeUndefined();
   });
 
   it('respects the automation switches of the user who connected the installation', async () => {

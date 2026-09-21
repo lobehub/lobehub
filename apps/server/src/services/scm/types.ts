@@ -1,4 +1,5 @@
 import type {
+  ScmActorAssociation,
   ScmChangeRequestEventKind,
   ScmChangeRequestSnapshot,
   ScmCheck,
@@ -9,6 +10,8 @@ import type {
 
 /** A provider user as it appears on an event. */
 export interface ScmActor {
+  /** Repository relationship the provider reported for this actor. */
+  association?: ScmActorAssociation;
   externalId: string;
   login: string;
 }

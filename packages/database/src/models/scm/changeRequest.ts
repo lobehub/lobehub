@@ -576,6 +576,38 @@ export class ScmChangeRequestModel {
   };
 
   /** Bump the wake counter; returns the new count so the caller can enforce its cap. */
+  /** Note a wake the debounce window swallowed, for the next delivery to carry. */
+  static markPendingWake = async (
+    db: LobeChatDatabase,
+    id: string,
+    reason: string,
+  ): Promise<void> => {
+    const existing = await ScmChangeRequestModel.findById(db, id);
+    if (!existing || existing.metadata?.pendingWake) return;
+
+    await db
+      .update(scmChangeRequests)
+      .set({
+        metadata: {
+          ...existing.metadata,
+          pendingWake: { reason, since: new Date().toISOString() },
+        },
+        updatedAt: new Date(),
+      })
+      .where(eq(scmChangeRequests.id, id));
+  };
+
+  static clearPendingWake = async (db: LobeChatDatabase, id: string): Promise<void> => {
+    const existing = await ScmChangeRequestModel.findById(db, id);
+    if (!existing?.metadata?.pendingWake) return;
+
+    const { pendingWake: _dropped, ...metadata } = existing.metadata;
+    await db
+      .update(scmChangeRequests)
+      .set({ metadata, updatedAt: new Date() })
+      .where(eq(scmChangeRequests.id, id));
+  };
+
   static recordWake = async (
     db: LobeChatDatabase,
     id: string,

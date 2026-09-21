@@ -15,6 +15,9 @@ const row = {
       url: 'https://github.com/o/r/actions/runs/9/job/2',
     },
     { conclusion: 'failure', externalId: 'check_run:4', name: 'Build "x"', status: 'completed' },
+    { conclusion: 'cancelled', externalId: 'check_run:5', name: 'Cancelled', status: 'completed' },
+    { conclusion: 'skipped', externalId: 'check_run:6', name: 'Skipped', status: 'completed' },
+    { conclusion: 'neutral', externalId: 'check_run:7', name: 'Neutral', status: 'completed' },
     { externalId: 'check_run:3', name: 'Deploy', status: 'in_progress' },
   ],
   headRef: 'feat/x',
@@ -48,6 +51,11 @@ describe('buildCiFailurePrompt', () => {
     expect(prompt).toContain('<check conclusion="failure" name="Build &quot;x&quot;" />');
     expect(prompt).not.toContain('name="Lint"');
     expect(prompt).not.toContain('name="Deploy"');
+    // Cancelled / skipped / neutral runs completed without failing; asking
+    // the agent to fix them would send it after a check that never ran.
+    expect(prompt).not.toContain('name="Cancelled"');
+    expect(prompt).not.toContain('name="Skipped"');
+    expect(prompt).not.toContain('name="Neutral"');
     expect(prompt).toContain(
       '<instruction>\nGitHub reported a failing check on pull request o/r#7',
     );
@@ -66,12 +74,19 @@ describe('buildReviewPrompt', () => {
     const prompt = buildReviewPrompt({
       feedback: [
         {
+          association: 'collaborator' as const,
           author: 'codex',
           body: 'Please split the handler.',
           state: 'CHANGES_REQUESTED',
           url: 'https://github.com/o/r/pull/7#pullrequestreview-1',
         },
-        { author: 'codex', body: 'Guard is inverted.\n\nSee line 40.', line: 42, path: 'src/x.ts' },
+        {
+          association: 'member' as const,
+          author: 'codex',
+          body: 'Guard is inverted.\n\nSee line 40.',
+          line: 42,
+          path: 'src/x.ts',
+        },
       ],
       reason: 'review_changes_requested',
       row,
