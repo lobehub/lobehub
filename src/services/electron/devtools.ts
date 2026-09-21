@@ -11,6 +11,10 @@ class DevtoolsService {
     return ensureElectronIpc().devtools.getAppProcessMetrics();
   }
 
+  async collectRendererGarbage(): Promise<void> {
+    return ensureElectronIpc().devtools.collectRendererGarbage();
+  }
+
   async captureMemoryDump(): Promise<MemoryDump> {
     return ensureElectronIpc().devtools.captureMemoryDump();
   }

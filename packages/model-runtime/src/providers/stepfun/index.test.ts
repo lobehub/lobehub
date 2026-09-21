@@ -125,7 +125,7 @@ describe('LobeStepfunAI - custom features', () => {
       expect(calledPayload.tools[0]).toEqual({ function: { name: 'test' }, type: 'function' });
     });
 
-    it('should set stream to false when tools are present', async () => {
+    it('should keep stream enabled when tools are present', async () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
         model: 'step-1-8k',
@@ -133,14 +133,37 @@ describe('LobeStepfunAI - custom features', () => {
       });
 
       const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
-      expect(calledPayload.stream).toBe(false);
+      expect(calledPayload.stream).toBe(true);
     });
 
-    it('should set stream to false when web_search is enabled', async () => {
+    it('should keep stream enabled when web_search is enabled', async () => {
       await instance.chat({
         enabledSearch: true,
         messages: [{ content: 'Hello', role: 'user' }],
         model: 'step-1-8k',
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      expect(calledPayload.stream).toBe(true);
+    });
+
+    it('should honor caller-provided stream=false when tools are present', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'step-1-8k',
+        stream: false,
+        tools: [{ function: { name: 'test' }, type: 'function' }],
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      expect(calledPayload.stream).toBe(false);
+    });
+
+    it('should honor caller-provided stream=false when no tools are present', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'step-1-8k',
+        stream: false,
       });
 
       const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];

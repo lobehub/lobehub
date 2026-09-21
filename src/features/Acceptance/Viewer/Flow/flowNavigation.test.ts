@@ -10,6 +10,11 @@ describe('acceptance flow navigation', () => {
     expect(resolveAcceptanceTab('flow', 2)).toBe('flow');
     expect(resolveAcceptanceTab('resources', 0)).toBe('resources');
   });
+  it('opens the discussion only when asked, never as the landing tab', () => {
+    expect(resolveAcceptanceTab('discussion', 0)).toBe('discussion');
+    expect(resolveAcceptanceTab('discussion', 3, true, false)).toBe('discussion');
+    expect(resolveAcceptanceTab(undefined, 0)).toBe('checks');
+  });
 });
 
 const makeFlows = () =>
@@ -83,4 +88,25 @@ it('falls back from draft and selected flows when the surface does not offer flo
   expect(resolveAcceptanceTab('flow', 3, false, false)).toBe('checks');
   expect(resolveAcceptanceTab('resources', 3, true, false)).toBe('resources');
   expect(resolveAcceptanceTab('flow', 3, false, true)).toBe('flow');
+});
+
+it('shows a draft round as the pending plan and hides the unsynced live copy', () => {
+  const flows = makeFlows();
+  const rounds = [
+    { run: { id: 'round-a', roundIndex: 4 } },
+    {
+      run: {
+        id: 'round-b',
+        planConfirmedAt: null,
+        roundIndex: 9,
+        status: 'planned',
+        userDecision: null,
+      },
+    },
+  ] as Parameters<typeof getFlowRoundViews>[1];
+  const views = getFlowRoundViews(flows, rounds);
+  expect(views.map(({ id, roundIndex }) => [id, roundIndex])).toEqual([
+    ['v1:visit-b', undefined],
+    ['v1:visit-a', 4],
+  ]);
 });

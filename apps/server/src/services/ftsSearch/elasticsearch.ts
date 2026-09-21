@@ -14,6 +14,7 @@ import {
   findFtsSearchIndexSchemaMismatch,
   FTS_SEARCH_DOCUMENT_ENTITIES,
   getFtsSearchIndexAlias,
+  parseFtsSearchPhysicalIndexName,
   sha256Json,
 } from '@/database/repositories/ftsSearchDocument';
 import type { FtsSearchTargetMappingProperties } from '@/database/repositories/ftsSearchDocument/projectionCompatibility';
@@ -53,8 +54,6 @@ const bulkResponseSchema = z.object({
   ),
 });
 
-const escapeRegExp = (value: string) => value.replaceAll(/[$()*+.?[\\\]^{|}]/g, String.raw`\$&`);
-
 const aliasResponseSchema = z.record(
   z.string(),
   z.object({
@@ -69,6 +68,13 @@ const syncMappingResponseSchema = z.record(
   z.string(),
   z.object({
     mappings: z.object({
+      _meta: z
+        .object({
+          reindex_run_id: z.string().uuid(),
+          schema_version: z.number().int().positive(),
+        })
+        .passthrough()
+        .optional(),
       properties: z
         .record(z.string(), z.object({ type: z.string().optional() }).passthrough())
         .default({}),
@@ -97,7 +103,9 @@ const indexIdentityResponseSchema = z.record(
       index: z
         .object({
           analysis: z.record(z.string(), z.unknown()),
-          uuid: z.string().trim().min(1),
+          // Serverless omits internal settings; sync still validates the stamped generation below.
+          // https://www.elastic.co/docs/reference/elasticsearch/index-settings/serverless
+          uuid: z.string().trim().min(1).optional(),
         })
         .passthrough(),
     }),
@@ -126,7 +134,8 @@ export interface ElasticsearchFtsSearchHttpClientOptions {
 }
 
 export interface ElasticsearchFtsSearchSyncIndexIdentity {
-  indexUuid: string;
+  /** Null when the deployment does not expose its internal index UUID. */
+  indexUuid: string | null;
   mappingSha256: string;
   physicalIndex: string;
   reindexRunId: string;
@@ -389,9 +398,9 @@ export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchC
 
   /**
    * Lists every live physical generation of each alias so incremental sync can write to all of
-   * them. Generations follow `<alias>-v<n>`; the alias's writable index is always included even if
-   * it was named differently by an operator. Only open indexes count: a generation being retired
-   * is closed first, which drops it from this list before it is deleted.
+   * them. Generations follow `<alias>-v<n>` or `<alias>-v<n>-r<run-id>`; the alias's writable index
+   * is always included even if it was named differently by an operator. Only open indexes count: a
+   * generation being retired is closed first, which drops it from this list before it is deleted.
    *
    * Resolved on every drain rather than cached so a generation created by a running rebuild starts
    * receiving writes on the next batch, and a retired one stops without a restart.
@@ -410,9 +419,10 @@ export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchC
     const targets: Record<string, string[]> = {};
     for (const alias of [...aliases].sort()) {
       const writeIndex = this.selectWriteTarget(aliasTable, alias);
-      const generationPattern = new RegExp(`^${escapeRegExp(alias)}-v\\d+$`);
       const generations = new Set(
-        Object.keys(generationTable).filter((index) => generationPattern.test(index)),
+        Object.keys(generationTable).filter(
+          (index) => parseFtsSearchPhysicalIndexName(alias, index) !== undefined,
+        ),
       );
       generations.add(writeIndex);
       targets[alias] = [...generations].sort();
@@ -433,7 +443,7 @@ export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchC
 
     const response = await fetch(
       new URL(
-        `/${indexes.map(encodeURIComponent).join(',')}/_mapping?filter_path=*.mappings.properties`,
+        `/${indexes.map(encodeURIComponent).join(',')}/_mapping?filter_path=*.mappings._meta,*.mappings.properties`,
         this.url,
       ),
       {
@@ -467,6 +477,23 @@ export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchC
         );
       }
       const entity = entitiesByIndex[index];
+      if (this.indexNamespace) {
+        const identity = parseFtsSearchPhysicalIndexName(
+          getFtsSearchIndexAlias(this.indexNamespace, entity),
+          index,
+        );
+        if (identity?.reindexRunId) {
+          const meta = payload.data[index]?.mappings._meta;
+          if (
+            meta?.reindex_run_id !== identity.reindexRunId ||
+            meta.schema_version < identity.builtSchemaVersion
+          ) {
+            throw new ElasticsearchFtsSearchRequestError(
+              `Elasticsearch full-text search rebuild generation ${index} has incompatible reindex metadata`,
+            );
+          }
+        }
+      }
       const compatibility = getFtsSearchProjectionCompatibility(
         entity,
         properties satisfies FtsSearchTargetMappingProperties,
@@ -584,7 +611,7 @@ export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchC
       }
 
       identities.set(alias, {
-        indexUuid: index.settings.index.uuid,
+        indexUuid: index.settings.index.uuid ?? null,
         mappingSha256: sha256Json(index.mappings),
         physicalIndex,
         reindexRunId: index.mappings._meta.reindex_run_id,

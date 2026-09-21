@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
 
 // The hook must NOT route anywhere: `/acceptance/:id` is a public,
 // workspace-less page and navigating there drops the workspace slug
-// (LOBE-13898). The navigate hook is mocked only to prove it stays unused.
+// The navigate hook is mocked only to prove it stays unused.
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => mocks.navigate,
 }));

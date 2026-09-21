@@ -110,6 +110,7 @@ export const workspaceInvitations = pgTable(
   },
   (t) => [
     index('workspace_invitations_workspace_id_idx').on(t.workspaceId),
+    index('workspace_invitations_inviter_id_idx').on(t.inviterId),
     index('workspace_invitations_email_idx').on(t.email),
     index('workspace_invitations_token_idx').on(t.token),
   ],

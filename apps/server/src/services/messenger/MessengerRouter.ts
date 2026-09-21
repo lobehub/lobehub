@@ -19,9 +19,19 @@ import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis'
 import { AiAgentService } from '@/server/services/aiAgent';
 import { AgentBridgeService } from '@/server/services/bot/AgentBridgeService';
 import { buildBotContext } from '@/server/services/bot/buildBotContext';
+import { replayDeferredBotMessages } from '@/server/services/bot/deferredMessages';
 import { submitBotFeedback } from '@/server/services/bot/feedbackSubmit';
+import {
+  buildReplayMessages,
+  getSameSenderMessages,
+  mergeBotMessages,
+} from '@/server/services/bot/mergeMessages';
+import { patchSenderBatches } from '@/server/services/bot/patchSenderBatches';
 import type { PlatformClient } from '@/server/services/bot/platforms';
 import { getBotReplyLocale } from '@/server/services/bot/platforms/const';
+// Leaf module, not the `./platforms` barrel: the barrel instantiates every
+// platform definition (and its ClientFactory) at import time.
+import { resolveBotConcurrency } from '@/server/services/bot/platforms/utils';
 import {
   renderCommandReply,
   renderFeedbackSubmitted,
@@ -53,6 +63,8 @@ const PERSONAL_SCOPE_ID = 'personal';
 const WECHAT_UNSUPPORTED_COMMANDS = new Set(['start']);
 
 interface RegisteredMessengerBot {
+  /** Chat SDK adapters keyed by platform id, as passed to the `Chat` config. */
+  adapters: Record<string, any>;
   binder: MessengerPlatformBinder;
   chatBot: Chat<any>;
   client: PlatformClient;
@@ -418,17 +430,53 @@ export class MessengerRouter {
         );
     }
 
-    const registered: RegisteredMessengerBot = { binder, chatBot, client, creds };
+    const registered: RegisteredMessengerBot = { adapters, binder, chatBot, client, creds };
     this.bots.set(creds.installationKey, registered);
 
     log('loadBot: registered messenger %s bot', creds.installationKey);
     return registered;
   }
 
+  /**
+   * Re-dispatch the messages `AgentBridgeService` parked while the thread's
+   * topic was still running (see `BotMessageRouter.replayDeferredMessages`).
+   * `applicationId` is the synthetic per-install id the bridge used when
+   * deferring (`messenger-<platform>[-<tenant>]`).
+   */
+  async replayDeferredMessages(
+    installationKey: string,
+    applicationId: string,
+    platformThreadId: string,
+  ): Promise<void> {
+    await replayDeferredBotMessages(applicationId, platformThreadId, async (entries) => {
+      const platform = installationKey.split(':')[0] as MessengerPlatform;
+      const store = getInstallationStore(platform);
+      const creds = await store?.resolveByKey(installationKey);
+      const bot = creds ? await this.getOrCreateBot(creds) : null;
+      const adapter = bot?.adapters[platform];
+      if (!bot || !adapter) throw new Error(`Messenger adapter unavailable for ${platform}`);
+      const results = await Promise.allSettled(
+        buildReplayMessages(entries).map((message) =>
+          bot.chatBot.processMessage(adapter, platformThreadId, message),
+        ),
+      );
+      const failure = results.find((result) => result.status === 'rejected');
+      if (failure?.status === 'rejected') throw failure.reason;
+    });
+  }
+
   private createChatBot(adapters: Record<string, any>, creds: InstallationCredentials): Chat<any> {
     const config: any = {
       adapters,
-      concurrency: 'queue',
+      // Messenger installs carry no per-channel settings, so this is purely the
+      // platform's own answer: WeChat collects a burst window because it splits
+      // one turn across several messages, everything else keeps the plain queue.
+      // Shared with `BotMessageRouter` so both paths agree on which platforms
+      // need collecting.
+      concurrency: (() => {
+        const { debounceMs, strategy } = resolveBotConcurrency(creds.platform, undefined);
+        return strategy === 'queue' ? 'queue' : { debounceMs, strategy };
+      })(),
       // Per-install Chat SDK identity so the queue / state / debounce keys
       // never overlap across workspaces.
       userName: `messenger-bot-${creds.installationKey}`,
@@ -444,7 +492,13 @@ export class MessengerRouter {
       });
     }
 
-    return new Chat(config);
+    const bot = new Chat(config);
+    const commands = this.getCommandsForPlatform(creds.platform);
+    patchSenderBatches(bot, (message) => {
+      const parsed = parseCommand(message.text);
+      return !!parsed && commands.some((command) => command.name === parsed.name);
+    });
+    return bot;
   }
 
   private registerHandlers(
@@ -697,17 +751,30 @@ export class MessengerRouter {
       return { count: participants.length + 1, isNewParticipant: true };
     };
 
-    bot.onSubscribedMessage(async (thread, message, _context?: MessageContext) => {
+    bot.onSubscribedMessage(async (thread, message, context?: MessageContext) => {
       log('onSubscribedMessage: install=%s, msgId=%s', creds.installationKey, (message as any).id);
+
+      // Fold in whatever the SDK collected while the previous handler ran (or
+      // during a `burst` window) so the agent sees the whole user turn — text
+      // and media alike — instead of only its last message.
+      const merged = mergeBotMessages(message, context?.skipped);
 
       // DM short-circuit — always 1:1 with the bot, no participant gating.
       if (thread.isDM) {
-        await handle(thread, message, 'handleSubscribedMessage');
+        await handle(thread, merged, 'handleSubscribedMessage');
         return;
       }
 
-      const isMention = message.isMention === true;
-      const { count } = await trackThreadParticipant(thread, message);
+      // A mention anywhere in the collected turn addresses the bot; the last
+      // message of a burst often carries the question without the `@`.
+      const isMention =
+        message.isMention === true ||
+        getSameSenderMessages(message, context?.skipped).some((m) => m.isMention === true) === true;
+      let count = 0;
+      for (const source of [...(context?.skipped ?? []), message]) {
+        const participant = await trackThreadParticipant(thread, source);
+        count = Math.max(count, participant.count);
+      }
 
       // Single-human thread → respond without `@`. Multi-human thread →
       // only @mention triggers a reply, so the bot doesn't insert itself
@@ -739,7 +806,7 @@ export class MessengerRouter {
       // subscribed channel thread). `handleSubscribedMessage` reads the
       // cached topicId from chat-sdk thread state and continues that topic;
       // it falls back to `handleMention` internally if no topicId is cached.
-      await handle(thread, message, 'handleSubscribedMessage');
+      await handle(thread, merged, 'handleSubscribedMessage');
     });
 
     // First-touch entry point for any non-subscribed conversation:
@@ -750,19 +817,22 @@ export class MessengerRouter {
     // thread state, and (for subscribable platforms / threads — see
     // `client.shouldSubscribe`) subscribes the thread so subsequent
     // messages route through `onSubscribedMessage` and continue the topic.
-    bot.onNewMention(async (thread, message, _context?: MessageContext) => {
+    bot.onNewMention(async (thread, message, context?: MessageContext) => {
       log(
         'onNewMention: install=%s, msgId=%s, threadId=%s',
         creds.installationKey,
         (message as any).id,
         thread.id,
       );
+      const merged = mergeBotMessages(message, context?.skipped);
       // Record the original @mentioner so the participant count starts at 1
       // (not 0) when their first follow-up lands in `onSubscribedMessage`.
       // Without this the follow-up looks like a "new participant" instead
       // of the same person continuing.
-      await trackThreadParticipant(thread, message);
-      await handle(thread, message, 'handleMention');
+      for (const source of [...(context?.skipped ?? []), message]) {
+        await trackThreadParticipant(thread, source);
+      }
+      await handle(thread, merged, 'handleMention');
     });
 
     // Native slash commands. chat-adapter routes a leading `/command` to the

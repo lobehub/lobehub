@@ -1,7 +1,7 @@
 import { CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { sortTreeItems, toTreeItem, TreeActionImpl } from './actions';
+import { sortTreeItems, toTreeItem, toTreeItemFromResource, TreeActionImpl } from './actions';
 import type { TreeState } from './types';
 
 const {
@@ -614,7 +614,7 @@ describe('sortTreeItems', () => {
     toTreeItem({ createdAt, fileType: 'custom/document', id, name });
 
   it('puts a just-created page first instead of dropping it into the A-Z list', () => {
-    // LOBE-13814: creating a page inside a folder full of "<name> 周报 — 2026-Wxx"
+    // Creating a page inside a folder full of "<name> 周报 — 2026-Wxx"
     // rows landed the new "Untitled" between "TC" and "xiaojie".
     const rows = [
       doc('report-tc', 'TC 周报 — 2026-W35', '2026-08-28T02:00:00.000Z'),
@@ -661,5 +661,41 @@ describe('sortTreeItems', () => {
     ];
 
     expect(sortTreeItems(rows).map((item) => item.id)).toEqual(['a', 'b']);
+  });
+});
+
+describe('toTreeItemFromResource', () => {
+  const row = {
+    createdAt: new Date('2026-01-01T00:00:00Z'),
+    fileId: 'file-1',
+    fileType: 'custom/document',
+    id: 'docs_1',
+    metadata: { emoji: '📄' },
+    name: 'Private note',
+    parentId: null,
+    size: 12,
+    slug: 'private-note',
+    sourceType: 'document',
+    url: '',
+    userId: 'user-1',
+    visibility: 'private' as const,
+  };
+
+  it('carries the fields the sidebar and the row menu read', () => {
+    // Regression: the explorer → tree reconcile rebuilt rows from a hand-written
+    // literal that omitted these two, so every list refresh stripped the private
+    // marker off the sidebar and mis-gated publish / make-private.
+    expect(toTreeItemFromResource(row)).toMatchObject({
+      userId: 'user-1',
+      visibility: 'private',
+    });
+  });
+
+  it('keeps a workspace-shared row shared', () => {
+    expect(toTreeItemFromResource({ ...row, visibility: 'public' }).visibility).toBe('public');
+  });
+
+  it('produces the same row as the tree fetch does for the same input', () => {
+    expect(toTreeItemFromResource(row)).toEqual(toTreeItem(row));
   });
 });

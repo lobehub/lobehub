@@ -20,19 +20,25 @@ vi.mock('@lobechat/builtin-tool-skill-store/executionRuntime', () => ({
 }));
 
 vi.mock('@/database/models/rbac', () => ({
-  RbacModel: vi.fn(() => ({
-    hasAnyPermission: mocks.hasAnyPermission,
-  })),
+  RbacModel: vi.fn(function () {
+    return {
+      hasAnyPermission: mocks.hasAnyPermission,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/user', () => ({
-  UserModel: vi.fn(() => ({
-    getUserSettings: mocks.getUserSettings,
-  })),
+  UserModel: vi.fn(function () {
+    return {
+      getUserSettings: mocks.getUserSettings,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/market', () => ({
-  MarketService: vi.fn(() => ({})),
+  MarketService: vi.fn(function () {
+    return {};
+  }),
 }));
 
 vi.mock('@/server/services/skill/importer', () => ({
@@ -41,7 +47,9 @@ vi.mock('@/server/services/skill/importer', () => ({
 
 vi.mock('@/server/services/agentSignal/procedure', () => ({
   emitToolOutcomeSafely: vi.fn(),
-  resolveToolOutcomeScope: vi.fn(() => ({ scope: 'user', scopeKey: 'user-1' })),
+  resolveToolOutcomeScope: vi.fn(function () {
+    return { scope: 'user', scopeKey: 'user-1' };
+  }),
 }));
 
 vi.mock('@/server/services/agentSignal/store/adapters/redis/policyStateStore', () => ({

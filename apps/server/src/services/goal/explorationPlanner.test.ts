@@ -9,7 +9,9 @@ const { generateObject, resolveGoalModelConfig } = vi.hoisted(() => ({
   resolveGoalModelConfig: vi.fn(),
 }));
 vi.mock('@/server/services/aiGeneration', () => ({
-  AiGenerationService: vi.fn(() => ({ generateObject })),
+  AiGenerationService: vi.fn(function () {
+    return { generateObject };
+  }),
 }));
 vi.mock('./modelConfig', () => ({ resolveGoalModelConfig }));
 
@@ -38,9 +40,39 @@ describe('GoalExplorationPlanner', () => {
     expect(generateObject).toHaveBeenCalledWith(
       expect.objectContaining({ model: 'goal-model', provider: 'goal-provider' }),
       {
-        tracing: { scenario: 'goal_explore', promptVersion: 'v1', schemaName: 'goal_exploration' },
+        tracing: { scenario: 'goal_explore', promptVersion: 'v2', schemaName: 'goal_exploration' },
       },
     );
+  });
+  it('accepts a revision that reuses the parent title but keeps its corrected protocol', async () => {
+    generateObject.mockResolvedValue({
+      action: 'revise',
+      parentNodeId: 'exp-1',
+      title: '',
+      instruction: 'Emit a calibrated score instead of a boolean, then report AUC',
+      reason: 'The arms measured a hard verdict, which discards the ranking signal',
+    });
+    const plan = await planner.plan(input);
+    expect(plan.action).toBe('revise');
+    expect(plan.parentNodeId).toBe('exp-1');
+  });
+  it('rejects a revision that names no experiment or carries no corrected protocol', async () => {
+    generateObject.mockResolvedValue({
+      action: 'revise',
+      parentNodeId: '',
+      title: 'Fix',
+      instruction: 'Measure AUC',
+      reason: 'Wrong instrument',
+    });
+    await expect(planner.plan(input)).rejects.toThrow();
+    generateObject.mockResolvedValue({
+      action: 'revise',
+      parentNodeId: 'exp-1',
+      title: 'Fix',
+      instruction: '   ',
+      reason: 'Wrong instrument',
+    });
+    await expect(planner.plan(input)).rejects.toThrow();
   });
   it('rejects empty expansion instructions and unknown actions', async () => {
     generateObject.mockResolvedValue({

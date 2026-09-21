@@ -1,6 +1,34 @@
 name: E2E CI
 
-on: [push, pull_request]
+on:
+  push:
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.claude/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/workflows/claude*.yml'
+      - '.github/workflows/issue-*.yml'
+      - '.github/workflows/release*.yml'
+      - '.github/workflows/sync*.y*ml'
+      - '.github/workflows/auto-*.yml'
+      - '.github/workflows/manual-*.yml'
+      - '.github/workflows/lighthouse.yml'
+      - '.github/workflows/bundle-analyzer.yml'
+  pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.claude/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/workflows/claude*.yml'
+      - '.github/workflows/issue-*.yml'
+      - '.github/workflows/release*.yml'
+      - '.github/workflows/sync*.y*ml'
+      - '.github/workflows/auto-*.yml'
+      - '.github/workflows/manual-*.yml'
+      - '.github/workflows/lighthouse.yml'
+      - '.github/workflows/bundle-analyzer.yml'
 
 permissions:
   actions: write
@@ -181,6 +209,15 @@ jobs:
         id: entry_graph_check
         continue-on-error: true
         run: node .github/scripts/bundle-size-gate.cjs check --current size-report/entry-graph.json --baseline .size-baseline/entry-graph.json --label "First-screen static import graph (gzip)" --report size-report/report.md --floor 65536
+
+      - name: Upload size report with resolved dependency versions
+        if: always() && env.SIZE_GATE_ENABLED == 'true'
+        uses: actions/upload-artifact@v6
+        with:
+          name: size-report
+          path: size-report/
+          retention-days: 30
+          if-no-files-found: ignore
 
       - name: Comment bundle size report on PR
         if: always() && env.SIZE_GATE_ENABLED == 'true' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)

@@ -274,6 +274,12 @@ export interface OnFinishData {
   finishReason?: string;
   grounding?: any;
   reasoning?: ModelReasoning;
+  /** Stable identities and terminal outcome for the provider attempt producing this result. */
+  routeAttempt?: {
+    attemptId: string;
+    outcome?: 'completed' | 'empty' | 'interrupted' | 'cancelled' | 'failed';
+    requestId: string;
+  };
   speed?: ModelPerformance;
   text: string;
   thinking?: string;

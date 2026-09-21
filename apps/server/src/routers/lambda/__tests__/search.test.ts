@@ -39,11 +39,13 @@ describe('searchRouter', () => {
       email: 'user@example.com',
       fullName: 'Test User',
     } as any);
-    vi.mocked(UserModel).mockImplementation(() => ({ getUserSettings }) as any);
+    vi.mocked(UserModel).mockImplementation(function () {
+      return { getUserSettings } as any;
+    });
     vi.mocked(createFtsSearchRepo).mockResolvedValue({ search } as any);
-    vi.mocked(DiscoverService).mockImplementation(
-      () => ({ getAssistantList, getMcpList, getPluginList }) as unknown as DiscoverService,
-    );
+    vi.mocked(DiscoverService).mockImplementation(function () {
+      return { getAssistantList, getMcpList, getPluginList } as unknown as DiscoverService;
+    });
   });
 
   afterEach(() => {
@@ -157,7 +159,7 @@ describe('searchRouter', () => {
   it('returns a typed error when the community agent market search fails', async () => {
     const marketError = new Error('Market unavailable');
     getAssistantList.mockRejectedValue(marketError);
-    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(function () {});
     const caller = searchRouter.createCaller({ userId: 'test-user' } as any);
 
     await expect(

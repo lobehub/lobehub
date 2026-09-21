@@ -16,15 +16,21 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/database/models/document', () => ({
-  DocumentModel: vi.fn(() => mocks.documentModel),
+  DocumentModel: vi.fn(function () {
+    return mocks.documentModel;
+  }),
 }));
 
 vi.mock('@/database/models/topicDocument', () => ({
-  TopicDocumentModel: vi.fn(() => mocks.topicDocumentModel),
+  TopicDocumentModel: vi.fn(function () {
+    return mocks.topicDocumentModel;
+  }),
 }));
 
 vi.mock('@/server/services/document', () => ({
-  DocumentService: vi.fn(() => mocks.documentService),
+  DocumentService: vi.fn(function () {
+    return mocks.documentService;
+  }),
 }));
 
 vi.mock('@/server/services/agentDocuments/headlessEditor', () => ({

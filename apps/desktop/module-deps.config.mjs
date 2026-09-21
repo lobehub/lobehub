@@ -10,7 +10,7 @@ const sourceNodeModules = path.join(__dirname, 'node_modules');
  * @param {string} moduleName - The module to resolve
  * @param {Set<string>} visited - Set of already visited modules
  * @param {string} nodeModulesPath - Path to node_modules directory
- * @param {{skipOptionalDependenciesFor?: Set<string>}} options - Dependency traversal options
+ * @param {{skipOptionalDependenciesFor?: Set<string>, targetPlatform?: string}} options - Dependency traversal options
  * @returns {Set<string>} Set of all dependencies
  */
 function resolveDependencies(
@@ -23,11 +23,15 @@ function resolveDependencies(
     return visited;
   }
 
+  const packageJsonPath = path.join(nodeModulesPath, moduleName, 'package.json');
+
+  if (!supportsPlatform(packageJsonPath, options.targetPlatform)) {
+    return visited;
+  }
+
   // Always add the module name first. Workspace and optional platform modules
   // may not be materialized locally, but they still need stable package rules.
   visited.add(moduleName);
-
-  const packageJsonPath = path.join(nodeModulesPath, moduleName, 'package.json');
 
   if (!fs.existsSync(packageJsonPath)) {
     return visited;
@@ -55,10 +59,21 @@ function resolveDependencies(
   return visited;
 }
 
+function supportsPlatform(packageJsonPath, targetPlatform) {
+  if (!targetPlatform || !fs.existsSync(packageJsonPath)) return true;
+
+  try {
+    const { os } = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+    return !Array.isArray(os) || os.includes(targetPlatform);
+  } catch {
+    return true;
+  }
+}
+
 /**
  * Get all transitive dependencies for a set of top-level modules.
  * @param {string[]} modules
- * @param {{skipOptionalDependenciesFor?: Set<string>}} options
+ * @param {{skipOptionalDependenciesFor?: Set<string>, targetPlatform?: string}} options
  * @returns {string[]}
  */
 export function getDependenciesForModules(modules, options = {}) {
@@ -78,12 +93,12 @@ export function getDependenciesForModules(modules, options = {}) {
  * Generate object-form electron-builder files config.
  * Object form is required because pnpm symlinks are resolved before packaging.
  * @param {string[]} modules
- * @param {{skipOptionalDependenciesFor?: Set<string>}} options
+ * @param {{skipOptionalDependenciesFor?: Set<string>, targetPlatform?: string}} options
  * @returns {Array<{from: string, to: string, filter: string[]}>}
  */
 export function getModuleFilesConfig(modules, options = {}) {
   return getDependenciesForModules(modules, options).map((dep) => ({
-    filter: ['**/*', '!**/*.map'],
+    filter: ['**/*', '!**/*.map', '!**/*.pdb'],
     from: `node_modules/${dep}`,
     to: `node_modules/${dep}`,
   }));
@@ -94,7 +109,7 @@ export function getModuleFilesConfig(modules, options = {}) {
  * electron-builder can include them via file rules.
  * @param {string[]} modules
  * @param {string} label
- * @param {{skipOptionalDependenciesFor?: Set<string>}} options
+ * @param {{skipOptionalDependenciesFor?: Set<string>, targetPlatform?: string}} options
  */
 export async function copyModulesToSource(modules, label, options = {}) {
   const deps = getDependenciesForModules(modules, options);

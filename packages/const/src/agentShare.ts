@@ -56,6 +56,51 @@ export const AGENT_SHARE_DEFAULT_MONTHLY_SPEND_LIMIT = 10;
 export const SHARE_VISITOR_PROMPT_MAX_LENGTH = 20_000;
 
 /**
+ * Upper bound on attachments a share visitor may pin to one turn.
+ *
+ * Visitor attachments are stored under the CREATOR's account (the creator's
+ * storage quota pays for them, like every other share artifact), and every
+ * attached document is parsed and injected into the creator-billed model call
+ * while every image rides along as vision input. This cap bounds that per-turn
+ * cost; together with {@link SHARE_VISITOR_MAX_FILE_SIZE} it bounds how much
+ * storage one visitor turn can put on the creator. Ten mirrors what a single
+ * owner turn realistically carries.
+ */
+export const SHARE_VISITOR_MAX_FILES_PER_TURN = 10;
+
+/**
+ * Largest single file a share visitor may upload, in bytes.
+ *
+ * Far below the owner's own `MAX_UPLOAD_FILE_SIZE` (2 GB): the bytes land on
+ * the CREATOR's storage quota and a visitor is an untrusted party. Also kept
+ * under the client's multipart threshold (64 MB) so the share upload path is
+ * a single reserved PUT — no multipart session to abort or resume.
+ */
+export const SHARE_VISITOR_MAX_FILE_SIZE = 32 * 1024 * 1024;
+
+/**
+ * Default `AgentShareConfig.maxFileStorage` (bytes) applied when a share is
+ * first created and whenever a partial config is normalized.
+ *
+ * Total storage a share's visitor uploads may occupy on the CREATOR's
+ * account — settled files plus in-flight reservations. Mandatory like
+ * `monthlySpendLimit`: the creator can move the number (or set `0` to turn
+ * visitor attachments off) but never clear it — without a ceiling, anyone
+ * with the link could upload, never send, and fill the creator's quota. The
+ * creator's own plan limit still applies on top.
+ */
+export const AGENT_SHARE_DEFAULT_MAX_FILE_STORAGE = 512 * 1024 * 1024;
+
+/**
+ * Message prefix of the `FORBIDDEN` error `shareChat.createUploadUrl` throws
+ * when a visitor upload is refused for storage reasons — the share's
+ * `maxFileStorage` cap or the creator's own account-level block. The client
+ * matches the prefix only; the suffix is a visitor-safe cause, never the
+ * creator's billing state.
+ */
+export const SHARE_UPLOAD_STORAGE_BLOCK_PREFIX = 'storage_block:';
+
+/**
  * Validates `AgentShareConfig.slug`: lowercase alphanumerics and hyphens
  * only, 3-64 characters, no leading/trailing hyphen. Deliberately excludes
  * uppercase and underscores to keep share URLs visually unambiguous and

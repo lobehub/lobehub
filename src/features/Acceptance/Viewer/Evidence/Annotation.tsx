@@ -7,6 +7,7 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { Trash2 } from 'lucide-react';
 import { memo } from 'react';
 
+import type { EvidenceOverlay } from './overlay';
 import { useAnnotationGesture } from './useAnnotationGesture';
 
 /**
@@ -36,12 +37,14 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: 11px;
     font-weight: 600;
     line-height: 1;
-    color: #fff;
+    color: ${cssVar.colorTextLightSolid};
 
     background: ${cssVar.colorError};
   `,
   /* Delete mirrors the index badge on the opposite corner — the same pink
-     disc, so which region the action removes reads at a glance. */
+     disc, so which region the action removes reads at a glance. Touch keeps
+     it: a phone reviewer who mis-drags a box has no keyboard escape, and the
+     only other way out used to be leaving the image entirely. */
   badgeDelete: css`
     cursor: pointer;
 
@@ -58,7 +61,7 @@ const styles = createStaticStyles(({ css }) => ({
     border: none;
     border-radius: 50%;
 
-    color: #fff;
+    color: ${cssVar.colorTextLightSolid};
 
     background: ${cssVar.colorError};
 
@@ -66,8 +69,11 @@ const styles = createStaticStyles(({ css }) => ({
       filter: brightness(1.15);
     }
 
-    @media (width <= 767px) {
-      display: none;
+    @media (pointer: coarse) {
+      inset-block-start: -12px;
+      inset-inline-end: -12px;
+      width: 24px;
+      height: 24px;
     }
   `,
   canvas: css`
@@ -101,7 +107,16 @@ const styles = createStaticStyles(({ css }) => ({
     position: absolute;
     border: 2px solid ${cssVar.colorError};
     border-radius: 4px;
-    box-shadow: 0 0 0 1px rgb(0 0 0 / 25%);
+
+    /*
+     * Two rings instead of one: the dark outside separates the box from a white
+     * screenshot, the light inside separates it from a dark one. The evidence
+     * image can be either, and neither the hue nor the reader's theme can tell
+     * us which — so the box carries its own contrast.
+     */
+    box-shadow:
+      0 0 0 1px rgb(0 0 0 / 45%),
+      inset 0 0 0 1px rgb(255 255 255 / 45%);
   `,
   resizeHandle: css`
     cursor: nwse-resize;
@@ -134,12 +149,12 @@ const rectStyle = (rect: Rect) => ({
 
 interface AnnotatedImageProps {
   /**
-   * `label` overrides the badge number. Regions belonging to one review may be
-   * spread across several images, and per-image numbering would restart at 1 on
-   * each — so a list that references "区域 2" elsewhere could point at two
-   * different boxes. Pass an explicit label to keep one sequence across images.
+   * Each region carries the colour of whoever drew it — see
+   * {@link EvidenceOverlay}. `label` overrides the badge number: regions
+   * belonging to one review may be spread across several images, and per-image
+   * numbering would restart at 1 on each.
    */
-  annotations: { comment?: string; label?: number; rect: Rect }[];
+  annotations: EvidenceOverlay[];
   imageStyle?: React.CSSProperties;
   /** Render the per-region notes under the image. Off when a caller already lists them. */
   showComments?: boolean;
@@ -158,8 +173,22 @@ export const AnnotatedImage = memo<AnnotatedImageProps>(
         <div className={styles.frame}>
           <img alt={''} className={styles.image} src={src} style={imageStyle} />
           {annotations.map((annotation, index) => (
-            <div className={styles.rect} key={index} style={rectStyle(annotation.rect)}>
-              {numbered && <span className={styles.badge}>{annotation.label ?? index + 1}</span>}
+            <div
+              className={styles.rect}
+              key={index}
+              style={{
+                ...rectStyle(annotation.rect),
+                borderColor: annotation.color ?? cssVar.colorError,
+              }}
+            >
+              {numbered && (
+                <span
+                  className={styles.badge}
+                  style={{ background: annotation.color ?? cssVar.colorError }}
+                >
+                  {annotation.label ?? index + 1}
+                </span>
+              )}
             </div>
           ))}
         </div>
@@ -170,6 +199,7 @@ export const AnnotatedImage = memo<AnnotatedImageProps>(
                 annotation.comment && (
                   <Text fontSize={12} key={index} type={'secondary'}>
                     {numbered ? `${annotation.label ?? index + 1}. ` : ''}
+                    {annotation.authorName ? `${annotation.authorName}: ` : ''}
                     {annotation.comment}
                   </Text>
                 ),

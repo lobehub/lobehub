@@ -9,6 +9,7 @@ import type {
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 
+import { TopicTrigger } from '@/const/topic';
 import { AgentModel } from '@/database/models/agent';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { GoalModel } from '@/database/models/goal';
@@ -21,7 +22,14 @@ import { AiAgentService } from '@/server/services/aiAgent';
 
 import { resolveGoalModelConfig } from '../modelConfig';
 import { scheduleGoalAdvance } from '../scheduler';
-import { recoveryEligibility, supervisionLimit, SUPERVISOR_DIAGNOSIS_TIMEOUT_MS } from './policy';
+import { claimGoalTask } from '../taskClaim';
+import {
+  RECOVERABLE_TASK_STATUSES,
+  recoveryEligibility,
+  statusAuthoredByActor,
+  supervisionLimit,
+  SUPERVISOR_DIAGNOSIS_TIMEOUT_MS,
+} from './policy';
 
 /** Durable supervisor with a dedicated, incident-scoped tool set. */
 export class GoalSupervisorService {
@@ -95,6 +103,7 @@ export class GoalSupervisorService {
       const topic = await new TopicModel(tx, this.userId, this.workspaceId).create({
         agentId: agent.id,
         title: `Supervision: ${goal.title}`,
+        trigger: TopicTrigger.GoalSupervision,
       });
       const state = await model.updateSupervisorState(goal.id, 0, {
         agentId: agent.id,
@@ -128,6 +137,9 @@ export class GoalSupervisorService {
       task.id,
     );
     const latest = runs[0];
+    // A kickoff that threw before writing a run has no operation to key an incident on,
+    // and settlement is anchored on that run's sequence. Supervising it needs incident
+    // identity and settlement redesigned, so it still reaches a person for now.
     if (!latest?.operationId) return null;
     const failedOperation = await operations.findById(latest.operationId);
     const state = graph.goal.config.supervisorState ?? (await this.initialize(graph));
@@ -146,7 +158,13 @@ export class GoalSupervisorService {
         }
         return null;
       }
-      let eligibility = recoveryEligibility(graph, task, failedOperation);
+      const taskModel = new TaskModel(this.db, this.userId, this.workspaceId);
+      let eligibility = recoveryEligibility(
+        graph,
+        task,
+        failedOperation,
+        statusAuthoredByActor(await taskModel.getActivities(task.id, 20), task.status),
+      );
       if (eligibility.eligible && (await this.budgetBlocked(graph))) {
         eligibility = {
           eligible: false,
@@ -162,6 +180,7 @@ export class GoalSupervisorService {
         reason: eligibility.reason,
         status: eligibility.eligible ? 'diagnosing' : 'escalated',
         taskId: task.id,
+        taskStatus: task.status,
       };
       const claimed = await new GoalModel(
         this.db,
@@ -312,15 +331,34 @@ export class GoalSupervisorService {
         !currentTask ||
         ownIncident?.status !== 'diagnosing' ||
         currentRuns[0]?.operationId !== incident.failedOperationId ||
-        !recoveryEligibility(currentGraph, currentTask, failedOperation).eligible ||
+        !recoveryEligibility(
+          currentGraph,
+          currentTask,
+          failedOperation,
+          statusAuthoredByActor(
+            await new TaskModel(tx, this.userId, this.workspaceId).getActivities(task.id, 20),
+            currentTask.status,
+          ),
+        ).eligible ||
         (await new GoalSupervisorService(tx, this.userId, this.workspaceId).budgetBlocked(
           currentGraph,
         ))
       )
         return false;
-      const changed = await new TaskModel(tx, this.userId, this.workspaceId).updateStatusIfCurrent(
-        task.id,
-        'failed',
+      // A diagnosis takes minutes, so claim against the status the incident was
+      // opened on. Re-reading first and comparing against that would swap whatever
+      // the person chose in the meantime.
+      if (!RECOVERABLE_TASK_STATUSES.has(currentTask.status)) return false;
+      // An incident persisted before this field existed cannot say what it opened
+      // on, so it cannot show the row is unchanged. Claiming against a later read
+      // would restore the race this closes; a rolling deploy leaves at most the
+      // handful mid-diagnosis, and they escalate rather than retry silently.
+      if (!ownIncident.taskStatus) return false;
+      const changed = await claimGoalTask(
+        new TaskModel(tx, this.userId, this.workspaceId),
+        // The status this incident opened on, so anything a person did across the
+        // whole diagnosis wins the race rather than only a change since this tick.
+        { id: task.id, status: ownIncident.taskStatus },
         'backlog',
         { error: null },
       );

@@ -5,6 +5,7 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
+    "./file-preview": "./src/filePreview.ts",
     "./project-file-index": "./src/projectFileIndex.ts",
     "./skill-directory": "./src/skillDirectory.ts",
     "./workspace": "./src/workspace.ts"
@@ -17,6 +18,7 @@
   },
   "dependencies": {
     "@lobechat/heterogeneous-agents": "workspace:*",
+    "@lobechat/html-artifact": "workspace:*",
     "@lobechat/local-file-shell": "workspace:*",
     "@lobechat/utils": "workspace:*",
     "fast-glob": "^3.3.3",
@@ -24,6 +26,6 @@
     "gray-matter": "^4.0.3"
   },
   "devDependencies": {
-    "vitest": "3.2.6"
+    "vitest": "5.0.0"
   }
 }

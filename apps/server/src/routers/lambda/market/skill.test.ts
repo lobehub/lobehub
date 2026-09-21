@@ -18,25 +18,29 @@ const {
 }));
 
 vi.mock('@/libs/trpc/lambda/middleware', () => ({
-  marketUserInfo: vi.fn((opts: any) =>
-    opts.next({
+  marketUserInfo: vi.fn(function (opts: any) {
+    return opts.next({
       ctx: {
         ...opts.ctx,
         marketUserInfo: { email: 'actor@example.com', name: 'Actor', userId: 'user-1' },
       },
-    }),
-  ),
-  serverDatabase: vi.fn((opts: any) => opts.next(opts)),
+    });
+  }),
+  serverDatabase: vi.fn(function (opts: any) {
+    return opts.next(opts);
+  }),
 }));
 
 vi.mock('@/server/services/market', () => ({
-  MarketService: vi.fn(() => ({
-    getSkillComments: mockGetSkillComments,
-    getSkillDetail: mockGetSkillDetail,
-    getSkillDownloadUrl: mockGetSkillDownloadUrl,
-    getSkillRatingDistribution: mockGetSkillRatingDistribution,
-    searchSkill: mockSearchSkill,
-  })),
+  MarketService: vi.fn(function () {
+    return {
+      getSkillComments: mockGetSkillComments,
+      getSkillDetail: mockGetSkillDetail,
+      getSkillDownloadUrl: mockGetSkillDownloadUrl,
+      getSkillRatingDistribution: mockGetSkillRatingDistribution,
+      searchSkill: mockSearchSkill,
+    };
+  }),
 }));
 
 const createCaller = async () => {

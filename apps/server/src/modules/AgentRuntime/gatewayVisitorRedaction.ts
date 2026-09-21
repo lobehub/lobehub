@@ -12,7 +12,7 @@ import { stripFinalStateInEventData } from './StreamEventManager';
 /**
  * Per-operation redaction policy for a shared-agent visitor run, derived from
  * the share's `AgentShareConfig` (`showModelInfo` / `showErrorDetails`) and
- * carried on `state.metadata.agentShareVisitor`.
+ * carried on `state.principal.actor.shareVisitor`.
  *
  * `null` is the explicit "not a share run — push verbatim" marker, so a
  * missing/undefined value can stay reserved for "not resolved yet".
@@ -56,7 +56,7 @@ export const isShareVisitorInit = (initialState: any): boolean =>
  * its policy is unreadable.
  */
 export const resolveRedactionFromState = (state: any): GatewayVisitorRedaction => {
-  const share = state?.metadata?.agentShareVisitor as
+  const share = state?.principal?.actor?.shareVisitor as
     { showErrorDetails?: boolean; showModelInfo?: boolean; visitorUserId?: string } | undefined;
 
   if (share?.visitorUserId) {
@@ -69,11 +69,17 @@ export const resolveRedactionFromState = (state: any): GatewayVisitorRedaction =
 };
 
 /**
- * Public `agent_runtime_init` DTO pushed to the Gateway for shared-agent
- * visitor runs. The full operation metadata must never cross the WS boundary to
- * the visitor. The client doesn't render anything from this event today —
- * `runAgent.ts`'s `agent_runtime_init` case only logs it — so `status` is the
- * only field forwarded.
+ * The `agent_runtime_init` DTO pushed to the Gateway.
+ *
+ * Applied to EVERY run, not just shared-agent visitors. No consumer reads this
+ * event's data: the web handler logs it and breaks, the CLI prints a fixed
+ * line, and the gateway transport does not handle the type at all. What the raw
+ * `initialState` would otherwise carry is the entire `AgentState` — the LLM
+ * context in `messages` plus the tool-set maps that `stripStateForStream`
+ * already treats as the size problem on `finalState`, and for a visitor the
+ * creator's `agentConfig` / system prompt on top.
+ *
+ * `status` is kept because it is the one field the shape has ever needed.
  */
 export const buildPublicInitEventData = (initialState: any): { status?: unknown } => ({
   status: initialState?.status,
@@ -179,7 +185,9 @@ const sanitizeErrorEventDataForVisitor = (
  * 4. `uiMessages` additionally goes through {@link toVisitorMessage}'s full
  *    field allowlist, which the private-blob key strip alone does not cover.
  *
- * For a normal run this falls back to the generic
+ * Normal step_complete events omit finalState unless the run opts in. Clients reconcile
+ * messages through message_patch/uiMessages and do not consume runtime state.
+ * Other events in a normal run fall back to the generic
  * {@link stripFinalStateInEventData} (messages / tool-set fields only),
  * matching the Redis xadd chokepoint.
  */
@@ -191,7 +199,7 @@ export const sanitizeGatewayEventData = (
   if (!data || typeof data !== 'object') return data;
   const record = data as Record<string, unknown>;
 
-  if (!redaction) return stripFinalStateInEventData(data);
+  if (!redaction) return stripFinalStateInEventData(data, eventType);
 
   const withoutFinalState: Record<string, unknown> =
     'finalState' in record

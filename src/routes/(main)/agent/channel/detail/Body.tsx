@@ -1,5 +1,6 @@
 'use client';
 
+import { isMaskedBotCredential } from '@lobechat/const';
 import { Block, Flexbox, Form, FormGroup, FormItem, Icon } from '@lobehub/ui';
 import type { SelectOption } from '@lobehub/ui/base-ui';
 import { Button, Select, Switch, Tag, Text } from '@lobehub/ui/base-ui';
@@ -29,7 +30,11 @@ import type {
   SerializedPlatformDefinition,
 } from '@/server/services/bot/platforms/types';
 
-import { platformCredentialBodyMap, platformCredentialExtrasMap } from '../platform/registry';
+import {
+  platformCredentialBodyMap,
+  platformCredentialExtrasMap,
+  platformSettingsFieldExtrasMap,
+} from '../platform/registry';
 import { extractSettingsDefaults } from './formState';
 import type { ChannelFormValues } from './index';
 
@@ -117,19 +122,28 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 // --------------- Validation rules builder ---------------
 
-function buildRules(field: FieldSchema, t: (key: string) => string) {
+export function buildRules(field: FieldSchema, t: (key: string) => string) {
   const rules: any[] = [];
 
   if (field.required) {
     rules.push({ message: t(field.label), required: true });
   }
 
-  // Format constraint declared by the platform schema. antd's validator skips
-  // `pattern` on empty values, so an untouched optional field stays valid.
+  // Format constraint declared by the platform schema. Empty stays valid, so an
+  // untouched optional field does not trip it, and so does the placeholder the
+  // server returns in place of a stored secret — the save path swaps that back
+  // for the real value, and holding it to the platform's format here would make
+  // every unrelated edit demand the secret be retyped.
   if (field.pattern) {
+    const pattern = new RegExp(field.pattern);
+    const message = field.patternMessage ? t(field.patternMessage) : t(field.label);
+
     rules.push({
-      message: field.patternMessage ? t(field.patternMessage) : t(field.label),
-      pattern: new RegExp(field.pattern),
+      validator: (_: unknown, value: unknown) => {
+        if (typeof value !== 'string' || !value) return Promise.resolve();
+        if (isMaskedBotCredential(value)) return Promise.resolve();
+        return pattern.test(value) ? Promise.resolve() : Promise.reject(new Error(message));
+      },
     });
   }
 
@@ -214,7 +228,15 @@ const SchemaField = memo<SchemaFieldProps>(
     const watchedValue = AntdForm.useWatch(
       field.visibleWhen ? [parentKey, field.visibleWhen.field] : [],
     );
-    if (field.visibleWhen && watchedValue !== field.visibleWhen.value) return null;
+    if (field.visibleWhen) {
+      // An array matches any of its entries, so one field can be shared by
+      // several sibling values (e.g. the window size for `burst` + `debounce`).
+      const expected = field.visibleWhen.value;
+      const matches = Array.isArray(expected)
+        ? expected.includes(watchedValue)
+        : watchedValue === expected;
+      if (!matches) return null;
+    }
 
     // Only explicitly authored, actionable guidance earns a help affordance.
     // Generic schema descriptions stay out of the compact row layout.
@@ -565,6 +587,14 @@ const Body = memo<BodyProps>(
       onValuesChange?.(form.getFieldsValue(true) as ChannelFormValues);
     }, [form, onValuesChange, platformDef.schema]);
 
+    // A settings-field helper writes straight into the form, which does not
+    // fire the Form's `onValuesChange` — same reason `handleResetSettings`
+    // reports its own write. Without this the page never sees the change and
+    // the unsaved-changes affordances stay hidden.
+    const handleFieldExtrasFilled = useCallback(() => {
+      onValuesChange?.(form.getFieldsValue(true) as ChannelFormValues);
+    }, [form, onValuesChange]);
+
     const handleSettingsHeaderClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
       const target = event.target;
       if (!(target instanceof Element)) return;
@@ -674,15 +704,26 @@ const Body = memo<BodyProps>(
                   const featureLocked =
                     !!field.paidFeature &&
                     platformDef.access?.features?.[field.paidFeature]?.allowed === false;
+                  const FieldExtras =
+                    platformSettingsFieldExtrasMap[`${platformDef.id}:${field.key}`];
                   return (
-                    <SchemaField
-                      divider
-                      disabled={disabled}
-                      featureLocked={featureLocked}
-                      field={field}
-                      key={field.key}
-                      parentKey="settings"
-                    />
+                    <Fragment key={field.key}>
+                      <SchemaField
+                        divider
+                        disabled={disabled}
+                        featureLocked={featureLocked}
+                        field={field}
+                        parentKey="settings"
+                      />
+                      {FieldExtras && (
+                        <FieldExtras
+                          disabled={disabled || featureLocked}
+                          platformId={platformDef.id}
+                          savedValue={currentConfig?.settings?.[field.key]}
+                          onFilled={handleFieldExtrasFilled}
+                        />
+                      )}
+                    </Fragment>
                   );
                 })}
               </FormGroup>

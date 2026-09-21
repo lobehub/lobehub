@@ -37,8 +37,12 @@ describe('sessionRouter', () => {
       findByIdOrSlug: vi.fn(),
       updateConfig: vi.fn().mockResolvedValue(undefined),
     };
-    vi.mocked(SessionModel).mockImplementation(() => sessionModelMock);
-    vi.mocked(SessionGroupModel).mockImplementation(() => ({}) as any);
+    vi.mocked(SessionModel).mockImplementation(function () {
+      return sessionModelMock;
+    });
+    vi.mocked(SessionGroupModel).mockImplementation(function () {
+      return {} as any;
+    });
 
     mockCtx = {
       jwtPayload: { userId },

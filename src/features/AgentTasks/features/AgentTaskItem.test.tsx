@@ -127,7 +127,7 @@ describe('AgentTaskItem', () => {
 
     fireEvent.click(screen.getByText('Hourly trend update'));
 
-    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_owner/task/T-22');
+    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_owner/task/T-22/hourly-trend-update');
   });
 
   it('opens an assigned task on the global detail route in global scope', () => {
@@ -135,7 +135,7 @@ describe('AgentTaskItem', () => {
 
     fireEvent.click(screen.getByText('Hourly trend update'));
 
-    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-22');
+    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-22/hourly-trend-update');
   });
 
   it('falls back to the global task detail route when the task has no assignee', () => {
@@ -143,7 +143,7 @@ describe('AgentTaskItem', () => {
 
     fireEvent.click(screen.getByText('Hourly trend update'));
 
-    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-22');
+    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-22/hourly-trend-update');
   });
 
   it('shows the assigned agent and member names in tooltips', () => {

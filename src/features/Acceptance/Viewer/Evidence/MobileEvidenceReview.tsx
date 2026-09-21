@@ -1,29 +1,86 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
+import { TextArea } from '@lobehub/ui';
 import { ActionIcon, Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ArrowLeft, ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { ChevronLeft, ChevronRight, NotebookPen, PencilLine, ZoomIn, ZoomOut } from 'lucide-react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { ZOOM_STEPS } from '../Review/rejectDraft';
+import type { RejectReviewModel } from '../Review/useRejectReview';
+import { AttachmentStrip, AttachmentUploadButton } from './attachments';
+import { EvidenceStage } from './EvidenceStage';
+import { MobileRegionNotes } from './RegionNotes';
 
 const styles = createStaticStyles(({ css }) => ({
   body: css`
     display: flex;
     flex: 1;
     flex-direction: column;
-    gap: 8px;
 
     min-width: 0;
     min-height: 0;
   `,
-  editor: css`
+  /** The one scroll on the page — image on top, the notes it earns below it. */
+  scroll: css`
     overflow-y: auto;
     overscroll-behavior: contain;
+    display: flex;
     flex: 1;
+    flex-direction: column;
+    gap: 8px;
 
     min-height: 0;
-    padding-block: 8px 16px;
+    padding-block-end: 12px;
+  `,
+  /** The image is what the reviewer came to look at, so it takes every pixel
+      the rows below it do not need. When the notes open underneath, it yields
+      down to a floor that still leaves room to circle on, then the page scrolls. */
+  stage: css`
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 40dvh;
+  `,
+  /** One full-width control under the image: the image arrows at the two
+      edges where a thumb lands, the zoom (minus, percentage, plus) between
+      them. Two fingers set the zoom too; the buttons show where it landed. */
+  switcher: css`
+    display: flex;
+    flex: none;
+    align-items: center;
+
+    width: 100%;
+    min-height: 44px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadius};
+  `,
+  zoom: css`
+    display: flex;
+    flex: 1;
+    gap: 4px;
+    align-items: center;
+    justify-content: center;
+  `,
+  /** Two equal thumb-sized buttons: what to do next with the image, and where
+      the written note goes. */
+  actions: css`
+    display: flex;
+    flex: none;
+    gap: 8px;
+
+    > button {
+      flex: 1;
+      min-height: 44px;
+    }
+  `,
+  editor: css`
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 16px;
+
+    padding-block-start: 4px;
 
     textarea {
       font-size: 16px;
@@ -32,135 +89,228 @@ const styles = createStaticStyles(({ css }) => ({
   footer: css`
     display: flex;
     flex: none;
+    flex-direction: column;
     gap: 8px;
 
     padding-block-start: 8px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 
     > button {
-      flex: 1;
       min-height: 44px;
     }
   `,
 }));
 
-interface MobileEvidenceReviewProps {
-  canSubmit: boolean;
-  drawing: boolean;
-  editor: ReactNode;
-  failed: boolean;
-  image: ReactNode;
-  imageCount: number;
-  imageIndex: number;
-  loading: boolean;
-  onConfirm: () => void;
-  onDrawingChange: (value: boolean) => void;
-  onImageChange: (index: number) => void;
-  onShowFeedback: (value: boolean) => void;
-  onZoom: (direction: 1 | -1) => void;
-  showFeedback: boolean;
-  zoom: number;
-}
-
-/** Phone review has one task at a time: inspect/mark the image, then write feedback. */
-export const MobileEvidenceReview = ({
-  canSubmit,
-  drawing,
-  failed,
-  editor,
-  image,
-  imageCount,
-  imageIndex,
-  loading,
-  onConfirm,
-  onDrawingChange,
-  onImageChange,
-  onShowFeedback,
-  onZoom,
-  showFeedback,
-  zoom,
-}: MobileEvidenceReviewProps) => {
+/**
+ * Phone review on one page: look at the image, circle what is wrong, and write
+ * the note right where the circle landed.
+ *
+ * Marking is a mode of its own. While it is on, everything under the image is
+ * about the regions — the list of circled comments and a Done button — so the
+ * reviewer is never asked to type a general note or submit halfway through a
+ * drag. Leaving the mode brings back the two-button row and the submit.
+ */
+export const MobileEvidenceReview = memo<{ model: RejectReviewModel }>(({ model }) => {
   const { t } = useTranslation('verify');
+  const {
+    activeAnnotations,
+    activeEvidence,
+    activeIndex,
+    annotations,
+    attachments,
+    canSubmit,
+    canvas,
+    comment,
+    drawing,
+    evidence,
+    failed,
+    handlePaste,
+    loading,
+    uploading,
+    zoom,
+  } = model;
+
+  // The supplement stays closed until asked for — the reject's substance is the
+  // marked regions, and the phone should not scroll past an empty textarea to
+  // reach the submit button. It opens itself when there is already text or
+  // screenshots to show (a restored draft, a paste, prior feedback) — hidden
+  // content the user cannot see is feedback waiting to be lost. Marked regions
+  // stay out of this: they have their own region-comments section.
+  const [supplementExpanded, setSupplementExpanded] = useState(() =>
+    Boolean(comment.trim() || attachments.length > 0),
+  );
+  const hasSupplementContent = comment.trim().length > 0 || attachments.length > 0;
+  const hasRegionContent = annotations.length > 0;
+
+  const regionNotes = (
+    <>
+      <Text strong>{t('acceptance.review.regionComments')}</Text>
+      {hasRegionContent ? (
+        <MobileRegionNotes
+          annotations={annotations}
+          evidence={evidence}
+          onChange={model.editAnnotation}
+          onJump={model.jumpToRegion}
+          onRemove={model.removeAnnotation}
+        />
+      ) : (
+        <Text fontSize={13} type={'secondary'}>
+          {t('acceptance.review.mobileRegionCommentsEmpty')}
+        </Text>
+      )}
+    </>
+  );
+
   return (
     <div className={styles.body}>
-      {showFeedback ? (
-        <>
-          {imageCount > 0 && (
+      <div className={styles.scroll}>
+        {activeEvidence && (
+          <>
+            <div className={styles.stage}>
+              <EvidenceStage
+                touch
+                annotations={activeAnnotations}
+                drawing={drawing}
+                src={activeEvidence.fileUrl}
+                zoom={zoom}
+                onDraw={canvas.onDraw}
+                onRemove={canvas.onRemove}
+                onSwipe={(direction) => model.selectEvidence(activeIndex + direction)}
+                onUpdate={canvas.onUpdate}
+                onZoom={model.setZoom}
+              />
+            </div>
+            {/* One full-width block under the stage: previous / next at the
+                edges, the zoom in the middle. No hint text — the phone shows,
+                it does not explain. The percentage is what a pinch landed on;
+                the buttons step from there to the next notch. */}
+            <div className={styles.switcher}>
+              <ActionIcon
+                aria-label={t('acceptance.review.previousImage')}
+                disabled={activeIndex <= 0}
+                icon={ChevronLeft}
+                size={{ blockSize: 44, size: 20 }}
+                onClick={() => model.selectEvidence(activeIndex - 1)}
+              />
+              <div className={styles.zoom}>
+                <ActionIcon
+                  aria-label={t('acceptance.review.zoomOut')}
+                  disabled={zoom <= ZOOM_STEPS[0]}
+                  icon={ZoomOut}
+                  size={{ blockSize: 44, size: 20 }}
+                  onClick={() => model.stepZoom(-1)}
+                />
+                <Text
+                  aria-live={'polite'}
+                  fontSize={13}
+                  style={{ minWidth: 44, textAlign: 'center' }}
+                >
+                  {Math.round(zoom * 100)}%
+                </Text>
+                <ActionIcon
+                  aria-label={t('acceptance.review.zoomIn')}
+                  disabled={zoom >= ZOOM_STEPS.at(-1)!}
+                  icon={ZoomIn}
+                  size={{ blockSize: 44, size: 20 }}
+                  onClick={() => model.stepZoom(1)}
+                />
+              </div>
+              <ActionIcon
+                aria-label={t('acceptance.review.nextImage')}
+                disabled={activeIndex >= evidence.length - 1}
+                icon={ChevronRight}
+                size={{ blockSize: 44, size: 20 }}
+                onClick={() => model.selectEvidence(activeIndex + 1)}
+              />
+            </div>
+          </>
+        )}
+        {drawing ? (
+          // Marking mode: the circled comments are the whole story below the
+          // image — each new box lands here, ready for its note.
+          <div className={styles.editor}>{regionNotes}</div>
+        ) : (
+          <>
+            {/* Two buttons side by side: one enters marking mode, the other
+                discloses the written note below. The open state is a light
+                fill, not the primary slab — it marks which panel is open, it
+                is not the page's action. */}
+            <div className={styles.actions}>
+              {activeEvidence && (
+                <Button icon={PencilLine} onClick={() => model.advance('toggle-draw')}>
+                  {t('acceptance.review.drawRegion')}
+                </Button>
+              )}
+              <Button
+                aria-expanded={supplementExpanded}
+                icon={NotebookPen}
+                type={supplementExpanded ? 'fill' : 'default'}
+                onClick={() => setSupplementExpanded((open) => !open)}
+              >
+                {hasSupplementContent && !supplementExpanded
+                  ? t('acceptance.review.supplementButtonDraft')
+                  : t('acceptance.review.supplementButton')}
+              </Button>
+            </div>
+            {(hasRegionContent || supplementExpanded) && (
+              <div className={styles.editor}>
+                {hasRegionContent && regionNotes}
+                {supplementExpanded && (
+                  <>
+                    <Text strong>{t('acceptance.review.supplement')}</Text>
+                    <TextArea
+                      aria-label={t('acceptance.review.supplement')}
+                      autoSize={{ maxRows: 10, minRows: 4 }}
+                      placeholder={t('acceptance.review.rejectPlaceholder')}
+                      style={{ fontSize: 16 }}
+                      value={comment}
+                      onChange={(event) => model.setComment(event.target.value)}
+                      onPaste={handlePaste}
+                    />
+                    <AttachmentUploadButton disabled={loading} onFiles={model.uploadFiles} />
+                    <AttachmentStrip
+                      attachments={attachments}
+                      disabled={loading}
+                      uploading={uploading}
+                      onRemove={model.removeAttachment}
+                    />
+                    <Text fontSize={12} type={'secondary'}>
+                      {t('acceptance.review.draftSaved')}
+                    </Text>
+                  </>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+      <div className={styles.footer}>
+        {drawing ? (
+          // Done closes marking mode; the boxes and their notes stay. The
+          // submit only comes back once the reviewer is out of the mode.
+          <Button type={'primary'} onClick={() => model.advance('toggle-draw')}>
+            {t('acceptance.review.confirmRegions')}
+          </Button>
+        ) : (
+          <>
+            {failed && (
+              <Text role={'alert'} type={'danger'}>
+                {t('acceptance.review.submitFailed')}
+              </Text>
+            )}
             <Button
-              icon={<Icon icon={ArrowLeft} />}
-              style={{ alignSelf: 'flex-start', minHeight: 44 }}
-              type={'text'}
-              onClick={() => onShowFeedback(false)}
+              disabled={!canSubmit}
+              loading={loading}
+              type={'primary'}
+              onClick={model.submitReject}
             >
-              {t('acceptance.review.backToImages')}
-            </Button>
-          )}
-          <div className={styles.editor}>{editor}</div>
-          {failed && (
-            <Text role={'alert'} type={'danger'}>
-              {t('acceptance.review.submitFailed')}
-            </Text>
-          )}
-          <div className={styles.footer}>
-            <Button disabled={!canSubmit} loading={loading} type={'primary'} onClick={onConfirm}>
               {t('acceptance.review.confirmReject')}
             </Button>
-          </div>
-        </>
-      ) : (
-        <>
-          <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
-            <ActionIcon
-              aria-label={t('acceptance.review.previousImage')}
-              disabled={imageIndex <= 0}
-              icon={ChevronLeft}
-              size={{ blockSize: 44, size: 20 }}
-              onClick={() => onImageChange(imageIndex - 1)}
-            />
-            <Text aria-live={'polite'} style={{ flex: 1, textAlign: 'center' }}>
-              {t('acceptance.review.imageNumber', { current: imageIndex + 1, total: imageCount })}
-            </Text>
-            <ActionIcon
-              aria-label={t('acceptance.review.nextImage')}
-              disabled={imageIndex >= imageCount - 1}
-              icon={ChevronRight}
-              size={{ blockSize: 44, size: 20 }}
-              onClick={() => onImageChange(imageIndex + 1)}
-            />
-          </Flexbox>
-          {image}
-          <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
-            <Text fontSize={12} style={{ flex: 1 }} type={'secondary'}>
-              {t(
-                drawing ? 'acceptance.review.mobileDrawHint' : 'acceptance.review.mobileBrowseHint',
-              )}
-            </Text>
-            <ActionIcon
-              aria-label={t('acceptance.review.zoomOut')}
-              disabled={zoom <= 0.5}
-              icon={ZoomOut}
-              size={{ blockSize: 44, size: 20 }}
-              onClick={() => onZoom(-1)}
-            />
-            <Text fontSize={12}>{Math.round(zoom * 100)}%</Text>
-            <ActionIcon
-              aria-label={t('acceptance.review.zoomIn')}
-              disabled={zoom >= 4}
-              icon={ZoomIn}
-              size={{ blockSize: 44, size: 20 }}
-              onClick={() => onZoom(1)}
-            />
-          </Flexbox>
-          <div className={styles.footer}>
-            <Button aria-pressed={drawing} onClick={() => onDrawingChange(!drawing)}>
-              {t(drawing ? 'acceptance.review.browseImage' : 'acceptance.review.drawRegion')}
-            </Button>
-            <Button type={'primary'} onClick={() => onShowFeedback(true)}>
-              {t('acceptance.review.writeFeedback')}
-            </Button>
-          </div>
-        </>
-      )}
+          </>
+        )}
+      </div>
     </div>
   );
-};
+});
+
+MobileEvidenceReview.displayName = 'AcceptanceMobileEvidenceReview';

@@ -79,7 +79,7 @@ const flattenSubtasks = (nodes: TaskDetailSubtask[]) => {
 interface TaskSubtaskProgressTagProps {
   currentIdentifier?: string;
   onRequestSubtasks?: () => Promise<TaskDetailSubtask[]>;
-  onSubtaskClick?: (identifier: string, assigneeAgentId?: string) => void;
+  onSubtaskClick?: (identifier: string, assigneeAgentId?: string, name?: string) => void;
   progress?: TaskSubtaskProgress;
   subtasks?: TaskDetailSubtask[];
 }
@@ -143,7 +143,11 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
           </Flexbox>
         ),
         onClick: () =>
-          onSubtaskClick?.(subtask.task.identifier, subtask.task.assignee?.id ?? undefined),
+          onSubtaskClick?.(
+            subtask.task.identifier,
+            subtask.task.assignee?.id ?? undefined,
+            subtask.task.name ?? undefined,
+          ),
       };
     }) as DropdownMenuProps['items'];
 
@@ -153,12 +157,16 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
       async (event: MouseEvent<HTMLElement>) => {
         event.stopPropagation();
 
+        // Only the lazy path owns open state; static menus leave toggling to
+        // the dropdown trigger so a click never fights its own open.
+        if (!onRequestSubtasks) return;
+
         if (open) {
           setOpen(false);
           return;
         }
 
-        if (!onRequestSubtasks || requesting) return;
+        if (requesting) return;
 
         setRequesting(true);
         try {
@@ -224,7 +232,7 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
       <DropdownMenu
         items={navigationItems}
         open={open}
-        trigger={'both'}
+        trigger={'click'}
         onOpenChange={handleOpenChange}
       >
         {tag}

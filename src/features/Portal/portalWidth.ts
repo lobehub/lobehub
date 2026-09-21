@@ -33,6 +33,7 @@ const VIEW_MIN_WIDTH: PortalWidths = {
   [PortalViewType.AcceptanceCheck]: CHAT_PORTAL_TOOL_UI_WIDTH,
   [PortalViewType.AgentDetail]: CHAT_PORTAL_TOOL_UI_WIDTH,
   [PortalViewType.Artifact]: CHAT_PORTAL_TOOL_UI_WIDTH,
+  [PortalViewType.Goal]: CHAT_PORTAL_TOOL_UI_WIDTH,
   [PortalViewType.GoalMetric]: CHAT_PORTAL_TOOL_UI_WIDTH,
   [PortalViewType.GoalNode]: CHAT_PORTAL_TOOL_UI_WIDTH,
   [PortalViewType.TaskDetail]: CHAT_PORTAL_TOOL_UI_WIDTH,
@@ -50,6 +51,9 @@ const VIEW_MIN_WIDTH: PortalWidths = {
 const VIEW_DEFAULT_WIDTH: PortalWidths = {
   [PortalViewType.Acceptance]: CHAT_PORTAL_WIDE_WIDTH,
   [PortalViewType.AcceptanceCheck]: CHAT_PORTAL_WIDE_WIDTH,
+  // The goal overview carries the exploration map and the header metrics row,
+  // both of which only read at the wide width.
+  [PortalViewType.Goal]: CHAT_PORTAL_WIDE_WIDTH,
   // Task / goal-node detail pack status, instruction, sub-tasks and the
   // activity feed into one column — wider than the reading column, but the
   // full document width crowds the page it sits next to.

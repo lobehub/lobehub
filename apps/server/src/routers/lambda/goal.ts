@@ -38,6 +38,97 @@ const goalProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
 const goalWriteProcedure = goalProcedure.use(withScopedPermission('agent:update'));
 const idInput = z.object({ id: z.string() });
 
+/** Everything a goal is created from except who owns it. */
+const conversationGoalInput = z.object({
+  config: z
+    .object({
+      acceptance: z
+        .object({
+          /** Numeric clauses gating acceptance; keyed by a series on this goal. */
+          metrics: z
+            .array(
+              z.object({
+                key: z.string().min(1).max(255),
+                op: z.enum(['gte', 'lte', 'gt', 'lt', 'eq']).optional(),
+                target: z.number(),
+                title: z.string().max(255).optional(),
+              }),
+            )
+            .max(MAX_GOAL_METRIC_CRITERIA)
+            .optional(),
+        })
+        .optional(),
+      // Bounds mirror `resolveMaxConcurrentTasks`, so a rejected value and
+      // a clamped one cannot disagree about what the cap may be.
+      exploration: z
+        .object({
+          instruction: z.string().min(1).max(8000),
+          maxExperiments: z.number().int().min(1).max(200),
+        })
+        .optional(),
+      manager: z
+        .object({
+          instruction: z.string().max(8000).optional(),
+          maxTurns: z.number().int().min(1).max(100).optional(),
+        })
+        .optional(),
+      maxConcurrentTasks: z.number().int().min(1).max(10).nullable().optional(),
+      supervision: z
+        .object({
+          enabled: z.boolean(),
+          maxIncidents: z.number().int().min(1).max(100).optional(),
+        })
+        .optional(),
+      /** Dedicated executor for the goal's Tasks; the goal agent supervises. */
+      taskAgentId: z.string().min(1).optional(),
+      recovery: z
+        .object({
+          maxAttemptsPerTask: z.number().int().positive().optional(),
+          maxStepsPerRun: z.number().int().positive().nullable().optional(),
+          operationLeaseTimeoutMs: z.number().int().min(60_000).optional(),
+        })
+        .optional(),
+      schedule: z
+        .object({
+          /** ISO-8601 instant; past it the coordinator stops dispatching. */
+          deadline: z.string().datetime().nullable().optional(),
+        })
+        .optional(),
+    })
+    .optional(),
+  maxRounds: z.number().int().positive().optional(),
+  maxTotalCost: z.number().positive().optional(),
+  /** Structured acceptance criteria — persisted rows that gate the terminal acceptance. */
+  criteria: z
+    .array(
+      z.object({
+        description: z.string().optional(),
+        instruction: z.string().optional(),
+        title: z.string().min(1),
+      }),
+    )
+    .optional(),
+  problemDescription: z.string().optional(),
+  projectId: z.string().optional(),
+  requirement: z.string().optional(),
+  title: z.string().min(1),
+  /** Seed task nodes, in dependency-free order. */
+  tasks: z
+    .array(
+      z.union([
+        z.string().min(1),
+        z.object({ description: z.string().optional(), title: z.string().min(1) }),
+      ]),
+    )
+    .optional(),
+});
+
+const createGoalInput = conversationGoalInput.extend({
+  agentId: z.string().optional(),
+  /** Set by the `/goal` tool so the seeded graph is authored by the agent. */
+  createdByAgentId: z.string().optional(),
+});
+
 function mapGoalError(error: unknown, operation: string): never {
   if (error instanceof TRPCError) throw error;
   console.error(`[goal:${operation}]`, error);
@@ -173,109 +264,108 @@ export const goalRouter = router({
       }
     }),
 
-  create: goalWriteProcedure
-    .input(
-      z.object({
-        agentId: z.string().optional(),
-        /** Set by the `/goal` tool so the seeded graph is authored by the agent. */
-        createdByAgentId: z.string().optional(),
-        config: z
-          .object({
-            acceptance: z
-              .object({
-                /** Numeric clauses gating acceptance; keyed by a series on this goal. */
-                metrics: z
-                  .array(
-                    z.object({
-                      key: z.string().min(1).max(255),
-                      op: z.enum(['gte', 'lte', 'gt', 'lt', 'eq']).optional(),
-                      target: z.number(),
-                      title: z.string().max(255).optional(),
-                    }),
-                  )
-                  .max(MAX_GOAL_METRIC_CRITERIA)
-                  .optional(),
-              })
-              .optional(),
-            // Bounds mirror `resolveMaxConcurrentTasks`, so a rejected value and
-            // a clamped one cannot disagree about what the cap may be.
-            exploration: z
-              .object({
-                instruction: z.string().min(1).max(8000),
-                maxExperiments: z.number().int().min(1).max(200),
-              })
-              .optional(),
-            manager: z
-              .object({
-                instruction: z.string().max(8000).optional(),
-                maxTurns: z.number().int().min(1).max(100).optional(),
-              })
-              .optional(),
-            maxConcurrentTasks: z.number().int().min(1).max(10).nullable().optional(),
-            supervision: z
-              .object({
-                enabled: z.boolean(),
-                maxIncidents: z.number().int().min(1).max(100).optional(),
-              })
-              .optional(),
-            recovery: z
-              .object({
-                maxAttemptsPerTask: z.number().int().positive().optional(),
-                maxStepsPerRun: z.number().int().positive().nullable().optional(),
-                operationLeaseTimeoutMs: z.number().int().min(60_000).optional(),
-              })
-              .optional(),
-            schedule: z
-              .object({
-                /** ISO-8601 instant; past it the coordinator stops dispatching. */
-                deadline: z.string().datetime().nullable().optional(),
-              })
-              .optional(),
-          })
-          .optional(),
-        maxRounds: z.number().int().positive().optional(),
-        maxTotalCost: z.number().positive().optional(),
-        /** Structured acceptance criteria — persisted rows that gate the terminal acceptance. */
-        criteria: z
-          .array(
-            z.object({
-              description: z.string().optional(),
-              instruction: z.string().optional(),
-              title: z.string().min(1),
-            }),
-          )
-          .optional(),
-        problemDescription: z.string().optional(),
-        projectId: z.string().optional(),
-        requirement: z.string().optional(),
-        title: z.string().min(1),
-        /** Seed task nodes, in dependency-free order. */
-        tasks: z
-          .array(
-            z.union([
-              z.string().min(1),
-              z.object({ description: z.string().optional(), title: z.string().min(1) }),
-            ]),
-          )
-          .optional(),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      try {
-        const data = await ctx.goalService.create(input);
-        // A goal is not a document — creating one means starting it. The
-        // coordinator takes it from here without a client holding a loop open.
-        await scheduleGoalAdvance({
-          goalId: data.goal.id,
-          trigger: 'create',
-          userId: ctx.userId,
-          workspaceId: ctx.workspaceId ?? undefined,
+  /**
+   * `/goal` from a conversation run authenticated by its operation token (device
+   * and gateway runs). The agent and conversation come from the operation, and
+   * the returned `turnToken` lets that run plan the goal immediately.
+   */
+  createConversationGoal: heteroAuthedProcedure
+    .use(serverDatabase)
+    .input(conversationGoalInput.extend({ operationId: z.string().min(1) }))
+    .mutation(async ({ ctx, input: { operationId, ...input } }) => {
+      if (ctx.heteroAuthKind !== 'operation' || !ctx.heteroOperation) {
+        throw new TRPCError({
+          code: 'UNAUTHORIZED',
+          message: 'An operation-bound token is required',
         });
-        return { data, message: 'Goal created', success: true };
+      }
+      let principal;
+      try {
+        principal = await resolveActiveHeteroOperationPrincipal({
+          capability: 'goal:manage',
+          claims: ctx.heteroOperation,
+          db: ctx.serverDB,
+          operationId,
+        });
+      } catch (error) {
+        if (!(error instanceof HeteroOperationPrincipalError)) throw error;
+        throw new TRPCError({
+          cause: error,
+          code:
+            error.status === 401 ? 'UNAUTHORIZED' : error.status === 409 ? 'CONFLICT' : 'FORBIDDEN',
+          message: error.message,
+        });
+      }
+      try {
+        const { graph, turnToken } = await new GoalService(
+          ctx.serverDB,
+          principal.userId,
+          principal.workspaceId,
+        ).createFromConversation(operationId, input);
+        await scheduleGoalAdvance({
+          goalId: graph.goal.id,
+          trigger: 'create',
+          userId: principal.userId,
+          workspaceId: principal.workspaceId,
+        });
+        return { data: graph, message: 'Goal created', success: true, turnToken };
       } catch (error) {
         mapGoalError(error, 'create');
       }
     }),
+
+  create: goalWriteProcedure
+    .input(
+      createGoalInput.extend({
+        /**
+         * Create the goal from the conversation run with this id (`/goal` on a
+         * desktop run signed in as the user). Agent and conversation come from
+         * the operation, so `agentId` / `createdByAgentId` are ignored.
+         */
+        conversationOperationId: z.string().min(1).optional(),
+        /**
+         * A local desktop run's operation lives only on the client, so it also
+         * names its conversation; the server checks the topic belongs to the
+         * caller and to this agent before accepting it.
+         */
+        conversationTopicId: z.string().min(1).optional(),
+      }),
+    )
+    .mutation(
+      async ({ ctx, input: { conversationOperationId, conversationTopicId, ...input } }) => {
+        try {
+          if (conversationOperationId) {
+            const { agentId, createdByAgentId: _createdBy, ...goalInput } = input;
+            const { graph, turnToken } = await ctx.goalService.createFromConversation(
+              conversationOperationId,
+              goalInput,
+              conversationTopicId && agentId
+                ? { agentId, topicId: conversationTopicId }
+                : undefined,
+            );
+            await scheduleGoalAdvance({
+              goalId: graph.goal.id,
+              trigger: 'create',
+              userId: ctx.userId,
+              workspaceId: ctx.workspaceId ?? undefined,
+            });
+            return { data: graph, message: 'Goal created', success: true, turnToken };
+          }
+          const data = await ctx.goalService.create(input);
+          // A goal is not a document — creating one means starting it. The
+          // coordinator takes it from here without a client holding a loop open.
+          await scheduleGoalAdvance({
+            goalId: data.goal.id,
+            trigger: 'create',
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId ?? undefined,
+          });
+          return { data, message: 'Goal created', success: true };
+        } catch (error) {
+          mapGoalError(error, 'create');
+        }
+      },
+    ),
 
   decide: goalWriteProcedure
     .input(
@@ -447,6 +537,8 @@ export const goalRouter = router({
         offset: z.number().optional(),
         projectId: z.string().optional(),
         statuses: z.array(z.enum(goalStatuses)).optional(),
+        /** Goals created from this conversation. */
+        topicId: z.string().optional(),
       }),
     )
     .query(async ({ input, ctx }) => ctx.goalModel.list(input)),
@@ -520,7 +612,8 @@ export const goalRouter = router({
     }),
 
   /**
-   * Hand the goal to a different responsible agent. Unfinished Tasks follow by
+   * Hand the goal to a different agent — the one that supervises and plans it.
+   * When that agent also does the goal's Tasks, unfinished ones follow by
    * default (`goalOnly` keeps them); Tasks mid-run switch on their next attempt.
    */
   setAgent: goalWriteProcedure
@@ -544,6 +637,34 @@ export const goalRouter = router({
         };
       } catch (error) {
         mapGoalError(error, 'setAgent');
+      }
+    }),
+
+  /**
+   * Route the goal's Tasks to a dedicated executor (`null` hands them back to
+   * the goal agent). Unfinished Tasks follow unless `goalOnly` is set.
+   */
+  setTaskAgent: goalWriteProcedure
+    .input(
+      idInput.extend({ agentId: z.string().min(1).nullable(), goalOnly: z.boolean().optional() }),
+    )
+    .mutation(async ({ ctx, input: { id, agentId, goalOnly } }) => {
+      try {
+        const goal = await ctx.goalModel.findById(id);
+        if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+        assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
+
+        const data = await ctx.goalService.setTaskAgent(id, agentId, { goalOnly });
+        const reassigned = data.reassignedTaskIds.length;
+        return {
+          data,
+          message: reassigned
+            ? `Task agent updated; ${reassigned} task(s) reassigned`
+            : 'Task agent updated',
+          success: true,
+        };
+      } catch (error) {
+        mapGoalError(error, 'setTaskAgent');
       }
     }),
 

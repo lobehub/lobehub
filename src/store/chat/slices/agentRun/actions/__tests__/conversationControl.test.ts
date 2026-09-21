@@ -6,9 +6,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { lambdaClient } from '@/libs/trpc/client';
 import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
 import { messageService } from '@/services/message';
+import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
+import { useUserStore } from '@/store/user';
 
 import { useChatStore } from '../../../../store';
 import { messageMapKey } from '../../../../utils/messageMapKey';
+import * as agentDispatcher from '../dispatch/agentDispatcher';
 import { createMockMessage, createMockResolvedAgentConfig, TEST_IDS } from './fixtures';
 import { resetTestEnvironment } from './helpers';
 
@@ -65,7 +68,9 @@ beforeEach(() => {
     });
   useChatStore.setState({
     updateTopicStatus: vi.fn().mockResolvedValue(undefined),
+    questionSubmissions: {},
   });
+  useUserStore.setState({ user: undefined, workspaceUserPreference: {} });
 });
 
 afterEach(() => {
@@ -236,6 +241,41 @@ describe('ConversationControl actions', () => {
 
       expect(result.current.operations[operationId!].status).toBe('cancelled');
       expect(mockSetJSONState).toHaveBeenCalledWith(editorState);
+    });
+
+    it('does not restore a completed send or an older cancelled draft', () => {
+      const context = { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID };
+      const editor = { setJSONState: vi.fn() };
+      const store = useChatStore.getState();
+      const older = store.startOperation({ context, type: 'sendMessage' });
+      store.updateOperationMetadata(older.operationId, {
+        inputEditorTempState: { content: 'older cancelled draft' },
+      });
+      store.cancelOperation(older.operationId);
+      const latest = store.startOperation({ context, type: 'sendMessage' });
+      store.updateOperationMetadata(latest.operationId, {
+        inputEditorTempState: { content: 'already sent' },
+      });
+      store.completeOperation(latest.operationId);
+
+      store.cancelSendMessageInServer(context, editor as any);
+
+      expect(editor.setJSONState).not.toHaveBeenCalled();
+    });
+
+    it('restores a pending send only once after stop has cancelled operations', () => {
+      const context = { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID };
+      const editor = { setJSONState: vi.fn() };
+      const store = useChatStore.getState();
+      const { operationId } = store.startOperation({ context, type: 'sendMessage' });
+      const snapshot = { content: 'still sending' };
+      store.updateOperationMetadata(operationId, { inputEditorTempState: snapshot });
+      store.cancelOperation(operationId);
+
+      store.cancelSendMessageInServer(context, editor as any);
+      store.cancelSendMessageInServer(context, editor as any);
+
+      expect(editor.setJSONState).toHaveBeenCalledExactlyOnceWith(snapshot);
     });
 
     it('should cancel operation for specified topic ID', () => {
@@ -765,6 +805,82 @@ describe('ConversationControl actions', () => {
     });
 
     describe('server-mode branch', () => {
+      it("uses a workspace member's effective device override to choose the resume transport", async () => {
+        const { result } = renderHook(() => useChatStore());
+        const agentId = 'workspace-agent';
+        const topicId = 'workspace-topic';
+        const chatKey = messageMapKey({ agentId, topicId });
+        const toolMessage = createMockMessage({
+          id: 'tool-msg-workspace-override',
+          plugin: { apiName: 'write', arguments: '{}', identifier: 'fs', type: 'default' },
+          role: 'tool',
+          tool_call_id: 'call-workspace-override',
+        } as any);
+
+        vi.spyOn(agentSelectors, 'getAgentConfigById').mockImplementation(
+          () => () =>
+            ({
+              agencyConfig: {
+                executionTarget: 'local',
+                heterogeneousProvider: { type: 'codex' },
+              },
+            }) as any,
+        );
+        vi.spyOn(agentByIdSelectors, 'getAgentById').mockImplementation(
+          () => () =>
+            ({
+              userId: 'workspace-owner',
+              visibility: 'public',
+              workspaceId: 'workspace-1',
+            }) as any,
+        );
+        useUserStore.setState({
+          workspaceUserPreference: {
+            agentDeviceOverrides: { [agentId]: { executionTarget: 'sandbox' } },
+          },
+        });
+        const selectRuntimeTypeSpy = vi
+          .spyOn(agentDispatcher, 'selectRuntimeType')
+          .mockImplementation((config) =>
+            config.executionTarget === 'sandbox' ? 'gateway' : 'hetero',
+          );
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: topicId,
+            dbMessagesMap: { [chatKey]: [toolMessage] },
+            messagesMap: { [chatKey]: [toolMessage] },
+          });
+        });
+
+        vi.spyOn(result.current, 'isGatewayModeEnabled').mockReturnValue(true);
+        vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
+        const executeGatewayAgentSpy = vi
+          .spyOn(result.current, 'executeGatewayAgent')
+          .mockResolvedValue({} as any);
+        const executeClientAgentSpy = vi
+          .spyOn(result.current, 'executeClientAgent')
+          .mockResolvedValue(undefined);
+
+        await act(async () => {
+          await result.current.approveToolCalling(toolMessage.id, '', {
+            agentId,
+            topicId,
+          });
+        });
+
+        expect(selectRuntimeTypeSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            executionTarget: 'sandbox',
+            isWorkspaceAgent: true,
+            workspaceScoped: false,
+          }),
+        );
+        expect(executeGatewayAgentSpy).toHaveBeenCalled();
+        expect(executeClientAgentSpy).not.toHaveBeenCalled();
+      });
+
       it('should start a new Gateway op with resumeApproval.decision=approved and NOT run local runtime', async () => {
         const { result } = renderHook(() => useChatStore());
 

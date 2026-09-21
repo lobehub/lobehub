@@ -48,7 +48,11 @@ const updateRecentTitle = (
   const nextItems = items.map((item) => {
     if (item.type !== entityType || item.id !== id || item.title === title) return item;
     changed = true;
-    return { ...item, title };
+    // Renaming a task sets `tasks.name`, which is exactly what `slugTitle`
+    // carries — move it with the title or the row's link keeps slugging the old
+    // name until the next server sync. Topics and documents have no slug
+    // source, so leave theirs alone.
+    return item.type === 'task' ? { ...item, slugTitle: title, title } : { ...item, title };
   });
 
   return changed ? nextItems : items;

@@ -34,11 +34,6 @@ vi.mock('@/libs/swr', () => ({
   useClientDataSWR: vi.fn(),
 }));
 
-vi.mock('@/components/AntdStaticMethods', () => ({
-  modal: { confirm: vi.fn() },
-  notification: { error: vi.fn() },
-}));
-
 vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   ...(await import('~base-ui-stubs')).baseUiStubs,
@@ -250,6 +245,42 @@ describe('TaskDetailSliceAction', () => {
 
       release();
       await pending;
+    });
+
+    it('revalidates goal graphs when the assignee changes, so a goal page shows the new executor', async () => {
+      useTaskStore.setState({
+        taskDetailMap: { 'T-1': { identifier: 'T-1', instruction: 'x', status: 'backlog' } },
+      });
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+      const { mutate } = await import('@/libs/swr');
+
+      await useTaskStore.getState().updateTask('T-1', { assigneeAgentId: 'agt_2' });
+
+      // A paused goal does not poll, so without this its page kept the old avatar.
+      const matchers = vi
+        .mocked(mutate)
+        .mock.calls.map(([key]) => key)
+        .filter((key): key is (key: unknown) => boolean => typeof key === 'function');
+      const matchesGoalGraph = (key: unknown) => matchers.some((match) => match(key));
+      expect(matchesGoalGraph(['goal:graph', 'goal-1'])).toBe(true);
+      expect(matchesGoalGraph(['goal:graph', 'goal-1', 'ws-1'])).toBe(true);
+      expect(matchesGoalGraph(['task:detail', 'T-1'])).toBe(false);
+    });
+
+    it('leaves goal graphs alone when the assignee does not change', async () => {
+      useTaskStore.setState({
+        taskDetailMap: { 'T-1': { identifier: 'T-1', instruction: 'x', status: 'backlog' } },
+      });
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+      const { mutate } = await import('@/libs/swr');
+
+      await useTaskStore.getState().updateTask('T-1', { priority: 2 });
+
+      const matchers = vi
+        .mocked(mutate)
+        .mock.calls.map(([key]) => key)
+        .filter((key): key is (key: unknown) => boolean => typeof key === 'function');
+      expect(matchers.some((match) => match(['goal:graph', 'goal-1']))).toBe(false);
     });
 
     it('should clear stale editorData for instruction-only optimistic updates', async () => {

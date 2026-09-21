@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { ConnectorDataError } from '../errors';
+import type { GmailComposioTools } from './client';
 import { createGmailConnectorClient } from './client';
 
 const createClient = (
-  execute: ReturnType<typeof vi.fn>,
-  options: { resolveVersion?: ReturnType<typeof vi.fn> } = {},
+  execute: GmailComposioTools['execute'],
+  options: { resolveVersion?: GmailComposioTools['getRawComposioToolBySlug'] } = {},
 ) =>
   createGmailConnectorClient({
     composio: {

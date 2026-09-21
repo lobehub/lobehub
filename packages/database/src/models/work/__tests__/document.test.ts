@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { agentShareDocumentAccessScope } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -86,6 +87,38 @@ describe('WorkModel · document', () => {
       identifier: 'research.md',
       type: 'document',
     });
+  });
+
+  it('does not register Agent Share documents in the ordinary Work registry', async () => {
+    const agentDocumentModel = new AgentDocumentModel(
+      serverDB,
+      userId,
+      undefined,
+      agentShareDocumentAccessScope({
+        shareId: 'share-work',
+        topicId,
+        visitorUserId: 'visitor-work',
+      }),
+    );
+    const workModel = new WorkModel(serverDB, userId);
+    const doc = await agentDocumentModel.create(agentId, 'visitor-note.md', 'Visitor draft');
+
+    const work = await workModel.registerDocument({
+      agentDocumentId: doc.id,
+      agentId,
+      changeType: 'created',
+      documentId: doc.documentId,
+      rootOperationId: 'op-share-doc-create',
+      toolCallId: 'tool-call-share-doc-create',
+      toolIdentifier: 'lobe-agent-documents',
+      toolName: 'createDocument',
+      topicId,
+    });
+
+    expect(work).toBeNull();
+    expect(await serverDB.select().from(works).where(eq(works.resourceId, doc.documentId))).toEqual(
+      [],
+    );
   });
 
   it('uses the document content prefix when document description is empty', async () => {

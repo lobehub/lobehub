@@ -1,5 +1,11 @@
-import { AccordionItem, Block, Center, Empty, Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Block, Center, Empty, Flexbox } from '@lobehub/ui';
+import {
+  AccordionHeader,
+  AccordionItem,
+  AccordionRoot,
+  AccordionTrigger,
+  Text,
+} from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
 import { cssVar } from 'antd-style';
 import { ClipboardCheckIcon } from 'lucide-react';
@@ -98,16 +104,20 @@ const TaskGroupHeader = memo<{
   const sub = item.kind === 'subGroup';
   return (
     <div style={{ paddingTop: item.first ? 0 : sub ? 6 : 16 }}>
-      <AccordionItem
-        expand={!item.collapsed}
+      <AccordionRoot
         indicatorPlacement={'end'}
-        itemKey={item.key}
-        paddingBlock={sub ? 6 : 8}
-        paddingInline={14}
-        title={renderGroupTitle(item.meta, item.count, sub)}
-        variant={sub ? undefined : 'filled'}
-        onExpandChange={() => onToggle(item.key)}
-      />
+        value={item.collapsed ? [] : [item.key]}
+        variant={sub ? 'borderless' : 'filled'}
+        onValueChange={() => onToggle(item.key)}
+      >
+        <AccordionItem value={item.key}>
+          <AccordionHeader>
+            <AccordionTrigger style={{ paddingBlock: sub ? 6 : 8, paddingInline: 14 }}>
+              {renderGroupTitle(item.meta, item.count, sub)}
+            </AccordionTrigger>
+          </AccordionHeader>
+        </AccordionItem>
+      </AccordionRoot>
     </div>
   );
 });

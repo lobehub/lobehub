@@ -34,6 +34,21 @@ describe('coordinatorNodeTitleKey', () => {
   });
 });
 
+describe('isGoalAcceptanceTask', () => {
+  it('recognizes only the terminal Goal acceptance task', async () => {
+    const { isGoalAcceptanceTask } = await import('./coordinatorCopy');
+    const view = (node: any) => ({ humanTouches: [], node }) as any;
+
+    expect(
+      isGoalAcceptanceTask(view({ kind: 'task', title: 'Complete full Goal acceptance' })),
+    ).toBe(true);
+    expect(isGoalAcceptanceTask(view({ kind: 'task', title: 'R2 · 对比' }))).toBe(false);
+    expect(
+      isGoalAcceptanceTask(view({ kind: 'decision', title: 'Complete full Goal acceptance' })),
+    ).toBe(false);
+  });
+});
+
 describe('coordinatorGateReason', () => {
   it('strips the question template down to the reason', () => {
     expect(

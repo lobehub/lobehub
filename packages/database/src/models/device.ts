@@ -26,9 +26,13 @@ export class WorkspaceDevicePrivateConflictError extends Error {
 }
 
 export interface RegisterDeviceParams {
+  /** CPU architecture reported by the client (`process.arch`); optional for older clients. */
+  architecture?: string | null;
   deviceId: string;
   hostname?: string | null;
   identitySource: string;
+  /** Extensible client-reported info bag (app version, runtime versions, OS release). */
+  metadata?: Record<string, string> | null;
   platform?: string | null;
 }
 
@@ -102,18 +106,22 @@ export class DeviceModel {
     const [result] = await this.db
       .insert(devices)
       .values({
+        architecture: params.architecture,
         deviceId: params.deviceId,
         hostname: params.hostname,
         identitySource: params.identitySource,
+        metadata: params.metadata,
         lastSeenAt: now,
         platform: params.platform,
         userId: this.userId,
       })
       .onConflictDoUpdate({
         set: {
+          architecture: params.architecture,
           hostname: params.hostname,
           identitySource: params.identitySource,
           lastSeenAt: now,
+          metadata: params.metadata,
           platform: params.platform,
         },
         target: [devices.userId, devices.deviceId],
@@ -167,9 +175,11 @@ export class DeviceModel {
     const [result] = await this.db
       .insert(devices)
       .values({
+        architecture: params.architecture,
         deviceId: params.deviceId,
         hostname: params.hostname,
         identitySource: params.identitySource,
+        metadata: params.metadata,
         lastSeenAt: now,
         platform: params.platform,
         // Set for enrollments driven from the owner's personal device list —
@@ -203,9 +213,11 @@ export class DeviceModel {
       // `targetWhere`.
       .onConflictDoUpdate({
         set: {
+          architecture: params.architecture,
           hostname: params.hostname,
           identitySource: params.identitySource,
           lastSeenAt: now,
+          metadata: params.metadata,
           platform: params.platform,
           visibility: params.visibility === 'public' ? 'public' : sql`${devices.visibility}`,
         },
@@ -297,6 +309,24 @@ export class DeviceModel {
       .update(devices)
       .set({ ...value, updatedAt: new Date() })
       .where(and(eq(devices.userId, this.userId), eq(devices.deviceId, deviceId)));
+  };
+
+  updateDeviceInfo = async (
+    deviceId: string,
+    value: Pick<RegisterDeviceParams, 'architecture' | 'hostname' | 'metadata' | 'platform'>,
+  ) => {
+    const [device] = await this.db
+      .update(devices)
+      .set({ ...value, updatedAt: new Date() })
+      .where(
+        and(
+          eq(devices.userId, this.userId),
+          eq(devices.deviceId, deviceId),
+          isNull(devices.workspaceId),
+        ),
+      )
+      .returning();
+    return device;
   };
 
   delete = async (deviceId: string) => {

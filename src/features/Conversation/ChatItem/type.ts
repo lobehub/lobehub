@@ -36,6 +36,8 @@ export interface ChatItemProps extends Omit<FlexboxProps, 'children' | 'onChange
    */
   error?: AlertProps;
   fontSize?: number;
+  /** Rendered in the header row next to the time, independent of `showTitle`. */
+  headerAddon?: ReactNode;
   /**
    * @description Whether the chat item is in loading state
    */

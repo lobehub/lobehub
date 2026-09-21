@@ -49,7 +49,7 @@ describe('OperationTraceRecorder', () => {
         afterStepSignalEvents: [],
         agentState: {
           messages: [],
-          metadata: { agentConfig: { model: 'claude-sonnet-4-6', provider: 'lobehub' } },
+          world: { agent: { model: 'claude-sonnet-4-6', provider: 'lobehub' } },
         },
         beforeStepSignalEvents: [],
         currentContext: { phase: 'user_input' },
@@ -88,6 +88,10 @@ describe('OperationTraceRecorder', () => {
             toolManifestMap: {},
             toolSourceMap: {},
             tools: [],
+            world: {
+              agent: { systemRole: 'kept' },
+              expertise: { contentHash: 'hash', renderedContext: '<expertise/>' },
+            },
           },
           reason: 'done',
           type: 'done',
@@ -120,6 +124,8 @@ describe('OperationTraceRecorder', () => {
       expect(doneEvent.finalState.toolManifestMap).toBeUndefined();
       expect(doneEvent.finalState.toolSourceMap).toBeUndefined();
       expect(doneEvent.finalState.tools).toBeUndefined();
+      // Only the expertise snapshot leaves `world`; the rest of it is kept.
+      expect(doneEvent.finalState.world).toEqual({ agent: { systemRole: 'kept' } });
     });
 
     it('emits messagesDelta-only beyond step 0 and only stores messagesBaseline when isCompression', async () => {
@@ -257,7 +263,7 @@ describe('OperationTraceRecorder', () => {
         completionReason: 'done',
         state: {
           cost: { total: 0.5 },
-          metadata: { agentId: 'agt-1', topicId: 'tpc-1', userId: 'u-1' },
+          origin: { agentId: 'agt-1', topicId: 'tpc-1', userId: 'u-1' },
           stepCount: 1,
           usage: { llm: { tokens: { total: 200 } } },
         },

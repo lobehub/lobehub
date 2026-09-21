@@ -1,9 +1,8 @@
 'use client';
 
-import { copyToClipboard } from '@lobehub/ui';
 import { toast } from '@lobehub/ui/base-ui';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams, useSearchParams } from 'react-router';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
 
 import { mutate as globalMutate } from '@/libs/swr';
 import { isAcceptanceListKey } from '@/libs/swr/keys';
@@ -11,7 +10,6 @@ import { verifyService } from '@/services/verify';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
 import { openAddCheckModal } from '../Checks/AddCheckModal';
-import { copyCheckRepairPrompt } from '../Checks/checkWork';
 import { acceptanceCheckPath, acceptanceOverviewPath } from '../routes';
 import { checksForTurn } from '../turnChecks';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
@@ -22,6 +20,7 @@ import AcceptanceFocusReview from './AcceptanceFocusReview';
 const AcceptanceFocusWorkspace = () => {
   const { t } = useTranslation('verify');
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const query = searchParams.toString() ? `?${searchParams}` : '';
   const params = useParams<{ checkId?: string }>();
@@ -57,9 +56,21 @@ const AcceptanceFocusWorkspace = () => {
       canReview={
         canReviewAcceptance(data) && (turn === null || turn === data.rounds.at(-1)?.run.roundIndex)
       }
-      onBack={() => navigate(acceptanceOverviewPath(acceptanceId) + query, { replace: true })}
+      // A phone opens this page by pushing onto the list, so the back arrow
+      // pops that entry — replacing it would leave a duplicate overview behind
+      // and make the system back button look broken.
+      onBack={() =>
+        (location.state as { fromCheckList?: boolean } | null)?.fromCheckList
+          ? navigate(-1)
+          : navigate(acceptanceOverviewPath(acceptanceId) + query, { replace: true })
+      }
+      // Stepping between checks replaces the entry in place, carrying the
+      // "came from the list" flag so the back arrow still knows where to land.
       onSelectCheck={(id) =>
-        navigate(acceptanceCheckPath(acceptanceId, id) + query, { replace: true })
+        navigate(acceptanceCheckPath(acceptanceId, id) + query, {
+          replace: true,
+          state: location.state,
+        })
       }
       // Checklist authoring writes through the subject — creator-only until that
       // path is reviewer-aware. Reviewing the checks themselves is not.
@@ -71,14 +82,6 @@ const AcceptanceFocusWorkspace = () => {
                 onSubmit: (items) =>
                   saveStanding([...(data.acceptance.config?.checklist ?? []), ...items]),
               })
-          : undefined
-      }
-      onCheckWork={
-        canReviewAcceptance(data) && data.acceptance.status !== 'closed'
-          ? async () => {
-              await copyCheckRepairPrompt(data.acceptance.id, focusedCheck, copyToClipboard);
-              toast.success({ title: t('acceptance.checkWork.copied') });
-            }
           : undefined
       }
       onEditStandingCheck={

@@ -82,6 +82,15 @@ export interface RuntimeContext {
   /** Plugins enabled for the agent */
   plugins?: string[];
 
+  /**
+   * The system role stored on the agent row, when the user customized it.
+   * Builtins whose runtime prompt is only a default the user may edit (the
+   * renameable inbox assistant) honor it; builtins whose prompt is the
+   * feature itself (page / task / supervisor) ignore it or embed it via
+   * their own context.
+   */
+  storedSystemRole?: string;
+
   /** Target agent config for AgentBuilder */
   targetAgentConfig?: LobeAgentConfig;
 

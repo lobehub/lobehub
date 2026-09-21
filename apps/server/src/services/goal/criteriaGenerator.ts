@@ -74,6 +74,12 @@ const decompositionSchema = z.object({
       z.object({
         /** 0-based indices of earlier tasks this one consumes; drives `depends_on` edges. */
         dependsOn: z.array(z.number().int().nonnegative()).optional(),
+        /**
+         * Present only when the direction is a candidate answer under test; the
+         * coordinator then wraps its Task in an experiment container. Ordinary
+         * delivery steps carry `null` and attach straight to the problem.
+         */
+        hypothesis: z.string().max(280).nullable().optional(),
         instruction: z.string().min(1),
         title: z.string().min(1).max(80),
       }),

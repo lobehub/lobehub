@@ -53,7 +53,23 @@ runs:
         echo ""
         echo "📋 Version: ${{ inputs.version }}, Channel: ${{ inputs.channel }}"
 
+    - name: Setup Node.js for renderer validation
+      id: setup
+      uses: actions/setup-node@v6
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        package-manager-cache: false
+
+    - name: Validate renderer OTA baseline before publishing
+      id: validate
+      shell: bash
+      env:
+        CHANNEL: ${{ inputs.channel }}
+        VERSION: ${{ inputs.version }}
+      run: node apps/desktop/scripts/validateMainHash.mjs --base release "$CHANNEL" "$VERSION"
+
     - name: Upload to S3
+      id: installers
       if: inputs.upload-release-files == 'true'
       shell: bash
       env:
@@ -65,6 +81,7 @@ runs:
         CHANNEL: ${{ inputs.channel }}
         VERSION: ${{ inputs.version }}
       run: |
+        set -euo pipefail
         if [ -z "$S3_BUCKET" ]; then
           echo "⚠️ S3 bucket is not configured, skipping S3 upload"
           exit 0
@@ -142,6 +159,7 @@ runs:
         aws s3 ls "s3://$S3_BUCKET/$CHANNEL/$VERSION/" $ENDPOINT_ARG || true
 
     - name: Publish renderer OTA base marker
+      id: base
       shell: bash
       env:
         AWS_ACCESS_KEY_ID: ${{ inputs.aws-access-key-id }}
@@ -157,6 +175,7 @@ runs:
 
         if [ -z "$S3_BUCKET" ]; then
           echo "S3 bucket not configured, skipping renderer OTA marker"
+          echo "reason=upload-not-configured" >> "$GITHUB_OUTPUT"
           exit 0
         fi
 
@@ -197,6 +216,21 @@ runs:
           --cache-control no-store $ENDPOINT_ARG
         aws s3 cp "$LATEST" "$S3_RENDERER_ROOT/latest.json" \
           --cache-control no-store $ENDPOINT_ARG
+        aws s3 cp release/renderer-mainhash-inputs.json "$S3_RENDERER_ROOT/mainhash-inputs.json" \
+          --cache-control no-store $ENDPOINT_ARG
         aws s3 cp /tmp/renderer-ota-base.json "s3://$S3_BUCKET/$CHANNEL/base.json" \
           --cache-control no-store $ENDPOINT_ARG
         echo "Published renderer OTA r0 for $CHANNEL/$VERSION"
+        echo "published=true" >> "$GITHUB_OUTPUT"
+
+    - name: Preserve release publication diagnostics
+      if: always()
+      uses: ./.github/actions/desktop-ota-diagnostics
+      env:
+        APP_VERSION: ${{ inputs.version }}
+        CLOUD_REF: ${{ inputs.cloud-ref }}
+      with:
+        kind: release
+        channel: ${{ inputs.channel }}
+        steps-json: ${{ toJSON(steps) }}
+        job-status: ${{ job.status }}

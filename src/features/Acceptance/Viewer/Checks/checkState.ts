@@ -16,10 +16,6 @@ export const userReviewState = (check: AcceptanceCheck): UserReviewState => {
   return 'rejected';
 };
 
-/** Accepted and ignored checks are terminal — there is no remaining work to send back. */
-export const isCheckWorkActionable = (check: AcceptanceCheck): boolean =>
-  ['pending', 'rejected'].includes(userReviewState(check));
-
 /** A successful review decision moves the reviewer forward by folding the finished row. */
 export const shouldCollapseAfterReview = (succeeded: boolean, expanded: boolean): boolean =>
   succeeded && expanded;

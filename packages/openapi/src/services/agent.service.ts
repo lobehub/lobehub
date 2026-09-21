@@ -34,6 +34,18 @@ export class AgentService extends BaseService {
     super(db, userId, workspaceId);
   }
 
+  async duplicateAgent(id: string, title?: string) {
+    const permission = await this.resolveOperationPermission('AGENT_FORK', { targetAgentId: id });
+    if (!permission.isPermitted)
+      throw this.createAuthorizationError('No permission to duplicate agent');
+    const result = await new AgentModel(this.db, this.userId, this.workspaceId).duplicate(
+      id,
+      title,
+    );
+    if (!result) throw this.createNotFoundError('Agent not found');
+    return this.getAgentById(result.agentId);
+  }
+
   /**
    * Get the user's Agent list
    * @param page Page number, starting from 1
@@ -98,6 +110,8 @@ export class AgentService extends BaseService {
           id: idGenerator('agents'),
           model: request.model || null,
           params: request.params ?? {},
+          // JSONB accepts mixed plugin entries; the legacy DB column remains string[].
+          plugins: request.plugins as unknown as string[] | undefined,
           provider: request.provider || null,
           slug: randomSlug(4), // Auto-generated slug
           systemRole: request.systemRole || null,
@@ -198,6 +212,8 @@ export class AgentService extends BaseService {
               : mergeJsonPatch(existingAgent.chatConfig, request.chatConfig);
         }
         if (request.description !== undefined) updateData.description = request.description ?? null;
+        if (request.plugins !== undefined)
+          updateData.plugins = request.plugins as unknown as string[];
         if (request.model !== undefined) updateData.model = request.model ?? null;
         if (request.provider !== undefined) updateData.provider = request.provider ?? null;
         if (request.systemRole !== undefined) updateData.systemRole = request.systemRole ?? null;

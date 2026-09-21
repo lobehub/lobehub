@@ -3,7 +3,14 @@
  * Each ComputerRuntime subclass maps its raw service response into this shape.
  */
 export interface ServiceResult {
-  error?: { message: string; name?: string };
+  error?: {
+    code?: string;
+    doc_url?: string;
+    hint?: string;
+    message: string;
+    name?: string;
+    status?: number;
+  };
   result: any;
   /** The execution workspace was recreated before this call. */
   sessionExpiredAndRecreated?: boolean;
@@ -291,6 +298,8 @@ export interface GetCommandOutputState {
   running?: boolean;
   /** The sandbox workspace was recreated before polling this command. */
   sessionExpiredAndRecreated?: boolean;
+  /** The signal that terminated the command, when one did. */
+  signal?: string;
   stderr?: string;
   stdout?: string;
   success: boolean;

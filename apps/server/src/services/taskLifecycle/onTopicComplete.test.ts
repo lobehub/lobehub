@@ -14,7 +14,9 @@ const { cascadeOnCompletion } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/server/services/taskRunner', () => ({
-  TaskRunnerService: vi.fn(() => ({ cascadeOnCompletion })),
+  TaskRunnerService: vi.fn(function () {
+    return { cascadeOnCompletion };
+  }),
 }));
 
 vi.mock('@/server/services/taskScheduler', () => ({
@@ -25,14 +27,18 @@ vi.mock('@/server/services/taskScheduler', () => ({
 // async Verify-driven completion. Mock it; default = no verify run.
 const verifyFindByOperation = vi.fn().mockResolvedValue(undefined);
 vi.mock('@/database/models/verifyRun', () => ({
-  VerifyRunModel: vi.fn(() => ({ findByOperation: verifyFindByOperation })),
+  VerifyRunModel: vi.fn(function () {
+    return { findByOperation: verifyFindByOperation };
+  }),
 }));
 
 // Goal-loop rounds suppress the per-topic brief; onTopicComplete asks the
 // goals table whether this task carries a goal. Default = plain task.
 const goalFindByGraphTask = vi.fn().mockResolvedValue(undefined);
 vi.mock('@/database/models/goal', () => ({
-  GoalModel: vi.fn(() => ({ findByGraphTask: goalFindByGraphTask })),
+  GoalModel: vi.fn(function () {
+    return { findByGraphTask: goalFindByGraphTask };
+  }),
 }));
 
 // Error-brief copy is localized at the source via the server translator; mock it

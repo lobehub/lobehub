@@ -1,5 +1,19 @@
 import { z } from 'zod';
 
+/** Structured context for an unavailable logical device. */
+export interface DeviceUnavailableErrorData {
+  /** Stable machine-readable availability code. */
+  code: 'DEVICE_NOT_FOUND';
+  /** Logical device requested by the failed dispatch. */
+  deviceId: string;
+  /** Availability failures are safe for an outer caller to reconsider. */
+  retryable: true;
+  /** Principal pool in which presence was checked. */
+  scope: 'personal' | 'workspace';
+  /** Workspace principal, present only for workspace-scoped dispatch. */
+  workspaceId?: string;
+}
+
 export type ProjectSkillScope = 'device' | 'project';
 export type ProjectSkillSource = '.agents/skills' | '.claude/skills';
 
@@ -339,6 +353,7 @@ export interface DeviceEnroller {
 }
 
 export interface DeviceListItem {
+  architecture?: string | null;
   channels: DeviceChannel[];
   defaultCwd: string | null;
   deviceId: string;
@@ -428,6 +443,116 @@ export interface DeviceGitLinkedPullRequestResult {
   status: DeviceGitLinkedPullRequestLookupStatus;
   /** Remote ref the lookup queried under — the PR's own head ref when one was found. */
   upstream?: DeviceGitUpstreamRef;
+}
+
+/** One CI check on a pull request, from `statusCheckRollup` (CheckRun or StatusContext). */
+export interface DeviceGitPullRequestCheck {
+  completedAt?: string;
+  detailsUrl?: string;
+  name: string;
+  required: boolean;
+  startedAt?: string;
+  status: 'cancelled' | 'failure' | 'neutral' | 'pending' | 'skipped' | 'success';
+}
+
+export interface DeviceGitPullRequestComment {
+  author: string;
+  body: string;
+  createdAt: string;
+  id: string;
+}
+
+export interface DeviceGitPullRequestReview {
+  author: string;
+  state: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED' | 'PENDING';
+  submittedAt: string;
+}
+
+export interface DeviceGitPullRequestCommit {
+  author: string;
+  committedAt: string;
+  message: string;
+  sha: string;
+}
+
+/**
+ * Full pull request detail returned by the `getPullRequestDetail` device RPC.
+ * Backs the Working Sidebar's Pull Request tab.
+ */
+export interface DeviceGitPullRequestDetail {
+  additions: number;
+  author: string;
+  autoMerge?: { method: 'merge' | 'rebase' | 'squash' } | null;
+  baseBehindBy: number;
+  baseRefName: string;
+  body: string;
+  changedFiles: number;
+  checks: DeviceGitPullRequestCheck[];
+  comments: DeviceGitPullRequestComment[];
+  commits: DeviceGitPullRequestCommit[];
+  deletions: number;
+  headRefName: string;
+  headRefOid: string;
+  isCrossRepository: boolean;
+  isDraft: boolean;
+  mergeable: 'CONFLICTING' | 'MERGEABLE' | 'UNKNOWN';
+  mergedAt?: string;
+  mergeStateStatus:
+    'BEHIND' | 'BLOCKED' | 'CLEAN' | 'DIRTY' | 'DRAFT' | 'HAS_HOOKS' | 'UNKNOWN' | 'UNSTABLE';
+  number: number;
+  repo: { name: string; owner: string };
+  reviewDecision: 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED' | null;
+  reviews: DeviceGitPullRequestReview[];
+  state: 'closed' | 'merged' | 'open';
+  title: string;
+  url: string;
+  viewerCanBypass: boolean;
+  viewerCanWrite: boolean;
+}
+
+/** Result of the `getPullRequestDetail` device RPC. */
+export type DeviceGitPullRequestActivity = Pick<
+  DeviceGitPullRequestDetail,
+  'comments' | 'commits' | 'reviews'
+>;
+
+export interface DeviceGitPullRequestDetailResult {
+  detail: DeviceGitPullRequestDetail | null;
+  status: DeviceGitLinkedPullRequestLookupStatus;
+}
+
+export type DeviceGitPullRequestMergeMethod = 'merge' | 'rebase' | 'squash';
+
+/** Result of the `getPullRequestMergeContext` device RPC. */
+export interface DeviceGitPullRequestMergeContext {
+  baseBehindBy: number;
+  requiredChecks: string[];
+  viewerCanBypass: boolean;
+  viewerCanWrite: boolean;
+}
+
+/** One `gh pr` mutation dispatched by the `runPullRequestAction` device RPC. */
+export type DeviceGitPullRequestAction =
+  | {
+      admin?: boolean;
+      deleteBranch?: boolean;
+      headRefOid: string;
+      method: DeviceGitPullRequestMergeMethod;
+      type: 'merge';
+    }
+  | { headRefOid: string; method: DeviceGitPullRequestMergeMethod; type: 'autoMerge' }
+  | { type: 'disableAutoMerge' }
+  | { method: 'merge' | 'rebase'; type: 'updateBranch' }
+  | { type: 'ready' }
+  | { body: string; type: 'comment' }
+  | { type: 'close' }
+  | { type: 'reopen' }
+  | { head: string; type: 'deleteBranch' }
+  | { base: string; type: 'changeBase' };
+
+export interface DeviceGitPullRequestActionResult {
+  error?: string;
+  success: boolean;
 }
 
 /**
@@ -623,6 +748,8 @@ export interface DeviceGitWorkingTreeFiles {
 
 /** One entry in a device's project file index. Mirrors `ProjectFileIndexEntry`. */
 export interface DeviceProjectFileIndexEntry {
+  /** Directory the index left unexpanded; children come from `listProjectDirectory`. */
+  collapsed?: boolean;
   /** Whether Git ignore rules match this file or directory. */
   gitIgnored?: boolean;
   isDirectory: boolean;
@@ -643,6 +770,15 @@ export interface DeviceProjectFileIndexResult {
   indexedAt: string;
   root: string;
   source: 'git' | 'glob';
+}
+
+/**
+ * Children of one directory on a remote device, returned by the
+ * `listProjectDirectory` device RPC. Fills in a subtree the index collapsed.
+ */
+export interface DeviceProjectDirectoryListResult {
+  entries: DeviceProjectFileIndexEntry[];
+  truncated: boolean;
 }
 
 export interface DeviceProjectFileSearchResult {
@@ -694,6 +830,18 @@ export type DeviceLocalFilePreview =
 export interface DeviceLocalFilePreviewResult {
   error?: string;
   preview?: DeviceLocalFilePreview;
+  success: boolean;
+}
+
+export interface DeviceCopyAssetForPublishResult {
+  error?: string;
+  success: boolean;
+}
+
+export interface DeviceExternalAssetForPublishResult {
+  base64?: string;
+  contentType?: string;
+  error?: string;
   success: boolean;
 }
 

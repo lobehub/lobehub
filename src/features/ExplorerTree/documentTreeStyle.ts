@@ -109,49 +109,35 @@ const DOCUMENT_TREE_NO_FOCUS_BORDER_CSS = `
 `;
 
 // pierre truncates every row with `MiddleTruncate split:"extension"` and no way
-// to configure it (FileTreeView hard-codes it; FileTreeOptions has no field for
-// truncation). The stem is rendered as a shrink-first segment and the extension
-// as a shrink-last one, so a long title collapses to `…承载md` — the ellipsis
-// lands mid-word and the extension survives, which is backwards for a document
-// outline where the title is the content and `.md` is storage detail.
-//
-// The split itself is only a flex priority in pierre's own stylesheet, so
-// swapping the two priorities is enough: the stem now holds its width and the
-// extension collapses to its own leading marker, which renders as one trailing
-// ellipsis. A title that fits is untouched — both halves render in full.
+// to configure it (FileTreeView hard-codes it). It halves the label, renders each
+// half as its own overflow-measured segment and paints an opaque "…" marker over
+// whichever half overflows, so a title without an extension loses its entire
+// second half the moment it overflows by a pixel, and the marker's fade-in
+// flashes a plate over the text whenever rows re-render (folder expand/collapse).
+// A document outline wants a plain trailing ellipsis, so flatten the segments
+// back into one inline run and let the browser truncate it.
 const DOCUMENT_TREE_TRAILING_ELLIPSIS_CSS = `
   [data-item-section='content'] [data-truncate-group-container='middle'] {
-    & > div[data-truncate-segment-priority='1'] {
-      flex: 0 999999 max-content;
+    overflow: hidden;
+    display: block;
+    min-width: 0;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+
+    & * {
+      overflow: visible;
+      display: inline;
+      height: auto;
+      margin: 0;
+      direction: ltr;
     }
 
-    & > div[data-truncate-segment-priority='2'] {
-      flex: 0 1 max-content;
+    & [data-truncate-content='overflow'],
+    & [data-truncate-marker-cell],
+    & [data-truncate-fill] {
+      display: none;
     }
   }
-
-  /* The swap leaves a narrow band where the overflow is smaller than the
-     extension: it then shrinks to a few pixels and, being right-aligned, leaks
-     its last character ("…研究报告 d"). pierre's own overflow query fires on that
-     segment, so stretch its marker across the segment — the marker is opaque and
-     sits above the text, so a partially rendered extension is covered rather
-     than half-shown. A fully collapsed one is zero-wide and stays invisible. */
-  @container measure (height > 1lh) {
-    [data-item-section='content'] [data-truncate-container='fruncate'] [data-truncate-marker] {
-      inset: 0;
-      justify-content: flex-start;
-    }
-  }
-
-  /* pierre paints the marker over the last characters and masks them with
-     --truncate-marker-background-color, which defaults to --trees-bg. These rows
-     are transparent so the panel shows through, and the ellipsis ended up drawn
-     on top of the text. Point the marker at the panel's own background so it
-     masks again, without giving the rows an opaque fill of their own. */
-  [data-type='item'] {
-    --truncate-marker-background-color: var(--explorer-tree-panel-bg, transparent);
-  }
-
 `;
 
 // Row presentation for the document tree. Nesting is carried by indentation

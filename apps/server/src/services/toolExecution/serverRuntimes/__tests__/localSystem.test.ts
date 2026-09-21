@@ -7,12 +7,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type ToolExecutionContext } from '../../types';
 
-// Mock deviceGateway
 const mockExecuteToolCall = vi.fn();
-vi.mock('@/server/services/deviceGateway', () => ({
-  deviceGateway: {
-    executeToolCall: (...args: any[]) => mockExecuteToolCall(...args),
-  },
+vi.mock('@/server/services/deviceGateway/authorizedToolCall', () => ({
+  executeAuthorizedDeviceToolCall: (_serverDB: unknown, ...args: unknown[]) =>
+    mockExecuteToolCall(...args),
 }));
 
 // Import after mock setup
@@ -107,7 +105,7 @@ describe('localSystemRuntime', () => {
       }
     });
 
-    it('should call deviceGateway.executeToolCall with correct arguments when a proxy function is invoked', async () => {
+    it('should dispatch the authorized device tool call with correct arguments', async () => {
       const context: ToolExecutionContext = {
         activeDeviceId: 'device-1',
         operationId: 'op-1',

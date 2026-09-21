@@ -7,7 +7,7 @@ import { ChevronRightIcon, TargetIcon } from 'lucide-react';
 import { memo } from 'react';
 
 import RingLoadingIcon from '@/components/RingLoading';
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useChatStore } from '@/store/chat';
 
 import type { OperationGoal } from './deriveOperationGoals';
 import GoalElapsedTime from './GoalElapsedTime';
@@ -56,15 +56,14 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const GoalCard = memo<{ goal: OperationGoal }>(({ goal }) => {
-  const navigate = useWorkspaceAwareNavigate();
-  const { agentId, progress, startedAt, title } = useGoalTaskStatus({
+  const openGoalPortal = useChatStore((s) => s.openGoal);
+  const { progress, startedAt, title } = useGoalTaskStatus({
     criteriaCount: goal.criteriaCount,
     goalId: goal.goalId,
   });
   const isActive = ACTIVE_PHASES.has(progress.phase);
-  const openGoal = () => {
-    if (agentId) navigate(`/agent/${agentId}/goal/${goal.goalId}`);
-  };
+  // Same destination as the tool card: the goal's progress beside the chat.
+  const openGoal = () => openGoalPortal(goal.goalId);
 
   return (
     <Flexbox

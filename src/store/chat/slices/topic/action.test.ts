@@ -38,6 +38,14 @@ vi.mock('@/libs/swr', async () => {
   };
 });
 
+vi.mock('swr', async () => {
+  const actual = await vi.importActual('swr');
+  return {
+    ...(actual as any),
+    mutate: vi.fn(),
+  };
+});
+
 // Mock topicService 和 messageService
 vi.mock('@/services/topic', () => ({
   topicService: {
@@ -243,15 +251,6 @@ describe('topic action', () => {
     });
   });
   describe('refreshTopic', () => {
-    beforeEach(() => {
-      vi.mock('swr', async () => {
-        const actual = await vi.importActual('swr');
-        return {
-          ...(actual as any),
-          mutate: vi.fn(),
-        };
-      });
-    });
     afterEach(() => {
       // 在每个测试用例开始前恢复到实际的 SWR 实现
       vi.resetAllMocks();
@@ -1759,6 +1758,231 @@ describe('topic action', () => {
       expect(revalidateSpy).toHaveBeenCalledTimes(1);
       expect(useChatStore.getState().activeTopicId).toBe('topic-b');
     });
+
+    describe('onlyIfActiveTopicIn guard', () => {
+      it('skips the switch when the user has navigated to another topic', async () => {
+        // Regression: a send's continuation calls switchTopic(newTopicId) after
+        // the persistence round-trip. If the user switched topics while that
+        // await was in flight, the unconditional switch yanked the UI (and the
+        // URL) back to the sent topic. The guard must drop the switch instead.
+        const { result } = renderHook(() => useChatStore());
+        const revalidateSpy = vi
+          .spyOn(result.current, 'revalidateMessages')
+          .mockResolvedValue(undefined);
+
+        await act(async () => {
+          useChatStore.setState({ activeTopicId: 'topic-user-moved-to' });
+        });
+
+        await act(async () => {
+          await result.current.switchTopic('topic-from-send', {
+            clearNewKey: true,
+            onlyIfActiveTopicIn: ['topic-from-send'],
+            skipRefreshMessage: true,
+          });
+        });
+
+        // The user's own topic stays active; the stale send continuation is a no-op.
+        expect(useChatStore.getState().activeTopicId).toBe('topic-user-moved-to');
+        expect(revalidateSpy).not.toHaveBeenCalled();
+      });
+
+      it('skips the switch when the user moved to the blank new-conversation view', async () => {
+        // Unset is the store's own "no topic" representation, so this also
+        // covers the guard's normalization of an unset field to `null`.
+        const { result } = renderHook(() => useChatStore());
+        vi.spyOn(result.current, 'revalidateMessages').mockResolvedValue(undefined);
+        await act(async () => {
+          useChatStore.setState({ activeTopicId: undefined });
+        });
+
+        await act(async () => {
+          await result.current.switchTopic('topic-from-send', {
+            clearNewKey: true,
+            onlyIfActiveTopicIn: ['topic-from-send'],
+            skipRefreshMessage: true,
+          });
+        });
+
+        expect(useChatStore.getState().activeTopicId).toBeUndefined();
+      });
+
+      it('applies the switch when the user is still on the expected topic', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const revalidateSpy = vi
+          .spyOn(result.current, 'revalidateMessages')
+          .mockResolvedValue(undefined);
+
+        await act(async () => {
+          useChatStore.setState({ activeTopicId: 'topic-from-send' });
+        });
+
+        await act(async () => {
+          await result.current.switchTopic('topic-from-send', {
+            clearNewKey: true,
+            onlyIfActiveTopicIn: ['topic-from-send'],
+            skipRefreshMessage: true,
+          });
+        });
+
+        expect(useChatStore.getState().activeTopicId).toBe('topic-from-send');
+        // clearNewKey still runs its side effects on an applied switch.
+        expect(useChatStore.getState().activeThreadId).toBeUndefined();
+        // skipRefreshMessage still suppresses the revalidation on an applied switch.
+        expect(revalidateSpy).not.toHaveBeenCalled();
+      });
+
+      it('applies the switch when the user sits on any accepted bucket', async () => {
+        // A send's topic can live under two ids: the client-minted one before
+        // the server confirms it, and the persisted one after the re-key. The
+        // guard must accept the conversation while it is on either, otherwise
+        // the send's own continuation would be dropped on the normal path.
+        const { result } = renderHook(() => useChatStore());
+        vi.spyOn(result.current, 'revalidateMessages').mockResolvedValue(undefined);
+
+        await act(async () => {
+          useChatStore.setState({ activeTopicId: 'topic-persisted' });
+        });
+
+        await act(async () => {
+          await result.current.switchTopic('topic-persisted', {
+            clearNewKey: true,
+            onlyIfActiveTopicIn: ['topic-minted', 'topic-persisted'],
+            skipRefreshMessage: true,
+          });
+        });
+
+        expect(useChatStore.getState().activeTopicId).toBe('topic-persisted');
+      });
+
+      it('does not consume the switch epoch when the guard skips', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const revalidateSpy = vi
+          .spyOn(result.current, 'revalidateMessages')
+          .mockResolvedValue(undefined);
+
+        await act(async () => {
+          useChatStore.setState({ activeTopicId: 'other-topic' });
+        });
+
+        // A guarded (skipped) call must not invalidate a concurrent normal
+        // switch's pending revalidation: the skipped call returns before the
+        // epoch bump, so the epoch only moves for real switches.
+        await act(async () => {
+          const guarded = result.current.switchTopic('topic-from-send', {
+            onlyIfActiveTopicIn: ['topic-from-send'],
+            skipRefreshMessage: true,
+          });
+          const real = result.current.switchTopic('real-topic');
+          await Promise.all([guarded, real]);
+        });
+
+        expect(useChatStore.getState().activeTopicId).toBe('real-topic');
+        expect(revalidateSpy).toHaveBeenCalledTimes(1);
+      });
+
+      it('skips the switch when the active agent changed between two blank views', async () => {
+        // Regression (Codex P1): the topic guard alone cannot tell two blank
+        // views apart — both have `activeTopicId` unset. A send from agent A's
+        // blank view whose preflight outlasts the user's navigation to agent
+        // B's blank view must NOT adopt A's minted topic in B's UI.
+        const { result } = renderHook(() => useChatStore());
+        const revalidateSpy = vi
+          .spyOn(result.current, 'revalidateMessages')
+          .mockResolvedValue(undefined);
+
+        await act(async () => {
+          useChatStore.setState({ activeAgentId: 'agent-b', activeTopicId: undefined });
+        });
+
+        await act(async () => {
+          await result.current.switchTopic('topic-minted-by-send', {
+            onlyIfActiveAgentId: 'agent-a',
+            onlyIfActiveTopicIn: [null],
+            skipRefreshMessage: true,
+          });
+        });
+
+        expect(useChatStore.getState().activeTopicId).toBeUndefined();
+        expect(revalidateSpy).not.toHaveBeenCalled();
+      });
+
+      it('applies the switch when the agent and topic both still match', async () => {
+        const { result } = renderHook(() => useChatStore());
+        vi.spyOn(result.current, 'revalidateMessages').mockResolvedValue(undefined);
+
+        await act(async () => {
+          useChatStore.setState({ activeAgentId: 'agent-a', activeTopicId: undefined });
+        });
+
+        await act(async () => {
+          await result.current.switchTopic('topic-minted-by-send', {
+            onlyIfActiveAgentId: 'agent-a',
+            onlyIfActiveTopicIn: [null],
+            skipRefreshMessage: true,
+          });
+        });
+
+        expect(useChatStore.getState().activeTopicId).toBe('topic-minted-by-send');
+      });
+
+      it('skips the switch when the active group changed between two blank views', async () => {
+        const { result } = renderHook(() => useChatStore());
+        vi.spyOn(result.current, 'revalidateMessages').mockResolvedValue(undefined);
+
+        await act(async () => {
+          useChatStore.setState({ activeGroupId: 'group-b', activeTopicId: undefined });
+        });
+
+        await act(async () => {
+          await result.current.switchTopic('topic-minted-by-send', {
+            onlyIfActiveGroupId: null,
+            onlyIfActiveTopicIn: [null],
+            skipRefreshMessage: true,
+          });
+        });
+
+        expect(useChatStore.getState().activeTopicId).toBeUndefined();
+      });
+
+      it('still clears the origin _new bucket when the guard drops the switch', async () => {
+        // Regression (Codex P1): a dropped switch used to suppress the
+        // clearNewKey cleanup too, leaving the send's origin blank bucket
+        // stale — and cleaning by the current view would wipe the WRONG
+        // conversation's bucket. The cleanup must target the origin.
+        const { result } = renderHook(() => useChatStore());
+        const replaceSpy = vi.spyOn(result.current, 'replaceMessages');
+        const clearPortalSpy = vi.spyOn(result.current, 'clearPortalStack');
+
+        await act(async () => {
+          useChatStore.setState({
+            activeAgentId: 'agent-b',
+            activeGroupId: undefined,
+            activeTopicId: 'topic-user-moved-to',
+          });
+        });
+
+        await act(async () => {
+          await result.current.switchTopic('topic-from-send', {
+            clearNewKey: true,
+            clearNewKeyContext: { agentId: 'agent-a', groupId: null },
+            onlyIfActiveTopicIn: ['topic-from-send'],
+            skipRefreshMessage: true,
+          });
+        });
+
+        // Navigation dropped…
+        expect(useChatStore.getState().activeTopicId).toBe('topic-user-moved-to');
+        // …but the origin conversation's _new bucket was still cleared.
+        expect(clearPortalSpy).toHaveBeenCalled();
+        expect(replaceSpy).toHaveBeenCalledWith(
+          [],
+          expect.objectContaining({
+            context: expect.objectContaining({ agentId: 'agent-a', topicId: null }),
+          }),
+        );
+      });
+    });
   });
   describe('removeSessionTopics', () => {
     it('should remove all topics from the current session and refresh the topic list', async () => {
@@ -2018,6 +2242,86 @@ describe('topic action', () => {
       expect(topicData.items).toHaveLength(1);
       expect(topicData.total).toBe(1);
       expect(topicData.hasMore).toBe(false);
+    });
+  });
+  describe('persisted topic-list cache write-through', () => {
+    const setupBucket = (agentId: string) => {
+      const containerKey = topicMapKey({ agentId });
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          topicDataMap: {
+            [containerKey]: {
+              currentPage: 0,
+              hasMore: false,
+              isLoadingMore: false,
+              items: [{ id: 'topic-1', status: 'running', title: 'Topic 1' }] as ChatTopic[],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        });
+      });
+      vi.mocked(mutate).mockClear();
+
+      return { containerKey, result };
+    };
+
+    it('mirrors a run-end status patch into the cached topic list', () => {
+      const { containerKey, result } = setupBucket('agent-write-through');
+
+      act(() => {
+        result.current.internal_dispatchTopic({
+          id: 'topic-1',
+          type: 'updateTopic',
+          value: { status: 'unread' },
+        });
+      });
+
+      expect(mutate).toHaveBeenCalledTimes(1);
+      const [matcher, updater, options] = vi.mocked(mutate).mock.calls[0] as [
+        (key: unknown) => boolean,
+        (cached?: { items: ChatTopic[]; total: number }) => unknown,
+        unknown,
+      ];
+
+      expect(options).toEqual({ revalidate: false });
+      // Only this container's list keys — the agent-view key and other
+      // containers keep their own cached pages.
+      expect(matcher(['topic:list', containerKey, { pageSize: 20 }])).toBe(true);
+      expect(matcher(['topic:list', topicMapKey({ agentId: 'other-agent' }), {}])).toBe(false);
+      expect(matcher(['topic:agentView', containerKey, {}])).toBe(false);
+
+      const cached = {
+        items: [{ id: 'topic-1', status: 'running', title: 'Topic 1' }] as ChatTopic[],
+        total: 1,
+      };
+      expect(updater(cached)).toMatchObject({
+        items: [{ id: 'topic-1', status: 'unread' }],
+        total: 1,
+      });
+
+      // A cached page without the patched row (or no entry at all) stays as-is,
+      // so the mutate cannot create a bogus entry.
+      const otherPage = { items: [{ id: 'topic-2', status: 'active' }] as ChatTopic[], total: 1 };
+      expect(updater(otherPage)).toBe(otherPage);
+      expect(updater(undefined)).toBeUndefined();
+    });
+
+    it('does not mirror client-only optimistic rows', () => {
+      const { result } = setupBucket('agent-write-through-add');
+
+      act(() => {
+        result.current.internal_dispatchTopic({
+          optimistic: true,
+          type: 'addTopic',
+          value: { id: 'topic-optimistic', title: 'New' },
+        });
+      });
+
+      expect(mutate).not.toHaveBeenCalled();
     });
   });
   describe('loadMoreAgentTopicsView', () => {
@@ -3496,5 +3800,51 @@ describe('topic action', () => {
       expect(next.excludeTriggers).toEqual(['cron', 'eval']);
       expect(next.items.map((i) => i.id)).toEqual(['topic-2']);
     });
+  });
+});
+
+describe('Topic metadata save failures', () => {
+  const key = topicMapKey({ agentId: 'agent-metadata' });
+  const previous = { heteroSessionId: 'session-a' };
+  const selected = { heteroSessionId: 'session-b' };
+  const setup = () => {
+    useChatStore.setState({
+      activeAgentId: 'agent-metadata',
+      topicDataMap: {
+        [key]: {
+          items: [
+            {
+              id: 'topic-metadata',
+              title: 'A',
+              createdAt: 1,
+              updatedAt: 1,
+              favorite: false,
+              metadata: previous,
+            },
+          ],
+          currentPage: 1,
+          hasMore: false,
+          pageSize: 20,
+          total: 1,
+        },
+      },
+    });
+    vi.spyOn(useChatStore.getState(), 'refreshTopic').mockRejectedValue(new Error('offline'));
+  };
+
+  it('restores the previous metadata if the mutation fails while offline', async () => {
+    setup();
+    vi.spyOn(topicService, 'updateTopicMetadata').mockRejectedValueOnce(new Error('offline'));
+    await expect(
+      useChatStore.getState().updateTopicMetadata('topic-metadata', selected),
+    ).rejects.toThrow('offline');
+    expect(useChatStore.getState().topicDataMap[key].items[0].metadata).toEqual(previous);
+  });
+
+  it('keeps the saved metadata if only revalidation fails', async () => {
+    setup();
+    vi.spyOn(topicService, 'updateTopicMetadata').mockResolvedValueOnce([]);
+    await useChatStore.getState().updateTopicMetadata('topic-metadata', selected);
+    expect(useChatStore.getState().topicDataMap[key].items[0].metadata).toEqual(selected);
   });
 });

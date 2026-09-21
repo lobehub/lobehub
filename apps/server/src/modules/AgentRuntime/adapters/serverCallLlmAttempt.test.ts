@@ -246,8 +246,15 @@ describe('ServerCallLlmAttempt', () => {
     expect(metadata.userAgent).toBeUndefined();
   });
 
-  it('keeps partial output and usage readable after a stream error', async () => {
-    const { attempt } = createAttempt(async ({ callback }) => {
+  it('records provider evidence while keeping partial output readable after a stream error', async () => {
+    const providerEvidence = {
+      providerResponse: {
+        apiMode: 'google_generate_content',
+        rawEvents: [{ candidates: [], responseId: 'response-1' }],
+      },
+    };
+    const { attempt } = createAttempt(async ({ callback, diagnostics }) => {
+      Object.assign(diagnostics!, providerEvidence);
       await callback?.onText?.('Partial answer');
       await callback?.onCompletion?.({
         text: '',
@@ -273,6 +280,45 @@ describe('ServerCallLlmAttempt', () => {
         usage: { totalOutputTokens: 3 },
       }),
     );
+    expect(recordModelCompletionFailureMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: 'stream_error',
+        response: expect.objectContaining({
+          streamError: {
+            errorType: 'ProviderBizError',
+            message: 'provider stream failed',
+            status: 503,
+          },
+        }),
+        runtime: expect.objectContaining({ provider: providerEvidence }),
+      }),
+    );
+  });
+
+  it('records a provider error raised before any response event', async () => {
+    const { attempt } = createAttempt(async () => {
+      throw new Error('upstream request failed');
+    });
+
+    await expect(attempt.execute()).rejects.toThrow('upstream request failed');
+    expect(recordModelCompletionFailureMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: 'provider_error',
+        response: expect.objectContaining({
+          error: { message: 'upstream request failed', name: 'Error' },
+        }),
+      }),
+    );
+  });
+
+  it('does not record an aborted provider request as a failure', async () => {
+    const { attempt } = createAttempt(async ({ diagnostics }) => {
+      Object.assign(diagnostics!, { providerResponse: { aborted: true } });
+      throw new Error('Request aborted');
+    });
+
+    await expect(attempt.execute()).rejects.toThrow('Request aborted');
+    expect(recordModelCompletionFailureMock).not.toHaveBeenCalled();
   });
 
   it('salvages a natural-stop answer emitted only in reasoning', async () => {

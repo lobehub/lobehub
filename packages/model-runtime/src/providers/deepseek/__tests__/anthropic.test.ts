@@ -30,21 +30,24 @@ describe('LobeDeepSeekAnthropicAI handlePayload', () => {
     vi.clearAllMocks();
   });
 
-  it('should enable thinking by default for deepseek-v4-pro', async () => {
-    await instance.chat({
-      messages: [{ content: 'Hello', role: 'user' }],
-      model: 'deepseek-v4-pro',
-      temperature: 0,
-    });
+  it.each(['deepseek-v4-pro', 'deepseek-flash'])(
+    'should enable thinking by default for %s',
+    async (model) => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model,
+        temperature: 0,
+      });
 
-    const payload = getLastRequestPayload();
+      const payload = getLastRequestPayload();
 
-    expect(payload.max_tokens).toBe(393_216);
-    expect(payload.thinking).toEqual({
-      budget_tokens: 1024,
-      type: 'enabled',
-    });
-  });
+      expect(payload.max_tokens).toBe(393_216);
+      expect(payload.thinking).toEqual({
+        budget_tokens: 1024,
+        type: 'enabled',
+      });
+    },
+  );
 
   it('should disable thinking when thinking.type is disabled', async () => {
     await instance.chat({

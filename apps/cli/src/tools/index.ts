@@ -71,8 +71,15 @@ export async function executeToolCall(
     const content = typeof result === 'string' ? result : JSON.stringify(result);
 
     if (apiName === 'cancelHeteroTask') {
-      const state = JSON.parse(content) as { success?: boolean };
-      return { content, state, success: state.success !== false };
+      const state = (typeof result === 'string' ? JSON.parse(content) : result) as {
+        exited?: boolean;
+        success?: boolean;
+      };
+      return {
+        content,
+        state,
+        success: state.success !== false && state.exited !== false,
+      };
     }
 
     return { content, success: true };

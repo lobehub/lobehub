@@ -25,23 +25,29 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/database/models/goal', () => ({
-  GoalModel: vi.fn(() => ({ findByGraphTask: mocks.goalFind })),
+  GoalModel: vi.fn(function () {
+    return { findByGraphTask: mocks.goalFind };
+  }),
 }));
 
 vi.mock('../acceptanceService', async (original) => ({
   ...(await original<typeof AcceptanceServiceModule>()),
-  AcceptanceService: vi.fn(() => ({
-    loadRounds: mocks.loadRounds,
-    acceptanceModel: { update: mocks.acceptanceUpdate },
-    attachPolicyRun: mocks.acceptanceAttachPolicyRun,
-    ensureForSubject: mocks.acceptanceEnsureForSubject,
-  })),
+  AcceptanceService: vi.fn(function () {
+    return {
+      loadRounds: mocks.loadRounds,
+      acceptanceModel: { update: mocks.acceptanceUpdate },
+      attachPolicyRun: mocks.acceptanceAttachPolicyRun,
+      ensureForSubject: mocks.acceptanceEnsureForSubject,
+    };
+  }),
 }));
 
 vi.mock('../planGenerator', () => ({
-  VerifyPlanGeneratorService: vi.fn(() => ({
-    generateDraftPlan: mocks.generateDraftPlan,
-  })),
+  VerifyPlanGeneratorService: vi.fn(function () {
+    return {
+      generateDraftPlan: mocks.generateDraftPlan,
+    };
+  }),
 }));
 
 vi.mock('../taskAcceptance', () => ({
@@ -53,27 +59,35 @@ vi.mock('../modelConfig', () => ({
 }));
 
 vi.mock('@/database/models/task', () => ({
-  TaskModel: vi.fn(() => ({
-    findById: mocks.taskFindById,
-  })),
+  TaskModel: vi.fn(function () {
+    return {
+      findById: mocks.taskFindById,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/verifyRun', () => ({
-  VerifyRunModel: vi.fn(() => ({
-    confirmPlan: mocks.confirmPlan,
-    ensureForOperation: mocks.ensureForOperation,
-    findByOperation: mocks.runFindByOperation,
-    setMetadata: mocks.setMetadata,
-    setPlan: mocks.setPlan,
-  })),
+  VerifyRunModel: vi.fn(function () {
+    return {
+      confirmPlan: mocks.confirmPlan,
+      ensureForOperation: mocks.ensureForOperation,
+      findByOperation: mocks.runFindByOperation,
+      setMetadata: mocks.setMetadata,
+      setPlan: mocks.setPlan,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/agentOperation', () => ({
-  AgentOperationModel: vi.fn(() => ({ findById: mocks.operationFindById })),
+  AgentOperationModel: vi.fn(function () {
+    return { findById: mocks.operationFindById };
+  }),
 }));
 
 vi.mock('@/server/services/aiAgent', () => ({
-  AiAgentService: vi.fn(() => ({ execAgent: mocks.agentExec })),
+  AiAgentService: vi.fn(function () {
+    return { execAgent: mocks.agentExec };
+  }),
 }));
 
 const db = {} as any;

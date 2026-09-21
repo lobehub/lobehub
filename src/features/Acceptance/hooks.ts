@@ -121,6 +121,14 @@ export const useAcceptanceList = (
     },
   );
 
+/** Rounds, evidence files and bytes a delete would purge. Pass null to skip. */
+export const useAcceptancePurgePreview = (acceptanceId: string | null) =>
+  useClientDataSWR(
+    acceptanceId ? verifyKeys.acceptancePurgePreview(acceptanceId) : null,
+    () => verifyService.getAcceptancePurgePreview([acceptanceId!]),
+    VERIFY_REPORT_SWR_CONFIG,
+  );
+
 /**
  * The panel's scroll feed: keyset pages, newest first, with the in-progress /
  * completed split applied server-side (see `acceptance.listPage`).

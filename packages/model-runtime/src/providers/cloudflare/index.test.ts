@@ -3,6 +3,7 @@ import type { Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ChatCompletionTool } from '../../types/chat';
+import type { ModelRuntimeDiagnostics } from '../../types/providerDiagnostics';
 import * as debugStreamModule from '../../utils/debugStream';
 import { LobeCloudflareAI } from './index';
 
@@ -77,6 +78,27 @@ describe('LobeCloudflareAI', () => {
 
       // Assert
       expect(result).toBeInstanceOf(Response);
+    });
+
+    it('captures the bounded raw provider response when diagnostics are enabled', async () => {
+      const diagnostics: ModelRuntimeDiagnostics = {};
+      const result = await instance.chat(
+        {
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: '@hf/meta-llama/meta-llama-3-8b-instruct',
+        },
+        { diagnostics },
+      );
+      await result.text();
+
+      expect(diagnostics.providerResponse).toMatchObject({
+        apiMode: 'cloudflare_workers_ai',
+        rawResponse: {
+          body: 'data: {"response": "Hello, world!"}\n\n',
+          status: 'captured',
+        },
+        status: 200,
+      });
     });
 
     it('should handle text messages correctly', async () => {

@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Button, confirmModal, Text } from '@lobehub/ui/base-ui';
+import { ActionIcon, Button, Collapsible, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   ChevronRight,
@@ -32,6 +32,7 @@ import {
 } from '@/features/Acceptance/Viewer/AcceptanceScope';
 import AcceptanceCheckInventory from '@/features/Acceptance/Viewer/Checks/AcceptanceCheckInventory';
 import AcceptanceDecision from '@/features/Acceptance/Viewer/Review/AcceptanceDecision';
+import { openAcceptanceDeleteConfirm } from '@/features/Acceptance/Workspace/AcceptanceDeleteConfirm';
 import { usePermission } from '@/hooks/usePermission';
 import { verifyService } from '@/services/verify';
 import { useChatStore } from '@/store/chat';
@@ -128,6 +129,7 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
   const { allowed: canEditTask } = usePermission('create_content');
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const taskDatabaseId = useTaskStore(taskDetailSelectors.activeTaskDatabaseId);
+  const taskName = useTaskStore(taskDetailSelectors.activeTaskName);
   const automationMode = useTaskStore(taskDetailSelectors.activeTaskAutomationMode);
   const verify = useTaskStore(taskDetailSelectors.activeTaskVerifyConfig);
   const [sectionExpanded, setSectionExpanded] = useState(true);
@@ -197,20 +199,19 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
   // to recreate it on the next run.
   const handleRemoveAcceptance = () => {
     if (!acceptanceSubject || !taskId) return;
-    confirmModal({
-      content: t('taskDetail.acceptance.removeConfirm.content'),
-      okButtonProps: { danger: true },
-      okText: t('taskDetail.acceptance.removeConfirm.ok'),
-      onOk: async () => {
+    openAcceptanceDeleteConfirm({
+      description: t('taskDetail.acceptance.removeConfirm.content'),
+      ids: [acceptanceSubject.id],
+      title: taskName || requirement || t('taskDetail.acceptance.untitled'),
+      onDelete: async (purge) => {
         await useTaskStore.getState().updateVerifyConfig(taskId, {
           enabled: false,
           requirement: null,
           verifyCriteriaIds: null,
         });
-        await verifyService.deleteAcceptance(acceptanceSubject.id);
+        await verifyService.deleteAcceptance(acceptanceSubject.id, purge);
         await mutateSubject();
       },
-      title: t('taskDetail.acceptance.removeConfirm.title'),
     });
   };
 
@@ -281,7 +282,7 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
   return (
     <Flexbox gap={8}>
       {header}
-      {sectionExpanded && (
+      <Collapsible open={sectionExpanded}>
         <Flexbox className={styles.body} gap={14}>
           {bundleLoading && <NeuralNetworkLoading size={28} />}
           {bundleError && <AcceptanceError onRetry={() => void mutateBundle()} />}
@@ -387,7 +388,7 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
             </>
           )}
         </Flexbox>
-      )}
+      </Collapsible>
     </Flexbox>
   );
 });

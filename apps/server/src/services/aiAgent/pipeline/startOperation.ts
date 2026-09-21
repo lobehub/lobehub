@@ -32,12 +32,15 @@ export interface StartOperationInput {
   botContext?: InternalExecAgentParams['botContext'];
   botPlatformContext?: InternalExecAgentParams['botPlatformContext'];
   clientIp?: string;
+  /** Tri-state disabled plugin identifiers, kept on the world slot for the context rules. */
+  disabledPluginIds?: string[];
   discordContext?: any;
   discovery: ToolDiscoveryResult;
   enableExpertise: boolean;
   evalContext?: InternalExecAgentParams['evalContext'];
   evalRuntime?: InternalExecAgentParams['evalRuntime'];
   hooks?: InternalExecAgentParams['hooks'];
+  includeFinalState?: boolean;
   /** Final runtime context — base prep context with 16b/16c overrides applied. */
   initialContext: OperationPrepResult['initialContext'];
   initialStepCount?: number;
@@ -95,6 +98,7 @@ export const startOperation = async (
     botContext,
     botPlatformContext,
     clientIp,
+    disabledPluginIds,
     discordContext,
     discovery,
     enableExpertise,
@@ -134,6 +138,7 @@ export const startOperation = async (
   // If createOperation fails, we still have valid messages that need error info
   try {
     const result = await deps.agentRuntimeService.createOperation({
+      includeFinalState: input.includeFinalState,
       activeDeviceId: discovery.activeDeviceId,
       activeDeviceScope: discovery.activeDeviceScope,
       agentConfig,
@@ -174,6 +179,7 @@ export const startOperation = async (
         : undefined,
       deviceSystemInfo:
         Object.keys(prep.deviceSystemInfo).length > 0 ? prep.deviceSystemInfo : undefined,
+      disabledPluginIds,
       executionPlan: discovery.executionPlan,
       searchDecision: discovery.searchDecision,
       userTimezone,
@@ -182,7 +188,7 @@ export const startOperation = async (
         // inherit the builtin agent's tools / systemRole / model), but their
         // resource tools and receipts must attribute to the *reviewed* user
         // agent, which rides on the marker. Prefer it so the tool-execution
-        // context (state.metadata.agentId) targets the reviewed agent; ordinary
+        // context (state.origin.agentId) targets the reviewed agent; ordinary
         // runs (no marker) fall back to the resolved executing agent.
         agentId: appContext?.agentSignal?.agentId ?? resolvedAgentId,
         // Propagate the originating request's client IP / user agent into
@@ -206,7 +212,7 @@ export const startOperation = async (
           ? { editingGroupId: appContext.editingGroupId }
           : {}),
         // Run-scoped Agent Signal marker for background self-iteration / memory
-        // runs — lands in state.metadata.agentSignal so the completion path can
+        // runs — lands in state.origin.signal so the completion path can
         // project receipts/briefs. Undefined for ordinary chat runs.
         ...(appContext?.agentSignal ? { agentSignal: appContext.agentSignal } : {}),
         defaultTaskAssigneeAgentId: appContext?.defaultTaskAssigneeAgentId,
@@ -234,10 +240,14 @@ export const startOperation = async (
       botPlatformContext,
       deviceAccessPolicy: { canUseDevice, reason: deviceAccessReason },
       discordContext,
+      // Run context the context engine injects into the system message —
+      // carried on the operation like `expertise`, not on the agent config.
+      connectorOwnershipNote: discovery.connectorOwnershipNote,
       evalContext,
       evalRuntime,
       enableExpertise,
       expertise: prep.expertise,
+      projectInstructions: prep.projectInstructions,
       initialContext,
       initialMessages: prep.allMessages,
       initialStepCount,
@@ -264,10 +274,18 @@ export const startOperation = async (
           ...(typeof video === 'boolean' && { video }),
           ...(typeof vision === 'boolean' && { vision }),
         },
+        // Read once during discovery: every LLM attempt of this run resolves its
+        // parameters from here, so no step re-reads the bank, the user's model
+        // row or the reasoning config — and none of them can change mid-run.
+        modelFacts: discovery.modelFacts,
         model,
         provider,
       },
       hooks,
+      // Listed once during discovery: every step renders {{CREDS_LIST}} from
+      // here instead of asking the Market API again. Awaited only now, so the
+      // read overlapped with the operation preparation that ran in between.
+      operationCredentials: await discovery.credentialFactsPromise,
       operationId,
       parentOperationId,
       signal,

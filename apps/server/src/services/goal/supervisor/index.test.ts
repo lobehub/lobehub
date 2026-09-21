@@ -26,6 +26,7 @@ import {
   users,
 } from '@/database/schemas';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { TaskService } from '@/server/services/task';
 import { TaskRunnerService } from '@/server/services/taskRunner';
 
 import { GoalService } from '../index';
@@ -114,6 +115,39 @@ const failedGoal = async (enabled = true, error = 'fetch failed: ECONNRESET') =>
     .values({ operationId, seq: 1, status: 'failed', taskId, topicId, userId });
   await taskModel.update(taskId, { status: 'failed', error, totalTopics: 1 });
   return { goalId: graph.goal.id, nodeId: created.nodeId!, operationId, taskId };
+};
+
+/**
+ * The run itself settled cleanly and something around it broke: the device link
+ * dropped, or verification could not run. The Task is left `paused`, not `failed`,
+ * and its operation is `done`, not `error`.
+ */
+const pipelineFailureGoal = async (
+  error = '{"error":"DEVICE_OFFLINE","success":false}',
+  withRun = true,
+) => {
+  const graph = await service().create({
+    config: { supervision: { enabled: true } },
+    tasks: ['Finish existing report'],
+    title: 'Interrupted delivery',
+  });
+  const created = await service().tick(graph.goal.id);
+  const taskId = created.taskId!;
+  if (withRun) {
+    const topicId = `topic-pipeline-${++sequence}`;
+    const operationId = `op-pipeline-${sequence}`;
+    await db.insert(topics).values({ id: topicId, userId });
+    await operationModel.recordStart({ operationId, taskId, topicId });
+    await operationModel.recordCompletion(operationId, {
+      completionReason: 'done',
+      status: 'done',
+    });
+    await db
+      .insert(taskTopics)
+      .values({ operationId, seq: 1, status: 'completed', taskId, topicId, userId });
+  }
+  await taskModel.update(taskId, { status: 'paused', error, totalTopics: withRun ? 1 : 0 });
+  return { goalId: graph.goal.id, taskId };
 };
 
 const diagnose = async (goalId: string, action = 'retry') => {
@@ -454,6 +488,78 @@ describe('Goal Supervisor integration', () => {
     expect((await goalModel.findById(goalId))?.config?.supervisorState?.incidents[0]).toMatchObject(
       { recoveryOperationId: operationId, status: 'recovered' },
     );
+  });
+
+  it('recovers a paused pipeline failure instead of leaving it on the human Gate', async () => {
+    const { goalId, taskId } = await pipelineFailureGoal();
+    expect((await service().tick(goalId)).outcome).toBe('waiting_external');
+    expect((await service().graph(goalId)).decisions).toHaveLength(0);
+    await diagnose(goalId);
+    expect((await service().tick(goalId)).outcome).toBe('advanced');
+    // The Task holds `paused`, so a recovery that only accepted `failed` would
+    // silently do nothing here and escalate the incident.
+    expect((await taskModel.findById(taskId))?.status).toBe('backlog');
+    const graph = await service().graph(goalId);
+    expect(graph.goal.config?.supervisorState?.incidents.at(-1)?.status).not.toBe('escalated');
+  });
+
+  it('does not overwrite a completion a person recorded during the diagnosis', async () => {
+    const { goalId, taskId } = await pipelineFailureGoal();
+    expect((await service().tick(goalId)).outcome).toBe('waiting_external');
+    await diagnose(goalId);
+    // The person settled the Task while the supervisor was still deciding.
+    await taskModel.update(taskId, { status: 'completed', error: null });
+    await service().tick(goalId);
+    expect((await taskModel.findById(taskId))?.status).toBe('completed');
+  });
+
+  it('loses the claim when the Task moved to another recoverable state mid-diagnosis', async () => {
+    // Routed as `paused`; a person then marks it `failed` without supplying a new
+    // error, so the run's transport reason survives and the policy still accepts it.
+    // Only claiming against the status the incident was opened on keeps this decision.
+    const { goalId, taskId } = await failedGoal(true, '{"error":"DEVICE_OFFLINE","success":false}');
+    await taskModel.update(taskId, { status: 'paused' });
+    expect((await service().tick(goalId)).outcome).toBe('waiting_external');
+    await diagnose(goalId);
+    await taskModel.update(taskId, { status: 'failed' });
+    await service().tick(goalId);
+    expect((await taskModel.findById(taskId))?.status).toBe('failed');
+  });
+
+  it('escalates a diagnosis persisted before the opening status was recorded', async () => {
+    const { goalId, taskId } = await pipelineFailureGoal();
+    expect((await service().tick(goalId)).outcome).toBe('waiting_external');
+    await diagnose(goalId);
+    // A rolling deploy leaves incidents from the previous version with no record of
+    // what they opened on, so they cannot prove the row is still theirs to claim.
+    const state = (await goalModel.findById(goalId))!.config!.supervisorState!;
+    await goalModel.updateSupervisorState(goalId, state.revision, {
+      ...state,
+      incidents: state.incidents.map(({ taskStatus: _drop, ...rest }) => rest),
+    });
+    expect(
+      (await goalModel.findById(goalId))!.config!.supervisorState!.incidents.at(-1)?.taskStatus,
+    ).toBeUndefined();
+
+    await service().tick(goalId);
+
+    expect((await taskModel.findById(taskId))?.status).toBe('paused');
+    const after = (await goalModel.findById(goalId))!.config!.supervisorState!;
+    expect(after.incidents.at(-1)?.status).toBe('escalated');
+  });
+
+  it('leaves a paused transport failure alone once a person marks it failed', async () => {
+    // The run errored with a recoverable transport error and the lifecycle paused the
+    // Task. A person then marks it failed without supplying a new error, so the
+    // transport text survives and only the transition's author tells them apart.
+    const { goalId, taskId } = await failedGoal();
+    await taskModel.update(taskId, { status: 'paused' });
+    await new TaskService(db, userId).updateStatus({ id: taskId, status: 'failed' }, { userId });
+
+    const move = await service().tick(goalId);
+
+    expect((await taskModel.findById(taskId))?.status).toBe('failed');
+    expect(move.outcome).not.toBe('waiting_external');
   });
 
   it('without supervision the same transport failure opens a human Gate', async () => {

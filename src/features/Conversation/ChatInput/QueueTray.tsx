@@ -224,6 +224,7 @@ const QueueTray = memo(() => {
             editorData: msg.editorData,
             files: filesArray,
             message: msg.content,
+            metadata: { ...msg.metadata, steer: true },
           });
         })
         .catch((error) => console.error('[QueueTray] sendNow failed:', error));

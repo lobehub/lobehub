@@ -15,6 +15,7 @@ import { verifyService } from '@/services/verify';
 import { useAcceptanceScope } from '../AcceptanceScope';
 import { checkFilterState, isException } from '../Checks/checkState';
 import { buildRepairPrompt } from '../Checks/checkWork';
+import { useAcceptanceComments } from '../Comments/hooks';
 import { flowPlanPhase } from '../Plan/planReview';
 import { acceptanceCheckPath } from '../routes';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
@@ -38,6 +39,7 @@ const AcceptanceDecision = ({ onDraftToComposer }: AcceptanceDecisionProps) => {
   const { turn, setTurn } = useAcceptanceTurn(embedded);
   const [pending, setPending] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const { approvals } = useAcceptanceComments(acceptanceId);
   if (!data || !canReviewAcceptance(data) || data.acceptance.status === 'closed') return null;
 
   if (flowPlanPhase(data.rounds.at(-1))) return null;
@@ -116,6 +118,19 @@ const AcceptanceDecision = ({ onDraftToComposer }: AcceptanceDecisionProps) => {
             },
   }[barState];
 
+  // Teammates' approvals ride along the state line: they are opinions the
+  // decider reads, never the decision itself. Only this round's count — an
+  // approval given to round 1 says nothing about round 2, and the reviewer's
+  // own card already asks them to look again, so counting it here would tell
+  // the decider the opposite of what the reviewer is being shown.
+  const approvalText = (() => {
+    const roundIndex = currentRound?.run.roundIndex;
+    if (roundIndex === undefined) return undefined;
+    const count = approvals.filter((approval) => approval.contextRoundIndex === roundIndex).length;
+    return count > 0 ? t('acceptance.comments.approvalCount', { count }) : undefined;
+  })();
+  const subTextWithApprovals = [barTexts.subText, approvalText].filter(Boolean).join(' · ');
+
   const currentRoundIndex = currentRound?.run.roundIndex ?? 0;
   const groupFeedbackEntries = rounds.flatMap((round) =>
     (round.run.decisionDetail?.groupFeedback ?? []).map((entry) => ({
@@ -183,7 +198,7 @@ const AcceptanceDecision = ({ onDraftToComposer }: AcceptanceDecisionProps) => {
         rerunPending={false}
         state={barState}
         statusText={barTexts.statusText}
-        subText={barTexts.subText}
+        subText={subTextWithApprovals || undefined}
         totalCount={reviewTotal}
         onOpenFeedback={() => setFeedbackOpen(true)}
         onAccept={() =>

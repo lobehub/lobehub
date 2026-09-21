@@ -74,6 +74,28 @@ const styles = createStaticStyles(({ css }) => ({
       object-fit: cover;
     }
   `,
+  /**
+   * A screenshot posted INTO a remark is the remark's evidence, not a chip on a
+   * draft: at 56px "here is what I see instead" is unreadable, so in a comment
+   * the picture is shown at a size a reader can judge without opening it.
+   */
+  thumbLarge: css`
+    width: auto;
+    max-width: min(100%, 360px);
+    height: auto;
+    max-height: 220px;
+
+    img {
+      cursor: zoom-in;
+
+      width: auto;
+      max-width: min(100%, 360px);
+      height: auto;
+      max-height: 220px;
+
+      object-fit: contain;
+    }
+  `,
   thumbLoading: css`
     display: flex;
     align-items: center;
@@ -255,10 +277,12 @@ AttachmentUploadButton.displayName = 'AcceptanceAttachmentUploadButton';
 
 interface AttachmentThumbsProps {
   attachments?: AcceptanceAttachment[];
+  /** `comment` shows the picture at reading size; the default is the 56px chip. */
+  size?: 'chip' | 'comment';
 }
 
 /** Read-only screenshots on a settled feedback card — click any to zoom (native preview). */
-export const AttachmentThumbs = memo<AttachmentThumbsProps>(({ attachments }) => {
+export const AttachmentThumbs = memo<AttachmentThumbsProps>(({ attachments, size = 'chip' }) => {
   const usable = (attachments ?? []).filter((attachment) => attachment.url);
   if (usable.length === 0) return null;
   return (
@@ -274,7 +298,10 @@ export const AttachmentThumbs = memo<AttachmentThumbsProps>(({ attachments }) =>
       }}
     >
       {usable.map((attachment) => (
-        <div className={styles.thumb} key={attachment.id}>
+        <div
+          className={cx(styles.thumb, size === 'comment' && styles.thumbLarge)}
+          key={attachment.id}
+        >
           <Image alt={attachment.name ?? ''} src={attachment.url!} />
         </div>
       ))}

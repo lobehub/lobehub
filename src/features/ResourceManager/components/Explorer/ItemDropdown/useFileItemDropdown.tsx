@@ -78,7 +78,16 @@ interface UseFileItemDropdownReturn {
 }
 
 /**
- * Shared with folder tree and explorer
+ * Builds resource actions shared by the folder tree and explorer.
+ *
+ * Use when:
+ * - Rendering an explorer or folder-tree resource menu.
+ *
+ * Expects:
+ * - Parsed file rows carry their backing files.id in fileId.
+ *
+ * Returns:
+ * - Available actions with file visibility changes targeting the backing file.
  */
 export const useFileItemDropdown = ({
   fileId,
@@ -308,7 +317,8 @@ export const useFileItemDropdown = ({
                 title: t('resources.publishToWorkspace.menu', { ns: 'chat' }),
                 onOk: async () => {
                   try {
-                    await publishFileToWorkspace(id);
+                    // Parsed file rows use a document ID; file endpoints require the backing file ID.
+                    await publishFileToWorkspace(fileId ?? id);
                     toast.success(t('resources.publishToWorkspace.success', { ns: 'chat' }));
                   } catch (error) {
                     console.error(error);
@@ -328,13 +338,13 @@ export const useFileItemDropdown = ({
               domEvent.stopPropagation();
               confirmModal({
                 cancelText: t('cancel', { ns: 'common' }),
-                content: <VisibilityConfirmContent variant="makePrivate" />,
+                content: <VisibilityConfirmContent inLibrary={isInLibrary} variant="makePrivate" />,
                 okButtonProps: { danger: true },
                 okText: t('continue', { ns: 'common' }),
                 title: t('makePrivate.confirm.title', { ns: 'common' }),
                 onOk: async () => {
                   try {
-                    await setFileVisibility(id, 'private');
+                    await setFileVisibility(fileId ?? id, 'private');
                     toast.success(t('makePrivate.success', { ns: 'common' }));
                   } catch (error) {
                     console.error(error);
@@ -496,6 +506,7 @@ export const useFileItemDropdown = ({
     canEditResources,
     currentUserId,
     deleteResource,
+    fileId,
     filename,
     id,
     isFolder,

@@ -8,7 +8,7 @@ import { workService } from '@/services/work';
 /**
  * User-initiated removal of a Work card. Intended for orphaned Works (the
  * backing task / document is gone, so the user cannot clear the card by
- * deleting the resource itself — see LOBE-13917). Confirms first because the
+ * deleting the resource itself). Confirms first because the
  * delete cascades the Work's version history and any project pins.
  */
 export interface UseRemoveWorkOptions {

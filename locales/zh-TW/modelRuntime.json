@@ -38,6 +38,7 @@
   "ProviderServiceUnavailable": "提供者暫時過載或不可用。請稍後重試。",
   "QuotaLimitReached": "抱歉，此金鑰的令牌使用量或請求次數已達配額上限。請增加金鑰配額或稍後重試。",
   "RateLimitExceeded": "抱歉，此金鑰的令牌使用量或請求次數已達速率限制。請稍後重試或增加金鑰配額。",
+  "RequestBodyTooLarge": "此請求對於模型提供者來說過於龐大。請精簡對話或減少附加內容，然後再試一次。",
   "StateStorePersistError": "對話狀態存儲的臨時問題中斷了此操作。請重試；如果問題持續，請聯繫支援。",
   "StateStoreReadError": "此操作無法繼續，因為其會話狀態無法取得。請重新開啟對話以繼續；如果問題持續存在，請聯絡支援。",
   "StreamChunkError": "解析流式請求的消息塊時發生錯誤。請檢查當前 API 接口是否符合標準規範，或聯繫您的 API 提供者以獲得協助。",

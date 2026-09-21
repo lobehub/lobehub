@@ -50,6 +50,11 @@ export interface EditorCanvasProps {
   blockImageCaretGuard?: boolean;
 
   /**
+   * Class name applied to the editor wrapper, e.g. to restyle inline chips.
+   */
+  className?: string;
+
+  /**
    * Reload an already-mounted editor when an authoritative external content
    * revision changes. Keep this stable for local autosave echoes and unchanged
    * refetches so unsaved input is never replaced by prop identity churn.
@@ -133,6 +138,15 @@ export interface EditorCanvasProps {
    * Use this when you need complete control over plugins.
    */
   plugins?: EditorPlugins;
+
+  /**
+   * Selection actions that stay available while the editor is NOT editable
+   * (locked or view-only page). They render in a floating toolbar of their
+   * own with no formatting controls, so a reader can still act on a selection
+   * — comment on it, ask about it — without being offered edits that would
+   * never save. Ignored while editable; use `toolbarExtraItems` there.
+   */
+  readonlySelectionItems?: ChatInputActionsProps['items'];
 
   /**
    * Slash menu items

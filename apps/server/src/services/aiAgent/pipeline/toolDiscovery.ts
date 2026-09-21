@@ -1,8 +1,6 @@
-import { AuvManifest } from '@lobechat/builtin-tool-auv';
-import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
+import { CredsIdentifier } from '@lobechat/builtin-tool-creds';
 import { GoalIdentifier, isGoalPrompt } from '@lobechat/builtin-tool-goal';
 import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
-import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MessageToolIdentifier } from '@lobechat/builtin-tool-message';
 import type { DeviceAttachment } from '@lobechat/builtin-tool-remote-device';
 import { generateSystemPrompt, RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
@@ -19,13 +17,29 @@ import type {
   ToolSource,
 } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
-import type { ChatTopicBotContext, RequestTrigger } from '@lobechat/types';
-import { getActivePluginIds } from '@lobechat/types';
+import type { DeviceUnavailableErrorData } from '@lobechat/device-gateway-client';
+import {
+  readFrozenModelFacts,
+  resolveClientExecutors,
+  resolveDiscoveryPool,
+  resolveInvocationToolIds,
+} from '@lobechat/mecha';
+import type {
+  ChatTopicBotContext,
+  FrozenCredentialFacts,
+  FrozenModelFacts,
+  RequestTrigger,
+} from '@lobechat/types';
+import {
+  agentShareFileAccessScope,
+  getActivePluginIds,
+  ordinaryFileAccessScope,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import type { ModelAbilities } from 'model-bank';
 
-import type { loadModels } from '@/business/client/model-bank/loadModels';
+import { loadModels } from '@/business/client/model-bank/loadModels';
 import { AiModelModel } from '@/database/models/aiModel';
 import { AiProviderModel } from '@/database/models/aiProvider';
 import { ChatGroupModel } from '@/database/models/chatGroup';
@@ -37,7 +51,6 @@ import type { PluginModel } from '@/database/models/plugin';
 import {
   type ExecutionPlan,
   executionPlanToManifestExecutionEnv,
-  executionTargetToRuntimeMode,
   isDeviceCapablePlan,
   isDeviceLockedPlan,
   resolveExecutionPlan,
@@ -49,6 +62,7 @@ import { resolveModelMediaCapabilities } from '@/server/modules/AgentRuntime/res
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import type { ServerAgentToolsContext } from '@/server/modules/Mecha';
 import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
+import { createServerModelParamsProviders } from '@/server/modules/Mecha/ModelParams/providers';
 import type { AgentDocumentsService } from '@/server/services/agentDocuments';
 import {
   isAgentSignalEnabledForUser,
@@ -70,11 +84,7 @@ import {
   resolveUserDisplayMap,
 } from '@/server/utils/connectorAttribution';
 
-import {
-  buildAllowedBuiltinTools,
-  isDeviceToolIdentifier,
-  REMOTE_DEVICE_TOOL_IDENTIFIERS,
-} from '../deviceToolRegistry';
+import { buildAllowedBuiltinTools } from '../deviceToolRegistry';
 import { buildBotConversationGroupContext, buildGroupAgentContext } from '../helpers/groupContext';
 import {
   getMediaAvailabilityFromFileTypes,
@@ -82,10 +92,27 @@ import {
   isMultimodalUnderstandingConfigured,
 } from '../helpers/mediaAvailability';
 import { resolveServerSearchDecision } from '../searchDecision';
-import { filterPluginsByShareGate, shareGateGrantsCloudSandbox } from '../shareGate';
+import {
+  filterPluginsByShareGate,
+  getShareGrantActivatedPluginIds,
+  shareGateGrantsCloudSandbox,
+} from '../shareGate';
 import type { ExecRunContext, InternalExecAgentParams } from '../types';
+import { markDegradedStage, traceDiscoveryStage } from './discoveryTracing';
 
 const log = debug('lobe-server:ai-agent-service');
+
+/**
+ * Start a read now and keep its rejection for the caller's `await`.
+ *
+ * A promise that rejects before anything awaits it trips Node's
+ * `unhandledRejection` even though this code does await it a few lines later,
+ * so register a no-op handler on the original and hand the same promise back.
+ */
+const started = <T>(task: Promise<T>): Promise<T> => {
+  task.catch(() => undefined);
+  return task;
+};
 
 export interface ToolDiscoveryDeps {
   agentDocumentsService: AgentDocumentsService;
@@ -134,10 +161,29 @@ export interface ToolDiscoveryResult {
   builtinModels: Awaited<ReturnType<typeof loadModels>>;
   composioManifests: LobeToolManifest[];
   connectorManifests: ReturnType<typeof buildConnectorManifests>;
+  /**
+   * Tells the model whose connected account each borrowed tool runs on. Run
+   * context: it travels on the operation and the context engine injects it.
+   */
+  connectorOwnershipNote?: string;
+  /**
+   * Credentials listed once for the whole operation; see
+   * {@link FrozenCredentialFacts}. Absent when the run cannot inject
+   * credentials.
+   *
+   * Deliberately still a promise: awaiting it here would put a Market round
+   * trip between tool discovery and operation preparation, on the path to the
+   * first token. The caller awaits it once the preparation it overlaps with is
+   * done. Never rejects — a failed read resolves to `undefined` and the run
+   * reads the list live, as it did before the snapshot existed.
+   */
+  credentialFactsPromise?: Promise<FrozenCredentialFacts | undefined>;
   executionPlan?: ExecutionPlan;
   hasAgentDocuments: boolean;
   hasEnabledKnowledgeBases: boolean;
   lobehubSkillManifests: LobeToolManifest[];
+  /** Model facts read once for the whole operation; see {@link FrozenModelFacts}. */
+  modelFacts: FrozenModelFacts;
   modelMediaCapabilities: Pick<ModelAbilities, 'audio' | 'video' | 'vision'>;
   onlineDevices: DeviceAttachment[];
   operationAgentGroup?: AgentGroupConfig;
@@ -163,14 +209,51 @@ export interface ToolDiscoveryResult {
  * Short-circuits when `disableTools` is set (only the client function tools
  * are honored), matching the pre-extraction behavior.
  *
- * Side effect: appends to `ctx.agentConfig.systemRole` (connector credential
- * ownership note) — `createOperation` downstream must see that write.
+ * Returns the connector credential ownership note as run context when the run
+ * borrows connectors other members authorized; the context engine injects it.
  */
+/**
+ * The credentials the run may reference, read once. Inside a workspace an agent
+ * only sees the workspace's shared organization credentials, never the
+ * operator's personal ones — the scope is recorded on the snapshot so a step in
+ * another scope falls back to a live read.
+ *
+ * Never fails the turn: without an answer the steps read the list live, exactly
+ * as they did before the snapshot existed.
+ */
+const readCredentialFacts = async (
+  deps: ToolDiscoveryDeps,
+): Promise<FrozenCredentialFacts | undefined> => {
+  try {
+    const marketService = await deps.getMarketService();
+    const result = deps.workspaceId
+      ? await marketService.market.organizations.creds({ workspaceId: deps.workspaceId }).list()
+      : await marketService.market.creds.list();
+    const creds = (result as any)?.data ?? [];
+    return {
+      credentials: creds.map((cred: any) => ({
+        description: cred.description,
+        key: cred.key,
+        name: cred.name,
+        ownerDisplayName: cred.ownerDisplayName,
+        ownerType: cred.ownerType,
+        type: cred.type,
+      })),
+      workspaceId: deps.workspaceId,
+    };
+  } catch (error) {
+    log('execAgent: failed to freeze credential facts: %O', error);
+    return undefined;
+  }
+};
+
 export const discoverTools = async (
   deps: ToolDiscoveryDeps,
   ctx: ExecRunContext,
   input: ToolDiscoveryInput,
 ): Promise<ToolDiscoveryResult> => {
+  /** Filled below when the run borrows connectors; returned as run context. */
+  let connectorOwnershipNote: string | undefined;
   const {
     agentConfig,
     appContext,
@@ -209,6 +292,8 @@ export const discoverTools = async (
   } = input;
 
   let tools: any[] | undefined;
+  /** Started once the tool set is known; awaited at the return. */
+  let credentialFactsPromise: Promise<FrozenCredentialFacts | undefined> | undefined;
   let toolsResult: { enabledToolIds: string[]; tools?: any[] | undefined } = {
     enabledToolIds: [],
     tools: undefined,
@@ -251,6 +336,7 @@ export const discoverTools = async (
             ...(additionalPluginIds || []),
             ...(selectedToolIds || []),
             ...(hasMentionedAgents ? ['lobe-agent-management'] : []),
+            ...(shareGate ? getShareGrantActivatedPluginIds(shareGate) : []),
           ]),
         ];
 
@@ -268,12 +354,188 @@ export const discoverTools = async (
   }
 
   // Model metadata is needed both for tool support checks and agent-management context.
-  const { loadModels } = await import('@/business/client/model-bank/loadModels');
   const builtinModels = await loadModels();
-  const [modelMetadataResult, providerMetadataResult] = await Promise.allSettled([
-    new AiModelModel(deps.db, deps.userId, deps.workspaceId).findByIdAndProvider(model, provider),
-    new AiProviderModel(deps.db, deps.userId, deps.workspaceId).findById(provider),
-  ]);
+  // Started, not awaited: the tool reads below hit other backends entirely, so
+  // this round trip overlaps them instead of gating them.
+  const modelMetadataTask = traceDiscoveryStage('model_metadata', async (span) => {
+    const results = await Promise.allSettled([
+      new AiModelModel(deps.db, deps.userId, deps.workspaceId).findByIdAndProvider(model, provider),
+      new AiProviderModel(deps.db, deps.userId, deps.workspaceId).findById(provider),
+    ]);
+    markDegradedStage(
+      span,
+      results.filter((result) => result.status === 'rejected').length,
+      'metadata lookups',
+    );
+    return results;
+  });
+  /**
+   * Connector resolution: the gatekeeper decrypts the stored OAuth tokens, or
+   * `buildConnectorManifests` gets no auth and every tool call 401s.
+   */
+  async function readConnectors() {
+    // Snapshot the candidate ids now — `agentPlugins` gains turn-scoped builtins
+    // (topic reference, bot message, multimodal understanding) further down, and
+    // those must not reach connector resolution or the stale-tools refresh.
+    const candidateIds = [...agentPlugins];
+    let connectorGateKeeper: KeyVaultsGateKeeper | undefined;
+    try {
+      connectorGateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+    } catch (err) {
+      log('execAgent: failed to init gatekeeper for connector credentials: %O', err);
+    }
+
+    return traceDiscoveryStage('connectors', async () => {
+      const connectors =
+        candidateIds.length > 0
+          ? await deps.connectorModel.resolveByIdentifiers(
+              candidateIds,
+              resolvedAgentId,
+              connectorGateKeeper,
+            )
+          : [];
+
+      // Only connectors WITH a real MCP endpoint (mcpServerUrl or stdio) can replace plugins in the
+      // manifest. Connectors WITHOUT an endpoint (e.g. Lobehub/Composio OAuth skills synced via
+      // syncToolsFromClient) must continue using their original plugin executor path — otherwise
+      // after humanIntervention approval the runtime tries to call mcpServerUrl='' and returns empty.
+      const connectorsMcp = connectors.filter(
+        (c) => c.mcpServerUrl || c.mcpConnectionType === 'stdio',
+      );
+
+      // Fetch ALL tools for all real-MCP connectors (including disabled tools) so that
+      // buildConnectorManifests can show blocking descriptions for disabled tools.
+      // The runtime hot-path still uses queryByConnectorIds (non-disabled only) elsewhere.
+      const connectorTools =
+        connectorsMcp.length > 0
+          ? await deps.connectorToolModel.queryAllByConnectorIds(connectorsMcp.map((c) => c.id))
+          : [];
+
+      return { connectorGateKeeper, connectors, connectorsMcp, connectorTools };
+    });
+  }
+
+  async function readLobehubSkillManifests(): Promise<LobeToolManifest[]> {
+    try {
+      const marketService = await deps.getMarketService();
+      return await traceDiscoveryStage('lobehub_skills', async (span) => {
+        // The service degrades to fewer (or zero) manifests instead of
+        // throwing, so count what it absorbed — otherwise a Market timeout
+        // looks exactly like a user with no connected skills.
+        let failureCount = 0;
+        const manifests = await marketService.getLobehubSkillManifests({
+          onError: () => {
+            failureCount += 1;
+          },
+        });
+        span.setAttribute('lobehub.tool_discovery.manifest_count', manifests.length);
+        markDegradedStage(span, failureCount, 'skill discovery requests');
+        return manifests;
+      });
+    } catch (error) {
+      log('execAgent: failed to fetch lobehub skill manifests: %O', error);
+      return [];
+    }
+  }
+
+  async function readDevicePool(): Promise<DeviceAttachment[]> {
+    if (!deviceGateway.isConfigured) return [];
+    try {
+      // Personal pool ∪ the current workspace pool, DB rows ⊕ gateway online,
+      // tagged with `scope` and the user-set `friendlyName` alias (see
+      // `getScopedOnlineDevices`) so the systemRole snapshot lets the model
+      // tell a personal machine apart from its workspace-enrolled counterpart
+      // (same physical machine under both principals). Keep only live devices:
+      // downstream `onlineDeviceIds` / `deviceOnline` treat this list as the
+      // online set.
+      let devices = (
+        await traceDiscoveryStage('online_devices', () =>
+          getScopedOnlineDevices(deps.db, deps.userId, deps.workspaceId),
+        )
+      ).filter((d) => d.online);
+
+      // A workspace agent whose caller pinned this desktop's personal
+      // deviceId via `users.preference.agentDeviceOverrides` (
+      // the `local` code path in `useSelectExecutionTarget`) needs its
+      // personal device to be visible in this run's device pool — otherwise
+      // `resolveExecutionPlan` treats the bound device as offline and the
+      // run stays unrouted. The workspace pool never includes personal
+      // devices by design (`getScopedOnlineDevices` enforces the strict
+      // scope), so union the specific personal device in here. The device
+      // is dispatchable because the gateway routes it by
+      // `(userId, deviceId)` — the caller owns it.
+      if (deps.workspaceId && agentConfig.agencyConfig?.boundDeviceId) {
+        const boundId = agentConfig.agencyConfig.boundDeviceId;
+        if (!devices.some((d) => d.deviceId === boundId)) {
+          const personalPool = await getScopedOnlineDevices(deps.db, deps.userId).catch(
+            () => [] as DeviceAttachment[],
+          );
+          const personalMatch = personalPool.find((d) => d.deviceId === boundId && d.online);
+          if (personalMatch) {
+            devices = [...devices, personalMatch];
+            log(
+              'execAgent: augmented device pool with caller personal device %s (per-user override)',
+              boundId,
+            );
+          }
+        }
+      }
+      log('execAgent: found %d online device(s)', devices.length);
+      return devices;
+    } catch (error) {
+      log('execAgent: failed to query device list: %O', error);
+      return [];
+    }
+  }
+
+  async function readAttachedFileTypes(): Promise<string[]> {
+    if (!attachedFileIds || attachedFileIds.length === 0) return [];
+    const fileModel = new FileModel(deps.db, deps.userId, deps.workspaceId);
+    const uniqueFileIds = Array.from(new Set(attachedFileIds));
+    const fileRecords = await traceDiscoveryStage('attached_files', () =>
+      fileModel.findByIds(
+        uniqueFileIds,
+        shareGate ? agentShareFileAccessScope(shareGate) : ordinaryFileAccessScope,
+      ),
+    );
+    return fileRecords.map((file) => file.fileType || '');
+  }
+
+  // Every other read this send needs, started together. They hit different
+  // backends — Postgres rows, the Market's live skill discovery, the device
+  // gateway — and none of them feeds another, so the user waits for the slowest
+  // one instead of the sum of all of them. Each keeps the degrade-to-empty
+  // behavior it had when it ran in sequence; only the plugin list still fails
+  // the run, because a run with no plugins is not the same run.
+  const toolReads = disableTools
+    ? undefined
+    : {
+        // The fallbacks sit OUTSIDE `traceDiscoveryStage` on purpose: the wrapper
+        // only marks a span errored when its callback throws, so absorbing the
+        // failure inside it would report a healthy stage for a failed read.
+        agentDocuments: started(
+          traceDiscoveryStage('agent_documents', () =>
+            deps.agentDocumentsService.hasDocuments(resolvedAgentId),
+          ).catch(() => false), // non-critical
+        ),
+        attachedFileTypes: started(readAttachedFileTypes()),
+        composioManifests: started(
+          traceDiscoveryStage('composio', () =>
+            deps.composioService.getComposioManifests(resolvedAgentId),
+          ).catch((error) => {
+            log('execAgent: failed to fetch composio manifests: %O', error);
+            return [] as LobeToolManifest[];
+          }),
+        ),
+        connectors: started(readConnectors()),
+        devicePool: started(readDevicePool()),
+        installedPlugins: started(
+          traceDiscoveryStage('installed_plugins', () => deps.pluginModel.query()),
+        ),
+        lobehubSkillManifests: started(readLobehubSkillManifests()),
+      };
+
+  const [modelMetadataResult, providerMetadataResult] = await modelMetadataTask;
   if (modelMetadataResult.status === 'rejected') {
     log('execAgent: failed to load active model search metadata: %O', modelMetadataResult.reason);
   }
@@ -295,6 +557,35 @@ export const discoverTools = async (
       provider,
       userAbilities: activeModelAbilities,
     }) ?? {};
+  // The rest of the run's model facts, read here because this stage already
+  // holds the loaded bank and the user's model row. Everything downstream — one
+  // per step, retries included — reads them back off the operation instead.
+  const modelFacts = await readFrozenModelFacts(
+    {
+      agent: { id: agentConfig.id },
+      mediaCapabilities: modelMediaCapabilities,
+      model,
+      provider,
+      topicId,
+    },
+    {
+      ...createServerModelParamsProviders({
+        builtinModels,
+        serverDB: deps.db,
+        userId: deps.userId,
+        workspaceId: deps.workspaceId,
+      }),
+      // Reuse the row read above rather than querying it a second time.
+      getUserModelRow: async () =>
+        activeModelMetadata
+          ? {
+              abilities: activeModelMetadata.abilities,
+              displayName: activeModelMetadata.displayName,
+              extendParams: activeModelMetadata.settings?.extendParams ?? undefined,
+            }
+          : null,
+    },
+  );
   const searchDecision = resolveServerSearchDecision({
     builtinModels,
     chatConfig: agentConfig.chatConfig ?? undefined,
@@ -307,7 +598,7 @@ export const discoverTools = async (
     providerSearchMode: activeProviderMetadata?.settings?.searchMode,
   });
 
-  if (disableTools) {
+  if (!toolReads) {
     log('execAgent: tools disabled by disableTools flag, skipping all tool discovery');
   } else {
     // 5a. Get installed plugins from database. Disabled identifiers are
@@ -316,7 +607,7 @@ export const discoverTools = async (
     // bypass (auto activator) short-circuits before rules are consulted, so a
     // present-but-rule-disabled manifest could still be auto-activated.
     const disabledPluginIdSet = new Set(disabledPluginIds);
-    const installedPlugins = (await deps.pluginModel.query()).filter(
+    const installedPlugins = (await toolReads.installedPlugins).filter(
       (p) => !disabledPluginIdSet.has(p.identifier),
     );
     log(
@@ -326,22 +617,8 @@ export const discoverTools = async (
     );
 
     // 5a-1. Resolve connectors — connector identifier takes priority over plugin.
-    // Credentials (OAuth tokens) are encrypted at rest, so decrypt them with a
-    // gatekeeper; otherwise buildConnectorManifests gets no auth and tool calls 401.
-    let connectorGateKeeper: KeyVaultsGateKeeper | undefined;
-    try {
-      connectorGateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
-    } catch (err) {
-      log('execAgent: failed to init gatekeeper for connector credentials: %O', err);
-    }
-    const connectors =
-      agentPlugins.length > 0
-        ? await deps.connectorModel.resolveByIdentifiers(
-            agentPlugins,
-            resolvedAgentId,
-            connectorGateKeeper,
-          )
-        : [];
+    const { connectorGateKeeper, connectors, connectorsMcp, connectorTools } =
+      await toolReads.connectors;
 
     // 5a-1b. Model awareness: when the caller runs a shared agent whose tools
     // were authorized by OTHER members (workspace dimension), tell the model
@@ -358,9 +635,9 @@ export const discoverTools = async (
         );
         const note = buildConnectorOwnershipPrompt(borrowed, displayMap);
         if (note) {
-          agentConfig.systemRole = agentConfig.systemRole
-            ? `${agentConfig.systemRole}\n\n${note}`
-            : note;
+          // Returned as run context for the context engine to inject, rather
+          // than concatenated onto the agent's systemRole here.
+          connectorOwnershipNote = note;
           log(
             'execAgent: injected tool credential ownership note for %d connector(s)',
             borrowed.length,
@@ -370,22 +647,6 @@ export const discoverTools = async (
     } catch (err) {
       log('execAgent: failed to build tool credential ownership note: %O', err);
     }
-
-    // Only connectors WITH a real MCP endpoint (mcpServerUrl or stdio) can replace plugins in the
-    // manifest. Connectors WITHOUT an endpoint (e.g. Lobehub/Composio OAuth skills synced via
-    // syncToolsFromClient) must continue using their original plugin executor path — otherwise
-    // after humanIntervention approval the runtime tries to call mcpServerUrl='' and returns empty.
-    const connectorsMcp = connectors.filter(
-      (c) => c.mcpServerUrl || c.mcpConnectionType === 'stdio',
-    );
-
-    // Fetch ALL tools for all real-MCP connectors (including disabled tools) so that
-    // buildConnectorManifests can show blocking descriptions for disabled tools.
-    // The runtime hot-path still uses queryByConnectorIds (non-disabled only) elsewhere.
-    const connectorTools =
-      connectorsMcp.length > 0
-        ? await deps.connectorToolModel.queryAllByConnectorIds(connectorsMcp.map((c) => c.id))
-        : [];
 
     connectorManifests = buildConnectorManifests(connectorsMcp, connectorTools);
 
@@ -431,21 +692,10 @@ export const discoverTools = async (
       return info?.abilities?.functionCall ?? true;
     };
 
-    // 5c. Fetch LobeHub Skills manifests
-    try {
-      const marketService = await deps.getMarketService();
-      lobehubSkillManifests = await marketService.getLobehubSkillManifests();
-    } catch (error) {
-      log('execAgent: failed to fetch lobehub skill manifests: %O', error);
-    }
+    // 5c / 5d. LobeHub Skills and Composio manifests, read in the wave above.
+    lobehubSkillManifests = await toolReads.lobehubSkillManifests;
     log('execAgent: got %d lobehub skill manifests', lobehubSkillManifests.length);
-
-    // 5d. Fetch Composio tool manifests from database
-    try {
-      composioManifests = await deps.composioService.getComposioManifests(resolvedAgentId);
-    } catch (error) {
-      log('execAgent: failed to fetch composio manifests: %O', error);
-    }
+    composioManifests = await toolReads.composioManifests;
     log('execAgent: got %d composio manifests', composioManifests.length);
 
     // 5d-1. Patch Lobehub/Composio manifests AND community-MCP plugin manifests
@@ -521,62 +771,15 @@ export const discoverTools = async (
       agentConfig.knowledgeBases?.some((kb: { enabled?: boolean | null }) => kb.enabled === true) ??
       false;
 
-    try {
-      hasAgentDocuments = await deps.agentDocumentsService.hasDocuments(resolvedAgentId);
-    } catch {
-      // Agent documents check is non-critical
-    }
+    hasAgentDocuments = await toolReads.agentDocuments;
 
     log('execAgent: isBotConversation=%s', isBotConversation);
 
-    // Build device context for ToolsEngine enableChecker
+    // Device context for the ToolsEngine enableChecker, read in the wave above.
     const gatewayConfigured = deviceGateway.isConfigured;
     const agentBoundDeviceId = agentConfig.agencyConfig?.boundDeviceId;
     const boundDeviceId = topicBoundDeviceId || agentBoundDeviceId;
-    if (gatewayConfigured) {
-      try {
-        // Personal pool ∪ the current workspace pool, DB rows ⊕ gateway online,
-        // tagged with `scope` and the user-set `friendlyName` alias (see
-        // `getScopedOnlineDevices`) so the systemRole snapshot lets the model
-        // tell a personal machine apart from its workspace-enrolled counterpart
-        // (same physical machine under both principals). Keep only live devices:
-        // downstream `onlineDeviceIds` / `deviceOnline` treat this list as the
-        // online set.
-        onlineDevices = (
-          await getScopedOnlineDevices(deps.db, deps.userId, deps.workspaceId)
-        ).filter((d) => d.online);
-        // A workspace agent whose caller pinned this desktop's personal
-        // deviceId via `users.preference.agentDeviceOverrides` (
-        // the `local` code path in `useSelectExecutionTarget`) needs its
-        // personal device to be visible in this run's device pool — otherwise
-        // `resolveExecutionPlan` treats the bound device as offline and the
-        // run stays unrouted. The workspace pool never includes personal
-        // devices by design (`getScopedOnlineDevices` enforces the strict
-        // scope), so union the specific personal device in here. The device
-        // is dispatchable because the gateway routes it by
-        // `(userId, deviceId)` — the caller owns it.
-        if (deps.workspaceId && agentConfig.agencyConfig?.boundDeviceId) {
-          const boundId = agentConfig.agencyConfig.boundDeviceId;
-          const alreadyIncluded = onlineDevices.some((d) => d.deviceId === boundId);
-          if (!alreadyIncluded) {
-            const personalPool = await getScopedOnlineDevices(deps.db, deps.userId).catch(
-              () => [] as DeviceAttachment[],
-            );
-            const personalMatch = personalPool.find((d) => d.deviceId === boundId && d.online);
-            if (personalMatch) {
-              onlineDevices = [...onlineDevices, personalMatch];
-              log(
-                'execAgent: augmented device pool with caller personal device %s (per-user override)',
-                boundId,
-              );
-            }
-          }
-        }
-        log('execAgent: found %d online device(s)', onlineDevices.length);
-      } catch (error) {
-        log('execAgent: failed to query device list: %O', error);
-      }
-    }
+    onlineDevices = await toolReads.devicePool;
     const deviceOnline = onlineDevices.length > 0;
 
     const toolsContext: ServerAgentToolsContext = {
@@ -590,13 +793,7 @@ export const discoverTools = async (
       builtinModels.find((item) => item.id === model && item.providerId === provider)?.abilities ??
       builtinModels.find((item) => item.id === model)?.abilities;
     const externalFileTypes = files?.map((file) => file.mimeType ?? '') ?? [];
-    let attachedFileTypes: string[] = [];
-    if (attachedFileIds && attachedFileIds.length > 0) {
-      const fileModel = new FileModel(deps.db, deps.userId, deps.workspaceId);
-      const fileRecords = await fileModel.findByIds(Array.from(new Set(attachedFileIds)));
-      attachedFileTypes = fileRecords.map((file) => file.fileType || '');
-    }
-    const inputFileTypes = [...externalFileTypes, ...attachedFileTypes];
+    const inputFileTypes = [...externalFileTypes, ...(await toolReads.attachedFileTypes)];
     const inputMediaAvailability = getMediaAvailabilityFromFileTypes(inputFileTypes);
     let historyMediaAvailability = { hasAudios: false, hasImages: false, hasVideos: false };
     const multimodalUnderstandingConfigured = isMultimodalUnderstandingConfigured();
@@ -654,7 +851,7 @@ export const discoverTools = async (
     // never route to a device, offline bindings stay unrouted, unbound runs
     // auto-activate only with exactly one device online). Without the
     // `canUseDevice` gate an external bot sender's turn would still populate
-    // `state.metadata.activeDeviceId`, and `buildStepToolDelta` re-injects
+    // `state.binding.device.id`, and `buildStepToolDelta` re-injects
     // `LocalSystemManifest` whenever activeDeviceId is set, bypassing the
     // engine's enabledToolIds exclusion — resolving the plan here closes
     // that bypass at the source.
@@ -691,9 +888,17 @@ export const discoverTools = async (
     // before tool/runtime preparation so no operation can start elsewhere.
     if (
       isFixedDeviceTarget &&
+      boundDeviceId &&
       resolveToolMode(agentConfig.chatConfig ?? undefined) !== 'chat' &&
       executionPlan.kind !== 'device'
     ) {
+      const errorData: DeviceUnavailableErrorData = {
+        code: 'DEVICE_NOT_FOUND',
+        deviceId: boundDeviceId,
+        retryable: true,
+        scope: deps.workspaceId ? 'workspace' : 'personal',
+        ...(deps.workspaceId ? { workspaceId: deps.workspaceId } : {}),
+      };
       const detail =
         executionPlan.kind === 'device-unrouted' && executionPlan.reason === 'bound-device-offline'
           ? 'The device fixed by this agent is offline. Ask an editor to bring it online or change the agent device policy.'
@@ -701,13 +906,13 @@ export const discoverTools = async (
       await deps.messageModel.update(assistantMessageId, {
         content: '',
         error: {
-          body: { detail },
+          body: { detail, ...errorData },
           message: 'Fixed agent device unavailable',
           type: 'ServerAgentRuntimeError',
         },
       });
       throw new TRPCError({
-        cause: { data: { code: 'FixedAgentDeviceUnavailable' } },
+        cause: { data: errorData },
         code: 'PRECONDITION_FAILED',
         message: detail,
       });
@@ -757,16 +962,14 @@ export const discoverTools = async (
 
     // Opt-in capability from the existing system-info RPC. Older desktop and CLI
     // clients omit it, so they must never receive the new Computer Use manifest.
-    const supportedDeviceTools =
-      activeDeviceId && canUseDevice && !disableLocalSystem
-        ? (
-            await deviceGateway.queryDeviceSystemInfo(
-              deps.userId,
-              activeDeviceId,
-              activeDeviceScope === 'workspace' ? deps.workspaceId : undefined,
-            )
-          )?.supportedTools
-        : undefined;
+    const systemInfoDeviceId = canUseDevice && !disableLocalSystem ? activeDeviceId : undefined;
+    const supportedDeviceTools = systemInfoDeviceId
+      ? (
+          await traceDiscoveryStage('device_system_info', () =>
+            ctx.runFacts.deviceSystemInfo(systemInfoDeviceId, activeDeviceScope),
+          )
+        )?.supportedTools
+      : undefined;
 
     // Resolve the operation's group context ONCE here and snapshot it into op
     // metadata below — the per-step context engine reads it back without a DB
@@ -880,20 +1083,17 @@ export const discoverTools = async (
     });
 
     // 5f. Generate tools and manifest map
-    const pluginIds = exclusivePluginIds
-      ? agentPlugins
-      : [
-          ...new Set([
-            ...agentPlugins,
-            ...(disableLocalSystem ? [] : [LocalSystemManifest.identifier, AuvManifest.identifier]),
-            RemoteDeviceManifest.identifier,
-            // Include LobeHub Skills and Composio tools so they are passed to generateToolsDetailed
-            ...activeLobehubSkillManifests.map((m) => m.identifier),
-            ...activeComposioManifests.map((m) => m.identifier),
-            // Connector manifests are also injected as additionalManifests
-            ...activeConnectorManifests.map((m) => m.identifier),
-          ]),
-        ];
+    // Which identifiers the engine considers, what the activator may discover
+    // mid-run, and which tools dispatch to the client are shared rules in
+    // `@lobechat/mecha`; this pipeline only supplies the run's facts.
+    const pluginIds = resolveInvocationToolIds({
+      agentPlugins,
+      composioIds: activeComposioManifests.map((m) => m.identifier),
+      connectorIds: activeConnectorManifests.map((m) => m.identifier),
+      disableLocalSystem,
+      exclusivePluginIds,
+      lobehubSkillIds: activeLobehubSkillManifests.map((m) => m.identifier),
+    });
     log('execAgent: agent configured plugins: %O', pluginIds);
 
     const isManualMode = agentConfig.chatConfig?.skillActivateMode === 'manual';
@@ -909,166 +1109,52 @@ export const discoverTools = async (
     tools = toolsResult.tools;
     log('execAgent: enabled tool ids: %O', toolsResult.enabledToolIds);
 
-    // Single guard for every `toolManifestMap[id] = ...` ingest below.
-    // Mirrors the post-merge filter in `createServerToolsEngine`: an
-    // installed plugin, a LobeHub Skill, or a Composio manifest declaring
-    // `identifier: 'lobe-remote-device'` would otherwise reach the
-    // activator-discovery map and let an external bot sender enable it
-    // (). Centralising the check at the ingest layer means
-    // every future manifest source automatically inherits the wall.
-    //
-    // A device-LOCKED run (routed, or explicitly bound but offline) keeps
-    // local-system but must not expose the remote-device picker: leaving it
-    // discoverable lets the activator's explicit activation bypass the rule
-    // gate and re-surface the device list mid-run — inviting redundant
-    // activateDevice calls or switching to a machine the user never chose.
-    // Enforced here (not as a point deletion after the seed) so the later
-    // Skill/Composio ingest loops cannot re-add the identifier.
-    const isManifestIngestAllowed = (identifier: string): boolean => {
-      if (exclusivePluginIds && !exclusivePluginIds.includes(identifier)) return false;
-      if (disabledPluginIdSet.has(identifier)) return false;
-      if (
-        gatewayConfigured &&
-        identifier === AuvManifest.identifier &&
-        !supportedDeviceTools?.includes(identifier)
-      )
-        return false;
-      if (!canUseDevice && isDeviceToolIdentifier(identifier)) return false;
-      if (deviceLocked && REMOTE_DEVICE_TOOL_IDENTIFIERS.has(identifier)) return false;
-      return true;
-    };
+    // Only a run that can inject credentials renders {{CREDS_LIST}}. Kick the
+    // read off here and await it at the end: it is one Market round trip, and
+    // every step of the run reads the answer back off the operation instead of
+    // asking again.
+    if (toolsResult.enabledToolIds?.includes(CredsIdentifier)) {
+      credentialFactsPromise = readCredentialFacts(deps);
+    }
 
     // Start with the scoped manifest map (pluginIds + defaultToolIds)
     const manifestMap = toolsEngine.getEnabledPluginManifests(pluginIds);
-    manifestMap.forEach((manifest, id) => {
-      if (!isManifestIngestAllowed(id)) return;
-      toolManifestMap[id] = manifest;
-    });
-
-    // Also include discoverable builtin tools that are not yet in the map,
-    // so the activator can find their manifests when dynamically enabling them
-    // (e.g., lobe-creds, lobe-task). Exclude discoverable:false tools to prevent
-    // internal infrastructure tools from being surfaced to the activator.
-    const allowedBuiltinTools = buildAllowedBuiltinTools({
-      canUseDevice,
-      deviceLocked,
+    const discovery = resolveDiscoveryPool({
+      builtinTools: buildAllowedBuiltinTools({
+        canUseDevice,
+        deviceLocked,
+        disableLocalSystem,
+        supportedDeviceTools: gatewayConfigured ? (supportedDeviceTools ?? []) : undefined,
+      }),
+      composio: activeComposioManifests,
+      device: gatewayConfigured ? { supportedTools: supportedDeviceTools } : undefined,
+      deviceAccess: { canUseDevice, deviceLocked },
+      deviceCapable,
       disableLocalSystem,
-      supportedDeviceTools: gatewayConfigured ? (supportedDeviceTools ?? []) : undefined,
+      disabledPluginIds,
+      enabledManifests: manifestMap,
+      exclusivePluginIds,
+      executionTarget: executionPlan.target,
+      lobehubSkills: activeLobehubSkillManifests,
     });
-    // Effective runtimeMode from the plan's resolved target — same value the
-    // engine derives, single derivation point.
-    const agentRuntimeMode = executionTargetToRuntimeMode(executionPlan.target);
-    // Mirrors AgentToolsEngine's agentModeRules gate: auto mode lets the model
-    // choose per call whether to run in the cloud sandbox or on the
-    // auto-routed device, so Cloud Sandbox stays allowed there too.
-    const cloudSandboxAllowed = agentRuntimeMode === 'cloud' || executionPlan.target === 'auto';
-    // When sandbox isn't reachable, remove lobe-cloud-sandbox from the
-    // manifest map. The initial seed via getEnabledPluginManifests (which includes
-    // defaultToolIds) may have already placed it there, and the allowedBuiltinTools
-    // loop below only guards the discoverable-builtin append path. Deleting here
-    // covers both sources in a single point.
-    if (!cloudSandboxAllowed) {
-      delete toolManifestMap[CloudSandboxManifest.identifier];
-    }
-    // Same single-point deletion for the device tools: a `none` / `sandbox`
-    // session must not expose the remote-device proxy either — leaving it
-    // discoverable would let the model activate a device mid-run and bypass
-    // the execution plan ("无设备" means NO device, not "no device yet").
-    // Scoped to gateway deployments: in the standalone Electron deployment
-    // (no DEVICE_GATEWAY) local-system routes in-process via the 'client'
-    // executor marking below, and the desktop client owns the tool gate.
-    const stripDeviceTools = gatewayConfigured && !deviceCapable;
-    if (stripDeviceTools) {
-      delete toolManifestMap[AuvManifest.identifier];
-      delete toolManifestMap[RemoteDeviceManifest.identifier];
-      delete toolManifestMap[LocalSystemManifest.identifier];
-    }
-    for (const tool of allowedBuiltinTools) {
-      if (!isManifestIngestAllowed(tool.identifier)) continue;
-      // lobe-cloud-sandbox is only activator-discoverable when the sandbox is
-      // reachable (executionTarget='sandbox', or 'auto' — see cloudSandboxAllowed above).
-      if (tool.identifier === CloudSandboxManifest.identifier && !cloudSandboxAllowed) continue;
-      // device tools are only activator-discoverable in device-capable sessions
-      if (stripDeviceTools && isDeviceToolIdentifier(tool.identifier)) continue;
-      if (tool.discoverable !== false && !toolManifestMap[tool.identifier]) {
-        toolManifestMap[tool.identifier] = tool.manifest as LobeToolManifest;
-      }
-    }
-
-    // Local System and AUV have `discoverable: isDesktop` in builtinTools,
-    // which evaluates to false on the Node.js server side, so they never enter
-    // the loop above. Explicitly inject them only when the device gateway is
-    // configured AND the plan's target is 'local' — skip for sandbox/none
-    // targets to avoid leaking local-system into non-local sessions. (The
-    // plan already degrades to `none` when device access is denied, so no
-    // separate `canUseDevice` check is needed here.)
-    for (const manifest of [LocalSystemManifest, AuvManifest]) {
-      if (
-        !disableLocalSystem &&
-        isManifestIngestAllowed(manifest.identifier) &&
-        gatewayConfigured &&
-        agentRuntimeMode === 'local' &&
-        !toolManifestMap[manifest.identifier]
-      ) {
-        toolManifestMap[manifest.identifier] = manifest as LobeToolManifest;
-      }
-    }
-
-    // Include lobehub skill and composio manifests for activator discovery.
-    // Uses the disabled-filtered `active*Manifests` (not the raw
-    // lobehubSkillManifests/composioManifests) — otherwise a disabled
-    // skill/composio integration would be re-ingested here and shown to
-    // the model as discoverable in <available_tools>, even though it was
-    // correctly excluded from the actual invocation pool above.
-    for (const manifest of activeLobehubSkillManifests) {
-      if (!isManifestIngestAllowed(manifest.identifier)) continue;
-      if (!toolManifestMap[manifest.identifier]) {
-        toolManifestMap[manifest.identifier] = manifest;
-      }
-    }
-    for (const manifest of activeComposioManifests) {
-      if (!isManifestIngestAllowed(manifest.identifier)) continue;
-      if (!toolManifestMap[manifest.identifier]) {
-        toolManifestMap[manifest.identifier] = manifest;
-      }
-    }
-
-    for (const manifest of activeLobehubSkillManifests) {
-      if (!isManifestIngestAllowed(manifest.identifier)) continue;
-      toolSourceMap[manifest.identifier] = 'lobehubSkill';
-    }
-    for (const manifest of activeComposioManifests) {
-      if (!isManifestIngestAllowed(manifest.identifier)) continue;
-      toolSourceMap[manifest.identifier] = 'composio';
-    }
-
-    // Mark tools that must run on the user's machine (local-system, stdio
-    // MCP) for direct client dispatch only in the standalone deployment
-    // where no DEVICE_GATEWAY is configured. In that mode the legacy
-    // Remote Device proxy isn't available and the embedded Electron runs
-    // both the server and the executor, so tools route in-process.
-    //
-    // With a device-gateway configured, every caller (desktop UI, web,
-    // IM/bot) converges on the device-gateway path: tool calls tunnel to
-    // a registered device's WS connection. `executor` stays unset so the
-    // RemoteDevice proxy resolves the route.
-    if (!gatewayConfigured) {
-      for (const id of Object.keys(toolManifestMap)) {
-        if (toolManifestMap[id]?.executors?.includes('client')) {
-          toolExecutorMap[id] = 'client';
-        }
-      }
-      for (const plugin of installedPlugins) {
-        if (plugin.customParams?.mcp?.type === 'stdio' && manifestMap.has(plugin.identifier)) {
-          toolExecutorMap[plugin.identifier] = 'client';
-        }
-      }
-      for (const connector of connectorsMcp) {
-        if (connector.mcpConnectionType === 'stdio' && manifestMap.has(connector.identifier)) {
-          toolExecutorMap[connector.identifier] = 'client';
-        }
-      }
-    }
+    Object.assign(toolManifestMap, discovery.manifestMap);
+    Object.assign(toolSourceMap, discovery.sourceMap);
+    Object.assign(
+      toolExecutorMap,
+      resolveClientExecutors({
+        enabledIds: new Set(manifestMap.keys()),
+        hasDeviceProxy: gatewayConfigured,
+        manifestMap: toolManifestMap,
+        stdioIdentifiers: [
+          ...installedPlugins
+            .filter((plugin) => plugin.customParams?.mcp?.type === 'stdio')
+            .map((plugin) => plugin.identifier),
+          ...connectorsMcp
+            .filter((connector) => connector.mcpConnectionType === 'stdio')
+            .map((connector) => connector.identifier),
+        ],
+      }),
+    );
 
     log(
       'execAgent: generated %d tools, %d lobehub skills, %d composio tools',
@@ -1167,10 +1253,13 @@ export const discoverTools = async (
     builtinModels,
     composioManifests,
     connectorManifests,
+    connectorOwnershipNote,
     executionPlan,
     hasAgentDocuments,
+    credentialFactsPromise,
     hasEnabledKnowledgeBases,
     lobehubSkillManifests,
+    modelFacts,
     modelMediaCapabilities,
     onlineDevices,
     operationAgentGroup,

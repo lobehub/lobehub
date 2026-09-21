@@ -274,6 +274,13 @@ export interface LocalSearchFilesParams {
 }
 
 export interface ProjectFileIndexEntry {
+  /**
+   * Directory whose children were deliberately left out of the index because
+   * Git collapsed it (`git ls-files --directory` reports a fully ignored
+   * directory as a single entry). The row is expandable, but its children must
+   * be fetched on demand via `listProjectDirectory`.
+   */
+  collapsed?: boolean;
   /** Whether Git ignore rules match this file or directory. */
   gitIgnored?: boolean;
   isDirectory: boolean;
@@ -292,6 +299,44 @@ export interface ProjectFileIndexResult {
   indexedAt: string;
   root: string;
   source: 'git' | 'glob';
+}
+
+export interface ProjectDirectoryListParams {
+  /** Cap on returned children; the caller is told when more exist. */
+  limit?: number;
+  /** Directory to list, relative to `root`. A trailing slash is tolerated. */
+  relativePath: string;
+  /** Project root the returned `relativePath`s are resolved against. */
+  root: string;
+}
+
+export interface ProjectDirectoryListResult {
+  entries: ProjectFileIndexEntry[];
+  /** True when the directory holds more children than `limit` returned. */
+  truncated: boolean;
+}
+
+export interface TrashLocalFilesParams {
+  paths: string[];
+}
+
+export interface TrashLocalFilesResultItem {
+  /** Error message if this specific path failed. */
+  error?: string;
+  /** The path as it was requested, so the caller can reconcile its own rows. */
+  path: string;
+  success: boolean;
+}
+
+export interface TrashLocalFilesResult {
+  /**
+   * Per-path outcome, in request order. A batch is not atomic: an earlier path
+   * can already be in the trash when a later one fails, so the caller needs
+   * this to reconcile its tree and to retry only what is left.
+   */
+  items: TrashLocalFilesResultItem[];
+  /** True only when every path was trashed. */
+  success: boolean;
 }
 
 export interface ProjectFileSearchParams extends ProjectFileIndexParams {

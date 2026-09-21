@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import {
   CUSTOM_FOLDER_FILE_TYPE,
   DERIVED_DOCUMENT_SOURCE_TYPE,
@@ -29,13 +31,20 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
+import { downloadRemoteImage } from '@/server/services/file/downloadRemoteImage';
 import { FileUploadService } from '@/server/services/fileUpload';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { createResourceContentPreview } from '@/server/utils/resourceContentPreview';
 import { AsyncTaskStatus, AsyncTaskType, type IAsyncTaskError } from '@/types/asyncTask';
 import type { FileListItem, KnowledgeItemStatus } from '@/types/files';
-import { QueryFileListSchema, toFileSource, UploadFileSchema } from '@/types/files';
+import {
+  FileSource,
+  QueryFileListSchema,
+  stripAgentShareFileProvenance,
+  toFileSource,
+  UploadFileSchema,
+} from '@/types/files';
 import { TransferErrorCode } from '@/types/transferError';
 
 import {
@@ -228,6 +237,7 @@ export const fileRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      const metadata = stripAgentShareFileProvenance(input.metadata);
       const existingFile = await ctx.fileModel.checkHash(input.hash!);
       const { isExist } = existingFile;
       const latestUpload = await ctx.fileUploadService.findLatest(input.url);
@@ -282,7 +292,7 @@ export const fileRouter = router({
           (settledFile.source ?? undefined) === toFileSource(input.source) &&
           settledFile.url === input.url &&
           (!ctx.workspaceId || settledFile.visibility === resolvedVisibility) &&
-          isEqual(settledFile.metadata, input.metadata ?? null);
+          isEqual(settledFile.metadata, metadata ?? null);
 
         if (isRetry) {
           return {
@@ -364,7 +374,7 @@ export const fileRouter = router({
           await ctx.fileModel.updateGlobalFile(
             input.hash!,
             {
-              metadata: input.metadata,
+              metadata,
               url: input.url,
             },
             trx,
@@ -377,7 +387,7 @@ export const fileRouter = router({
               fileHash: input.hash,
               fileType: input.fileType,
               knowledgeBaseId: input.knowledgeBaseId,
-              metadata: input.metadata,
+              metadata,
               name: input.name,
               parentId: resolvedParentId,
               size: actualSize,
@@ -858,6 +868,32 @@ export const fileRouter = router({
       return ctx.knowledgeRepo.queryRecent(limit, 'page', input?.visibility);
     }),
 
+  rehostImage: fileProcedure
+    .use(withScopedPermission('file:upload'))
+    .use(checkFileStorageUsage)
+    .input(z.object({ url: z.url() }))
+    .mutation(async ({ ctx, input }) => {
+      const { buffer, extension, mimeType } = await downloadRemoteImage(input.url);
+      const pathname = `images/${ctx.userId}/${randomUUID()}.${extension}`;
+      const result = await ctx.fileService.uploadFromBuffer(
+        buffer,
+        mimeType,
+        pathname,
+        (transaction) =>
+          businessFileUploadCheck({
+            actualSize: buffer.length,
+            clientIp: ctx.clientIp ?? undefined,
+            inputSize: buffer.length,
+            transaction,
+            url: pathname,
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId,
+          }),
+        { source: FileSource.PageEditor, visibility: 'private' },
+      );
+      return { fileId: result.fileId, url: result.url };
+    }),
+
   removeFile: fileProcedure
     .use(withScopedPermission('file:delete'))
     .input(z.object({ id: z.string() }))
@@ -866,7 +902,9 @@ export const fileRouter = router({
       if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
       await assertFileNotInRestrictedKnowledgeBase(ctx, input.id);
 
-      const file = await ctx.fileModel.delete(input.id, serverDBEnv.REMOVE_GLOBAL_FILE);
+      const file = await ctx.fileModel.delete(input.id, {
+        removeGlobalFile: serverDBEnv.REMOVE_GLOBAL_FILE,
+      });
 
       if (!file) return;
 
@@ -882,7 +920,9 @@ export const fileRouter = router({
       if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
       await assertFileNotInRestrictedKnowledgeBase(ctx, input.id);
 
-      const file = await ctx.fileModel.deleteUnreferenced(input.id, serverDBEnv.REMOVE_GLOBAL_FILE);
+      const file = await ctx.fileModel.deleteUnreferenced(input.id, {
+        removeGlobalFile: serverDBEnv.REMOVE_GLOBAL_FILE,
+      });
       if (!file) return;
 
       await ctx.fileService.deleteFile(file.url!);
@@ -957,7 +997,7 @@ export const fileRouter = router({
       const updates: Parameters<typeof ctx.fileModel.update>[1] = {};
 
       if (metadata !== undefined) {
-        updates.metadata = metadata;
+        updates.metadata = stripAgentShareFileProvenance(metadata);
       }
 
       if (name !== undefined) {

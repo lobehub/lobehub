@@ -44,6 +44,8 @@
   "document_comment_mentioned_title": "Вы были упомянуты в комментарии к документу",
   "document_liked": "{{actorLabel}} понравился ваш документ \"{{documentTitle}}\".",
   "document_liked_title": "Кому-то понравился ваш документ",
+  "document_mentioned": "{{actorLabel}} упомянул вас в «{{documentTitle}}».",
+  "document_mentioned_title": "Вы были упомянуты в документе",
   "email.footer.contactSupport": "Связаться с поддержкой",
   "email.footer.joinDiscord": "Присоединиться к Discord",
   "email.footer.manage": "Управление уведомлениями",

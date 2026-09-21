@@ -308,6 +308,8 @@ export default {
   'betaFeedback.collapse': 'Collapse',
   'betaFeedback.desc':
     'Workspace is in beta. Report issues, request features, or compare notes with other beta users.',
+  'betaFeedback.createWorkspacePromo': "You're in the beta — create your first workspace",
+  'betaFeedback.createWorkspaceTitle': 'Create your first workspace',
   'betaFeedback.discord.action': 'Open Discord',
   'betaFeedback.discord.desc': 'Scan with your phone camera to join.',
   'betaFeedback.discord.title': 'Discord',
@@ -539,6 +541,8 @@ export default {
   'visibilityConfirm.makePrivate.itemAccess': 'Other workspace members lose access immediately',
   'visibilityConfirm.makePrivate.itemReferences':
     'Existing message attachments and references will show as unavailable',
+  'visibilityConfirm.makePrivate.itemLibrary':
+    'It stays in the library you filed it in — other members just stop seeing it there',
   'visibilityConfirm.makePrivate.itemLoaded':
     'Content others have already loaded can’t be pulled back',
   'visibilityConfirm.publish.itemVisible': 'All workspace members will see this immediately',

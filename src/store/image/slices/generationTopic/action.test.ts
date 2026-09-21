@@ -17,6 +17,14 @@ vi.mock('@/libs/swr', async () => {
   };
 });
 
+vi.mock('swr', async () => {
+  const actual = await vi.importActual('swr');
+  return {
+    ...(actual as any),
+    mutate: vi.fn(),
+  };
+});
+
 // Mock services and dependencies
 vi.mock('@/services/generationTopic', () => ({
   generationTopicService: {
@@ -459,16 +467,6 @@ describe('GenerationTopicAction', () => {
   });
 
   describe('refreshGenerationTopics', () => {
-    beforeEach(() => {
-      vi.mock('swr', async () => {
-        const actual = await vi.importActual('swr');
-        return {
-          ...(actual as any),
-          mutate: vi.fn(),
-        };
-      });
-    });
-
     afterEach(() => {
       vi.resetAllMocks();
     });

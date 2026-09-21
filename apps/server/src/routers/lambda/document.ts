@@ -1,19 +1,24 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { notifyDocumentMention } from '@/business/server/document-mention/notifyActivity';
 import { businessFileTransferStorageCheck } from '@/business/server/lambda-routers/file';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { FREE_DOCUMENT_HISTORY_WINDOW_DAYS } from '@/const/documentHistory';
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { ChunkModel } from '@/database/models/chunk';
 import { DOCUMENT_TRANSFER_FOREIGN_ROWS, DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
+import { RbacModel } from '@/database/models/rbac';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
+import { WorkModel } from '@/database/models/work';
 import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DocumentService } from '@/server/services/document';
+import { canViewDocumentContent } from '@/server/services/documentAccess';
 import { FileService } from '@/server/services/file';
 import {
   assertCanPerformResourceAction,
@@ -21,6 +26,7 @@ import {
   getResourceMeta,
 } from '@/server/services/resourcePermission';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
+import { after } from '@/server/utils/scheduleAfterResponse';
 import { TransferErrorCode } from '@/types/transferError';
 
 import { isWorkspaceNonOwner } from './_helpers/assertWorkspaceRowManageable';
@@ -28,6 +34,7 @@ import {
   assertContentsNotInRestrictedKnowledgeBase,
   getRestrictedKnowledgeBaseIds,
 } from './_helpers/knowledgeBaseAccess';
+import { resolveRootOperation } from './_helpers/runProvenance';
 import {
   compareDocumentHistoryItemsInputSchema,
   getDocumentHistoryItemInputSchema,
@@ -68,6 +75,106 @@ const getFreeDocumentHistorySince = () => {
   return new Date(now - FREE_DOCUMENT_HISTORY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
 };
 
+/**
+ * Ping members newly @-mentioned in the document body. Runs after the response
+ * and re-checks each recipient against the document's General access, so a
+ * chip for someone outside a private page never leaks its existence. The
+ * business slot is a no-op outside Cloud.
+ */
+const notifyDocumentMentionsBestEffort = (
+  ctx: { serverDB: Parameters<typeof getResourceMeta>[0]; userId: string; workspaceId: string },
+  params: { documentId: string; mentionedUserIds: string[]; savedAt: Date },
+) => {
+  const recipientUserIds = [...new Set(params.mentionedUserIds)].filter(
+    (userId) => userId !== ctx.userId,
+  );
+  if (recipientUserIds.length === 0) return;
+
+  after(async () => {
+    try {
+      const [meta, permissionsByUserId] = await Promise.all([
+        getResourceMeta(ctx.serverDB, 'document', params.documentId),
+        RbacModel.getWorkspaceUsersPermissions({
+          db: ctx.serverDB,
+          requireMembership: true,
+          userIds: recipientUserIds,
+          workspaceId: ctx.workspaceId,
+        }),
+      ]);
+      if (!meta) return;
+
+      await Promise.all(
+        recipientUserIds.map(async (recipientUserId) => {
+          const grantedPermissions = permissionsByUserId.get(recipientUserId);
+          if (!grantedPermissions) return;
+
+          const canView = await canViewDocumentContent({
+            db: ctx.serverDB,
+            grantedPermissions,
+            meta,
+            resourceId: params.documentId,
+            userId: recipientUserId,
+            workspaceId: ctx.workspaceId,
+          });
+          if (!canView) return;
+
+          await notifyDocumentMention({
+            actorUserId: ctx.userId,
+            documentId: params.documentId,
+            recipientUserId,
+            savedAt: params.savedAt,
+            workspaceId: ctx.workspaceId,
+          });
+        }),
+      );
+    } catch (error) {
+      console.error('[document] Failed to send mention notification', error);
+    }
+  });
+};
+
+/**
+ * Credit a document written inside an agent run to that run as a Work version,
+ * so run consumers (a Goal harvesting a Task's deliverables) can find it. Agents
+ * that write through the `lh doc` CLI never pass through a tool runtime, which is
+ * where document Work is otherwise registered.
+ *
+ * Attribution is best effort and never fails the write: only an owned operation
+ * that is still running can claim the document — a stale `LOBEHUB_OPERATION_ID`
+ * left in a shell must not credit a finished run — and any provenance or
+ * bookkeeping failure just leaves the document unattributed.
+ */
+const registerRunDocumentWork = async (
+  ctx: { operationModel: AgentOperationModel; workModel: WorkModel },
+  params: {
+    changeType: 'created' | 'updated';
+    documentId: string;
+    operationId?: string;
+    toolName: string;
+  },
+) => {
+  if (!params.operationId) return;
+  try {
+    const operation = await ctx.operationModel.findOwnOperationById(params.operationId);
+    if (!operation || operation.status !== 'running') return;
+    const rootOperation = await resolveRootOperation(
+      (id) => ctx.operationModel.findOwnOperationById(id),
+      operation,
+    );
+    await ctx.workModel.registerDocument({
+      agentId: operation.agentId,
+      changeType: params.changeType,
+      documentId: params.documentId,
+      rootOperationId: rootOperation.id,
+      toolIdentifier: 'lobehub-document',
+      toolName: params.toolName,
+      topicId: operation.topicId,
+    });
+  } catch (error) {
+    console.error('[document] Failed to credit the document to its run', error);
+  }
+};
+
 const documentProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   const wsId = ctx.workspaceId ?? undefined;
@@ -79,6 +186,8 @@ const documentProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts)
       documentService: new DocumentService(ctx.serverDB, ctx.userId, wsId),
       fileModel: new FileModel(ctx.serverDB, ctx.userId, wsId),
       messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
+      operationModel: new AgentOperationModel(ctx.serverDB, ctx.userId, wsId),
+      workModel: new WorkModel(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
@@ -93,6 +202,8 @@ export const documentRouter = router({
         fileType: z.string().optional(),
         knowledgeBaseId: z.string().optional(),
         metadata: z.record(z.string(), z.any()).optional(),
+        /** The agent run writing this document; credits it to that run as Work. */
+        operationId: z.string().optional(),
         parentId: z.string().optional(),
         slug: z.string().optional(),
         title: z.string(),
@@ -102,10 +213,11 @@ export const documentRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      const { operationId, ...documentInput } = input;
       // Resolve parentId if it's a slug
-      let resolvedParentId = input.parentId;
-      if (input.parentId) {
-        const docBySlug = await ctx.documentModel.findBySlug(input.parentId);
+      let resolvedParentId = documentInput.parentId;
+      if (documentInput.parentId) {
+        const docBySlug = await ctx.documentModel.findBySlug(documentInput.parentId);
         if (docBySlug) {
           resolvedParentId = docBySlug.id;
         }
@@ -114,9 +226,11 @@ export const documentRouter = router({
       await assertCanCreateUnderParent(ctx, resolvedParentId);
 
       // Parse editorData from JSON string to object
-      const editorData = input.editorData ? JSON.parse(input.editorData) : undefined;
+      const editorData = documentInput.editorData
+        ? JSON.parse(documentInput.editorData)
+        : undefined;
       const document = await ctx.documentService.createDocument({
-        ...input,
+        ...documentInput,
         editorData,
         parentId: resolvedParentId,
       });
@@ -128,6 +242,12 @@ export const documentRouter = router({
           ctx.userId,
         );
       }
+      await registerRunDocumentWork(ctx, {
+        changeType: 'created',
+        documentId: document.id,
+        operationId,
+        toolName: 'createDocument',
+      });
       return document;
     }),
 
@@ -422,7 +542,12 @@ export const documentRouter = router({
 
   updateDocument: documentProcedure
     .use(withScopedPermission('document:update'))
-    .input(updateDocumentInputSchema)
+    .input(
+      updateDocumentInputSchema.extend({
+        /** The agent run editing this document; an edit adds a Work version to that run. */
+        operationId: z.string().optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       await assertContentsNotInRestrictedKnowledgeBase(ctx, [input.id]);
 
@@ -440,13 +565,35 @@ export const documentRouter = router({
         }
       }
 
-      const { id, editorData: editorDataString, ...params } = input;
+      const { id, editorData: editorDataString, operationId, ...params } = input;
       // Parse editorData from JSON string to object if present
       const editorData = editorDataString ? JSON.parse(editorDataString) : undefined;
       const result = await ctx.documentService.updateDocument(id, {
         ...params,
         editorData,
       });
+
+      // Only a change to what the document says is a new deliverable version;
+      // a move or a file-type change is not.
+      if (result && (params.content !== undefined || params.title !== undefined)) {
+        await registerRunDocumentWork(ctx, {
+          changeType: 'updated',
+          documentId: id,
+          operationId,
+          toolName: 'updateDocument',
+        });
+      }
+
+      if (ctx.workspaceId && result?.addedMentionUserIds && result.savedAt) {
+        notifyDocumentMentionsBestEffort(
+          { serverDB: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId },
+          {
+            documentId: id,
+            mentionedUserIds: result.addedMentionUserIds,
+            savedAt: result.savedAt,
+          },
+        );
+      }
 
       return result;
     }),

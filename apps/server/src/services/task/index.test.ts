@@ -60,9 +60,11 @@ vi.mock('@/server/services/verify/taskAcceptance', () => ({ resolveTaskAcceptanc
 // the running-status branch in updateStatus doesn't drag them in.
 const { interruptTaskMock } = vi.hoisted(() => ({ interruptTaskMock: vi.fn() }));
 vi.mock('@/server/services/aiAgent', () => ({
-  AiAgentService: vi.fn().mockImplementation(() => ({
-    interruptTask: interruptTaskMock,
-  })),
+  AiAgentService: vi.fn().mockImplementation(function () {
+    return {
+      interruptTask: interruptTaskMock,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/taskScheduler', () => ({
@@ -148,12 +150,24 @@ describe('TaskService', () => {
     resolveTaskAcceptance.mockResolvedValue(undefined);
     mockTaskTopicModel.findRunningByTaskIds.mockResolvedValue([]);
     mockTaskModel.getActivities.mockResolvedValue([]);
-    (AgentModel as any).mockImplementation(() => mockAgentModel);
-    (TaskModel as any).mockImplementation(() => mockTaskModel);
-    (TaskTopicModel as any).mockImplementation(() => mockTaskTopicModel);
-    (BriefModel as any).mockImplementation(() => mockBriefModel);
-    (RbacModel as any).mockImplementation(() => mockRbacModel);
-    (WorkspaceMemberModel as any).mockImplementation(() => mockWorkspaceMemberModel);
+    (AgentModel as any).mockImplementation(function () {
+      return mockAgentModel;
+    });
+    (TaskModel as any).mockImplementation(function () {
+      return mockTaskModel;
+    });
+    (TaskTopicModel as any).mockImplementation(function () {
+      return mockTaskTopicModel;
+    });
+    (BriefModel as any).mockImplementation(function () {
+      return mockBriefModel;
+    });
+    (RbacModel as any).mockImplementation(function () {
+      return mockRbacModel;
+    });
+    (WorkspaceMemberModel as any).mockImplementation(function () {
+      return mockWorkspaceMemberModel;
+    });
   });
 
   describe('assertAssigneeUserAssignable', () => {

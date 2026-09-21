@@ -44,6 +44,8 @@
   "document_comment_mentioned_title": "Bir belge yorumunda bahsedildiniz",
   "document_liked": "{{actorLabel}} belgenizi beğendi: \"{{documentTitle}}\".",
   "document_liked_title": "Birisi belgenizi beğendi",
+  "document_mentioned": "{{actorLabel}} sizi \"{{documentTitle}}\" içinde bahsetti.",
+  "document_mentioned_title": "Bir belgede bahsedildiniz",
   "email.footer.contactSupport": "Destek ile iletişime geçin",
   "email.footer.joinDiscord": "Discord'a katılın",
   "email.footer.manage": "Bildirimleri yönet",

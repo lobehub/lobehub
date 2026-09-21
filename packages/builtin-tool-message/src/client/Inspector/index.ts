@@ -4,4 +4,5 @@ import { MessageApiName } from '../../types';
 export const MessageInspectors: Record<string, any> = {
   [MessageApiName.sendMessage]: undefined,
   [MessageApiName.readMessages]: undefined,
+  [MessageApiName.readDocument]: undefined,
 };

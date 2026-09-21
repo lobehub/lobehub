@@ -3,7 +3,7 @@
 import type { AcceptanceStatus } from '@lobechat/types';
 import { Center, Flexbox, Icon } from '@lobehub/ui';
 import type { DropdownItem } from '@lobehub/ui/base-ui';
-import { ActionIcon, Checkbox, confirmModal, DropdownMenu, toast } from '@lobehub/ui/base-ui';
+import { ActionIcon, Checkbox, DropdownMenu, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import {
@@ -33,6 +33,7 @@ import type { AcceptanceListItem } from '@/services/verify';
 import { verifyService } from '@/services/verify';
 
 import { getAcceptanceStatusActions } from '../Viewer/statusActions';
+import { openAcceptanceDeleteConfirm } from './AcceptanceDeleteConfirm';
 import { openMergeAcceptanceModal } from './MergeAcceptanceModal';
 import { useAcceptanceProjectMenuItem } from './useAcceptanceProjectMenuItem';
 
@@ -113,7 +114,7 @@ const AcceptanceRow = memo<{
   /** Multi-select is running: the row picks instead of navigating. */
   selectable?: boolean;
   selected?: boolean;
-  onToggleSelect?: () => void;
+  onToggleSelect?: (shift: boolean) => void;
 }>(({ active, item, onChanged, onToggleSelect, selectable, selected, showProject }) => {
   const { t } = useTranslation('verify');
   const navigate = useNavigate();
@@ -225,26 +226,20 @@ const AcceptanceRow = memo<{
   };
 
   const removeAcceptance = () => {
-    confirmModal({
-      cancelText: t('actions.cancel'),
-      content: t('acceptance.workspace.deleteConfirmDescription', { title }),
-      okButtonProps: { danger: true },
-      okText: t('actions.delete'),
-      onOk: async () => {
+    openAcceptanceDeleteConfirm({
+      ids: [item.id],
+      title,
+      onDelete: async (purge) => {
         setMutating(true);
         try {
-          await verifyService.deleteAcceptance(item.id);
+          await verifyService.deleteAcceptance(item.id, purge);
           if (active) navigate('/acceptance', { replace: true });
           await onChanged();
           toast.success(t('acceptance.workspace.deleteSuccess'));
-        } catch (error) {
-          console.error('[acceptance:delete]', error);
-          toast.error(t('acceptance.workspace.deleteError'));
         } finally {
           setMutating(false);
         }
       },
-      title: t('acceptance.workspace.deleteConfirmTitle'),
     });
   };
 
@@ -384,7 +379,13 @@ const AcceptanceRow = memo<{
             }
           : undefined
       }
-      onClick={() => (selectable ? onToggleSelect?.() : navigate(`/acceptance/${item.id}`))}
+      onClick={(e) => {
+        if (selectable || e.shiftKey || e.metaKey || e.ctrlKey) {
+          onToggleSelect?.(e.shiftKey);
+          return;
+        }
+        navigate(`/acceptance/${item.id}`);
+      }}
     />
   );
 });

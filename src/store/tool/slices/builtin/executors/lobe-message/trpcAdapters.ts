@@ -261,6 +261,10 @@ export const trpcMessageService: MessageRuntimeService = {
     return lambdaClient.botMessage.readMessages.query(await buildTrpcInput(params)) as any;
   },
 
+  readDocument: async (params) => {
+    return lambdaClient.botMessage.readDocument.query(await buildTrpcInput(params)) as any;
+  },
+
   editMessage: async (params) => {
     return lambdaClient.botMessage.editMessage.mutate(await buildTrpcInput(params)) as any;
   },

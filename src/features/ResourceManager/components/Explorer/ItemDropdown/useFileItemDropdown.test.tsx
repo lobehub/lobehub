@@ -1,5 +1,6 @@
 import { CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
-import { renderHook, waitFor } from '@testing-library/react';
+import { fireEvent, render, renderHook, waitFor } from '@testing-library/react';
+import { Component } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 interface SendToMessengerParams {
@@ -12,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   confirmModal: vi.fn(),
   deleteResource: vi.fn<() => Promise<void>>(async () => {}),
   dropTreeNodes: vi.fn(async () => undefined),
+  publishFileToWorkspace: vi.fn(async (_id: string) => undefined),
+  setFileVisibility: vi.fn(async (_id: string, _visibility: string) => undefined),
   refreshFileList: vi.fn(async () => undefined),
   revalidateTree: vi.fn(async () => undefined),
   useSendToMessengerMenuItem: vi.fn((_params: SendToMessengerParams) => undefined),
@@ -42,9 +45,9 @@ vi.mock('@/store/file', () => ({
     () => ({
       deleteResource: mocks.deleteResource,
       moveResource: vi.fn(),
-      publishFileToWorkspace: vi.fn(),
+      publishFileToWorkspace: mocks.publishFileToWorkspace,
       refreshFileList: mocks.refreshFileList,
-      setFileVisibility: vi.fn(),
+      setFileVisibility: mocks.setFileVisibility,
     }),
     { getState: () => ({ queryParams: { parentId: 'parent-id' } }) },
   ),
@@ -102,6 +105,88 @@ describe('useFileItemDropdown — visibility toggles', () => {
       useFileItemDropdown({ ...baseParams, userId: 'another-member', visibility: 'public' } as any),
     );
     expect(keys(result)).not.toContain('makePrivate');
+  });
+});
+
+/** @example Publishing or unpublishing an extracted spreadsheet changes its backing file. */
+describe('useFileItemDropdown — backing file visibility', () => {
+  // ROOT CAUSE:
+  //
+  // The resource list uses the parsed document ID after extracting an Office file.
+  // Visibility actions previously passed that document ID to file-only endpoints,
+  // which returned NOT_FOUND. Both actions must use the underlying fileId.
+  /** @example A docs_* row publishes its file_* attachment after confirmation. */
+  it('publishes the underlying file for a parsed spreadsheet', async () => {
+    mocks.activeWorkspaceId = 'ws-1';
+    const { result } = renderHook(() =>
+      useFileItemDropdown({
+        ...baseParams,
+        fileId: 'file-spreadsheet',
+        filename: 'trip.xlsx',
+        id: 'docs-spreadsheet',
+        sourceType: 'file',
+        userId: 'user-1',
+        visibility: 'private',
+      }),
+    );
+    const item = result.current.menuItems().find((item) => item?.key === 'publishToWorkspace');
+    if (!item || !('onClick' in item) || !item.onClick) throw new Error('Missing publish action');
+    const menu = render(
+      <button
+        onClick={(domEvent) =>
+          item.onClick?.({
+            domEvent,
+            item: new Component({}),
+            key: String(item.key),
+            keyPath: [String(item.key)],
+          })
+        }
+      >
+        Change visibility
+      </button>,
+    );
+    fireEvent.click(menu.getByRole('button', { name: 'Change visibility' }));
+    await mocks.confirmModal.mock.calls.at(-1)![0].onOk();
+
+    /** @example The file endpoint receives file-spreadsheet, never docs-spreadsheet. */
+    expect(mocks.publishFileToWorkspace).toHaveBeenCalledWith('file-spreadsheet');
+  });
+
+  /** @example A published docs_* row makes its file_* attachment private. */
+  it('makes the underlying file private for a parsed spreadsheet', async () => {
+    mocks.activeWorkspaceId = 'ws-1';
+    const { result } = renderHook(() =>
+      useFileItemDropdown({
+        ...baseParams,
+        fileId: 'file-spreadsheet',
+        filename: 'trip.xlsx',
+        id: 'docs-spreadsheet',
+        sourceType: 'file',
+        userId: 'user-1',
+        visibility: 'public',
+      }),
+    );
+    const item = result.current.menuItems().find((item) => item?.key === 'makePrivate');
+    if (!item || !('onClick' in item) || !item.onClick) throw new Error('Missing private action');
+    const menu = render(
+      <button
+        onClick={(domEvent) =>
+          item.onClick?.({
+            domEvent,
+            item: new Component({}),
+            key: String(item.key),
+            keyPath: [String(item.key)],
+          })
+        }
+      >
+        Change visibility
+      </button>,
+    );
+    fireEvent.click(menu.getByRole('button', { name: 'Change visibility' }));
+    await mocks.confirmModal.mock.calls.at(-1)![0].onOk();
+
+    /** @example The file endpoint updates file-spreadsheet to private. */
+    expect(mocks.setFileVisibility).toHaveBeenCalledWith('file-spreadsheet', 'private');
   });
 });
 

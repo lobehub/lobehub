@@ -16,6 +16,7 @@ import History from '../components/History';
 import { useChatItemContextMenu } from '../hooks/useChatItemContextMenu';
 import MessageSelectionWrapper from '../MessageForward/MessageSelectionWrapper';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../store';
+import type { SteerContinuation } from '../store/slices/data/steerChains';
 import AgentCouncilMessage from './AgentCouncil';
 import AssistantMessage from './Assistant';
 import AssistantGroupMessage from './AssistantGroup';
@@ -49,6 +50,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 export interface MessageItemProps {
   className?: string;
+  continuations?: SteerContinuation[];
   defaultWorkflowExpandLevel?: WorkflowExpandLevelDefault;
   disableEditing?: boolean;
   enableHistoryDivider?: boolean;
@@ -63,6 +65,7 @@ export interface MessageItemProps {
 const MessageItem = memo<MessageItemProps>(
   ({
     className,
+    continuations,
     defaultWorkflowExpandLevel,
     enableHistoryDivider,
     id,
@@ -170,6 +173,7 @@ const MessageItem = memo<MessageItemProps>(
         case 'assistantGroup': {
           return (
             <AssistantGroupMessage
+              continuations={continuations}
               defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
               disableEditing={effectiveDisableEditing}
               footerRender={footerRender}
@@ -187,6 +191,7 @@ const MessageItem = memo<MessageItemProps>(
           // turn. Keeps a single code path instead of a thinner duplicate.
           return (
             <AssistantGroupMessage
+              continuations={continuations}
               defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
               disableEditing={effectiveDisableEditing}
               footerRender={footerRender}
@@ -239,6 +244,7 @@ const MessageItem = memo<MessageItemProps>(
       return null;
     }, [
       role,
+      continuations,
       defaultWorkflowExpandLevel,
       effectiveDisableEditing,
       footerRender,

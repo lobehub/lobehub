@@ -1,6 +1,17 @@
-import type { CompletionSoundSettings } from '@lobechat/electron-client-ipc';
+import type {
+  CompletionBuiltinSound,
+  CompletionSoundPlayback,
+  CompletionSoundSettings,
+} from '@lobechat/electron-client-ipc';
 
 import { ensureElectronIpc } from '@/utils/electron/ipc';
+
+const BUILTIN_FILES: Record<CompletionBuiltinSound, string> = {
+  glassBell: '/sounds/glass-bell.wav',
+  lobehub: '/sounds/chat-complete.wav',
+  softTone: '/sounds/soft-tone.wav',
+  xylophone: '/sounds/xylophone.wav',
+};
 
 class CompletionSoundService {
   private audio?: HTMLAudioElement;
@@ -8,7 +19,7 @@ class CompletionSoundService {
 
   getSettings = () => ensureElectronIpc().completionSound.getSettings();
 
-  setSettings = (settings: Partial<CompletionSoundSettings> & { reset?: boolean }) =>
+  setSettings = (settings: Partial<CompletionSoundSettings>) =>
     ensureElectronIpc().completionSound.setSettings(settings);
 
   importSound = () => ensureElectronIpc().completionSound.importSound();
@@ -20,9 +31,10 @@ class CompletionSoundService {
     if (this.playing) return this.playing;
     if (this.audio && !this.audio.paused && !this.audio.ended) return;
     const start = async () => {
-      const playback = await ensureElectronIpc().completionSound.getPlayback(options ?? {});
+      const playback: CompletionSoundPlayback =
+        await ensureElectronIpc().completionSound.getPlayback(options ?? {});
       if (!playback.play) return;
-      this.audio = new Audio(playback.dataUrl ?? '/sounds/chat-complete.wav');
+      this.audio = new Audio(playback.dataUrl ?? BUILTIN_FILES[playback.builtin ?? 'lobehub']);
       this.audio.volume = playback.volume;
       await this.audio.play();
     };

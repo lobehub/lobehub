@@ -1,11 +1,11 @@
 'use client';
 
-import { type DraggablePanelProps } from '@lobehub/ui';
-import { DraggablePanel } from '@lobehub/ui';
+import { DraggablePanel, type DraggablePanelProps } from '@lobehub/ui/base-ui';
 import { createStaticStyles, useResponsive } from 'antd-style';
 import { type PropsWithChildren } from 'react';
 import { Activity, memo, useState } from 'react';
 
+import { useTopicDrawerPortalHostViewType } from '@/features/AgentTasks/hooks/useTopicDrawerArtifactPortal';
 import { usePortalPanelWidth } from '@/features/Portal/usePortalPanelWidth';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors, portalThreadSelectors } from '@/store/chat/selectors';
@@ -33,11 +33,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 const PortalPanel = memo(({ children }: PropsWithChildren) => {
-  const [showPortal, currentViewType, showThread] = useChatStore((s) => [
+  const [showPortal, showThread] = useChatStore((s) => [
     chatPortalSelectors.showStandalonePortal(s),
-    chatPortalSelectors.currentViewType(s),
     portalThreadSelectors.showThread(s),
   ]);
+  const currentViewType = useTopicDrawerPortalHostViewType();
 
   // legacy threads live outside the view stack, so they surface as an empty stack
   const viewType = currentViewType ?? (showThread ? PortalViewType.Thread : null);

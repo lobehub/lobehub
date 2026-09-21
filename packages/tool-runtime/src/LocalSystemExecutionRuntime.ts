@@ -101,6 +101,9 @@ export interface ExecuteLocalToolOptions {
  * into the camelCase format expected by ComputerRuntime.
  */
 export class LocalSystemExecutionRuntime extends ComputerRuntime {
+  /** `lobe-local-system`'s `getCommandOutput` takes a `timeout`; see its manifest. */
+  protected readonly supportsObservationTimeout = true;
+
   private service: ILocalSystemService;
 
   constructor(service: ILocalSystemService) {
@@ -430,6 +433,12 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
             // The picker's chip only shows the user's intent, and a run that
             // lost the flag somewhere in between looks identical otherwise.
             sandboxed: raw.sandboxed,
+            // Liveness and the terminating signal: `exit_code` alone cannot
+            // tell a running command from a killed one (see
+            // `GetCommandOutputResult`), and dropping them here is what forced
+            // the consumer to guess.
+            running: raw.running,
+            signal: raw.signal,
             stderr: raw.stderr,
             stdout: raw.stdout,
             success: raw.success,
@@ -445,6 +454,8 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
             exitCode: raw.exit_code,
             error: raw.error,
             outputFiles: raw.output_files,
+            running: raw.running,
+            signal: raw.signal,
             stderr: raw.stderr,
             stdout: raw.stdout,
             success: raw.success,

@@ -2,6 +2,7 @@ import type {
   ClaudeCodeQuotaSnapshot,
   CodexQuotaSnapshot,
   CodexRateLimitResetResult,
+  KimiCodeQuotaSnapshot,
 } from '@lobechat/electron-client-ipc';
 import type { HeterogeneousProviderBindingReference } from '@lobechat/heterogeneous-agents';
 import type {
@@ -89,6 +90,14 @@ class HeterogeneousAgentService {
     force?: boolean;
   }): Promise<ClaudeCodeQuotaSnapshot> {
     return this.ipc.heterogeneousAgent.getClaudeCodeQuota(params);
+  }
+
+  async getKimiCodeQuota(params?: {
+    env?: Record<string, string>;
+    force?: boolean;
+    kimiCodeHomePath?: string | null;
+  }): Promise<KimiCodeQuotaSnapshot> {
+    return this.ipc.heterogeneousAgent.getKimiCodeQuota(params);
   }
 
   /**

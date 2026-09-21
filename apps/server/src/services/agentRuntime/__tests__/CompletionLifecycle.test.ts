@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { type Message, parse } from '@lobechat/conversation-flow';
 import { ChatErrorType, RequestTrigger } from '@lobechat/types';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { NotifyAgentInterventionRequiredParams } from '@/business/server/agent-run/agentInterventionReview';
 import * as agentSignalService from '@/server/services/agentSignal';
@@ -23,12 +23,20 @@ const {
   mockBuildRuntimeInterventionNotification,
   mockNotifyAgentInterventionRequired,
   mockNotifyAgentRunCompleted,
+  mockListWorks,
 } = vi.hoisted(() => ({
   mockBuildRuntimeInterventionNotification: vi.fn<
     () => Promise<NotifyAgentInterventionRequiredParams | undefined>
   >(async () => undefined),
   mockNotifyAgentInterventionRequired: vi.fn(async () => {}),
   mockNotifyAgentRunCompleted: vi.fn(async () => {}),
+  mockListWorks: vi.fn(async (): Promise<{ id: string }[]> => []),
+}));
+
+vi.mock('@/database/models/work', () => ({
+  WorkModel: vi.fn(function () {
+    return { listByRootOperation: mockListWorks };
+  }),
 }));
 
 vi.mock('@/business/server/agent-run/agentInterventionReview', () => ({
@@ -169,7 +177,7 @@ describe('CompletionLifecycle.buildLifecycleEvent', () => {
         { content: 'user prompt', role: 'user' },
         { content: 'final answer', role: 'assistant' },
       ],
-      metadata: { agentId: 'agent-1', userId: 'user-1' },
+      origin: { agentId: 'agent-1', userId: 'user-1' },
     };
 
     const { event } = callBuild(state);
@@ -256,7 +264,7 @@ describe('CompletionLifecycle.buildLifecycleEvent', () => {
           role: 'assistantGroup',
         },
       ],
-      metadata: { agentId: 'agent-1', userId: 'user-1' },
+      origin: { agentId: 'agent-1', userId: 'user-1' },
     };
 
     const { assistantMessageId, event } = callBuild(state);
@@ -426,11 +434,37 @@ describe('CompletionLifecycle.buildLifecycleEvent', () => {
   });
 
   it('handles missing messages array gracefully', () => {
-    const { event } = callBuild({ metadata: { agentId: 'a' } });
+    const { event } = callBuild({ origin: { agentId: 'a' } });
 
     expect(event.lastAssistantContent).toBeUndefined();
     expect(event.attachments).toBeUndefined();
     expect(event.agentId).toBe('a');
+  });
+
+  it('preserves safe external-agent context on completion hooks', () => {
+    const { event } = callBuild(
+      {
+        error: {
+          type: 'AgentRuntimeError',
+          body: {
+            agentType: 'claude-code',
+            code: 'rate_limit',
+            details: { kind: 'usage_limit' },
+            stderr: 'secret path',
+            rateLimitInfo: { status: 'rejected', rateLimitType: 'seven_day', resetsAt: 1789826400 },
+          },
+        },
+        origin: { agentId: 'agent-1', userId: 'user-1' },
+      },
+      'error',
+    );
+    expect(event.errorAttribution).toBe('user');
+    expect(event.errorHeterogeneous).toEqual({
+      agentType: 'claude-code',
+      kind: 'usage_limit',
+      rateLimitType: 'seven_day',
+      resetsAt: 1789826400,
+    });
   });
 
   it('populates errorType + attribution from the normalized error on the error path', () => {
@@ -440,7 +474,7 @@ describe('CompletionLifecycle.buildLifecycleEvent', () => {
     // runtime error via formatErrorForState and surface these taxonomy fields.
     const state = {
       error: { error: { message: 'fetch failed' }, errorType: 'ProviderNetworkError' },
-      metadata: { agentId: 'agent-1', userId: 'user-1' },
+      origin: { agentId: 'agent-1', userId: 'user-1' },
     };
 
     const { event } = callBuild(state, 'error');
@@ -448,6 +482,34 @@ describe('CompletionLifecycle.buildLifecycleEvent', () => {
     expect(event.errorType).toBe('ProviderNetworkError');
     expect(event.errorAttribution).toBe('system');
     expect(event.errorMessage).toBe('fetch failed');
+  });
+
+  it('carries the budget context of an exhausted allowance onto the event', () => {
+    // Without this the bot reply can only say "not enough credits": which
+    // allowance ran out, and by how much, lived in the error body and stopped
+    // at the lifecycle boundary.
+    const state = {
+      error: {
+        budget: {
+          availableCredits: 7_242_747,
+          budgetTypeAtError: 'workspace_member',
+          requiredCredits: 197_391,
+          shortfallCredits: 0,
+        },
+        error: { message: 'Workspace budget exceeded' },
+        errorType: 'InsufficientBudgetForModel',
+      },
+      origin: { agentId: 'agent-1', userId: 'user-1' },
+    };
+
+    const { event } = callBuild(state, 'error');
+
+    expect(event.errorBudget).toEqual({
+      availableCredits: 7_242_747,
+      budgetTypeAtError: 'workspace_member',
+      requiredCredits: 197_391,
+      shortfallCredits: 0,
+    });
   });
 
   it('leaves errorType + attribution undefined when there is no error', () => {
@@ -472,7 +534,7 @@ describe('CompletionLifecycle.buildLifecycleEvent', () => {
         { content: 'final answer', id: 'msg-assistant', role: 'assistant' },
         { content: 'trailing tool result', id: 'msg-tool-2', role: 'tool' },
       ],
-      metadata: { agentId: 'agent-1', userId: 'user-1' },
+      origin: { agentId: 'agent-1', userId: 'user-1' },
     };
 
     const { assistantMessageId } = callBuild(state, 'done');
@@ -486,7 +548,8 @@ describe('CompletionLifecycle.buildLifecycleEvent', () => {
     // client already persisted the parked candidate against.
     const state = {
       messages: [{ content: 'final answer', id: 'msg-from-state', role: 'assistant' }],
-      metadata: { agentId: 'agent-1', assistantMessageId: 'msg-from-metadata' },
+      metadata: { assistantMessageId: 'msg-from-metadata' },
+      origin: { agentId: 'agent-1' },
     };
 
     const { assistantMessageId } = callBuild(state, 'done');
@@ -517,7 +580,7 @@ describe('CompletionLifecycle.dispatchHooks — error persistence', () => {
     (lifecycle as any).messageModel = { update: updateMessage };
     vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
     vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
-    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(() => {});
+    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
 
     await lifecycle.dispatchHooks(
       'op-1',
@@ -528,7 +591,8 @@ describe('CompletionLifecycle.dispatchHooks — error persistence', () => {
           errorType: ChatErrorType.FreePlanLimit,
           provider: 'lobehub',
         },
-        metadata: { _hooks: [], assistantMessageId: 'msg-1' },
+        metadata: { assistantMessageId: 'msg-1' },
+        host: { hooks: [] },
         status: 'error',
       },
       'error',
@@ -557,12 +621,12 @@ describe('CompletionLifecycle.dispatchHooks — error persistence', () => {
       .mockRejectedValue(
         new CriticalHookDeliveryError('task-on-complete', new Error('qstash down')),
       );
-    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(() => {});
+    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
 
     await expect(
       lifecycle.dispatchHooks(
         'op-1',
-        { metadata: { _hooks: [] }, status: 'interrupted' },
+        { host: { hooks: [] }, status: 'interrupted' },
         'interrupted',
       ),
     ).rejects.toThrow('Critical webhook delivery failed: task-on-complete');
@@ -574,13 +638,9 @@ describe('CompletionLifecycle.dispatchHooks — error persistence', () => {
     const lifecycle = buildLifecycle();
     vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(false);
     const dispatch = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
-    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(() => {});
+    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
 
-    await lifecycle.dispatchHooks(
-      'op-reclaimed',
-      { metadata: { _hooks: [] }, status: 'done' },
-      'done',
-    );
+    await lifecycle.dispatchHooks('op-reclaimed', { host: { hooks: [] }, status: 'done' }, 'done');
 
     expect(dispatch).not.toHaveBeenCalled();
   });
@@ -596,7 +656,7 @@ describe('CompletionLifecycle.dispatchHooks — verify plan race', () => {
     vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
     vi.spyOn(lifecycle as any, 'createVerifyMessage').mockResolvedValue(undefined);
     vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
-    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(() => {});
+    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
 
     // Control exactly when the fire-and-forget instantiation settles.
     let settle: () => void = () => {};
@@ -615,7 +675,7 @@ describe('CompletionLifecycle.dispatchHooks — verify plan race', () => {
     expect(instantiateSpy).toHaveBeenCalledTimes(1);
 
     // Completion fires while the plan instantiation is still in flight.
-    const doneState = { metadata: { agentId: 'a', _hooks: [] }, status: 'done' };
+    const doneState = { host: { hooks: [] }, origin: { agentId: 'a' }, status: 'done' };
     const dispatch = lifecycle.dispatchHooks('op-1', doneState, 'done');
 
     // The gate must stay blocked on the pending instantiation, not race past it.
@@ -650,7 +710,8 @@ describe('CompletionLifecycle.dispatchHooks — async-tool park', () => {
   });
 
   const parkedState = {
-    metadata: { agentId: 'a', _hooks: [] },
+    host: { hooks: [] },
+    origin: { agentId: 'a' },
     status: 'waiting_for_async_tool',
   };
 
@@ -658,7 +719,7 @@ describe('CompletionLifecycle.dispatchHooks — async-tool park', () => {
     const lifecycle = buildLifecycle();
     const persistSpy = vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
     const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
-    const unregisterSpy = vi.spyOn(hookDispatcher, 'unregister').mockImplementation(() => {});
+    const unregisterSpy = vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
 
     await lifecycle.dispatchHooks('op-1', parkedState, 'waiting_for_async_tool');
 
@@ -671,9 +732,9 @@ describe('CompletionLifecycle.dispatchHooks — async-tool park', () => {
     const lifecycle = buildLifecycle();
     vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
     const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
-    const unregisterSpy = vi.spyOn(hookDispatcher, 'unregister').mockImplementation(() => {});
+    const unregisterSpy = vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
 
-    const doneState = { metadata: { agentId: 'a', _hooks: [] }, status: 'done' };
+    const doneState = { host: { hooks: [] }, origin: { agentId: 'a' }, status: 'done' };
     await lifecycle.dispatchHooks('op-1', doneState, 'done');
 
     expect(dispatchSpy).toHaveBeenCalledWith('op-1', 'onComplete', expect.anything(), []);
@@ -691,16 +752,17 @@ describe('CompletionLifecycle.dispatchHooks — completion notification', () => 
     vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
     vi.spyOn(lifecycle as any, 'createVerifyMessage').mockResolvedValue(undefined);
     vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
-    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(() => {});
+    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
     vi.spyOn(verifyServices, 'runVerifyOnCompletion').mockResolvedValue(undefined);
     // The recall gate falls back to the op row when metadata carries no trigger.
     (lifecycle as any).agentOperationModel = { findById: vi.fn(async () => null) };
   };
 
-  const buildDoneState = (metadata: Record<string, unknown> = {}) => ({
+  const buildDoneState = (origin: Record<string, unknown> = {}) => ({
     createdAt: new Date(Date.now() - 90_000).toISOString(),
     messages: [{ content: 'final reply', role: 'assistant' }],
-    metadata: { _hooks: [], agentId: 'agt_1', topicId: 'tpc_1', ...metadata },
+    host: { hooks: [] },
+    origin: { agentId: 'agt_1', topicId: 'tpc_1', ...origin },
     status: 'done',
   });
 
@@ -798,7 +860,11 @@ describe('CompletionLifecycle.dispatchHooks — completion notification', () => 
     const lifecycle = buildLifecycle();
     stubSideEffects(lifecycle);
 
-    await lifecycle.dispatchHooks('op-1', buildDoneState({ isSubAgent: true }), 'done');
+    await lifecycle.dispatchHooks(
+      'op-1',
+      buildDoneState({ lineage: { isSubAgent: true } }),
+      'done',
+    );
     await flushMicrotasks();
 
     expect(mockNotifyAgentRunCompleted).not.toHaveBeenCalled();
@@ -810,7 +876,11 @@ describe('CompletionLifecycle.dispatchHooks — completion notification', () => 
 
     // execAgentMember stamps in-group members with orchestrationRole: 'member'
     // but NOT isSubAgent — they are internal steps of the supervisor run.
-    await lifecycle.dispatchHooks('op-1', buildDoneState({ orchestrationRole: 'member' }), 'done');
+    await lifecycle.dispatchHooks(
+      'op-1',
+      buildDoneState({ lineage: { orchestrationRole: 'member' } }),
+      'done',
+    );
     await flushMicrotasks();
 
     expect(mockNotifyAgentRunCompleted).not.toHaveBeenCalled();
@@ -824,7 +894,7 @@ describe('CompletionLifecycle.dispatchHooks — completion notification', () => 
       orchestrationRole: 'member',
     });
 
-    expect(state.metadata.orchestrationRole).toBe('member');
+    expect(state.origin.lineage.orchestrationRole).toBe('member');
   });
 
   it.each(['max_steps', 'cost_limit'])(
@@ -846,7 +916,7 @@ describe('CompletionLifecycle.dispatchHooks — completion notification', () => 
 
     await lifecycle.dispatchHooks(
       'op-1',
-      { metadata: { _hooks: [], agentId: 'agt_1' }, status: 'error' },
+      { host: { hooks: [] }, origin: { agentId: 'agt_1' }, status: 'error' },
       'error',
     );
 
@@ -861,7 +931,7 @@ describe('CompletionLifecycle.dispatchHooks — completion notification', () => 
     // and leak into later dispatchHooks('done') tests in this file.
     mockNotifyAgentRunCompleted.mockRejectedValueOnce(new Error('push provider down'));
 
-    const doneState = { metadata: { _hooks: [], agentId: 'agt_1' }, status: 'done' };
+    const doneState = { host: { hooks: [] }, origin: { agentId: 'agt_1' }, status: 'done' };
     await expect(lifecycle.dispatchHooks('op-1', doneState, 'done')).resolves.toBeUndefined();
     await flushMicrotasks();
 
@@ -975,11 +1045,11 @@ describe('CompletionLifecycle.dispatchHooks — parks do not register file works
       }),
     };
     vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
-    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(() => {});
+    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
 
     await lifecycle.dispatchHooks(
       'op-1',
-      { metadata: { _hooks: [], agentId: 'a' }, status: 'waiting_for_human' },
+      { host: { hooks: [] }, origin: { agentId: 'a' }, status: 'waiting_for_human' },
       'waiting_for_human',
     );
 
@@ -1011,12 +1081,12 @@ describe('CompletionLifecycle.dispatchHooks — parks do not register file works
       }),
     };
     vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
-    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(() => {});
+    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
 
     await expect(
       lifecycle.dispatchHooks(
         'op-1',
-        { metadata: { _hooks: [], agentId: 'a' }, status: 'waiting_for_human' },
+        { host: { hooks: [] }, origin: { agentId: 'a' }, status: 'waiting_for_human' },
         'waiting_for_human',
       ),
     ).rejects.toBeInstanceOf(CriticalAgentInterventionPersistenceError);
@@ -1031,12 +1101,12 @@ describe('CompletionLifecycle.dispatchHooks — parks do not register file works
     mockNotifyAgentInterventionRequired.mockRejectedValueOnce(new Error('database unavailable'));
     stubDurablePendingRows(lifecycle);
     vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
-    const unregister = vi.spyOn(hookDispatcher, 'unregister').mockImplementation(() => {});
+    const unregister = vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
 
     await expect(
       lifecycle.dispatchHooks(
         'op-1',
-        { metadata: { _hooks: [], agentId: 'a' }, status: 'waiting_for_human' },
+        { host: { hooks: [] }, origin: { agentId: 'a' }, status: 'waiting_for_human' },
         'waiting_for_human',
       ),
     ).rejects.toMatchObject({
@@ -1060,12 +1130,12 @@ describe('CompletionLifecycle.dispatchHooks — parks do not register file works
     });
     stubDurablePendingRows(lifecycle);
     vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
-    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(() => {});
+    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
 
     await expect(
       lifecycle.dispatchHooks(
         'op-1',
-        { metadata: { _hooks: [], agentId: 'a' }, status: 'waiting_for_human' },
+        { host: { hooks: [] }, origin: { agentId: 'a' }, status: 'waiting_for_human' },
         'waiting_for_human',
       ),
     ).resolves.toBeUndefined();
@@ -1080,7 +1150,7 @@ describe('CompletionLifecycle.dispatchHooks — parks do not register file works
 
     await lifecycle.dispatchHooks(
       'op-1',
-      { metadata: { _hooks: [], agentId: 'a' }, status: 'waiting_for_human' },
+      { host: { hooks: [] }, origin: { agentId: 'a' }, status: 'waiting_for_human' },
       'waiting_for_human',
     );
 
@@ -1098,9 +1168,13 @@ describe('CompletionLifecycle.dispatchHooks — parks do not register file works
     const lifecycle = buildLifecycle();
     vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
     vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
-    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(() => {});
+    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
 
-    const parkedState = { metadata: { _hooks: [], agentId: 'a' }, status: 'waiting_for_human' };
+    const parkedState = {
+      host: { hooks: [] },
+      origin: { agentId: 'a' },
+      status: 'waiting_for_human',
+    };
     await lifecycle.dispatchHooks('op-1', parkedState, 'waiting_for_human');
 
     expect(mockRegister).not.toHaveBeenCalled();
@@ -1114,7 +1188,8 @@ describe('CompletionLifecycle.dispatchHooks — parks do not register file works
     vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
 
     const parkedState = {
-      metadata: { _hooks: [], agentId: 'a' },
+      host: { hooks: [] },
+      origin: { agentId: 'a' },
       status: 'waiting_for_async_tool',
     };
     await lifecycle.dispatchHooks('op-1', parkedState, 'waiting_for_async_tool');
@@ -1133,7 +1208,8 @@ describe('CompletionLifecycle.dispatchHooks — lastAssistantContent DB recovery
       { content: 'user prompt', id: 'msg-user', role: 'user' },
       { content: assistantContent, id: 'msg-assistant', role: 'assistant' },
     ],
-    metadata: { _hooks: [], agentId: 'agent-1', topicId: 'tpc-1', userId: 'user-1' },
+    host: { hooks: [] },
+    origin: { agentId: 'agent-1', topicId: 'tpc-1', userId: 'user-1' },
     status: 'done',
   });
 
@@ -1141,8 +1217,8 @@ describe('CompletionLifecycle.dispatchHooks — lastAssistantContent DB recovery
     vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
     vi.spyOn(lifecycle as any, 'createVerifyMessage').mockResolvedValue(undefined);
     vi.spyOn(verifyServices, 'runVerifyOnCompletion').mockResolvedValue(undefined);
-    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(() => {});
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
+    vi.spyOn(console, 'warn').mockImplementation(function () {});
     return vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
   };
 
@@ -1187,7 +1263,8 @@ describe('CompletionLifecycle.dispatchHooks — lastAssistantContent DB recovery
             role: 'assistantGroup',
           },
         ],
-        metadata: { _hooks: [], agentId: 'agent-1', topicId: 'tpc-1', userId: 'user-1' },
+        host: { hooks: [] },
+        origin: { agentId: 'agent-1', topicId: 'tpc-1', userId: 'user-1' },
         status: 'done',
       },
       'done',
@@ -1382,7 +1459,7 @@ describe('CompletionLifecycle.emitSignalEvents — assistant anchor', () => {
         { content: 'user prompt', id: 'msg-user', role: 'user' },
         { content: 'final answer', id: 'msg-assistant', role: 'assistant' },
       ],
-      metadata: { agentId: 'agent-1', topicId: 'tpc-1', userId: 'user-1' },
+      origin: { agentId: 'agent-1', topicId: 'tpc-1', userId: 'user-1' },
       stepCount: 2,
     };
 
@@ -1419,7 +1496,7 @@ describe('CompletionLifecycle.emitSignalEvents — assistant anchor', () => {
       'op-1',
       {
         messages: [{ content: 'review complete', id: 'msg-assistant', role: 'assistant' }],
-        metadata: { agentId: 'agent-1', topicId: 'tpc-1', userId: 'user-1' },
+        origin: { agentId: 'agent-1', topicId: 'tpc-1', userId: 'user-1' },
         stepCount: 1,
       },
       'done',
@@ -1442,6 +1519,99 @@ describe('CompletionLifecycle.emitSignalEvents — assistant anchor', () => {
 
 describe('CompletionLifecycle.registerFileWorks', () => {
   const mockRegister = vi.mocked(registerWorksForOperation);
+  beforeEach(() => {
+    mockListWorks.mockReset();
+  });
+
+  it('anchors an already registered Work after a folded tool turn with no file scan candidates', async () => {
+    mockRegister.mockResolvedValue({ attempted: 0, failed: 0 });
+    mockListWorks.mockResolvedValue([{ id: 'registered-document' }]);
+    const lifecycle = buildLifecycle();
+    const update = vi
+      .spyOn(lifecycle['messageModel'], 'update')
+      .mockResolvedValue({ success: true });
+    const state = {
+      messages: [{ id: 'display-group', role: 'assistantGroup', children: [] }],
+      metadata: { workAssistantMessageId: 'final-assistant' },
+      origin: { sourceMessageId: 'source-user' },
+    };
+
+    await lifecycle.registerFileWorks('op-1', state);
+
+    expect(mockListWorks).toHaveBeenCalledWith({
+      includeFileWorks: true,
+      limit: 1,
+      rootOperationId: 'op-1',
+    });
+    expect(update).toHaveBeenCalledWith('final-assistant', {
+      metadata: { work: { rootOperationId: 'op-1', userMessageId: 'source-user' } },
+    });
+    expect(state.metadata).toHaveProperty('_fileWorksRegistered', true);
+  });
+
+  it('does not anchor a reply when only other operations have Works', async () => {
+    mockRegister.mockResolvedValue({ attempted: 0, failed: 0 });
+    const lifecycle = buildLifecycle();
+    const update = vi
+      .spyOn(lifecycle['messageModel'], 'update')
+      .mockResolvedValue({ success: true });
+
+    await lifecycle.registerFileWorks('op-1', {
+      metadata: { assistantMessageId: 'final-assistant' },
+    });
+
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('withholds the completion marker when an anchor write fails and retries it', async () => {
+    mockRegister.mockResolvedValue({ attempted: 0, failed: 0 });
+    mockListWorks.mockResolvedValue([{ id: 'registered-document' }]);
+    const lifecycle = buildLifecycle();
+    const update = vi
+      .spyOn(lifecycle['messageModel'], 'update')
+      .mockResolvedValueOnce({ success: false })
+      .mockResolvedValueOnce({ success: true });
+    const state = { metadata: { assistantMessageId: 'final-assistant' } };
+    await lifecycle.registerFileWorks('op-1', state);
+    expect(state.metadata).not.toHaveProperty('_fileWorksRegistered');
+    await lifecycle.registerFileWorks('op-1', state);
+    expect(state.metadata).toHaveProperty('_fileWorksRegistered', true);
+    expect(update).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps registration retryable until the explicit final assistant id is available', async () => {
+    mockRegister.mockResolvedValue({ attempted: 0, failed: 0 });
+    mockListWorks.mockResolvedValue([{ id: 'registered-document' }]);
+    const lifecycle = buildLifecycle();
+    const update = vi
+      .spyOn(lifecycle['messageModel'], 'update')
+      .mockResolvedValue({ success: true });
+    const state: { metadata: { assistantMessageId?: string } } = { metadata: {} };
+    await lifecycle.registerFileWorks('op-1', state);
+    expect(update).not.toHaveBeenCalled();
+    expect(state.metadata).not.toHaveProperty('_fileWorksRegistered');
+    state.metadata.assistantMessageId = 'final-assistant';
+    await lifecycle.registerFileWorks('op-1', state);
+    expect(state.metadata).toHaveProperty('_fileWorksRegistered', true);
+  });
+
+  it('preserves completion idempotency when the shell scanner resolved a fallback anchor', async () => {
+    mockRegister.mockResolvedValue({ anchorMessageId: 'shell-assistant', attempted: 1, failed: 0 });
+    mockListWorks.mockResolvedValue([{ id: 'registered-shell-work' }]);
+    const lifecycle = buildLifecycle();
+    const update = vi
+      .spyOn(lifecycle['messageModel'], 'update')
+      .mockResolvedValue({ success: true });
+    const state = { metadata: {} };
+    await lifecycle.registerFileWorks('op-1', state);
+    expect(update).toHaveBeenCalledWith('shell-assistant', {
+      metadata: { work: { rootOperationId: 'op-1', userMessageId: undefined } },
+    });
+    expect(state.metadata).toHaveProperty('_fileWorksRegistered', true);
+    mockRegister.mockClear();
+    await lifecycle.registerFileWorks('op-1', state);
+    expect(mockRegister).not.toHaveBeenCalled();
+  });
 
   it('registers once and stamps the state marker so later calls skip', async () => {
     mockRegister.mockClear();
@@ -1449,7 +1619,8 @@ describe('CompletionLifecycle.registerFileWorks', () => {
     const lifecycle = buildLifecycle();
     const state = {
       cost: { total: 1.25 },
-      metadata: { userId: 'user-2' },
+      metadata: {},
+      origin: { userId: 'user-2' },
       usage: { llm: { apiCalls: 2 } },
     } as any;
 

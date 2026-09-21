@@ -1,3 +1,4 @@
+import assetLinks from '@/../public/.well-known/assetlinks.json';
 import { appEnv } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
 import { getRedisConfig } from '@/envs/redis';
@@ -5,6 +6,8 @@ import { initializeRedis, isRedisEnabled } from '@/libs/redis';
 import { isDev } from '@/utils/env';
 
 const APPLE_TRUSTED_ORIGIN = 'https://appleid.apple.com';
+const ANDROID_APP_NAMESPACE = 'android_app';
+const ANDROID_PASSKEY_RELATION = 'delegate_permission/common.get_login_creds';
 const MOBILE_APP_SCHEME = 'com.lobehub.app://';
 const EXPO_DEV_SCHEME = 'exp://*/*';
 
@@ -35,10 +38,46 @@ const parseTrustedOrigins = (value?: string) =>
     .map((item) => normalizeOrigin(item.trim()))
     .filter((origin): origin is string => Boolean(origin));
 
-const mergeTrustedOrigins = (...originGroups: Array<string[] | undefined>) => {
+const mergeOrigins = (...originGroups: Array<string[] | undefined>) => {
   const mergedOrigins = new Set(originGroups.flatMap((origins) => origins ?? []));
 
   return mergedOrigins.size > 0 ? Array.from(mergedOrigins) : undefined;
+};
+
+const fingerprintToAndroidOrigin = (fingerprint: string) => {
+  const hex = fingerprint.replaceAll(':', '');
+  if (!/^[\dA-F]{64}$/i.test(hex)) return undefined;
+
+  return `android:apk-key-hash:${Buffer.from(hex, 'hex').toString('base64url')}`;
+};
+
+const getAndroidPasskeyOrigins = () =>
+  assetLinks.flatMap(({ relation, target }) => {
+    if (
+      target.namespace !== ANDROID_APP_NAMESPACE ||
+      !relation.includes(ANDROID_PASSKEY_RELATION)
+    ) {
+      return [];
+    }
+
+    return target.sha256_cert_fingerprints
+      .map(fingerprintToAndroidOrigin)
+      .filter((origin): origin is string => Boolean(origin));
+  });
+
+/**
+ * Build the exact WebAuthn origins accepted by the passkey plugin.
+ *
+ * Android Credential Manager derives its origin from the APK signing certificate. The public
+ * Digital Asset Links file is already the source of truth for certificates authorized to use
+ * LobeHub credentials, so keep Better Auth's allowlist in sync with it instead of duplicating
+ * hashes in deployment configuration.
+ */
+export const getPasskeyOrigins = () => {
+  const webOrigin = normalizeOrigin(appEnv.APP_URL);
+  if (!webOrigin) return undefined;
+
+  return mergeOrigins([webOrigin], getAndroidPasskeyOrigins());
 };
 
 /**
@@ -51,7 +90,7 @@ export const getTrustedOrigins = (enabledSSOProviders: string[]) => {
   const originsFromEnv = parseTrustedOrigins(authEnv.AUTH_TRUSTED_ORIGINS);
 
   if (originsFromEnv?.length) {
-    return mergeTrustedOrigins(originsFromEnv, additionalOrigins);
+    return mergeOrigins(originsFromEnv, additionalOrigins);
   }
 
   const defaults = [
@@ -67,7 +106,7 @@ export const getTrustedOrigins = (enabledSSOProviders: string[]) => {
     ? [APPLE_TRUSTED_ORIGIN]
     : undefined;
 
-  return mergeTrustedOrigins(defaults, providerOrigins, additionalOrigins);
+  return mergeOrigins(defaults, providerOrigins, additionalOrigins);
 };
 
 /**

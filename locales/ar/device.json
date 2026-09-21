@@ -13,6 +13,7 @@
   "workingDirectory.branchesLoadFailed": "فشل تحميل الفروع",
   "workingDirectory.branchesLoading": "جارٍ تحميل الفروع…",
   "workingDirectory.branchesNoMatch": "لا توجد فروع مطابقة",
+  "workingDirectory.branchesTruncated": "{{count}} المزيد — اكتب للتصفية",
   "workingDirectory.browseDescription": "اختر مجلدًا على الجهاز المتصل.",
   "workingDirectory.browseFolders": "تصفح المجلدات",
   "workingDirectory.cancel": "إلغاء",

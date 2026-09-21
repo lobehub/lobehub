@@ -48,9 +48,10 @@ const STATUS_REFINABLE_CODES = new Set<string>([AgentRuntimeErrorType.ProviderBi
  */
 const codeFromHttpStatus = (status: number | undefined): ILobeAgentRuntimeErrorType | undefined => {
   if (!status) return undefined;
-  // 429 / 402 have unambiguous semantics worth special-casing.
+  // These statuses have unambiguous semantics worth special-casing.
   if (status === 429) return AgentRuntimeErrorType.RateLimitExceeded;
   if (status === 402) return AgentRuntimeErrorType.InsufficientQuota;
+  if (status === 413) return AgentRuntimeErrorType.RequestBodyTooLarge;
   if (status >= 500 && status <= 599) return AgentRuntimeErrorType.ProviderServiceUnavailable;
   // Any other client error with no usable message → the bare-HTTP bucket.
   if (status >= 400 && status <= 499) return AgentRuntimeErrorType.UpstreamHttpError;

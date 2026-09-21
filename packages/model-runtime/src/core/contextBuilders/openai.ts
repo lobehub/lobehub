@@ -442,8 +442,13 @@ export const convertOpenAIResponseInputs = async (
                   c as OpenAI.ChatCompletionContentPart,
                   options,
                 );
-                const url = (image as OpenAI.ChatCompletionContentPartImage).image_url?.url;
-                return url ? { image_url: url, type: 'input_image' as const } : undefined;
+                const imageUrl = (image as OpenAI.ChatCompletionContentPartImage).image_url;
+                if (!imageUrl?.url) return undefined;
+                return {
+                  image_url: imageUrl.url,
+                  type: 'input_image' as const,
+                  ...(imageUrl.detail && { detail: imageUrl.detail }),
+                };
               }),
             )
           ).filter((c) => !!c);
@@ -515,12 +520,16 @@ export const convertOpenAIResponseInputs = async (
                   c as OpenAI.ChatCompletionContentPart,
                   options,
                 );
-                if (!(image as OpenAI.ChatCompletionContentPartImage).image_url?.url) {
+                const imageUrl = (image as OpenAI.ChatCompletionContentPartImage).image_url;
+                if (!imageUrl?.url) {
                   return undefined;
                 }
+                // Forward the requested detail level so callers that need full resolution
+                // (e.g. inspecting small annotations on screenshots) are not downgraded to auto.
                 return {
-                  image_url: (image as OpenAI.ChatCompletionContentPartImage).image_url?.url,
+                  image_url: imageUrl.url,
                   type: 'input_image',
+                  ...(imageUrl.detail && { detail: imageUrl.detail }),
                 };
               }),
             );

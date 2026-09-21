@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { agentShareDocumentAccessScope, agentShareFileAccessScope } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -376,6 +377,111 @@ describe('DocumentModel', () => {
   });
 
   describe('findById', () => {
+    it('hides a generated Agent Share document from ordinary document reads', async () => {
+      const shareDocumentModel = new DocumentModel(
+        serverDB,
+        userId,
+        undefined,
+        undefined,
+        agentShareDocumentAccessScope({
+          shareId: 'share-a',
+          topicId: 'topic-a',
+          visitorUserId: 'visitor-a',
+        }),
+      );
+      const { id: documentId, slug } = await shareDocumentModel.create({
+        content: 'private generated visitor content',
+        fileType: 'custom/document',
+        filename: 'visitor-note.md',
+        source: 'agent-document://agent-a/visitor-note.md',
+        sourceType: 'agent',
+        title: 'Visitor note',
+        totalCharCount: 33,
+        totalLineCount: 1,
+      });
+
+      await expect(documentModel.query({ sourceTypes: ['agent'] })).resolves.toMatchObject({
+        items: [],
+        total: 0,
+      });
+      await expect(documentModel.findById(documentId)).resolves.toBeUndefined();
+      await expect(documentModel.findByIds([documentId])).resolves.toEqual([]);
+      await expect(documentModel.findBySlug(slug!)).resolves.toBeUndefined();
+      await expect(shareDocumentModel.findById(documentId)).resolves.toBeDefined();
+    });
+
+    it('strips caller-supplied Agent Share provenance from ordinary document creates', async () => {
+      const created = await documentModel.create({
+        content: 'ordinary content',
+        fileType: 'custom/document',
+        filename: 'ordinary.md',
+        metadata: {
+          agentShare: {
+            shareId: 'forged-share',
+            topicId: 'forged-topic',
+            visitorUserId: 'forged-visitor',
+          },
+          purpose: 'ordinary',
+        },
+        source: 'document',
+        sourceType: 'api',
+        title: 'Ordinary note',
+        totalCharCount: 16,
+        totalLineCount: 1,
+      });
+
+      expect(created.metadata).toEqual({ purpose: 'ordinary' });
+      await expect(documentModel.findById(created.id)).resolves.toBeDefined();
+    });
+
+    it('hides a document derived from an agent-share file from ordinary document reads', async () => {
+      const { id: fileId } = await fileModel.create({
+        fileType: 'application/pdf',
+        metadata: { agentShare: { shareId: 'share-a', visitorUserId: 'visitor-a' } },
+        name: 'visitor.pdf',
+        size: 100,
+        url: 'files/user/agent-share/share-a/visitor.pdf',
+      });
+      const { id: documentId, slug } = await documentModel.create({
+        content: 'private visitor content',
+        fileId,
+        fileType: 'custom/document',
+        filename: 'visitor',
+        source: 'files/user/agent-share/share-a/visitor.pdf',
+        sourceType: 'file',
+        title: 'Visitor document',
+        totalCharCount: 23,
+        totalLineCount: 1,
+      });
+
+      await expect(documentModel.query({ sourceTypes: ['file'] })).resolves.toMatchObject({
+        items: [],
+        total: 0,
+      });
+      await expect(documentModel.findById(documentId)).resolves.toBeUndefined();
+      await expect(documentModel.findByIds([documentId])).resolves.toEqual([]);
+      await expect(documentModel.findByFileId(fileId)).resolves.toBeUndefined();
+      await expect(documentModel.findBySlug(slug!)).resolves.toBeUndefined();
+      await expect(
+        documentModel.findByFileId(
+          fileId,
+          agentShareFileAccessScope({
+            shareId: 'share-a',
+            visitorUserId: 'visitor-a',
+          }),
+        ),
+      ).resolves.toMatchObject({ id: documentId });
+      await expect(
+        documentModel.findByFileId(
+          fileId,
+          agentShareFileAccessScope({
+            shareId: 'share-a',
+            visitorUserId: 'visitor-b',
+          }),
+        ),
+      ).resolves.toBeUndefined();
+    });
+
     it('should find document by id', async () => {
       const { documentId } = await createTestDocument(documentModel, fileModel, 'Test content');
 

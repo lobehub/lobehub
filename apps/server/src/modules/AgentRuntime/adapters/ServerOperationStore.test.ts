@@ -11,7 +11,9 @@ const topicMock = {
 };
 
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn().mockImplementation(() => topicMock),
+  TopicModel: vi.fn().mockImplementation(function () {
+    return topicMock;
+  }),
 }));
 
 const db = {} as LobeChatDatabase;

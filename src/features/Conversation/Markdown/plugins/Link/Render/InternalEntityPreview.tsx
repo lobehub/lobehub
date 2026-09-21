@@ -1,7 +1,7 @@
 'use client';
 
 import type { VerifyCodingScope } from '@lobechat/types';
-import { Flexbox, Icon, Popover } from '@lobehub/ui';
+import { Flexbox, Freeze, Icon, Popover } from '@lobehub/ui';
 import { Avatar, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import type { TFunction } from 'i18next';
@@ -276,7 +276,8 @@ export const InternalEntityPreview = memo<InternalEntityPreviewProps>(
 
     return (
       <Popover
-        content={content}
+        // Disabling the SWR key clears data before the exit animation finishes.
+        content={<Freeze frozen={!open}>{content}</Freeze>}
         mouseEnterDelay={0.35}
         open={open}
         placement="top"

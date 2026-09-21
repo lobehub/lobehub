@@ -44,7 +44,9 @@ vi.mock('@lobechat/business-const', async (importOriginal) => ({
 
 vi.mock('@lobechat/business-model-runtime', async (importOriginal) => ({
   ...((await importOriginal()) as any),
-  buildMappedBusinessModelFields: vi.fn(() => ({})),
+  buildMappedBusinessModelFields: vi.fn(function () {
+    return {};
+  }),
   resolveBusinessModelMapping: vi.fn(),
 }));
 
@@ -89,11 +91,21 @@ describe('imageRouter.createImage — model mapping failure reconciles billing',
       uploadImageForGeneration: vi.fn(),
     };
 
-    vi.mocked(AsyncTaskModel).mockImplementation(() => asyncTaskModelMock);
-    vi.mocked(GenerationBatchModel).mockImplementation(() => generationBatchModelMock);
-    vi.mocked(GenerationModel).mockImplementation(() => generationModelMock);
-    vi.mocked(GenerationService).mockImplementation(() => generationServiceMock);
-    vi.mocked(FileModel).mockImplementation(() => ({}) as any);
+    vi.mocked(AsyncTaskModel).mockImplementation(function () {
+      return asyncTaskModelMock;
+    });
+    vi.mocked(GenerationBatchModel).mockImplementation(function () {
+      return generationBatchModelMock;
+    });
+    vi.mocked(GenerationModel).mockImplementation(function () {
+      return generationModelMock;
+    });
+    vi.mocked(GenerationService).mockImplementation(function () {
+      return generationServiceMock;
+    });
+    vi.mocked(FileModel).mockImplementation(function () {
+      return {} as any;
+    });
     vi.mocked(initModelRuntimeFromDB).mockResolvedValue({} as any);
 
     // The batch must exist so the route proceeds into the guarded section.

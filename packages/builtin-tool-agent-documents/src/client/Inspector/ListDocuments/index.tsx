@@ -16,7 +16,9 @@ export const ListDocumentsInspector = memo<
   const { t } = useTranslation('plugin');
 
   const scope = args?.scope || partialArgs?.scope;
-  const count = pluginState?.documents?.length;
+  // The read path projects the row list away and pins its size as
+  // `documentCount`; the array is only here for a payload that predates that.
+  const count = pluginState?.documentCount ?? pluginState?.documents?.length;
   const styles = inspectorChipStyles;
 
   return (

@@ -29,9 +29,11 @@ vi.mock('@/database/models/user', () => ({
 }));
 
 vi.mock('@/database/models/workspaceMember', () => ({
-  WorkspaceMemberModel: vi.fn().mockImplementation(() => ({
-    searchAssignableMembers: memberMocks.searchAssignableMembers,
-  })),
+  WorkspaceMemberModel: vi.fn().mockImplementation(function () {
+    return {
+      searchAssignableMembers: memberMocks.searchAssignableMembers,
+    };
+  }),
 }));
 
 // Keep the role gate deterministic: only 'viewer' is excluded here.
@@ -65,7 +67,9 @@ vi.mock('@/server/services/task', () => ({
 }));
 
 vi.mock('@/server/services/verify/planGenerator', () => ({
-  VerifyPlanGeneratorService: vi.fn().mockImplementation(() => verifyMocks),
+  VerifyPlanGeneratorService: vi.fn().mockImplementation(function () {
+    return verifyMocks;
+  }),
 }));
 
 describe('taskRuntime.factory', () => {

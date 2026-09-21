@@ -34,6 +34,7 @@ export const isHeterogeneousAgentStatusGuideError = (
       agentType === 'codex' ||
       agentType === 'cursor' ||
       agentType === 'droid' ||
+      agentType === 'devin' ||
       agentType === 'grok-build' ||
       agentType === 'kimi-code' ||
       agentType === 'opencode' ||

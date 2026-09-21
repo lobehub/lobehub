@@ -13,6 +13,7 @@
   "workingDirectory.branchesLoadFailed": "ブランチの読み込みに失敗しました",
   "workingDirectory.branchesLoading": "ブランチを読み込み中…",
   "workingDirectory.branchesNoMatch": "一致するブランチがありません",
+  "workingDirectory.branchesTruncated": "{{count}} 件以上 — フィルターするには入力してください",
   "workingDirectory.browseDescription": "接続されたデバイス上のフォルダを選択してください。",
   "workingDirectory.browseFolders": "フォルダを参照",
   "workingDirectory.cancel": "キャンセル",

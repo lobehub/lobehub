@@ -1,7 +1,7 @@
 import { BrowserIdentifier, BrowserManifest } from '@lobechat/builtin-tool-browser';
 import debug from 'debug';
 
-import { deviceGateway } from '@/server/services/deviceGateway';
+import { executeAuthorizedDeviceToolCall } from '@/server/services/deviceGateway/authorizedToolCall';
 import { FileService } from '@/server/services/file';
 
 import { buildNoActiveDeviceResult, REMOTE_DEVICE_TOOL_IDENTIFIER } from './noActiveDevice';
@@ -147,7 +147,8 @@ export const browserRuntime: ServerRuntimeRegistration = {
         // are stripped device-side.
         const finalArgs = { ...args, __agentId: context.agentId, __topicId: context.topicId };
 
-        const result = await deviceGateway.executeToolCall(
+        const result = await executeAuthorizedDeviceToolCall(
+          context.serverDB,
           {
             deviceId: context.activeDeviceId!,
             operationId: context.operationId,
