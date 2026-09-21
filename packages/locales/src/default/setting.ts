@@ -3914,7 +3914,6 @@ When I am ___, I need ___
   'environments.meta.created': 'Created',
   'environments.meta.createdAt': 'Created {{time}}',
   'environments.detail.close': 'Close',
-  'environments.form.title': 'Specification',
   'environments.form.desc':
     'What an instance is built from — where the code comes from and what makes it usable.',
   'environments.form.pending':
@@ -3950,4 +3949,7 @@ When I am ___, I need ___
   'environments.total_one': '{{count}} environment',
   'environments.total_other': '{{count}} environments',
   'environments.mine': 'My environments',
+  'environments.form.basics': 'Basics',
+  'environments.form.setup': 'Setup',
+  'environments.form.runtime': 'Runtime and storage',
 };

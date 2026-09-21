@@ -75,15 +75,6 @@ const InstanceList = memo<InstanceListProps>(
 
     return (
       <Flexbox gap={8}>
-        <Flexbox gap={2}>
-          <Text fontSize={12} type={'secondary'} weight={500}>
-            {t('environments.instances.title')}
-          </Text>
-          <Text fontSize={12} type={'secondary'}>
-            {t('environments.instances.desc')}
-          </Text>
-        </Flexbox>
-
         {instances.length === 0 && !adding && (
           <Text fontSize={12} type={'secondary'}>
             {t('environments.instances.empty')}

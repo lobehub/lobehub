@@ -3,14 +3,46 @@
 import { Flexbox, Icon, TextArea } from '@lobehub/ui';
 import { ActionIcon, Button, Input, Switch, Text } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
-import { PlusIcon, Trash2Icon } from 'lucide-react';
-import { memo, useState } from 'react';
+import {
+  FolderGit2Icon,
+  HardDriveIcon,
+  InfoIcon,
+  KeyRoundIcon,
+  PlusIcon,
+  TerminalIcon,
+  Trash2Icon,
+} from 'lucide-react';
+import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { SandboxEnvironmentSpecification } from '@/services/sandboxWorkspace';
 
 import GithubRepositoryPicker, { type GithubRepositorySelection } from './GithubRepositoryPicker';
+import PanelSection from './PanelSection';
 import type { SandboxEnvironment } from './useEnvironmentData';
+
+/**
+ * One labelled control. Extracted because a section holds several and they were
+ * each five lines of the same three elements, which buried the one line that
+ * differed.
+ */
+const Field = memo<{ children: ReactNode; desc?: ReactNode; label: ReactNode }>(
+  ({ children, desc, label }) => (
+    <Flexbox gap={6}>
+      <Text fontSize={12} type={'secondary'} weight={500}>
+        {label}
+      </Text>
+      {desc && (
+        <Text fontSize={12} type={'secondary'}>
+          {desc}
+        </Text>
+      )}
+      {children}
+    </Flexbox>
+  ),
+);
+
+Field.displayName = 'EnvironmentFormField';
 
 interface EnvironmentFormProps {
   environment: SandboxEnvironment;
@@ -174,53 +206,42 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave }) => 
   };
 
   return (
-    <Flexbox gap={20}>
-      <Flexbox gap={2}>
-        <Text fontSize={12} type={'secondary'} weight={500}>
-          {t('environments.form.title')}
-        </Text>
-        <Text fontSize={12} type={'secondary'}>
-          {t('environments.form.desc')}
-        </Text>
-        {/* Scoped to these fields, because it is only true of these fields. An
-            instance's own directory persists today — that part was verified end
-            to end — so a page-wide "none of this does anything yet" told people
-            the working thing was broken too. What is genuinely inert is the
-            build: nothing clones a source or runs a setup command. */}
-        <Text fontSize={12} type={'warning'}>
-          {t('environments.form.pending')}
-        </Text>
-      </Flexbox>
+    <Flexbox>
+      <PanelSection
+        desc={t('environments.form.desc')}
+        icon={InfoIcon}
+        title={t('environments.form.basics')}
+      >
+        <Field label={t('environments.nameLabel')}>
+          <Input
+            placeholder={t('environments.namePlaceholder')}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
+        </Field>
+        <Field label={t('environments.form.description')}>
+          <Input
+            placeholder={t('environments.form.descriptionPlaceholder')}
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+          />
+        </Field>
+      </PanelSection>
 
-      <Flexbox gap={6}>
-        <Text fontSize={12} type={'secondary'} weight={500}>
-          {t('environments.nameLabel')}
-        </Text>
-        <Input
-          placeholder={t('environments.namePlaceholder')}
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-        />
-      </Flexbox>
-
-      <Flexbox gap={6}>
-        <Text fontSize={12} type={'secondary'} weight={500}>
-          {t('environments.form.description')}
-        </Text>
-        <Input
-          placeholder={t('environments.form.descriptionPlaceholder')}
-          value={description}
-          onChange={(event) => setDescription(event.target.value)}
-        />
-      </Flexbox>
-
-      <Flexbox gap={6}>
-        <Text fontSize={12} type={'secondary'} weight={500}>
-          {t('environments.form.sources')}
-        </Text>
-        <Text fontSize={12} type={'secondary'}>
-          {t('environments.form.sourcesHint')}
-        </Text>
+      <PanelSection
+        desc={t('environments.form.sourcesHint')}
+        icon={FolderGit2Icon}
+        title={t('environments.form.sources')}
+        notice={
+          /* On the first section the execution plane does not act on, and
+             worded for all of them. An instance's own directory does persist —
+             that part was verified end to end — so a panel-wide "none of this
+             works yet" would call a working feature broken. */
+          <Text fontSize={12} type={'warning'}>
+            {t('environments.form.pending')}
+          </Text>
+        }
+      >
         {/* One repository, so no list and no way to add a second. The same
             picker the create dialog uses, so the two agree on what choosing a
             repository looks like; branch and folder stay free text because
@@ -243,62 +264,37 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave }) => 
             />
           </Flexbox>
         )}
-      </Flexbox>
+      </PanelSection>
 
-      <Flexbox gap={6}>
-        <Text fontSize={12} type={'secondary'} weight={500}>
-          {t('environments.form.bootstrap')}
-        </Text>
-        <Text fontSize={12} type={'secondary'}>
-          {t('environments.form.bootstrapHint')}
-        </Text>
-        <TextArea
-          autoSize={{ maxRows: 10, minRows: 3 }}
-          placeholder={'pnpm install'}
-          value={state.bootstrapCommand}
-          onChange={(event) => patch({ bootstrapCommand: event.target.value })}
-        />
-      </Flexbox>
+      <PanelSection icon={TerminalIcon} title={t('environments.form.setup')}>
+        <Field desc={t('environments.form.bootstrapHint')} label={t('environments.form.bootstrap')}>
+          <TextArea
+            autoSize={{ maxRows: 10, minRows: 3 }}
+            placeholder={'pnpm install'}
+            value={state.bootstrapCommand}
+            onChange={(event) => patch({ bootstrapCommand: event.target.value })}
+          />
+        </Field>
+        <Field
+          desc={t('environments.form.maintenanceHint')}
+          label={t('environments.form.maintenance')}
+        >
+          <TextArea
+            autoSize={{ maxRows: 6, minRows: 2 }}
+            placeholder={'git pull --ff-only'}
+            value={state.maintenanceCommand}
+            onChange={(event) => patch({ maintenanceCommand: event.target.value })}
+          />
+        </Field>
+      </PanelSection>
 
-      <Flexbox gap={6}>
-        <Text fontSize={12} type={'secondary'} weight={500}>
-          {t('environments.form.maintenance')}
-        </Text>
-        <Text fontSize={12} type={'secondary'}>
-          {t('environments.form.maintenanceHint')}
-        </Text>
-        <TextArea
-          autoSize={{ maxRows: 6, minRows: 2 }}
-          placeholder={'git pull --ff-only'}
-          value={state.maintenanceCommand}
-          onChange={(event) => patch({ maintenanceCommand: event.target.value })}
-        />
-      </Flexbox>
-
-      <Flexbox gap={6}>
-        <Text fontSize={12} type={'secondary'} weight={500}>
-          {t('environments.form.exclude')}
-        </Text>
-        <Text fontSize={12} type={'secondary'}>
-          {t('environments.form.excludeHint')}
-        </Text>
-        <TextArea
-          autoSize={{ maxRows: 8, minRows: 2 }}
-          placeholder={'dist\n.cache'}
-          value={state.excludePaths}
-          onChange={(event) => patch({ excludePaths: event.target.value })}
-        />
-      </Flexbox>
-
-      <Flexbox gap={6}>
-        <Text fontSize={12} type={'secondary'} weight={500}>
-          {t('environments.form.env')}
-        </Text>
-        {/* Said plainly because the shape cannot enforce it: a text field cannot
-            tell a region from a token. */}
-        <Text fontSize={12} type={'secondary'}>
-          {t('environments.form.envHint')}
-        </Text>
+      <PanelSection
+        /* Said plainly because the shape cannot enforce it: a text field cannot
+           tell a region from a token. */
+        desc={t('environments.form.envHint')}
+        icon={KeyRoundIcon}
+        title={t('environments.form.env')}
+      >
         {state.env.map(([key, value], index) => (
           <Flexbox horizontal align={'center'} gap={8} key={index}>
             <Input
@@ -342,22 +338,32 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave }) => 
             {t('environments.form.addEnv')}
           </Button>
         </Flexbox>
-      </Flexbox>
+      </PanelSection>
 
-      <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
-        <Flexbox gap={2}>
-          <Text fontSize={12} weight={500}>
-            {t('environments.form.internetAccess')}
-          </Text>
-          <Text fontSize={12} type={'secondary'}>
-            {t('environments.form.internetAccessHint')}
-          </Text>
+      <PanelSection last icon={HardDriveIcon} title={t('environments.form.runtime')}>
+        <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
+          <Flexbox gap={2}>
+            <Text fontSize={12} weight={500}>
+              {t('environments.form.internetAccess')}
+            </Text>
+            <Text fontSize={12} type={'secondary'}>
+              {t('environments.form.internetAccessHint')}
+            </Text>
+          </Flexbox>
+          <Switch
+            checked={state.internetAccess}
+            onChange={(internetAccess) => patch({ internetAccess })}
+          />
         </Flexbox>
-        <Switch
-          checked={state.internetAccess}
-          onChange={(internetAccess) => patch({ internetAccess })}
-        />
-      </Flexbox>
+        <Field desc={t('environments.form.excludeHint')} label={t('environments.form.exclude')}>
+          <TextArea
+            autoSize={{ maxRows: 8, minRows: 2 }}
+            placeholder={'dist\n.cache'}
+            value={state.excludePaths}
+            onChange={(event) => patch({ excludePaths: event.target.value })}
+          />
+        </Field>
+      </PanelSection>
 
       {dirty && (
         <Flexbox horizontal align={'center'} gap={12} justify={'flex-end'}>
