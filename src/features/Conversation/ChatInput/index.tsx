@@ -55,15 +55,6 @@ import { canSendVoiceMessage, useCanSendVoiceMessage } from './voiceMessageCapab
 /** Max recent messages to feed into auto-complete context (≈10 conversation turns) */
 const MAX_CONTEXT_MESSAGES = 25;
 
-/**
- * The floating tray overlay is inset from the composer: it is absolutely placed
- * `12`px inside the column's padding box and adds another `12`px of its own
- * padding, while the composer itself sits on the column's `16`px padding. Trays
- * are meant to ride slightly narrower than the input, but a blocking notice is
- * not — pull it back out by the difference so its edges land on the composer's.
- */
-const NOTICE_INLINE_PULL = 16 - (12 + 12);
-
 export interface ChatInputProps {
   /**
    * Custom style for the action bar container
@@ -135,7 +126,8 @@ export interface ChatInputProps {
   /**
    * Blocking notices (device offline, cloud not configured, …). They ride at the
    * top of the composer's floating stack — above the run-status / queue / todo
-   * trays, which stay next to the input they annotate. Rendered as a sibling
+   * trays, which stay next to the input they annotate, and on the same inline
+   * edges as those trays so the stack reads as one column. Rendered as a sibling
    * above `ChatInput` instead, a notice would be covered by those trays, since
    * the stack floats upward from the top of this column.
    */
@@ -487,11 +479,10 @@ const ChatInput = memo<ChatInputProps>(
               zIndex: 10,
             }}
           >
-            {/* A blocking notice outranks the run it is blocking, so it sits above
-                every tray. The pull cancels the overlay's own inset (see
-                NOTICE_INLINE_PULL) — trays stay narrower than the input, notices
-                line up with it. */}
-            {notices && <Flexbox style={{ marginInline: NOTICE_INLINE_PULL }}>{notices}</Flexbox>}
+            {/* A blocking notice outranks the run it is blocking, so it heads the
+                stack. It takes the overlay's own inset like every tray below it,
+                so the whole floating column shares one pair of edges. */}
+            {notices}
             <InputCompletionErrorAlert />
             {!disableQueue && hasQueuedMessages && <QueueTray />}
             <TodoProgress topAttached={!disableQueue && hasQueuedMessages} />
