@@ -3,10 +3,10 @@ import type { Context } from 'hono';
 
 import { auth } from '@/auth';
 import { getServerDB } from '@/database/core/db-adaptor';
-import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import { scmEnv } from '@/envs/scm';
 import { buildGitHubInstallUrl } from '@/server/services/scm/github/app';
 import { issueScmInstallState } from '@/server/services/scm/oauth/stateStore';
+import { canWriteScmScope, sanitizeReturnTo } from '@/server/services/scm/scope';
 
 const log = debug('lobe-server:scm:github-install');
 
@@ -28,7 +28,7 @@ export const githubInstall = async (c: Context): Promise<Response> => {
   const req = c.req.raw;
   const url = new URL(req.url);
   const workspaceId = url.searchParams.get('workspaceId');
-  const returnTo = url.searchParams.get('returnTo') ?? undefined;
+  const returnTo = sanitizeReturnTo(url.searchParams.get('returnTo'));
 
   let session: Awaited<ReturnType<typeof auth.api.getSession>>;
   try {
@@ -43,10 +43,9 @@ export const githubInstall = async (c: Context): Promise<Response> => {
   }
   const userId = session.user.id;
 
-  if (workspaceId) {
-    const db = await getServerDB();
-    const member = await new WorkspaceMemberModel(db, userId).getMember(workspaceId, userId);
-    if (!member) return c.json({ error: 'not a member of this workspace' }, 403);
+  // Viewers read a workspace; binding an installation writes into it.
+  if (workspaceId && !(await canWriteScmScope(await getServerDB(), userId, workspaceId))) {
+    return c.json({ error: 'installing into this workspace needs the member role' }, 403);
   }
 
   const state = await issueScmInstallState({ lobeUserId: userId, returnTo, workspaceId });

@@ -47,7 +47,7 @@ const snapshot = {
 };
 
 beforeEach(async () => {
-  await serverDB.insert(users).values({ id: userId });
+  await serverDB.insert(users).values([{ id: userId }, { id: 'scm-setup-other' }]);
   mocks.consumeState.mockResolvedValue(null);
   mocks.getSession.mockResolvedValue(null);
   mocks.fetchInstallation.mockResolvedValue(snapshot);
@@ -99,24 +99,69 @@ describe('githubSetup', () => {
     });
   });
 
-  it('binds an unknown installation on the no-code leg, and refreshes a known one', async () => {
+  it('never binds or links without our state: a known own installation is refreshed, anything else is handed over as pending', async () => {
     mocks.getSession.mockResolvedValue({ user: { id: userId } });
 
-    const first = await setup({ installation_id: '777', setup_action: 'install' });
-    expect(new URL(first.headers.get('location')!).searchParams.get('installed')).toBe('ok');
+    // Unknown installation, no state: no bind, no code exchange, confirm in the app.
+    const first = await setup({
+      code: 'attacker-code',
+      installation_id: '777',
+      setup_action: 'install',
+    });
+    const firstLocation = new URL(first.headers.get('location')!);
+    expect(Object.fromEntries(firstLocation.searchParams)).toEqual({
+      account: 'arvinxx',
+      pending: '777',
+    });
     expect(mocks.exchangeCode).not.toHaveBeenCalled();
-    const bound = await ScmInstallationModel.findByProviderInstallationId(
+    expect(
+      await ScmInstallationModel.findByProviderInstallationId(serverDB, 'github', '777'),
+    ).toBeNull();
+
+    // Someone else's installation: also pending, never refreshed into their row.
+    await ScmInstallationModel.bind(serverDB, { ...snapshot, userId: 'scm-setup-other' });
+    const theirs = await setup({ installation_id: '777', setup_action: 'update' });
+    expect(new URL(theirs.headers.get('location')!).searchParams.get('pending')).toBe('777');
+    expect(
+      (await ScmInstallationModel.findByProviderInstallationId(serverDB, 'github', '777'))
+        ?.repositories,
+    ).toEqual(snapshot.repositories);
+
+    // The session user's own installation is refreshed from the API.
+    await ScmInstallationModel.bind(serverDB, { ...snapshot, userId });
+    mocks.fetchInstallation.mockResolvedValue({ ...snapshot, repositories: [] });
+    const second = await setup({ installation_id: '777', setup_action: 'update' });
+    expect(new URL(second.headers.get('location')!).searchParams.get('installed')).toBe('updated');
+    const refreshed = await ScmInstallationModel.findByProviderInstallationId(
       serverDB,
       'github',
       '777',
     );
-    expect(bound?.userId).toBe(userId);
-
-    mocks.fetchInstallation.mockResolvedValue({ ...snapshot, repositories: [] });
-    const second = await setup({ installation_id: '777', setup_action: 'update' });
-    expect(new URL(second.headers.get('location')!).searchParams.get('installed')).toBe('updated');
-    const refreshed = await ScmInstallationModel.findById(serverDB, bound!.id);
     expect(refreshed?.repositories).toEqual([]);
+  });
+
+  it('binds without an identity when the state is valid but GitHub sent no code', async () => {
+    mocks.consumeState.mockResolvedValue({ lobeUserId: userId, ts: 1 });
+
+    const res = await setup({ installation_id: '777', setup_action: 'install', state: 's' });
+    expect(new URL(res.headers.get('location')!).searchParams.get('installed')).toBe('ok');
+    expect(mocks.exchangeCode).not.toHaveBeenCalled();
+    expect(
+      await ScmInstallationModel.findByProviderInstallationId(serverDB, 'github', '777'),
+    ).toMatchObject({ installedByExternalLogin: null, userId });
+  });
+
+  it('only follows same-origin return destinations from the state', async () => {
+    mocks.consumeState.mockResolvedValue({
+      lobeUserId: userId,
+      returnTo: 'https://evil.example/phish',
+      ts: 1,
+    });
+
+    const res = await setup({ code: 'c', installation_id: '777', state: 's' });
+    const location = new URL(res.headers.get('location')!);
+    expect(location.origin).toBe('http://localhost');
+    expect(location.pathname).toBe('/settings/integrations/github');
   });
 
   it('reports a failed code exchange instead of binding', async () => {

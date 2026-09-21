@@ -7,7 +7,7 @@ import {
   ScmIdentityModel,
   ScmInstallationModel,
 } from '@/database/models/scm';
-import { scmWebhookDeliveries, users, workspaces } from '@/database/schemas';
+import { scmWebhookDeliveries, users, workspaceMembers, workspaces } from '@/database/schemas';
 
 import { scmRouter } from '../scm';
 
@@ -17,6 +17,11 @@ const otherUserId = 'scm-router-user-2';
 
 vi.mock('@/envs/scm', () => ({
   scmEnv: { ENABLED_GITHUB_APP: true, GITHUB_APP_SLUG: 'lobehub-dev' },
+}));
+
+const mocks = vi.hoisted(() => ({ fetchInstallation: vi.fn() }));
+vi.mock('@/server/services/scm/github/app', () => ({
+  fetchGitHubInstallation: mocks.fetchInstallation,
 }));
 
 vi.mock('@/business/server/trpc-middlewares/workspaceAuth', async () => {
@@ -130,5 +135,78 @@ describe('scmRouter', () => {
     expect((await ws.listChangeRequests({ limit: 10 })).map((r) => r.repoFullName)).toEqual([
       'c/shared',
     ]);
+  });
+
+  it('connects a pending installation into the caller scope, but never one bound elsewhere', async () => {
+    mocks.fetchInstallation.mockResolvedValue({
+      accountExternalId: '9',
+      accountLogin: 'arvinxx',
+      accountType: 'user',
+      installationId: '900',
+      provider: 'github',
+      repositorySelection: 'all',
+    });
+
+    const mine = caller({ userId });
+    const bound = await mine.connectInstallation({ installationId: '900', provider: 'github' });
+    expect(bound).toMatchObject({ accountLogin: 'arvinxx', userId, workspaceId: null });
+    expect(mocks.fetchInstallation).toHaveBeenCalledWith('900');
+
+    // Re-confirming in the same scope is a refresh, not an error.
+    await expect(
+      mine.connectInstallation({ installationId: '900', provider: 'github' }),
+    ).resolves.toMatchObject({ id: bound.id });
+
+    // Another user cannot pull it into their account.
+    await expect(
+      caller({ userId: otherUserId }).connectInstallation({
+        installationId: '900',
+        provider: 'github',
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+
+    // An id GitHub does not know binds nothing.
+    mocks.fetchInstallation.mockRejectedValueOnce(new Error('404'));
+    await expect(
+      mine.connectInstallation({ installationId: '404', provider: 'github' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(
+      await ScmInstallationModel.findByProviderInstallationId(serverDB, 'github', '404'),
+    ).toBeNull();
+  });
+
+  it('requires the member role to connect into a workspace', async () => {
+    const [workspace] = await serverDB
+      .insert(workspaces)
+      .values({ name: 'ws', primaryOwnerId: userId, slug: 'scm-ws-connect' })
+      .returning();
+    await serverDB
+      .insert(workspaceMembers)
+      .values({ role: 'viewer', userId: otherUserId, workspaceId: workspace.id });
+    mocks.fetchInstallation.mockResolvedValue({
+      accountExternalId: '10',
+      accountLogin: 'org',
+      accountType: 'organization',
+      installationId: '901',
+      provider: 'github',
+      repositorySelection: 'all',
+    });
+
+    await expect(
+      caller({ userId: otherUserId, workspaceId: workspace.id }).connectInstallation({
+        installationId: '901',
+        provider: 'github',
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    await serverDB
+      .insert(workspaceMembers)
+      .values({ role: 'member', userId, workspaceId: workspace.id });
+    await expect(
+      caller({ userId, workspaceId: workspace.id }).connectInstallation({
+        installationId: '901',
+        provider: 'github',
+      }),
+    ).resolves.toMatchObject({ userId, workspaceId: workspace.id });
   });
 });

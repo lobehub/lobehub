@@ -157,6 +157,46 @@ describe('ScmChangeRequestModel', () => {
     ).toHaveLength(0);
   });
 
+  it('keeps every check when deliveries for one commit land concurrently', async () => {
+    const row = await ScmChangeRequestModel.upsert(serverDB, snapshot);
+    const names = ['Lint', 'Test', 'Build', 'Typecheck', 'E2E', 'Docs'];
+
+    await Promise.all(
+      names.map((name) =>
+        ScmChangeRequestModel.applyChecks(serverDB, row.id, {
+          checks: [check(name, name === 'Test' ? 'failure' : 'success')],
+          headSha: sha1,
+        }),
+      ),
+    );
+
+    const after = await ScmChangeRequestModel.findById(serverDB, row.id);
+    expect((after?.checks ?? []).map((c) => c.name).sort()).toEqual([...names].sort());
+    expect(after?.ciStatus).toBe('failure');
+  });
+
+  it('follows the installation to a new tenant and drops the old tenant links', async () => {
+    const [acceptance] = await serverDB
+      .insert(acceptances)
+      .values({ subjectId: 's', subjectType: 'standalone', userId })
+      .returning();
+    const first = await ScmChangeRequestModel.upsert(serverDB, {
+      ...snapshot,
+      links: { acceptanceId: acceptance.id },
+    });
+    expect(first.acceptanceId).toBe(acceptance.id);
+
+    await serverDB.insert(users).values({ id: 'scm-model-user-2' });
+    const moved = await ScmChangeRequestModel.upsert(serverDB, {
+      ...snapshot,
+      userId: 'scm-model-user-2',
+    });
+    expect(moved.id).toBe(first.id);
+    expect(moved.userId).toBe('scm-model-user-2');
+    expect(moved.acceptanceId).toBeNull();
+    expect(moved.topicId).toBeNull();
+  });
+
   it('counts wakes', async () => {
     const row = await ScmChangeRequestModel.upsert(serverDB, snapshot);
     expect(await ScmChangeRequestModel.recordWake(serverDB, row.id)).toBe(1);

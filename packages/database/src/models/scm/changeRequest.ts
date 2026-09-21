@@ -195,7 +195,10 @@ export class ScmChangeRequestModel {
    * Create or refresh the hub row from a provider snapshot. A new head commit
    * resets the CI rollup: the stored checks described the old commit.
    * Links are only ever filled in, never cleared, so a later event that could
-   * not resolve the acceptance does not drop a link an earlier one found.
+   * not resolve the acceptance does not drop a link an earlier one found —
+   * unless the installation moved to another tenant since the row was
+   * created, in which case the row follows it and the tenant-owned links
+   * (acceptance, topic, task, Work) start over from what this event resolved.
    */
   static upsert = async (
     db: LobeChatDatabase,
@@ -231,13 +234,21 @@ export class ScmChangeRequestModel {
       url: params.url,
     };
 
+    const scopeMoved =
+      !!existing &&
+      (existing.userId !== params.userId ||
+        (existing.workspaceId ?? null) !== (params.workspaceId ?? null));
+    const inherited = scopeMoved ? undefined : existing;
     const linkValues = {
-      acceptanceId: links.acceptanceId ?? existing?.acceptanceId ?? null,
+      acceptanceId: links.acceptanceId ?? inherited?.acceptanceId ?? null,
       installationId: links.installationId ?? existing?.installationId ?? null,
-      taskId: links.taskId ?? existing?.taskId ?? null,
-      topicId: links.topicId ?? existing?.topicId ?? null,
-      workId: links.workId ?? existing?.workId ?? null,
+      taskId: links.taskId ?? inherited?.taskId ?? null,
+      topicId: links.topicId ?? inherited?.topicId ?? null,
+      workId: links.workId ?? inherited?.workId ?? null,
     };
+    const ownerValues = scopeMoved
+      ? { userId: params.userId, workspaceId: params.workspaceId ?? null }
+      : {};
 
     const ciValues = headChanged
       ? { checks: null, ciHeadSha: params.headSha ?? null, ciStatus: null }
@@ -250,7 +261,14 @@ export class ScmChangeRequestModel {
     if (existing) {
       const [row] = await db
         .update(scmChangeRequests)
-        .set({ ...snapshot, ...linkValues, ...ciValues, ...eventValues, updatedAt: now })
+        .set({
+          ...snapshot,
+          ...linkValues,
+          ...ownerValues,
+          ...ciValues,
+          ...eventValues,
+          updatedAt: now,
+        })
         .where(eq(scmChangeRequests.id, existing.id))
         .returning();
       return row;
@@ -306,37 +324,46 @@ export class ScmChangeRequestModel {
     db: LobeChatDatabase,
     id: string,
     params: ApplyChecksParams,
-  ): Promise<ApplyChecksResult | null> => {
-    const existing = await ScmChangeRequestModel.findById(db, id);
-    if (!existing) return null;
+  ): Promise<ApplyChecksResult | null> =>
+    // Deliveries for the jobs of one commit arrive together and are handled
+    // concurrently; each merges its own check into the stored set, so the
+    // read and the write must not interleave or the last writer drops the
+    // others' checks. The row lock serialises them.
+    db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(scmChangeRequests)
+        .where(eq(scmChangeRequests.id, id))
+        .for('update');
+      if (!existing) return null;
 
-    if (existing.headSha && existing.headSha !== params.headSha) {
+      if (existing.headSha && existing.headSha !== params.headSha) {
+        return {
+          applied: false,
+          ciStatus: existing.ciStatus,
+          previousCiStatus: existing.ciStatus,
+          row: existing,
+        };
+      }
+
+      const sameCommit = existing.ciHeadSha === params.headSha;
+      const checks =
+        params.replace || !sameCommit ? params.checks : mergeChecks(existing.checks, params.checks);
+      const ciStatus = rollupCiStatus(checks);
+
+      const [row] = await tx
+        .update(scmChangeRequests)
+        .set({ checks, ciHeadSha: params.headSha, ciStatus, updatedAt: new Date() })
+        .where(eq(scmChangeRequests.id, id))
+        .returning();
+
       return {
-        applied: false,
-        ciStatus: existing.ciStatus,
-        previousCiStatus: existing.ciStatus,
-        row: existing,
+        applied: true,
+        ciStatus,
+        previousCiStatus: sameCommit ? existing.ciStatus : null,
+        row,
       };
-    }
-
-    const sameCommit = existing.ciHeadSha === params.headSha;
-    const checks =
-      params.replace || !sameCommit ? params.checks : mergeChecks(existing.checks, params.checks);
-    const ciStatus = rollupCiStatus(checks);
-
-    const [row] = await db
-      .update(scmChangeRequests)
-      .set({ checks, ciHeadSha: params.headSha, ciStatus, updatedAt: new Date() })
-      .where(eq(scmChangeRequests.id, id))
-      .returning();
-
-    return {
-      applied: true,
-      ciStatus,
-      previousCiStatus: sameCommit ? existing.ciStatus : null,
-      row,
-    };
-  };
+    });
 
   static setReviewDecision = async (
     db: LobeChatDatabase,

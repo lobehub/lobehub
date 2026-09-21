@@ -8,14 +8,15 @@ import { scmEnv } from '@/envs/scm';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { exchangeGitHubUserCode, fetchGitHubInstallation } from '@/server/services/scm/github/app';
 import { consumeScmInstallState } from '@/server/services/scm/oauth/stateStore';
+import { canWriteScmScope, sanitizeReturnTo } from '@/server/services/scm/scope';
 
 const log = debug('lobe-server:scm:github-setup');
 
-/** Where the user lands after connecting; the page reads `installed=ok|error=…` from the query. */
+/** Where the user lands after connecting; the page reads `installed=…`, `error=…` or `pending=…` from the query. */
 const SETTINGS_PATH = '/settings/integrations/github';
 
 const redirectToSettings = (origin: string, params: Record<string, string>, returnTo?: string) => {
-  const target = new URL(returnTo ?? SETTINGS_PATH, origin);
+  const target = new URL(sanitizeReturnTo(returnTo) ?? SETTINGS_PATH, origin);
   for (const [key, value] of Object.entries(params)) target.searchParams.set(key, value);
   return Response.redirect(target, 302);
 };
@@ -25,13 +26,16 @@ const redirectToSettings = (origin: string, params: Record<string, string>, retu
  * and after changing an installation's repositories (Setup URL, without
  * `code`). One handler covers both:
  *
- * - With `code`: exchange it for the user's identity, read the installation
- *   from the API, bind it to the LobeHub user recovered from `state` (or the
- *   current session when the install started on github.com), redirect.
- * - Without `code`: refresh the installation snapshot; the row must exist.
- *
- * The App must have "Request user authorization (OAuth) during installation"
- * enabled for the `code` leg to exist.
+ * - **With our `state`** (the flow started from "Connect" in LobeHub): the
+ *   state names the user and scope; the code, when present, is exchanged
+ *   for the user's identity and the installation is bound.
+ * - **Without `state`** (the flow started on github.com, or the state
+ *   expired): nothing is bound automatically. A known installation owned by
+ *   the session user is refreshed; anything else is handed to the settings
+ *   page as `pending`, where the user confirms the connection in a signed-in
+ *   request. The `code` is never exchanged here: a stateless callback could
+ *   be an attacker's authorization URL forwarded to a signed-in victim, and
+ *   linking that identity would hand the victim's account to the attacker.
  */
 export const githubSetup = async (c: Context): Promise<Response> => {
   const url = new URL(c.req.url);
@@ -50,38 +54,29 @@ export const githubSetup = async (c: Context): Promise<Response> => {
   }
 
   const db = await getServerDB();
-
-  // 1. Who is connecting: the state issued by our install entry, else the session.
   const statePayload = state ? await consumeScmInstallState(state) : null;
-  let userId = statePayload?.lobeUserId;
-  if (!userId) {
+
+  // ---- Stateless leg: refresh what the user already owns, confirm the rest.
+  if (!statePayload) {
+    let userId: string | undefined;
     try {
       const session = await auth.api.getSession({ headers: c.req.raw.headers });
       userId = session?.user?.id;
     } catch (error) {
       log('getSession failed: %O', error);
     }
-  }
-  if (!userId) {
-    // Started on github.com without a LobeHub session: bounce through sign-in
-    // and come back with the same query so the code can still be exchanged.
-    const callbackUrl = encodeURIComponent(`${url.pathname}${url.search}`);
-    return Response.redirect(new URL(`/signin?callbackUrl=${callbackUrl}`, url.origin), 302);
-  }
-  const returnTo = statePayload?.returnTo;
+    if (!userId) {
+      // Bounce through sign-in and come back with the same query.
+      const callbackUrl = encodeURIComponent(`${url.pathname}${url.search}`);
+      return Response.redirect(new URL(`/signin?callbackUrl=${callbackUrl}`, url.origin), 302);
+    }
 
-  // 2. No-code leg: the Setup URL after a repository change, or an install
-  // that skipped user authorization (an App without the OAuth-on-install
-  // option, or a re-install whose code already expired). A known row is
-  // refreshed in place; an unknown one is bound to the user we resolved,
-  // without an identity — the API tells us everything else.
-  if (!code) {
     let snapshot: Awaited<ReturnType<typeof fetchGitHubInstallation>>;
     try {
       snapshot = await fetchGitHubInstallation(installationId);
     } catch (error) {
       log('fetch installation %s failed: %O', installationId, error);
-      return redirectToSettings(url.origin, { error: 'installation_fetch_failed' }, returnTo);
+      return redirectToSettings(url.origin, { error: 'installation_fetch_failed' });
     }
 
     const existing = await ScmInstallationModel.findByProviderInstallationId(
@@ -89,65 +84,77 @@ export const githubSetup = async (c: Context): Promise<Response> => {
       'github',
       installationId,
     );
-    if (existing) {
+    if (
+      existing &&
+      (existing.workspaceId
+        ? await canWriteScmScope(db, userId, existing.workspaceId)
+        : existing.userId === userId)
+    ) {
       await ScmInstallationModel.refreshSnapshot(db, existing.id, snapshot);
-      return redirectToSettings(url.origin, { installed: 'updated' }, returnTo);
+      return redirectToSettings(url.origin, { installed: 'updated' });
     }
 
-    const installation = await ScmInstallationModel.bind(db, {
-      ...snapshot,
-      userId,
-      workspaceId: statePayload?.workspaceId ?? null,
-    });
     log(
-      'bound installation %s (%s) to user=%s without identity',
-      installation.id,
+      'installation %s (%s) arrived without state for user=%s; asking for confirmation',
+      installationId,
       snapshot.accountLogin,
       userId,
     );
-    return redirectToSettings(
-      url.origin,
-      { account: snapshot.accountLogin, installed: 'ok' },
-      returnTo,
-    );
+    return redirectToSettings(url.origin, {
+      account: snapshot.accountLogin,
+      pending: installationId,
+    });
   }
 
-  // 3. Install leg: identity first, then the installation bound to the user.
-  let authorization: Awaited<ReturnType<typeof exchangeGitHubUserCode>>;
-  try {
-    authorization = await exchangeGitHubUserCode(code);
-  } catch (error) {
-    log('code exchange failed: %O', error);
-    return redirectToSettings(url.origin, { error: 'exchange_failed' }, returnTo);
+  // ---- Stateful leg: the user and scope come from the state we issued.
+  const userId = statePayload.lobeUserId;
+  const workspaceId = statePayload.workspaceId ?? null;
+  const returnTo = statePayload.returnTo;
+
+  // Membership can change between the click and the callback; recheck.
+  if (!(await canWriteScmScope(db, userId, workspaceId))) {
+    return redirectToSettings(url.origin, { error: 'workspace_forbidden' }, returnTo);
   }
 
-  const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
-  try {
-    await ScmIdentityModel.upsert(
-      db,
-      {
-        credentials: {
-          accessToken: authorization.accessToken,
-          refreshToken: authorization.refreshToken,
-          refreshTokenExpiresAt: authorization.refreshTokenExpiresAt,
+  let installedBy: { login: string; userId: string } | undefined;
+  if (code) {
+    let authorization: Awaited<ReturnType<typeof exchangeGitHubUserCode>>;
+    try {
+      authorization = await exchangeGitHubUserCode(code);
+    } catch (error) {
+      log('code exchange failed: %O', error);
+      return redirectToSettings(url.origin, { error: 'exchange_failed' }, returnTo);
+    }
+
+    const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+    try {
+      await ScmIdentityModel.upsert(
+        db,
+        {
+          credentials: {
+            accessToken: authorization.accessToken,
+            refreshToken: authorization.refreshToken,
+            refreshTokenExpiresAt: authorization.refreshTokenExpiresAt,
+          },
+          externalLogin: authorization.user.login,
+          externalUserId: authorization.user.externalId,
+          metadata: {
+            avatarUrl: authorization.user.avatarUrl,
+            email: authorization.user.email ?? undefined,
+          },
+          provider: 'github',
+          tokenExpiresAt: authorization.expiresAt ? new Date(authorization.expiresAt) : null,
+          userId,
         },
-        externalLogin: authorization.user.login,
-        externalUserId: authorization.user.externalId,
-        metadata: {
-          avatarUrl: authorization.user.avatarUrl,
-          email: authorization.user.email ?? undefined,
-        },
-        provider: 'github',
-        tokenExpiresAt: authorization.expiresAt ? new Date(authorization.expiresAt) : null,
-        userId,
-      },
-      gateKeeper,
-    );
-  } catch (error) {
-    // The unique index on (provider, external_user_id) fires when this GitHub
-    // account is already someone else's identity.
-    log('identity upsert failed for %s: %O', authorization.user.login, error);
-    return redirectToSettings(url.origin, { error: 'identity_taken' }, returnTo);
+        gateKeeper,
+      );
+    } catch (error) {
+      // The unique index on (provider, external_user_id) fires when this GitHub
+      // account is already someone else's identity.
+      log('identity upsert failed for %s: %O', authorization.user.login, error);
+      return redirectToSettings(url.origin, { error: 'identity_taken' }, returnTo);
+    }
+    installedBy = { login: authorization.user.login, userId: authorization.user.externalId };
   }
 
   let snapshot: Awaited<ReturnType<typeof fetchGitHubInstallation>>;
@@ -160,19 +167,20 @@ export const githubSetup = async (c: Context): Promise<Response> => {
 
   const installation = await ScmInstallationModel.bind(db, {
     ...snapshot,
-    installedByExternalLogin: authorization.user.login,
-    installedByExternalUserId: authorization.user.externalId,
+    installedByExternalLogin: installedBy?.login,
+    installedByExternalUserId: installedBy?.userId,
     userId,
-    workspaceId: statePayload?.workspaceId ?? null,
+    workspaceId,
   });
 
   log(
-    'bound installation %s (%s) to user=%s workspace=%s action=%s',
+    'bound installation %s (%s) to user=%s workspace=%s action=%s identity=%s',
     installation.id,
     snapshot.accountLogin,
     userId,
-    statePayload?.workspaceId ?? '-',
+    workspaceId ?? '-',
     setupAction ?? '-',
+    installedBy ? 'linked' : 'none',
   );
   return redirectToSettings(
     url.origin,

@@ -1,4 +1,4 @@
-import { and, desc, eq, isNotNull, sql } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull, type SQL, sql } from 'drizzle-orm';
 
 import type { ScmChangeRequestLinks } from '@/database/models/scm';
 import { acceptances, verifyRuns, works } from '@/database/schemas';
@@ -9,11 +9,17 @@ import type { LobeChatDatabase } from '@/database/type';
  * sources, in order of trust:
  *
  * 1. The acceptance link the `pr` skill puts in the PR body
- *    (`…/acceptance/<uuid>`). Globally unique, no scope needed.
+ *    (`…/acceptance/<uuid>`).
  * 2. The `external` Work the agent's `gh pr create` registered
  *    (`works.resourceId = owner/repo#number`). Gives topic + agent.
  * 3. The acceptance round that recorded this PR url in its coding context
  *    (`verify_runs.context.pullRequest.url`), written by `lh acceptance run ingest`.
+ *
+ * Every source is confined to the tenant the installation is bound to: a
+ * personal installation only sees that user's personal records, a workspace
+ * installation only that workspace's. A PR body can name any acceptance id,
+ * and without this fence a merge on an attacker's repository would accept
+ * someone else's delivery.
  *
  * Every source is optional; the result only ever fills links, and the model
  * never clears one, so a later event with less context cannot undo a match.
@@ -37,10 +43,19 @@ export interface ResolveLinksParams {
   body?: string | null;
   number: number;
   repoFullName: string;
-  /** Scope of the installation the event came through; used to rank Work matches. */
+  /** Scope of the installation the event came through; every source must match it exactly. */
   scope: { userId: string; workspaceId?: string | null };
   url: string;
 }
+
+/** Exact tenant match: the workspace, or the user's personal (workspace-less) records. */
+const inScope = (
+  table: { userId: SQL.Aliased | any; workspaceId: any },
+  scope: ResolveLinksParams['scope'],
+): SQL =>
+  scope.workspaceId
+    ? eq(table.workspaceId, scope.workspaceId)
+    : and(eq(table.userId, scope.userId), isNull(table.workspaceId))!;
 
 export const resolveChangeRequestLinks = async (
   db: LobeChatDatabase,
@@ -48,7 +63,7 @@ export const resolveChangeRequestLinks = async (
 ): Promise<ScmChangeRequestLinks> => {
   const links: ScmChangeRequestLinks = {};
 
-  // 1. Acceptance link in the body — first existing id wins.
+  // 1. Acceptance link in the body — first id that exists in this scope wins.
   for (const id of parseAcceptanceIds(params.body)) {
     const [row] = await db
       .select({
@@ -57,7 +72,7 @@ export const resolveChangeRequestLinks = async (
         subjectType: acceptances.subjectType,
       })
       .from(acceptances)
-      .where(eq(acceptances.id, id))
+      .where(and(eq(acceptances.id, id), inScope(acceptances, params.scope)))
       .limit(1);
     if (row) {
       links.acceptanceId = row.id;
@@ -67,23 +82,26 @@ export const resolveChangeRequestLinks = async (
     }
   }
 
-  // 2. The registered Work. Prefer one in the installation's scope, then the newest.
+  // 2. The registered Work in this scope, newest first.
   const resourceId = `${params.repoFullName}#${params.number}`;
-  const scopeRank = params.scope.workspaceId
-    ? sql<number>`CASE WHEN ${works.workspaceId} = ${params.scope.workspaceId} THEN 0 ELSE 1 END`
-    : sql<number>`CASE WHEN ${works.userId} = ${params.scope.userId} AND ${works.workspaceId} IS NULL THEN 0 ELSE 1 END`;
   const [work] = await db
     .select({ id: works.id, originTopicId: works.originTopicId })
     .from(works)
-    .where(and(eq(works.resourceType, 'github_pull_request'), eq(works.resourceId, resourceId)))
-    .orderBy(scopeRank, desc(works.updatedAt))
+    .where(
+      and(
+        eq(works.resourceType, 'github_pull_request'),
+        eq(works.resourceId, resourceId),
+        inScope(works, params.scope),
+      ),
+    )
+    .orderBy(desc(works.updatedAt))
     .limit(1);
   if (work) {
     links.workId = work.id;
     if (!links.topicId && work.originTopicId) links.topicId = work.originTopicId;
   }
 
-  // 3. The acceptance round that ingested this PR url.
+  // 3. The acceptance round in this scope that ingested this PR url.
   if (!links.acceptanceId) {
     const [run] = await db
       .select({ acceptanceId: verifyRuns.acceptanceId })
@@ -91,6 +109,7 @@ export const resolveChangeRequestLinks = async (
       .where(
         and(
           isNotNull(verifyRuns.acceptanceId),
+          inScope(verifyRuns, params.scope),
           sql`${verifyRuns.context} -> 'pullRequest' ->> 'url' = ${params.url}`,
         ),
       )
