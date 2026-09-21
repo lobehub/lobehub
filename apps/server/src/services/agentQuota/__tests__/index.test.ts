@@ -282,6 +282,31 @@ describe('AgentQuotaService.recordUsage', () => {
     expect(await ledger.sumCostUsd(account.id, from, to)).toBeCloseTo(2.175, 6);
   });
 
+  it('creates the account for a first-run turn instead of landing it unattributed', async () => {
+    // A codex run can outrun the quota menu's ingestion: the account row does
+    // not exist yet when the first usage arrives (Codex review on PR #19770).
+    const accounts = new AgentProviderAccountModel(serverDB, userId);
+    await service.recordUsage({
+      externalAccountId: 'codex-fresh-acc',
+      messageId: 'msg-first-run',
+      model: 'gpt-5.3-codex',
+      occurredAt: Date.parse('2026-07-01T01:00:00Z'),
+      provider: 'codex',
+      usage: { input: 1000, output: 500 },
+    });
+
+    const account = await accounts.findByExternalId('codex', 'codex-fresh-acc');
+    expect(account).not.toBeNull();
+    // The ledger row is attributed to the freshly created account.
+    expect(
+      await ledger.sumCostUsd(
+        account!.id,
+        new Date('2026-07-01T00:00:00Z'),
+        new Date('2026-07-01T02:00:00Z'),
+      ),
+    ).toBeGreaterThan(0);
+  });
+
   it('stores tokens without a cost for a model the bank does not know', async () => {
     const account = await service.ingestSnapshot({
       identity,

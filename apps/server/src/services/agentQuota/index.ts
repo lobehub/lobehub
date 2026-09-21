@@ -242,7 +242,14 @@ export class AgentQuotaService {
     if (!externalEventId) return;
 
     const account = params.externalAccountId
-      ? await this.accounts.findByExternalId(params.provider, params.externalAccountId)
+      ? ((await this.accounts.findByExternalId(params.provider, params.externalAccountId)) ??
+        // A first-run turn can arrive before any snapshot ingestion created the
+        // account row. Create it here or the turn is permanently unattributed —
+        // later snapshot ingestion does not backfill existing ledger rows. The
+        // remaining identity fields are enriched by the next snapshot upsert.
+        (await this.accounts.upsertByIdentity(params.provider, {
+          externalAccountId: params.externalAccountId,
+        })))
       : null;
 
     const price = params.model
