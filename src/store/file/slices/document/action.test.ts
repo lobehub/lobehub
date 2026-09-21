@@ -133,6 +133,7 @@ describe('DocumentAction', () => {
     vi.mocked(documentService.updateDocument).mockResolvedValue({
       historyAppended: false,
       id: 'doc-1',
+      updatedAt: '2026-01-01T00:00:00.000Z',
     });
 
     act(() => {
@@ -182,7 +183,13 @@ describe('DocumentAction', () => {
     const existingResource = createResourceFixture();
 
     let resolveUpdate:
-      ((value: { historyAppended: boolean; id: string; savedAt?: string }) => void) | undefined;
+      | ((value: {
+          historyAppended: boolean;
+          id: string;
+          savedAt?: string;
+          updatedAt: string;
+        }) => void)
+      | undefined;
     vi.mocked(documentService.updateDocument).mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -222,7 +229,7 @@ describe('DocumentAction', () => {
       title: 'Optimistic title',
     });
 
-    resolveUpdate?.({ historyAppended: false, id: 'doc-1' });
+    resolveUpdate?.({ historyAppended: false, id: 'doc-1', updatedAt: '2026-01-01T00:00:00.000Z' });
 
     await act(async () => {
       await pendingUpdate;
@@ -248,6 +255,7 @@ describe('DocumentAction', () => {
     vi.mocked(documentService.updateDocument).mockResolvedValue({
       historyAppended: false,
       id: 'doc-1',
+      updatedAt: '2026-01-01T00:00:00.000Z',
     });
 
     act(() => {

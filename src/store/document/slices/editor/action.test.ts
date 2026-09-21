@@ -16,7 +16,11 @@ vi.mock('@/services/document', () => ({
       id: 'doc-1',
       updatedAt: new Date('2026-01-01T00:00:00.000Z'),
     }),
-    updateDocument: vi.fn().mockResolvedValue({ historyAppended: false, id: 'doc-1' }),
+    updateDocument: vi.fn().mockResolvedValue({
+      historyAppended: false,
+      id: 'doc-1',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }),
   },
 }));
 
@@ -52,6 +56,7 @@ describe('DocumentStore - Editor Actions', () => {
     vi.mocked(documentService.updateDocument).mockReset().mockResolvedValue({
       historyAppended: false,
       id: 'doc-1',
+      updatedAt: '2026-01-01T00:00:00.000Z',
     });
     vi.mocked(documentService.acquireDocumentLock)
       .mockReset()
@@ -972,7 +977,11 @@ name: skill-name
       });
       vi.mocked(documentService.updateDocument)
         .mockRejectedValueOnce(lockError)
-        .mockResolvedValueOnce({ historyAppended: false, id: 'doc-1' });
+        .mockResolvedValueOnce({
+          historyAppended: false,
+          id: 'doc-1',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        });
 
       await act(async () => {
         await result.current.performSave('doc-1');
@@ -1323,6 +1332,7 @@ name: skill-name
       vi.mocked(documentService.updateDocument).mockResolvedValue({
         historyAppended: false,
         id: 'doc-1',
+        updatedAt: '2026-01-01T00:00:00.000Z',
       });
       act(() => {
         result.current.markDirty('doc-1');
@@ -1392,6 +1402,7 @@ name: skill-name
       vi.mocked(documentService.updateDocument).mockResolvedValue({
         historyAppended: false,
         id: 'doc-1',
+        updatedAt: '2026-01-01T00:00:00.000Z',
       });
 
       act(() => {
@@ -1486,6 +1497,7 @@ name: skill-name
         historyAppended: true,
         id: 'doc-1',
         savedAt: '2026-04-15T10:00:00.000Z',
+        updatedAt: '2026-04-15T10:00:00.000Z',
       });
 
       act(() => {

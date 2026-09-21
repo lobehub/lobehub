@@ -345,14 +345,17 @@ export class DocumentModel {
     // incoming value so callers can't sneak around the one-way rule.
     const { metadata, visibility: _ignored, ...patch } = value;
 
-    return this.db
+    const [row] = await this.db
       .update(documents)
       .set({
+        updatedAt: new Date(),
         ...patch,
         ...(metadata !== undefined && { metadata: this.scopeMetadata(metadata) }),
-        updatedAt: new Date(),
       })
-      .where(and(this.readScope(), eq(documents.id, id)));
+      .where(and(this.readScope(), eq(documents.id, id)))
+      .returning({ updatedAt: documents.updatedAt });
+
+    return row?.updatedAt;
   };
 
   /**

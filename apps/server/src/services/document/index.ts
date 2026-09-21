@@ -754,21 +754,22 @@ export class DocumentService {
       // The lock lease is refreshed by the client heartbeat (acquireDocumentLock),
       // so a save does not need to touch it.
 
+      const now = new Date();
       let savedAt: Date | undefined;
 
       if (historyAppended) {
-        savedAt = new Date();
+        savedAt = now;
         await documentHistoryService.createHistory({
           breakAutosaveWindow: params.breakAutosaveWindow,
           documentId: id,
           editorData: currentEditorDataAccepted,
           saveSource: params.saveSource ?? 'autosave',
-          savedAt,
+          savedAt: now,
         });
       }
 
-      if (Object.keys(updates).length > 0) {
-        await documentModel.update(id, updates as Partial<DocumentItem>);
+      if (Object.keys(updates).length > 0 || historyAppended) {
+        await documentModel.update(id, { ...updates, updatedAt: now } as Partial<DocumentItem>);
       }
 
       if ((params.title !== undefined || params.parentId !== undefined) && currentDocument.fileId) {
@@ -785,6 +786,7 @@ export class DocumentService {
         historyAppended,
         id,
         savedAt,
+        updatedAt: now,
       };
     });
 

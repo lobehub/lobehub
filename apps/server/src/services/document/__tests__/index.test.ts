@@ -798,7 +798,12 @@ describe('DocumentService', () => {
         }),
       );
       expect(mockDocumentHistoryService.createHistory).not.toHaveBeenCalled();
-      expect(result).toEqual({ historyAppended: false, id: 'doc-1' });
+      expect(result).toEqual({
+        historyAppended: false,
+        id: 'doc-1',
+        savedAt: undefined,
+        updatedAt: expect.any(Date),
+      });
     });
 
     it('should append history when editorData changes', async () => {
@@ -822,6 +827,23 @@ describe('DocumentService', () => {
       expect(result.historyAppended).toBe(true);
       expect(result.id).toBe('doc-1');
       expect(result.savedAt).toBeInstanceOf(Date);
+    });
+
+    it('should return the updatedAt written to the row, matching the history savedAt', async () => {
+      const editorData = { blocks: [{ type: 'paragraph', text: 'Hello' }] };
+      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.findById.mockResolvedValue(createCurrentDocument());
+
+      const result = await service.updateDocument('doc-1', { editorData, saveSource: 'manual' });
+
+      expect(mockDocumentModel.update).toHaveBeenCalledWith(
+        'doc-1',
+        expect.objectContaining({ updatedAt: result.updatedAt }),
+      );
+      expect(mockDocumentHistoryService.createHistory).toHaveBeenCalledWith(
+        expect.objectContaining({ savedAt: result.updatedAt }),
+      );
+      expect(result.savedAt).toEqual(result.updatedAt);
     });
 
     it('should persist raw editorData with diff nodes and normalize only the history snapshot', async () => {
@@ -905,7 +927,12 @@ describe('DocumentService', () => {
         'doc-1',
         expect.objectContaining({ content: 'retry payload' }),
       );
-      expect(result).toEqual({ historyAppended: false, id: 'doc-1' });
+      expect(result).toEqual({
+        historyAppended: false,
+        id: 'doc-1',
+        savedAt: undefined,
+        updatedAt: expect.any(Date),
+      });
     });
 
     it('should skip history when editorData is unchanged', async () => {
@@ -920,7 +947,12 @@ describe('DocumentService', () => {
         expect.objectContaining({ editorData }),
       );
       expect(mockDocumentHistoryService.createHistory).not.toHaveBeenCalled();
-      expect(result).toEqual({ historyAppended: false, id: 'doc-1' });
+      expect(result).toEqual({
+        historyAppended: false,
+        id: 'doc-1',
+        savedAt: undefined,
+        updatedAt: expect.any(Date),
+      });
     });
 
     it('should report members newly mentioned by this save on the accepted view', async () => {

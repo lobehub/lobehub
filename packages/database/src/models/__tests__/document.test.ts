@@ -531,6 +531,35 @@ describe('DocumentModel', () => {
 
       expect(unchanged?.content).toBe('Original content');
     });
+
+    it('should return the committed updatedAt', async () => {
+      const { documentId } = await createTestDocument(documentModel, fileModel, 'Original content');
+
+      const updatedAt = await documentModel.update(documentId, { content: 'Updated content' });
+
+      const found = await documentModel.findById(documentId);
+      expect(updatedAt).toEqual(found?.updatedAt);
+    });
+
+    it('should let an explicit updatedAt win over the default now()', async () => {
+      const { documentId } = await createTestDocument(documentModel, fileModel, 'Original content');
+      const explicitUpdatedAt = new Date('2026-01-01T00:00:00.000Z');
+
+      const updatedAt = await documentModel.update(documentId, {
+        content: 'Updated content',
+        updatedAt: explicitUpdatedAt,
+      });
+
+      expect(updatedAt).toEqual(explicitUpdatedAt);
+    });
+
+    it('should return undefined when the row does not belong to the caller', async () => {
+      const { documentId } = await createTestDocument(documentModel, fileModel, 'Original content');
+
+      const updatedAt = await documentModel2.update(documentId, { content: 'Hacked content' });
+
+      expect(updatedAt).toBeUndefined();
+    });
   });
 
   describe('findBySlug', () => {
