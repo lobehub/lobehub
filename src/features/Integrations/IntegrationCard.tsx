@@ -3,7 +3,7 @@
 import { Block, Flexbox } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
-import { memo } from 'react';
+import { type KeyboardEvent, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { IntegrationDefinition, UpcomingIntegration } from './registry';
@@ -54,6 +54,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       border-color: ${cssVar.colorBorder};
       background: ${cssVar.colorFillSecondary};
     }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimaryBorderHover};
+      outline-offset: 2px;
+    }
   `,
   upcoming: css`
     color: ${cssVar.colorTextTertiary};
@@ -83,6 +88,7 @@ const IntegrationCard = memo<IntegrationCardProps>(
     const { t } = useTranslation('integration');
     const Icon = integration.icon;
     const openable = !upcoming && !!onOpen;
+    const open = () => onOpen?.(integration.id as IntegrationDefinition['id']);
 
     const statusLabel = upcoming
       ? t('overview.status.comingSoon')
@@ -97,6 +103,9 @@ const IntegrationCard = memo<IntegrationCardProps>(
     return (
       <Block
         role={openable ? 'button' : undefined}
+        // `role="button"` alone leaves the card unreachable: it has to take
+        // focus and answer Enter / Space the way a real button does.
+        tabIndex={openable ? 0 : undefined}
         variant={'filled'}
         className={cx(
           styles.card,
@@ -104,8 +113,15 @@ const IntegrationCard = memo<IntegrationCardProps>(
           upcoming && styles.upcomingCard,
           openable && styles.openable,
         )}
-        onClick={
-          openable ? () => onOpen?.(integration.id as IntegrationDefinition['id']) : undefined
+        onClick={openable ? open : undefined}
+        onKeyDown={
+          openable
+            ? (event: KeyboardEvent<HTMLDivElement>) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                open();
+              }
+            : undefined
         }
       >
         <Flexbox horizontal align="center" gap={14}>
