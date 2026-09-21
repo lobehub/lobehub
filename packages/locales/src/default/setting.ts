@@ -3880,8 +3880,7 @@ When I am ___, I need ___
   'environments.visibility.publish': 'Publish to Workspace',
   'environments.visibility.publishConfirmTitle': 'Publish this environment to the workspace?',
   'environments.visibility.publicTag': 'Published',
-  'environments.visibility.sharedByTag': 'Shared by {{name}}',
   'environments.visibility.changeFailed': "Could not change this environment's visibility",
   'environments.visibility.readonlyHint':
-    'Shared with you: you can run in this environment, but only its creator can change what it builds.',
+    'Published to this workspace by its creator: you can run in this environment, but only they can change what it builds.',
 };

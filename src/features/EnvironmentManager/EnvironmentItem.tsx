@@ -2,7 +2,7 @@
 
 import { Github } from '@lobehub/icons';
 import { DropdownMenu, Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Avatar, Button, confirmModal, Tag, Text, toast } from '@lobehub/ui/base-ui';
+import { Avatar, Button, confirmModal, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import {
@@ -204,18 +204,13 @@ const EnvironmentItem = memo<EnvironmentItemProps>(
         </div>
 
         <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
-          <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-            <Text ellipsis fontSize={15} weight={500}>
-              {environment.name}
-            </Text>
-            {/* Whose environment this is, said once and only where it is not
-                obvious: a published row in a workspace could be anyone's, and
-                running in someone else's is the thing worth knowing before you
-                do it. */}
-            {environment.visibility === 'public' && !canEdit && (
-              <Tag>{t('environments.visibility.sharedByTag', { name: creator })}</Tag>
-            )}
-          </Flexbox>
+          {/* No "published by" badge beside the name. The avatar on the right
+              already names the author on hover, and inside the published pool
+              every row is published by definition — the badge printed the same
+              fact twice and took the width the name needed. */}
+          <Text ellipsis fontSize={15} weight={500}>
+            {environment.name}
+          </Text>
           <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
             {/* The repository leads because it is what the name is usually taken
                 from, and it truncates because it is the only part of this line
@@ -246,7 +241,14 @@ const EnvironmentItem = memo<EnvironmentItemProps>(
             // gives with the enroller's avatar.
             <Tooltip title={t('environments.meta.creatorTooltip', { name: creator })}>
               <span onClick={(event) => event.stopPropagation()}>
-                <Avatar avatar={environment.creator.avatar ?? undefined} size={20} />
+                {/* The name is passed as the avatar itself, not only as
+                    `title`. `Avatar` derives its fallback text from
+                    `String(avatar)` first, so an undefined picture becomes the
+                    literal string "undefined" and every author without one
+                    renders the same "UN" — `title` never gets a turn. Since the
+                    row carries no badge, that placeholder would be the only
+                    thing left saying whose environment this is. */}
+                <Avatar avatar={environment.creator.avatar || creator} size={20} title={creator} />
               </span>
             </Tooltip>
           )}
