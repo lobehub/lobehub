@@ -18,7 +18,7 @@ import { resolveVerifyModelConfig } from './modelConfig';
 import { finalizeVerifyRun } from './settle';
 import { VERIFY_ABANDONED_MS } from './staleness';
 import { VerifyStatusService } from './statusService';
-import { resolveTaskAcceptance } from './taskAcceptance';
+import { attachTaskRunToAcceptance, resolveTaskAcceptance } from './taskAcceptance';
 
 const log = debug('lobe-server:verify-lifecycle');
 const MAX_TASK_DOCUMENT_CHARS = 80_000;
@@ -100,6 +100,25 @@ const executeVerifyLifecycle = async (
     if (!op) {
       log('op %s missing, cannot run verify', params.operationId);
       return;
+    }
+
+    // Resolved once here, before any of the branches below can return: it both
+    // binds this round to the Task's Acceptance (a builder that planned the round
+    // itself leaves it unattached) and pins which agent verifies. Non-task runs
+    // keep an undefined verifier → builtin fallback.
+    const resolvedAcceptance = op.taskId
+      ? await resolveTaskAcceptance(db, userId, op.taskId, workspaceId).catch((error) => {
+          log('could not resolve the acceptance of task %s (non-fatal): %O', op.taskId, error);
+          return undefined;
+        })
+      : undefined;
+    if (resolvedAcceptance) {
+      await attachTaskRunToAcceptance(
+        db,
+        userId,
+        { acceptanceId: resolvedAcceptance.acceptance.id, run },
+        workspaceId,
+      );
     }
 
     // The builder now captures Acceptance evidence inside the main run. When it
@@ -206,13 +225,7 @@ const executeVerifyLifecycle = async (
       return;
     }
 
-    // Task-bound runs may pin which agent verifies through its Acceptance policy.
-    // Non-task runs leave it undefined → builtin fallback.
-    let verifierAgentId: string | undefined;
-    if (op.taskId) {
-      const resolvedAcceptance = await resolveTaskAcceptance(db, userId, op.taskId, workspaceId);
-      verifierAgentId = resolvedAcceptance?.config.verifierAgentId ?? undefined;
-    }
+    const verifierAgentId = resolvedAcceptance?.config.verifierAgentId ?? undefined;
 
     const modelConfig = await resolveVerifyModelConfig(
       db,

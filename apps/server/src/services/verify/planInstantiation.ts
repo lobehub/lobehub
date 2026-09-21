@@ -8,7 +8,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { AcceptanceService, buildAcceptanceCheckUnion } from './acceptanceService';
 import { resolveVerifyModelConfig } from './modelConfig';
 import { VerifyPlanGeneratorService } from './planGenerator';
-import { resolveTaskAcceptance } from './taskAcceptance';
+import { attachTaskRunToAcceptance, resolveTaskAcceptance } from './taskAcceptance';
 
 const log = debug('lobe-server:verify-plan-instantiation');
 
@@ -70,7 +70,18 @@ export const instantiateVerifyPlanOnStart = async (
     const runModel = new VerifyRunModel(db, userId, workspaceId);
     const existing = await runModel.findByOperation(params.operationId);
     // Idempotent: a plan already exists for this run (re-fire, or agent/UI-built).
-    if (existing?.plan?.length) return;
+    if (existing?.plan?.length) {
+      // An agent/UI-built plan never passed through the attach at the end of this
+      // function, so the round would stay orphaned from the Task's Acceptance —
+      // invisible to the task surface and unreadable by the Goal review.
+      await attachTaskRunToAcceptance(
+        db,
+        userId,
+        { acceptanceId: acceptance.id, run: existing },
+        workspaceId,
+      );
+      return;
+    }
 
     const goal = task?.instruction ?? task?.name ?? '';
 

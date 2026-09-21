@@ -5,6 +5,7 @@ import { runVerifyAfterEvidenceSubmission, runVerifyOnCompletion } from '../life
 import { VERIFY_ABANDONED_MS } from '../staleness';
 
 const {
+  attachTaskRunToAcceptance,
   claimEvidenceCollection,
   claimVerifying,
   execute,
@@ -16,6 +17,7 @@ const {
   startEvidenceSubmission,
   updateStatus,
 } = vi.hoisted(() => ({
+  attachTaskRunToAcceptance: vi.fn(),
   claimEvidenceCollection: vi.fn(),
   claimVerifying: vi.fn(),
   evidenceListByRun: vi.fn(),
@@ -84,7 +86,10 @@ vi.mock('../evidenceSubmission', () => ({
   startEvidenceSubmission,
 }));
 vi.mock('../taskAcceptance', () => ({
-  resolveTaskAcceptance: vi.fn().mockResolvedValue({ config: { enabled: true } }),
+  attachTaskRunToAcceptance,
+  resolveTaskAcceptance: vi
+    .fn()
+    .mockResolvedValue({ acceptance: { id: 'acceptance-1' }, config: { enabled: true } }),
 }));
 
 const db = {} as any;
@@ -100,6 +105,7 @@ const confirmedRun = {
 describe('runVerifyOnCompletion — verification claim', () => {
   beforeEach(() => {
     [
+      attachTaskRunToAcceptance,
       claimEvidenceCollection,
       claimVerifying,
       evidenceListByRun,
@@ -169,6 +175,41 @@ describe('runVerifyOnCompletion — verification claim', () => {
     await runVerifyOnCompletion(db, 'u1', params);
 
     expect(startEvidenceSubmission).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * Regression: only the plan this pipeline creates itself was bound to the Task's
+   * Acceptance. A builder that authored its own plan through the CLI produced a
+   * round with no acceptance, which passed verification and then failed the Goal
+   * review with "no Acceptance" — parking a complete delivery on a person.
+   */
+  it('binds a task-bound round to its Acceptance before judging it', async () => {
+    const orphan = { ...confirmedRun, acceptanceId: null };
+    findByOperation.mockResolvedValue(orphan);
+    operationFindById.mockResolvedValue({
+      agentId: 'builder',
+      id: 'op-1',
+      model: 'm',
+      provider: 'p',
+      taskId: 'task-1',
+      topicId: 'topic-1',
+    });
+    evidenceListByRun.mockResolvedValue([{ checkItemId: 'c1', type: 'text' }]);
+
+    await runVerifyOnCompletion(db, 'u1', params);
+
+    expect(attachTaskRunToAcceptance).toHaveBeenCalledWith(
+      db,
+      'u1',
+      { acceptanceId: 'acceptance-1', run: orphan },
+      undefined,
+    );
+  });
+
+  it('leaves a run with no task out of the Acceptance binding', async () => {
+    await runVerifyOnCompletion(db, 'u1', params);
+
+    expect(attachTaskRunToAcceptance).not.toHaveBeenCalled();
   });
 
   it('judges directly when the builder already submitted evidence inside the Task run', async () => {

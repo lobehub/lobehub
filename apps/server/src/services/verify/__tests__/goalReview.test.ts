@@ -222,6 +222,22 @@ describe('Goal automatic Acceptance review', () => {
   });
 
   /**
+   * Regression: every exception in here produced one canned sentence telling the
+   * reader to configure a review model. A round that was never linked to its
+   * Acceptance therefore escalated to a person as a model-configuration problem,
+   * hiding the only fact that could have unblocked it.
+   */
+  it('carries the real reason when the review cannot even start', async () => {
+    mocks.run.mockResolvedValue({ id: 'r1', acceptanceId: null, metadata: {} });
+
+    const review = await reviewGoalDelivery(db, 'u1', 't1', 'op1');
+
+    expect(review?.status).toBe('errored');
+    expect(review?.feedback).toContain('Goal delivery has no Acceptance');
+    expect(review?.feedback).not.toContain('Configure an available model');
+  });
+
+  /**
    * Regression: a review that could not run on one check was retried by
    * rerunning the whole review. Every other check was re-asked and its opinion
    * upserted over the first one, so a nondeterministic second pass could turn a

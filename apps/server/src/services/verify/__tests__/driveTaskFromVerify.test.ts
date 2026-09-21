@@ -9,8 +9,13 @@ import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
 
 import { reviewGoalDelivery } from '../goalReview';
 import { driveTaskFromVerify, finalizeVerifyRun } from '../settle';
+import { attachTaskRunToAcceptance, resolveTaskAcceptance } from '../taskAcceptance';
 
 vi.mock('../goalReview', () => ({ reviewGoalDelivery: vi.fn() }));
+vi.mock('../taskAcceptance', () => ({
+  attachTaskRunToAcceptance: vi.fn(),
+  resolveTaskAcceptance: vi.fn(),
+}));
 
 vi.mock('../repairService', () => ({
   maybeAutoRepair: vi.fn(),
@@ -180,6 +185,57 @@ describe('driveTaskFromVerify', () => {
     expect(deliverMock.mock.calls[0][0].errorMessage.toLowerCase()).toContain('internal error');
   });
 
+  /**
+   * Regression: a builder that planned its own round left `acceptanceId` null, so
+   * the review could not reach the delivery and errored with "no Acceptance" — a
+   * failure class with no recovery branch, which parked a passing delivery on a
+   * person. The link is repaired here, before the review reads it.
+   */
+  it('binds an orphaned passing round to the task acceptance before reviewing it', async () => {
+    const orphan = { acceptanceId: null, id: 'run-1', status: 'passed' };
+    runFindByOperation.mockResolvedValue(orphan);
+    vi.mocked(resolveTaskAcceptance).mockResolvedValue({
+      acceptance: { id: 'acceptance-1' } as any,
+      config: {},
+    });
+    vi.mocked(reviewGoalDelivery).mockResolvedValue({
+      feedback: '',
+      predictionIds: [],
+      status: 'passed',
+    });
+
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+
+    expect(attachTaskRunToAcceptance).toHaveBeenCalledWith(
+      db,
+      'u1',
+      { acceptanceId: 'acceptance-1', run: orphan },
+      undefined,
+    );
+    expect(vi.mocked(attachTaskRunToAcceptance).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(reviewGoalDelivery).mock.invocationCallOrder[0],
+    );
+    expect(serviceUpdateStatus).toHaveBeenCalledWith({ id: 'task-1', status: 'completed' });
+  });
+
+  it('leaves an already attached round alone', async () => {
+    runFindByOperation.mockResolvedValue({
+      acceptanceId: 'acceptance-1',
+      id: 'run-1',
+      status: 'passed',
+    });
+    vi.mocked(reviewGoalDelivery).mockResolvedValue({
+      feedback: '',
+      predictionIds: [],
+      status: 'passed',
+    });
+
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+
+    expect(resolveTaskAcceptance).not.toHaveBeenCalled();
+    expect(attachTaskRunToAcceptance).not.toHaveBeenCalled();
+  });
+
   it('does not launch a duplicate review when task drive is already claimed', async () => {
     runFindByOperation.mockResolvedValue({
       id: 'run-1',
@@ -193,6 +249,8 @@ describe('driveTaskFromVerify', () => {
 
   beforeEach(() => {
     vi.mocked(reviewGoalDelivery).mockReset();
+    vi.mocked(resolveTaskAcceptance).mockReset().mockResolvedValue(undefined);
+    vi.mocked(attachTaskRunToAcceptance).mockReset().mockResolvedValue(undefined);
     vi.mocked(scheduleGoalAdvance).mockClear();
     goalFindByTask.mockReset();
     [

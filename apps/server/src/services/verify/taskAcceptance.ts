@@ -1,9 +1,14 @@
 import type { AcceptanceConfig, TaskVerifyConfig } from '@lobechat/types';
+import debug from 'debug';
 
 import { AcceptanceModel } from '@/database/models/acceptance';
 import { TaskModel } from '@/database/models/task';
-import type { AcceptanceItem } from '@/database/schemas/verify';
+import type { AcceptanceItem, VerifyRunItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
+
+import { AcceptanceService } from './acceptanceService';
+
+const log = debug('lobe-server:verify-task-acceptance');
 
 export interface ResolvedTaskAcceptance {
   acceptance: AcceptanceItem;
@@ -97,4 +102,43 @@ export const resolveTaskAcceptance = async (
     config: acceptance.config ?? {},
     requirement: acceptance.requirement ?? undefined,
   };
+};
+
+/**
+ * Bind a task-bound verification round to the Acceptance that owns the Task's
+ * completion contract.
+ *
+ * `instantiateVerifyPlanOnStart` attaches the plan it creates itself, but a builder
+ * that authors its own plan through the CLI (`verify.generateDraftPlan` →
+ * `verify.confirmPlan`) writes a round with no acceptance. That round still verifies
+ * and still passes, and then the Goal's Acceptance review — which can only reach the
+ * delivery through its Acceptance — errors with "no Acceptance". That failure class
+ * has no recovery branch, so a delivery that met every criterion ends up parked on a
+ * human decision gate.
+ *
+ * Idempotent and best-effort: a round that already belongs to an acceptance is left
+ * alone, and a refusal (already accepted / closed aggregate) must never break verify.
+ */
+export const attachTaskRunToAcceptance = async (
+  db: LobeChatDatabase,
+  userId: string,
+  params: { acceptanceId: string; run: Pick<VerifyRunItem, 'acceptanceId' | 'id'> },
+  workspaceId?: string,
+): Promise<void> => {
+  if (params.run.acceptanceId) return;
+
+  try {
+    await new AcceptanceService(db, userId, workspaceId).attachPolicyRun(
+      params.run.id,
+      params.acceptanceId,
+    );
+    log('attached run %s to task acceptance %s', params.run.id, params.acceptanceId);
+  } catch (error) {
+    log(
+      'could not attach run %s to acceptance %s (non-fatal): %O',
+      params.run.id,
+      params.acceptanceId,
+      error,
+    );
+  }
 };

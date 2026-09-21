@@ -136,8 +136,13 @@ export const reviewGoalDelivery = async (
   } catch (error) {
     console.error('[goal-review] Acceptance review failed:', error);
     review.status = 'errored';
-    review.feedback =
-      'Automatic Acceptance review could not complete. Configure an available model on the Acceptance verifier agent and retry the review before advancing.';
+    // The reason has to travel: this string is what the escalation quotes back to
+    // the person who has to unblock the Goal. A single canned sentence sent every
+    // failure — a missing Acceptance link included — to look like an unconfigured
+    // review model, which is a different problem with a different fix.
+    review.feedback = `Automatic Acceptance review could not complete: ${
+      error instanceof Error ? error.message : String(error)
+    }. Resolve the cause and retry the review before advancing.`;
   }
   if (run) {
     // Preserve the task-drive claim and the run's existing policy/provenance.

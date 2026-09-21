@@ -19,6 +19,7 @@ import { reviewGoalDelivery } from './goalReview';
 import { maybeAutoRepair } from './repairService';
 import { VerifyReporterService } from './reporter';
 import { VerifyStatusService } from './statusService';
+import { attachTaskRunToAcceptance, resolveTaskAcceptance } from './taskAcceptance';
 
 const log = debug('lobe-server:verify-settle');
 
@@ -104,6 +105,27 @@ export const driveTaskFromVerify = async (
     const taskModel = new TaskModel(db, userId, workspaceId);
     const task = await taskModel.findById(taskOperation.taskId);
     if (!task || TERMINAL_TASK_STATUS.has(task.status)) return; // task already settled
+
+    // Last defence before the review: a round the builder planned itself can still
+    // arrive here unattached, because the CLI-driven verify path never passes
+    // through the completion lifecycle. The review reaches a delivery only through
+    // its Acceptance, and a missing link reads as "no Acceptance" — an error with
+    // no recovery branch, which parks a passing delivery on a person.
+    if (run.status === 'passed' && !run.acceptanceId) {
+      const resolved = await resolveTaskAcceptance(
+        db,
+        userId,
+        taskOperation.taskId,
+        workspaceId,
+      ).catch(() => undefined);
+      if (resolved)
+        await attachTaskRunToAcceptance(
+          db,
+          userId,
+          { acceptanceId: resolved.acceptance.id, run },
+          workspaceId,
+        );
+    }
 
     // The review already retries a check whose review could not run. An
     // `errored` result here is the reviewer's problem, and another builder
