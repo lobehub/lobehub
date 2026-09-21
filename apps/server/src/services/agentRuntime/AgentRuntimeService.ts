@@ -363,6 +363,19 @@ export interface AgentRuntimeDelegate {
    */
   execVirtualSubAgent?: (params: ExecVirtualSubAgentParams) => Promise<ExecSubAgentResult>;
   /**
+   * Run the init an operation was created without: tool discovery and the
+   * message / context assembly. Returns the state slots they produce, which the
+   * step then merges before executing — see `host.init`.
+   *
+   * Implemented by AiAgentService (it owns the pipeline and the models it needs);
+   * the runtime only knows when to ask and what to do with the answer.
+   */
+  runDeferredInit?: (params: {
+    envelope: unknown;
+    operationId: string;
+    state: AgentState;
+  }) => Promise<Partial<AgentState>>;
+  /**
    * Re-check that an Agent Share visitor run is STILL authorized to continue,
    * called on EVERY step. Without it, a revocation that lands mid-run (link →
    * private, share disabled, agent deleted) would only stop NEW requests: the
@@ -1702,6 +1715,50 @@ export class AgentRuntimeService {
 
         if (!agentState) {
           throw new Error(`Agent state not found for operation ${operationId}`);
+        }
+
+        // The run may have been created without its init — the send path
+        // returned as soon as the messages were durable and left discovery and
+        // the context assembly to this worker (see `host.init`).
+        //
+        // It runs after the step claim, so two deliveries of step 0 cannot both
+        // pay for a discovery, and before anything is published, so the client
+        // sees one `step_start` for a fully initialized run. A failure here
+        // falls into the step error handler below: the operation ends with the
+        // error on its assistant message, which is the only honest outcome once
+        // the user has already been told the message was sent.
+        const pendingInit = agentState.host?.init;
+        if (pendingInit?.pending) {
+          // Stop pressed during the init window: the sentinel is the same one
+          // the step boundary reads, and honouring it here saves the whole
+          // discovery rather than doing it for a run nobody is waiting for.
+          if (await this.coordinator.isInterrupted(operationId)) {
+            log('[%s][%d] Interrupted before deferred init; skipping it', operationId, stepIndex);
+            return { nextStepScheduled: false, state: agentState, stepResult: null, success: true };
+          }
+
+          if (!this.delegate?.runDeferredInit) {
+            throw new Error(
+              `Operation ${operationId} needs a deferred init but no runner is wired`,
+            );
+          }
+
+          const initStartedAt = Date.now();
+          const initialized = await this.delegate.runDeferredInit({
+            envelope: pendingInit.envelope,
+            operationId,
+            state: agentState,
+          });
+          Object.assign(agentState, initialized, {
+            host: { ...agentState.host, ...initialized.host, init: undefined },
+          });
+          await this.coordinator.saveAgentState(operationId, agentState);
+          log(
+            '[%s][%d] Deferred init finished in %dms',
+            operationId,
+            stepIndex,
+            Date.now() - initStartedAt,
+          );
         }
 
         // A parked approval step is already durable before its generic Review
