@@ -39,6 +39,30 @@ export interface DiscoveredOAuth {
   metadata: AuthorizationServerMetadata;
 }
 
+const selectDynamicClientAuthMethod = (metadata: AuthorizationServerMetadata): string => {
+  const supportedMethods = metadata.token_endpoint_auth_methods_supported;
+
+  // Keep the existing confidential-client behavior for servers that omit this
+  // metadata. When a server explicitly supports public clients, prefer `none`
+  // because this authorization-code flow always uses PKCE.
+  if (!supportedMethods) return 'client_secret_post';
+  if (supportedMethods.includes('none')) return 'none';
+  if (supportedMethods.includes('client_secret_post')) return 'client_secret_post';
+  if (supportedMethods.includes('client_secret_basic')) return 'client_secret_basic';
+
+  throw new Error(
+    `Incompatible auth server: unsupported token endpoint auth methods: ${supportedMethods.join(', ')}`,
+  );
+};
+
+const selectDynamicClientGrantTypes = (metadata: AuthorizationServerMetadata): string[] => {
+  const grantTypes = ['authorization_code'];
+  if (metadata.grant_types_supported?.includes('refresh_token')) {
+    grantTypes.push('refresh_token');
+  }
+  return grantTypes;
+};
+
 /**
  * Discover the OAuth authorization server backing a remote MCP resource.
  *
@@ -96,11 +120,11 @@ export const registerDynamicClient = async (params: {
   return registerClient(params.authorizationServerUrl, {
     clientMetadata: {
       client_name: params.clientName ?? 'LobeHub',
-      grant_types: ['authorization_code', 'refresh_token'],
+      grant_types: selectDynamicClientGrantTypes(params.metadata),
       redirect_uris: [params.redirectUri],
       response_types: ['code'],
       scope: params.scopes?.join(' '),
-      token_endpoint_auth_method: 'client_secret_post',
+      token_endpoint_auth_method: selectDynamicClientAuthMethod(params.metadata),
     },
     metadata: params.metadata,
     scope: params.scopes?.join(' '),
