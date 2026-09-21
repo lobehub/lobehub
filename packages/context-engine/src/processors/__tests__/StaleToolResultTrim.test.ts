@@ -20,6 +20,7 @@ const toolMessage = (
   id: `tool-${apiName}-${Math.random()}`,
   plugin: { apiName, identifier },
   role: 'tool',
+  tool_call_id: `call-${apiName}`,
   ...overrides,
 });
 
@@ -39,6 +40,7 @@ const recencyPadding = (n: number) =>
     content: `recent ${i}`,
     id: `pad-${i}`,
     role: 'assistant',
+    tool_call_id: undefined,
   }));
 
 const createProcessor = () =>
