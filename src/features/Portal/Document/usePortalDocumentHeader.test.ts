@@ -34,6 +34,12 @@ vi.mock('@/services/document', () => ({
   },
 }));
 
+const mockInvalidate = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+
+vi.mock('@/services/document/invalidation', () => ({
+  invalidateDocumentMutation: mockInvalidate,
+}));
+
 const mockAgentState = vi.hoisted(() => ({
   current: {
     activeAgentId: 'agent-1' as string | undefined,
@@ -87,6 +93,7 @@ describe('usePortalDocumentTitle', () => {
     mockChatState.current.portalStack[0].agentDocumentId = 'agent-document-1';
     mockUpdateDocument.mockClear();
     mockMutate.mockClear();
+    mockInvalidate.mockClear();
     toastError.mockClear();
   });
 
@@ -126,6 +133,57 @@ describe('usePortalDocumentTitle', () => {
 
     expect(toastError).toHaveBeenCalled();
     expect(result.current.draft).toBe('开营筹备清单');
+  });
+
+  it('serializes overlapping saves: a stale rejected rename cannot roll back a newer one', async () => {
+    let rejectFirst!: (e: Error) => void;
+    mockUpdateDocument
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectFirst = reject;
+          }),
+      )
+      .mockResolvedValueOnce(undefined);
+    const { result } = renderHook(() => usePortalDocumentTitle());
+
+    // First (slow) rename — its promise never resolves until the stale reject
+    // below, so fire it without awaiting.
+    act(() => result.current.startEdit());
+    act(() => result.current.setDraft('重命名一'));
+    void result.current.commitEdit();
+
+    // A newer rename lands first (fast server response).
+    act(() => result.current.startEdit());
+    act(() => result.current.setDraft('重命名二'));
+    await act(async () => {
+      await result.current.commitEdit();
+    });
+    expect(mockUpdateDocument).toHaveBeenNthCalledWith(2, { id: 'document-1', title: '重命名二' });
+
+    // The older request now REJECTS — it must not touch draft or cache,
+    // because a newer save already claimed the latest ticket.
+    await act(async () => {
+      rejectFirst(new Error('late failure'));
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+
+    expect(result.current.draft).toBe('重命名二');
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it('revalidates the agent-document list after a successful rename', async () => {
+    const { result } = renderHook(() => usePortalDocumentTitle());
+
+    act(() => result.current.startEdit());
+    act(() => result.current.setDraft('开营筹备清单 V2'));
+    await act(async () => {
+      await result.current.commitEdit();
+    });
+
+    expect(mockInvalidate).toHaveBeenCalledWith(
+      expect.objectContaining({ agentId: 'agent-1', documentId: 'document-1' }),
+    );
   });
 
   it('locks meta for a managed skill index (rename must not rewrite SKILL.md)', () => {

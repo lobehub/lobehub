@@ -2,7 +2,7 @@
 
 import { buildAgentDocumentUrl } from '@lobechat/builtin-tool-agent-documents';
 import { toast } from '@lobehub/ui/base-ui';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
@@ -10,6 +10,7 @@ import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useClientDataSWR } from '@/libs/swr';
 import { portalKeys } from '@/libs/swr/keys';
 import { documentService } from '@/services/document';
+import { invalidateDocumentMutation } from '@/services/document/invalidation';
 import { useAgentStore } from '@/store/agent';
 import { getDocumentRenderMode } from '@/utils/documentRenderMode';
 import { isSkillMarkdownDocument } from '@/utils/skillMarkdown';
@@ -29,6 +30,7 @@ export const TITLE_MAX_LENGTH = 100;
 export const usePortalDocumentTitle = () => {
   const { t } = useTranslation(['chat', 'common']);
   const documentId = useResolvedDocumentId();
+  const agentId = useAgentStore((s) => s.activeAgentId);
 
   const {
     data: document,
@@ -55,6 +57,11 @@ export const usePortalDocumentTitle = () => {
 
   const [draft, setDraft] = useState(savedTitle);
   const [editing, setEditing] = useState(false);
+  // Serializes overlapping saves: a slow rename must not let a rejected older
+  // request roll the title back over a newer one, nor let its own success
+  // overwrite a newer intent. The newest commit bumps the ticket; only the
+  // holder of the latest ticket may touch the draft/cache on settle.
+  const saveTicketRef = useRef(0);
 
   // Follow the SWR source while idle; never clobber a draft mid-typing.
   const syncIdleDraft = useCallback(
@@ -71,27 +78,37 @@ export const usePortalDocumentTitle = () => {
   }, [metaLocked, savedTitle]);
 
   const commitEdit = useCallback(async () => {
-    setEditing(false);
     const nextTitle = draft.trim();
     // Empty or unchanged drafts fall back to the saved title — no write.
     if (!nextTitle || nextTitle === savedTitle || !documentId) {
       setDraft(savedTitle);
+      setEditing(false);
       return;
     }
 
-    // Optimistic update, then reconcile with the server response.
+    // Claim the newest save; only this ticket may settle the title.
+    const ticket = ++saveTicketRef.current;
+    setEditing(false);
     setDraft(nextTitle);
+
+    // Optimistic update, then reconcile with the server response.
     mutateDocument((prev) => (prev ? { ...prev, title: nextTitle } : prev), { revalidate: false });
     try {
       await documentService.updateDocument({ id: documentId, title: nextTitle });
+      if (ticket !== saveTicketRef.current) return;
+      // Revalidate the caches other surfaces read titles from (working-sidebar
+      // tree, standalone document page read `agent:documentsList`), mirroring
+      // the full-page editor's post-rename list refresh.
+      void invalidateDocumentMutation({ agentId: agentId ?? undefined, documentId });
     } catch {
+      if (ticket !== saveTicketRef.current) return;
       toast.error(t('operationFailed', { ns: 'common' }));
       setDraft(savedTitle);
       mutateDocument((prev) => (prev ? { ...prev, title: savedTitle } : prev), {
         revalidate: false,
       });
     }
-  }, [draft, documentId, mutateDocument, savedTitle, t]);
+  }, [agentId, draft, documentId, mutateDocument, savedTitle, t]);
 
   return {
     commitEdit,

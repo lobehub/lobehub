@@ -5,7 +5,7 @@ import { Flexbox } from '@lobehub/ui';
 import { Button, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Download, MessageSquareText } from 'lucide-react';
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useClientDataSWR } from '@/libs/swr';
@@ -59,7 +59,13 @@ const FooterActions = memo<FooterActionsProps>(({ agentId, documentId, title }) 
   );
   const markdown = storeContent ?? documentMeta?.content ?? '';
 
+  // A pending guard, not just visual: the server's lookup-then-create is not
+  // atomic, so concurrent double-clicks can create two document topics.
+  const [switching, setSwitching] = useState(false);
+
   const handleChatToEdit = useCallback(async () => {
+    if (switching) return;
+    setSwitching(true);
     try {
       const result = await agentDocumentService.getOrCreateChatTopic({ agentId, documentId });
       // Return to the main conversation anchored on this document's chat topic —
@@ -68,8 +74,10 @@ const FooterActions = memo<FooterActionsProps>(({ agentId, documentId, title }) 
       await switchTopic(result.topicId);
     } catch {
       toast.error(t('operationFailed', { ns: 'common' }));
+    } finally {
+      setSwitching(false);
     }
-  }, [agentId, clearPortalStack, documentId, switchTopic, t]);
+  }, [agentId, clearPortalStack, documentId, switchTopic, switching, t]);
 
   const handleExport = useCallback(async () => {
     const content = markdown;
@@ -100,6 +108,7 @@ const FooterActions = memo<FooterActionsProps>(({ agentId, documentId, title }) 
       <Button
         block
         icon={MessageSquareText}
+        loading={switching}
         type={'default'}
         onClick={() => void handleChatToEdit()}
       >
