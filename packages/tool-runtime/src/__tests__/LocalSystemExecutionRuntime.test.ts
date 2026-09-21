@@ -388,6 +388,45 @@ describe('LocalSystemExecutionRuntime.readFile', () => {
     expect(output.content).toContain('(lines 1-200 of 2545)');
     expect(output.content).toContain('1 some lines');
   });
+
+  // The cloud manifest makes startLine/endLine independently optional: an
+  // endLine-only read stops mid-file and must still get the window marker,
+  // a startLine-only read runs to EOF and must not.
+  it('marks an endLine-only loc-less read (cloud sandbox shape)', async () => {
+    const service = createService({
+      readLocalFile: vi.fn().mockResolvedValue({
+        content: 'some lines',
+        fileType: 'txt',
+        filename: 'big.txt',
+        totalCharCount: 148_370,
+        totalLineCount: 2545,
+      }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    const output = await runtime.readFile({ endLine: 200, path: '/tmp/big.txt' });
+
+    expect(output.content).toContain('(lines 1-200 of 2545)');
+    expect(output.content).toContain('1 some lines');
+  });
+
+  it('does not mark a startLine-only loc-less read that runs to EOF', async () => {
+    const service = createService({
+      readLocalFile: vi.fn().mockResolvedValue({
+        content: 'tail',
+        fileType: 'txt',
+        filename: 'big.txt',
+        totalCharCount: 148_370,
+        totalLineCount: 2545,
+      }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    const output = await runtime.readFile({ path: '/tmp/big.txt', startLine: 2001 });
+
+    expect(output.content).not.toContain('(lines');
+    expect(output.content).toContain('2001 tail');
+  });
 });
 
 describe('LocalSystemExecutionRuntime.executeToolCall — working directory anchoring', () => {

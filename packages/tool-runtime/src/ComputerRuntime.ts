@@ -170,14 +170,17 @@ export abstract class ComputerRuntime {
       // discovering the file was truncated.
       const hasLoc = Array.isArray(r.loc) && r.loc.length === 2;
       // The loc-less fallback is the cloud sandbox path (local reads always
-      // return `loc`): its `startLine`/`endLine` args are 1-based inclusive,
-      // so normalize to the 0-based end-exclusive window the formatter
-      // computes with — passing [1, 200] through raw would label a full
-      // 200-line read as "(lines 1-199 of ...)".
+      // return `loc`): its `startLine`/`endLine` args are 1-based inclusive
+      // and independently optional, so normalize to the 0-based
+      // end-exclusive window the formatter computes with — passing [1, 200]
+      // through raw would label a full 200-line read as "(lines 1-199 of
+      // ...)". An endLine-only read stops mid-file and needs the marker; a
+      // startLine-only read runs to EOF (window end = totalLines).
+      const fallbackEnd = args.endLine ?? r.totalLineCount ?? r.totalLines;
       const lineRange: [number, number] | undefined = hasLoc
         ? [r.loc[0], r.loc[1]]
-        : args.startLine !== undefined && args.endLine !== undefined
-          ? [Math.max(args.startLine - 1, 0), args.endLine]
+        : (args.startLine !== undefined || args.endLine !== undefined) && fallbackEnd !== undefined
+          ? [Math.max((args.startLine ?? 1) - 1, 0), fallbackEnd]
           : undefined;
 
       // `loc` is 0-based end-exclusive while the cloud sandbox's

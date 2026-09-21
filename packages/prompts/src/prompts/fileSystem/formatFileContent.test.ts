@@ -99,6 +99,33 @@ describe('formatFileContent', () => {
     expect(result).toBe('1 a\n2 b');
   });
 
+  it('should preserve a genuine blank line at the window boundary', () => {
+    // `a\n\nb` read with loc [0, 2] arrives as `a\n` — the terminal empty
+    // element is the real second line, not a trailing-newline artifact.
+    const result = formatFileContent({
+      content: 'a\n',
+      firstLineNumber: 1,
+      lineRange: [0, 2],
+      totalLines: 3,
+    });
+    expect(result).toBe('(lines 1-2 of 3)\n1 a\n2 ');
+  });
+
+  it('should cap the output after adding line numbers', () => {
+    // 100K blank lines: ~100KB raw, ~700KB after numbering.
+    const content = Array.from({ length: 100_000 }, () => '').join('\n');
+    const result = formatFileContent({
+      content,
+      firstLineNumber: 1,
+      lineRange: [0, 100_000],
+      totalLines: 200_000,
+    });
+    expect(result).toContain('[output truncated at 500000 chars after adding line numbers.');
+    expect(result.length).toBeLessThan(501_000);
+    // A capped payload must not claim the full window.
+    expect(result).not.toContain('(lines');
+  });
+
   it('should not mark a window without a total line count', () => {
     const result = formatFileContent({
       content: 'some lines',
