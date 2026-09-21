@@ -28,7 +28,7 @@ import type { IServiceModule, ServiceLifecycle, ServiceModule } from '@/services
 import LocalDatabaseService from '@/services/LocalDatabaseSrv';
 import { createLogger } from '@/utils/logger';
 import * as electronIs from '@/utils/platform';
-import { refreshShellPath } from '@/utils/shellPath';
+import { refreshShellEnvironment } from '@/utils/shellPath';
 
 import { BrowserManager } from './browser/BrowserManager';
 import { backendProxyProtocolManager } from './infrastructure/BackendProxyProtocolManager';
@@ -307,11 +307,10 @@ export class App {
   private initializeAfterFirstFrame = async (initializeNativeShell: () => Promise<void>) => {
     await this.browserManager.waitForMainWindowFirstFrame();
 
-    // GUI-launched apps do not inherit the user's login-shell PATH. Resolve it
-    // asynchronously after the first frame so shell startup never blocks the
-    // main process -> renderer navigation critical path.
-    void refreshShellPath().catch((error) => {
-      logger.warn('Failed to refresh PATH from the login shell:', error);
+    // GUI-launched apps do not inherit shell PATH or Claude Code Bedrock settings.
+    // Resolve them after the first frame so shell startup does not block initial navigation.
+    void refreshShellEnvironment().catch((error) => {
+      logger.warn('从登录 shell 刷新环境变量失败：', error);
     });
 
     await Promise.all([initializeNativeShell(), this.runControllerHooks('afterFirstFrame')]);
