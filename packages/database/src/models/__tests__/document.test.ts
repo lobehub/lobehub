@@ -541,16 +541,42 @@ describe('DocumentModel', () => {
       expect(updatedAt).toEqual(found?.updatedAt);
     });
 
-    it('should let an explicit updatedAt win over the default now()', async () => {
+    it('advances the version for concurrent writes even when callers send the same old timestamp', async () => {
       const { documentId } = await createTestDocument(documentModel, fileModel, 'Original content');
-      const explicitUpdatedAt = new Date('2026-01-01T00:00:00.000Z');
+      const original = (await documentModel.findById(documentId))!;
+      const versions = await Promise.all(
+        Array.from({ length: 4 }, (_, index) =>
+          documentModel.update(documentId, {
+            content: `Write ${index}`,
+            updatedAt: original.updatedAt,
+          }),
+        ),
+      );
+      const timestamps = versions.map((version) => version!.getTime()).sort((a, b) => a - b);
+      expect(new Set(timestamps).size).toBe(4);
+      expect(timestamps[0]).toBeGreaterThan(original.updatedAt.getTime());
+      expect((await documentModel.findById(documentId))?.updatedAt.getTime()).toBe(timestamps[3]);
+    });
 
-      const updatedAt = await documentModel.update(documentId, {
-        content: 'Updated content',
-        updatedAt: explicitUpdatedAt,
+    it('advances direct SQL writes beyond a future row version despite a backward app clock', async () => {
+      const { documentId } = await createTestDocument(documentModel, fileModel, 'Original content');
+      const original = (await documentModel.findById(documentId))!;
+      const future = new Date('2100-01-01T00:00:00.000Z');
+      const [seed] = await serverDB
+        .insert(documents)
+        .values({ ...original, id: 'future-version-doc', slug: null, updatedAt: future })
+        .returning();
+      const [first] = await serverDB
+        .update(documents)
+        .set({ content: 'Direct write', updatedAt: new Date('2000-01-01') })
+        .where(eq(documents.id, seed.id))
+        .returning();
+      const second = await documentModel.update(seed.id, {
+        content: 'Model write',
+        updatedAt: future,
       });
-
-      expect(updatedAt).toEqual(explicitUpdatedAt);
+      expect(first.updatedAt.getTime()).toBe(future.getTime() + 1);
+      expect(second!.getTime()).toBe(first.updatedAt.getTime() + 1);
     });
 
     it('should still bump updatedAt when the patch carries an explicit undefined', async () => {

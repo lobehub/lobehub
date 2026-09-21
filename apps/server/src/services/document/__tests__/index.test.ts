@@ -784,7 +784,7 @@ describe('DocumentService', () => {
 
     it('should update content and recalculate char/line counts', async () => {
       const newContent = 'Updated\nContent';
-      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.update.mockResolvedValue(new Date('2026-04-12T00:00:00.000Z'));
       mockDocumentModel.findById.mockResolvedValue(createCurrentDocument());
 
       const result = await service.updateDocument('doc-1', { content: newContent });
@@ -808,7 +808,7 @@ describe('DocumentService', () => {
 
     it('should append history when editorData changes', async () => {
       const editorData = { blocks: [{ type: 'paragraph', text: 'Hello' }] };
-      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.update.mockResolvedValue(new Date('2026-04-12T00:00:00.000Z'));
       mockDocumentModel.findById.mockResolvedValue(createCurrentDocument());
 
       const result = await service.updateDocument('doc-1', { editorData, saveSource: 'manual' });
@@ -831,18 +831,19 @@ describe('DocumentService', () => {
 
     it('should return the updatedAt written to the row, matching the history savedAt', async () => {
       const editorData = { blocks: [{ type: 'paragraph', text: 'Hello' }] };
-      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.update.mockResolvedValue(new Date('2026-04-12T00:00:00.000Z'));
       mockDocumentModel.findById.mockResolvedValue(createCurrentDocument());
 
       const result = await service.updateDocument('doc-1', { editorData, saveSource: 'manual' });
 
       expect(mockDocumentModel.update).toHaveBeenCalledWith(
         'doc-1',
-        expect.objectContaining({ updatedAt: result.updatedAt }),
+        expect.not.objectContaining({ updatedAt: expect.anything() }),
       );
       expect(mockDocumentHistoryService.createHistory).toHaveBeenCalledWith(
         expect.objectContaining({ savedAt: result.updatedAt }),
       );
+      expect(result.updatedAt).toEqual(new Date('2026-04-12T00:00:00.000Z'));
       expect(result.savedAt).toEqual(result.updatedAt);
     });
 
@@ -866,7 +867,7 @@ describe('DocumentService', () => {
           ],
         },
       };
-      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.update.mockResolvedValue(new Date('2026-04-12T00:00:00.000Z'));
       mockDocumentModel.findById.mockResolvedValue(
         createCurrentDocument({ editorData: createEditorDataWithDiffNode() }),
       );
@@ -910,7 +911,7 @@ describe('DocumentService', () => {
 
     it('accepts the save when expectedUpdatedAt matches the stored row', async () => {
       const storedUpdatedAt = new Date('2026-04-11T00:00:00.000Z');
-      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.update.mockResolvedValue(new Date('2026-04-12T00:00:00.000Z'));
       mockDocumentModel.findById.mockResolvedValue(createCurrentDocument());
       (mockDb as any).select = vi.fn(() => ({
         from: () => ({
@@ -937,7 +938,7 @@ describe('DocumentService', () => {
 
     it('should skip history when editorData is unchanged', async () => {
       const editorData = { blocks: [] };
-      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.update.mockResolvedValue(new Date('2026-04-12T00:00:00.000Z'));
       mockDocumentModel.findById.mockResolvedValue(createCurrentDocument());
 
       const result = await service.updateDocument('doc-1', { editorData });
@@ -990,7 +991,7 @@ describe('DocumentService', () => {
           type: 'root',
         },
       };
-      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.update.mockResolvedValue(new Date('2026-04-12T00:00:00.000Z'));
       mockDocumentModel.findById.mockResolvedValue(
         createCurrentDocument({ editorData: currentEditorData }),
       );
@@ -1012,7 +1013,7 @@ describe('DocumentService', () => {
           type: 'root',
         },
       };
-      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.update.mockResolvedValue(new Date('2026-04-12T00:00:00.000Z'));
       mockDocumentModel.findById.mockResolvedValue(
         createCurrentDocument({ editorData: currentEditorData }),
       );
@@ -1024,7 +1025,7 @@ describe('DocumentService', () => {
     });
 
     it('should update title and filename together', async () => {
-      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.update.mockResolvedValue(new Date('2026-04-12T00:00:00.000Z'));
       mockDocumentModel.findById.mockResolvedValue(createCurrentDocument());
 
       await service.updateDocument('doc-1', { title: 'New Title' });
@@ -1039,7 +1040,7 @@ describe('DocumentService', () => {
     });
 
     it('should sync title update to associated file', async () => {
-      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.update.mockResolvedValue(new Date('2026-04-12T00:00:00.000Z'));
       mockDocumentModel.findById.mockResolvedValue(createCurrentDocument({ fileId: 'file-1' }));
       mockFileModel.update.mockResolvedValue(undefined);
 
@@ -1049,7 +1050,7 @@ describe('DocumentService', () => {
     });
 
     it('should sync parentId update to associated file', async () => {
-      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.update.mockResolvedValue(new Date('2026-04-12T00:00:00.000Z'));
       mockDocumentModel.findById.mockResolvedValue(createCurrentDocument({ fileId: 'file-1' }));
       mockFileModel.update.mockResolvedValue(undefined);
 
@@ -1059,7 +1060,7 @@ describe('DocumentService', () => {
     });
 
     it('should sync both title and parentId to file when both are updated', async () => {
-      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.update.mockResolvedValue(new Date('2026-04-12T00:00:00.000Z'));
       mockDocumentModel.findById.mockResolvedValue(createCurrentDocument({ fileId: 'file-1' }));
       mockFileModel.update.mockResolvedValue(undefined);
 
@@ -1072,7 +1073,7 @@ describe('DocumentService', () => {
     });
 
     it('should NOT update file when document has no associated file', async () => {
-      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.update.mockResolvedValue(new Date('2026-04-12T00:00:00.000Z'));
       mockDocumentModel.findById.mockResolvedValue(createCurrentDocument());
 
       await service.updateDocument('doc-1', { title: 'New Title' });
@@ -1082,7 +1083,7 @@ describe('DocumentService', () => {
 
     it('should update metadata', async () => {
       const metadata = { key: 'value' };
-      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.update.mockResolvedValue(new Date('2026-04-12T00:00:00.000Z'));
       mockDocumentModel.findById.mockResolvedValue(createCurrentDocument());
 
       await service.updateDocument('doc-1', { metadata });
@@ -1094,7 +1095,7 @@ describe('DocumentService', () => {
     });
 
     it('should update fileType', async () => {
-      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.update.mockResolvedValue(new Date('2026-04-12T00:00:00.000Z'));
       mockDocumentModel.findById.mockResolvedValue(createCurrentDocument());
 
       await service.updateDocument('doc-1', { fileType: 'text/markdown' });
@@ -1106,7 +1107,7 @@ describe('DocumentService', () => {
     });
 
     it('should handle parentId null (moving to root)', async () => {
-      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.update.mockResolvedValue(new Date('2026-04-12T00:00:00.000Z'));
       mockDocumentModel.findById.mockResolvedValue(createCurrentDocument({ fileId: 'file-1' }));
       mockFileModel.update.mockResolvedValue(undefined);
 
@@ -1138,7 +1139,7 @@ describe('DocumentService', () => {
       // Private rows are creator-only; a leftover lease from a publish →
       // unpublish flip must not turn every autosave into a CONFLICT loop.
       const wsService = new DocumentService(mockDb, userId, 'ws-1');
-      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.update.mockResolvedValue(new Date('2026-04-12T00:00:00.000Z'));
       mockDocumentModel.findById.mockResolvedValue(
         createCurrentDocument({ visibility: 'private', workspaceId: 'ws-1' }),
       );
@@ -1152,7 +1153,7 @@ describe('DocumentService', () => {
 
     it('should allow a workspace save when no other member holds the lock', async () => {
       const wsService = new DocumentService(mockDb, userId, 'ws-1');
-      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.update.mockResolvedValue(new Date('2026-04-12T00:00:00.000Z'));
       mockDocumentModel.findById.mockResolvedValue(createCurrentDocument({ workspaceId: 'ws-1' }));
       vi.spyOn(EditLockService.prototype, 'canWrite').mockResolvedValue(true);
 
@@ -1163,7 +1164,7 @@ describe('DocumentService', () => {
 
     it('checks workspace body saves against the provided lock owner id', async () => {
       const wsService = new DocumentService(mockDb, userId, 'ws-1');
-      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.update.mockResolvedValue(new Date('2026-04-12T00:00:00.000Z'));
       mockDocumentModel.findById.mockResolvedValue(createCurrentDocument({ workspaceId: 'ws-1' }));
       const guardSpy = vi.spyOn(EditLockService.prototype, 'canWrite').mockResolvedValue(true);
 
@@ -1175,7 +1176,7 @@ describe('DocumentService', () => {
 
     it('allows a metadata-only save while another member holds the lock (only the body is locked)', async () => {
       const wsService = new DocumentService(mockDb, userId, 'ws-1');
-      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.update.mockResolvedValue(new Date('2026-04-12T00:00:00.000Z'));
       // Current body matches what the autosave re-sends — only title changes.
       mockDocumentModel.findById.mockResolvedValue(
         createCurrentDocument({ content: 'body', editorData: { blocks: [] }, workspaceId: 'ws-1' }),
