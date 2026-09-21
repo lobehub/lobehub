@@ -122,7 +122,8 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(
           <Flexbox gap={8}>
             <FieldLabel>{t('environments.meta.creator')}</FieldLabel>
             <Flexbox horizontal align={'center'} gap={8}>
-              <Avatar avatar={environment.creator?.avatar ?? undefined} size={24} />
+              {/* Name as the avatar value — see EnvironmentItem for why `title` alone does not reach the fallback text. */}
+              <Avatar avatar={environment.creator?.avatar || creator} size={24} title={creator} />
               <Text>{creator}</Text>
             </Flexbox>
           </Flexbox>
