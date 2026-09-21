@@ -20,23 +20,37 @@ export function resolveCeSnapshot(
   // New format: contextEngine typed field
   if (step.contextEngine !== undefined) {
     let resolvedInput = step.contextEngine.input;
+    let resolvedMetadata = step.contextEngine.metadata;
     let resolvedOutput = step.contextEngine.output;
 
-    if (allSteps && (resolvedInput === undefined || resolvedOutput === undefined)) {
+    if (
+      allSteps &&
+      (resolvedInput === undefined ||
+        resolvedMetadata === undefined ||
+        resolvedOutput === undefined)
+    ) {
       for (let i = step.stepIndex - 1; i >= 0; i--) {
         const prevStep = allSteps.find((s) => s.stepIndex === i);
         if (!prevStep?.contextEngine) continue;
         if (resolvedInput === undefined && prevStep.contextEngine.input !== undefined) {
           resolvedInput = prevStep.contextEngine.input;
         }
+        if (resolvedMetadata === undefined && prevStep.contextEngine.metadata !== undefined) {
+          resolvedMetadata = prevStep.contextEngine.metadata;
+        }
         if (resolvedOutput === undefined && prevStep.contextEngine.output !== undefined) {
           resolvedOutput = prevStep.contextEngine.output;
         }
-        if (resolvedInput !== undefined && resolvedOutput !== undefined) break;
+        if (
+          resolvedInput !== undefined &&
+          resolvedMetadata !== undefined &&
+          resolvedOutput !== undefined
+        )
+          break;
       }
     }
 
-    return { input: resolvedInput, output: resolvedOutput };
+    return { input: resolvedInput, metadata: resolvedMetadata, output: resolvedOutput };
   }
 
   // Legacy format: context_engine_result stored in events array
