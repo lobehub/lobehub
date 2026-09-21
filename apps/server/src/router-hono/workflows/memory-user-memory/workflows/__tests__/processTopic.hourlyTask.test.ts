@@ -137,6 +137,25 @@ describe('processTopicHandler hourly task behavior', () => {
     ]);
   });
 
+  it('skips both extraction blocks for a request that names only the retired experience layer', async () => {
+    /**
+     * @example
+     * The executor treats an empty layer list as unrestricted, so an Experience-only request
+     * must not reach it at all — neither the CEPA block nor the identity block runs.
+     */
+    const context = createContext({
+      baseUrl: 'https://app.example.com',
+      layers: [LayersEnum.Experience],
+      sources: [MemorySourceType.ChatTopic],
+      topicIds: ['t1'],
+      userIds: ['u1'],
+    });
+
+    await processTopicHandler(context as never);
+
+    expect(mocks.extractTopic).not.toHaveBeenCalled();
+  });
+
   it('skips CEPA extraction when the hourly task is cancelled before heavy work', async () => {
     /**
      * @example

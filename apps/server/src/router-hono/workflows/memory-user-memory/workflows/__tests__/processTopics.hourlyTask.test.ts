@@ -155,6 +155,24 @@ describe('processTopicsHandler hourly task behavior', () => {
     ]);
   });
 
+  it('does not fan out a request that names only the retired experience layer', async () => {
+    /**
+     * @example
+     * Nothing is left to extract, so no process-topic run is triggered for the topic.
+     */
+    const context = createContext({
+      baseUrl: 'https://app.example.com',
+      layers: [LayersEnum.Experience],
+      sources: [MemorySourceType.ChatTopic],
+      topicIds: ['t1'],
+      userIds: ['u1'],
+    });
+
+    await expect(processTopicsHandler(context as never)).resolves.toMatchObject({ skipped: true });
+
+    expect(mocks.triggerProcessTopic).not.toHaveBeenCalled();
+  });
+
   it('skips topic fan-out and persona update when the hourly task is cancelled', async () => {
     /**
      * @example
