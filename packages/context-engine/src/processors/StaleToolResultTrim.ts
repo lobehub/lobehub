@@ -8,6 +8,7 @@ declare module '../types' {
     staleToolResultTrim?: {
       byRule: Record<string, number>;
       savedChars: number;
+      skippedReason?: 'warm-cache';
       trimmedMessages: number;
     };
   }
@@ -16,6 +17,26 @@ declare module '../types' {
 const log = debug('context-engine:processor:StaleToolResultTrimProcessor');
 
 export interface StaleToolResultTrimConfig {
+  /**
+   * Cache read price relative to the plain input price.
+   * Anthropic: 0.1.
+   * @default 0.1
+   */
+  cacheReadPrice?: number;
+  /**
+   * Provider prompt-cache TTL in ms. A turn whose trigger follows the
+   * previous turn's last activity within this window has a warm cache, so
+   * trimming is a paid rewrite and goes through the warm break-even check.
+   * Anthropic: 5 min (refreshed per hit).
+   * @default 300_000
+   */
+  cacheTtlMs?: number;
+  /**
+   * Cache write price relative to the plain input price.
+   * Anthropic 5-min TTL: 1.25.
+   * @default 1.25
+   */
+  cacheWritePrice?: number;
   /**
    * Head chars kept when an old `runCommand` / `getCommandOutput` result is
    * trimmed (the same number of tail chars is also kept).
@@ -47,6 +68,20 @@ export interface StaleToolResultTrimConfig {
    * @default 100_000
    */
   minTotalToolChars?: number;
+  /**
+   * Warm-cache break-even: assumed number of remaining LLM steps the current
+   * turn will run. The trim fires on a warm cache only when
+   * `estimate × saved × readPrice > rewriteDelta × warmSafetyMargin`.
+   * Conservative default; real heavy ops run 100+ steps, quick follow-ups 1-5.
+   * @default 20
+   */
+  warmRemainingStepsEstimate?: number;
+  /**
+   * Multiplier on the rewrite cost in the warm break-even check, absorbing
+   * estimation error.
+   * @default 1.5
+   */
+  warmSafetyMargin?: number;
 }
 
 const LOCAL_SYSTEM = 'lobe-local-system';
@@ -88,14 +123,17 @@ const locOf = (plugin: PluginInfo | undefined): [number, number] | undefined => 
  * the page snapshot is ten interactions old — replaying it buys the model
  * nothing, but every caller still pays for it on every step.
  *
- * Cache safety: the trim runs on the loaded history on every request and the
- * rules are monotone — a message, once trimmed, trims identically on every
- * later request (trim decisions only depend on the presence of LATER
- * messages, never on earlier ones, and the recency window only moves
- * forward). The already-trimmed prefix therefore stays byte-stable across
- * requests and keeps the prompt-cache prefix reusable; the savings land at
- * the operation boundary, where the cache is cold anyway (TTL) and the whole
- * prefix would be rewritten regardless.
+ * Cache safety comes from three constraints: trim decisions only depend on
+ * the presence of LATER messages, so once trimmed a message trims identically
+ * on every later request and the already-trimmed prefix stays byte-stable;
+ * the trim never touches messages from the in-flight turn (after the last
+ * user message), because every LLM step of a running operation re-runs this
+ * pipeline and rewriting the prefix mid-operation would cold the warm prompt
+ * cache for every remaining step; and when the turn boundary itself has a
+ * warm cache (user followed up within the provider's cache TTL), the trim is
+ * a paid rewrite, so it only fires when the savings clear the warm
+ * thresholds. Trimming is truly free at cold boundaries — the first turn,
+ * or any gap longer than the cache TTL.
  *
  * Must run AFTER the flatten processors (assistantGroup / compressedGroup
  * hoist nested tool results into top-level `role: 'tool'` rows with
@@ -109,11 +147,16 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
   constructor(config: StaleToolResultTrimConfig = {}, options: ProcessorOptions = {}) {
     super(options);
     this.config = {
+      cacheReadPrice: config.cacheReadPrice ?? 0.1,
+      cacheTtlMs: config.cacheTtlMs ?? 300_000,
+      cacheWritePrice: config.cacheWritePrice ?? 1.25,
       commandKeepChars: config.commandKeepChars ?? 500,
       crawlKeepChars: config.crawlKeepChars ?? 1000,
       enabled: config.enabled ?? true,
       keepRecentMessages: config.keepRecentMessages ?? 20,
       minTotalToolChars: config.minTotalToolChars ?? 100_000,
+      warmRemainingStepsEstimate: config.warmRemainingStepsEstimate ?? 20,
+      warmSafetyMargin: config.warmSafetyMargin ?? 1.5,
     };
   }
 
@@ -160,8 +203,8 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
       }
     });
 
-    // Pass 2 — trim
-    const clonedContext = this.cloneContext(context);
+    // Pass 2 — collect trim candidates (dry run first; the cache-warmth gate
+    // below needs the total savings before deciding).
     const keepFrom = messages.length - this.config.keepRecentMessages;
 
     // Turn boundary: the last user message starts the in-flight turn. Every
@@ -169,31 +212,101 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
     // this pipeline, so trimming a message produced DURING the current turn
     // would rewrite the prefix mid-operation and invalidate the warm prompt
     // cache for every remaining step. Restricting the trim to messages older
-    // than the last user message confines it to the operation boundary, where
-    // the cache is cold anyway. When no user message exists (tests, exotic
-    // flows), the recency window alone applies.
+    // than the last user message confines it to the operation boundary. When
+    // no user message exists (tests, exotic flows), the recency window alone
+    // applies.
     const lastUserIndex = messages.reduce((acc, m, i) => (m.role === 'user' ? i : acc), -1);
     const boundary = lastUserIndex >= 0 ? Math.min(keepFrom, lastUserIndex) : keepFrom;
 
-    let trimmedMessages = 0;
-    let savedChars = 0;
-    const byRule: Record<string, number> = {};
-
-    clonedContext.messages = clonedContext.messages.map((message, index) => {
-      if (index >= boundary) return message;
-      if (message.role !== 'tool') return message;
-      if (typeof message.content !== 'string' || message.content.length === 0) return message;
+    const candidates: { content: string; index: number; rule: string }[] = [];
+    for (let index = 0; index < boundary; index++) {
+      const message = messages[index];
+      if (message.role !== 'tool') continue;
+      if (typeof message.content !== 'string' || message.content.length === 0) continue;
       // Error results are the most valuable debugging context — never trim.
-      if (message.pluginError) return message;
+      if (message.pluginError) continue;
 
       const trimmed = this.trimMessage(message, index, lastWriteIndexByPath, readWindowsByPath);
-      if (trimmed === undefined || trimmed.content === message.content) return message;
+      if (trimmed === undefined || trimmed.content === message.content) continue;
+      candidates.push({ content: trimmed.content, index, rule: trimmed.rule });
+    }
 
-      trimmedMessages += 1;
-      savedChars += message.content.length - trimmed.content.length;
-      byRule[trimmed.rule] = (byRule[trimmed.rule] ?? 0) + 1;
-      return { ...message, content: trimmed.content };
+    if (candidates.length === 0) {
+      return this.markAsExecuted(context);
+    }
+
+    // Cache-warmth gate. Trimming is free only when the prompt cache is cold —
+    // i.e. the gap between the previous turn's last activity and this turn's
+    // trigger exceeds the provider's cache TTL (Anthropic: 5 min, refreshed
+    // per hit). When the user follows up within the TTL, the untrimmed prefix
+    // would still hit, so the trim must clear a break-even check against the
+    // rewrite it causes:
+    //
+    //   gain = R_est × S × readPrice   (each remaining step reads S less)
+    //   cost = ((P − S) × writePrice − P × readPrice) × margin
+    //
+    // Thanks to determinism the rewrite is paid at most once per trim-set
+    // change, not per follow-up — but a warm quick-question turn (1-5 steps)
+    // would never recoup it, which is exactly what the check blocks. Both
+    // timestamps are fixed for the whole turn, so the decision cannot flip
+    // mid-operation and flip the prefix with it.
+    const potentialSavedChars = candidates.reduce(
+      (s, c) => s + (messages[c.index].content as string).length - c.content.length,
+      0,
+    );
+    const triggeredAt = Date.parse(messages[lastUserIndex]?.createdAt ?? '');
+    const prevActivityAt = Date.parse(messages[lastUserIndex - 1]?.createdAt ?? '');
+    const cacheWarm =
+      Number.isFinite(triggeredAt) &&
+      Number.isFinite(prevActivityAt) &&
+      triggeredAt - prevActivityAt <= this.config.cacheTtlMs;
+
+    if (cacheWarm) {
+      const totalChars = messages.reduce(
+        (s, m) => s + (typeof m.content === 'string' ? m.content.length : 0),
+        0,
+      );
+      const gain =
+        this.config.warmRemainingStepsEstimate * potentialSavedChars * this.config.cacheReadPrice;
+      const rewriteDelta =
+        (totalChars - potentialSavedChars) * this.config.cacheWritePrice -
+        totalChars * this.config.cacheReadPrice;
+      const worthwhile = gain > rewriteDelta * this.config.warmSafetyMargin;
+      if (!worthwhile) {
+        log(
+          'Skipping trim: cache warm (gap <= %dms), gain %d <= cost %d × %d',
+          this.config.cacheTtlMs,
+          gain,
+          rewriteDelta,
+          this.config.warmSafetyMargin,
+        );
+        const skipped = this.cloneContext(context);
+        skipped.metadata.staleToolResultTrim = {
+          byRule: {},
+          savedChars: 0,
+          skippedReason: 'warm-cache',
+          trimmedMessages: 0,
+        };
+        return this.markAsExecuted(skipped);
+      }
+    }
+
+    // Pass 3 — apply
+    const clonedContext = this.cloneContext(context);
+    let savedChars = 0;
+    const byRule: Record<string, number> = {};
+    const candidateByIndex = new Map(candidates.map((c) => [c.index, c]));
+
+    clonedContext.messages = clonedContext.messages.map((message, index) => {
+      const candidate = candidateByIndex.get(index);
+      if (!candidate) return message;
+
+      savedChars += (message.content as string).length - candidate.content.length;
+      byRule[candidate.rule] = (byRule[candidate.rule] ?? 0) + 1;
+      return { ...message, content: candidate.content };
     });
+
+    const trimmedMessages = candidates.length;
 
     if (trimmedMessages > 0) {
       log('Trimmed %d stale tool result(s), saved %d chars', trimmedMessages, savedChars);

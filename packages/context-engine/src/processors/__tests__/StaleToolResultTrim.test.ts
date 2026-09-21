@@ -92,7 +92,7 @@ describe('StaleToolResultTrimProcessor', () => {
 
     expect(result.messages[0].content).toBe('first chunk');
     expect(result.messages[1].content).toBe('second chunk');
-    expect(result.metadata.staleToolResultTrim?.trimmedMessages).toBe(0);
+    expect(result.metadata.staleToolResultTrim?.trimmedMessages ?? 0).toBe(0);
   });
 
   it('trims stale browser snapshots outside the recency window', async () => {
@@ -199,7 +199,7 @@ describe('StaleToolResultTrimProcessor', () => {
     const second = await processor.process(createContext(first.messages));
 
     expect(second.messages).toEqual(first.messages);
-    expect(second.metadata.staleToolResultTrim?.trimmedMessages).toBe(0);
+    expect(second.metadata.staleToolResultTrim?.trimmedMessages ?? 0).toBe(0);
   });
 
   it('does nothing when disabled', async () => {
@@ -233,5 +233,65 @@ describe('StaleToolResultTrimProcessor', () => {
     // After the boundary: untouched even though /b.ts was likewise overwritten
     expect(result.messages[3].content).toBe('y'.repeat(5000));
     expect(result.metadata.staleToolResultTrim?.trimmedMessages).toBe(1);
+  });
+
+  describe('cache-warmth gate', () => {
+    const T0 = Date.parse('2026-09-20T08:00:00Z');
+    const MIN = 60_000;
+
+    const turnMessages = (staleChars: number, gapMs: number) => [
+      readFileResult('/a.ts', 'x'.repeat(staleChars), [0, 200]),
+      writeFileResult('/a.ts'),
+      {
+        content: 'previous turn done',
+        createdAt: new Date(T0).toISOString(),
+        id: 'prev',
+        role: 'assistant',
+      },
+      {
+        content: 'next task',
+        createdAt: new Date(T0 + gapMs).toISOString(),
+        id: 'trigger',
+        role: 'user',
+      },
+      ...recencyPadding(3),
+    ];
+
+    it('trims when the gap exceeds the cache TTL (cold cache — trim is free)', async () => {
+      const result = await createProcessor().process(
+        createContext(turnMessages(5000, 10 * MIN)), // 10 min gap > 5 min TTL
+      );
+
+      expect(result.messages[0].content).toContain('superseded by a later write');
+      expect(result.metadata.staleToolResultTrim?.trimmedMessages).toBe(1);
+    });
+
+    it('skips the trim on a warm follow-up when savings are small relative to the payload', async () => {
+      // Large live payload (untrimmed) + small stale read: the rewrite of ~500k
+      // chars at write price dwarfs 20 estimated steps of 5k-char savings.
+      const result = await createProcessor().process(
+        createContext([
+          { content: 'z'.repeat(500_000), id: 'big-live-doc', role: 'assistant' },
+          ...turnMessages(5000, 1 * MIN),
+        ]),
+      );
+
+      expect(result.messages[1].content).toBe('x'.repeat(5000));
+      expect(result.metadata.staleToolResultTrim).toEqual({
+        byRule: {},
+        savedChars: 0,
+        skippedReason: 'warm-cache',
+        trimmedMessages: 0,
+      });
+    });
+
+    it('still trims on a warm follow-up when savings clear the warm thresholds', async () => {
+      const result = await createProcessor().process(
+        createContext(turnMessages(400_000, 1 * MIN)), // ~400k chars saved, >99% of payload
+      );
+
+      expect(result.messages[0].content).toContain('superseded by a later write');
+      expect(result.metadata.staleToolResultTrim?.trimmedMessages).toBe(1);
+    });
   });
 });
