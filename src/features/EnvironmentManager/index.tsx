@@ -128,10 +128,12 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
       <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
         {tabs ?? (
           <Text fontSize={12} type={'secondary'} weight={500}>
-            {/* Nothing until there is something to count. An unsettled fetch has
-                no count yet, and printing zero would be a claim rather than a
-                blank — the element still renders so the actions stay right. */}
-            {environments.length > 0 ? t('environments.total', { count: environments.length }) : ''}
+            {/* Zero counts too, once the fetch has settled: "no environments"
+                is an answer, and withholding it left this side of the row blank
+                in exactly the case that needed filling. What stays blank is the
+                window before the first result, where the count is unknown
+                rather than zero. */}
+            {data ? t('environments.total', { count: environments.length }) : ''}
           </Text>
         )}
         <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
