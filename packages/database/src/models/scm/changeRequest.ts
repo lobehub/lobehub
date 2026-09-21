@@ -41,10 +41,28 @@ export const isFailingCheck = (check: ScmCheck): boolean =>
   check.status === 'completed' && !!check.conclusion && FAILING_CONCLUSIONS.has(check.conclusion);
 
 /** Merge incoming checks into the stored set by external id; incoming wins. */
+/**
+ * When this result was reported, as the provider timed it. A completed run
+ * always sorts after a pending one for the same id, so a delayed "queued"
+ * cannot un-finish a check even when neither side carries a timestamp.
+ */
+const reportedAt = (check: ScmCheck): number => {
+  const stamp = check.reportedAt ?? check.completedAt ?? check.startedAt;
+  const parsed = stamp ? Date.parse(stamp) : Number.NaN;
+  if (!Number.isNaN(parsed)) return parsed;
+  return check.status === 'completed' ? 1 : 0;
+};
+
 export const mergeChecks = (current: ScmCheck[] | null | undefined, incoming: ScmCheck[]) => {
   const byId = new Map<string, ScmCheck>();
   for (const check of current ?? []) byId.set(check.externalId, check);
-  for (const check of incoming) byId.set(check.externalId, check);
+  for (const check of incoming) {
+    const stored = byId.get(check.externalId);
+    // A delayed pending event must not regress a completed check, and a
+    // delayed success must not hide a newer failure.
+    if (stored && reportedAt(stored) > reportedAt(check)) continue;
+    byId.set(check.externalId, check);
+  }
   return [...byId.values()];
 };
 
@@ -380,11 +398,18 @@ export class ScmChangeRequestModel {
 
       const reviewers = { ...existing.metadata?.reviewers };
       if (params.reviewerId) {
-        if (params.decision) {
-          reviewers[params.reviewerId] = {
-            at: (params.at ?? new Date()).toISOString(),
-            decision: params.decision,
-          };
+        // Reviews are delivered per reviewer and can arrive out of order; an
+        // approval submitted after a changes-request must not be undone by
+        // the older event landing second.
+        const stored = reviewers[params.reviewerId];
+        const at = params.at ?? new Date();
+        const storedAt = stored?.at ? Date.parse(stored.at) : Number.NaN;
+        const isStale = !Number.isNaN(storedAt) && at.getTime() < storedAt;
+
+        if (isStale) {
+          // nothing to apply: the stored verdict is the newer one
+        } else if (params.decision) {
+          reviewers[params.reviewerId] = { at: at.toISOString(), decision: params.decision };
         } else delete reviewers[params.reviewerId];
       }
 

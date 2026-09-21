@@ -19,7 +19,15 @@ import { canWriteScmScope, sanitizeReturnTo } from '@/server/services/scm/scope'
 
 const log = debug('lobe-server:scm:github-setup');
 
-/** Where the user lands after connecting; the page reads `installed=…`, `error=…` or `pending=…` from the query. */
+/**
+ * Where the user lands after connecting; the page reads `installed=…`,
+ * `error=…` or `pending=…` from the query.
+ *
+ * That page ships with the settings half of this stack. Until it lands the
+ * path renders the bare settings shell — which no user reaches, because the
+ * install entry is only linked from that same page and the App stays
+ * disabled without its environment variables.
+ */
 const SETTINGS_PATH = '/settings/integrations/github';
 
 const redirectToSettings = (origin: string, params: Record<string, string>, returnTo?: string) => {

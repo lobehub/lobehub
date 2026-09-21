@@ -138,6 +138,7 @@ describe('normalizeGitHubEvent', () => {
             conclusion: 'failure',
             externalId: 'check_run:2',
             name: 'Test Packages',
+            reportedAt: '2026-09-20T06:05:00Z',
             startedAt: '2026-09-20T06:01:00Z',
             status: 'completed',
             url: 'https://github.com/lobehub/lobehub/runs/2',

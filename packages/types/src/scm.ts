@@ -65,6 +65,12 @@ export interface ScmCheck {
   conclusion?: string;
   externalId: string;
   name: string;
+  /**
+   * Provider-clock time this result was reported. Check runs and legacy
+   * statuses reuse their external id as they transition, so deliveries that
+   * arrive out of order are ordered by this rather than by arrival.
+   */
+  reportedAt?: string;
   startedAt?: string;
   /** Provider status, e.g. `queued` | `in_progress` | `completed`. */
   status: string;

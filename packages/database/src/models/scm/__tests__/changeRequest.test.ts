@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
@@ -49,6 +50,44 @@ describe('rollupCiStatus', () => {
     expect(
       rollupCiStatus([check('a', 'success'), check('b', 'skipped'), check('c', 'cancelled')]),
     ).toBe('success');
+  });
+
+  it('keeps the newer report when deliveries for one check arrive out of order', () => {
+    const at = (
+      name: string,
+      conclusion: string | undefined,
+      reportedAt: string,
+      status = 'completed',
+    ) => ({
+      conclusion,
+      externalId: 'check_run:9',
+      name,
+      reportedAt,
+      status,
+    });
+
+    // A delayed `queued` must not un-finish a completed run.
+    const completed = at('Test', 'failure', '2026-09-20T06:05:00Z');
+    const stalePending = at('Test', undefined, '2026-09-20T06:01:00Z', 'queued');
+    expect(mergeChecks([completed], [stalePending])).toEqual([completed]);
+
+    // A delayed success must not hide a newer failure.
+    const staleSuccess = at('Test', 'success', '2026-09-20T06:02:00Z');
+    expect(mergeChecks([completed], [staleSuccess])).toEqual([completed]);
+
+    // The genuinely newer result still wins.
+    const newer = at('Test', 'success', '2026-09-20T06:09:00Z');
+    expect(mergeChecks([completed], [newer])).toEqual([newer]);
+
+    // With no timestamps at all, completed still beats pending.
+    const bare = { externalId: 'check_run:8', name: 'Lint', status: 'queued' };
+    const bareDone = {
+      conclusion: 'success',
+      externalId: 'check_run:8',
+      name: 'Lint',
+      status: 'completed',
+    };
+    expect(mergeChecks([bareDone], [bare])).toEqual([bareDone]);
   });
 
   it('merges by external id with the incoming check winning', () => {
@@ -242,10 +281,12 @@ describe('ScmChangeRequestModel', () => {
     // Reviewer A requests changes, reviewer B approves afterwards: the
     // outstanding request still governs.
     await ScmChangeRequestModel.applyReviewerDecision(serverDB, row.id, {
+      at: new Date('2026-09-20T08:00:00Z'),
       decision: 'changes_requested',
       reviewerId: 'rev-a',
     });
     await ScmChangeRequestModel.applyReviewerDecision(serverDB, row.id, {
+      at: new Date('2026-09-20T08:30:00Z'),
       decision: 'approved',
       reviewerId: 'rev-b',
     });
@@ -253,8 +294,24 @@ describe('ScmChangeRequestModel', () => {
       'changes_requested',
     );
 
+    // A stale delivery of A's earlier verdict does not undo a newer one.
+    await ScmChangeRequestModel.applyReviewerDecision(serverDB, row.id, {
+      at: new Date('2026-09-20T12:00:00Z'),
+      decision: 'approved',
+      reviewerId: 'rev-a',
+    });
+    await ScmChangeRequestModel.applyReviewerDecision(serverDB, row.id, {
+      at: new Date('2026-09-20T09:00:00Z'),
+      decision: 'changes_requested',
+      reviewerId: 'rev-a',
+    });
+    expect((await ScmChangeRequestModel.findById(serverDB, row.id))?.reviewDecision).toBe(
+      'approved',
+    );
+
     // A dismisses their own review: only B's approval is left.
     await ScmChangeRequestModel.applyReviewerDecision(serverDB, row.id, {
+      at: new Date('2026-09-20T13:00:00Z'),
       decision: null,
       reviewerId: 'rev-a',
     });
@@ -347,6 +404,38 @@ describe('ScmWebhookDeliveryModel', () => {
     expect(await ScmWebhookDeliveryModel.pruneBefore(serverDB, new Date(Date.now() + 1000))).toBe(
       1,
     );
+  });
+
+  it('lets a failed or abandoned delivery be replayed, but never a settled one', async () => {
+    const key = { deliveryId: 'd-2', provider: 'github' as const };
+    const claim = () => ScmWebhookDeliveryModel.claim(serverDB, { ...key, event: 'pull_request' });
+
+    expect((await claim())?.status).toBe('received');
+    // In flight: a redelivery must not run the handler a second time.
+    expect(await claim()).toBeNull();
+
+    // Failed: redelivery is how GitHub recovers the event, so it is claimable.
+    await ScmWebhookDeliveryModel.settle(serverDB, key, { error: 'boom', status: 'failed' });
+    const retried = await claim();
+    expect(retried).toMatchObject({ error: null, status: 'received' });
+    expect(retried?.processedAt).toBeNull();
+
+    // Settled: nothing to redo.
+    await ScmWebhookDeliveryModel.settle(serverDB, key, { status: 'processed' });
+    expect(await claim()).toBeNull();
+    await ScmWebhookDeliveryModel.settle(serverDB, key, { status: 'skipped' });
+    expect(await claim()).toBeNull();
+
+    // Stuck in `received` past the window — the process died mid-flight.
+    await serverDB
+      .update(scmWebhookDeliveries)
+      .set({
+        processedAt: null,
+        receivedAt: new Date(Date.now() - 10 * 60_000),
+        status: 'received',
+      })
+      .where(eq(scmWebhookDeliveries.deliveryId, 'd-2'));
+    expect((await claim())?.status).toBe('received');
   });
 });
 
