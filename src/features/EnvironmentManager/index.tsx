@@ -27,11 +27,16 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorBgContainer};
   `,
   /**
-   * One frame around the list, on the page's own surface — the device manager's
-   * shape. A filled settings group would have put a second card inside the
-   * first and repeated the page's title inside it; the route already says what
-   * this page is.
+   * Inside a settings group the list drops its own frame: the group is already
+   * a card, and a bordered card within it draws two nested rectangles around
+   * one list. The device manager makes the same call for the same reason.
    */
+  plainCol: css`
+    overflow: hidden;
+    min-width: 0;
+    border-radius: ${cssVar.borderRadiusLG};
+  `,
+  /** The standalone frame, for the page that has no group to sit in. */
   listCol: css`
     overflow: hidden;
 
@@ -149,6 +154,10 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
     </Flexbox>
   );
 
+  // A group brings its own card, so the list only frames itself when it is the
+  // outermost thing on the page.
+  const frame = tabs ? styles.listCol : styles.plainCol;
+
   const list = (
     <AsyncBoundary
       data={data}
@@ -160,7 +169,7 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
         // Inside the same frame the rows land in, sized to the skeleton's
         // rows: loading, empty and loaded are one surface whose contents
         // change, not three surfaces of three different heights.
-        <Flexbox className={styles.listCol}>
+        <Flexbox className={frame}>
           <Center style={{ minHeight: LIST_MIN_HEIGHT }} width={'100%'}>
             <Empty
               description={t('environments.desc')}
@@ -183,7 +192,7 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
         </Flexbox>
       }
       loading={
-        <Flexbox className={styles.listCol}>
+        <Flexbox className={frame}>
           <Flexbox padding={4}>
             <ListSkeleton />
           </Flexbox>
@@ -192,7 +201,7 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
       onRetry={refresh}
     >
       <Flexbox horizontal align={'flex-start'} gap={16}>
-        <Flexbox className={styles.listCol} flex={1}>
+        <Flexbox className={frame} flex={1}>
           <Flexbox className={styles.listScroll} gap={2} padding={4}>
             {environments.map((environment) => (
               <EnvironmentItem
