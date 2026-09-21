@@ -116,15 +116,17 @@ export class DocumentActionImpl {
       this.#cleanupDebouncedSave(documentId);
     }
 
-    const { activeDocumentId, internal_dispatchDocument } = this.#get();
-
-    // Delete document via reducer
-    internal_dispatchDocument({ id: documentId, type: 'deleteDocument' });
+    const { activeDocumentId, internal_dispatchDocument, getPendingSave } = this.#get();
 
     // Update activeDocumentId if needed
     if (activeDocumentId === documentId) {
       this.#set({ activeDocumentId: undefined }, false, n('closeDocument:clearActive'));
     }
+
+    const remove = () => internal_dispatchDocument({ id: documentId, type: 'deleteDocument' });
+    const pending = getPendingSave(documentId);
+    if (pending) void pending.finally(remove);
+    else remove();
   };
 
   /**

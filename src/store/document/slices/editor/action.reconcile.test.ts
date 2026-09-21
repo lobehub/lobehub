@@ -353,13 +353,11 @@ describe('DocumentStore - Editor Actions (reconcile)', () => {
   });
 
   describe('performSave overlap', () => {
-    it('queues a save requested while another is in flight and sends the newer content after it resolves', async () => {
-      vi.useFakeTimers();
-      const { result } = renderHook(() => useDocumentStore());
-      let markdown = '# First';
+    const createMovingEditor = () => {
+      const state = { markdown: '# First' };
       const editor = {
         getDocument: vi.fn((type: string) => {
-          if (type === 'markdown') return markdown;
+          if (type === 'markdown') return state.markdown;
           if (type === 'json') {
             return { root: { children: [{ children: [], type: 'paragraph' }], type: 'root' } };
           }
@@ -367,21 +365,35 @@ describe('DocumentStore - Editor Actions (reconcile)', () => {
         }),
         setDocument: vi.fn(),
       } as any;
-      let resolveFirst!: (
-        value: Awaited<ReturnType<typeof documentService.updateDocument>>,
-      ) => void;
+      return { editor, state };
+    };
+
+    const hangFirstSave = () => {
+      type SaveResult = Awaited<ReturnType<typeof documentService.updateDocument>>;
+      let resolveFirst!: (value: SaveResult) => void;
+      const firstResult = new Promise<SaveResult>((resolve) => {
+        resolveFirst = resolve;
+      });
       vi.mocked(documentService.updateDocument)
-        .mockImplementationOnce(
-          () =>
-            new Promise((resolve) => {
-              resolveFirst = resolve;
-            }),
-        )
+        .mockImplementationOnce(() => firstResult)
         .mockResolvedValueOnce({
           historyAppended: false,
           id: 'doc-1',
           updatedAt: '2026-01-01T00:00:02.000Z',
         });
+      return () =>
+        resolveFirst({
+          historyAppended: false,
+          id: 'doc-1',
+          updatedAt: '2026-01-01T00:00:01.000Z',
+        });
+    };
+
+    it('waits for the in-flight save, then sends the later request with its own metadata and the committed version', async () => {
+      vi.useFakeTimers();
+      const { result } = renderHook(() => useDocumentStore());
+      const { editor, state } = createMovingEditor();
+      const resolveFirst = hangFirstSave();
 
       act(() => {
         result.current.initDocumentWithEditor({
@@ -394,35 +406,94 @@ describe('DocumentStore - Editor Actions (reconcile)', () => {
         result.current.markDirty('doc-1');
       });
 
-      let first: Promise<void>;
+      let first!: Promise<void>;
+      let second!: Promise<void>;
       act(() => {
         first = result.current.performSave('doc-1', undefined, { saveSource: 'autosave' });
       });
-      markdown = '# Second';
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      state.markdown = '# Second';
       act(() => {
         result.current.handleContentChange();
+        second = result.current.performSave(
+          'doc-1',
+          { title: 'Renamed' },
+          { saveSource: 'manual' },
+        );
       });
       await act(async () => {
-        await result.current.performSave('doc-1', undefined, { saveSource: 'manual' });
+        await Promise.resolve();
       });
       expect(documentService.updateDocument).toHaveBeenCalledTimes(1);
 
       await act(async () => {
-        resolveFirst({
-          historyAppended: false,
-          id: 'doc-1',
-          updatedAt: '2026-01-01T00:00:01.000Z',
-        });
-        await first;
+        resolveFirst();
+        await Promise.all([first, second]);
       });
+
+      expect(documentService.updateDocument).toHaveBeenCalledTimes(2);
+      expect(documentService.updateDocument).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          content: '# Second',
+          expectedUpdatedAt: new Date('2026-01-01T00:00:01.000Z'),
+          saveSource: 'manual',
+          title: 'Renamed',
+        }),
+      );
       expect(result.current.documents['doc-1']).toMatchObject({
-        isDirty: true,
-        lastSavedContent: '# First',
+        isDirty: false,
+        lastSavedContent: '# Second',
+        lastUpdatedTime: new Date('2026-01-01T00:00:02.000Z'),
       });
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(5000);
       });
+      expect(documentService.updateDocument).toHaveBeenCalledTimes(2);
+      vi.useRealTimers();
+    });
+
+    it('closeDocument flushes the pending autosave after the in-flight save and keeps the newer content', async () => {
+      vi.useFakeTimers();
+      const { result } = renderHook(() => useDocumentStore());
+      const { editor, state } = createMovingEditor();
+      const resolveFirst = hangFirstSave();
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          content: '# Base',
+          documentId: 'doc-1',
+          editor,
+          sourceType: 'page',
+          updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+        });
+        result.current.markDirty('doc-1');
+      });
+
+      let first!: Promise<void>;
+      act(() => {
+        first = result.current.performSave('doc-1', undefined, { saveSource: 'autosave' });
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      state.markdown = '# Second';
+      act(() => {
+        result.current.handleContentChange();
+        result.current.closeDocument('doc-1');
+      });
+      expect(result.current.activeDocumentId).toBeUndefined();
+      expect(result.current.documents['doc-1']).toBeDefined();
+
+      await act(async () => {
+        resolveFirst();
+        await first;
+        await result.current.getPendingSave('doc-1');
+        await Promise.resolve();
+      });
+
       expect(documentService.updateDocument).toHaveBeenCalledTimes(2);
       expect(documentService.updateDocument).toHaveBeenLastCalledWith(
         expect.objectContaining({
@@ -430,9 +501,46 @@ describe('DocumentStore - Editor Actions (reconcile)', () => {
           expectedUpdatedAt: new Date('2026-01-01T00:00:01.000Z'),
         }),
       );
+      expect(result.current.documents['doc-1']).toBeUndefined();
+      vi.useRealTimers();
+    });
+
+    it('does not replay an autosave for a document with autoSave disabled', async () => {
+      vi.useFakeTimers();
+      const { result } = renderHook(() => useDocumentStore());
+      const { editor, state } = createMovingEditor();
+      const resolveFirst = hangFirstSave();
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          autoSave: false,
+          content: '# Base',
+          documentId: 'doc-1',
+          editor,
+          sourceType: 'page',
+          updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+        });
+        result.current.markDirty('doc-1');
+      });
+
+      let first!: Promise<void>;
+      act(() => {
+        first = result.current.performSave('doc-1', undefined, { saveSource: 'manual' });
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      state.markdown = '# Second';
+      await act(async () => {
+        resolveFirst();
+        await first;
+        await vi.advanceTimersByTimeAsync(5000);
+      });
+
+      expect(documentService.updateDocument).toHaveBeenCalledTimes(1);
       expect(result.current.documents['doc-1']).toMatchObject({
-        isDirty: false,
-        lastSavedContent: '# Second',
+        isDirty: true,
+        lastSavedContent: '# First',
       });
       vi.useRealTimers();
     });

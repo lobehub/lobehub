@@ -49,6 +49,7 @@ export const createEditorSlice = (set: Setter, get: () => DocumentStore, _api?: 
 export class EditorActionImpl {
   readonly #get: () => DocumentStore;
   readonly #set: Setter;
+  readonly #inflightSaves = new Map<string, Promise<void>>();
 
   constructor(set: Setter, get: () => DocumentStore, _api?: unknown) {
     void _api;
@@ -302,15 +303,32 @@ export class EditorActionImpl {
     this.#set({ editor });
   };
 
+  getPendingSave = (documentId: string): Promise<void> | undefined =>
+    this.#inflightSaves.get(documentId);
+
   performSave = async (
     documentId?: string,
     metadata?: SaveMetadata,
     options?: SaveExecutionOptions,
   ): Promise<void> => {
     const id = documentId || this.#get().activeDocumentId;
-
     if (!id) return;
 
+    const previous = this.#inflightSaves.get(id) ?? Promise.resolve();
+    const run = previous.catch(() => {}).then(() => this.#runSave(id, metadata, options));
+    this.#inflightSaves.set(id, run);
+    try {
+      await run;
+    } finally {
+      if (this.#inflightSaves.get(id) === run) this.#inflightSaves.delete(id);
+    }
+  };
+
+  #runSave = async (
+    id: string,
+    metadata?: SaveMetadata,
+    options?: SaveExecutionOptions,
+  ): Promise<void> => {
     const { editor, documents, internal_dispatchDocument } = this.#get();
     const doc = documents[id];
     if (!doc || !editor) return;
@@ -319,11 +337,6 @@ export class EditorActionImpl {
 
     // Skip save if neither document content nor metadata changed
     if (!doc.isDirty && !hasMetadataChanges) return;
-
-    if (doc.saveStatus === 'saving') {
-      this.#get().triggerDebouncedSave(id);
-      return;
-    }
 
     // Update save status
     internal_dispatchDocument({ id, type: 'updateDocument', value: { saveStatus: 'saving' } });
