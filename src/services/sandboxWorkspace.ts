@@ -69,6 +69,13 @@ class SandboxWorkspaceService {
   setEnvironmentVisibility = async (params: { id: string; visibility: EnvironmentVisibility }) =>
     lambdaClient.sandboxWorkspace.setEnvironmentVisibility.mutate(params);
 
+  /**
+   * Replaces a file's whole contents, creating it and its parents if needed.
+   * Text only — the execution plane carries the body as a JSON string.
+   */
+  writeFile = async (params: { content: string; path: string; topicId?: string }) =>
+    lambdaClient.sandboxWorkspace.writeFile.mutate(params);
+
   /** Refused while instances still reference it — those go first. */
   removeEnvironment = async (params: { id: string }) =>
     lambdaClient.sandboxWorkspace.removeEnvironment.mutate(params);

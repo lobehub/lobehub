@@ -204,6 +204,27 @@ export const createSandboxWorkspaceClient = ({
 
       return request(`${CURRENT_WORKSPACE}/file?${query.toString()}`);
     },
+
+    /**
+     * Write a file, creating it and its parents when they do not exist.
+     *
+     * Text only: the endpoint carries `content` as a JSON string with no
+     * encoding field, so there is no way to round-trip bytes through it. A
+     * caller holding binary has to wait for an upload path rather than
+     * smuggling it through as text.
+     */
+    writeFile: async (
+      params: RequestContext & { content: string; path: string },
+    ): Promise<{ path: string }> =>
+      request(`${CURRENT_WORKSPACE}/file`, {
+        body: JSON.stringify({
+          content: params.content,
+          path: params.path,
+          topicId: params.topicId,
+        }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'PUT',
+      }),
   };
 };
 
