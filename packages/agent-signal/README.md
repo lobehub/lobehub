@@ -91,26 +91,26 @@ Use server services for:
 - Redis or in-memory dedupe
 - Observability persistence
 
-See [src/server/services/agentSignal/emitter.ts](../../src/server/services/agentSignal/emitter.ts), [src/server/services/agentSignal/orchestrator.ts](../../src/server/services/agentSignal/orchestrator.ts), and [src/server/services/agentSignal/sources/index.ts](../../src/server/services/agentSignal/sources/index.ts).
+See [src/server/services/agentSignal/emitter.ts](../../apps/server/src/services/agentSignal/emitter.ts), [src/server/services/agentSignal/orchestrator.ts](../../apps/server/src/services/agentSignal/orchestrator.ts), and [src/server/services/agentSignal/sources/index.ts](../../apps/server/src/services/agentSignal/sources/index.ts).
 
 ## Supported Source Events
 
 | Source event                   | Constant                                              | Primary producer                                                                                                                  | Payload intent                                                                                            |
 | ------------------------------ | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `agent.execution.completed`    | `AGENT_SIGNAL_SOURCE_TYPES.agentExecutionCompleted`   | [Agent Runtime](../../src/server/services/agentRuntime/AgentRuntimeService.ts)                                                    | Server agent execution completed with operation, step, topic, and context metadata.                       |
-| `agent.execution.failed`       | `AGENT_SIGNAL_SOURCE_TYPES.agentExecutionFailed`      | [Agent Runtime](../../src/server/services/agentRuntime/AgentRuntimeService.ts)                                                    | Server agent execution failed with operation, reason, error, topic, and context metadata.                 |
-| `agent.user.message`           | `AGENT_SIGNAL_SOURCE_TYPES.agentUserMessage`          | [Workflow bridge](../../src/server/workflows/agentSignal/run.ts), [Bot router](../../src/server/services/bot/BotMessageRouter.ts) | User feedback/message content that policies can analyze for memory, prompt, document, or skill changes.   |
-| `bot.message.merged`           | `AGENT_SIGNAL_SOURCE_TYPES.botMessageMerged`          | [Bot router](../../src/server/services/bot/BotMessageRouter.ts)                                                                   | Bot-platform message content merged into a conversation scope.                                            |
+| `agent.execution.completed`    | `AGENT_SIGNAL_SOURCE_TYPES.agentExecutionCompleted`   | [Agent Runtime](../../apps/server/src/services/agentRuntime/AgentRuntimeService.ts)                                                    | Server agent execution completed with operation, step, topic, and context metadata.                       |
+| `agent.execution.failed`       | `AGENT_SIGNAL_SOURCE_TYPES.agentExecutionFailed`      | [Agent Runtime](../../apps/server/src/services/agentRuntime/AgentRuntimeService.ts)                                                    | Server agent execution failed with operation, reason, error, topic, and context metadata.                 |
+| `agent.user.message`           | `AGENT_SIGNAL_SOURCE_TYPES.agentUserMessage`          | [Workflow bridge](../../apps/server/src/workflows/agentSignal/run.ts), [Bot router](../../apps/server/src/services/bot/BotMessageRouter.ts) | User feedback/message content that policies can analyze for memory, prompt, document, or skill changes.   |
+| `bot.message.merged`           | `AGENT_SIGNAL_SOURCE_TYPES.botMessageMerged`          | [Bot router](../../apps/server/src/services/bot/BotMessageRouter.ts)                                                                   | Bot-platform message content merged into a conversation scope.                                            |
 | `client.gateway.error`         | `AGENT_SIGNAL_SOURCE_TYPES.clientGatewayError`        | [Gateway event handler](../../src/store/chat/slices/agentRun/actions/transports/gateway/gatewayEventHandler.ts)                   | Browser gateway error for a client-side runtime operation.                                                |
 | `client.gateway.runtime_end`   | `AGENT_SIGNAL_SOURCE_TYPES.clientGatewayRuntimeEnd`   | [Gateway event handler](../../src/store/chat/slices/agentRun/actions/transports/gateway/gatewayEventHandler.ts)                   | Browser gateway runtime finished for a client-side operation.                                             |
 | `client.gateway.step_complete` | `AGENT_SIGNAL_SOURCE_TYPES.clientGatewayStepComplete` | [Gateway event handler](../../src/store/chat/slices/agentRun/actions/transports/gateway/gatewayEventHandler.ts)                   | Browser gateway step completed with operation and step index metadata.                                    |
 | `client.gateway.stream_start`  | `AGENT_SIGNAL_SOURCE_TYPES.clientGatewayStreamStart`  | [Gateway event handler](../../src/store/chat/slices/agentRun/actions/transports/gateway/gatewayEventHandler.ts)                   | Browser gateway stream started with operation and first step metadata.                                    |
 | `client.runtime.complete`      | `AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeComplete`     | [Chat streaming executor](../../src/store/chat/slices/agentRun/actions/transports/client/streamingExecutor.ts)                    | Browser chat runtime completed with operation, topic, thread, and status metadata.                        |
 | `client.runtime.start`         | `AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeStart`        | [Chat streaming executor](../../src/store/chat/slices/agentRun/actions/transports/client/streamingExecutor.ts)                    | Browser chat runtime started; workflow may bridge this into `agent.user.message` with serialized context. |
-| `runtime.after_step`           | `AGENT_SIGNAL_SOURCE_TYPES.runtimeAfterStep`          | [Agent Runtime](../../src/server/services/agentRuntime/AgentRuntimeService.ts)                                                    | Server runtime step finished with operation, step index, topic, and context metadata.                     |
-| `runtime.before_step`          | `AGENT_SIGNAL_SOURCE_TYPES.runtimeBeforeStep`         | [Agent Runtime](../../src/server/services/agentRuntime/AgentRuntimeService.ts)                                                    | Server runtime step is about to run with operation, step index, topic, and context metadata.              |
+| `runtime.after_step`           | `AGENT_SIGNAL_SOURCE_TYPES.runtimeAfterStep`          | [Agent Runtime](../../apps/server/src/services/agentRuntime/AgentRuntimeService.ts)                                                    | Server runtime step finished with operation, step index, topic, and context metadata.                     |
+| `runtime.before_step`          | `AGENT_SIGNAL_SOURCE_TYPES.runtimeBeforeStep`         | [Agent Runtime](../../apps/server/src/services/agentRuntime/AgentRuntimeService.ts)                                                    | Server runtime step is about to run with operation, step index, topic, and context metadata.              |
 
-`AGENT_SIGNAL_CLIENT_SOURCE_TYPES` is the allow-list for browser-originated events accepted by [src/server/routers/lambda/agentSignal.ts](../../src/server/routers/lambda/agentSignal.ts). It currently includes only the `client.*` source events.
+`AGENT_SIGNAL_CLIENT_SOURCE_TYPES` is the allow-list for browser-originated events accepted by [src/server/routers/lambda/agentSignal.ts](../../apps/server/src/routers/lambda/agentSignal.ts). It currently includes only the `client.*` source events.
 
 ## Source Event Modules
 
@@ -119,22 +119,22 @@ See [src/server/services/agentSignal/emitter.ts](../../src/server/services/agent
 - [Scope-key helpers](src/source/scopeKey.ts): topic, bot thread, task, agent/user, and user scope-key builders.
 - [Browser service facade](../../src/services/agentSignal.ts): tRPC client wrapper for browser code.
 - [Browser bridge](../../src/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge.ts): feature-gated non-blocking browser emission helper.
-- [Lambda router](../../src/server/routers/lambda/agentSignal.ts): authenticated browser ingress and client source type validation.
-- [Server emitter](../../src/server/services/agentSignal/emitter.ts): feature-gated immediate execution or workflow handoff.
-- [Server orchestrator](../../src/server/services/agentSignal/orchestrator.ts): source event execution through policies, runtime, and observability.
-- [Source dedupe store](../../src/server/services/agentSignal/sources/index.ts): source event dedupe, scope locking, and source node rendering.
-- [Workflow trigger](../../src/server/workflows/agentSignal/index.ts): async Upstash Workflow handoff.
-- [Workflow runner](../../src/server/workflows/agentSignal/run.ts): workflow execution and client runtime bridge.
-- [Agent Runtime](../../src/server/services/agentRuntime/AgentRuntimeService.ts): server runtime source event producers.
+- [Lambda router](../../apps/server/src/routers/lambda/agentSignal.ts): authenticated browser ingress and client source type validation.
+- [Server emitter](../../apps/server/src/services/agentSignal/emitter.ts): feature-gated immediate execution or workflow handoff.
+- [Server orchestrator](../../apps/server/src/services/agentSignal/orchestrator.ts): source event execution through policies, runtime, and observability.
+- [Source dedupe store](../../apps/server/src/services/agentSignal/sources/index.ts): source event dedupe, scope locking, and source node rendering.
+- [Workflow trigger](../../apps/server/src/workflows/agentSignal/index.ts): async Upstash Workflow handoff.
+- [Workflow runner](../../apps/server/src/workflows/agentSignal/run.ts): workflow execution and client runtime bridge.
+- [Agent Runtime](../../apps/server/src/services/agentRuntime/AgentRuntimeService.ts): server runtime source event producers.
 - [Chat](../../src/store/chat/slices/agentRun/actions/transports/client/streamingExecutor.ts): browser chat runtime source event producer.
 - [Gateway event handler](../../src/store/chat/slices/agentRun/actions/transports/gateway/gatewayEventHandler.ts): browser gateway source event producer.
-- [Bot router](../../src/server/services/bot/BotMessageRouter.ts): bot-platform source event producer.
+- [Bot router](../../apps/server/src/services/bot/BotMessageRouter.ts): bot-platform source event producer.
 
 ## Adding A Source Event
 
 1. Add the constant and payload shape in [src/source/sourceTypes.ts](src/source/sourceTypes.ts).
-2. Add a renderer in [src/server/services/agentSignal/sources/renderers](../../src/server/services/agentSignal/sources/renderers) if the generic payload needs normalization before becoming an `AgentSignalSource`.
-3. Register the renderer in [src/server/services/agentSignal/sources/buildSource.ts](../../src/server/services/agentSignal/sources/buildSource.ts).
+2. Add a renderer in [src/server/services/agentSignal/sources/renderers](../../apps/server/src/services/agentSignal/sources/renderers) if the generic payload needs normalization before becoming an `AgentSignalSource`.
+3. Register the renderer in [src/server/services/agentSignal/sources/buildSource.ts](../../apps/server/src/services/agentSignal/sources/buildSource.ts).
 4. Add the source to `AGENT_SIGNAL_CLIENT_SOURCE_TYPES` only when browser code should be allowed to emit it through the lambda router.
 5. Add focused tests for source event creation, router validation, renderer normalization, or workflow bridging depending on the new producer path.
 
