@@ -2,7 +2,7 @@
 
 import type { EnvironmentVisibility } from '@lobechat/types';
 import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ContainerIcon, PlusIcon, RefreshCwIcon } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
@@ -122,10 +122,18 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
   return (
     <Flexbox gap={16}>
       {/* Whatever narrows the list on the left, whatever acts on it on the
-          right. With nothing to narrow by, the actions keep the row to
-          themselves rather than sitting under an empty space. */}
-      <Flexbox horizontal align={'center'} gap={16} justify={tabs ? 'space-between' : 'flex-end'}>
-        {tabs}
+          right. A page with one pool has no tabs, so the count takes that side
+          — it is the one fact about the list that the list itself does not
+          state, and it keeps the row from being two buttons against a blank. */}
+      <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
+        {tabs ?? (
+          <Text fontSize={12} type={'secondary'} weight={500}>
+            {/* Nothing until there is something to count. An unsettled fetch has
+                no count yet, and printing zero would be a claim rather than a
+                blank — the element still renders so the actions stay right. */}
+            {environments.length > 0 ? t('environments.total', { count: environments.length }) : ''}
+          </Text>
+        )}
         <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
           <Button
             icon={<Icon icon={RefreshCwIcon} />}

@@ -559,6 +559,8 @@
   "environments.refresh": "Refresh",
   "environments.remove": "Delete environment",
   "environments.removeFailed": "Could not delete this environment",
+  "environments.total_one": "{{count}} environment",
+  "environments.total_other": "{{count}} environments",
   "environments.unavailable.desc": "Environments describe a persistent cloud workspace, and this deployment does not provide one.",
   "environments.unavailable.title": "Persistent sandbox is not available here",
   "environments.upgrade.benefits.environments.desc": "Repositories, setup command and variables live in the environment; every sandbox built from it starts ready.",

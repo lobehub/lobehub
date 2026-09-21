@@ -559,6 +559,8 @@
   "environments.refresh": "刷新",
   "environments.remove": "删除环境",
   "environments.removeFailed": "删除环境失败",
+  "environments.total_one": "{{count}} 个环境",
+  "environments.total_other": "{{count}} 个环境",
   "environments.unavailable.desc": "环境描述的是一个持久化的云端工作区，而当前部署没有提供它。",
   "environments.unavailable.title": "此部署不提供持久化沙箱",
   "environments.upgrade.benefits.environments.desc": "仓库、安装命令和变量写在环境里，每个按它建出的沙箱都从就绪状态开始。",

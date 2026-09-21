@@ -3901,4 +3901,6 @@ When I am ___, I need ___
   'environments.files.saveFailed': 'Could not save this file',
   'environments.files.createFailed': 'Could not create this',
   'environments.files.removeFailed': 'Could not delete this',
+  'environments.total_one': '{{count}} environment',
+  'environments.total_other': '{{count}} environments',
 };
