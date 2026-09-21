@@ -5,7 +5,7 @@ import type {
   ScmProvider,
   ScmRepositorySelection,
 } from '@lobechat/types';
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull, ne } from 'drizzle-orm';
 
 import type { ScmInstallationItem } from '../../schemas';
 import { scmInstallations } from '../../schemas';
@@ -116,6 +116,22 @@ export class ScmInstallationModel {
         target: [scmInstallations.provider, scmInstallations.installationId],
       })
       .returning();
+
+    // A provider account holds one installation of the app at a time, so any
+    // other live row for the same account is a stale one (uninstalled and
+    // reinstalled under a new id, or a missed `installation.deleted`): retire
+    // it rather than list the account twice.
+    await db
+      .update(scmInstallations)
+      .set({ revokedAt: new Date(), updatedAt: new Date() })
+      .where(
+        and(
+          eq(scmInstallations.provider, params.provider),
+          eq(scmInstallations.accountExternalId, params.accountExternalId),
+          ne(scmInstallations.id, row.id),
+          isNull(scmInstallations.revokedAt),
+        ),
+      );
 
     return row;
   };

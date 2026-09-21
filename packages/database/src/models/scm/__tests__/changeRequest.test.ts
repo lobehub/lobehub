@@ -229,6 +229,24 @@ describe('ScmWebhookDeliveryModel', () => {
 });
 
 describe('ScmInstallationModel', () => {
+  it('retires the stale row when the same account comes back under a new installation id', async () => {
+    const base = {
+      accountExternalId: 'acct-1',
+      accountLogin: 'arvinxx',
+      accountType: 'user' as const,
+      provider: 'github' as const,
+      repositorySelection: 'all' as const,
+      userId,
+    };
+    const old = await ScmInstallationModel.bind(serverDB, { ...base, installationId: '100' });
+    const fresh = await ScmInstallationModel.bind(serverDB, { ...base, installationId: '200' });
+    expect(fresh.id).not.toBe(old.id);
+
+    const listed = await ScmInstallationModel.listByScope(serverDB, { userId });
+    expect(listed.map((i) => i.installationId)).toEqual(['200']);
+    expect((await ScmInstallationModel.findById(serverDB, old.id))?.revokedAt).not.toBeNull();
+  });
+
   it('re-binding the same installation keeps its id, moves scope, and clears revocation', async () => {
     const params = {
       accountExternalId: '1',
