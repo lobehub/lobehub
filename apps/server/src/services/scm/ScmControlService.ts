@@ -232,7 +232,7 @@ export class ScmControlService {
       if (topic?.agentId) {
         conversation = {
           title: topic.title,
-          url: `${origin}/agent/${topic.agentId}?topic=${row.topicId}`,
+          url: `${origin}/agent/${topic.agentId}/${row.topicId}`,
         };
       }
     }

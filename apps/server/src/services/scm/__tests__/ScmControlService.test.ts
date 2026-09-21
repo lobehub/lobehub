@@ -449,7 +449,7 @@ describe('ScmControlService — the tracking comment in GitHub', () => {
       v: 1,
     });
     expect(body).toContain(`https://app.test/acceptance/${row.acceptanceId}`);
-    expect(body).toContain(`https://app.test/agent/agt_control?topic=${row.topicId}`);
+    expect(body).toContain(`https://app.test/agent/agt_control/${row.topicId}`);
     expect(body).toContain('| 🟡 Delivered |');
     expect(body).toContain('[PR topic ↗︎]');
 

@@ -32,7 +32,7 @@ describe('tracking comment', () => {
         status: 'delivered',
         url: 'https://app.test/acceptance/1042abc6-4d38-49a6-b4b9-5c5a606d762e',
       },
-      conversation: { title: 'Fix | the thing\nnow', url: 'https://app.test/agent/a?topic=tpc_1' },
+      conversation: { title: 'Fix | the thing\nnow', url: 'https://app.test/agent/a/tpc_1' },
       marker,
       notification: { count: 1, max: 3, reason: 'ci_failed' },
       updatedAt: new Date('2026-09-20T15:12:00Z'),
@@ -43,7 +43,7 @@ describe('tracking comment', () => {
       '| Acceptance | Status | Conversation | Notifications | Updated (UTC) |',
     );
     expect(body).toContain(
-      '| [1042abc6](https://app.test/acceptance/1042abc6-4d38-49a6-b4b9-5c5a606d762e) | 🟡 Delivered | [Fix \\| the thing now ↗︎](https://app.test/agent/a?topic=tpc_1) | 1/3 · CI failed | Sep 20, 2026 3:12pm |',
+      '| [1042abc6](https://app.test/acceptance/1042abc6-4d38-49a6-b4b9-5c5a606d762e) | 🟡 Delivered | [Fix \\| the thing now ↗︎](https://app.test/agent/a/tpc_1) | 1/3 · CI failed | Sep 20, 2026 3:12pm |',
     );
   });
 

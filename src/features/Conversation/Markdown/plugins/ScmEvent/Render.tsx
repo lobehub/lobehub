@@ -56,11 +56,18 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextTertiary};
   `,
   link: css`
-    color: inherit;
+    /* The Markdown host paints anchors in the link colour; inside the card
+       a link reads as text and the trailing icon says it can be clicked. */
+    display: inline-flex;
+    gap: 4px;
+    align-items: center;
+
+    color: inherit !important;
     text-decoration: none;
 
     &:hover {
-      text-decoration: underline;
+      color: ${cssVar.colorTextSecondary} !important;
+      text-decoration: none;
     }
   `,
   log: css`
@@ -166,8 +173,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     font-size: 13px;
     text-align: start;
-
-    background: ${cssVar.colorBgContainer};
   `,
 }));
 
@@ -184,13 +189,6 @@ const CheckRow = memo<{ check: ScmEventCheck }>(({ check }) => {
   const { t } = useTranslation('integration');
   const [open, setOpen] = useState(false);
   const failed = isFailed(check);
-  const name = check.url ? (
-    <a className={styles.link} href={check.url} rel="noreferrer" target="_blank">
-      {check.name}
-    </a>
-  ) : (
-    check.name
-  );
 
   return (
     <Flexbox className={styles.check} gap={2}>
@@ -201,7 +199,7 @@ const CheckRow = memo<{ check: ScmEventCheck }>(({ check }) => {
           size="small"
         />
         <Text style={{ flex: 1, minWidth: 0 }} weight={500}>
-          {name}
+          {check.name}
         </Text>
         <Text style={{ fontSize: 12 }} type="secondary">
           {check.conclusion ?? ''}
@@ -297,6 +295,7 @@ const Render = memo<MarkdownElementProps<ScmEventAttributes>>(({ children, node 
             {attrs.url ? (
               <a className={styles.link} href={attrs.url} rel="noreferrer" target="_blank">
                 {title}
+                <Icon icon={ExternalLinkIcon} size={12} />
               </a>
             ) : (
               title
