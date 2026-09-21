@@ -132,11 +132,16 @@ export const useChatInputNotice = (): ChatInputNotice | undefined => {
   const topicModel = useChatStore((s) =>
     topicId ? topicSelectors.getTopicModelById(topicId)(s) : undefined,
   );
+  const hasTopicRow = useChatStore((s) => !!topicId && !!topicSelectors.getTopicById(topicId)(s));
   const updateTopicModel = useChatStore((s) => s.updateTopicModel);
-  // A topic whose row hasn't landed yet reads as "no pin" and would fall back
-  // to the agent default — same cold-load flash as above.
+  // The main chat's topic row arrives with the sidebar list (or its detail
+  // fetch) a beat after the route makes it active; until then it reads as "no
+  // pin" and would fall back to the agent default — the same cold-load flash as
+  // above. Only that topic is worth waiting on: a host-owned topic that is never
+  // listed (a document's chat panel is a system topic) would otherwise suppress
+  // the notice for good, so it is judged by its agent default instead.
   const isActiveTopicPending = useChatStore(
-    (s) => !!topicId && !topicSelectors.getTopicById(topicId)(s),
+    (s) => !!topicId && topicId === s.activeTopicId && !topicSelectors.getTopicById(topicId)(s),
   );
   const model = topicModel?.model ?? agentModel;
   const provider = topicModel?.model ? topicModel.provider : agentProvider;
@@ -220,10 +225,12 @@ export const useChatInputNotice = (): ChatInputNotice | undefined => {
       });
       if (providerId !== provider) {
         try {
-          // Re-point the row the model actually came from, the way the model
-          // trigger's own switch routes: this conversation's topic when there
-          // is one, the agent (or member override) otherwise.
-          if (topicId) await updateTopicModel(topicId, { model, provider: providerId });
+          // Re-point the row the judged model came from, the way the model
+          // trigger's own switch routes: this conversation's topic when its row
+          // is known, the agent (or member override) otherwise — an unlisted
+          // topic was judged by its agent default, so that is what gets fixed.
+          if (topicId && hasTopicRow)
+            await updateTopicModel(topicId, { model, provider: providerId });
           else await selectModel({ model, provider: providerId });
         } catch (error) {
           console.error('Failed to select the enabled chat model provider:', error);
@@ -239,6 +246,7 @@ export const useChatInputNotice = (): ChatInputNotice | undefined => {
   }, [
     enableTargetProviderId,
     enabledChatModelList,
+    hasTopicRow,
     model,
     provider,
     selectModel,

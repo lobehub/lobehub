@@ -640,6 +640,32 @@ describe('useChatInputNotice', () => {
     });
   });
 
+  it('judges an unlisted conversation topic by its agent default instead of waiting on it', async () => {
+    // A document's chat panel runs on a system topic the sidebar never lists,
+    // so its row never lands in the store — waiting on it would hide the notice
+    // forever, even with the agent default genuinely disabled.
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+    testState.chatInput.topicId = 'doc-topic';
+    testState.chat.activeTopicId = 'outer-topic';
+    testState.chat.topics = { 'outer-topic': { model: 'gpt-4o', provider: 'openai' } };
+    testState.agent.provider = 'removed-provider';
+    testState.aiInfra.builtinAiModelList = [{ id: 'gpt-4o', providerId: 'openai', type: 'chat' }];
+
+    const { result } = renderHook(() => useChatInputNotice());
+
+    expect(result.current).toMatchObject({ action: 'enableModel', key: 'input.modelDisabled' });
+
+    await act(async () => result.current?.onAction?.());
+
+    // It judged the agent default, so the repair lands on the agent, not on a
+    // topic pin it never saw.
+    expect(testState.agentModelSelection.selectModel).toHaveBeenCalledWith({
+      model: 'gpt-4o',
+      provider: 'openai',
+    });
+    expect(testState.chat.updateTopicModel).not.toHaveBeenCalled();
+  });
+
   it('does not return a model notice for heterogeneous agents', () => {
     testState.agent.agencyConfig = { heterogeneousProvider: { type: 'codex' } };
     testState.aiInfra.isInitAiProviderRuntimeState = true;
