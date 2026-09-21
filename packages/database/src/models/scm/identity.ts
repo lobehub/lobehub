@@ -82,14 +82,26 @@ export class ScmIdentityModel {
       ...(encrypted === undefined ? {} : { credentials: encrypted }),
     };
 
+    // The conflict target is the provider account, which is global: without
+    // the `where` an authorization from a second LobeHub account would
+    // rewrite `userId` and hand over the stored token. Restricting the
+    // update to the current owner turns that case into zero rows, which the
+    // callback reports as `identity_taken`.
     const [row] = await db
       .insert(scmIdentities)
       .values(values)
       .onConflictDoUpdate({
         set: { ...values, updatedAt: new Date() },
         target: [scmIdentities.provider, scmIdentities.externalUserId],
+        where: eq(scmIdentities.userId, params.userId),
       })
       .returning();
+
+    if (!row) {
+      throw new Error(
+        `scm identity ${params.provider}:${params.externalUserId} belongs to another user`,
+      );
+    }
 
     return row;
   };

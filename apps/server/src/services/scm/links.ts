@@ -1,5 +1,5 @@
 import type { ScmChangeRequestLinks } from '@lobechat/types';
-import { and, desc, eq, isNotNull, isNull, type SQL, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, type SQL, sql } from 'drizzle-orm';
 
 import { acceptances, verifyRuns, works } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
@@ -24,6 +24,9 @@ import type { LobeChatDatabase } from '@/database/type';
  * Every source is optional; the result only ever fills links, and the model
  * never clears one, so a later event with less context cannot undo a match.
  */
+
+/** Ceiling on how many body ids one delivery may resolve; the body is user-controlled. */
+const MAX_BODY_ACCEPTANCE_IDS = 20;
 
 const ACCEPTANCE_LINK_RE =
   /\/acceptance\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/gi;
@@ -63,18 +66,24 @@ export const resolveChangeRequestLinks = async (
 ): Promise<ScmChangeRequestLinks> => {
   const links: ScmChangeRequestLinks = {};
 
-  // 1. Acceptance link in the body — first id that exists in this scope wins.
-  for (const id of parseAcceptanceIds(params.body)) {
-    const [row] = await db
+  // 1. Acceptance link in the body — first id that exists in this scope
+  // wins. The body is user-controlled and may name a hundred ids, so they
+  // are resolved in one query rather than one round trip each.
+  const candidates = parseAcceptanceIds(params.body).slice(0, MAX_BODY_ACCEPTANCE_IDS);
+  if (candidates.length > 0) {
+    const rows = await db
       .select({
         id: acceptances.id,
         subjectId: acceptances.subjectId,
         subjectType: acceptances.subjectType,
       })
       .from(acceptances)
-      .where(and(eq(acceptances.id, id), inScope(acceptances, params.scope)))
-      .limit(1);
-    if (row) {
+      .where(and(inArray(acceptances.id, candidates), inScope(acceptances, params.scope)));
+
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    for (const id of candidates) {
+      const row = byId.get(id);
+      if (!row) continue;
       links.acceptanceId = row.id;
       if (row.subjectType === 'topic') links.topicId = row.subjectId;
       if (row.subjectType === 'task') links.taskId = row.subjectId;

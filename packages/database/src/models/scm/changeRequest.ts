@@ -183,18 +183,26 @@ export class ScmChangeRequestModel {
     const links = params.links ?? {};
     const now = new Date();
 
+    // Lifecycle stamps are state the provider can legitimately reset — a
+    // reopened pull request reports `closed_at: null` — so for those an
+    // explicit `null` clears the column and only `undefined` (the caller
+    // said nothing) keeps it. Descriptive fields keep the lenient rule: a
+    // payload that omits the title should not erase the stored one.
+    const resettable = <T>(next: T | null | undefined, previous: T | null | undefined): T | null =>
+      next === undefined ? (previous ?? null) : next;
+
     const snapshot = {
       authorExternalId: params.authorExternalId ?? existing?.authorExternalId ?? null,
       authorExternalLogin: params.authorExternalLogin ?? existing?.authorExternalLogin ?? null,
       baseRef: params.baseRef ?? existing?.baseRef ?? null,
-      closedAt: params.closedAt ?? existing?.closedAt ?? null,
+      closedAt: resettable(params.closedAt, existing?.closedAt),
       externalId: params.externalId ?? existing?.externalId ?? null,
       headRef: params.headRef ?? existing?.headRef ?? null,
       headSha: params.headSha ?? existing?.headSha ?? null,
       isDraft: params.isDraft ?? existing?.isDraft ?? false,
       mergeStateStatus: params.mergeStateStatus ?? existing?.mergeStateStatus ?? null,
-      mergedAt: params.mergedAt ?? existing?.mergedAt ?? null,
-      mergedByExternalId: params.mergedByExternalId ?? existing?.mergedByExternalId ?? null,
+      mergedAt: resettable(params.mergedAt, existing?.mergedAt),
+      mergedByExternalId: resettable(params.mergedByExternalId, existing?.mergedByExternalId),
       metadata: {
         ...existing?.metadata,
         ...params.metadata,
@@ -342,6 +350,60 @@ export class ScmChangeRequestModel {
         previousCiStatus: sameCommit ? existing.ciStatus : null,
         row,
       };
+    });
+
+  /**
+   * Record one reviewer's verdict and recompute the change request's
+   * rollup. GitHub reports reviews per reviewer, not as an aggregate, so
+   * storing the newest event verbatim would let a later approval bury
+   * another reviewer's outstanding changes request (and the reverse, on a
+   * different delivery order). `decision: null` drops the reviewer, which
+   * is what a dismissal means.
+   */
+  static applyReviewerDecision = async (
+    db: LobeChatDatabase,
+    id: string,
+    params: {
+      at?: Date;
+      decision: 'approved' | 'changes_requested' | null;
+      /** Provider user id; without one the verdict cannot be attributed. */
+      reviewerId?: string | null;
+    },
+  ): Promise<ScmReviewDecision | null> =>
+    db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(scmChangeRequests)
+        .where(eq(scmChangeRequests.id, id))
+        .for('update');
+      if (!existing) return null;
+
+      const reviewers = { ...existing.metadata?.reviewers };
+      if (params.reviewerId) {
+        if (params.decision) {
+          reviewers[params.reviewerId] = {
+            at: (params.at ?? new Date()).toISOString(),
+            decision: params.decision,
+          };
+        } else delete reviewers[params.reviewerId];
+      }
+
+      const verdicts = Object.values(reviewers).map((entry) => entry.decision);
+      const reviewDecision: ScmReviewDecision | null = verdicts.includes('changes_requested')
+        ? 'changes_requested'
+        : verdicts.includes('approved')
+          ? 'approved'
+          : null;
+
+      await tx
+        .update(scmChangeRequests)
+        .set({
+          metadata: { ...existing.metadata, reviewers },
+          reviewDecision,
+          updatedAt: new Date(),
+        })
+        .where(eq(scmChangeRequests.id, id));
+      return reviewDecision;
     });
 
   static setReviewDecision = async (

@@ -105,6 +105,13 @@ export interface ScmChangeRequestMetadata {
   lastProviderEventAt?: string;
   /** Provider's mergeability verdict, when it exposes one (`MERGEABLE`, `CONFLICTING`, …). */
   mergeable?: string;
+  /**
+   * Latest effective verdict per reviewer, keyed by provider user id. The
+   * change request's `reviewDecision` is the rollup of these: one
+   * outstanding "changes requested" outweighs any number of approvals,
+   * whatever order the deliveries arrive in.
+   */
+  reviewers?: Record<string, { at?: string; decision: 'approved' | 'changes_requested' }>;
 }
 
 /** Processing state of one inbound webhook delivery. */

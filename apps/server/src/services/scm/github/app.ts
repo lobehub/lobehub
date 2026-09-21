@@ -141,3 +141,28 @@ export const listGitHubInstallationRepositories = async (
   log('installation %s has %d repositories', installationId, repositories.length);
   return repositories;
 };
+
+/**
+ * The installations the *user* can see, read with their own token. This is
+ * the only signal that ties a person to an installation: the app-level
+ * credential can fetch any installation of this App, so it cannot tell
+ * whether the caller is the one who installed it.
+ */
+export const userCanAccessInstallation = async (
+  accessToken: string,
+  installationId: string,
+): Promise<boolean> => {
+  try {
+    const octokit = new Octokit({ auth: accessToken });
+    for await (const response of octokit.paginate.iterator('GET /user/installations', {
+      per_page: 100,
+    })) {
+      const installations = (response.data ?? []) as { id: number }[];
+      if (installations.some((item) => String(item.id) === installationId)) return true;
+    }
+    return false;
+  } catch (error) {
+    log('cannot list installations for the authorizing user: %O', error);
+    return false;
+  }
+};

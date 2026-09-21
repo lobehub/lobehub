@@ -236,6 +236,89 @@ describe('ScmChangeRequestModel', () => {
     expect(moved.topicId).toBeNull();
   });
 
+  it('rolls up review verdicts per reviewer, in any delivery order', async () => {
+    const row = await ScmChangeRequestModel.upsert(serverDB, snapshot);
+
+    // Reviewer A requests changes, reviewer B approves afterwards: the
+    // outstanding request still governs.
+    await ScmChangeRequestModel.applyReviewerDecision(serverDB, row.id, {
+      decision: 'changes_requested',
+      reviewerId: 'rev-a',
+    });
+    await ScmChangeRequestModel.applyReviewerDecision(serverDB, row.id, {
+      decision: 'approved',
+      reviewerId: 'rev-b',
+    });
+    expect((await ScmChangeRequestModel.findById(serverDB, row.id))?.reviewDecision).toBe(
+      'changes_requested',
+    );
+
+    // A dismisses their own review: only B's approval is left.
+    await ScmChangeRequestModel.applyReviewerDecision(serverDB, row.id, {
+      decision: null,
+      reviewerId: 'rev-a',
+    });
+    const after = await ScmChangeRequestModel.findById(serverDB, row.id);
+    expect(after?.reviewDecision).toBe('approved');
+    expect(Object.keys(after?.metadata.reviewers ?? {})).toEqual(['rev-b']);
+  });
+
+  it('clears the closure stamp when a pull request reopens', async () => {
+    const closedAt = new Date('2026-09-20T10:00:00Z');
+    const closed = await ScmChangeRequestModel.upsert(serverDB, {
+      ...snapshot,
+      closedAt,
+      eventKind: 'closed',
+      state: 'closed',
+    });
+    expect(closed.closedAt).toEqual(closedAt);
+
+    // GitHub reports `closed_at: null` on a reopen; keeping the old stamp
+    // would leave the row open and closed at once.
+    const reopened = await ScmChangeRequestModel.upsert(serverDB, {
+      ...snapshot,
+      closedAt: null,
+      eventKind: 'reopened',
+      state: 'open',
+    });
+    expect(reopened.state).toBe('open');
+    expect(reopened.closedAt).toBeNull();
+    // A descriptive field the event did not carry is still kept.
+    expect(reopened.title).toBe(closed.title);
+  });
+
+  it('keeps concurrent repository grants from overwriting each other', async () => {
+    const repo = (id: string) => ({ externalId: id, fullName: `arvinxx/r${id}` });
+    const installation = await ScmInstallationModel.bind(serverDB, {
+      accountExternalId: 'acct-repos',
+      accountLogin: 'arvinxx',
+      accountType: 'user',
+      installationId: '500',
+      provider: 'github',
+      repositories: [repo('1'), repo('2')],
+      repositorySelection: 'selected',
+      userId,
+    });
+
+    await Promise.all([
+      ScmInstallationModel.applyRepositoryChange(serverDB, installation.id, {
+        added: [repo('3')],
+        removed: [],
+      }),
+      ScmInstallationModel.applyRepositoryChange(serverDB, installation.id, {
+        added: [],
+        removed: [repo('1')],
+      }),
+      ScmInstallationModel.applyRepositoryChange(serverDB, installation.id, {
+        added: [repo('4')],
+        removed: [],
+      }),
+    ]);
+
+    const after = await ScmInstallationModel.findById(serverDB, installation.id);
+    expect((after?.repositories ?? []).map((r) => r.externalId).sort()).toEqual(['2', '3', '4']);
+  });
+
   it('counts wakes', async () => {
     const row = await ScmChangeRequestModel.upsert(serverDB, snapshot);
     expect(await ScmChangeRequestModel.recordWake(serverDB, row.id)).toBe(1);

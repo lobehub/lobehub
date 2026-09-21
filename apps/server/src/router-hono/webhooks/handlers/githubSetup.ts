@@ -6,7 +6,11 @@ import { getServerDB } from '@/database/core/db-adaptor';
 import { ScmIdentityModel, ScmInstallationModel } from '@/database/models/scm';
 import { scmEnv } from '@/envs/scm';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { exchangeGitHubUserCode, fetchGitHubInstallation } from '@/server/services/scm/github/app';
+import {
+  exchangeGitHubUserCode,
+  fetchGitHubInstallation,
+  userCanAccessInstallation,
+} from '@/server/services/scm/github/app';
 import {
   consumeScmInstallState,
   issueScmInstallClaim,
@@ -168,6 +172,19 @@ export const githubSetup = async (c: Context): Promise<Response> => {
       log('identity upsert failed for %s: %O', authorization.user.login, error);
       return redirectToSettings(url.origin, { error: 'identity_taken' }, returnTo);
     }
+    // App-level access proves the installation belongs to this App, not that
+    // the person finishing the flow has anything to do with it. Without this
+    // check a valid state of one's own plus a guessed installation id would
+    // move someone else's installation into the attacker's scope.
+    if (!(await userCanAccessInstallation(authorization.accessToken, installationId))) {
+      log(
+        'user %s cannot access installation %s; refusing to bind',
+        authorization.user.login,
+        installationId,
+      );
+      return redirectToSettings(url.origin, { error: 'installation_not_yours' }, returnTo);
+    }
+
     installedBy = { login: authorization.user.login, userId: authorization.user.externalId };
   }
 
@@ -177,6 +194,24 @@ export const githubSetup = async (c: Context): Promise<Response> => {
   } catch (error) {
     log('fetch installation %s failed: %O', installationId, error);
     return redirectToSettings(url.origin, { error: 'installation_fetch_failed' }, returnTo);
+  }
+
+  // Binding moves the row's scope, so an installation that already belongs
+  // to someone else is never taken over from here — whoever holds it has to
+  // disconnect it first. (With a code we have already proved access, but the
+  // owner still decides.)
+  const bound = await ScmInstallationModel.findByProviderInstallationId(
+    db,
+    'github',
+    installationId,
+  );
+  const ownedByCaller =
+    !bound ||
+    !!bound.revokedAt ||
+    (bound.userId === userId && (bound.workspaceId ?? null) === workspaceId);
+  if (!ownedByCaller) {
+    log('installation %s is connected elsewhere; refusing to rebind', installationId);
+    return redirectToSettings(url.origin, { error: 'installation_taken' }, returnTo);
   }
 
   const installation = await ScmInstallationModel.bind(db, {

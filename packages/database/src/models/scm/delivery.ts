@@ -54,6 +54,9 @@ export class ScmWebhookDeliveryModel {
   };
 
   /** Retention sweep: drop rows older than the given instant. Returns the count removed. */
+  /** How long a settled delivery stays on the ledger before the sweep drops it. */
+  static RETENTION_DAYS = 30;
+
   static pruneBefore = async (db: LobeChatDatabase, before: Date): Promise<number> => {
     const rows = await db
       .delete(scmWebhookDeliveries)

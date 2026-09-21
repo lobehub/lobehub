@@ -4,12 +4,29 @@ import type { Context } from 'hono';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { ScmWebhookDeliveryModel } from '@/database/models/scm';
 import { scmEnv } from '@/envs/scm';
+import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import {
   describeGitHubDelivery,
   normalizeGitHubEvent,
 } from '@/server/services/scm/github/normalize';
 import { verifyGitHubSignature } from '@/server/services/scm/github/signature';
 import { ScmIngestService } from '@/server/services/scm/ScmIngestService';
+
+/**
+ * The ledger grows with every accepted delivery, so it is swept from the
+ * ingress itself rather than from a scheduler this deployment may not run.
+ * A Redis claim keeps it to one sweep a day across every instance; without
+ * Redis the sweep is skipped rather than run on every request.
+ */
+const pruneDeliveryLedger = async (db: Awaited<ReturnType<typeof getServerDB>>) => {
+  const redis = getAgentRuntimeRedisClient();
+  if (!redis) return;
+  if ((await redis.set('scm:delivery-prune', '1', 'EX', 86_400, 'NX')) !== 'OK') return;
+
+  const before = new Date(Date.now() - ScmWebhookDeliveryModel.RETENTION_DAYS * 86_400_000);
+  const pruned = await ScmWebhookDeliveryModel.pruneBefore(db, before);
+  log('pruned %d webhook deliveries received before %s', pruned, before.toISOString());
+};
 
 const log = debug('lobe-server:scm:github-webhook');
 
@@ -76,6 +93,10 @@ export const githubWebhook = async (c: Context): Promise<Response> => {
       outcome.status,
       outcome.detail ?? '',
     );
+    // After the response path is settled, not before: retention must never
+    // decide whether a delivery is accepted.
+    await pruneDeliveryLedger(db).catch((error) => log('delivery prune failed: %O', error));
+
     return c.json({ ok: true, ...outcome });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   consumeState: vi.fn(),
   issueClaim: vi.fn(),
   scmEnv: { ENABLED_GITHUB_APP: true, ENABLED_GITHUB_APP_OAUTH: true },
+  canAccessInstallation: vi.fn(),
   exchangeCode: vi.fn(),
   fetchInstallation: vi.fn(),
   getSession: vi.fn(),
@@ -33,6 +34,7 @@ vi.mock('@/server/services/scm/oauth/stateStore', () => ({
 vi.mock('@/server/services/scm/github/app', () => ({
   exchangeGitHubUserCode: mocks.exchangeCode,
   fetchGitHubInstallation: mocks.fetchInstallation,
+  userCanAccessInstallation: mocks.canAccessInstallation,
 }));
 
 const app = new Hono().get('/setup', githubSetup);
@@ -56,6 +58,7 @@ beforeEach(async () => {
   mocks.getSession.mockResolvedValue(null);
   mocks.scmEnv.ENABLED_GITHUB_APP_OAUTH = true;
   mocks.fetchInstallation.mockResolvedValue(snapshot);
+  mocks.canAccessInstallation.mockResolvedValue(true);
   mocks.exchangeCode.mockResolvedValue({
     accessToken: 'ghu_token',
     user: { externalId: '42', login: 'arvinxx' },
@@ -190,6 +193,53 @@ describe('githubSetup', () => {
     const location = new URL(res.headers.get('location')!);
     expect(location.origin).toBe('http://localhost');
     expect(location.pathname).toBe('/settings/integrations/github');
+  });
+
+  it('refuses an installation the authorizing GitHub user cannot see', async () => {
+    mocks.consumeState.mockResolvedValue({ lobeUserId: userId, ts: 1 });
+    mocks.canAccessInstallation.mockResolvedValue(false);
+
+    // A valid state of one's own plus a guessed installation id would
+    // otherwise move someone else's installation into this scope.
+    const res = await setup({ code: 'c', installation_id: '777', state: 's' });
+    expect(new URL(res.headers.get('location')!).searchParams.get('error')).toBe(
+      'installation_not_yours',
+    );
+    expect(
+      await ScmInstallationModel.findByProviderInstallationId(serverDB, 'github', '777'),
+    ).toBeNull();
+  });
+
+  it('never rebinds an installation that is connected elsewhere', async () => {
+    await serverDB.insert(users).values({ id: 'scm-setup-owner' });
+    await ScmInstallationModel.bind(serverDB, { ...snapshot, userId: 'scm-setup-owner' });
+    mocks.consumeState.mockResolvedValue({ lobeUserId: userId, ts: 1 });
+
+    const res = await setup({ code: 'c', installation_id: '777', state: 's' });
+    expect(new URL(res.headers.get('location')!).searchParams.get('error')).toBe(
+      'installation_taken',
+    );
+    expect(
+      (await ScmInstallationModel.findByProviderInstallationId(serverDB, 'github', '777'))?.userId,
+    ).toBe('scm-setup-owner');
+  });
+
+  it('refuses to move a GitHub identity to a second LobeHub account', async () => {
+    await serverDB.insert(users).values({ id: 'scm-setup-first' });
+    mocks.consumeState.mockResolvedValue({ lobeUserId: 'scm-setup-first', ts: 1 });
+    await setup({ code: 'c', installation_id: '777', state: 's' });
+    expect(await ScmIdentityModel.findByExternalUser(serverDB, 'github', '42')).toMatchObject({
+      userId: 'scm-setup-first',
+    });
+
+    // The same GitHub account authorizing from another LobeHub account must
+    // not carry the stored token across; the row keeps its owner.
+    mocks.consumeState.mockResolvedValue({ lobeUserId: userId, ts: 1 });
+    const res = await setup({ code: 'c', installation_id: '778', state: 's' });
+    expect(new URL(res.headers.get('location')!).searchParams.get('error')).toBe('identity_taken');
+    expect(await ScmIdentityModel.findByExternalUser(serverDB, 'github', '42')).toMatchObject({
+      userId: 'scm-setup-first',
+    });
   });
 
   it('reports a failed code exchange instead of binding', async () => {

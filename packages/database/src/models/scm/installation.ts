@@ -138,6 +138,37 @@ export class ScmInstallationModel {
       .where(eq(scmInstallations.id, id));
   };
 
+  /**
+   * Apply a repository grant change. Adds and removes for one installation
+   * arrive as separate deliveries and are handled concurrently, so the
+   * read/merge/write runs under a row lock — otherwise two handlers start
+   * from the same snapshot and the last write drops the other's change.
+   */
+  static applyRepositoryChange = async (
+    db: LobeChatDatabase,
+    id: string,
+    change: { added: ScmInstallationRepository[]; removed: ScmInstallationRepository[] },
+  ): Promise<ScmInstallationRepository[]> =>
+    db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(scmInstallations)
+        .where(eq(scmInstallations.id, id))
+        .for('update');
+      if (!existing) return [];
+
+      const removed = new Set(change.removed.map((r) => r.externalId));
+      const kept = existing.repositories.filter((r) => !removed.has(r.externalId));
+      const known = new Set(kept.map((r) => r.externalId));
+      const next = [...kept, ...change.added.filter((r) => !known.has(r.externalId))];
+
+      await tx
+        .update(scmInstallations)
+        .set({ repositories: next, updatedAt: new Date() })
+        .where(eq(scmInstallations.id, id));
+      return next;
+    });
+
   static setSuspended = async (
     db: LobeChatDatabase,
     id: string,

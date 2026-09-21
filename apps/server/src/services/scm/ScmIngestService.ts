@@ -1,4 +1,3 @@
-import type { ScmReviewDecision } from '@lobechat/types';
 import debug from 'debug';
 
 import { isFailingCheck, ScmChangeRequestModel, ScmInstallationModel } from '@/database/models/scm';
@@ -127,12 +126,10 @@ export class ScmIngestService {
       return { detail: `installation ${event.installationId} is not bound`, status: 'skipped' };
     }
 
-    const removed = new Set(event.removed.map((r) => r.externalId));
-    const kept = existing.repositories.filter((r) => !removed.has(r.externalId));
-    const known = new Set(kept.map((r) => r.externalId));
-    const next = [...kept, ...event.added.filter((r) => !known.has(r.externalId))];
-
-    await ScmInstallationModel.setRepositories(this.db, existing.id, next);
+    await ScmInstallationModel.applyRepositoryChange(this.db, existing.id, {
+      added: event.added,
+      removed: event.removed,
+    });
     return {
       detail: `installation ${existing.id}: +${event.added.length} -${event.removed.length}`,
       status: 'processed',
@@ -278,17 +275,20 @@ export class ScmIngestService {
       };
     }
 
-    const decision: ScmReviewDecision | null =
+    // A plain comment carries no verdict and leaves the rollup alone; a
+    // dismissal drops that reviewer's verdict from it.
+    const decision =
       event.kind === 'review_approved'
-        ? 'approved'
+        ? ('approved' as const)
         : event.kind === 'review_changes_requested'
-          ? 'changes_requested'
+          ? ('changes_requested' as const)
           : null;
-    // A dismissal clears the aggregate: GitHub says the verdict no longer counts.
-    if (event.kind === 'review_dismissed') {
-      await ScmChangeRequestModel.setReviewDecision(this.db, row.id, null);
-    } else if (decision) {
-      await ScmChangeRequestModel.setReviewDecision(this.db, row.id, decision);
+    if (decision || event.kind === 'review_dismissed') {
+      await ScmChangeRequestModel.applyReviewerDecision(this.db, row.id, {
+        at: event.occurredAt,
+        decision,
+        reviewerId: event.actor?.externalId,
+      });
     }
     await ScmChangeRequestModel.recordEvent(this.db, row.id, event.kind, event.occurredAt);
 
