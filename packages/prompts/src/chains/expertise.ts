@@ -113,6 +113,123 @@ export const chainExpertiseDomainDraft = ({
       ],
 });
 
+export const EXPERTISE_RULE_DRAFT_PROMPT_VERSION = 'v1';
+
+/**
+ * One rule drafted from whatever the reviewer typed or pasted: a sentence, a paragraph, or a
+ * whole document. The schema mirrors the editable fields of a lesson row so the review step can
+ * show every field and let the reviewer change any of them before it is written.
+ */
+export const EXPERTISE_RULE_DRAFT_JSON_SCHEMA = {
+  name: 'expertise_rule_draft',
+  schema: {
+    additionalProperties: false,
+    properties: {
+      compilability: { enum: ['compiled', 'compilable', 'not-compilable'], type: 'string' },
+      enforcement: { enum: ['block', 'remind'], type: 'string' },
+      groupId: { type: ['string', 'null'] },
+      how: { type: ['string', 'null'] },
+      limits: { type: ['string', 'null'] },
+      newGroup: {
+        additionalProperties: false,
+        properties: {
+          gate: { type: 'string' },
+          title: { maxLength: 40, type: 'string' },
+        },
+        required: ['gate', 'title'],
+        type: ['object', 'null'],
+      },
+      title: { maxLength: 120, type: 'string' },
+      why: { type: ['string', 'null'] },
+    },
+    required: [
+      'compilability',
+      'enforcement',
+      'groupId',
+      'how',
+      'limits',
+      'newGroup',
+      'title',
+      'why',
+    ],
+    type: 'object',
+  },
+} as const satisfies ExpertiseGenerateObjectSchema;
+
+const EXPERTISE_RULE_DRAFT_SYSTEM_PROMPT = `You turn what a reviewer wrote — one sentence, a paragraph, or a pasted document — into ONE delivery rule they will hold every future delivery to.
+
+Return:
+- title: the rule as one imperative sentence in the reviewer's own voice, general enough to apply to any future delivery (strip page names, component names and the name of this particular task), specific enough that a delivery can be judged against it;
+- why: one or two sentences on what goes wrong when it is broken, or null when the reviewer gave no reason and none is obvious;
+- how: what counts as breaking it, as a concrete example a checker could look for, or null;
+- limits: when it does NOT apply, or null when the reviewer set no boundary;
+- enforcement: "block" only when the reviewer clearly wants deliveries held until fixed (words like must, never, reject, block, 必须, 不许, 打回); otherwise "remind";
+- compilability: "compiled" when a program could check it from the delivery alone (a diff, a file, a count), "compilable" when a program can gather the evidence but a judgement is still needed, "not-compilable" when only a person or a model can judge it;
+- groupId: the id of the existing group whose gate question this rule passes, or null when none fits;
+- newGroup: when groupId is null, a proposed group — a short title and the gate question a rule must pass to be filed there; otherwise null.
+
+If the input is a long document, extract the single most important rule it states; do not summarise the document. Never invent requirements the reviewer did not express. Write every human-facing field in the language the reviewer used.`;
+
+interface ExpertiseRuleDraftChainInput {
+  brief: string;
+  groups: { gate: string; id: string; title: string }[];
+}
+
+export const chainExpertiseRuleDraft = ({
+  brief,
+  groups,
+}: ExpertiseRuleDraftChainInput): { messages: OpenAIChatMessage[] } => ({
+  messages: [
+    { content: EXPERTISE_RULE_DRAFT_SYSTEM_PROMPT, role: 'system' },
+    {
+      content: [
+        groups.length > 0
+          ? `Existing groups (id · title · gate question):\n${groups
+              .map((group) => `- ${group.id} · ${group.title} · ${group.gate}`)
+              .join('\n')}`
+          : 'There are no groups yet; propose one in newGroup.',
+        `What the reviewer wrote:\n${brief.trim()}`,
+      ].join('\n\n'),
+      role: 'user',
+    },
+  ],
+});
+
+export const EXPERTISE_RULE_GROUP_DRAFT_PROMPT_VERSION = 'v1';
+
+/** A group is a name and the gate question a rule must pass to be filed under it. */
+export const EXPERTISE_RULE_GROUP_DRAFT_JSON_SCHEMA = {
+  name: 'expertise_rule_group_draft',
+  schema: {
+    additionalProperties: false,
+    properties: {
+      gate: { type: 'string' },
+      outOfScope: { type: ['string', 'null'] },
+      title: { maxLength: 40, type: 'string' },
+    },
+    required: ['gate', 'outOfScope', 'title'],
+    type: 'object',
+  },
+} as const satisfies ExpertiseGenerateObjectSchema;
+
+const EXPERTISE_RULE_GROUP_DRAFT_SYSTEM_PROMPT = `A reviewer is opening a group to file their delivery rules under. From what they wrote, return:
+- title: a short name for the group, 2 to 6 words, in the reviewer's language;
+- gate: the one question to ask of a rule before filing it here, phrased so a yes means it belongs (for example: "Strip the page and task names — does this still hold for any delivery?");
+- outOfScope: one sentence on what does not belong here, or null.
+
+Keep the reviewer's intent; do not widen the group beyond what they described.`;
+
+export const chainExpertiseRuleGroupDraft = ({
+  brief,
+}: {
+  brief: string;
+}): { messages: OpenAIChatMessage[] } => ({
+  messages: [
+    { content: EXPERTISE_RULE_GROUP_DRAFT_SYSTEM_PROMPT, role: 'system' },
+    { content: brief.trim(), role: 'user' },
+  ],
+});
+
 export const EXPERTISE_TOPIC_INGESTION_PROMPT_VERSION = 'v2';
 
 export const EXPERTISE_TOPIC_INGESTION_JSON_SCHEMA = {

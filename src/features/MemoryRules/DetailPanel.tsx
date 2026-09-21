@@ -1,20 +1,30 @@
 'use client';
 
 import type { ExpertiseEnforcement, ExpertiseReasonKind } from '@lobechat/types';
-import { Flexbox, Icon, TextArea } from '@lobehub/ui';
+import { Block, Flexbox, Icon, TextArea } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
   type DropdownItem,
   DropdownMenu,
-  Segmented,
   Tag,
   Text,
 } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
-import { ClipboardCheckIcon, MoreHorizontalIcon } from 'lucide-react';
-import { useState } from 'react';
+import {
+  ActivityIcon,
+  BellIcon,
+  ClipboardCheckIcon,
+  HistoryIcon,
+  type LucideIcon,
+  MoreHorizontalIcon,
+  PencilIcon,
+  ScaleIcon,
+  ShieldCheckIcon,
+  TargetIcon,
+} from 'lucide-react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import RightPanel from '@/features/RightPanel';
@@ -28,7 +38,7 @@ const styles = createStaticStyles(({ css }) => ({
   body: css`
     overflow-y: auto;
     flex: 1;
-    padding-block: 8px 24px;
+    padding-block: 4px 24px;
     padding-inline: 28px;
   `,
   foot: css`
@@ -74,30 +84,37 @@ const styles = createStaticStyles(({ css }) => ({
       color: ${cssVar.colorText};
     }
   `,
-  meta: css`
-    display: grid;
-    grid-template-columns: 56px 1fr;
-    gap: 8px 12px;
-
-    margin-block-start: 14px;
-    padding-block: 12px;
-    border-block: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-size: 12.5px;
-
-    dt {
-      color: ${cssVar.colorTextTertiary};
-    }
-
-    dd {
-      margin: 0;
-      color: ${cssVar.colorText};
-    }
-  `,
   muted: css`
     font-size: 12px;
     line-height: 1.6;
     color: ${cssVar.colorTextSecondary};
+  `,
+  properties: css`
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    margin-block-start: 16px;
+    padding-block-end: 16px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+  `,
+  property: css`
+    width: 100%;
+    min-height: 30px;
+    padding-block: 5px;
+    padding-inline: 8px 10px;
+    border-radius: ${cssVar.borderRadius};
+
+    font-size: 13px;
+  `,
+  propertyLabel: css`
+    flex: none;
+    width: 44px;
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  propertyStatic: css`
+    background: transparent;
   `,
   quote: css`
     margin-block: 6px 0;
@@ -123,33 +140,107 @@ const styles = createStaticStyles(({ css }) => ({
     line-height: 1.35;
     text-wrap: pretty;
   `,
+  titleInput: css`
+    box-sizing: border-box;
+    width: 100%;
+    padding: 0;
+    border: none;
+
+    font-family: inherit;
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1.35;
+    color: inherit;
+
+    background: transparent;
+    outline: none;
+  `,
+  warning: css`
+    padding-block: 6px;
+    padding-inline: 8px;
+    border-radius: ${cssVar.borderRadius};
+
+    font-size: 12px;
+    line-height: 1.6;
+    color: ${cssVar.colorWarningText};
+
+    background: ${cssVar.colorWarningBg};
+  `,
 }));
+
+interface PropertyProps {
+  children: ReactNode;
+  icon: LucideIcon;
+  label: string;
+  menu?: DropdownItem[];
+}
+
+/**
+ * One property line, in the shape the task detail uses: a label, an icon, the current value, and
+ * a menu behind the click when it can be changed. Read-only lines drop the fill so the eye finds
+ * the switches first.
+ */
+const Property = ({ children, icon, label, menu }: PropertyProps) => {
+  const row = (
+    <Block
+      horizontal
+      align={'center'}
+      className={cx(styles.property, !menu && styles.propertyStatic)}
+      clickable={Boolean(menu)}
+      gap={8}
+      variant={menu ? 'filled' : 'borderless'}
+    >
+      <span className={styles.propertyLabel}>{label}</span>
+      <Icon color={cssVar.colorTextSecondary} icon={icon} size={14} />
+      <Flexbox flex={1} style={{ minWidth: 0 }}>
+        {children}
+      </Flexbox>
+    </Block>
+  );
+  return menu ? <DropdownMenu items={menu}>{row}</DropdownMenu> : row;
+};
 
 interface RuleDocumentProps {
   code: string;
   group?: RuleGroup;
   groups: RuleGroup[];
   menu: DropdownItem[];
+  onTitleEditing: (editing: boolean) => void;
   onUpdate: (patch: UpdateRuleInput) => Promise<unknown>;
   rule: RuleItem;
+  titleEditing: boolean;
 }
 
 /**
- * The rule as a document: a heading per column of the lesson row, each editable on its own, with
- * the evidence it grew from and the edits it has been through underneath. The exception composer
- * is docked at the foot so a long source list never pushes it out of a short window.
+ * The rule as a document: the sentence itself as the title (editable in place), its settings as
+ * property lines, then the sections a lesson row carries, the evidence it grew from, and the
+ * edits it has been through. The exception composer is docked at the foot so a long source list
+ * never pushes it out of a short window.
  */
-const RuleDocument = ({ code, group, groups, menu, onUpdate, rule }: RuleDocumentProps) => {
+const RuleDocument = ({
+  code,
+  group,
+  groups,
+  menu,
+  onTitleEditing,
+  onUpdate,
+  rule,
+  titleEditing,
+}: RuleDocumentProps) => {
   const { t } = useTranslation('memory');
   const scopeLabel = useScopeLabel();
   const { data: sources } = useRuleSources(rule.id);
   const { data: revisions, mutate: mutateRevisions } = useRuleRevisions(rule.id);
   const [exception, setException] = useState('');
+  const [titleDraft, setTitleDraft] = useState(rule.title);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setTitleDraft(rule.title);
+  }, [rule.id, rule.title, titleEditing]);
 
   const archived = rule.status === 'retired';
   const authored = Boolean(rule.createdByUserId) && rule.hitCount === 0;
-  const limits = sectionBody(rule, 'limits');
   const all = groups.flatMap((g) => g.rules);
   const titleOf = (id: string) => all.find((r) => r.id === id)?.title ?? id;
   const mergedInto = mergedIntoId(rule);
@@ -165,127 +256,178 @@ const RuleDocument = ({ code, group, groups, menu, onUpdate, rule }: RuleDocumen
     }
   };
 
+  const commitTitle = () => {
+    const next = titleDraft.trim();
+    onTitleEditing(false);
+    if (next && next !== rule.title) void save({ title: next });
+  };
+
   const addException = () => {
     const text = exception.trim();
     if (!text) return;
     void save({ sections: { limits: text } }).then(() => setException(''));
   };
 
+  const choose = <T extends string>(
+    values: readonly T[],
+    label: (value: T) => string,
+    onPick: (value: T) => void,
+  ): DropdownItem[] =>
+    values.map((value) => ({ key: value, label: label(value), onClick: () => onPick(value) }));
+  const editable = !archived && !busy;
+
   return (
     <Flexbox height={'100%'} width={'100%'}>
       <div className={styles.head}>
         <Flexbox horizontal align={'flex-start'} gap={8}>
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <div className={styles.kicker}>
               {code} · {group?.domain.title}
               {rule.tags?.length ? ` · ${rule.tags.join(' / ')}` : ''}
             </div>
-            <div className={styles.title}>{rule.title}</div>
+            {titleEditing ? (
+              <input
+                autoFocus
+                className={styles.titleInput}
+                value={titleDraft}
+                onBlur={commitTitle}
+                onChange={(e) => setTitleDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') commitTitle();
+                  if (e.key === 'Escape') onTitleEditing(false);
+                }}
+              />
+            ) : (
+              <div className={styles.title}>{rule.title}</div>
+            )}
           </div>
+          {!archived && !titleEditing && (
+            <ActionIcon
+              icon={PencilIcon}
+              size={'small'}
+              title={t('rules.actions.edit')}
+              onClick={() => onTitleEditing(true)}
+            />
+          )}
           <DropdownMenu items={menu}>
             <ActionIcon disabled={busy} icon={MoreHorizontalIcon} size={'small'} />
           </DropdownMenu>
         </Flexbox>
-        <dl className={styles.meta}>
-          <dt>{t('rules.meta.enforcement')}</dt>
-          <dd>
-            <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
-              <Segmented<ExpertiseEnforcement>
-                disabled={archived || busy}
-                size={'small'}
-                value={rule.enforcement}
-                options={[
-                  { label: t('rules.enforcement.remind'), value: 'remind' },
-                  { label: t('rules.enforcement.block'), value: 'block' },
-                ]}
-                onChange={(enforcement) => void save({ enforcement })}
-              />
-              <span className={styles.muted}>
-                {t(
-                  rule.enforcement === 'block'
-                    ? 'rules.enforcement.blockDesc'
-                    : 'rules.enforcement.remindDesc',
-                )}
-              </span>
-            </Flexbox>
-            {rule.enforcement === 'block' && rule.reasonKind === 'taste' && (
-              <Text fontSize={12} style={{ display: 'block', marginTop: 4 }} type={'warning'}>
-                {t('rules.enforcement.tasteWarning')}
-              </Text>
-            )}
-          </dd>
-          <dt>{t('rules.meta.method')}</dt>
-          <dd>
-            <Segmented<RuleItem['compilability']>
-              disabled={archived || busy}
-              size={'small'}
-              value={rule.compilability}
-              options={(['compiled', 'compilable', 'not-compilable'] as const).map((value) => ({
-                label: t(`rules.method.${value}`),
-                value,
-              }))}
-              onChange={(compilability) => void save({ compilability })}
-            />
-          </dd>
-          <dt>{t('rules.meta.reason')}</dt>
-          <dd>
-            <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
-              <Segmented<ExpertiseReasonKind>
-                disabled={archived || busy}
-                size={'small'}
-                value={rule.reasonKind ?? 'taste'}
-                options={[
-                  { label: t('rules.reason.mechanism'), value: 'mechanism' },
-                  { label: t('rules.reason.taste'), value: 'taste' },
-                ]}
-                onChange={(reasonKind) => void save({ reasonKind })}
-              />
-              <span className={styles.muted}>
-                {t(
-                  rule.reasonSource === 'inferred'
-                    ? 'rules.reason.inferred'
-                    : 'rules.reason.reviewer',
-                )}
-              </span>
-            </Flexbox>
-          </dd>
-          <dt>{t('rules.meta.scope')}</dt>
-          <dd>{group ? scopeLabel(group.scopes) : ''}</dd>
-          <dt>{t('rules.meta.runs')}</dt>
-          <dd>
-            {rule.hitRunCount
-              ? t('rules.runs.detail', { hits: rule.hitCount, runs: rule.hitRunCount })
-              : t('rules.runs.none')}
-            {rule.falsePositiveCount > 0 && (
-              <span className={styles.muted}>
-                {' '}
-                {t('rules.runs.overruled', { count: rule.falsePositiveCount })}
-              </span>
-            )}
-          </dd>
-          <dt>{t('rules.meta.origin')}</dt>
-          <dd>
-            {authored
-              ? t('rules.origin.authored')
-              : t('rules.origin.distilled', { examples: rule.exampleCount, hits: rule.hitCount }) +
-                (rule.lastHitAt
-                  ? t('rules.origin.lastHit', { time: dayjs(rule.lastHitAt).fromNow() })
-                  : '')}
+
+        <div className={styles.properties}>
+          <Property
+            icon={rule.enforcement === 'block' ? ShieldCheckIcon : BellIcon}
+            label={t('rules.meta.enforcement')}
+            menu={
+              editable
+                ? choose(
+                    ['block', 'remind'] as const,
+                    (value) =>
+                      t(
+                        value === 'block'
+                          ? 'rules.compose.enforcementBlock'
+                          : 'rules.compose.enforcementRemind',
+                      ),
+                    (enforcement: ExpertiseEnforcement) => void save({ enforcement }),
+                  )
+                : undefined
+            }
+          >
+            <Text weight={500}>
+              {t(
+                rule.enforcement === 'block'
+                  ? 'rules.enforcement.block'
+                  : 'rules.enforcement.remind',
+              )}
+            </Text>
+            <span className={styles.muted}>
+              {t(
+                rule.enforcement === 'block'
+                  ? 'rules.enforcement.blockDesc'
+                  : 'rules.enforcement.remindDesc',
+              )}
+            </span>
+          </Property>
+          <Property
+            icon={ClipboardCheckIcon}
+            label={t('rules.meta.method')}
+            menu={
+              editable
+                ? choose(
+                    ['compiled', 'compilable', 'not-compilable'] as const,
+                    (value) => t(`rules.method.${value}`),
+                    (compilability) => void save({ compilability }),
+                  )
+                : undefined
+            }
+          >
+            <Text weight={500}>{t(`rules.method.${rule.compilability}`)}</Text>
+          </Property>
+          <Property
+            icon={ScaleIcon}
+            label={t('rules.meta.reason')}
+            menu={
+              editable
+                ? choose(
+                    ['mechanism', 'taste'] as const,
+                    (value) => t(`rules.reason.${value}`),
+                    (reasonKind: ExpertiseReasonKind) => void save({ reasonKind }),
+                  )
+                : undefined
+            }
+          >
+            <Text weight={500}>{t(`rules.reason.${rule.reasonKind ?? 'taste'}`)}</Text>
+            <span className={styles.muted}>
+              {t(
+                rule.reasonSource === 'inferred'
+                  ? 'rules.reason.inferred'
+                  : 'rules.reason.reviewer',
+              )}
+            </span>
+          </Property>
+          {rule.enforcement === 'block' && rule.reasonKind === 'taste' && (
+            <div className={styles.warning}>{t('rules.enforcement.tasteWarning')}</div>
+          )}
+          <Property icon={TargetIcon} label={t('rules.meta.scope')}>
+            <span>{group ? scopeLabel(group.scopes) : ''}</span>
+          </Property>
+          <Property icon={ActivityIcon} label={t('rules.meta.runs')}>
+            <span>
+              {rule.hitRunCount
+                ? t('rules.runs.detail', { hits: rule.hitCount, runs: rule.hitRunCount })
+                : t('rules.runs.none')}
+              {rule.falsePositiveCount > 0 && (
+                <span className={styles.muted}>
+                  {' · '}
+                  {t('rules.runs.overruled', { count: rule.falsePositiveCount })}
+                </span>
+              )}
+            </span>
+          </Property>
+          <Property icon={HistoryIcon} label={t('rules.meta.origin')}>
+            <span>
+              {authored
+                ? t('rules.origin.authored')
+                : t('rules.origin.distilled', { hits: rule.hitCount }) +
+                  (rule.lastHitAt
+                    ? t('rules.origin.lastHit', { time: dayjs(rule.lastHitAt).fromNow() })
+                    : '')}
+            </span>
             {Boolean(rule.generalizedFromIds?.length) && (
-              <div className={styles.muted}>
+              <span className={styles.muted}>
                 {t('rules.origin.generalizedFrom', {
                   titles: rule.generalizedFromIds!.map(titleOf).join('」「'),
                 })}
-              </div>
+              </span>
             )}
             {rule.specificity === 'over-specific' && (
-              <div className={styles.muted}>{t('rules.origin.overSpecific')}</div>
+              <span className={styles.muted}>{t('rules.origin.overSpecific')}</span>
             )}
             {rule.specificity === 'one-off' && (
-              <div className={styles.muted}>{t('rules.origin.oneOff')}</div>
+              <span className={styles.muted}>{t('rules.origin.oneOff')}</span>
             )}
             {archived && (
-              <div className={styles.muted}>
+              <span className={styles.muted}>
                 {t('rules.archived.at', {
                   time: dayjs(rule.retiredAt ?? undefined).format('YYYY-MM-DD'),
                 })}
@@ -293,19 +435,13 @@ const RuleDocument = ({ code, group, groups, menu, onUpdate, rule }: RuleDocumen
                 {mergedInto
                   ? t('rules.archived.mergedInto', { title: titleOf(mergedInto) })
                   : t('rules.archived.byYou')}
-              </div>
+              </span>
             )}
-          </dd>
-        </dl>
+          </Property>
+        </div>
       </div>
 
       <div className={styles.body}>
-        <Field
-          editable={!archived}
-          label={t('rules.field.rule')}
-          value={rule.title}
-          onSave={(title) => title && void save({ title })}
-        />
         <Field
           editable={!archived}
           label={t('rules.field.why')}
@@ -324,7 +460,7 @@ const RuleDocument = ({ code, group, groups, menu, onUpdate, rule }: RuleDocumen
           editable={!archived}
           label={t('rules.field.limits')}
           placeholder={t('rules.field.limitsEmpty')}
-          value={limits}
+          value={sectionBody(rule, 'limits')}
           onSave={(next) => void save({ sections: { limits: next || null } })}
         />
         <Field
@@ -426,7 +562,6 @@ const RuleDocument = ({ code, group, groups, menu, onUpdate, rule }: RuleDocumen
           <Button
             disabled={!exception.trim()}
             loading={busy}
-            size={'small'}
             type={'primary'}
             onClick={addException}
           >

@@ -14,6 +14,7 @@ import {
   ExpertiseDomainService,
 } from '@/server/services/expertise/domain';
 import { ExpertiseIngestionService } from '@/server/services/expertise/ingestion';
+import { ExpertiseRuleDraftService } from '@/server/services/expertise/rules';
 import { ExpertiseHistoryWorkflow } from '@/server/workflows/expertiseHistory';
 
 /**
@@ -32,6 +33,11 @@ const expertiseProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts
         ctx.workspaceId ?? undefined,
       ),
       expertiseIngestionService: new ExpertiseIngestionService(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      ),
+      expertiseRuleDraftService: new ExpertiseRuleDraftService(
         ctx.serverDB,
         ctx.userId,
         ctx.workspaceId ?? undefined,
@@ -245,15 +251,35 @@ export const expertiseRouter = router({
     .input(z.object({ lessonId: z.string() }))
     .query(async ({ ctx, input }) => ctx.expertiseModel.listLessonRevisions(input.lessonId)),
 
+  /**
+   * Drafts one rule from whatever the reviewer typed or pasted. Nothing is written: the draft
+   * comes back for review and only `createRule` persists it.
+   */
+  draftRule: expertiseProcedure
+    .input(
+      z.object({
+        brief: z.string().min(1).max(20_000),
+        groups: z.array(z.object({ gate: z.string(), id: z.string(), title: z.string() })).max(50),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => ctx.expertiseRuleDraftService.draftRule(input)),
+
+  /** Drafts a group (name + gate question) from a sentence; `createRuleGroup` persists it. */
+  draftRuleGroup: expertiseProcedure
+    .input(z.object({ brief: z.string().min(1).max(20_000) }))
+    .mutation(async ({ ctx, input }) => ctx.expertiseRuleDraftService.draftRuleGroup(input)),
+
   /** A rule the reviewer writes down by hand. */
   createRule: expertiseWriteProcedure
     .input(
       z.object({
-        body: z.string().max(4000).optional(),
         compilability: z.enum(['compiled', 'compilable', 'not-compilable']).optional(),
         domainId: z.string(),
         enforcement: z.enum(EXPERTISE_ENFORCEMENTS).optional(),
+        how: z.string().max(8000).optional(),
+        limits: z.string().max(4000).optional(),
         title: z.string().min(1).max(500),
+        why: z.string().max(4000).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => ctx.expertiseModel.createRule(input)),

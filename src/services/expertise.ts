@@ -25,6 +25,10 @@ export type RuleSource = Awaited<
 export type RuleRevision = Awaited<
   ReturnType<typeof lambdaClient.expertise.ruleRevisions.query>
 >[number];
+export type RuleDraft = Awaited<ReturnType<typeof lambdaClient.expertise.draftRule.mutate>>;
+export type RuleGroupDraft = Awaited<
+  ReturnType<typeof lambdaClient.expertise.draftRuleGroup.mutate>
+>;
 export type CreateRuleInput = Parameters<typeof lambdaClient.expertise.createRule.mutate>[0];
 export type UpdateRuleInput = Omit<
   Parameters<typeof lambdaClient.expertise.updateRule.mutate>[0],
@@ -40,6 +44,13 @@ class ExpertiseService {
 
   ruleRevisions = async (lessonId: string) =>
     lambdaClient.expertise.ruleRevisions.query({ lessonId });
+
+  draftRule = async (input: {
+    brief: string;
+    groups: { gate: string; id: string; title: string }[];
+  }) => lambdaClient.expertise.draftRule.mutate(input);
+
+  draftRuleGroup = async (brief: string) => lambdaClient.expertise.draftRuleGroup.mutate({ brief });
 
   createRule = async (input: CreateRuleInput) => lambdaClient.expertise.createRule.mutate(input);
 

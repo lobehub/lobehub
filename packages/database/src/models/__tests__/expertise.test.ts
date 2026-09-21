@@ -425,10 +425,11 @@ describe('ExpertiseModel', () => {
     const model = new ExpertiseModel(serverDB, userId);
 
     const created = await model.createRule({
-      body: '主行只留一个操作',
       domainId: 'rules-domain',
       enforcement: 'block',
+      limits: '   ',
       title: '次要操作收进「…」',
+      why: '主行只留一个操作',
     });
 
     expect(created?.code).toBe('P-03');
@@ -557,6 +558,30 @@ describe('ExpertiseModel', () => {
       rejectedReason: `moved-to:${moved!.id}`,
       status: 'rejected',
     });
+  });
+
+  it('reuses a group the reviewer already has instead of opening a second one', async () => {
+    await seedRuleGroup();
+    const model = new ExpertiseModel(serverDB, userId);
+
+    const reused = await model.createRuleGroup({ gate: '别的守门题', title: '  我的交付审美 ' });
+    expect(reused).toBe('rules-domain');
+
+    const opened = await model.createRuleGroup({
+      gate: '这条只对本仓库成立吗？',
+      title: 'OSS 工程规范',
+    });
+    expect(opened).not.toBe('rules-domain');
+
+    const groups = await model.listRules();
+    // The newly opened group lands after the ones already there, not at the top.
+    expect(groups.map((g) => g.domain.title)).toEqual([
+      '我的交付审美',
+      'LobeHub 设计体系',
+      'OSS 工程规范',
+    ]);
+    // The reused group keeps its own gate question; the caller does not get to overwrite it.
+    expect(groups[0].domain.domainFilter).toBe('交付标准');
   });
 
   it('folds one rule into another and archives the source with a pointer back', async () => {

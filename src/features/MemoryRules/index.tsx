@@ -1,9 +1,9 @@
 'use client';
 
 import { Block, Empty, Flexbox, Icon, SortableList } from '@lobehub/ui';
-import { Button, DropdownMenu, Text } from '@lobehub/ui/base-ui';
+import { Button, Text } from '@lobehub/ui/base-ui';
 import { cx } from 'antd-style';
-import { FlaskConicalIcon, FolderPlusIcon, PencilIcon, PlusIcon, ScaleIcon } from 'lucide-react';
+import { FlaskConicalIcon, PencilIcon, PlusIcon, ScaleIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -56,7 +56,7 @@ const MemoryRules = () => {
   const enabled = useUserStore(labPreferSelectors.enableMemoryRules);
   const { data, error, isLoading, mutate } = useRules();
   const [selectedId, setSelectedId] = useState<string>();
-  const [editingId, setEditingId] = useState<string>();
+  const [titleEditing, setTitleEditing] = useState(false);
   const [mergeFrom, setMergeFrom] = useState<string>();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
@@ -124,7 +124,11 @@ const MemoryRules = () => {
 
   const handlers = {
     archive: (id: string) => void run(() => expertiseService.archiveRule(id)),
-    edit: (id: string) => setEditingId(id),
+    // Rewording opens the document with the title already in edit mode.
+    edit: (id: string) => {
+      setSelectedId(id);
+      setTitleEditing(true);
+    },
     merge: (id: string) => setMergeFrom(id),
     move: (id: string, domainId: string) =>
       void run(async () => {
@@ -135,6 +139,7 @@ const MemoryRules = () => {
   };
 
   const select = (id: string) => {
+    setTitleEditing(false);
     if (mergeFrom && mergeFrom !== id) {
       const target = id;
       void run(async () => {
@@ -164,7 +169,6 @@ const MemoryRules = () => {
     <RuleRow
       active={rule.id === selectedId}
       code={codes.get(rule.id) ?? ''}
-      editing={editingId === rule.id}
       menu={buildRuleMenu(t, rule, groups, handlers)}
       rule={rule}
       archivedInto={(() => {
@@ -173,8 +177,6 @@ const MemoryRules = () => {
       })()}
       onEnforcement={(enforcement) => void updateRule(rule.id, { enforcement })}
       onSelect={() => select(rule.id)}
-      onStopEdit={() => setEditingId(undefined)}
-      onTitle={(title) => void updateRule(rule.id, { title })}
     />
   );
 
@@ -206,25 +208,11 @@ const MemoryRules = () => {
                 </Text>
                 <Text type={'secondary'}>{t('rules.subtitle', { count: live.length })}</Text>
               </Flexbox>
-              {groups.length > 0 && (
-                <Flexbox horizontal align={'center'} gap={6}>
-                  <DropdownMenu
-                    items={[
-                      {
-                        icon: <Icon icon={FolderPlusIcon} />,
-                        key: 'new',
-                        label: t('rules.actions.newGroup'),
-                        onClick: () => openGroupModal(),
-                      },
-                    ]}
-                  >
-                    <Button size={'small'}>{t('rules.actions.group')}</Button>
-                  </DropdownMenu>
-                  <Button icon={<Icon icon={PlusIcon} />} size={'small'} onClick={() => compose()}>
-                    {t('rules.actions.write')}
-                  </Button>
-                </Flexbox>
-              )}
+              {/* One primary action. Writing a rule also opens the group when the reviewer has
+                  none, so a separate "new group" button would be a second way to start. */}
+              <Button icon={<Icon icon={PlusIcon} />} type={'primary'} onClick={() => compose()}>
+                {t('rules.actions.write')}
+              </Button>
             </Flexbox>
 
             {mergeFrom && (
@@ -261,9 +249,7 @@ const MemoryRules = () => {
                           {t('rules.backlog', { count: data!.backlogRounds })}
                         </Text>
                       )}
-                      <Button size={'small'} onClick={() => openGroupModal()}>
-                        {t('rules.actions.newGroup')}
-                      </Button>
+                      <Button onClick={() => compose()}>{t('rules.empty.write')}</Button>
                     </Flexbox>
                   }
                 />
@@ -354,8 +340,13 @@ const MemoryRules = () => {
             groups={groups}
             menu={selected ? buildRuleMenu(t, selected, groups, handlers) : []}
             rule={selected}
-            onClose={() => setSelectedId(undefined)}
+            titleEditing={titleEditing}
+            onTitleEditing={setTitleEditing}
             onUpdate={(patch) => (selected ? updateRule(selected.id, patch) : Promise.resolve())}
+            onClose={() => {
+              setSelectedId(undefined);
+              setTitleEditing(false);
+            }}
           />
         )}
       </Flexbox>

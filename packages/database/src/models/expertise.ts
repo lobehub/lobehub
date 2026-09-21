@@ -130,7 +130,9 @@ export class ExpertiseModel {
           carrierWhere ? or(carrierWhere, ownerWhere) : ownerWhere,
         ),
       )
-      .orderBy(asc(expertiseBindings.sortOrder));
+      // Every binding starts at sortOrder 0, so without a tiebreak the order of a reviewer's
+      // groups is whatever the planner returns and a newly opened group can jump to the top.
+      .orderBy(asc(expertiseBindings.sortOrder), asc(expertiseDomains.createdAt));
 
     // One domain may be bound at multiple levels; retain the first binding by sort order.
     const seen = new Set<string>();
@@ -672,11 +674,26 @@ export class ExpertiseModel {
         userId: this.userId,
         workspaceId: this.workspaceId,
       });
+      const carrier = carrierColumns(params.carrier, {
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      });
+      // A new mount goes after the ones already there. Leaving every binding at 0 makes the
+      // reviewer's group order depend on the query plan.
+      const [carrierColumn, carrierValue] = Object.entries(carrier)[0] as [
+        keyof typeof expertiseBindings.$inferInsert,
+        string,
+      ];
+      const [last] = await tx
+        .select({ sortOrder: sql<number>`max(${expertiseBindings.sortOrder})` })
+        .from(expertiseBindings)
+        .where(eq(expertiseBindings[carrierColumn as 'boundUserId'], carrierValue));
       await tx.insert(expertiseBindings).values({
         addedByUserId: this.userId,
         domainId: id,
+        sortOrder: (last?.sortOrder ?? -1) + 1,
         workspaceId: this.workspaceId,
-        ...carrierColumns(params.carrier, { userId: this.userId, workspaceId: this.workspaceId }),
+        ...carrier,
       });
     });
     return id;
@@ -811,18 +828,22 @@ export class ExpertiseModel {
    * been distilled, so there is no mechanism to claim yet.
    */
   createRule = async (params: {
-    body?: string;
     compilability?: 'compiled' | 'compilable' | 'not-compilable';
     domainId: string;
     enforcement?: ExpertiseEnforcement;
+    how?: string;
+    limits?: string;
     title: string;
+    why?: string;
   }) => {
     const domain = await this.findDomain(params.domainId);
     if (!domain) return null;
     const title = params.title.trim();
-    const body = params.body?.trim();
     const sections: ExpertiseLessonSection[] = [{ body: title, key: 'rule' }];
-    if (body) sections.push({ body, key: 'why' });
+    for (const key of ['why', 'how', 'limits'] as const) {
+      const body = params[key]?.trim();
+      if (body) sections.push({ body, key });
+    }
 
     return this.db.transaction(async (tx) => {
       const code = await this.nextLessonCode(tx, params.domainId);
@@ -1059,14 +1080,26 @@ export class ExpertiseModel {
    * A group the reviewer opens by hand. It is a plain always-on domain: the gate question is the
    * domain filter, and it mounts on the reviewer themselves so every acceptance without a project
    * can add to it.
+   *
+   * A name the reviewer already uses returns that group instead of opening a second one. The
+   * drafting model proposes a group name without seeing which ones already exist in every case,
+   * and two groups with the same name on one page are indistinguishable to the reader.
    */
-  createRuleGroup = async (params: { gate: string; title: string }) =>
-    this.createDomain({
-      brief: params.title,
+  createRuleGroup = async (params: { gate: string; title: string }) => {
+    const title = params.title.trim();
+    const existing = await this.listDomainsForOwner();
+    const match = existing.find(
+      ({ domain }) => domain.title.trim().toLowerCase() === title.toLowerCase(),
+    );
+    if (match) return match.domain.id;
+
+    return this.createDomain({
+      brief: title,
       carrier: { type: 'user' },
       domainFilter: params.gate,
-      title: params.title,
+      title,
     });
+  };
 
   /** Renames a group; the gate question can be changed the same way. */
   updateRuleGroup = async (domainId: string, patch: { gate?: string; title?: string }) => {
