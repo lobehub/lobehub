@@ -4025,4 +4025,5 @@ When I am ___, I need ___
   'environments.files.removeFailed': 'Could not delete this',
   'environments.total_one': '{{count}} environment',
   'environments.total_other': '{{count}} environments',
+  'environments.mine': 'My environments',
 };
