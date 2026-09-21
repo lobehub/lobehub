@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { gptImage25Schema, gptImage2Schema } from '../../const/imageParameters';
+import { gptImage2Schema, gptImage25Schema } from '../../const/imageParameters';
+import { ModelParamsMetaSchema } from '../../standard-parameters';
 import { LOBE_DEFAULT_MODEL_LIST } from '../index';
 
 const GPT_IMAGE_25_QUALITY = ['auto', 'low', 'medium', 'high', 'xhigh', 'max'];
@@ -37,4 +38,23 @@ describe('GPT Image 2.5 model cards', () => {
     expect(gptImage25Schema.size).toBe(gptImage2Schema.size);
     expect(gptImage25Schema.imageUrls).toBe(gptImage2Schema.imageUrls);
   });
+
+  it('exposes exactly the verified parameters, so a field added to GPT Image 2 cannot leak', () => {
+    // Literal list on purpose: derive it from gptImage2Schema and the leak this guards
+    // against would pass unnoticed.
+    expect(Object.keys(gptImage25Schema).sort()).toEqual([
+      'imageUrls',
+      'prompt',
+      'quality',
+      'size',
+    ]);
+    expect(() => ModelParamsMetaSchema.parse(gptImage25Schema)).not.toThrow();
+  });
+
+  it.each(['gpt-image-2.5-flare', 'gpt-image-2.5-sunburst'])(
+    'points %s at the shared 2.5 schema object',
+    (id) => {
+      expect(findOpenAICard(id)?.parameters).toBe(gptImage25Schema);
+    },
+  );
 });

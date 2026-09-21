@@ -47,14 +47,19 @@ export const gptImage2Schema: ModelParamsSchema = {
   },
 };
 
+// Listed field by field rather than spread from gptImage2Schema: a parameter added to
+// GPT Image 2 later must not appear on 2.5 until it has been verified there. The size and
+// reference-image constraints are shared by reference on purpose.
 export const gptImage25Schema: ModelParamsSchema = {
-  ...gptImage2Schema,
+  imageUrls: gptImage2Schema.imageUrls,
+  prompt: { default: '' },
   // The GPT Image 2.5 model pages list six quality tiers. The two extra ones are rejected
   // by gpt-image-2, which answers 400 "does not support quality 'xhigh'" (same for 'max').
   quality: {
     default: 'auto',
     enum: ['auto', 'low', 'medium', 'high', 'xhigh', 'max'],
   },
+  size: gptImage2Schema.size,
 };
 
 export const nanoBananaParameters: ModelParamsSchema = {

@@ -1,4 +1,4 @@
-import { gptImage1Schema, gptImage25Schema, gptImage2Schema } from '../const/imageParameters';
+import { gptImage1Schema, gptImage2Schema, gptImage25Schema } from '../const/imageParameters';
 import type {
   AIASRModelCard,
   AIChatModelCard,
