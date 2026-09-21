@@ -28,6 +28,7 @@ import GithubProvider from './github';
 import GithubCopilotProvider from './githubCopilot';
 import GLMCodingPlanProvider from './glmCodingPlan';
 import GoogleProvider from './google';
+import GreenPTProvider from './greenpt';
 import GroqProvider from './groq';
 import HigressProvider from './higress';
 import HuggingFaceProvider from './huggingface';
@@ -188,6 +189,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   TogetherAIProvider,
   FireworksAIProvider,
   GroqProvider,
+  GreenPTProvider,
   PerplexityProvider,
   ModelScopeProvider,
   Ai21Provider,
@@ -284,6 +286,7 @@ export { default as GithubProviderCard } from './github';
 export { default as GithubCopilotProviderCard } from './githubCopilot';
 export { default as GLMCodingPlanProviderCard } from './glmCodingPlan';
 export { default as GoogleProviderCard } from './google';
+export { default as GreenPTProviderCard } from './greenpt';
 export { default as GroqProviderCard } from './groq';
 export { default as HigressProviderCard } from './higress';
 export { default as HuggingFaceProviderCard } from './huggingface';
