@@ -8,6 +8,11 @@ import type {
   CopyAssetForPublishResult,
   ExternalAssetForPublishParams,
   ExternalAssetForPublishResult,
+  // The DEVICE's index shape, not the renderer's. The renderer union also
+  // covers the cloud sandbox as a source, which nothing on a machine produces,
+  // so declaring that wider type here would over-claim what this returns — and
+  // the gateway handler bag, typed by what a device sends, would reject it.
+  ProjectFileIndexResult as DeviceProjectFileIndexResult,
   SkillDirectoryDeps,
 } from '@lobechat/device-control';
 import {
@@ -44,7 +49,6 @@ import {
   type ProjectDirectoryListParams,
   type ProjectDirectoryListResult,
   type ProjectFileIndexParams,
-  type ProjectFileIndexResult,
   type ProjectFileSearchParams,
   type ProjectFileSearchResult,
   type RenameLocalFileResult,
@@ -717,7 +721,9 @@ export default class LocalFileCtr extends ControllerModule {
   // ==================== Search & Find ====================
 
   @IpcMethod()
-  async getProjectFileIndex(params: ProjectFileIndexParams = {}): Promise<ProjectFileIndexResult> {
+  async getProjectFileIndex(
+    params: ProjectFileIndexParams = {},
+  ): Promise<DeviceProjectFileIndexResult> {
     const startedAt = Date.now();
     const result = await defaultGetProjectFileIndex(params);
 

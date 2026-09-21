@@ -55,6 +55,7 @@ const createTransport = () => {
   ]);
   const transport: GitHubConnectorTransport = {
     getAuthenticatedUser: async () => ({ id: 98_765, login: 'octocat' }),
+    listAccessibleRepositories: async () => [],
     listRepositoryContributors,
     listUserOrganizations,
     request: async ({ operation, variables }) => {
@@ -435,6 +436,7 @@ describe('createGitHubConnectorClient', () => {
     });
     const transport: GitHubConnectorTransport = {
       getAuthenticatedUser: async () => ({ id: 98_765, login: 'octocat' }),
+      listAccessibleRepositories: async () => [],
       listRepositoryContributors: async () => [],
       listUserOrganizations: async () => [],
       request,
@@ -477,6 +479,7 @@ describe('createGitHubConnectorClient', () => {
     const sensitiveRepository = 'token-sensitive-owner/private-repository';
     const transport: GitHubConnectorTransport = {
       getAuthenticatedUser: async () => ({ id: 98_765, login: 'octocat' }),
+      listAccessibleRepositories: async () => [],
       listRepositoryContributors: vi.fn().mockRejectedValue({ status: 401 }),
       listUserOrganizations: async () => [],
       request: vi.fn(),
