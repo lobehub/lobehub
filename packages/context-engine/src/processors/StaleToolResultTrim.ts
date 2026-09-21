@@ -96,20 +96,46 @@ const CRAWL_APIS = new Set(['search', 'crawlSinglePage', 'crawlMultiPages']);
 
 interface PluginInfo {
   apiName?: string;
-  arguments?: Record<string, any>;
+  arguments?: unknown;
   identifier?: string;
 }
 
 const getPlugin = (message: Message): PluginInfo | undefined =>
   message.plugin as PluginInfo | undefined;
 
-const pathOf = (plugin: PluginInfo | undefined): string | undefined => {
-  const p = plugin?.arguments?.path ?? plugin?.arguments?.file_path;
+// On the wire, `plugin.arguments` is the serialized JSON string from the
+// model's tool call; older rows and tests may carry the parsed object.
+const parseArguments = (args: unknown): Record<string, any> | undefined => {
+  if (!args) return undefined;
+  if (typeof args === 'object') return args as Record<string, any>;
+  if (typeof args === 'string') {
+    try {
+      const parsed = JSON.parse(args);
+      return parsed && typeof parsed === 'object' ? parsed : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+};
+
+// Prefer the structured pluginState (`ReadFileState`/`WriteFileState` carry
+// `path`/`loc` as real fields); fall back to parsing the tool-call arguments
+// for rows written before the state fields existed.
+const pathOf = (message: Message, plugin: PluginInfo | undefined): string | undefined => {
+  const fromState = (message.pluginState as { path?: unknown } | undefined)?.path;
+  if (typeof fromState === 'string' && fromState.length > 0) return fromState;
+  const args = parseArguments(plugin?.arguments);
+  const p = args?.path ?? args?.file_path;
   return typeof p === 'string' && p.length > 0 ? p : undefined;
 };
 
-const locOf = (plugin: PluginInfo | undefined): [number, number] | undefined => {
-  const loc = plugin?.arguments?.loc;
+const locOf = (message: Message, plugin: PluginInfo | undefined): [number, number] | undefined => {
+  const fromState = (message.pluginState as { loc?: unknown } | undefined)?.loc;
+  if (Array.isArray(fromState) && fromState.length === 2) {
+    return [fromState[0], fromState[1]];
+  }
+  const loc = parseArguments(plugin?.arguments)?.loc;
   return Array.isArray(loc) && loc.length === 2 ? [loc[0], loc[1]] : undefined;
 };
 
@@ -174,24 +200,51 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
       return this.markAsExecuted(context);
     }
 
-    // Pass 1 — index later events that invalidate earlier results:
+    // Turn boundary: the last user message starts the in-flight turn. Every
+    // LLM step of a running operation re-assembles the payload and re-runs
+    // this pipeline, so the trim set must be FROZEN for the whole turn —
+    // anything that changes it mid-operation rewrites the prefix and colds
+    // the warm prompt cache for every remaining step. Two moving parts are
+    // pinned accordingly:
+    //
+    // 1. The recency window is derived from the turn boundary, not the
+    //    growing message count: the protected tail is the K messages before
+    //    the trigger plus the entire in-flight turn. `messages.length - K`
+    //    would advance as the op appends, letting old results cross the
+    //    cutoff mid-operation.
+    // 2. The supersede index (pass 1) only covers the closed history before
+    //    the boundary: an in-flight write must not retroactively trim
+    //    pre-boundary reads mid-operation. It takes effect at the next turn
+    //    boundary instead.
+    //
+    // When no user message exists (tests, exotic flows), the recency window
+    // alone applies.
+    const lastUserIndex = messages.reduce((acc, m, i) => (m.role === 'user' ? i : acc), -1);
+    const boundary =
+      lastUserIndex >= 0
+        ? Math.max(0, lastUserIndex + 1 - this.config.keepRecentMessages)
+        : Math.max(0, messages.length - this.config.keepRecentMessages);
+
+    // Pass 1 — index events inside the closed history that invalidate earlier
+    // results:
     // - writes per file path (any writeFile/editFile result row marks a write)
     // - read windows per path, to find reads fully covered by a later re-read
     const lastWriteIndexByPath = new Map<string, number>();
     const readWindowsByPath = new Map<string, { end: number; index: number; start: number }[]>();
 
-    messages.forEach((m, index) => {
-      if (m.role !== 'tool') return;
+    for (let index = 0; index < boundary; index++) {
+      const m = messages[index];
+      if (m.role !== 'tool') continue;
       const plugin = getPlugin(m);
-      if (plugin?.identifier !== LOCAL_SYSTEM) return;
+      if (plugin?.identifier !== LOCAL_SYSTEM) continue;
 
-      const path = pathOf(plugin);
-      if (!path) return;
+      const path = pathOf(m, plugin);
+      if (!path) continue;
 
       if (WRITE_APIS.has(plugin.apiName ?? '')) {
         lastWriteIndexByPath.set(path, index);
       } else if (READ_APIS.has(plugin.apiName ?? '')) {
-        const loc = locOf(plugin);
+        const loc = locOf(m, plugin);
         const windows = readWindowsByPath.get(path) ?? [];
         windows.push(
           loc
@@ -201,23 +254,10 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
         );
         readWindowsByPath.set(path, windows);
       }
-    });
+    }
 
     // Pass 2 — collect trim candidates (dry run first; the cache-warmth gate
     // below needs the total savings before deciding).
-    const keepFrom = messages.length - this.config.keepRecentMessages;
-
-    // Turn boundary: the last user message starts the in-flight turn. Every
-    // LLM step of a running operation re-assembles the payload and re-runs
-    // this pipeline, so trimming a message produced DURING the current turn
-    // would rewrite the prefix mid-operation and invalidate the warm prompt
-    // cache for every remaining step. Restricting the trim to messages older
-    // than the last user message confines it to the operation boundary. When
-    // no user message exists (tests, exotic flows), the recency window alone
-    // applies.
-    const lastUserIndex = messages.reduce((acc, m, i) => (m.role === 'user' ? i : acc), -1);
-    const boundary = lastUserIndex >= 0 ? Math.min(keepFrom, lastUserIndex) : keepFrom;
-
     const candidates: { content: string; index: number; rule: string }[] = [];
     for (let index = 0; index < boundary; index++) {
       const message = messages[index];
@@ -329,7 +369,7 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
     const content = message.content as string;
 
     if (identifier === LOCAL_SYSTEM && READ_APIS.has(apiName)) {
-      const path = pathOf(plugin);
+      const path = pathOf(message, plugin);
       if (!path) return undefined;
 
       const writeIndex = lastWriteIndexByPath.get(path);
@@ -340,7 +380,7 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
         };
       }
 
-      const loc = locOf(plugin);
+      const loc = locOf(message, plugin);
       if (loc) {
         const covered = (readWindowsByPath.get(path) ?? []).some(
           (w) => w.index > index && w.start <= loc[0] && w.end >= loc[1],

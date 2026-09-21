@@ -26,12 +26,24 @@ const toolMessage = (
 
 const readFileResult = (path: string, content: string, loc?: [number, number]) =>
   toolMessage('lobe-local-system', 'readFile', content, {
-    plugin: { apiName: 'readFile', arguments: { loc, path }, identifier: 'lobe-local-system' },
+    plugin: {
+      apiName: 'readFile',
+      // Canonical wire shape: arguments arrive as the serialized JSON string
+      // from the model's tool call, not a parsed object.
+      arguments: JSON.stringify({ loc, path }),
+      identifier: 'lobe-local-system',
+    },
+    pluginState: { loc, path },
   });
 
 const writeFileResult = (path: string) =>
   toolMessage('lobe-local-system', 'writeFile', `Successfully wrote to ${path}`, {
-    plugin: { apiName: 'writeFile', arguments: { path }, identifier: 'lobe-local-system' },
+    plugin: {
+      apiName: 'writeFile',
+      arguments: JSON.stringify({ path }),
+      identifier: 'lobe-local-system',
+    },
+    pluginState: { path, success: true },
   });
 
 // Tail padding that keeps the trim window away from the messages under test.
@@ -211,37 +223,97 @@ describe('StaleToolResultTrimProcessor', () => {
     expect(result.messages[0].content).toBe('x'.repeat(5000));
   });
 
-  // Every LLM step of a running operation re-runs the pipeline; trimming a
-  // message from the in-flight turn would rewrite the prefix mid-operation
-  // and cold the prompt cache for every remaining step. The trim must stop at
-  // the last user message (the operation boundary), where the cache is cold
-  // anyway.
-  it('never trims messages from the in-flight turn (after the last user message)', async () => {
+  // Every LLM step of a running operation re-runs the pipeline; the trim set
+  // must stay frozen for the whole turn or the prefix flips mid-operation.
+  it('never trims messages from the in-flight turn, and an in-flight write does not retroactively trim', async () => {
+    const processor = new StaleToolResultTrimProcessor({
+      keepRecentMessages: 1,
+      minTotalToolChars: 0,
+    });
     const messages = [
       readFileResult('/a.ts', 'x'.repeat(5000), [0, 200]),
       writeFileResult('/a.ts'),
       { content: '继续', id: 'user-1', role: 'user' },
       readFileResult('/b.ts', 'y'.repeat(5000), [0, 200]),
-      writeFileResult('/b.ts'),
+      writeFileResult('/b.ts'), // in-flight write — must NOT trim the read above mid-turn
       ...recencyPadding(3),
     ];
 
-    const result = await createProcessor().process(createContext(messages));
+    const result = await processor.process(createContext(messages));
 
-    // Before the boundary: trimmed
+    // Closed history before the boundary: trimmed
     expect(result.messages[0].content).toContain('superseded by a later write');
-    // After the boundary: untouched even though /b.ts was likewise overwritten
+    // In-flight: untouched even though /b.ts was likewise overwritten
     expect(result.messages[3].content).toBe('y'.repeat(5000));
     expect(result.metadata.staleToolResultTrim?.trimmedMessages).toBe(1);
+  });
+
+  // Regression (Codex P1): the recency cutoff must be derived from the turn
+  // boundary, not the growing message count — otherwise results that started
+  // inside the protected tail cross the cutoff as the op appends messages.
+  it('freezes the recency window at the turn boundary for the whole operation', async () => {
+    const processor = new StaleToolResultTrimProcessor({
+      keepRecentMessages: 3,
+      minTotalToolChars: 0,
+    });
+    const staleSnapshot = toolMessage('lobe-browser', 'snapshot', 'snap '.repeat(500));
+    const messages = [
+      { content: 'older turn', id: 'm0', role: 'assistant' },
+      staleSnapshot, // index 1: inside the 3-message protected tail at turn start
+      { content: 'tail', id: 'm2', role: 'assistant' },
+      { content: 'start working', id: 'user-1', role: 'user' },
+      // 50 in-flight messages appended as the operation progresses
+      ...recencyPadding(50),
+    ];
+
+    const result = await processor.process(createContext(messages));
+
+    expect(result.messages[1].content).toBe(staleSnapshot.content);
+    expect(result.metadata.staleToolResultTrim?.trimmedMessages ?? 0).toBe(0);
+  });
+
+  it('parses serialized string arguments when pluginState is absent', async () => {
+    const legacyRead = toolMessage('lobe-local-system', 'readFile', 'x'.repeat(5000), {
+      plugin: {
+        apiName: 'readFile',
+        arguments: JSON.stringify({ path: '/legacy.ts' }),
+        identifier: 'lobe-local-system',
+      },
+    });
+    const legacyWrite = toolMessage(
+      'lobe-local-system',
+      'writeFile',
+      'Successfully wrote to /legacy.ts',
+      {
+        plugin: {
+          apiName: 'writeFile',
+          arguments: JSON.stringify({ path: '/legacy.ts' }),
+          identifier: 'lobe-local-system',
+        },
+      },
+    );
+
+    const result = await createProcessor().process(
+      createContext([legacyRead, legacyWrite, ...recencyPadding(3)]),
+    );
+
+    expect(result.messages[0].content).toContain('superseded by a later write');
   });
 
   describe('cache-warmth gate', () => {
     const T0 = Date.parse('2026-09-20T08:00:00Z');
     const MIN = 60_000;
 
+    // Filler between the write and the trigger keeps the write result outside
+    // the recency tail (keepRecentMessages=3 in createProcessor), so the stale
+    // read is a trim candidate; the last two entries fix the turn-boundary
+    // timestamps the warmth gate reads.
     const turnMessages = (staleChars: number, gapMs: number) => [
       readFileResult('/a.ts', 'x'.repeat(staleChars), [0, 200]),
       writeFileResult('/a.ts'),
+      { content: 'filler 1', id: 'f1', role: 'assistant' },
+      { content: 'filler 2', id: 'f2', role: 'assistant' },
+      { content: 'filler 3', id: 'f3', role: 'assistant' },
       {
         content: 'previous turn done',
         createdAt: new Date(T0).toISOString(),
