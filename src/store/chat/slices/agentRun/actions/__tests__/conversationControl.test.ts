@@ -29,6 +29,7 @@ vi.mock('@/libs/trpc/client', () => ({
           success: false,
         }),
       },
+      stopPendingApproval: { mutate: vi.fn().mockResolvedValue({ success: true }) },
       submitHeteroIntervention: { mutate: vi.fn().mockResolvedValue({ success: true }) },
     },
     shareChat: {
@@ -1795,6 +1796,7 @@ describe('ConversationControl actions', () => {
     it('retires the paused operation only when Stop wins the durable claim', async () => {
       const { result } = renderHook(() => useChatStore());
       const pausedOperationId = seedDurableTerminalCard(result);
+      vi.spyOn(result.current, 'refreshMessages').mockResolvedValue(undefined);
       const executeGatewayAgentSpy = vi
         .spyOn(result.current, 'executeGatewayAgent')
         .mockResolvedValue({} as any);

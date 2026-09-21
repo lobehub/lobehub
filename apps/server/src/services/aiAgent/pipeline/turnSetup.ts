@@ -22,11 +22,13 @@ import debug from 'debug';
 
 import { AiModelModel } from '@/database/models/aiModel';
 import type { MessageModel } from '@/database/models/message';
+import { ProjectWorkingDirectoryModel } from '@/database/models/projectWorkingDirectory';
 import type { TopicModel } from '@/database/models/topic';
 import { resolveModelExtendParamsForUser } from '@/server/modules/AgentRuntime/adapters/serverCallLlmContextHints';
 import type { AgentConfigWithId } from '@/server/services/agent';
 import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { shouldSuppressSignal } from '@/server/services/agentSignal/suppressSignal';
+import { deviceGateway } from '@/server/services/deviceGateway';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import { resolveAttachmentsByFileIds } from '@/server/services/file/resolveAttachments';
@@ -602,6 +604,37 @@ export const setupTurn = async (
       // (config source of truth), NOT in metadata.
       const existingTopic = await deps.topicModel.findById(topicId);
       topicEditingGroupId = existingTopic?.metadata?.editingGroupId ?? undefined;
+      if (existingTopic?.projectWorkingDirectoryId || existingTopic?.metadata?.projectExecution) {
+        if (shareGate || (botContext && !resolveDeviceAccessPolicy({ botContext }).canUseDevice))
+          throw new Error('Project directory access denied');
+        const directory = await new ProjectWorkingDirectoryModel(
+          deps.db,
+          deps.userId,
+          deps.workspaceId,
+        ).resolveForTopic(topicId);
+        if (!directory) throw new Error('Project directory binding no longer exists');
+        if (
+          agentConfig.agencyConfig?.executionTargetSelectionPolicy === 'fixed' &&
+          agentConfig.agencyConfig.boundDeviceId !== directory.deviceId
+        )
+          throw new Error('Agent is fixed to another execution target');
+        const stat = await deviceGateway.statPath({
+          deviceId: directory.deviceId,
+          path: directory.path,
+          userId: deps.userId,
+          workspaceId: deps.workspaceId,
+        });
+        if (!stat?.exists || !stat.isDirectory)
+          throw new Error('Device is offline or working directory is unavailable');
+        resolvedRequestedDeviceId = directory.deviceId;
+        effectiveRequestedDeviceId = directory.deviceId;
+        topicBoundDeviceId = directory.deviceId;
+        agentConfig.agencyConfig = {
+          ...agentConfig.agencyConfig,
+          boundDeviceId: directory.deviceId,
+          executionTarget: 'device',
+        };
+      }
 
       // Fail-closed guard: a non-share run must never operate on a share-visitor
       // topic. `findById` is ownership-scoped but deliberately does NOT exclude
@@ -657,8 +690,11 @@ export const setupTurn = async (
       const topicPinnedDeviceId = canUseTopicPin
         ? existingTopic?.metadata?.boundDeviceId
         : undefined;
+      // A project-directory topic already routed to its directory's device above.
       if (
         !requestedDeviceId &&
+        !existingTopic?.projectWorkingDirectoryId &&
+        !existingTopic?.metadata?.projectExecution &&
         topicPinnedDeviceId &&
         !isFixedExecutionTargetSelection &&
         agentConfig.agencyConfig?.executionTarget !== 'auto'

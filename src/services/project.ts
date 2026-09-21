@@ -52,8 +52,10 @@ class ProjectService {
 
   requestCompletion = async (id: string) => lambdaClient.project.requestCompletion.mutate({ id });
 
-  update = async (id: string, input: { name?: string }) =>
-    lambdaClient.project.update.mutate({ id, ...input });
+  update = async (
+    id: string,
+    input: { description?: string | null; name?: string; slug?: string | null },
+  ) => lambdaClient.project.update.mutate({ id, ...input });
 
   updateStatus = async (id: string, status: 'active' | 'archived' | 'backlog' | 'paused') =>
     lambdaClient.project.updateStatus.mutate({ id, status });

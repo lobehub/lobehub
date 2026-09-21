@@ -53,6 +53,7 @@ import { chatService } from '@/services/chat';
 import { resolveSelectedSkillsWithContent } from '@/services/chat/mecha/skillPreload';
 import { resolveSelectedToolsWithContent } from '@/services/chat/mecha/toolPreload';
 import { messageService } from '@/services/message';
+import { projectWorkingDirectoryService } from '@/services/projectWorkingDirectory';
 import { topicService } from '@/services/topic';
 import { getAgentStoreState } from '@/store/agent';
 import {
@@ -473,7 +474,7 @@ export class ConversationLifecycleActionImpl {
     // switcher. A workspace-local pick is intentionally private to this member
     // and is therefore safe to execute in-process on their desktop. An existing
     // conversation then stays on the machine it already ran on.
-    const { agencyConfig, workspaceScoped } = applyTopicDeviceBinding(
+    const topicBinding = applyTopicDeviceBinding(
       {
         agencyConfig: resolveAgentAgencyConfig(agentConfig?.agencyConfig, deviceOverride, {
           canManage,
@@ -488,7 +489,32 @@ export class ConversationLifecycleActionImpl {
       ),
       getElectronStoreState().gatewayDeviceInfo?.deviceId,
     );
+    const { workspaceScoped } = topicBinding;
+    let { agencyConfig } = topicBinding;
     const isGatewayMode = this.#get().isGatewayModeEnabled(agentId);
+    const boundTopic = context.topicId
+      ? topicSelectors.getTopicById(context.topicId)(this.#get())
+      : undefined;
+    if (boundTopic?.projectWorkingDirectoryId || boundTopic?.metadata?.projectExecution) {
+      if (!boundTopic.projectWorkingDirectoryId)
+        throw new Error('Project directory binding no longer exists');
+      const { data: directory } = await projectWorkingDirectoryService.resolve(
+        boundTopic.projectWorkingDirectoryId,
+      );
+      if (!isGatewayMode)
+        throw new Error('Enable Gateway Mode to run in a project working directory');
+      if (
+        agencyConfig?.executionTargetSelectionPolicy === 'fixed' &&
+        agencyConfig.boundDeviceId !== directory.deviceId
+      )
+        throw new Error('Agent is fixed to another execution target');
+      agencyConfig = {
+        ...agencyConfig,
+        boundDeviceId: directory.deviceId,
+        executionTarget: 'device',
+      };
+    }
+
     // Legacy agents may only carry `model: '<cli-type>'`. Keep gateway routing
     // unchanged when it is available. Recover the provider when gateway mode is
     // off so desktop can still spawn locally and non-desktop (Android/web) still

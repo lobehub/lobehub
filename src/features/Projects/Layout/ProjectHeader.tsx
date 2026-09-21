@@ -1,5 +1,7 @@
 'use client';
 
+import { ActionIcon } from '@lobehub/ui/base-ui';
+import { SettingsIcon } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -31,7 +33,7 @@ const ProjectHeader = memo<ProjectHeaderProps>(({ project }) => {
   const items = useMemo<SwitcherItem[]>(
     () =>
       projects.map((item) => ({
-        avatar: item.avatar || item.name,
+        avatar: item.avatar || undefined,
         id: item.slug ?? item.id,
         private: item.visibility === 'private',
         title: item.name,
@@ -63,11 +65,20 @@ const ProjectHeader = memo<ProjectHeaderProps>(({ project }) => {
           }
         >
           <SidebarHeaderSelectTrigger
-            avatar={project?.avatar || project?.name || t('sidebar.title')}
+            avatar={project?.avatar || undefined}
             name={project?.name || t('sidebar.title')}
             title={project?.name || t('sidebar.title')}
           />
         </SidebarHeaderSelectPopover>
+      }
+      right={
+        <ActionIcon
+          aria-label={t('settings.title')}
+          icon={SettingsIcon}
+          size="small"
+          title={t('settings.title')}
+          onClick={() => navigate(`/project/${project?.slug ?? project?.id}/settings`)}
+        />
       }
     />
   );

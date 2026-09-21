@@ -6,33 +6,34 @@ import {
   AccordionPanel,
   accordionStyles,
   AccordionTrigger,
-  ActionIcon,
   Text,
 } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { FolderClosedIcon, FolderOpenIcon, type LucideIcon, PlusIcon } from 'lucide-react';
+import { FolderClosedIcon, FolderOpenIcon, type LucideIcon } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import Avatar from '@/components/Avatar';
 import { TOPIC_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import RingLoadingIcon from '@/components/RingLoading';
 import UnreadDot from '@/components/UnreadDot';
-import { isDesktop } from '@/const/version';
 import { useCommitWorkingDirectory } from '@/features/ChatInput/ControlBar/useCommitWorkingDirectory';
-import { resolveExecutionTarget } from '@/helpers/executionTarget';
-import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
+import { AgentDirectoryActions } from '@/features/Projects/WorkingDirectories/AgentDirectoryActions';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
+import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
+import { getTopicWorkingDirectorySourcePath } from '@/utils/client/topic';
 
 import { buildPrefixedAgentRoutePath, parseAgentPathname } from '../../../utils/agentPathname';
 import TopicItem from '../../List/Item';
+import { useTopicListScope } from '../../TopicListScope';
 import { type GroupItemComponentProps } from '../GroupedAccordion';
 import {
   getProjectTopicStatusCounts,
@@ -165,12 +166,22 @@ const CollapsedUnreadDot = memo<{ count: number }>(({ count }) => {
 CollapsedUnreadDot.displayName = 'CollapsedProjectUnreadDot';
 
 const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
-  const { t } = useTranslation('topic');
   const { id, title, children } = group;
+  const scope = useTopicListScope();
+  const navigate = useWorkspaceAwareNavigate();
+  const directories = useProjectDirectoryStore((s) => s.useFetchDirectories)(
+    undefined,
+    !!children[0]?.projectWorkingDirectoryId,
+  );
+  const project = directories.data?.data.find(
+    (d) => d.id === children[0]?.projectWorkingDirectoryId,
+  );
 
   const workingDirectory = useMemo(
-    () => (id.startsWith(PROJECT_GROUP_PREFIX) ? id.slice(PROJECT_GROUP_PREFIX.length) : undefined),
-    [id],
+    () =>
+      (children[0] ? getTopicWorkingDirectorySourcePath(children[0]) : undefined) ??
+      (id.startsWith(PROJECT_GROUP_PREFIX) ? id.slice(PROJECT_GROUP_PREFIX.length) : undefined),
+    [id, children],
   );
 
   const agentId = useAgentStore((s) => s.activeAgentId);
@@ -181,13 +192,6 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
   const currentAgentId = targetAgentId ?? agentId;
   const router = useQueryRoute();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
-  const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(currentAgentId ?? ''));
-  const isHeterogeneous = useAgentStore((s) =>
-    currentAgentId ? agentByIdSelectors.isAgentHeterogeneousById(currentAgentId)(s) : false,
-  );
-  const isWorkspaceAgent = useAgentStore((s) =>
-    currentAgentId ? agentByIdSelectors.isWorkspaceAgentById(currentAgentId)(s) : false,
-  );
   const { commitAgentDefault } = useCommitWorkingDirectory(currentAgentId ?? '');
 
   const handleAddTopic = useCallback(async () => {
@@ -210,17 +214,7 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
     activeWorkspaceSlug,
   ]);
 
-  // Web can add a topic in a directory too when the agent targets a bound
-  // device — the write goes to `workingDirByDevice`, no Electron dependency.
-  const deviceRoutingAvailable = useIsGatewayModeEnabled(currentAgentId);
-  const effectiveTarget = resolveExecutionTarget(agencyConfig, {
-    clientExecutionAvailable: isDesktop,
-    deviceRoutingAvailable,
-    isHetero: isHeterogeneous,
-    workspaceScoped: isWorkspaceAgent,
-  });
-  const isDeviceMode = effectiveTarget === 'device' && !!agencyConfig?.boundDeviceId;
-  const canAddTopic = (isDesktop || isDeviceMode) && !!workingDirectory;
+  const canAddTopic = !scope && !!currentAgentId && !!workingDirectory;
 
   const statusCounts = useChatStore(
     (s) => getProjectTopicStatusCounts(children, operationSelectors.visiblyRunningTopicIds(s)),
@@ -239,15 +233,11 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
         {hasCollapsedUnread && <CollapsedUnreadDot count={unreadCount} />}
         {canAddTopic && (
           <span className={hasCollapsedIndicators ? styles.addTopicAction : undefined}>
-            <ActionIcon
-              icon={PlusIcon}
-              size={'small'}
-              title={t('actions.addNewTopicInProject', { directory: title })}
-              tooltipProps={{ placement: 'right' }}
-              onClick={(e) => {
-                e.stopPropagation();
-                void handleAddTopic();
-              }}
+            <AgentDirectoryActions
+              agentId={currentAgentId!}
+              path={workingDirectory!}
+              topics={children}
+              onLegacyStart={handleAddTopic}
             />
           </span>
         )}
@@ -259,15 +249,41 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
       <AccordionHeader className={'accordion-header'}>
         <AccordionTrigger style={{ paddingBlock: 4, paddingInline: 4 }}>
           <Flexbox horizontal align="center" gap={8} height={24} style={{ overflow: 'hidden' }}>
-            <Center flex={'none'} height={24} width={28}>
-              <Icon
-                color={cssVar.colorTextTertiary}
-                icon={ProjectFolderIcon}
-                size={{ size: 15, strokeWidth: 1.5 }}
-              />
+            <Center flex="none" height={24} width={28}>
+              {project ? (
+                <Avatar
+                  avatar={project.projectAvatar || undefined}
+                  name={project.projectName}
+                  size={18}
+                />
+              ) : (
+                <Icon
+                  color={cssVar.colorTextTertiary}
+                  icon={ProjectFolderIcon}
+                  size={{ size: 15, strokeWidth: 1.5 }}
+                />
+              )}
             </Center>
-            <Text ellipsis fontSize={14} style={{ color: cssVar.colorTextSecondary, flex: 1 }}>
-              {title}
+            <Text
+              ellipsis
+              fontSize={14}
+              style={{ color: project ? cssVar.colorText : cssVar.colorTextSecondary, flex: 1 }}
+            >
+              {project && !scope ? (
+                <a
+                  href={`/project/${project.projectSlug ?? project.projectId}`}
+                  style={{ color: 'inherit', textDecoration: 'none' }}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    navigate(`/project/${project.projectSlug ?? project.projectId}`);
+                  }}
+                >
+                  {project.projectName}
+                </a>
+              ) : (
+                title
+              )}
             </Text>
           </Flexbox>
         </AccordionTrigger>
