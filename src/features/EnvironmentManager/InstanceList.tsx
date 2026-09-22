@@ -13,6 +13,25 @@ import { formatSize } from '@/utils/format';
 import type { SandboxInstance } from './useEnvironmentData';
 
 const styles = createStaticStyles(({ css }) => ({
+  /**
+   * One framed block with rules between its rows, rather than rows floating on
+   * the panel. Loose rows read as a list of unrelated lines; a frame says where
+   * the set begins and ends, which is what makes the "new instance" button
+   * below it read as an addition to that set.
+   */
+  list: css`
+    overflow: hidden;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+  `,
+  row: css`
+    padding-block: 12px;
+    padding-inline: 16px;
+
+    & + & {
+      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+    }
+  `,
   /** The surface Railway gives the same job: a filled panel, set off from the list above it. */
   createCard: css`
     padding: 16px;
@@ -92,65 +111,69 @@ const InstanceList = memo<InstanceListProps>(
           </Text>
         )}
 
-        {instances.map((instance) => (
-          <Flexbox horizontal align={'center'} gap={8} key={instance.id}>
-            <Flexbox flex={1} gap={2}>
-              <Flexbox horizontal align={'center'} gap={6}>
-                <Text fontSize={13} weight={500}>
-                  {instance.name}
-                </Text>
-                {instance.stale && (
-                  <Tooltip title={t('environments.instances.staleHint')}>
-                    <Tag color={'warning'} size={'small'}>
-                      {t('environments.instances.stale')}
-                    </Tag>
-                  </Tooltip>
-                )}
-              </Flexbox>
-              <Text fontSize={12} type={'secondary'}>
-                {instance.workingDirectory}
-              </Text>
-            </Flexbox>
-            <Text fontSize={12} type={'secondary'}>
-              {/* An instance that was created but never used has no snapshot,
+        {instances.length > 0 && (
+          <Flexbox className={styles.list}>
+            {instances.map((instance) => (
+              <Flexbox horizontal align={'center'} className={styles.row} gap={8} key={instance.id}>
+                <Flexbox flex={1} gap={2}>
+                  <Flexbox horizontal align={'center'} gap={6}>
+                    <Text fontSize={13} weight={500}>
+                      {instance.name}
+                    </Text>
+                    {instance.stale && (
+                      <Tooltip title={t('environments.instances.staleHint')}>
+                        <Tag color={'warning'} size={'small'}>
+                          {t('environments.instances.stale')}
+                        </Tag>
+                      </Tooltip>
+                    )}
+                  </Flexbox>
+                  <Text fontSize={12} type={'secondary'}>
+                    {instance.workingDirectory}
+                  </Text>
+                </Flexbox>
+                <Text fontSize={12} type={'secondary'}>
+                  {/* An instance that was created but never used has no snapshot,
                   which is a normal state and not an error. */}
-              {snapshotsUnavailable
-                ? '—'
-                : instance.snapshot
-                  ? formatSize(instance.snapshot.bytes)
-                  : t('environments.instances.unused')}
-            </Text>
-            {/* Reading what an instance kept is not an edit, so it stays
+                  {snapshotsUnavailable
+                    ? '—'
+                    : instance.snapshot
+                      ? formatSize(instance.snapshot.bytes)
+                      : t('environments.instances.unused')}
+                </Text>
+                {/* Reading what an instance kept is not an edit, so it stays
                 available in an environment someone else published — that is
                 most of what having access to one is for. */}
-            <ActionIcon
-              icon={FolderOpenIcon}
-              size={'small'}
-              title={t('environments.files.browse')}
-              onClick={() => onBrowse(instance.workingDirectory)}
-            />
-            {editable && (
-              <ActionIcon
-                icon={Trash2Icon}
-                size={'small'}
-                title={t('environments.instances.remove')}
-                // A rejected promise here used to disappear: the row stayed, and
-                // a refused delete was indistinguishable from a click that did
-                // nothing. The execution plane refuses while a conversation is
-                // still using the instance, and that reason is the one worth
-                // showing.
-                onClick={() =>
-                  onRemove(instance.id).catch((error: unknown) =>
-                    toast.error(
-                      (error as { message?: string })?.message ||
-                        t('environments.instances.removeFailed'),
-                    ),
-                  )
-                }
-              />
-            )}
+                <ActionIcon
+                  icon={FolderOpenIcon}
+                  size={'small'}
+                  title={t('environments.files.browse')}
+                  onClick={() => onBrowse(instance.workingDirectory)}
+                />
+                {editable && (
+                  <ActionIcon
+                    icon={Trash2Icon}
+                    size={'small'}
+                    title={t('environments.instances.remove')}
+                    // A rejected promise here used to disappear: the row stayed, and
+                    // a refused delete was indistinguishable from a click that did
+                    // nothing. The execution plane refuses while a conversation is
+                    // still using the instance, and that reason is the one worth
+                    // showing.
+                    onClick={() =>
+                      onRemove(instance.id).catch((error: unknown) =>
+                        toast.error(
+                          (error as { message?: string })?.message ||
+                            t('environments.instances.removeFailed'),
+                        ),
+                      )
+                    }
+                  />
+                )}
+              </Flexbox>
+            ))}
           </Flexbox>
-        ))}
+        )}
 
         {snapshotsUnavailable && instances.length > 0 && (
           <Text fontSize={12} type={'secondary'}>
@@ -202,16 +225,8 @@ const InstanceList = memo<InstanceListProps>(
 
             <Flexbox horizontal align={'center'} gap={12} justify={'flex-end'}>
               <Flexbox horizontal gap={8} style={{ flex: 'none' }}>
-                <Button size={'small'} onClick={() => onAddingChange(false)}>
-                  {t('environments.cancel')}
-                </Button>
-                <Button
-                  disabled={!canCreate}
-                  loading={busy}
-                  size={'small'}
-                  type={'primary'}
-                  onClick={create}
-                >
+                <Button onClick={() => onAddingChange(false)}>{t('environments.cancel')}</Button>
+                <Button disabled={!canCreate} loading={busy} type={'primary'} onClick={create}>
                   {t('environments.instances.confirm')}
                 </Button>
               </Flexbox>
@@ -219,11 +234,7 @@ const InstanceList = memo<InstanceListProps>(
           </Flexbox>
         ) : (
           <Flexbox horizontal>
-            <Button
-              icon={<Icon icon={PlusIcon} />}
-              size={'small'}
-              onClick={() => onAddingChange(true)}
-            >
+            <Button icon={<Icon icon={PlusIcon} />} onClick={() => onAddingChange(true)}>
               {t('environments.instances.add')}
             </Button>
           </Flexbox>
