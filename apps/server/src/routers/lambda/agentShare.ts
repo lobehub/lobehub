@@ -369,10 +369,14 @@ export const agentShareRouter = router({
    * the one exception, and `assembleSkillPool` applies it from
    * `enabledPluginIds` on its own.
    *
-   * Ownership comes from `requireShare` — `getByAgentId` is ownership-scoped,
-   * so a non-owner never reaches the skill reads below.
+   * Authorization matches the other share reads: `assertCanManageAgentShare`
+   * for the workspace case, then `requireShare` on the ownership-scoped
+   * `getByAgentId`. Both matter here — this lists the CREATOR's whole skill
+   * catalog, so a workspace member who cannot manage the Agent must not reach
+   * the reads below.
    */
   listGrantableSkills: agentShareProcedure.input(agentIdInput).query(async ({ input, ctx }) => {
+    await assertCanManageAgentShare(ctx, input.agentId);
     requireShare(await ctx.agentShareModel.getByAgentId(input.agentId));
 
     const workspaceId = ctx.workspaceId ?? undefined;
