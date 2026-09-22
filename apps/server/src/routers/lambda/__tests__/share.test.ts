@@ -6,6 +6,11 @@ import { AgentShareModel } from '@/database/models/agentShare';
 import { TopicShareModel } from '@/database/models/topicShare';
 import { createContextInner } from '@/libs/trpc/lambda/context';
 
+vi.mock('@/server/services/agentShare/deliveryStatsCache', () => ({
+  getCachedDeliveryStats: (_db: unknown, _owner: string, _agent: string, load: () => unknown) =>
+    load(),
+}));
+
 vi.mock('@/database/models/agentShare', () => ({
   AgentShareModel: {
     assertShareAccess: vi.fn(),

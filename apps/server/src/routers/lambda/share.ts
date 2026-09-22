@@ -24,6 +24,7 @@ import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { resolveModelMediaCapabilities } from '@/server/modules/AgentRuntime/resolveModelMediaCapabilities';
 import { AgentService } from '@/server/services/agent';
+import { getCachedDeliveryStats } from '@/server/services/agentShare/deliveryStatsCache';
 
 import { assertAgentShareVisitorEnabled } from './_helpers/agentShareFeatureGate';
 
@@ -152,7 +153,12 @@ export const shareRouter = router({
         profileModel.listFeaturedWorks(share.agentId, share.shareConfig.featuredWorkIds ?? []),
         (async () => {
           try {
-            deliveryStats = await profileModel.getStats(share.agentId);
+            deliveryStats = await getCachedDeliveryStats(
+              ctx.serverDB,
+              share.ownerId,
+              share.agentId,
+              () => profileModel.getStats(share.agentId),
+            );
           } catch (error) {
             log('failed to count share deliveries for %s: %O', share.shareId, error);
           }
