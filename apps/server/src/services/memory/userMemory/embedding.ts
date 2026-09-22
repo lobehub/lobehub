@@ -109,24 +109,52 @@ export const embedUserMemoryTexts = async (
   const outputs = params.input.map<number[] | undefined>(() => undefined);
   if (requests.length === 0) return outputs;
 
-  const embeddings = await params.runtime.embeddings(
-    {
-      dimensions: params.dimensions ?? DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
-      input: requests.map((item) => item.text),
-      model: params.model,
-    },
-    {
-      metadata: {
-        ...params.spendOrigin,
-        trigger: params.spendOrigin?.trigger ?? RequestTrigger.Memory,
+  const expectedDimensions = params.dimensions ?? DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS;
+
+  let embeddings: Array<number[] | null | undefined>;
+  try {
+    embeddings = await params.runtime.embeddings(
+      {
+        dimensions: expectedDimensions,
+        input: requests.map((item) => item.text),
+        model: params.model,
       },
-      user: params.userId,
-    },
-  );
+      {
+        metadata: {
+          ...params.spendOrigin,
+          trigger: params.spendOrigin?.trigger ?? RequestTrigger.Memory,
+        },
+        user: params.userId,
+      },
+    );
+  } catch (error) {
+    // Provider errors used to surface as an opaque "Failed to save identity
+    // memory: undefined" in the UI. Name the memory embedding model and the
+    // most common cause so self-hosted operators can act on it.
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `[user-memory] embedding request failed for model "${params.model}" (requested dimensions: ${expectedDimensions}). ` +
+        `Most OpenAI-compatible endpoints reject a fixed "dimensions" parameter — point MEMORY_USER_MEMORY_EMBEDDING_MODEL at an embedding model that supports it. ` +
+        `Original error: ${reason}`,
+      { cause: error instanceof Error ? error : undefined },
+    );
+  }
 
   for (const [requestIndex, embeddingVector] of (embeddings ?? []).entries()) {
     const request = requests[requestIndex];
     if (!request || !embeddingVector) continue;
+
+    // The user-memory tables pin pgvector columns to
+    // DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS. A model returning a different
+    // length would fail the insert with a cryptic pgvector size mismatch
+    // (or silently break similarity search), so fail early with a clear cause.
+    if (embeddingVector.length !== expectedDimensions) {
+      throw new Error(
+        `[user-memory] embedding model "${params.model}" returned ${embeddingVector.length}-dimensional vectors, ` +
+          `but the memory tables store ${expectedDimensions}-dimensional vectors. ` +
+          `Switch MEMORY_USER_MEMORY_EMBEDDING_MODEL to a model matching the stored dimensions.`,
+      );
+    }
 
     outputs[request.index] = embeddingVector;
   }
