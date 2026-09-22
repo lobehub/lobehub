@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 
 import { formatSize } from '@/utils/format';
 
+import { describeError } from './errorMessage';
 import { openInstanceFileBrowser } from './InstanceFileBrowser';
 import type { SandboxInstance } from './useEnvironmentData';
 
@@ -66,6 +67,8 @@ interface InstanceListProps {
   onRemove: (id: string) => Promise<void>;
   /** Only the label: the folder holds the built state and cannot move. */
   onRename: (params: { id: string; name: string }) => Promise<void>;
+  /** Sizes are still on their way from the execution plane. */
+  snapshotsPending: boolean;
   /** Sizes are missing rather than zero when the sandbox could not be reached. */
   snapshotsUnavailable: boolean;
 }
@@ -75,6 +78,7 @@ interface InstanceRowProps {
   instance: SandboxInstance;
   onRemove: (id: string) => Promise<void>;
   onRename: (params: { id: string; name: string }) => Promise<void>;
+  snapshotsPending: boolean;
   snapshotsUnavailable: boolean;
 }
 
@@ -87,7 +91,7 @@ interface InstanceRowProps {
  * as a field that would fail on save.
  */
 const InstanceRow = memo<InstanceRowProps>(
-  ({ editable, instance, onRemove, onRename, snapshotsUnavailable }) => {
+  ({ editable, instance, onRemove, onRename, snapshotsPending, snapshotsUnavailable }) => {
     const { t } = useTranslation('setting');
 
     const [editing, setEditing] = useState(false);
@@ -111,9 +115,7 @@ const InstanceRow = memo<InstanceRowProps>(
         await onRename({ id: instance.id, name: draft.trim() });
         setEditing(false);
       } catch (error) {
-        toast.error(
-          (error as { message?: string })?.message || t('environments.instances.renameFailed'),
-        );
+        toast.error(describeError(error, t, t('environments.instances.renameFailed')));
       } finally {
         setSaving(false);
       }
@@ -193,7 +195,7 @@ const InstanceRow = memo<InstanceRowProps>(
         <Text fontSize={12} type={'secondary'}>
           {/* An instance that was created but never used has no snapshot,
           which is a normal state and not an error. */}
-          {snapshotsUnavailable
+          {snapshotsUnavailable || snapshotsPending
             ? '—'
             : instance.snapshot
               ? formatSize(instance.snapshot.bytes)
@@ -269,6 +271,7 @@ const InstanceList = memo<InstanceListProps>(
     onCreate,
     onRemove,
     onRename,
+    snapshotsPending,
     snapshotsUnavailable,
   }) => {
     const { t } = useTranslation('setting');
@@ -332,6 +335,7 @@ const InstanceList = memo<InstanceListProps>(
                 editable={editable}
                 instance={instance}
                 key={instance.id}
+                snapshotsPending={snapshotsPending}
                 snapshotsUnavailable={snapshotsUnavailable}
                 onRemove={onRemove}
                 onRename={onRename}

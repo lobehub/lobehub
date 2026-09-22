@@ -15,6 +15,7 @@ import {
 } from '@/services/sandboxWorkspace';
 
 import EnvironmentVariables from './EnvironmentVariables';
+import { describeError } from './errorMessage';
 import GithubRepositoryPicker, { type GithubRepositorySelection } from './GithubRepositoryPicker';
 import InlineField from './InlineField';
 import PanelSection from './PanelSection';
@@ -170,7 +171,7 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave, secti
     try {
       await action();
     } catch (error) {
-      toast.error((error as { message?: string })?.message || String(error));
+      toast.error(describeError(error, t, String(error)));
     } finally {
       setBusy(false);
     }

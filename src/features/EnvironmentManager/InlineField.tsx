@@ -7,6 +7,8 @@ import { CheckIcon, PencilIcon, XIcon } from 'lucide-react';
 import { type KeyboardEvent, memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { describeError } from './errorMessage';
+
 const styles = createStaticStyles(({ css }) => ({
   /**
    * The value at rest looks like a field, not like prose: a bordered box the
@@ -81,6 +83,7 @@ interface InlineFieldProps {
 const InlineField = memo<InlineFieldProps>(
   ({ desc, label, multiline, onEditingChange, onSave, placeholder, required, select, value }) => {
     const { t } = useTranslation('common');
+    const { t: tSetting } = useTranslation('setting');
     const [draft, setDraft] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
 
@@ -106,7 +109,7 @@ const InlineField = memo<InlineFieldProps>(
         await onSave(next);
         cancel();
       } catch (error) {
-        toast.error((error as { message?: string })?.message || String(error));
+        toast.error(describeError(error, tSetting, String(error)));
       } finally {
         setSaving(false);
       }

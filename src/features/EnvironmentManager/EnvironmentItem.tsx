@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { formatSize } from '@/utils/format';
 
+import { describeError } from './errorMessage';
 import { repositoryPath } from './repository';
 import { useCanEditEnvironment } from './useCanEditEnvironment';
 import { type SandboxEnvironment, useEnvironmentActions } from './useEnvironmentData';
@@ -141,9 +142,7 @@ const EnvironmentItem = memo<EnvironmentItemProps>(
       actions
         .setEnvironmentVisibility({ id: environment.id, visibility })
         .catch((error: unknown) =>
-          toast.error(
-            (error as { message?: string })?.message || t('environments.visibility.changeFailed'),
-          ),
+          toast.error(describeError(error, t, t('environments.visibility.changeFailed'))),
         );
 
     const publish = () =>
@@ -195,7 +194,7 @@ const EnvironmentItem = memo<EnvironmentItemProps>(
         // A refusal has to reach the person. An environment still holding
         // instances is refused on purpose, and that is what they need to read.
         .catch((error: unknown) =>
-          toast.error((error as { message?: string })?.message || t('environments.removeFailed')),
+          toast.error(describeError(error, t, t('environments.removeFailed'))),
         );
 
     return (

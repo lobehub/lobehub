@@ -30,6 +30,8 @@ import useSWR from 'swr';
 import { sandboxWorkspaceService } from '@/services/sandboxWorkspace';
 import { formatSize } from '@/utils/format';
 
+import { describeError } from './errorMessage';
+
 const styles = createStaticStyles(({ css }) => ({
   body: css`
     overflow: hidden;
@@ -158,8 +160,15 @@ const InstanceFileBrowser = memo<InstanceFileBrowserProps>(({ root }) => {
   const [creating, setCreating] = useState<'directory' | 'file' | undefined>();
   const [newName, setNewName] = useState('');
 
-  const listing = useSWR(['sandbox-instance-files', cwd], () =>
-    sandboxWorkspaceService.listFiles({ path: cwd }),
+  const listing = useSWR(
+    ['sandbox-instance-files', cwd],
+    () => sandboxWorkspaceService.listFiles({ path: cwd }),
+    {
+      // Each listing is a sandbox round trip. A missing directory is an answer,
+      // not a failure to retry, and refocusing the window must not re-list.
+      revalidateOnFocus: false,
+      shouldRetryOnError: (error) => !isMissingDirectory(error),
+    },
   );
 
   const file = useSWR(openFile ? ['sandbox-instance-file', openFile] : null, async () => {
@@ -179,8 +188,7 @@ const InstanceFileBrowser = memo<InstanceFileBrowserProps>(({ root }) => {
   // Takes the translated fallback rather than its key: `t` is typed against the
   // literal key union, so threading a key through a `string` parameter loses
   // exactly the check that would catch a typo in one.
-  const fail = (error: unknown, fallback: string) =>
-    toast.error((error as { message?: string })?.message || fallback);
+  const fail = (error: unknown, fallback: string) => toast.error(describeError(error, t, fallback));
 
   const openDirectory = (path: string) => {
     setCwd(path);
