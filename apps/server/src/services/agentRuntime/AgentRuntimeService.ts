@@ -35,6 +35,7 @@ import {
 } from '@lobechat/observability-otel/modules/agent-runtime';
 import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 import {
+  type AgentRunInitRequest,
   type ChatToolPayload,
   type EvalToolForwardingConfig,
   type ExecSubAgentParams,
@@ -364,15 +365,15 @@ export interface AgentRuntimeDelegate {
   execVirtualSubAgent?: (params: ExecVirtualSubAgentParams) => Promise<ExecSubAgentResult>;
   /**
    * Run the init an operation was created without: tool discovery and the
-   * message / context assembly. Returns the state slots they produce, which the
-   * step then merges before executing — see `host.init`.
+   * message / context assembly for `state.request`. Returns the state slots they
+   * produce, which the step merges before executing.
    *
    * Implemented by AiAgentService (it owns the pipeline and the models it needs);
    * the runtime only knows when to ask and what to do with the answer.
    */
   runDeferredInit?: (params: {
-    envelope: unknown;
     operationId: string;
+    request: AgentRunInitRequest;
     state: AgentState;
   }) => Promise<Partial<AgentState>>;
   /**
@@ -1719,7 +1720,8 @@ export class AgentRuntimeService {
 
         // The run may have been created without its init — the send path
         // returned as soon as the messages were durable and left discovery and
-        // the context assembly to this worker (see `host.init`).
+        // the context assembly to this worker. The turn's request is still on the
+        // state, which is exactly what says the init has not run yet.
         //
         // It runs after the step claim, so two deliveries of step 0 cannot both
         // pay for a discovery, and before anything is published, so the client
@@ -1727,8 +1729,7 @@ export class AgentRuntimeService {
         // falls into the step error handler below: the operation ends with the
         // error on its assistant message, which is the only honest outcome once
         // the user has already been told the message was sent.
-        const pendingInit = agentState.host?.init;
-        if (pendingInit?.pending) {
+        if (agentState.request) {
           // Stop pressed during the init window: the sentinel is the same one
           // the step boundary reads, and honouring it here saves the whole
           // discovery rather than doing it for a run nobody is waiting for.
@@ -1745,13 +1746,13 @@ export class AgentRuntimeService {
 
           const initStartedAt = Date.now();
           const initialized = await this.delegate.runDeferredInit({
-            envelope: pendingInit.envelope,
             operationId,
+            request: agentState.request,
             state: agentState,
           });
-          Object.assign(agentState, initialized, {
-            host: { ...agentState.host, ...initialized.host, init: undefined },
-          });
+          // Clearing the request in the same write is what makes a redelivery of
+          // this step read an initialized run instead of paying for discovery again.
+          Object.assign(agentState, initialized, { request: undefined });
           await this.coordinator.saveAgentState(operationId, agentState);
           log(
             '[%s][%d] Deferred init finished in %dms',

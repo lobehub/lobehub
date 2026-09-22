@@ -898,6 +898,8 @@ describe('AgentRuntimeService', () => {
         },
         messages: [],
         origin: { agentId: 'agent-1', topicId: 'topic-1' },
+        // The turn's ask still on the state = the init has not run yet.
+        request: { approvedToolEntries: [], selectedToolIds: ['lobe-web-browsing'] },
         stepCount: 0,
       });
 
@@ -936,14 +938,14 @@ describe('AgentRuntimeService', () => {
 
         expect(runDeferredInit).toHaveBeenCalledTimes(1);
         expect(runDeferredInit.mock.calls[0][0]).toMatchObject({
-          envelope: { request: { operationId: 'test-operation-1' } },
           operationId: 'test-operation-1',
+          request: { selectedToolIds: ['lobe-web-browsing'] },
         });
         // Durable before the step runs, and the marker is gone so a retry of
         // this delivery cannot pay for discovery twice.
         const saved = coordinator.saveAgentState.mock.calls[0][1];
         expect(saved.operationToolSet).toEqual({ enabledToolIds: ['lobe-web-browsing'] });
-        expect(saved.host.init).toBeUndefined();
+        expect(saved.request).toBeUndefined();
         // The exit: the step sees the initialized state, not the thin one.
         expect(step.mock.calls[0][0].operationToolSet).toEqual({
           enabledToolIds: ['lobe-web-browsing'],

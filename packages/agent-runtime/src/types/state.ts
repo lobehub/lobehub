@@ -13,6 +13,7 @@ import type {
   UserMemoryConfig,
 } from '@lobechat/context-engine';
 import type {
+  AgentRunInitRequest,
   AgentShareVisitorContext,
   AgentSignalOperationMarker,
   ChatToolPayload,
@@ -172,17 +173,6 @@ export interface AgentRunHostEnvelope {
   hooks?: SerializedAgentHook[];
   /** Opt into runtime state snapshots on step_complete events. Defaults to false. */
   includeFinalState?: boolean;
-  /**
-   * The run was created without its init — tool discovery and the message /
-   * context assembly still have to happen before step 0 can execute. The worker
-   * runs them, replaces this with the initialized slots, and only then starts
-   * the step.
-   *
-   * `envelope` is opaque here on purpose: the runtime carries it, the host is
-   * the only thing that reads it (`DeferredInitEnvelope` on the server), exactly
-   * like the serialized hooks above.
-   */
-  init?: { envelope: unknown; pending: true };
   /** Queue retry policy for step scheduling. */
   queue?: { retries?: number; retryDelay?: string };
 }
@@ -469,6 +459,20 @@ export interface AgentState {
   // --- Principal ---
   /** Under whose authority the run acts and what it may do. Frozen at creation. */
   principal?: AgentRunPrincipal;
+  /**
+   * The turn's raw ask, kept ONLY while the run still owes its init.
+   *
+   * A run can be created before tool discovery and the context assembly have
+   * happened; the step-0 worker does them and clears this in the same write that
+   * saves what they produced (LOBE-13745). Its presence is therefore the signal:
+   * a state carrying a request has not been initialized yet.
+   *
+   * Everything else the init needs is already on the other slots (`world.agent`,
+   * `world.channel`, `principal.policy`, `host.hooks`, `modelRuntimeConfig` …) —
+   * this is the residue those slots have no claim on.
+   */
+  request?: AgentRunInitRequest;
+
   /** @deprecated Use `principal.policy.securityBlacklist`. */
   securityBlacklist?: SecurityBlacklistConfig;
   // --- State Machine ---

@@ -1,5 +1,5 @@
 import type { LobeChatDatabase } from '@lobechat/database';
-import type { RequestTrigger } from '@lobechat/types';
+import type { AgentRunInitRequest, RequestTrigger } from '@lobechat/types';
 
 import type { AgentModel } from '@/database/models/agent';
 import type { ConnectorModel } from '@/database/models/connector';
@@ -12,66 +12,20 @@ import type { ComposioService } from '@/server/services/composio';
 import type { MarketService } from '@/server/services/market';
 
 import type { ExecRunContext, InternalExecAgentParams } from '../types';
-import {
-  type ApprovedToolEntry,
-  buildApprovalResumeContext,
-  type ClaimedApprovalResume,
-} from './approvalResume';
+import { buildApprovalResumeContext, type ClaimedApprovalResume } from './approvalResume';
 import {
   type OperationPrepDeps,
   type OperationPrepResult,
   prepareOperation,
 } from './operationPrep';
 import { discoverTools, type ToolDiscoveryResult } from './toolDiscovery';
-import type { RunAttachments } from './turnSetup';
 
 /**
- * Everything the init stage reads that is NOT a live object: ids, flags and
- * already-resolved values. Plain JSON on purpose — an operation that defers its
- * init has to carry this on its state through Redis and rebuild the
- * live half (models, services, the history loader) in the step-0 worker.
- *
- * Keep it that way: a `Date`, a `Buffer` or a model instance in here silently
- * degrades once the request round-trips as JSON. `buildOperationInitRequest` has
- * a test that holds the line.
+ * The turn's raw ask. Declared in `@lobechat/types` because it is also the shape
+ * of `AgentState.request`: a run whose init is deferred carries it there until
+ * the step-0 worker consumes it.
  */
-export interface OperationInitRequest {
-  additionalPluginIds?: string[];
-  agentSlug?: string | null;
-  approvalOwnerAssistantId?: string;
-  /** Narrowed from the claim: the entries there carry a `Date` that JSON would flatten. */
-  approvedToolEntries: ApprovedToolEntry[];
-  attachedFileIds?: string[];
-  botContext?: InternalExecAgentParams['botContext'];
-  botPlatformContext?: InternalExecAgentParams['botPlatformContext'];
-  disabledPluginIds: string[];
-  disableLocalSystem?: boolean;
-  disableSelfFeedbackIntentTool?: boolean;
-  disableTools?: boolean;
-  discordContext?: InternalExecAgentParams['discordContext'];
-  ephemeralUserMessage?: string;
-  exclusivePluginIds?: string[];
-  /** Mime types of the raw bot/IM uploads — the only thing discovery reads off them. */
-  externalFileTypes?: string[];
-  functionTools?: InternalExecAgentParams['functionTools'];
-  globalMemoryEnabled: boolean;
-  hasMentionedAgents: boolean;
-  isFixedDeviceTarget: boolean;
-  localDeviceId?: string;
-  mentionedAgents?: InternalExecAgentParams['mentionedAgents'];
-  operationId: string;
-  parentMessageId?: string;
-  requestedDeviceId?: string;
-  requestTrigger?: RequestTrigger;
-  resumeApproval?: InternalExecAgentParams['resumeApproval'];
-  resumeApprovalPlugin?: Parameters<typeof buildApprovalResumeContext>[0]['resumeApprovalPlugin'];
-  resumeApprovals?: InternalExecAgentParams['resumeApprovals'];
-  resumeFromHistory: boolean;
-  resumeToolResult?: InternalExecAgentParams['resumeToolResult'];
-  runAttachments: RunAttachments;
-  selectedToolIds?: string[];
-  topicBoundDeviceId?: string | null;
-}
+export type OperationInitRequest = AgentRunInitRequest;
 
 /** The live half: models, services and the two loaders the stages call back into. */
 export interface OperationInitDeps {
@@ -140,6 +94,7 @@ export const runOperationInit = async (
   deps: OperationInitDeps,
   ctx: ExecRunContext,
   request: OperationInitRequest,
+  operationId: string,
 ): Promise<OperationInitResult> => {
   // Stage 5 (5a–5f) — tool discovery (see `pipeline/toolDiscovery`).
   const discovery = await discoverTools(
@@ -160,12 +115,12 @@ export const runOperationInit = async (
       additionalPluginIds: request.additionalPluginIds,
       agentSlug: request.agentSlug,
       attachedFileIds: request.attachedFileIds,
-      botContext: request.botContext,
+      botContext: ctx.botContext,
       disableLocalSystem: request.disableLocalSystem,
       disableSelfFeedbackIntentTool: request.disableSelfFeedbackIntentTool,
       disableTools: request.disableTools,
-      disabledPluginIds: request.disabledPluginIds,
-      discordContext: request.discordContext,
+      disabledPluginIds: ctx.disabledPluginIds,
+      discordContext: ctx.discordContext,
       exclusivePluginIds: request.exclusivePluginIds,
       externalFileTypes: request.externalFileTypes,
       functionTools: request.functionTools,
@@ -174,7 +129,7 @@ export const runOperationInit = async (
       isFixedDeviceTarget: request.isFixedDeviceTarget,
       loadHistoryMessages: deps.loadHistoryMessages,
       localDeviceId: request.localDeviceId,
-      requestTrigger: request.requestTrigger,
+      requestTrigger: request.requestTrigger as RequestTrigger | undefined,
       requestedDeviceId: request.requestedDeviceId,
       selectedToolIds: request.selectedToolIds,
       throwIfExecutionAborted: deps.throwIfExecutionAborted,
@@ -198,15 +153,15 @@ export const runOperationInit = async (
     },
     ctx,
     {
-      botPlatformContext: request.botPlatformContext,
-      disabledPluginIds: request.disabledPluginIds,
+      botPlatformContext: ctx.botPlatformContext,
+      disabledPluginIds: ctx.disabledPluginIds,
       discovery,
       ephemeralUserMessage: request.ephemeralUserMessage,
       globalMemoryEnabled: request.globalMemoryEnabled,
       hasMentionedAgents: request.hasMentionedAgents,
       loadHistoryMessages: deps.loadHistoryMessages,
       mentionedAgents: request.mentionedAgents,
-      operationId: request.operationId,
+      operationId,
       runAttachments: request.runAttachments,
       runFromHistory: request.resumeFromHistory,
       throwIfExecutionAborted: deps.throwIfExecutionAborted,
@@ -221,7 +176,7 @@ export const runOperationInit = async (
     assistantMessageId: ctx.assistantMessageId,
     initialContext: prep.initialContext,
     messageCount: prep.allMessages.length,
-    operationId: request.operationId,
+    operationId,
     parentMessageId: request.parentMessageId,
     resumeApproval: request.resumeApproval,
     resumeApprovalPlugin: request.resumeApprovalPlugin,
