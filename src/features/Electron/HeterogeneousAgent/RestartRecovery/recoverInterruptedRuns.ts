@@ -1,3 +1,4 @@
+import { stripGoalCommand } from '@lobechat/builtin-tool-goal';
 import { HETERO_RESTART_CONTINUE_PROMPT } from '@lobechat/const';
 import type { ChatTopic, ConversationContext, UIChatMessage } from '@lobechat/types';
 
@@ -10,6 +11,7 @@ import {
 } from '@/features/Conversation/store/slices/generation/action';
 import {
   getHeteroSessionIdForWorkingDirectory,
+  setHeteroSessionBindingKeyForWorkingDirectory,
   setHeteroSessionIdForWorkingDirectory,
 } from '@/helpers/heteroSessionByWorkingDirectory';
 import { agentService } from '@/services/agent';
@@ -18,6 +20,7 @@ import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
+import { getNativeHeteroSessionBindingKey } from '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume';
 import { getUserStoreState } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
@@ -53,6 +56,8 @@ interface InterruptedRun {
   agentType: string;
   /** Assistant row the interrupted run streamed into — its branch root. */
   assistantMessageId?: string;
+  /** Hosted provider binding the run's CLI session belongs to, when it had one. */
+  bindingKey?: string;
   configDir?: string;
   cwd?: string;
   /** Too old to replay; hand the topic a status-only cleanup and stop there. */
@@ -237,7 +242,18 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
       ledgerCwd &&
       !getHeteroSessionIdForWorkingDirectory(topic.metadata, ledgerCwd)
     ) {
+      // The binding key travels WITH the session id: a provider-bound resume
+      // whose key does not match the binding main resolves is dropped there,
+      // and the replay then has no session to read. Both were written by the
+      // same lost update, so both are restored.
+      const bindingKey = run.bindingKey ?? getNativeHeteroSessionBindingKey(run.agentType);
       const patch = {
+        heteroSessionBindingKey: bindingKey,
+        heteroSessionBindingKeyByWorkingDirectory: setHeteroSessionBindingKeyForWorkingDirectory(
+          topic.metadata,
+          ledgerCwd,
+          bindingKey,
+        ),
         heteroSessionId: run.agentSessionId,
         heteroSessionIdByWorkingDirectory: setHeteroSessionIdForWorkingDirectory(
           topic.metadata,
@@ -279,7 +295,11 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
       // A resumed session shares one transcript, so the last turn on disk may
       // still be the PREVIOUS one when the restart beat the CLI to recording
       // this prompt. Replaying that would rewrite the conversation.
-      expectedPrompt: userTurn.content,
+      //
+      // Stripped exactly like the executor strips it before sending: a `/goal`
+      // turn reaches the CLI without its command word, so the raw row content
+      // is not what the transcript recorded.
+      expectedPrompt: stripGoalCommand(userTurn.content),
       // The CLI cannot have recorded this run's prompt before the run existed,
       // which is what tells two adjacent prompts apart when their text does not.
       notBefore: run.startedAt,

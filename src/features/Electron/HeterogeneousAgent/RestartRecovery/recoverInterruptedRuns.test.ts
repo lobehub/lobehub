@@ -298,7 +298,13 @@ describe('recoverInterruptedHeteroRuns', () => {
 
   it('restores the resume metadata from the ledger when the topic write was lost', async () => {
     mockListInterruptedRuns.mockResolvedValue([
-      { ...run, agentSessionId: 'cc-from-ledger', configDir: '/profile', cwd: '/repo' },
+      {
+        ...run,
+        agentSessionId: 'cc-from-ledger',
+        bindingKey: 'provider:openai-compatible#1',
+        configDir: '/profile',
+        cwd: '/repo',
+      },
     ]);
     mockGetTopicDetail.mockResolvedValue({ ...topic, metadata: { workingDirectory: '/repo' } });
     mockRunHetero.mockResolvedValue({ assistantMessageId: 'a-new', replayComplete: true });
@@ -306,7 +312,12 @@ describe('recoverInterruptedHeteroRuns', () => {
     const results = await recoverInterruptedHeteroRuns();
 
     expect(results).toEqual([{ outcome: 'replayed', topicId: 'topic-1' }]);
+    // The binding key travels with the session id: main drops a provider-bound
+    // resume whose key does not match the binding it resolves, and the replay
+    // then has no session to read.
     expect(chatStore.updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
+      heteroSessionBindingKey: 'provider:openai-compatible#1',
+      heteroSessionBindingKeyByWorkingDirectory: { '/repo': 'provider:openai-compatible#1' },
       heteroSessionId: 'cc-from-ledger',
       heteroSessionIdByWorkingDirectory: { '/repo': 'cc-from-ledger' },
       workingDirectory: '/repo',
@@ -601,6 +612,39 @@ describe('recoverInterruptedHeteroRuns', () => {
     // The superseded entry is spent too, or it would be retried every launch.
     expect(mockReleaseInterruptedRun).toHaveBeenCalledWith('ipc-1');
     expect(mockReleaseInterruptedRun).toHaveBeenCalledWith('ipc-later');
+  });
+
+  it('restores a native binding key when the run had no hosted binding', async () => {
+    mockListInterruptedRuns.mockResolvedValue([
+      { ...run, agentSessionId: 'cc-from-ledger', cwd: '/repo' },
+    ]);
+    mockGetTopicDetail.mockResolvedValue({ ...topic, metadata: { workingDirectory: '/repo' } });
+    mockRunHetero.mockResolvedValue({ assistantMessageId: 'a-new', replayComplete: true });
+
+    await recoverInterruptedHeteroRuns();
+
+    expect(chatStore.updateTopicMetadata).toHaveBeenCalledWith(
+      'topic-1',
+      expect.objectContaining({ heteroSessionBindingKey: 'native:v1:claude-code' }),
+    );
+  });
+
+  it('probes with the prompt the CLI was actually given', async () => {
+    // The executor strips the `/goal` command before sending, so the
+    // transcript never holds the raw row content — probing with it would
+    // reject the run's own turn as a different one.
+    mockGetMessages.mockResolvedValue([
+      ...messages.slice(0, 2),
+      { content: '/goal ship the report', createdAt: 200, id: 'u1', role: 'user' },
+      ...messages.slice(3),
+    ]);
+    mockRunHetero.mockResolvedValue({ assistantMessageId: 'a-new', replayComplete: true });
+
+    await recoverInterruptedHeteroRuns();
+
+    expect(mockProbeTranscriptReplay).toHaveBeenCalledWith(
+      expect.objectContaining({ expectedPrompt: 'ship the report' }),
+    );
   });
 
   it('releases the ledger entry once recovery has an outcome', async () => {

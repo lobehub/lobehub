@@ -24,6 +24,12 @@ export interface HeteroInflightRun {
    */
   assistantMessageId?: string;
   /**
+   * Hosted provider binding the CLI session belongs to, when the run had one.
+   * A resume is dropped when its key does not match the binding this machine
+   * resolves, so recovery has to restore it alongside the session id.
+   */
+  bindingKey?: string;
+  /**
    * How many launches have taken this entry for recovery. The entry survives
    * a handover (see {@link HeteroInflightRunRegistry.claim}), so this is what
    * stops a recovery that keeps dying from being retried forever.

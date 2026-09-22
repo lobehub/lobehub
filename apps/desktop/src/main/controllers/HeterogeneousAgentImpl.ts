@@ -625,6 +625,7 @@ export default class HeterogeneousAgentCtr {
       agentSessionId: session.agentSessionId,
       agentType: session.agentType,
       assistantMessageId: params.assistantMessageId,
+      bindingKey: session.hostedProviderBinding?.bindingKey,
       command,
       configDir,
       cwd,
