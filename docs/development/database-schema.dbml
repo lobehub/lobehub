@@ -1349,6 +1349,7 @@ table environments {
   name varchar(255) [not null]
   description text
   enabled boolean [not null, default: true]
+  visibility text [not null, default: 'private']
   configuration jsonb [not null]
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
@@ -1357,6 +1358,9 @@ table environments {
   indexes {
     user_id [name: 'environments_user_id_idx']
     workspace_id [name: 'environments_workspace_id_idx']
+    (workspace_id, visibility, user_id) [name: 'environments_workspace_visibility_idx']
+    (user_id, name) [name: 'environments_user_name_unique', unique]
+    (workspace_id, user_id, name) [name: 'environments_workspace_user_name_unique', unique]
     
     
   }

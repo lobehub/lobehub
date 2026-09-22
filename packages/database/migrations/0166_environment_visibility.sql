@@ -1,0 +1,2 @@
+ALTER TABLE "environments" ADD COLUMN "visibility" text DEFAULT 'private' NOT NULL;--> statement-breakpoint
+CREATE INDEX "environments_workspace_visibility_idx" ON "environments" USING btree ("workspace_id","visibility","user_id");

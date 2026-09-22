@@ -1155,6 +1155,20 @@
       "when": 1789483504676,
       "tag": "0164_document_comment_selection_anchor",
       "breakpoints": true
+    },
+    {
+      "idx": 165,
+      "version": "7",
+      "when": 1789632387966,
+      "tag": "0165_environment_name_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 166,
+      "version": "7",
+      "when": 1789918923714,
+      "tag": "0166_environment_visibility",
+      "breakpoints": true
     }
   ],
   "version": "6"

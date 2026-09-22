@@ -36,6 +36,26 @@ export interface GitHubGraphQLRequest<Variables extends Record<string, unknown>>
 /** @internal Test seam and protocol adapter. */
 export interface GitHubConnectorTransport {
   getAuthenticatedUser: () => Promise<{ id: number | string; login: string }>;
+  /**
+   * Every repository the token can reach, across the owner's own account and
+   * the organizations they belong to — not the contribution-shaped listings
+   * above, which rank by evidence of work and would hide a repository the
+   * person has never touched but wants to build in.
+   */
+  listAccessibleRepositories: (input: { perPage: number }) => Promise<
+    Array<{
+      defaultBranch?: string | null;
+      isPrivate?: boolean;
+      name?: string | null;
+      owner?: string | null;
+    }>
+  >;
+  /** The branches of one repository, for choosing what an environment checks out. */
+  listRepositoryBranches: (input: {
+    owner: string;
+    perPage: number;
+    repository: string;
+  }) => Promise<Array<{ name?: string | null }>>;
   listRepositoryContributors: (input: {
     owner: string;
     perPage: number;
@@ -185,6 +205,28 @@ export const createOctokitTransport = (accessToken: string): GitHubConnectorTran
       return response.data.map(({ contributions, login }) => ({
         contributions,
         login,
+      }));
+    },
+    listRepositoryBranches: async ({ owner, perPage, repository }) => {
+      const response = await octokit.rest.repos.listBranches({
+        owner,
+        per_page: perPage,
+        repo: repository,
+      });
+
+      return response.data.map(({ name }) => ({ name }));
+    },
+    listAccessibleRepositories: async ({ perPage }) => {
+      const response = await octokit.rest.repos.listForAuthenticatedUser({
+        per_page: perPage,
+        sort: 'updated',
+      });
+
+      return response.data.map(({ default_branch, name, owner, private: isPrivate }) => ({
+        defaultBranch: default_branch,
+        isPrivate,
+        name,
+        owner: owner?.login,
       }));
     },
     listUserOrganizations: async ({ perPage }) => {

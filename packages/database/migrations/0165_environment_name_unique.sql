@@ -1,0 +1,2 @@
+CREATE UNIQUE INDEX "environments_user_name_unique" ON "environments" USING btree ("user_id","name") WHERE "environments"."workspace_id" is null;--> statement-breakpoint
+CREATE UNIQUE INDEX "environments_workspace_user_name_unique" ON "environments" USING btree ("workspace_id","user_id","name") WHERE "environments"."workspace_id" is not null;

@@ -55,6 +55,8 @@ const createTransport = () => {
   ]);
   const transport: GitHubConnectorTransport = {
     getAuthenticatedUser: async () => ({ id: 98_765, login: 'octocat' }),
+    listAccessibleRepositories: async () => [],
+    listRepositoryBranches: async () => [],
     listRepositoryContributors,
     listUserOrganizations,
     request: async ({ operation, variables }) => {
@@ -435,6 +437,9 @@ describe('createGitHubConnectorClient', () => {
     });
     const transport: GitHubConnectorTransport = {
       getAuthenticatedUser: async () => ({ id: 98_765, login: 'octocat' }),
+      listAccessibleRepositories: async () => [],
+      listRepositoryBranches: async () => [],
+      listRepositoryBranches: async () => [],
       listRepositoryContributors: async () => [],
       listUserOrganizations: async () => [],
       request,
@@ -477,6 +482,9 @@ describe('createGitHubConnectorClient', () => {
     const sensitiveRepository = 'token-sensitive-owner/private-repository';
     const transport: GitHubConnectorTransport = {
       getAuthenticatedUser: async () => ({ id: 98_765, login: 'octocat' }),
+      listAccessibleRepositories: async () => [],
+      listRepositoryBranches: async () => [],
+      listRepositoryBranches: async () => [],
       listRepositoryContributors: vi.fn().mockRejectedValue({ status: 401 }),
       listUserOrganizations: async () => [],
       request: vi.fn(),
@@ -588,6 +596,26 @@ describe('createGitHubConnectorClient', () => {
       'https://api.github.com/user/orgs?per_page=20',
       'https://api.github.com/user',
       'https://api.github.com/users/octocat/orgs?per_page=20',
+    ]);
+  });
+
+  it('lists branch names and drops entries the API returned without one', async () => {
+    const transport: GitHubConnectorTransport = {
+      getAuthenticatedUser: async () => ({ id: 98_765, login: 'octocat' }),
+      listAccessibleRepositories: async () => [],
+      listRepositoryBranches: async ({ owner, repository }) =>
+        owner === 'lobehub' && repository === 'lobehub'
+          ? [{ name: 'canary' }, { name: null }, { name: 'main' }]
+          : [],
+      listRepositoryContributors: async () => [],
+      listUserOrganizations: async () => [],
+      request: async () => ({}),
+    };
+    const client = createGitHubConnectorClient({ transport });
+
+    await expect(client.listRepositoryBranches('lobehub', 'lobehub')).resolves.toEqual([
+      'canary',
+      'main',
     ]);
   });
 });

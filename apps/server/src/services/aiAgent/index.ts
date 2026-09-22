@@ -1,5 +1,6 @@
 import type { AgentState } from '@lobechat/agent-runtime';
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
+import type { SandboxWorkspaceClaim } from '@lobechat/builtin-tool-cloud-sandbox';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type {
   ExecAgentResult,
@@ -204,8 +205,10 @@ export class AiAgentService {
     };
   }
 
-  private async getMarketService(): Promise<MarketService> {
-    if (this._marketService) return this._marketService;
+  private async getMarketService(options?: {
+    sandboxWorkspace: SandboxWorkspaceClaim;
+  }): Promise<MarketService> {
+    if (!options && this._marketService) return this._marketService;
 
     let accessToken: string | undefined;
     try {
@@ -214,6 +217,15 @@ export class AiAgentService {
       accessToken = (settings?.market as any)?.accessToken;
     } catch {
       // non-fatal — MarketService will fall back to trustedClientToken
+    }
+
+    // A sandbox-workspace claim is signed into the trust token, so a service
+    // carrying one is built for that run and kept out of the shared cache.
+    if (options) {
+      return new MarketService({
+        accessToken,
+        userInfo: { sandboxWorkspace: options.sandboxWorkspace, userId: this.userId },
+      });
     }
 
     this._marketService = new MarketService({
@@ -1051,7 +1063,7 @@ export class AiAgentService {
         {
           bindTopicWorkingDirectory: (p) => this.bindTopicWorkingDirectory(p),
           db: this.db,
-          getMarketService: () => this.getMarketService(),
+          getMarketService: (options) => this.getMarketService(options),
           messageModel: this.messageModel,
           resolveDeviceWorkspaceId: (deviceId) => this.resolveDeviceWorkspaceId(deviceId),
           topicModel: this.topicModel,

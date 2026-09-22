@@ -12,6 +12,7 @@ import Appearance from '../appearance';
 import Connector from '../connector';
 import Creds from '../creds';
 import Devices from '../devices';
+import Environments from '../environments';
 import Hotkey from '../hotkey';
 import Labels from '../labels';
 import Labs from '../labs';
@@ -44,6 +45,7 @@ export const componentMap = {
   [SettingsTabs.SystemTools]: SystemTools,
   [SettingsTabs.Storage]: Storage,
   [SettingsTabs.Devices]: Devices,
+  [SettingsTabs.Environments]: Environments,
   [SettingsTabs.Labels]: Labels,
   // Profile related tabs
   [SettingsTabs.Profile]: Profile,

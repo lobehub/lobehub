@@ -34,10 +34,70 @@ export interface SandboxWorkspaceInfo {
   dir: string;
   key: string;
   lastActiveAt: string | null;
+  /**
+   * Outcome of the most recent environment snapshot. Snapshots happen when a
+   * session is torn down, with no request left to fail, so this is the only
+   * place a user can learn their environments stopped being saved.
+   */
+  lastSnapshotAt: string | null;
+  lastSnapshotError: string | null;
   quotaBytes: number;
   status: 'active' | 'archived';
   usageBytes: number | null;
   usageCheckedAt: string | null;
+}
+
+/**
+ * A snapshot the execution plane holds. Only environments that have actually
+ * been captured appear — one created but never used has metadata here and no
+ * snapshot there, which is why the two are joined rather than assumed to match.
+ */
+export interface SandboxEnvironmentSnapshot {
+  /** Size of the snapshot archive itself; exact, not a directory walk. */
+  bytes: number;
+  /** Files in the archive, or `null` when the sidecar metadata disagrees with it. */
+  files: number | null;
+  /** The identifier, which is this platform's environment id. */
+  name: string;
+  updatedAt: string;
+}
+
+/** One run of an environment, as the execution plane's trail records it. */
+export interface SandboxSessionRecord {
+  /** Set on builds: what the build status endpoint is polled with. */
+  buildId: string | null;
+  endedAt: string | null;
+  /** Null while the run is still going. */
+  endReason:
+    | 'build_failed'
+    | 'build_gone'
+    | 'build_succeeded'
+    | 'build_timeout'
+    | 'expired'
+    | 'explicit'
+    | 'idle'
+    | 'lost'
+    | 'switched'
+    | null;
+  /** The instance id, which is what the snapshot is stored under. */
+  environment: string | null;
+  id: number;
+  kind: 'build' | 'session';
+  /** A console session opened by the file browser rather than a conversation. */
+  management: boolean;
+  sessionId: string;
+  sessionUserId: string;
+  /** Archive size after the teardown snapshot; null when it failed or has not run. */
+  snapshotBytes: number | null;
+  snapshotError: string | null;
+  startedAt: string;
+  topicId: string | null;
+}
+
+export interface SandboxSessionList {
+  /** Pass as `before` to fetch the next page; null on the last one. */
+  nextBefore: string | null;
+  sessions: SandboxSessionRecord[];
 }
 
 export interface SandboxWorkspaceClientOptions {
@@ -83,10 +143,18 @@ export const createSandboxWorkspaceClient = ({
     });
 
     if (!response.ok) {
-      const body = await response.json().catch(() => ({}) as { message?: string });
+      const body = await response
+        .json()
+        .catch(() => ({}) as { error_description?: string; message?: string });
       log('workspace file request failed: %s %d %O', path, response.status, body);
+      // The market answers in the OAuth shape — `error` for the code and
+      // `error_description` for the reason — so reading `message` alone
+      // reduced every refusal ("could not delete", "outside the workspace")
+      // to the status number, which is the one thing the user cannot act on.
       throw new SandboxWorkspaceFilesError(
-        body.message || `Workspace request failed with status ${response.status}`,
+        body.error_description ||
+          body.message ||
+          `Workspace request failed with status ${response.status}`,
         response.status,
       );
     }
@@ -113,6 +181,27 @@ export const createSandboxWorkspaceClient = ({
         method: 'POST',
       }),
 
+    copyEnvironment: async (
+      params: RequestContext & { from: string; to: string },
+    ): Promise<{ name: string }> =>
+      request(`${CURRENT_WORKSPACE}/environments/${encodeURIComponent(params.from)}/copy`, {
+        body: JSON.stringify({ to: params.to, topicId: params.topicId }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      }),
+
+    deleteEnvironment: async (
+      params: RequestContext & { name: string },
+    ): Promise<{ name: string }> => {
+      const query = withTopic(new URLSearchParams(), params);
+      const suffix = query.size > 0 ? `?${query.toString()}` : '';
+
+      return request(
+        `${CURRENT_WORKSPACE}/environments/${encodeURIComponent(params.name)}${suffix}`,
+        { method: 'DELETE' },
+      );
+    },
+
     deleteFile: async (
       params: RequestContext & { path: string; recursive?: boolean },
     ): Promise<{ path: string }> => {
@@ -127,6 +216,40 @@ export const createSandboxWorkspaceClient = ({
       const suffix = query.size > 0 ? `?${query.toString()}` : '';
 
       return request(`${CURRENT_WORKSPACE}${suffix}`);
+    },
+
+    /**
+     * Needs a live sandbox session, so it can take seconds on a cold start —
+     * a caller rendering this must show it is loading rather than treat it as
+     * data it already has.
+     */
+    listEnvironments: async (
+      params: RequestContext = {},
+    ): Promise<{ environments: SandboxEnvironmentSnapshot[] }> => {
+      const query = withTopic(new URLSearchParams(), params);
+      const suffix = query.size > 0 ? `?${query.toString()}` : '';
+
+      return request(`${CURRENT_WORKSPACE}/environments${suffix}`);
+    },
+
+    /**
+     * One environment's run history, newest first. Answered from the control
+     * plane's own trail, so unlike the listings above it needs no sandbox
+     * session and costs no cold start.
+     */
+    listEnvironmentSessions: async (params: {
+      before?: string;
+      limit?: number;
+      name: string;
+    }): Promise<SandboxSessionList> => {
+      const query = new URLSearchParams();
+      if (params.limit !== undefined) query.set('limit', String(params.limit));
+      if (params.before) query.set('before', params.before);
+      const suffix = query.size > 0 ? `?${query.toString()}` : '';
+
+      return request(
+        `${CURRENT_WORKSPACE}/environments/${encodeURIComponent(params.name)}/sessions${suffix}`,
+      );
     },
 
     listFiles: async (
@@ -147,6 +270,27 @@ export const createSandboxWorkspaceClient = ({
 
       return request(`${CURRENT_WORKSPACE}/file?${query.toString()}`);
     },
+
+    /**
+     * Write a file, creating it and its parents when they do not exist.
+     *
+     * Text only: the endpoint carries `content` as a JSON string with no
+     * encoding field, so there is no way to round-trip bytes through it. A
+     * caller holding binary has to wait for an upload path rather than
+     * smuggling it through as text.
+     */
+    writeFile: async (
+      params: RequestContext & { content: string; path: string },
+    ): Promise<{ path: string }> =>
+      request(`${CURRENT_WORKSPACE}/file`, {
+        body: JSON.stringify({
+          content: params.content,
+          path: params.path,
+          topicId: params.topicId,
+        }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'PUT',
+      }),
   };
 };
 

@@ -143,6 +143,21 @@ export const isSafeSandboxCwd = (value: string): boolean => {
 };
 
 /**
+ * Identifiers the execution plane accepts for a named environment: a leading
+ * alphanumeric, then `[A-Za-z0-9._-]`, at most 64 characters.
+ *
+ * Deliberately stricter than the workspace key's rule, and checked on this side
+ * as well as the far one, because of WHERE the far one fails: a session runs to
+ * completion and the snapshot is refused at the end, so the work is done and
+ * there is nowhere to put it. Refusing at the point the identifier is chosen
+ * costs nothing by comparison.
+ */
+const SAFE_ENVIRONMENT_ID = /^[A-Z0-9][\w.-]{0,63}$/i;
+
+export const isSafeSandboxEnvironmentId = (value: string): boolean =>
+  SAFE_ENVIRONMENT_ID.test(value);
+
+/**
  * Prompt variables the cloud-sandbox system role consumes:
  * - `sandbox_workspace` fills the `<sandbox_environment>` file-system bullets
  * - `sandbox_session_files` fills the `<session_behavior>` persistence bullet

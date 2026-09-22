@@ -19,18 +19,19 @@ import {
 
 const db = await getTestDB();
 const userId = 'environment-schema-user';
+const colleagueId = 'environment-schema-colleague';
 const workspaceId = 'environment-schema-workspace';
 const configuration: EnvironmentConfiguration = {
   sources: [{ kind: 'git', url: 'https://github.com/lobehub/lobehub.git' }],
 };
 
-const createEnvironment = async (name = 'Development', scope?: string) => {
+const createEnvironment = async (name = 'Development', scope?: string, owner = userId) => {
   const [environment] = await db
     .insert(environments)
     .values({
       configuration,
       name,
-      userId,
+      userId: owner,
       workspaceId: scope,
     })
     .returning();
@@ -51,36 +52,22 @@ const createProject = async (identifier: string) => {
   return project;
 };
 
+const members = [userId, colleagueId];
+
 beforeEach(async () => {
   await db.insert(users).values({ id: userId });
 });
 
 afterEach(async () => {
   // Explicit unlink and cleanup mirrors the resource deletion contract.
-  await db
-    .delete(projectEnvironments)
-    .where(
-      inArray(
-        projectEnvironments.environmentId,
-        db
-          .select({ id: environments.id })
-          .from(environments)
-          .where(eq(environments.userId, userId)),
-      ),
-    );
-  await db
-    .delete(environmentInstances)
-    .where(
-      inArray(
-        environmentInstances.environmentId,
-        db
-          .select({ id: environments.id })
-          .from(environments)
-          .where(eq(environments.userId, userId)),
-      ),
-    );
-  await db.delete(environments).where(eq(environments.userId, userId));
-  await db.delete(users).where(eq(users.id, userId));
+  const owned = db
+    .select({ id: environments.id })
+    .from(environments)
+    .where(inArray(environments.userId, members));
+  await db.delete(projectEnvironments).where(inArray(projectEnvironments.environmentId, owned));
+  await db.delete(environmentInstances).where(inArray(environmentInstances.environmentId, owned));
+  await db.delete(environments).where(inArray(environments.userId, members));
+  await db.delete(users).where(inArray(users.id, members));
 });
 
 describe('Environment registration schema', () => {
@@ -121,6 +108,25 @@ describe('Environment registration schema', () => {
   it('rejects empty names', async () => {
     const values = { configuration, name: 'Development', userId };
     await expect(db.insert(environments).values({ ...values, name: '  ' })).rejects.toThrow();
+  });
+
+  it('identifies an environment by name per member, not per workspace', async () => {
+    await db.insert(users).values({ id: colleagueId });
+    await db
+      .insert(workspaces)
+      .values({ id: workspaceId, name: 'Team', primaryOwnerId: userId, slug: workspaceId });
+
+    await createEnvironment('Data analysis');
+    await expect(createEnvironment('Data analysis')).rejects.toThrow();
+
+    // Personal and workspace scope are separate namespaces: the same person may
+    // keep a private environment and a work one under one name.
+    await createEnvironment('Data analysis', workspaceId);
+    await expect(createEnvironment('Data analysis', workspaceId)).rejects.toThrow();
+
+    // And a colleague in that workspace keeps their own, because an environment
+    // is theirs to build even when the workspace owns the storage it sits in.
+    await createEnvironment('Data analysis', workspaceId, colleagueId);
   });
 
   it('retains environment records until explicit cleanup on owner or workspace deletion', async () => {

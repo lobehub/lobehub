@@ -53,6 +53,9 @@ export const componentMap = {
   [SettingsTabs.Devices]: dynamic(() => import('../devices'), {
     loading: loading('Settings > Devices'),
   }),
+  [SettingsTabs.Environments]: dynamic(() => import('../environments'), {
+    loading: loading('Settings > Environments'),
+  }),
   [SettingsTabs.Labels]: dynamic(() => import('../labels'), {
     loading: loading('Settings > Labels'),
   }),
