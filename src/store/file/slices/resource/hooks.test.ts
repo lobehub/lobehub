@@ -375,7 +375,8 @@ describe('applyResourceMoveToListCaches', () => {
       scope,
       toParentKeys: ['folder-w37'],
     }).then(settled);
-    for (let i = 0; i < 5; i++) await Promise.resolve();
+    // Enough microtask turns for the serialising queue plus the awaited writes.
+    for (let i = 0; i < 20; i++) await Promise.resolve();
 
     expect(settled).toHaveBeenCalled();
 
@@ -390,6 +391,54 @@ describe('applyResourceMoveToListCaches', () => {
 
     releaseRefetch();
     vi.mocked(mutate).mockReset();
+  });
+
+  it('runs concurrent patches one after another so none overwrites the other', async () => {
+    // Two rows moved together: the second row's patch must read the list the
+    // first one wrote, so its collect/mutate calls start only after the first
+    // patch finished all of its writes.
+    cachedKeys = [listKey('folder-w37')];
+    const order: string[] = [];
+    let releaseFirstWrite: () => void = () => {};
+    let armed = false;
+    vi.mocked(mutate).mockImplementation((async (key: unknown, data: unknown, options: any) => {
+      if (typeof key === 'function') for (const cached of cachedKeys) (key as Matcher)(cached);
+      // collect: no data; write: updater + revalidate false; reconcile: revalidate true
+      const kind = options?.revalidate ? 'reconcile' : data === undefined ? 'collect' : 'write';
+      order.push(kind);
+      if (kind === 'write' && !armed) {
+        armed = true;
+        await new Promise<void>((resolve) => {
+          releaseFirstWrite = resolve;
+        });
+      }
+    }) as any);
+
+    const patch = { fromParentKeys: [null], scope, toParentKeys: ['folder-w37'] };
+    const first = applyResourceMoveToListCaches(moved as any, patch);
+    const second = applyResourceMoveToListCaches({ ...moved, id: 'doc-2' } as any, patch);
+    try {
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+
+      // First patch: keys enumerated, destination + source writes issued (the
+      // destination one hangs). The second patch has not started at all.
+      expect(order).toEqual(['collect', 'write', 'write']);
+    } finally {
+      releaseFirstWrite();
+    }
+    await first;
+    await second;
+
+    expect(order).toEqual([
+      'collect',
+      'write',
+      'write',
+      'reconcile',
+      'collect',
+      'write',
+      'write',
+      'reconcile',
+    ]);
   });
 
   it('matches root lists with a null parent key', async () => {

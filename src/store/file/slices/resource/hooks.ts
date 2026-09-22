@@ -236,7 +236,7 @@ const collectCachedListKeys = async (matcher: (key: unknown) => key is ResourceS
  * Scoped to the workspace and library the move was issued from: other
  * libraries never list this row under these parents.
  */
-export const applyResourceMoveToListCaches = async (
+const applyMoveToListCaches = async (
   resource: ResourceItem,
   { fromParentKeys, toParentKeys, scope }: ResourceMoveCachePatch,
 ) => {
@@ -276,6 +276,28 @@ export const applyResourceMoveToListCaches = async (
     async (currentData: ResourceListData | undefined) => currentData,
     { revalidate: true },
   );
+};
+
+let pendingMovePatches: Promise<unknown> = Promise.resolve();
+
+/**
+ * Patches run one at a time. A multi-item move lands its requests together and
+ * every item patches the same source / destination keys; SWR's `mutate` reads
+ * the cached list before awaiting the updater and drops a write whose read was
+ * overtaken by a later mutation of the same key, so concurrent patches would
+ * lose all but the last row. Serialising here covers every caller — the
+ * explorer's own moves and the tree's API-only branches alike.
+ */
+export const applyResourceMoveToListCaches = (
+  resource: ResourceItem,
+  patch: ResourceMoveCachePatch,
+): Promise<void> => {
+  const run = pendingMovePatches.then(
+    () => applyMoveToListCaches(resource, patch),
+    () => applyMoveToListCaches(resource, patch),
+  );
+  pendingMovePatches = run.catch(() => {});
+  return run;
 };
 
 /**
