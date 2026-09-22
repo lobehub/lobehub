@@ -490,6 +490,8 @@ export default {
   'share.settings.skills.grantedEmpty':
     'No skills granted yet — visitors cannot load any. Pick from the list below to grant one.',
   'share.settings.skills.grantedGroup': 'Granted to visitors · {{count}}',
+  'share.settings.skills.loadFailed':
+    'Could not load this Agent’s skills. Close and reopen the share settings to try again.',
   'share.settings.skills.loading': 'Loading skills…',
   'share.settings.skills.title': 'Skills visitors can use',
   'share.settings.tools.desc':
@@ -505,6 +507,9 @@ export default {
   'share.settings.tools.grantedEmpty':
     'No tools granted yet — visitors get a plain chat. Pick from the list below to grant one.',
   'share.settings.tools.grantedGroup': 'Granted to visitors · {{count}}',
+  'share.settings.tools.loadFailed':
+    'Could not load this Agent’s tools. Close and reopen the share settings to try again.',
+  'share.settings.tools.loading': 'Loading tools…',
   'share.settings.tools.needsMemoryPermission':
     'Also turn on “Allow reading my memory” above, or this tool stays inert for visitors.',
   'share.settings.tools.notAvailableToVisitors':
