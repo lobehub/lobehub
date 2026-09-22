@@ -85,7 +85,7 @@ const SelectorMenu = memo<SelectorMenuProps>(
               right-anchored send area — only its right edge holds still. Aligning to
               the left edge drags the open popup sideways on every pick. */}
           <DropdownMenuPositioner placement="topRight" sideOffset={8}>
-            <DropdownMenuPopup style={{ width: 240 }}>
+            <DropdownMenuPopup style={{ minWidth: 240, maxWidth: 360 }}>
               {view.isCatalogModel && (
                 <ModelCatalogSelector
                   agentId={agentId}

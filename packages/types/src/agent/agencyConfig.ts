@@ -17,6 +17,7 @@ import type {
   HeterogeneousAgentMode,
   HeterogeneousReasoningEffort,
   HeterogeneousSpeedMode,
+  PiThinkingEffort,
   QoderReasoningEffort,
 } from './heteroSelectorCapabilities';
 import {
@@ -32,6 +33,7 @@ import {
   isCodexFastServiceTier,
   isCodexReasoningEffort,
   isGrokBuildReasoningEffort,
+  isPiThinkingEffort,
   isQoderReasoningEffort,
   QODER_REASONING_EFFORT_FLAG,
 } from './heteroSelectorCapabilities';
@@ -447,6 +449,12 @@ interface QoderSelectionSource {
   model?: string | null;
 }
 
+interface PiSelectionSource {
+  args?: string[];
+  effort?: string | null;
+  model?: string | null;
+}
+
 const HETERO_EXEC_AGENT_ARG_FLAG = '--agent-arg';
 
 const modelFlagsOf = (
@@ -510,6 +518,13 @@ const getExplicitQoderReasoningEffort = (
 ): QoderReasoningEffort | undefined => {
   const effort = source?.effort?.trim();
   return isQoderReasoningEffort(effort) ? effort : undefined;
+};
+
+const getExplicitPiThinkingEffort = (
+  source: PiSelectionSource | null | undefined,
+): PiThinkingEffort | undefined => {
+  const effort = source?.effort?.trim();
+  return isPiThinkingEffort(effort) ? effort : undefined;
 };
 
 const getExplicitCodexSpeedMode = (
@@ -640,6 +655,8 @@ export const buildHeteroSpawnArgs = (
     ) {
       extraArgs.push('--model', model);
     }
+    const effort = getExplicitPiThinkingEffort(provider);
+    if (effort && !hasCliFlag(baseArgs, '--thinking')) extraArgs.push('--thinking', effort);
   }
 
   if (provider.type === 'qoder') {
@@ -797,6 +814,9 @@ export const buildHeteroExecArgs = (
     ) {
       selectorArgs.push('--model', model);
     }
+    const effort = getExplicitPiThinkingEffort(provider);
+    if (effort && !hasCliFlag(baseArgs, '--thinking') && !hasCliFlag(baseArgs, '--effort'))
+      selectorArgs.push('--effort', effort);
   }
 
   if (provider.type === 'qoder') {
