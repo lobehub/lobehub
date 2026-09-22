@@ -541,6 +541,7 @@
   "environments.instances.create": "创建实例",
   "environments.instances.desc": "每个副本有自己的目录和自己装好的东西，所以两个对话可以并行而不会互相覆盖。",
   "environments.instances.directoryHint": "这个副本存放你想留下的东西——报告、数据、导出。源代码跟着环境走，不在这里。",
+  "environments.instances.directoryLabel": "目录",
   "environments.instances.directoryPlaceholder": "reports/q3",
   "environments.instances.duplicateDirectory": "已经有另一个副本在用这个目录了",
   "environments.instances.empty": "还没有实例",

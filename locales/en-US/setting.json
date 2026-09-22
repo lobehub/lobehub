@@ -541,6 +541,7 @@
   "environments.instances.create": "New instance",
   "environments.instances.desc": "Each instance has its own folder and its own installed state, so two conversations can run side by side without overwriting each other.",
   "environments.instances.directoryHint": "Where this instance keeps what you want to keep — reports, data, exports. Source code lives with the environment, not here.",
+  "environments.instances.directoryLabel": "Directory",
   "environments.instances.directoryPlaceholder": "reports/q3",
   "environments.instances.duplicateDirectory": "Another instance already uses this folder",
   "environments.instances.empty": "No instances yet",
