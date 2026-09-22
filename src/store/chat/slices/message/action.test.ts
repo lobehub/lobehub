@@ -1657,6 +1657,9 @@ describe('chatMessage actions', () => {
       expect(messageService.getMessages).toHaveBeenCalledWith({
         agentId: 'prefetch-agent',
         groupId: null,
+        // Whole tool payloads: the conversation read only asks for projected
+        // ones for a protocol-v2 client whose runs execute on the server.
+        projectToolPayloads: false,
         threadId: null,
         topicId: 'prefetch-topic',
       });
@@ -1736,6 +1739,7 @@ describe('chatMessage actions', () => {
       expect(messageService.getMessages).toHaveBeenCalledWith({
         agentId: 'prefetch-agent',
         groupId: null,
+        projectToolPayloads: false,
         threadId: null,
         topicId: 'cached-topic',
       });

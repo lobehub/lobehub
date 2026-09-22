@@ -219,16 +219,6 @@ export const UserLabSchema = z.object({
   /** Capture a conversation turn as an eval test case (developer-facing). */
   enableEvalCapture: z.boolean().optional(),
   /**
-   * route every agent run in this tab over one shared gateway WebSocket
-   * (protocol v2 mux) instead of one socket per run
-   *
-   * @deprecated The Labs toggle is gone; the transport is gated by the
-   * `agent_gateway_mux` feature flag. Still read on the server to pick
-   * message-patch delivery and read-path projection until those decisions move
-   * to the client's declared protocol, which removes this field.
-   */
-  enableGatewayMux: z.boolean().optional(),
-  /**
    * enable Goals: hand the agent a goal it plans into tasks, tracks and delivers
    */
   enableGoals: z.boolean().optional(),
