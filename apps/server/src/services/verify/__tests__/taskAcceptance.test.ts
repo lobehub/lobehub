@@ -159,22 +159,38 @@ describe('attachTaskRunToAcceptance', () => {
   });
 
   it('leaves a round that already belongs to an acceptance alone', async () => {
-    await attachTaskRunToAcceptance(db, 'user-1', {
-      acceptanceId: 'acceptance-2',
-      run: { acceptanceId: 'acceptance-1', id: 'run-1' },
-    });
+    const run = { acceptanceId: 'acceptance-1', id: 'run-1' };
 
+    await expect(
+      attachTaskRunToAcceptance(db, 'user-1', { acceptanceId: 'acceptance-2', run }),
+    ).resolves.toBe(run);
     expect(mocks.attachPolicyRun).not.toHaveBeenCalled();
   });
 
   it('never breaks verification when the aggregate refuses the round', async () => {
     mocks.attachPolicyRun.mockRejectedValue(new Error('This acceptance has already been accepted'));
+    const run = { acceptanceId: null, id: 'run-1' };
+
+    // The caller keeps verifying against the row it already holds.
+    await expect(
+      attachTaskRunToAcceptance(db, 'user-1', { acceptanceId: 'acceptance-1', run }),
+    ).resolves.toBe(run);
+  });
+
+  /**
+   * Regression: attaching onto an acceptance whose newest round is still a draft
+   * folds this run into it and deletes the source row. A caller that kept the id it
+   * passed in would go on claiming and reading a row that no longer exists.
+   */
+  it('hands back the row the round was folded into', async () => {
+    const folded = { acceptanceId: 'acceptance-1', id: 'draft-run' };
+    mocks.attachPolicyRun.mockResolvedValue(folded);
 
     await expect(
       attachTaskRunToAcceptance(db, 'user-1', {
         acceptanceId: 'acceptance-1',
         run: { acceptanceId: null, id: 'run-1' },
       }),
-    ).resolves.toBeUndefined();
+    ).resolves.toBe(folded);
   });
 });

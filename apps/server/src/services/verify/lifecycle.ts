@@ -89,12 +89,12 @@ const executeVerifyLifecycle = async (
   throwOnError = false,
 ): Promise<void> => {
   try {
-    const run = await new VerifyRunModel(db, userId, workspaceId).findByOperation(
+    const confirmedRun = await new VerifyRunModel(db, userId, workspaceId).findByOperation(
       params.operationId,
     );
 
     // Opt-in gate: only runs with a confirmed plan.
-    if (!run?.plan?.length || !run.planConfirmedAt) return;
+    if (!confirmedRun?.plan?.length || !confirmedRun.planConfirmedAt) return;
 
     const op = await new AgentOperationModel(db, userId, workspaceId).findById(params.operationId);
     if (!op) {
@@ -106,20 +106,28 @@ const executeVerifyLifecycle = async (
     // binds this round to the Task's Acceptance (a builder that planned the round
     // itself leaves it unattached) and pins which agent verifies. Non-task runs
     // keep an undefined verifier → builtin fallback.
+    //
+    // A throw is left to the outer catch on purpose. Only a resolved "this Task has
+    // no Acceptance" may fall back to the builtin verifier; swallowing a transient
+    // failure here would hand a Task that pins its own verifier to a different one
+    // and settle it on that verdict.
     const resolvedAcceptance = op.taskId
-      ? await resolveTaskAcceptance(db, userId, op.taskId, workspaceId).catch((error) => {
-          log('could not resolve the acceptance of task %s (non-fatal): %O', op.taskId, error);
-          return undefined;
-        })
+      ? await resolveTaskAcceptance(db, userId, op.taskId, workspaceId)
       : undefined;
-    if (resolvedAcceptance) {
-      await attachTaskRunToAcceptance(
-        db,
-        userId,
-        { acceptanceId: resolvedAcceptance.acceptance.id, run },
-        workspaceId,
-      );
-    }
+    // Attaching can fold this round into a draft round of the acceptance, which
+    // deletes the row we read above, so the rest of the lifecycle follows the row
+    // the attach settled on.
+    const run = resolvedAcceptance
+      ? await attachTaskRunToAcceptance(
+          db,
+          userId,
+          { acceptanceId: resolvedAcceptance.acceptance.id, run: confirmedRun },
+          workspaceId,
+        )
+      : confirmedRun;
+    // A fold merges both plans onto the surviving row; anything else keeps the plan
+    // the opt-in gate above already accepted.
+    const plan = run.plan?.length ? run.plan : confirmedRun.plan;
 
     // The builder now captures Acceptance evidence inside the main run. When it
     // covered the whole plan, the post-run evidence turn has nothing left to
@@ -142,7 +150,7 @@ const executeVerifyLifecycle = async (
         byCheckItem.set(row.checkItemId, types);
       }
 
-      const uncovered = run.plan.filter((item) => {
+      const uncovered = plan.filter((item) => {
         if (item.required === false) return false;
         const captured = byCheckItem.get(item.id);
         if (!captured?.size) return true;
@@ -185,7 +193,7 @@ const executeVerifyLifecycle = async (
               db,
               deliverable: params.deliverable,
               operation: op,
-              plan: run.plan,
+              plan,
               userId,
               workspaceId,
             });
@@ -196,7 +204,7 @@ const executeVerifyLifecycle = async (
               deliverable: params.deliverable,
               goal: params.goal,
               operation: op,
-              plan: run.plan,
+              plan,
               userId,
               workspaceId,
             });

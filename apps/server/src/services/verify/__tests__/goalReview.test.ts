@@ -238,6 +238,23 @@ describe('Goal automatic Acceptance review', () => {
   });
 
   /**
+   * The feedback is persisted on the run and quoted into the escalation, so an
+   * unexpected backend failure must not carry SQL, identifiers or provider
+   * diagnostics out of the server log.
+   */
+  it('keeps an unexpected backend failure out of the feedback', async () => {
+    mocks.rounds.mockRejectedValue(
+      new Error('select "verify_runs"."id" from ... — connection terminated'),
+    );
+
+    const review = await reviewGoalDelivery(db, 'u1', 't1', 'op1');
+
+    expect(review?.status).toBe('errored');
+    expect(review?.feedback).toContain('internal error');
+    expect(review?.feedback).not.toContain('verify_runs');
+  });
+
+  /**
    * Regression: a review that could not run on one check was retried by
    * rerunning the whole review. Every other check was re-asked and its opinion
    * upserted over the first one, so a nondeterministic second pass could turn a

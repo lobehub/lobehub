@@ -14,6 +14,7 @@ const {
   operationFindById,
   finalizeVerifyRun,
   recordHeterogeneousDeliverableEvidence,
+  resolveTaskAcceptance,
   startEvidenceSubmission,
   updateStatus,
 } = vi.hoisted(() => ({
@@ -26,6 +27,7 @@ const {
   findByOperation: vi.fn(),
   operationFindById: vi.fn(),
   recordHeterogeneousDeliverableEvidence: vi.fn(),
+  resolveTaskAcceptance: vi.fn(),
   startEvidenceSubmission: vi.fn(),
   updateStatus: vi.fn(),
 }));
@@ -85,12 +87,7 @@ vi.mock('../evidenceSubmission', () => ({
   recordHeterogeneousDeliverableEvidence,
   startEvidenceSubmission,
 }));
-vi.mock('../taskAcceptance', () => ({
-  attachTaskRunToAcceptance,
-  resolveTaskAcceptance: vi
-    .fn()
-    .mockResolvedValue({ acceptance: { id: 'acceptance-1' }, config: { enabled: true } }),
-}));
+vi.mock('../taskAcceptance', () => ({ attachTaskRunToAcceptance, resolveTaskAcceptance }));
 
 const db = {} as any;
 const params = { deliverable: 'done', goal: 'ship it', operationId: 'op-1' };
@@ -114,9 +111,19 @@ describe('runVerifyOnCompletion — verification claim', () => {
       findByOperation,
       operationFindById,
       recordHeterogeneousDeliverableEvidence,
+      resolveTaskAcceptance,
       startEvidenceSubmission,
       updateStatus,
     ].forEach((m) => m.mockReset());
+    resolveTaskAcceptance.mockResolvedValue({
+      acceptance: { id: 'acceptance-1' },
+      config: { enabled: true },
+    });
+    // The real helper hands back the row the round ended up in; by default that is
+    // the row it was given.
+    attachTaskRunToAcceptance.mockImplementation(
+      async (_db: unknown, _userId: string, { run }: { run: unknown }) => run,
+    );
     findByOperation.mockResolvedValue(confirmedRun);
     operationFindById.mockResolvedValue({ id: 'op-1', model: 'm', provider: 'p', taskId: null });
     claimVerifying.mockResolvedValue(true);
@@ -175,6 +182,59 @@ describe('runVerifyOnCompletion — verification claim', () => {
     await runVerifyOnCompletion(db, 'u1', params);
 
     expect(startEvidenceSubmission).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * Regression: attaching onto an acceptance whose newest round is still a draft
+   * folds this run into it and deletes the source row, moving the operation id
+   * across. Keeping the id we came in with meant claiming and reading a row that
+   * no longer exists, and the completion path returned without judging anything.
+   */
+  it('follows the row the attach settled on when the round is folded', async () => {
+    findByOperation.mockResolvedValue({ ...confirmedRun, acceptanceId: null });
+    attachTaskRunToAcceptance.mockResolvedValue({
+      ...confirmedRun,
+      acceptanceId: 'acceptance-1',
+      id: 'folded-run',
+    });
+    operationFindById.mockResolvedValue({
+      agentId: 'builder',
+      id: 'op-1',
+      model: 'm',
+      provider: 'p',
+      taskId: 'task-1',
+      topicId: 'topic-1',
+    });
+    evidenceListByRun.mockResolvedValue([{ checkItemId: 'c1', type: 'text' }]);
+
+    await runVerifyOnCompletion(db, 'u1', params);
+
+    expect(evidenceListByRun).toHaveBeenCalledWith('folded-run');
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * Regression: swallowing a failed Acceptance resolution left `verifierAgentId`
+   * undefined, which is also how "this Task has no Acceptance" reads. A transient
+   * failure would hand a Task that pins its own verifier to the builtin one and
+   * settle the Task on that verdict, where before the error stopped the run.
+   */
+  it('stops instead of judging with the fallback verifier when resolution fails', async () => {
+    resolveTaskAcceptance.mockRejectedValue(new Error('connection terminated'));
+    operationFindById.mockResolvedValue({
+      agentId: 'builder',
+      id: 'op-1',
+      model: 'm',
+      provider: 'p',
+      taskId: 'task-1',
+      topicId: 'topic-1',
+    });
+    evidenceListByRun.mockResolvedValue([{ checkItemId: 'c1', type: 'text' }]);
+
+    await runVerifyOnCompletion(db, 'u1', params);
+
+    expect(claimVerifying).not.toHaveBeenCalled();
+    expect(execute).not.toHaveBeenCalled();
   });
 
   /**

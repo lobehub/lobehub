@@ -10,6 +10,24 @@ import { mapWithConcurrency } from './concurrency';
 import { resolveGoalReviewModelConfig } from './goalReviewModelConfig';
 import { REVIEW_PREDICT_CONCURRENCY, VerifyReviewPredictorService } from './reviewPredictor';
 
+/**
+ * The startup failures this review can name back to a person. Everything else that
+ * can throw in here — the database, the acceptance and evidence reads, the model
+ * lookup — could carry SQL, identifiers or provider diagnostics, and the feedback
+ * string is persisted on the run and quoted into the escalation, so those stay in
+ * the server log only.
+ */
+const REVIEW_BLOCKERS = {
+  acceptanceMissing: 'Goal Acceptance was not found',
+  noAcceptance: 'Goal delivery has no Acceptance',
+  noRequiredChecks: 'Goal Acceptance has no required checks',
+} as const;
+
+const namedBlocker = (error: unknown): string | undefined => {
+  const message = error instanceof Error ? error.message : undefined;
+  return Object.values(REVIEW_BLOCKERS).find((blocker) => blocker === message);
+};
+
 /** Called under the verify run's task-drive claim, before completing a Goal task. */
 export const reviewGoalDelivery = async (
   db: LobeChatDatabase,
@@ -29,10 +47,10 @@ export const reviewGoalDelivery = async (
     status: 'passed',
   };
   try {
-    if (!run?.acceptanceId) throw new Error('Goal delivery has no Acceptance');
+    if (!run?.acceptanceId) throw new Error(REVIEW_BLOCKERS.noAcceptance);
     const service = new AcceptanceService(db, userId, workspaceId);
     const acceptance = await service.acceptanceModel.findById(run.acceptanceId);
-    if (!acceptance) throw new Error('Goal Acceptance was not found');
+    if (!acceptance) throw new Error(REVIEW_BLOCKERS.acceptanceMissing);
     const { results, runs } = await service.loadRounds(acceptance.id);
     const checks = buildAcceptanceCheckUnion(
       runs.map((round) => ({
@@ -40,7 +58,7 @@ export const reviewGoalDelivery = async (
         run: round,
       })),
     ).filter((check) => check.required);
-    if (!checks.length) throw new Error('Goal Acceptance has no required checks');
+    if (!checks.length) throw new Error(REVIEW_BLOCKERS.noRequiredChecks);
 
     const evidenceModel = new VerifyEvidenceModel(db, userId, workspaceId);
     const evidence = await Promise.all(
@@ -140,9 +158,10 @@ export const reviewGoalDelivery = async (
     // the person who has to unblock the Goal. A single canned sentence sent every
     // failure — a missing Acceptance link included — to look like an unconfigured
     // review model, which is a different problem with a different fix.
-    review.feedback = `Automatic Acceptance review could not complete: ${
-      error instanceof Error ? error.message : String(error)
-    }. Resolve the cause and retry the review before advancing.`;
+    const blocker = namedBlocker(error);
+    review.feedback = blocker
+      ? `Automatic Acceptance review could not complete: ${blocker}. Resolve the cause and retry the review before advancing.`
+      : 'Automatic Acceptance review could not complete (internal error); the server log holds the reason. Retry the review before advancing.';
   }
   if (run) {
     // Preserve the task-drive claim and the run's existing policy/provenance.

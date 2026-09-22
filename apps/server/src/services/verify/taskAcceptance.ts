@@ -118,21 +118,30 @@ export const resolveTaskAcceptance = async (
  *
  * Idempotent and best-effort: a round that already belongs to an acceptance is left
  * alone, and a refusal (already accepted / closed aggregate) must never break verify.
+ *
+ * Returns the row the round now lives in, which the caller must keep using: attaching
+ * onto an acceptance whose newest round is still a draft FOLDS this run into that
+ * draft and deletes the source row, moving its operation id across. A caller that
+ * kept the id it came in with would go on claiming and reading a row that no longer
+ * exists.
  */
-export const attachTaskRunToAcceptance = async (
+export const attachTaskRunToAcceptance = async <
+  T extends Pick<VerifyRunItem, 'acceptanceId' | 'id'>,
+>(
   db: LobeChatDatabase,
   userId: string,
-  params: { acceptanceId: string; run: Pick<VerifyRunItem, 'acceptanceId' | 'id'> },
+  params: { acceptanceId: string; run: T },
   workspaceId?: string,
-): Promise<void> => {
-  if (params.run.acceptanceId) return;
+): Promise<T | VerifyRunItem> => {
+  if (params.run.acceptanceId) return params.run;
 
   try {
-    await new AcceptanceService(db, userId, workspaceId).attachPolicyRun(
+    const attached = await new AcceptanceService(db, userId, workspaceId).attachPolicyRun(
       params.run.id,
       params.acceptanceId,
     );
     log('attached run %s to task acceptance %s', params.run.id, params.acceptanceId);
+    return attached;
   } catch (error) {
     log(
       'could not attach run %s to acceptance %s (non-fatal): %O',
@@ -140,5 +149,6 @@ export const attachTaskRunToAcceptance = async (
       params.acceptanceId,
       error,
     );
+    return params.run;
   }
 };

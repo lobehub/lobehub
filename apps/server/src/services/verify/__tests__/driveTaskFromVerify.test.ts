@@ -250,7 +250,9 @@ describe('driveTaskFromVerify', () => {
   beforeEach(() => {
     vi.mocked(reviewGoalDelivery).mockReset();
     vi.mocked(resolveTaskAcceptance).mockReset().mockResolvedValue(undefined);
-    vi.mocked(attachTaskRunToAcceptance).mockReset().mockResolvedValue(undefined);
+    vi.mocked(attachTaskRunToAcceptance)
+      .mockReset()
+      .mockImplementation(async (_db, _userId, params) => params.run);
     vi.mocked(scheduleGoalAdvance).mockClear();
     goalFindByTask.mockReset();
     [
