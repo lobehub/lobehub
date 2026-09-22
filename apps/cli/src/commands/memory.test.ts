@@ -91,6 +91,61 @@ describe('memory command', () => {
       expect(consoleSpy).toHaveBeenCalledWith(JSON.stringify(items, null, 2));
     });
 
+    it.each([false, true])('preserves a successful empty list (json=%s)', async (json) => {
+      mockTrpcClient.userMemory.getIdentities.query.mockResolvedValue([]);
+      await createProgram().parseAsync([
+        'node',
+        'test',
+        'memory',
+        'list',
+        'identity',
+        ...(json ? ['--json'] : []),
+      ]);
+      expect(consoleSpy).toHaveBeenCalledExactlyOnceWith(
+        json ? '[]' : 'No identity memories found.',
+      );
+    });
+
+    it.each([false, true])('propagates a single-category failure (json=%s)', async (json) => {
+      const error = new Error('Identity request failed');
+      mockTrpcClient.userMemory.getIdentities.query.mockRejectedValue(error);
+      await expect(
+        createProgram().parseAsync([
+          'node',
+          'test',
+          'memory',
+          'list',
+          'identity',
+          ...(json ? ['--json'] : []),
+        ]),
+      ).rejects.toBe(error);
+      expect(consoleSpy).not.toHaveBeenCalled();
+    });
+
+    it.each([false, true])(
+      'does not present partial categories as complete (json=%s)',
+      async (json) => {
+        const error = new Error('Activity request failed');
+        mockTrpcClient.userMemory.getIdentities.query.mockResolvedValue([
+          { description: 'Still present', id: 'existing-memory', type: 'personal' },
+        ]);
+        mockTrpcClient.userMemory.getActivities.query.mockRejectedValue(error);
+        mockTrpcClient.userMemory.getContexts.query.mockResolvedValue([]);
+        mockTrpcClient.userMemory.getExperiences.query.mockResolvedValue([]);
+        mockTrpcClient.userMemory.getPreferences.query.mockResolvedValue([]);
+        await expect(
+          createProgram().parseAsync([
+            'node',
+            'test',
+            'memory',
+            'list',
+            ...(json ? ['--json'] : []),
+          ]),
+        ).rejects.toBe(error);
+        expect(consoleSpy).not.toHaveBeenCalled();
+      },
+    );
+
     it('should reject invalid category', async () => {
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'memory', 'list', 'invalid']);
