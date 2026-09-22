@@ -426,7 +426,15 @@ jobs:
     # 手动触发时可选择跳过
     if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_s3_upload) }}
     steps:
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
+          private-key: ${{ secrets.LOBEHUB_BOT_APP_PRIVATE_KEY }}
+
       - uses: actions/checkout@v7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
       - uses: ./.github/actions/desktop-publish-s3
         with:
           channel: stable
