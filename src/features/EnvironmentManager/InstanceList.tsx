@@ -166,21 +166,41 @@ const InstanceList = memo<InstanceListProps>(
              form now says how to leave it, which a bare row never did. */
           <Flexbox className={styles.createCard} gap={12}>
             <Text weight={500}>{t('environments.instances.add')}</Text>
-            <Input
-              autoFocus
-              placeholder={t('environments.instances.namePlaceholder')}
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-            />
-            <Input
-              placeholder={t('environments.instances.directoryPlaceholder')}
-              value={workingDirectory}
-              onChange={(event) => setWorkingDirectory(event.target.value)}
-            />
-            <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
-              <Text fontSize={12} style={{ minWidth: 0 }} type={'secondary'}>
+
+            {/* Labelled, not just placeholded. Two bare boxes reading "副本名称"
+                and "reports/q3" name neither field and vanish the moment
+                anyone types, leaving a form nobody can check their own answer
+                against. */}
+            <Flexbox gap={6}>
+              <Text fontSize={12} type={'secondary'} weight={500}>
+                {t('environments.nameLabel')}
+              </Text>
+              <Input
+                autoFocus
+                placeholder={t('environments.instances.namePlaceholder')}
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+              />
+            </Flexbox>
+
+            <Flexbox gap={6}>
+              <Text fontSize={12} type={'secondary'} weight={500}>
+                {t('environments.instances.directoryLabel')}
+              </Text>
+              {/* Beside the field it explains, rather than in the footer, where
+                  it was squeezed into a column five lines tall next to buttons
+                  that had room to spare. */}
+              <Text fontSize={12} type={'secondary'}>
                 {t('environments.instances.directoryHint')}
               </Text>
+              <Input
+                placeholder={t('environments.instances.directoryPlaceholder')}
+                value={workingDirectory}
+                onChange={(event) => setWorkingDirectory(event.target.value)}
+              />
+            </Flexbox>
+
+            <Flexbox horizontal align={'center'} gap={12} justify={'flex-end'}>
               <Flexbox horizontal gap={8} style={{ flex: 'none' }}>
                 <Button size={'small'} onClick={() => onAddingChange(false)}>
                   {t('environments.cancel')}
