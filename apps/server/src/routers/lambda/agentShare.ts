@@ -9,6 +9,7 @@ import { getAgentShareMonthlySpend } from '@/business/server/agent-share/spendGa
 import { withRbacPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentShareModel } from '@/database/models/agentShare';
+import { AgentShareProfileModel } from '@/database/models/agentShareProfile';
 import { FileModel } from '@/database/models/file';
 import { RbacModel } from '@/database/models/rbac';
 import { TopicModel } from '@/database/models/topic';
@@ -119,6 +120,7 @@ const agentShareProcedure = wsCompatProcedure.use(serverDatabase).use(async (opt
               })
           : undefined,
       }),
+      agentShareProfileModel: new AgentShareProfileModel(ctx.serverDB, ctx.userId),
     },
   });
 });
@@ -299,6 +301,28 @@ export const agentShareRouter = router({
         ),
       ),
     ),
+
+  /** Owner-only candidate Works for the share profile editor. */
+  listEligibleWorks: agentShareProcedure
+    .input(
+      agentIdInput.extend({
+        includeWorkIds: z
+          .array(z.string().trim().min(1))
+          .max(100)
+          .refine((ids) => new Set(ids).size === ids.length, 'Duplicate selected Work')
+          .optional(),
+        limit: z.number().int().positive().max(50).optional(),
+        offset: z.number().int().nonnegative().max(10000).optional(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      requireShare(await ctx.agentShareModel.getByAgentId(input.agentId));
+      return ctx.agentShareProfileModel.listEligibleWorks(input.agentId, {
+        includeWorkIds: input.includeWorkIds ?? [],
+        limit: input.limit,
+        offset: input.offset,
+      });
+    }),
 
   updateShareConfig: agentShareProcedure
     .input(

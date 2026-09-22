@@ -4,6 +4,7 @@ import {
   and,
   avg,
   count,
+  desc,
   eq,
   exists,
   inArray,
@@ -176,6 +177,58 @@ export class AgentShareProfileModel {
       const work = byId.get(id);
       return work ? [work] : [];
     });
+  };
+
+  /**
+   * Candidate Works for the creator's share profile editor. This deliberately
+   * uses the same provenance query as featured reads and validation, so the
+   * settings surface cannot accidentally offer visitor or mixed-history Works.
+   *
+   * Selected ids are returned alongside the current page. A creator can keep
+   * an older Work selected after it falls outside the newest page, and can
+   * still see and withdraw it without making the editor treat the first page
+   * as the complete candidate pool.
+   */
+  listEligibleWorks = async (
+    agentId: string,
+    {
+      includeWorkIds = [],
+      limit = 30,
+      offset = 0,
+    }: { includeWorkIds?: string[]; limit?: number; offset?: number } = {},
+  ): Promise<{ hasMore: boolean; items: SharedAgentWork[] }> => {
+    const rows = await this.eligibleWorks(agentId)
+      .orderBy(desc(works.updatedAt), desc(works.id))
+      .limit(limit + 1)
+      .offset(offset);
+    const hasMore = rows.length > limit;
+    const pageRows = hasMore ? rows.slice(0, limit) : rows;
+    const selectedRows =
+      includeWorkIds.length > 0 ? await this.eligibleWorks(agentId, includeWorkIds) : [];
+    const allRows = [...selectedRows, ...pageRows];
+    const costs = await getTotalCostByWorkIds(
+      { db: this.db, userId: this.userId },
+      allRows.map(({ id }) => id),
+    );
+    const byId = new Map(
+      allRows.map(({ deliveredAt: _deliveredAt, ...work }) => [
+        work.id,
+        {
+          ...work,
+          totalCost: costs.get(work.id) ?? null,
+          url: sanitizeExternalUrl(work.url) ?? null,
+        },
+      ]),
+    );
+    const orderedIds = [...includeWorkIds, ...pageRows.map(({ id }) => id)];
+
+    return {
+      hasMore,
+      items: [...new Set(orderedIds)].flatMap((id) => {
+        const work = byId.get(id);
+        return work ? [work] : [];
+      }),
+    };
   };
 
   getStats = async (agentId: string): Promise<SharedAgentDeliveryStats> => {

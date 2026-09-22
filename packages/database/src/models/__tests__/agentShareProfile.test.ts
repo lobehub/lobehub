@@ -136,6 +136,41 @@ describe('AgentShareProfileModel', () => {
     expect(await model.getStats(agent)).toEqual(before);
   });
 
+  it('pages creator candidates and keeps selected Works available outside the page', async () => {
+    await addWork('newest');
+    await addWork('middle');
+    await addWork('oldest');
+    await db
+      .update(works)
+      .set({ updatedAt: new Date('2026-01-03T00:00:00Z') })
+      .where(eq(works.id, 'newest'));
+    await db
+      .update(works)
+      .set({ updatedAt: new Date('2026-01-02T00:00:00Z') })
+      .where(eq(works.id, 'middle'));
+    await db
+      .update(works)
+      .set({ updatedAt: new Date('2026-01-01T00:00:00Z') })
+      .where(eq(works.id, 'oldest'));
+    await addWork('visitor', { originTopicId: visitorTopic }, visitorTopic);
+
+    const firstPage = await model.listEligibleWorks(agent, { limit: 1, offset: 0 });
+    expect(firstPage.hasMore).toBe(true);
+    expect(firstPage.items.map(({ id }) => id)).toEqual(['newest']);
+
+    const secondPageWithSelected = await model.listEligibleWorks(agent, {
+      includeWorkIds: ['oldest', 'visitor'],
+      limit: 1,
+      offset: 1,
+    });
+    expect(secondPageWithSelected.hasMore).toBe(true);
+    expect(secondPageWithSelected.items.map(({ id }) => id)).toEqual(['oldest', 'middle']);
+
+    expect(
+      (await new AgentShareProfileModel(db, 'other-owner').listEligibleWorks(agent)).items,
+    ).toEqual([]);
+  });
+
   it('rejects visitor, foreign agent/user/workspace, deleted and unknown provenance', async () => {
     await addWork('valid');
     await addWork('visitor', { originTopicId: visitorTopic }, visitorTopic);
