@@ -532,6 +532,9 @@ const exec = async (options: ExecOptions): Promise<void> => {
   const agentType = options.type;
   let sink: TrpcIngestSink | undefined;
   let serverIngester: CoalescingBatchIngester | undefined;
+  // Set for the duration of each spawn attempt (see `runOneAgent`): stops the
+  // running agent when the server tells us its output is being discarded.
+  let abortForIngestLoss: ((error: Error) => void) | undefined;
   // Uploader for tool_result images (CC `Read` on an image file). Reuses the
   // CLI's authenticated lambda client so the persisted event carries a
   // `{ fileId, url }` reference instead of heavy base64. Only wired in
@@ -548,7 +551,15 @@ const exec = async (options: ExecOptions): Promise<void> => {
       options.topic!,
       process.env.LOBEHUB_ASSISTANT_MESSAGE_ID,
     );
-    serverIngester = new CoalescingBatchIngester(sink);
+    serverIngester = new CoalescingBatchIngester(sink, undefined, (error) => {
+      // The server has stopped storing this run's events (its topic marker was
+      // settled underneath it, or the operation is already terminal) and every
+      // later batch would be discarded the same way. Waiting for `drain()` to
+      // report that means the agent keeps working — for minutes, on a long task
+      // — to produce output nobody will ever see. Stop it now; the drain below
+      // still raises the same error, so the finish leg reports a failed run.
+      abortForIngestLoss?.(error);
+    });
 
     uploadImage = createFileStoreImageUploader(async () => {
       const lambda = await getTrpcClient();
@@ -815,9 +826,22 @@ const exec = async (options: ExecOptions): Promise<void> => {
     const removeSignalListeners = () => {
       process.off('SIGINT', onSigint);
       process.off('SIGTERM', onSigterm);
+      abortForIngestLoss = undefined;
     };
     process.on('SIGINT', onSigint);
     process.on('SIGTERM', onSigterm);
+
+    // Deliberately NOT `interrupted`: the user did not stop this run, so the
+    // finish leg must report `error` (with the ingest failure as its detail)
+    // rather than `cancelled`, which would leave the operation running on the
+    // server with nothing left to drive it.
+    let ingestLoss: Error | undefined;
+    abortForIngestLoss = (error) => {
+      if (ingestLoss) return;
+      ingestLoss = error;
+      log.error('Server is discarding this run output, stopping the agent:', error.message);
+      applyCancellation('SIGTERM');
+    };
 
     // One raw-dump file pair per spawn attempt (the resume retry is a second
     // attempt). The stdout tee runs inside `spawnAgent` before the adapter.
@@ -846,7 +870,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
       }
       if (cancellationSignal) {
         return {
-          cancelled: true,
+          cancelled: !ingestLoss,
           code: null,
           ingestError: false,
           resumeNotFound: false,
