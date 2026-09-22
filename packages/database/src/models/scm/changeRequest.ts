@@ -15,25 +15,37 @@ import type { ScmChangeRequestItem } from '../../schemas';
 import { scmChangeRequests } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 
-/** Conclusions that make the rollup a failure. Cancelled and skipped runs are neutral. */
+/**
+ * Conclusions worth waking an agent over: something broke and there is
+ * something to fix. A cancelled or stale run is not one of them — usually a
+ * human superseded it — but it is not a pass either, which is why the two
+ * sets below are separate rather than complements.
+ */
 const FAILING_CONCLUSIONS = new Set(['action_required', 'failure', 'startup_failure', 'timed_out']);
+
+/** The only conclusions that let the rollup read as green. */
+const GREEN_CONCLUSIONS = new Set(['neutral', 'skipped', 'success']);
 
 /**
  * Fold a set of checks into one CI status. Pending wins over everything
- * because the user cannot act on a partial result; failure wins over
- * success; an empty set is `unknown` rather than `success` so "no CI
- * configured" never reads as a green light.
+ * because the user cannot act on a partial result, then failure, then
+ * `unknown` — a commit whose workflow was cancelled has not passed, and
+ * saying `success` there would hand a green light to merge automation. An
+ * empty set is `unknown` too, so "no CI configured" never reads as green.
  */
 export const rollupCiStatus = (checks: ScmCheck[] | null | undefined): ScmCiStatus => {
   if (!checks || checks.length === 0) return 'unknown';
 
   let failed = false;
+  let inconclusive = false;
   for (const check of checks) {
     if (check.status !== 'completed') return 'pending';
     if (check.conclusion && FAILING_CONCLUSIONS.has(check.conclusion)) failed = true;
+    else if (!check.conclusion || !GREEN_CONCLUSIONS.has(check.conclusion)) inconclusive = true;
   }
 
-  return failed ? 'failure' : 'success';
+  if (failed) return 'failure';
+  return inconclusive ? 'unknown' : 'success';
 };
 
 /** Whether one check's conclusion counts as a failure in the rollup. */
@@ -53,17 +65,33 @@ const reportedAt = (check: ScmCheck): number => {
   return check.status === 'completed' ? 1 : 0;
 };
 
+/**
+ * What the check *is*, as opposed to which attempt reported it. Re-running a
+ * failed Actions job mints a new `check_run:<id>`, so keying the set by the
+ * external id alone would keep the failed attempt next to its successful
+ * replacement and pin the rollup to `failure` forever. The provider's own
+ * identity for a check is its name within its namespace — `check_run` and
+ * the legacy status API are kept apart so two providers reporting the same
+ * name do not collapse into one.
+ */
+const checkIdentity = (check: ScmCheck): string => {
+  const [namespace] = check.externalId.split(':');
+  const name = check.name?.trim();
+  return name ? `${namespace}:name:${name}` : check.externalId;
+};
+
 export const mergeChecks = (current: ScmCheck[] | null | undefined, incoming: ScmCheck[]) => {
-  const byId = new Map<string, ScmCheck>();
-  for (const check of current ?? []) byId.set(check.externalId, check);
+  const byIdentity = new Map<string, ScmCheck>();
+  for (const check of current ?? []) byIdentity.set(checkIdentity(check), check);
   for (const check of incoming) {
-    const stored = byId.get(check.externalId);
+    const key = checkIdentity(check);
+    const stored = byIdentity.get(key);
     // A delayed pending event must not regress a completed check, and a
     // delayed success must not hide a newer failure.
     if (stored && reportedAt(stored) > reportedAt(check)) continue;
-    byId.set(check.externalId, check);
+    byIdentity.set(key, check);
   }
-  return [...byId.values()];
+  return [...byIdentity.values()];
 };
 
 /**
@@ -239,6 +267,8 @@ export class ScmChangeRequestModel {
           ...existing?.metadata,
           ...params.metadata,
           ...(params.eventAt ? { lastProviderEventAt: params.eventAt.toISOString() } : {}),
+          // Once adopted (or superseded by a newer head) the bucket is spent.
+          ...(headChanged ? { pendingChecks: undefined } : {}),
         },
         repoExternalId: params.repoExternalId ?? existing?.repoExternalId ?? null,
         state: params.state,
@@ -263,7 +293,17 @@ export class ScmChangeRequestModel {
         : {};
 
       const ciValues = headChanged
-        ? { checks: null, ciHeadSha: params.headSha ?? null, ciStatus: null }
+        ? (() => {
+            // Results reported before this push became the head belong to
+            // the new commit, not to the one being replaced.
+            const held = existing?.metadata?.pendingChecks;
+            const adopted = held && held.sha === params.headSha ? held.checks : null;
+            return {
+              checks: adopted,
+              ciHeadSha: params.headSha ?? null,
+              ciStatus: adopted ? rollupCiStatus(adopted) : null,
+            };
+          })()
         : {};
 
       const eventValues =
@@ -367,11 +407,27 @@ export class ScmChangeRequestModel {
       if (!existing) return null;
 
       if (existing.headSha && existing.headSha !== params.headSha) {
+        // Not necessarily stale: GitHub can report a job for a commit before
+        // the `synchronize` that makes it the head. Hold the results against
+        // that commit — `upsert` adopts them when the head catches up, and a
+        // newer commit simply replaces the bucket.
+        const held = existing.metadata?.pendingChecks;
+        const pendingChecks = {
+          checks:
+            held?.sha === params.headSha ? mergeChecks(held.checks, params.checks) : params.checks,
+          sha: params.headSha,
+        };
+        const [row] = await tx
+          .update(scmChangeRequests)
+          .set({ metadata: { ...existing.metadata, pendingChecks }, updatedAt: new Date() })
+          .where(eq(scmChangeRequests.id, id))
+          .returning();
+
         return {
           applied: false,
           ciStatus: existing.ciStatus,
           previousCiStatus: existing.ciStatus,
-          row: existing,
+          row,
         };
       }
 

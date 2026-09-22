@@ -112,6 +112,13 @@ export interface ScmChangeRequestMetadata {
   /** Provider's mergeability verdict, when it exposes one (`MERGEABLE`, `CONFLICTING`, …). */
   mergeable?: string;
   /**
+   * Check results for a commit that is not the head yet. GitHub can report
+   * a job before the `synchronize` that moves the pull request onto its
+   * commit; holding them here keeps the push from landing with an empty CI
+   * rollup when that job never reports again.
+   */
+  pendingChecks?: { checks: ScmCheck[]; sha: string };
+  /**
    * Latest effective verdict per reviewer, keyed by provider user id. The
    * change request's `reviewDecision` is the rollup of these: one
    * outstanding "changes requested" outweighs any number of approvals,

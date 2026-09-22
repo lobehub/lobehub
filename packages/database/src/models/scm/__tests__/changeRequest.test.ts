@@ -41,15 +41,62 @@ afterEach(async () => {
 });
 
 describe('rollupCiStatus', () => {
+  it('never calls a cancelled or unrecognized conclusion green', () => {
+    // A cancelled workflow has not passed. Saying `success` here would hand
+    // merge automation a green light it never earned; `failure` would be a
+    // lie in the other direction, since nothing broke.
+    expect(rollupCiStatus([check('Test', 'cancelled')])).toBe('unknown');
+    expect(rollupCiStatus([check('Test', 'stale')])).toBe('unknown');
+    expect(rollupCiStatus([check('Test', undefined)])).toBe('unknown');
+    expect(rollupCiStatus([check('Lint', 'success'), check('Test', 'cancelled')])).toBe('unknown');
+
+    // The green set is exactly success / neutral / skipped.
+    expect(
+      rollupCiStatus([check('a', 'success'), check('b', 'neutral'), check('c', 'skipped')]),
+    ).toBe('success');
+    // Something actually broken still outranks the inconclusive ones.
+    expect(rollupCiStatus([check('Test', 'cancelled'), check('Build', 'failure')])).toBe('failure');
+  });
+
+  it('replaces a failed attempt when the job is rerun under a new id', () => {
+    // A rerun mints a new `check_run:<id>`; keeping both would pin the
+    // rollup to failure forever.
+    const failed = {
+      conclusion: 'failure',
+      externalId: 'check_run:1',
+      name: 'Test',
+      reportedAt: '2026-09-20T06:00:00Z',
+      status: 'completed',
+    };
+    const rerun = {
+      conclusion: 'success',
+      externalId: 'check_run:2',
+      name: 'Test',
+      reportedAt: '2026-09-20T06:30:00Z',
+      status: 'completed',
+    };
+
+    const merged = mergeChecks([failed], [rerun]);
+    expect(merged).toEqual([rerun]);
+    expect(rollupCiStatus(merged)).toBe('success');
+
+    // Two providers reporting the same name stay apart.
+    const legacy = {
+      conclusion: 'failure',
+      externalId: 'status:Test',
+      name: 'Test',
+      status: 'completed',
+    };
+    expect(mergeChecks([rerun], [legacy])).toHaveLength(2);
+  });
+
   it('is unknown with no checks, pending while any runs, failure over success', () => {
     expect(rollupCiStatus([])).toBe('unknown');
     expect(rollupCiStatus([check('a', 'success'), check('b', undefined, 'in_progress')])).toBe(
       'pending',
     );
     expect(rollupCiStatus([check('a', 'success'), check('b', 'failure')])).toBe('failure');
-    expect(
-      rollupCiStatus([check('a', 'success'), check('b', 'skipped'), check('c', 'cancelled')]),
-    ).toBe('success');
+    expect(rollupCiStatus([check('a', 'success'), check('b', 'skipped')])).toBe('success');
   });
 
   it('keeps the newer report when deliveries for one check arrive out of order', () => {
@@ -134,6 +181,30 @@ describe('ScmChangeRequestModel', () => {
     expect(updated.ciStatus).toBeNull();
     expect(updated.checks).toBeNull();
     expect(updated.lastEventKind).toBe('synchronized');
+  });
+
+  it('holds checks reported before the push that makes their commit the head', async () => {
+    const row = await ScmChangeRequestModel.upsert(serverDB, snapshot);
+
+    // GitHub reported the job for sha2 before the `synchronize` landed.
+    const early = await ScmChangeRequestModel.applyChecks(serverDB, row.id, {
+      checks: [check('Test', 'success')],
+      headSha: sha2,
+    });
+    expect(early?.applied).toBe(false);
+    expect(early?.row.ciStatus).toBeNull();
+    expect(early?.row.metadata.pendingChecks?.sha).toBe(sha2);
+
+    // The push arrives: the held results are this commit's CI, not leftovers.
+    const pushed = await ScmChangeRequestModel.upsert(serverDB, {
+      ...snapshot,
+      eventKind: 'synchronized',
+      headSha: sha2,
+    });
+    expect(pushed.ciHeadSha).toBe(sha2);
+    expect(pushed.ciStatus).toBe('success');
+    expect(pushed.checks).toHaveLength(1);
+    expect(pushed.metadata.pendingChecks).toBeUndefined();
   });
 
   it('drops check results for a commit that is no longer the head', async () => {

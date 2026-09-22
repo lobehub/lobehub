@@ -48,7 +48,17 @@ export const githubInstall = async (c: Context): Promise<Response> => {
     return c.json({ error: 'installing into this workspace needs the member role' }, 403);
   }
 
-  const state = await issueScmInstallState({ lobeUserId: userId, returnTo, workspaceId });
+  // The install hand-off parks the caller's identity in Redis; a deployment
+  // that configured the App but no Redis would otherwise 500 here.
+  let state: string;
+  try {
+    state = await issueScmInstallState({ lobeUserId: userId, returnTo, workspaceId });
+  } catch (error) {
+    log('cannot issue install state: %O', error);
+    return new Response('Connecting GitHub needs Redis (REDIS_URL) on this LobeHub deployment.', {
+      status: 503,
+    });
+  }
   const installUrl = buildGitHubInstallUrl(state);
   if (!installUrl) return new Response('GitHub App slug is not configured.', { status: 503 });
 
