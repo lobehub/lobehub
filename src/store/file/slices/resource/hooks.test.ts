@@ -108,17 +108,17 @@ describe('patchDestinationList', () => {
       patchDestinationList({ hasMore: false, items: [a, z] }, named, {
         sortType: 'asc' as any,
         sorter: 'name',
-      }).items.map((item: any) => item.id),
+      })!.items.map((item: any) => item.id),
     ).toEqual(['a', 'moved', 'z']);
     expect(
       patchDestinationList({ hasMore: false, items: [z, a] }, named, {
         sortType: 'desc' as any,
         sorter: 'name',
-      }).items.map((item: any) => item.id),
+      })!.items.map((item: any) => item.id),
     ).toEqual(['z', 'moved', 'a']);
     // A sorter without a sortType is newest-first on the server too.
     expect(
-      patchDestinationList({ hasMore: false, items: [z, a] }, named, { sorter: 'name' }).items.map(
+      patchDestinationList({ hasMore: false, items: [z, a] }, named, { sorter: 'name' })!.items.map(
         (item: any) => item.id,
       ),
     ).toEqual(['moved', 'z', 'a']);
