@@ -45,9 +45,16 @@ const noopLogger: GatewayClientLogger = {
   warn: () => {},
 };
 
+/**
+ * The one shape of `fetch` this host uses. Narrower than `typeof fetch` on
+ * purpose: the global is overloaded, and forwarding those overloads through a
+ * wrapper or `bind` doesn't type-check under every tsconfig in the monorepo.
+ */
+export type TunnelFetch = (url: string, init: RequestInit) => Promise<Response>;
+
 export interface DeviceTunnelHostOptions {
   /** Injectable for tests; defaults to global `fetch`. */
-  fetchImpl?: typeof fetch;
+  fetchImpl?: TunnelFetch;
   logger?: GatewayClientLogger;
   /** Tunnels served at once. Extra opens are rejected rather than queued. */
   maxConcurrent?: number;
@@ -88,13 +95,13 @@ const describeError = (error: unknown): string => {
 
 export class DeviceTunnelHost {
   private connections = new Map<string, TunnelConnection>();
-  private fetchImpl: typeof fetch;
+  private fetchImpl: TunnelFetch;
   private logger: GatewayClientLogger;
   private maxConcurrent: number;
   private send: (frame: TunnelClientFrame) => void;
 
   constructor(options: DeviceTunnelHostOptions) {
-    this.fetchImpl = options.fetchImpl ?? ((...args) => globalThis.fetch(...args));
+    this.fetchImpl = options.fetchImpl ?? ((url, init) => globalThis.fetch(url, init));
     this.logger = options.logger ?? noopLogger;
     this.maxConcurrent = options.maxConcurrent ?? 32;
     this.send = options.send;

@@ -5,6 +5,7 @@ import { gzipSync } from 'node:zlib';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import type { TunnelFetch } from './tunnel';
 import { DeviceTunnelHost } from './tunnel';
 import type { TunnelClientFrame, TunnelOpenMessage } from './types';
 import { TUNNEL_CHUNK_SIZE, TUNNEL_FLOW_WINDOW } from './types';
@@ -255,10 +256,10 @@ describe('DeviceTunnelHost', () => {
     const host = new DeviceTunnelHost({
       // Stands in for an origin that accepts the connection but reads the body
       // lazily; the response head never arrives.
-      fetchImpl: (async (_url: unknown, init: { body?: ReadableStream<Uint8Array> }) => {
-        uploaded = init.body;
+      fetchImpl: ((_url, init) => {
+        uploaded = init.body as ReadableStream<Uint8Array>;
         return new Promise<Response>(() => {});
-      }) as unknown as typeof fetch,
+      }) as TunnelFetch,
       send: (frame) => frames.push(frame),
     });
     host.handleFrame(
@@ -295,10 +296,10 @@ describe('DeviceTunnelHost', () => {
   it('brackets an IPv6 loopback target when building the URL', async () => {
     const urls: string[] = [];
     const host = new DeviceTunnelHost({
-      fetchImpl: (async (url: unknown) => {
-        urls.push(String(url));
+      fetchImpl: (async (url) => {
+        urls.push(url);
         return new Response('ok', { status: 200 });
-      }) as unknown as typeof fetch,
+      }) as TunnelFetch,
       send: () => {},
     });
     host.handleFrame(openFrame('c1', '/thing', { target: { host: '::1', port: 5173 } }));
