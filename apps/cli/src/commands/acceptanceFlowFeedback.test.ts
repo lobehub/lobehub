@@ -6,7 +6,10 @@ import { registerAcceptanceCommands } from './verifyAcceptance';
 
 const { getBundle, outputJson } = vi.hoisted(() => ({ getBundle: vi.fn(), outputJson: vi.fn() }));
 vi.mock('../api/client', () => ({
-  getTrpcClient: async () => ({ acceptance: { getBundle: { query: getBundle } } }),
+  getTrpcClient: async () => ({
+    acceptance: { getBundle: { query: getBundle } },
+    acceptanceComment: { list: { query: async () => ({ items: [] }) } },
+  }),
 }));
 vi.mock('../utils/format', async (original) => ({
   ...(await original<typeof Format>()),
