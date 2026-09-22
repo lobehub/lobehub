@@ -204,6 +204,7 @@ const normalizePullRequestReviewComment = (payload: Json): ScmInboundEvent => {
 };
 
 const checkFromRun = (run: Json): ScmCheck => ({
+  appId: str(run.app?.id) ?? undefined,
   completedAt: str(run.completed_at) ?? undefined,
   conclusion: str(run.conclusion) ?? undefined,
   externalId: `check_run:${run.id}`,

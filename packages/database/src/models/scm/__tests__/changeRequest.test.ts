@@ -58,10 +58,36 @@ describe('rollupCiStatus', () => {
     expect(rollupCiStatus([check('Test', 'cancelled'), check('Build', 'failure')])).toBe('failure');
   });
 
+  it('keeps two apps reporting the same check name apart', () => {
+    // GitHub dedupes "latest per name" *within an app*; collapsing across
+    // apps would let one app's pass erase another app's failure.
+    const failing = {
+      appId: '1',
+      conclusion: 'failure',
+      externalId: 'check_run:10',
+      name: 'Test',
+      reportedAt: '2026-09-20T06:00:00Z',
+      status: 'completed',
+    };
+    const passing = {
+      appId: '2',
+      conclusion: 'success',
+      externalId: 'check_run:11',
+      name: 'Test',
+      reportedAt: '2026-09-20T06:10:00Z',
+      status: 'completed',
+    };
+
+    const merged = mergeChecks([failing], [passing]);
+    expect(merged).toHaveLength(2);
+    expect(rollupCiStatus(merged)).toBe('failure');
+  });
+
   it('replaces a failed attempt when the job is rerun under a new id', () => {
     // A rerun mints a new `check_run:<id>`; keeping both would pin the
     // rollup to failure forever.
     const failed = {
+      appId: '1',
       conclusion: 'failure',
       externalId: 'check_run:1',
       name: 'Test',
@@ -69,6 +95,7 @@ describe('rollupCiStatus', () => {
       status: 'completed',
     };
     const rerun = {
+      appId: '1',
       conclusion: 'success',
       externalId: 'check_run:2',
       name: 'Test',
@@ -228,6 +255,34 @@ describe('ScmChangeRequestModel', () => {
     });
     expect(done).toMatchObject({ applied: true, ciStatus: 'success', previousCiStatus: 'pending' });
     expect(done?.row.checks).toHaveLength(2);
+  });
+
+  it('follows a repository rename instead of splitting the change request', async () => {
+    const created = await ScmChangeRequestModel.upsert(serverDB, {
+      ...snapshot,
+      externalId: 'PR_node_1',
+      eventKind: 'opened',
+    });
+
+    // The repository is renamed; every later delivery carries the new name.
+    const renamed = await ScmChangeRequestModel.upsert(serverDB, {
+      ...snapshot,
+      eventKind: 'synchronized',
+      externalId: 'PR_node_1',
+      repoFullName: 'lobehub/lobehub-renamed',
+      url: 'https://github.com/lobehub/lobehub-renamed/pull/7',
+    });
+
+    expect(renamed.id).toBe(created.id);
+    expect(renamed.repoFullName).toBe('lobehub/lobehub-renamed');
+    expect(
+      await ScmChangeRequestModel.findByIdentity(
+        serverDB,
+        'github',
+        'lobehub/lobehub-renamed',
+        snapshot.number,
+      ),
+    ).toMatchObject({ id: created.id });
   });
 
   it('finds rows by head sha and fills only missing links', async () => {

@@ -60,6 +60,13 @@ export type ScmReviewDecision = 'approved' | 'changes_requested' | 'review_requi
 
 /** Outcome of one CI check on the current head commit. */
 export interface ScmCheck {
+  /**
+   * Provider app that published the check. Two apps may report the same
+   * name for one commit, so the source is part of a check's identity —
+   * without it a passing `Test` from one app would erase a failing `Test`
+   * from another and turn the rollup green.
+   */
+  appId?: string;
   completedAt?: string;
   /** Provider conclusion, e.g. `success` | `failure` | `cancelled` | `skipped`. */
   conclusion?: string;

@@ -68,16 +68,22 @@ const reportedAt = (check: ScmCheck): number => {
 /**
  * What the check *is*, as opposed to which attempt reported it. Re-running a
  * failed Actions job mints a new `check_run:<id>`, so keying the set by the
- * external id alone would keep the failed attempt next to its successful
- * replacement and pin the rollup to `failure` forever. The provider's own
- * identity for a check is its name within its namespace — `check_run` and
- * the legacy status API are kept apart so two providers reporting the same
- * name do not collapse into one.
+ * external id alone keeps the failed attempt next to its successful
+ * replacement and pins the rollup to `failure` forever.
+ *
+ * GitHub's own answer to "which result counts" is the latest run of a given
+ * name *published by a given app* (`GET /commits/{ref}/check-runs?filter=latest`),
+ * so that is the identity used here. Dropping the app would let one app's
+ * passing `Test` erase another's failing `Test`; dropping the name would
+ * stop reruns from superseding anything. The legacy status API has no app
+ * and its context is unique per commit, so its namespace carries the name
+ * alone.
  */
 const checkIdentity = (check: ScmCheck): string => {
   const [namespace] = check.externalId.split(':');
   const name = check.name?.trim();
-  return name ? `${namespace}:name:${name}` : check.externalId;
+  if (!name) return check.externalId;
+  return check.appId ? `${namespace}:app:${check.appId}:${name}` : `${namespace}:${name}`;
 };
 
 export const mergeChecks = (current: ScmCheck[] | null | undefined, incoming: ScmCheck[]) => {
@@ -100,6 +106,27 @@ export const mergeChecks = (current: ScmCheck[] | null | undefined, incoming: Sc
  * over the db; scope lives on the row.
  */
 export class ScmChangeRequestModel {
+  /**
+   * The change request by the provider's own id for it (GitHub's PR node
+   * id). Stable across a repository rename or transfer, which is what the
+   * name-based key is not.
+   */
+  static findByExternalId = async (
+    db: LobeChatDatabase,
+    provider: ScmProvider,
+    externalId: string,
+  ): Promise<ScmChangeRequestItem | null> => {
+    const [row] = await db
+      .select()
+      .from(scmChangeRequests)
+      .where(
+        and(eq(scmChangeRequests.provider, provider), eq(scmChangeRequests.externalId, externalId)),
+      )
+      .limit(1);
+
+    return row ?? null;
+  };
+
   static findByIdentity = async (
     db: LobeChatDatabase,
     provider: ScmProvider,
@@ -203,14 +230,23 @@ export class ScmChangeRequestModel {
     // see the pre-merge state, and whichever writes last wins — the stale
     // guards below can only judge what they were shown.
     db.transaction(async (tx) => {
+      // Renaming or transferring a repository changes `repoFullName` on
+      // every later delivery, so the name-based key would miss the row and
+      // insert a second one — splitting the checks, the review state and
+      // the acceptance links off the copy still on screen. The provider's
+      // own id for the pull request survives both, so it leads.
       const [existing] = await tx
         .select()
         .from(scmChangeRequests)
         .where(
           and(
             eq(scmChangeRequests.provider, params.provider),
-            eq(scmChangeRequests.repoFullName, params.repoFullName),
-            eq(scmChangeRequests.number, params.number),
+            params.externalId
+              ? eq(scmChangeRequests.externalId, params.externalId)
+              : and(
+                  eq(scmChangeRequests.repoFullName, params.repoFullName),
+                  eq(scmChangeRequests.number, params.number),
+                )!,
           ),
         )
         .for('update');
@@ -271,6 +307,8 @@ export class ScmChangeRequestModel {
           ...(headChanged ? { pendingChecks: undefined } : {}),
         },
         repoExternalId: params.repoExternalId ?? existing?.repoExternalId ?? null,
+        // Follow a rename rather than leaving the row under the old name.
+        repoFullName: params.repoFullName,
         state: params.state,
         title: params.title ?? existing?.title ?? null,
         url: params.url,
