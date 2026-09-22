@@ -17,9 +17,13 @@ Its two siblings:
   or release is not required. Do not hand-edit this installed copy.
   `.claude/skills` shares `.agents/skills`.
 
-Every script referenced below lives under `.agents/acceptance/scripts/`, including
-the generic capture toolchain (`report-init.sh`, `cdp-screenshot.sh`,
-`record-gif.sh`, `check-screen-recording.sh`, …).
+Project helpers (`report-init.sh`, `record-gif.sh`, `capture-app-window.sh`, …)
+live under `.agents/acceptance/scripts/`. Generic CDP capture and screen-recording
+preflight live only under `.agents/skills/acceptance/scripts/`; invoke their shell
+scripts with `bash`. See the installed skill's
+[`screenshot-helpers.md`](../skills/acceptance/references/screenshot-helpers.md)
+for commands, prerequisites, and exit codes. Do not copy these implementations
+into the project layer.
 
 ## 1. Project summary
 
@@ -359,7 +363,7 @@ in `.agents/acceptance/references/agent-gateway.md`.
 - **OS-capture surfaces are macOS-only** (bot channels, `capture-app-window.sh`,
   osascript screenshots): they come out black without Screen Recording (TCC)
   permission or when the display is asleep/locked. CDP-based evidence
-  (`agent-browser screenshot`, `.agents/acceptance/scripts/cdp-screenshot.sh`) is
+  (`agent-browser screenshot`, `bash .agents/skills/acceptance/scripts/cdp-screenshot.sh`) is
   unaffected. Electron runs on Linux/cloud only under `xvfb-run`, and there OS
   capture does not work — prefer CDP evidence for cloud-portable runs.
 
