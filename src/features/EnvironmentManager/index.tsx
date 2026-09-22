@@ -232,6 +232,17 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
                 instanceCount={
                   instances.filter((instance) => instance.environmentId === environment.id).length
                 }
+                // What the environment's instances keep, summed. A brand-new
+                // instance has no snapshot and counts as nothing; when the
+                // snapshot store could not be reached the sizes are unknown,
+                // not zero, so the row says nothing rather than "0 B".
+                storageBytes={
+                  instanceData?.snapshotsUnavailable
+                    ? null
+                    : instances
+                        .filter((instance) => instance.environmentId === environment.id)
+                        .reduce((sum, instance) => sum + (instance.snapshot?.bytes ?? 0), 0)
+                }
                 onCreateInstance={() => createInstance(environment.id)}
                 onSelect={() => select(environment.id)}
               />
