@@ -50,20 +50,22 @@ export const RemoteDirectoryBrowser = ({
     <Flexbox gap={16}>
       <Text type={'secondary'}>{t('workingDirectory.browseDescription')}</Text>
       <Flexbox horizontal align={'center'} gap={8}>
-        <ActionIcon
-          aria-label={t('workingDirectory.home')}
-          disabled={loading}
-          icon={HouseIcon}
-          title={t('workingDirectory.home')}
-          onClick={() => navigate()}
-        />
-        <ActionIcon
-          aria-label={t('workingDirectory.parentFolder')}
-          disabled={loading || !directory?.parentPath}
-          icon={ArrowUpIcon}
-          title={t('workingDirectory.parentFolder')}
-          onClick={() => directory?.parentPath && navigate(directory.parentPath)}
-        />
+        <Flexbox horizontal flex={'none'} gap={2}>
+          <ActionIcon
+            aria-label={t('workingDirectory.home')}
+            disabled={loading}
+            icon={HouseIcon}
+            title={t('workingDirectory.home')}
+            onClick={() => navigate()}
+          />
+          <ActionIcon
+            aria-label={t('workingDirectory.parentFolder')}
+            disabled={loading || !directory?.parentPath}
+            icon={ArrowUpIcon}
+            title={t('workingDirectory.parentFolder')}
+            onClick={() => directory?.parentPath && navigate(directory.parentPath)}
+          />
+        </Flexbox>
         <Input
           aria-label={t('workingDirectory.current')}
           disabled={loading}

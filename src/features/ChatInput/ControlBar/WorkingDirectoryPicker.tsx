@@ -9,7 +9,6 @@ import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   CheckIcon,
   ChevronDownIcon,
-  FolderIcon,
   FolderOpenIcon,
   FolderPlusIcon,
   SearchIcon,
@@ -40,6 +39,7 @@ import { useElectronStore } from '@/store/electron';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
+import DashedFolderIcon from './DashedFolderIcon';
 import DirIcon from './DirIcon';
 import { useCommitWorkingDirectory } from './useCommitWorkingDirectory';
 import { useMigrateDeviceRecents } from './useMigrateDeviceRecents';
@@ -547,20 +547,14 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
 
   const displayName = selectedDir
     ? (getWorkingDirectoryName(selectedDir) ?? selectedDir)
-    : t('workingDirectory.title');
+    : t('workingDirectory.unselected');
 
   const trigger = (
     <div className={styles.button}>
       {selectedDir ? (
         <DirIcon repoType={recents.find((r) => r.path === selectedDir)?.repoType} />
       ) : (
-        // Empty state: dashed outline + muted color read as "not set yet"; the
-        // Tooltip below already hints t('workingDirectory.title').
-        <Icon
-          icon={FolderIcon}
-          size={14}
-          style={{ color: cssVar.colorTextQuaternary, strokeDasharray: '3 2' }}
-        />
+        <DashedFolderIcon size={14} />
       )}
       <span className={styles.buttonLabel}>{displayName}</span>
       <Icon icon={ChevronDownIcon} size={12} />

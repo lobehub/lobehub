@@ -96,6 +96,7 @@ export default {
   'workingDirectory.staleWorktreeSnapshot':
     'The worktree “{{name}}” recorded for this conversation no longer exists — showing the Git snapshot saved on the topic.',
   'workingDirectory.title': 'Working Directory',
+  'workingDirectory.unselected': 'Not selected',
   'workingDirectory.undo': 'Undo',
   'workingDirectory.topicDescription': 'Override Agent default for this conversation only',
   'workingDirectory.topicLevel': 'Conversation override',

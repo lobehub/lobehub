@@ -104,6 +104,7 @@
   "workingDirectory.uncommittedChanges_one": "Uncommitted changes: {{count}} file",
   "workingDirectory.uncommittedChanges_other": "Uncommitted changes: {{count}} files",
   "workingDirectory.undo": "Undo",
+  "workingDirectory.unselected": "Not selected",
   "workingDirectory.useFolder": "Use this folder",
   "workingDirectory.worktreeSearchPlaceholder": "Search worktrees",
   "workingDirectory.worktreeUnavailable": "unavailable",
