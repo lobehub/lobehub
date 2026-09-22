@@ -2,6 +2,7 @@
   "addFolder": "Create Folder",
   "addLibrary": "Add",
   "addPage": "Create Page",
+  "chunk.similaritySearch.pageNumber": "Page {{pageNumber}}",
   "detail.basic.createdAt": "Creation Time",
   "detail.basic.filename": "File Name",
   "detail.basic.size": "File Size",
