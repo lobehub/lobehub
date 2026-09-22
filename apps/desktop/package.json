@@ -53,6 +53,7 @@
     "@lobehub/fluent-emoji": "^4.1.0",
     "@lydell/node-pty": "1.2.0-beta.12",
     "electron-log": "^5.4.4",
+    "electron-sparkle-updater": "^0.5.0",
     "font-list": "^2.1.0",
     "get-windows": "^9.3.0",
     "node-screenshots": "^0.2.8"

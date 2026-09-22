@@ -12,7 +12,16 @@ import semver from 'semver';
 
 import { isDev, isWindows } from '@/const/env';
 import { getDesktopEnv } from '@/env';
-import { UPDATE_CHANNEL, UPDATE_SERVER_URL, updaterConfig } from '@/modules/updater/configs';
+import {
+  getSparkleFeedUrl,
+  isSparkleChannel,
+  UPDATE_CHANNEL,
+  UPDATE_SERVER_URL,
+  updaterConfig,
+} from '@/modules/updater/configs';
+import { electronUpdaterEngine } from '@/modules/updater/electronUpdaterEngine';
+import type { UpdateEngine } from '@/modules/updater/engine';
+import { SparkleEngine } from '@/modules/updater/sparkleEngine';
 import { extractRestoreRoute } from '@/modules/updater/utils';
 import { createLogger } from '@/utils/logger';
 
@@ -28,6 +37,8 @@ export class UpdaterManager {
   private downloading: boolean = false;
   private updateAvailable: boolean = false;
   private currentChannel: UpdateChannel = UPDATE_CHANNEL;
+  private sparkleEngine: SparkleEngine | null = null;
+  private engine: UpdateEngine = electronUpdaterEngine;
   /** Incremented on each channel switch to invalidate in-flight checks */
   private checkGeneration: number = 0;
   /** Generation at the start of the current active check */
@@ -126,12 +137,14 @@ export class UpdaterManager {
         `Production mode: channel=${this.currentChannel}, allowPrerelease=${this.currentChannel !== 'stable'}`,
       );
       this.configureUpdateProvider();
+      this.sparkleEngine = await this.createSparkleEngine();
     }
 
     // Keep every release channel rollback-capable. Assign this after configuring the provider because
     // electron-updater's channel setter mutates allowDowngrade as a side effect.
     autoUpdater.allowDowngrade = true;
 
+    this.engine = this.resolveEngine(this.currentChannel);
     this.registerEvents();
 
     if (updaterConfig.app.autoCheckUpdate) {
@@ -140,7 +153,7 @@ export class UpdaterManager {
     }
 
     logger.debug(
-      `Initialized with channel: ${autoUpdater.channel}, allowPrerelease: ${autoUpdater.allowPrerelease}`,
+      `Initialized with channel: ${autoUpdater.channel}, allowPrerelease: ${autoUpdater.allowPrerelease}, engine: ${this.engine.kind}`,
     );
 
     logger.info('UpdaterManager initialization completed');
@@ -159,6 +172,9 @@ export class UpdaterManager {
     // Reapply after configureUpdateProvider for the same channel-setter side effect as initialize.
     autoUpdater.allowDowngrade = true;
     logger.info('allowDowngrade=true');
+
+    this.engine = this.resolveEngine(channel);
+    logger.info(`Update engine: ${this.engine.kind}`);
 
     this.installLaterVersion = null;
 
@@ -188,6 +204,7 @@ export class UpdaterManager {
       `${manual ? 'Manually checking' : 'Auto checking'} for updates... (gen=${this.activeGeneration})`,
     );
 
+    logger.info('[Updater Config] Engine:', this.engine.kind);
     logger.info('[Updater Config] Channel:', autoUpdater.channel);
     logger.info('[Updater Config] currentChannel:', this.currentChannel);
     logger.info('[Updater Config] allowPrerelease:', autoUpdater.allowPrerelease);
@@ -201,7 +218,7 @@ export class UpdaterManager {
     this.setStage('checking');
 
     try {
-      await autoUpdater.checkForUpdates();
+      await this.engine.checkForUpdates();
     } catch (error) {
       if (this.isStaleCheck()) return;
 
@@ -242,7 +259,7 @@ export class UpdaterManager {
     this.setStage('downloading');
 
     try {
-      await autoUpdater.downloadUpdate();
+      await this.engine.downloadUpdate();
     } catch (error) {
       this.downloading = false;
       logger.error('Error downloading update:', error);
@@ -293,8 +310,8 @@ export class UpdaterManager {
     app.releaseSingleInstanceLock();
 
     setTimeout(() => {
-      logger.info('Calling autoUpdater.quitAndInstall...');
-      autoUpdater.quitAndInstall(true, true);
+      logger.info(`Calling ${this.engine.kind} quitAndInstall...`);
+      this.engine.quitAndInstall();
     }, 100);
   };
 
@@ -304,7 +321,7 @@ export class UpdaterManager {
   public installLater = () => {
     logger.info('Update will be installed on next restart');
 
-    autoUpdater.autoInstallOnAppQuit = true;
+    this.engine.installOnQuit();
     if (this.latestUpdateInfo?.version) {
       this.installLaterVersion = this.latestUpdateInfo.version;
       logger.info(`Suppressing further prompts for version ${this.installLaterVersion}`);
@@ -445,16 +462,43 @@ export class UpdaterManager {
     }
   }
 
+  private async createSparkleEngine(): Promise<SparkleEngine | null> {
+    if (process.platform !== 'darwin') return null;
+
+    const baseUrl = this.getBaseUpdateUrl();
+    if (!baseUrl) return null;
+
+    const engine = await SparkleEngine.create({
+      appcastUrl: getSparkleFeedUrl(baseUrl, 'canary'),
+      currentVersion: electronApp.getVersion(),
+    });
+    logger.info(engine ? 'Sparkle engine ready' : 'Sparkle engine unavailable');
+    return engine;
+  }
+
+  private resolveEngine(channel: UpdateChannel): UpdateEngine {
+    return isSparkleChannel(channel) && this.sparkleEngine
+      ? this.sparkleEngine
+      : electronUpdaterEngine;
+  }
+
   private registerEvents() {
     logger.debug('Registering updater events');
 
-    autoUpdater.on('checking-for-update', () => {
+    this.bindEngine(electronUpdaterEngine);
+    if (this.sparkleEngine) this.bindEngine(this.sparkleEngine);
+
+    logger.debug('Updater events registered');
+  }
+
+  private bindEngine(engine: UpdateEngine) {
+    engine.on('checking-for-update', () => {
       logger.info('[Updater] Checking for update...');
       logger.info('[Updater] Current channel:', autoUpdater.channel);
       logger.info('[Updater] Current allowPrerelease:', autoUpdater.allowPrerelease);
     });
 
-    autoUpdater.on('update-available', (info) => {
+    engine.on('update-available', (info) => {
       logger.info(
         `Update available: ${info.version} (activeGen=${this.activeGeneration}, currentGen=${this.checkGeneration})`,
       );
@@ -478,7 +522,7 @@ export class UpdaterManager {
       this.downloadUpdate();
     });
 
-    autoUpdater.on('update-not-available', (info) => {
+    engine.on('update-not-available', (info) => {
       logger.info(`Update not available. Current: ${info.version}`);
 
       this.setStage('latest');
@@ -487,7 +531,8 @@ export class UpdaterManager {
       }, 5000);
     });
 
-    autoUpdater.on('error', async (err) => {
+    engine.on('error', async (err) => {
+      this.downloading = false;
       const message = err instanceof Error ? err.message : String(err);
 
       if (this.isMissingUpdateManifestError(err)) {
@@ -512,7 +557,7 @@ export class UpdaterManager {
       }, 3000);
     });
 
-    autoUpdater.on('download-progress', (progressObj) => {
+    engine.on('download-progress', (progressObj) => {
       logger.debug(
         `Download speed: ${progressObj.bytesPerSecond} - Downloaded ${progressObj.percent}% (${progressObj.transferred}/${progressObj.total})`,
       );
@@ -522,7 +567,7 @@ export class UpdaterManager {
       this.mainWindow.broadcast('updateDownloadProgress', progressObj);
     });
 
-    autoUpdater.on('update-downloaded', (info) => {
+    engine.on('update-downloaded', (info) => {
       logger.info(`Update downloaded: ${info.version}`);
       this.downloading = false;
 
@@ -540,8 +585,6 @@ export class UpdaterManager {
 
       this.mainWindow.broadcast('updateReady', updateInfo);
     });
-
-    logger.debug('Updater events registered');
   }
 
   /**

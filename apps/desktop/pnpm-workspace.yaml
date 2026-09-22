@@ -50,6 +50,7 @@ allowBuilds:
   '@sentry/cli': true
   electron: true
   electron-builder: true
+  electron-sparkle-updater: false
   electron-winstaller: false
   esbuild: false
   get-windows: false
@@ -71,3 +72,4 @@ minimumReleaseAgeExclude:
   - '@auv-js/cli-win32-x64-msvc@0.0.16'
   - '@auv-js/cli@0.0.16'
   - '@auv-js/sdk@0.0.16'
+  - electron-sparkle-updater@0.5.0
