@@ -528,6 +528,104 @@ describe('serverMessagesEngine', () => {
     });
   });
 
+  describe('stale tool result trimming', () => {
+    const READ_CONTENT = 'x'.repeat(120_000);
+
+    // A readFile result superseded by a later write to the same path, outside
+    // the default recency window and past the default size gate, so the trim
+    // fires unless the switch disables it. No createdAt → cold cache.
+    const supersededReadMessages = (): UIChatMessage[] =>
+      [
+        {
+          content: '',
+          id: 'a1',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'readFile',
+              arguments: JSON.stringify({ path: '/a.ts' }),
+              id: 'call-readFile',
+              identifier: 'lobe-local-system',
+              type: 'builtin',
+            },
+          ],
+        },
+        {
+          content: READ_CONTENT,
+          id: 't1',
+          plugin: {
+            apiName: 'readFile',
+            arguments: JSON.stringify({ path: '/a.ts' }),
+            identifier: 'lobe-local-system',
+          },
+          pluginState: { loc: [0, 200], path: '/a.ts' },
+          role: 'tool',
+          tool_call_id: 'call-readFile',
+        },
+        {
+          content: '',
+          id: 'a2',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'writeFile',
+              arguments: JSON.stringify({ path: '/a.ts' }),
+              id: 'call-writeFile',
+              identifier: 'lobe-local-system',
+              type: 'builtin',
+            },
+          ],
+        },
+        {
+          content: 'Successfully wrote to /a.ts',
+          id: 't2',
+          plugin: {
+            apiName: 'writeFile',
+            arguments: JSON.stringify({ path: '/a.ts' }),
+            identifier: 'lobe-local-system',
+          },
+          pluginState: { path: '/a.ts', success: true },
+          role: 'tool',
+          tool_call_id: 'call-writeFile',
+        },
+        ...Array.from({ length: 21 }, (_, i) => ({
+          content: `recent ${i}`,
+          id: `pad-${i}`,
+          role: 'assistant',
+        })),
+      ] as unknown as UIChatMessage[];
+
+    const payloadText = (messages: any[]) =>
+      messages
+        .map((m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)))
+        .join('\n');
+
+    it('trims stale tool results by default', async () => {
+      const result = await serverMessagesEngine({
+        messages: supersededReadMessages(),
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const payload = payloadText(result);
+      expect(payload).not.toContain(READ_CONTENT);
+      expect(payload).toContain('superseded by a later write');
+    });
+
+    it('forwards enableStaleToolResultTrim: false to the engine', async () => {
+      const result = await serverMessagesEngine({
+        enableStaleToolResultTrim: false,
+        messages: supersededReadMessages(),
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const payload = payloadText(result);
+      expect(payload).toContain(READ_CONTENT);
+      expect(payload).not.toContain('superseded by a later write');
+    });
+  });
+
   describe('user memory injection', () => {
     it('should inject user memories when provided', async () => {
       const messages = createBasicMessages();

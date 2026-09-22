@@ -26,6 +26,7 @@ export const toContextSnapshot = ({
   enableAgentMode,
   enableExpertise,
   enableHistoryCount,
+  enableStaleToolResultTrim,
   evalContext,
   expertise,
   forceFinish,
@@ -57,6 +58,7 @@ export const toContextSnapshot = ({
   agent: {
     documents: agentDocuments,
     enableHistoryCount,
+    enableStaleToolResultTrim,
     historyCount,
     identity: agentIdentity,
     inputTemplate,

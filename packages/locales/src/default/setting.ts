@@ -1158,6 +1158,9 @@ export default {
   'settingChat.enableHistoryCount.setlimited': 'Set limited history messages',
   'settingChat.enableHistoryCount.title': 'Limit History Message Count',
   'settingChat.enableHistoryCount.unlimited': 'Unlimited history message count',
+  'settingChat.enableStaleToolResultTrim.desc':
+    'Replace outdated tool outputs (overwritten file reads, old browser snapshots, stale command output) with short placeholders in the model context to save tokens. Disable if the assistant needs full historical tool output.',
+  'settingChat.enableStaleToolResultTrim.title': 'Trim Stale Tool Results',
   'settingChat.enableStreaming.desc':
     'Enable streaming output to display responses in real-time. When disabled, only the complete response is shown.',
   'settingChat.enableStreaming.title': 'Enable Streaming Output',

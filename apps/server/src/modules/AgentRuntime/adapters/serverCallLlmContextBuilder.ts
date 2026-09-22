@@ -134,6 +134,7 @@ export const buildServerCallLlmContext = async ({
     discordContext: state.world?.channel?.discord,
     enableExpertise: selectEnableExpertise(state),
     enableHistoryCount: agentConfig.chatConfig?.enableHistoryCount ?? undefined,
+    enableStaleToolResultTrim: agentConfig.chatConfig?.enableStaleToolResultTrim ?? undefined,
     evalContext: state.world?.eval,
     expertise: selectExpertise(state),
     forceFinish: state.forceFinish,

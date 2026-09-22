@@ -74,6 +74,16 @@ describe('buildMessagesEngineParams', () => {
     ).toEqual({ enabled: true, includeFileUrl: false });
   });
 
+  it('maps the agent stale-tool-result trim flag through to the engine params', () => {
+    expect(buildMessagesEngineParams(baseSnapshot()).enableStaleToolResultTrim).toBeUndefined();
+
+    const disabled = buildMessagesEngineParams({
+      ...baseSnapshot(),
+      agent: { ...baseSnapshot().agent, enableStaleToolResultTrim: false },
+    });
+    expect(disabled.enableStaleToolResultTrim).toBe(false);
+  });
+
   it('renders placeholders from the run timezone and lets host variables win', () => {
     const generators = buildMessagesEngineParams({
       ...baseSnapshot(),

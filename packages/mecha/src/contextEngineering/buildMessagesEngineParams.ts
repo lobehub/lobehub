@@ -41,6 +41,7 @@ export const buildMessagesEngineParams = (snapshot: ContextSnapshot): MessagesEn
     agentDocuments: agent.documents,
     agentIdentity: agent.identity,
     enableHistoryCount: agent.enableHistoryCount,
+    enableStaleToolResultTrim: agent.enableStaleToolResultTrim,
     historyCount: agent.historyCount,
     inputTemplate: agent.inputTemplate,
     knowledge: agent.knowledge,

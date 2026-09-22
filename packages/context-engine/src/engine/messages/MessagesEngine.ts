@@ -162,6 +162,7 @@ export class MessagesEngine {
       inputTemplate,
       enableAgentMode,
       enableHistoryCount,
+      enableStaleToolResultTrim,
       historyCount,
       forceFinish,
       historySummary,
@@ -575,7 +576,10 @@ export class MessagesEngine {
       // cache is cold anyway. Same pipeline position constraints as
       // ActivationResultTrimProcessor above. Cache economics (TTL, read/write
       // prices) follow the active provider.
-      new StaleToolResultTrimProcessor({ economics: cacheEconomicsForProvider(provider) }),
+      new StaleToolResultTrimProcessor({
+        economics: cacheEconomicsForProvider(provider),
+        enabled: enableStaleToolResultTrim !== false,
+      }),
       // Placeholder variables processing — MUST run AFTER all flatten / role
       // transform steps. AssistantGroup / Supervisor messages keep their real
       // content (including any `{{...}}` placeholders inside tool results)

@@ -242,13 +242,16 @@ export const contextEngineering = async ({
     : undefined;
   const agentMeta = agentId ? agentSelectors.getAgentMetaById(agentId)(agentStoreState) : undefined;
   const agentItem = agentId ? agentByIdSelectors.getAgentById(agentId)(agentStoreState) : undefined;
+  // The responding agent's chat config — the transient target's own row when
+  // there is one, otherwise the current agent's.
+  const respondingChatConfig =
+    agentConfig?.chatConfig ?? agentChatConfigSelectors.currentChatConfig(agentStoreState);
   const facts = await gatherContextFacts(
     {
       agent: {
         // The current-agent chat config carries the skill activation mode the
         // management rule reads, even when `agentId` is a transient target.
-        chatConfig:
-          agentConfig?.chatConfig ?? agentChatConfigSelectors.currentChatConfig(agentStoreState),
+        chatConfig: respondingChatConfig,
         description: agentMeta?.description,
         slug: agentItem?.slug,
         title: agentMeta?.title,
@@ -299,6 +302,9 @@ export const contextEngineering = async ({
     agent: {
       documents: facts.agentDocuments,
       enableHistoryCount,
+      // Pass the raw value through (explicit false preserved); the engine
+      // treats undefined as enabled.
+      enableStaleToolResultTrim: respondingChatConfig.enableStaleToolResultTrim,
       historyCount,
       // The agent's identity lives on the agent row (name/title), not in the
       // prompt text — inject it so the model can answer "who are you?" with

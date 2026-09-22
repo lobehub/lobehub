@@ -1000,6 +1000,8 @@
   "settingChat.enableHistoryCount.setlimited": "使用历史消息数",
   "settingChat.enableHistoryCount.title": "限制历史消息数",
   "settingChat.enableHistoryCount.unlimited": "不限历史消息数",
+  "settingChat.enableStaleToolResultTrim.desc": "将已被覆盖的文件读取、过期的浏览器快照与旧命令输出替换为简短占位符，以节省上下文 token。若助手需要完整的历史工具输出可关闭。",
+  "settingChat.enableStaleToolResultTrim.title": "裁剪过期工具结果",
   "settingChat.enableStreaming.desc": "启用流式输出以实时显示响应。禁用后仅显示完整响应。",
   "settingChat.enableStreaming.title": "启用流式输出",
   "settingChat.historyCount.desc": "每次请求携带的消息数（包括最新编写的提问。每个提问和回答都计算1）",

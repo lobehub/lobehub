@@ -84,6 +84,13 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    */
   enableReasoningEffort?: boolean;
   /**
+   * Whether stale tool results (overwritten file reads, outdated browser
+   * snapshots, old command output) are replaced with short placeholders in the
+   * model context to save tokens.
+   * Treat undefined as `true` — trimming is the default.
+   */
+  enableStaleToolResultTrim?: boolean;
+  /**
    * Whether to enable streaming output
    */
   enableStreaming?: boolean;
@@ -254,6 +261,7 @@ export const AgentChatConfigSchema = z
     enableReasoning: z.boolean().optional(),
     enableReasoningEffort: z.boolean().optional(),
     enableStreaming: z.boolean().optional(),
+    enableStaleToolResultTrim: z.boolean().optional(),
     gpt5ReasoningEffort: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
     gpt5_1ReasoningEffort: z.enum(['none', 'low', 'medium', 'high']).optional(),
     gpt5_2ProReasoningEffort: z.enum(['medium', 'high', 'xhigh']).optional(),

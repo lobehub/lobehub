@@ -29,6 +29,7 @@ export const DEFAULT_AGENT_CHAT_CONFIG: LobeAgentChatConfig = {
   enableContextCompression: true,
   enableFollowUpChips: false,
   enableHistoryCount: false,
+  enableStaleToolResultTrim: true,
   enableStreaming: true,
   historyCount: 20,
   reasoningBudgetToken: 1024,

@@ -579,6 +579,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
     'enableAutoScrollOnStreaming',
   ]);
   const enableStreaming = form.getFieldValue(['chatConfig', 'enableStreaming']);
+  const enableStaleToolResultTrim = form.getFieldValue(['chatConfig', 'enableStaleToolResultTrim']);
   const enableFollowUpChips = form.getFieldValue(['chatConfig', 'enableFollowUpChips']);
   const globalFollowUp = useUserStore(systemAgentSelectors.followUpAction, isEqual);
   const globalFollowUpReady =
@@ -895,6 +896,21 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                 />
               )}
             </ControlRow>
+            <ControlRow
+              tag="staleToolResultTrim"
+              title={t('settingChat.enableStaleToolResultTrim.title')}
+              tooltip={t('settingChat.enableStaleToolResultTrim.desc')}
+              action={
+                <Switch
+                  checked={enableStaleToolResultTrim !== false}
+                  disabled={!canCreate}
+                  size={'small'}
+                  onChange={(checked) => {
+                    handleFieldChange(['chatConfig', 'enableStaleToolResultTrim'], checked);
+                  }}
+                />
+              }
+            />
             <ControlRow
               tag="autoScroll"
               title={t('settingChat.enableAutoScrollOnStreaming.title')}
