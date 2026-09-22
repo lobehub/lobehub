@@ -17,6 +17,12 @@ export interface HeteroInflightRun {
   /** CLI-native session id (Claude Code `session_id`), known once the stream starts. */
   agentSessionId?: string;
   agentType: string;
+  /**
+   * Assistant row this run streams into. The only precise handle on the run's
+   * own branch: a regenerated turn hangs several assistant branches off one
+   * user row, and recovery must not touch the others.
+   */
+  assistantMessageId?: string;
   /** Basename of the spawned executable (e.g. `claude`), used to verify a pid before signalling it. */
   command?: string;
   /**

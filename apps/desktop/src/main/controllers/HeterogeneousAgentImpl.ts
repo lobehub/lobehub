@@ -160,7 +160,7 @@ import {
   describeHeteroCliProcess,
   isProcessAlive,
   killProcessTreeByPid,
-  readProcessCommandLine,
+  readProcessIdentity,
   waitForProcessExit,
 } from '@/utils/heteroCliProcess';
 import { createLogger } from '@/utils/logger';
@@ -332,6 +332,8 @@ interface SendPromptParams {
    * they aren't watching.
    */
   agentId?: string;
+  /** Assistant row this run streams into — recorded so recovery can scope to its branch. */
+  assistantMessageId?: string;
   /** Image attachments to include in the prompt (downloaded from url, cached by id) */
   imageList?: HeterogeneousAgentImageAttachment[];
   /**
@@ -3092,6 +3094,7 @@ export default class HeterogeneousAgentCtr {
       agentId: params.agentId,
       agentSessionId: session.agentSessionId,
       agentType: session.agentType,
+      assistantMessageId: params.assistantMessageId,
       // The interpreter alone is not an identity — see describeHeteroCliProcess.
       ...describeHeteroCliProcess(proc.spawnfile || session.command, proc.spawnargs),
       // The EFFECTIVE profile: quota-account routing and agent env also set
@@ -3321,17 +3324,36 @@ export default class HeterogeneousAgentCtr {
       logger.warn('Stopped session is still alive; withholding recovery:', { pid: run.pid });
       return false;
     }
+    // Unix liveness deliberately tests the whole process GROUP, so this stays
+    // true when the CLI leader has exited but one of its tool children is
+    // still running.
     if (!run.pid || !isProcessAlive(run.pid)) return true;
 
-    const commandLine = await readProcessCommandLine(run.pid);
+    const identity = await readProcessIdentity(run.pid);
+
+    // The lookup itself failed, so nothing is known: the leader may well be
+    // alive and writing. Withhold rather than guess in either direction.
+    if (identity.status === 'error') {
+      logger.warn('Could not read process identity; withholding recovery:', { pid: run.pid });
+      return false;
+    }
+
     // A pid that no longer looks like our CLI was recycled, so the original
     // process is gone and the run is safe to recover.
-    if (!commandLineLooksLikeHeteroCli(commandLine, run)) {
-      logger.info('Skipping pid reuse for interrupted run:', { commandLine, pid: run.pid });
+    if (identity.status === 'found' && !commandLineLooksLikeHeteroCli(identity.commandLine, run)) {
+      logger.info('Skipping pid reuse for interrupted run:', {
+        commandLine: identity.commandLine,
+        pid: run.pid,
+      });
       return true;
     }
+
+    // `gone` with a live group means the leader exited and left tool children
+    // behind. The group id is still ours (it is only released once empty), so
+    // reaping it cannot touch an unrelated tree.
     logger.info('Reaping orphaned CLI from previous desktop process:', {
       agentType: run.agentType,
+      leaderExited: identity.status === 'gone',
       pid: run.pid,
     });
     killProcessTreeByPid(run.pid, 'SIGTERM');

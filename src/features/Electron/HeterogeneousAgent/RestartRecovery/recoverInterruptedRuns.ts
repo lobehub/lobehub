@@ -48,6 +48,8 @@ interface InterruptedRun {
   /** CLI-native session id main saw on the stream — the ledger's own copy. */
   agentSessionId?: string;
   agentType: string;
+  /** Assistant row the interrupted run streamed into — its branch root. */
+  assistantMessageId?: string;
   configDir?: string;
   cwd?: string;
   ipcSessionId: string;
@@ -68,6 +70,33 @@ const isInterruptedTopicStatus = (status: string | null | undefined): boolean =>
 const toTime = (value: UIChatMessage['createdAt']): number => {
   const time = typeof value === 'number' ? value : new Date(value as any).getTime();
   return Number.isFinite(time) ? time : 0;
+};
+
+/**
+ * The run's own branch: its assistant row plus everything hanging off it. A
+ * regenerated turn keeps several assistant branches under one user row, and
+ * only this one belongs to the interrupted run.
+ */
+const collectBranch = (messages: UIChatMessage[], rootId: string): string[] => {
+  const childrenByParent = new Map<string, UIChatMessage[]>();
+  for (const message of messages) {
+    if (!message.parentId) continue;
+    const siblings = childrenByParent.get(message.parentId) ?? [];
+    siblings.push(message);
+    childrenByParent.set(message.parentId, siblings);
+  }
+
+  const ids: string[] = [];
+  const queue = [rootId];
+  const seen = new Set<string>();
+  while (queue.length > 0) {
+    const id = queue.shift()!;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    ids.push(id);
+    for (const child of childrenByParent.get(id) ?? []) queue.push(child.id);
+  }
+  return ids;
 };
 
 /** Rows on the topic's main chain, oldest first. Subagent threads are left alone. */
@@ -187,26 +216,34 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
     }
 
     // The topic is still in flight — but is it OUR run? Another device may
-    // have started a newer turn on it while this desktop was down. Its user row
-    // postdates our spawn, and recovering would delete that live run's output
-    // and replay a stale session over it. Leave the topic completely alone:
-    // settling it would also clobber the other device's status.
+    // have started a newer turn while this desktop was down. Recovering would
+    // delete that live run's output and replay a stale session over it. Leave
+    // the topic completely alone: settling would clobber its status too.
     const startedAt = run.startedAt ? Date.parse(run.startedAt) : Number.NaN;
     if (Number.isFinite(startedAt) && toTime(userTurn.createdAt) > startedAt) {
       return { outcome: 'skipped', reason: 'topic-taken-over', topicId };
     }
 
+    // A regeneration hangs a NEW assistant branch off the SAME user row, so the
+    // timestamp above cannot see it. The newest branch under that row has to be
+    // the one we recorded.
+    const branchRoots = mainChain
+      .filter((message) => message.parentId === userTurn.id && message.role !== 'user')
+      .sort((a, b) => toTime(a.createdAt) - toTime(b.createdAt));
+    const newestRoot = branchRoots.at(-1);
+    if (run.assistantMessageId && newestRoot && newestRoot.id !== run.assistantMessageId) {
+      return { outcome: 'skipped', reason: 'topic-taken-over', topicId };
+    }
+
     // Everything the interrupted turn persisted is a partial view of what the
-    // transcript holds in full — replace it rather than try to stitch.
-    const userAt = toTime(userTurn.createdAt);
-    const staleIds = mainChain
-      .filter(
-        (message) =>
-          message.id !== userTurn.id &&
-          message.role !== 'user' &&
-          toTime(message.createdAt) >= userAt,
-      )
-      .map((message) => message.id);
+    // transcript holds in full — replace it rather than try to stitch. Scoped
+    // to the run's own branch: earlier completed answers under the same user
+    // row are somebody's history, not this run's leftovers.
+    const branchRootId =
+      (run.assistantMessageId && mainChain.some((m) => m.id === run.assistantMessageId)
+        ? run.assistantMessageId
+        : newestRoot?.id) ?? undefined;
+    const staleIds = branchRootId ? collectBranch(mainChain, branchRootId) : [];
     if (staleIds.length > 0) await messageService.removeMessages(staleIds, context);
 
     // Seed the in-memory list ourselves: while the recovery op is running, the
@@ -237,9 +274,16 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
       topic: topic as ChatTopic,
     });
 
-    if (replayComplete) {
+    if (replayComplete === true) {
       chatStore.completeOperation(operationId);
       return { outcome: 'replayed', topicId };
+    }
+
+    // No outcome at all means the replay never ran: the executor swallowed the
+    // failure and persisted a terminal error. Resuming here would spend a real
+    // turn — and touch the workspace — on top of a replay that did not happen.
+    if (replayComplete !== false) {
+      throw new Error('Transcript replay reported no outcome');
     }
 
     // Chain the continuation onto the replayed tail so it grows the same

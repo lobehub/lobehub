@@ -2573,6 +2573,7 @@ export const executeHeterogeneousAgent = async (
     // Send the prompt — blocks until process exits
     const sendResult = await heterogeneousAgentService.sendPrompt({
       agentId: context.agentId,
+      assistantMessageId,
       imageList,
       operationId,
       // `/goal` travels as system-context instructions; the CLI gets only the

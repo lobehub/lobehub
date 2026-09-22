@@ -38,6 +38,8 @@ class HeterogeneousAgentService {
 
   async sendPrompt(params: {
     agentId?: string;
+    /** Assistant row this run streams into — recorded in the in-flight ledger. */
+    assistantMessageId?: string;
     imageList?: Array<{ id: string; url: string }>;
     operationId: string;
     prompt: string;

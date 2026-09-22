@@ -4,6 +4,7 @@ import {
   commandLineLooksLikeHeteroCli,
   describeHeteroCliProcess,
   isProcessAlive,
+  readProcessIdentity,
   tokenizeCommandLine,
   waitForProcessExit,
 } from './heteroCliProcess';
@@ -163,6 +164,20 @@ describe('commandLineLooksLikeHeteroCli with an interpreter identity', () => {
   it('rejects an unrelated node process that recycled the pid', () => {
     // `node` alone matches half the machine; the script path is what pins it.
     expect(commandLineLooksLikeHeteroCli('node.exe C:\\other\\server.js', run)).toBe(false);
+  });
+});
+
+describe('readProcessIdentity', () => {
+  it('reports the current process as found with its command line', async () => {
+    const identity = await readProcessIdentity(process.pid, 'darwin');
+
+    expect(identity.status).toBe('found');
+    expect(identity.commandLine).toBeTruthy();
+  });
+
+  it('reports a dead pid as gone rather than unreadable', async () => {
+    // `gone` proves the process exited; `error` would mean the lookup failed.
+    expect((await readProcessIdentity(2_147_483_000, 'darwin')).status).toBe('gone');
   });
 });
 

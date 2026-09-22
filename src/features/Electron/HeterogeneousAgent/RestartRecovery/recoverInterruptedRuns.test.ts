@@ -356,6 +356,70 @@ describe('recoverInterruptedHeteroRuns', () => {
     });
   });
 
+  it("deletes only the interrupted run's own branch, keeping earlier answers", async () => {
+    // A regenerated turn hangs several assistant branches off one user row.
+    const withBranches = [
+      ...messages.slice(0, 3),
+      // an earlier, completed answer to the same user turn
+      { content: 'first answer', createdAt: 205, id: 'a-old', parentId: 'u1', role: 'assistant' },
+      { content: 'old tool', createdAt: 206, id: 't-old', parentId: 'a-old', role: 'tool' },
+      // the interrupted run's own branch
+      { content: 'partial', createdAt: 210, id: 'a1', parentId: 'u1', role: 'assistant' },
+      { content: '', createdAt: 220, id: 't1', parentId: 'a1', role: 'tool' },
+    ];
+    mockListInterruptedRuns.mockResolvedValue([{ ...run, assistantMessageId: 'a1' }]);
+    mockGetMessages.mockResolvedValue(withBranches);
+    mockRunHetero.mockResolvedValue({ assistantMessageId: 'a-new', replayComplete: true });
+
+    const results = await recoverInterruptedHeteroRuns();
+
+    expect(results).toEqual([{ outcome: 'replayed', topicId: 'topic-1' }]);
+    expect(mockRemoveMessages).toHaveBeenCalledWith(['a1', 't1'], {
+      agentId: 'agent-1',
+      topicId: 'topic-1',
+    });
+  });
+
+  it('leaves the topic alone when another device added a newer assistant branch', async () => {
+    // Regeneration elsewhere does not move the user row's timestamp, so only
+    // the recorded assistant identity catches this takeover.
+    mockListInterruptedRuns.mockResolvedValue([{ ...run, assistantMessageId: 'a1' }]);
+    mockGetMessages.mockResolvedValue([
+      ...messages,
+      { content: 'newer run', createdAt: 900, id: 'a-newer', parentId: 'u1', role: 'assistant' },
+    ]);
+
+    const results = await recoverInterruptedHeteroRuns();
+
+    expect(results).toEqual([
+      { outcome: 'skipped', reason: 'topic-taken-over', topicId: 'topic-1' },
+    ]);
+    expect(mockRemoveMessages).not.toHaveBeenCalled();
+    expect(chatStore.updateTopicStatus).not.toHaveBeenCalled();
+  });
+
+  it('does not resume when the replay reported no outcome', async () => {
+    // The executor swallows a replay failure and returns nothing; resuming
+    // would spend a real turn on top of a replay that never happened.
+    mockRunHetero.mockResolvedValue({ assistantMessageId: 'a-new' });
+
+    const results = await recoverInterruptedHeteroRuns();
+
+    expect(results).toEqual([
+      {
+        outcome: 'failed',
+        reason: 'Transcript replay reported no outcome',
+        topicId: 'topic-1',
+      },
+    ]);
+    expect(mockRunHetero).toHaveBeenCalledTimes(1);
+    expect(chatStore.updateTopicStatus).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      status: 'active',
+      topicId: 'topic-1',
+    });
+  });
+
   it('leaves a topic alone when a newer turn took it over while the app was down', async () => {
     // Another device started a turn after our run was spawned: its user row is
     // newer than the ledger entry. Touching it would delete that live run's

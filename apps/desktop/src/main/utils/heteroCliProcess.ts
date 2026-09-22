@@ -112,23 +112,40 @@ export const commandLineLooksLikeHeteroCli = (
   });
 };
 
-const run = (file: string, args: string[]): Promise<string | undefined> =>
+/**
+ * Why a process identity lookup came back without a command line. `gone` and
+ * `error` must not be conflated: the first proves the process exited, the
+ * second proves nothing at all.
+ */
+export type ProcessIdentityStatus = 'found' | 'gone' | 'error';
+
+export interface ProcessIdentity {
+  commandLine?: string;
+  status: ProcessIdentityStatus;
+}
+
+const run = (file: string, args: string[]): Promise<ProcessIdentity> =>
   new Promise((resolve) => {
     execFile(file, args, { timeout: 5000, windowsHide: true }, (error, stdout) => {
-      if (error) {
-        resolve(undefined);
+      const line = stdout.trim();
+      if (line) {
+        resolve({ commandLine: line, status: 'found' });
         return;
       }
-      const line = stdout.trim();
-      resolve(line || undefined);
+      // A clean non-zero exit with no output is the tool saying "no such
+      // process"; anything else (spawn failure, timeout, killed) leaves the
+      // question open.
+      const failure = error as (Error & { code?: number | string }) | null;
+      const exitedCleanly = !failure || typeof failure.code === 'number';
+      resolve({ status: exitedCleanly ? 'gone' : 'error' });
     });
   });
 
-/** Command line of `pid` from the OS process table, or undefined when it is gone. */
-export const readProcessCommandLine = (
+/** Identity of `pid` from the OS process table — see {@link ProcessIdentity}. */
+export const readProcessIdentity = (
   pid: number,
   platform: NodeJS.Platform = process.platform,
-): Promise<string | undefined> =>
+): Promise<ProcessIdentity> =>
   platform === 'win32'
     ? run('powershell.exe', [
         '-NoProfile',
