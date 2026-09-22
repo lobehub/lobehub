@@ -803,11 +803,10 @@ export const prepareOperation = async (
     //
     // A shared run only sees skills its share configuration allows —
     // `shareConfig.skillGrants`, the creator's explicit per-skill list, NOT the
-    // tool picker (`filterSkillsByShareGate`, which keeps the pre-`skillGrants`
-    // `toolGrants` reading as a fallback for shares saved before the field
-    // existed). The pool is the FIRST enforcement point, not the only one:
-    // `activateSkill` takes a model-supplied name, so the skill runtime
-    // re-checks the same grant at load time.
+    // tool picker (`filterSkillsByShareGate`). The pool is the FIRST
+    // enforcement point, not the only one: `activateSkill` takes a
+    // model-supplied name, so the skill runtime re-checks the same grant at
+    // load time.
     const shareAllowedSkillIds = shareGate
       ? filterSkillsByShareGate(
           [...projectMetas, ...dbMetas, ...agentSkillMetas, ...builtinMetas].map(

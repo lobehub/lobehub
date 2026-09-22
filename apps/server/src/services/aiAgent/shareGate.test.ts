@@ -160,39 +160,18 @@ describe('filterSkillsByShareGate', () => {
     ]);
   });
 
-  it('treats an empty array as an explicit full revocation', () => {
-    // Distinct from "never configured" below: an owner who unticks their last
-    // skill must not fall back to the legacy toolGrants reading and silently
-    // regain everything.
-    expect(
-      filterSkillsByShareGate(
-        ['pdf-report'],
-        buildGate({ skillGrants: [], toolGrants: [{ identifier: 'pdf-report' }] }),
-      ),
-    ).toEqual([]);
-  });
-
-  it('falls back to toolGrants for a share saved before skillGrants existed', () => {
-    // Back-compat: those shares stored skill ids in `toolGrants` because that
-    // was the only list there was. Reading them keeps an existing share working
-    // until its owner opens the settings and re-picks.
-    const gate = buildGate({ toolGrants: [{ identifier: 'pdf-report' }] });
-
-    expect(filterSkillsByShareGate(['pdf-report', 'internal-audit'], gate)).toEqual(['pdf-report']);
-  });
-
   it('cannot turn an ordinary tool grant into a skill grant', () => {
-    // The legacy fallback reads a list that mixes tool ids and skill ids. It is
-    // safe only because the result is intersected with the run's REAL skill
-    // candidates — `web-search` is a tool id, never a skill, so it can never
-    // widen the skill pool no matter what the stored config says.
-    const gate = buildGate({ toolGrants: [{ identifier: 'web-search' }] });
+    // `toolGrants` is never read as a skill list. Tool and skill ids share one
+    // namespace, so a tool grant that happens to name a real skill id must not
+    // widen the skill pool either.
+    const gate = buildGate({ toolGrants: [{ identifier: 'pdf-report' }] });
 
     expect(filterSkillsByShareGate(['pdf-report'], gate)).toEqual([]);
   });
 
   it('exposes no skills when the share grants nothing at all', () => {
     expect(filterSkillsByShareGate(['pdf-report'], buildGate())).toEqual([]);
+    expect(filterSkillsByShareGate(['pdf-report'], buildGate({ skillGrants: [] }))).toEqual([]);
   });
 });
 
@@ -262,6 +241,10 @@ describe('AGENT_SHARE_NO_DATA_GRANT_BUILTIN_IDENTIFIERS', () => {
   const maximalPermissions = {
     allowReadMemory: true,
     knowledgeBaseIds: ['kb1'],
+    // `lobe-skills` has its own opt-in — the skill list, not `toolGrants` — so
+    // "maximal" has to name a skill or the tool reads as unconditionally
+    // blocked and lands in this set by accident.
+    skillGrants: ['pdf-report'],
     toolGrants: [{ identifier: AgentDocumentsIdentifier }],
   };
 
@@ -677,6 +660,17 @@ describe('applyShareGateToToolSet', () => {
     expect(toolSet.enabledToolIds).toEqual([]);
   });
 
+  it('does not let an ordinary tool grant turn lobe-skills on', () => {
+    // The skill list is the only opt-in. Granting some unrelated tool says
+    // nothing about skills, so the Skills tool stays out of the visitor's set.
+    const toolSet = buildSkillsToolSet();
+
+    applyShareGateToToolSet(toolSet, buildGate({ toolGrants: [{ identifier: 'web-search' }] }));
+
+    expect(toolSet.manifestMap[SkillsIdentifier]).toBeUndefined();
+    expect(toolSet.enabledToolIds).toEqual([]);
+  });
+
   it('preserves the restricted Agent Documents schema for a per-API grant', () => {
     const toolSet = buildToolSet([
       {
@@ -1049,7 +1043,9 @@ describe('isShareBlockedBuiltinDispatch', () => {
   });
 
   it('blocks every Skills API when the owner revoked or never granted a skill', () => {
-    for (const permissions of [{}, { skillGrants: [] }]) {
+    // A tool grant is included on purpose: `toolGrants` never authorizes a
+    // skill, so it cannot unblock these APIs either.
+    for (const permissions of [{}, { skillGrants: [] }, { toolGrants: [{ identifier: 'x' }] }]) {
       expect(
         isShareBlockedBuiltinDispatch(permissions, SkillsIdentifier, SkillsApiName.activateSkill),
       ).toBe(true);

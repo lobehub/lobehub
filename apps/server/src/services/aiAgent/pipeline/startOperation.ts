@@ -176,9 +176,7 @@ export const startOperation = async (
             // re-check every load against the SAME allowlist the skill pool was
             // assembled from. Assembly alone is not enough: `activateSkill`
             // resolves a model-supplied skill NAME, so a name the pool never
-            // offered still reaches the runtime. Passed through verbatim —
-            // `undefined` vs `[]` is load-bearing (see
-            // `AgentShareConfig.skillGrants`), so it must not be defaulted here.
+            // offered still reaches the runtime.
             skillGrants: shareGate.shareConfig.skillGrants,
             showErrorDetails: shareGate.shareConfig.showErrorDetails,
             showModelInfo: shareGate.shareConfig.showModelInfo,

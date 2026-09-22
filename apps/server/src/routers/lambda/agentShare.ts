@@ -89,10 +89,10 @@ export const agentShareConfigSchema = z
     showErrorDetails: z.boolean().optional(),
     showModelInfo: z.boolean().optional(),
     /**
-     * Skill identifiers the creator opened to visitors. An empty array is a
-     * MEANINGFUL value here (explicit full revocation), unlike `toolGrants`
-     * entries' `apis`, so it is accepted rather than rejected — see the
-     * tri-state contract on `AgentShareConfig.skillGrants`.
+     * Skill identifiers the creator opened to visitors. An empty array is
+     * accepted rather than rejected: unticking the last skill is a normal
+     * write, and it reads the same as never having configured the field —
+     * no skill granted.
      */
     skillGrants: z
       .array(z.string().trim().min(1))

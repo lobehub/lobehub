@@ -100,34 +100,13 @@ describe('resolveShareAllowedSkillIds', () => {
     );
   });
 
-  it('treats an empty array as an explicit full revocation, not as "unset"', () => {
-    expect(
-      resolveShareAllowedSkillIds(['pdf-report'], {
-        skillGrants: [],
-        toolGrants: [{ identifier: 'pdf-report' }],
-      }),
-    ).toEqual([]);
+  it('grants nothing when skillGrants is empty', () => {
+    expect(resolveShareAllowedSkillIds(['pdf-report'], { skillGrants: [] })).toEqual([]);
   });
 
-  it('falls back to toolGrants when skillGrants was never configured', () => {
-    // Back-compat for shares saved before `skillGrants` existed, where skill
-    // ids were stored in the only list available at the time.
-    expect(
-      resolveShareAllowedSkillIds(['pdf-report', 'internal-audit'], {
-        toolGrants: [{ identifier: 'pdf-report' }],
-      }),
-    ).toEqual(['pdf-report']);
-  });
-
-  it('cannot let an ordinary tool grant widen the skill pool', () => {
-    // What makes the legacy fallback safe: it is an INTERSECTION with the run's
-    // real skill candidates, so tool ids in that mixed list match nothing.
-    expect(
-      resolveShareAllowedSkillIds(['pdf-report'], { toolGrants: [{ identifier: 'web-search' }] }),
-    ).toEqual([]);
-  });
-
-  it('grants nothing when the share carries neither list', () => {
+  it('grants nothing when skillGrants was never configured', () => {
+    // Default-closed: no grant means no skill, and `toolGrants` is never read
+    // as a skill list even though the two share one identifier namespace.
     expect(resolveShareAllowedSkillIds(['pdf-report'], {})).toEqual([]);
   });
 });

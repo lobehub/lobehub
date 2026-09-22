@@ -757,10 +757,9 @@ export const skillsRuntime: ServerRuntimeRegistration = {
     // name the pool never offered still arrives here. This predicate is that
     // second, authoritative check.
     //
-    // `resolveShareAllowedSkillIds` is given one candidate at a time rather
-    // than a catalog because its legacy `toolGrants` fallback is only sound as
-    // an intersection with real skill candidates — see its JSDoc. Passing a
-    // single id makes each call exactly that intersection.
+    // `resolveShareAllowedSkillIds` intersects candidates with the grant, so
+    // passing the single id under test makes each call exactly the membership
+    // question this predicate asks.
     const shareVisitor = context.agentShareVisitor;
     const isSkillGranted = shareVisitor
       ? (identifier: string) => resolveShareAllowedSkillIds([identifier], shareVisitor).length > 0

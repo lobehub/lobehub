@@ -53,11 +53,8 @@ const normalizeAgentShareConfig = (
   showErrorDetails: config?.showErrorDetails ?? DEFAULT_AGENT_SHARE_CONFIG.showErrorDetails,
   showModelInfo: config?.showModelInfo ?? DEFAULT_AGENT_SHARE_CONFIG.showModelInfo,
   /**
-   * Deliberately NOT defaulted: `skillGrants` is tri-state and `undefined`
-   * (never configured, legacy `toolGrants` fallback applies) must stay
-   * distinguishable from `[]` (explicit full revocation). Filling a default
-   * here would silently revoke every skill on rows written before this field
-   * existed.
+   * Left absent rather than defaulted to `[]`: both read as "no skill
+   * granted", so a default would only write a value the creator never picked.
    */
   skillGrants: config?.skillGrants,
   slug: config?.slug,

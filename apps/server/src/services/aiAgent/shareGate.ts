@@ -108,8 +108,7 @@ export const filterPluginsByShareGate = (pluginIds: string[], gate: AgentShareGa
  * grant also authorizes the no-tool path (a pinned skill's body is injected
  * straight into context), so it cannot be expressed as a grant on the
  * `lobe-skills` tool entry. See {@link resolveShareAllowedSkillIds} for the
- * tri-state semantics and why the intersection with real candidates is what
- * makes the legacy `toolGrants` fallback safe.
+ * default-closed semantics.
  *
  * Kept next to {@link filterPluginsByShareGate} so the two read as the pair
  * they are; callers must not use the plugin filter for skill ids.
@@ -181,10 +180,9 @@ export interface ShareDataToolPermissions {
    */
   knowledgeBaseIds?: string[];
   /**
-   * The share's `skillGrants` — see `AgentShareConfig.skillGrants` for the
-   * tri-state contract. Read here only to answer "does this share authorize any
-   * skill at all", which is what turns the `lobe-skills` TOOL on; which
-   * individual skills it may load is decided by
+   * The share's `skillGrants`. Read here only to answer "does this share
+   * authorize any skill at all", which is what turns the `lobe-skills` TOOL on;
+   * which individual skills it may load is decided by
    * {@link filterSkillsByShareGate} at assembly and re-checked at load time in
    * the skill runtime.
    */
@@ -201,18 +199,9 @@ export interface ShareDataToolPermissions {
  * way {@link getShareGrantActivatedPluginIds} lets the Documents grant double as
  * that tool's runtime opt-in. Without this, a share could list skills the
  * visitor's model has no tool to load.
- *
- * The legacy branch is deliberately coarse: before `skillGrants` existed, skill
- * ids rode along in `toolGrants` and cannot be told apart from ordinary tool
- * ids without the run's real skill candidates (which this function does not
- * have). Offering the tool to such a share is safe — an empty skill pool simply
- * leaves it with nothing to activate, exactly as it does for a creator who owns
- * no skills — and the per-skill filter still decides what is reachable.
  */
 const hasShareSkillAuthorization = (permissions: ShareDataToolPermissions): boolean =>
-  permissions.skillGrants
-    ? permissions.skillGrants.length > 0
-    : (permissions.toolGrants?.length ?? 0) > 0;
+  (permissions.skillGrants?.length ?? 0) > 0;
 
 /**
  * `resolveShareToolGrants` plus the grants that are implied rather than picked.

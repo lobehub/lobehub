@@ -85,11 +85,9 @@ export interface AgentShareVisitorContext {
   showModelInfo?: boolean;
   /**
    * Mirrors `shareConfig.skillGrants` so the skill runtime can enforce the same
-   * per-skill allowlist the operation's skill pool was built from. Tri-state —
-   * `undefined` means "never configured, fall back to skill ids in
-   * `toolGrants`", `[]` means explicit full revocation. Carried separately from
-   * {@link toolGrants} because a skill grant also governs the no-tool
-   * pinned-content path.
+   * per-skill allowlist the operation's skill pool was built from. Absent or
+   * empty grants no skill. Carried separately from {@link toolGrants} because a
+   * skill grant also governs the no-tool pinned-content path.
    */
   skillGrants?: string[];
   /**
