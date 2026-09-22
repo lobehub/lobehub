@@ -128,6 +128,12 @@ export interface ScmChangeRequestMetadata {
   /** Acceptance links parsed out of the change request body. */
   acceptanceIdsFromBody?: string[];
   /**
+   * Who is currently posting the tracking comment, as an ISO timestamp.
+   * Taken atomically so concurrent deliveries cannot each post one; goes
+   * stale on its own if the post never finishes.
+   */
+  commentClaimedAt?: string;
+  /**
    * Provider-clock timestamp of the newest change-request event applied.
    * Kept apart from the `lastEventAt` column, which also records events we
    * time with our own clock (check results), so ordering only ever compares

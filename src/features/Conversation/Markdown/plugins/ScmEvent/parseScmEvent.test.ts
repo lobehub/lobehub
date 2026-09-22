@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseAttributes, parseScmEvent } from './parseScmEvent';
+import { parseAttributes, parseScmEvent, safeScmUrl } from './parseScmEvent';
 
 // Mirrors what apps/server/src/services/scm/wakePrompt.ts emits.
 const ciInner = `<check conclusion="failure" name="Test" url="https://github.com/o/r/actions/runs/9/job/2">
@@ -82,5 +82,35 @@ describe('parseScmEvent', () => {
       name: 'a & b <c>',
       repo: 'o/r',
     });
+  });
+});
+
+describe('safeScmUrl', () => {
+  it('keeps http(s) and drops every other scheme', () => {
+    expect(safeScmUrl('https://github.com/o/r/pull/7')).toBe('https://github.com/o/r/pull/7');
+    expect(safeScmUrl('http://localhost:3000/x')).toBe('http://localhost:3000/x');
+    // The block is markdown anyone can write, and on desktop a click on the
+    // card's anchor reaches shell.openExternal — an OS handler must not be
+    // one message away.
+    for (const hostile of [
+      'vscode://file/etc/passwd',
+      'file:///etc/passwd',
+      'javascript:alert(1)',
+      'not a url',
+      '',
+    ]) {
+      expect(safeScmUrl(hostile)).toBeUndefined();
+    }
+    expect(safeScmUrl(undefined)).toBeUndefined();
+  });
+
+  it('strips a hostile url off the parsed checks and reviews', () => {
+    const parsed = parseScmEvent(
+      '<check name="Test" url="vscode://file/etc/passwd" />' +
+        '<review author="a" url="javascript:alert(1)"><![CDATA[hi]]></review>',
+    );
+
+    expect(parsed.checks[0]).toMatchObject({ name: 'Test', url: undefined });
+    expect(parsed.reviews[0]).toMatchObject({ author: 'a', url: undefined });
   });
 });

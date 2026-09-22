@@ -507,6 +507,39 @@ describe('ScmControlService — wake', () => {
     expect((await ScmChangeRequestModel.findById(serverDB, row.id))?.wakeCount).toBe(SCM_MAX_WAKES);
   });
 
+  it('flips the Work to merged even when accepting on merge is off', async () => {
+    const [work] = await serverDB
+      .insert(works)
+      .values({
+        resourceId: 'arvinxx/sandbox#5',
+        resourceType: 'github_pull_request',
+        status: 'open',
+        toolIdentifier: 'lobe-local-system',
+        toolName: 'runCommand',
+        type: 'external',
+        userId,
+        visibility: 'private',
+      })
+      .returning();
+    const row = await ScmChangeRequestModel.upsert(serverDB, {
+      ...baseRow,
+      links: { workId: work.id },
+      state: 'merged',
+    });
+    await serverDB
+      .update(users)
+      .set({ preference: { integration: { github: { acceptOnMerge: false } } } as any })
+      .where(eq(users.id, userId));
+
+    expect(
+      await control().handle({ event: changeRequestEvent('merged'), kind: 'merged', row }),
+    ).toMatchObject({ outcome: 'skipped', detail: 'acceptOnMerge is off' });
+
+    // The switch only governs the verdict; the Work row mirrors GitHub.
+    const [flipped] = await serverDB.select().from(works).where(eq(works.id, work.id));
+    expect(flipped.status).toBe('merged');
+  });
+
   it('reports a failed wake without counting it', async () => {
     const topic = await createTopic();
     const row = await ScmChangeRequestModel.upsert(serverDB, {
@@ -594,8 +627,7 @@ describe('ScmControlService — the tracking comment in GitHub', () => {
     expect(stale).toMatchObject({ outcome: 'commented', updated: true });
     expect(mocks.postComment).toHaveBeenCalledTimes(1);
 
-    // And when the claim itself is lost, nothing is posted either.
-    mocks.redisSet.mockResolvedValueOnce(null);
+    // And when another delivery already holds the claim, nothing is posted.
     const unclaimed = await ScmChangeRequestModel.upsert(serverDB, {
       ...baseRow,
       links: { acceptanceId: row.acceptanceId, installationId: row.installationId },
@@ -603,6 +635,7 @@ describe('ScmControlService — the tracking comment in GitHub', () => {
       number: 6,
       url: 'https://github.com/arvinxx/sandbox/pull/6',
     });
+    await ScmChangeRequestModel.claimCommentSlot(serverDB, unclaimed.id);
     expect(
       await control().handle({
         event: changeRequestEvent('opened'),
@@ -611,6 +644,22 @@ describe('ScmControlService — the tracking comment in GitHub', () => {
       }),
     ).toMatchObject({ outcome: 'skipped', detail: 'comment already in flight' });
     expect(mocks.postComment).toHaveBeenCalledTimes(1);
+  });
+
+  it('posts once when opened and synchronize race, with no Redis to arbitrate', async () => {
+    const row = await bindAndOpen({ metadata: { repoPrivate: true } });
+    // Both handlers hold the pre-comment row, which is what a Redis-less
+    // deployment looks like: nothing outside the database serialises them.
+    const outcomes = await Promise.all([
+      control().handle({ event: changeRequestEvent('opened'), kind: 'opened', row }),
+      control().handle({ event: changeRequestEvent('opened'), kind: 'synchronized', row }),
+    ]);
+
+    expect(mocks.postComment).toHaveBeenCalledTimes(1);
+    expect(outcomes.filter((o) => o.outcome === 'commented' && !o.updated)).toHaveLength(1);
+    expect(
+      (await ScmChangeRequestModel.findById(serverDB, row.id))?.metadata.lobehubCommentId,
+    ).toBe('c-1');
   });
 
   it('reflects the merge and the notifications in the comment', async () => {

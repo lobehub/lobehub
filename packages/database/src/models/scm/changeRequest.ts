@@ -646,6 +646,55 @@ export class ScmChangeRequestModel {
     return reserved?.wakeCount ?? null;
   };
 
+  /**
+   * Take the right to post the tracking comment, atomically.
+   *
+   * Posting a comment is irreversible, so the single-writer decision cannot
+   * live in the application: `opened` and the `synchronize` a second later
+   * are handled concurrently, and on a deployment without Redis nothing
+   * else stops them both from seeing an unposted row. A conditional update
+   * on the metadata bag lets exactly one through; the claim goes stale
+   * after `staleAfterMs` so a crashed post does not block the row forever.
+   */
+  static claimCommentSlot = async (
+    db: LobeChatDatabase,
+    id: string,
+    staleAfterMs = 5 * 60 * 1000,
+  ): Promise<boolean> => {
+    const now = new Date();
+    const staleBefore = new Date(now.getTime() - staleAfterMs).toISOString();
+
+    const [claimed] = await db
+      .update(scmChangeRequests)
+      .set({
+        metadata: sql`${scmChangeRequests.metadata} || ${JSON.stringify({
+          commentClaimedAt: now.toISOString(),
+        })}::jsonb`,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(scmChangeRequests.id, id),
+          sql`${scmChangeRequests.metadata} ->> 'lobehubCommentId' is null`,
+          sql`coalesce(${scmChangeRequests.metadata} ->> 'commentClaimedAt', '') < ${staleBefore}`,
+        ),
+      )
+      .returning({ id: scmChangeRequests.id });
+
+    return Boolean(claimed);
+  };
+
+  /** Give the comment slot back when the post never happened. */
+  static releaseCommentSlot = async (db: LobeChatDatabase, id: string): Promise<void> => {
+    await db
+      .update(scmChangeRequests)
+      .set({
+        metadata: sql`${scmChangeRequests.metadata} - 'commentClaimedAt'`,
+        updatedAt: new Date(),
+      })
+      .where(eq(scmChangeRequests.id, id));
+  };
+
   /** Hand a reserved wake back when the run never started. */
   static releaseWake = async (db: LobeChatDatabase, id: string): Promise<void> => {
     await db

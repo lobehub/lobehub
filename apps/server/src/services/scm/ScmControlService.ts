@@ -89,6 +89,12 @@ export class ScmControlService {
         return this.syncComment(row);
       }
       case 'merged': {
+        // The Work row mirrors what GitHub says about the pull request, so
+        // it follows the merge whatever the automation switches say; only
+        // the acceptance verdict is opt-out.
+        if (row.workId) {
+          await this.db.update(works).set({ status: 'merged' }).where(eq(works.id, row.workId));
+        }
         if (!(await this.isEnabled(row, 'acceptOnMerge'))) {
           return { detail: 'acceptOnMerge is off', outcome: 'skipped' };
         }
@@ -170,16 +176,22 @@ export class ScmControlService {
 
     // `opened` and the `synchronize` that follows the first push arrive a
     // second apart and are handled concurrently; the row each handler holds
-    // predates the other's write, so a per-row claim decides who posts.
-    if (!(await this.claimOnce(`scm:comment:${row.id}`, 300))) {
+    // predates the other's write, so the claim decides who posts. It has to
+    // be the database's: posting is irreversible, and a Redis-less
+    // deployment would otherwise leave an orphan comment nothing updates.
+    if (!(await ScmChangeRequestModel.claimCommentSlot(this.db, row.id))) {
+      const fresh = await ScmChangeRequestModel.findById(this.db, row.id);
+      if (fresh?.metadata.lobehubCommentId)
+        return this.updateComment(fresh, fresh.metadata.lobehubCommentId);
       return { detail: 'comment already in flight', outcome: 'skipped' };
     }
     const fresh = await ScmChangeRequestModel.findById(this.db, row.id);
-    if (fresh?.metadata.lobehubCommentId)
-      return this.updateComment(fresh, fresh.metadata.lobehubCommentId);
 
     const installationId = await this.providerInstallationId(row.installationId);
-    if (!installationId) return { detail: 'installation not found', outcome: 'skipped' };
+    if (!installationId) {
+      await ScmChangeRequestModel.releaseCommentSlot(this.db, row.id);
+      return { detail: 'installation not found', outcome: 'skipped' };
+    }
 
     const commentId = await postGitHubPullRequestComment({
       body: await this.buildCommentBody(fresh ?? row),
@@ -187,7 +199,10 @@ export class ScmControlService {
       number: row.number,
       repoFullName: row.repoFullName,
     });
-    if (!commentId) return { detail: 'comment failed', outcome: 'skipped' };
+    if (!commentId) {
+      await ScmChangeRequestModel.releaseCommentSlot(this.db, row.id);
+      return { detail: 'comment failed', outcome: 'skipped' };
+    }
 
     await ScmChangeRequestModel.upsert(this.db, {
       metadata: { lobehubCommentId: commentId },
@@ -284,9 +299,6 @@ export class ScmControlService {
   // --------------- merge → accepted ---------------
 
   private onMerged = async (row: ScmChangeRequestItem): Promise<ScmControlOutcome> => {
-    if (row.workId) {
-      await this.db.update(works).set({ status: 'merged' }).where(eq(works.id, row.workId));
-    }
     if (!row.acceptanceId) return { detail: 'no linked acceptance', outcome: 'skipped' };
 
     // Stacked PRs: the acceptance closes when the last linked PR lands.

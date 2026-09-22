@@ -32,6 +32,26 @@ export interface ParsedScmEvent {
   reviews: ScmEventReview[];
 }
 
+/**
+ * A card link the renderer may turn into an anchor.
+ *
+ * The block is markdown a message author can write by hand, and on desktop
+ * a click on an anchor reaches `shell.openExternal` — so an `scmEvent` with
+ * a `vscode:` or `file:` url would launch an OS protocol handler. Only
+ * http(s) survives parsing; anything else is dropped and the field renders
+ * as plain text. Same rule as `openTrustedExternalUrl`, applied one layer
+ * earlier so every consumer of the parsed event inherits it.
+ */
+export const safeScmUrl = (value: string | undefined): string | undefined => {
+  if (!value) return undefined;
+  try {
+    const { protocol, href } = new URL(value);
+    return protocol === 'http:' || protocol === 'https:' ? href : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 const unescapeAttribute = (value: string) =>
   value
     .replaceAll('&quot;', '"')
@@ -74,7 +94,7 @@ export const parseScmEvent = (raw: string): ParsedScmEvent => {
       conclusion: attrs.conclusion,
       log: logMatch ? cdataText(logMatch[1]) : undefined,
       name: attrs.name,
-      url: attrs.url,
+      url: safeScmUrl(attrs.url),
     });
   }
 
@@ -87,7 +107,7 @@ export const parseScmEvent = (raw: string): ParsedScmEvent => {
       line: Number.isFinite(line) ? line : undefined,
       path: attrs.path,
       state: attrs.state,
-      url: attrs.url,
+      url: safeScmUrl(attrs.url),
     });
   }
 

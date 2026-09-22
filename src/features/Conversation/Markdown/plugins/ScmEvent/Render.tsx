@@ -18,6 +18,7 @@ import { type MarkdownElementProps } from '../type';
 import {
   type ParsedScmEvent,
   parseScmEvent,
+  safeScmUrl,
   type ScmEventAttributes,
   type ScmEventCheck,
   type ScmEventReview,
@@ -297,6 +298,8 @@ const Render = memo<MarkdownElementProps<ScmEventAttributes>>(({ children, node 
     </span>
   );
 
+  // The header link is a tag attribute, so it skips the parser's guard.
+  const headerUrl = safeScmUrl(attrs.url);
   const single = parsed.checks.length === 1 ? parsed.checks[0] : null;
   const many = parsed.checks.length > 1 ? parsed.checks : null;
   const reviewers = [...new Set(parsed.reviews.map((review) => `@${review.author}`))];
@@ -309,8 +312,8 @@ const Render = memo<MarkdownElementProps<ScmEventAttributes>>(({ children, node 
         </span>
         <Flexbox flex={1} gap={1} style={{ minWidth: 0 }}>
           <Text ellipsis weight={500}>
-            {attrs.url ? (
-              <a className={styles.link} href={attrs.url} rel="noreferrer" target="_blank">
+            {headerUrl ? (
+              <a className={styles.link} href={headerUrl} rel="noreferrer" target="_blank">
                 {title}
                 <Icon icon={ExternalLinkIcon} size={12} />
               </a>
