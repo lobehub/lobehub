@@ -18,7 +18,9 @@ const DEFAULT_GATEWAY_TOOL_CALL_TIMEOUT_MS = 30_000;
  * long as the socket stays open.
  */
 const DEVICE_QUERY_TIMEOUT_MS = 10_000;
-const HTTP_CALL_TIMEOUT_PADDING_MS = 30_000;
+// The gateway reserves 45s for reconnect/replay after the tool's execution
+// budget. Keep another 15s for the terminal response to cross the HTTP hop.
+const HTTP_CALL_TIMEOUT_PADDING_MS = 60_000;
 
 export interface DeviceStatusResult {
   deviceCount: number;

@@ -109,6 +109,13 @@ vi.mock('@lobechat/device-gateway-client', () => ({
       updateToken: vi.fn(),
     };
   }),
+  PersistentToolCallExecutor: vi.fn().mockImplementation(() => ({
+    execute: vi.fn(async (_requestId: unknown, run: () => Promise<unknown>) => ({
+      result: await run(),
+      status: 'completed',
+    })),
+  })),
+  resolveToolCallExecutionResult: (execution: { result: unknown }) => execution.result,
 }));
 
 describe('connect command', () => {

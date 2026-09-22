@@ -15,8 +15,13 @@ import type {
   RpcRequestMessage,
   SystemInfoRequestMessage,
   ToolCallRequestMessage,
+  ToolCallResponseMessage,
 } from '@lobechat/device-gateway-client';
-import { GatewayClient } from '@lobechat/device-gateway-client';
+import {
+  GatewayClient,
+  PersistentToolCallExecutor,
+  resolveToolCallExecutionResult,
+} from '@lobechat/device-gateway-client';
 import { listHeterogeneousAgentModels } from '@lobechat/heterogeneous-agents/models';
 import { getShellInfo } from '@lobechat/local-file-shell';
 import type { Command } from 'commander';
@@ -29,6 +34,7 @@ import {
   CLI_CONNECT_SERVICE_NAME,
   CLI_DISPLAY_NAME,
   CLI_PRIMARY_BIN,
+  resolveCliDirName,
 } from '../constants/identity';
 import { OFFICIAL_GATEWAY_URL } from '../constants/urls';
 import {
@@ -74,6 +80,9 @@ import { log, setVerbose } from '../utils/logger';
 import { sweepLocalTraces } from '../utils/traceMaintenance';
 
 const CONNECT_SERVICE_NAME = CLI_CONNECT_SERVICE_NAME;
+const toolCallExecutor = new PersistentToolCallExecutor<ToolCallResponseMessage['result']>(
+  path.join(os.homedir(), resolveCliDirName(), 'device-tool-calls'),
+);
 
 interface ConnectOptions {
   daemon?: boolean;
@@ -862,12 +871,32 @@ function bindGatewayClientHandlers(
       log.toolCall(toolCall.apiName, requestId, toolCall.arguments, operationId);
     }
 
-    // Timed on the DEVICE's clock. The server can only see the whole dispatch
-    // round trip, so reporting this back is what separates a slow tool from
-    // slow transport.
-    const startedAt = performance.now();
-    const result = await executeToolCall(toolCall.apiName, toolCall.arguments, timeout);
-    const executionTimeMs = Math.round(performance.now() - startedAt);
+    const execution = await toolCallExecutor.execute(requestId, async () => {
+      // Timed on the DEVICE's clock. The server can only see the whole dispatch
+      // round trip, so reporting this back is what separates a slow tool from
+      // slow transport.
+      const startedAt = performance.now();
+      try {
+        const result = await executeToolCall(toolCall.apiName, toolCall.arguments, timeout);
+        return {
+          content: result.content,
+          error: result.error,
+          executionTimeMs: Math.round(performance.now() - startedAt),
+          state: result.state,
+          success: result.success,
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return {
+          content: message,
+          error: message,
+          executionTimeMs: Math.round(performance.now() - startedAt),
+          success: false,
+        };
+      }
+    });
+    const result = resolveToolCallExecutionResult(execution);
+    const executionTimeMs = result.executionTimeMs ?? 0;
 
     if (isDaemonChild) {
       appendLog(
@@ -877,16 +906,7 @@ function bindGatewayClientHandlers(
       log.toolResult(requestId, result.success, result.content, operationId);
     }
 
-    client.sendToolCallResponse({
-      requestId,
-      result: {
-        content: result.content,
-        error: result.error,
-        executionTimeMs,
-        state: result.state,
-        success: result.success,
-      },
-    });
+    client.sendToolCallResponse({ requestId, result });
   });
 
   // Handle generic server-internal device RPCs (git / workspace / file ops).
