@@ -1,8 +1,11 @@
+import { AGENT_SHARE_ALLOWED_PROVIDERS } from '@lobechat/business-const';
 import { Tooltip } from '@lobehub/ui';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
+import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
@@ -32,6 +35,12 @@ const ModelSwitch = memo(() => {
   // default; a switch pins to the active topic, otherwise updates the agent
   // (via selectModel, which honors workspace member overrides).
   const activeTopicId = useChatStore((s) => s.activeTopicId);
+  const { isShared } = useAgentShareSupported(agentId);
+  const chatModels = useEnabledChatModels();
+  const enabledList =
+    !activeTopicId && isShared && AGENT_SHARE_ALLOWED_PROVIDERS
+      ? chatModels.filter((item) => AGENT_SHARE_ALLOWED_PROVIDERS?.includes(item.id))
+      : undefined;
   const topicModel = useChatStore(topicSelectors.activeTopicModel);
   const updateTopicModel = useChatStore((s) => s.updateTopicModel);
   const model = topicModel?.model ?? agentModel;
@@ -85,6 +94,7 @@ const ModelSwitch = memo(() => {
         canSelectModel={canSelectModel}
         displayName={displayName}
         effort={effort}
+        enabledList={enabledList}
         model={model}
         placement={dropdownPlacement ?? 'topRight'}
         provider={provider}
@@ -100,6 +110,7 @@ const ModelSwitch = memo(() => {
 
   return (
     <ModelSwitchPanel
+      enabledList={enabledList}
       model={model}
       openOnHover={false}
       placement={dropdownPlacement ?? 'topRight'}

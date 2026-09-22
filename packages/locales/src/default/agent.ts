@@ -425,6 +425,8 @@ export default {
     'Sharing is off. Turn it on to get a link you can hand out — turning it off again only pauses it, and the same link resumes whenever you turn it back on.',
   'share.settings.link.publishDisabled':
     'Sharing is not available on your account yet. You can still turn off a share you already published.',
+  'share.settings.link.modelDisabled':
+    'Only LobeHub models can be shared. Switch this Agent to a LobeHub model before turning sharing on.',
   'share.settings.link.slugError.invalid':
     'Use lowercase letters, numbers and hyphens only, and don’t start or end with a hyphen.',
   'share.settings.link.slugError.reserved': 'This word is reserved. Please pick another one.',

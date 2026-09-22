@@ -6,10 +6,13 @@ import {
 } from '@lobehub/ui';
 import { memo } from 'react';
 
+import type { EnabledProviderWithModels } from '@/types/aiProvider';
+
 import { PanelContent } from './components/PanelContent';
 import { styles } from './styles';
 
 interface ModelSwitchSubmenuPopupProps {
+  enabledList?: EnabledProviderWithModels[];
   model?: string;
   onModelChange?: (params: { model: string; provider: string }) => Promise<void>;
   /** Called with `false` once a row is picked, so the host can close its whole menu. */
@@ -23,11 +26,12 @@ interface ModelSwitchSubmenuPopupProps {
  * The caller supplies the `DropdownMenuSubmenuRoot` and its trigger row.
  */
 export const ModelSwitchSubmenuPopup = memo<ModelSwitchSubmenuPopupProps>(
-  ({ model, onModelChange, onOpenChange, provider }) => (
+  ({ enabledList, model, onModelChange, onOpenChange, provider }) => (
     <DropdownMenuPortal>
       <DropdownMenuPositioner alignOffset={-4} anchor={null} placement="right" sideOffset={8}>
         <DropdownMenuPopup className={styles.container} onKeyDown={stopPropagation}>
           <PanelContent
+            enabledList={enabledList}
             model={model}
             provider={provider}
             onModelChange={onModelChange}

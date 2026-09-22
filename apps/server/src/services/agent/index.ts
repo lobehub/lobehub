@@ -1,6 +1,6 @@
 import { type BuiltinAgentSlug } from '@lobechat/builtin-agents';
 import { BUILTIN_AGENTS } from '@lobechat/builtin-agents';
-import { DEFAULT_PROVIDER } from '@lobechat/business-const';
+import { AGENT_SHARE_ALLOWED_PROVIDERS, DEFAULT_PROVIDER } from '@lobechat/business-const';
 import { DEFAULT_AGENT_CONFIG, DEFAULT_MODEL } from '@lobechat/const';
 import { type LobeChatDatabase } from '@lobechat/database';
 import { type AgentItem, type LobeAgentChatConfig, type LobeAgentConfig } from '@lobechat/types';
@@ -10,6 +10,7 @@ import debug from 'debug';
 import { type PartialDeep } from 'type-fest';
 
 import { AgentModel } from '@/database/models/agent';
+import { AgentShareModel } from '@/database/models/agentShare';
 import { SessionModel } from '@/database/models/session';
 import { UserModel } from '@/database/models/user';
 import { normalizeInboxAgentAvatar, normalizeInboxAgentTitle } from '@/database/utils/inboxAgent';
@@ -65,6 +66,22 @@ export class AgentService {
     this.workspaceId = workspaceId;
     this.agentModel = new AgentModel(db, userId, workspaceId);
     this.userModel = new UserModel(db, userId);
+  }
+
+  /** Validate the effective selection at configuration boundaries, including inherited defaults. */
+  async assertShareModelAllowed(agentId: string, patch: PartialDeep<AgentItem> = {}) {
+    if (!AGENT_SHARE_ALLOWED_PROVIDERS) return;
+
+    const agent = await this.agentModel.getAgentConfigById(agentId);
+    if (!agent) throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
+
+    const { provider } = await this.resolveModelSelection({ ...agent, ...patch });
+    if (!AGENT_SHARE_ALLOWED_PROVIDERS.includes(provider)) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: `Shared agents only support models from: ${AGENT_SHARE_ALLOWED_PROVIDERS.join(', ')}. Switch providers or turn off sharing first.`,
+      });
+    }
   }
 
   async createInbox() {
@@ -275,6 +292,11 @@ export class AgentService {
     agentId: string,
     value: PartialDeep<AgentItem>,
   ): Promise<UpdateAgentResult> {
+    if (AGENT_SHARE_ALLOWED_PROVIDERS && ('model' in value || 'provider' in value)) {
+      const share = await new AgentShareModel(this.db, this.userId).getByAgentId(agentId);
+      if (share?.visibility === 'link') await this.assertShareModelAllowed(agentId, value);
+    }
+
     // 1. Execute update
     // `AgentItem` here is the `@lobechat/types` domain shape (plugins:
     // AgentPluginEntry[]); `agentModel.updateConfig` takes the DB-layer

@@ -38,6 +38,13 @@ vi.mock('@lobechat/business-const', async () => {
   };
 });
 
+const mockAssertShareModelAllowed = vi.fn();
+vi.mock('@/server/services/agent', () => ({
+  AgentService: vi.fn(function () {
+    return { assertShareModelAllowed: mockAssertShareModelAllowed };
+  }),
+}));
+
 const mockCreate = vi.fn();
 const mockFindByShareId = vi.fn();
 const mockForceDisableWorkspaceShare = vi.fn();
@@ -104,6 +111,7 @@ const share = {
 describe('agentShareRouter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAssertShareModelAllowed.mockReset().mockResolvedValue(undefined);
     mocks.businessConst.ENABLE_BUSINESS_FEATURES = true;
     mockCreate.mockResolvedValue(share);
     mockFindByShareId.mockResolvedValue({
@@ -151,6 +159,29 @@ describe('agentShareRouter', () => {
 
     await caller.enableShare({ agentId: 'agent-1', visibility: 'link' });
     expect(mockCreate).toHaveBeenCalledWith('agent-1', 'link');
+  });
+
+  it.each(['enableShare', 'updateVisibility'] as const)(
+    'rejects unsupported providers through %s before publishing',
+    async (method) => {
+      mockAssertShareModelAllowed.mockRejectedValue(
+        new TRPCError({ code: 'BAD_REQUEST', message: 'Unsupported share provider' }),
+      );
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+      await expect(
+        caller[method]({ agentId: 'agent-1', visibility: 'link' }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      expect(mockCreate).not.toHaveBeenCalled();
+      expect(mockUpdateVisibility).not.toHaveBeenCalled();
+    },
+  );
+
+  it('allows disabling a share with an unsupported provider', async () => {
+    mockAssertShareModelAllowed.mockRejectedValue(new Error('Unsupported share provider'));
+    const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+    await expect(
+      caller.updateVisibility({ agentId: 'agent-1', visibility: 'private' }),
+    ).resolves.toEqual(share);
   });
 
   it('returns null when a personal agent has no share', async () => {

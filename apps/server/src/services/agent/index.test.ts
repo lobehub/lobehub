@@ -4,6 +4,7 @@ import { DEFAULT_AGENT_CONFIG, DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE } from 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentModel } from '@/database/models/agent';
+import { AgentShareModel } from '@/database/models/agentShare';
 import { SessionModel } from '@/database/models/session';
 import { UserModel } from '@/database/models/user';
 import type * as RedisModule from '@/libs/redis';
@@ -11,6 +12,11 @@ import { initializeRedisWithPrefix, isRedisEnabled, RedisKeys } from '@/libs/red
 import { parseAgentConfig } from '@/server/globalConfig/parseDefaultAgent';
 
 import { AgentService } from './index';
+
+vi.mock('@lobechat/business-const', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  AGENT_SHARE_ALLOWED_PROVIDERS: ['lobehub'],
+}));
 
 vi.mock('@/envs/app', () => ({
   appEnv: {
@@ -32,6 +38,8 @@ vi.mock('@/database/models/session', () => ({
 vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn(),
 }));
+
+vi.mock('@/database/models/agentShare', () => ({ AgentShareModel: vi.fn() }));
 
 vi.mock('@/database/models/user', () => ({
   UserModel: vi.fn(),
@@ -821,6 +829,89 @@ describe('AgentService', () => {
         // Should return normal config without error
         expect(result?.id).toBe('agent-1');
         expect(result?.openingMessage).toBeUndefined();
+      });
+    });
+  });
+
+  describe('share provider restrictions', () => {
+    const storedAgent = { id: 'agent-1', model: 'gpt-4', provider: 'lobehub' };
+    let agent: Omit<typeof storedAgent, 'provider'> & { provider: string | null };
+    let visibility: string;
+
+    beforeEach(() => {
+      agent = { ...storedAgent };
+      visibility = 'link';
+      mockUserModel.getUserSettingsDefaultAgentConfig.mockResolvedValue({});
+      vi.mocked(parseAgentConfig).mockReturnValue({ provider: 'lobehub' });
+      vi.mocked(AgentModel).mockImplementation(function () {
+        return {
+          getAgentConfigById: vi.fn(async () => agent),
+          updateConfig: vi.fn(async (_id, patch) => {
+            agent = { ...agent, ...patch };
+          }),
+        } as unknown as AgentModel;
+      });
+      vi.mocked(AgentShareModel).mockImplementation(function () {
+        return { getByAgentId: vi.fn(async () => ({ visibility })) } as unknown as AgentShareModel;
+      });
+      vi.mocked(isRedisEnabled).mockReturnValue(false);
+      service = new AgentService(mockDb, mockUserId);
+    });
+
+    it('rejects changing a shared agent to a third-party provider without saving it', async () => {
+      await expect(
+        service.updateAgentConfig('agent-1', { provider: 'supergrok' }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      expect(agent.provider).toBe('lobehub');
+    });
+
+    it('allows changing the model within the supported provider', async () => {
+      await expect(service.updateAgentConfig('agent-1', { model: 'gpt-5' })).resolves.toMatchObject(
+        { success: true },
+      );
+      expect(agent.model).toBe('gpt-5');
+    });
+
+    it('allows third-party providers when there is no share', async () => {
+      vi.mocked(AgentShareModel).mockImplementation(function () {
+        return { getByAgentId: vi.fn(async () => null) } as unknown as AgentShareModel;
+      });
+      await expect(
+        service.updateAgentConfig('agent-1', { provider: 'openai' }),
+      ).resolves.toMatchObject({ success: true });
+      expect(agent.provider).toBe('openai');
+    });
+
+    it('allows third-party providers after sharing is disabled', async () => {
+      visibility = 'private';
+      await expect(
+        service.updateAgentConfig('agent-1', { provider: 'supergrok' }),
+      ).resolves.toMatchObject({ success: true });
+      expect(agent.provider).toBe('supergrok');
+    });
+
+    it('does not block unrelated edits to legacy shared agents', async () => {
+      agent.provider = 'supergrok';
+      await expect(
+        service.updateAgentConfig('agent-1', { title: 'Updated title' }),
+      ).resolves.toMatchObject({ success: true });
+    });
+
+    it('rejects publishing a third-party model', async () => {
+      agent.provider = 'supergrok';
+      await expect(service.assertShareModelAllowed('agent-1')).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+      });
+    });
+
+    it('resolves inherited providers before publishing', async () => {
+      agent.provider = null;
+      await expect(service.assertShareModelAllowed('agent-1')).resolves.toBeUndefined();
+      mockUserModel.getUserSettingsDefaultAgentConfig.mockResolvedValue({
+        config: { provider: 'openai' },
+      });
+      await expect(service.assertShareModelAllowed('agent-1')).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
       });
     });
   });

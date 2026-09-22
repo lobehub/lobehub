@@ -1,5 +1,6 @@
 'use client';
 
+import { AGENT_SHARE_ALLOWED_PROVIDERS } from '@lobechat/business-const';
 import { isDesktop } from '@lobechat/const';
 import {
   isHeterogeneousProviderBindingSupported,
@@ -16,6 +17,7 @@ import { Wrench } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
 import { resolveServerDefaultAgentModels } from '@/features/HeterogeneousAgent/modelPicker';
 import ModelSelect from '@/features/ModelSelect';
 import ReasoningEffortSelect from '@/features/ModelSelect/ReasoningEffortSelect';
@@ -62,6 +64,7 @@ const ProfileEditor = memo(() => {
   const { allowed: canEdit } = usePermission('edit_own_content');
   const agentId = useAgentStore((s) => s.activeAgentId || '');
   const config = useAgentStore(agentSelectors.getAgentConfigById(agentId), isEqual);
+  const { isShared } = useAgentShareSupported(agentId);
   const isWorkspaceAgent = useAgentStore(agentByIdSelectors.isWorkspaceAgentById(agentId));
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
@@ -261,6 +264,11 @@ const ProfileEditor = memo(() => {
                   initialWidth
                   disabled={!canEdit}
                   popupWidth={400}
+                  providerIds={
+                    isShared && AGENT_SHARE_ALLOWED_PROVIDERS
+                      ? [...AGENT_SHARE_ALLOWED_PROVIDERS]
+                      : undefined
+                  }
                   value={{
                     model: config?.model,
                     provider: config?.provider,

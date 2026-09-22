@@ -15,6 +15,7 @@ import { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { AgentService } from '@/server/services/agent';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 
 import { assertAgentShareCreationEnabled } from './_helpers/agentShareFeatureGate';
@@ -90,6 +91,7 @@ const agentShareProcedure = wsCompatProcedure.use(serverDatabase).use(async (opt
 
   return opts.next({
     ctx: {
+      agentService: new AgentService(ctx.serverDB, ctx.userId),
       agentShareModel: new AgentShareModel(ctx.serverDB, ctx.userId, workspaceId, {
         authorizeMutation: workspaceId
           ? (db, agentId) =>
@@ -173,6 +175,9 @@ export const agentShareRouter = router({
     .mutation(async ({ input, ctx }) => {
       await assertCanManageAgentShare(ctx, input.agentId);
       await assertAgentShareCreationEnabled(ctx.userId);
+
+      if (input.visibility === 'link')
+        await ctx.agentService.assertShareModelAllowed(input.agentId);
 
       return ctx.agentShareModel.create(input.agentId, input.visibility);
     }),
@@ -332,7 +337,10 @@ export const agentShareRouter = router({
       await assertCanManageAgentShare(ctx, input.agentId);
       // Flipping to `link` publishes the share, so it is the same capability
       // as `enableShare`; going back to `private` unpublishes and stays open.
-      if (input.visibility === 'link') await assertAgentShareCreationEnabled(ctx.userId);
+      if (input.visibility === 'link') {
+        await assertAgentShareCreationEnabled(ctx.userId);
+        await ctx.agentService.assertShareModelAllowed(input.agentId);
+      }
 
       return requireShare(
         await ctx.agentShareModel.updateVisibility(input.agentId, input.visibility),
