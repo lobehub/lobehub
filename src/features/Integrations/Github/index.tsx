@@ -6,8 +6,8 @@ import { createStaticStyles } from 'antd-style';
 import { ArrowLeftIcon, BookOpenIcon } from 'lucide-react';
 import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import urlJoin from 'url-join';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import AsyncError from '@/components/AsyncError';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
@@ -17,8 +17,7 @@ import { useGithubIntegration } from '../useGithubIntegration';
 import Automation from './Automation';
 import Connections from './Connections';
 import { GITHUB_INTEGRATION } from './definition';
-
-const RETURN_TO = '/settings/integrations/github';
+import { buildGithubInstallHref } from './installHref';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   back: css`
@@ -94,6 +93,7 @@ const GithubIntegration = memo<GithubIntegrationProps>(({ onBack }) => {
   const { t, ready } = useTranslation('integration');
   const appOrigin = useAppOrigin();
   const workspaceSlug = useActiveWorkspaceSlug();
+  const workspaceId = useActiveWorkspaceId();
   const scope = workspaceSlug ? 'workspace' : 'personal';
   const data = useGithubIntegration();
 
@@ -145,14 +145,9 @@ const GithubIntegration = memo<GithubIntegrationProps>(({ onBack }) => {
   }
 
   const { config, identity, installations } = data;
-  // Absolute on purpose: on desktop the renderer lives on app://renderer and a
-  // relative link never reaches the server route.
-  // The callback sends the user back here; inside a workspace that has to be
-  // the mirrored path, or they land on the personal surface instead.
-  const returnTo = workspaceSlug ? `/${workspaceSlug}${RETURN_TO}` : RETURN_TO;
   const installHref =
-    config?.enabled && appOrigin
-      ? `${urlJoin(appOrigin, config.installPath)}?returnTo=${encodeURIComponent(returnTo)}`
+    config?.enabled && config.installPath
+      ? buildGithubInstallHref(config.installPath, { appOrigin, workspaceId, workspaceSlug })
       : undefined;
 
   const first = installations.at(-1);
