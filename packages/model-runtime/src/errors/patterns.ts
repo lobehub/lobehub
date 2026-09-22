@@ -911,8 +911,8 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   },
   {
     code: AgentRuntimeErrorType.ModelNotFound,
-    match: sub('not supported","type":"invalid_request_error"'),
-    note: 'openai-compat relay: requested model not served',
+    match: { kind: 'regex', value: /Requested model .+ not supported/ },
+    note: 'openai-compat relay: requested model not served. Keeps the `Requested model` discriminator so generic `... is not supported` parameter rejections in the same JSON envelope stay out.',
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1040,8 +1040,8 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   // Harvested from the 2026-09 production residue.
   {
     code: AgentRuntimeErrorType.PermissionDenied,
-    match: sub('has been suspended.'),
-    note: 'Google: api_key consumer suspended',
+    match: sub('Permission denied: Consumer '),
+    note: 'Google: api_key consumer suspended. Scoped to the consumer wording so `account has been suspended` still reaches AccountDeactivated below.',
   },
   {
     code: AgentRuntimeErrorType.PermissionDenied,

@@ -752,6 +752,29 @@ describe('2026-09 production residue — second harvest', () => {
     expect(isUserSideError(AgentRuntimeErrorType.ProviderBizError, message)).toBe(true);
   });
 
+  it('keeps `Requested model` as the model-not-found discriminator', () => {
+    // The relay wraps both rejections in the same JSON envelope, so a bare
+    // `not supported","type":"invalid_request_error"` substring would also
+    // claim parameter rejections and hand the user model-not-found guidance.
+    expect(
+      matchErrorPattern({
+        message:
+          '{"error":{"message":"Parameter temperature is not supported","type":"invalid_request_error","param":null,"code":null}}',
+      })?.code,
+    ).not.toBe(AgentRuntimeErrorType.ModelNotFound);
+  });
+
+  it('leaves plain account-suspension messages on AccountDeactivated', () => {
+    // The PermissionDenied section is matched before AccountDeactivated, so the
+    // consumer-suspension entry must stay scoped to the Google wording.
+    for (const message of [
+      'Your account has been suspended.',
+      '403 Your account has been suspended. Please contact support.',
+    ]) {
+      expect(matchErrorPattern({ message })?.code).toBe(AgentRuntimeErrorType.AccountDeactivated);
+    }
+  });
+
   it('leaves the two first-party-colliding candidates unclassified', () => {
     // Both phrases also reach us from the first-party provider, so they were
     // held back from this round rather than narrowed: keeping our own failures
