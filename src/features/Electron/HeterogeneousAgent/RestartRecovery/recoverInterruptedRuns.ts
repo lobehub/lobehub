@@ -310,7 +310,7 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
     const tail = mainChainOf(await messageService.getMessages(context)).findLast(
       (message) => message.role === 'assistant',
     );
-    await runHeterogeneousFromExistingMessage(chatStore, {
+    const continuation = await runHeterogeneousFromExistingMessage(chatStore, {
       context,
       heterogeneousProvider,
       parentMessageId: tail?.id ?? userTurn.id,
@@ -318,6 +318,12 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
       prompt: HETERO_RESTART_CONTINUE_PROMPT,
       topic: topic as ChatTopic,
     });
+    // The executor persists a terminal error rather than throwing, so the call
+    // resolving is not success. Reporting `resumed` here would tell the user a
+    // run was picked up when the CLI never started.
+    if (continuation.terminalError) {
+      throw new Error('Restart continuation ended on a terminal error');
+    }
     chatStore.completeOperation(operationId);
     return { outcome: 'resumed', topicId };
   } catch (error) {

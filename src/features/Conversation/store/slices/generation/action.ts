@@ -249,7 +249,12 @@ export const runHeterogeneousFromExistingMessage = async (
     /** Topic row when the caller already holds it (not necessarily in the paginated store). */
     topic?: ChatTopic;
   },
-): Promise<{ assistantMessageId: string; replayComplete?: boolean }> => {
+): Promise<{
+  assistantMessageId: string;
+  replayComplete?: boolean;
+  /** The executor persisted a terminal error instead of throwing. */
+  terminalError?: boolean;
+}> => {
   const {
     context,
     heterogeneousProvider,
@@ -328,7 +333,11 @@ export const runHeterogeneousFromExistingMessage = async (
     workingDirectory,
   });
 
-  return { assistantMessageId: assistantMsg.id, replayComplete: outcome?.replay?.complete };
+  return {
+    assistantMessageId: assistantMsg.id,
+    replayComplete: outcome?.replay?.complete,
+    terminalError: outcome?.terminalError,
+  };
 };
 
 export interface HeteroContinuationScheduleParams {

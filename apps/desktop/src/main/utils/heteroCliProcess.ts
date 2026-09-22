@@ -113,11 +113,12 @@ export const commandLineLooksLikeHeteroCli = (
 };
 
 /**
- * Why a process identity lookup came back without a command line. `gone` and
- * `error` must not be conflated: the first proves the process exited, the
- * second proves nothing at all.
+ * Outcome of a process identity lookup. No output means only `unknown`: a
+ * non-zero exit from `ps` / PowerShell is indistinguishable between "no such
+ * process" and the tool failing operationally, so absence has to be
+ * established independently — see {@link isPidAlive}.
  */
-export type ProcessIdentityStatus = 'found' | 'gone' | 'error';
+export type ProcessIdentityStatus = 'found' | 'unknown';
 
 export interface ProcessIdentity {
   commandLine?: string;
@@ -126,18 +127,9 @@ export interface ProcessIdentity {
 
 const run = (file: string, args: string[]): Promise<ProcessIdentity> =>
   new Promise((resolve) => {
-    execFile(file, args, { timeout: 5000, windowsHide: true }, (error, stdout) => {
+    execFile(file, args, { timeout: 5000, windowsHide: true }, (_error, stdout) => {
       const line = stdout.trim();
-      if (line) {
-        resolve({ commandLine: line, status: 'found' });
-        return;
-      }
-      // A clean non-zero exit with no output is the tool saying "no such
-      // process"; anything else (spawn failure, timeout, killed) leaves the
-      // question open.
-      const failure = error as (Error & { code?: number | string }) | null;
-      const exitedCleanly = !failure || typeof failure.code === 'number';
-      resolve({ status: exitedCleanly ? 'gone' : 'error' });
+      resolve(line ? { commandLine: line, status: 'found' } : { status: 'unknown' });
     });
   });
 
@@ -154,6 +146,20 @@ export const readProcessIdentity = (
         `(Get-CimInstance Win32_Process -Filter "ProcessId = ${pid}").CommandLine`,
       ])
     : run('ps', ['-o', 'command=', '-p', String(pid)]);
+
+/**
+ * Whether the process `pid` ITSELF still exists, independent of its group and
+ * of any external tool. Signal 0 to a live pid succeeds; ESRCH means the
+ * process is genuinely gone, and EPERM means it exists but belongs elsewhere.
+ */
+export const isPidAlive = (pid: number): boolean => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code !== 'ESRCH';
+  }
+};
 
 /**
  * Whether `pid` still exists. On Unix the check targets the process GROUP

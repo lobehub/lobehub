@@ -158,6 +158,7 @@ import { buildProxyEnv } from '@/modules/networkProxy/envBuilder';
 import {
   commandLineLooksLikeHeteroCli,
   describeHeteroCliProcess,
+  isPidAlive,
   isProcessAlive,
   killProcessTreeByPid,
   readProcessIdentity,
@@ -3360,29 +3361,31 @@ export default class HeterogeneousAgentCtr {
 
     const identity = await readProcessIdentity(run.pid);
 
-    // The lookup itself failed, so nothing is known: the leader may well be
-    // alive and writing. Withhold rather than guess in either direction.
-    if (identity.status === 'error') {
+    if (identity.status === 'found') {
+      // A pid that no longer looks like our CLI was recycled, so the original
+      // process is gone and the run is safe to recover.
+      if (!commandLineLooksLikeHeteroCli(identity.commandLine, run)) {
+        logger.info('Skipping pid reuse for interrupted run:', {
+          commandLine: identity.commandLine,
+          pid: run.pid,
+        });
+        return true;
+      }
+    } else if (isPidAlive(run.pid)) {
+      // No command line while the pid itself is still there: the lookup failed
+      // operationally, so the identity is unknown and the leader may well be
+      // writing. Withhold rather than guess in either direction.
       logger.warn('Could not read process identity; withholding recovery:', { pid: run.pid });
       return false;
     }
 
-    // A pid that no longer looks like our CLI was recycled, so the original
-    // process is gone and the run is safe to recover.
-    if (identity.status === 'found' && !commandLineLooksLikeHeteroCli(identity.commandLine, run)) {
-      logger.info('Skipping pid reuse for interrupted run:', {
-        commandLine: identity.commandLine,
-        pid: run.pid,
-      });
-      return true;
-    }
-
-    // `gone` with a live group means the leader exited and left tool children
-    // behind. The group id is still ours (it is only released once empty), so
-    // reaping it cannot touch an unrelated tree.
+    // Either the identity matched, or the leader is independently confirmed
+    // gone while its group lives on through a tool child. The group id is
+    // still ours — it is only released once empty — so reaping it cannot
+    // reach an unrelated tree.
     logger.info('Reaping orphaned CLI from previous desktop process:', {
       agentType: run.agentType,
-      leaderExited: identity.status === 'gone',
+      leaderExited: identity.status !== 'found',
       pid: run.pid,
     });
     killProcessTreeByPid(run.pid, 'SIGTERM');

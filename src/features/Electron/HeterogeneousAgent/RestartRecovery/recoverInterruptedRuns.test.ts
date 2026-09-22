@@ -412,6 +412,26 @@ describe('recoverInterruptedHeteroRuns', () => {
     expect(chatStore.updateTopicStatus).not.toHaveBeenCalled();
   });
 
+  it('does not report a failed continuation as resumed', async () => {
+    // The executor persists a terminal error instead of throwing, so the call
+    // resolving is not success — a toast saying the run was picked up would be
+    // a lie when the CLI never started.
+    mockRunHetero
+      .mockResolvedValueOnce({ assistantMessageId: 'a-new', replayComplete: false })
+      .mockResolvedValueOnce({ assistantMessageId: 'a-cont', terminalError: true });
+
+    const results = await recoverInterruptedHeteroRuns();
+
+    expect(results).toEqual([
+      {
+        outcome: 'failed',
+        reason: 'Restart continuation ended on a terminal error',
+        topicId: 'topic-1',
+      },
+    ]);
+    expect(chatStore.completeOperation).not.toHaveBeenCalled();
+  });
+
   it('does not resume when the replay reported no outcome', async () => {
     // The executor swallows a replay failure and returns nothing; resuming
     // would spend a real turn on top of a replay that never happened.

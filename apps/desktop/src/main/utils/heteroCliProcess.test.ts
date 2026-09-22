@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   commandLineLooksLikeHeteroCli,
   describeHeteroCliProcess,
+  isPidAlive,
   isProcessAlive,
   readProcessIdentity,
   tokenizeCommandLine,
@@ -175,9 +176,17 @@ describe('readProcessIdentity', () => {
     expect(identity.commandLine).toBeTruthy();
   });
 
-  it('reports a dead pid as gone rather than unreadable', async () => {
-    // `gone` proves the process exited; `error` would mean the lookup failed.
-    expect((await readProcessIdentity(2_147_483_000, 'darwin')).status).toBe('gone');
+  it('reports no output as unknown rather than proof of absence', async () => {
+    // `ps` exits non-zero both for "no such process" and for an operational
+    // failure, so absence is established by isPidAlive instead.
+    expect((await readProcessIdentity(2_147_483_000, 'darwin')).status).toBe('unknown');
+  });
+});
+
+describe('isPidAlive', () => {
+  it('confirms the current process and a dead pid independently of any tool', () => {
+    expect(isPidAlive(process.pid)).toBe(true);
+    expect(isPidAlive(2_147_483_000)).toBe(false);
   });
 });
 
