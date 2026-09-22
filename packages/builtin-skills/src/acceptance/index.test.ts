@@ -183,7 +183,7 @@ describe('fetchAcceptanceSkillBundle', () => {
     const gate = Promise.withResolvers<void>();
     let resolutions = 0;
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
-      if (String(url).includes('api.github.com')) {
+      if (String(url) === 'https://api.github.com/repos/lobehub/acceptance/commits/HEAD') {
         return Response.json({ sha: resolutions++ === 0 ? commit : next });
       }
       if (String(url).endsWith(commit)) {
