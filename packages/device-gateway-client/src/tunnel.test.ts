@@ -249,6 +249,64 @@ describe('DeviceTunnelHost', () => {
     expect(bytesSent()).toBeLessThan(stalledAt + TUNNEL_FLOW_WINDOW + TUNNEL_CHUNK_SIZE);
   });
 
+  it('acks request-body bytes only once the origin consumes them', async () => {
+    const frames: TunnelClientFrame[] = [];
+    let uploaded: ReadableStream<Uint8Array> | undefined;
+    const host = new DeviceTunnelHost({
+      // Stands in for an origin that accepts the connection but reads the body
+      // lazily; the response head never arrives.
+      fetchImpl: (async (_url: unknown, init: { body?: ReadableStream<Uint8Array> }) => {
+        uploaded = init.body;
+        return new Promise<Response>(() => {});
+      }) as unknown as typeof fetch,
+      send: (frame) => frames.push(frame),
+    });
+    host.handleFrame(
+      openFrame('c1', '/echo', { head: { headers: [], method: 'POST', path: '/echo' } }),
+    );
+    const chunk = Buffer.alloc(1024, 0x64);
+    host.handleFrame({ connId: 'c1', data: chunk.toString('base64'), seq: 1, type: 'tunnel_data' });
+    await nextTick();
+    await nextTick();
+
+    // Buffered but not consumed: acking here would refill the gateway's window
+    // and let an upload pile up in this process without bound.
+    expect(frames.filter((f) => f.type === 'tunnel_ack')).toHaveLength(0);
+
+    const { value } = await uploaded!.getReader().read();
+    expect(value?.byteLength).toBe(1024);
+    await nextTick();
+    expect(frames.filter((f) => f.type === 'tunnel_ack')).toEqual([
+      { bytes: 1024, connId: 'c1', type: 'tunnel_ack' },
+    ]);
+    host.closeAll('TEST_CLEANUP');
+  });
+
+  it('acks immediately for a bodyless method, whose data frames are dropped', async () => {
+    const { frames, host } = createHost();
+    host.handleFrame(openFrame('c1', '/'));
+    const stray = Buffer.from('body-on-a-get');
+    host.handleFrame({ connId: 'c1', data: stray.toString('base64'), seq: 1, type: 'tunnel_data' });
+
+    expect(frames).toContainEqual({ bytes: stray.byteLength, connId: 'c1', type: 'tunnel_ack' });
+    host.closeAll('TEST_CLEANUP');
+  });
+
+  it('brackets an IPv6 loopback target when building the URL', async () => {
+    const urls: string[] = [];
+    const host = new DeviceTunnelHost({
+      fetchImpl: (async (url: unknown) => {
+        urls.push(String(url));
+        return new Response('ok', { status: 200 });
+      }) as unknown as typeof fetch,
+      send: () => {},
+    });
+    host.handleFrame(openFrame('c1', '/thing', { target: { host: '::1', port: 5173 } }));
+
+    await waitFor(() => urls.length === 1);
+    expect(urls[0]).toBe('http://[::1]:5173/thing');
+  });
+
   it('rejects a non-loopback target', async () => {
     const { frames, host } = createHost();
     host.handleFrame(openFrame('c1', '/', { target: { host: '10.0.0.5', port } }));

@@ -560,6 +560,10 @@ export class GatewayClient extends EventEmitter {
   }
 
   private closeWebSocket() {
+    // Every teardown funnels through here — including `forceReconnect`, which
+    // detaches `handleClose` — so tunnels must be released here or a forced
+    // reconnect would leave loopback fetches running and slots consumed.
+    this.tunnelHost?.closeAll('DEVICE_DISCONNECTED');
     if (!this.ws) {
       return;
     }
@@ -595,7 +599,6 @@ export class GatewayClient extends EventEmitter {
   }
 
   private cleanup() {
-    this.tunnelHost?.closeAll('DEVICE_DISCONNECTED');
     this.stopHeartbeat();
     this.clearReconnectTimer();
     this.clearConnectWatchdog();

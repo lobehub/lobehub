@@ -57,8 +57,14 @@ export interface DeviceTunnelHostOptions {
 
 interface TunnelConnection {
   abort: AbortController;
-  /** Feeds the request body into `fetch`; absent for bodyless methods. */
-  bodyController?: ReadableStreamDefaultController<Uint8Array>;
+  /** Upload finished: the gateway sent its fin frame. */
+  bodyFin: boolean;
+  /** True for methods that carry no body, whose data frames are dropped. */
+  bodyless: boolean;
+  /** Request-body chunks received but not yet handed to `fetch`. */
+  bodyQueue: Uint8Array[];
+  /** Parked `pull` waiting for the next request-body chunk. */
+  bodyWaiters: (() => void)[];
   closed: boolean;
   connId: string;
   /** Set once `tunnel_open_ack` has gone out, so failures switch to `tunnel_close`. */
@@ -109,19 +115,20 @@ export class DeviceTunnelHost {
         if (!conn || conn.closed) return;
         if (frame.data) {
           const bytes = Buffer.from(frame.data, 'base64');
-          // A bodyless method still acks: the gateway's send window must refill
-          // even when the payload is dropped, or a retry would stall.
-          conn.bodyController?.enqueue(new Uint8Array(bytes));
-          this.send({ bytes: bytes.byteLength, connId: frame.connId, type: 'tunnel_ack' });
-        }
-        if (frame.fin) {
-          try {
-            conn.bodyController?.close();
-          } catch {
-            // Already closed by an earlier fin or an aborted request.
+          if (conn.bodyless) {
+            // Nothing will ever consume these, so ack now: an unrefilled window
+            // would stall the gateway's pump for the rest of the request.
+            this.send({ bytes: bytes.byteLength, connId: frame.connId, type: 'tunnel_ack' });
+          } else {
+            // Queued, not acked. The ack is the gateway's permission to send
+            // more, so it has to mean "consumed by the origin", not "buffered
+            // here" — otherwise a slow local handler lets an upload accumulate
+            // in this process without bound.
+            conn.bodyQueue.push(new Uint8Array(bytes));
           }
-          conn.bodyController = undefined;
         }
+        if (frame.fin) conn.bodyFin = true;
+        this.wakeBody(conn);
         return;
       }
       case 'tunnel_ack': {
@@ -165,8 +172,13 @@ export class DeviceTunnelHost {
       return;
     }
 
+    const method = head.method.toUpperCase();
     const conn: TunnelConnection = {
       abort: new AbortController(),
+      bodyFin: false,
+      bodyless: method === 'GET' || method === 'HEAD',
+      bodyQueue: [],
+      bodyWaiters: [],
       closed: false,
       connId,
       headSent: false,
@@ -188,27 +200,45 @@ export class DeviceTunnelHost {
     head: TunnelRequestHead,
     target: { host: string; port: number },
   ): Promise<void> {
-    const method = head.method.toUpperCase();
-    const bodyless = method === 'GET' || method === 'HEAD';
-
-    const body = bodyless
+    const body = conn.bodyless
       ? undefined
-      : new ReadableStream<Uint8Array>({
-          cancel: () => {
-            conn.bodyController = undefined;
+      : new ReadableStream<Uint8Array>(
+          {
+            cancel: () => {
+              conn.bodyQueue.length = 0;
+              this.wakeBody(conn);
+            },
+            // `pull` only runs when the HTTP client actually wants more bytes,
+            // which is what makes the ack below mean "consumed".
+            pull: async (controller) => {
+              while (conn.bodyQueue.length === 0 && !conn.bodyFin && !conn.closed) {
+                await new Promise<void>((resolve) => conn.bodyWaiters.push(resolve));
+              }
+              if (conn.closed) throw new Error('TUNNEL_CLOSED');
+              const chunk = conn.bodyQueue.shift();
+              if (!chunk) {
+                controller.close();
+                return;
+              }
+              controller.enqueue(chunk);
+              this.send({ bytes: chunk.byteLength, connId: conn.connId, type: 'tunnel_ack' });
+            },
           },
-          start: (controller) => {
-            conn.bodyController = controller;
-          },
-        });
+          // Nothing is buffered ahead of a read, so backpressure reaches the
+          // gateway instead of stopping at this process.
+          { highWaterMark: 0 },
+        );
+
+    // An IPv6 literal needs brackets or the URL is invalid.
+    const authority = target.host.includes(':') ? `[${target.host}]` : target.host;
 
     try {
-      const response = await this.fetchImpl(`http://${target.host}:${target.port}${head.path}`, {
+      const response = await this.fetchImpl(`http://${authority}:${target.port}${head.path}`, {
         body,
         // Required by undici whenever the body is a stream.
         ...(body ? { duplex: 'half' } : {}),
         headers: head.headers,
-        method,
+        method: head.method.toUpperCase(),
         // A dev server's redirect belongs to the browser, not to this hop.
         redirect: 'manual',
         signal: conn.abort.signal,
@@ -286,12 +316,8 @@ export class DeviceTunnelHost {
     if (!conn) return;
     conn.closed = true;
     conn.abort.abort();
-    try {
-      conn.bodyController?.error(new Error(reason));
-    } catch {
-      // Controller already settled.
-    }
-    conn.bodyController = undefined;
+    conn.bodyQueue.length = 0;
+    this.wakeBody(conn);
     this.wake(conn);
     this.connections.delete(connId);
     if (notify) this.send({ connId, reason, type: 'tunnel_close' });
@@ -302,12 +328,19 @@ export class DeviceTunnelHost {
     if (!conn) return;
     conn.closed = true;
     this.wake(conn);
+    this.wakeBody(conn);
     this.connections.delete(connId);
   }
 
   private wake(conn: TunnelConnection): void {
     const waiters = conn.waiters;
     conn.waiters = [];
+    for (const waiter of waiters) waiter();
+  }
+
+  private wakeBody(conn: TunnelConnection): void {
+    const waiters = conn.bodyWaiters;
+    conn.bodyWaiters = [];
     for (const waiter of waiters) waiter();
   }
 }
