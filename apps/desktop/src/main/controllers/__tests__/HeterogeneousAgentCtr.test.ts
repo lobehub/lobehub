@@ -669,8 +669,10 @@ vi.mock('@/modules/heterogeneousAgent/kimiCodeQuota', () => ({
 // Captures the most recent spawn() call so sendPrompt tests can assert on argv.
 const spawnCalls: Array<{ args: string[]; command: string; options: any }> = [];
 let nextFakeProc: any = null;
-const { execFileMock } = vi.hoisted(() => ({
+const { execFileMock, onSpawnMock } = vi.hoisted(() => ({
   execFileMock: vi.fn(),
+  /** Runs inside the spawn mock, so a test can move the clock across a spawn. */
+  onSpawnMock: vi.fn(),
 }));
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
@@ -680,6 +682,7 @@ vi.mock('node:child_process', async (importOriginal) => {
     execFile: execFileMock,
     spawn: (command: string, args: string[], options: any) => {
       spawnCalls.push({ args, command, options });
+      onSpawnMock();
       nextFakeProc?.__start?.();
       return nextFakeProc;
     },
@@ -750,6 +753,7 @@ describe('HeterogeneousAgentCtr', () => {
     consumeCodexRateLimitResetCreditMock.mockReset();
     fetchCodexQuotaMock.mockReset();
     fetchKimiCodeQuotaMock.mockReset();
+    onSpawnMock.mockReset();
     claudeSdkSessionAfterSpawnMock.mockReset();
     claudeSdkSessionAfterSpawnMock.mockImplementation(async () => {});
     claudeSdkSessionCloseMock.mockReset();
@@ -1513,6 +1517,45 @@ describe('HeterogeneousAgentCtr', () => {
         .map(([, payload]) => payload.event);
       expect(streamEvents.some((event) => event.type === 'agent_runtime_end')).toBe(true);
       expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+    });
+
+    it('stamps the replay floor before the CLI can record its prompt', async () => {
+      // `startedAt` is the floor a transcript replay is matched against. Taken
+      // after the spawn, the CLI could append this turn's prompt record first
+      // and recovery would then reject its own turn.
+      const start = new Date('2026-09-22T10:00:00.000Z');
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        vi.setSystemTime(start);
+        onSpawnMock.mockImplementation(() => {
+          vi.setSystemTime(new Date(start.getTime() + 5000));
+        });
+        nextFakeProc = createFakeProc().proc;
+        const ctr = new HeterogeneousAgentCtr({
+          appStoragePath,
+          storeManager: { get: vi.fn() },
+        } as any);
+        const { sessionId } = await ctr.startSession({
+          agentType: 'claude-code',
+          command: 'claude',
+        });
+
+        await ctr.sendPrompt({
+          operationId: 'op-floor',
+          prompt: 'do the thing',
+          sessionId,
+          topicId: 'topic-floor',
+        });
+
+        const ledger = JSON.parse(
+          await readFile(path.join(appStoragePath, 'heteroAgent', 'inflight-runs.json'), 'utf8'),
+        ).runs;
+        expect(ledger).toHaveLength(1);
+        // The spawn jumped the clock 5s; a floor taken after it would land there.
+        expect(Date.parse(ledger[0].startedAt)).toBeLessThan(start.getTime() + 5000);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('records the SDK-spawned CLI child on the recovery ledger', async () => {
@@ -5610,6 +5653,24 @@ describe('HeterogeneousAgentCtr', () => {
 
       expect(await createCtr().listInterruptedRuns({})).toEqual([]);
       expect(await readLedger()).toEqual([expect.objectContaining({ claimCount: 1 })]);
+    });
+
+    it('puts a withheld run back when stopping its live session released the claim', async () => {
+      // Reaping a session this process still holds goes through `stopSession`,
+      // which releases the ledger entry as part of stopping it. A stop that
+      // cannot confirm the child died would otherwise leave the topic stranded
+      // with nothing to retry.
+      heteroProcessOverrides.waitForProcessExit = async () => false;
+      await seedLedger([entry({ command: 'claude', pid: 4321 })]);
+      const ctr = createCtr();
+      (ctr as any).sessions.set('ipc-1', {
+        agentType: 'claude-code',
+        command: 'claude',
+        sessionId: 'ipc-1',
+      });
+
+      expect(await ctr.listInterruptedRuns({})).toEqual([]);
+      expect(await readLedger()).toEqual([expect.objectContaining({ ipcSessionId: 'ipc-1' })]);
     });
 
     it('leaves a run recorded by another account on the ledger, unclaimed', async () => {

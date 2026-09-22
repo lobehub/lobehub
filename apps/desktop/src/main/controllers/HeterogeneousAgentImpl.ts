@@ -610,8 +610,16 @@ export default class HeterogeneousAgentCtr {
     pid?: number;
     scriptPath?: string;
     session: AgentSession;
+    /**
+     * ISO time the run began, taken BEFORE the CLI could exist. A replay is
+     * only accepted for a transcript turn recorded at or after this, so a
+     * timestamp taken once the child is already running (and, in stdin mode,
+     * already holding the prompt) could fall on the wrong side of the turn it
+     * is meant to admit.
+     */
+    startedAt?: string;
   }): void {
-    const { command, configDir, cwd, params, pid, scriptPath, session } = args;
+    const { command, configDir, cwd, params, pid, scriptPath, session, startedAt } = args;
     this.getInflightRuns()?.upsert({
       agentId: params.agentId,
       agentSessionId: session.agentSessionId,
@@ -624,7 +632,7 @@ export default class HeterogeneousAgentCtr {
       operationId: params.operationId,
       pid,
       scriptPath,
-      startedAt: new Date().toISOString(),
+      startedAt: startedAt ?? new Date().toISOString(),
       topicId: params.topicId,
       userId: params.userId,
       workspaceId: params.workspaceId,
@@ -1985,6 +1993,10 @@ export default class HeterogeneousAgentCtr {
 
     try {
       await new Promise<void>((resolve, reject) => {
+        // Stamped before the child exists: it is the floor a transcript replay
+        // is matched against, and the CLI may append this turn's prompt record
+        // the moment it starts.
+        const startedAt = new Date().toISOString();
         const proc = spawn(resolvedCliSpawnPlan.command, resolvedCliSpawnPlan.args, spawnOptions);
         this.handleSpawnedAgentProcess({
           cwd,
@@ -1996,6 +2008,7 @@ export default class HeterogeneousAgentCtr {
           session,
           initialCumulativeUsage,
           spawnEnv,
+          startedAt,
           traceSession,
           useStdin,
           spawnPlan,
@@ -2046,6 +2059,9 @@ export default class HeterogeneousAgentCtr {
       return;
     }
 
+    // Same floor as the spawned-CLI path: taken before the transport (and the
+    // executable it launches) exists.
+    const startedAt = new Date().toISOString();
     const sdkSession = new ClaudeAgentSdkSession({
       args: session.args,
       commandPath,
@@ -2096,6 +2112,7 @@ export default class HeterogeneousAgentCtr {
       cwd,
       params,
       session,
+      startedAt,
     });
 
     logger.info('Starting Claude Code SDK session:', {
@@ -3116,6 +3133,7 @@ export default class HeterogeneousAgentCtr {
     session,
     spawnEnv,
     spawnPlan,
+    startedAt,
     traceSession,
     useStdin,
   }: {
@@ -3129,6 +3147,8 @@ export default class HeterogeneousAgentCtr {
     initialCumulativeUsage?: UsageData | undefined;
     spawnEnv: NodeJS.ProcessEnv;
     spawnPlan: HeterogeneousAgentBuildPlan;
+    /** ISO time taken before the spawn — see `recordInflightRun`. */
+    startedAt?: string;
     traceSession: CliTraceSession | undefined;
     useStdin: boolean;
   }) {
@@ -3168,6 +3188,7 @@ export default class HeterogeneousAgentCtr {
       params,
       pid: proc.pid,
       session,
+      startedAt,
     });
 
     // Producer-side conversion (V3 contract): JSONL framing + adapter +
@@ -3404,9 +3425,13 @@ export default class HeterogeneousAgentCtr {
 
       // Safety could not be established (identity unreadable, the tree outlived
       // SIGKILL, the reap threw). Withhold the run: replaying or resuming next
-      // to a live writer is worse than waiting. The claim stays on the entry,
-      // so the next launch tries again.
-      if (!safe) continue;
+      // to a live writer is worse than waiting — and put the entry back, since
+      // reaping an in-memory session goes through `stopSession`, which releases
+      // the claim as part of stopping it.
+      if (!safe) {
+        registry.upsert(run);
+        continue;
+      }
       recoverable.push(run);
     }
     return recoverable;
