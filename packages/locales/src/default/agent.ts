@@ -405,9 +405,9 @@ export default {
   'share.settings.limits.maxTurnsPerTopic': 'Turns per conversation',
   'share.settings.limits.maxTurnsPerTopicHint':
     'How many messages a visitor can send inside one conversation.',
-  'share.settings.limits.monthlySpendLimit': 'Monthly spend cap',
+  'share.settings.limits.monthlySpendLimit': 'Monthly spend cap (USD)',
   'share.settings.limits.monthlySpendLimitHint':
-    'Visitor runs stop once this month’s spend on this Agent reaches the cap.',
+    'Visitor runs stop once this month’s spend on this Agent reaches the cap. Resets on the 1st of each month (UTC).',
   'share.settings.limits.title': 'Limits',
   'share.settings.link.copied': 'Link copied',
   'share.settings.link.copy': 'Copy link',
