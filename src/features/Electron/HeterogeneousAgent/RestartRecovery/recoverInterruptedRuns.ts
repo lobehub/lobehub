@@ -1,6 +1,7 @@
 import { HETERO_RESTART_CONTINUE_PROMPT } from '@lobechat/const';
 import type { ChatTopic, ConversationContext, UIChatMessage } from '@lobechat/types';
 
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import {
   ensureEffectiveAgencyAccess,
   getEffectiveAgencyConfig,
@@ -345,7 +346,11 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
  * ledger rarely holds more than one or two.
  */
 export const recoverInterruptedHeteroRuns = async (): Promise<RestartRecoveryResult[]> => {
-  const runs = (await heterogeneousAgentService.listInterruptedRuns()) as InterruptedRun[];
+  // Scoped to the workspace this renderer is in: topic reads go through it, so
+  // a run recorded elsewhere stays on the ledger until that workspace is back.
+  const runs = (await heterogeneousAgentService.listInterruptedRuns(
+    getActiveWorkspaceId() ?? undefined,
+  )) as InterruptedRun[];
   if (!runs?.length) return [];
 
   // One recovery per topic; a later entry supersedes an earlier one.

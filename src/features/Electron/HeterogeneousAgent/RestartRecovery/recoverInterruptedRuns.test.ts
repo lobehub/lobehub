@@ -67,6 +67,10 @@ vi.mock('@/store/chat', () => ({
   useChatStore: { getState: () => chatStore },
 }));
 
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  getActiveWorkspaceId: () => 'ws-1',
+}));
+
 const provider = { command: 'claude', type: 'claude-code' as const };
 const run = {
   agentId: 'agent-1',
@@ -116,6 +120,16 @@ describe('recoverInterruptedHeteroRuns', () => {
         workingDirectory: cwd,
       };
     });
+  });
+
+  it('asks main only for runs of the workspace it is in', async () => {
+    // Topic reads are workspace-scoped, so a run from elsewhere must stay on
+    // the ledger rather than resolve as a missing topic and be consumed.
+    mockListInterruptedRuns.mockResolvedValue([]);
+
+    await recoverInterruptedHeteroRuns();
+
+    expect(mockListInterruptedRuns).toHaveBeenCalledWith('ws-1');
   });
 
   it('does nothing when the ledger is empty', async () => {

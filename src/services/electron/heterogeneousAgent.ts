@@ -40,6 +40,8 @@ class HeterogeneousAgentService {
     agentId?: string;
     /** Assistant row this run streams into — recorded in the in-flight ledger. */
     assistantMessageId?: string;
+    /** Workspace the run belongs to — recovery is workspace-scoped. */
+    workspaceId?: string;
     imageList?: Array<{ id: string; url: string }>;
     operationId: string;
     prompt: string;
@@ -75,8 +77,14 @@ class HeterogeneousAgentService {
    * Local CLI runs the previous desktop process left in flight, handed over
    * once. Main reaps any surviving process before returning.
    */
-  async listInterruptedRuns() {
-    return this.ipc.heterogeneousAgent.listInterruptedRuns();
+  /**
+   * Local CLI runs the previous desktop process left in flight, handed over
+   * once. Only runs belonging to `workspaceId` are released: topic lookups are
+   * workspace-scoped, so an entry from another workspace has to stay on the
+   * ledger until that workspace is active again.
+   */
+  async listInterruptedRuns(workspaceId?: string) {
+    return this.ipc.heterogeneousAgent.listInterruptedRuns({ workspaceId });
   }
 
   /** Whether the on-disk CLI transcript for a run can be replayed, without spawning anything. */

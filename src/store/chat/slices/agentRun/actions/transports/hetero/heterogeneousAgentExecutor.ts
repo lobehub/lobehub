@@ -51,6 +51,7 @@ import { createNanoId } from '@lobechat/utils';
 import { toast } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import {
   removeHeteroSessionBindingKeyForWorkingDirectory,
   removeHeteroSessionIdForWorkingDirectory,
@@ -532,6 +533,12 @@ export const executeHeterogeneousAgent = async (
     model?: string;
     usage: unknown;
   }) => {
+    // A replay re-reads a turn the provider already billed, and the rows it
+    // writes carry fresh message ids — so the server's message-id dedupe
+    // cannot recognise them and the same spend would be counted twice,
+    // skewing account routing. The usage still lands on the message for
+    // display; only the ledger write is suppressed.
+    if (replayTranscript) return;
     if (
       (adapterType !== 'claude-code' && adapterType !== 'codex') ||
       (heterogeneousProvider.authMode ?? 'subscription') !== 'subscription' ||
@@ -2575,6 +2582,7 @@ export const executeHeterogeneousAgent = async (
       agentId: context.agentId,
       assistantMessageId,
       imageList,
+      workspaceId: getActiveWorkspaceId() ?? undefined,
       operationId,
       // `/goal` travels as system-context instructions; the CLI gets only the
       // request so its own `/goal` command does not take the message over.

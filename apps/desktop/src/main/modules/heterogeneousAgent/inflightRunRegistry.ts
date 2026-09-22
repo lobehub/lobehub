@@ -51,6 +51,12 @@ export interface HeteroInflightRun {
   /** ISO timestamp of the spawn. */
   startedAt: string;
   topicId?: string;
+  /**
+   * Workspace the run belongs to. Topic lookups are workspace-scoped, so a
+   * relaunch under a different workspace must leave this entry alone rather
+   * than consume it and resolve the topic as missing.
+   */
+  workspaceId?: string;
 }
 
 /** Runs older than this are dropped on read — their context is stale, not resumable. */

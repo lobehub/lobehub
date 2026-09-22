@@ -378,6 +378,8 @@ interface SendPromptParams {
    * a different namespace entirely.
    */
   topicId?: string;
+  /** Workspace the run belongs to; recovery only releases runs of the active one. */
+  workspaceId?: string;
 }
 
 interface CancelSessionParams {
@@ -3095,6 +3097,7 @@ export default class HeterogeneousAgentCtr {
       agentSessionId: session.agentSessionId,
       agentType: session.agentType,
       assistantMessageId: params.assistantMessageId,
+      workspaceId: params.workspaceId,
       // The interpreter alone is not an identity — see describeHeteroCliProcess.
       ...describeHeteroCliProcess(proc.spawnfile || session.command, proc.spawnargs),
       // The EFFECTIVE profile: quota-account routing and agent env also set
@@ -3283,19 +3286,27 @@ export default class HeterogeneousAgentCtr {
 
   /**
    * Runs this machine had in flight when the previous desktop process went
-   * away, handed over exactly once. Each is reaped first: a session that is
+   * away, handed over exactly once — and only those belonging to the caller's
+   * workspace. Each is reaped first: a session that is
    * still in memory (renderer reload, main survived) is stopped like a
    * cancel, and a CLI left over from a crashed main (spawned detached, so it
    * outlives its parent) is signalled after its command line is checked, so
    * a recycled pid never gets an unrelated process killed. The caller replays
    * the on-disk transcript and resumes from there.
    */
-  async listInterruptedRuns(): Promise<HeteroInflightRun[]> {
+  async listInterruptedRuns(params?: { workspaceId?: string }): Promise<HeteroInflightRun[]> {
     const registry = this.getInflightRuns();
     if (!registry) return [];
     const runs = registry.takeAll();
     const recoverable: HeteroInflightRun[] = [];
     for (const run of runs) {
+      // Topic lookups run through the caller's workspace scope, so a run from
+      // another workspace would resolve as a missing topic. Put it back and
+      // wait for a launch under that workspace.
+      if ((run.workspaceId ?? undefined) !== (params?.workspaceId ?? undefined)) {
+        registry.upsert(run);
+        continue;
+      }
       // Expired entries are handed over untouched: the renderer only settles
       // their topic, and there is nothing left of the process to reap.
       if (run.expired) {

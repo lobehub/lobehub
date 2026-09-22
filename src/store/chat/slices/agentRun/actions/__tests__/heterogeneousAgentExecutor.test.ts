@@ -2159,6 +2159,9 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
       expect(mockSendPrompt).toHaveBeenCalledWith({
         agentId: 'agent-1',
+        // Recorded in the in-flight ledger so restart recovery can scope to
+        // this run's own branch and workspace.
+        assistantMessageId: 'ast-initial',
         imageList,
         operationId: 'op-1',
         prompt: 'test prompt',
@@ -2166,6 +2169,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         systemContext: undefined,
         // Keys the run's in-app browser session (`topic:<topicId>`) in the main process.
         topicId: 'topic-1',
+        workspaceId: undefined,
       });
     });
 
@@ -4989,6 +4993,24 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
             heterogeneousProvider: { command: 'kimi', type: 'kimi-code' as const },
           },
         },
+      );
+
+      expect(mockRecordQuotaUsage).not.toHaveBeenCalled();
+    });
+
+    it('does NOT ledger usage during a transcript replay', async () => {
+      // A replay re-reads a turn the provider already billed, and its rows get
+      // fresh message ids — the server dedupes by message id, so ledgering
+      // again would double-count the same spend.
+      await runWithEvents(
+        [
+          ccInit(),
+          ccMessageStart('msg_01', 'claude-opus-4-6'),
+          ccAssistant('msg_01', [{ text: 'Hello', type: 'text' }], { model: 'claude-opus-4-6' }),
+          ccMessageDelta({ input_tokens: 100, output_tokens: 20 }),
+          ccResult(),
+        ],
+        { params: { replayTranscript: true, resumeSessionId: 'cc-session-1' } },
       );
 
       expect(mockRecordQuotaUsage).not.toHaveBeenCalled();
