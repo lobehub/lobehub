@@ -15,5 +15,5 @@ export {
 export type { BuildClaudeCodeTranscriptOptions } from './rebuildClaudeCode';
 export { buildClaudeCodeTranscript, encodeClaudeProjectDir } from './rebuildClaudeCode';
 export type { ClaudeCodeReplayTurn } from './replayClaudeCode';
-export { buildClaudeCodeReplayTurn } from './replayClaudeCode';
+export { buildClaudeCodeReplayTurn, claudeCodeReplayTurnMatchesPrompt } from './replayClaudeCode';
 export { parseJsonlRecords, stripNulDeep, truncateTitle } from './utils';

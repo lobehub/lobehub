@@ -71,6 +71,11 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   getActiveWorkspaceId: () => 'ws-1',
 }));
 
+vi.mock('@/store/user', () => ({ getUserStoreState: () => ({}) }));
+vi.mock('@/store/user/selectors', () => ({
+  userProfileSelectors: { userId: () => 'user-1' },
+}));
+
 const provider = { command: 'claude', type: 'claude-code' as const };
 const run = {
   agentId: 'agent-1',
@@ -122,14 +127,17 @@ describe('recoverInterruptedHeteroRuns', () => {
     });
   });
 
-  it('asks main only for runs of the workspace it is in', async () => {
-    // Topic reads are workspace-scoped, so a run from elsewhere must stay on
+  it('asks main only for runs of the user and workspace it is in', async () => {
+    // Topic reads are scoped to both, so a run recorded elsewhere must stay on
     // the ledger rather than resolve as a missing topic and be consumed.
     mockListInterruptedRuns.mockResolvedValue([]);
 
     await recoverInterruptedHeteroRuns();
 
-    expect(mockListInterruptedRuns).toHaveBeenCalledWith('ws-1');
+    expect(mockListInterruptedRuns).toHaveBeenCalledWith({
+      userId: 'user-1',
+      workspaceId: 'ws-1',
+    });
   });
 
   it('does nothing when the ledger is empty', async () => {
@@ -154,6 +162,8 @@ describe('recoverInterruptedHeteroRuns', () => {
       agentType: 'claude-code',
       configDir: undefined,
       cwd: '/repo',
+      // Pins the transcript's last turn to the prompt this run was given.
+      expectedPrompt: 'do the thing',
       sessionId: 'cc-1',
     });
     // The probe identity comes from the resolver the run itself uses.
@@ -302,6 +312,7 @@ describe('recoverInterruptedHeteroRuns', () => {
       agentType: 'claude-code',
       configDir: '/profile',
       cwd: '/repo',
+      expectedPrompt: 'do the thing',
       sessionId: 'cc-from-ledger',
     });
     // The run itself sees the patched topic so resume resolves from it, and the

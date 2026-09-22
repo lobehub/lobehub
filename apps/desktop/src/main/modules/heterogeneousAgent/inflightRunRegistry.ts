@@ -52,6 +52,11 @@ export interface HeteroInflightRun {
   startedAt: string;
   topicId?: string;
   /**
+   * User the run belongs to. A personal-space run has no workspace, so the
+   * account is the only thing separating two people sharing one install.
+   */
+  userId?: string;
+  /**
    * Workspace the run belongs to. Topic lookups are workspace-scoped, so a
    * relaunch under a different workspace must leave this entry alone rather
    * than consume it and resolve the topic as missing.

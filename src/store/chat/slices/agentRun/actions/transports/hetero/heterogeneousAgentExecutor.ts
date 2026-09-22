@@ -78,8 +78,8 @@ import {
 import { type ChatStore, useChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
+import { getUserStoreState, useUserStore } from '@/store/user';
+import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
 
 import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
 import type { RunScope } from '../../lifecycle/types';
@@ -2591,6 +2591,7 @@ export const executeHeterogeneousAgent = async (
       agentId: context.agentId,
       assistantMessageId,
       imageList,
+      userId: userProfileSelectors.userId(getUserStoreState()),
       workspaceId: getActiveWorkspaceId() ?? undefined,
       operationId,
       // `/goal` travels as system-context instructions; the CLI gets only the

@@ -18,6 +18,8 @@ import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
+import { getUserStoreState } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 /**
  * Pick local Claude Code runs back up after the desktop app restarted.
@@ -236,22 +238,26 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
       return { outcome: 'skipped', reason: 'resume-unavailable', topicId };
     }
 
+    if (!userTurn) {
+      await settle();
+      return { outcome: 'skipped', reason: 'no-user-turn', topicId };
+    }
+
     // Nothing is touched until the transcript is known to be readable: the
     // rows already persisted are the only record of the run when it is not.
     const probe = await heterogeneousAgentService.probeTranscriptReplay({
       agentType: run.agentType,
       configDir: run.configDir,
       cwd: workingDirectory,
+      // A resumed session shares one transcript, so the last turn on disk may
+      // still be the PREVIOUS one when the restart beat the CLI to recording
+      // this prompt. Replaying that would rewrite the conversation.
+      expectedPrompt: userTurn.content,
       sessionId: resumeSessionId,
     });
     if (!probe.available) {
       await settle();
       return { outcome: 'skipped', reason: `no-transcript: ${probe.reason ?? 'unknown'}`, topicId };
-    }
-
-    if (!userTurn) {
-      await settle();
-      return { outcome: 'skipped', reason: 'no-user-turn', topicId };
     }
 
     // Everything the interrupted turn persisted is a partial view of what the
@@ -352,11 +358,14 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
  * ledger rarely holds more than one or two.
  */
 export const recoverInterruptedHeteroRuns = async (): Promise<RestartRecoveryResult[]> => {
-  // Scoped to the workspace this renderer is in: topic reads go through it, so
-  // a run recorded elsewhere stays on the ledger until that workspace is back.
-  const runs = (await heterogeneousAgentService.listInterruptedRuns(
-    getActiveWorkspaceId() ?? undefined,
-  )) as InterruptedRun[];
+  // Scoped to the user AND workspace this renderer is in: topic reads go
+  // through both, so a run recorded elsewhere stays on the ledger until the
+  // launch that owns it. Personal space has no workspace, which is why the
+  // account has to be part of the key.
+  const runs = (await heterogeneousAgentService.listInterruptedRuns({
+    userId: userProfileSelectors.userId(getUserStoreState()),
+    workspaceId: getActiveWorkspaceId() ?? undefined,
+  })) as InterruptedRun[];
   if (!runs?.length) return [];
 
   // One recovery per topic; a later entry supersedes an earlier one.

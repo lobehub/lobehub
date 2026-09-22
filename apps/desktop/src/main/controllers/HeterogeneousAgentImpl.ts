@@ -100,6 +100,7 @@ import {
 } from '@lobechat/heterogeneous-agents/spawn';
 import {
   buildClaudeCodeReplayTurn,
+  claudeCodeReplayTurnMatchesPrompt,
   truncateTitle,
 } from '@lobechat/heterogeneous-agents/transcript';
 import {
@@ -379,6 +380,8 @@ interface SendPromptParams {
    * a different namespace entirely.
    */
   topicId?: string;
+  /** User the run belongs to; recovery only releases runs of the signed-in one. */
+  userId?: string;
   /** Workspace the run belongs to; recovery only releases runs of the active one. */
   workspaceId?: string;
 }
@@ -617,6 +620,7 @@ export default class HeterogeneousAgentCtr {
       scriptPath,
       startedAt: new Date().toISOString(),
       topicId: params.topicId,
+      userId: params.userId,
       workspaceId: params.workspaceId,
     });
   }
@@ -3336,16 +3340,25 @@ export default class HeterogeneousAgentCtr {
    * a recycled pid never gets an unrelated process killed. The caller replays
    * the on-disk transcript and resumes from there.
    */
-  async listInterruptedRuns(params?: { workspaceId?: string }): Promise<HeteroInflightRun[]> {
+  async listInterruptedRuns(params?: {
+    userId?: string;
+    workspaceId?: string;
+  }): Promise<HeteroInflightRun[]> {
     const registry = this.getInflightRuns();
     if (!registry) return [];
     const runs = registry.takeAll();
     const recoverable: HeteroInflightRun[] = [];
     for (const run of runs) {
-      // Topic lookups run through the caller's workspace scope, so a run from
-      // another workspace would resolve as a missing topic. Put it back and
-      // wait for a launch under that workspace.
-      if ((run.workspaceId ?? undefined) !== (params?.workspaceId ?? undefined)) {
+      // Topic lookups run through the caller's user and workspace scope, so a
+      // run recorded under either a different account (same Electron profile,
+      // someone signed in after) or a different workspace would resolve as a
+      // missing topic. Put it back and wait for the launch that owns it — the
+      // workspace is undefined for personal space, which is why the user has
+      // to be compared too.
+      const sameOwner =
+        (run.userId ?? undefined) === (params?.userId ?? undefined) &&
+        (run.workspaceId ?? undefined) === (params?.workspaceId ?? undefined);
+      if (!sameOwner) {
         registry.upsert(run);
         continue;
       }
@@ -3442,6 +3455,8 @@ export default class HeterogeneousAgentCtr {
   private async readClaudeCodeReplayTurn(params: {
     configDir?: string;
     cwd: string;
+    /** Prompt the interrupted run was given — see claudeCodeReplayTurnMatchesPrompt. */
+    expectedPrompt?: string;
     sessionId: string;
   }): Promise<ReturnType<typeof buildClaudeCodeReplayTurn>> {
     const filePath = await resolveClaudeCodeTranscriptPath(params);
@@ -3455,6 +3470,16 @@ export default class HeterogeneousAgentCtr {
     }
     const turn = buildClaudeCodeReplayTurn(content);
     if (!turn) throw new Error(`Claude Code transcript ${params.sessionId} has no turn to replay`);
+
+    // A resumed session shares one transcript across turns, so a restart that
+    // lands before the CLI recorded the new prompt leaves the PREVIOUS turn as
+    // the last one. Replaying that under the new prompt would rewrite the
+    // conversation and report success.
+    if (!claudeCodeReplayTurnMatchesPrompt(turn, params.expectedPrompt)) {
+      throw new Error(
+        `Claude Code transcript ${params.sessionId} last turn does not match the interrupted prompt`,
+      );
+    }
     return turn;
   }
 
@@ -3467,6 +3492,8 @@ export default class HeterogeneousAgentCtr {
     agentType: string;
     configDir?: string;
     cwd?: string;
+    /** Prompt of the interrupted run; a transcript whose last turn is a different one is rejected. */
+    expectedPrompt?: string;
     sessionId?: string;
   }): Promise<HeteroTranscriptReplayProbe> {
     if (params.agentType !== 'claude-code') {
@@ -3479,6 +3506,7 @@ export default class HeterogeneousAgentCtr {
       const turn = await this.readClaudeCodeReplayTurn({
         configDir: params.configDir,
         cwd: params.cwd,
+        expectedPrompt: params.expectedPrompt,
         sessionId: params.sessionId,
       });
       return { available: true, complete: turn!.complete };
@@ -3512,6 +3540,8 @@ export default class HeterogeneousAgentCtr {
         session.env?.CLAUDE_CONFIG_DIR ??
         session.hostedProviderBinding?.profileDir,
       cwd: session.cwd,
+      // The prompt this run was given — re-checked here, not just at probe time.
+      expectedPrompt: params.prompt,
       sessionId: session.agentSessionId,
     }))!;
 

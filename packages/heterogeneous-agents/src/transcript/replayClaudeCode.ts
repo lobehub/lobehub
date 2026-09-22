@@ -108,6 +108,33 @@ const toUserLine = (record: any, sessionId: string): string =>
     uuid: record.uuid,
   });
 
+const normalizePrompt = (value: string): string => value.replaceAll(/\s+/g, ' ').trim();
+
+/**
+ * Whether a replayable turn really is the one LobeHub was running.
+ *
+ * A resumed session keeps one transcript across turns, so a restart that lands
+ * before the CLI appended the new prompt leaves the PREVIOUS completed turn as
+ * the last one on disk. Replaying that under the new prompt would silently
+ * rewrite the conversation, so the turn has to be matched to the prompt the
+ * interrupted run was given.
+ *
+ * Containment rather than equality: what the CLI recorded may carry an
+ * injected preamble or drop a slash command, and a false mismatch only costs
+ * the replay — a false match corrupts the topic.
+ */
+export const claudeCodeReplayTurnMatchesPrompt = (
+  turn: ClaudeCodeReplayTurn,
+  expectedPrompt: string | undefined,
+): boolean => {
+  const expected = normalizePrompt(expectedPrompt ?? '');
+  const recorded = normalizePrompt(turn.promptText);
+  // Nothing to compare against — the caller did not pin a prompt.
+  if (!expected) return true;
+  if (!recorded) return false;
+  return recorded.includes(expected) || expected.includes(recorded);
+};
+
 /**
  * Build the replay for the LAST turn of a transcript. Returns null when the
  * transcript has no session id or no user prompt to anchor on.

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { AgentStreamPipeline } from '../spawn/agentStreamPipeline';
-import { buildClaudeCodeReplayTurn } from './replayClaudeCode';
+import { buildClaudeCodeReplayTurn, claudeCodeReplayTurnMatchesPrompt } from './replayClaudeCode';
 
 const SESSION_ID = '03003604-e4aa-4c7c-ac24-86e4adcfca35';
 
@@ -343,5 +343,26 @@ describe('buildClaudeCodeReplayTurn', () => {
       ['toolu_1', true],
       ['toolu_2', false],
     ]);
+  });
+});
+
+describe('claudeCodeReplayTurnMatchesPrompt', () => {
+  const turn = buildClaudeCodeReplayTurn(completedTranscript)!;
+
+  it('matches the prompt the interrupted run was given', () => {
+    expect(claudeCodeReplayTurnMatchesPrompt(turn, 'second request')).toBe(true);
+    // The CLI may record a preamble around what we sent, and vice versa.
+    expect(claudeCodeReplayTurnMatchesPrompt(turn, '  second   request ')).toBe(true);
+    expect(claudeCodeReplayTurnMatchesPrompt(turn, 'please: second request now')).toBe(true);
+  });
+
+  it('rejects a transcript still ending on the previous turn', () => {
+    // The restart beat the CLI to recording the follow-up, so the last turn on
+    // disk answers an older prompt — replaying it would rewrite the topic.
+    expect(claudeCodeReplayTurnMatchesPrompt(turn, 'a completely different ask')).toBe(false);
+  });
+
+  it('does not gate when the caller pinned no prompt', () => {
+    expect(claudeCodeReplayTurnMatchesPrompt(turn, undefined)).toBe(true);
   });
 });
