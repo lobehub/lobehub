@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import { formatSize } from '@/utils/format';
 
+import { openInstanceFileBrowser } from './InstanceFileBrowser';
 import type { SandboxInstance } from './useEnvironmentData';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -53,8 +54,6 @@ interface InstanceListProps {
   editable: boolean;
   instances: SandboxInstance[];
   onAddingChange: (adding: boolean) => void;
-  /** Open this instance's directory in the file browser. */
-  onBrowse: (workingDirectory: string) => void;
   onCreate: (params: { name: string; workingDirectory: string }) => Promise<void>;
   onRemove: (id: string) => Promise<void>;
   /** Sizes are missing rather than zero when the sandbox could not be reached. */
@@ -69,16 +68,7 @@ interface InstanceListProps {
  * have them overwrite each other's work.
  */
 const InstanceList = memo<InstanceListProps>(
-  ({
-    adding,
-    editable,
-    instances,
-    onAddingChange,
-    onBrowse,
-    onCreate,
-    onRemove,
-    snapshotsUnavailable,
-  }) => {
+  ({ adding, editable, instances, onAddingChange, onCreate, onRemove, snapshotsUnavailable }) => {
     const { t } = useTranslation('setting');
 
     const [name, setName] = useState('');
@@ -148,7 +138,7 @@ const InstanceList = memo<InstanceListProps>(
                   icon={FolderOpenIcon}
                   size={'small'}
                   title={t('environments.files.browse')}
-                  onClick={() => onBrowse(instance.workingDirectory)}
+                  onClick={() => openInstanceFileBrowser(instance)}
                 />
                 {editable && (
                   <ActionIcon
