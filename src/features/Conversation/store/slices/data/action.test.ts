@@ -644,6 +644,7 @@ describe('DataSlice', () => {
         expect(messageService.getMessages).toHaveBeenCalledWith({
           agentId: 'test-session',
           groupId: null,
+          projectToolPayloads: false,
           threadId: 'test-thread',
           topicId: 'test-topic',
         });

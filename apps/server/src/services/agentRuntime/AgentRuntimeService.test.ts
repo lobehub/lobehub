@@ -2530,31 +2530,25 @@ describe('AgentRuntimeService', () => {
       expect(result).toEqual(stubMessages);
     });
 
-    it.each([
-      { skipToolProjection: false, visitorUserId: undefined },
-      { skipToolProjection: true, visitorUserId: 'visitor_1' },
-    ])(
-      'includes visitor rows with skipToolProjection=$skipToolProjection',
-      async ({ skipToolProjection, visitorUserId }) => {
-        // Regression: `MessageModel.query()` hides share-visitor messages by
-        // default. A visitor run executes under the creator's identity, so
-        // without the opt-in the terminal snapshot for the visitor's topic is
-        // `[]` and the client replaces the conversation it just streamed with
-        // nothing.
-        const queryMessages = vi.fn().mockResolvedValue([]);
-        stubMessageService(service, queryMessages);
+    it.each([undefined, 'visitor_1'])('includes visitor rows (visitor=%s)', async (visitorUserId) => {
+      // Regression: `MessageModel.query()` hides share-visitor messages by
+      // default. A visitor run executes under the creator's identity, so
+      // without the opt-in the terminal snapshot for the visitor's topic is
+      // `[]` and the client replaces the conversation it just streamed with
+      // nothing.
+      const queryMessages = vi.fn().mockResolvedValue([]);
+      stubMessageService(service, queryMessages);
 
-        await service.queryUiMessages({
-          origin: { agentId: 'agt_1', topicId: 'tpc_1' },
-          principal: visitorUserId ? { actor: { shareVisitor: { visitorUserId } } } : undefined,
-        } as any);
+      await service.queryUiMessages({
+        origin: { agentId: 'agt_1', topicId: 'tpc_1' },
+        principal: visitorUserId ? { actor: { shareVisitor: { visitorUserId } } } : undefined,
+      } as any);
 
-        expect(queryMessages).toHaveBeenCalledWith(expect.anything(), {
-          allowShareVisitor: true,
-          skipToolProjection,
-        });
-      },
-    );
+      // The pushed snapshot always carries whole tool payloads now: it only
+      // reaches a client that did not ask for protocol 2, which has no way to
+      // fetch an omitted payload back.
+      expect(queryMessages).toHaveBeenCalledWith(expect.anything(), { allowShareVisitor: true });
+    });
 
     it('scopes the snapshot to the run thread when the operation is a subtopic run', async () => {
       // Regression: without `threadId` the snapshot is the topic's MAIN

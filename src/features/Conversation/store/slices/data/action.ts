@@ -4,8 +4,8 @@ import debug from 'debug';
 import { type SWRResponse } from 'swr';
 import { type StateCreator } from 'zustand/vanilla';
 
+import { readConversationMessages } from '@/helpers/conversationMessageRead';
 import { useClientDataSWRWithSync } from '@/libs/swr';
-import { messageService } from '@/services/message';
 import {
   getMessageListFetchPolicy,
   messageListKey,
@@ -265,7 +265,7 @@ export const dataSlice: StateCreator<
     return useClientDataSWRWithSync<UIChatMessage[]>(
       shouldFetch ? messageListKey(context) : null,
 
-      () => runMessageListQuery(context, messageService.getMessages),
+      () => runMessageListQuery(context, readConversationMessages),
       {
         ...getMessageListFetchPolicy(context),
         ...(revalidateOnFocus !== undefined && { revalidateOnFocus }),

@@ -948,6 +948,13 @@ const StartExecutionSchema = z.object({
 const ExecAgentSchema = z
   .object({
     includeFinalState: z.boolean().optional(),
+    /**
+     * Wire protocol the calling client speaks. `2` declares it reconciles its
+     * message list from `message_patch` revisions, so the run may stop pushing
+     * whole `uiMessages` snapshots. Absent ⇒ 1 (an older bundle, the CLI, or a
+     * server-initiated run), which keeps the pushed snapshots.
+     */
+    clientProtocol: z.union([z.literal(1), z.literal(2)]).optional(),
     /** The agent ID to run (either agentId or slug is required) */
     agentId: z.string().optional(),
     /** Application context for message storage */
@@ -2336,6 +2343,7 @@ export const aiAgentRouter = router({
         appContext,
         autoStart,
         clientIds: input.clientIds,
+        clientProtocol: input.clientProtocol,
         includeFinalState: input.includeFinalState,
         // This procedure serves the composer (`aiAgentService.execAgentTask`).
         // The client already queues follow-ups behind a live run and shows the
@@ -2491,6 +2499,7 @@ export const aiAgentRouter = router({
           workspaceId: ctx.workspaceId,
         });
         const result = await ctx.aiAgentService.execAgent({
+          clientProtocol: task.clientProtocol,
           includeFinalState: task.includeFinalState,
           agentId,
           appContext,

@@ -17,6 +17,7 @@ import { normalizeChatMessageError } from '@lobechat/model-runtime/errors';
 import type { BuiltinToolResult, ConversationContext, UIChatMessage } from '@lobechat/types';
 import { isRecord, pickNonEmptyString, toRecord } from '@lobechat/utils/object';
 
+import { readConversationMessages } from '@/helpers/conversationMessageRead';
 import { messageService } from '@/services/message';
 import { didToolMutateWorkView, workService } from '@/services/work';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
@@ -88,9 +89,7 @@ const fetchAndReplaceMessages = async (
   const skipWorks = options?.skipWorks;
   const snapshotGeneration = options?.snapshotGeneration;
   const started = snapshotGeneration?.current;
-  const messages = await messageService.getMessages(
-    skipWorks ? { ...context, skipWorks } : context,
-  );
+  const messages = await readConversationMessages(skipWorks ? { ...context, skipWorks } : context);
   if (snapshotGeneration && snapshotGeneration.current !== started) return undefined;
   if (snapshotGeneration) snapshotGeneration.current += 1;
   get().replaceMessages(messages, { context, preserveWorks: skipWorks });

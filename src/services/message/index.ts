@@ -34,11 +34,17 @@ export interface MessageQueryContext {
   topicShareId?: string;
 }
 
-interface MessageReadQueryContext {
+export interface MessageReadQueryContext {
   agentId?: string | null;
   /** Agent-share visitor surface — routes the read through `shareChat.getMessages`. */
   agentShareId?: string;
   groupId?: string | null;
+  /**
+   * Ask the server for render-facing tool view models instead of the stored
+   * payloads. Only set it for a read whose result is never turned into an LLM
+   * context in the browser — see `readConversationMessages`.
+   */
+  projectToolPayloads?: boolean;
   /**
    * Skip the Work-summary assembly on the server — set by mid-stream
    * refetches (tool_end / step_complete) so each tool round doesn't re-run

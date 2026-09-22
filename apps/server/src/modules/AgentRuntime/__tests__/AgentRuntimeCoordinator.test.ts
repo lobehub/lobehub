@@ -674,7 +674,7 @@ describe('AgentRuntimeCoordinator', () => {
 
     it('marks a protocol-v2 patched terminal event with its expected revision', async () => {
       const coordinatorWithResolver = new AgentRuntimeCoordinator({
-        messagePatchModeResolver: vi.fn().mockResolvedValue(true),
+        messagePatchModeResolver: vi.fn().mockReturnValue(true),
         stateManager: mockStateManager,
         streamEventManager: mockStreamManager,
         uiMessagesResolver: vi.fn().mockResolvedValue(undefined),
