@@ -18,7 +18,7 @@ async function capture() {
   const { values } = parseArgs({
     options: {
       'port': { type: 'string', default: '9222' },
-      'out': { type: 'string', default: path.join(require('node:os').tmpdir(), 'cdp-capture.png') },
+      'out': { type: 'string' },
       'full': { type: 'boolean', default: false },
       'target-url': { type: 'string' },
       'timeout': { type: 'string', default: '12000' },
@@ -106,8 +106,12 @@ async function capture() {
   if (bytes.length < 24 || !bytes.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex'))) {
     throw new Error('CDP returned an empty or invalid PNG.');
   }
-  fs.mkdirSync(path.dirname(path.resolve(values.out)), { recursive: true });
-  fs.writeFileSync(values.out, bytes);
+  const out = values.out ?? path.join(
+    fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'acceptance-cdp.')),
+    'shot.png',
+  );
+  fs.mkdirSync(path.dirname(path.resolve(out)), { recursive: true });
+  fs.writeFileSync(out, bytes);
   socket.close();
   clearTimeout(deadline);
   finish(
@@ -116,7 +120,7 @@ async function capture() {
       bytes: bytes.length,
       ms: Date.now() - started,
       targetUrl: page.url,
-      out: values.out,
+      out,
     },
     0,
   );

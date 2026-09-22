@@ -29,6 +29,12 @@ bounds discovery, the WebSocket handshake, and capture together. `--full` captur
 the page's content bounds. Errors exit nonzero; missing/old Node exits 7, capture
 failure exits 5. The script creates the output's parent directories.
 
+Without `--out`, either helper saves to a unique directory in the system temporary
+directory (honoring `TMPDIR`), even for concurrent captures on the same port.
+Read the actual screenshot path from the JSON result's `out` field; do not assume
+a fixed filename. Ordinary captures are retained for inspection; remove the
+temporary directory after use. An explicit `--out` writes to that exact path.
+
 The wrapper also attempts a brightness probe using **macOS `sips` and Python 3**
 (standard library only). Ordinary capture can succeed without these tools, but
 explicitly reports that brightness was not measured. A measured black frame exits
