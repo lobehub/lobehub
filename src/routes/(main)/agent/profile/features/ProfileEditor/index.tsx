@@ -9,24 +9,27 @@ import {
 import type { HeterogeneousApiConfig, HeterogeneousAuthMode } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import type { TabsItem } from '@lobehub/ui/base-ui';
-import { Alert, Tabs } from '@lobehub/ui/base-ui';
+import { Alert, Button, Tabs } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { Wrench } from 'lucide-react';
+import { ChevronDown, Wrench } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AGENT_SHARE_ALLOWED_PROVIDERS } from '@/business/agent-share';
 import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
+import { ModelIcon } from '@/components/LobeIcons';
 import { resolveServerDefaultAgentModels } from '@/features/HeterogeneousAgent/modelPicker';
-import ModelSelect from '@/features/ModelSelect';
 import ReasoningEffortSelect from '@/features/ModelSelect/ReasoningEffortSelect';
+import ModelSwitchPanel from '@/features/ModelSwitchPanel';
 import RunPriorityHint from '@/features/ProfileEditor/AgentUserTools/RunPriorityHint';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
+import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
+import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 import EditorCanvas from '../EditorCanvas';
 import AgentHeader from './AgentHeader';
@@ -65,6 +68,14 @@ const ProfileEditor = memo(() => {
   const agentId = useAgentStore((s) => s.activeAgentId || '');
   const config = useAgentStore(agentSelectors.getAgentConfigById(agentId), isEqual);
   const { isShared } = useAgentShareSupported(agentId);
+  const chatModels = useEnabledChatModels();
+  const enabledList =
+    isShared && AGENT_SHARE_ALLOWED_PROVIDERS
+      ? chatModels.filter((provider) => AGENT_SHARE_ALLOWED_PROVIDERS?.includes(provider.id))
+      : undefined;
+  const selectedModel = useAiInfraStore(
+    aiModelSelectors.getEnabledModelById(config?.model ?? '', config?.provider ?? ''),
+  );
   const isWorkspaceAgent = useAgentStore(agentByIdSelectors.isWorkspaceAgentById(agentId));
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
@@ -259,34 +270,36 @@ const ProfileEditor = memo(() => {
                 <div className={styles.configLabel}>{t('settingAgent.runtimeConfig.title')}</div>
                 <RunPriorityHint agentId={agentId} />
               </Flexbox>
-              {isShared && AGENT_SHARE_ALLOWED_PROVIDERS && (
-                <Alert
-                  showIcon
-                  description={t('share.settings.modelRestriction.description', { ns: 'agent' })}
-                  title={t('share.settings.modelRestriction.title', { ns: 'agent' })}
-                  type={'info'}
-                />
-              )}
               <Flexbox horizontal align={'center'} gap={12} justify={'flex-start'} wrap={'wrap'}>
-                <ModelSelect
-                  initialWidth
-                  disabled={!canEdit}
-                  popupWidth={400}
-                  providerIds={
-                    isShared && AGENT_SHARE_ALLOWED_PROVIDERS
-                      ? [...AGENT_SHARE_ALLOWED_PROVIDERS]
-                      : undefined
+                <ModelSwitchPanel
+                  enabledList={enabledList}
+                  model={config?.model}
+                  open={canEdit ? undefined : false}
+                  openOnHover={false}
+                  placement={'bottomLeft'}
+                  provider={config?.provider}
+                  notice={
+                    enabledList && (
+                      <Alert
+                        showIcon
+                        title={t('share.settings.modelRestriction.title', { ns: 'agent' })}
+                        type={'info'}
+                        description={t('share.settings.modelRestriction.description', {
+                          ns: 'agent',
+                        })}
+                      />
+                    )
                   }
-                  value={{
-                    model: config?.model,
-                    provider: config?.provider,
+                  onModelChange={async (value) => {
+                    if (canEdit) await updateAgentConfigById(agentId, value);
                   }}
-                  onChange={(value) => {
-                    if (!canEdit) return;
-
-                    void updateAgentConfigById(agentId, value);
-                  }}
-                />
+                >
+                  <Button disabled={!canEdit}>
+                    <ModelIcon model={config?.model} size={20} />
+                    {selectedModel?.displayName || config?.model}
+                    <ChevronDown size={14} />
+                  </Button>
+                </ModelSwitchPanel>
                 {config?.model && config.provider && (
                   <ReasoningEffortSelect
                     disabled={!canEdit}
