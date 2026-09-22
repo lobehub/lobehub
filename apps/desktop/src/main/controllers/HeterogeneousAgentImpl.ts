@@ -3242,9 +3242,12 @@ export default class HeterogeneousAgentCtr {
 
           logger.info('Agent process exited:', { code, sessionId: session.sessionId, signal });
           session.process = undefined;
-          // A quit-driven kill must stay on the ledger: that entry is what the
-          // next launch resumes from. Every other exit is a settled run.
-          if (!this.shuttingDown) this.getInflightRuns()?.remove(session.sessionId);
+          // The ledger entry deliberately OUTLIVES the process. The CLI exiting
+          // says nothing about whether the renderer stored the turn — it may be
+          // reloading, or gone — and dropping the entry here would leave a
+          // reloading renderer with no recovery token at all. `stopSession`,
+          // which the executor calls once its terminal handling and persistence
+          // have settled, is the acknowledgement that releases it.
 
           // If *we* killed it (cancel / stop / before-quit), treat the non-zero
           // exit as a clean shutdown — surfacing it as an error would make a
@@ -3835,6 +3838,12 @@ export default class HeterogeneousAgentCtr {
    * Stop and clean up a session.
    */
   async stopSession(params: StopSessionParams): Promise<void> {
+    // The renderer reaching its own cleanup IS the acknowledgement that the run
+    // was stored, so release the ledger entry before anything can return early.
+    // A stop racing app shutdown is the exception: that entry is what the next
+    // launch resumes from.
+    if (!this.shuttingDown) this.getInflightRuns()?.remove(params.sessionId);
+
     const session = this.sessions.get(params.sessionId);
     if (!session) return;
 
@@ -3896,9 +3905,6 @@ export default class HeterogeneousAgentCtr {
     }
 
     await session.hostedProviderBinding?.cleanup();
-    // See the exit handler: a stop that races app shutdown must keep the
-    // ledger entry for the next launch.
-    if (!this.shuttingDown) this.getInflightRuns()?.remove(params.sessionId);
     this.sessions.delete(params.sessionId);
   }
 
