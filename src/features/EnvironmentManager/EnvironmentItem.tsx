@@ -224,9 +224,27 @@ const EnvironmentItem = memo<EnvironmentItemProps>(
               already names the author on hover, and inside the published pool
               every row is published by definition — the badge printed the same
               fact twice and took the width the name needed. */}
-          <Text ellipsis fontSize={15} weight={500}>
-            {environment.name}
-          </Text>
+          {/* The description sits after the name rather than on a line of its
+              own: it is a gloss on the name, not a second fact, and a third
+              line made every row taller for the rows that have one. It gives
+              way first, since the name is what the row is found by. */}
+          <Flexbox horizontal align={'baseline'} gap={8} style={{ minWidth: 0 }}>
+            <Text ellipsis fontSize={15} style={{ flex: '0 1 auto', minWidth: 0 }} weight={500}>
+              {environment.name}
+            </Text>
+            {environment.description && (
+              /* Shrinks a thousand times more readily than the name, the same
+                 way the repository yields to the facts on the line below. */
+              <Text
+                ellipsis
+                fontSize={13}
+                style={{ flex: '0 1000 auto', minWidth: 0 }}
+                type={'secondary'}
+              >
+                {environment.description}
+              </Text>
+            )}
+          </Flexbox>
           <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
             {/* The repository leads because it is what the name is usually taken
                 from, and it truncates because it is the only part of this line
