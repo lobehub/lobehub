@@ -243,6 +243,7 @@
   "preview.downloadFile": "ファイルをダウンロード",
   "preview.raw": "生データ",
   "preview.render": "プレビュー",
+  "preview.tooLarge": "このファイルは大きすぎてプレビューできません。内容を表示するにはダウンロードしてください。",
   "preview.unsupportedFileAndContact": "このファイル形式はオンラインプレビューをサポートしていません。プレビューのリクエストがある場合は、ぜひ<1>ご連絡ください</1>。",
   "resource": "リソース",
   "resourceList.batchCopyDescription": "選択したリソースを別のワークスペースにクローンします。",

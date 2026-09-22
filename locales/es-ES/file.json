@@ -243,6 +243,7 @@
   "preview.downloadFile": "Descargar archivo",
   "preview.raw": "Sin procesar",
   "preview.render": "Vista previa",
+  "preview.tooLarge": "Este archivo es demasiado grande para previsualizar. Descárgalo para ver su contenido.",
   "preview.unsupportedFileAndContact": "Este formato de archivo no es compatible con la vista previa en línea. Si deseas solicitar compatibilidad, no dudes en <1>contactarnos</1>.",
   "resource": "Recurso",
   "resourceList.batchCopyDescription": "Clona los recursos seleccionados en otro espacio de trabajo.",

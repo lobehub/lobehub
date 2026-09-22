@@ -243,6 +243,7 @@
   "preview.downloadFile": "Dosyayı İndir",
   "preview.raw": "Ham",
   "preview.render": "Önizleme",
+  "preview.tooLarge": "Bu dosya önizleme için çok büyük. İçeriğini görmek için indiriniz.",
   "preview.unsupportedFileAndContact": "Bu dosya biçimi çevrimiçi önizleme için desteklenmiyor. Önizleme talebiniz varsa <1>bizimle iletişime geçin</1>.",
   "resource": "Kaynak",
   "resourceList.batchCopyDescription": "Seçilen kaynakları başka bir çalışma alanına klonlayın.",

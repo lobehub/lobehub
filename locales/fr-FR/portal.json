@@ -1,4 +1,5 @@
 {
+  "FilePreview.actions.download": "Télécharger le fichier source",
   "FilePreview.tabs.chunk": "Fragment",
   "FilePreview.tabs.file": "Fichier",
   "Plugins": "Compétences",
