@@ -7,7 +7,7 @@ const { promisify } = require('node:util');
 const { test } = require('node:test');
 
 const execFileAsync = promisify(execFile);
-const sourceScript = path.join(__dirname, 'vercelIgnoredBuildStep.js');
+const sourceScript = path.resolve(__dirname, '../../scripts/vercelIgnoredBuildStep.js');
 
 const runGit = (repoRoot, args) =>
   execFileAsync('git', args, {

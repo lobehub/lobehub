@@ -61,7 +61,7 @@ jobs:
           git checkout --force FETCH_HEAD
 
       - name: Verify preview build filtering
-        run: node --test scripts/vercelIgnoredBuildStep.test.cjs
+        run: node --test .github/scripts/vercel-ignored-build-step.test.cjs
 
       - name: Setup environment
         uses: ./.github/actions/setup-env
