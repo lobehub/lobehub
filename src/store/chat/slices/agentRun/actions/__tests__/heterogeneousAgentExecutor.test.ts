@@ -2982,7 +2982,12 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         const store = createMockStore();
         const get = vi.fn(() => store);
 
-        await expect(executeHeterogeneousAgent(get, defaultParams)).resolves.toBeUndefined();
+        // The run swallows its failure and persists a terminal error instead
+        // of throwing; the outcome is how a caller (restart recovery) tells
+        // that apart from a run that actually finished.
+        await expect(executeHeterogeneousAgent(get, defaultParams)).resolves.toEqual({
+          terminalError: true,
+        });
 
         expect(mockUpdateMessageError).toHaveBeenCalledWith(
           'ast-initial',
