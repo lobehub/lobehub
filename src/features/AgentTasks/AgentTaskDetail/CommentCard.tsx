@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import { AttachmentUploadButton } from '@/features/AttachmentInput';
 import { mentionFilledClassName } from '@/features/ChatInput/InputEditor/mentionStyle';
+import { richTextImageRenderers } from '@/features/Conversation/Messages/User/components/richTextImageRenderers';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import { seedAttachments } from '@/features/EditorCanvas/attachmentRegistry';
 import {
@@ -28,6 +29,7 @@ import { styles } from '../shared/style';
 // as the Linear-style card on its own row instead of the default inline pill.
 const FILE_WRAPPER_STYLE = { marginBlock: 8 };
 const rendererOverrides = {
+  ...richTextImageRenderers,
   file: (node: Record<string, any>) => (
     <div style={FILE_WRAPPER_STYLE}>
       <LinearFileCard node={node as Parameters<typeof LinearFileCard>[0]['node']} />

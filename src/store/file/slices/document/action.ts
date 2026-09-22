@@ -120,13 +120,27 @@ export class DocumentActionImpl {
     this.#set({ localDocumentMap: newMap }, false, actionName);
   };
 
-  #isResourceVisibleInCurrentQuery = (resource: ResourceItem): boolean => {
+  /**
+   * Whether `resource` belongs in the explorer's current list.
+   *
+   * `keepWhenUnknown` is for rows that are ALREADY in the list: `file.getKnowledgeItems`
+   * rows carry neither `knowledgeBaseId` nor `parentId`, so a title/emoji save merged
+   * onto such a row cannot prove the row moved out of the current library/folder.
+   * Treating "unknown" as "elsewhere" dropped the page from the explorer (and the
+   * sidebar tree that mirrors it) on every autosave (LOBE-14152).
+   */
+  #isResourceVisibleInCurrentQuery = (
+    resource: ResourceItem,
+    options?: { keepWhenUnknown?: boolean },
+  ): boolean => {
     const { queryParams, resourceMap } = this.#get();
+    const keepWhenUnknown = options?.keepWhenUnknown ?? false;
 
     if (!queryParams) return false;
 
     if (
       queryParams.libraryId !== undefined &&
+      !(keepWhenUnknown && resource.knowledgeBaseId === undefined) &&
       (resource.knowledgeBaseId ?? undefined) !== queryParams.libraryId
     ) {
       return false;
@@ -142,6 +156,7 @@ export class DocumentActionImpl {
       return (resource.parentId ?? null) === null;
     }
 
+    if (resource.parentId === undefined && keepWhenUnknown) return true;
     if (!resource.parentId) return false;
     if (resource.parentId === queryParams.parentId) return true;
 
@@ -179,7 +194,9 @@ export class DocumentActionImpl {
         document.title !== undefined
           ? (document.title ?? 'Untitled')
           : (fallback?.name ?? fallback?.title ?? 'Untitled'),
-      parentId: document.parentId !== undefined ? document.parentId : (fallback?.parentId ?? null),
+      // Keep `undefined` when neither side knows the parent: list rows omit it, and
+      // coercing to `null` would misreport a folder child as a root item.
+      parentId: document.parentId !== undefined ? document.parentId : fallback?.parentId,
       size: document.totalCharCount ?? fallback?.size ?? document.content?.length ?? 0,
       slug: document.slug !== undefined ? document.slug : fallback?.slug,
       sourceType: DERIVED_DOCUMENT_SOURCE_TYPE,
@@ -199,7 +216,10 @@ export class DocumentActionImpl {
       resourceMap.has(resource.id) || resourceList.some((item) => item.id === resource.id);
 
     if (exists) {
-      if (!queryParams || this.#isResourceVisibleInCurrentQuery(resource)) {
+      if (
+        !queryParams ||
+        this.#isResourceVisibleInCurrentQuery(resource, { keepWhenUnknown: true })
+      ) {
         replaceLocalResource(resource.id, resource);
       } else {
         removeLocalResource(resource.id);

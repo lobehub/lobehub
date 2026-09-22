@@ -52,6 +52,14 @@ export interface Action {
   setPendingCommentAnchor: (pending: PendingCommentAnchor | undefined) => void;
   setRightPanelMode: (mode: RightPanelMode) => void;
   setTitle: (title: string) => void;
+  /**
+   * Adopt title/emoji pushed from the outside (document list refresh, sidebar
+   * rename, realtime sync) — but only while the local meta is clean and idle.
+   * While the user is typing, or a save is in flight, the local value wins;
+   * otherwise a list refresh echoing the *previous* save would clobber the
+   * characters typed since (LOBE-14152).
+   */
+  syncMeta: (title?: string, emoji?: string) => void;
   triggerDebouncedMetaSave: () => void;
 }
 
@@ -185,12 +193,22 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
             onEmojiChange?.(emoji);
           }
 
+          // The user may have kept typing while the request was in flight, so
+          // re-derive dirtiness from the *current* meta instead of clearing it
+          // blindly — otherwise those trailing edits would never be persisted.
+          const { title: currentTitle, emoji: currentEmoji } = get();
+          const stillDirty = currentTitle !== title || currentEmoji !== emoji;
+
           set({
-            isMetaDirty: false,
+            isMetaDirty: stillDirty,
             lastSavedEmoji: emoji,
             lastSavedTitle: title,
             metaSaveStatus: 'saved',
           });
+
+          if (stillDirty) {
+            get().triggerDebouncedMetaSave();
+          }
         } catch (error) {
           console.error('[PageEditor] Failed to save meta:', error);
           set({ metaSaveStatus: 'idle' });
@@ -272,6 +290,21 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
         if (isDirty) {
           triggerDebouncedMetaSave();
         }
+      },
+
+      syncMeta: (title, emoji) => {
+        const { isMetaDirty, metaSaveStatus, lastSavedTitle, lastSavedEmoji } = get();
+
+        if (isMetaDirty || metaSaveStatus === 'saving') return;
+        if (title === lastSavedTitle && emoji === lastSavedEmoji) return;
+
+        set({
+          emoji,
+          isMetaDirty: false,
+          lastSavedEmoji: emoji,
+          lastSavedTitle: title,
+          title,
+        });
       },
 
       triggerDebouncedMetaSave: () => {

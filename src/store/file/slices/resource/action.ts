@@ -7,6 +7,7 @@ import { OptimisticEngine } from '@/store/utils/optimisticEngine';
 import type { CreateResourceParams, ResourceItem, UpdateResourceParams } from '@/types/resource';
 
 import type { FileStore } from '../../store';
+import type { ResourceParentKey } from './hooks';
 import type { ResourceState } from './initialState';
 import { initialResourceState } from './initialState';
 import { getResourceQueryKey } from './utils';
@@ -251,6 +252,50 @@ export class ResourceActionImpl {
 
     const parentResource = resourceMap.get(resource.parentId);
     return parentResource?.slug === queryParams.parentId;
+  };
+
+  /**
+   * `queryParams.parentId` carries the folder slug from the URL while drop
+   * targets and the sidebar tree address folders by id. Collect both spellings
+   * for a folder from wherever it is already known client-side: the explorer's
+   * own rows, the current folder, or the loaded sidebar nodes. Unknown handles
+   * pass through unchanged; the root is always `null`.
+   */
+  #resolveParentCacheKeys = async (
+    parents: Array<ResourceParentKey | undefined>,
+  ): Promise<ResourceParentKey[]> => {
+    const handles = parents.filter((parent): parent is string => !!parent);
+    if (handles.length === 0) return [null];
+
+    const keys = new Set<string>(handles);
+    const { currentFolderId, queryParams, resourceMap } = this.#get();
+    const currentSlug = queryParams?.parentId ?? null;
+
+    const addFolder = (folder: { id: string; slug?: string | null }) => {
+      keys.add(folder.id);
+      if (folder.slug) keys.add(folder.slug);
+    };
+
+    for (const handle of handles) {
+      const row =
+        resourceMap.get(handle) ?? [...resourceMap.values()].find((item) => item.slug === handle);
+      if (row) addFolder(row);
+
+      if (currentFolderId && (handle === currentFolderId || handle === currentSlug)) {
+        addFolder({ id: currentFolderId, slug: currentSlug });
+      }
+    }
+
+    const { useTreeStore } = await import('@/store/tree');
+    for (const items of Object.values(useTreeStore.getState().children)) {
+      for (const node of items) {
+        if (node.isFolder && (keys.has(node.id) || (node.slug && keys.has(node.slug)))) {
+          addFolder(node);
+        }
+      }
+    }
+
+    return [...keys];
   };
 
   #patchLocalResourceEntries = (
@@ -644,7 +689,8 @@ export class ResourceActionImpl {
       return;
     }
 
-    if ((existing.parentId ?? null) === parentId) return;
+    // List rows may omit `parentId`; only a known parent can prove a no-op move.
+    if (existing.parentId !== undefined && (existing.parentId ?? null) === parentId) return;
 
     const syncEngine = this.#getSyncEngine();
     const tx = syncEngine.createTransaction(`moveResource(${id})`);
@@ -674,13 +720,42 @@ export class ResourceActionImpl {
       draft.resourceList = draft.resourceList.filter((item) => item.id !== id);
       draft.resourceMap.delete(id);
     });
-    tx.mutation = () => resourceService.moveResource(id, parentId);
+    tx.mutation = () => resourceService.moveResource(id, parentId, existing);
     tx.onSuccess = async (result) => {
-      if (!shouldKeepVisible) return;
-      this.#replaceLocalResource(id, result as ResourceItem);
+      const moved = result as ResourceItem;
+      if (shouldKeepVisible) this.#replaceLocalResource(id, moved);
+
+      // The row lives in the current explorer list, so the current query's
+      // parent names the source folder even when the row itself omits `parentId`.
+      await this.applyMovedResourceToCaches(
+        moved,
+        [existing.parentId, queryParams?.parentId ?? null],
+        [parentId, moved.parentId ?? null],
+      );
     };
 
     await tx.commit<ResourceItem>();
+  };
+
+  /**
+   * Mirror a completed move into the SWR folder-list caches so the destination
+   * (and source) folder show the moved row on their next visit instead of the
+   * cached pre-move list. Callers pass whatever handle they hold for each
+   * folder — a drop target id, a URL slug or an empty root — and the handles
+   * are widened here to every key the explorer may query that folder by.
+   */
+  applyMovedResourceToCaches = async (
+    resource: ResourceItem,
+    fromParent: ResourceParentKey | undefined | Array<ResourceParentKey | undefined>,
+    toParent: ResourceParentKey | undefined | Array<ResourceParentKey | undefined>,
+  ): Promise<void> => {
+    const { applyResourceMoveToListCaches } = await import('./hooks');
+    const [fromParentKeys, toParentKeys] = await Promise.all([
+      this.#resolveParentCacheKeys(Array.isArray(fromParent) ? fromParent : [fromParent]),
+      this.#resolveParentCacheKeys(Array.isArray(toParent) ? toParent : [toParent]),
+    ]);
+
+    await applyResourceMoveToListCaches(resource, { fromParentKeys, toParentKeys });
   };
 
   removeLocalResource = (id: string): void => {

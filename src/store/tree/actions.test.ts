@@ -5,6 +5,7 @@ import { sortTreeItems, toTreeItem, toTreeItemFromResource, TreeActionImpl } fro
 import type { TreeState } from './types';
 
 const {
+  mockApplyMovedResourceToCaches,
   mockDeleteResources,
   mockGetKnowledgeItems,
   mockRefreshFileList,
@@ -13,6 +14,7 @@ const {
   mockSwrMutate,
   mockUpdateResource,
 } = vi.hoisted(() => ({
+  mockApplyMovedResourceToCaches: vi.fn(),
   mockDeleteResources: vi.fn(),
   mockGetKnowledgeItems: vi.fn(),
   mockRefreshFileList: vi.fn(),
@@ -31,6 +33,7 @@ vi.mock('@/services/file', () => ({
 }));
 
 const fileStoreState = {
+  applyMovedResourceToCaches: mockApplyMovedResourceToCaches,
   moveResource: mockStoreMove,
   refreshFileList: mockRefreshFileList,
   resourceMap: new Map<string, unknown>(),
@@ -83,6 +86,7 @@ const createSetter = (getState: () => TreeState) => {
 
 describe('TreeActionImpl.moveItem', () => {
   beforeEach(() => {
+    mockApplyMovedResourceToCaches.mockReset();
     mockRefreshFileList.mockReset();
     mockResourceMove.mockReset();
     mockStoreMove.mockReset();
@@ -97,10 +101,16 @@ describe('TreeActionImpl.moveItem', () => {
     );
     const revalidateSpy = vi.spyOn(actions, 'revalidate').mockResolvedValue();
 
+    const moved = { id: 'file-1', parentId: 'folder-b' };
+    mockResourceMove.mockResolvedValue(moved);
+
     await actions.moveItem('file-1', 'folder-a', 'folder-b');
     await Promise.resolve();
 
     expect(mockResourceMove).toHaveBeenCalledWith('file-1', 'folder-b');
+    // The explorer never saw the row, so its folder-list caches are patched
+    // from the server result before the current list refreshes.
+    expect(mockApplyMovedResourceToCaches).toHaveBeenCalledWith(moved, 'folder-a', 'folder-b');
     expect(mockRefreshFileList).toHaveBeenCalledTimes(1);
     expect(mockStoreMove).not.toHaveBeenCalled();
     expect(revalidateSpy).toHaveBeenCalledWith('folder-a');
@@ -121,6 +131,7 @@ describe('TreeActionImpl.moveItem', () => {
 
     expect(mockStoreMove).toHaveBeenCalledWith('file-1', 'folder-b');
     expect(mockResourceMove).not.toHaveBeenCalled();
+    expect(mockApplyMovedResourceToCaches).not.toHaveBeenCalled();
     expect(mockRefreshFileList).not.toHaveBeenCalled();
   });
 });
