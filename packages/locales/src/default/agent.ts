@@ -687,6 +687,13 @@ export default {
   'share.settings.profile.saveError': 'Could not save. Your draft is preserved. Try again.',
   'share.settings.profile.invalid':
     'Each example needs a task prompt. Keep at most 20 examples and 100 featured works.',
+  'share.settings.profile.demoCases.item': 'Example {{number}}',
+  'share.settings.profile.demoCases.promptLabel': 'Task prompt (required)',
+  'share.settings.profile.demoCases.promptHint':
+    'Shown as the example title. Clicking it fills the visitor’s chat input without sending.',
+  'share.settings.profile.demoCases.descriptionLabel': 'Description (optional)',
+  'share.settings.profile.demoCases.descriptionHint':
+    'Shown below the task prompt to explain what this agent can help with. This text is not added to the chat.',
   'share.settings.profile.demoCases.title': 'Example tasks',
   'share.settings.profile.demoCases.desc':
     'Write examples for visitors to try. These are separate from the agent’s opening questions.',
