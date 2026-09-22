@@ -3952,4 +3952,5 @@ When I am ___, I need ___
   'environments.form.basics': 'Basics',
   'environments.form.setup': 'Setup',
   'environments.form.runtime': 'Runtime and storage',
+  'environments.instances.confirm': 'Create',
 };
