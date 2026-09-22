@@ -1,7 +1,16 @@
 'use client';
 
 import { Flexbox, Icon, TextArea } from '@lobehub/ui';
-import { ActionIcon, Button, createModal, Input, Skeleton, Text, toast } from '@lobehub/ui/base-ui';
+import {
+  ActionIcon,
+  Button,
+  confirmModal,
+  createModal,
+  Input,
+  Skeleton,
+  Text,
+  toast,
+} from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import {
@@ -222,6 +231,22 @@ const InstanceFileBrowser = memo<InstanceFileBrowserProps>(({ root }) => {
     }
   };
 
+  // Asked first: there is no trash here, and a folder goes with everything
+  // under it, so a slip on the one icon in the row was permanent.
+  const confirmRemove = (entry: { isDirectory: boolean; name: string; path: string }) =>
+    confirmModal({
+      content: t(
+        entry.isDirectory
+          ? 'environments.files.removeConfirmDirectory'
+          : 'environments.files.removeConfirmFile',
+      ),
+      cancelText: t('cancel', { ns: 'common' }),
+      okButtonProps: { danger: true },
+      okText: t('environments.files.remove'),
+      onOk: () => remove(entry.path, entry.isDirectory),
+      title: t('environments.files.removeConfirmTitle', { name: entry.name }),
+    });
+
   if (openFile)
     return (
       <Flexbox>
@@ -414,7 +439,7 @@ const InstanceFileBrowser = memo<InstanceFileBrowserProps>(({ root }) => {
                     icon={Trash2Icon}
                     size={'small'}
                     title={t('environments.files.remove')}
-                    onClick={() => remove(entry.path, entry.isDirectory)}
+                    onClick={() => confirmRemove(entry)}
                   />
                 </span>
               </Flexbox>

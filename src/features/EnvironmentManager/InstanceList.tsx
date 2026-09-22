@@ -1,10 +1,18 @@
 'use client';
 
 import { isSafeSandboxCwd } from '@lobechat/builtin-tool-cloud-sandbox';
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Button, Input, Tag, Text, toast } from '@lobehub/ui/base-ui';
+import { Center, Empty, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Button, confirmModal, Input, Tag, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { CheckIcon, FolderOpenIcon, PencilIcon, PlusIcon, Trash2Icon, XIcon } from 'lucide-react';
+import {
+  CheckIcon,
+  FolderOpenIcon,
+  LayersIcon,
+  PencilIcon,
+  PlusIcon,
+  Trash2Icon,
+  XIcon,
+} from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -159,22 +167,28 @@ const InstanceRow = memo<InstanceRowProps>(
 
     return (
       <Flexbox horizontal align={'center'} className={styles.row} gap={8}>
-        <Flexbox flex={1} gap={2}>
-          <Flexbox horizontal align={'center'} gap={6}>
-            <Text fontSize={13} weight={500}>
-              {instance.name}
-            </Text>
-            {instance.stale && (
-              <Tooltip title={t('environments.instances.staleHint')}>
-                <Tag color={'warning'} size={'small'}>
-                  {t('environments.instances.stale')}
-                </Tag>
-              </Tooltip>
-            )}
-          </Flexbox>
-          <Text fontSize={12} type={'secondary'}>
+        {/* One line: the folder after the name, the way the environment row
+            carries its description. It yields first when the row is narrow,
+            since the name is what the instance is picked by. */}
+        <Flexbox horizontal align={'baseline'} flex={1} gap={8} style={{ minWidth: 0 }}>
+          <Text ellipsis fontSize={13} style={{ flex: '0 1 auto', minWidth: 0 }} weight={500}>
+            {instance.name}
+          </Text>
+          <Text
+            ellipsis
+            fontSize={12}
+            style={{ flex: '0 1000 auto', minWidth: 0 }}
+            type={'secondary'}
+          >
             {instance.workingDirectory}
           </Text>
+          {instance.stale && (
+            <Tooltip title={t('environments.instances.staleHint')}>
+              <Tag color={'warning'} size={'small'}>
+                {t('environments.instances.stale')}
+              </Tag>
+            </Tooltip>
+          )}
         </Flexbox>
         <Text fontSize={12} type={'secondary'}>
           {/* An instance that was created but never used has no snapshot,
@@ -207,18 +221,28 @@ const InstanceRow = memo<InstanceRowProps>(
             icon={Trash2Icon}
             size={'small'}
             title={t('environments.instances.remove')}
-            // A rejected promise here used to disappear: the row stayed, and
-            // a refused delete was indistinguishable from a click that did
-            // nothing. The execution plane refuses while a conversation is
-            // still using the instance, and that reason is the one worth
-            // showing.
+            // Asked first: the delete takes the snapshot with it, and the
+            // icon sits one slot from "browse", so a slip was a lost copy.
             onClick={() =>
-              onRemove(instance.id).catch((error: unknown) =>
-                toast.error(
-                  (error as { message?: string })?.message ||
-                    t('environments.instances.removeFailed'),
-                ),
-              )
+              confirmModal({
+                content: t('environments.instances.removeConfirmContent'),
+                cancelText: t('cancel', { ns: 'common' }),
+                okButtonProps: { danger: true },
+                okText: t('environments.instances.remove'),
+                // A rejected promise here used to disappear: the row stayed,
+                // and a refused delete was indistinguishable from a click that
+                // did nothing. The execution plane refuses while a
+                // conversation is still using the instance, and that reason
+                // is the one worth showing.
+                onOk: () =>
+                  onRemove(instance.id).catch((error: unknown) =>
+                    toast.error(
+                      (error as { message?: string })?.message ||
+                        t('environments.instances.removeFailed'),
+                    ),
+                  ),
+                title: t('environments.instances.removeConfirmTitle', { name: instance.name }),
+              })
             }
           />
         )}
@@ -273,10 +297,32 @@ const InstanceList = memo<InstanceListProps>(
 
     return (
       <Flexbox gap={8}>
+        {/* A first-use empty state, not a line saying "none": it says what to
+            do here and where the instance is picked up afterwards, which is
+            the half of the story this panel cannot show. The create button
+            lives inside it, so an empty list has one call to action rather
+            than a placeholder above the same button. */}
         {instances.length === 0 && !adding && (
-          <Text fontSize={12} type={'secondary'}>
-            {t('environments.instances.empty')}
-          </Text>
+          <Center paddingBlock={16}>
+            <Empty
+              descriptionProps={{ fontSize: 13 }}
+              icon={LayersIcon}
+              style={{ maxWidth: 360 }}
+              title={t('environments.instances.empty')}
+              action={
+                editable ? (
+                  <Button icon={<Icon icon={PlusIcon} />} onClick={() => onAddingChange(true)}>
+                    {t('environments.instances.add')}
+                  </Button>
+                ) : undefined
+              }
+              description={t(
+                editable
+                  ? 'environments.instances.emptyHint'
+                  : 'environments.instances.emptyReadonly',
+              )}
+            />
+          </Center>
         )}
 
         {instances.length > 0 && (
@@ -351,7 +397,7 @@ const InstanceList = memo<InstanceListProps>(
               </Flexbox>
             </Flexbox>
           </Flexbox>
-        ) : (
+        ) : instances.length === 0 ? null : (
           <Flexbox horizontal>
             <Button icon={<Icon icon={PlusIcon} />} onClick={() => onAddingChange(true)}>
               {t('environments.instances.add')}

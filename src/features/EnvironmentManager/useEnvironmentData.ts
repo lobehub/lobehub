@@ -46,6 +46,28 @@ export const useInstances = () =>
     () => sandboxWorkspaceService.listInstances(),
   );
 
+const SESSIONS_KEY = 'sandbox-environment-sessions';
+
+/**
+ * One environment's run history. Keyed by environment so opening another
+ * panel fetches its own rather than serving the previous one's rows.
+ */
+export const useInstanceSessions = (environmentId: string) =>
+  useClientDataSWR<Awaited<ReturnType<typeof sandboxWorkspaceService.listInstanceSessions>>>(
+    [SESSIONS_KEY, environmentId],
+    () => sandboxWorkspaceService.listInstanceSessions({ environmentId }),
+    {
+      // A run that is still going changes on its own — it ends, or a snapshot
+      // lands — so the panel keeps looking while one is on screen and stops
+      // the moment none is.
+      refreshInterval: (data) => (data?.sessions.some((session) => !session.endedAt) ? 15_000 : 0),
+    },
+  );
+
+export type SandboxSessionRecord = NonNullable<
+  ReturnType<typeof useInstanceSessions>['data']
+>['sessions'][number];
+
 export type SandboxInstance = NonNullable<
   ReturnType<typeof useInstances>['data']
 >['instances'][number];
@@ -123,7 +145,15 @@ export const useEnvironmentActions = () => {
       name?: string;
     }) => {
       await sandboxWorkspaceService.updateEnvironment(params);
-      await Promise.all([refreshEnvironments(), refreshInstances()]);
+      // The environment list first, and only then the instance list — in that
+      // order, and not together. The instance list is what shows staleness,
+      // so it has to be refreshed, but fetching it with sizes pays a sandbox
+      // cold start of several seconds; and issued in the same tick the two
+      // calls land in one tRPC batch request, so "not awaited" still meant
+      // the save spinner waited for it. Kicked off after the fast one has
+      // returned, it travels alone and the tags catch up when it lands.
+      await refreshEnvironments();
+      void refreshInstances();
     },
   };
 };
