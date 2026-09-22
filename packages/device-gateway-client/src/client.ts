@@ -4,6 +4,7 @@ import os from 'node:os';
 
 import WebSocket from 'ws';
 
+import { DeviceTunnelHost } from './tunnel';
 import type {
   AgentRunAckMessage,
   AgentRunRequestMessage,
@@ -80,6 +81,14 @@ export interface GatewayClientOptions {
   serverUrl?: string;
   token: string;
   tokenType?: 'apiKey' | 'jwt' | 'serviceToken';
+  /**
+   * Serve HTTP tunnel requests: the gateway relays a browser request to a
+   * loopback port on this machine (`http://127.0.0.1:<port>/…`) so a dev server
+   * running here can be opened from the cloud UI. Default: enabled. Callers
+   * that must never expose local ports can turn it off; the gateway then gets a
+   * `TUNNEL_DISABLED` ack instead of silence.
+   */
+  tunnel?: boolean;
   userAgent?: string;
   userId?: string;
   /**
@@ -93,6 +102,7 @@ export interface GatewayClientOptions {
 
 export class GatewayClient extends EventEmitter {
   private ws: WebSocket | null = null;
+  private tunnelHost: DeviceTunnelHost | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private connectWatchdogTimer: ReturnType<typeof setTimeout> | null = null;
@@ -129,6 +139,12 @@ export class GatewayClient extends EventEmitter {
     this.logger = options.logger || noopLogger;
     this.autoReconnect = options.autoReconnect ?? true;
     this.connectTimeoutMs = options.connectTimeoutMs ?? CONNECT_TIMEOUT;
+    if (options.tunnel !== false) {
+      this.tunnelHost = new DeviceTunnelHost({
+        logger: this.logger,
+        send: (frame) => this.sendMessage(frame),
+      });
+    }
   }
 
   // ─── Public API ───
@@ -389,6 +405,21 @@ export class GatewayClient extends EventEmitter {
           break;
         }
 
+        case 'tunnel_open':
+        case 'tunnel_data':
+        case 'tunnel_ack':
+        case 'tunnel_close': {
+          if (this.tunnelHost) this.tunnelHost.handleFrame(message);
+          else if (message.type === 'tunnel_open')
+            this.sendMessage({
+              connId: message.connId,
+              error: 'TUNNEL_DISABLED',
+              ok: false,
+              type: 'tunnel_open_ack',
+            });
+          break;
+        }
+
         default: {
           this.logger.warn('Unknown message type:', (message as any).type);
         }
@@ -401,6 +432,9 @@ export class GatewayClient extends EventEmitter {
   private handleClose = (code: number, reason: Buffer) => {
     this.logger.info(`WebSocket closed: code=${code} reason=${reason.toString()}`);
     this.stopHeartbeat();
+    // In-flight tunnels can't survive the socket: their frames have nowhere to
+    // go and the browser side is already being failed by the gateway.
+    this.tunnelHost?.closeAll('DEVICE_DISCONNECTED');
     // `handshakeTimeout` closes the socket on its own, so the watchdog must be
     // disarmed here or it would fire later and force a SECOND reconnect on top
     // of the one this close already scheduled.
@@ -561,6 +595,7 @@ export class GatewayClient extends EventEmitter {
   }
 
   private cleanup() {
+    this.tunnelHost?.closeAll('DEVICE_DISCONNECTED');
     this.stopHeartbeat();
     this.clearReconnectTimer();
     this.clearConnectWatchdog();
