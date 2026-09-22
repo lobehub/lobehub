@@ -7,6 +7,18 @@
  * Persistence (localStorage vs IndexedDB) is handled transparently by the
  * tier-aware SWR cache provider (see `localStorageProvider.ts`) based on the
  * SWR key — consumers never need to opt in per call.
+ *
+ * Why a `data`-keyed effect and not `onSuccess` alone: SWR only fires
+ * `onSuccess` when a *network fetch* resolves, and with the *fetched* value — it
+ * never fires for a cache hit (verified: a warm cache serves `response.data`
+ * synchronously while `onSuccess` stays at 0 calls, and with
+ * `revalidateIfStale: false` it never fires at all). So the cached snapshot can
+ * only reach the store by reading `response.data`. We do that in one effect
+ * deduped on the data reference: a key change yields a new data reference and
+ * re-syncs automatically, so there is no second "reset on key change" effect to
+ * order against — that two-effect ordering was the original skeleton-stuck bug.
+ * An effect (not a render-phase write) keeps this safe under concurrent React,
+ * where a render can be discarded before commit.
  */
 
 import { useEffect, useRef } from 'react';
@@ -55,36 +67,24 @@ export function useClientDataSWRWithSync<T>(
   fetcher: (() => Promise<T>) | null,
   options?: UseClientDataSWRWithSyncOptions<T>,
 ): SWRResponse<T> {
-  const { onData, skipSync, onSuccess, ...swrOptions } = options || {};
-  const hasSyncedRef = useRef(false);
+  const { onData, skipSync, ...swrOptions } = options || {};
 
-  const response = useClientDataSWR<T>(key, fetcher, {
-    ...swrOptions,
-    onSuccess: (data, key, config) => {
-      // Call original onSuccess
-      onSuccess?.(data, key, config);
-      // Also sync via onData
-      if (onData && !skipSync) {
-        onData(data);
-        hasSyncedRef.current = true;
-      }
-    },
-  });
+  const response = useClientDataSWR<T>(key, fetcher, swrOptions);
 
   const { data } = response;
 
-  // When cached data is available, sync to store immediately
+  // Single source of delivery, keyed on the data reference. Covers both a cache
+  // hit (data present on mount / after a key switch) and a fresh fetch (data
+  // reference changes when SWR commits the new value). Dedupe on the reference
+  // so a stable snapshot / re-render never re-fires, and StrictMode's double
+  // effect invoke delivers exactly once.
+  const syncedDataRef = useRef<T | undefined>(undefined);
   useEffect(() => {
-    if (data && onData && !skipSync && !hasSyncedRef.current) {
-      onData(data);
-      hasSyncedRef.current = true;
-    }
-  }, [data, onData, skipSync]);
-
-  // Reset sync state when key changes
-  useEffect(() => {
-    hasSyncedRef.current = false;
-  }, [key?.toString()]);
+    if (data === undefined || skipSync || !onData) return;
+    if (syncedDataRef.current === data) return;
+    syncedDataRef.current = data;
+    onData(data);
+  }, [data, skipSync, onData]);
 
   return response;
 }
