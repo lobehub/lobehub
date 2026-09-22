@@ -3993,6 +3993,7 @@ When I am ___, I need ___
   'environments.files.binary': 'Not a text file — it can be kept and deleted here, but not edited.',
   'environments.files.unreadable': 'This file could not be read',
   'environments.files.listFailed': 'This directory could not be listed',
+  'environments.files.invalidPath': "The name has to stay inside this instance's directory",
   'environments.files.truncated': 'Only the first entries are shown',
   'environments.files.saveFailed': 'Could not save this file',
   'environments.files.createFailed': 'Could not create this',

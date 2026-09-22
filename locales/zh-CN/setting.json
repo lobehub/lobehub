@@ -504,6 +504,7 @@
   "environments.files.directoryPlaceholder": "reports",
   "environments.files.empty": "这个目录是空的",
   "environments.files.filePlaceholder": "notes.md",
+  "environments.files.invalidPath": "名称不能爬出这个实例的目录",
   "environments.files.listFailed": "这个目录列不出来",
   "environments.files.newDirectory": "新建目录",
   "environments.files.newFile": "新建文件",

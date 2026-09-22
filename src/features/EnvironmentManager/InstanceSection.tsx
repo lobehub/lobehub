@@ -37,6 +37,7 @@ const InstanceSection = memo<InstanceSectionProps>(
           adding={adding}
           editable={editable}
           instances={instances}
+          snapshotsPending={data?.snapshotsPending ?? false}
           snapshotsUnavailable={data?.snapshotsUnavailable ?? false}
           onAddingChange={onAddingChange}
           onRemove={actions.removeInstance}

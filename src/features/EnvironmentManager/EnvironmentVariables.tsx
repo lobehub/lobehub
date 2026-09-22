@@ -7,6 +7,8 @@ import { BracesIcon, CheckIcon, PencilIcon, PlusIcon, Trash2Icon, XIcon } from '
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { describeError } from './errorMessage';
+
 const styles = createStaticStyles(({ css }) => ({
   /** Railway's variables list: a framed block with a rule between rows. */
   list: css`
@@ -99,7 +101,7 @@ const EnvRow = memo<{
       await action();
       setDraft(null);
     } catch (error) {
-      toast.error((error as { message?: string })?.message || String(error));
+      toast.error(describeError(error, t, String(error)));
     } finally {
       setBusy(false);
     }
@@ -201,7 +203,7 @@ const EnvironmentVariables = memo<EnvironmentVariablesProps>(({ entries, onSave 
     try {
       await action();
     } catch (error) {
-      toast.error((error as { message?: string })?.message || String(error));
+      toast.error(describeError(error, t, String(error)));
     } finally {
       setBusy(false);
     }

@@ -504,6 +504,7 @@
   "environments.files.directoryPlaceholder": "reports",
   "environments.files.empty": "This directory is empty",
   "environments.files.filePlaceholder": "notes.md",
+  "environments.files.invalidPath": "The name has to stay inside this instance's directory",
   "environments.files.listFailed": "This directory could not be listed",
   "environments.files.newDirectory": "New folder",
   "environments.files.newFile": "New file",

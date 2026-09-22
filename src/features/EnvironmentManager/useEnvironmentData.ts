@@ -1,4 +1,5 @@
 import type { EnvironmentVisibility } from '@lobechat/types';
+import { useCallback, useMemo } from 'react';
 import { useSWRConfig } from 'swr';
 
 import { useClientDataSWR } from '@/libs/swr';
@@ -32,19 +33,50 @@ export const useEnvironments = (visibility?: EnvironmentVisibility) =>
   );
 
 /**
- * Working copies, joined with the state the execution plane holds for each.
+ * Working copies, in two phases.
  *
- * Reaching that state needs a live sandbox session, so this can take seconds on
- * a cold start — and can fail on its own, in which case the copies still list
- * with `snapshotsUnavailable` set and only their sizes are missing. Kept in its
- * own SWR entry for exactly that reason: a slow or broken snapshot store must
- * not hold up the list of what exists.
+ * The rows themselves come from the database and settle in a few milliseconds.
+ * Their sizes come from the execution plane, which needs a live sandbox session
+ * to answer — seconds on a cold start, every time, and it can fail on its own.
+ * Fetched together, the whole list waited on the slow half; so the rows are
+ * asked for first and the sizes catch up in a second request that never blocks
+ * them. While the sizes are still on their way `snapshotsPending` is true and a
+ * row shows neither a size nor "unused", since it does not know yet; when the
+ * store cannot be reached the rows still list with `snapshotsUnavailable` set.
  */
-export const useInstances = () =>
-  useClientDataSWR<Awaited<ReturnType<typeof sandboxWorkspaceService.listInstances>>>(
-    [INSTANCES_KEY],
-    () => sandboxWorkspaceService.listInstances(),
+export const useInstances = () => {
+  const rows = useClientDataSWR<Awaited<ReturnType<typeof sandboxWorkspaceService.listInstances>>>(
+    [INSTANCES_KEY, 'rows'],
+    () => sandboxWorkspaceService.listInstances({ withSizes: false }),
   );
+  const sizes = useClientDataSWR<Awaited<ReturnType<typeof sandboxWorkspaceService.listInstances>>>(
+    rows.data ? [INSTANCES_KEY, 'sizes'] : null,
+    () => sandboxWorkspaceService.listInstances(),
+    // A size does not change while the user looks at the page, and each
+    // refetch is a sandbox round trip; refocusing the tab must not pay it.
+    { dedupingInterval: 30_000, revalidateOnFocus: false },
+  );
+
+  const data = useMemo(() => {
+    if (!rows.data) return undefined;
+    const byId = new Map(sizes.data?.instances.map((instance) => [instance.id, instance.snapshot]));
+    return {
+      instances: rows.data.instances.map((instance) => ({
+        ...instance,
+        snapshot: byId.get(instance.id) ?? null,
+      })),
+      snapshotsPending: !sizes.data && !sizes.error,
+      snapshotsUnavailable: sizes.data ? sizes.data.snapshotsUnavailable : !!sizes.error,
+    };
+  }, [rows.data, sizes.data, sizes.error]);
+
+  const mutate = useCallback(async () => {
+    await rows.mutate();
+    await sizes.mutate();
+  }, [rows.mutate, sizes.mutate]);
+
+  return { data, error: rows.error, isLoading: rows.isLoading, mutate };
+};
 
 const SESSIONS_KEY = 'sandbox-environment-sessions';
 
