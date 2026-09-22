@@ -152,17 +152,25 @@ const InstanceList = memo<InstanceListProps>(
             <Flexbox horizontal align={'center'} gap={8}>
               <Input
                 placeholder={t('environments.instances.namePlaceholder')}
-                style={{ flex: 1 }}
+                // `minWidth: 0`, or the pair refuses to shrink past its
+                // intrinsic width and pushes the button out of the panel.
+                style={{ flex: 1, minWidth: 0 }}
                 value={name}
                 onChange={(event) => setName(event.target.value)}
               />
               <Input
                 placeholder={t('environments.instances.directoryPlaceholder')}
-                style={{ flex: 1 }}
+                style={{ flex: 1, minWidth: 0 }}
                 value={workingDirectory}
                 onChange={(event) => setWorkingDirectory(event.target.value)}
               />
-              <Button disabled={!canCreate} loading={busy} size={'small'} onClick={create}>
+              <Button
+                disabled={!canCreate}
+                loading={busy}
+                size={'small'}
+                style={{ flex: 'none' }}
+                onClick={create}
+              >
                 {t('environments.instances.add')}
               </Button>
             </Flexbox>
