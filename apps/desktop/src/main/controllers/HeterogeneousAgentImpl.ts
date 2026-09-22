@@ -157,6 +157,7 @@ import type {
 import { buildProxyEnv } from '@/modules/networkProxy/envBuilder';
 import {
   commandLineLooksLikeHeteroCli,
+  describeHeteroCliProcess,
   isProcessAlive,
   killProcessTreeByPid,
   readProcessCommandLine,
@@ -349,6 +350,13 @@ interface SendPromptParams {
    * still owed.
    */
   replayTranscript?: boolean;
+  /**
+   * Claude profile root the transcript was written under. Passed by restart
+   * recovery from its ledger: this turn's own account routing may resolve a
+   * different profile, but the file to read is the one the interrupted run
+   * actually produced.
+   */
+  replayTranscriptConfigDir?: string;
   /**
    * Prior conversation turns used to rebuild a Claude Code transcript that the
    * CLI garbage-collected (`cleanupPeriodDays`, default 30 days). Only consumed
@@ -3084,8 +3092,11 @@ export default class HeterogeneousAgentCtr {
       agentId: params.agentId,
       agentSessionId: session.agentSessionId,
       agentType: session.agentType,
-      command: path.basename(proc.spawnfile || session.command),
-      configDir: session.hostedProviderBinding?.profileDir,
+      // The interpreter alone is not an identity — see describeHeteroCliProcess.
+      ...describeHeteroCliProcess(proc.spawnfile || session.command, proc.spawnargs),
+      // The EFFECTIVE profile: quota-account routing and agent env also set
+      // CLAUDE_CONFIG_DIR, and the transcript is written under whichever won.
+      configDir: spawnEnv.CLAUDE_CONFIG_DIR ?? session.hostedProviderBinding?.profileDir,
       cwd,
       ipcSessionId: session.sessionId,
       operationId: params.operationId,
@@ -3394,7 +3405,10 @@ export default class HeterogeneousAgentCtr {
     }
 
     const turn = (await this.readClaudeCodeReplayTurn({
-      configDir: session.hostedProviderBinding?.profileDir,
+      configDir:
+        params.replayTranscriptConfigDir ??
+        session.env?.CLAUDE_CONFIG_DIR ??
+        session.hostedProviderBinding?.profileDir,
       cwd: session.cwd,
       sessionId: session.agentSessionId,
     }))!;

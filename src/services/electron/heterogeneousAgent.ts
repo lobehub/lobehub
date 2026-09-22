@@ -46,6 +46,8 @@ class HeterogeneousAgentService {
      * Desktop main resolves with `{ replay: { complete } }`.
      */
     replayTranscript?: boolean;
+    /** Claude profile root the transcript was written under (restart recovery). */
+    replayTranscriptConfigDir?: string;
     /** Prior turns used to rebuild a GC-ed Claude Code transcript before `--resume`. */
     resumeReplayMessages?: HeteroSessionImportMessage[];
     sessionId: string;

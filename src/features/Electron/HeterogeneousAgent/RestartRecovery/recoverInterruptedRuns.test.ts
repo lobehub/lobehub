@@ -170,6 +170,8 @@ describe('recoverInterruptedHeteroRuns', () => {
         parentOperationId: 'wrap-op',
         prompt: 'do the thing',
         replayTranscript: true,
+        // The probe and the replay must read the SAME profile the run used.
+        replayTranscriptConfigDir: undefined,
         topic,
       }),
     );
@@ -288,10 +290,12 @@ describe('recoverInterruptedHeteroRuns', () => {
       cwd: '/repo',
       sessionId: 'cc-from-ledger',
     });
-    // The run itself sees the patched topic so resume resolves from it.
+    // The run itself sees the patched topic so resume resolves from it, and the
+    // replay reads the profile the interrupted run actually wrote under.
     expect(mockRunHetero.mock.calls[0][1].topic.metadata).toMatchObject({
       heteroSessionIdByWorkingDirectory: { '/repo': 'cc-from-ledger' },
     });
+    expect(mockRunHetero.mock.calls[0][1].replayTranscriptConfigDir).toBe('/profile');
   });
 
   it('settles a topic still marked running when the replay throws before the executor owns it', async () => {

@@ -240,6 +240,8 @@ export interface HeterogeneousAgentExecutorParams {
    * spawning the CLI (desktop restart recovery). Requires `resumeSessionId`.
    */
   replayTranscript?: boolean;
+  /** Claude profile root the interrupted run's transcript was written under. */
+  replayTranscriptConfigDir?: string;
   /** CC session ID from previous execution in this topic (for --resume) */
   resumeBindingKey?: string;
   resumeSessionId?: string;
@@ -492,6 +494,7 @@ export const executeHeterogeneousAgent = async (
     operationId,
     pageSelections,
     replayTranscript,
+    replayTranscriptConfigDir,
     resumeBindingKey,
     resumeSessionId,
     workingDirectory,
@@ -2575,7 +2578,7 @@ export const executeHeterogeneousAgent = async (
       // `/goal` travels as system-context instructions; the CLI gets only the
       // request so its own `/goal` command does not take the message over.
       prompt: stripGoalCommand(message),
-      ...(replayTranscript ? { replayTranscript: true } : {}),
+      ...(replayTranscript ? { replayTranscript: true, replayTranscriptConfigDir } : {}),
       ...(resumeReplayMessages?.length ? { resumeReplayMessages } : {}),
       sessionId: ipcRunSessionId,
       systemContext: systemContext || undefined,

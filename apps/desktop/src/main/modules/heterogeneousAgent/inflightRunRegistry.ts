@@ -19,13 +19,23 @@ export interface HeteroInflightRun {
   agentType: string;
   /** Basename of the spawned executable (e.g. `claude`), used to verify a pid before signalling it. */
   command?: string;
-  /** Claude profile root (`CLAUDE_CONFIG_DIR`) when the run used a hosted binding profile. */
+  /**
+   * Effective Claude profile root (`CLAUDE_CONFIG_DIR`) the run spawned with —
+   * a hosted binding profile, a quota-routed account, or an agent env override.
+   * The transcript lives under it, so probing and replay must both use it.
+   */
   configDir?: string;
   cwd?: string;
   /** Desktop IPC session id (`AgentSession.sessionId`). */
   ipcSessionId: string;
   operationId: string;
   pid?: number;
+  /**
+   * Path of the CLI script when the executable is a shared interpreter (an npm
+   * `.cmd` shim unwraps to `node <cli-script>`). Pins the pid identity: `node`
+   * on its own matches half the machine.
+   */
+  scriptPath?: string;
   /** ISO timestamp of the spawn. */
   startedAt: string;
   topicId?: string;

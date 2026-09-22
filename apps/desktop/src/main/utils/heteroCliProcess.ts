@@ -10,21 +10,54 @@ const tokenIdentity = (token: string): string => {
 };
 
 /**
+ * Spawn-time identity of a CLI run, recorded so a later launch can tell the
+ * original process from whatever inherited its pid.
+ */
+export interface HeteroCliProcessIdentity {
+  /** Basename identity of the spawned executable, e.g. `claude` or `node`. */
+  command?: string;
+  /** Path of the script the executable runs, when it is an interpreter. */
+  scriptPath?: string;
+}
+
+/**
+ * Derive the identity to persist from a spawned child. `spawnfile` alone is not
+ * enough: an npm `.cmd` shim is unwrapped into `node <cli-script>`, so the
+ * executable is the generic interpreter and only the script says which CLI it
+ * is (`proc.spawnargs[0]` is the program, so the script is searched after it).
+ */
+export const describeHeteroCliProcess = (
+  spawnfile: string | undefined,
+  spawnargs: readonly string[] | undefined,
+): HeteroCliProcessIdentity => {
+  const command = spawnfile ? tokenIdentity(spawnfile) : undefined;
+  const scriptPath = (spawnargs ?? [])
+    .slice(1)
+    .find((arg) => !arg.startsWith('-') && /[/\\]/.test(arg));
+  return { command, scriptPath };
+};
+
+/**
  * Whether a live process's command line plausibly belongs to a recorded
  * heterogeneous-agent CLI run. Pids are recycled, so an orphan is only
  * signalled when its command line still carries the CLI that was spawned.
  *
- * Only tokens that can BE the program are considered: the first token, or any
- * token spelled as a path (the CLI is often launched through an interpreter,
- * `node /path/bin/claude …`). A plain substring — or any argv token — would
- * accept unrelated processes that merely name it (`grep -r claude /var/log`,
- * `python /tmp/claude-cleanup.py`) and kill their whole process tree.
+ * Two independent gates:
+ * - the recorded executable has to appear where a PROGRAM can appear — the
+ *   first token, or a token spelled as a path. A plain substring (or any argv
+ *   token) would accept processes that merely name it (`grep -r claude`,
+ *   `python /tmp/claude-cleanup.py`) and kill their whole tree.
+ * - when a CLI script was recorded, that exact path must be on the line. The
+ *   executable is then a shared interpreter, and `node` alone matches half the
+ *   machine.
  */
 export const commandLineLooksLikeHeteroCli = (
   commandLine: string | undefined,
-  run: { agentType: string; command?: string },
+  run: { agentType: string } & HeteroCliProcessIdentity,
 ): boolean => {
   if (!commandLine) return false;
+  if (run.scriptPath && !commandLine.includes(run.scriptPath)) return false;
+
   const needles = new Set(
     [run.command, run.agentType]
       .filter((value): value is string => !!value)

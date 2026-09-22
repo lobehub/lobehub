@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   commandLineLooksLikeHeteroCli,
+  describeHeteroCliProcess,
   isProcessAlive,
   waitForProcessExit,
 } from './heteroCliProcess';
@@ -58,6 +59,65 @@ describe('commandLineLooksLikeHeteroCli', () => {
       }),
     ).toBe(false);
     expect(commandLineLooksLikeHeteroCli(undefined, { agentType: 'claude-code' })).toBe(false);
+  });
+});
+
+describe('describeHeteroCliProcess', () => {
+  it('records the CLI script when the executable is an interpreter', () => {
+    // A Windows npm shim is unwrapped into `node <cli-script>`.
+    expect(
+      describeHeteroCliProcess('C:\\Program Files\\nodejs\\node.exe', [
+        'C:\\Program Files\\nodejs\\node.exe',
+        'C:\\app\\node_modules\\@anthropic-ai\\claude-code\\cli.js',
+        '-p',
+      ]),
+    ).toEqual({
+      command: 'node',
+      scriptPath: 'C:\\app\\node_modules\\@anthropic-ai\\claude-code\\cli.js',
+    });
+  });
+
+  it('skips interpreter flags when looking for the script', () => {
+    expect(
+      describeHeteroCliProcess('/usr/bin/node', [
+        '/usr/bin/node',
+        '--enable-source-maps',
+        '/opt/cli.js',
+      ]).scriptPath,
+    ).toBe('/opt/cli.js');
+  });
+
+  it('records no script when the executable IS the CLI', () => {
+    expect(
+      describeHeteroCliProcess('/Users/me/.local/bin/claude', [
+        '/Users/me/.local/bin/claude',
+        '-p',
+        '--output-format',
+        'stream-json',
+      ]),
+    ).toEqual({ command: 'claude', scriptPath: undefined });
+  });
+});
+
+describe('commandLineLooksLikeHeteroCli with an interpreter identity', () => {
+  const run = {
+    agentType: 'claude-code',
+    command: 'node',
+    scriptPath: 'C:\\app\\node_modules\\@anthropic-ai\\claude-code\\cli.js',
+  };
+
+  it('accepts the same interpreter running the recorded script', () => {
+    expect(
+      commandLineLooksLikeHeteroCli(
+        'node.exe C:\\app\\node_modules\\@anthropic-ai\\claude-code\\cli.js -p',
+        run,
+      ),
+    ).toBe(true);
+  });
+
+  it('rejects an unrelated node process that recycled the pid', () => {
+    // `node` alone matches half the machine; the script path is what pins it.
+    expect(commandLineLooksLikeHeteroCli('node.exe C:\\other\\server.js', run)).toBe(false);
   });
 });
 

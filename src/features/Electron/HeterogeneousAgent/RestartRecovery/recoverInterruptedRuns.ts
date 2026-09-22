@@ -220,6 +220,9 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
       parentOperationId: operationId,
       prompt: userTurn.content,
       replayTranscript: true,
+      // The transcript sits under the profile the interrupted run used, which
+      // this turn's own account routing may no longer resolve to.
+      replayTranscriptConfigDir: run.configDir,
       topic: topic as ChatTopic,
     });
 
