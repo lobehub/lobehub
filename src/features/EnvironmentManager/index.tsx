@@ -126,9 +126,13 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
    * right below already says there are none.
    */
   const actions = (
-    <Flexbox horizontal align={'center'} gap={8}>
+    // `flex: none`, because this shares a `space-between` row with whatever
+    // names the list. Left shrinkable, the group gets compressed by a wide
+    // neighbour and the count is the first thing to give — it wrapped onto two
+    // lines beside buttons that had room to spare.
+    <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
       {environments.length > 0 && (
-        <Text fontSize={12} type={'secondary'} weight={500}>
+        <Text fontSize={12} style={{ whiteSpace: 'nowrap' }} type={'secondary'} weight={500}>
           {t('environments.total', { count: environments.length })}
         </Text>
       )}
