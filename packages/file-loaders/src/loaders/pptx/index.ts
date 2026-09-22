@@ -9,6 +9,17 @@ import { extractFiles, parseString } from '../../utils/parser-utils';
 const log = debug('file-loaders:pptx');
 
 /**
+ * Matches the slide parts of a PPTX archive.
+ *
+ * Deliberately not global. A `/g` regex carries `lastIndex` between calls, and
+ * this one is reused as a predicate over every entry in the archive, so once a
+ * slide matches, the next name is searched from where the previous match ended.
+ * Whenever two slide entries sit next to each other — which is how PowerPoint
+ * itself writes them — every second slide is silently skipped.
+ */
+const SLIDE_FILE_PATTERN = /ppt\/slides\/slide\d+\.xml/;
+
+/**
  * Represents a loader for PPTX files using extracted utility functions.
  *
  * This loader reads a PPTX file, extracts text content from each slide,
@@ -30,13 +41,12 @@ export class PptxLoader implements FileLoaderInterface {
 
     try {
       // --- File Extraction Step ---
-      const slidesRegex = /ppt\/slides\/slide\d+\.xml/g;
       const slideNumberRegex = /slide(\d+)\.xml/;
 
       log('Extracting slide XML files from PPTX');
       // Extract only slide XML files
       const slideFiles: ExtractedFile[] = await extractFiles(filePath, (fileName) =>
-        slidesRegex.test(fileName),
+        SLIDE_FILE_PATTERN.test(fileName),
       );
       log('Extracted slide files:', slideFiles.length);
 
