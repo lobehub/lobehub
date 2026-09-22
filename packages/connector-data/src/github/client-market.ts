@@ -142,6 +142,22 @@ export const createGitHubMarketTransport = ({
         };
       });
     },
+    listRepositoryBranches: async ({ owner, perPage, repository }) => {
+      const data = await proxy({
+        endpoint: `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/branches`,
+        method: 'GET',
+        parameters: [{ in: 'query', name: 'per_page', value: perPage }],
+      });
+      if (!Array.isArray(data)) {
+        throw new Error('GitHub Market branch response is invalid');
+      }
+
+      return data.map((item) => {
+        const record = toRecord(item);
+
+        return { name: typeof record?.name === 'string' ? record.name : null };
+      });
+    },
     listUserOrganizations: async ({ perPage }) => {
       const data = await proxy({
         endpoint: '/user/orgs',

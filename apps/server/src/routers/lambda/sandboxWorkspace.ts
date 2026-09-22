@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { EnvironmentModel } from '@/database/models/environment';
 import { EnvironmentInstanceModel } from '@/database/models/environmentInstance';
+import { TopicModel } from '@/database/models/topic';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { ConnectorDataService } from '@/server/services/connectorData';
@@ -125,6 +126,13 @@ const entitledProcedure = workspaceProcedure.use(async (opts) => {
  * part a rename is allowed to move.
  */
 const nameSchema = z.string().trim().min(1).max(255);
+
+/**
+ * The topic the execution plane keys its file-browser console sessions to.
+ * The same literal market uses (`MANAGEMENT_TOPIC_ID`); it is not a topic of
+ * ours, so it is never looked up and the run is shown as a console session.
+ */
+const MANAGEMENT_TOPIC_ID = 'sandbox-workspace-console';
 
 /**
  * An environment or instance id. Checked for shape rather than left to the
@@ -580,6 +588,72 @@ export const sandboxWorkspaceRouter = router({
       };
     }),
 
+  /**
+   * The run history of every instance of one environment, newest first.
+   *
+   * The execution plane keys its trail by instance — that is the name the
+   * snapshot is stored under — while the panel shows one environment, so this
+   * is the union of the instances' histories with the instance named on each
+   * row. Read from the control plane's own records: unlike `listInstances`
+   * it starts no sandbox and pays no cold start.
+   *
+   * Topic titles are looked up for the caller's own topics; a run another
+   * member started in a published environment keeps its id only.
+   */
+  listInstanceSessions: instanceProcedure
+    .input(
+      z.object({
+        environmentId: idSchema,
+        /** Per instance, not in total: each instance's page is fetched on its own. */
+        limit: z.number().int().min(1).max(100).default(20),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const instances = await ctx.instanceModel.query({ environmentId: input.environmentId });
+      if (instances.length === 0) return { sessions: [], unavailable: false };
+
+      const pages = await Promise.all(
+        instances.map((instance) =>
+          ctx.client
+            .listEnvironmentSessions({ limit: input.limit, name: instance.id })
+            // One instance's history failing must not blank the others; the
+            // caller is told the list is incomplete rather than shown "no runs".
+            .catch(() => null),
+        ),
+      );
+
+      const merged = instances
+        .flatMap((instance, index) =>
+          (pages[index]?.sessions ?? []).map((session) => ({
+            ...session,
+            instanceId: instance.id,
+            instanceName: instance.name,
+          })),
+        )
+        .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+
+      const topicIds = [
+        ...new Set(
+          merged
+            .map((session) => session.topicId)
+            .filter((id): id is string => !!id && id !== MANAGEMENT_TOPIC_ID),
+        ),
+      ];
+      const topics =
+        topicIds.length > 0
+          ? await new TopicModel(ctx.serverDB, ctx.userId).findByIds(topicIds).catch(() => [])
+          : [];
+      const titles = new Map(topics.map((topic) => [topic.id, topic.title]));
+
+      return {
+        sessions: merged.map((session) => ({
+          ...session,
+          topicTitle: (session.topicId && titles.get(session.topicId)) || null,
+        })),
+        unavailable: pages.includes(null),
+      };
+    }),
+
   listFiles: entitledProcedure
     .input(
       z.object({
@@ -657,6 +731,34 @@ export const sandboxWorkspaceRouter = router({
    * picker exists to resolve, so it answers `connected: false` and lets the
    * UI offer the connection instead of a failure.
    */
+  /**
+   * The branches of one repository, so the environment's checkout target is
+   * picked from what exists rather than typed. Same shape as the repository
+   * listing: no connection is not an error, it is `connected: false`.
+   */
+  listGithubBranches: entitledProcedure
+    .input(z.object({ owner: z.string().min(1).max(255), repository: z.string().min(1).max(255) }))
+    .query(async ({ ctx, input }) => {
+      const service = new ConnectorDataService(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+
+      try {
+        const client = await service.getGitHubClient();
+
+        return {
+          branches: await client.listRepositoryBranches(input.owner, input.repository),
+          connected: true,
+        };
+      } catch (error) {
+        if (isGithubUnavailable(error)) return { branches: [], connected: false };
+
+        throw error;
+      }
+    }),
+
   listGithubRepositories: entitledProcedure.query(async ({ ctx }) => {
     const service = new ConnectorDataService(
       ctx.serverDB,

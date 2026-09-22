@@ -62,6 +62,44 @@ export interface SandboxEnvironmentSnapshot {
   updatedAt: string;
 }
 
+/** One run of an environment, as the execution plane's trail records it. */
+export interface SandboxSessionRecord {
+  /** Set on builds: what the build status endpoint is polled with. */
+  buildId: string | null;
+  endedAt: string | null;
+  /** Null while the run is still going. */
+  endReason:
+    | 'build_failed'
+    | 'build_gone'
+    | 'build_succeeded'
+    | 'build_timeout'
+    | 'expired'
+    | 'explicit'
+    | 'idle'
+    | 'lost'
+    | 'switched'
+    | null;
+  /** The instance id, which is what the snapshot is stored under. */
+  environment: string | null;
+  id: number;
+  kind: 'build' | 'session';
+  /** A console session opened by the file browser rather than a conversation. */
+  management: boolean;
+  sessionId: string;
+  sessionUserId: string;
+  /** Archive size after the teardown snapshot; null when it failed or has not run. */
+  snapshotBytes: number | null;
+  snapshotError: string | null;
+  startedAt: string;
+  topicId: string | null;
+}
+
+export interface SandboxSessionList {
+  /** Pass as `before` to fetch the next page; null on the last one. */
+  nextBefore: string | null;
+  sessions: SandboxSessionRecord[];
+}
+
 export interface SandboxWorkspaceClientOptions {
   baseURL: string;
   headers: Record<string, string>;
@@ -105,10 +143,18 @@ export const createSandboxWorkspaceClient = ({
     });
 
     if (!response.ok) {
-      const body = await response.json().catch(() => ({}) as { message?: string });
+      const body = await response
+        .json()
+        .catch(() => ({}) as { error_description?: string; message?: string });
       log('workspace file request failed: %s %d %O', path, response.status, body);
+      // The market answers in the OAuth shape — `error` for the code and
+      // `error_description` for the reason — so reading `message` alone
+      // reduced every refusal ("could not delete", "outside the workspace")
+      // to the status number, which is the one thing the user cannot act on.
       throw new SandboxWorkspaceFilesError(
-        body.message || `Workspace request failed with status ${response.status}`,
+        body.error_description ||
+          body.message ||
+          `Workspace request failed with status ${response.status}`,
         response.status,
       );
     }
@@ -184,6 +230,26 @@ export const createSandboxWorkspaceClient = ({
       const suffix = query.size > 0 ? `?${query.toString()}` : '';
 
       return request(`${CURRENT_WORKSPACE}/environments${suffix}`);
+    },
+
+    /**
+     * One environment's run history, newest first. Answered from the control
+     * plane's own trail, so unlike the listings above it needs no sandbox
+     * session and costs no cold start.
+     */
+    listEnvironmentSessions: async (params: {
+      before?: string;
+      limit?: number;
+      name: string;
+    }): Promise<SandboxSessionList> => {
+      const query = new URLSearchParams();
+      if (params.limit !== undefined) query.set('limit', String(params.limit));
+      if (params.before) query.set('before', params.before);
+      const suffix = query.size > 0 ? `?${query.toString()}` : '';
+
+      return request(
+        `${CURRENT_WORKSPACE}/environments/${encodeURIComponent(params.name)}/sessions${suffix}`,
+      );
     },
 
     listFiles: async (
