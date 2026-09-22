@@ -1,3 +1,4 @@
+import { LobeAgentApiName, LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
 import { getBuiltinStreaming } from '@lobechat/builtin-tools/streamings';
 import { type ChatToolResult, type ToolIntervention } from '@lobechat/types';
 import { safeParsePartialJSON } from '@lobechat/utils';
@@ -118,6 +119,12 @@ const Render = memo<RenderProps>(
 
     if (isToolCalling) return placeholder;
 
+    /** Keep the child-thread entry available when its run fails. */
+    const canInspectFailedSubAgent =
+      identifier === LobeAgentIdentifier &&
+      apiName === LobeAgentApiName.callSubAgent &&
+      typeof result.state?.threadId === 'string';
+
     return (
       <Suspense fallback={placeholder}>
         <Flexbox gap={8}>
@@ -125,7 +132,6 @@ const Render = memo<RenderProps>(
             content={result.content || ''}
             messageId={toolMessageId}
             pluginState={result.state}
-            showCustomToolRender={result.error ? false : showCustomToolRender}
             toolCallId={toolCallId}
             plugin={{
               apiName,
@@ -133,6 +139,9 @@ const Render = memo<RenderProps>(
               identifier,
               type: type as any,
             }}
+            showCustomToolRender={
+              (!result.error || canInspectFailedSubAgent) && showCustomToolRender
+            }
           />
         </Flexbox>
       </Suspense>
