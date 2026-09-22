@@ -32,11 +32,15 @@ vi.mock('@/services/file', () => ({
   },
 }));
 
-const moveScope = { libraryId: 'kb-1', workspaceId: 'workspace-1' };
+const moveCachePatch = {
+  fromParentKeys: ['folder-a'],
+  scope: { libraryId: 'kb-1', workspaceId: 'workspace-1' },
+  toParentKeys: ['folder-b'],
+};
 
 const fileStoreState = {
   applyMovedResourceToCaches: mockApplyMovedResourceToCaches,
-  captureResourceMoveCacheScope: vi.fn(() => moveScope),
+  prepareResourceMoveCachePatch: vi.fn(async () => moveCachePatch),
   moveResource: mockStoreMove,
   refreshFileList: mockRefreshFileList,
   resourceMap: new Map<string, unknown>(),
@@ -93,7 +97,7 @@ describe('TreeActionImpl.moveItem', () => {
     mockRefreshFileList.mockReset();
     mockResourceMove.mockReset();
     mockStoreMove.mockReset();
-    fileStoreState.captureResourceMoveCacheScope.mockClear();
+    fileStoreState.prepareResourceMoveCachePatch.mockClear();
     fileStoreState.resourceMap = new Map();
   });
 
@@ -113,15 +117,14 @@ describe('TreeActionImpl.moveItem', () => {
 
     expect(mockResourceMove).toHaveBeenCalledWith('file-1', 'folder-b');
     // The explorer never saw the row, so its folder-list caches are patched
-    // from the server result before the current list refreshes, in the scope
-    // captured before the request went out.
-    expect(mockApplyMovedResourceToCaches).toHaveBeenCalledWith(
-      moved,
+    // from the server result before the current list refreshes, with the
+    // folder keys and scope prepared before the request went out.
+    expect(fileStoreState.prepareResourceMoveCachePatch).toHaveBeenCalledWith(
       'folder-a',
       'folder-b',
-      moveScope,
     );
-    expect(fileStoreState.captureResourceMoveCacheScope.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(mockApplyMovedResourceToCaches).toHaveBeenCalledWith(moved, moveCachePatch);
+    expect(fileStoreState.prepareResourceMoveCachePatch.mock.invocationCallOrder[0]).toBeLessThan(
       mockResourceMove.mock.invocationCallOrder[0],
     );
     expect(mockRefreshFileList).toHaveBeenCalledTimes(1);

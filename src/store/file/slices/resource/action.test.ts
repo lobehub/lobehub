@@ -160,6 +160,40 @@ describe('resource actions', () => {
     expect(patch.scope).toEqual({ libraryId: undefined, workspaceId: null });
   });
 
+  it('should resolve folder aliases before the request so a scope switch cannot hide them', async () => {
+    const targetFolder = createResource({
+      fileType: 'custom/folder',
+      id: 'folder-w37-id',
+      name: 'W37',
+      parentId: null,
+      slug: 'w37-slug',
+    });
+    const doc = createResource({ id: 'doc-1', parentId: null });
+    mockMoveResource.mockImplementation(async () => {
+      // The user opened another library meanwhile: the old rows are gone.
+      useFileStore.setState({
+        queryParams: { libraryId: 'kb-2', parentId: null },
+        resourceList: [],
+        resourceMap: new Map(),
+      });
+      treeState.children = {};
+      return { ...doc, parentId: targetFolder.id };
+    });
+    useFileStore.setState({
+      queryParams: { parentId: null },
+      resourceList: [doc, targetFolder],
+      resourceMap: new Map([
+        [doc.id, doc],
+        [targetFolder.id, targetFolder],
+      ]),
+    });
+
+    await useFileStore.getState().moveResource(doc.id, targetFolder.id);
+
+    const [, patch] = mockApplyMoveToCaches.mock.calls[0];
+    expect(new Set(patch.toParentKeys)).toEqual(new Set(['folder-w37-id', 'w37-slug']));
+  });
+
   it('should patch the caches of the workspace and library the move started in', async () => {
     // The user switches workspace and library while the request is in flight;
     // the caches that listed the row belong to the scope captured beforehand.

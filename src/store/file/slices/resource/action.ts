@@ -8,7 +8,7 @@ import { OptimisticEngine } from '@/store/utils/optimisticEngine';
 import type { CreateResourceParams, ResourceItem, UpdateResourceParams } from '@/types/resource';
 
 import type { FileStore } from '../../store';
-import type { ResourceMoveCacheScope, ResourceParentKey } from './hooks';
+import type { ResourceMoveCachePatch, ResourceParentKey } from './hooks';
 import type { ResourceState } from './initialState';
 import { initialResourceState } from './initialState';
 import { getResourceQueryKey } from './utils';
@@ -684,7 +684,6 @@ export class ResourceActionImpl {
   moveResource = async (id: string, parentId: string | null): Promise<void> => {
     const { queryParams, resourceMap } = this.#get();
     const existing = resourceMap.get(id);
-    const scope = this.captureResourceMoveCacheScope();
 
     if (!existing) {
       console.warn(`Resource ${id} not found for move`);
@@ -693,6 +692,13 @@ export class ResourceActionImpl {
 
     // List rows may omit `parentId`; only a known parent can prove a no-op move.
     if (existing.parentId !== undefined && (existing.parentId ?? null) === parentId) return;
+
+    // The row lives in the current explorer list, so the current query's
+    // parent names the source folder even when the row itself omits `parentId`.
+    const cachePatch = await this.prepareResourceMoveCachePatch(
+      [existing.parentId, queryParams?.parentId ?? null],
+      parentId,
+    );
 
     const syncEngine = this.#getSyncEngine();
     const tx = syncEngine.createTransaction(`moveResource(${id})`);
@@ -727,53 +733,53 @@ export class ResourceActionImpl {
       const moved = result as ResourceItem;
       if (shouldKeepVisible) this.#replaceLocalResource(id, moved);
 
-      // The row lives in the current explorer list, so the current query's
-      // parent names the source folder even when the row itself omits `parentId`.
-      await this.applyMovedResourceToCaches(
-        moved,
-        [existing.parentId, queryParams?.parentId ?? null],
-        [parentId, moved.parentId ?? null],
-        scope,
-      );
+      await this.applyMovedResourceToCaches(moved, cachePatch);
     };
 
     await tx.commit<ResourceItem>();
   };
 
   /**
-   * Mirror a completed move into the SWR folder-list caches so the destination
-   * (and source) folder show the moved row on their next visit instead of the
-   * cached pre-move list. Callers pass whatever handle they hold for each
-   * folder — a drop target id, a URL slug or an empty root — and the handles
-   * are widened here to every key the explorer may query that folder by.
-   * `scope` is the workspace / library the move was issued from, taken with
-   * `captureResourceMoveCacheScope` *before* the request: the user may have
-   * switched scope while it was in flight.
+   * Everything a completed move needs to patch the SWR folder-list caches,
+   * gathered *before* the request goes out: the workspace / library the move
+   * is issued from, and both folders widened to every key the explorer may
+   * query them by (`queryParams.parentId` carries the URL slug while drop
+   * targets and the sidebar tree address folders by id). The user may switch
+   * scope while the request is in flight, after which neither the scope nor
+   * the old folders' slug aliases can be read from the store any more.
+   *
+   * Callers pass whatever handle they hold for each folder — a drop target
+   * id, a URL slug or an empty root.
    */
-  applyMovedResourceToCaches = async (
-    resource: ResourceItem,
+  prepareResourceMoveCachePatch = async (
     fromParent: ResourceParentKey | undefined | Array<ResourceParentKey | undefined>,
     toParent: ResourceParentKey | undefined | Array<ResourceParentKey | undefined>,
-    scope: ResourceMoveCacheScope,
-  ): Promise<void> => {
-    const { applyResourceMoveToListCaches } = await import('./hooks');
+  ): Promise<ResourceMoveCachePatch> => {
+    const scope = {
+      libraryId: this.#get().queryParams?.libraryId,
+      workspaceId: getActiveWorkspaceId(),
+    };
     const [fromParentKeys, toParentKeys] = await Promise.all([
       this.#resolveParentCacheKeys(Array.isArray(fromParent) ? fromParent : [fromParent]),
       this.#resolveParentCacheKeys(Array.isArray(toParent) ? toParent : [toParent]),
     ]);
 
-    await applyResourceMoveToListCaches(resource, { fromParentKeys, scope, toParentKeys });
+    return { fromParentKeys, scope, toParentKeys };
   };
 
   /**
-   * Snapshot the workspace and library a move is about to be issued from, so
-   * the folder-list caches patched after it lands are the ones that listed the
-   * row even if the user changes scope meanwhile.
+   * Mirror a completed move into the SWR folder-list caches so the destination
+   * (and source) folder show the moved row on their next visit instead of the
+   * cached pre-move list. `patch` comes from `prepareResourceMoveCachePatch`,
+   * taken before the request.
    */
-  captureResourceMoveCacheScope = (): ResourceMoveCacheScope => ({
-    libraryId: this.#get().queryParams?.libraryId,
-    workspaceId: getActiveWorkspaceId(),
-  });
+  applyMovedResourceToCaches = async (
+    resource: ResourceItem,
+    patch: ResourceMoveCachePatch,
+  ): Promise<void> => {
+    const { applyResourceMoveToListCaches } = await import('./hooks');
+    await applyResourceMoveToListCaches(resource, patch);
+  };
 
   removeLocalResource = (id: string): void => {
     this.#set(

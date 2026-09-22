@@ -297,6 +297,47 @@ describe('applyResourceMoveToListCaches', () => {
     });
   });
 
+  it('only seeds plain destination listings; filtered variants are left to revalidate', async () => {
+    const plain = listKey('folder-w37');
+    const plainAll = listKey('folder-w37', { category: 'all', sourceFilter: 'all' });
+    const filtered = [
+      listKey('folder-w37', { q: 'weekly' }),
+      listKey('folder-w37', { category: 'images' }),
+      listKey('folder-w37', { sourceFilter: 'ai' }),
+      listKey('folder-w37', { visibility: 'private' }),
+    ];
+    cachedKeys = [plain, plainAll, ...filtered];
+    const { writes, reconcile } = await runMove();
+    const destinationWrites = writes.filter(([matcher]) => matcher(plain) || matcher(plainAll));
+
+    expect(destinationWrites).toHaveLength(2);
+    for (const key of filtered) {
+      expect(writes.some(([matcher]) => matcher(key))).toBe(false);
+      // …but a mounted filtered list is still refetched.
+      expect(reconcile[0](key)).toBe(true);
+    }
+  });
+
+  it('keeps a library row out of a personal root that hides library files', async () => {
+    const root = ['resource:list', { parentId: null, showFilesInKnowledgeBase: false }, null];
+    const rootShowingLibraries = [
+      'resource:list',
+      { parentId: null, showFilesInKnowledgeBase: true },
+      null,
+    ];
+    cachedKeys = [root, rootShowingLibraries];
+    await applyResourceMoveToListCaches({ ...moved, knowledgeBaseId: 'kb-1' } as any, {
+      fromParentKeys: ['folder-w37'],
+      scope: { libraryId: undefined, workspaceId: null },
+      toParentKeys: [null],
+    });
+
+    const calls = vi.mocked(mutate).mock.calls as unknown as MutateCall[];
+    const writes = calls.slice(1, -1);
+    expect(writes.some(([matcher]) => matcher(root))).toBe(false);
+    expect(writes.some(([matcher]) => matcher(rootShowingLibraries))).toBe(true);
+  });
+
   it('drops the moved row from every cached source list', async () => {
     const { writes } = await runMove();
     const from = writes.find(([matcher]) => matcher(listKey('folder-2026-09')))!;

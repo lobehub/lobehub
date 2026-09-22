@@ -53,7 +53,7 @@ export type ResourceParentKey = string | null;
 
 /**
  * The workspace and library a move was issued from. Captured *before* the
- * request (`captureResourceMoveCacheScope` on the file store): the user may
+ * request (`prepareResourceMoveCachePatch` on the file store): the user may
  * switch workspace or library while it is in flight, and the caches to patch
  * are the ones that listed the row, not the newly active scope.
  */
@@ -83,6 +83,25 @@ const isResourceListKeyForParent = (
   if (!params || params.libraryId !== libraryId) return false;
 
   return parentKeys.has(params.parentId ?? null);
+};
+
+/**
+ * Whether a cached list is a plain folder listing the moved row certainly
+ * belongs to. A list narrowed by a keyword, a category tab, a source chip or a
+ * visibility mode may or may not include the row, and the server owns those
+ * rules; such variants are left for revalidation rather than seeded with a row
+ * that might not match. The personal root's default `showFilesInKnowledgeBase:
+ * false` hides library rows, so a row that belongs to a library stays out.
+ */
+const listsMovedRowUnfiltered = (params: ResourceQueryParams, resource: ResourceItem) => {
+  if (params.q?.trim()) return false;
+  if (params.category && params.category !== 'all') return false;
+  if (params.sourceFilter && params.sourceFilter !== 'all') return false;
+  if (params.visibility) return false;
+  if (!params.libraryId && !params.showFilesInKnowledgeBase && resource.knowledgeBaseId) {
+    return false;
+  }
+  return true;
 };
 
 const stripOptimistic = (resource: ResourceItem): ResourceItem => {
@@ -205,7 +224,8 @@ const collectCachedListKeys = async (matcher: (key: unknown) => key is ResourceS
  *
  * Destination entries are patched one key at a time because the row's place
  * depends on that key's sort (see `patchDestinationList`); the updater SWR
- * hands us does not know which key it is running for.
+ * hands us does not know which key it is running for. Filtered variants of the
+ * destination (see `listsMovedRowUnfiltered`) are only revalidated.
  *
  * The patches are written with `revalidate: false` and the reconciling refetch
  * of any mounted key is fired without being awaited: SWR's `mutate` resolves
@@ -226,8 +246,11 @@ export const applyResourceMoveToListCaches = async (
 
   const isToKey = (key: unknown) => isResourceListKeyForParent(key, scope, toKeys);
   const isFromKey = (key: unknown) => isResourceListKeyForParent(key, scope, fromKeys);
+  // Removing from the source is safe for every variant; inserting is not.
+  const isSeedableToKey = (key: unknown): key is ResourceSWRKey =>
+    isToKey(key) && listsMovedRowUnfiltered(key[1], movedResource);
 
-  const destinationKeys = toKeys.size > 0 ? await collectCachedListKeys(isToKey) : [];
+  const destinationKeys = toKeys.size > 0 ? await collectCachedListKeys(isSeedableToKey) : [];
 
   await Promise.all([
     ...destinationKeys.map((cachedKey) =>
