@@ -36,26 +36,27 @@ You can achieve various feature combinations using the above configuration synta
   their default values).
 </Callout>
 
-| Configuration Item       | Description                                                                                              | Default Value |
-| ------------------------ | -------------------------------------------------------------------------------------------------------- | ------------- |
-| `check_updates`          | Allows checking for updates.                                                                             | Enabled       |
-| `provider_settings`      | Controls model provider settings display.                                                                | Enabled       |
-| `openai_api_key`         | Allows users to customize the OpenAI API Key.                                                            | Enabled       |
-| `openai_proxy_url`       | Allows users to customize the OpenAI proxy URL.                                                          | Enabled       |
-| `api_key_manage`         | Controls access to API key management page (/profile/apikey).                                            | Disabled      |
-| `agent_share`            | Gates new or re-enabled interactive Agent shares. Requires deployment support; see the boundary below.    | Disabled      |
-| `edit_agent`             | Allows users to edit assistants.                                                                         | Enabled       |
-| `ai_image`               | Controls AI image generation feature and page (/image).                                                  | Enabled       |
-| `speech_to_text`         | Enables speech-to-text functionality.                                                                    | Enabled       |
-| `token_counter`          | Reserved for token counter display.                                                                      | Enabled       |
-| `welcome_suggest`        | Displays welcome suggestions.                                                                            | Enabled       |
-| `changelog`              | Controls changelog modal/page display.                                                                   | Enabled       |
-| `market`                 | Enables the assistant market functionality.                                                              | Enabled       |
-| `knowledge_base`         | Enables the knowledge base functionality.                                                                | Enabled       |
-| `rag_eval`               | Controls RAG evaluation feature (/repos/\[id]/evals).                                                    | Disabled      |
-| `cloud_promotion`        | Controls cloud service promotion link display in user menu.                                              | Disabled      |
-| `commercial_hide_github` | Hides GitHub-related links in settings footer (requires commercial license).                             | Disabled      |
-| `commercial_hide_docs`   | Hides documentation and help menu including changelog, docs, and feedback (requires commercial license). | Disabled      |
+| Configuration Item       | Description                                                                                                                           | Default Value |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| `check_updates`          | Allows checking for updates.                                                                                                          | Enabled       |
+| `provider_settings`      | Controls model provider settings display.                                                                                             | Enabled       |
+| `openai_api_key`         | Allows users to customize the OpenAI API Key.                                                                                         | Enabled       |
+| `openai_proxy_url`       | Allows users to customize the OpenAI proxy URL.                                                                                       | Enabled       |
+| `api_key_manage`         | Controls access to API key management page (/profile/apikey).                                                                         | Disabled      |
+| `agent_share`            | Gates new or re-enabled interactive Agent shares. Requires deployment support; see the boundary below.                                | Disabled      |
+| `agent_gateway_mux`      | Routes agent runs over one multiplexed gateway socket per user. Requires a gateway that serves `/v2/ws` (`AGENT_GATEWAY_PROTOCOL=2`). | Disabled      |
+| `edit_agent`             | Allows users to edit assistants.                                                                                                      | Enabled       |
+| `ai_image`               | Controls AI image generation feature and page (/image).                                                                               | Enabled       |
+| `speech_to_text`         | Enables speech-to-text functionality.                                                                                                 | Enabled       |
+| `token_counter`          | Reserved for token counter display.                                                                                                   | Enabled       |
+| `welcome_suggest`        | Displays welcome suggestions.                                                                                                         | Enabled       |
+| `changelog`              | Controls changelog modal/page display.                                                                                                | Enabled       |
+| `market`                 | Enables the assistant market functionality.                                                                                           | Enabled       |
+| `knowledge_base`         | Enables the knowledge base functionality.                                                                                             | Enabled       |
+| `rag_eval`               | Controls RAG evaluation feature (/repos/\[id]/evals).                                                                                 | Disabled      |
+| `cloud_promotion`        | Controls cloud service promotion link display in user menu.                                                                           | Disabled      |
+| `commercial_hide_github` | Hides GitHub-related links in settings footer (requires commercial license).                                                          | Disabled      |
+| `commercial_hide_docs`   | Hides documentation and help menu including changelog, docs, and feedback (requires commercial license).                              | Disabled      |
 
 ## Interactive Agent Sharing: Deployment and Rollout Boundaries
 

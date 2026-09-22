@@ -50,7 +50,6 @@ import { getServerConfigStoreState } from '@/store/serverConfig';
 import type { StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import {
-  labPreferSelectors,
   settingsSelectors,
   toolInterventionSelectors,
   userProfileSelectors,
@@ -76,6 +75,25 @@ const getGatewayServerConfig = () =>
   (typeof window !== 'undefined'
     ? window.global_serverConfigStore?.getState()?.serverConfig
     : undefined) ?? getServerConfigStoreState()?.serverConfig;
+
+const getGatewayFeatureFlags = () =>
+  (typeof window !== 'undefined'
+    ? window.global_serverConfigStore?.getState()?.featureFlags
+    : undefined) ?? getServerConfigStoreState()?.featureFlags;
+
+/**
+ * Whether this client may open the multiplexed (protocol v2) gateway socket.
+ *
+ * Both halves are required and mean different things: the deployment has to
+ * actually expose `/v2/ws` (`agentGatewayProtocol` — a capability, since there
+ * is no negotiation on the socket itself), and this user has to be inside the
+ * rollout (`enableGatewayMux`, a server-published feature flag). Read
+ * non-reactively like the other gateway prefs: a connection keeps the transport
+ * it was opened with even if either side changes mid-run.
+ */
+const canUseGatewayMux = (): boolean =>
+  getGatewayServerConfig()?.agentGatewayProtocol === 2 &&
+  !!getGatewayFeatureFlags()?.enableGatewayMux;
 
 /**
  * Interrupts a gateway operation and rejects when its physical shutdown is unconfirmed.
@@ -217,7 +235,7 @@ export interface ConnectGatewayParams {
   /**
    * This tab started the run, so it is the one that executes the run's local
    * `tool_execute` requests. `false` for a passive reconnect. Only the
-   * multiplexed transport (lab `enableGatewayMux`) carries it to the hub; the
+   * multiplexed transport carries it to the hub; the
    * v1 per-operation socket is always the executor.
    */
   executor?: boolean;
@@ -308,7 +326,7 @@ export class GatewayActionImpl {
     new AgentStreamClient(options);
 
   /**
-   * Overridable seams for the multiplexed transport (lab `enableGatewayMux`):
+   * Overridable seams for the multiplexed transport:
    * resolve the page-wide mux for an identity, then adapt one operation on it
    * to the v1 client surface.
    */
@@ -449,13 +467,12 @@ export class GatewayActionImpl {
     // Disconnect existing connection for this operation if any
     this.disconnectFromGateway(operationId);
 
-    // Share visitors default to protocol v2 because the public surface does
-    // not inherit the creator's Labs preference. Owner runs keep the existing
-    // opt-in rollout: a connection keeps the transport it was opened with
-    // even if the toggle flips mid-run.
+    // Share visitors take protocol v2 wherever the deployment has it: the
+    // public surface has no user to carry a rollout flag. Owner runs wait for
+    // the rollout to reach them.
     const muxIdentity: GatewayMuxIdentity = { agentShareId, gatewayUrl };
     const useGatewayMux =
-      (Boolean(agentShareId) || labPreferSelectors.enableGatewayMux(useUserStore.getState())) &&
+      (agentShareId ? getGatewayServerConfig()?.agentGatewayProtocol === 2 : canUseGatewayMux()) &&
       !isGatewayMuxUnavailable(muxIdentity);
     let muxClient: OperationClient | undefined;
     if (useGatewayMux) {
@@ -678,14 +695,15 @@ export class GatewayActionImpl {
    * has not disabled it. `disableGatewayMode: undefined` means enabled.
    */
   /**
-   * Dial the page-wide mux as soon as the user is in the app (lab
-   * `enableGatewayMux`), so the session's first run never pays the WebSocket
-   * handshake on its critical path — `connectToGateway` then only sends a
-   * `subscribe` frame on the already-open socket. No-op when gateway mode is
-   * off; safe to call repeatedly (`connect` is idempotent).
+   * Dial the page-wide mux as soon as the user is in the app, so the session's
+   * first run never pays the WebSocket handshake on its critical path —
+   * `connectToGateway` then only sends a `subscribe` frame on the already-open
+   * socket. No-op when gateway mode is off or this client may not use the
+   * multiplexed transport (see `canUseGatewayMux`); safe to call repeatedly
+   * (`connect` is idempotent).
    */
   warmupGatewayMux = (): void => {
-    if (!labPreferSelectors.enableGatewayMux(useUserStore.getState())) return;
+    if (!canUseGatewayMux()) return;
     const serverConfig = getGatewayServerConfig();
     if (!serverConfig?.agentGatewayUrl || !serverConfig.enableGatewayMode) return;
 

@@ -42,7 +42,8 @@ vi.mock('@/store/file/store', () => ({
   getFileStoreState: () => ({ moveChatContextSelections: vi.fn() }),
 }));
 
-const mockLab = vi.hoisted(() => ({ enableGatewayMux: false }));
+/** The two server-side halves the transport requires: capability + rollout. */
+const mockServer = vi.hoisted(() => ({ agentGatewayProtocol: 2 as 1 | 2, enableGatewayMux: true }));
 const mockUserState = vi.hoisted(() => ({
   profile: { id: 'user-1' },
   workspaceUserPreference: { agentDeviceOverrides: {} as Record<string, any> },
@@ -54,7 +55,6 @@ vi.mock('@/store/user', () => ({
 }));
 
 vi.mock('@/store/user/selectors', () => ({
-  labPreferSelectors: { enableGatewayMux: () => mockLab.enableGatewayMux },
   settingsSelectors: { defaultAgentConfig: () => ({ chatConfig: {} }) },
   toolInterventionSelectors: { allowList: () => [], approvalMode: () => 'manual' },
   userGeneralSettingsSelectors: { telemetry: () => false },
@@ -79,7 +79,10 @@ vi.mock('@/store/agent/selectors', () => ({
     getAgencyConfigById: () => () => undefined,
     getAgentById: () => () => undefined,
   },
-  agentSelectors: { currentAgentWorkingDirectory: () => () => undefined },
+  agentSelectors: {
+    currentAgentWorkingDirectory: () => () => undefined,
+    getAgentConfigById: () => () => undefined,
+  },
   chatConfigByIdSelectors: {
     getChatConfigById: () => () => ({}),
     isChatModeById: () => () => false,
@@ -178,9 +181,31 @@ function createTestAction(overrides: Record<string, any> = {}) {
 
 const flushMicrotasks = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
-describe('GatewayActionImpl (enableGatewayMux lab)', () => {
+describe('GatewayActionImpl (multiplexed gateway transport)', () => {
   beforeEach(() => {
-    mockLab.enableGatewayMux = true;
+    mockServer.agentGatewayProtocol = 2;
+    mockServer.enableGatewayMux = true;
+    (globalThis as any).window = {
+      global_serverConfigStore: {
+        getState: () => ({
+          featureFlags: { enableGatewayMux: mockServer.enableGatewayMux },
+          serverConfig: {
+            agentGatewayProtocol: mockServer.agentGatewayProtocol,
+            agentGatewayUrl: GATEWAY_URL,
+            enableGatewayMode: true,
+          },
+        }),
+      },
+    };
+    // The conversation read resolves Gateway mode from this store too.
+    vi.spyOn(serverConfigStore, 'getServerConfigStoreState').mockReturnValue({
+      featureFlags: { enableGatewayMux: mockServer.enableGatewayMux },
+      serverConfig: {
+        agentGatewayProtocol: mockServer.agentGatewayProtocol,
+        agentGatewayUrl: GATEWAY_URL,
+        enableGatewayMode: true,
+      },
+    } as unknown as ReturnType<typeof serverConfigStore.getServerConfigStoreState>);
     vi.mocked(messageService.getMessages).mockClear();
   });
 
@@ -218,8 +243,8 @@ describe('GatewayActionImpl (enableGatewayMux lab)', () => {
       expect(state.gatewayConnections['op-1']).toEqual({ client: muxClient, status: 'connecting' });
     });
 
-    it('keeps the v1 per-operation socket byte-for-byte when the flag is off', () => {
-      mockLab.enableGatewayMux = false;
+    it('keeps the v1 per-operation socket byte-for-byte outside the rollout', () => {
+      mockServer.enableGatewayMux = false;
       const { action, state, v1Client } = createTestAction();
 
       action.connectToGateway({
@@ -242,8 +267,8 @@ describe('GatewayActionImpl (enableGatewayMux lab)', () => {
       expect(state.gatewayConnections['op-1'].client).toBe(v1Client);
     });
 
-    it('uses the share-scoped mux by default when the lab flag is off', () => {
-      mockLab.enableGatewayMux = false;
+    it('uses the share-scoped mux even outside the rollout', () => {
+      mockServer.enableGatewayMux = false;
       const { action, mux, muxClient, state, v1Client } = createTestAction();
 
       action.connectToGateway({
@@ -483,7 +508,15 @@ describe('GatewayActionImpl (enableGatewayMux lab)', () => {
   describe('warmupGatewayMux', () => {
     const withServerConfig = (serverConfig: Record<string, unknown>) => {
       (globalThis as any).window = {
-        global_serverConfigStore: { getState: () => ({ serverConfig }) },
+        global_serverConfigStore: {
+          getState: () => ({
+            featureFlags: { enableGatewayMux: mockServer.enableGatewayMux },
+            serverConfig: {
+              agentGatewayProtocol: mockServer.agentGatewayProtocol,
+              ...serverConfig,
+            },
+          }),
+        },
       };
     };
 
@@ -511,8 +544,13 @@ describe('GatewayActionImpl (enableGatewayMux lab)', () => {
         const { action, mux } = createTestAction();
         Reflect.deleteProperty(globalThis, 'window');
         vi.spyOn(serverConfigStore, 'getServerConfigStoreState').mockReturnValue({
-          serverConfig: { agentGatewayUrl: GATEWAY_URL, enableGatewayMode: enabled },
-        } as ReturnType<typeof serverConfigStore.getServerConfigStoreState>);
+          featureFlags: { enableGatewayMux: true },
+          serverConfig: {
+            agentGatewayProtocol: 2,
+            agentGatewayUrl: GATEWAY_URL,
+            enableGatewayMode: enabled,
+          },
+        } as unknown as ReturnType<typeof serverConfigStore.getServerConfigStoreState>);
 
         action.warmupGatewayMux();
 
@@ -526,18 +564,26 @@ describe('GatewayActionImpl (enableGatewayMux lab)', () => {
       },
     );
 
-    it('is a no-op when the lab flag is off or gateway mode is unavailable', () => {
+    it('is a no-op outside the rollout, without gateway mode, or on a v1 deployment', () => {
+      mockServer.enableGatewayMux = false;
       withServerConfig({ agentGatewayUrl: GATEWAY_URL, enableGatewayMode: true });
-      mockLab.enableGatewayMux = false;
       const off = createTestAction();
       off.action.warmupGatewayMux();
       expect(off.mux.connect).not.toHaveBeenCalled();
 
-      mockLab.enableGatewayMux = true;
+      mockServer.enableGatewayMux = true;
       withServerConfig({ agentGatewayUrl: GATEWAY_URL, enableGatewayMode: false });
       const noGateway = createTestAction();
       noGateway.action.warmupGatewayMux();
       expect(noGateway.mux.connect).not.toHaveBeenCalled();
+
+      // The deployment's gateway has no `/v2/ws` at all: dialing it would only
+      // burn the client's fallback budget on 404s.
+      mockServer.agentGatewayProtocol = 1;
+      withServerConfig({ agentGatewayUrl: GATEWAY_URL, enableGatewayMode: true });
+      const v1Deployment = createTestAction();
+      v1Deployment.action.warmupGatewayMux();
+      expect(v1Deployment.mux.connect).not.toHaveBeenCalled();
     });
   });
 
@@ -560,7 +606,13 @@ describe('GatewayActionImpl (enableGatewayMux lab)', () => {
     beforeEach(() => {
       (globalThis as any).window = {
         global_serverConfigStore: {
-          getState: () => ({ serverConfig: { agentGatewayUrl: GATEWAY_URL } }),
+          getState: () => ({
+            featureFlags: { enableGatewayMux: mockServer.enableGatewayMux },
+            serverConfig: {
+              agentGatewayProtocol: mockServer.agentGatewayProtocol,
+              agentGatewayUrl: GATEWAY_URL,
+            },
+          }),
         },
       };
     });

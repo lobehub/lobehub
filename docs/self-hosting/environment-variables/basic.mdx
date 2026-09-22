@@ -129,6 +129,13 @@ Business builds enable Gateway Mode automatically. Self-hosted deployments can s
 - Default: -
 - Example: `https://agent-gateway.example.com`
 
+### `AGENT_GATEWAY_PROTOCOL`
+
+- Type: Optional
+- Description: Which Agent Gateway wire protocol clients may use. `1` is the per-operation WebSocket (`GET /ws`), which is what `lobehub/lobehub-gateway` serves; `2` adds the per-user multiplexed socket (`GET /v2/ws`). Self-hosted deployments default to `1` — a client that dials `/v2/ws` on a gateway without it cannot stream until it falls back. Set it only if you run a gateway that does serve `/v2/ws`.
+- Default: `1`
+- Example: `2`
+
 ### `AGENT_GATEWAY_INTERNAL_URL`
 
 - Type: Optional

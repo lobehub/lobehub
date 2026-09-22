@@ -18,8 +18,6 @@
   "features.deviceTunnel.title": "远程端口链接",
   "features.evalCapture.desc": "在消息动作里增加一项，把一轮对话（前置上下文、本轮输入与它产生的回答）捕获成评测用例。",
   "features.evalCapture.title": "把对话保存为评测用例",
-  "features.gatewayMux.desc": "当前标签页里的所有智能体运行共用一条网关 WebSocket，而不是每次运行各开一条；断线重连与事件回放在这条共享连接上按运行分别处理。",
-  "features.gatewayMux.title": "单连接网关（实验）",
   "features.groupChat.desc": "启用多代理协同群聊功能。",
   "features.groupChat.title": "群聊（多代理）",
   "features.heteroSessionImport.desc": "在话题列表菜单中新增「导入本地 Agent 会话」入口：扫描本地 Claude Code / Codex CLI 的会话记录并导入为话题，重复导入时增量同步新消息。",

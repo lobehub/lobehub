@@ -15,7 +15,6 @@ export const labPreferSelectors = {
   enableDesktopSplitView: (s: UserState): boolean =>
     s.preference.lab?.enableDesktopSplitView ?? false,
   enableEvalCapture: (s: UserState): boolean => s.preference.lab?.enableEvalCapture ?? false,
-  enableGatewayMux: (s: UserState): boolean => s.preference.lab?.enableGatewayMux ?? false,
   enableHeteroSessionImport: (s: UserState): boolean =>
     s.preference.lab?.enableHeteroSessionImport ?? false,
   enableImessage: (s: UserState): boolean => s.preference.lab?.enableImessage ?? false,

@@ -39,6 +39,17 @@ export const FeatureFlagsSchema = z.object({
 
   rag_eval: FeatureFlagValue.optional(),
 
+  /**
+   * Rollout gate for the multiplexed Agent Gateway socket (protocol v2: one
+   * `/v2/ws` connection per user instead of one per run). Array values are user
+   * ids, so the rollout can go allowlist → everyone without a deploy.
+   *
+   * Deployment support is independent and enforced separately: the client also
+   * requires `serverConfig.agentGatewayProtocol === 2`, because a gateway
+   * without `/v2/ws` cannot serve this no matter what the flag says.
+   */
+  agent_gateway_mux: FeatureFlagValue.optional(),
+
   // internal flag
   agent_self_iteration: FeatureFlagValue.optional(),
   agent_onboarding: FeatureFlagValue.optional(),
@@ -102,6 +113,10 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   knowledge_base: true,
   rag_eval: false,
 
+  // Off until an admin publishes a user allowlist or flips it to true; the
+  // v1 socket stays the default everywhere until then.
+  agent_gateway_mux: false,
+
   agent_self_iteration: isDev,
   agent_onboarding: isDev,
   dev_dock: isDev,
@@ -134,6 +149,7 @@ export const mapFeatureFlagsEnvToState = (
     isAgentEditable: evaluateFeatureFlag(config.edit_agent, userId),
 
     enableAgentShare: evaluateFeatureFlag(config.agent_share, userId),
+    enableGatewayMux: evaluateFeatureFlag(config.agent_gateway_mux, userId),
     showProvider: evaluateFeatureFlag(config.provider_settings, userId),
 
     showOpenAIApiKey: evaluateFeatureFlag(config.openai_api_key, userId),
