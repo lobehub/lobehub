@@ -50,6 +50,12 @@ export interface GitHubConnectorTransport {
       owner?: string | null;
     }>
   >;
+  /** The branches of one repository, for choosing what an environment checks out. */
+  listRepositoryBranches: (input: {
+    owner: string;
+    perPage: number;
+    repository: string;
+  }) => Promise<Array<{ name?: string | null }>>;
   listRepositoryContributors: (input: {
     owner: string;
     perPage: number;
@@ -200,6 +206,15 @@ export const createOctokitTransport = (accessToken: string): GitHubConnectorTran
         contributions,
         login,
       }));
+    },
+    listRepositoryBranches: async ({ owner, perPage, repository }) => {
+      const response = await octokit.rest.repos.listBranches({
+        owner,
+        per_page: perPage,
+        repo: repository,
+      });
+
+      return response.data.map(({ name }) => ({ name }));
     },
     listAccessibleRepositories: async ({ perPage }) => {
       const response = await octokit.rest.repos.listForAuthenticatedUser({

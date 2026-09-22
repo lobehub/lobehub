@@ -37,6 +37,8 @@ export interface GitHubConnectorClient {
   listRecentContributions: () => Promise<GitHubContribution[]>;
   listRecentPullRequests: () => Promise<GitHubPullRequest[]>;
   listRecentRepositories: () => Promise<GitHubRepository[]>;
+  /** Branch names of one repository, in the order GitHub lists them. */
+  listRepositoryBranches: (owner: string, repository: string) => Promise<string[]>;
   listRepositoryContributors: (repository: string) => Promise<GitHubRepositoryContributor[]>;
   listUserOrganizations: () => Promise<GitHubOrganization[]>;
 }
@@ -105,6 +107,11 @@ export function createGitHubConnectorClient({
     listRecentContributions: async () => (await getContributionOverview()).contributions,
     listRecentPullRequests: async () => (await getRepositories()).pulls,
     listRecentRepositories: async () => (await getRepositories()).recent,
+    listRepositoryBranches: async (owner, repository) => {
+      const branches = await transport.listRepositoryBranches({ owner, perPage: 100, repository });
+
+      return branches.flatMap(({ name }) => (name ? [name] : []));
+    },
     listRepositoryContributors: (repository) => loadRepositoryContributors(transport, repository),
     listAccessibleRepositories: async () => {
       const repositories = await transport.listAccessibleRepositories({ perPage: 100 });
