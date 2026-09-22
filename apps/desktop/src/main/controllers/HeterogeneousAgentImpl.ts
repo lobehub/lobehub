@@ -589,6 +589,39 @@ export default class HeterogeneousAgentCtr {
   private inflightRunRegistry?: HeteroInflightRunRegistry;
 
   /**
+   * Enter a started run in the recovery ledger. Every transport that can carry
+   * a Claude Code turn has to go through here, or a restart during that run
+   * leaves its topic stranded with no entry for `listInterruptedRuns`.
+   */
+  private recordInflightRun(args: {
+    command?: string;
+    configDir?: string;
+    cwd: string;
+    params: SendPromptParams;
+    pid?: number;
+    scriptPath?: string;
+    session: AgentSession;
+  }): void {
+    const { command, configDir, cwd, params, pid, scriptPath, session } = args;
+    this.getInflightRuns()?.upsert({
+      agentId: params.agentId,
+      agentSessionId: session.agentSessionId,
+      agentType: session.agentType,
+      assistantMessageId: params.assistantMessageId,
+      command,
+      configDir,
+      cwd,
+      ipcSessionId: session.sessionId,
+      operationId: params.operationId,
+      pid,
+      scriptPath,
+      startedAt: new Date().toISOString(),
+      topicId: params.topicId,
+      workspaceId: params.workspaceId,
+    });
+  }
+
+  /**
    * Crash-safe ledger of the CLI runs this process has spawned and not seen
    * exit. Read back by `listInterruptedRuns` after a restart. Lazy: the
    * storage path is not available until the app store is ready, and a
@@ -2021,7 +2054,9 @@ export default class HeterogeneousAgentCtr {
         this.broadcast('heteroAgentRuntimeStatus', status);
       },
       onSessionId: (agentSessionId) => {
-        if (agentSessionId !== session.agentSessionId) session.agentSessionId = agentSessionId;
+        if (agentSessionId === session.agentSessionId) return;
+        session.agentSessionId = agentSessionId;
+        this.getInflightRuns()?.patch(session.sessionId, { agentSessionId });
       },
       onStderr: (data) => this.appendCliTraceFile(traceSession, 'stderr.log', data),
       operationId: params.operationId,
@@ -2032,6 +2067,16 @@ export default class HeterogeneousAgentCtr {
     });
 
     session.sdkSession = sdkSession;
+    // The SDK is a Claude Code transport like any other, so a restart mid-run
+    // has to find this turn on the ledger. No pid: the session runs in-process,
+    // leaving no detached tree for recovery to reap.
+    this.recordInflightRun({
+      command: path.basename(commandPath),
+      configDir: spawnEnv.CLAUDE_CONFIG_DIR ?? session.hostedProviderBinding?.profileDir,
+      cwd,
+      params,
+      session,
+    });
 
     logger.info('Starting Claude Code SDK session:', {
       commandPath,
@@ -3093,23 +3138,16 @@ export default class HeterogeneousAgentCtr {
     }
 
     session.process = proc;
-    this.getInflightRuns()?.upsert({
-      agentId: params.agentId,
-      agentSessionId: session.agentSessionId,
-      agentType: session.agentType,
-      assistantMessageId: params.assistantMessageId,
-      workspaceId: params.workspaceId,
+    this.recordInflightRun({
       // The interpreter alone is not an identity — see describeHeteroCliProcess.
       ...describeHeteroCliProcess(proc.spawnfile || session.command, proc.spawnargs),
       // The EFFECTIVE profile: quota-account routing and agent env also set
       // CLAUDE_CONFIG_DIR, and the transcript is written under whichever won.
       configDir: spawnEnv.CLAUDE_CONFIG_DIR ?? session.hostedProviderBinding?.profileDir,
       cwd,
-      ipcSessionId: session.sessionId,
-      operationId: params.operationId,
+      params,
       pid: proc.pid,
-      startedAt: new Date().toISOString(),
-      topicId: params.topicId,
+      session,
     });
 
     // Producer-side conversion (V3 contract): JSONL framing + adapter +
