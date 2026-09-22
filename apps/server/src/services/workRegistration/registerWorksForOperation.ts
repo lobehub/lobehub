@@ -363,7 +363,12 @@ export const registerWorksForOperation = async (
     return { attempted: 0, failed: 0 };
   }
 
-  const messageModel = new MessageModel(serverDB, userId, workspaceId);
+  // A share visitor's tool rows live under a topic with a non-null `senderId`,
+  // which `MessageModel.ownership()` excludes by default — without the opt-in
+  // the scan (and the anchor stamp below) silently sees nothing for that run.
+  const messageModel = new MessageModel(serverDB, userId, workspaceId, undefined, {
+    includeShareVisitor: Boolean(params.agentShareVisitor),
+  });
   const records = await collectOperationRecords(messageModel, scanTree);
   if (records.length === 0) {
     log(

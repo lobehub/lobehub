@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { MessageModel } from '@/database/models/message';
 import { WorkModel } from '@/database/models/work';
 
 import { redeployFileWork, registerWorksForOperation } from './registerWorksForOperation';
@@ -187,6 +188,12 @@ describe('registerWorksForOperation', () => {
 
     await registerWorksForOperation({ ...baseParams, agentShareVisitor });
 
+    // The scan must opt in to share-visitor rows: the visitor's tool messages
+    // hang off a topic with a non-null `senderId`, which the default
+    // `ownership()` predicate excludes (the scan would find nothing).
+    expect(vi.mocked(MessageModel)).toHaveBeenCalledWith(serverDB, 'user-1', undefined, undefined, {
+      includeShareVisitor: true,
+    });
     // The registry is opened under the share scope of the completing op's
     // topic, so the Work row is stamped and hidden from the creator's lists.
     expect(vi.mocked(WorkModel)).toHaveBeenCalledWith(serverDB, 'user-1', undefined, {
@@ -211,6 +218,9 @@ describe('registerWorksForOperation', () => {
     await registerWorksForOperation(baseParams);
 
     expect(vi.mocked(WorkModel)).toHaveBeenCalledWith(serverDB, 'user-1', undefined, undefined);
+    expect(vi.mocked(MessageModel)).toHaveBeenCalledWith(serverDB, 'user-1', undefined, undefined, {
+      includeShareVisitor: false,
+    });
     expect(mockExportAndUploadFile.mock.calls[0][2]).not.toHaveProperty('metadata');
   });
 
