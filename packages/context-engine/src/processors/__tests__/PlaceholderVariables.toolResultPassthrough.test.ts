@@ -95,6 +95,53 @@ describe('PlaceholderVariablesProcessor — tool result passthrough', () => {
     expect(result.messages[1].content).toBe('topic tpc_abc');
   });
 
+  // Regression: GroupRoleTransformProcessor turns another agent's tool results
+  // into `role: 'user'` and drops `plugin`, so a role check alone would classify
+  // them as ordinary user prose and resume rewriting them — reintroducing the
+  // exact break this processor exists to prevent, on the group path only.
+  it('passes through a tool result that a role conversion folded into user', async () => {
+    const processor = new PlaceholderVariablesProcessor({ variableGenerators: timeGenerators });
+
+    const ctx = buildContext([
+      {
+        role: 'user',
+        foldedToolResult: { apiName: 'runCommand', identifier: 'lobe-local-system' },
+        content:
+          '<speaker name="Dev" />\n<tool_result id="t1" name="runCommand">\nat {{time}}\n</tool_result>',
+      },
+    ]);
+
+    const result = await processor.process(ctx);
+
+    expect(result.messages[0].content).toContain('{{time}}');
+  });
+
+  it('still hydrates an activation result folded into user', async () => {
+    const processor = new PlaceholderVariablesProcessor({ variableGenerators: timeGenerators });
+
+    const ctx = buildContext([
+      {
+        role: 'user',
+        foldedToolResult: { apiName: 'activateSkill', identifier: 'lobe-skills' },
+        content: 'topic {{topic_id}}',
+      },
+    ]);
+
+    const result = await processor.process(ctx);
+
+    expect(result.messages[0].content).toBe('topic tpc_abc');
+  });
+
+  it('passes through a folded result whose tool identity was lost', async () => {
+    const processor = new PlaceholderVariablesProcessor({ variableGenerators: timeGenerators });
+
+    const ctx = buildContext([{ role: 'user', foldedToolResult: {}, content: 'at {{time}}' }]);
+
+    const result = await processor.process(ctx);
+
+    expect(result.messages[0].content).toBe('at {{time}}');
+  });
+
   it('passes through a tool result that carries no identity at all', async () => {
     const processor = new PlaceholderVariablesProcessor({ variableGenerators: timeGenerators });
 

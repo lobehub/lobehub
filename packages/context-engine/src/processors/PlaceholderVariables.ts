@@ -121,13 +121,18 @@ export const HYDRATED_TOOL_RESULTS: Readonly<Record<string, readonly string[]>> 
 };
 
 /**
- * Resolve a tool message's `(identifier, apiName)`.
+ * Resolve a tool result's `(identifier, apiName)`.
  *
- * Prefers the structured `plugin` field the flatten processors re-attach, and
- * falls back to the wire name (`identifier____apiName`) for payload-shaped
- * messages that no longer carry it.
+ * Prefers `foldedToolResult` — set when a role conversion moved the result into
+ * another role's content (GroupRoleTransformProcessor turns another agent's
+ * tool results into `role: 'user'` and drops `plugin`), then the structured
+ * `plugin` field the flatten processors re-attach, and finally the wire name
+ * (`identifier____apiName`) for payload-shaped messages carrying neither.
  */
 const resolveToolIdentity = (message: any): { apiName?: string; identifier?: string } => {
+  const folded = message?.foldedToolResult as { apiName?: string; identifier?: string } | undefined;
+  if (folded) return { apiName: folded.apiName, identifier: folded.identifier };
+
   const plugin = message?.plugin as { apiName?: string; identifier?: string } | undefined;
   if (plugin?.identifier) return { apiName: plugin.apiName, identifier: plugin.identifier };
 
@@ -373,9 +378,13 @@ export class PlaceholderVariablesProcessor extends BaseProcessor {
    * still gets a live clock. Tool results are not: they are records, and only
    * the activation tools listed in {@link HYDRATED_TOOL_RESULTS} return a
    * template that still needs hydrating.
+   *
+   * `foldedToolResult` covers the results a role conversion has already moved
+   * out of `role: 'tool'` — in a group conversation another agent's results
+   * arrive as `role: 'user'`, and they are no less a record for it.
    */
   private shouldHydrate(message: any): boolean {
-    if (message?.role !== 'tool') return true;
+    if (message?.role !== 'tool' && !message?.foldedToolResult) return true;
 
     const { apiName, identifier } = resolveToolIdentity(message);
     if (!identifier || !apiName) return false;
