@@ -372,21 +372,32 @@ Before declaring the task done, prove coverage: for each check with
 explicitly; a missing type holds the delivery at `uncertain` no matter how good
 the work is.
 
-The final response MUST include the published acceptance URL together with the
-coverage result — never only a check-result id or a prose claim. Copy the complete
-`acceptanceUrl` returned by `lh acceptance run ingest --json` verbatim: it is the
-stable cross-round decision surface. Add the returned `roundUrl` verbatim as this
-round's fixed snapshot when it is non-null; when it is null, the acceptance URL alone
-is the handoff.
-These URLs use the CLI's configured server, including self-hosted servers. Never
-hard-code a host, build a URL from an id, or append a round query yourself.
+The final response for a completed handoff MUST include the published acceptance
+URL together with the coverage result — never only a check-result id or a prose
+claim. Obtain the links from the path you actually executed:
+
+- **Authored round:** copy `acceptanceUrl` returned by
+  `lh acceptance run ingest --json` verbatim. Add its `roundUrl` verbatim when
+  non-null; otherwise the acceptance URL alone is the handoff.
+- **Operation-plan round:** follow the read-only
+  [plan handoff lookup](references/plan-format.md#resolve-the-plan-rounds-handoff-links).
+  It resolves the supplied operation ID to its existing run, acceptance, and
+  round using the CLI's actual server configuration. Copy its
+  `acceptanceUrl` and `roundUrl` output. Do not run authored ingest, create another
+  acceptance, or resubmit evidence merely to obtain a link.
+
+Never guess a host, acceptance ID, or round index. The documented plan lookup is
+the only reconstruction needed for CLIs whose submission output contains only an
+internal run URL. If the run has no acceptance association or the lookup fails,
+report the handoff as blocked and preserve the submitted evidence; do not declare
+delivery complete or fabricate a link.
 Put no images, local paths, local file links, or internal run-page paths in the
 chat reply.
 
 Write the link as a plain-text line, never inside a fenced or inline code block — the
 chat client only linkifies plain text, and a code block makes it unclickable.
-Replace each placeholder below with the URL returned by the CLI; omit the `Round`
-line when `roundUrl` is null:
+Replace each placeholder below with the URL from the selected path; omit the
+`Round` line when `roundUrl` is null:
 
 Acceptance: <acceptanceUrl, verbatim>
 Round: <roundUrl, verbatim>
