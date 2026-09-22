@@ -180,11 +180,92 @@ describe('AgentShareModel', () => {
       expect(share).toMatchObject({
         agentId: workspaceAgentId,
         visibility: 'link',
-        workspaceId,
       });
       await expect(
         otherWorkspaceAgentShareModel.getByAgentId(workspaceAgentId),
       ).resolves.toBeNull();
+    });
+  });
+
+  describe('Agent-derived workspace scope', () => {
+    it('resolves runtime identity and limits without a duplicated share scope', async () => {
+      const [share] = await serverDB
+        .insert(agentShares)
+        .values({
+          agentId: workspaceAgentId,
+          shareConfig: { maxTopicsPerVisitor: 3, monthlySpendLimit: 2.5 },
+          visibility: 'link',
+        })
+        .returning();
+
+      await expect(AgentShareModel.findByShareId(serverDB, share.id)).resolves.toMatchObject({
+        agentId: workspaceAgentId,
+        ownerId: userId,
+        shareId: share.id,
+        workspaceId,
+      });
+      await expect(
+        AgentShareModel.readCurrentVisitorCaps(serverDB, workspaceAgentId),
+      ).resolves.toMatchObject({
+        maxTopicsPerVisitor: 3,
+        monthlySpendLimit: 2.5,
+        shareId: share.id,
+        workspaceId,
+      });
+      await expect(
+        AgentShareModel.isRunStillAuthorized(serverDB, {
+          agentId: workspaceAgentId,
+          shareId: share.id,
+        }),
+      ).resolves.toBe(true);
+    });
+
+    it('scopes owner mutations and administrator pause through the Agent', async () => {
+      const [share] = await serverDB
+        .insert(agentShares)
+        .values({
+          agentId: workspaceAgentId,
+          visibility: 'link',
+        })
+        .returning();
+
+      await expect(
+        otherWorkspaceAgentShareModel.updateVisibility(workspaceAgentId, 'private'),
+      ).resolves.toBeNull();
+      await expect(agentShareModel.getByAgentId(workspaceAgentId)).resolves.toBeNull();
+      await expect(
+        otherWorkspaceAgentShareModel.deleteByAgentId(workspaceAgentId),
+      ).resolves.toBeNull();
+      await expect(
+        AgentShareModel.forceDisableWorkspaceShare(serverDB, otherWorkspaceId, share.id),
+      ).resolves.toBeNull();
+      await expect(
+        workspaceAgentShareModel.updateConfig(workspaceAgentId, { maxTopicsPerVisitor: 4 }),
+      ).resolves.toMatchObject({
+        id: share.id,
+        shareConfig: { maxTopicsPerVisitor: 4 },
+        visibility: 'link',
+      });
+      await expect(
+        AgentShareModel.listWorkspaceSharesForAudit(serverDB, workspaceId, {
+          limit: 50,
+          offset: 0,
+        }),
+      ).resolves.toEqual([
+        expect.objectContaining({ agentId: workspaceAgentId, shareId: share.id }),
+      ]);
+      await expect(
+        AgentShareModel.listWorkspaceSharesForAudit(serverDB, otherWorkspaceId, {
+          limit: 50,
+          offset: 0,
+        }),
+      ).resolves.toEqual([]);
+      await expect(
+        AgentShareModel.forceDisableWorkspaceShare(serverDB, workspaceId, share.id),
+      ).resolves.toMatchObject({
+        shareId: share.id,
+        visibility: 'private',
+      });
     });
   });
 
@@ -560,16 +641,6 @@ describe('AgentShareModel', () => {
       });
     });
 
-    it('invalidates a share when the agent moves to another workspace', async () => {
-      const created = await workspaceAgentShareModel.create(workspaceAgentId, 'link');
-      await serverDB
-        .update(agents)
-        .set({ workspaceId: otherWorkspaceId })
-        .where(eq(agents.id, workspaceAgentId));
-
-      expect(await AgentShareModel.findByShareId(serverDB, created.id)).toBeNull();
-    });
-
     it('returns null for an unknown UUID', async () => {
       expect(
         await AgentShareModel.findByShareId(serverDB, '00000000-0000-0000-0000-000000000000'),
@@ -664,17 +735,6 @@ describe('AgentShareModel', () => {
           agentId,
           shareId: '00000000-0000-0000-0000-000000000000',
         }),
-      ).toBe(false);
-    });
-
-    // `transferAgent` does not touch `agent_shares`; the per-step check must
-    // notice the agent left personal scope on its own, like `findByShareId`.
-    it('revokes an in-flight run once the agent is moved into a workspace', async () => {
-      const created = await agentShareModel.create(agentId, 'link');
-      await serverDB.update(agents).set({ workspaceId }).where(eq(agents.id, agentId));
-
-      expect(
-        await AgentShareModel.isRunStillAuthorized(serverDB, { agentId, shareId: created!.id }),
       ).toBe(false);
     });
   });

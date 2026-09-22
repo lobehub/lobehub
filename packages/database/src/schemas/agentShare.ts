@@ -3,7 +3,6 @@ import { index, integer, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle
 
 import { timestamps } from './_helpers';
 import { agents } from './agent';
-import { workspaces } from './workspace';
 
 export interface AgentShareConfig {
   /**
@@ -94,7 +93,6 @@ export const agentShares = pgTable(
     agentId: text('agent_id')
       .notNull()
       .references(() => agents.id, { onDelete: 'cascade' }),
-    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     visibility: text('visibility').default('private').notNull(), // 'private' | 'link'
 
@@ -114,7 +112,6 @@ export const agentShares = pgTable(
   (t) => [
     uniqueIndex('agent_shares_agent_id_unique').on(t.agentId),
     index('agent_shares_visibility_idx').on(t.visibility),
-    index('agent_shares_workspace_id_idx').on(t.workspaceId),
   ],
 );
 

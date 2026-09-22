@@ -1569,7 +1569,7 @@ describe('AgentGroupRepository', () => {
       ]);
       const [referencedShare] = await serverDB
         .insert(agentShares)
-        .values({ agentId: 'transfer-member', visibility: 'link', workspaceId })
+        .values({ agentId: 'transfer-member', visibility: 'link' })
         .returning();
       await serverDB.insert(chatGroupsAgents).values([
         {
@@ -1736,7 +1736,7 @@ describe('AgentGroupRepository', () => {
           .returning();
         const [share] = await serverDB
           .insert(agentShares)
-          .values({ agentId: ownedAgent.id, visibility, workspaceId })
+          .values({ agentId: ownedAgent.id, visibility })
           .returning();
         const [junction] = await serverDB
           .insert(chatGroupsAgents)

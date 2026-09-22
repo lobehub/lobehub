@@ -9,7 +9,7 @@ import { MessageModel } from '@/database/models/message';
 import type { CreateTopicParams } from '@/database/models/topic';
 import { TopicModel } from '@/database/models/topic';
 import type { TopicItem } from '@/database/schemas';
-import { agentShares } from '@/database/schemas';
+import { agents, agentShares } from '@/database/schemas';
 
 /**
  * Re-validate the share is still the SAME live `link` share this request was
@@ -37,11 +37,12 @@ const assertShareStillAuthorized = async (
   const [share] = await tx
     .select({ id: agentShares.id, visibility: agentShares.visibility })
     .from(agentShares)
+    .innerJoin(agents, eq(agentShares.agentId, agents.id))
     .where(
       and(
         eq(agentShares.agentId, agentId),
         eq(agentShares.id, expectedShareId),
-        workspaceId ? eq(agentShares.workspaceId, workspaceId) : isNull(agentShares.workspaceId),
+        workspaceId ? eq(agents.workspaceId, workspaceId) : isNull(agents.workspaceId),
       ),
     );
 

@@ -1089,7 +1089,6 @@ describe('AgentModel.transferAgent', () => {
           agentId: agent.id,
           shareConfig: { monthlySpendLimit: 5 },
           visibility,
-          workspaceId: source,
         })
         .returning();
       const [topic] = await serverDB
@@ -1135,7 +1134,6 @@ describe('AgentModel.transferAgent', () => {
     await serverDB.insert(agentShares).values({
       agentId: shared.id,
       visibility: 'private',
-      workspaceId: wsId1,
     });
 
     await expect(model.transferAgents([ordinary.id, shared.id], wsId2, userId)).rejects.toThrow(

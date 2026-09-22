@@ -90,7 +90,7 @@ describe('ChatGroupModel.transferGroupOwnership', () => {
       const { group, supervisor } = await seedGroupWithRoster();
       const [share] = await serverDB
         .insert(agentShares)
-        .values({ agentId: supervisor.id, visibility, workspaceId: wsId })
+        .values({ agentId: supervisor.id, visibility })
         .returning();
 
       const [groupBefore] = await serverDB
@@ -144,7 +144,7 @@ describe('ChatGroupModel.transferGroupOwnership', () => {
     const { group, referenced } = await seedGroupWithRoster();
     const [share] = await serverDB
       .insert(agentShares)
-      .values({ agentId: referenced.id, visibility: 'link', workspaceId: wsId })
+      .values({ agentId: referenced.id, visibility: 'link' })
       .returning();
 
     await handover({ fromUserId: ownerId, groupId: group.id, toUserId: recipientId });

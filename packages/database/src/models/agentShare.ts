@@ -117,16 +117,11 @@ export class AgentShareModel {
         .from(agents)
         .where(
           this.workspaceId
-            ? and(
-                eq(agents.id, agentShares.agentId),
-                eq(agents.workspaceId, this.workspaceId),
-                eq(agentShares.workspaceId, this.workspaceId),
-              )
+            ? and(eq(agents.id, agentShares.agentId), eq(agents.workspaceId, this.workspaceId))
             : and(
                 eq(agents.id, agentShares.agentId),
                 eq(agents.userId, this.userId),
                 isNull(agents.workspaceId),
-                isNull(agentShares.workspaceId),
               ),
         ),
     );
@@ -237,11 +232,6 @@ export class AgentShareModel {
       return mutation(tx, agent);
     });
 
-  private static shareScope = (agent: LockedAgentSnapshot) =>
-    agent.workspaceId
-      ? eq(agentShares.workspaceId, agent.workspaceId)
-      : isNull(agentShares.workspaceId);
-
   /** Create a private share by default, or return the existing share for the agent. */
   create = async (agentId: string, visibility: ShareVisibility = 'private') => {
     const share = await this.withScopedAgentLock(agentId, async (tx, agent) => {
@@ -256,7 +246,6 @@ export class AgentShareModel {
           agentId,
           shareConfig: DEFAULT_AGENT_SHARE_CONFIG,
           visibility,
-          workspaceId: agent.workspaceId,
         })
         .onConflictDoNothing({ target: agentShares.agentId })
         .returning();
@@ -268,14 +257,7 @@ export class AgentShareModel {
       const [existing] = await tx
         .select()
         .from(agentShares)
-        .where(
-          and(
-            eq(agentShares.agentId, agentId),
-            agent.workspaceId
-              ? eq(agentShares.workspaceId, agent.workspaceId)
-              : isNull(agentShares.workspaceId),
-          ),
-        )
+        .where(eq(agentShares.agentId, agentId))
         .limit(1);
       return existing ?? null;
     });
@@ -327,7 +309,7 @@ export class AgentShareModel {
       })
       .from(agentShares)
       .innerJoin(agents, eq(agentShares.agentId, agents.id))
-      .where(and(eq(agentShares.workspaceId, workspaceId), eq(agents.workspaceId, workspaceId)))
+      .where(eq(agents.workspaceId, workspaceId))
       .orderBy(sql`${agentShares.updatedAt} DESC, ${agentShares.id} DESC`)
       .limit(options.limit)
       .offset(options.offset);
@@ -348,7 +330,8 @@ export class AgentShareModel {
       const [share] = await tx
         .select({ agentId: agentShares.agentId })
         .from(agentShares)
-        .where(and(eq(agentShares.id, shareId), eq(agentShares.workspaceId, workspaceId)))
+        .innerJoin(agents, eq(agentShares.agentId, agents.id))
+        .where(and(eq(agentShares.id, shareId), eq(agents.workspaceId, workspaceId)))
         .limit(1);
       if (!share) return null;
 
@@ -366,7 +349,7 @@ export class AgentShareModel {
       const [updated] = await tx
         .update(agentShares)
         .set({ updatedAt: new Date(), visibility: 'private' })
-        .where(and(eq(agentShares.id, shareId), eq(agentShares.workspaceId, workspaceId)))
+        .where(and(eq(agentShares.id, shareId), eq(agentShares.agentId, agent.id)))
         .returning({
           agentId: agentShares.agentId,
           shareId: agentShares.id,
@@ -390,7 +373,7 @@ export class AgentShareModel {
     agentId: string,
     config: AgentShareConfigPatch,
   ): Promise<NormalizedAgentShareItem | null> =>
-    this.withScopedAgentLock(agentId, async (tx, agent) => {
+    this.withScopedAgentLock(agentId, async (tx) => {
       const { slug: _slug, ...patch } = config as AgentShareConfigPatch & { slug?: unknown };
       const setEntries = Object.entries(patch).filter(([, v]) => v !== undefined);
 
@@ -405,7 +388,7 @@ export class AgentShareModel {
           shareConfig: sql<AgentShareConfig>`${configExpr}`,
           updatedAt: new Date(),
         })
-        .where(and(eq(agentShares.agentId, agentId), AgentShareModel.shareScope(agent)))
+        .where(eq(agentShares.agentId, agentId))
         .returning();
 
       if (!updated) return null;
@@ -423,11 +406,11 @@ export class AgentShareModel {
     agentId: string,
     visibility: ShareVisibility,
   ): Promise<NormalizedAgentShareItem | null> =>
-    this.withScopedAgentLock(agentId, async (tx, agent) => {
+    this.withScopedAgentLock(agentId, async (tx) => {
       const [updated] = await tx
         .update(agentShares)
         .set({ updatedAt: new Date(), visibility })
-        .where(and(eq(agentShares.agentId, agentId), AgentShareModel.shareScope(agent)))
+        .where(eq(agentShares.agentId, agentId))
         .returning();
 
       if (!updated) return null;
@@ -454,14 +437,14 @@ export class AgentShareModel {
     slug: string | null,
   ): Promise<NormalizedAgentShareItem | null> => {
     if (slug === null) {
-      return this.withScopedAgentLock(agentId, async (tx, agent) => {
+      return this.withScopedAgentLock(agentId, async (tx) => {
         const [updated] = await tx
           .update(agentShares)
           .set({
             shareConfig: sql<AgentShareConfig>`COALESCE(${agentShares.shareConfig}, '{}'::jsonb) - 'slug'`,
             updatedAt: new Date(),
           })
-          .where(and(eq(agentShares.agentId, agentId), AgentShareModel.shareScope(agent)))
+          .where(eq(agentShares.agentId, agentId))
           .returning();
 
         if (!updated) return null;
@@ -475,7 +458,7 @@ export class AgentShareModel {
       throw new TRPCError({ code: 'BAD_REQUEST', message: rejection });
     }
 
-    return this.withScopedAgentLock(agentId, async (tx, agent) => {
+    return this.withScopedAgentLock(agentId, async (tx) => {
       if (await AgentShareModel.isShareSlugTaken(tx, slug, agentId)) {
         throw new TRPCError({ code: 'CONFLICT', message: 'SHARE_SLUG_TAKEN' });
       }
@@ -486,7 +469,7 @@ export class AgentShareModel {
           shareConfig: sql<AgentShareConfig>`COALESCE(${agentShares.shareConfig}, '{}'::jsonb) || ${JSON.stringify({ slug })}::jsonb`,
           updatedAt: new Date(),
         })
-        .where(and(eq(agentShares.agentId, agentId), AgentShareModel.shareScope(agent)))
+        .where(eq(agentShares.agentId, agentId))
         .returning();
 
       if (!updated) return null;
@@ -506,10 +489,10 @@ export class AgentShareModel {
    * `isRunStillAuthorized` guards against).
    */
   deleteByAgentId = async (agentId: string): Promise<AgentShareItem | null> =>
-    this.withScopedAgentLock(agentId, async (tx, agent) => {
+    this.withScopedAgentLock(agentId, async (tx) => {
       const [deleted] = await tx
         .delete(agentShares)
-        .where(and(eq(agentShares.agentId, agentId), AgentShareModel.shareScope(agent)))
+        .where(eq(agentShares.agentId, agentId))
         .returning();
 
       return deleted ?? null;
@@ -543,16 +526,11 @@ export class AgentShareModel {
       .select({
         id: agentShares.id,
         shareConfig: agentShares.shareConfig,
-        workspaceId: agentShares.workspaceId,
+        workspaceId: agents.workspaceId,
       })
       .from(agentShares)
       .innerJoin(agents, eq(agentShares.agentId, agents.id))
-      .where(
-        and(
-          eq(agentShares.agentId, agentId),
-          sql`${agentShares.workspaceId} IS NOT DISTINCT FROM ${agents.workspaceId}`,
-        ),
-      );
+      .where(eq(agentShares.agentId, agentId));
 
     const normalized = normalizeAgentShareConfig(row?.shareConfig ?? null);
     return {
@@ -593,9 +571,8 @@ export class AgentShareModel {
    * comes back as a different instance — a hard delete (`deleteByAgentId`) or
    * the agent being deleted and recreated under the same id.
    *
-   * The share and Agent must also remain in the same tenancy. Transfers are
-   * blocked while a share row exists, including paused shares. The join still
-   * fails closed for historical or manual writes that left a mismatched row.
+   * The Agent is the sole source of ownership and Workspace scope. Transfers
+   * are blocked while a share row exists, including paused shares.
    *
    * Deliberately cheap (one indexed lookup + a primary-key join): it runs once
    * per runtime step. Returns `false` — never throws — for an ordinary
@@ -610,22 +587,15 @@ export class AgentShareModel {
       .select({ id: agentShares.id, visibility: agentShares.visibility })
       .from(agentShares)
       .innerJoin(agents, eq(agentShares.agentId, agents.id))
-      .where(
-        and(
-          eq(agentShares.agentId, params.agentId),
-          sql`${agentShares.workspaceId} IS NOT DISTINCT FROM ${agents.workspaceId}`,
-        ),
-      )
+      .where(eq(agentShares.agentId, params.agentId))
       .limit(1);
 
     return !!share && share.id === params.shareId && share.visibility === 'link';
   };
 
   /**
-   * Resolve the public metadata required by an agent share page. The
-   * null-safe tenancy equality is load-bearing: both personal and Workspace
-   * Agents may be shared, but a row that no longer matches its Agent's current
-   * scope must never resolve.
+   * Resolve public share metadata and derive ownership and billing scope from
+   * the Agent. Sharing prevents transfers, so no separate tenancy snapshot is needed.
    */
   static findByShareId = async (db: LobeChatDatabase, shareId: string) => {
     if (!isUuid(shareId)) return null;
@@ -647,8 +617,7 @@ export class AgentShareModel {
         agentTitle: agents.title,
         // Creator identity for the visitor-facing profile. Left-joined on the
         // owner rather than read through a second query: the share page needs
-        // it on its only round trip, and the row is already joined for the
-        // tenancy-consistency guard below.
+        // it on its only round trip alongside the Agent's Workspace scope.
         ownerAvatar: users.avatar,
         ownerFullName: users.fullName,
         ownerId: agents.userId,
@@ -657,17 +626,12 @@ export class AgentShareModel {
         shareId: agentShares.id,
         userViewCount: agentShares.userViewCount,
         visibility: agentShares.visibility,
-        workspaceId: agentShares.workspaceId,
+        workspaceId: agents.workspaceId,
       })
       .from(agentShares)
       .innerJoin(agents, eq(agentShares.agentId, agents.id))
       .leftJoin(users, eq(agents.userId, users.id))
-      .where(
-        and(
-          eq(agentShares.id, shareId),
-          sql`${agentShares.workspaceId} IS NOT DISTINCT FROM ${agents.workspaceId}`,
-        ),
-      )
+      .where(eq(agentShares.id, shareId))
       .limit(1);
 
     if (!share) return null;

@@ -868,7 +868,6 @@ table agent_quota_windows {
 table agent_shares {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   agent_id text [not null]
-  workspace_id text
   visibility text [not null, default: 'private']
   share_config jsonb
   user_view_count integer [not null, default: 0]
@@ -879,7 +878,6 @@ table agent_shares {
   indexes {
     agent_id [name: 'agent_shares_agent_id_unique', unique]
     visibility [name: 'agent_shares_visibility_idx']
-    workspace_id [name: 'agent_shares_workspace_id_idx']
   }
 }
 

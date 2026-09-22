@@ -85,7 +85,6 @@ describe('AgentModel.transferAgentOwnership', () => {
           agentId: agent.id,
           shareConfig: { allowReadMemory: true, monthlySpendLimit: 5 },
           visibility,
-          workspaceId: wsId,
         })
         .returning();
 
