@@ -37,7 +37,15 @@ function sheetToMarkdownTable(jsonData: Record<string, any>[]): string {
         const value = row[header];
         // Handle null/undefined and escape pipe characters within cells
         const cellContent =
-          value === null || value === undefined ? '' : String(value).replaceAll('|', '\\|');
+          value === null || value === undefined
+            ? ''
+            : String(value)
+                .replaceAll('|', '\\|')
+                // A cell can hold several lines (Alt+Enter in Excel). A raw
+                // newline ends the table row, so the rest of the cell and every
+                // column after it fall out of the table; `<br>` is how GFM
+                // writes a line break inside a cell.
+                .replaceAll(/\r\n|[\n\r]/g, '<br>');
         return cellContent.trim(); // Trim whitespace from cells
       });
       return `| ${cells.join(' | ')} |`;
