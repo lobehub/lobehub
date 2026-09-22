@@ -3,6 +3,7 @@
 import { isSafeSandboxCwd } from '@lobechat/builtin-tool-cloud-sandbox';
 import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { ActionIcon, Button, Input, Tag, Text, toast } from '@lobehub/ui/base-ui';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { FolderOpenIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,6 +11,16 @@ import { useTranslation } from 'react-i18next';
 import { formatSize } from '@/utils/format';
 
 import type { SandboxInstance } from './useEnvironmentData';
+
+const styles = createStaticStyles(({ css }) => ({
+  /** The surface Railway gives the same job: a filled panel, set off from the list above it. */
+  createCard: css`
+    padding: 16px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+    background: ${cssVar.colorFillQuaternary};
+  `,
+}));
 
 interface InstanceListProps {
   /** Whether the create form is showing. Owned by the caller so the row's
@@ -148,35 +159,43 @@ const InstanceList = memo<InstanceListProps>(
         )}
 
         {!editable ? null : adding ? (
-          <Flexbox gap={6}>
-            <Flexbox horizontal align={'center'} gap={8}>
-              <Input
-                placeholder={t('environments.instances.namePlaceholder')}
-                // `minWidth: 0`, or the pair refuses to shrink past its
-                // intrinsic width and pushes the button out of the panel.
-                style={{ flex: 1, minWidth: 0 }}
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-              />
-              <Input
-                placeholder={t('environments.instances.directoryPlaceholder')}
-                style={{ flex: 1, minWidth: 0 }}
-                value={workingDirectory}
-                onChange={(event) => setWorkingDirectory(event.target.value)}
-              />
-              <Button
-                disabled={!canCreate}
-                loading={busy}
-                size={'small'}
-                style={{ flex: 'none' }}
-                onClick={create}
-              >
-                {t('environments.instances.add')}
-              </Button>
+          /* A panel of its own rather than a row squeezed under the list: two
+             fields and a button abreast left each of them too narrow to read,
+             and the button was the one pushed out. Stacked full width with the
+             actions underneath, the shape holds at any panel width — and the
+             form now says how to leave it, which a bare row never did. */
+          <Flexbox className={styles.createCard} gap={12}>
+            <Text weight={500}>{t('environments.instances.add')}</Text>
+            <Input
+              autoFocus
+              placeholder={t('environments.instances.namePlaceholder')}
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
+            <Input
+              placeholder={t('environments.instances.directoryPlaceholder')}
+              value={workingDirectory}
+              onChange={(event) => setWorkingDirectory(event.target.value)}
+            />
+            <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
+              <Text fontSize={12} style={{ minWidth: 0 }} type={'secondary'}>
+                {t('environments.instances.directoryHint')}
+              </Text>
+              <Flexbox horizontal gap={8} style={{ flex: 'none' }}>
+                <Button size={'small'} onClick={() => onAddingChange(false)}>
+                  {t('environments.cancel')}
+                </Button>
+                <Button
+                  disabled={!canCreate}
+                  loading={busy}
+                  size={'small'}
+                  type={'primary'}
+                  onClick={create}
+                >
+                  {t('environments.instances.confirm')}
+                </Button>
+              </Flexbox>
             </Flexbox>
-            <Text fontSize={12} type={'secondary'}>
-              {t('environments.instances.directoryHint')}
-            </Text>
           </Flexbox>
         ) : (
           <Flexbox horizontal>
