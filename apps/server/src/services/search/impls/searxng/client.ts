@@ -46,15 +46,29 @@ export class SearXNGClient {
 
       const processedParams = Object.entries(otherParams).reduce<Record<string, any>>(
         (acc, [key, value]) => {
-          acc[key] = Array.isArray(value) ? value.join(',') : value;
+          if (value === undefined || value === null) return acc;
+          if (Array.isArray(value)) {
+            const filtered = value.filter(Boolean);
+            if (filtered.length > 0) {
+              acc[key] = filtered.join(',');
+            }
+          } else if (typeof value === 'string') {
+            if (value.trim() !== '') {
+              acc[key] = value.trim();
+            }
+          } else {
+            acc[key] = value;
+          }
           return acc;
         },
         {},
       );
 
+      const trimmedTimeRange = typeof time_range === 'string' ? time_range.trim() : time_range;
+
       const searchParams = qs.stringify({
         ...processedParams,
-        ...(time_range !== 'anytime' && { time_range }),
+        ...(trimmedTimeRange && trimmedTimeRange !== 'anytime' && { time_range: trimmedTimeRange }),
         format: 'json',
         q: query,
       });

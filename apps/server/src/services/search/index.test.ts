@@ -779,4 +779,77 @@ describe('SearchService', () => {
       expect(result.results[0]).toBe(successResult);
     });
   });
+
+  describe('webSearch parameter handling', () => {
+    it('should forward searchTimeRange and searchCategories to provider query', async () => {
+      mockSearchImpl.query.mockResolvedValue({
+        costTime: 10,
+        query: 'test',
+        resultNumbers: 1,
+        results: [{ title: 'Result 1', url: 'https://example.com' }],
+      });
+
+      const result = await searchService.webSearch({
+        query: 'test',
+        searchCategories: ['news'],
+        searchTimeRange: 'day',
+      });
+
+      expect(mockSearchImpl.query).toHaveBeenCalledWith('test', {
+        searchCategories: ['news'],
+        searchTimeRange: 'day',
+      });
+      expect(result.results).toHaveLength(1);
+    });
+
+    it('should omit anytime from searchTimeRange', async () => {
+      mockSearchImpl.query.mockResolvedValue({
+        costTime: 10,
+        query: 'test',
+        resultNumbers: 1,
+        results: [{ title: 'Result 1', url: 'https://example.com' }],
+      });
+
+      await searchService.webSearch({
+        query: 'test',
+        searchTimeRange: 'anytime',
+      });
+
+      expect(mockSearchImpl.query).toHaveBeenCalledWith('test', undefined);
+    });
+
+    it('should retry without engines on empty results while preserving category and time range', async () => {
+      mockSearchImpl.query
+        .mockResolvedValueOnce({
+          costTime: 10,
+          query: 'test',
+          resultNumbers: 0,
+          results: [],
+        })
+        .mockResolvedValueOnce({
+          costTime: 15,
+          query: 'test',
+          resultNumbers: 1,
+          results: [{ title: 'Fallback Result', url: 'https://example.com' }],
+        });
+
+      const result = await searchService.webSearch({
+        query: 'test',
+        searchCategories: ['news'],
+        searchEngines: ['google'],
+        searchTimeRange: 'week',
+      });
+
+      expect(mockSearchImpl.query).toHaveBeenNthCalledWith(1, 'test', {
+        searchCategories: ['news'],
+        searchEngines: ['google'],
+        searchTimeRange: 'week',
+      });
+      expect(mockSearchImpl.query).toHaveBeenNthCalledWith(2, 'test', {
+        searchCategories: ['news'],
+        searchTimeRange: 'week',
+      });
+      expect(result.results).toHaveLength(1);
+    });
+  });
 });
