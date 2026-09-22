@@ -466,11 +466,68 @@ export const computeChatCost = (
 
     if (unit.strategy === 'lookup') {
       const lookupUnit = unit as LookupPricingUnit;
+
+      // A cache write whose TTL was not reported (converters that forward no
+      // pricing options, non-streaming generation) was made at the API default.
+      const lookupOptions: ComputeChatCostOptions | undefined =
+        unit.name === 'textInput_cacheWrite' &&
+        lookupUnit.lookup.pricingParams?.includes('ttl') &&
+        options?.lookupParams?.ttl === undefined
+          ? { ...options, lookupParams: { ...options?.lookupParams, ttl: '5m' } }
+          : options;
+
+      // Providers can report per-TTL cache-write splits (Anthropic
+      // `usage.cache_creation`): server tools add automatic 5m writes even when
+      // the request's own cache_control uses a 1h TTL, so the reported split
+      // takes precedence over the request-level ttl lookup param. Each bucket
+      // goes through the regular lookup contract with only `ttl` overridden, so
+      // cards with additional pricingParams keep resolving.
+      if (unit.name === 'textInput_cacheWrite') {
+        const ttlSplits: Array<['5m' | '1h', number]> = [];
+        if (typeof usage.inputWriteCacheTokens5m === 'number' && usage.inputWriteCacheTokens5m > 0)
+          ttlSplits.push(['5m', usage.inputWriteCacheTokens5m]);
+        if (typeof usage.inputWriteCacheTokens1h === 'number' && usage.inputWriteCacheTokens1h > 0)
+          ttlSplits.push(['1h', usage.inputWriteCacheTokens1h]);
+
+        if (ttlSplits.length > 0) {
+          let rawCredits = 0;
+          const segments: Array<{ credits: number; quantity: number; rate: number }> = [];
+
+          for (const [ttl, tokens] of ttlSplits) {
+            const bucket = computeLookupCredits(lookupUnit, tokens, {
+              ...lookupOptions,
+              lookupParams: { ...lookupOptions?.lookupParams, ttl },
+            });
+            if (bucket.issues) {
+              issues.push(bucket.issues);
+              continue;
+            }
+            rawCredits += bucket.credits;
+            segments.push({
+              credits: bucket.credits,
+              quantity: tokens,
+              rate: bucket.credits / tokens,
+            });
+          }
+
+          const usdCredits = toUSDCredits(rawCredits, currency, usdToCnyRate);
+          breakdown.push({
+            cost: creditsToUSD(usdCredits),
+            credits: usdCredits,
+            quantity,
+            currency,
+            segments,
+            unit,
+          });
+          continue;
+        }
+      }
+
       const {
         credits: rawCredits,
         key,
         issues: lookupIssue,
-      } = computeLookupCredits(lookupUnit, quantity, options);
+      } = computeLookupCredits(lookupUnit, quantity, lookupOptions);
 
       if (lookupIssue) issues.push(lookupIssue);
 

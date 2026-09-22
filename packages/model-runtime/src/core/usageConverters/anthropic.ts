@@ -25,6 +25,10 @@ export const buildAnthropicInitialUsage = (
     inputCacheMissTokens: usage.input_tokens,
     inputCachedTokens: usage.cache_read_input_tokens ?? undefined,
     inputWriteCacheTokens: usage.cache_creation_input_tokens || undefined,
+    // Server tools add automatic 5m cache writes regardless of the request TTL,
+    // so keep the per-TTL split for pricing.
+    inputWriteCacheTokens1h: usage.cache_creation?.ephemeral_1h_input_tokens || undefined,
+    inputWriteCacheTokens5m: usage.cache_creation?.ephemeral_5m_input_tokens || undefined,
     totalInputTokens,
     totalOutputTokens,
     totalTokens: totalInputTokens + totalOutputTokens,

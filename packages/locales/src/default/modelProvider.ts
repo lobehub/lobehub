@@ -258,6 +258,8 @@ export default {
     'Choose extended parameters supported by the model. Hover an option to preview controls. Incorrect configs may cause request failures.',
   'providerModels.item.modelConfig.extendParams.options.codexMaxReasoningEffort.hint':
     'For Codex models; controls reasoning intensity.',
+  'providerModels.item.modelConfig.extendParams.options.contextCachingTTL.hint':
+    'For Claude models; keeps the prompt cache warm across longer pauses at a higher write cost.',
   'providerModels.item.modelConfig.extendParams.options.disableContextCaching.hint':
     'For Claude models; can lower cost and speed up responses.',
   'providerModels.item.modelConfig.extendParams.options.effort.hint':

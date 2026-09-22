@@ -3,14 +3,17 @@ import Anthropic from '@anthropic-ai/sdk';
 import { AgentRuntimeErrorType } from '@lobechat/types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { ChatStreamPayload } from '../../types';
 import type { ModelRuntimeDiagnostics } from '../../types/providerDiagnostics';
 import { ContextExceededPreFlightError } from '../../utils/resolveSafeMaxTokens';
 import {
+  buildDefaultAnthropicPayload,
   createAnthropicCompatibleParams,
   createAnthropicCompatibleRuntime,
   createDefaultAnthropicClient,
   DEFAULT_ANTHROPIC_TIMEOUT,
   handleDefaultAnthropicError,
+  resolveDefaultAnthropicPricingOptions,
 } from './index';
 
 vi.mock('@anthropic-ai/sdk', () => {
@@ -671,5 +674,90 @@ describe('createAnthropicCompatibleRuntime', () => {
       expect.objectContaining({ requestModel: 'upstream-model' }),
     );
     expect(result).toEqual({ ok: true });
+  });
+});
+
+describe('buildDefaultAnthropicPayload cache ttl', () => {
+  const requestPayload = (overrides: Partial<ChatStreamPayload> = {}): ChatStreamPayload => ({
+    messages: [
+      { content: 'You are a helpful assistant.', role: 'system' },
+      { content: 'Hello', role: 'user' },
+    ],
+    model: 'claude-opus-5',
+    temperature: 1,
+    ...overrides,
+  });
+
+  it('keeps the wire format unchanged when no ttl is configured', async () => {
+    const post = await buildDefaultAnthropicPayload(requestPayload());
+    const explicitDefault = await buildDefaultAnthropicPayload(
+      requestPayload({ contextCachingTTL: '5m' }),
+    );
+    const json = JSON.stringify(post);
+
+    expect(explicitDefault).toEqual(post);
+    expect(json).toContain('"cache_control":{"type":"ephemeral"}');
+    expect(json).not.toContain('"ttl"');
+  });
+
+  it('stamps ttl 1h on every cached layer and resolves the pricing ttl from it', async () => {
+    const payload = requestPayload({
+      contextCachingTTL: '1h',
+      tools: [
+        {
+          function: { description: 'test tool', name: 'tool1', parameters: {} },
+          type: 'function',
+        },
+      ],
+    });
+    const post = await buildDefaultAnthropicPayload(payload);
+
+    // System, messages and tools are stamped separately; the pricing resolver reads the
+    // first ttl it finds, so asserting a single layer would let a drop on the others survive.
+    const systemBlocks = post.system as { cache_control?: { ttl?: string; type: string } }[];
+    expect(systemBlocks[0].cache_control).toEqual({ ttl: '1h', type: 'ephemeral' });
+
+    const lastMessage = post.messages.at(-1);
+    const lastContent = Array.isArray(lastMessage?.content)
+      ? lastMessage.content.at(-1)
+      : undefined;
+    expect((lastContent as { cache_control?: unknown } | undefined)?.cache_control).toEqual({
+      ttl: '1h',
+      type: 'ephemeral',
+    });
+
+    const tools = post.tools as { cache_control?: unknown }[];
+    expect(tools.at(-1)?.cache_control).toEqual({ ttl: '1h', type: 'ephemeral' });
+
+    expect(resolveDefaultAnthropicPricingOptions(payload, post)).toEqual({
+      lookupParams: { ttl: '1h' },
+    });
+  });
+
+  it('resolves the pricing ttl from the tools when they are the only stamped layer', () => {
+    // No system prompt, and the message breakpoint can be removed together with an
+    // unsupported assistant prefill: the last tool is then the only cache_control left.
+    expect(
+      resolveDefaultAnthropicPricingOptions(requestPayload({ contextCachingTTL: '1h' }), {
+        max_tokens: 1,
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'claude-opus-5',
+        tools: [
+          {
+            cache_control: { ttl: '1h', type: 'ephemeral' },
+            input_schema: { type: 'object' },
+            name: 'tool1',
+          },
+        ],
+      }),
+    ).toEqual({ lookupParams: { ttl: '1h' } });
+  });
+
+  it('sends no cache_control and resolves no pricing options when caching is disabled, even with a ttl configured', async () => {
+    const payload = requestPayload({ contextCachingTTL: '1h', enabledContextCaching: false });
+    const post = await buildDefaultAnthropicPayload(payload);
+
+    expect(JSON.stringify(post)).not.toContain('cache_control');
+    expect(resolveDefaultAnthropicPricingOptions(payload, post)).toBeUndefined();
   });
 });

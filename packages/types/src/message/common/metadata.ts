@@ -91,6 +91,13 @@ export interface ModelTokensUsage {
    */
   inputVideoTokens?: number;
   inputWriteCacheTokens?: number;
+  /**
+   * Per-TTL cache-write split (Anthropic `usage.cache_creation`). Server tools
+   * add automatic 5m cache writes even when the request's own cache_control
+   * uses a 1h TTL, so pricing needs the split, not just the aggregate.
+   */
+  inputWriteCacheTokens1h?: number;
+  inputWriteCacheTokens5m?: number;
   outputAudioTokens?: number;
   outputImageTokens?: number;
   outputReasoningTokens?: number;
@@ -111,6 +118,8 @@ export const ModelUsageSchema = z.object({
   inputCachedTokens: z.number().optional(),
   inputCacheMissTokens: z.number().optional(),
   inputWriteCacheTokens: z.number().optional(),
+  inputWriteCacheTokens1h: z.number().optional(),
+  inputWriteCacheTokens5m: z.number().optional(),
   inputCachedTextTokens: z.number().optional(),
   inputCachedImageTokens: z.number().optional(),
   inputCachedAudioTokens: z.number().optional(),

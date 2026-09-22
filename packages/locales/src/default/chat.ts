@@ -309,6 +309,9 @@ export default {
   'editedFiles.viewChanges': 'View changes',
   'emptyAgent': 'No Agents yet. Start with your first Agent—build your system over time.',
   'emptyAgentAction': 'Create Agent',
+  'extendParams.contextCachingTTL.desc':
+    'How long the provider keeps the cached prompt prefix. 1-hour caching costs more to write (2x base input vs 1.25x) but stays warm across longer pauses between turns.',
+  'extendParams.contextCachingTTL.title': 'Cache Duration',
   'extendParams.disableContextCaching.desc':
     'Reduce by up to 90% of the cost of generating a single conversation and bring a max of 4x speed. <1>Learn more</1>',
   'extendParams.disableContextCaching.title': 'Enable Context Caching',

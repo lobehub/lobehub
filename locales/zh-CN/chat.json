@@ -366,6 +366,8 @@
   "editedFiles.viewChanges": "查看更改",
   "emptyAgent": "还没有助理。从第一个助理开始，慢慢搭建你的助理体系",
   "emptyAgentAction": "创建助理",
+  "extendParams.contextCachingTTL.desc": "缓存的提示前缀在服务端保留的时长。1 小时缓存的写入费用更高（基础输入价的 2 倍，5 分钟为 1.25 倍），但在更长的对话间隔后仍可命中。",
+  "extendParams.contextCachingTTL.title": "缓存时长",
   "extendParams.disableContextCaching.desc": "最多可减少90%的单次对话生成成本，并将速度提升至最多4倍。<1>了解更多</1>",
   "extendParams.disableContextCaching.title": "开启上下文缓存",
   "extendParams.effort.desc": "通过设置努力参数，控制 Claude 在回应时使用的 token 数量。",

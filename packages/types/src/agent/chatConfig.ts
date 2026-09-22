@@ -30,6 +30,11 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    * Model ID to use for generating compression summaries
    */
   compressionModelId?: string;
+  /**
+   * Prompt-cache TTL for providers that support it (currently Anthropic).
+   * Unset = provider default (5m).
+   */
+  contextCachingTTL?: '5m' | '1h';
   deepseekV4GAReasoningEffort?: 'none' | 'low' | 'high' | 'max';
   deepseekV4ReasoningEffort?: 'none' | 'high' | 'max';
 
@@ -238,6 +243,7 @@ export const AgentChatConfigSchema = z
     deepseekV4ReasoningEffort: z.enum(['none', 'high', 'max']).optional(),
     qwen38ReasoningEffort: z.enum(['none', 'low', 'medium', 'xhigh']).optional(),
     compressionModelId: z.string().optional(),
+    contextCachingTTL: z.enum(['5m', '1h']).optional(),
     disableContextCaching: z.boolean().optional(),
     disableGatewayMode: z.boolean().optional(),
     effort: z.enum(['low', 'medium', 'high', 'max']).optional(),

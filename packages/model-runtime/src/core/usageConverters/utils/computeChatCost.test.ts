@@ -1277,7 +1277,7 @@ describe('computeChatPricing', () => {
       expect(cacheWrite?.credits).toBe(0); // No credits when lookup fails
     });
 
-    it('handles lookup pricing with missing lookup params and adds issue', () => {
+    it('prices a cache write at the API default ttl when no lookup params are provided', () => {
       const pricing = anthropicChatModels.find(
         (model: { id: string }) => model.id === 'claude-opus-4-6',
       )?.pricing;
@@ -1289,17 +1289,16 @@ describe('computeChatPricing', () => {
         outputTextTokens: 500,
       };
 
-      // Don't provide lookup params at all
+      // No lookup params at all: the write still happened, at the API default (5m) TTL.
       const result = computeChatCost(pricing, usage);
       expect(result).toBeDefined();
-      expect(result?.issues).toHaveLength(1);
-      expect(result?.issues[0].reason).toContain('Missing lookup params');
-      expect(result?.issues[0].reason).toContain('ttl');
+      expect(result?.issues).toHaveLength(0);
 
       const cacheWrite = result?.breakdown.find(
         (item) => item.unit.name === 'textInput_cacheWrite',
       );
-      expect(cacheWrite?.credits).toBe(0); // No credits when lookup params missing
+      expect(cacheWrite?.lookupKey).toBe('5m');
+      expect(cacheWrite?.credits).toBe(300 * 6.25);
     });
 
     it('handles lookup pricing with undefined lookup params and adds issue', () => {
@@ -1672,5 +1671,132 @@ describe('computeChatPricing', () => {
         expect(totalCost).toBeCloseTo(0.006, 6);
       });
     });
+  });
+});
+
+describe('Anthropic lookup cache-write pricing', () => {
+  const findPricing = (id: string) =>
+    (anthropicChatModels as { id: string; pricing?: Pricing }[]).find((m) => m.id === id)?.pricing;
+
+  it.each([
+    { id: 'claude-fable-5-1', rate1h: 20, rate5m: 12.5 },
+    { id: 'claude-fable-5', rate1h: 20, rate5m: 12.5 },
+    { id: 'claude-opus-5', rate1h: 10, rate5m: 6.25 },
+    { id: 'claude-opus-4-8', rate1h: 10, rate5m: 6.25 },
+    { id: 'claude-opus-4-7', rate1h: 10, rate5m: 6.25 },
+    { id: 'claude-sonnet-5', rate1h: 4, rate5m: 2.5 },
+    { id: 'claude-sonnet-4-5-20250929', rate1h: 6, rate5m: 3.75 },
+  ])('prices cache writes per ttl for $id', ({ id, rate1h, rate5m }) => {
+    const pricing = findPricing(id);
+    expect(pricing).toBeDefined();
+
+    const usage: ModelTokensUsage = {
+      inputCacheMissTokens: 0,
+      inputWriteCacheTokens: 1_000_000,
+      totalInputTokens: 1_000_000,
+      totalOutputTokens: 0,
+      totalTokens: 1_000_000,
+    };
+
+    for (const [ttl, rate] of [
+      ['5m', rate5m],
+      ['1h', rate1h],
+    ] as const) {
+      const result = computeChatCost(pricing, usage, { lookupParams: { ttl } });
+      expect(result?.issues).toHaveLength(0);
+
+      const write = result?.breakdown.find((item) => item.unit.name === 'textInput_cacheWrite');
+      expect(write?.lookupKey).toBe(ttl);
+      expect(write?.credits).toBe(1_000_000 * rate);
+    }
+  });
+});
+
+describe('Anthropic cache-write pricing without a reported ttl', () => {
+  // OpenAI-compatible providers fall back to the Anthropic card through getModelPricing and
+  // forward no pricing options; the write still happened at the API default TTL.
+  it('prices an unreported-ttl cache write at the 5m rate instead of dropping it', () => {
+    const pricing = (anthropicChatModels as { id: string; pricing?: Pricing }[]).find(
+      (m) => m.id === 'claude-opus-5',
+    )?.pricing;
+    const usage: ModelTokensUsage = {
+      inputCacheMissTokens: 0,
+      inputWriteCacheTokens: 1_000_000,
+      totalInputTokens: 1_000_000,
+      totalOutputTokens: 0,
+      totalTokens: 1_000_000,
+    };
+
+    const result = computeChatCost(pricing, usage);
+    expect(result?.issues).toHaveLength(0);
+
+    const write = result?.breakdown.find((item) => item.unit.name === 'textInput_cacheWrite');
+    expect(write?.lookupKey).toBe('5m');
+    expect(write?.credits).toBe(1_000_000 * 6.25);
+  });
+});
+
+describe('Anthropic mixed-ttl cache-write pricing', () => {
+  // Server tools add automatic 5m cache writes even when the request's own
+  // cache_control uses a 1h TTL (docs: tool-use-with-prompt-caching), so each
+  // bucket must be priced at its own rate — never the request-level ttl alone.
+  const pricing = (anthropicChatModels as { id: string; pricing?: Pricing }[]).find(
+    (m) => m.id === 'claude-opus-5',
+  )?.pricing;
+
+  const usage: ModelTokensUsage = {
+    inputCacheMissTokens: 0,
+    inputWriteCacheTokens: 3_000,
+    inputWriteCacheTokens1h: 2_000,
+    inputWriteCacheTokens5m: 1_000,
+    totalInputTokens: 3_000,
+    totalOutputTokens: 0,
+    totalTokens: 3_000,
+  };
+
+  it('prices each ttl bucket at its own rate even when the request ttl says 1h', () => {
+    expect(pricing).toBeDefined();
+
+    const result = computeChatCost(pricing, usage, { lookupParams: { ttl: '1h' } });
+    expect(result?.issues).toHaveLength(0);
+
+    const write = result?.breakdown.find((item) => item.unit.name === 'textInput_cacheWrite');
+    expect(write?.segments).toEqual([
+      { credits: 1_000 * 6.25, quantity: 1_000, rate: 6.25 },
+      { credits: 2_000 * 10, quantity: 2_000, rate: 10 },
+    ]);
+    expect(write?.credits).toBe(1_000 * 6.25 + 2_000 * 10);
+  });
+
+  it('prices the split without any lookup params at all', () => {
+    const result = computeChatCost(pricing, usage);
+    expect(result?.issues).toHaveLength(0);
+
+    const write = result?.breakdown.find((item) => item.unit.name === 'textInput_cacheWrite');
+    expect(write?.credits).toBe(1_000 * 6.25 + 2_000 * 10);
+  });
+
+  it('keeps the other lookup params when a card keys cache writes by more than ttl', () => {
+    const compositePricing: Pricing = {
+      units: [
+        {
+          lookup: {
+            prices: { '1h_standard': 10, '5m_standard': 6.25 },
+            pricingParams: ['ttl', 'tier'],
+          },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    };
+
+    const result = computeChatCost(compositePricing, usage, {
+      lookupParams: { tier: 'standard', ttl: '1h' },
+    });
+    expect(result?.issues).toHaveLength(0);
+
+    const write = result?.breakdown.find((item) => item.unit.name === 'textInput_cacheWrite');
+    expect(write?.credits).toBe(1_000 * 6.25 + 2_000 * 10);
   });
 });

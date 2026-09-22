@@ -31,6 +31,7 @@ import type { LobeRuntimeAI } from '../BaseAI';
 import {
   buildAnthropicMessages,
   buildAnthropicTools,
+  buildCacheControl,
   buildSearchTool,
 } from '../contextBuilders/anthropic';
 import { resolveModelSamplingParameters } from '../parameterResolver';
@@ -161,6 +162,7 @@ export const buildDefaultAnthropicPayload = async (
     tools,
     thinking,
     effort,
+    contextCachingTTL,
     enabledContextCaching = true,
     enabledSearch,
   } = payload;
@@ -182,10 +184,12 @@ export const buildDefaultAnthropicPayload = async (
       ? systemMessage.content
       : undefined;
 
+  const cacheTTL = enabledContextCaching ? contextCachingTTL : undefined;
+
   const systemPrompts = systemPromptText
     ? ([
         {
-          cache_control: enabledContextCaching ? { type: 'ephemeral' } : undefined,
+          cache_control: enabledContextCaching ? buildCacheControl(cacheTTL) : undefined,
           text: systemPromptText,
           type: 'text',
         },
@@ -194,10 +198,10 @@ export const buildDefaultAnthropicPayload = async (
 
   const postMessages = stripUnsupportedClaudeAssistantPrefill(
     model,
-    await buildAnthropicMessages(userMessages, { enabledContextCaching }),
+    await buildAnthropicMessages(userMessages, { cacheTTL, enabledContextCaching }),
   );
 
-  let postTools = buildAnthropicTools(tools, { enabledContextCaching }) as
+  let postTools = buildAnthropicTools(tools, { cacheTTL, enabledContextCaching }) as
     AnthropicTools[] | undefined;
 
   if (enabledSearch) {
@@ -272,6 +276,7 @@ export const resolveDefaultAnthropicPricingOptions = (
   const cacheTTL = resolveCacheTTL(requestPayload, {
     messages: anthropicPayload.messages,
     system: anthropicPayload.system,
+    tools: anthropicPayload.tools,
   });
 
   if (!cacheTTL) return undefined;

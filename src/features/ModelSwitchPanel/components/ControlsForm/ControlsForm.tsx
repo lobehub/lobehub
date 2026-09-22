@@ -20,6 +20,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 
+import CacheTTLSegmented from './CacheTTLSegmented';
 import CodexMaxReasoningEffortSlider from './CodexMaxReasoningEffortSlider';
 import ContextCachingSwitch from './ContextCachingSwitch';
 import DeepSeekReasoningEffortSlider, {
@@ -190,6 +191,16 @@ const ControlsForm = memo<ControlsFormProps>(
         layout: 'horizontal',
         minWidth: undefined,
         name: 'disableContextCaching',
+      },
+      {
+        children: <CacheTTLSegmented disabled={disabled} />,
+        label: labelWithTooltip(
+          t('extendParams.contextCachingTTL.title'),
+          t('extendParams.contextCachingTTL.desc'),
+        ),
+        layout: 'horizontal',
+        minWidth: undefined,
+        name: 'contextCachingTTL',
       },
       {
         children: <Switch disabled={disabled} size={'small'} />,

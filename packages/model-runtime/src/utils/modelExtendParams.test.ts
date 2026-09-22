@@ -553,3 +553,36 @@ describe('resolveEffectiveReasoningChatConfig', () => {
     expect(params.reasoning_effort).toBe('max');
   });
 });
+
+describe('applyModelExtendParams - contextCachingTTL', () => {
+  it('forwards contextCachingTTL when the model supports it', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({ contextCachingTTL: '1h' }),
+      extendParams: ['contextCachingTTL', 'disableContextCaching'],
+      model: 'claude-opus-5',
+    });
+
+    expect(result.contextCachingTTL).toBe('1h');
+  });
+
+  it('drops contextCachingTTL when context caching is disabled', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({ contextCachingTTL: '1h', disableContextCaching: true }),
+      extendParams: ['contextCachingTTL', 'disableContextCaching'],
+      model: 'claude-opus-5',
+    });
+
+    expect(result.contextCachingTTL).toBeUndefined();
+    expect(result.enabledContextCaching).toBe(false);
+  });
+
+  it('ignores contextCachingTTL when the model does not list it', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({ contextCachingTTL: '1h' }),
+      extendParams: ['disableContextCaching'],
+      model: 'claude-opus-5',
+    });
+
+    expect(result.contextCachingTTL).toBeUndefined();
+  });
+});

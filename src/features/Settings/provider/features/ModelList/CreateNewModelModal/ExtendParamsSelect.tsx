@@ -5,6 +5,7 @@ import { type ExtendParamsType } from 'model-bank';
 import { memo, type ReactNode, type SyntheticEvent, useMemo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
+import CacheTTLSegmented from '@/features/ModelSwitchPanel/components/ControlsForm/CacheTTLSegmented';
 import CodexMaxReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/CodexMaxReasoningEffortSlider';
 import DeepSeekReasoningEffortSlider, {
   DeepSeekV4GAReasoningEffortSlider,
@@ -54,6 +55,10 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
   {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.disableContextCaching.hint',
     key: 'disableContextCaching',
+  },
+  {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.contextCachingTTL.hint',
+    key: 'contextCachingTTL',
   },
   {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.enableReasoning.hint',
@@ -287,6 +292,7 @@ const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
     previewWidth: 280,
     tag: 'reasoning_effort',
   },
+  contextCachingTTL: { labelSuffix: ' (Claude)', previewWidth: 300, tag: 'cache_control.ttl' },
   disableContextCaching: { labelSuffix: ' (Claude)', previewWidth: 400 },
   effort: { labelSuffix: ' (Opus 4.6)', previewWidth: 280, tag: 'output_config.effort' },
   enableAdaptiveThinking: {
@@ -493,6 +499,7 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
       deepseekV4GAReasoningEffort: <DeepSeekV4GAReasoningEffortSlider value="high" />,
       deepseekV4ReasoningEffort: <DeepSeekReasoningEffortSlider value="high" />,
       qwen38ReasoningEffort: <Qwen38ReasoningEffortSlider value="xhigh" />,
+      contextCachingTTL: <CacheTTLSegmented disabled value="1h" />,
       disableContextCaching: <Switch checked disabled />,
       effort: <EffortSlider value="high" />,
       enableAdaptiveThinking: <Switch checked disabled />,

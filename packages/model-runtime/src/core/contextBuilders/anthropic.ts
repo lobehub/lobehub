@@ -5,6 +5,17 @@ import type OpenAI from 'openai';
 import type { OpenAIChatMessage, UserMessageContentPart } from '../../types';
 import { parseDataUri } from '../../utils/uriParser';
 
+export type AnthropicCacheTTL = NonNullable<Anthropic.Messages.CacheControlEphemeral['ttl']>;
+
+/**
+ * The API default TTL is 5m; `ttl` is only sent for non-default values so
+ * requests without the option stay byte-identical to the previous wire format.
+ */
+export const buildCacheControl = (
+  ttl?: AnthropicCacheTTL,
+): Anthropic.Messages.CacheControlEphemeral =>
+  ttl && ttl !== '5m' ? { ttl, type: 'ephemeral' } : { type: 'ephemeral' };
+
 const ANTHROPIC_SUPPORTED_IMAGE_TYPES = new Set([
   'image/jpeg',
   'image/jpg',
@@ -329,7 +340,7 @@ export const buildAnthropicMessage = async (
 
 export const buildAnthropicMessages = async (
   oaiMessages: OpenAIChatMessage[],
-  options: { enabledContextCaching?: boolean } = {},
+  options: { cacheTTL?: AnthropicCacheTTL; enabledContextCaching?: boolean } = {},
 ): Promise<Anthropic.Messages.MessageParam[]> => {
   const messages: Anthropic.Messages.MessageParam[] = [];
 
@@ -435,7 +446,7 @@ export const buildAnthropicMessages = async (
     if (typeof lastMessage.content === 'string') {
       lastMessage.content = [
         {
-          cache_control: { type: 'ephemeral' },
+          cache_control: buildCacheControl(options.cacheTTL),
           text: lastMessage.content as string,
           type: 'text',
         },
@@ -448,7 +459,7 @@ export const buildAnthropicMessages = async (
         lastContent.type !== 'thinking' &&
         lastContent.type !== 'redacted_thinking'
       ) {
-        lastContent.cache_control = { type: 'ephemeral' };
+        lastContent.cache_control = buildCacheControl(options.cacheTTL);
       }
     }
   }
@@ -457,7 +468,7 @@ export const buildAnthropicMessages = async (
 
 export const buildAnthropicTools = (
   tools?: OpenAI.ChatCompletionTool[],
-  options: { enabledContextCaching?: boolean } = {},
+  options: { cacheTTL?: AnthropicCacheTTL; enabledContextCaching?: boolean } = {},
 ) => {
   if (!tools) return;
 
@@ -467,7 +478,7 @@ export const buildAnthropicTools = (
     return {
       cache_control:
         options.enabledContextCaching && index === tools.length - 1
-          ? { type: 'ephemeral' }
+          ? buildCacheControl(options.cacheTTL)
           : undefined,
       description: fn.description,
       input_schema: fn.parameters as Anthropic.Tool.InputSchema,
