@@ -14,6 +14,9 @@ import Loading from '@/components/Loading/CircleLoading';
 import { Document, Page, pdfjs } from '@/libs/pdfjs';
 import { localFileService } from '@/services/electron/localFileService';
 
+import DocxPane from './DocxPane';
+import OfficeOnlinePane from './OfficeOnlinePane';
+import PptxPane from './PptxPane';
 import XlsxPane from './xlsx/XlsxPane';
 
 // Same CDN assets as the FileViewer PDF renderer — cmaps / fonts are required
@@ -26,41 +29,11 @@ const pdfOptions = {
 const maxPageWidth = 1200;
 
 const styles = createStaticStyles(({ css }) => ({
-  docxContainer: css`
-    overflow: auto;
-    height: 100%;
-    background: ${cssVar.colorBgLayout};
-
-    /* docx-preview renders fixed-size "pages"; keep them centered with a gap.
-       "safe center" falls back to flex-start when the page is wider than the
-       pane, so the left edge stays reachable by horizontal scroll. */
-    .docx-wrapper {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      align-items: safe center;
-
-      padding: 10px;
-
-      background: transparent;
-    }
-
-    .docx-wrapper > section.docx {
-      margin-block-end: 0;
-      border-radius: 4px;
-      box-shadow: ${cssVar.boxShadowTertiary};
-    }
-  `,
   fallbackIcon: css`
     width: 64px;
     height: 64px;
     border-radius: 14px;
     background: ${cssVar.colorFillTertiary};
-  `,
-  officeContainer: css`
-    overflow: auto;
-    height: 100%;
-    background: ${cssVar.colorBgLayout};
   `,
   page: css`
     overflow: hidden;
@@ -121,103 +94,11 @@ const PdfPane = memo<{ blob: Blob }>(({ blob }) => {
 
 PdfPane.displayName = 'PdfPane';
 
-interface OfficePaneProps {
-  blob: Blob;
-  /** Renderer failed — parent swaps in the download / open-externally state. */
-  onError: (error: unknown) => void;
-}
-
-const PptxPane = memo<OfficePaneProps>(({ blob, onError }) => {
-  const [loading, setLoading] = useState(true);
-  const [scrollEl, setScrollEl] = useState<HTMLElement | null>(null);
-  const [container, setContainer] = useState<HTMLElement | null>(null);
-
-  useEffect(() => {
-    if (!container || !scrollEl) return;
-
-    const controller = new AbortController();
-    let viewer: { destroy: () => void } | undefined;
-
-    (async () => {
-      try {
-        const { PptxViewer, RECOMMENDED_ZIP_LIMITS } = await import('@aiden0z/pptx-renderer');
-        if (controller.signal.aborted) return;
-        viewer = await PptxViewer.open(blob, container, {
-          listOptions: { windowed: true },
-          scrollContainer: scrollEl,
-          signal: controller.signal,
-          // Local files are still untrusted input (agent/tool generated) — cap
-          // the ZIP expansion to keep a hostile pptx from exhausting memory.
-          zipLimits: RECOMMENDED_ZIP_LIMITS,
-        });
-        setLoading(false);
-      } catch (error) {
-        if (controller.signal.aborted) return;
-        onError(error);
-      }
-    })();
-
-    return () => {
-      controller.abort();
-      viewer?.destroy();
-    };
-  }, [blob, container, scrollEl, onError]);
-
-  return (
-    <div className={styles.officeContainer} ref={setScrollEl}>
-      {loading && <Loading />}
-      {/* The viewer owns this node's children — React must never render into it,
-          or its bookkeeping breaks when the library replaces the content. */}
-      <div ref={setContainer} />
-    </div>
-  );
-});
-
-PptxPane.displayName = 'PptxPane';
-
-const DocxPane = memo<OfficePaneProps>(({ blob, onError }) => {
-  const [loading, setLoading] = useState(true);
-  const [container, setContainer] = useState<HTMLElement | null>(null);
-
-  useEffect(() => {
-    if (!container) return;
-
-    let disposed = false;
-
-    (async () => {
-      try {
-        const { renderAsync } = await import('docx-preview');
-        if (disposed) return;
-        await renderAsync(blob, container);
-        if (!disposed) setLoading(false);
-      } catch (error) {
-        if (!disposed) onError(error);
-      }
-    })();
-
-    return () => {
-      disposed = true;
-      // renderAsync has no dispose handle — it owns the container's children
-      // (including injected <style>), so clearing it is the documented cleanup.
-      container.replaceChildren();
-    };
-  }, [blob, container, onError]);
-
-  return (
-    <div className={styles.docxContainer}>
-      {loading && <Loading />}
-      <div ref={setContainer} />
-    </div>
-  );
-});
-
-DocxPane.displayName = 'DocxPane';
-
 /**
  * Modern OOXML formats with an in-app renderer. Legacy binary formats (.doc /
  * .ppt / .xls) have none and keep the download / open-externally fallback.
  */
-const OFFICE_PANES: Record<string, typeof PptxPane> = {
+const OFFICE_PANES: Record<string, typeof DocxPane> = {
   'application/vnd.openxmlformats-officedocument.presentationml.presentation': PptxPane,
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': XlsxPane,
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': DocxPane,
@@ -229,18 +110,22 @@ export interface DocumentPreviewProps {
   filePath: string;
   /** File lives on this desktop's filesystem — offer "open with default app". */
   isLocalFile: boolean;
+  /** Publicly fetchable URL, if the file has one — enables the online fallback. */
+  sourceUrl?: string | null;
 }
 
 /**
- * In-portal preview for binary documents transported as blobs. PDFs render
+ * Preview for binary documents transported as blobs — local workspace files in
+ * the portal, and uploaded files fetched from their URL by the file viewer. PDFs render
  * inline via react-pdf (the Electron iframe PDF plugin is disabled, so a blob
  * URL in an iframe would not render on desktop); pptx / docx / xlsx render
  * inline via dynamically-imported client renderers, falling back to a
  * download / open-externally state when parsing fails. Legacy binary office
- * formats (.doc / .ppt / .xls) have no local renderer and always degrade.
+ * formats (.doc / .ppt / .xls / .odt) have no renderer; with a remote
+ * `sourceUrl` they degrade to the online viewer, otherwise to download.
  */
 const DocumentPreview = memo<DocumentPreviewProps>(
-  ({ blob, contentType, filePath, isLocalFile }) => {
+  ({ blob, contentType, filePath, isLocalFile, sourceUrl }) => {
     const { t } = useTranslation('chat');
     const filename = filePath.split('/').at(-1) ?? '';
     const [renderError, setRenderError] = useState(false);
@@ -271,6 +156,8 @@ const DocumentPreview = memo<DocumentPreviewProps>(
     if (OfficePane && !renderError) {
       return <OfficePane blob={blob} onError={handleRenderError} />;
     }
+
+    if (sourceUrl) return <OfficeOnlinePane url={sourceUrl} />;
 
     return (
       <Center gap={16} height={'100%'} width={'100%'}>

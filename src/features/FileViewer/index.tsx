@@ -187,7 +187,7 @@ const FileViewer = memo<FileViewerProps>(({ id, style, fileType, url, name }) =>
   // Microsoft Office documents - check before code files to avoid false matches
   // (e.g., 'doc' contains 'c' which would match CODE_EXTENSIONS)
   if (matchesFileType(fileType, name, MSDOC_EXTENSIONS, MSDOC_MIME_TYPES)) {
-    return <MSDocViewer fileId={id} url={url} />;
+    return <MSDocViewer fileId={id} fileName={name} fileType={fileType} url={url} />;
   }
 
   // HTML files should render as a sandboxed preview before the broader code-file fallback.
