@@ -51,19 +51,31 @@ type ResourceListData = { hasMore: boolean; items: ResourceItem[]; total?: numbe
 /** Parent identifiers for one folder: its id, its slug, or `null` for the root. */
 export type ResourceParentKey = string | null;
 
+/**
+ * The workspace and library a move was issued from. Captured *before* the
+ * request (`captureResourceMoveCacheScope` on the file store): the user may
+ * switch workspace or library while it is in flight, and the caches to patch
+ * are the ones that listed the row, not the newly active scope.
+ */
+export interface ResourceMoveCacheScope {
+  /** Library the explorer was showing, `undefined` outside a library. */
+  libraryId: string | undefined;
+  workspaceId: string | null;
+}
+
 export interface ResourceMoveCachePatch {
   /** Every key the source folder may be addressed by in `queryParams.parentId`. */
   fromParentKeys: ResourceParentKey[];
+  scope: ResourceMoveCacheScope;
   /** Every key the destination folder may be addressed by in `queryParams.parentId`. */
   toParentKeys: ResourceParentKey[];
 }
 
 const isResourceListKeyForParent = (
   key: unknown,
-  workspaceId: string | null,
-  libraryId: string | undefined,
+  { workspaceId, libraryId }: ResourceMoveCacheScope,
   parentKeys: Set<ResourceParentKey>,
-) => {
+): key is ResourceSWRKey => {
   if (!Array.isArray(key)) return false;
   if (key[0] !== resourceKeys.list.root || key[2] !== workspaceId) return false;
 
@@ -79,6 +91,108 @@ const stripOptimistic = (resource: ResourceItem): ResourceItem => {
   return rest;
 };
 
+const toTime = (value: Date | string | number | undefined | null) =>
+  value == null ? 0 : new Date(value).getTime();
+
+const SORT_ACCESSORS: Record<string, (item: ResourceItem) => number | string> = {
+  createdAt: (item) => toTime(item.createdAt),
+  name: (item) => item.name ?? '',
+  size: (item) => item.size ?? 0,
+  updatedAt: (item) => toTime(item.updatedAt),
+};
+
+/**
+ * The order the server returns a list in, mirrored from the knowledge
+ * repository's `orderBy`: both `sorter` and `sortType` have to be present for a
+ * custom sort, anything else is newest-first.
+ */
+const compareResourcesForList = ({ sorter, sortType }: ResourceQueryParams) => {
+  const custom = sorter && sortType && sorter in SORT_ACCESSORS;
+  const accessor = custom ? SORT_ACCESSORS[sorter] : SORT_ACCESSORS.createdAt;
+  const direction = custom && String(sortType).toLowerCase() === 'asc' ? 1 : -1;
+
+  return (a: ResourceItem, b: ResourceItem) => {
+    const left = accessor(a);
+    const right = accessor(b);
+    const order =
+      typeof left === 'string' && typeof right === 'string'
+        ? left.localeCompare(right)
+        : Number(left) - Number(right);
+    return order * direction;
+  };
+};
+
+/**
+ * Put the moved row where the server would list it. A cached page keeps its
+ * length: `useFetchResources` derives the next `offset` from the cached row
+ * count, so a page that grew past its limit would make "load more" skip a
+ * server row. On a full page the row is either placed in order (the row that
+ * falls off the end reappears at that same server offset) or, when it sorts
+ * past everything cached, left for the later page that will contain it.
+ */
+export const patchDestinationList = (
+  currentData: ResourceListData | undefined,
+  movedResource: ResourceItem,
+  params: ResourceQueryParams,
+): ResourceListData | undefined => {
+  if (!currentData) return currentData;
+
+  const remaining = currentData.items.filter((item) => item.id !== movedResource.id);
+  const removed = currentData.items.length - remaining.length;
+  const total = currentData.total === undefined ? undefined : currentData.total - removed + 1;
+
+  const compare = compareResourcesForList(params);
+  const position = remaining.findIndex((item) => compare(movedResource, item) < 0);
+  const inserted =
+    position === -1
+      ? [...remaining, movedResource]
+      : [...remaining.slice(0, position), movedResource, ...remaining.slice(position)];
+
+  const pageLength = currentData.items.length;
+  if (!currentData.hasMore || inserted.length <= pageLength) {
+    return { ...currentData, items: inserted, total };
+  }
+
+  return {
+    ...currentData,
+    items: position === -1 ? remaining : inserted.slice(0, pageLength),
+    total,
+  };
+};
+
+export const patchSourceList = (
+  currentData: ResourceListData | undefined,
+  movedResource: ResourceItem,
+): ResourceListData | undefined => {
+  if (!currentData) return currentData;
+
+  const remaining = currentData.items.filter((item) => item.id !== movedResource.id);
+  if (remaining.length === currentData.items.length) return currentData;
+
+  return {
+    ...currentData,
+    items: remaining,
+    total: currentData.total === undefined ? undefined : Math.max(0, currentData.total - 1),
+  };
+};
+
+/**
+ * List the cached keys a matcher accepts without touching their data: the
+ * collecting matcher never accepts, so SWR mutates nothing.
+ */
+const collectCachedListKeys = async (matcher: (key: unknown) => key is ResourceSWRKey) => {
+  const keys: ResourceSWRKey[] = [];
+  await mutate(
+    (key) => {
+      if (matcher(key)) keys.push(key);
+      return false;
+    },
+    undefined,
+    { revalidate: false },
+  );
+  return keys;
+};
+
 /**
  * Keep every cached folder list in step with a move.
  *
@@ -89,62 +203,46 @@ const stripOptimistic = (resource: ResourceItem): ResourceItem => {
  * (and could resurface in the source) until a focus revalidation. Patch the
  * cache entries themselves so the cache-hit path already shows the move.
  *
+ * Destination entries are patched one key at a time because the row's place
+ * depends on that key's sort (see `patchDestinationList`); the updater SWR
+ * hands us does not know which key it is running for.
+ *
  * The patches are written with `revalidate: false` and the reconciling refetch
  * of any mounted key is fired without being awaited: SWR's `mutate` resolves
  * only after that refetch when `revalidate` is on, and this runs inside the
  * move transaction's `onSuccess`, so awaiting it would hold the caller's
  * promise (and the "moved" toast) for one extra list round-trip.
  *
- * Scoped to the active workspace and the library the move happened in: other
+ * Scoped to the workspace and library the move was issued from: other
  * libraries never list this row under these parents.
  */
 export const applyResourceMoveToListCaches = async (
   resource: ResourceItem,
-  { fromParentKeys, toParentKeys }: ResourceMoveCachePatch,
+  { fromParentKeys, toParentKeys, scope }: ResourceMoveCachePatch,
 ) => {
-  const workspaceId = getActiveWorkspaceId();
-  const libraryId = useFileStore.getState().queryParams?.libraryId;
   const toKeys = new Set(toParentKeys);
   const fromKeys = new Set(fromParentKeys.filter((key) => !toKeys.has(key)));
   const movedResource = stripOptimistic(resource);
 
-  const isToKey = (key: unknown) => isResourceListKeyForParent(key, workspaceId, libraryId, toKeys);
-  const isFromKey = (key: unknown) =>
-    isResourceListKeyForParent(key, workspaceId, libraryId, fromKeys);
+  const isToKey = (key: unknown) => isResourceListKeyForParent(key, scope, toKeys);
+  const isFromKey = (key: unknown) => isResourceListKeyForParent(key, scope, fromKeys);
+
+  const destinationKeys = toKeys.size > 0 ? await collectCachedListKeys(isToKey) : [];
 
   await Promise.all([
-    toKeys.size > 0 &&
+    ...destinationKeys.map((cachedKey) =>
       mutate(
-        isToKey,
-        async (currentData: ResourceListData | undefined) => {
-          if (!currentData) return currentData;
-
-          const remaining = currentData.items.filter((item) => item.id !== movedResource.id);
-          const removed = currentData.items.length - remaining.length;
-
-          return {
-            ...currentData,
-            items: [movedResource, ...remaining],
-            total: currentData.total === undefined ? undefined : currentData.total - removed + 1,
-          };
-        },
+        (key) => isEqual(key, cachedKey),
+        async (currentData: ResourceListData | undefined) =>
+          patchDestinationList(currentData, movedResource, cachedKey[1]),
         { revalidate: false },
       ),
+    ),
     fromKeys.size > 0 &&
       mutate(
         isFromKey,
-        async (currentData: ResourceListData | undefined) => {
-          if (!currentData) return currentData;
-
-          const remaining = currentData.items.filter((item) => item.id !== movedResource.id);
-          if (remaining.length === currentData.items.length) return currentData;
-
-          return {
-            ...currentData,
-            items: remaining,
-            total: currentData.total === undefined ? undefined : Math.max(0, currentData.total - 1),
-          };
-        },
+        async (currentData: ResourceListData | undefined) =>
+          patchSourceList(currentData, movedResource),
         { revalidate: false },
       ),
   ]);

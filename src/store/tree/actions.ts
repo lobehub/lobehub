@@ -435,10 +435,11 @@ export class TreeActionImpl {
       if (resourceMap.has(itemId)) {
         await useFileStore.getState().moveResource(itemId, toParent || null);
       } else {
+        const scope = useFileStore.getState().captureResourceMoveCacheScope();
         const moved = await resourceService.moveResource(itemId, toParent || null);
         await useFileStore
           .getState()
-          .applyMovedResourceToCaches(moved, fromParent || null, toParent || null);
+          .applyMovedResourceToCaches(moved, fromParent || null, toParent || null, scope);
         await useFileStore.getState().refreshFileList();
       }
 
@@ -472,10 +473,11 @@ export class TreeActionImpl {
       } else {
         // Item not in Explorer → API only, then patch the folder-list caches
         // (the explorer's SWR entries for both folders) and refresh Explorer
+        const scope = useFileStore.getState().captureResourceMoveCacheScope();
         const moved = await resourceService.moveResource(itemId, toParent || null);
         await useFileStore
           .getState()
-          .applyMovedResourceToCaches(moved, fromParent || null, toParent || null);
+          .applyMovedResourceToCaches(moved, fromParent || null, toParent || null, scope);
         await useFileStore.getState().refreshFileList();
       }
     };
@@ -522,6 +524,7 @@ export class TreeActionImpl {
       }
 
       // Items not in Explorer → API only, then patch the folder-list caches
+      const scope = useFileStore.getState().captureResourceMoveCacheScope();
       for (const id of notInExplorer) {
         promises.push(
           resourceService
@@ -529,7 +532,7 @@ export class TreeActionImpl {
             .then((moved) =>
               useFileStore
                 .getState()
-                .applyMovedResourceToCaches(moved, fromParent || null, toParent || null),
+                .applyMovedResourceToCaches(moved, fromParent || null, toParent || null, scope),
             ),
         );
       }

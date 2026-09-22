@@ -185,7 +185,8 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
             { saveSource: 'autosave' },
           );
 
-          // Notify parent after successful save
+          // Notify parent after successful save. The callbacks were captured
+          // with the request, so they still address the document that was saved.
           if (title !== lastSavedTitle) {
             onTitleChange?.(title || '');
           }
@@ -193,10 +194,17 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
             onEmojiChange?.(emoji);
           }
 
+          // The store outlives a document switch (see `setDocumentId`). If the
+          // editor moved on to another document while this request was in
+          // flight, the meta below belongs to that document: comparing it with
+          // the saved values would mark it dirty, record the previous
+          // document's title as its last-saved one and queue a save of it.
+          const { title: currentTitle, emoji: currentEmoji, documentId: currentDocumentId } = get();
+          if (currentDocumentId !== documentId) return;
+
           // The user may have kept typing while the request was in flight, so
           // re-derive dirtiness from the *current* meta instead of clearing it
           // blindly — otherwise those trailing edits would never be persisted.
-          const { title: currentTitle, emoji: currentEmoji } = get();
           const stillDirty = currentTitle !== title || currentEmoji !== emoji;
 
           set({
@@ -211,7 +219,7 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
           }
         } catch (error) {
           console.error('[PageEditor] Failed to save meta:', error);
-          set({ metaSaveStatus: 'idle' });
+          if (get().documentId === documentId) set({ metaSaveStatus: 'idle' });
         }
       },
 

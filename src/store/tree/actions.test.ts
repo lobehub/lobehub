@@ -32,8 +32,11 @@ vi.mock('@/services/file', () => ({
   },
 }));
 
+const moveScope = { libraryId: 'kb-1', workspaceId: 'workspace-1' };
+
 const fileStoreState = {
   applyMovedResourceToCaches: mockApplyMovedResourceToCaches,
+  captureResourceMoveCacheScope: vi.fn(() => moveScope),
   moveResource: mockStoreMove,
   refreshFileList: mockRefreshFileList,
   resourceMap: new Map<string, unknown>(),
@@ -90,6 +93,7 @@ describe('TreeActionImpl.moveItem', () => {
     mockRefreshFileList.mockReset();
     mockResourceMove.mockReset();
     mockStoreMove.mockReset();
+    fileStoreState.captureResourceMoveCacheScope.mockClear();
     fileStoreState.resourceMap = new Map();
   });
 
@@ -109,8 +113,17 @@ describe('TreeActionImpl.moveItem', () => {
 
     expect(mockResourceMove).toHaveBeenCalledWith('file-1', 'folder-b');
     // The explorer never saw the row, so its folder-list caches are patched
-    // from the server result before the current list refreshes.
-    expect(mockApplyMovedResourceToCaches).toHaveBeenCalledWith(moved, 'folder-a', 'folder-b');
+    // from the server result before the current list refreshes, in the scope
+    // captured before the request went out.
+    expect(mockApplyMovedResourceToCaches).toHaveBeenCalledWith(
+      moved,
+      'folder-a',
+      'folder-b',
+      moveScope,
+    );
+    expect(fileStoreState.captureResourceMoveCacheScope.mock.invocationCallOrder[0]).toBeLessThan(
+      mockResourceMove.mock.invocationCallOrder[0],
+    );
     expect(mockRefreshFileList).toHaveBeenCalledTimes(1);
     expect(mockStoreMove).not.toHaveBeenCalled();
     expect(revalidateSpy).toHaveBeenCalledWith('folder-a');

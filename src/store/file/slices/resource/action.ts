@@ -1,5 +1,6 @@
 import debug from 'debug';
 
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { knowledgeBaseService } from '@/services/knowledgeBase';
 import { resourceService } from '@/services/resource';
 import type { StoreSetter } from '@/store/types';
@@ -7,7 +8,7 @@ import { OptimisticEngine } from '@/store/utils/optimisticEngine';
 import type { CreateResourceParams, ResourceItem, UpdateResourceParams } from '@/types/resource';
 
 import type { FileStore } from '../../store';
-import type { ResourceParentKey } from './hooks';
+import type { ResourceMoveCacheScope, ResourceParentKey } from './hooks';
 import type { ResourceState } from './initialState';
 import { initialResourceState } from './initialState';
 import { getResourceQueryKey } from './utils';
@@ -683,6 +684,7 @@ export class ResourceActionImpl {
   moveResource = async (id: string, parentId: string | null): Promise<void> => {
     const { queryParams, resourceMap } = this.#get();
     const existing = resourceMap.get(id);
+    const scope = this.captureResourceMoveCacheScope();
 
     if (!existing) {
       console.warn(`Resource ${id} not found for move`);
@@ -731,6 +733,7 @@ export class ResourceActionImpl {
         moved,
         [existing.parentId, queryParams?.parentId ?? null],
         [parentId, moved.parentId ?? null],
+        scope,
       );
     };
 
@@ -743,11 +746,15 @@ export class ResourceActionImpl {
    * cached pre-move list. Callers pass whatever handle they hold for each
    * folder — a drop target id, a URL slug or an empty root — and the handles
    * are widened here to every key the explorer may query that folder by.
+   * `scope` is the workspace / library the move was issued from, taken with
+   * `captureResourceMoveCacheScope` *before* the request: the user may have
+   * switched scope while it was in flight.
    */
   applyMovedResourceToCaches = async (
     resource: ResourceItem,
     fromParent: ResourceParentKey | undefined | Array<ResourceParentKey | undefined>,
     toParent: ResourceParentKey | undefined | Array<ResourceParentKey | undefined>,
+    scope: ResourceMoveCacheScope,
   ): Promise<void> => {
     const { applyResourceMoveToListCaches } = await import('./hooks');
     const [fromParentKeys, toParentKeys] = await Promise.all([
@@ -755,8 +762,18 @@ export class ResourceActionImpl {
       this.#resolveParentCacheKeys(Array.isArray(toParent) ? toParent : [toParent]),
     ]);
 
-    await applyResourceMoveToListCaches(resource, { fromParentKeys, toParentKeys });
+    await applyResourceMoveToListCaches(resource, { fromParentKeys, scope, toParentKeys });
   };
+
+  /**
+   * Snapshot the workspace and library a move is about to be issued from, so
+   * the folder-list caches patched after it lands are the ones that listed the
+   * row even if the user changes scope meanwhile.
+   */
+  captureResourceMoveCacheScope = (): ResourceMoveCacheScope => ({
+    libraryId: this.#get().queryParams?.libraryId,
+    workspaceId: getActiveWorkspaceId(),
+  });
 
   removeLocalResource = (id: string): void => {
     this.#set(

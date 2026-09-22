@@ -4,14 +4,14 @@ import { initialState } from '@/store/file/initialState';
 import { useFileStore } from '@/store/file/store';
 import type { CreateDocumentParams, ResourceItem } from '@/types/resource';
 
-const { mockApplyMoveToCaches, mockCreateResource, mockMoveResource, treeState } = vi.hoisted(
-  () => ({
+const { activeWorkspace, mockApplyMoveToCaches, mockCreateResource, mockMoveResource, treeState } =
+  vi.hoisted(() => ({
+    activeWorkspace: { id: null as string | null },
     mockApplyMoveToCaches: vi.fn(),
     mockCreateResource: vi.fn(),
     mockMoveResource: vi.fn(),
     treeState: { children: {} as Record<string, any[]> },
-  }),
-);
+  }));
 
 vi.mock('@/services/resource', () => ({
   resourceService: {
@@ -26,6 +26,10 @@ vi.mock('./hooks', () => ({
 
 vi.mock('@/store/tree', () => ({
   useTreeStore: { getState: () => treeState },
+}));
+
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  getActiveWorkspaceId: () => activeWorkspace.id,
 }));
 
 const createResource = (overrides: Partial<ResourceItem> = {}): ResourceItem => ({
@@ -44,6 +48,7 @@ const createResource = (overrides: Partial<ResourceItem> = {}): ResourceItem => 
 describe('resource actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    activeWorkspace.id = null;
     treeState.children = {};
     useFileStore.setState(initialState);
   });
@@ -152,6 +157,30 @@ describe('resource actions', () => {
     expect(resource).toEqual(movedDoc);
     expect(new Set(patch.fromParentKeys)).toEqual(new Set(['folder-2026-09-id', '2026-09-slug']));
     expect(new Set(patch.toParentKeys)).toEqual(new Set(['folder-w37-id', 'w37-slug']));
+    expect(patch.scope).toEqual({ libraryId: undefined, workspaceId: null });
+  });
+
+  it('should patch the caches of the workspace and library the move started in', async () => {
+    // The user switches workspace and library while the request is in flight;
+    // the caches that listed the row belong to the scope captured beforehand.
+    const doc = createResource({ id: 'doc-1', parentId: null });
+    activeWorkspace.id = 'workspace-1';
+    mockMoveResource.mockImplementation(async () => {
+      activeWorkspace.id = 'workspace-2';
+      useFileStore.setState({ queryParams: { libraryId: 'kb-2', parentId: null } });
+      return { ...doc, parentId: 'folder-a' };
+    });
+
+    useFileStore.setState({
+      queryParams: { libraryId: 'kb-1', parentId: null },
+      resourceList: [doc],
+      resourceMap: new Map([[doc.id, doc]]),
+    });
+
+    await useFileStore.getState().moveResource(doc.id, 'folder-a');
+
+    const [, patch] = mockApplyMoveToCaches.mock.calls[0];
+    expect(patch.scope).toEqual({ libraryId: 'kb-1', workspaceId: 'workspace-1' });
   });
 
   it('should address the root with a null parent key when moving out of a folder', async () => {
