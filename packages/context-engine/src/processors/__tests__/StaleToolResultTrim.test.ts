@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { PipelineContext } from '../../types';
-import { StaleToolResultTrimProcessor } from '../StaleToolResultTrim';
+import { cacheEconomicsForProvider, StaleToolResultTrimProcessor } from '../StaleToolResultTrim';
 
 const createContext = (messages: any[]): PipelineContext => ({
   initialState: { messages: [] },
@@ -403,6 +403,44 @@ describe('StaleToolResultTrimProcessor', () => {
   });
 
   describe('closed-history pinning', () => {
+    // Regression (Codex P1): the warm break-even must price the rewrite from
+    // the payload frozen at the turn boundary. Counting in-flight output
+    // grows the cost estimate step by step and flips a passing trim back to a
+    // skip mid-operation — restoring the original prefix.
+    it('does not flip the warm-gate decision as in-flight output grows', async () => {
+      const T0 = Date.parse('2026-09-20T08:00:00Z');
+      const buildMessages = (inFlightChars: number) => [
+        readFileResult('/a.ts', 'x'.repeat(200_000), [0, 200]), // big stale read → trim candidate
+        writeFileResult('/a.ts'),
+        { content: 'filler', id: 'f1', role: 'assistant' },
+        { content: 'filler', id: 'f2', role: 'assistant' },
+        { content: 'filler', id: 'f3', role: 'assistant' },
+        {
+          content: 'previous turn done',
+          createdAt: new Date(T0).toISOString(),
+          id: 'prev',
+          role: 'assistant',
+        },
+        {
+          content: 'next task',
+          createdAt: new Date(T0 + 60_000).toISOString(), // warm: 1 min gap
+          id: 'trigger',
+          role: 'user',
+        },
+        // in-flight output appended as the operation progresses
+        toolMessage('lobe-local-system', 'runCommand', 'y'.repeat(inFlightChars)),
+        ...recencyPadding(3),
+      ];
+
+      const processor = createProcessor();
+      const atTurnStart = await processor.process(createContext(buildMessages(0)));
+      const midOperation = await processor.process(createContext(buildMessages(2_000_000)));
+
+      expect(atTurnStart.metadata.staleToolResultTrim?.trimmedMessages).toBe(1);
+      expect(midOperation.metadata.staleToolResultTrim?.trimmedMessages).toBe(1);
+      expect(midOperation.messages[0].content).toBe(atTurnStart.messages[0].content);
+    });
+
     // Regression (Codex P1): the size gate must be measured on the closed
     // history only — otherwise in-flight tool output trips it mid-turn and
     // activates trims that were off at the boundary, flipping the prefix.
@@ -473,6 +511,62 @@ describe('StaleToolResultTrimProcessor', () => {
       const result = await createProcessor().process(createContext(messages));
 
       expect(result.messages[0].content).toBe('middle chunk');
+    });
+  });
+
+  describe('cacheEconomicsForProvider', () => {
+    it('returns provider-specific policies and falls back to Anthropic', () => {
+      expect(cacheEconomicsForProvider('anthropic')).toEqual({
+        readPrice: 0.1,
+        ttlMs: 300_000,
+        writePrice: 1.25,
+      });
+      expect(cacheEconomicsForProvider('deepseek').ttlMs).toBe(3_600_000);
+      expect(cacheEconomicsForProvider('openai').writePrice).toBe(1);
+      expect(cacheEconomicsForProvider('some-new-provider')).toEqual(
+        cacheEconomicsForProvider('anthropic'),
+      );
+    });
+
+    it('prices the warmth check with the active provider policy', async () => {
+      // 10-minute gap: cold under Anthropic's 5-min TTL, still warm under
+      // DeepSeek's hour-long disk cache.
+      const T0 = Date.parse('2026-09-20T08:00:00Z');
+      const messages = [
+        { content: 'z'.repeat(500_000), id: 'big-live-doc', role: 'assistant' },
+        readFileResult('/a.ts', 'x'.repeat(5000), [0, 200]),
+        writeFileResult('/a.ts'),
+        { content: 'filler', id: 'f1', role: 'assistant' },
+        { content: 'filler', id: 'f2', role: 'assistant' },
+        { content: 'filler', id: 'f3', role: 'assistant' },
+        {
+          content: 'previous turn done',
+          createdAt: new Date(T0).toISOString(),
+          id: 'prev',
+          role: 'assistant',
+        },
+        {
+          content: 'next task',
+          createdAt: new Date(T0 + 600_000).toISOString(),
+          id: 'trigger',
+          role: 'user',
+        },
+        ...recencyPadding(3),
+      ];
+
+      const anthropic = await createProcessor().process(createContext(messages));
+      expect(anthropic.metadata.staleToolResultTrim?.cacheWarm).toBe(false);
+      expect(anthropic.metadata.staleToolResultTrim?.trimmedMessages).toBe(1);
+
+      const deepseek = await new StaleToolResultTrimProcessor({
+        economics: cacheEconomicsForProvider('deepseek'),
+        keepRecentMessages: 3,
+        minTotalToolChars: 0,
+      }).process(createContext(messages));
+      expect(deepseek.metadata.staleToolResultTrim).toMatchObject({
+        cacheWarm: true,
+        skippedReason: 'warm-cache',
+      });
     });
   });
 });

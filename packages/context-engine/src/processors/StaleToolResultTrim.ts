@@ -29,22 +29,19 @@ const log = debug('context-engine:processor:StaleToolResultTrimProcessor');
 export interface StaleToolResultTrimConfig {
   /**
    * Cache read price relative to the plain input price.
-   * Anthropic: 0.1.
-   * @default 0.1
+   * Defaults to the active provider's policy from `economics`.
    */
   cacheReadPrice?: number;
   /**
    * Provider prompt-cache TTL in ms. A turn whose trigger follows the
    * previous turn's last activity within this window has a warm cache, so
    * trimming is a paid rewrite and goes through the warm break-even check.
-   * Anthropic: 5 min (refreshed per hit).
-   * @default 300_000
+   * Defaults to the active provider's policy from `economics`.
    */
   cacheTtlMs?: number;
   /**
    * Cache write price relative to the plain input price.
-   * Anthropic 5-min TTL: 1.25.
-   * @default 1.25
+   * Defaults to the active provider's policy from `economics`.
    */
   cacheWritePrice?: number;
   /**
@@ -58,6 +55,12 @@ export interface StaleToolResultTrimConfig {
    * @default 1000
    */
   crawlKeepChars?: number;
+  /**
+   * Cache economics of the active provider (TTL + read/write prices), e.g.
+   * from {@link cacheEconomicsForProvider}. Individual `cache*` overrides win.
+   * @default ANTHROPIC_CACHE_ECONOMICS
+   */
+  economics?: CacheEconomics;
   /**
    * Master switch.
    * @default true
@@ -97,6 +100,53 @@ export interface StaleToolResultTrimConfig {
 const LOCAL_SYSTEM = 'lobe-local-system';
 const BROWSER = 'lobe-browser';
 const WEB_BROWSING = 'lobe-web-browsing';
+
+export interface CacheEconomics {
+  /** Cached-read price relative to the plain input price. */
+  readPrice: number;
+  /** Cache entry lifetime in ms; a turn gap beyond this means the cache is cold. */
+  ttlMs: number;
+  /** Reprocessing price of an invalidated prefix, relative to plain input. */
+  writePrice: number;
+}
+
+export const ANTHROPIC_CACHE_ECONOMICS: CacheEconomics = {
+  readPrice: 0.1, // cache read = 10% of input
+  ttlMs: 300_000, // 5-minute ephemeral TTL, refreshed per hit
+  writePrice: 1.25, // cache write = 1.25× input
+};
+
+// Cache economics differ per provider; pricing the warmth verdict and the
+// break-even gate with the wrong ones either rewrites still-warm prefixes or
+// skips worthwhile trims.
+const PROVIDER_CACHE_ECONOMICS: Record<string, CacheEconomics> = {
+  anthropic: ANTHROPIC_CACHE_ECONOMICS,
+  // Anthropic models via Bedrock share the same cache semantics.
+  bedrock: ANTHROPIC_CACHE_ECONOMICS,
+  deepseek: {
+    // Automatic disk context cache: long-lived, hit ≈ 0.25× miss, no write
+    // fee — an invalidated prefix just costs a plain input pass.
+    readPrice: 0.25,
+    ttlMs: 3_600_000,
+    writePrice: 1,
+  },
+  google: {
+    // Gemini implicit caching: short TTL, hit ≈ 0.25×, no explicit write fee.
+    readPrice: 0.25,
+    ttlMs: 300_000,
+    writePrice: 1,
+  },
+  openai: {
+    // Automatic prompt caching: short inactivity expiry, hit = 0.5×, no write fee.
+    readPrice: 0.5,
+    ttlMs: 300_000,
+    writePrice: 1,
+  },
+};
+
+/** Cache economics for a provider id; falls back to Anthropic's (most conservative TTL). */
+export const cacheEconomicsForProvider = (provider?: string): CacheEconomics =>
+  PROVIDER_CACHE_ECONOMICS[provider ?? ''] ?? ANTHROPIC_CACHE_ECONOMICS;
 
 const READ_APIS = new Set(['readFile']);
 const WRITE_APIS = new Set(['writeFile', 'editFile']);
@@ -214,10 +264,11 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
 
   constructor(config: StaleToolResultTrimConfig = {}, options: ProcessorOptions = {}) {
     super(options);
+    const economics = config.economics ?? ANTHROPIC_CACHE_ECONOMICS;
     this.config = {
-      cacheReadPrice: config.cacheReadPrice ?? 0.1,
-      cacheTtlMs: config.cacheTtlMs ?? 300_000,
-      cacheWritePrice: config.cacheWritePrice ?? 1.25,
+      cacheReadPrice: config.cacheReadPrice ?? economics.readPrice,
+      cacheTtlMs: config.cacheTtlMs ?? economics.ttlMs,
+      cacheWritePrice: config.cacheWritePrice ?? economics.writePrice,
       commandKeepChars: config.commandKeepChars ?? 500,
       crawlKeepChars: config.crawlKeepChars ?? 1000,
       enabled: config.enabled ?? true,
@@ -331,9 +382,10 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
     //
     // Thanks to determinism the rewrite is paid at most once per trim-set
     // change, not per follow-up — but a warm quick-question turn (1-5 steps)
-    // would never recoup it, which is exactly what the check blocks. Both
-    // timestamps are fixed for the whole turn, so the decision cannot flip
-    // mid-operation and flip the prefix with it.
+    // would never recoup it, which is exactly what the check blocks. The gap,
+    // the candidates, and the priced payload are all frozen at the turn
+    // boundary, so the decision cannot flip mid-operation and flip the
+    // prefix with it.
     const potentialSavedChars = candidates.reduce(
       (s, c) => s + (messages[c.index].content as string).length - c.content.length,
       0,
@@ -347,10 +399,18 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
     const cacheWarm = gapMs !== undefined && gapMs <= this.config.cacheTtlMs;
 
     if (cacheWarm) {
-      const totalChars = messages.reduce(
-        (s, m) => s + (typeof m.content === 'string' ? m.content.length : 0),
-        0,
-      );
+      // The cost side of the break-even must be priced from the payload frozen
+      // at the turn boundary (closed history + the trigger), not the live
+      // message list: candidates and savings are already frozen there, and
+      // counting in-flight output would grow the estimated rewrite cost
+      // step by step, flipping a trim that passed the gate back to a skip
+      // mid-operation and restoring the original prefix.
+      const payloadEnd = lastUserIndex >= 0 ? lastUserIndex + 1 : messages.length;
+      let totalChars = 0;
+      for (let i = 0; i < payloadEnd; i++) {
+        const m = messages[i];
+        if (typeof m.content === 'string') totalChars += m.content.length;
+      }
       const gainEstimate =
         this.config.warmRemainingStepsEstimate * potentialSavedChars * this.config.cacheReadPrice;
       const rewriteCostEstimate =
