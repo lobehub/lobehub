@@ -94,6 +94,32 @@ vi.mock('@/server/featureFlags', () => ({
 const { agentShareConfigPatchSchema, agentShareConfigSchema, agentShareRouter } =
   await import('../agentShare');
 
+describe('share profile configuration', () => {
+  it('accepts independent demo cases and an ordered selection of works', () => {
+    const config = {
+      demoCases: [{ description: 'Find a minimal fix', prompt: 'Help me debug this error' }],
+      featuredWorkIds: ['work-first', 'work-second'],
+    };
+    expect(agentShareConfigPatchSchema.parse(config)).toEqual(config);
+  });
+
+  it('allows clearing profile content without changing other settings', () => {
+    expect(agentShareConfigPatchSchema.parse({ demoCases: [], featuredWorkIds: [] })).toEqual({
+      demoCases: [],
+      featuredWorkIds: [],
+    });
+  });
+
+  it.each([
+    { demoCases: [{ description: 'Empty task', prompt: ' ' }] },
+    { demoCases: [{ description: 'Description', prompt: 'Task', openingQuestion: 'Other' }] },
+    { featuredWorkIds: ['same', 'same'] },
+    { featuredWorkIds: [''] },
+  ])('rejects invalid profile content: %j', (config) => {
+    expect(agentShareConfigPatchSchema.safeParse(config).success).toBe(false);
+  });
+});
+
 const share = {
   agentId: 'agent-1',
   id: 'share-1',

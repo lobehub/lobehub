@@ -16,6 +16,25 @@ vi.mock('@/database/models/agentShare', () => ({
 
 const countShareVisitors = vi.fn();
 const topicModelConstructor = vi.fn();
+const profileModelConstructor = vi.fn();
+const listFeaturedWorks = vi.fn();
+const getDeliveryStats = vi.fn();
+const emptyDeliveryStats = {
+  averageOperationDurationSeconds: null,
+  averageWorkCost: null,
+  lastDeliveredAt: null,
+  workCount: 0,
+};
+
+vi.mock('@/database/models/agentShareProfile', () => ({
+  AgentShareProfileModel: class {
+    constructor(...args: unknown[]) {
+      profileModelConstructor(...args);
+    }
+    getStats = getDeliveryStats;
+    listFeaturedWorks = listFeaturedWorks;
+  },
+}));
 
 vi.mock('@/database/models/topic', () => ({
   TopicModel: class {
@@ -142,6 +161,8 @@ describe('shareRouter', () => {
       vi.mocked(AgentShareModel.assertShareAccess).mockReturnValue(undefined);
       vi.mocked(AgentShareModel.incrementUserViewCount).mockResolvedValue(undefined);
       countShareVisitors.mockResolvedValue({ topicCount: 12, visitorCount: 7 });
+      listFeaturedWorks.mockResolvedValue([]);
+      getDeliveryStats.mockResolvedValue(emptyDeliveryStats);
       loadModelsMock.mockResolvedValue([
         {
           abilities: { audio: false, video: false, vision: true },
@@ -153,6 +174,48 @@ describe('shareRouter', () => {
       resolveModelSelectionMock.mockResolvedValue({ model: 'gpt-4o', provider: 'openai' });
     });
 
+    it('returns independent demos and selected deliveries in the owner scope', async () => {
+      const demoCases = [{ prompt: 'Review this migration', description: 'Find deployment risks' }];
+      const work = { id: 'work-selected', title: 'Migration review', totalCost: 0.2 };
+      vi.mocked(AgentShareModel.findBySlugOrId).mockResolvedValue({
+        ...agentShare,
+        shareConfig: {
+          ...agentShare.shareConfig,
+          demoCases,
+          featuredWorkIds: [work.id],
+          maxFileStorage: 512 * 1024 * 1024,
+          monthlySpendLimit: 10,
+        },
+        agentSlug: 'agent-profile',
+      });
+      listFeaturedWorks.mockResolvedValue([work]);
+      getDeliveryStats.mockResolvedValue({
+        averageOperationDurationSeconds: 15,
+        averageWorkCost: 0.2,
+        lastDeliveredAt: new Date('2026-01-01'),
+        workCount: 3,
+      });
+      const caller = shareRouter.createCaller(await createContextInner({ userId: 'visitor-user' }));
+      const result = await caller.getSharedAgent({ slugOrId: 'shared-agent' });
+      expect(result.demoCases).toEqual(demoCases);
+      expect(result.agentMeta.openingQuestions).toEqual(['What can you do?']);
+      expect(result.featuredWorks).toEqual([work]);
+      expect(result.stats).toMatchObject({
+        averageOperationDurationSeconds: 15,
+        averageWorkCost: 0.2,
+        workCount: 3,
+      });
+      expect(profileModelConstructor).toHaveBeenCalledWith(expect.anything(), 'owner-user');
+    });
+
+    it('keeps the profile available when delivery analytics fail', async () => {
+      getDeliveryStats.mockRejectedValue(new Error('analytics unavailable'));
+      const caller = shareRouter.createCaller(await createContextInner({ userId: 'visitor-user' }));
+      const result = await caller.getSharedAgent({ slugOrId: 'shared-agent' });
+      expect(result.stats).toMatchObject(emptyDeliveryStats);
+      expect(result.featuredWorks).toEqual([]);
+    });
+
     it('requires authentication without resolving or counting the share', async () => {
       const caller = shareRouter.createCaller(await createContextInner());
 
@@ -161,6 +224,8 @@ describe('shareRouter', () => {
       });
       expect(AgentShareModel.findBySlugOrId).not.toHaveBeenCalled();
       expect(AgentShareModel.incrementUserViewCount).not.toHaveBeenCalled();
+      expect(listFeaturedWorks).not.toHaveBeenCalled();
+      expect(getDeliveryStats).not.toHaveBeenCalled();
     });
 
     it('resolves by slug, returns only visitor-safe metadata, and counts the view', async () => {
@@ -181,10 +246,12 @@ describe('shareRouter', () => {
         },
         billingScope: 'personal',
         creator: { avatar: 'owner.png', name: 'Owner Person' },
+        demoCases: [],
+        featuredWorks: [],
         isOwner: false,
         shareId: 'agent-share-1',
         slug: 'shared-agent',
-        stats: { conversations: 12, views: 42, visitors: 7 },
+        stats: { ...emptyDeliveryStats, conversations: 12, views: 42, visitors: 7 },
         terms: {
           allowCreatorViewSessions: false,
           maxFileStorage: 512 * 1024 * 1024,
@@ -391,6 +458,8 @@ describe('shareRouter', () => {
         code,
       });
       expect(AgentShareModel.incrementUserViewCount).not.toHaveBeenCalled();
+      expect(listFeaturedWorks).not.toHaveBeenCalled();
+      expect(getDeliveryStats).not.toHaveBeenCalled();
     });
 
     describe('visitor capability', () => {

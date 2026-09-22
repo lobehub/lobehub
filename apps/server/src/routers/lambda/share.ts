@@ -5,6 +5,7 @@ import {
 } from '@lobechat/const';
 import {
   type SharedAgentData,
+  type SharedAgentDeliveryStats,
   type SharedAgentUploadAbility,
   type SharedTopicData,
 } from '@lobechat/types';
@@ -14,6 +15,7 @@ import type { ModelAbilities } from 'model-bank';
 import { z } from 'zod';
 
 import { AgentShareModel } from '@/database/models/agentShare';
+import { AgentShareProfileModel } from '@/database/models/agentShareProfile';
 import { AiModelModel } from '@/database/models/aiModel';
 import { TopicModel } from '@/database/models/topic';
 import { TopicShareModel } from '@/database/models/topicShare';
@@ -138,8 +140,23 @@ export const shareRouter = router({
       // them. Best-effort — analytics must never turn a valid share page into
       // an error.
       let stats = { conversations: 0, visitors: 0 };
-      const [uploadAbility] = await Promise.all([
+      const profileModel = new AgentShareProfileModel(ctx.serverDB, share.ownerId);
+      let deliveryStats: SharedAgentDeliveryStats = {
+        averageOperationDurationSeconds: null,
+        averageWorkCost: null,
+        lastDeliveredAt: null,
+        workCount: 0,
+      };
+      const [uploadAbility, featuredWorks] = await Promise.all([
         resolveVisitorUploadAbility(ctx.serverDB, share),
+        profileModel.listFeaturedWorks(share.agentId, share.shareConfig.featuredWorkIds ?? []),
+        (async () => {
+          try {
+            deliveryStats = await profileModel.getStats(share.agentId);
+          } catch (error) {
+            log('failed to count share deliveries for %s: %O', share.shareId, error);
+          }
+        })(),
         (async () => {
           try {
             const topicModel = new TopicModel(
@@ -171,10 +188,12 @@ export const shareRouter = router({
           avatar: share.ownerAvatar ?? null,
           name: share.ownerFullName ?? share.ownerUsername ?? null,
         },
+        demoCases: share.shareConfig.demoCases ?? [],
+        featuredWorks,
         isOwner,
         shareId: share.shareId,
         slug: share.shareConfig.slug ?? null,
-        stats: { ...stats, views: share.userViewCount },
+        stats: { ...stats, ...deliveryStats, views: share.userViewCount },
         terms: {
           allowCreatorViewSessions: share.shareConfig.allowCreatorViewSessions ?? false,
           maxFileStorage: share.shareConfig.maxFileStorage ?? AGENT_SHARE_DEFAULT_MAX_FILE_STORAGE,

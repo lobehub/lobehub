@@ -46,6 +46,22 @@ export const agentShareConfigSchema = z
   .object({
     allowCreatorViewSessions: z.boolean().optional(),
     allowReadMemory: z.boolean().optional(),
+    demoCases: z
+      .array(
+        z
+          .object({
+            description: z.string().trim().max(2000),
+            prompt: z.string().trim().min(1).max(10000),
+          })
+          .strict(),
+      )
+      .max(20)
+      .optional(),
+    featuredWorkIds: z
+      .array(z.string().trim().min(1))
+      .max(100)
+      .refine((ids) => new Set(ids).size === ids.length, 'Duplicate featured Work')
+      .optional(),
     /** Bytes; `0` is a real value (attachments off), so non-negative rather than positive. */
     maxFileStorage: z.number().int().nonnegative().optional(),
     /**
