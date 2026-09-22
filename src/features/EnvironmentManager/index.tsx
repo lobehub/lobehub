@@ -238,8 +238,11 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
             ))}
           </Flexbox>
         </Flexbox>
+        {/* Twice the list's share. A row carries a name and two facts; the panel
+            carries a form, so an even split starved the half doing the work and
+            left the other half mostly empty. */}
         {selected && (
-          <Flexbox className={styles.detailCol} flex={1}>
+          <Flexbox className={styles.detailCol} flex={2}>
             {/* Keyed on the environment so the form's draft state resets when
                   the selection changes — a description typed for one
                   environment must not survive into another. */}
