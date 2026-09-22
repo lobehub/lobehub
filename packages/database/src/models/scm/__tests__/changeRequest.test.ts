@@ -294,17 +294,22 @@ describe('ScmChangeRequestModel', () => {
       'changes_requested',
     );
 
-    // A stale delivery of A's earlier verdict does not undo a newer one.
-    await ScmChangeRequestModel.applyReviewerDecision(serverDB, row.id, {
-      at: new Date('2026-09-20T12:00:00Z'),
-      decision: 'approved',
-      reviewerId: 'rev-a',
-    });
-    await ScmChangeRequestModel.applyReviewerDecision(serverDB, row.id, {
-      at: new Date('2026-09-20T09:00:00Z'),
-      decision: 'changes_requested',
-      reviewerId: 'rev-a',
-    });
+    // A stale delivery of A's earlier verdict does not undo a newer one,
+    // and says so, so the caller can skip the downstream side effects.
+    expect(
+      await ScmChangeRequestModel.applyReviewerDecision(serverDB, row.id, {
+        at: new Date('2026-09-20T12:00:00Z'),
+        decision: 'approved',
+        reviewerId: 'rev-a',
+      }),
+    ).toMatchObject({ applied: true });
+    expect(
+      await ScmChangeRequestModel.applyReviewerDecision(serverDB, row.id, {
+        at: new Date('2026-09-20T09:00:00Z'),
+        decision: 'changes_requested',
+        reviewerId: 'rev-a',
+      }),
+    ).toMatchObject({ applied: false, reviewDecision: 'approved' });
     expect((await ScmChangeRequestModel.findById(serverDB, row.id))?.reviewDecision).toBe(
       'approved',
     );
@@ -318,6 +323,46 @@ describe('ScmChangeRequestModel', () => {
     const after = await ScmChangeRequestModel.findById(serverDB, row.id);
     expect(after?.reviewDecision).toBe('approved');
     expect(Object.keys(after?.metadata.reviewers ?? {})).toEqual(['rev-b']);
+  });
+
+  it('serializes a merge against an older synchronize that overlaps it', async () => {
+    await ScmChangeRequestModel.upsert(serverDB, {
+      ...snapshot,
+      eventAt: new Date('2026-09-20T08:00:00Z'),
+      eventKind: 'opened',
+      state: 'open',
+    });
+
+    // Both deliveries start from the same open row; the row lock decides
+    // the order, and the merge must survive whichever writes last.
+    await Promise.all([
+      ScmChangeRequestModel.upsert(serverDB, {
+        ...snapshot,
+        eventAt: new Date('2026-09-20T12:00:00Z'),
+        eventKind: 'merged',
+        mergedAt: new Date('2026-09-20T12:00:00Z'),
+        state: 'merged',
+      }),
+      ScmChangeRequestModel.upsert(serverDB, {
+        ...snapshot,
+        eventAt: new Date('2026-09-20T11:00:00Z'),
+        eventKind: 'synchronized',
+        headSha: sha2,
+        state: 'open',
+      }),
+    ]);
+
+    const after = await ScmChangeRequestModel.findById(
+      serverDB,
+      (await ScmChangeRequestModel.findByIdentity(
+        serverDB,
+        snapshot.provider,
+        snapshot.repoFullName,
+        snapshot.number,
+      ))!.id,
+    );
+    expect(after?.state).toBe('merged');
+    expect(after?.headSha).toBe(sha1);
   });
 
   it('clears the closure stamp when a pull request reopens', async () => {

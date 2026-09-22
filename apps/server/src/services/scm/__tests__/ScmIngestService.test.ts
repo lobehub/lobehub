@@ -139,6 +139,50 @@ describe('ScmIngestService', () => {
     expect(hook).toHaveBeenLastCalledWith(expect.objectContaining({ kind: 'merged' }));
   });
 
+  it('drops a review the same reviewer has already superseded', async () => {
+    const hook = vi.fn();
+    const service = new ScmIngestService(serverDB);
+    service.onChangeRequestEvent = hook;
+
+    await bindInstallation();
+    await ingest('pull_request', fx.pullRequestEvent('opened'), service);
+
+    // The approval lands first; the older changes-request arrives after.
+    await ingest(
+      'pull_request_review',
+      {
+        ...fx.reviewEvent('approved'),
+        review: { ...fx.reviewEvent('approved').review, submitted_at: '2026-09-20T12:00:00Z' },
+      },
+      service,
+    );
+    hook.mockClear();
+
+    expect(
+      await ingest(
+        'pull_request_review',
+        {
+          ...fx.reviewEvent('changes_requested'),
+          review: {
+            ...fx.reviewEvent('changes_requested').review,
+            submitted_at: '2026-09-20T09:00:00Z',
+          },
+        },
+        service,
+      ),
+    ).toMatchObject({ status: 'skipped' });
+
+    const row = await ScmChangeRequestModel.findByIdentity(
+      serverDB,
+      'github',
+      'lobehub/lobehub',
+      19_719,
+    );
+    // Neither the verdict, nor the event marker, nor the control half moved.
+    expect(row).toMatchObject({ lastEventKind: 'review_approved', reviewDecision: 'approved' });
+    expect(hook).not.toHaveBeenCalled();
+  });
+
   it('resets CI on a new push and ignores late results for the old commit', async () => {
     await bindInstallation();
     await ingest('pull_request', fx.pullRequestEvent('opened'));

@@ -284,11 +284,17 @@ export class ScmIngestService {
           ? ('changes_requested' as const)
           : null;
     if (decision || event.kind === 'review_dismissed') {
-      await ScmChangeRequestModel.applyReviewerDecision(this.db, row.id, {
+      const { applied } = await ScmChangeRequestModel.applyReviewerDecision(this.db, row.id, {
         at: event.occurredAt,
         decision,
         reviewerId: event.actor?.externalId,
       });
+      // The reviewer has since said something newer. Recording this event
+      // would rewind `lastEventAt`, and handing it to the control half
+      // would wake the agent over a verdict that no longer stands.
+      if (!applied) {
+        return { detail: `${row.id} ${event.kind} superseded`, status: 'skipped' };
+      }
     }
     await ScmChangeRequestModel.recordEvent(this.db, row.id, event.kind, event.occurredAt);
 

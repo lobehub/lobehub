@@ -169,133 +169,157 @@ export class ScmChangeRequestModel {
   static upsert = async (
     db: LobeChatDatabase,
     params: ScmUpsertChangeRequestParams,
-  ): Promise<ScmChangeRequestItem> => {
-    const existing = await ScmChangeRequestModel.findByIdentity(
-      db,
-      params.provider,
-      params.repoFullName,
-      params.number,
-    );
+  ): Promise<ScmChangeRequestItem> =>
+    // The whole read-modify-write runs under a row lock. Reading the row
+    // outside one lets a `merged` and an older `synchronize` delivery both
+    // see the pre-merge state, and whichever writes last wins — the stale
+    // guards below can only judge what they were shown.
+    db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(scmChangeRequests)
+        .where(
+          and(
+            eq(scmChangeRequests.provider, params.provider),
+            eq(scmChangeRequests.repoFullName, params.repoFullName),
+            eq(scmChangeRequests.number, params.number),
+          ),
+        )
+        .for('update');
 
-    // Deliveries are not ordered: GitHub retries, and a redelivery of an old
-    // `opened` after a `merged` would otherwise reopen the row, rewind the
-    // head and drop the CI rollup for the commit that actually landed. Two
-    // independent guards, because neither covers the other:
-    //
-    // - an event whose provider timestamp predates the newest one applied is
-    //   a replay (compared provider-clock to provider-clock; the
-    //   `lastEventAt` column also carries events we stamp ourselves, so it
-    //   cannot serve as the reference);
-    // - a merge is terminal and a close only reopens through `reopened`,
-    //   whatever the timestamps say.
-    const previousEventAt = existing?.metadata?.lastProviderEventAt;
-    const outOfOrder =
-      !!previousEventAt && !!params.eventAt && params.eventAt < new Date(previousEventAt);
-    const regressesLifecycle =
-      (existing?.state === 'merged' && params.state !== 'merged') ||
-      (existing?.state === 'closed' && params.state === 'open' && params.eventKind !== 'reopened');
-    const stale = !!existing && (outOfOrder || regressesLifecycle);
+      // Deliveries are not ordered: GitHub retries, and a redelivery of an old
+      // `opened` after a `merged` would otherwise reopen the row, rewind the
+      // head and drop the CI rollup for the commit that actually landed. Two
+      // independent guards, because neither covers the other:
+      //
+      // - an event whose provider timestamp predates the newest one applied is
+      //   a replay (compared provider-clock to provider-clock; the
+      //   `lastEventAt` column also carries events we stamp ourselves, so it
+      //   cannot serve as the reference);
+      // - a merge is terminal and a close only reopens through `reopened`,
+      //   whatever the timestamps say.
+      const previousEventAt = existing?.metadata?.lastProviderEventAt;
+      const outOfOrder =
+        !!previousEventAt && !!params.eventAt && params.eventAt < new Date(previousEventAt);
+      const regressesLifecycle =
+        (existing?.state === 'merged' && params.state !== 'merged') ||
+        (existing?.state === 'closed' &&
+          params.state === 'open' &&
+          params.eventKind !== 'reopened');
+      const stale = !!existing && (outOfOrder || regressesLifecycle);
 
-    const headChanged =
-      !stale && !!params.headSha && !!existing && existing.headSha !== params.headSha;
-    const links = params.links ?? {};
-    const now = new Date();
+      const headChanged =
+        !stale && !!params.headSha && !!existing && existing.headSha !== params.headSha;
+      const links = params.links ?? {};
+      const now = new Date();
 
-    // Lifecycle stamps are state the provider can legitimately reset — a
-    // reopened pull request reports `closed_at: null` — so for those an
-    // explicit `null` clears the column and only `undefined` (the caller
-    // said nothing) keeps it. Descriptive fields keep the lenient rule: a
-    // payload that omits the title should not erase the stored one.
-    const resettable = <T>(next: T | null | undefined, previous: T | null | undefined): T | null =>
-      next === undefined ? (previous ?? null) : next;
+      // Lifecycle stamps are state the provider can legitimately reset — a
+      // reopened pull request reports `closed_at: null` — so for those an
+      // explicit `null` clears the column and only `undefined` (the caller
+      // said nothing) keeps it. Descriptive fields keep the lenient rule: a
+      // payload that omits the title should not erase the stored one.
+      const resettable = <T>(
+        next: T | null | undefined,
+        previous: T | null | undefined,
+      ): T | null => (next === undefined ? (previous ?? null) : next);
 
-    const snapshot = {
-      authorExternalId: params.authorExternalId ?? existing?.authorExternalId ?? null,
-      authorExternalLogin: params.authorExternalLogin ?? existing?.authorExternalLogin ?? null,
-      baseRef: params.baseRef ?? existing?.baseRef ?? null,
-      closedAt: resettable(params.closedAt, existing?.closedAt),
-      externalId: params.externalId ?? existing?.externalId ?? null,
-      headRef: params.headRef ?? existing?.headRef ?? null,
-      headSha: params.headSha ?? existing?.headSha ?? null,
-      isDraft: params.isDraft ?? existing?.isDraft ?? false,
-      mergeStateStatus: params.mergeStateStatus ?? existing?.mergeStateStatus ?? null,
-      mergedAt: resettable(params.mergedAt, existing?.mergedAt),
-      mergedByExternalId: resettable(params.mergedByExternalId, existing?.mergedByExternalId),
-      metadata: {
-        ...existing?.metadata,
-        ...params.metadata,
-        ...(params.eventAt ? { lastProviderEventAt: params.eventAt.toISOString() } : {}),
-      },
-      repoExternalId: params.repoExternalId ?? existing?.repoExternalId ?? null,
-      state: params.state,
-      title: params.title ?? existing?.title ?? null,
-      url: params.url,
-    };
+      const snapshot = {
+        authorExternalId: params.authorExternalId ?? existing?.authorExternalId ?? null,
+        authorExternalLogin: params.authorExternalLogin ?? existing?.authorExternalLogin ?? null,
+        baseRef: params.baseRef ?? existing?.baseRef ?? null,
+        closedAt: resettable(params.closedAt, existing?.closedAt),
+        externalId: params.externalId ?? existing?.externalId ?? null,
+        headRef: params.headRef ?? existing?.headRef ?? null,
+        headSha: params.headSha ?? existing?.headSha ?? null,
+        isDraft: params.isDraft ?? existing?.isDraft ?? false,
+        mergeStateStatus: params.mergeStateStatus ?? existing?.mergeStateStatus ?? null,
+        mergedAt: resettable(params.mergedAt, existing?.mergedAt),
+        mergedByExternalId: resettable(params.mergedByExternalId, existing?.mergedByExternalId),
+        metadata: {
+          ...existing?.metadata,
+          ...params.metadata,
+          ...(params.eventAt ? { lastProviderEventAt: params.eventAt.toISOString() } : {}),
+        },
+        repoExternalId: params.repoExternalId ?? existing?.repoExternalId ?? null,
+        state: params.state,
+        title: params.title ?? existing?.title ?? null,
+        url: params.url,
+      };
 
-    const scopeMoved =
-      !!existing &&
-      (existing.userId !== params.userId ||
-        (existing.workspaceId ?? null) !== (params.workspaceId ?? null));
-    const inherited = scopeMoved ? undefined : existing;
-    const linkValues = {
-      acceptanceId: links.acceptanceId ?? inherited?.acceptanceId ?? null,
-      installationId: links.installationId ?? existing?.installationId ?? null,
-      taskId: links.taskId ?? inherited?.taskId ?? null,
-      topicId: links.topicId ?? inherited?.topicId ?? null,
-      workId: links.workId ?? inherited?.workId ?? null,
-    };
-    const ownerValues = scopeMoved
-      ? { userId: params.userId, workspaceId: params.workspaceId ?? null }
-      : {};
-
-    const ciValues = headChanged
-      ? { checks: null, ciHeadSha: params.headSha ?? null, ciStatus: null }
-      : {};
-
-    const eventValues =
-      params.eventKind && !stale
-        ? { lastEventAt: params.eventAt ?? now, lastEventKind: params.eventKind }
+      const scopeMoved =
+        !!existing &&
+        (existing.userId !== params.userId ||
+          (existing.workspaceId ?? null) !== (params.workspaceId ?? null));
+      const inherited = scopeMoved ? undefined : existing;
+      const linkValues = {
+        acceptanceId: links.acceptanceId ?? inherited?.acceptanceId ?? null,
+        installationId: links.installationId ?? existing?.installationId ?? null,
+        taskId: links.taskId ?? inherited?.taskId ?? null,
+        topicId: links.topicId ?? inherited?.topicId ?? null,
+        workId: links.workId ?? inherited?.workId ?? null,
+      };
+      const ownerValues = scopeMoved
+        ? { userId: params.userId, workspaceId: params.workspaceId ?? null }
         : {};
 
-    if (existing) {
-      // A stale delivery still carries link context worth keeping (an
-      // acceptance id parsed from the body), so fills apply; the lifecycle
-      // columns do not.
-      const stateValues = stale
-        ? { metadata: { ...snapshot.metadata, ...existing.metadata, ...params.metadata } }
-        : snapshot;
-      const [row] = await db
-        .update(scmChangeRequests)
-        .set({
-          ...stateValues,
+      const ciValues = headChanged
+        ? { checks: null, ciHeadSha: params.headSha ?? null, ciStatus: null }
+        : {};
+
+      const eventValues =
+        params.eventKind && !stale
+          ? { lastEventAt: params.eventAt ?? now, lastEventKind: params.eventKind }
+          : {};
+
+      if (existing) {
+        // A stale delivery still carries link context worth keeping (an
+        // acceptance id parsed from the body), so fills apply; the lifecycle
+        // columns do not.
+        const stateValues = stale
+          ? { metadata: { ...snapshot.metadata, ...existing.metadata, ...params.metadata } }
+          : snapshot;
+        const [row] = await tx
+          .update(scmChangeRequests)
+          .set({
+            ...stateValues,
+            ...linkValues,
+            ...ownerValues,
+            ...ciValues,
+            ...eventValues,
+            updatedAt: now,
+          })
+          .where(eq(scmChangeRequests.id, existing.id))
+          .returning();
+        return row;
+      }
+
+      // No row to lock yet, so two first deliveries can race here; the
+      // unique index settles it and both end up applied.
+      const [row] = await tx
+        .insert(scmChangeRequests)
+        .values({
+          ...snapshot,
           ...linkValues,
-          ...ownerValues,
-          ...ciValues,
           ...eventValues,
-          updatedAt: now,
+          ciHeadSha: params.headSha ?? null,
+          number: params.number,
+          provider: params.provider,
+          repoFullName: params.repoFullName,
+          userId: params.userId,
+          workspaceId: params.workspaceId ?? null,
         })
-        .where(eq(scmChangeRequests.id, existing.id))
+        .onConflictDoUpdate({
+          set: { ...snapshot, ...linkValues, ...eventValues, updatedAt: now },
+          target: [
+            scmChangeRequests.provider,
+            scmChangeRequests.repoFullName,
+            scmChangeRequests.number,
+          ],
+        })
         .returning();
+
       return row;
-    }
-
-    const [row] = await db
-      .insert(scmChangeRequests)
-      .values({
-        ...snapshot,
-        ...linkValues,
-        ...eventValues,
-        ciHeadSha: params.headSha ?? null,
-        number: params.number,
-        provider: params.provider,
-        repoFullName: params.repoFullName,
-        userId: params.userId,
-        workspaceId: params.workspaceId ?? null,
-      })
-      .returning();
-
-    return row;
-  };
+    });
 
   /** Fill in links that are still null. Never overwrites a link already set. */
   static attachLinks = async (
@@ -387,16 +411,17 @@ export class ScmChangeRequestModel {
       /** Provider user id; without one the verdict cannot be attributed. */
       reviewerId?: string | null;
     },
-  ): Promise<ScmReviewDecision | null> =>
+  ): Promise<{ applied: boolean; reviewDecision: ScmReviewDecision | null }> =>
     db.transaction(async (tx) => {
       const [existing] = await tx
         .select()
         .from(scmChangeRequests)
         .where(eq(scmChangeRequests.id, id))
         .for('update');
-      if (!existing) return null;
+      if (!existing) return { applied: false, reviewDecision: null };
 
       const reviewers = { ...existing.metadata?.reviewers };
+      let stale = false;
       if (params.reviewerId) {
         // Reviews are delivered per reviewer and can arrive out of order; an
         // approval submitted after a changes-request must not be undone by
@@ -404,9 +429,9 @@ export class ScmChangeRequestModel {
         const stored = reviewers[params.reviewerId];
         const at = params.at ?? new Date();
         const storedAt = stored?.at ? Date.parse(stored.at) : Number.NaN;
-        const isStale = !Number.isNaN(storedAt) && at.getTime() < storedAt;
+        stale = !Number.isNaN(storedAt) && at.getTime() < storedAt;
 
-        if (isStale) {
+        if (stale) {
           // nothing to apply: the stored verdict is the newer one
         } else if (params.decision) {
           reviewers[params.reviewerId] = { at: at.toISOString(), decision: params.decision };
@@ -420,6 +445,8 @@ export class ScmChangeRequestModel {
           ? 'approved'
           : null;
 
+      if (stale) return { applied: false, reviewDecision: existing.reviewDecision };
+
       await tx
         .update(scmChangeRequests)
         .set({
@@ -428,7 +455,7 @@ export class ScmChangeRequestModel {
           updatedAt: new Date(),
         })
         .where(eq(scmChangeRequests.id, id));
-      return reviewDecision;
+      return { applied: true, reviewDecision };
     });
 
   static setReviewDecision = async (
