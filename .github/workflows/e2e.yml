@@ -2,6 +2,9 @@ name: E2E CI
 
 on:
   push:
+    branches:
+      - main
+      - canary
     paths-ignore:
       - '**/*.md'
       - 'docs/**'
@@ -31,7 +34,7 @@ on:
       - '.github/workflows/bundle-analyzer.yml'
 
 permissions:
-  actions: write
+  actions: read
   contents: read
   pull-requests: write
 
@@ -40,9 +43,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Same-repo PRs get their pull_request run skipped as a duplicate of the push run,
-  # so the size gates must also run on pushes to feature branches.
-  SIZE_GATE_ENABLED: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref != 'refs/heads/canary' && github.ref != 'refs/heads/main') }}
+  # Size gates run on every PR. Main/canary pushes run the full E2E job and publish
+  # their baselines, while the PR run owns the comparison gate.
+  SIZE_GATE_ENABLED: ${{ github.event_name == 'pull_request' }}
   APP_URL: http://localhost:3006
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
   DATABASE_DRIVER: node
@@ -56,24 +59,7 @@ env:
   S3_ENDPOINT: https://e2e-mock-s3.localhost
 
 jobs:
-  # Check for duplicate runs
-  check-duplicate-run:
-    name: Check Duplicate Run
-    runs-on: ubuntu-latest
-    outputs:
-      should_skip: ${{ steps.skip_check.outputs.should_skip }}
-    steps:
-      - id: skip_check
-        uses: fkirc/skip-duplicate-actions@v5
-        with:
-          concurrent_skipping: 'same_content_newer'
-          skip_after_successful_duplicate: 'true'
-          do_not_skip: '["workflow_dispatch", "schedule"]'
-
   e2e:
-    needs: check-duplicate-run
-    if: >-
-      github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' || needs.check-duplicate-run.outputs.should_skip != 'true'
     name: Test Web App
     runs-on: ubuntu-latest
     services:

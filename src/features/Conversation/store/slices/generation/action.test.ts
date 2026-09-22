@@ -1805,8 +1805,12 @@ describe('Generation Actions', () => {
         }),
       );
 
-      // Store is refreshed so the loading bubble shows while the CLI streams.
-      expect(mockRefreshMessages).toHaveBeenCalled();
+      // Store is refreshed so the loading bubble shows while the CLI streams —
+      // scoped to the run's own context, not whatever topic happens to be
+      // active (restart recovery runs this for background topics).
+      expect(mockRefreshMessages).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId: 'session-1', topicId: 'topic-1' }),
+      );
 
       // The executor receives the new assistant row id, the original user
       // message's images, the original prompt, and the child hetero op id.

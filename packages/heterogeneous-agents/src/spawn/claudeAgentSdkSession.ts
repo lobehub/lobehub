@@ -1,8 +1,12 @@
+import { type ChildProcess, spawn } from 'node:child_process';
+
 import type {
   Options as ClaudeAgentSdkOptions,
   Query as ClaudeAgentSdkQuery,
   SDKMessage,
   SDKUserMessage,
+  SpawnedProcess as SdkSpawnedProcess,
+  SpawnOptions as SdkSpawnOptions,
 } from '@anthropic-ai/claude-agent-sdk';
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 
@@ -154,6 +158,12 @@ export interface ClaudeAgentSdkSessionOptions {
   cwd: string;
   env: NodeJS.ProcessEnv;
   onEvents: (events: AgentStreamEvent[]) => Promise<void> | void;
+  /**
+   * The CLI child this session spawned. The SDK runs an actual Claude
+   * executable, so a host crash can leave that process orphaned — the host
+   * needs its identity to reap it on the next launch.
+   */
+  onProcessSpawn?: (process: { args: string[]; command: string; pid?: number }) => void;
   onRawMessage: (line: string) => Promise<void> | void;
   onRuntimeStatus: (status: HeterogeneousAgentRuntimeStatus) => void;
   onSessionId: (sessionId: string) => void;
@@ -165,6 +175,48 @@ export interface ClaudeAgentSdkSessionOptions {
   /** Uploader for base64 tool_result images; see `AgentStreamPipelineOptions`. */
   uploadImage?: UploadHeterogeneousImage;
 }
+
+/**
+ * Spawn the CLI the SDK would otherwise own privately.
+ *
+ * Two reasons to take it over: the pid has to reach the host's recovery ledger
+ * (an SDK run orphaned by a main-process crash is a real Claude process, still
+ * writing the transcript a replay is about to read), and the child belongs in
+ * its own Unix process group like every other CLI run here, so reaping it takes
+ * its tool children with it. `signal` is the SDK's forwarded one — it fires
+ * only after the graceful stdin-EOF window.
+ */
+export const spawnClaudeCodeCliProcess = (
+  options: SdkSpawnOptions,
+  hooks: {
+    onProcessSpawn?: (process: { args: string[]; command: string; pid?: number }) => void;
+    onStderr: (data: string) => void;
+  },
+  platform: NodeJS.Platform = process.platform,
+): SdkSpawnedProcess => {
+  const child: ChildProcess = spawn(options.command, options.args, {
+    cwd: options.cwd,
+    detached: platform !== 'win32',
+    // The SDK types env as a plain string map; this repo augments ProcessEnv
+    // with required keys, which no spawn caller carries.
+    env: options.env as NodeJS.ProcessEnv,
+    signal: options.signal,
+    stdio: ['pipe', 'pipe', 'pipe'],
+    windowsHide: true,
+  });
+
+  // The SDK only wires its own `stderr` option on the spawn it owns, so this
+  // pipe has nobody reading it — and a full stderr pipe blocks the CLI.
+  child.stderr?.on('data', (chunk: Buffer | string) => hooks.onStderr(chunk.toString()));
+
+  hooks.onProcessSpawn?.({
+    args: [options.command, ...options.args],
+    command: options.command,
+    pid: child.pid,
+  });
+
+  return child as unknown as SdkSpawnedProcess;
+};
 
 export class ClaudeAgentSdkSession {
   private readonly abortController = new AbortController();
@@ -260,6 +312,11 @@ export class ClaudeAgentSdkSession {
       includePartialMessages: true,
       pathToClaudeCodeExecutable: executablePath,
       permissionMode: 'bypassPermissions',
+      spawnClaudeCodeProcess: (spawnOptions) =>
+        spawnClaudeCodeCliProcess(spawnOptions, {
+          onProcessSpawn: this.options.onProcessSpawn,
+          onStderr: (data) => void this.options.onStderr(data),
+        }),
       ...(this.options.resumeSessionId ? { resume: this.options.resumeSessionId } : {}),
       ...argOptions,
       stderr: (data) => {

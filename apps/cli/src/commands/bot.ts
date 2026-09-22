@@ -745,7 +745,12 @@ export function registerBotCommand(program: Command) {
         const platformDef = await resolvePlatform(client, platform);
 
         const { credentials } = extractCredentials(platformDef, options);
-        if (Object.keys(credentials).length > 0) input.credentials = credentials;
+        if (Object.keys(credentials).length > 0) {
+          input.credentials =
+            platform === existing.platform
+              ? { ...(existing.credentials as Record<string, string>), ...credentials }
+              : credentials;
+        }
         if (options.appId) input.applicationId = options.appId;
         if (options.platform) input.platform = options.platform;
 

@@ -51,6 +51,7 @@ import { createNanoId } from '@lobechat/utils';
 import { toast } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import {
   removeHeteroSessionBindingKeyForWorkingDirectory,
   removeHeteroSessionIdForWorkingDirectory,
@@ -77,8 +78,8 @@ import {
 import { type ChatStore, useChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
+import { getUserStoreState, useUserStore } from '@/store/user';
+import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
 
 import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
 import type { RunScope } from '../../lifecycle/types';
@@ -235,11 +236,35 @@ export interface HeterogeneousAgentExecutorParams {
   message: string;
   operationId: string;
   pageSelections?: PageSelection[];
+  /**
+   * Replay the last turn of the topic's on-disk CLI transcript instead of
+   * spawning the CLI (desktop restart recovery). Requires `resumeSessionId`.
+   */
+  replayTranscript?: boolean;
+  /** Claude profile root the interrupted run's transcript was written under. */
+  replayTranscriptConfigDir?: string;
+  /** ISO spawn time of the interrupted run; pins the replay to that run's own turn. */
+  replayTranscriptStartedAt?: string;
   /** CC session ID from previous execution in this topic (for --resume) */
   resumeBindingKey?: string;
   resumeSessionId?: string;
   workingDirectory?: string;
   workingDirectoryConfig?: WorkingDirConfig;
+}
+
+export interface HeterogeneousAgentExecutionOutcome {
+  /** Present when the run was a transcript replay; see `replayTranscript`. */
+  replay?: {
+    /** False when the replayed turn was cut off and a `--resume` continuation is still owed. */
+    complete: boolean;
+    recordCount: number;
+  };
+  /**
+   * The run ended on a terminal error the executor already persisted and did
+   * NOT rethrow. Callers that judge success by the promise resolving — restart
+   * recovery reporting a continuation — have to read this instead.
+   */
+  terminalError?: boolean;
 }
 
 const buildLocalHeterogeneousSystemContext = ({
@@ -467,7 +492,7 @@ const mutateMessageBatch = async (operations: MessageBatchOperation[]): Promise<
 export const executeHeterogeneousAgent = async (
   get: () => ChatStore,
   params: HeterogeneousAgentExecutorParams,
-): Promise<void> => {
+): Promise<HeterogeneousAgentExecutionOutcome | void> => {
   const {
     heterogeneousProvider: persistedHeterogeneousProvider,
     contextSelections,
@@ -477,11 +502,17 @@ export const executeHeterogeneousAgent = async (
     message,
     operationId,
     pageSelections,
+    replayTranscript,
+    replayTranscriptConfigDir,
+    replayTranscriptStartedAt,
     resumeBindingKey,
     resumeSessionId,
     workingDirectory,
     workingDirectoryConfig,
   } = params;
+  let outcome: HeterogeneousAgentExecutionOutcome | undefined;
+  /** Set by `persistTerminalError`; surfaced on the outcome, see its doc. */
+  let terminalErrorPersisted = false;
 
   const heterogeneousProvider = normalizeHeterogeneousProviderConfig(
     persistedHeterogeneousProvider,
@@ -513,6 +544,12 @@ export const executeHeterogeneousAgent = async (
     model?: string;
     usage: unknown;
   }) => {
+    // A replay re-reads a turn the provider already billed, and the rows it
+    // writes carry fresh message ids — so the server's message-id dedupe
+    // cannot recognise them and the same spend would be counted twice,
+    // skewing account routing. The usage still lands on the message for
+    // display; only the ledger write is suppressed.
+    if (replayTranscript) return;
     if (
       (adapterType !== 'claude-code' && adapterType !== 'codex') ||
       (heterogeneousProvider.authMode ?? 'subscription') !== 'subscription' ||
@@ -586,6 +623,7 @@ export const executeHeterogeneousAgent = async (
     messageError: ChatMessageError,
     options?: { clearContent?: boolean },
   ) => {
+    terminalErrorPersisted = true;
     writeTopicStatus('failed');
     get().internal_toggleToolCallingStreaming(mainState.currentAssistantId, undefined);
     get().completeOperation(operationId);
@@ -2552,18 +2590,26 @@ export const executeHeterogeneousAgent = async (
       : undefined;
 
     // Send the prompt — blocks until process exits
-    await heterogeneousAgentService.sendPrompt({
+    const sendResult = await heterogeneousAgentService.sendPrompt({
       agentId: context.agentId,
+      assistantMessageId,
       imageList,
+      userId: userProfileSelectors.userId(getUserStoreState()),
+      workspaceId: getActiveWorkspaceId() ?? undefined,
       operationId,
       // `/goal` travels as system-context instructions; the CLI gets only the
       // request so its own `/goal` command does not take the message over.
       prompt: stripGoalCommand(message),
+      ...(replayTranscript
+        ? { replayTranscript: true, replayTranscriptConfigDir, replayTranscriptStartedAt }
+        : {}),
       ...(resumeReplayMessages?.length ? { resumeReplayMessages } : {}),
       sessionId: ipcRunSessionId,
       systemContext: systemContext || undefined,
       topicId: context.topicId ?? undefined,
     });
+    const replayOutcome = (sendResult as HeterogeneousAgentExecutionOutcome | undefined)?.replay;
+    if (replayOutcome) outcome = { replay: replayOutcome };
     await waitForCompletionCallback();
 
     // Persist heterogeneous-agent session id + the cwd it was created under,
@@ -2719,4 +2765,8 @@ export const executeHeterogeneousAgent = async (
   if (fallbackPromise) {
     await fallbackPromise;
   }
+
+  if (terminalErrorPersisted) return { ...outcome, terminalError: true };
+
+  return outcome;
 };
