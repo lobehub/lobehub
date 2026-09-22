@@ -67,7 +67,6 @@ export interface XiaomiMiMoModelCard {
 export const params = {
   baseURL: 'https://api.xiaomimimo.com/v1',
   chatCompletion: {
-    audioInputSchema: 'xiaomimimo',
     handlePayload: (payload) => {
       const { enabledSearch, thinking, temperature, tools, top_p, max_tokens, stream, ...rest } =
         payload as any;

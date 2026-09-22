@@ -67,25 +67,6 @@ describe('convertMessageContent', () => {
     },
   );
 
-  it('should use the Xiaomi audio schema without the OpenAI format field', async () => {
-    const content = {
-      audio_url: { url: `data:audio/wav;base64,${WAV_BASE64}` },
-      type: 'audio_url',
-    } as const;
-    vi.mocked(parseDataUri).mockReturnValue({
-      base64: WAV_BASE64,
-      mimeType: 'audio/wav',
-      type: 'base64',
-    });
-
-    await expect(
-      convertMessageContent(content, {
-        audioInputSchema: 'xiaomimimo',
-        supportsAudioInput: true,
-      }),
-    ).resolves.toEqual({ input_audio: { data: WAV_BASE64 }, type: 'input_audio' });
-  });
-
   it.each([
     ['WAV', 'audio/wav', 'wav', WAV_BASE64],
     ['MP3', 'audio/mpeg', 'mp3', MP3_BASE64],

@@ -22,7 +22,6 @@ export type ExtendedChatCompletionContentPart = {
 };
 
 type ConvertMessageContentOptions = {
-  audioInputSchema?: 'openai' | 'xiaomimimo';
   forceImageBase64?: boolean;
   forceVideoBase64?: boolean;
   model?: string;
@@ -58,20 +57,7 @@ type ConvertibleMessageContentPart =
   | OpenAI.ChatCompletionContentPart
   | Extract<UserMessageContentPart, { type: 'audio_url' }>;
 
-type XiaomiAudioContentPart = { input_audio: { data: string }; type: 'input_audio' };
-
 const OPENAI_AUDIO_INPUT_MAX_BYTES = 20 * 1024 * 1024;
-
-const toAudioInputPart = (
-  data: string,
-  format: 'mp3' | 'wav',
-  schema?: ConvertMessageContentOptions['audioInputSchema'],
-): OpenAI.ChatCompletionContentPartInputAudio | XiaomiAudioContentPart =>
-  schema === 'xiaomimimo'
-    ? // Xiaomi documents input_audio.data without OpenAI's format field.
-      // https://mimo.mi.com/docs/en-US/api/chat/openai-api
-      { input_audio: { data }, type: 'input_audio' }
-    : { input_audio: { data, format }, type: 'input_audio' };
 
 const detectOpenAIAudioFormat = (base64: string): 'mp3' | 'wav' | undefined => {
   const header = Buffer.from(base64.replaceAll(/\s/g, '').slice(0, 64), 'base64');
@@ -96,7 +82,7 @@ const detectOpenAIAudioFormat = (base64: string): 'mp3' | 'wav' | undefined => {
 const convertAudioContent = async (
   content: Extract<UserMessageContentPart, { type: 'audio_url' }>,
   options?: ConvertMessageContentOptions,
-): Promise<OpenAI.ChatCompletionContentPartInputAudio | XiaomiAudioContentPart> => {
+): Promise<OpenAI.ChatCompletionContentPartInputAudio> => {
   if (!options?.supportsAudioInput) {
     throw new TypeError('Audio input is not supported by this provider runtime');
   }
@@ -109,7 +95,7 @@ const convertAudioContent = async (
       throw new TypeError('OpenAI audio input only supports base64 WAV or MP3 data');
     }
 
-    return toAudioInputPart(base64, format, options.audioInputSchema);
+    return { input_audio: { data: base64, format }, type: 'input_audio' };
   }
 
   if (type === 'url') {
@@ -123,7 +109,7 @@ const convertAudioContent = async (
       throw new TypeError('OpenAI audio input only supports WAV or MP3 files');
     }
 
-    return toAudioInputPart(converted.base64, format, options.audioInputSchema);
+    return { input_audio: { data: converted.base64, format }, type: 'input_audio' };
   }
 
   throw new TypeError(`Invalid audio URL: ${content.audio_url.url}`);
@@ -136,9 +122,7 @@ const isInternalThinkingContentPart = (
 export const convertMessageContent = async (
   content: ConvertibleMessageContentPart,
   options?: ConvertMessageContentOptions,
-): Promise<
-  OpenAI.ChatCompletionContentPart | ExtendedChatCompletionContentPart | XiaomiAudioContentPart
-> => {
+): Promise<OpenAI.ChatCompletionContentPart | ExtendedChatCompletionContentPart> => {
   if (content.type === 'audio_url') return convertAudioContent(content, options);
 
   if (content.type === 'image_url') {
