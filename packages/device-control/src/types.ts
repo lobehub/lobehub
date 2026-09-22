@@ -324,6 +324,7 @@ export interface ListHeterogeneousAgentModelsParams {
     | 'devin'
     | 'droid'
     | 'grok-build'
+    | 'kimi-code'
     | 'opencode'
     | 'pi'
     | 'qoder'

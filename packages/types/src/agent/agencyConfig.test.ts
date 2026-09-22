@@ -448,6 +448,23 @@ describe('buildHeteroSpawnArgs', () => {
     ]);
   });
 
+  it('does not duplicate the Kimi Code model when native args already spell it', () => {
+    expect(
+      buildHeteroSpawnArgs({
+        args: ['-m', 'kimi-code/k3'],
+        model: 'kimi-code/k3-256k',
+        type: 'kimi-code',
+      }),
+    ).toEqual(['-m', 'kimi-code/k3']);
+    expect(
+      buildHeteroExecArgs({
+        args: ['--model=kimi-code/k3'],
+        model: 'kimi-code/k3-256k',
+        type: 'kimi-code',
+      }),
+    ).toEqual(['--agent-arg=--model=kimi-code/k3']);
+  });
+
   it('preserves Qoder model and reasoning effort from native args without injecting duplicates', () => {
     expect(
       buildHeteroSpawnArgs({

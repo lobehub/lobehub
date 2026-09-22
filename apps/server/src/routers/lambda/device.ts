@@ -374,6 +374,7 @@ export const deviceRouter = router({
           'droid',
           'devin',
           'grok-build',
+          'kimi-code',
           'opencode',
           'pi',
           'qoder',

@@ -606,6 +606,7 @@ export class DeviceGateway {
       | 'devin'
       | 'droid'
       | 'grok-build'
+      | 'kimi-code'
       | 'opencode'
       | 'pi'
       | 'qoder'
