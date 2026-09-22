@@ -370,7 +370,7 @@
   "share.settings.usage.fileStorageOff": "{{used}} · 附件已關閉",
   "share.settings.usage.loadFailed": "無法加載使用情況",
   "share.settings.usage.monthlySpend": "本月支出",
-  "share.settings.usage.spendOfLimit": "{{spend}} / {{limit}}",
+  "share.settings.usage.spendOfLimit": "${{spend}} / ${{limit}}",
   "share.settings.usage.title": "使用情況",
   "share.settings.usage.views": "訪問次數",
   "share.settings.usage.visitors": "訪客",

@@ -370,7 +370,7 @@
   "share.settings.usage.fileStorageOff": "{{used}} · pièces jointes désactivées",
   "share.settings.usage.loadFailed": "Impossible de charger l'utilisation",
   "share.settings.usage.monthlySpend": "Dépenses de ce mois",
-  "share.settings.usage.spendOfLimit": "{{spend}} sur {{limit}}",
+  "share.settings.usage.spendOfLimit": "${{spend}} sur ${{limit}}",
   "share.settings.usage.title": "Utilisation",
   "share.settings.usage.views": "Visites",
   "share.settings.usage.visitors": "Visiteurs",

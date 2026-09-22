@@ -370,7 +370,7 @@
   "share.settings.usage.fileStorageOff": "{{used}} · bijlagen uitgeschakeld",
   "share.settings.usage.loadFailed": "Gebruik kon niet worden geladen",
   "share.settings.usage.monthlySpend": "Uitgaven deze maand",
-  "share.settings.usage.spendOfLimit": "{{spend}} van {{limit}}",
+  "share.settings.usage.spendOfLimit": "${{spend}} van ${{limit}}",
   "share.settings.usage.title": "Gebruik",
   "share.settings.usage.views": "Bezoeken",
   "share.settings.usage.visitors": "Bezoekers",

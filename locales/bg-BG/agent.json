@@ -370,7 +370,7 @@
   "share.settings.usage.fileStorageOff": "{{used}} · прикачените файлове са изключени",
   "share.settings.usage.loadFailed": "Неуспешно зареждане на използването",
   "share.settings.usage.monthlySpend": "Разходи за този месец",
-  "share.settings.usage.spendOfLimit": "{{spend}} от {{limit}}",
+  "share.settings.usage.spendOfLimit": "${{spend}} от ${{limit}}",
   "share.settings.usage.title": "Използване",
   "share.settings.usage.views": "Посещения",
   "share.settings.usage.visitors": "Посетители",

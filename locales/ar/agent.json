@@ -370,7 +370,7 @@
   "share.settings.usage.fileStorageOff": "{{used}} · المرفقات معطلة",
   "share.settings.usage.loadFailed": "تعذر تحميل الاستخدام",
   "share.settings.usage.monthlySpend": "إنفاق هذا الشهر",
-  "share.settings.usage.spendOfLimit": "{{spend}} من {{limit}}",
+  "share.settings.usage.spendOfLimit": "${{spend}} من ${{limit}}",
   "share.settings.usage.title": "الاستخدام",
   "share.settings.usage.views": "الزيارات",
   "share.settings.usage.visitors": "الزوار",

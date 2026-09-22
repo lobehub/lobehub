@@ -370,7 +370,7 @@
   "share.settings.usage.fileStorageOff": "{{used}} · 添付ファイル無効",
   "share.settings.usage.loadFailed": "使用状況を読み込めませんでした",
   "share.settings.usage.monthlySpend": "今月の支出",
-  "share.settings.usage.spendOfLimit": "{{spend}} / {{limit}}",
+  "share.settings.usage.spendOfLimit": "${{spend}} / ${{limit}}",
   "share.settings.usage.title": "使用状況",
   "share.settings.usage.views": "訪問数",
   "share.settings.usage.visitors": "訪問者",
