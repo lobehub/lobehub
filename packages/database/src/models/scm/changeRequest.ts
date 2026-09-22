@@ -9,7 +9,7 @@ import type {
   ScmReviewDecision,
   ScmUpsertChangeRequestParams,
 } from '@lobechat/types';
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull, lt, sql } from 'drizzle-orm';
 
 import type { ScmChangeRequestItem } from '../../schemas';
 import { scmChangeRequests } from '../../schemas';
@@ -575,7 +575,6 @@ export class ScmChangeRequestModel {
       .where(eq(scmChangeRequests.id, id));
   };
 
-  /** Bump the wake counter; returns the new count so the caller can enforce its cap. */
   /** Note a wake the debounce window swallowed, for the next delivery to carry. */
   static markPendingWake = async (
     db: LobeChatDatabase,
@@ -608,27 +607,53 @@ export class ScmChangeRequestModel {
       .where(eq(scmChangeRequests.id, id));
   };
 
-  static recordWake = async (
+  /**
+   * Claim one of the `max` wakes this change request is allowed, atomically.
+   *
+   * The cap has to be enforced by the database, not by the caller: without
+   * Redis there is no debounce, so two webhooks landing together both read
+   * the same `wakeCount` and a read-modify-write would lose one increment.
+   * A conditional `UPDATE … WHERE wake_count < max` lets exactly one of them
+   * through per remaining slot. Returns the new count, or `null` when the
+   * cap is already spent.
+   */
+  static reserveWake = async (
     db: LobeChatDatabase,
     id: string,
+    max: number,
     reason?: string,
-  ): Promise<number> => {
-    const existing = await ScmChangeRequestModel.findById(db, id);
-    if (!existing) return 0;
-
+  ): Promise<number | null> => {
     const now = new Date();
-    const wakeCount = existing.wakeCount + 1;
-    await db
+    // jsonb concat rather than a read-modify-write: it merges the one key
+    // this update owns and leaves every other key as the row has it.
+    const metadata = reason
+      ? sql`${scmChangeRequests.metadata} || ${JSON.stringify({
+          lastWake: { at: now.toISOString(), reason },
+        })}::jsonb`
+      : undefined;
+
+    const [reserved] = await db
       .update(scmChangeRequests)
       .set({
         lastWakeAt: now,
-        metadata: reason
-          ? { ...existing.metadata, lastWake: { at: now.toISOString(), reason } }
-          : existing.metadata,
+        ...(metadata ? { metadata } : {}),
         updatedAt: now,
-        wakeCount,
+        wakeCount: sql`${scmChangeRequests.wakeCount} + 1`,
+      })
+      .where(and(eq(scmChangeRequests.id, id), lt(scmChangeRequests.wakeCount, max)))
+      .returning({ wakeCount: scmChangeRequests.wakeCount });
+
+    return reserved?.wakeCount ?? null;
+  };
+
+  /** Hand a reserved wake back when the run never started. */
+  static releaseWake = async (db: LobeChatDatabase, id: string): Promise<void> => {
+    await db
+      .update(scmChangeRequests)
+      .set({
+        updatedAt: new Date(),
+        wakeCount: sql`greatest(${scmChangeRequests.wakeCount} - 1, 0)`,
       })
       .where(eq(scmChangeRequests.id, id));
-    return wakeCount;
   };
 }

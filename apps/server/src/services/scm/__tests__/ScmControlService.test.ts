@@ -449,6 +449,64 @@ describe('ScmControlService — wake', () => {
     ).toMatchObject({ outcome: 'woken' });
   });
 
+  it('drops a pending wake when the automation was switched off in between', async () => {
+    const topic = await createTopic();
+    const row = await ScmChangeRequestModel.upsert(serverDB, {
+      ...baseRow,
+      links: { topicId: topic.id },
+    });
+
+    // A burst leaves a marker behind.
+    mocks.redisSet.mockResolvedValue(null);
+    await control().handle({ event: checksEvent, kind: 'ci_failed', row });
+    expect(
+      (await ScmChangeRequestModel.findById(serverDB, row.id))?.metadata.pendingWake?.reason,
+    ).toBe('ci_failed');
+
+    // The user turns CI notifications off before the next delivery. The
+    // marker must not outlive that decision.
+    await serverDB
+      .update(users)
+      .set({ preference: { integration: { github: { wakeOnCiFailure: false } } } as any })
+      .where(eq(users.id, userId));
+    mocks.redisSet.mockResolvedValue('OK');
+
+    const fresh = (await ScmChangeRequestModel.findById(serverDB, row.id))!;
+    await control().handle({
+      event: changeRequestEvent('opened'),
+      kind: 'synchronized',
+      row: fresh,
+    });
+
+    expect(mocks.execAgent).not.toHaveBeenCalled();
+    const after = await ScmChangeRequestModel.findById(serverDB, row.id);
+    expect(after?.metadata.pendingWake).toBeUndefined();
+    expect(after?.wakeCount).toBe(0);
+  });
+
+  it('holds the wake cap when two deliveries race on the same stale row', async () => {
+    const topic = await createTopic();
+    const row = await ScmChangeRequestModel.upsert(serverDB, {
+      ...baseRow,
+      links: { topicId: topic.id },
+    });
+    // One slot left, and both deliveries hold the snapshot that says so —
+    // which is what a Redis-less deployment looks like, since nothing
+    // debounces them.
+    await ScmChangeRequestModel.reserveWake(serverDB, row.id, SCM_MAX_WAKES, 'ci_failed');
+    await ScmChangeRequestModel.reserveWake(serverDB, row.id, SCM_MAX_WAKES, 'ci_failed');
+    const stale = { ...row, wakeCount: SCM_MAX_WAKES - 1 };
+
+    const outcomes = await Promise.all([
+      control().handle({ event: checksEvent, kind: 'ci_failed', row: stale }),
+      control().handle({ event: checksEvent, kind: 'ci_failed', row: stale }),
+    ]);
+
+    expect(outcomes.filter((o) => o.outcome === 'woken')).toHaveLength(1);
+    expect(mocks.execAgent).toHaveBeenCalledTimes(1);
+    expect((await ScmChangeRequestModel.findById(serverDB, row.id))?.wakeCount).toBe(SCM_MAX_WAKES);
+  });
+
   it('reports a failed wake without counting it', async () => {
     const topic = await createTopic();
     const row = await ScmChangeRequestModel.upsert(serverDB, {

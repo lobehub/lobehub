@@ -33,6 +33,13 @@ const WAKE_DEBOUNCE_SECONDS = 60;
 /** How far back review feedback is collected for a wake. */
 const REVIEW_LOOKBACK_MS = 15 * 60 * 1000;
 
+/** The automation switch each wake reason answers to. */
+const WAKE_PREFERENCE: Record<ScmWakeReason, keyof GithubIntegrationPreference> = {
+  ci_failed: 'wakeOnCiFailure',
+  review_changes_requested: 'wakeOnReview',
+  review_commented: 'wakeOnReview',
+};
+
 export interface ScmControlEvent {
   event: Extract<ScmInboundEvent, { type: 'change_request' | 'checks' | 'review' }>;
   kind: string;
@@ -90,8 +97,8 @@ export class ScmControlService {
         return outcome;
       }
       case 'ci_failed': {
-        if (!(await this.isEnabled(row, 'wakeOnCiFailure'))) {
-          return { detail: 'wakeOnCiFailure is off', outcome: 'skipped' };
+        if (!(await this.isEnabled(row, WAKE_PREFERENCE[kind]))) {
+          return { detail: `${WAKE_PREFERENCE[kind]} is off`, outcome: 'skipped' };
         }
         return this.wakeAndRefresh(row, kind);
       }
@@ -110,8 +117,8 @@ export class ScmControlService {
         if (!association || !SCM_TRUSTED_ASSOCIATIONS.has(association)) {
           return { detail: `reviewer is ${association ?? 'unknown'}`, outcome: 'skipped' };
         }
-        if (!(await this.isEnabled(row, 'wakeOnReview'))) {
-          return { detail: 'wakeOnReview is off', outcome: 'skipped' };
+        if (!(await this.isEnabled(row, WAKE_PREFERENCE[kind]))) {
+          return { detail: `${WAKE_PREFERENCE[kind]} is off`, outcome: 'skipped' };
         }
         return this.wakeAndRefresh(row, kind);
       }
@@ -327,7 +334,18 @@ export class ScmControlService {
     const pending = fresh?.metadata.pendingWake;
     if (!fresh || !pending) return;
 
-    const outcome = await this.wake(fresh, pending.reason as ScmWakeReason);
+    const reason = pending.reason as ScmWakeReason;
+    // The marker outlives the window it was written in, and the user may
+    // have turned the automation off in between. `route()` guards the
+    // direct path; this one has to ask the same question, or an explicit
+    // opt-out would still be followed by a headless run.
+    const preference = WAKE_PREFERENCE[reason];
+    if (preference && !(await this.isEnabled(fresh, preference))) {
+      await ScmChangeRequestModel.clearPendingWake(this.db, rowId);
+      return;
+    }
+
+    const outcome = await this.wake(fresh, reason);
     // Still inside the window: leave the marker for the next delivery.
     if (outcome.outcome === 'skipped' && outcome.detail === 'debounced') return;
 
@@ -342,6 +360,8 @@ export class ScmControlService {
     if (row.isDraft) return { detail: 'draft pull request', outcome: 'skipped' };
     if (row.state !== 'open') return { detail: `pull request is ${row.state}`, outcome: 'skipped' };
     if (!row.topicId) return { detail: 'no linked conversation', outcome: 'skipped' };
+    // An early out on the snapshot so a capped pull request does not pay for
+    // job logs; the cap itself is enforced by the reservation further down.
     if (row.wakeCount >= SCM_MAX_WAKES) {
       return { detail: `wake cap (${SCM_MAX_WAKES}) reached`, outcome: 'skipped' };
     }
@@ -359,6 +379,15 @@ export class ScmControlService {
 
     const prompt = await this.buildPrompt(row, reason);
     const running = Boolean(topic.metadata?.runningOperation);
+
+    // Take the slot before starting anything: the check above read a row
+    // snapshot, and on a Redis-less deployment there is no debounce to stop
+    // two deliveries from passing it together. Handed back below if the run
+    // never starts.
+    const count = await ScmChangeRequestModel.reserveWake(this.db, row.id, SCM_MAX_WAKES, reason);
+    if (count === null) {
+      return { detail: `wake cap (${SCM_MAX_WAKES}) reached`, outcome: 'skipped' };
+    }
 
     // A busy topic: execAgent's reservation retries briefly for the running
     // turn to hand back (queued-steer semantics); if it does not, the wake is
@@ -386,13 +415,13 @@ export class ScmControlService {
       operationId = result.operationId;
     } catch (error) {
       log('wake %s on %s failed: %O', reason, row.id, error);
+      await ScmChangeRequestModel.releaseWake(this.db, row.id);
       return {
         detail: `wake failed: ${error instanceof Error ? error.message : String(error)}`,
         outcome: 'skipped',
       };
     }
 
-    const count = await ScmChangeRequestModel.recordWake(this.db, row.id, reason);
     log(
       'woke agent %s in topic %s for %s (%s#%d, wake %d/%d, op %s)',
       topic.agentId,

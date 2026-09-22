@@ -225,11 +225,29 @@ export interface GitHubReviewFeedback {
   url?: string;
 }
 
+/** Reviews per page when walking back from the newest ones. */
+const REVIEW_PAGE_SIZE = 100;
+/** How far back to walk; a window's worth of reviews never spans more. */
+const MAX_REVIEW_PAGES = 3;
+
+/** The `page` of the `rel="last"` entry in a GitHub Link header, if any. */
+const lastPageOf = (link: string | undefined): number | null => {
+  const match = link?.match(/<([^>]+)>;\s*rel="last"/);
+  if (!match) return null;
+  const page = Number(new URL(match[1]).searchParams.get('page'));
+  return Number.isFinite(page) && page > 1 ? page : null;
+};
+
 /**
  * Reviews and inline review comments on a pull request since a given time,
  * for the wake-up prompt after review feedback. One fetch per wake, so the
  * prompt carries everything a reviewer said in the debounce window instead
  * of one event's worth.
+ *
+ * The reviews endpoint has no `since`, and returns oldest first — so on a
+ * long-running pull request the reviews we want are on the *last* page.
+ * Reading page one would wake the agent with no feedback at all; walk back
+ * from the end until a page starts before the window.
  */
 export const fetchGitHubReviewFeedback = async (params: {
   installationId: string;
@@ -243,12 +261,35 @@ export const fetchGitHubReviewFeedback = async (params: {
   try {
     const octokit = await app.getInstallationOctokit(Number(params.installationId));
     const repo = parseRepo(params.repoFullName);
+    const sinceMs = params.since.getTime();
     const [reviews, comments] = await Promise.all([
-      octokit.request('GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews', {
-        ...repo,
-        per_page: 50,
-        pull_number: params.number,
-      }),
+      (async () => {
+        const first = await octokit.request(
+          'GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews',
+          { ...repo, per_page: REVIEW_PAGE_SIZE, pull_number: params.number },
+        );
+        const last = lastPageOf(first.headers.link as string | undefined);
+        if (!last) return first.data;
+
+        const collected: typeof first.data = [];
+        for (let page = last; page >= 1 && last - page < MAX_REVIEW_PAGES; page--) {
+          const data =
+            page === 1
+              ? first.data
+              : (
+                  await octokit.request('GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews', {
+                    ...repo,
+                    page,
+                    per_page: REVIEW_PAGE_SIZE,
+                    pull_number: params.number,
+                  })
+                ).data;
+          collected.unshift(...data);
+          const oldest = data.find((review) => review.submitted_at)?.submitted_at;
+          if (oldest && new Date(oldest).getTime() < sinceMs) break;
+        }
+        return collected;
+      })(),
       octokit.request('GET /repos/{owner}/{repo}/pulls/{pull_number}/comments', {
         ...repo,
         per_page: 100,
@@ -257,9 +298,8 @@ export const fetchGitHubReviewFeedback = async (params: {
       }),
     ]);
 
-    const sinceMs = params.since.getTime();
     const feedback: GitHubReviewFeedback[] = [];
-    for (const review of reviews.data) {
+    for (const review of reviews) {
       if (!review.body || !review.submitted_at) continue;
       if (new Date(review.submitted_at).getTime() < sinceMs) continue;
       feedback.push({

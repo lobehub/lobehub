@@ -547,19 +547,32 @@ describe('ScmChangeRequestModel', () => {
     expect((after?.repositories ?? []).map((r) => r.externalId).sort()).toEqual(['2', '3', '4']);
   });
 
-  it('counts wakes and remembers the last reason', async () => {
+  it('counts wakes up to the cap, and keeps the rest of the metadata bag', async () => {
     const row = await ScmChangeRequestModel.upsert(serverDB, {
       ...snapshot,
       metadata: { repoPrivate: true },
     });
-    expect(await ScmChangeRequestModel.recordWake(serverDB, row.id)).toBe(1);
-    expect(await ScmChangeRequestModel.recordWake(serverDB, row.id, 'ci_failed')).toBe(2);
+    expect(await ScmChangeRequestModel.reserveWake(serverDB, row.id, 2)).toBe(1);
+    expect(await ScmChangeRequestModel.reserveWake(serverDB, row.id, 2, 'ci_failed')).toBe(2);
+    // Spent: the cap is the WHERE clause, so the row is simply not updated.
+    expect(await ScmChangeRequestModel.reserveWake(serverDB, row.id, 2, 'ci_failed')).toBeNull();
+
     const after = await ScmChangeRequestModel.findById(serverDB, row.id);
+    expect(after?.wakeCount).toBe(2);
     expect(after?.lastWakeAt).not.toBeNull();
     expect(after?.metadata).toMatchObject({
       lastWake: { at: expect.any(String), reason: 'ci_failed' },
       repoPrivate: true,
     });
+
+    await ScmChangeRequestModel.releaseWake(serverDB, row.id);
+    expect((await ScmChangeRequestModel.findById(serverDB, row.id))?.wakeCount).toBe(1);
+  });
+
+  it('never lets a released wake take the counter below zero', async () => {
+    const row = await ScmChangeRequestModel.upsert(serverDB, snapshot);
+    await ScmChangeRequestModel.releaseWake(serverDB, row.id);
+    expect((await ScmChangeRequestModel.findById(serverDB, row.id))?.wakeCount).toBe(0);
   });
 });
 
