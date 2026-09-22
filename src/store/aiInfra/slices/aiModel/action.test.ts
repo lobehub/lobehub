@@ -215,7 +215,6 @@ describe('AiModelAction', () => {
     it('should fetch remote models and batch update', async () => {
       const mockRemoteModels = [
         {
-          audio: true,
           displayName: 'Remote Model 1',
           enabled: true,
           files: true,
@@ -262,7 +261,6 @@ describe('AiModelAction', () => {
       expect(batchUpdateArg).toHaveLength(2);
       expect(batchUpdateArg[0]).toMatchObject({
         abilities: {
-          audio: true,
           files: true,
           functionCall: true,
           vision: false,

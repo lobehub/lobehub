@@ -2,9 +2,9 @@ import type { ModelProviderCard } from '../types';
 
 const XiaomiMiMo: ModelProviderCard = {
   chatModels: [],
-  checkModel: 'mimo-v2.6-flash',
+  checkModel: 'mimo-v2.5',
   description:
-    'Xiaomi MiMo provides omni-modal conversational models with an OpenAI-compatible API, deep reasoning, tool calling, and a 1M-token context window.',
+    'Xiaomi MiMo provides a conversational model service with an OpenAI-compatible API. The mimo-v2-flash model supports deep reasoning, streaming output, function calling, a 256K context window, and a maximum output of 128K.',
   id: 'xiaomimimo',
   modelList: { showModelFetcher: true },
   name: 'Xiaomi MiMo',

@@ -621,7 +621,6 @@ const processModelCard = (
   };
 
   return {
-    audio: model.audio ?? knownModel?.abilities?.audio ?? false,
     contextWindowTokens: model.contextWindowTokens ?? knownModel?.contextWindowTokens ?? undefined,
     description: model.description ?? knownModel?.description ?? '',
     displayName: processDisplayName(model.displayName ?? knownModel?.displayName ?? model.id),

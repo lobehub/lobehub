@@ -77,7 +77,6 @@ export class AiModelActionImpl {
       );
       const remoteModels = data.map<AiProviderModelListItem>((model) => {
         const hasAnyAbility =
-          model.audio ||
           model.files ||
           model.functionCall ||
           model.imageOutput ||
@@ -90,7 +89,6 @@ export class AiModelActionImpl {
           ...model,
           ...(hasAnyAbility && {
             abilities: {
-              audio: model.audio,
               files: model.files,
               functionCall: model.functionCall,
               imageOutput: model.imageOutput,

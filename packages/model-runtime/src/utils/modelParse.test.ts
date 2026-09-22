@@ -331,7 +331,7 @@ describe('modelParse', () => {
       });
     });
 
-    it('xiaomimimo: should infer multimodal abilities for supported generations', async () => {
+    it('xiaomimimo: should infer multimodal abilities for omni', async () => {
       const out = await processModelList(
         [
           { id: 'mimo-v2-flash' },
@@ -339,15 +339,12 @@ describe('modelParse', () => {
           { id: 'mimo-v2-omni' },
           { id: 'mimo-v2.5-pro' },
           { id: 'mimo-v2.5' },
-          { id: 'mimo-v2.6-flash' },
-          { id: 'mimo-v2.6-pro' },
-          { id: 'mimo-v2.6-pro-ultraspeed' },
         ],
         MODEL_LIST_CONFIGS.xiaomimimo,
         'xiaomimimo',
       );
 
-      expect(out).toHaveLength(8);
+      expect(out).toHaveLength(5);
 
       const flash = out.find((m) => m.id === 'mimo-v2-flash')!;
       const pro = out.find((m) => m.id === 'mimo-v2-pro')!;
@@ -374,17 +371,6 @@ describe('modelParse', () => {
       expect(v25.functionCall).toBe(true);
       expect(v25.reasoning).toBe(true);
       expect(v25.vision).toBe(true);
-      expect(v25.audio).toBe(true);
-
-      for (const id of ['mimo-v2.6-flash', 'mimo-v2.6-pro', 'mimo-v2.6-pro-ultraspeed']) {
-        const model = out.find((item) => item.id === id)!;
-        expect(model.functionCall).toBe(true);
-        expect(model.reasoning).toBe(true);
-        expect(model.vision).toBe(true);
-        expect(model.video).toBe(true);
-        expect(model.audio).toBe(true);
-        expect(model.maxOutput).toBe(131_072);
-      }
 
       const tts = await processModelList(
         [{ id: 'mimo-v2-tts' }],
