@@ -128,6 +128,7 @@ CLAUDE.local.md
 docker-compose/dev/data/
 
 # Migration scripts data
+.elasticsearch-reindex/
 scripts/clerk-to-betterauth/test/*.csv
 scripts/clerk-to-betterauth/test/*.json
 scripts/clerk-to-betterauth/prod/*.csv
@@ -142,8 +143,10 @@ e2e/reports
 out
 i18n-unused-keys-report.json
 .vitest-reports
+.vitest/
 
 pnpm-lock.yaml
+!apps/desktop/pnpm-lock.yaml
 .turbo
 spaHtmlTemplates.ts
 
@@ -159,6 +162,18 @@ docs/superpowers/
 # Kagura agent runtime
 .kagura/
 
+# AUV computer-use runtime: run records plus captured screenshots, written
+# relative to whatever directory the CLI was invoked from, so this can appear
+# at the repo root or inside an app.
+.auv/
+
 # Amp agent runtime
-.amp/*
-!.amp/settings.json
+.amp/
+
+# synthesized by plugins/vite/completionSounds.ts
+public/sounds/
+apps/desktop/resources/sounds/
+
+# alint: local provider setup (holds the API key) and result cache
+.alint/
+.alintcache

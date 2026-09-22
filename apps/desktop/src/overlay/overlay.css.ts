@@ -87,6 +87,14 @@ export const overlay = style({
   },
 });
 
+/** Composer mode floats the panel over the desktop without dimming it. */
+export const overlayCompose = style({
+  'background': 'transparent',
+  '::before': {
+    display: 'none',
+  },
+});
+
 export const windowHighlight = style([
   overlayFrame,
   overlayInsetFrame,

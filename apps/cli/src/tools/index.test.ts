@@ -9,15 +9,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { executeToolCall } from './index';
 import * as isolatedWorker from './isolatedWorker';
 
-vi.mock('../utils/logger', () => ({
-  log: {
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  },
-}));
-
 describe('executeToolCall', () => {
   const tmpDir = path.join(os.tmpdir(), 'cli-tool-dispatch-test-' + process.pid);
 
@@ -132,6 +123,25 @@ describe('executeToolCall', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toContain('Unknown tool API');
+  });
+
+  it('should expose cancellation confirmation as structured state', async () => {
+    const result = await executeToolCall(
+      'cancelHeteroTask',
+      JSON.stringify({ taskId: 'missing-operation' }),
+    );
+
+    expect(result).toEqual({
+      content: JSON.stringify({
+        message: 'No task found with taskId: missing-operation',
+        success: false,
+      }),
+      state: {
+        message: 'No task found with taskId: missing-operation',
+        success: false,
+      },
+      success: false,
+    });
   });
 
   it('should carry structured state on file reads', async () => {

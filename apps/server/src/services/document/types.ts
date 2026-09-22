@@ -58,6 +58,8 @@ export interface UpdateDocumentParams {
   breakAutosaveWindow?: boolean;
   content?: string;
   editorData?: Record<string, any>;
+  /** See `updateDocumentInputSchema.expectedUpdatedAt` — atomic version predicate. */
+  expectedUpdatedAt?: Date;
   fileType?: string;
   lockOwnerId?: string;
   metadata?: Record<string, any>;
@@ -68,6 +70,11 @@ export interface UpdateDocumentParams {
 }
 
 export interface UpdateDocumentResult {
+  /**
+   * Workspace member ids @-mentioned in the saved body that were absent from
+   * the previous snapshot. Present only when this save added at least one.
+   */
+  addedMentionUserIds?: string[];
   historyAppended: boolean;
   id: string;
   savedAt?: Date;

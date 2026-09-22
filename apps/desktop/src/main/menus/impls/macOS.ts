@@ -92,7 +92,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
             click: async () => {
               const mainWindow = this.app.browserManager.getMainWindow();
               mainWindow.show();
-              mainWindow.broadcast('navigate', { path: '/settings' });
+              mainWindow.broadcast('createNewTab', { path: '/settings' });
             },
             label: t('macOS.preferences'),
           },

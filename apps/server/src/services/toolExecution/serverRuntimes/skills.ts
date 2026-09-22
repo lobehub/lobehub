@@ -31,10 +31,12 @@ import type { LobeChatDatabase } from '@/database/type';
 import { filterBuiltinSkills } from '@/helpers/skillFilters';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { deviceGateway } from '@/server/services/deviceGateway';
+import { executeAuthorizedDeviceToolCall } from '@/server/services/deviceGateway/authorizedToolCall';
 import { FileService } from '@/server/services/file';
 import { MarketService } from '@/server/services/market';
 import { createSandboxService, normalizeSandboxCommandResult } from '@/server/services/sandbox';
 import { SkillResourceService } from '@/server/services/skill/resource';
+import { getToolAccessDeniedError } from '@/server/services/toolExecution/errorClassification';
 import {
   buildDeviceLhEnv,
   isLhCommand,
@@ -182,6 +184,9 @@ class SkillServerRuntimeService implements SkillRuntimeService {
   ): Promise<{ command: string; error?: string }> => {
     const workspaceId =
       this.workspaceId ?? (isLhCommand(command) ? await this.resolveWorkspaceId() : undefined);
+    // No `shareVisitorBlocked` guard needed here: `lobe-skills` is absent from
+    // `AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS`, so this runtime is never
+    // constructed for an Agent Share visitor's run in the first place.
     const result = await preprocessLhCommand(command, this.userId, workspaceId);
 
     return { command: result.command, error: result.error };
@@ -240,6 +245,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
 
       if (!response.success) {
         return {
+          error: response.error,
           executionEnv: 'sandbox',
           exitCode: 1,
           output: '',
@@ -252,6 +258,9 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     } catch (error) {
       log('Error running command: %O', error);
       return {
+        error: getToolAccessDeniedError(error, 'Command execution failed') ?? {
+          message: (error as Error).message,
+        },
         executionEnv: 'sandbox',
         exitCode: 1,
         output: '',
@@ -412,7 +421,8 @@ class SkillServerRuntimeService implements SkillRuntimeService {
       // workspace agent routed to the caller's own machine is still editing
       // workspace content.
       const deviceLhEnv = buildDeviceLhEnv(await this.resolveWorkspaceId());
-      const response = await deviceGateway.executeToolCall(
+      const response = await executeAuthorizedDeviceToolCall(
+        this.serverDB,
         {
           deviceId: device.deviceId,
           operationId: device.operationId,
@@ -572,6 +582,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
 
       if (!response.success) {
         return {
+          error: response.error,
           executionEnv: 'sandbox',
           exitCode: 1,
           output: '',
@@ -584,6 +595,9 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     } catch (error) {
       log('Error executing script: %O', error);
       return {
+        error: getToolAccessDeniedError(error, 'Command execution failed') ?? {
+          message: (error as Error).message,
+        },
         executionEnv: 'sandbox',
         exitCode: 1,
         output: '',
@@ -616,6 +630,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
       const result = await sandboxService.exportAndUploadFile(path, filename);
 
       return {
+        error: result.error,
         fileId: result.fileId,
         filename: result.filename,
         mimeType: result.mimeType,
@@ -626,6 +641,9 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     } catch (error) {
       log('Error exporting file: %O', error);
       return {
+        error: getToolAccessDeniedError(error, 'File export failed') ?? {
+          message: (error as Error).message,
+        },
         filename,
         success: false,
       };
@@ -680,9 +698,16 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       context.userId,
       context.workspaceId,
     );
+    /**
+     * `workspaceId` decides which sandbox session this runtime reaches: the
+     * session is keyed by the acting account, so a token without it acts as the
+     * personal account while `lobe-creds` and `lobe-cloud-sandbox` — which do
+     * pass it — act as the workspace. Omitting it split one workspace topic
+     * across two sandboxes, leaving injected credentials invisible here.
+     */
     const marketService = new MarketService({
       accessToken: marketAccessToken,
-      userInfo: { userId: context.userId },
+      userInfo: { userId: context.userId, workspaceId: context.workspaceId },
     });
     const fileService = new FileService(context.serverDB, context.userId, context.workspaceId);
     const fileModel = new FileModel(context.serverDB, context.userId, context.workspaceId);
@@ -768,8 +793,13 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       const userId = context.userId;
       deviceFileAccess = {
         listFiles: async (dir: string) => {
-          const result = await deviceGateway.executeToolCall(
-            { deviceId: activeDeviceId, userId },
+          const result = await executeAuthorizedDeviceToolCall(
+            context.serverDB,
+            {
+              deviceId: activeDeviceId,
+              userId,
+              workspaceId: await resolveRunWorkspaceId(context),
+            },
             {
               apiName: LocalSystemApiName.globFiles,
               // `**/*` matches every regular file recursively under `dir`.
@@ -797,8 +827,13 @@ export const skillsRuntime: ServerRuntimeRegistration = {
             .map((f) => (f.startsWith(dir) ? f.slice(dir.length).replace(/^[/\\]+/, '') : f));
         },
         readFile: async (filePath: string) => {
-          const result = await deviceGateway.executeToolCall(
-            { deviceId: activeDeviceId, userId },
+          const result = await executeAuthorizedDeviceToolCall(
+            context.serverDB,
+            {
+              deviceId: activeDeviceId,
+              userId,
+              workspaceId: await resolveRunWorkspaceId(context),
+            },
             {
               apiName: LocalSystemApiName.readFile,
               // Read the whole file; SKILL.md and references are small.

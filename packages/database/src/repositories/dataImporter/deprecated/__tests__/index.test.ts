@@ -787,171 +787,167 @@ describe('DataImporter', () => {
     it('should import parentId Success', () => {});
   });
 
-  describe(
-    'real world examples',
-    () => {
-      it('should import successfully', async () => {
-        const result = await importer.importData({
-          messages: [
-            {
-              role: 'user',
-              content: 'hello',
-              files: [],
-              sessionId: 'inbox',
-              topicId: '2wcF8yaS',
-              createdAt: 1714236590340,
-              id: 'DCG1G1EH',
-              updatedAt: 1714236590340,
-              extra: {},
-            },
-            {
-              role: 'assistant',
-              content: '...',
-              parentId: 'DCG1G1EH',
-              sessionId: 'inbox',
-              topicId: '2wcF8yaS',
-              createdAt: 1714236590441,
-              id: 'gY41w5vQ',
-              updatedAt: 1714236590518,
-              error: {
-                body: {
-                  error: {
-                    message: "model 'mixtral' not found, try pulling it first",
-                    name: 'ResponseError',
-                    status_code: 404,
-                  },
-                  provider: 'ollama',
+  describe('real world examples', { timeout: 15000 }, () => {
+    it('should import successfully', async () => {
+      const result = await importer.importData({
+        messages: [
+          {
+            role: 'user',
+            content: 'hello',
+            files: [],
+            sessionId: 'inbox',
+            topicId: '2wcF8yaS',
+            createdAt: 1714236590340,
+            id: 'DCG1G1EH',
+            updatedAt: 1714236590340,
+            extra: {},
+          },
+          {
+            role: 'assistant',
+            content: '...',
+            parentId: 'DCG1G1EH',
+            sessionId: 'inbox',
+            topicId: '2wcF8yaS',
+            createdAt: 1714236590441,
+            id: 'gY41w5vQ',
+            updatedAt: 1714236590518,
+            error: {
+              body: {
+                error: {
+                  message: "model 'mixtral' not found, try pulling it first",
+                  name: 'ResponseError',
+                  status_code: 404,
                 },
-                message:
-                  'Error requesting Ollama service, please troubleshoot or retry based on the following information',
-                type: 'OllamaBizError',
+                provider: 'ollama',
               },
-              extra: { fromModel: 'mixtral', fromProvider: 'ollama' },
+              message:
+                'Error requesting Ollama service, please troubleshoot or retry based on the following information',
+              type: 'OllamaBizError',
             },
-            {
-              role: 'user',
-              content: 'hello',
-              files: [],
-              sessionId: 'a5fefc88-f6c1-44fb-9e98-3d366b1ed589',
-              topicId: 'v38snJ0A',
-              createdAt: 1717080410895,
-              id: 'qOIxEGEB',
-              updatedAt: 1717080410895,
-              extra: {},
+            extra: { fromModel: 'mixtral', fromProvider: 'ollama' },
+          },
+          {
+            role: 'user',
+            content: 'hello',
+            files: [],
+            sessionId: 'a5fefc88-f6c1-44fb-9e98-3d366b1ed589',
+            topicId: 'v38snJ0A',
+            createdAt: 1717080410895,
+            id: 'qOIxEGEB',
+            updatedAt: 1717080410895,
+            extra: {},
+          },
+          {
+            role: 'assistant',
+            content: '...',
+            parentId: 'qOIxEGEB',
+            sessionId: 'a5fefc88-f6c1-44fb-9e98-3d366b1ed589',
+            topicId: 'v38snJ0A',
+            createdAt: 1717080410970,
+            id: 'w28FcqY5',
+            updatedAt: 1717080411485,
+            error: {
+              body: { error: { errorType: 'NoOpenAIAPIKey' }, provider: 'openai' },
+              message: 'OpenAI API Key is empty, please add a custom OpenAI API Key',
+              type: 'NoOpenAIAPIKey',
             },
-            {
-              role: 'assistant',
-              content: '...',
-              parentId: 'qOIxEGEB',
-              sessionId: 'a5fefc88-f6c1-44fb-9e98-3d366b1ed589',
-              topicId: 'v38snJ0A',
-              createdAt: 1717080410970,
-              id: 'w28FcqY5',
-              updatedAt: 1717080411485,
-              error: {
-                body: { error: { errorType: 'NoOpenAIAPIKey' }, provider: 'openai' },
-                message: 'OpenAI API Key is empty, please add a custom OpenAI API Key',
-                type: 'NoOpenAIAPIKey',
+            extra: { fromModel: 'gpt-3.5-turbo', fromProvider: 'openai' },
+          },
+        ],
+        sessionGroups: [
+          {
+            name: 'Writter',
+            sort: 0,
+            createdAt: 1706114744425,
+            id: 'XlUbvOvL',
+            updatedAt: 1706114747468,
+          },
+        ],
+        sessions: [
+          {
+            config: {
+              model: 'gpt-3.5-turbo',
+              params: {
+                frequency_penalty: 0,
+                presence_penalty: 0,
+                temperature: 0.6,
+                top_p: 1,
               },
-              extra: { fromModel: 'gpt-3.5-turbo', fromProvider: 'openai' },
-            },
-          ],
-          sessionGroups: [
-            {
-              name: 'Writter',
-              sort: 0,
-              createdAt: 1706114744425,
-              id: 'XlUbvOvL',
-              updatedAt: 1706114747468,
-            },
-          ],
-          sessions: [
-            {
-              config: {
-                model: 'gpt-3.5-turbo',
-                params: {
-                  frequency_penalty: 0,
-                  presence_penalty: 0,
-                  temperature: 0.6,
-                  top_p: 1,
-                },
-                plugins: [],
-                systemRole:
-                  "You are a LobeChat technical operator 🍐🐊. You now need to write a developer's guide for LobeChat as a guide for them to develop LobeChat. This guide will include several sections, and you need to output the corresponding document content based on the user's input.\n\nHere is the technical introduction of LobeChat\n\n    LobeChat is an AI conversation application built with the Next.js framework. It uses a series of technology stacks to implement various functions and features.\n\n\n    ## Basic Technology Stack\n\n    The core technology stack of LobeChat is as follows:\n\n    - **Framework**: We chose [Next.js](https://nextjs.org/), a powerful React framework that provides key features such as server-side rendering, routing framework, and Router Handler for our project.\n    - **Component Library**: We use [Ant Design (antd)](https://ant.design/) as the basic component library, and introduce [lobe-ui](https://github.com/lobehub/lobe-ui) as our business component library.\n    - **State Management**: We use [zustand](https://github.com/pmndrs/zustand), a lightweight and easy-to-use state management library.\n    - **Network Request**: We adopt [swr](https://swr.vercel.app/), a React Hooks library for data fetching.\n    - **Routing**: We directly use the routing solution provided by [Next.js](https://nextjs.org/) itself.\n    - **Internationalization**: We use [i18next](https://www.i18next.com/) to implement multi-language support for the application.\n    - **Styling**: We use [antd-style](https://github.com/ant-design/antd-style), a CSS-in-JS library that is compatible with Ant Design.\n    - **Unit Testing**: We use [vitest](https://github.com/vitejs/vitest) for unit testing.\n\n    ## Folder Directory Structure\n\n    The folder directory structure of LobeChat is as follows:\n\n    \\`\\`\\`bash\n    src\n    ├── app        # Main logic and state management related code of the application\n    ├── components # Reusable UI components\n    ├── config     # Application configuration files, including client environment variables and server environment variables\n    ├── const      # Used to define constants, such as action types, route names, etc.\n    ├── features   # Function modules related to business functions, such as Agent settings, plugin development pop-ups, etc.\n    ├── hooks      # Custom utility Hooks reused throughout the application\n    ├── layout     # Layout components of the application, such as navigation bar, sidebar, etc.\n    ├── locales    # Language files for internationalization\n    ├── services   # Encapsulated backend service interfaces, such as HTTP requests\n    ├── store      # Zustand store for state management\n    ├── types      # TypeScript type definition files\n    └── utils      # Common utility functions\n    \\`\\`\\`\n",
-                tts: {
-                  showAllLocaleVoice: false,
-                  sttLocale: 'auto',
-                  ttsService: 'openai',
-                  voice: { openai: 'alloy' },
-                },
-                chatConfig: {
-                  historyCount: 1,
-                },
-                openingQuestions: ['Question 1', 'Question 2'],
-                openingMessage: `Hello, I'm Agent 1, learn more from [xxx](https://xxx.com)`,
+              plugins: [],
+              systemRole:
+                "You are a LobeChat technical operator 🍐🐊. You now need to write a developer's guide for LobeChat as a guide for them to develop LobeChat. This guide will include several sections, and you need to output the corresponding document content based on the user's input.\n\nHere is the technical introduction of LobeChat\n\n    LobeChat is an AI conversation application built with the Next.js framework. It uses a series of technology stacks to implement various functions and features.\n\n\n    ## Basic Technology Stack\n\n    The core technology stack of LobeChat is as follows:\n\n    - **Framework**: We chose [Next.js](https://nextjs.org/), a powerful React framework that provides key features such as server-side rendering, routing framework, and Router Handler for our project.\n    - **Component Library**: We use [Ant Design (antd)](https://ant.design/) as the basic component library, and introduce [lobe-ui](https://github.com/lobehub/lobe-ui) as our business component library.\n    - **State Management**: We use [zustand](https://github.com/pmndrs/zustand), a lightweight and easy-to-use state management library.\n    - **Network Request**: We adopt [swr](https://swr.vercel.app/), a React Hooks library for data fetching.\n    - **Routing**: We directly use the routing solution provided by [Next.js](https://nextjs.org/) itself.\n    - **Internationalization**: We use [i18next](https://www.i18next.com/) to implement multi-language support for the application.\n    - **Styling**: We use [antd-style](https://github.com/ant-design/antd-style), a CSS-in-JS library that is compatible with Ant Design.\n    - **Unit Testing**: We use [vitest](https://github.com/vitejs/vitest) for unit testing.\n\n    ## Folder Directory Structure\n\n    The folder directory structure of LobeChat is as follows:\n\n    \\`\\`\\`bash\n    src\n    ├── app        # Main logic and state management related code of the application\n    ├── components # Reusable UI components\n    ├── config     # Application configuration files, including client environment variables and server environment variables\n    ├── const      # Used to define constants, such as action types, route names, etc.\n    ├── features   # Function modules related to business functions, such as Agent settings, plugin development pop-ups, etc.\n    ├── hooks      # Custom utility Hooks reused throughout the application\n    ├── layout     # Layout components of the application, such as navigation bar, sidebar, etc.\n    ├── locales    # Language files for internationalization\n    ├── services   # Encapsulated backend service interfaces, such as HTTP requests\n    ├── store      # Zustand store for state management\n    ├── types      # TypeScript type definition files\n    └── utils      # Common utility functions\n    \\`\\`\\`\n",
+              tts: {
+                showAllLocaleVoice: false,
+                sttLocale: 'auto',
+                ttsService: 'openai',
+                voice: { openai: 'alloy' },
               },
-              group: 'XlUbvOvL',
-              meta: {
-                avatar: '📝',
-                description:
-                  'LobeChat is an AI conversation application built with the Next.js framework. I will help you write the development documentation for LobeChat.',
-                tags: [
-                  'Development Documentation',
-                  'Technical Introduction',
-                  'next-js',
-                  'react',
-                  'lobe-chat',
-                ],
-                title: 'LobeChat Technical Documentation Expert',
+              chatConfig: {
+                historyCount: 1,
               },
-              type: 'agent',
-              createdAt: '2024-01-24T16:43:12.164Z',
-              id: 'a5fefc88-f6c1-44fb-9e98-3d366b1ed589',
-              updatedAt: '2024-01-24T16:46:15.226Z',
-              pinned: false,
+              openingQuestions: ['Question 1', 'Question 2'],
+              openingMessage: `Hello, I'm Agent 1, learn more from [xxx](https://xxx.com)`,
             },
-          ],
-          topics: [
-            {
-              title: 'Default Topic',
-              sessionId: 'inbox',
-              createdAt: 1714236590531,
-              id: '2wcF8yaS',
-              updatedAt: 1714236590531,
+            group: 'XlUbvOvL',
+            meta: {
+              avatar: '📝',
+              description:
+                'LobeChat is an AI conversation application built with the Next.js framework. I will help you write the development documentation for LobeChat.',
+              tags: [
+                'Development Documentation',
+                'Technical Introduction',
+                'next-js',
+                'react',
+                'lobe-chat',
+              ],
+              title: 'LobeChat Technical Documentation Expert',
             },
-            {
-              title: 'Default Topic',
-              sessionId: 'a5fefc88-f6c1-44fb-9e98-3d366b1ed589',
-              createdAt: 1717080410825,
-              id: 'v38snJ0A',
-              updatedAt: 1717080410825,
-            },
-          ],
-          version: mockImportData.version,
-        });
-
-        expect(result).toEqual({
-          sessionGroups: { added: 1, errors: 0, skips: 0 },
-          sessions: { added: 1, errors: 0, skips: 0 },
-          topics: { added: 2, errors: 0, skips: 0 },
-          messages: { added: 4, errors: 0, skips: 0 },
-        });
+            type: 'agent',
+            createdAt: '2024-01-24T16:43:12.164Z',
+            id: 'a5fefc88-f6c1-44fb-9e98-3d366b1ed589',
+            updatedAt: '2024-01-24T16:46:15.226Z',
+            pinned: false,
+          },
+        ],
+        topics: [
+          {
+            title: 'Default Topic',
+            sessionId: 'inbox',
+            createdAt: 1714236590531,
+            id: '2wcF8yaS',
+            updatedAt: 1714236590531,
+          },
+          {
+            title: 'Default Topic',
+            sessionId: 'a5fefc88-f6c1-44fb-9e98-3d366b1ed589',
+            createdAt: 1717080410825,
+            id: 'v38snJ0A',
+            updatedAt: 1717080410825,
+          },
+        ],
+        version: mockImportData.version,
       });
 
-      it('should import real world data', async () => {
-        const result = await importer.importData({
-          ...(mockImportData.state as any),
-          version: mockImportData.version,
-        });
-
-        expect(result).toEqual({
-          sessionGroups: { added: 2, errors: 0, skips: 0 },
-          sessions: { added: 15, errors: 0, skips: 0 },
-          topics: { added: 4, errors: 0, skips: 0 },
-          messages: { added: 32, errors: 0, skips: 0 },
-        });
+      expect(result).toEqual({
+        sessionGroups: { added: 1, errors: 0, skips: 0 },
+        sessions: { added: 1, errors: 0, skips: 0 },
+        topics: { added: 2, errors: 0, skips: 0 },
+        messages: { added: 4, errors: 0, skips: 0 },
       });
-    },
-    { timeout: 15000 },
-  );
+    });
+
+    it('should import real world data', async () => {
+      const result = await importer.importData({
+        ...(mockImportData.state as any),
+        version: mockImportData.version,
+      });
+
+      expect(result).toEqual({
+        sessionGroups: { added: 2, errors: 0, skips: 0 },
+        sessions: { added: 15, errors: 0, skips: 0 },
+        topics: { added: 4, errors: 0, skips: 0 },
+        messages: { added: 32, errors: 0, skips: 0 },
+      });
+    });
+  });
 });

@@ -10,13 +10,14 @@ import { ReferTopicNode } from '@/features/ChatInput/InputEditor/ReferTopic/Refe
 
 interface RichTextMessageProps {
   editorState: unknown;
+  variant?: 'chat' | 'default';
 }
 
 const LINE_HEIGHT = 1.6;
 const style: CSSProperties = { '--common-line-height': LINE_HEIGHT } as CSSProperties;
 const EXTRA_NODES = [ActionTagNode, ReferTopicNode, LocalFileTagNode];
 
-const RichTextMessage = memo<RichTextMessageProps>(({ editorState }) => {
+const RichTextMessage = memo<RichTextMessageProps>(({ editorState, variant = 'chat' }) => {
   const value = useMemo(() => {
     if (!editorState || typeof editorState !== 'object') return null;
     if (Object.keys(editorState as Record<string, unknown>).length === 0) return null;
@@ -31,7 +32,7 @@ const RichTextMessage = memo<RichTextMessageProps>(({ editorState }) => {
       extraNodes={EXTRA_NODES}
       style={style}
       value={value}
-      variant="chat"
+      variant={variant}
     />
   );
 });

@@ -1,6 +1,6 @@
 ---
 name: agent-runtime-hooks
-description: 'Agent runtime lifecycle hooks. Use for before/after tool or step hooks, tool mocks, human intervention, sub-agent calls, context compression, evals, callAgent, or lifecycle events.'
+description: 'Use for agent lifecycle hooks, tool mocks, intervention, sub-agent calls and context compression.'
 user-invocable: false
 ---
 
@@ -57,7 +57,7 @@ execAgent({ hooks })
 | `apps/server/src/services/agentRuntime/hooks/HookDispatcher.ts` | Registration, dispatch, dispatchBeforeToolCall         |
 | `apps/server/src/modules/AgentRuntime/RuntimeExecutors.ts`      | Tool/Compact/HumanIntervention hook dispatch           |
 | `apps/server/src/services/agentRuntime/AgentRuntimeService.ts`  | Step hooks + HumanIntervention resume/reject           |
-| `apps/server/src/services/aiAgent/index.ts`                     | CallAgent hook dispatch                                |
+| `apps/server/src/services/aiAgent/subAgentRuns.ts`              | CallAgent hook dispatch                                |
 
 ## Registration Flow
 

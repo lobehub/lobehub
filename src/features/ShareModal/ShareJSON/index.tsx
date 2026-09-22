@@ -12,6 +12,7 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 
 import { useShareData } from '../ShareDataProvider';
 import { styles } from '../style';
+import { useExportMessages } from '../useExportMessages';
 import { generateFullExport } from './generateFullExport';
 import { generateMessages } from './generateMessages';
 import Preview from './Preview';
@@ -66,6 +67,9 @@ const ShareJSON = memo(() => {
   ];
 
   const { dbMessages, systemRole, title, topic } = useShareData();
+  // Tool bodies the read path left on the server would otherwise serialize as
+  // empty strings and be lost on re-import — see `useExportMessages`.
+  const { isHydrating, isIncomplete, messages: exportMessages } = useExportMessages(dbMessages);
 
   // Always include tool messages (includeTool: true)
   const data =
@@ -73,13 +77,13 @@ const ShareJSON = memo(() => {
       ? generateMessages({
           ...fieldValue,
           includeTool: true,
-          messages: dbMessages,
+          messages: exportMessages,
           systemRole: systemRole ?? '',
         })
       : generateFullExport({
           ...fieldValue,
           includeTool: true,
-          messages: dbMessages,
+          messages: exportMessages,
           systemRole: systemRole ?? '',
           topic: topic ?? undefined,
         });
@@ -92,7 +96,11 @@ const ShareJSON = memo(() => {
     <>
       <Button
         block
+        // Both actions serialize `content`; until the omitted tool bodies land
+        // it is still the projected view, which would export as empty results.
+        disabled={isHydrating || isIncomplete}
         icon={CopyIcon}
+        loading={isHydrating}
         size={isMobile ? undefined : 'large'}
         type={'primary'}
         onClick={async () => {
@@ -104,6 +112,7 @@ const ShareJSON = memo(() => {
       </Button>
       <Button
         block
+        disabled={isHydrating || isIncomplete}
         size={isMobile ? undefined : 'large'}
         onClick={() => {
           exportFile(content, `${title}.json`);

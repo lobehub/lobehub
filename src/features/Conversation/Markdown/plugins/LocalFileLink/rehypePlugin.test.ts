@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { rehypeLobeLink } from '../Link/rehypePlugin';
 import { LOBE_LOCAL_FILE_LINK_TAG } from './parse';
 import { rehypeLocalFileLink } from './rehypePlugin';
 
 vi.mock('@lobechat/const', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
-  isDesktop: true,
+  isDesktop: false,
 }));
 
 const createAnchor = (href: string, text: string) => ({
@@ -32,6 +33,20 @@ describe('rehypeLocalFileLink', () => {
       type: 'element',
     });
   });
+
+  it.each(['/home/ubuntu/workspace/device-gateway/src/client.ts:391', './src/client.ts:391'])(
+    'marks %s as a file before the generic link plugin on web',
+    (href) => {
+      const anchor = createAnchor(href, 'client.ts');
+      const tree = { children: [anchor], type: 'root' };
+
+      rehypeLocalFileLink()(tree);
+      rehypeLobeLink()(tree);
+
+      expect(anchor.tagName).toBe(LOBE_LOCAL_FILE_LINK_TAG);
+      expect(anchor.properties).toEqual({ linkHref: href, linkLabel: 'client.ts' });
+    },
+  );
 
   it('keeps regular app routes untouched', () => {
     const anchor = createAnchor('/settings/profile', 'settings');

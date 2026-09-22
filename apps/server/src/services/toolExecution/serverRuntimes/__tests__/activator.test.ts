@@ -12,26 +12,34 @@ vi.mock('@lobechat/builtin-skills', () => ({
 }));
 
 vi.mock('@/database/models/agent', () => ({
-  AgentModel: vi.fn(() => ({
-    getAgentConfigById: mocks.getAgentConfigById,
-  })),
+  AgentModel: vi.fn(function () {
+    return {
+      getAgentConfigById: mocks.getAgentConfigById,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/agentSkill', () => ({
-  AgentSkillModel: vi.fn(() => ({
-    findAll: mocks.findAll,
-    findById: mocks.findById,
-    findByName: mocks.findByName,
-  })),
+  AgentSkillModel: vi.fn(function () {
+    return {
+      findAll: mocks.findAll,
+      findById: mocks.findById,
+      findByName: mocks.findByName,
+    };
+  }),
 }));
 
 vi.mock('@/helpers/skillFilters', () => ({
-  filterBuiltinSkills: vi.fn((skills: unknown) => skills),
+  filterBuiltinSkills: vi.fn(function (skills: unknown) {
+    return skills;
+  }),
 }));
 
 vi.mock('@/server/services/agentSignal/procedure', () => ({
   emitToolOutcomeSafely: vi.fn().mockResolvedValue(undefined),
-  resolveToolOutcomeScope: vi.fn(() => ({ scope: 'agent', scopeKey: 'agent-1' })),
+  resolveToolOutcomeScope: vi.fn(function () {
+    return { scope: 'agent', scopeKey: 'agent-1' };
+  }),
 }));
 
 vi.mock('@/server/services/agentSignal/store/adapters/redis/policyStateStore', () => ({

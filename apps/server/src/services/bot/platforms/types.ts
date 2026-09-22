@@ -105,7 +105,11 @@ export interface FieldSchema {
    * - 'array' → list
    */
   type: 'array' | 'boolean' | 'integer' | 'number' | 'object' | 'password' | 'string';
-  /** Conditional visibility: show only when another field matches a value */
+  /**
+   * Conditional visibility: show only when another field matches a value. Pass
+   * an array to match any of several values, e.g. a window size that applies to
+   * both the `burst` and `debounce` concurrency strategies.
+   */
   visibleWhen?: { field: string; value: unknown };
 }
 
@@ -267,6 +271,19 @@ export interface PlatformClient {
   extractChatId: (platformThreadId: string) => string;
 
   /**
+   * The `channelId` that `readMessages` needs to read THIS conversation's
+   * history, injected into the model's prompt as the current conversation.
+   *
+   * Omit it when `extractChatId` already identifies the conversation exactly
+   * (Feishu `oc_…`, Discord channel-or-thread id, Telegram chat id). Implement
+   * it — returning `undefined` — when the platform's history read cannot be
+   * scoped to what `platformThreadId` denotes: a Slack reply thread decodes to
+   * its parent channel, and `conversations.history` on that channel would read
+   * unrelated channel traffic while claiming to be the current conversation.
+   */
+  extractConversationId?: (platformThreadId: string) => string | undefined;
+
+  /**
    * Resolve attachments on an inbound `Message` into `AttachmentSource[]` for
    * ingestion by the bridge. Each platform owns its own attachment quirks
    * here: data-source priority, type-only metadata inference, quoted-message
@@ -314,12 +331,27 @@ export interface PlatformClient {
    */
   formatReply?: (body: string, stats?: UsageStats) => string;
 
-  // --- Runtime Operations ---
-
   /** Get a messenger for a specific thread (outbound messaging). */
   getMessenger: (platformThreadId: string) => PlatformMessenger;
 
+  // --- Runtime Operations ---
+
   readonly id: string;
+
+  /**
+   * Whether this conversation contains only the operator and this bot, so every
+   * message in it is implicitly addressed to the bot and no @-mention is needed.
+   *
+   * The router otherwise infers that from how many distinct humans have SPOKEN
+   * in the thread, which misreads a quiet group as private — badly so on
+   * platforms where the subscribed "thread" is the entire group chat. A platform
+   * that can report real membership should implement this and settle it.
+   *
+   * Must fail CLOSED: resolve `false` whenever membership can't be established,
+   * so an unprovable chat stays mention-only rather than the bot talking over a
+   * group. Platforms that can't tell omit the method.
+   */
+  isSoloBotConversation?: (platformThreadId: string) => Promise<boolean>;
 
   /**
    * Optional hook called from the router when a non-DM message wakes the
@@ -343,6 +375,18 @@ export interface PlatformClient {
 
   /** Parse a composite message ID into the platform-native format. */
   parseMessageId: (compositeId: string) => string | number;
+
+  /**
+   * Re-register the platform webhook with the current credentials.
+   *
+   * `BotMessageRouter` calls this (rate-limited per bot) when the adapter
+   * rejects an inbound webhook as unverified (401) — the platform is still
+   * delivering to a registration made with missing or stale verification
+   * material. Implementations must be idempotent and safe to call while the
+   * bot keeps serving traffic. Webhook-mode platforms whose registration we
+   * own (Telegram) implement it; others omit it.
+   */
+  reconcileWebhook?: () => Promise<void>;
 
   /**
    * Register bot commands with the platform (e.g., Telegram setMyCommands).
@@ -515,6 +559,15 @@ export interface PlatformDefinition {
 
   /** The name of the platform. */
   name: string;
+
+  /**
+   * Credential keys that are identifiers rather than secrets, for platforms
+   * whose credentials never come from the form schema and so have no
+   * `type: 'password'` marking to read. WeChat's QR handshake writes `botId`
+   * and `userId` alongside the token; those two are safe to show, the token is
+   * not. Everything unlisted is treated as secret.
+   */
+  publicCredentialKeys?: string[];
 
   /** Field schema — top-level objects `credentials` and `settings` map to DB columns. */
   schema: FieldSchema[];

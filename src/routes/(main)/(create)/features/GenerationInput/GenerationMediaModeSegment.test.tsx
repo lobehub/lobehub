@@ -20,15 +20,11 @@ const componentMocks = vi.hoisted(() => ({
   segmented: undefined as SegmentedCapture | undefined,
 }));
 
-vi.mock('@lobehub/ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
   ActionIcon: ({ title }: { title?: ReactNode }) => (
     <button aria-label={typeof title === 'string' ? title : 'action'} type="button" />
   ),
-  Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  Icon: () => <span data-testid="mode-icon" />,
-}));
-
-vi.mock('@lobehub/ui/base-ui', () => ({
   Segmented: (props: SegmentedCapture) => {
     componentMocks.segmented = props;
     return (
@@ -42,7 +38,8 @@ vi.mock('@lobehub/ui/base-ui', () => ({
   Select: () => <div data-testid="mode-select" />,
 }));
 
-vi.mock('antd-style', () => ({
+vi.mock('antd-style', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
   createStaticStyles: () => ({
     heroSelect: 'hero-select',
     heroText: 'hero-text',
@@ -68,10 +65,6 @@ vi.mock('@/features/ChatInput/ActionBar/components/ActionPopover', () => ({
   ),
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
 vi.mock('@/store/serverConfig', () => ({
   useServerConfigStore: <T,>(selector: (state: { isMobile: boolean }) => T) =>
     selector({ isMobile: false }),
@@ -81,9 +74,10 @@ describe('GenerationMediaModeSegment', () => {
   it('uses an icon-only toggle group in the composer toolbar', () => {
     render(<GenerationMediaModeSegment mode="image" />);
 
-    expect(screen.getByTestId('mode-toggle-group')).toBeInTheDocument();
+    const toggleGroup = screen.getByTestId('mode-toggle-group');
+    expect(toggleGroup).toBeInTheDocument();
     expect(screen.queryByTestId('mode-select')).not.toBeInTheDocument();
-    expect(screen.getAllByTestId('mode-icon')).toHaveLength(2);
+    expect(toggleGroup.querySelectorAll('svg')).toHaveLength(2);
     expect(screen.queryByText('tab.image')).not.toBeInTheDocument();
     expect(screen.queryByText('tab.video')).not.toBeInTheDocument();
     expect(componentMocks.segmented?.options?.map((option) => option.label)).toEqual([

@@ -4,8 +4,8 @@ import {
   buildAgentSkillIdentifier,
   EMPTY_ARRAY,
 } from '@lobechat/const';
-import { ActionIcon, Center, Empty, Flexbox, Text } from '@lobehub/ui';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { Center, Empty, Flexbox } from '@lobehub/ui';
+import { ActionIcon, confirmModal, Text, toast } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cx } from 'antd-style';
 import dayjs from 'dayjs';
@@ -330,13 +330,16 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
     }, [controlledFilter, isDocumentMode]);
 
     // Local desktop reads skills over IPC; a bound device reads over RPC.
+    // `enabled` is false while the pane sits hidden behind `<Activity>`. Without it
+    // a closed panel still ran the filesystem skill scan and mounted a row subtree
+    // per skill — thousands of zero-box components the user never sees.
     const showProjectSkills =
-      (showLocalProjectSkills || isLocalEnabled || !!deviceId) && !!workingDirectory;
+      enabled && (showLocalProjectSkills || isLocalEnabled || !!deviceId) && !!workingDirectory;
 
     // Mirror what each child component reads so the parent can decide the
     // section layout (flat when a single source has items, sectioned otherwise).
     // Both hooks are SWR-deduped against their respective child fetches.
-    const userSkillItems = useUserSkills();
+    const userSkillItems = useUserSkills(enabled);
     const {
       deviceItems: deviceSkillItems,
       error: projectSkillsError,

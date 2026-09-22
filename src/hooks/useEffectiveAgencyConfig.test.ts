@@ -109,15 +109,18 @@ describe('useEffectiveAgencyConfig', () => {
     expect(result.current.workspaceScoped).toBe(true);
   });
 
-  it('ignores member overrides and policy while the Workspace Agent is private', () => {
+  // The owner's own `local` / this-machine pick also lives in the per-user
+  // override (the shared row must never reference a personal device — the
+  // server rejects it), so it must merge back even on a private Workspace
+  // Agent, with the member policy stripped for the owner's own surfaces.
+  it("applies the owner's override and strips the policy while the Workspace Agent is private", () => {
     setupStores({
       agencyConfig: {
-        boundDeviceId: 'owner-device',
+        boundDeviceId: 'shared-device',
         executionTarget: 'device',
         executionTargetSelectionPolicy: 'fixed',
       },
-      isLoading: true,
-      override: { boundDeviceId: 'member-device', executionTarget: 'local' },
+      override: { boundDeviceId: 'owner-desktop', executionTarget: 'local' },
       visibility: 'private',
       workspaceId: 'ws-1',
     });
@@ -125,7 +128,7 @@ describe('useEffectiveAgencyConfig', () => {
     const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
 
     expect(result.current).toEqual({
-      agencyConfig: { boundDeviceId: 'owner-device', executionTarget: 'device' },
+      agencyConfig: { boundDeviceId: 'owner-desktop', executionTarget: 'local' },
       canDisplayExecutionTarget: true,
       canSelectExecutionTarget: true,
       isPreferenceLoading: false,
@@ -133,7 +136,21 @@ describe('useEffectiveAgencyConfig', () => {
     });
   });
 
-  it('ignores member overrides and policy for the author or Workspace admin', () => {
+  it('waits for the preference fetch even when the caller manages the agent', () => {
+    setupStores({
+      agencyConfig: { executionTarget: 'device' },
+      isLoading: true,
+      visibility: 'private',
+      workspaceId: 'ws-1',
+    });
+
+    const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
+
+    expect(result.current.isPreferenceLoading).toBe(true);
+    expect(result.current.canDisplayExecutionTarget).toBe(false);
+  });
+
+  it("applies the author's or Workspace admin's own override on a public Workspace Agent", () => {
     managementAccess.canManageAgent = true;
     setupStores({
       agencyConfig: {
@@ -141,7 +158,7 @@ describe('useEffectiveAgencyConfig', () => {
         executionTarget: 'device',
         executionTargetSelectionPolicy: 'fixed',
       },
-      override: { boundDeviceId: 'member-device', executionTarget: 'local' },
+      override: { boundDeviceId: 'manager-desktop', executionTarget: 'local' },
       visibility: 'public',
       workspaceId: 'ws-1',
     });
@@ -149,7 +166,7 @@ describe('useEffectiveAgencyConfig', () => {
     const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
 
     expect(result.current).toEqual({
-      agencyConfig: { boundDeviceId: 'shared-device', executionTarget: 'device' },
+      agencyConfig: { boundDeviceId: 'manager-desktop', executionTarget: 'local' },
       canDisplayExecutionTarget: true,
       canSelectExecutionTarget: true,
       isPreferenceLoading: false,

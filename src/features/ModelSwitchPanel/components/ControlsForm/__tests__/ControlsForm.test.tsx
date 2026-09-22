@@ -27,21 +27,22 @@ const testState = vi.hoisted(() => ({
   updateAgentChatConfig: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui', () => {
+vi.mock('@lobehub/ui', async (importOriginal) => {
   const MockForm = () => <div data-testid="controls-form" />;
   MockForm.useForm = () => [{ setFieldsValue: testState.setFieldsValue }];
 
   return {
-    Flexbox: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+    ...(await importOriginal<object>()),
     Form: MockForm,
   };
 });
 
-vi.mock('antd', () => {
+vi.mock('antd', async (importOriginal) => {
+  const antd = await importOriginal<{ Form: object }>();
+
   return {
-    Form: { useWatch: vi.fn(() => undefined) },
-    Grid: { useBreakpoint: () => ({ sm: true }) },
-    Switch: () => <input type="checkbox" />,
+    ...antd,
+    Form: { ...antd.Form, useWatch: vi.fn(() => undefined) },
   };
 });
 

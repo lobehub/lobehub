@@ -45,12 +45,55 @@ export interface ResumeApprovalParam {
 export interface ResumeToolResultParam {
   /** The human-provided tool result (the answer text). */
   content: string;
+  /** Distinguishes a submitted form from an explicit skip. */
+  outcome?: 'skipped' | 'submitted';
   /** ID of the pending `role='tool'` message this result targets. */
   parentMessageId: string;
   /** Optional plugin state to persist on the tool message. */
   pluginState?: Record<string, unknown>;
+  /** Optional user-supplied reason for a skipped interaction. */
+  rejectionReason?: string;
   /** tool_call_id of the pending tool call being answered. */
   toolCallId: string;
+}
+
+export type AgentInterventionSourceAction =
+  | { optionId: string; type: 'select_provider_option' }
+  | {
+      edits?: Record<string, Record<string, unknown>>;
+      scope: 'once' | 'remember';
+      type: 'approve_tool';
+    }
+  | { reason?: string; type: 'reject_continue' }
+  | { scope: 'operation'; type: 'stop' }
+  | { result: Record<string, string | string[]>; type: 'submit_answers' }
+  | {
+      result: { kind: 'agent_marketplace'; selectedTemplateIds: string[] };
+      type: 'submit_custom';
+    }
+  | { type: 'skip_interaction' }
+  | { type: 'cancel_interaction' };
+
+export interface ResolveAgentInterventionBySourceParams {
+  action: AgentInterventionSourceAction;
+  batchId: string;
+  operationId: string;
+  resolutionRequestId: string;
+  targets: Array<{ toolCallId: string; toolMessageId: string }>;
+}
+
+export type ResolveAgentInterventionBySourceResult =
+  | { execution?: never; handled: false; state?: never }
+  | {
+      execution?: ExecAgentResult;
+      handled: true;
+      state: 'already_resolved' | 'claimed';
+    };
+
+export interface GetAgentInterventionReviewBySourceParams {
+  batchId: string;
+  operationId: string;
+  targets: Array<{ toolCallId: string; toolMessageId: string }>;
 }
 
 export interface ExecAgentTaskParams {
@@ -93,6 +136,8 @@ export interface ExecAgentTaskParams {
   /** Tool identifiers the user @-mentioned in this message; the server enables them for this run. */
   selectedToolIds?: string[];
   slug?: string;
+  /** The prompt was queued behind a running turn and renders as its continuation. */
+  steer?: boolean;
   /**
    * Override what initiated this operation. Server defaults to `'chat'` when
    * omitted. Pass a more specific value (`'cli'`, `'openapi'`, …) so the
@@ -220,6 +265,15 @@ class AiAgentService {
     return await lambdaClient.aiAgent.refreshGatewayToken.query({ topicId });
   }
 
+  /**
+   * Mint the per-user JWT for the multiplexed Gateway WebSocket (v2, one
+   * socket per user). Not bound to any operation — the mux client calls this
+   * before every connect attempt.
+   */
+  async issueGatewayUserToken(): Promise<{ token: string }> {
+    return await lambdaClient.aiAgent.issueGatewayUserToken.query();
+  }
+
   async execSubAgentTask(params: ExecSubAgentTaskParams) {
     return await lambdaClient.aiAgent.execSubAgentTask.mutate(params);
   }
@@ -240,14 +294,51 @@ class AiAgentService {
   }
 
   /**
+   * Tell a running server operation whether user messages are queued behind it,
+   * so it hands the turn back at its next step boundary.
+   */
+  async setQueuedMessages(params: { operationId: string; pending: boolean }) {
+    return await lambdaClient.aiAgent.setQueuedMessages.mutate(params);
+  }
+
+  /**
    * Stop a run parked on tool approval: settle the pending tool rows and end
    * the operation without running anything or continuing the model.
    *
    * Not `interruptTask` — that one assumes a live loop will persist the
    * outcome, which a parked run does not have.
    */
-  async stopPendingApproval(params: { toolMessageIds: string[]; topicId: string }) {
+  async stopPendingApproval(params: {
+    batchId: string;
+    operationId: string;
+    toolMessageIds: string[];
+    topicId: string;
+  }) {
     return await lambdaClient.aiAgent.stopPendingApproval.mutate(params);
+  }
+
+  /**
+   * Try the Cloud durable first-winner path for an active Web card. A false
+   * result means this deployment has no generic intervention store and the
+   * caller should use the legacy OSS Gateway resume path.
+   */
+  async resolveAgentInterventionBySource(
+    params: ResolveAgentInterventionBySourceParams,
+  ): Promise<ResolveAgentInterventionBySourceResult> {
+    const result = await lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate(params);
+
+    if (!result.success) return { handled: false };
+
+    return {
+      execution: 'execution' in result ? result.execution : undefined,
+      handled: true,
+      state: result.state,
+    };
+  }
+
+  /** Fetch the authoritative v2 snapshot and view/resolve authorization for an active card. */
+  async getAgentInterventionReviewBySource(params: GetAgentInterventionReviewBySourceParams) {
+    return await lambdaClient.aiAgent.getAgentInterventionReviewBySource.mutate(params);
   }
 
   /**

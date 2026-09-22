@@ -459,8 +459,10 @@ export const buildMonthGrid = (month: dayjs.Dayjs): CalendarDayCell[] => {
   });
 };
 
-/** Compact token count for a calendar cell: 1.2M / 340K / 820. */
+/** Compact token count for a calendar cell: 1.3B / 585M / 340K / 820. */
 export const formatTokens = (tokens: number): string => {
+  if (tokens >= 1_000_000_000)
+    return `${(tokens / 1_000_000_000).toFixed(tokens >= 10_000_000_000 ? 0 : 1)}B`;
   if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(tokens >= 10_000_000 ? 0 : 1)}M`;
   if (tokens >= 1000) return `${Math.round(tokens / 1000)}K`;
   return String(Math.round(tokens));

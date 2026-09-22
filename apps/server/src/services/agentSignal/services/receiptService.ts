@@ -40,12 +40,7 @@ export interface AgentSignalReceiptMetadata {
   reviewScope?: Scope;
   /** Rollback availability/status for the linked mutation. */
   rollbackStatus?:
-    | 'available'
-    | 'conflict'
-    | 'failed'
-    | 'not_found'
-    | 'rolled_back'
-    | 'unsupported';
+    'available' | 'conflict' | 'failed' | 'not_found' | 'rolled_back' | 'unsupported';
   /** Scoped self-reflection id for non-nightly review receipts. */
   scopeId?: string;
   /** Scoped self-reflection namespace for non-nightly review receipts. */
@@ -331,7 +326,9 @@ const getReceiptTopicId = (input: { sourceId: string; topicId?: string }) =>
   input.topicId ?? input.sourceId;
 
 const getActionReceiptKind = (action: ActionPlan): AgentSignalReceipt['kind'] =>
-  action.operation?.domain ?? 'review';
+  action.operation?.domain === 'memory' || action.operation?.domain === 'skill'
+    ? action.operation.domain
+    : 'review';
 
 const getActionReceiptStatus = (status: ActionStatus): AgentSignalReceipt['status'] | undefined => {
   if (status === ActionStatus.Applied) return 'applied';

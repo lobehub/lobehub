@@ -1,7 +1,7 @@
 'use client';
 
-import { Block, Flexbox, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Block, Flexbox } from '@lobehub/ui';
+import { Button, Text } from '@lobehub/ui/base-ui';
 import React, { memo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -49,6 +49,7 @@ const ConsentClient = memo<ClientProps>(({ uid, clientId, scopes, clientMetadata
         logoUrl={clientMetadata.logo}
       />
       <AuthCard
+        centered
         subtitle={t('consent.description', { clientName: clientDisplayName })}
         title={t('consent.title', { clientName: clientDisplayName })}
         footer={

@@ -1,6 +1,6 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { Flexbox, Icon, Input, Text } from '@lobehub/ui';
-import { Alert, Button } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Input } from '@lobehub/ui';
+import { Alert, Button, Text } from '@lobehub/ui/base-ui';
 import { type FormInstance, type InputRef } from 'antd';
 import { Badge, Divider, Form } from 'antd';
 import { createStaticStyles } from 'antd-style';
@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import AuthIcons from '@/components/AuthIcons';
 import AuthCard from '@/features/AuthCard';
-import { AuthAgreement, useAuthAgreement } from '@/features/AuthShell';
+import AuthAgreement, { useAuthAgreement } from '@/features/AuthShell/AuthAgreement';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   inlineLink: css`

@@ -259,6 +259,7 @@ export const codexDriver: HeterogeneousAgentDriver = {
     return {
       args: [...sanitizeCodexProviderBindingArgs(args), '--model', requestModel],
       env: { ...sanitizeCodexProviderBindingEnv(env), CODEX_HOME: profileDir },
+      operationTokenEnvKey: SERVER_TOKEN_ENV,
       profileFiles: [
         { content: config, path: 'config.toml' },
         ...(customModel

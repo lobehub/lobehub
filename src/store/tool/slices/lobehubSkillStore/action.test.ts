@@ -10,8 +10,6 @@ import { useUserStore } from '@/store/user';
 import { useToolStore } from '../../store';
 import { LobehubSkillStatus } from './types';
 
-vi.mock('zustand/traditional');
-
 beforeEach(() => {
   vi.clearAllMocks();
   useUserStore.setState({ isSignedIn: false });

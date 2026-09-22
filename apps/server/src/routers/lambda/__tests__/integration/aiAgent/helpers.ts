@@ -51,9 +51,13 @@ export const waitForOperationComplete = async (
 // This mock needs to be in a shared place but vitest hoists vi.mock
 // So each test file should import and use this constant
 export const FILE_SERVICE_MOCK = {
-  FileService: vi.fn().mockImplementation(() => ({
-    getFullFileUrl: vi.fn().mockImplementation((path: string) => (path ? `/files${path}` : null)),
-  })),
+  FileService: vi.fn().mockImplementation(function () {
+    return {
+      getFullFileUrl: vi.fn().mockImplementation(function (path: string) {
+        return path ? `/files${path}` : null;
+      }),
+    };
+  }),
 };
 
 /**

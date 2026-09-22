@@ -1,10 +1,8 @@
 import {
-  type AssistantContentBlock,
   type ChatImageItem,
   type ChatMessageError,
   type ChatMessagePluginError,
   type ChatToolPayload,
-  type ChatToolPayloadWithResult,
   type ChatVideoItem,
   type CreateMessageParams,
   type GroundingSearch,
@@ -299,25 +297,9 @@ export const messageCRUDSlice: StateCreator<
     const state = get();
     const { internal_dispatchMessage, replaceMessages, context } = state;
 
-    const message = dataSelectors.getDisplayMessageById(id)(state);
-    if (!message) return;
+    if (!dataSelectors.getDisplayMessageById(id)(state)) return;
 
-    let ids = [message.id];
-
-    // Handle assistantGroup and supervisor messages: delete all child blocks and tool results
-    if ((message.role === 'assistantGroup' || message.role === 'supervisor') && message.children) {
-      const childIds = message.children.map((child: AssistantContentBlock) => child.id);
-      ids = ids.concat(childIds);
-
-      // Collect all tool result IDs from children
-      const toolResultIds = message.children.flatMap((child: AssistantContentBlock) => {
-        if (!child.tools) return [];
-        return child.tools
-          .filter((tool: ChatToolPayloadWithResult) => tool.result?.id)
-          .map((tool: ChatToolPayloadWithResult) => tool.result!.id);
-      });
-      ids = ids.concat(toolResultIds);
-    }
+    const ids = dataSelectors.deletableRowMessageIds(id)(state);
 
     // Optimistic update
     internal_dispatchMessage({ ids, type: 'deleteMessages' });

@@ -148,8 +148,8 @@ export class SandboxMiddlewareService implements SandboxService {
       if (!exported.success) {
         return {
           error: {
+            ...exported.error,
             message: exported.error?.message || 'Failed to export file from sandbox',
-            name: exported.error?.name,
           },
           filename,
           success: false,
@@ -197,8 +197,12 @@ export class SandboxMiddlewareService implements SandboxService {
 export const normalizeSandboxCommandResult = (
   result: SandboxCallToolResult,
 ): SandboxCommandResult => {
+  const sessionState = result.sessionExpiredAndRecreated
+    ? { sessionExpiredAndRecreated: true }
+    : {};
   if (!result.success) {
     return {
+      ...sessionState,
       exitCode: 1,
       output: '',
       stderr: result.error?.message || 'Command execution failed',
@@ -214,6 +218,7 @@ export const normalizeSandboxCommandResult = (
   const success = typeof raw.success === 'boolean' ? raw.success : exitCode === 0;
 
   return {
+    ...sessionState,
     exitCode,
     output,
     stderr,

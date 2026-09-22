@@ -1,9 +1,11 @@
 import { type ChatToolPayloadWithResult } from '@lobechat/types';
-import { Accordion, AccordionItem, ActionIcon, Block, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Block, Flexbox, Icon } from '@lobehub/ui';
+import { Accordion, ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { AlertTriangle, Check, HandIcon, Maximize2, Minimize2, X } from 'lucide-react';
-import { AnimatePresence, m as motion } from 'motion/react';
-import { type Key, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Check, HandIcon, Maximize2, Minimize2, X } from 'lucide-react';
+import { AnimatePresence } from 'motion/react';
+import * as motion from 'motion/react-m';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
@@ -30,6 +32,7 @@ import {
   getWorkflowSummaryText,
   shapeProseForWorkflowHeadline,
 } from '../toolDisplayNames';
+import { getBlocksEndCreatedAt, getFirstBlockCreatedAt } from './groupChain';
 import type { RenderableAssistantContentBlock } from './types';
 import WorkflowExpandedList from './WorkflowExpandedList';
 
@@ -43,7 +46,7 @@ export type WorkflowExpandLevel = 'collapsed' | 'semi' | 'full';
 
 /** Per-phase initial level. Pass an object when streaming and completion
  *  should differ — e.g. heterogeneous agents want full while streaming but
- *  still collapse once a turn finishes. A plain string applies to both. */
+ *  keep the built-in completion default. A plain string applies to both. */
 export type WorkflowExpandLevelDefault =
   WorkflowExpandLevel | { completion?: WorkflowExpandLevel; streaming?: WorkflowExpandLevel };
 
@@ -52,17 +55,17 @@ interface WorkflowCollapseProps {
   assistantMessageId: string;
   blocks: RenderableAssistantContentBlock[];
   /**
-   * Fixed default expand level. When set, overrides the built-in auto
-   * behavior (expand while streaming, collapse after completion) for the
-   * initial state and resets. Users can still toggle locally.
-   * Pass an object to override only one phase (e.g. `{ streaming: 'full' }`).
-   * Undefined = legacy auto behavior. Pending intervention still forces open.
+   * Fixed default expand level. When set, overrides the built-in defaults
+   * (streaming `semi`, completion `full`) for the initial state and resets.
+   * Users can still toggle locally. Pass an object to override only one
+   * phase (e.g. `{ streaming: 'collapsed' }`). Undefined = built-in defaults.
+   * Pending intervention still forces open.
    */
   defaultWorkflowExpandLevel?: WorkflowExpandLevelDefault;
   disableEditing?: boolean;
   /**
-   * Skip the completion auto-collapse (semi → collapsed, an animated Accordion
-   * height transition) because the parent is about to fold the whole workflow
+   * Skip applying the completion level (an animated Accordion height
+   * transition) because the parent is about to fold the whole workflow
    * into `ProcessFold` in a single commit. Collapsing twice — once as a
    * multi-frame animation, once as the fold swap — is what makes the
    * conversation visibly jitter when a turn with tool calls finishes.
@@ -165,29 +168,60 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
       if (ops.length === 0) return undefined;
       return ops.reduce((min, op) => Math.min(min, op.metadata.startTime), Infinity);
     });
+    /** Wall-clock bounds of this collapse's own steps. A long turn folds into
+     *  several collapses, so anchoring to the op start makes every one of them
+     *  read the same run-long number; both the live timer and the finished
+     *  header should cover this fold only. Read as two primitives so the
+     *  selectors stay reference-stable across streaming re-renders. */
+    const segmentStartTime = useConversationStore((s) =>
+      getFirstBlockCreatedAt(s.dbMessages, blocks),
+    );
+    const segmentEndTime = useConversationStore((s) => getBlocksEndCreatedAt(s.dbMessages, blocks));
+    /** Falls back to the op start (then to mount time) when the blocks don't
+     *  resolve against the raw messages. */
+    const workingStartTime = segmentStartTime ?? opStartTime;
 
     const allComplete = toolsPhaseComplete && (workflowChromeComplete || !isGenerating);
     const summaryText = useMemo(() => getWorkflowSummaryText(blocks), [blocks]);
     const completionStatus = useMemo(() => getWorkflowCompletionStatus(allTools), [allTools]);
 
-    /** Sum of per-round model output duration (not reasoning-only); see ModelPerformance.duration */
+    /** How long this fold actually occupied: last step (or tool result) minus
+     *  first step. `performance.duration` only sums per-round model output, so
+     *  a fold that spent minutes inside tool calls or waiting between rounds
+     *  under-reported badly — it is kept solely as a fallback for hosts that
+     *  render blocks without the raw `dbMessages` (share pages, portals). */
+    const wallClockMs =
+      segmentStartTime !== undefined && segmentEndTime !== undefined
+        ? segmentEndTime - segmentStartTime
+        : 0;
     const totalWorkflowMs = useMemo(
       () => blocks.reduce((sum, b) => sum + (b.performance?.duration ?? 0), 0),
       [blocks],
     );
-    const durationText = totalWorkflowMs > 0 ? formatReasoningDuration(totalWorkflowMs) : undefined;
+    const durationMs = wallClockMs > 0 ? wallClockMs : totalWorkflowMs;
+    const durationText = durationMs > 0 ? formatReasoningDuration(durationMs) : undefined;
     const { streaming: streamingDefault, completion: completionDefault } = useMemo(
       () => resolveExpandDefaults(defaultWorkflowExpandLevel),
       [defaultWorkflowExpandLevel],
     );
     const streamingInitialLevel: WorkflowExpandLevel = streamingDefault ?? 'semi';
-    const completionInitialLevel: WorkflowExpandLevel = completionDefault ?? 'collapsed';
-    /** When a consumer opts any phase into `full`, treat the workflow as a
-     *  "fully expanded" experience — manual expands from collapsed go to
-     *  `full` instead of the legacy `semi` cap. Heterogeneous agents rely on
-     *  this so all 40+ tool calls stay visible after the user re-expands. */
+    // Completion defaults to the full list, not a summary-only row: the whole
+    // point of opening a finished turn (or its ProcessFold) is seeing what ran,
+    // and semi's height cap forces a third hop (⤢) for long tool lists. The
+    // base-ui panel unmounts children when folded, so history messages kept at
+    // full pay no render cost while the fold is closed. Consumers pin the old
+    // summary row with defaultWorkflowExpandLevel='collapsed'.
+    const completionInitialLevel: WorkflowExpandLevel = completionDefault ?? 'full';
+    /** Where a manual re-expand from collapsed lands. Derived from the
+     *  *effective* completion level rather than the raw prop: the production
+     *  caller always passes `{ streaming: <setting> }` and no completion phase,
+     *  so keying off `completionDefault` alone reopened at the legacy `semi`
+     *  cap while the same workflow had just rendered at `full`. Consumers that
+     *  pin completion below full keep that compact level; a `full` streaming
+     *  phase keeps the fully expanded experience heterogeneous agents need
+     *  (all 40+ tool calls visible after a re-expand). */
     const manualExpandLevel: WorkflowExpandLevel =
-      streamingDefault === 'full' || completionDefault === 'full' ? 'full' : 'semi';
+      streamingDefault === 'full' || completionInitialLevel === 'full' ? 'full' : 'semi';
 
     const [expandLevel, setExpandLevel] = useState<WorkflowExpandLevel>(() =>
       allComplete ? completionInitialLevel : streamingInitialLevel,
@@ -307,11 +341,12 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
       }
 
       if (activeWorkingStartedAtRef.current === null) {
-        // Initial/remount seeds from op start so elapsed reflects wall-clock
-        // since the op began. Intervention resume seeds from now so pause
-        // time stays excluded from the accumulator.
+        // Initial/remount seeds from this collapse's first step so elapsed
+        // reflects wall-clock since the fold began. Intervention resume seeds
+        // from now so pause time stays excluded from the accumulator.
         const isInitial = accumulatedWorkingMsRef.current === 0;
-        activeWorkingStartedAtRef.current = isInitial && opStartTime ? opStartTime : Date.now();
+        activeWorkingStartedAtRef.current =
+          isInitial && workingStartTime ? workingStartTime : Date.now();
       }
 
       const tick = () => {
@@ -327,7 +362,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
       const interval = setInterval(tick, 1000);
 
       return () => clearInterval(interval);
-    }, [opStartTime, pendingInterventionPresent, streaming]);
+    }, [workingStartTime, pendingInterventionPresent, streaming]);
 
     const showWorkingElapsed =
       !pendingInterventionPresent &&
@@ -338,7 +373,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
     // every nested AccordionItem (each GroupTool) re-renders due to "context
     // changed" on every streaming chunk.
     const handleExpandedChange = useCallback(
-      (keys: Key[]) => {
+      (keys: string[]) => {
         const nowExpanded = keys.includes('workflow');
         if (forceExpanded && !nowExpanded) return;
 
@@ -391,30 +426,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
           return wrapInBlock(<Icon color={cssVar.colorError} icon={X} />);
         }
         case 'partial': {
-          // Mix of success + failure: show success as the primary state and
-          // surface a small warning badge slightly inset from the bottom-right
-          // so the overall turn still reads as "done" rather than "broken".
-          return (
-            <div style={{ flex: 'none', position: 'relative' }}>
-              {wrapInBlock(<Icon color={cssVar.colorSuccess} icon={Check} />)}
-              <div
-                style={{
-                  alignItems: 'center',
-                  background: cssVar.colorBgContainer,
-                  borderRadius: '50%',
-                  bottom: 2,
-                  display: 'flex',
-                  height: 10,
-                  justifyContent: 'center',
-                  position: 'absolute',
-                  right: 2,
-                  width: 10,
-                }}
-              >
-                <Icon color={cssVar.colorWarning} icon={AlertTriangle} size={8} />
-              </div>
-            </div>
-          );
+          return wrapInBlock(<Icon color={cssVar.colorSuccess} icon={Check} />);
         }
         default: {
           return wrapInBlock(<Icon color={cssVar.colorSuccess} icon={Check} />);
@@ -533,28 +545,30 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
 
     return (
       <Accordion
-        expandedKeys={expandedKeys}
+        indicatorPlacement="inline"
+        styles={{ trigger: { paddingBlock: 4, paddingInline: 4 } }}
+        value={expandedKeys}
         variant="borderless"
-        onExpandedChange={handleExpandedChange}
-      >
-        <AccordionItem
-          alwaysShowAction
-          action={expandToggleNode}
-          itemKey="workflow"
-          paddingBlock={4}
-          paddingInline={4}
-          title={title}
-        >
-          <WorkflowExpandedList
-            assistantId={assistantMessageId}
-            blocks={blocks}
-            constrained={constrained}
-            disableEditing={disableEditing}
-            scrollRef={scrollRef}
-            onScroll={handleAutoScroll}
-          />
-        </AccordionItem>
-      </Accordion>
+        items={[
+          {
+            action: expandToggleNode,
+            alwaysShowAction: true,
+            children: (
+              <WorkflowExpandedList
+                assistantId={assistantMessageId}
+                blocks={blocks}
+                constrained={constrained}
+                disableEditing={disableEditing}
+                scrollRef={scrollRef}
+                onScroll={handleAutoScroll}
+              />
+            ),
+            key: 'workflow',
+            title,
+          },
+        ]}
+        onValueChange={handleExpandedChange}
+      />
     );
   },
 );

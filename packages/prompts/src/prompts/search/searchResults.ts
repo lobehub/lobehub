@@ -10,6 +10,13 @@ export interface SearchResultItem {
 }
 
 /**
+ * A completed search with zero hits is a final answer, not a transient failure.
+ * Say so explicitly: models otherwise re-issue the identical (billed) query.
+ */
+export const EMPTY_SEARCH_RESULTS_PROMPT =
+  '<searchResults>No results found. The search completed successfully and this is the final answer for this exact query — do not resend the same query. To find something, rewrite it: drop or reduce quoted phrases, remove site:/language modifiers, widen the time range, or use fewer, more general keywords.</searchResults>';
+
+/**
  * Convert search results array to compact XML format for token efficiency
  * Uses attributes for title/url and element content for main text
  *
@@ -26,7 +33,7 @@ export interface SearchResultItem {
  * ```
  */
 export const searchResultsPrompt = (results: SearchResultItem[]): string => {
-  if (results.length === 0) return '<searchResults>No results found.</searchResults>';
+  if (results.length === 0) return EMPTY_SEARCH_RESULTS_PROMPT;
 
   const items = results
     .map((item) => {

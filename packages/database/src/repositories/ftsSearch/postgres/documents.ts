@@ -1,0 +1,338 @@
+import type { SQLWrapper } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
+
+import { DOCUMENT_FOLDER_TYPE, documents, knowledgeBaseFiles } from '../../../schemas';
+import { notAgentShareDocument } from '../../../utils/documentVisibility';
+import { notAgentShareFileReference } from '../../../utils/fileVisibility';
+import { buildWorkspaceWhere } from '../../../utils/workspace';
+import type {
+  FtsSearchBackendResponse,
+  FtsSearchFolderResult,
+  FtsSearchKnowledgeBaseDocumentHit,
+  FtsSearchPageResult,
+} from '../types';
+import type { PostgresFtsSearchContext } from './context';
+import type { PostgresFtsSearchField } from './dialect';
+import { buildResponse, truncate } from './results';
+
+const FOLDER_FIELDS: PostgresFtsSearchField[] = [
+  { column: documents.title, weight: 4 },
+  { column: documents.slug, weight: 3 },
+  { column: documents.description, weight: 2 },
+];
+
+const PAGE_FIELDS: PostgresFtsSearchField[] = [
+  { column: documents.title, weight: 4 },
+  { column: documents.slug, weight: 3 },
+  { column: documents.content },
+];
+
+const KNOWLEDGE_BASE_DOCUMENT_FIELDS = PAGE_FIELDS;
+
+/** Search folders (documents with `file_type=DOCUMENT_FOLDER_TYPE`). */
+export async function searchFolders(
+  context: PostgresFtsSearchContext,
+  query: string,
+  limit: number,
+  excludeKbIds?: string[],
+): Promise<FtsSearchBackendResponse<FtsSearchFolderResult>> {
+  const { db, dialect } = context;
+  const preparedQuery = dialect.prepare(query);
+  const score = dialect.score(documents.id, FOLDER_FIELDS, preparedQuery);
+  const excludeKb = (column: SQLWrapper) =>
+    excludeKbIds && excludeKbIds.length > 0
+      ? or(isNull(column), notInArray(column, excludeKbIds))
+      : undefined;
+
+  const hits = db
+    .select({
+      createdAt: documents.createdAt,
+      description: documents.description,
+      filename: documents.filename,
+      id: documents.id,
+      knowledgeBaseId: documents.knowledgeBaseId,
+      metadata: documents.metadata,
+      score: score.as('score'),
+      slug: documents.slug,
+      title: documents.title,
+      updatedAt: documents.updatedAt,
+      workspaceId: documents.workspaceId,
+    })
+    .from(documents)
+    .where(
+      and(
+        context.scanScopeWhere(documents),
+        eq(documents.fileType, DOCUMENT_FOLDER_TYPE),
+        context.liftsExclusionFilter ? undefined : excludeKb(documents.knowledgeBaseId),
+        dialect.match(FOLDER_FIELDS, preparedQuery),
+      ),
+    )
+    .orderBy(sql`${score} DESC`)
+    .limit(context.scanCandidateLimit(limit))
+    .as('folder_hits');
+
+  const rows = await db
+    .select({
+      createdAt: hits.createdAt,
+      description: hits.description,
+      filename: hits.filename,
+      id: hits.id,
+      knowledgeBaseId: hits.knowledgeBaseId,
+      score: hits.score,
+      slug: hits.slug,
+      title: hits.title,
+      updatedAt: hits.updatedAt,
+    })
+    .from(hits)
+    .where(
+      and(
+        context.liftedScopeWhere(hits.workspaceId),
+        notAgentShareDocument(hits.metadata),
+        context.liftsExclusionFilter ? excludeKb(hits.knowledgeBaseId) : undefined,
+      ),
+    )
+    .orderBy(desc(hits.score))
+    .limit(limit);
+
+  return buildResponse(rows, (row) => {
+    const title = row.title || row.filename || 'Untitled';
+    return {
+      createdAt: row.createdAt,
+      description: row.description,
+      id: row.id,
+      knowledgeBaseId: row.knowledgeBaseId,
+      relevance: row.relevance,
+      slug: row.slug,
+      title,
+      type: 'folder' as const,
+      updatedAt: row.updatedAt,
+    };
+  });
+}
+
+/** Search pages (documents with `file_type='custom/document'`). */
+export async function searchPages(
+  context: PostgresFtsSearchContext,
+  query: string,
+  limit: number,
+  excludeKbIds?: string[],
+): Promise<FtsSearchBackendResponse<FtsSearchPageResult>> {
+  const { db, dialect } = context;
+  const preparedQuery = dialect.prepare(query);
+  const score = dialect.score(documents.id, PAGE_FIELDS, preparedQuery);
+  const excludeKb = (knowledgeBaseId: SQLWrapper, fileId: SQLWrapper) =>
+    excludeKbIds && excludeKbIds.length > 0
+      ? and(
+          or(isNull(knowledgeBaseId), notInArray(knowledgeBaseId, excludeKbIds)),
+          // Parsed-file pages store KB membership on file_id instead of the
+          // document row, so check the join table as well.
+          or(
+            isNull(fileId),
+            notInArray(
+              fileId,
+              db
+                .select({ fileId: knowledgeBaseFiles.fileId })
+                .from(knowledgeBaseFiles)
+                .where(inArray(knowledgeBaseFiles.knowledgeBaseId, excludeKbIds)),
+            ),
+          ),
+        )
+      : undefined;
+
+  const hits = db
+    .select({
+      createdAt: documents.createdAt,
+      fileId: documents.fileId,
+      filename: documents.filename,
+      id: documents.id,
+      knowledgeBaseId: documents.knowledgeBaseId,
+      metadata: documents.metadata,
+      score: score.as('score'),
+      title: documents.title,
+      updatedAt: documents.updatedAt,
+      workspaceId: documents.workspaceId,
+    })
+    .from(documents)
+    .where(
+      and(
+        context.scanScopeWhere(documents),
+        eq(documents.fileType, 'custom/document'),
+        context.liftsExclusionFilter
+          ? undefined
+          : excludeKb(documents.knowledgeBaseId, documents.fileId),
+        dialect.match(PAGE_FIELDS, preparedQuery),
+      ),
+    )
+    .orderBy(sql`${score} DESC`)
+    .limit(context.scanCandidateLimit(limit))
+    .as('page_hits');
+
+  const rows = await db
+    .select({
+      createdAt: hits.createdAt,
+      filename: hits.filename,
+      id: hits.id,
+      score: hits.score,
+      title: hits.title,
+      updatedAt: hits.updatedAt,
+    })
+    .from(hits)
+    .where(
+      and(
+        context.liftedScopeWhere(hits.workspaceId),
+        notAgentShareDocument(hits.metadata),
+        notAgentShareFileReference(db, hits.fileId),
+        context.liftsExclusionFilter ? excludeKb(hits.knowledgeBaseId, hits.fileId) : undefined,
+      ),
+    )
+    .orderBy(desc(hits.score))
+    .limit(limit);
+
+  return buildResponse(rows, (row) => {
+    const title = row.title || row.filename || 'Untitled';
+    return {
+      createdAt: row.createdAt,
+      description: null,
+      id: row.id,
+      relevance: row.relevance,
+      title,
+      type: 'page' as const,
+      updatedAt: row.updatedAt,
+    };
+  });
+}
+
+/**
+ * FTS search documents belonging to one or more knowledge bases.
+ *
+ * Inline pages and file-backed documents use separate scoring queries because
+ * ParadeDB rejects a disjunctive shape spanning BM25 and non-BM25 predicates.
+ */
+export async function searchKnowledgeBaseDocuments(
+  context: PostgresFtsSearchContext,
+  query: string,
+  knowledgeBaseIds: string[],
+  limit: number = 20,
+): Promise<FtsSearchBackendResponse<FtsSearchKnowledgeBaseDocumentHit>> {
+  if (!query || query.trim() === '') return { candidates: [], items: [] };
+  if (!knowledgeBaseIds || knowledgeBaseIds.length === 0) {
+    return { candidates: [], items: [] };
+  }
+
+  const { db, dialect } = context;
+  const preparedQuery = dialect.prepare(query);
+  const score = dialect.score(documents.id, KNOWLEDGE_BASE_DOCUMENT_FIELDS, preparedQuery);
+  const matchClause = dialect.match(KNOWLEDGE_BASE_DOCUMENT_FIELDS, preparedQuery);
+  const folderClause = ne(documents.fileType, DOCUMENT_FOLDER_TYPE);
+  const userClause = buildWorkspaceWhere(context.scope, documents);
+
+  const inlineHits = db
+    .select({
+      content: documents.content,
+      fileId: documents.fileId,
+      filename: documents.filename,
+      id: documents.id,
+      knowledgeBaseId: documents.knowledgeBaseId,
+      metadata: documents.metadata,
+      score: score.as('score'),
+      title: documents.title,
+      updatedAt: documents.updatedAt,
+    })
+    .from(documents)
+    .where(
+      and(
+        userClause,
+        folderClause,
+        inArray(documents.knowledgeBaseId, knowledgeBaseIds),
+        notAgentShareFileReference(db, documents.fileId),
+        matchClause,
+      ),
+    )
+    .orderBy(sql`${score} DESC`)
+    .limit(context.scanCandidateLimit(limit))
+    .as('inline_hits');
+
+  const inlineRowsPromise = db
+    .select({
+      content: inlineHits.content,
+      fileId: inlineHits.fileId,
+      filename: inlineHits.filename,
+      id: inlineHits.id,
+      knowledgeBaseId: inlineHits.knowledgeBaseId,
+      score: inlineHits.score,
+      title: inlineHits.title,
+      updatedAt: inlineHits.updatedAt,
+    })
+    .from(inlineHits)
+    .where(notAgentShareDocument(inlineHits.metadata))
+    .orderBy(desc(inlineHits.score))
+    .limit(limit);
+
+  const fileBackedHits = db
+    .select({
+      content: documents.content,
+      fileId: documents.fileId,
+      filename: documents.filename,
+      id: documents.id,
+      knowledgeBaseId: knowledgeBaseFiles.knowledgeBaseId,
+      metadata: documents.metadata,
+      score: score.as('score'),
+      title: documents.title,
+      updatedAt: documents.updatedAt,
+    })
+    .from(documents)
+    .innerJoin(
+      knowledgeBaseFiles,
+      and(
+        eq(knowledgeBaseFiles.fileId, documents.fileId),
+        buildWorkspaceWhere(context.scope, knowledgeBaseFiles),
+        inArray(knowledgeBaseFiles.knowledgeBaseId, knowledgeBaseIds),
+      ),
+    )
+    .where(
+      and(userClause, folderClause, notAgentShareFileReference(db, documents.fileId), matchClause),
+    )
+    .orderBy(sql`${score} DESC`)
+    .limit(context.scanCandidateLimit(limit))
+    .as('file_backed_hits');
+
+  const fileBackedRowsPromise = db
+    .select({
+      content: fileBackedHits.content,
+      fileId: fileBackedHits.fileId,
+      filename: fileBackedHits.filename,
+      id: fileBackedHits.id,
+      knowledgeBaseId: fileBackedHits.knowledgeBaseId,
+      score: fileBackedHits.score,
+      title: fileBackedHits.title,
+      updatedAt: fileBackedHits.updatedAt,
+    })
+    .from(fileBackedHits)
+    .where(notAgentShareDocument(fileBackedHits.metadata))
+    .orderBy(desc(fileBackedHits.score))
+    .limit(limit);
+
+  const [inlineRows, fileBackedRows] = await Promise.all([
+    inlineRowsPromise,
+    fileBackedRowsPromise,
+  ]);
+
+  const byId = new Map<string, (typeof inlineRows)[number]>();
+  for (const row of [...inlineRows, ...fileBackedRows]) {
+    const previous = byId.get(row.id);
+    if (!previous || row.score > previous.score) byId.set(row.id, row);
+  }
+  const merged = Array.from(byId.values())
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+
+  return buildResponse(merged, (row) => ({
+    documentId: row.id,
+    fileId: row.fileId ?? undefined,
+    knowledgeBaseId: row.knowledgeBaseId ?? '',
+    relevance: row.relevance,
+    snippet: truncate(row.content, 300) ?? '',
+    title: row.title || row.filename || 'Untitled',
+    updatedAt: row.updatedAt,
+  }));
+}

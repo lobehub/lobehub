@@ -20,15 +20,6 @@ vi.mock('electron', () => ({
 
 vi.mock('execa', () => ({ execa: vi.fn() }));
 
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
-}));
-
 vi.mock('@/utils/net-fetch', () => ({ netFetch: vi.fn() }));
 
 vi.mock('@/utils/file-system', () => ({ makeSureDirExist: vi.fn() }));
@@ -161,6 +152,24 @@ describe('LocalFileCtr — readFile / readFiles (real fs)', () => {
       expect(result.imageFileId).toBe('file-1');
       expect(result.imageUrl).toBe('https://files.example.com/cat.png');
       expect(result.content).toBe('[Image: cat.png]');
+    });
+
+    it('should upload AVIF as an image for downstream media analysis', async () => {
+      mockUploadService.uploadLocalFile.mockResolvedValue({
+        id: 'file-avif',
+        url: 'https://files.example.com/sample.avif',
+      });
+      const filePath = path.join(tmpDir, 'sample.avif');
+      await writeFile(filePath, Buffer.from('avif'));
+
+      const result = await localFileCtr.readFile({ path: filePath });
+
+      expect(mockUploadService.uploadLocalFile).toHaveBeenCalledWith(filePath);
+      expect(result.isImage).toBe(true);
+      expect(result.fileType).toBe('image/avif');
+      expect(result.imageFileId).toBe('file-avif');
+      expect(result.imageUrl).toBe('https://files.example.com/sample.avif');
+      expect(result.content).toBe('[Image: sample.avif]');
     });
 
     it('should resolve a relative image path against cwd', async () => {

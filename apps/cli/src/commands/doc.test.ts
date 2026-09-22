@@ -35,16 +35,6 @@ vi.mock('../api/client', () => ({
   getTrpcClient: mockGetTrpcClient,
 }));
 
-vi.mock('../utils/logger', () => ({
-  log: {
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  },
-  setVerbose: vi.fn(),
-}));
-
 describe('doc command', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
   let consoleSpy: ReturnType<typeof vi.spyOn>;
@@ -69,6 +59,7 @@ describe('doc command', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     exitSpy.mockRestore();
     consoleSpy.mockRestore();
   });
@@ -230,6 +221,24 @@ describe('doc command', () => {
   // ── create ────────────────────────────────────────────
 
   describe('create', () => {
+    /**
+     * Regression: inside an agent run the created document was never tied to the
+     * run, so a Goal could not show it as the Task's deliverable.
+     */
+    it.each([
+      { env: 'op-run-1', expected: { operationId: 'op-run-1' } },
+      { env: '', expected: undefined },
+    ])('passes the current run operation when set: %j', async ({ env, expected }) => {
+      vi.stubEnv('LOBEHUB_OPERATION_ID', env);
+      mockTrpcClient.document.createDocument.mutate.mockResolvedValue({ id: 'new-doc' });
+
+      await createProgram().parseAsync(['node', 'test', 'doc', 'create', '--title', 'Report']);
+
+      const [params] = mockTrpcClient.document.createDocument.mutate.mock.calls[0];
+      if (expected) expect(params).toMatchObject(expected);
+      else expect(params).not.toHaveProperty('operationId');
+    });
+
     it('should create a document with title and body', async () => {
       mockTrpcClient.document.createDocument.mutate.mockResolvedValue({ id: 'new-doc' });
 
@@ -412,6 +421,20 @@ describe('doc command', () => {
   // ── edit ──────────────────────────────────────────────
 
   describe('edit', () => {
+    it.each([
+      { env: 'op-run-1', expected: { operationId: 'op-run-1' } },
+      { env: '', expected: undefined },
+    ])('passes the current run operation when set: %j', async ({ env, expected }) => {
+      vi.stubEnv('LOBEHUB_OPERATION_ID', env);
+      mockTrpcClient.document.updateDocument.mutate.mockResolvedValue({});
+
+      await createProgram().parseAsync(['node', 'test', 'doc', 'edit', 'doc1', '--body', 'v2']);
+
+      const [params] = mockTrpcClient.document.updateDocument.mutate.mock.calls[0];
+      if (expected) expect(params).toMatchObject(expected);
+      else expect(params).not.toHaveProperty('operationId');
+    });
+
     it('should update document title', async () => {
       mockTrpcClient.document.updateDocument.mutate.mockResolvedValue({});
 
@@ -564,6 +587,28 @@ describe('doc command', () => {
         }),
       );
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Linked'));
+    });
+
+    it('carries the dispatched operation only for its own topic', async () => {
+      vi.stubEnv('LOBEHUB_OPERATION_ID', 'op-current');
+      vi.stubEnv('LOBEHUB_TOPIC_ID', 'topic_123');
+      mockTrpcClient.document.getDocumentById.query.mockResolvedValue({ title: 'Report' });
+      mockTrpcClient.notebook.createDocument.mutate.mockResolvedValue({ id: 'linked' });
+      await createProgram().parseAsync(['node', 'test', 'doc', 'link-topic', 'doc1', 'topic_123']);
+      expect(mockTrpcClient.notebook.createDocument.mutate).toHaveBeenLastCalledWith(
+        expect.objectContaining({ operationId: 'op-current' }),
+      );
+      await createProgram().parseAsync([
+        'node',
+        'test',
+        'doc',
+        'link-topic',
+        'doc1',
+        'other-topic',
+      ]);
+      expect(mockTrpcClient.notebook.createDocument.mutate).toHaveBeenLastCalledWith(
+        expect.not.objectContaining({ operationId: expect.any(String) }),
+      );
     });
 
     it('should error when document not found', async () => {

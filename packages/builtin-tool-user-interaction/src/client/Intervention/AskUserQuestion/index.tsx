@@ -8,10 +8,12 @@ import {
   useAskUserForm,
 } from '@lobechat/shared-tool-ui/ask-user';
 import type { BuiltinInterventionProps } from '@lobechat/types';
-import { Flexbox, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Alert, Button, Text } from '@lobehub/ui/base-ui';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useConversationStore } from '@/features/Conversation/store';
 import { dataSelectors } from '@/features/Conversation/store/slices/data/selectors';
 import { useChatStore } from '@/store/chat';
@@ -32,13 +34,17 @@ import { useChatStore } from '@/store/chat';
  */
 const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestionArgs>>((props) => {
   const { t } = useTranslation('tool');
-  const { actionsPortalTarget, args, interactionMode, messageId, onInteractionAction } = props;
+  const { actionsPortalTarget, args, disabled, interactionMode, messageId, onInteractionAction } =
+    props;
 
   const persistedDraft = useConversationStore((s) => {
     const msg = dataSelectors.getDbMessageById(messageId)(s);
     return (msg?.pluginState as { [DRAFT_PLUGIN_STATE_KEY]?: unknown })?.[DRAFT_PLUGIN_STATE_KEY];
   });
   const setInterventionDraft = useChatStore((s) => s.setInterventionDraft);
+  const submissionPhase = useChatStore((s) => s.questionSubmissions[messageId]);
+  const checkQuestionSubmission = useChatStore((s) => s.checkQuestionSubmission);
+  const context = useConversationStore((s) => s.context);
   const writeDraft = useCallback(
     (draft: AskUserDraft) => setInterventionDraft(messageId, draft),
     [messageId, setInterventionDraft],
@@ -46,6 +52,7 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
 
   const form = useAskUserForm({
     args,
+    disabled,
     onInteractionAction,
     persistedDraft,
     writeDraft,
@@ -71,6 +78,32 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     );
   }
 
+  if (submissionPhase === 'submitting' || submissionPhase === 'checking') {
+    return (
+      <Flexbox horizontal align="center" gap={8} padding={8} role="status">
+        <NeuralNetworkLoading size={16} />
+        <Text type="secondary">
+          {t(
+            submissionPhase === 'submitting'
+              ? 'askUserQuestion.submitting'
+              : 'askUserQuestion.checking',
+          )}
+        </Text>
+      </Flexbox>
+    );
+  }
+
+  if (submissionPhase === 'uncertain') {
+    return (
+      <Flexbox gap={8} padding={8}>
+        <Text role="status">{t('askUserQuestion.uncertain')}</Text>
+        <Button onClick={() => checkQuestionSubmission(messageId, context)}>
+          {t('askUserQuestion.checkStatus')}
+        </Button>
+      </Flexbox>
+    );
+  }
+
   const labels = {
     customPlaceholder: t('askUserQuestion.customOption.placeholder'),
     escapeBack: t('askUserQuestion.escape.back'),
@@ -87,12 +120,17 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
   };
 
   return (
-    <AskUserQuestionView
-      {...form}
-      actionsPortalTarget={actionsPortalTarget}
-      labels={labels}
-      showCountdown={false}
-    />
+    <Flexbox gap={8}>
+      {submissionPhase === 'failed' && (
+        <Alert title={t('askUserQuestion.submitFailed')} type="error" />
+      )}
+      <AskUserQuestionView
+        {...form}
+        actionsPortalTarget={actionsPortalTarget}
+        labels={labels}
+        showCountdown={false}
+      />
+    </Flexbox>
   );
 });
 

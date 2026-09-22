@@ -6,7 +6,7 @@ import ChatAppearance from '../chat-appearance/features/ChatAppearance';
 import Appearance from '../common/features/Appearance';
 import Common from '../common/features/Common/Common';
 import Desktop from './features/Desktop';
-import Terminal from './features/Terminal';
+import Font from './features/Font';
 
 interface PageProps {
   showSettingHeader?: boolean;
@@ -20,7 +20,7 @@ const Page = ({ showSettingHeader = true }: PageProps) => {
       <Common />
       <Appearance />
       <Desktop />
-      <Terminal />
+      <Font />
       <ChatAppearance />
     </>
   );

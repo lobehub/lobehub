@@ -84,6 +84,30 @@ export {
   normalizeCursorQuestion,
 } from './cursorAcpSession';
 export {
+  buildDevinAcpArgs,
+  buildDevinAcpPrompt,
+  type DevinAcpImagePromptBlock,
+  type DevinAcpPromptBlock,
+  DevinAcpSession,
+  type DevinAcpSessionOptions,
+  type DevinAcpTextPromptBlock,
+  isDevinAcpSessionNotFoundError,
+} from './devinAcpSession';
+export {
+  buildDroidAcpArgs,
+  buildDroidAcpPrompt,
+  type DroidAcpImagePromptBlock,
+  type DroidAcpModelCatalog,
+  type DroidAcpPromptBlock,
+  DroidAcpSession,
+  type DroidAcpSessionOptions,
+  type DroidAcpTextPromptBlock,
+  isDroidAcpSessionNotFoundError,
+  listDroidAcpModels,
+  type ListDroidAcpModelsOptions,
+  parseDroidAcpModelCatalog,
+} from './droidAcpSession';
+export {
   createFileStoreImageUploader,
   type FileStoreCreateFileInput,
   type FileStorePort,
@@ -135,7 +159,6 @@ export {
   CODEX_REQUIRED_ARGS,
   KIMI_CODE_BASE_ARGS,
   OPENCODE_BASE_ARGS,
-  PI_BASE_ARGS,
   QODER_BASE_ARGS,
   type QoderSpawnArgsOptions,
   spawnAgent,

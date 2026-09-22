@@ -7,7 +7,6 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import RingLoadingIcon from '@/components/RingLoading';
-import { electronSystemService } from '@/services/electron/system';
 import { gitService } from '@/services/git';
 import {
   deviceSelectors,
@@ -20,6 +19,7 @@ import {
 } from '@/store/device';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import BranchSwitcher from './BranchSwitcher';
 import { gitChipStyles } from './gitChipStyles';
@@ -185,13 +185,13 @@ const GitStatus = memo<GitStatusProps>(
     const [pulling, setPulling] = useState(false);
     const [pushing, setPushing] = useState(false);
     const toggleRightPanel = useGlobalStore((s) => s.toggleRightPanel);
-    const setWorkingSidebarTab = useGlobalStore((s) => s.setWorkingSidebarTab);
+    const openWorkingSidebar = useGlobalStore((s) => s.openWorkingSidebar);
     const showRightPanel = useGlobalStore(systemStatusSelectors.showRightPanel);
     const workingSidebarTab = useGlobalStore((s) => s.status.workingSidebarTab);
 
     const handleOpenPr = useCallback(() => {
       if (prData?.pullRequest?.url) {
-        void electronSystemService.openExternalLink(prData.pullRequest.url);
+        openTrustedExternalUrl(prData.pullRequest.url);
       }
     }, [prData?.pullRequest?.url]);
 
@@ -200,9 +200,8 @@ const GitStatus = memo<GitStatusProps>(
         toggleRightPanel(false);
         return;
       }
-      setWorkingSidebarTab('review');
-      toggleRightPanel(true);
-    }, [showRightPanel, workingSidebarTab, setWorkingSidebarTab, toggleRightPanel]);
+      openWorkingSidebar('review');
+    }, [openWorkingSidebar, showRightPanel, workingSidebarTab, toggleRightPanel]);
 
     const refreshAfterSync = useCallback(async () => {
       await Promise.all([

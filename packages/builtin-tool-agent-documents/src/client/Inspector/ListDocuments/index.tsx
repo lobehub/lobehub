@@ -16,18 +16,16 @@ export const ListDocumentsInspector = memo<
   const { t } = useTranslation('plugin');
 
   const scope = args?.scope || partialArgs?.scope;
-  const count = pluginState?.documents?.length;
+  // The read path projects the row list away and pins its size as
+  // `documentCount`; the array is only here for a payload that predates that.
+  const count = pluginState?.documentCount ?? pluginState?.documents?.length;
   const styles = inspectorChipStyles;
 
   return (
-    <div
-      style={{ flexWrap: 'wrap', gap: 4 }}
-      className={cx(
-        inspectorTextStyles.root,
-        (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-      )}
-    >
-      <span>{t('builtins.lobe-agent-documents.apiName.listDocuments')}</span>
+    <div className={inspectorTextStyles.root} style={{ flexWrap: 'wrap', gap: 4 }}>
+      <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+        {t('builtins.lobe-agent-documents.apiName.listDocuments')}
+      </span>
       {scope && (
         <>
           <span className={styles.separator}>·</span>

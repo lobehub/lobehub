@@ -1,7 +1,8 @@
 'use client';
 
 import { type AssistantContentBlock, type UIChatMessage } from '@lobechat/types';
-import { Accordion, AccordionItem, Block, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
+import { Block, Flexbox, Icon, Markdown } from '@lobehub/ui';
+import { Accordion, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ScrollText, Workflow } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
@@ -44,45 +45,47 @@ const InstructionAccordion = memo<{ childrenCount: number; instruction: string }
 
     return (
       <Accordion
-        expandedKeys={expandedKeys}
         gap={8}
-        onExpandedChange={(keys) => setExpandedKeys(keys as string[])}
-      >
-        <AccordionItem
-          itemKey="instruction"
-          paddingBlock={4}
-          paddingInline={4}
-          title={
-            <Flexbox horizontal align="center" gap={8}>
+        indicatorPlacement="inline"
+        styles={{ trigger: { paddingBlock: 4, paddingInline: 4 } }}
+        value={expandedKeys}
+        items={[
+          {
+            children: (
               <Block
-                horizontal
-                align="center"
-                flex="none"
-                gap={4}
-                height={24}
-                justify="center"
-                style={{ fontSize: 12 }}
-                variant="outlined"
-                width={24}
+                className={styles.instructionContent}
+                padding={12}
+                style={{ marginBlock: 8 }}
+                variant={'outlined'}
               >
-                <Icon color={cssVar.colorTextSecondary} icon={ScrollText} />
+                <Markdown variant={'chat'}>{instruction}</Markdown>
               </Block>
-              <Text as="span" type="secondary">
-                {t('task.instruction')}
-              </Text>
-            </Flexbox>
-          }
-        >
-          <Block
-            className={styles.instructionContent}
-            padding={12}
-            style={{ marginBlock: 8 }}
-            variant={'outlined'}
-          >
-            <Markdown variant={'chat'}>{instruction}</Markdown>
-          </Block>
-        </AccordionItem>
-      </Accordion>
+            ),
+            key: 'instruction',
+            title: (
+              <Flexbox horizontal align="center" gap={8}>
+                <Block
+                  horizontal
+                  align="center"
+                  flex="none"
+                  gap={4}
+                  height={24}
+                  justify="center"
+                  style={{ fontSize: 12 }}
+                  variant="outlined"
+                  width={24}
+                >
+                  <Icon color={cssVar.colorTextSecondary} icon={ScrollText} />
+                </Block>
+                <Text as="span" type="secondary">
+                  {t('task.instruction')}
+                </Text>
+              </Flexbox>
+            ),
+          },
+        ]}
+        onValueChange={setExpandedKeys}
+      />
     );
   },
 );
@@ -275,15 +278,30 @@ const CompletedView = memo<{
     <Flexbox gap={8}>
       {/* Intermediate steps - collapsed by default */}
       {intermediateBlocks.length > 0 && (
-        <Accordion defaultExpandedKeys={[]} gap={8}>
-          <AccordionItem itemKey="intermediate" paddingBlock={4} paddingInline={4} title={title}>
-            <Flexbox gap={8} paddingInline={4} style={{ marginTop: 8 }}>
-              {intermediateBlocks.map((block) => (
-                <ContentBlock {...block} disableEditing assistantId={assistantId} key={block.id} />
-              ))}
-            </Flexbox>
-          </AccordionItem>
-        </Accordion>
+        <Accordion
+          defaultValue={[]}
+          gap={8}
+          indicatorPlacement="inline"
+          styles={{ trigger: { paddingBlock: 4, paddingInline: 4 } }}
+          items={[
+            {
+              children: (
+                <Flexbox gap={8} paddingInline={4} style={{ marginTop: 8 }}>
+                  {intermediateBlocks.map((block) => (
+                    <ContentBlock
+                      {...block}
+                      disableEditing
+                      assistantId={assistantId}
+                      key={block.id}
+                    />
+                  ))}
+                </Flexbox>
+              ),
+              key: 'intermediate',
+              title,
+            },
+          ]}
+        />
       )}
 
       {/* Final result - always visible */}

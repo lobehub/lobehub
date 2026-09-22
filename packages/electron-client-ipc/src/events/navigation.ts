@@ -24,10 +24,10 @@ export interface NavigationBroadcastEvents {
   createNewPage: () => void;
 
   /**
-   * Ask renderer to open a new tab based on the currently active tab's context.
-   * Triggered by Cmd/Ctrl+T on the main window.
+   * Ask renderer to open a new tab, optionally at a specific path.
+   * Triggered by Cmd/Ctrl+T on the main window and menu actions that need a fresh tab.
    */
-  createNewTab: () => void;
+  createNewTab: (data?: { path: string }) => void;
 
   /**
    * Ask renderer to create a new topic (start a new conversation).

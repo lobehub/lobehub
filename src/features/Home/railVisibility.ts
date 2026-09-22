@@ -10,13 +10,16 @@ interface RailVisibilityInput {
   hiddenWidgets: string[];
   isLogin?: boolean | null;
   showHomeRail?: boolean;
+  usageActive?: boolean;
 }
 
-export const canHostRail = (hiddenWidgets: string[]): boolean =>
-  hasVisibleRailWidget({ ...RAIL_INBOX_PROPS, hiddenWidgets });
+export const canHostRail = (hiddenWidgets: string[], usageActive?: boolean): boolean =>
+  hasVisibleRailWidget({ ...RAIL_INBOX_PROPS, hiddenWidgets, usageActive });
 
 export const resolveRailVisibility = ({
   hiddenWidgets,
   isLogin,
   showHomeRail,
-}: RailVisibilityInput): boolean => Boolean(isLogin && showHomeRail && canHostRail(hiddenWidgets));
+  usageActive,
+}: RailVisibilityInput): boolean =>
+  Boolean(isLogin && showHomeRail && canHostRail(hiddenWidgets, usageActive));

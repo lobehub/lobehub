@@ -24,8 +24,10 @@ export const ShowAgentMarketplaceInspector = memo<
 
   if (isArgumentsStreaming && categoryHints.length === 0) {
     return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{tPlugin('builtins.lobe-web-onboarding.apiName.showAgentMarketplace')}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {tPlugin('builtins.lobe-web-onboarding.apiName.showAgentMarketplace')}
+        </span>
       </div>
     );
   }
@@ -34,14 +36,10 @@ export const ShowAgentMarketplaceInspector = memo<
   const overflowCount = categoryHints.length - visibleHints.length;
 
   return (
-    <div
-      style={{ flexWrap: 'wrap', gap: 4 }}
-      className={cx(
-        inspectorTextStyles.root,
-        (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-      )}
-    >
-      <span>{tPlugin('builtins.lobe-web-onboarding.apiName.showAgentMarketplace')}</span>
+    <div className={inspectorTextStyles.root} style={{ flexWrap: 'wrap', gap: 4 }}>
+      <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+        {tPlugin('builtins.lobe-web-onboarding.apiName.showAgentMarketplace')}
+      </span>
       {visibleHints.map((slug) => {
         const labelKey = CATEGORY_LABEL_I18N_KEYS[slug];
         return (

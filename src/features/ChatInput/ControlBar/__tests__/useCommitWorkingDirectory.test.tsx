@@ -19,8 +19,6 @@ const testState = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({ confirmModal: vi.fn() }));
-
 vi.mock('@/hooks/useEffectiveAgencyConfig', () => ({
   useEffectiveAgencyConfig: () => testState.effective,
 }));

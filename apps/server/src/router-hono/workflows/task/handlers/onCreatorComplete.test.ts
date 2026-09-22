@@ -20,21 +20,29 @@ const {
 
 vi.mock('@/database/server', () => ({ getServerDB }));
 vi.mock('@/server/services/bot/BotCallbackService', () => ({
-  BotCallbackService: vi.fn(() => ({ handleCallback })),
+  BotCallbackService: vi.fn(function () {
+    return { handleCallback };
+  }),
 }));
 vi.mock('@/server/services/taskResultBridge', () => ({
-  TaskResultBridgeService: vi.fn(() => ({ completeCreatorWakeup })),
+  TaskResultBridgeService: vi.fn(function () {
+    return { completeCreatorWakeup };
+  }),
 }));
 vi.mock('@/server/services/taskResultBridge/redisStore', () => ({
-  TaskResultCallbackRedisStore: vi.fn(() => ({
-    areDelivered,
-    getDeliveredChunkCount,
-    markDeliveryChunk,
-  })),
+  TaskResultCallbackRedisStore: vi.fn(function () {
+    return {
+      areDelivered,
+      getDeliveredChunkCount,
+      markDeliveryChunk,
+    };
+  }),
 }));
 
 const makeContext = (body: Record<string, unknown>) => {
-  const json = vi.fn((payload, status = 200) => ({ payload, status }));
+  const json = vi.fn(function (payload, status = 200) {
+    return { payload, status };
+  });
   return {
     context: { json, req: { json: vi.fn().mockResolvedValue(body) } } as any,
     json,

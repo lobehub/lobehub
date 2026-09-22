@@ -13,50 +13,33 @@ import { type DevDockLayout as DevDockLayoutComponent } from './index';
 
 let SPAGlobalProvider: typeof SPAGlobalProviderComponent;
 let DevDockLayout: typeof DevDockLayoutComponent;
-const { cacheGateReleased, canAccessDevDock, devDockRenderError } = vi.hoisted(() => ({
-  cacheGateReleased: { current: true },
-  canAccessDevDock: vi.fn(() => false),
-  devDockRenderError: { current: null as Error | null },
-}));
+const { cacheGateReleased, canAccessDevDock, devDockRenderError, initializeBuiltin } = vi.hoisted(
+  () => ({
+    cacheGateReleased: { current: true },
+    canAccessDevDock: vi.fn(() => false),
+    devDockRenderError: { current: null as Error | null },
+    initializeBuiltin: vi.fn(() => null),
+  }),
+);
 
-vi.mock('@lobehub/ui', async () => {
+vi.mock('@lobehub/ui', async (importOriginal) => {
   const React = await import('react');
-  const Passthrough = ({ children }: { children?: ReactNode }) =>
-    React.createElement(React.Fragment, null, children);
 
   return {
+    ...(await importOriginal<object>()),
     ContextMenuHost: () => React.createElement('div', { 'data-testid': 'context-menu-host' }),
     ModalHost: () => React.createElement('div', { 'data-testid': 'legacy-modal-host' }),
-    TooltipGroup: Passthrough,
     setContextMenuInterceptor: vi.fn(),
   };
 });
 
-vi.mock('@lobehub/ui/base-ui', async () => {
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
   const React = await import('react');
 
   return {
+    ...(await importOriginal<object>()),
     ModalHost: () => React.createElement('div', { 'data-testid': 'base-modal-host' }),
     ToastHost: () => React.createElement('div', { 'data-testid': 'toast-host' }),
-  };
-});
-
-vi.mock('antd-style', async () => {
-  const React = await import('react');
-
-  return {
-    StyleProvider: ({ children }: { children?: ReactNode }) =>
-      React.createElement(React.Fragment, null, children),
-  };
-});
-
-vi.mock('motion/react', async () => {
-  const React = await import('react');
-
-  return {
-    LazyMotion: ({ children }: { children?: ReactNode }) =>
-      React.createElement(React.Fragment, null, children),
-    domMax: {},
   };
 });
 
@@ -165,6 +148,7 @@ vi.mock('@/layout/GlobalProvider/ServerVersionOutdatedAlert', () => ({
 }));
 
 vi.mock('@/layout/GlobalProvider/StoreInitialization', () => ({
+  BuiltinAgentInitialization: initializeBuiltin,
   default: () => null,
 }));
 
@@ -196,15 +180,35 @@ describe('SPAGlobalProvider', () => {
     const loadedModule = await import('./index');
     SPAGlobalProvider = loadedModule.default;
     DevDockLayout = loadedModule.DevDockLayout;
-  });
+  }, 30_000);
 
   beforeEach(() => {
+    initializeBuiltin.mockClear();
     cacheGateReleased.current = true;
     canAccessDevDock.mockReturnValue(false);
     devDockRenderError.current = null;
     setDevDockUnlocked(false);
     Reflect.deleteProperty(window, '__SERVER_CONFIG__');
     setPostRenderReady(false);
+  });
+
+  it('defers builtin subscriptions until persistent cache hydration has completed', () => {
+    cacheGateReleased.current = false;
+    const { unmount } = render(
+      <SPAGlobalProvider>
+        <div />
+      </SPAGlobalProvider>,
+    );
+    expect(initializeBuiltin).not.toHaveBeenCalled();
+    unmount();
+
+    cacheGateReleased.current = true;
+    render(
+      <SPAGlobalProvider>
+        <div />
+      </SPAGlobalProvider>,
+    );
+    expect(initializeBuiltin).toHaveBeenCalled();
   });
 
   afterEach(() => {

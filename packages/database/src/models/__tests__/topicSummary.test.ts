@@ -126,6 +126,79 @@ describe('TopicSummaryModel', () => {
     expect(result).toEqual([]);
   });
 
+  it('excludes share-visitor topics from candidates', async () => {
+    // Visitor topics carry the creator's userId plus a non-null senderId so
+    // they would otherwise satisfy the ownership predicate; the auto-summary
+    // worker must never spend the creator's budget on them.
+    await db.insert(users).values({ id: 'visitor-1' });
+    await db.insert(topics).values([
+      { createdAt: new Date('2026-07-31T00:00:00Z'), id: 'creator-owned', userId },
+      {
+        createdAt: new Date('2026-07-31T00:00:00Z'),
+        id: 'visitor-topic',
+        senderId: 'visitor-1',
+        userId,
+      },
+    ]);
+    await db.insert(messages).values([
+      {
+        content: 'own',
+        id: 'm-owned',
+        role: 'user',
+        topicId: 'creator-owned',
+        updatedAt: new Date('2026-07-31T10:00:00Z'),
+        userId,
+      },
+      {
+        content: 'visit',
+        id: 'm-visitor',
+        role: 'user',
+        topicId: 'visitor-topic',
+        updatedAt: new Date('2026-07-31T10:00:00Z'),
+        userId,
+      },
+    ]);
+
+    const result = await model.listCandidates({
+      idleBefore: new Date('2026-07-31T11:00:00Z'),
+      limit: 20,
+      topicCreatedAfter: new Date('2026-07-30T12:00:00Z'),
+    });
+
+    expect(result.map(({ id }) => id)).toEqual(['creator-owned']);
+  });
+
+  it('refuses to write a summary onto a share-visitor topic', async () => {
+    // The write fence guards direct callers that skipped listCandidates.
+    await db.insert(users).values({ id: 'visitor-2' });
+    await db.insert(topics).values({
+      id: 'visitor-write',
+      senderId: 'visitor-2',
+      userId,
+    });
+    await db.insert(messages).values({
+      content: 'answer',
+      id: 'm-visitor-write',
+      role: 'assistant',
+      topicId: 'visitor-write',
+      updatedAt: new Date('2026-07-31T10:00:00Z'),
+      userId,
+    });
+
+    const updated = await model.updateSummaryIfCurrent({
+      description: 'Should not land',
+      lastMessageId: 'm-visitor-write',
+      lastMessageUpdatedAt: new Date('2026-07-31T10:00:00Z'),
+      summary: 'Should not land',
+      topicId: 'visitor-write',
+    });
+    const [topic] = await db.select().from(topics).where(eq(topics.id, 'visitor-write'));
+
+    expect(updated).toBe(false);
+    expect(topic.description).toBeNull();
+    expect(topic.historySummary).toBeNull();
+  });
+
   it('excludes system-generated topics from candidates', async () => {
     await db.insert(topics).values([
       { createdAt: new Date('2026-07-31T00:00:00Z'), id: 'regular', userId },

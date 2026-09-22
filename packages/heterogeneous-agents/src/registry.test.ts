@@ -7,6 +7,8 @@ import {
   CodexAdapter,
   CursorAcpAdapter,
   CursorAdapter,
+  DroidAcpAdapter,
+  DevinAcpAdapter,
   GrokBuildAdapter,
   KimiCodeAdapter,
   OpenCodeAdapter,
@@ -50,6 +52,15 @@ describe('registry', () => {
       expect(createAdapter('cursor-acp')).toBeInstanceOf(CursorAcpAdapter);
     });
 
+    it('creates a DroidAcpAdapter for Droid and its ACP runtime alias', () => {
+      expect(createAdapter('droid')).toBeInstanceOf(DroidAcpAdapter);
+      expect(createAdapter('droid-acp')).toBeInstanceOf(DroidAcpAdapter);
+    });
+
+    it('creates a DevinAcpAdapter for "devin"', () => {
+      expect(createAdapter('devin')).toBeInstanceOf(DevinAcpAdapter);
+    });
+
     it('creates a GrokBuildAdapter for "grok-build"', () => {
       expect(createAdapter('grok-build')).toBeInstanceOf(GrokBuildAdapter);
     });
@@ -82,6 +93,7 @@ describe('registry', () => {
       );
       expect(listAgentTypes()).toContain('claude-code-sdk');
       expect(listAgentTypes()).toContain('cursor-acp');
+      expect(listAgentTypes()).toContain('droid-acp');
     });
   });
 });

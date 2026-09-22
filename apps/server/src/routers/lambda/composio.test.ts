@@ -34,28 +34,34 @@ vi.mock('@/config/composio', () => ({
 }));
 
 vi.mock('@/database/models/plugin', () => ({
-  PluginModel: vi.fn().mockImplementation(() => ({
-    create: mocks.pluginCreate,
-    delete: mocks.pluginDelete,
-    findById: mocks.pluginFindById,
-    update: mocks.pluginUpdate,
-  })),
+  PluginModel: vi.fn().mockImplementation(function () {
+    return {
+      create: mocks.pluginCreate,
+      delete: mocks.pluginDelete,
+      findById: mocks.pluginFindById,
+      update: mocks.pluginUpdate,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/connector', () => ({
-  ConnectorModel: vi.fn().mockImplementation(() => ({
-    create: mocks.connectorCreate,
-    delete: mocks.connectorDelete,
-    findScopedByIdentifier: mocks.connectorFindScopedByIdentifier,
-    update: mocks.connectorUpdate,
-  })),
+  ConnectorModel: vi.fn().mockImplementation(function () {
+    return {
+      create: mocks.connectorCreate,
+      delete: mocks.connectorDelete,
+      findScopedByIdentifier: mocks.connectorFindScopedByIdentifier,
+      update: mocks.connectorUpdate,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/connectorTool', () => ({
-  ConnectorToolModel: vi.fn().mockImplementation(() => ({
-    deleteToolsNotIn: mocks.connectorToolDeleteToolsNotIn,
-    upsertMany: mocks.connectorToolUpsertMany,
-  })),
+  ConnectorToolModel: vi.fn().mockImplementation(function () {
+    return {
+      deleteToolsNotIn: mocks.connectorToolDeleteToolsNotIn,
+      upsertMany: mocks.connectorToolUpsertMany,
+    };
+  }),
 }));
 
 vi.mock('@/libs/composio', () => ({
@@ -125,6 +131,17 @@ describe('composioRouter.getConnection', () => {
 });
 
 describe('composioRouter.createConnection dual-write', () => {
+  /** @example GitHub cannot create a legacy Composio account after moving to Market OAuth. */
+  it('rejects apps removed from the Composio catalog before remote side effects', async () => {
+    await expect(
+      caller().createConnection({ appSlug: 'GITHUB', identifier: 'github', label: 'GitHub' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+    expect(mocks.authConfigsList).not.toHaveBeenCalled();
+    expect(mocks.connectedAccountsLink).not.toHaveBeenCalled();
+    expect(mocks.connectorCreate).not.toHaveBeenCalled();
+  });
+
   it('mirrors a pending connection into user_connectors + tools', async () => {
     mocks.getServerComposioAuthConfigId.mockReturnValue('ac_env');
     mocks.connectedAccountsLink.mockResolvedValue({ id: 'ca-1', redirectUrl: 'https://auth' });

@@ -66,11 +66,11 @@ export const CallSubAgentInspector = memo<
   const stats = hasFinalStats ? pluginState : pluginState?.progress;
 
   return (
-    <div
-      className={cx(inspectorTextStyles.root, styles.root, isShiny && shinyTextStyles.shinyText)}
-    >
+    <div className={cx(inspectorTextStyles.root, styles.root)}>
       <GroupBotIcon className={styles.icon} size={14} />
-      <span className={styles.label}>{t('builtins.lobe-agent.apiName.callSubAgent')}</span>
+      <span className={cx(styles.label, isShiny && shinyTextStyles.shinyText)}>
+        {t('builtins.lobe-agent.apiName.callSubAgent')}
+      </span>
       {description && <span className={styles.chip}>{description}</span>}
       {stats && (
         <SubAgentStats

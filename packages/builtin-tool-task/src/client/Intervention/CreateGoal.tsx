@@ -10,8 +10,8 @@ import {
   ReactTablePlugin,
 } from '@lobehub/editor';
 import { Editor, useEditor } from '@lobehub/editor/react';
-import { ActionIcon, Flexbox, Icon, Input, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Input } from '@lobehub/ui';
+import { ActionIcon, Button, Text } from '@lobehub/ui/base-ui';
 import { InputNumber } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react';
@@ -23,7 +23,7 @@ import {
   CriterionRequiredChip,
   CriterionRow,
   openCriterionEditModal,
-} from '@/features/Verify/CriterionList';
+} from '@/features/Acceptance/CriterionList';
 
 import type { CreateGoalParams, GoalCriterionDraft } from '../../types';
 

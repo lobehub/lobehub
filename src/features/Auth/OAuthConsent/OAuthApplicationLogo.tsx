@@ -1,4 +1,5 @@
-import { Avatar, Center, Flexbox, FluentEmoji, Icon } from '@lobehub/ui';
+import { Center, Flexbox, FluentEmoji, Icon } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Link2Icon } from 'lucide-react';
 import React, { memo } from 'react';
@@ -36,7 +37,9 @@ interface OAuthApplicationLogoProps {
 const OAuthApplicationLogo = memo<OAuthApplicationLogoProps>(
   ({ isFirstParty, clientDisplayName, logoUrl, size = 72 }) => {
     return isFirstParty ? (
-      <Avatar alt={clientDisplayName} avatar={logoUrl!} shape={'square'} size={size} />
+      <Center>
+        <Avatar alt={clientDisplayName} avatar={logoUrl!} shape={'square'} size={size} />
+      </Center>
     ) : (
       <Flexbox horizontal align={'center'} gap={8} justify={'center'}>
         {logoUrl ? (

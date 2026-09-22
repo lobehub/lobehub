@@ -21,8 +21,8 @@ export interface ModelEmptyCompletionDiagnostics {
  * does not make an otherwise blank turn visible to the user.
  *
  * The `errorType` tags this as the terminal `ModelEmptyCompletion` provider
- * error. Callers surface it immediately so the user can decide whether another
- * potentially billable request should be made.
+ * error. Ordinary callers surface it immediately. A managed router may instead
+ * authorize route fallback while the attempt is still buffered and uncommitted.
  */
 export class ModelEmptyError extends Error {
   readonly errorType = AgentRuntimeErrorType.ModelEmptyCompletion;

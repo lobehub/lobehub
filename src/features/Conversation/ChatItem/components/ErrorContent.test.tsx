@@ -2,7 +2,6 @@
  * @vitest-environment happy-dom
  */
 import { fireEvent, render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import ErrorContent from './ErrorContent';
@@ -11,40 +10,6 @@ const deleteMessageMock = vi.fn();
 const updateMessageErrorMock = vi.fn();
 let messageContent: string | undefined = '';
 let isRegenerating = false;
-
-// Drive the Alert's `afterClose` directly via a click, so we exercise
-// ErrorContent's dismiss branching without the real close animation.
-vi.mock('@lobehub/ui', () => ({
-  Skeleton: { Button: () => <div>loading</div> },
-}));
-
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Alert: ({ action, afterClose }: { action?: ReactNode; afterClose?: () => void }) => (
-    <div>
-      <button type="button" onClick={() => afterClose?.()}>
-        close
-      </button>
-      {action}
-    </div>
-  ),
-  Button: ({
-    children,
-    disabled,
-    loading,
-  }: {
-    children?: ReactNode;
-    disabled?: boolean;
-    loading?: boolean;
-  }) => (
-    <button aria-busy={loading || undefined} disabled={disabled} type="button">
-      {children}
-    </button>
-  ),
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
 
 vi.mock('@/features/Conversation/store', () => ({
   dataSelectors: {
@@ -67,11 +32,29 @@ describe('ErrorContent dismiss behavior', () => {
     isRegenerating = false;
   });
 
+  it('starts with collapsed diagnostics while keeping the reason and retry available', () => {
+    const retry = vi.fn();
+    const { container } = render(
+      <ErrorContent
+        error={{ message: 'Quota exhausted', extra: <pre>provider diagnostics</pre> }}
+        id="msg-1"
+        onRegenerate={retry}
+      />,
+    );
+
+    expect(screen.getByRole('alert')).toHaveAttribute('data-alert-variant', 'outlined');
+    expect(screen.getByText('Quota exhausted')).toBeVisible();
+    expect(container.querySelector('details')).not.toHaveAttribute('open');
+    expect(screen.getByText('Show Details')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: /regenerate/i }));
+    expect(retry).toHaveBeenCalledOnce();
+  });
+
   it('clears only the error (keeps the message) when the turn already streamed content', () => {
     messageContent = 'already streamed text';
     render(<ErrorContent error={{ message: 'boom' } as any} id="msg-1" />);
 
-    fireEvent.click(screen.getByText('close'));
+    fireEvent.click(screen.getByRole('button', { name: 'Close alert' }));
 
     expect(updateMessageErrorMock).toHaveBeenCalledWith('msg-1', null);
     expect(deleteMessageMock).not.toHaveBeenCalled();
@@ -81,7 +64,7 @@ describe('ErrorContent dismiss behavior', () => {
     messageContent = '';
     render(<ErrorContent error={{ message: 'boom' } as any} id="msg-1" />);
 
-    fireEvent.click(screen.getByText('close'));
+    fireEvent.click(screen.getByRole('button', { name: 'Close alert' }));
 
     expect(deleteMessageMock).toHaveBeenCalledWith('msg-1');
     expect(updateMessageErrorMock).not.toHaveBeenCalled();

@@ -7,16 +7,6 @@ import { TrayManager } from '../TrayManager';
 // Mock electron modules (empty shim — TrayManager no longer reads nativeTheme)
 vi.mock('electron', () => ({}));
 
-// Mock logger
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  }),
-}));
-
 // Mock environment constants
 vi.mock('@/const/env', () => ({
   isMac: true,
@@ -61,7 +51,9 @@ describe('TrayManager', () => {
     } as unknown as App;
 
     // Mock Tray constructor
-    vi.mocked(Tray).mockImplementation(() => mockTray);
+    vi.mocked(Tray).mockImplementation(function () {
+      return mockTray;
+    });
 
     trayManager = new TrayManager(mockApp);
   });

@@ -4,6 +4,7 @@ import {
   allowFromField,
   extractDmSettings,
   extractGroupSettings,
+  extractGuestSettings,
   extractUserAllowlist,
   extractWatchKeywordEntries,
   extractWatchKeywords,
@@ -12,12 +13,14 @@ import {
   getStepReactionEmoji,
   makeDmPolicyField,
   makeGroupPolicyFields,
+  makeGuestPolicyField,
   messageMatchesWatchKeyword,
   normalizeAllowFromEntries,
   normalizeBotReplyLocale,
   shouldAllowSender,
   shouldHandleDm,
   shouldHandleGroup,
+  shouldHandleGuest,
   THINKING_REACTION_EMOJI,
   validateAccessSettings,
   WORKING_REACTION_EMOJI,
@@ -134,6 +137,22 @@ describe('makeDmPolicyField', () => {
   });
 });
 
+describe('makeGuestPolicyField', () => {
+  it('produces a flat guestPolicy field with four independent access modes', () => {
+    const field = makeGuestPolicyField({ policy: 'open' });
+
+    expect(field.key).toBe('guestPolicy');
+    expect(field.default).toBe('open');
+    expect(field.enum).toEqual(['open', 'allowlist', 'pairing', 'disabled']);
+    expect(field.enumLabels).toEqual([
+      'channel.guestPolicyOpen',
+      'channel.guestPolicyAllowlist',
+      'channel.guestPolicyPairing',
+      'channel.guestPolicyDisabled',
+    ]);
+  });
+});
+
 describe('allowFromField', () => {
   it('is an object list (id + optional name) so operators can label entries', () => {
     expect(allowFromField.key).toBe('allowFrom');
@@ -189,6 +208,18 @@ describe('extractDmSettings', () => {
     // Regression: the original bug stored disabled at `settings.dm.policy` but
     // never read it back. The new shape is flat; nested `dm.policy` is ignored.
     expect(extractDmSettings({ dm: { policy: 'disabled' } })).toEqual({ policy: 'open' });
+  });
+});
+
+describe('extractGuestSettings', () => {
+  it('defaults to open for backward compatibility and reads valid policies', () => {
+    expect(extractGuestSettings(undefined)).toEqual({ policy: 'open' });
+    expect(extractGuestSettings({ guestPolicy: 'mystery' })).toEqual({ policy: 'open' });
+    expect(extractGuestSettings({ guestPolicy: 'allowlist' })).toEqual({
+      policy: 'allowlist',
+    });
+    expect(extractGuestSettings({ guestPolicy: 'pairing' })).toEqual({ policy: 'pairing' });
+    expect(extractGuestSettings({ guestPolicy: 'disabled' })).toEqual({ policy: 'disabled' });
   });
 });
 
@@ -499,6 +530,93 @@ describe('shouldHandleDm', () => {
   });
 });
 
+describe('shouldHandleGuest', () => {
+  const emptyUserAllowlist = { ids: [] as string[] };
+  const aliceOnly = { ids: ['alice-id'] };
+
+  it('does not affect non-Guest traffic', () => {
+    expect(
+      shouldHandleGuest({
+        authorUserId: undefined,
+        guestSettings: { policy: 'disabled' },
+        isGuest: false,
+        userAllowlist: emptyUserAllowlist,
+      }),
+    ).toBe('allow');
+  });
+
+  it('keeps existing Guest Mode behavior under open policy', () => {
+    expect(
+      shouldHandleGuest({
+        authorUserId: 'stranger-id',
+        guestSettings: { policy: 'open' },
+        isGuest: true,
+        userAllowlist: emptyUserAllowlist,
+      }),
+    ).toBe('allow');
+  });
+
+  it('fails closed for an empty Guest allowlist and permits listed users', () => {
+    expect(
+      shouldHandleGuest({
+        authorUserId: 'alice-id',
+        guestSettings: { policy: 'allowlist' },
+        isGuest: true,
+        userAllowlist: emptyUserAllowlist,
+      }),
+    ).toBe('reject');
+    expect(
+      shouldHandleGuest({
+        authorUserId: 'alice-id',
+        guestSettings: { policy: 'allowlist' },
+        isGuest: true,
+        userAllowlist: aliceOnly,
+      }),
+    ).toBe('allow');
+  });
+
+  it('pairs strangers, permits approved users and always permits the owner', () => {
+    expect(
+      shouldHandleGuest({
+        authorUserId: 'stranger-id',
+        guestSettings: { policy: 'pairing' },
+        isGuest: true,
+        operatorUserId: 'owner-id',
+        userAllowlist: emptyUserAllowlist,
+      }),
+    ).toBe('pair');
+    expect(
+      shouldHandleGuest({
+        authorUserId: 'alice-id',
+        guestSettings: { policy: 'pairing' },
+        isGuest: true,
+        operatorUserId: 'owner-id',
+        userAllowlist: aliceOnly,
+      }),
+    ).toBe('allow');
+    expect(
+      shouldHandleGuest({
+        authorUserId: 'owner-id',
+        guestSettings: { policy: 'pairing' },
+        isGuest: true,
+        operatorUserId: 'owner-id',
+        userAllowlist: emptyUserAllowlist,
+      }),
+    ).toBe('allow');
+  });
+
+  it('rejects every Guest summon when disabled', () => {
+    expect(
+      shouldHandleGuest({
+        authorUserId: 'alice-id',
+        guestSettings: { policy: 'disabled' },
+        isGuest: true,
+        userAllowlist: aliceOnly,
+      }),
+    ).toBe('reject');
+  });
+});
+
 describe('shouldHandleGroup', () => {
   const open = { allowFrom: [] as string[], policy: 'open' as const };
   const disabled = { allowFrom: [] as string[], policy: 'disabled' as const };
@@ -645,6 +763,7 @@ describe('validateAccessSettings', () => {
 
   it('passes pairing when the operator (settings.userId) is set', () => {
     expect(validateAccessSettings({ dmPolicy: 'pairing', userId: 'owner-id' }).valid).toBe(true);
+    expect(validateAccessSettings({ guestPolicy: 'pairing', userId: 'owner-id' }).valid).toBe(true);
   });
 
   it('rejects pairing without a userId — owner is the approver, missing it bricks the flow', () => {
@@ -653,13 +772,14 @@ describe('validateAccessSettings', () => {
     expect(result.errors).toEqual([
       {
         field: 'userId',
-        message: expect.stringContaining('Pairing policy'),
+        message: expect.stringContaining('Pairing policies require'),
       },
     ]);
   });
 
   it('treats a blank-string userId the same as missing (whitespace is not an owner)', () => {
     expect(validateAccessSettings({ dmPolicy: 'pairing', userId: '   ' }).valid).toBe(false);
+    expect(validateAccessSettings({ guestPolicy: 'pairing', userId: '   ' }).valid).toBe(false);
   });
 
   it('does not require userId for allowlist or disabled — they have no approval flow', () => {

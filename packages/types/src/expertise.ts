@@ -121,3 +121,89 @@ export interface ExpertiseInsightEvidenceRef {
   ids: string[];
   type: ExpertiseInsightEvidenceType;
 }
+
+/**
+ * Whether a standard rests on something observable or on the owner's preference.
+ *
+ * Both are legitimate — a reviewer is allowed to just want things a certain way — but only one of
+ * them can be enforced automatically. A taste standard has no test a delivery could be measured
+ * against, so compiling it into a criterion that blocks work on its own would be enforcing a
+ * preference as if it were a fact.
+ */
+export type ExpertiseReasonKind = 'mechanism' | 'taste';
+
+/**
+ * Whether the reviewer gave the reason or the distillation supplied it.
+ *
+ * An inferred reason is worth keeping — the mechanism is what lets a standard reach a screen
+ * nobody has built yet — but it must never read as something the reviewer said, because a reason
+ * carries weight downstream that an invented one has not earned.
+ */
+export type ExpertiseReasonSource = 'inferred' | 'reviewer';
+
+/**
+ * What a backtest concluded about one lesson.
+ *
+ * `ready` does not mean the standard is correct — it means firing it would not have contradicted
+ * the reviewer on the history we can see.
+ */
+export type ExpertiseBacktestVerdict = 'ready' | 'too-broad' | 'insufficient-evidence';
+
+/**
+ * How a distilled standard scored against the reviewer's own past decisions.
+ *
+ * Read the numbers, not the name: measuring this on 898 of one reviewer's circled rejections showed
+ * the score cannot be used as a gate, because the labels it scores against are incomplete. A
+ * reviewer circles the one or two worst things in a delivery, so a standard that correctly spots a
+ * real defect they did not circle that time is counted a false alarm. Concretely: standards fired on
+ * 25 of 44 rejections from the same category, but matched what the reviewer had actually written on
+ * 4 — while firing on 39% of deliveries they accepted. Neither number separates a good standard
+ * from a bad one.
+ *
+ * So nothing writes this column yet, and nothing should gate on `verdict` until a measurement with
+ * unbiased labels exists — the candidate being forward measurement, where a standard is injected
+ * without blocking and what is counted is how often the reviewer overrides it once it has fired.
+ * Kept as a column because that measurement still belongs on the lesson.
+ */
+export interface ExpertiseBacktestResult {
+  /** ISO 8601. */
+  computedAt: string;
+  /** Units it flagged that the reviewer had in fact accepted — the cost of compiling it. */
+  falseAlarms: number;
+  /** Units the standard flagged, out of `sampled`. */
+  fired: number;
+  /**
+   * `fired` is low-information on its own: a standard nobody could violate scores a perfect
+   * precision on two units. The verdict requires a floor.
+   */
+  precision: number;
+  /** Prompt version behind the judgements, so scores from different wordings never get pooled. */
+  promptVersion: string;
+  /** Historical judged units put in front of the model, excluding the ones that taught it. */
+  sampled: number;
+  verdict: ExpertiseBacktestVerdict;
+}
+
+/**
+ * What one consolidation pass read, and what each boundary it wrote rests on.
+ *
+ * A rewritten standard is only as trustworthy as the deliveries behind it, and the rewrite text
+ * cannot carry that: the model cites deliveries by per-request labels ("S2") that mean nothing once
+ * the request is gone. Ids are resolved before they are stored, so an exemption can always be
+ * walked back to the delivery the reviewer let through.
+ */
+export interface ExpertiseRevisionEvidence {
+  /**
+   * Each exemption written into `limits`, with the accepted deliveries it was read from. Never
+   * empty per entry: a boundary that cannot name a delivery the reviewer shipped is invented, and
+   * is dropped before it gets here.
+   */
+  boundaries: { checkResultIds: string[]; limit: string }[];
+  /** Rejected deliveries (`verify_check_results` ids) the pass restated the standard from. */
+  instances: string[];
+  /**
+   * Accepted deliveries offered as the contrast set. Kept even when no boundary was found, so
+   * "no boundary" can be read as "none among these" rather than "never looked".
+   */
+  shipped: string[];
+}

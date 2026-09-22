@@ -1,11 +1,23 @@
-import type { ChatTopicMetadata, DeviceGitLinkedPullRequest } from '@lobechat/types';
+import type {
+  ChatTopicMetadata,
+  DeviceGitLinkedPullRequest,
+  DeviceGitPullRequestCiStatus,
+} from '@lobechat/types';
 import {
   getTopicMetadataWorkingDirectoryEffectivePath,
   getTopicMetadataWorkingDirectorySourcePath,
 } from '@lobechat/utils/client/topic';
 import { cssVar } from 'antd-style';
 import type { LucideIcon } from 'lucide-react';
-import { GitMerge, GitPullRequestArrow, GitPullRequestClosed } from 'lucide-react';
+import {
+  CircleCheck,
+  CircleSlash,
+  CircleX,
+  GitMerge,
+  GitPullRequestArrow,
+  GitPullRequestClosed,
+  LoaderCircle,
+} from 'lucide-react';
 
 import {
   getConfigRepoType,
@@ -19,7 +31,9 @@ export type PullRequestState = 'open' | 'merged' | 'closed';
  * Resolve a GitHub PR's lifecycle state. GitHub's `state` is only open|closed;
  * "merged" is a closed PR carrying a `mergedAt`, so check that first.
  */
-export const getPullRequestState = (pr: DeviceGitLinkedPullRequest): PullRequestState => {
+export const getPullRequestState = (
+  pr: Pick<DeviceGitLinkedPullRequest, 'mergedAt' | 'state'>,
+): PullRequestState => {
   if (pr.mergedAt || pr.state === 'merged') return 'merged';
   if (pr.state === 'closed') return 'closed';
   return 'open';
@@ -27,7 +41,7 @@ export const getPullRequestState = (pr: DeviceGitLinkedPullRequest): PullRequest
 
 // GitHub merged-PR purple. Kept as a constant since antd's token set has no
 // semantic "merged" color; the green (success) / red (error) come from tokens.
-const MERGED_PURPLE = '#8957e5';
+export const MERGED_PURPLE = '#8957e5';
 
 export interface PullRequestStateVisual {
   color: string;
@@ -39,6 +53,30 @@ export const PR_STATE_VISUAL: Record<PullRequestState, PullRequestStateVisual> =
   closed: { color: cssVar.colorError, icon: GitPullRequestClosed, labelKey: 'metaCard.pr.closed' },
   merged: { color: MERGED_PURPLE, icon: GitMerge, labelKey: 'metaCard.pr.merged' },
   open: { color: cssVar.colorSuccess, icon: GitPullRequestArrow, labelKey: 'metaCard.pr.open' },
+};
+
+export interface CiVisual {
+  color: string;
+  icon: LucideIcon;
+  labelKey:
+    'metaCard.ci.failure' | 'metaCard.ci.none' | 'metaCard.ci.pending' | 'metaCard.ci.success';
+}
+
+export const getCiVisual = (status?: DeviceGitPullRequestCiStatus): CiVisual => {
+  switch (status) {
+    case 'success': {
+      return { color: cssVar.colorSuccess, icon: CircleCheck, labelKey: 'metaCard.ci.success' };
+    }
+    case 'failure': {
+      return { color: cssVar.colorError, icon: CircleX, labelKey: 'metaCard.ci.failure' };
+    }
+    case 'pending': {
+      return { color: cssVar.colorWarning, icon: LoaderCircle, labelKey: 'metaCard.ci.pending' };
+    }
+    default: {
+      return { color: cssVar.colorTextTertiary, icon: CircleSlash, labelKey: 'metaCard.ci.none' };
+    }
+  }
 };
 
 /**

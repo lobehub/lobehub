@@ -79,7 +79,7 @@ const useBedrockCard = (): ProviderItem => {
     if (!hasAuthShape) return;
 
     setAuthMode(inferBedrockAuthMode(keyVaults));
-  }, [isLoading, keyVaults?.accessKeyId, keyVaults?.apiKey, keyVaults?.secretAccessKey]);
+  }, [isLoading, keyVaults]);
 
   const authModeOptions = useMemo<TabsItem[]>(
     () => [

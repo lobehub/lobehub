@@ -22,8 +22,14 @@ import {
   AgentManagementRenders,
   AgentManagementStreamings,
 } from '@lobechat/builtin-tool-agent-management/client';
-import { BrowserManifest, BrowserRenders } from '@lobechat/builtin-tool-browser/client';
+import { AuvIdentifier, AuvInspectors } from '@lobechat/builtin-tool-auv/client';
 import {
+  BrowserInspectors,
+  BrowserManifest,
+  BrowserRenders,
+} from '@lobechat/builtin-tool-browser/client';
+import {
+  ClaudeCodeApiName,
   ClaudeCodeIdentifier,
   ClaudeCodeInspectors,
   ClaudeCodeInterventions,
@@ -42,6 +48,8 @@ import {
   GoalInterventions,
   GoalManifest,
   GoalRenders,
+  GoalSupervisorInspectors,
+  GoalSupervisorManifest,
 } from '@lobechat/builtin-tool-goal/client';
 import {
   GroupAgentBuilderInspectors,
@@ -169,6 +177,7 @@ import { CodexInspectors, CodexRenders } from './codex';
 import { GithubIdentifier, GithubInspectors, GithubRenders } from './github';
 import { registerBuiltinInspectors } from './inspectors';
 import { registerBuiltinInterventions } from './interventions';
+import { KimiCodeInspectors, KimiCodeRenders } from './kimiCode';
 import { LinearIdentifier, LinearInspectors, LinearRenders } from './linear';
 import { NotebookIdentifier, NotebookRenders } from './notebook';
 import { registerBuiltinPlaceholders } from './placeholders';
@@ -177,9 +186,12 @@ import { registerBuiltinRenders } from './renders';
 import { registerBuiltinStreamings } from './streamings';
 import { TwitterIdentifier, TwitterInspectors } from './twitter';
 
+const DROID_IDENTIFIER = 'droid';
+const DEVIN_IDENTIFIER = 'devin';
 const QODER_IDENTIFIER = 'qoder';
 const OPENCODE_IDENTIFIER = 'opencode';
 const PI_IDENTIFIER = 'pi';
+const KIMI_CODE_IDENTIFIER = 'kimi-code';
 
 const heterogeneousCliInspectors: Record<string, BuiltinInspector> = {
   bash: createRunCommandInspector(
@@ -214,6 +226,12 @@ export const registerBuiltinToolSurfaces = (): void => {
     [AgentDocumentsManifest.identifier]: AgentDocumentsRenders as Record<string, BuiltinRender>,
     [AgentManagementManifest.identifier]: AgentManagementRenders as Record<string, BuiltinRender>,
     [ClaudeCodeIdentifier]: ClaudeCodeRenders as Record<string, BuiltinRender>,
+    [DROID_IDENTIFIER]: {
+      [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeRenders[ClaudeCodeApiName.AskUserQuestion],
+    },
+    [DEVIN_IDENTIFIER]: {
+      [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeRenders[ClaudeCodeApiName.AskUserQuestion],
+    },
     [QODER_IDENTIFIER]: ClaudeCodeRenders as Record<string, BuiltinRender>,
     [CloudSandboxManifest.identifier]: CloudSandboxRenders as Record<string, BuiltinRender>,
     [GroupAgentBuilderManifest.identifier]: GroupAgentBuilderRenders as Record<
@@ -241,6 +259,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     [WebOnboardingManifest.identifier]: WebOnboardingRenders as Record<string, BuiltinRender>,
     [OPENCODE_IDENTIFIER]: heterogeneousCliRenders,
     [PI_IDENTIFIER]: heterogeneousCliRenders,
+    [KIMI_CODE_IDENTIFIER]: KimiCodeRenders as Record<string, BuiltinRender>,
     codex: {
       ...CodexRenders,
       command_execution: RunCommandRender as BuiltinRender,
@@ -250,6 +269,10 @@ export const registerBuiltinToolSurfaces = (): void => {
   });
 
   registerBuiltinInspectors({
+    [AuvIdentifier]: AuvInspectors as Record<string, BuiltinInspector>,
+    // Read-only alias for messages recorded by the original private desktop PR.
+    // New manifests and execution routes only advertise lobe-computer-use.
+    'lobe-auv': AuvInspectors as Record<string, BuiltinInspector>,
     [AgentBuilderManifest.identifier]: AgentBuilderInspectors as Record<string, BuiltinInspector>,
     [AgentDocumentsManifest.identifier]: AgentDocumentsInspectors as Record<
       string,
@@ -260,6 +283,12 @@ export const registerBuiltinToolSurfaces = (): void => {
       BuiltinInspector
     >,
     [ClaudeCodeIdentifier]: ClaudeCodeInspectors as Record<string, BuiltinInspector>,
+    [DROID_IDENTIFIER]: {
+      [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeInspectors[ClaudeCodeApiName.AskUserQuestion],
+    },
+    [DEVIN_IDENTIFIER]: {
+      [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeInspectors[ClaudeCodeApiName.AskUserQuestion],
+    },
     [QODER_IDENTIFIER]: ClaudeCodeInspectors as Record<string, BuiltinInspector>,
     [CloudSandboxManifest.identifier]: CloudSandboxInspectors as Record<string, BuiltinInspector>,
     [GroupAgentBuilderManifest.identifier]: GroupAgentBuilderInspectors as Record<
@@ -271,12 +300,14 @@ export const registerBuiltinToolSurfaces = (): void => {
       BuiltinInspector
     >,
     [GoalManifest.identifier]: GoalInspectors as Record<string, BuiltinInspector>,
+    [GoalSupervisorManifest.identifier]: GoalSupervisorInspectors,
     [ImageGenerationManifest.identifier]: ImageGenerationInspectors as Record<
       string,
       BuiltinInspector
     >,
     [KnowledgeBaseManifest.identifier]: KnowledgeBaseInspectors as Record<string, BuiltinInspector>,
     [LobeAgentManifest.identifier]: LobeAgentInspectors as Record<string, BuiltinInspector>,
+    [BrowserManifest.identifier]: BrowserInspectors as Record<string, BuiltinInspector>,
     [LocalSystemManifest.identifier]: LocalSystemInspectors as Record<string, BuiltinInspector>,
     [MemoryManifest.identifier]: MemoryInspectors as Record<string, BuiltinInspector>,
     [MessageManifest.identifier]: MessageInspectors as Record<string, BuiltinInspector>,
@@ -295,7 +326,8 @@ export const registerBuiltinToolSurfaces = (): void => {
     [WebOnboardingManifest.identifier]: WebOnboardingInspectors as Record<string, BuiltinInspector>,
     [OPENCODE_IDENTIFIER]: heterogeneousCliInspectors,
     [PI_IDENTIFIER]: heterogeneousCliInspectors,
-    codex: CodexInspectors,
+    [KIMI_CODE_IDENTIFIER]: KimiCodeInspectors,
+    'codex': CodexInspectors,
     [GithubIdentifier]: GithubInspectors,
     [LinearIdentifier]: LinearInspectors,
     [TwitterIdentifier]: TwitterInspectors,
@@ -337,6 +369,14 @@ export const registerBuiltinToolSurfaces = (): void => {
       BuiltinIntervention
     >,
     [ClaudeCodeIdentifier]: ClaudeCodeInterventions as Record<string, BuiltinIntervention>,
+    [DROID_IDENTIFIER]: {
+      [ClaudeCodeApiName.AskUserQuestion]:
+        ClaudeCodeInterventions[ClaudeCodeApiName.AskUserQuestion],
+    },
+    [DEVIN_IDENTIFIER]: {
+      [ClaudeCodeApiName.AskUserQuestion]:
+        ClaudeCodeInterventions[ClaudeCodeApiName.AskUserQuestion],
+    },
     [QODER_IDENTIFIER]: ClaudeCodeInterventions as Record<string, BuiltinIntervention>,
     [CloudSandboxManifest.identifier]: CloudSandboxInterventions as Record<
       string,

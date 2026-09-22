@@ -27,4 +27,10 @@ describe('systemRole templates', () => {
       expect(template).toContain('{{shellSyntaxGuidance}}');
     }
   });
+
+  it('teaches image reads only in the desktop template', () => {
+    expect(desktopPrompt).toContain('readFile');
+    expect(desktopPrompt).toContain('base64');
+    expect(genericPrompt).not.toContain('base64');
+  });
 });

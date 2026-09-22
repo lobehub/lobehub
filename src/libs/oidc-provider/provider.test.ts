@@ -58,6 +58,32 @@ describe('OIDC Provider - Market Client Integration', () => {
   });
 
   describe('Provider Configuration', () => {
+    it('should accept both Cloud desktop callback origins during the apex migration', async () => {
+      vi.doMock('@/envs/app', () => ({
+        appEnv: {
+          APP_URL: 'https://app.lobehub.com',
+          MARKET_BASE_URL: undefined,
+        },
+      }));
+
+      const { default: Provider } = await import('oidc-provider');
+      const { defaultClients } = await import('./config');
+      const provider = new Provider('https://app.lobehub.com/oidc', { clients: defaultClients });
+      const desktopClient = await provider.Client.find('lobehub-desktop');
+
+      expect(
+        desktopClient?.redirectUriAllowed('https://app.lobehub.com/oidc/callback/desktop'),
+      ).toBe(true);
+      expect(desktopClient?.redirectUriAllowed('https://lobehub.com/oidc/callback/desktop')).toBe(
+        true,
+      );
+      expect(desktopClient?.redirectUriAllowed('https://example.com/oidc/callback/desktop')).toBe(
+        false,
+      );
+
+      vi.doUnmock('@/envs/app');
+    });
+
     it('should export API_AUDIENCE constant', async () => {
       vi.doMock('@/envs/app', () => ({
         appEnv: {
@@ -88,7 +114,7 @@ describe('OIDC Provider - Market Client Integration', () => {
         BackchannelAuthenticationRequest: 600,
         ClientCredentials: 600,
         DeviceCode: 600,
-        Grant: 14 * 24 * 60 * 60,
+        Grant: 365 * 24 * 60 * 60,
         IdToken: 3600,
         Interaction: 3600,
         RefreshToken: 30 * 24 * 60 * 60,
@@ -100,6 +126,23 @@ describe('OIDC Provider - Market Client Integration', () => {
         expect(Number.isSafeInteger(ttl)).toBe(true);
         expect(ttl).toBeGreaterThan(0);
       }
+
+      vi.doUnmock('@/envs/app');
+    }, 10000);
+
+    it('keeps the grant alive longer than a rotating refresh token', async () => {
+      vi.doMock('@/envs/app', () => ({
+        appEnv: {
+          APP_URL: 'https://example.com',
+          MARKET_BASE_URL: undefined,
+        },
+      }));
+
+      const { oidcArtifactTTL } = await import('./provider');
+      const dayFifteen = 15 * 24 * 60 * 60;
+
+      expect(oidcArtifactTTL.Grant).toBeGreaterThan(dayFifteen);
+      expect(oidcArtifactTTL.Grant).toBeGreaterThanOrEqual(oidcArtifactTTL.RefreshToken);
 
       vi.doUnmock('@/envs/app');
     }, 10000);

@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { DiscoverService } from '@/server/services/discover';
+
 import { agentBuilderRuntime } from '../agentBuilder';
 
 const {
@@ -28,29 +30,37 @@ vi.mock('@/business/server/aiProvider', () => ({
 }));
 
 vi.mock('@/database/models/agent', () => ({
-  AgentModel: vi.fn(() => ({
-    getAgentConfigById: mockGetAgentConfigById,
-    update: mockUpdateAgent,
-    updateConfig: mockUpdateConfig,
-  })),
+  AgentModel: vi.fn(function () {
+    return {
+      getAgentConfigById: mockGetAgentConfigById,
+      update: mockUpdateAgent,
+      updateConfig: mockUpdateConfig,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/plugin', () => ({
-  PluginModel: vi.fn(() => ({
-    create: mockCreatePlugin,
-    findById: mockFindById,
-  })),
+  PluginModel: vi.fn(function () {
+    return {
+      create: mockCreatePlugin,
+      findById: mockFindById,
+    };
+  }),
 }));
 
 vi.mock('@/database/repositories/aiInfra', () => ({
-  AiInfraRepos: vi.fn(() => ({
-    getAiProviderList: mockGetAiProviderList,
-    getAiProviderModelList: mockGetAiProviderModelList,
-  })),
+  AiInfraRepos: vi.fn(function () {
+    return {
+      getAiProviderList: mockGetAiProviderList,
+      getAiProviderModelList: mockGetAiProviderModelList,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/discover', () => ({
-  DiscoverService: vi.fn(() => ({})),
+  DiscoverService: vi.fn(function () {
+    return {};
+  }),
 }));
 
 const createRuntime = () =>
@@ -59,6 +69,15 @@ const createRuntime = () =>
     serverDB: {} as never,
     toolManifestMap: {},
     userId: 'user-1',
+  });
+
+const createWorkspaceRuntime = () =>
+  agentBuilderRuntime.factory({
+    editingAgentId: 'agent-1',
+    serverDB: {} as never,
+    toolManifestMap: {},
+    userId: 'user-1',
+    workspaceId: 'workspace-1',
   });
 
 describe('agentBuilderRuntime', () => {
@@ -284,6 +303,29 @@ describe('agentBuilderRuntime', () => {
       expect(result.state).toMatchObject({ agentId: 'agent-1' });
       expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', {
         plugins: [{ identifier: 'market-plugin', mode: 'pinned' }],
+      });
+    });
+  });
+
+  // Regression guard for `searchMarketTools` returning `unauthorized`: built
+  // without an identity, DiscoverService signs no trusted-client token, so every
+  // server-executed market search failed — which the model reports as a plain
+  // tool failure and silently works around, leaving the built agent with no
+  // market tool.
+  describe('market identity', () => {
+    it('passes the run identity to DiscoverService', () => {
+      createRuntime();
+
+      expect(DiscoverService).toHaveBeenCalledWith({
+        userInfo: { userId: 'user-1', workspaceId: undefined },
+      });
+    });
+
+    it('scopes the market identity to the run workspace', () => {
+      createWorkspaceRuntime();
+
+      expect(DiscoverService).toHaveBeenCalledWith({
+        userInfo: { userId: 'user-1', workspaceId: 'workspace-1' },
       });
     });
   });

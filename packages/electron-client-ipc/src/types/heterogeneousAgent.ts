@@ -1,4 +1,7 @@
-import type { HeteroQuotaWindow } from '@lobechat/heterogeneous-agents/quota';
+import type {
+  CodexQuotaSnapshot,
+  CodexRateLimitResetOutcome,
+} from '@lobechat/heterogeneous-agents/quota';
 
 import type { HeterogeneousCliAgentType } from './binary';
 
@@ -13,6 +16,8 @@ export {
   CODEX_CLI_INSTALL_DOCS_URL,
   CURSOR_CLI_INSTALL_COMMANDS,
   CURSOR_CLI_INSTALL_DOCS_URL,
+  DROID_CLI_INSTALL_COMMANDS,
+  DROID_CLI_INSTALL_DOCS_URL,
   GROK_BUILD_CLI_INSTALL_COMMANDS,
   GROK_BUILD_CLI_INSTALL_DOCS_URL,
   OPENCODE_CLI_INSTALL_COMMANDS,
@@ -26,6 +31,12 @@ export {
 
 export const HeterogeneousAgentSessionErrorCode = {
   AuthRequired: 'auth_required',
+  /**
+   * The shell probe that resolves PATH ran out of time. Distinct from
+   * `CliNotFound` because it says nothing about whether the CLI is installed —
+   * conflating them told users to reinstall a working binary.
+   */
+  CliDetectionTimeout: 'cli_detection_timeout',
   CliNotFound: 'cli_not_found',
   Overloaded: 'overloaded',
   RateLimit: 'rate_limit',
@@ -57,51 +68,19 @@ export type {
   ClaudeCodeScopedWeekly,
   HeteroQuotaWindow,
 } from '@lobechat/heterogeneous-agents/quota';
-
-export type CodexQuotaWindow = HeteroQuotaWindow;
-
-export interface CodexRateLimitSnapshot {
-  /** Canonical metered limit identifier, for example `codex` or `codex_other`. */
-  limitId: string;
-  limitName: string | null;
-  primary: CodexQuotaWindow | null;
-  secondary: CodexQuotaWindow | null;
-}
-
-export interface CodexRateLimitResetCredit {
-  expiresAt: number | null;
-  grantedAt: number | null;
-  /** Opaque backend identifier used only when redeeming this specific credit. */
-  id: string | null;
-  redeemedAt?: number | null;
-  redeemStartedAt?: number | null;
-  resetType: string | null;
-  status: string;
-  title: string | null;
-}
-
-export interface CodexRateLimitResetCredits {
-  availableCount: number;
-  /** Detailed rows when supported by the installed Codex CLI/backend. */
-  credits?: CodexRateLimitResetCredit[];
-  nextExpiresAt?: number | null;
-  totalEarnedCount?: number;
-}
-
-export interface CodexQuotaSnapshot {
-  error: string | null;
-  provider: 'codex';
-  rateLimitResetCredits?: CodexRateLimitResetCredits | null;
-  /** Complete multi-bucket view when supported by the installed Codex app-server. */
-  rateLimits?: CodexRateLimitSnapshot[];
-  session: CodexQuotaWindow | null;
-  status: 'error' | 'ok' | 'unavailable';
-  updatedAt: number;
-  weekly: CodexQuotaWindow | null;
-}
-
-export type CodexRateLimitResetOutcome =
-  'alreadyRedeemed' | 'noCredit' | 'nothingToReset' | 'reset';
+export type {
+  CodexQuotaSnapshot,
+  CodexQuotaWindow,
+  CodexRateLimitResetCredit,
+  CodexRateLimitResetCredits,
+  CodexRateLimitResetOutcome,
+  CodexRateLimitSnapshot,
+} from '@lobechat/heterogeneous-agents/quota';
+export type {
+  KimiCodeExtraUsage,
+  KimiCodeQuotaSnapshot,
+  KimiCodeQuotaUnavailableReason,
+} from '@lobechat/heterogeneous-agents/quota';
 
 export interface CodexRateLimitResetResult {
   outcome: CodexRateLimitResetOutcome;
@@ -144,5 +123,11 @@ export interface HeterogeneousAgentRuntimeStatus {
   staleDeadlineAt?: number;
   state: HeterogeneousAgentRuntimeState;
   transport:
-    'acp-stdio' | 'claude-sdk' | 'cli-spawn' | 'codex-app-server' | 'cursor-acp' | 'trae-acp';
+    | 'acp-stdio'
+    | 'claude-sdk'
+    | 'cli-spawn'
+    | 'codex-app-server'
+    | 'cursor-acp'
+    | 'droid-acp'
+    | 'trae-acp';
 }

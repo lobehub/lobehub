@@ -32,14 +32,14 @@ describe('CompletionLifecycle — verify gate scheduling', () => {
     vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
     vi.spyOn(lifecycle as any, 'createVerifyMessage').mockResolvedValue(undefined);
     vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
-    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(() => {});
+    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
     const runVerify = vi
       .spyOn(verifyServices, 'runVerifyOnCompletion')
       .mockResolvedValue(undefined);
 
     await lifecycle.dispatchHooks(
       'op-1',
-      { metadata: { _hooks: [], agentId: 'a' }, status: 'done' },
+      { host: { hooks: [] }, origin: { agentId: 'a' }, status: 'done' },
       'done',
     );
 

@@ -7,11 +7,10 @@ import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useUserStore } from '@/store/user';
-
 import { useConversationResourceAccess } from '../../../../../hooks/useConversationResourceAccess';
 import { useConversationStore } from '../../../../../store';
 import { type ApprovalMode } from './index';
+import { isSubmitShortcutBlockedByTarget } from './submitShortcutGuard';
 
 interface ApprovalActionsProps {
   apiName: string;
@@ -23,7 +22,8 @@ interface ApprovalActionsProps {
    * Callback to be called before approve action
    * Used to flush pending saves (e.g., debounced saves) from intervention components
    */
-  onBeforeApprove?: () => void | Promise<void>;
+  onBeforeApprove?: () =>
+    Promise<Record<string, unknown> | undefined> | Record<string, unknown> | undefined;
   toolCallId: string;
 }
 
@@ -183,8 +183,6 @@ const ApprovalActions = memo<ApprovalActionsProps>(
       stopPendingApprovalForCard,
       messageId,
     ]);
-    const addToolToAllowList = useUserStore((s) => s.addToolToAllowList);
-
     const handleSubmit = useCallback(async () => {
       if (loading || isMessageCreating || !canUseResource) return;
       setLoading(true);
@@ -192,17 +190,18 @@ const ApprovalActions = memo<ApprovalActionsProps>(
         if (choice === 'reject') {
           await rejectAndContinueToolCall(messageId, reason.trim() || undefined);
         } else {
-          if (onBeforeApprove) await onBeforeApprove();
-          await approveToolCall(messageId, assistantGroupId ?? '');
-          if (isAllowListMode && choice === 'approve-remember') {
-            await addToolToAllowList(`${identifier}/${apiName}`);
-          }
+          const editedArguments = await onBeforeApprove?.();
+          await approveToolCall(messageId, assistantGroupId ?? '', {
+            editedArguments,
+            ...(isAllowListMode && choice === 'approve-remember'
+              ? { rememberToolKey: `${identifier}/${apiName}` }
+              : {}),
+          });
         }
       } finally {
         setLoading(false);
       }
     }, [
-      addToolToAllowList,
       apiName,
       approveToolCall,
       assistantGroupId,
@@ -227,7 +226,9 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     }, [choice]);
 
     // Page-level keyboard: 1/2/↑/↓ to switch, Enter to submit. Skip while
-    // typing anywhere on the page so we never hijack the main chat composer.
+    // typing anywhere on the page so we never hijack the main chat composer,
+    // and skip when another interactive control has focus — Enter must
+    // activate that control, never silently submit an approval.
     // The reject input has its own onKeyDown for Enter / ↑.
     //
     // Kept fresh in a ref so the shared-arbiter registration below stays
@@ -237,11 +238,7 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     useEffect(() => {
       onKeyDownRef.current = (e: KeyboardEvent) => {
         if (e.defaultPrevented) return;
-        const target = e.target as HTMLElement | null;
-        if (target) {
-          const tag = target.tagName;
-          if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return;
-        }
+        if (isSubmitShortcutBlockedByTarget(e.target as HTMLElement | null)) return;
         if (e.metaKey || e.ctrlKey || e.altKey) return;
         // Digit keys select the matching numbered row directly.
         if (/^[1-9]$/.test(e.key)) {

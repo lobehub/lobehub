@@ -14,7 +14,7 @@ Periodic review of the project-local skill set under `.agents/skills/`. The goal
 
 ### 1 — Inventory
 
-Build a fresh census of all SKILL.md files. Do NOT trust any prior cached list.
+Build a current inventory, including symlinked skills. Look for inventory/check helpers in `package.json` scripts and `.agents/scripts/`; reuse them when available and inspect their supported options rather than duplicating their checks. Read each description and inspect bodies where routing, overlap, or stale references need investigation. Without an inventory helper:
 
 ```bash
 find -L .agents/skills -name SKILL.md | wc -l                      # total count, including symlinked skills
@@ -23,24 +23,12 @@ find -L .agents/skills -name SKILL.md -exec wc -l {} \; | sort -rn # by body len
 
 Group by domain in a mental table (DB / state / UI / agent / testing / workflow / docs / etc.). Note new arrivals since last audit (`git log --since="1 week ago" -- .agents/skills/`).
 
-### 2 — Pull frontmatter for all skills
-
-```bash
-# Extract name + description for each SKILL.md
-for f in .agents/skills/*/SKILL.md; do
-  echo "=== $(basename $(dirname $f)) ==="
-  awk '/^---$/{c++; next} c==1' "$f" | head -20
-done
-```
-
-Read the description block of every skill. The body can stay unread unless step 4 flags it.
-
-### 3 — Detect overlap / redundancy
+### 2 — Detect overlap / redundancy
 
 For each pair within the same domain, ask:
 
 - **Same description**? → likely duplicate (one is probably a stale rename leftover, or a global-vs-local collision).
-- **Trigger keywords substantially overlap**? → either merge, OR tighten one description so the model can choose unambiguously.
+- **The same task fits multiple descriptions**? → check whether the skills are complementary or actually compete; clarify the boundary only when selection is ambiguous.
 - **One skill's body says "see also: foo"**? → confirm `foo` still exists, AND confirm the cross-reference is still meaningful (the referenced skill may have absorbed the referrer's concerns).
 - **Skill duplicates content from `AGENTS.md`**? → fold into AGENTS.md or slim the skill to just the delta.
 
@@ -48,78 +36,53 @@ Common false positives (do NOT merge):
 
 - `db-migrations` vs `drizzle` — distinct workflows (migration files vs schema authoring).
 - `agent-runtime-hooks` vs `agent-tracing` vs `agent-signal` — different surfaces of the agent system.
-- `testing` vs `agent-testing` — different test types.
+- `testing` vs `acceptance` — different test types.
 
-### 4 — Description format consistency
+### 3 — Description and invocation boundaries
 
-Apply the **standard template**:
+Check whether the description makes the skill's purpose and selection boundary clear and matches its body. Flag broad triggers that attract unrelated tasks, missing distinctions between overlapping skills, and stale names or references.
 
-```
-{Topic + key conventions or scope}. Use when {scenarios — verbs + nouns}. Triggers on {`code-symbols`, 'natural phrases', '中文'}.
-```
+Do not require literal phrases such as `Use when` or `Triggers on`, a fixed sentence structure, or a description length proportional to the body. These are writing choices, not runtime routing controls. Treat script wording heuristics as review hints, not proof of a defect.
 
-Skills with `disable-model-invocation: true` (user-invoked only, slash commands) don't need `Triggers on` — they're never auto-routed.
+Verify explicit-only invocation settings against the active harness's supported metadata, such as frontmatter `disable-model-invocation` or `policy.allow_implicit_invocation` in `agents/openai.yaml`. Do not assume different harnesses recognize the same fields. Preserve the intended policy; do not infer runtime behavior from description wording alone.
 
-Flag descriptions that:
-
-- ❌ Have NO `Use when` clause (model can't decide when to load it).
-- ❌ Have NO `Triggers on` clause (and aren't `disable-model-invocation`).
-- ❌ Use weird formats (numbered lists `(1)(2)(3)`, `Triggers:` colon instead of `Triggers on`, `MUST use when ...` as opening word).
-- ❌ Are dramatically terse for a 200+ line body, or dramatically verbose for a 60-line body.
-- ❌ Reference deleted/renamed skills.
-
-### 5 — Stale-skill check
+### 4 — Stale-skill check
 
 For narrow domain skills (e.g. `response-compliance`, one-off CLI workflows):
 
 ```bash
 # Confirm the referenced code surface still exists
-rg -l "response-compliance|openresponses" packages/ src/              # adjust per skill
-git log --since="3 months ago" -- .agents/skills/ < skill > /SKILL.md # is it being maintained?
+rg -l "response-compliance|openresponses" packages/ src/            # adjust per skill
+git log --since="3 months ago" -- '.agents/skills/<skill>/SKILL.md' # replace <skill>
 ```
 
 If the underlying surface is gone and the skill hasn't been edited in 3+ months → flag for archival.
 
-### 6 — Cross-reference integrity
+### 4b — Living-log freshness (`common-mistakes.md`, `probe-mock-patterns.md`)
 
-Any skill body mentioning another skill by name:
+Both layers (`.agents/skills/acceptance/references/` generic, `.agents/acceptance/`
+project) are injected into every acceptance round, so a stale entry is a stale
+instruction. For each entry:
 
 ```bash
-# Scan all skill bodies for skill-name references
-rg -o '`[a-z][a-z0-9-]+`' .agents/skills/*/SKILL.md | grep -v ':\s*$' | sort -u
+rg -n '^`since|holds-while' .agents/acceptance/common-mistakes.md        # every entry must carry both
+rg -n 'holds-while: (?!always)' -P .agents/acceptance/common-mistakes.md # the mechanism-bound ones
 ```
 
-For each name extracted, confirm `.agents/skills/<name>/SKILL.md` exists. Broken references happen after renames — fix them in the same audit pass.
+- Missing `since` / `holds-while` → the entry predates the admission rule; either add them or move it to field-notes.
+- For every non-`always` `holds-while`, check whether the named mechanism still exists (the script default, the ingest gap, the platform behavior). Gone → delete the entry (PROCESS.md Step 0 exit rule); the field notes keep history.
+- An entry that names a project script from the generic layer, or a product noun, is in the wrong layer.
+- Duplicate ids (`rg -o '^### [ML]-?[A-Z]?\d+' | sort | uniq -d`).
 
-### 7 — Output report
+### 5 — Cross-reference integrity
 
-Produce a markdown summary back to the user with the same structure as the original audit (this skill was created during one):
+Check actual skill links, named handoffs, and referenced files against their owning root, including symlink targets. A code symbol or CLI command in backticks is not automatically a skill reference. Resolve renamed or moved targets before reporting a broken link, and fix confirmed references when edits are authorized.
 
-```markdown
-## 📊 Inventory
+### 6 — Output report
 
-{count, domain breakdown}
+Report actionable findings with file references, evidence, and the proposed change. Distinguish confirmed defects from uncertain candidates. Include inventory totals or an execution order only when they help the user decide; no fixed headings, template, or line-count estimates are required.
 
-## 🎯 Recommendations
-
-### 🔴 High confidence
-
-- {action} — {reason}
-
-### 🟡 Medium confidence
-
-- {action} — {reason needs verification}
-
-### 🟢 Low confidence / no-op
-
-- {item considered but skipping because ...}
-
-## 📋 Suggested order
-
-{table of actions with risk + LOC estimate}
-```
-
-End by asking the user which actions to apply — do NOT auto-apply unless the user passed `--apply` and even then confirm destructive deletes individually.
+An audit-only request produces recommendations. When the user authorizes fixes, through `--apply` or ordinary language, apply safe changes within that scope without asking again. Deletions require authorization covering the target; do not request it again when already provided.
 
 ## Output rules
 
@@ -131,7 +94,7 @@ End by asking the user which actions to apply — do NOT auto-apply unless the u
 ## What NOT to do
 
 - ❌ Don't rename skill directories without checking for cross-references AND user memory entries that name the old slug.
-- ❌ Don't normalize a description by removing trigger keywords just to fit the template — the keywords are the routing signal.
+- ❌ Don't remove meaningful selection boundaries merely to shorten a description or fit a template.
 - ❌ Don't fold a heavy 200+ line skill into another just because they share a domain — large skills get loaded selectively and merging makes everything load.
 - ❌ Don't propose `.agents/skills/INDEX.md` or `<domain>-<skill>` prefix renames unless the user explicitly asks — costs > benefits for cosmetic reorgs.
 

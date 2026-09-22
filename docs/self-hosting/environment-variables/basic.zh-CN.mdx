@@ -121,9 +121,16 @@ LobeHub 在部署时提供了一些额外的配置项，你可以使用环境变
 ### `AGENT_GATEWAY_URL`
 
 - 类型：可选
-- 描述：Agent Gateway 端点，用于让 Gateway Mode 通过后端运行支持的助理任务。
+- 描述：Agent Gateway 端点，用于让 Gateway Mode 通过后端运行支持的助理任务。浏览器会向该地址建立 WebSocket 连接，因此必须能被浏览器访问。
 - 默认值：-
 - 示例：`https://agent-gateway.example.com`
+
+### `AGENT_GATEWAY_INTERNAL_URL`
+
+- 类型：可选
+- 描述：服务端访问 Agent Gateway 使用的地址。当 LobeHub 服务端无法直接访问 `AGENT_GATEWAY_URL` 时配置，例如使用 Docker Compose 服务名。未设置时回退到 `AGENT_GATEWAY_URL`。
+- 默认值：-
+- 示例：`http://gateway:8787`
 
 ### `AGENT_GATEWAY_SERVICE_TOKEN`
 
@@ -242,11 +249,19 @@ SSRF_ALLOW_IP_ADDRESS_LIST=192.168.1.100,10.0.0.50
 - 默认值：-
 - 示例：`gemini-2.5-flash` 或你的本地多模态模型 ID
 
+### `MULTIMODAL_UNDERSTANDING_IMAGE_FORMATS`
+
+- 类型：可选
+- 描述：兜底多模态理解模型支持的图片格式，使用英文逗号分隔。可填写 `jpeg`、`png`、`webp` 或对应的 MIME 类型。系统优先根据 URL 后缀判断格式；不支持的格式会在发送给模型前转换为列表中的第一个格式。URL 没有可识别的后缀时，系统会下载图片后识别格式。
+- 默认值：`jpeg,png`
+- 示例：`png,jpeg,webp`
+
 配置示例：
 
 ```bash
 MULTIMODAL_UNDERSTANDING_PROVIDER=google
 MULTIMODAL_UNDERSTANDING_MODEL=gemini-2.5-flash
+MULTIMODAL_UNDERSTANDING_IMAGE_FORMATS=png,jpeg,webp
 ```
 
 为兼容迁移，旧环境变量 `VISUAL_UNDERSTANDING_PROVIDER` 和 `VISUAL_UNDERSTANDING_MODEL` 仍可继续使用。同时配置新旧变量时，`MULTIMODAL_UNDERSTANDING_*` 优先。

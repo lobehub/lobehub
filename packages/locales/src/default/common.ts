@@ -308,6 +308,8 @@ export default {
   'betaFeedback.collapse': 'Collapse',
   'betaFeedback.desc':
     'Workspace is in beta. Report issues, request features, or compare notes with other beta users.',
+  'betaFeedback.createWorkspacePromo': "You're in the beta — create your first workspace",
+  'betaFeedback.createWorkspaceTitle': 'Create your first workspace',
   'betaFeedback.discord.action': 'Open Discord',
   'betaFeedback.discord.desc': 'Scan with your phone camera to join.',
   'betaFeedback.discord.title': 'Discord',
@@ -475,6 +477,7 @@ export default {
   'layoutInitializing': 'Loading layout...',
   'legal': 'Legal Disclaimer',
   'loading': 'Loading...',
+  'stillLoading': 'Still loading...',
   'mail.business': 'Business Cooperation',
   'mail.support': 'Email Support',
   'deleteHistoryMigrating':
@@ -538,6 +541,8 @@ export default {
   'visibilityConfirm.makePrivate.itemAccess': 'Other workspace members lose access immediately',
   'visibilityConfirm.makePrivate.itemReferences':
     'Existing message attachments and references will show as unavailable',
+  'visibilityConfirm.makePrivate.itemLibrary':
+    'It stays in the library you filed it in — other members just stop seeing it there',
   'visibilityConfirm.makePrivate.itemLoaded':
     'Content others have already loaded can’t be pulled back',
   'visibilityConfirm.publish.itemVisible': 'All workspace members will see this immediately',
@@ -619,6 +624,18 @@ export default {
   'tab.setting': 'Settings',
   'tab.tasks': 'Tasks',
   'tab.video': 'Video',
+  'taskDock.activeOf': '{{active}} running · {{total}} total',
+  'taskDock.cancelAll': 'Cancel all',
+  'taskDock.collapse': 'Collapse',
+  'taskDock.expand': 'Expand',
+  'taskDock.group.publish': 'Publishing',
+  'taskDock.group.upload': 'Uploads',
+  'taskDock.open': 'Open',
+  'taskDock.status.cancelled': 'Cancelled',
+  'taskDock.status.error': 'Some tasks need attention',
+  'taskDock.status.running': 'In progress',
+  'taskDock.status.success': 'All done',
+  'taskDock.totalCount': '{{count}} items',
   'telemetry.allow': 'Allow',
   'telemetry.deny': 'Deny',
   'telemetry.desc':
@@ -655,6 +672,7 @@ export default {
   'userPanel.moveGuide': 'The settings button has been moved here',
   'userPanel.myUsage': 'My Usage',
   'userPanel.plans': 'Subscription Plans',
+  'userPanel.quota': 'Quota',
   'userPanel.profile': 'Account',
   'userPanel.setting': 'Settings',
   'userPanel.upgradePlan': 'Upgrade Plan',

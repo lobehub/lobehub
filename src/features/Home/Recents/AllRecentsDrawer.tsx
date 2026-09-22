@@ -2,19 +2,17 @@
 
 import { Empty, Flexbox, SearchBar } from '@lobehub/ui';
 import { SearchIcon } from 'lucide-react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import SideBarDrawer from '@/features/NavPanel/SideBarDrawer';
-import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
-import { useClientDataSWR } from '@/libs/swr';
-import { recentKeys } from '@/libs/swr/keys';
 import { useCacheScope } from '@/libs/swr/useCacheScope';
-import { RECENT_SIDEBAR_TYPES, recentService } from '@/services/recent';
+import { useHomeStore } from '@/store/home';
+import { homeRecentSelectors } from '@/store/home/selectors';
+import { createRecentQueryKey } from '@/store/home/slices/recent/initialState';
 
-import RecentListItem from './Item';
+import ConnectedItem from './ConnectedItem';
 
 interface AllRecentsDrawerProps {
   onClose: () => void;
@@ -25,26 +23,18 @@ const AllRecentsDrawer = memo<AllRecentsDrawerProps>(({ open, onClose }) => {
   const { t } = useTranslation('common');
   const [searchKeyword, setSearchKeyword] = useState('');
   const scope = useCacheScope();
+  const useFetchAllRecents = useHomeStore((s) => s.useFetchAllRecents);
+  const queryKey = createRecentQueryKey(50);
+  const query = useHomeStore(homeRecentSelectors.query(scope, queryKey));
+  const items = query?.items;
 
-  const { data: recents, isLoading } = useClientDataSWR(
-    open ? recentKeys.allDrawer(open, scope) : null,
-    () => recentService.getAll(50, RECENT_SIDEBAR_TYPES),
-  );
+  const { isLoading } = useFetchAllRecents(open, scope);
 
-  const filteredRecents = useMemo(() => {
-    if (!recents) return [];
+  const filteredItems = useMemo(() => {
     const keyword = searchKeyword.trim().toLowerCase();
-    if (!keyword) return recents;
-    return recents.filter((item) => item.title.toLowerCase().includes(keyword));
-  }, [recents, searchKeyword]);
-
-  const getRecentRoute = useCallback((item: (typeof filteredRecents)[number]) => {
-    if (item.type !== 'task') return item.routePath;
-    const taskId = item.id;
-    if (!taskId) return item.routePath;
-
-    return taskDetailPath(taskId, item.agentId ?? undefined);
-  }, []);
+    if (!keyword) return items ?? [];
+    return items?.filter((item) => item.title.toLowerCase().includes(keyword)) ?? [];
+  }, [items, searchKeyword]);
 
   return (
     <SideBarDrawer
@@ -66,24 +56,21 @@ const AllRecentsDrawer = memo<AllRecentsDrawerProps>(({ open, onClose }) => {
       onClose={onClose}
     >
       <Flexbox gap={1} paddingBlock={1} paddingInline={4}>
-        {isLoading || !recents ? (
+        {isLoading && !query ? (
           <SkeletonList rows={5} />
-        ) : filteredRecents.length === 0 && searchKeyword.trim() ? (
+        ) : filteredItems.length === 0 && searchKeyword.trim() ? (
           <Empty
             description={t('navPanel.searchResultEmpty')}
             icon={SearchIcon}
             style={{ paddingBlock: 24 }}
           />
         ) : (
-          filteredRecents.map((item) => (
-            <WorkspaceLink
-              key={`${item.type}-${item.id}`}
-              style={{ color: 'inherit', textDecoration: 'none' }}
-              to={getRecentRoute(item)}
-            >
-              <RecentListItem {...item} />
-            </WorkspaceLink>
-          ))
+          filteredItems.map((item) => {
+            const itemRef = `${item.type}:${item.id}` as const;
+            return (
+              <ConnectedItem itemRef={itemRef} key={itemRef} queryKey={queryKey} scope={scope} />
+            );
+          })
         )}
       </Flexbox>
     </SideBarDrawer>

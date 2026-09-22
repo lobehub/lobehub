@@ -1,6 +1,17 @@
 'use client';
 
-import { Accordion, AccordionItem, ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import {
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
+  AccordionRoot,
+  accordionStyles,
+  AccordionTrigger,
+  ActionIcon,
+  Text,
+} from '@lobehub/ui/base-ui';
+import { cx } from 'antd-style';
 import { ArrowRight } from 'lucide-react';
 import { memo, type MouseEvent, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -35,7 +46,7 @@ const TaskList = memo<TaskListProps>(({ itemKey }) => {
   const { data, isLoading } = useClientDataSWR<{ data: TaskGroupItem[]; success: boolean }>(
     enabled ? taskKeys.sidebarGroups(agentId) : null,
     async ([, id]: [string, string]) =>
-      taskService.groupList({ assigneeAgentId: id, groups: SIDEBAR_GROUPS, hasGoal: false }),
+      taskService.groupList({ assigneeAgentId: id, groups: SIDEBAR_GROUPS }),
     {
       fallbackData: { data: [], success: true },
       revalidateOnFocus: false,
@@ -86,39 +97,50 @@ const TaskList = memo<TaskListProps>(({ itemKey }) => {
     />
   );
 
+  const header = (
+    <AccordionHeader>
+      <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
+        {titleNode}
+      </AccordionTrigger>
+      <div
+        className={cx('accordion-action', accordionStyles.action, accordionStyles.actionBorderless)}
+      >
+        {actionNode}
+      </div>
+    </AccordionHeader>
+  );
+
   if (isLoading && taskGroups.length === 0) {
     return (
-      <AccordionItem
-        action={actionNode}
-        itemKey={itemKey}
-        paddingBlock={4}
-        paddingInline={'8px 4px'}
-        title={titleNode}
-      >
-        <SkeletonList />
+      <AccordionItem value={itemKey}>
+        {header}
+        <AccordionPanel contentStyle={{ padding: 0 }}>
+          <SkeletonList />
+        </AccordionPanel>
       </AccordionItem>
     );
   }
 
   return (
-    <AccordionItem
-      action={actionNode}
-      itemKey={itemKey}
-      paddingBlock={4}
-      paddingInline={'8px 4px'}
-      title={titleNode}
-    >
-      {orderedGroups.length === 0 ? (
-        <Text fontSize={12} style={{ padding: '8px 12px' }} type="secondary">
-          {t('taskList.kanban.emptyColumn')}
-        </Text>
-      ) : (
-        <Accordion defaultExpandedKeys={orderedGroups.map((g) => g.key)} gap={2}>
-          {orderedGroups.map((group) => (
-            <StatusGroup group={group} key={group.key} />
-          ))}
-        </Accordion>
-      )}
+    <AccordionItem value={itemKey}>
+      {header}
+      <AccordionPanel contentStyle={{ padding: 0 }}>
+        {orderedGroups.length === 0 ? (
+          <Text fontSize={12} style={{ padding: '8px 12px' }} type="secondary">
+            {t('taskList.kanban.emptyColumn')}
+          </Text>
+        ) : (
+          <AccordionRoot
+            defaultValue={orderedGroups.map((g) => g.key)}
+            indicatorPlacement="inline"
+            style={{ gap: 2 }}
+          >
+            {orderedGroups.map((group) => (
+              <StatusGroup group={group} key={group.key} />
+            ))}
+          </AccordionRoot>
+        )}
+      </AccordionPanel>
     </AccordionItem>
   );
 });

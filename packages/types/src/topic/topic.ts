@@ -1,5 +1,8 @@
+import type { AiModelReasoningConfig } from 'model-bank';
+import { AiModelReasoningConfigSchema } from 'model-bank/aiModel';
 import { z } from 'zod';
 
+import type { HeterogeneousReasoningEffort } from '../agent/heteroSelectorCapabilities';
 import type { SerializedAgentHook } from '../agentHook';
 import { serializedAgentHookSchema } from '../agentHook';
 import type { WorkingDirConfig } from '../device';
@@ -118,8 +121,6 @@ export interface ChatTopicMetadata {
     summarizedAt: string;
     version: number;
   };
-  /** Restored-history tail used as the source message for eval attempt threads. */
-  evalHistoryTailMessageId?: string;
   bot?: ChatTopicBotContext;
   boundDeviceId?: string;
   cronJobId?: string;
@@ -145,6 +146,8 @@ export interface ChatTopicMetadata {
    * written without it can never be attributed afterwards.
    */
   editingGroupId?: string;
+  /** Restored-history tail used as the source message for eval attempt threads. */
+  evalHistoryTailMessageId?: string;
   /**
    * Scoped pointer to the currently active assistant message for a running
    * heterogeneous agent operation. Includes `operationId` so cold-start
@@ -153,6 +156,15 @@ export interface ChatTopicMetadata {
    * Updated on every step boundary.
    */
   heteroCurrentMsgId?: { msgId: string; operationId: string };
+  /**
+   * Topic-pinned reasoning effort for a heterogeneous agent (Claude Code /
+   * Codex / …). Snapshotted from `agencyConfig.heterogeneousProvider.effort`
+   * when the topic is created and overwritten when the user picks an effort
+   * while the topic is active, so a single session can run at a higher effort
+   * without retuning the agent. Resolved as "topic effort if present, else the
+   * agent's effort" by `applyTopicModelToHeterogeneousProvider`.
+   */
+  heteroEffort?: HeterogeneousReasoningEffort;
   /**
    * Secret-free identity of the provider/auth binding that created
    * `heteroSessionId`. Resume is allowed only when this identity still matches.
@@ -196,6 +208,12 @@ export interface ChatTopicMetadata {
   /** origin marker for imported topics, e.g. `claude-code-local` / `codex-local` */
   importedFrom?: string;
   /**
+   * Root operation that most recently consumed `runningOperation`.
+   * Used to scope a post-terminal `unread` → `active` correction when the
+   * watching client receives the terminal event after the server cleared the marker.
+   */
+  lastSettledOperationId?: string;
+  /**
    * Measured dominant model by token volume, written by the usage roll-up
    * (`topicUsage.recompute`). This is an analytics projection of "what actually
    * ran", NOT the topic's configured model — the pinned/config model lives in
@@ -210,6 +228,18 @@ export interface ChatTopicMetadata {
   onboardingSession?: OnboardingSessionSnapshot;
   /** Measured dominant provider by token volume — see {@link ChatTopicMetadata.model}. */
   provider?: string;
+  /**
+   * Topic-pinned reasoning effort / mode for the pinned API model
+   * (`ChatTopic.model`). Mirrors the model pin: snapshotted from the user's
+   * model-instance reasoning config when the topic is created, re-snapshotted
+   * for the new model when the user switches model while the topic is active,
+   * and overwritten when the user picks an effort while the topic is active.
+   * Generation resolves "topic config if present (and its pinned model matches
+   * the run model), else the user-level model-instance config" — see
+   * `resolveEffectiveReasoningChatConfig`. An empty object is a valid snapshot:
+   * it pins the topic to the model's own defaults.
+   */
+  reasoningConfig?: AiModelReasoningConfig;
   /**
    * Web (cloud) only. Ordered list of GitHub repos selected for this topic.
    * Each repo will be cloned into the Gateway sandbox before execution.
@@ -228,7 +258,7 @@ export interface ChatTopicMetadata {
       deviceId?: string;
       deviceUserId?: string;
       deviceWorkspaceId?: string;
-      heteroType?: string;
+      heteroType?: string | null;
       hooks?: SerializedAgentHook[];
       operationId: string;
       orchestrationRole?: 'supervisor' | 'member';
@@ -242,7 +272,7 @@ export interface ChatTopicMetadata {
     /** Workspace principal used for a workspace-enrolled device. */
     deviceWorkspaceId?: string;
     /** Notify-based platform type used to select the cancellation protocol. */
-    heteroType?: string;
+    heteroType?: string | null;
     /**
      * Serialized lifecycle hooks (onComplete / onError) registered for this run.
      *
@@ -273,6 +303,18 @@ export interface ChatTopicMetadata {
     startedAt?: string;
     threadId?: string | null;
   } | null;
+  /**
+   * When the current run claimed this topic, as an ISO string. Stamped by the
+   * server whenever a status write moves the topic into `running` (see
+   * `TopicModel.update`), and read back only while the topic still is — a
+   * leftover stamp under a finished topic means nothing.
+   *
+   * Exists for runs the server doesn't execute: a desktop heterogeneous CLI or
+   * in-browser runtime writes no `agent_operations` row, so without this the
+   * topic list has no start time to run an elapsed clock from. Server-executed
+   * runs keep using their operation row, which is the more faithful record.
+   */
+  runStartedAt?: string;
   /**
    * A deferred agent run on this topic. Present iff the topic status is
    * `scheduled`. Set to `null` to clear it (same clear-convention as
@@ -465,9 +507,11 @@ export const parseTopicScheduledRun = (raw: unknown): TopicScheduledRun | null =
   };
 };
 
-/** Metadata patch accepted by the topic update API. */
 export const chatTopicMetadataUpdateSchema = z.object({
   boundDeviceId: z.string().optional(),
+  heteroEffort: z
+    .custom<HeterogeneousReasoningEffort>((value) => typeof value === 'string')
+    .optional(),
   heteroSessionBindingKey: z.string().optional(),
   heteroSessionBindingKeyByWorkingDirectory: z.record(z.string(), z.string()).optional(),
   heteroSessionId: z.string().optional(),
@@ -506,6 +550,8 @@ export const chatTopicMetadataUpdateSchema = z.object({
     })
     .optional(),
   provider: z.string().optional(),
+  lastSettledOperationId: z.string().optional(),
+  reasoningConfig: AiModelReasoningConfigSchema.optional(),
   repos: z.array(z.string()).optional(),
   runningOperation: z
     .object({
@@ -517,7 +563,7 @@ export const chatTopicMetadataUpdateSchema = z.object({
             deviceId: z.string().optional(),
             deviceUserId: z.string().optional(),
             deviceWorkspaceId: z.string().optional(),
-            heteroType: z.string().optional(),
+            heteroType: z.string().nullable().optional(),
             hooks: z.array(serializedAgentHookSchema).optional(),
             operationId: z.string(),
             orchestrationRole: z.enum(['supervisor', 'member']).optional(),
@@ -529,7 +575,7 @@ export const chatTopicMetadataUpdateSchema = z.object({
       deviceId: z.string().optional(),
       deviceUserId: z.string().optional(),
       deviceWorkspaceId: z.string().optional(),
-      heteroType: z.string().optional(),
+      heteroType: z.string().nullable().optional(),
       hooks: z.array(serializedAgentHookSchema).optional(),
       operationId: z.string(),
       orchestrationRole: z.enum(['supervisor', 'member']).optional(),
@@ -548,6 +594,15 @@ export const chatTopicMetadataUpdateSchema = z.object({
   scheduledRun: topicScheduledRunSchema.nullish(),
   workingDirectory: z.string().optional(),
   workingDirectoryConfig: workingDirConfigSchema.optional(),
+});
+
+/**
+ * Metadata a client may seed when creating a topic: the pinned reasoning
+ * snapshot taken alongside the pinned model (see `snapshotAgentModel`).
+ */
+export const chatTopicCreateMetadataSchema = chatTopicMetadataUpdateSchema.pick({
+  heteroEffort: true,
+  reasoningConfig: true,
 });
 
 export interface ChatTopicSummary {
@@ -603,6 +658,15 @@ export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
    */
   model?: string | null;
   provider?: string | null;
+  /**
+   * Start time of the topic's current run — the latest top-level running
+   * `agent_operations.startedAt`, only set while `status === 'running'` and
+   * null otherwise. Present on list queries that select the column (per-agent
+   * / group sidebar lists, the queryTopics feed); absent on slim projections.
+   * Lets lists show live elapsed time for runs that have no local operation
+   * (e.g. after a page refresh, where only the active topic is reconnected).
+   */
+  runStartedAt?: Date | string | number | null;
   sessionId?: string;
   /**
    * Sort key for the sidebar list: the topic's latest message-activity time

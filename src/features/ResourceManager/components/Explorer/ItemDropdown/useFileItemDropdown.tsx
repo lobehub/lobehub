@@ -1,6 +1,6 @@
 import { CUSTOM_FOLDER_FILE_TYPE, DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
 import type { SFSymbol } from '@lobechat/electron-client-ipc';
-import { copyToClipboard, Icon, Tooltip } from '@lobehub/ui';
+import { copyToClipboard, Icon } from '@lobehub/ui';
 import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { type ItemType } from 'antd/es/menu/interface';
 import {
@@ -18,6 +18,7 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import RepoIcon from '@/components/LibIcon';
 import { useSendToMessengerMenuItem } from '@/features/Messenger/PushResourceModal/useSendToMessengerMenuItem';
 import { useKnowledgeBaseListContext } from '@/features/ResourceManager/components/KnowledgeBaseListProvider';
@@ -25,7 +26,6 @@ import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { usePermission } from '@/hooks/usePermission';
-import { useResourceManageable } from '@/hooks/useResourceManageable';
 import { documentService } from '@/services/document';
 import { useFileStore } from '@/store/file';
 import { useKnowledgeBaseStore } from '@/store/library';
@@ -33,7 +33,6 @@ import { useTreeStore } from '@/store/tree';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 import { downloadFile } from '@/utils/client/downloadFile';
-import { isForbiddenError } from '@/utils/forbiddenError';
 
 import { openMoveToFolderModal } from '../MoveToFolderModal';
 
@@ -50,7 +49,20 @@ interface UseFileItemDropdownParams {
   fileType: string;
   id: string;
   libraryId?: string;
+  /**
+   * Runs once the row is gone, so a caller can leave a route that pointed at
+   * it. Fires before the sidebar tree forgets the subtree, so a caller may
+   * still inspect what is about to be removed.
+   */
+  onDeleted?: () => void;
   onRenameStart?: () => void;
+  /**
+   * Folder id the row hangs off in the sidebar tree, when the caller knows it.
+   * The explorer's current folder is not a substitute: the sidebar navigates
+   * into a folder on click, so deleting it from its own context menu would
+   * refresh the deleted folder rather than the list it was listed in.
+   */
+  parentId?: string;
   /** Byte size when available — powers the push modal's oversize pre-warning. */
   size?: number;
   sourceType?: string;
@@ -66,7 +78,16 @@ interface UseFileItemDropdownReturn {
 }
 
 /**
- * Shared with folder tree and explorer
+ * Builds resource actions shared by the folder tree and explorer.
+ *
+ * Use when:
+ * - Rendering an explorer or folder-tree resource menu.
+ *
+ * Expects:
+ * - Parsed file rows carry their backing files.id in fileId.
+ *
+ * Returns:
+ * - Available actions with file visibility changes targeting the backing file.
  */
 export const useFileItemDropdown = ({
   fileId,
@@ -77,7 +98,9 @@ export const useFileItemDropdown = ({
   fileType,
   size,
   sourceType,
+  onDeleted,
   onRenameStart,
+  parentId,
   userId,
   visibility,
 }: UseFileItemDropdownParams): UseFileItemDropdownReturn => {
@@ -86,9 +109,7 @@ export const useFileItemDropdown = ({
   const appOrigin = useAppOrigin();
   const { allowed: canEditResources } = usePermission('edit_own_content');
   const currentUserId = useUserStore(userProfileSelectors.userId);
-  // Row-level ownership: only the creator or a workspace owner may rename or
-  // delete a shared resource — mirrors the server-side enforcement.
-  const canManage = useResourceManageable(userId);
+  const activeWorkspaceId = useActiveWorkspaceId();
 
   const {
     deleteResource,
@@ -262,23 +283,23 @@ export const useFileItemDropdown = ({
 
     const hasKnowledgeBaseActions = libraryRelatedActions.some(Boolean);
 
+    // Visibility is a workspace concept: `files.visibility` defaults to
+    // `'public'` even for personal-mode rows (`workspace_id IS NULL`), where it
+    // is meaningless. Without this gate every personal file would offer
+    // "Make private" (and, once flipped, "Publish to workspace").
+    const isOwnWorkspaceFile =
+      !!activeWorkspaceId &&
+      sourceType !== DERIVED_DOCUMENT_SOURCE_TYPE &&
+      !isFolder &&
+      !!currentUserId &&
+      userId === currentUserId;
     // Only the creator of a still-private file (not a folder, since folders
     // live in the `documents` table and have their own publish flow) sees the
     // "Publish to workspace" entry. Mirrors the agent / task one-way publish.
-    const isOwnPrivateFile =
-      sourceType !== DERIVED_DOCUMENT_SOURCE_TYPE &&
-      !isFolder &&
-      visibility === 'private' &&
-      !!currentUserId &&
-      userId === currentUserId;
+    const isOwnPrivateFile = isOwnWorkspaceFile && visibility === 'private';
     // Bidirectional counterpart: workspace-public files owned by the caller
     // can be pulled back to private via the same guarded server path.
-    const isOwnPublicFile =
-      sourceType !== DERIVED_DOCUMENT_SOURCE_TYPE &&
-      !isFolder &&
-      visibility === 'public' &&
-      !!currentUserId &&
-      userId === currentUserId;
+    const isOwnPublicFile = isOwnWorkspaceFile && visibility === 'public';
 
     return (
       [
@@ -296,7 +317,8 @@ export const useFileItemDropdown = ({
                 title: t('resources.publishToWorkspace.menu', { ns: 'chat' }),
                 onOk: async () => {
                   try {
-                    await publishFileToWorkspace(id);
+                    // Parsed file rows use a document ID; file endpoints require the backing file ID.
+                    await publishFileToWorkspace(fileId ?? id);
                     toast.success(t('resources.publishToWorkspace.success', { ns: 'chat' }));
                   } catch (error) {
                     console.error(error);
@@ -316,13 +338,13 @@ export const useFileItemDropdown = ({
               domEvent.stopPropagation();
               confirmModal({
                 cancelText: t('cancel', { ns: 'common' }),
-                content: <VisibilityConfirmContent variant="makePrivate" />,
+                content: <VisibilityConfirmContent inLibrary={isInLibrary} variant="makePrivate" />,
                 okButtonProps: { danger: true },
                 okText: t('continue', { ns: 'common' }),
                 title: t('makePrivate.confirm.title', { ns: 'common' }),
                 onOk: async () => {
                   try {
-                    await setFileVisibility(id, 'private');
+                    await setFileVisibility(fileId ?? id, 'private');
                     toast.success(t('makePrivate.success', { ns: 'common' }));
                   } catch (error) {
                     console.error(error);
@@ -418,19 +440,11 @@ export const useFileItemDropdown = ({
           },
         canEditResources &&
           isFolder && {
-            disabled: !canManage,
             icon: <Icon icon={PencilIcon} />,
             key: 'rename',
-            label: canManage ? (
-              t('FileManager.actions.rename')
-            ) : (
-              <Tooltip title={t('manageOnlyCreator', { ns: 'common' })}>
-                <span>{t('FileManager.actions.rename')}</span>
-              </Tooltip>
-            ),
+            label: t('FileManager.actions.rename'),
             onClick: async ({ domEvent }) => {
               domEvent.stopPropagation();
-              if (!canManage) return;
               onRenameStart?.();
             },
             sfSymbol: 'pencil',
@@ -440,44 +454,44 @@ export const useFileItemDropdown = ({
         },
         canEditResources && {
           danger: true,
-          disabled: !canManage,
           icon: <Icon icon={Trash} />,
           key: 'delete',
-          label: canManage ? (
-            t('delete', { ns: 'common' })
-          ) : (
-            <Tooltip title={t('manageOnlyCreator', { ns: 'common' })}>
-              <span>{t('delete', { ns: 'common' })}</span>
-            </Tooltip>
-          ),
+          label: t('delete', { ns: 'common' }),
           onClick: async ({ domEvent }) => {
             domEvent.stopPropagation();
-            if (!canManage) return;
             confirmModal({
               content: isFolder
                 ? t('FileManager.actions.confirmDeleteFolder')
                 : t('FileManager.actions.confirmDelete'),
               okButtonProps: { danger: true },
               title: t('delete', { ns: 'common' }),
-              onOk: async () => {
-                try {
-                  // Use optimistic delete - instant UI update, sync in background
-                  await deleteResource(id);
+              onOk: () => {
+                // The store removes the row optimistically. Do not hold the
+                // confirmation dialog open while the network mutation and
+                // reconciliation finish; failures roll back and surface a toast.
+                void (async () => {
+                  try {
+                    await deleteResource(id);
 
-                  // Revalidate tree for the parent folder
-                  const { queryParams } = useFileStore.getState();
-                  const parentId = queryParams?.parentId ?? '';
-                  void useTreeStore.getState().revalidate(parentId);
-                  await refreshFileList({ revalidateResources: false });
+                    // Drop the row from the sidebar tree and refresh the folder
+                    // that actually held it. The explorer's current folder is
+                    // only the fallback, for rows the tree never loaded.
+                    const treeParentKey =
+                      parentId ?? useFileStore.getState().queryParams?.parentId ?? '';
 
-                  toast.success(t('FileManager.actions.deleteSuccess'));
-                } catch (error) {
-                  toast.error(
-                    isForbiddenError(error)
-                      ? t('manageOnlyCreator', { ns: 'common' })
-                      : t('operationFailed', { ns: 'common' }),
-                  );
-                }
+                    // Before the purge, not after: a caller leaving a route
+                    // that pointed into this subtree still has to walk it, and
+                    // `dropNodes` forgets the whole subtree synchronously.
+                    onDeleted?.();
+                    void useTreeStore.getState().dropNodes([id], treeParentKey);
+                    await refreshFileList({ revalidateResources: false });
+
+                    toast.success(t('FileManager.actions.deleteSuccess'));
+                  } catch (error) {
+                    console.error('Failed to delete resource:', error);
+                    toast.error(t('operationFailed', { ns: 'common' }));
+                  }
+                })();
               },
             });
           },
@@ -488,10 +502,11 @@ export const useFileItemDropdown = ({
   }, [
     addFilesToKnowledgeBase,
     appOrigin,
+    activeWorkspaceId,
     canEditResources,
-    canManage,
     currentUserId,
     deleteResource,
+    fileId,
     filename,
     id,
     isFolder,
@@ -500,7 +515,9 @@ export const useFileItemDropdown = ({
     libraries,
     libraryId,
     moveResource,
+    onDeleted,
     onRenameStart,
+    parentId,
     publishFileToWorkspace,
     setFileVisibility,
     refreshFileList,

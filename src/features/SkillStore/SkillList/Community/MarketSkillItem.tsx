@@ -1,7 +1,7 @@
 'use client';
 
-import { ActionIcon, Avatar, Block, DropdownMenu, Flexbox, Icon, Tag } from '@lobehub/ui';
-import { confirmModal, createModal } from '@lobehub/ui/base-ui';
+import { Block, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Avatar, confirmModal, createModal, Tag } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { t as translate } from 'i18next';

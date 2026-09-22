@@ -226,8 +226,8 @@ describe('aiProviderRouter', () => {
       const result = await caller.getAiProviderRuntimeState({});
 
       expect(result.providerBindingAgentTypes).toEqual({
-        'anthropic-custom': ['claude-code'],
-        'openai': ['codex'],
+        'anthropic-custom': ['claude-code', 'grok-build', 'kimi-code', 'pi'],
+        'openai': ['codex', 'grok-build', 'kimi-code', 'pi', 'trae'],
       });
       expect(JSON.stringify(result.providerBindingAgentTypes)).not.toContain('secret');
       expect(JSON.stringify(result.providerBindingAgentTypes)).not.toContain('example.com');
@@ -313,7 +313,15 @@ describe('aiProviderRouter', () => {
       vi.mocked(AiInfraRepos).prototype.getAiProviderRuntimeState = vi.fn().mockResolvedValue({
         ...mockRuntimeState,
         enabledAiModels: [
-          { abilities: {}, id: 'claude-test', providerId: mockProviderId, type: 'chat' },
+          {
+            abilities: { reasoning: true, vision: true },
+            contextWindowTokens: 200_000,
+            displayName: 'Claude Test',
+            id: 'claude-test',
+            maxOutput: 32_000,
+            providerId: mockProviderId,
+            type: 'chat',
+          },
           { abilities: {}, id: 'embed-test', providerId: mockProviderId, type: 'embedding' },
           { abilities: {}, id: 'gpt-test', providerId: 'other', type: 'chat' },
         ],
@@ -331,8 +339,24 @@ describe('aiProviderRouter', () => {
       const result = await caller.getProviderBindingRuntime({ id: mockProviderId });
 
       expect(result.enabledModels).toEqual([
-        { id: 'claude-test', providerId: mockProviderId, type: 'chat' },
-        { id: 'embed-test', providerId: mockProviderId, type: 'embedding' },
+        {
+          abilities: { reasoning: true, vision: true },
+          contextWindowTokens: 200_000,
+          displayName: 'Claude Test',
+          id: 'claude-test',
+          maxOutput: 32_000,
+          providerId: mockProviderId,
+          type: 'chat',
+        },
+        {
+          abilities: { reasoning: undefined, vision: undefined },
+          contextWindowTokens: undefined,
+          displayName: undefined,
+          id: 'embed-test',
+          maxOutput: undefined,
+          providerId: mockProviderId,
+          type: 'embedding',
+        },
       ]);
     });
   });

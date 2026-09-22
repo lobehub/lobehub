@@ -1,7 +1,8 @@
 'use client';
 
 import { type TaskDetail } from '@lobechat/types';
-import { Flexbox, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, keyframes } from 'antd-style';
 import { Footprints, Timer, Wrench } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';

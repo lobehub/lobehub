@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import type { NewUserMemoryExperience } from '../../../schemas';
@@ -431,6 +431,40 @@ describe('UserMemoryExperienceModel', () => {
       const result = await experienceModel.queryList({ pageSize: 200 });
 
       expect(result.pageSize).toBe(100);
+    });
+
+    it('hydrates external candidates through current user and list filters', async () => {
+      const ftsSearchCandidates = vi.fn().mockResolvedValue({
+        candidates: [
+          { id: 'other-list-exp', score: 12 },
+          { id: 'deleted-list-exp', score: 10 },
+          { id: 'list-exp-2', score: 8 },
+          { id: 'list-exp-1', score: 6 },
+        ],
+        total: 4,
+      });
+      const model = new UserMemoryExperienceModel(serverDB, userId, {
+        ftsSearchCandidateEnabled: true,
+        ftsSearchCandidates,
+      });
+
+      const result = await model.queryList({ q: 'candidate', tags: ['tag1'], types: ['lesson'] });
+
+      expect(result.items.map(({ id }) => id)).toEqual(['list-exp-1']);
+      expect(result.total).toBe(1);
+      expect(ftsSearchCandidates).toHaveBeenCalledWith({
+        entity: 'memoryExperiences',
+        filters: {
+          memoryTagMatch: 'any',
+          memoryTags: ['tag1'],
+          memoryTypes: ['lesson'],
+        },
+        pagination: {},
+        query: {
+          fields: ['parent_title', 'situation', 'key_learning', 'action'],
+          text: 'candidate',
+        },
+      });
     });
 
     // BM25 search requires pg_search extension (ParadeDB), not available in PGlite

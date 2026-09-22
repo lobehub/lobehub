@@ -2,6 +2,8 @@ import debug from 'debug';
 import mime from 'mime';
 import sharp from 'sharp';
 
+import { businessFileUploadCheck } from '@/business/server/lambda-routers/file';
+import type { Transaction } from '@/database/type';
 import type { FileService } from '@/server/services/file';
 
 const log = debug('lobe-server:file-ingestion');
@@ -97,6 +99,7 @@ export async function ingestAttachment(
   source: AttachmentSource,
   fileService: FileService,
   userId: string,
+  workspaceId?: string,
 ): Promise<IngestResult> {
   log(
     'ingestAttachment: input name=%s, mimeType=%s, hasBuffer=%s, hasUrl=%s, size=%s',
@@ -174,7 +177,30 @@ export async function ingestAttachment(
   const ext = source.name?.split('.').pop() || 'bin';
   const { nanoid } = await import('@lobechat/utils');
   const pathname = `files/${userId}/${nanoid()}/${source.name || `file.${ext}`}`;
-  const { fileId, key } = await fileService.uploadFromBuffer(buffer, mimeType, pathname);
+
+  // `uploadFromBuffer` writes straight through `FileService`, which has no quota
+  // gate of its own. Charge the post-compression length, since that is what
+  // actually lands in storage. Check once up front so an over-quota attachment
+  // never reaches storage, then again under the owner lock the file row is
+  // written with, since only that one cannot interleave with a concurrent upload.
+  const quotaCheck = (transaction?: Transaction) =>
+    businessFileUploadCheck({
+      actualSize: buffer.length,
+      inputSize: source.size ?? buffer.length,
+      transaction,
+      url: pathname,
+      userId,
+      workspaceId,
+    });
+
+  await quotaCheck();
+
+  const { fileId, key } = await fileService.uploadFromBuffer(
+    buffer,
+    mimeType,
+    pathname,
+    quotaCheck,
+  );
 
   // 5. Resolve access URL for images, videos and audio.
   const resolvedUrl =

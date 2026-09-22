@@ -31,12 +31,12 @@ vi.mock('@/server/services/connector/stateStore', () => ({
   consumeConnectorOAuthState: mockConsume,
 }));
 vi.mock('@/database/models/connector', () => ({
-  ConnectorModel: vi
-    .fn()
-    .mockImplementation(() => ({ findById: mockFindById, update: mockUpdate })),
+  ConnectorModel: vi.fn(function () {
+    return { findById: mockFindById, update: mockUpdate };
+  }),
 }));
 vi.mock('@/database/models/connectorTool', () => ({
-  ConnectorToolModel: vi.fn().mockImplementation(() => ({})),
+  ConnectorToolModel: vi.fn(function () {}),
 }));
 vi.mock('@/server/services/connector/sync', () => ({ syncConnectorToolsById: mockSync }));
 

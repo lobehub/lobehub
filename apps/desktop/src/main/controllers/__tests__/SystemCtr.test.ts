@@ -50,16 +50,6 @@ const invokeIpc = async <T = any>(
   return handler(fakeEvent, payload);
 };
 
-// Mock logger
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
-}));
-
 // Mock electron
 vi.mock('electron', () => ({
   app: {
@@ -184,6 +174,25 @@ describe('SystemController', () => {
           videos: '/mock/path/videos',
         },
       });
+    });
+
+    it('omits user folders that Electron cannot resolve instead of throwing', async () => {
+      const { app } = await import('electron');
+      const getPath = vi.mocked(app.getPath);
+      const original = getPath.getMockImplementation();
+      getPath.mockImplementation((name: string) => {
+        if (name === 'pictures') throw new Error("Failed to get 'pictures' path");
+        return `/mock/path/${name}`;
+      });
+
+      try {
+        const result = await invokeIpc('system.getAppState');
+
+        expect(result.userPath.pictures).toBeUndefined();
+        expect(result.userPath.home).toBe('/mock/path/home');
+      } finally {
+        getPath.mockImplementation(original!);
+      }
     });
   });
 

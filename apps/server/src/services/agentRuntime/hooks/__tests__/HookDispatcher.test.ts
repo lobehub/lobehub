@@ -5,7 +5,9 @@ import type { AgentHook, AgentHookEvent } from '../types';
 
 // Mock isQueueAgentRuntimeEnabled to control local vs production mode
 vi.mock('@/server/services/queue/impls', () => ({
-  isQueueAgentRuntimeEnabled: vi.fn(() => false), // Default: local mode
+  isQueueAgentRuntimeEnabled: vi.fn(function () {
+    return false;
+  }), // Default: local mode
 }));
 
 const mockPublishJSON = vi.hoisted(() => vi.fn());
@@ -317,7 +319,7 @@ describe('HookDispatcher', () => {
 
     it('dispatch rejects a no-fallback delivery failure after delivering other hooks', async () => {
       vi.mocked(isQueueAgentRuntimeEnabled).mockReturnValue(true);
-      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(function () {});
 
       dispatcher.register(operationId, [
         {
@@ -373,6 +375,36 @@ describe('HookDispatcher', () => {
 
     it('should return undefined for unknown operation', () => {
       expect(dispatcher.getSerializedHooks('unknown')).toBeUndefined();
+    });
+  });
+
+  describe('canDeliver', () => {
+    it('answers per mode: a handler-only hook reaches nobody in queue mode', () => {
+      dispatcher.register(operationId, [
+        { handler: vi.fn(), id: 'local-only', type: 'onComplete' },
+      ]);
+
+      expect(dispatcher.canDeliver(operationId, 'onComplete')).toBe(true);
+
+      vi.mocked(isQueueAgentRuntimeEnabled).mockReturnValue(true);
+      expect(dispatcher.canDeliver(operationId, 'onComplete')).toBe(false);
+    });
+
+    it('counts a webhook hook in both modes', () => {
+      dispatcher.register(operationId, [
+        { handler: vi.fn(), id: 'with-webhook', type: 'onComplete', webhook: { url: '/api/hook' } },
+      ]);
+
+      expect(dispatcher.canDeliver(operationId, 'onComplete')).toBe(true);
+      vi.mocked(isQueueAgentRuntimeEnabled).mockReturnValue(true);
+      expect(dispatcher.canDeliver(operationId, 'onComplete')).toBe(true);
+    });
+
+    it('is false for another type, and for an operation with no hooks at all', () => {
+      dispatcher.register(operationId, [{ handler: vi.fn(), id: 'step', type: 'afterStep' }]);
+
+      expect(dispatcher.canDeliver(operationId, 'onComplete')).toBe(false);
+      expect(dispatcher.canDeliver('unknown', 'onComplete')).toBe(false);
     });
   });
 
@@ -726,7 +758,10 @@ describe('HookDispatcher', () => {
   });
 
   describe('dispatchBeforeToolCall — edge cases', () => {
-    it('should use the last mock() call when multiple handlers call mock()', async () => {
+    it('should preserve the first mock() call when multiple handlers call mock()', async () => {
+      const secondHandler = vi.fn(async (event: any) => {
+        event.mock({ content: '{"second":true}', success: true });
+      });
       dispatcher.register(operationId, [
         {
           handler: async (event: any) => {
@@ -736,9 +771,7 @@ describe('HookDispatcher', () => {
           type: 'beforeToolCall',
         },
         {
-          handler: async (event: any) => {
-            event.mock({ content: '{"second":true}', success: true });
-          },
+          handler: secondHandler,
           id: 'mock-2',
           type: 'beforeToolCall',
         },
@@ -754,8 +787,36 @@ describe('HookDispatcher', () => {
 
       expect(result).toEqual({
         isMocked: true,
-        result: { content: '{"second":true}', success: true },
+        result: { content: '{"first":true}', success: true },
       });
+      expect(secondHandler).not.toHaveBeenCalled();
+    });
+
+    it('should stop after a hook mocks and then throws', async () => {
+      const secondHandler = vi.fn();
+      dispatcher.register(operationId, [
+        {
+          handler: async (event: any) => {
+            event.mock({ content: '{"first":true}', success: true });
+            throw new Error('after mock');
+          },
+          id: 'mock-then-throw',
+          type: 'beforeToolCall',
+        },
+        { handler: secondHandler, id: 'must-not-run', type: 'beforeToolCall' },
+      ]);
+      const result = await dispatcher.dispatchBeforeToolCall(operationId, {
+        apiName: 'search',
+        args: {},
+        callIndex: 1,
+        identifier: 'twitter',
+        stepIndex: 0,
+      });
+      expect(result).toEqual({
+        isMocked: true,
+        result: { content: '{"first":true}', success: true },
+      });
+      expect(secondHandler).not.toHaveBeenCalled();
     });
 
     it('should return mock when only one of multiple handlers calls mock()', async () => {

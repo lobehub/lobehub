@@ -21,21 +21,19 @@ export const SubmitAgentPickInspector = memo<
 
   if (isArgumentsStreaming && ids.length === 0) {
     return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{tPlugin('builtins.lobe-web-onboarding.apiName.submitAgentPick')}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {tPlugin('builtins.lobe-web-onboarding.apiName.submitAgentPick')}
+        </span>
       </div>
     );
   }
 
   return (
-    <div
-      style={{ gap: 4 }}
-      className={cx(
-        inspectorTextStyles.root,
-        (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-      )}
-    >
-      <span>{tPlugin('builtins.lobe-web-onboarding.apiName.submitAgentPick')}</span>
+    <div className={inspectorTextStyles.root} style={{ gap: 4 }}>
+      <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+        {tPlugin('builtins.lobe-web-onboarding.apiName.submitAgentPick')}
+      </span>
       {ids.length > 0 && (
         <span className={styles.meta}>
           {tTool('agentMarketplace.inspector.pickCount', { count: ids.length })}

@@ -9,10 +9,12 @@ import { checkTelemetryEnabled } from './telemetry';
 const { mockGetUserSettings, mockGetUserPreference, MockUserModel } = vi.hoisted(() => {
   const mockGetUserSettings = vi.fn();
   const mockGetUserPreference = vi.fn();
-  const MockUserModel = vi.fn().mockImplementation(() => ({
-    getUserPreference: mockGetUserPreference,
-    getUserSettings: mockGetUserSettings,
-  })) as any;
+  const MockUserModel = vi.fn(function () {
+    return {
+      getUserPreference: mockGetUserPreference,
+      getUserSettings: mockGetUserSettings,
+    };
+  }) as any;
   return { MockUserModel, mockGetUserPreference, mockGetUserSettings };
 });
 

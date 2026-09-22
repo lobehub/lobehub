@@ -4,6 +4,11 @@
  */
 export interface AskUserQuestionOption {
   description?: string;
+  /**
+   * Stable provider-owned value. When present the UI displays `label` but
+   * submits this exact id, avoiding ambiguous or localized-label mapping.
+   */
+  id?: string;
   label: string;
   /**
    * The tool schema has no recommendation field, so models mark their pick by

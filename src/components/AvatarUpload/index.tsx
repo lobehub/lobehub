@@ -1,6 +1,7 @@
 'use client';
 
-import { Avatar, Icon } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui/base-ui';
 import { Spin, Upload } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Loader2, PencilIcon, X } from 'lucide-react';

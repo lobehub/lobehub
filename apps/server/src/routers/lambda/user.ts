@@ -906,6 +906,78 @@ export const userRouter = router({
     return ctx.userModel.updateSetting(nextValue);
   }),
 
+  updateToolIntervention: userProcedure
+    .input(
+      z
+        .object({
+          appendAllowList: z.array(z.string().trim().min(1).max(256)).max(64).optional(),
+          approvalMode: z.enum(['auto-run', 'allow-list', 'manual']).optional(),
+        })
+        .strict(),
+    )
+    .mutation(async ({ ctx, input }) => {
+      // `tool` is a member-scope workspace setting — same RBAC gate as updateSettings
+      if (ctx.workspaceId) {
+        const rbac = new RbacModel(ctx.serverDB, ctx.userId);
+        const allowed = await rbac.hasAnyPermission([...WORKSPACE_CONTENT_PERMISSIONS], {
+          workspaceId: ctx.workspaceId,
+        });
+
+        if (!allowed) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'You do not have permission to perform this action.',
+          });
+        }
+      }
+
+      // Server-side merge on the `tool` column: each browser tab fetches user
+      // state once and can hold hours-stale settings, so a whole-column `tool`
+      // replace built from client memory clobbers changes made from other tabs
+      // (e.g. reverts approvalMode). The model merges atomically in one SQL
+      // statement, so even two concurrent calls cannot drop each other's change.
+      return ctx.userModel.mergeToolInterventionSetting(input);
+    }),
+
+  updateUninstalledBuiltinTools: userProcedure
+    .input(
+      z
+        .object({
+          uninstalledBuiltinTools: z.array(z.string().trim().min(1).max(256)).max(256),
+          // The client pins the scope it computed the list for. Deriving the slot
+          // from the request's dynamic workspace header instead would let a
+          // workspace switch during the action write scope A's list into scope B.
+          workspaceId: z.string().trim().min(1).max(128).nullable(),
+        })
+        .strict(),
+    )
+    .mutation(async ({ ctx, input }) => {
+      // `tool` is a member-scope workspace setting — same RBAC gate as
+      // updateSettings, checked against the TARGET workspace slot
+      if (input.workspaceId) {
+        const rbac = new RbacModel(ctx.serverDB, ctx.userId);
+        const allowed = await rbac.hasAnyPermission([...WORKSPACE_CONTENT_PERMISSIONS], {
+          workspaceId: input.workspaceId,
+        });
+
+        if (!allowed) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'You do not have permission to perform this action.',
+          });
+        }
+      }
+
+      // The model patches only the pinned scope's slot atomically — a
+      // whole-column write built from a client snapshot would race with
+      // concurrent tool-column writers (e.g. an approvalMode change) and could
+      // revert them.
+      return ctx.userModel.replaceUninstalledBuiltinToolsSetting({
+        uninstalledBuiltinTools: input.uninstalledBuiltinTools,
+        workspaceId: input.workspaceId,
+      });
+    }),
+
   updateUsername: userProcedure.input(usernameSchema).mutation(async ({ ctx, input }) => {
     const existedUser = await UserModel.findByUsername(ctx.serverDB, input);
     if (existedUser && existedUser.id !== ctx.userId) {

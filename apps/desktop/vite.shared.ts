@@ -107,7 +107,12 @@ export const applyDesktopViteConfigExtension = async (
 
   const { module: extensionModule } = await runnerImport<DesktopViteConfigExtensionModule>(
     extensionPath,
-    { configFile: false, root: path.dirname(extensionPath) },
+    {
+      configFile: false,
+      // The module runner resolves these build tools from Desktop's frozen installation.
+      resolve: { dedupe: ['@sentry/vite-plugin', 'magic-string'] },
+      root: DESKTOP_DIR,
+    },
   );
 
   if (typeof extensionModule.extendDesktopViteConfig !== 'function') {

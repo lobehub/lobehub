@@ -321,6 +321,7 @@ export class UpdaterManager {
     logger.info('Simulating update available...');
 
     const mockUpdateInfo: UpdateInfo = {
+      kind: 'app',
       releaseDate: new Date().toISOString(),
       releaseNotes: ` #### Version 1.0.0 Release Notes
 - Added some great new features
@@ -349,6 +350,7 @@ export class UpdaterManager {
     logger.info('Simulating update downloaded...');
 
     const mockUpdateInfo: UpdateInfo = {
+      kind: 'app',
       releaseDate: new Date().toISOString(),
       releaseNotes: ` #### Version 1.0.0 Release Notes
 - Added some great new features
@@ -361,7 +363,7 @@ export class UpdaterManager {
 
     this.downloading = false;
     this.setStage('downloaded', { updateInfo: mockUpdateInfo });
-    this.mainWindow.broadcast('updateDownloaded', mockUpdateInfo);
+    this.mainWindow.broadcast('updateReady', mockUpdateInfo);
   };
 
   /**
@@ -472,7 +474,7 @@ export class UpdaterManager {
 
       // Always auto-download
       logger.info('Update found, starting download automatically...');
-      this.setStage('downloading', { updateInfo: info });
+      this.setStage('downloading', { updateInfo: { ...info, kind: 'app' } });
       this.downloadUpdate();
     });
 
@@ -526,16 +528,17 @@ export class UpdaterManager {
 
       this.maybeClearInstallLaterGuard(info.version);
 
-      this.setStage('downloaded', { updateInfo: info });
+      const updateInfo = { ...info, kind: 'app' } satisfies UpdateInfo;
+      this.setStage('downloaded', { updateInfo });
 
       if (this.installLaterVersion) {
         logger.info(
-          `Not re-broadcasting updateDownloaded — install-later acknowledged for v${this.installLaterVersion}, incoming v${info.version}`,
+          `Not broadcasting updateReady — install-later acknowledged for v${this.installLaterVersion}, incoming v${info.version}`,
         );
         return;
       }
 
-      this.mainWindow.broadcast('updateDownloaded', info);
+      this.mainWindow.broadcast('updateReady', updateInfo);
     });
 
     logger.debug('Updater events registered');
@@ -584,6 +587,7 @@ export class UpdaterManager {
   private getCurrentUpdateInfo(): UpdateInfo {
     const version = autoUpdater.currentVersion?.version || electronApp.getVersion();
     return {
+      kind: 'app',
       releaseDate: new Date().toISOString(),
       version,
     };

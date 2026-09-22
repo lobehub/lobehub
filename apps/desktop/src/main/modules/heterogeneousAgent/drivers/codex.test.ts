@@ -46,6 +46,7 @@ describe('codexDriver provider binding', () => {
     expect(config).not.toContain('model_catalog_json');
     expect(plan.profileFiles).toHaveLength(1);
     expect(config).not.toContain('stale');
+    expect(plan.operationTokenEnvKey).toBe('LOBEHUB_HETERO_TOKEN');
     expect(plan.env.LOBEHUB_HETERO_TOKEN).toBeUndefined();
   });
 

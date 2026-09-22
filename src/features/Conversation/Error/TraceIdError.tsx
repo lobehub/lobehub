@@ -14,10 +14,11 @@ import { useRetryParentMessage } from './useRetryParentMessage';
 interface TraceIdErrorProps {
   id: string;
   onRetry?: () => Promise<void> | void;
+  showRetry?: boolean;
   traceId?: string;
 }
 
-const TraceIdError = memo<TraceIdErrorProps>(({ id, onRetry, traceId }) => {
+const TraceIdError = memo<TraceIdErrorProps>(({ id, onRetry, showRetry = true, traceId }) => {
   const { t } = useTranslation('error');
   const { disabled, loading, retryParentMessage } = useRetryParentMessage(id);
 
@@ -44,22 +45,24 @@ const TraceIdError = memo<TraceIdErrorProps>(({ id, onRetry, traceId }) => {
   return (
     <BaseErrorForm
       avatar={<Icon icon={AlertTriangle} size={24} />}
-      title={t('unknownError.title')}
+      title={t(showRetry ? 'unknownError.title' : 'unknownError.sharedTitle')}
       action={
-        <Button
-          disabled={!onRetry && disabled}
-          icon={<Icon icon={RotateCw} />}
-          loading={!onRetry && loading}
-          size={'small'}
-          type={'primary'}
-          onClick={handleRetry}
-        >
-          {t('unknownError.retry')}
-        </Button>
+        showRetry ? (
+          <Button
+            disabled={!onRetry && disabled}
+            icon={<Icon icon={RotateCw} />}
+            loading={!onRetry && loading}
+            size={'small'}
+            type={'primary'}
+            onClick={handleRetry}
+          >
+            {t('unknownError.retry')}
+          </Button>
+        ) : undefined
       }
       desc={
         <span>
-          {t('unknownError.desc')}{' '}
+          {t(showRetry ? 'unknownError.desc' : 'unknownError.sharedDesc')}{' '}
           <a
             href={SOCIAL_URL.discord}
             rel="noopener noreferrer"

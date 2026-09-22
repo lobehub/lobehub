@@ -1,7 +1,15 @@
 'use client';
 
-import { ActionIcon, Avatar, copyToClipboard, Flexbox, Skeleton, Text } from '@lobehub/ui';
-import { DropdownMenu, toast, useModalContext } from '@lobehub/ui/base-ui';
+import { copyToClipboard, Flexbox } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Avatar,
+  DropdownMenu,
+  Skeleton,
+  Text,
+  toast,
+  useModalContext,
+} from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { MoreHorizontal, XIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
@@ -65,11 +73,7 @@ const DocumentModalHeader = memo(() => {
       <Flexbox allowShrink horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
         {emoji && <Avatar avatar={emoji} shape={'square'} size={24} />}
         {isDocumentLoading && !title ? (
-          <Skeleton.Button
-            active
-            size={'small'}
-            style={{ height: 14, minWidth: 120, width: 120 }}
-          />
+          <Skeleton style={{ height: 14, minWidth: 120, width: 120 }} />
         ) : (
           <Text ellipsis style={{ minWidth: 0 }} weight={500}>
             {title || t('pageEditor.titlePlaceholder')}

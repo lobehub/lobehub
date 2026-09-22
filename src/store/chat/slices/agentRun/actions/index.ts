@@ -7,6 +7,10 @@ import { type ConversationControlAction } from './entries/conversationControl';
 import { ConversationControlActionImpl } from './entries/conversationControl';
 import { type ConversationLifecycleAction } from './entries/conversationLifecycle';
 import { ConversationLifecycleActionImpl } from './entries/conversationLifecycle';
+import {
+  type QuestionSubmissionAction,
+  QuestionSubmissionActionImpl,
+} from './entries/questionSubmission';
 import { type ChatMemoryAction } from './state/memory';
 import { ChatMemoryActionImpl } from './state/memory';
 import { type StreamingStatesAction } from './state/streamingStates';
@@ -22,6 +26,7 @@ export type ChatAgentRunAction = ChatMemoryAction &
   ClientToolExecutionAction &
   ConversationLifecycleAction &
   ConversationControlAction &
+  QuestionSubmissionAction &
   GatewayAction &
   StreamingExecutorAction &
   StreamingStatesAction;
@@ -41,6 +46,7 @@ export const chatAgentRun: StateCreator<
     new ClientToolExecutionActionImpl(...params),
     new ConversationLifecycleActionImpl(...params),
     new ConversationControlActionImpl(...params),
+    new QuestionSubmissionActionImpl(...params),
     new GatewayActionImpl(...params),
     new StreamingExecutorActionImpl(...params),
     new StreamingStatesActionImpl(...params),

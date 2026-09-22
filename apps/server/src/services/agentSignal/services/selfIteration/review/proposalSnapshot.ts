@@ -11,6 +11,8 @@ export interface SelfReviewProposalSnapshotAdapters {
     /** User that owns the agent. */
     userId: string;
   }) => Promise<boolean>;
+  /** Reads the current prompt hash for the reviewed agent. */
+  readAgentPromptSnapshot?: (agentId: string) => Promise<{ promptHash: string } | undefined>;
   /** Reads the current managed skill target snapshot by agent document id. */
   readSkillTargetSnapshot: (
     skillDocumentId: string,
@@ -20,7 +22,7 @@ export interface SelfReviewProposalSnapshotAdapters {
 /** Input for capturing a complete proposal base snapshot before merge/apply. */
 export interface CaptureSelfReviewProposalSnapshotInput {
   /** Mergeable proposal action type to snapshot. */
-  actionType: 'create_skill' | 'refine_skill';
+  actionType: 'create_skill' | 'refine_prompt' | 'refine_skill';
   /** Agent that owns the target skill namespace. */
   agentId: string;
   /** Frozen action input from the proposal operation. */
@@ -66,6 +68,22 @@ export const createSelfReviewProposalSnapshotService = (
     input,
     userId,
   }: CaptureSelfReviewProposalSnapshotInput): Promise<SelfReviewProposalBaseSnapshot> => {
+    if (actionType === 'refine_prompt') {
+      const value = input.agentId;
+      if (typeof value !== 'string' || value.trim().length === 0) {
+        throw new Error('agentId is required');
+      }
+      const targetAgentId = value.trim();
+      const snapshot = await adapters.readAgentPromptSnapshot?.(targetAgentId);
+      if (!snapshot?.promptHash) throw new Error('Agent prompt snapshot is required');
+
+      return {
+        agentId: targetAgentId,
+        promptHash: snapshot.promptHash,
+        targetType: 'agent_prompt',
+      };
+    }
+
     if (actionType === 'refine_skill') {
       const value = input.skillDocumentId;
       if (typeof value !== 'string' || value.trim().length === 0) {

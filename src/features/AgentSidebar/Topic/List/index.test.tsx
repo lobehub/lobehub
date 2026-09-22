@@ -2,7 +2,6 @@
  * @vitest-environment happy-dom
  */
 import { fireEvent, render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import TopicList from './index';
@@ -55,6 +54,10 @@ vi.mock('@/features/NavPanel/components/SkeletonList', () => ({
 
 vi.mock('@/hooks/useFetchChatTopics', () => ({
   useFetchChatTopics: vi.fn(),
+}));
+
+vi.mock('@/hooks/useFetchActiveTopicDetail', () => ({
+  useFetchActiveTopicDetail: vi.fn(),
 }));
 
 vi.mock('@/hooks/usePermission', () => ({
@@ -110,12 +113,6 @@ vi.mock('@/store/user/selectors', () => ({
   },
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
-}));
-
 vi.mock('../AllTopicsDrawer', () => ({
   default: ({ open }: { open: boolean }) => (
     <div data-open={String(open)} data-testid="all-topics-drawer" />
@@ -136,16 +133,6 @@ vi.mock('../TopicListContent/ByTimeMode', () => ({
 
 vi.mock('./Item', () => ({
   default: () => <div data-testid="topic-item" />,
-}));
-
-// Partial mock: keep every real export (e.g. `lobeStaticStylish`, which
-// `createStaticStyles` reads at import time in transitively-loaded modules like
-// ShareModal/useContainerStyles) and override only Flexbox. A full mock returning
-// just Flexbox drops those exports and crashes collection whenever the suite's
-// module graph evaluates one of them.
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
 }));
 
 describe('Agent topic list', () => {

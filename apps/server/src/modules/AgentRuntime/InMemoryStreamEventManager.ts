@@ -49,7 +49,7 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
       // event shape stays identical to the production wire format —
       // tests run against this manager and would otherwise mask
       // regressions in the strip behaviour.
-      data: stripFinalStateInEventData(event.data),
+      data: stripFinalStateInEventData(event.data, event.type),
       id: eventId,
       operationId,
       timestamp: Date.now(),
@@ -110,6 +110,8 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
     operationId,
     stepIndex,
     finalState,
+    messagePatchMode,
+    messageRevision,
     reason,
     reasonDetail,
     uiMessages,
@@ -117,7 +119,8 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
     // Strip happens centrally inside `publishStreamEvent`.
     return this.publishStreamEvent(operationId, {
       data: {
-        finalState,
+        ...(!messagePatchMode && { finalState }),
+        ...(messagePatchMode && { messagePatchMode: true, messageRevision }),
         operationId,
         phase: 'execution_complete',
         reason: reason || 'completed',

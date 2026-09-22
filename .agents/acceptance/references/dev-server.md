@@ -6,7 +6,7 @@ surfaces (CLI, Electron, Web) hit.
 ## Resolve ports first
 
 Run `test-env.sh` as described in
-[SKILL.md Step 2.0](../../skills/agent-testing/SKILL.md#20-resolve-the-current-test-environment)
+[PROCESS.md Step 2](../PROCESS.md#step-2--environment-and-auth)
 before starting or probing any local test surface.
 
 ## Ports & modes

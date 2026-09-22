@@ -6,6 +6,9 @@ const PORTAL_ROOT_ID = 'lobe-ui-theme-app';
 export const MAX_RETAINED_BROWSER_WEBVIEWS = 10;
 const RETAINED_IN_USE_GRACE_MS = 60_000;
 const BOUNDS_POLL_INTERVAL_MS = 100;
+const RESIZE_BRIDGE_WIDTH = 10;
+const RESIZE_HANDLE_SELECTOR =
+  '.ant-draggable-panel-left-handle, .ant-draggable-panel-right-handle';
 
 interface BrowserWebviewElement extends HTMLElement {
   getWebContentsId: () => number;
@@ -15,10 +18,12 @@ interface RetainedWebview {
   boundsFrame?: number;
   boundsPollTimer?: number;
   host?: HTMLElement;
+  interactionBridge?: HTMLDivElement;
   lastBoundsKey?: string;
   lastUsedAt: number;
   ready: Promise<BrowserWebviewElement>;
   resizeObserver?: ResizeObserver;
+  restoreInteraction?: () => void;
   syncBounds?: () => void;
   visible: boolean;
   webview: BrowserWebviewElement;
@@ -66,6 +71,7 @@ class BrowserWebviewRegistry {
       window.addEventListener('resize', retained.syncBounds);
       window.addEventListener('scroll', retained.syncBounds, true);
       retained.boundsPollTimer = window.setInterval(retained.syncBounds, BOUNDS_POLL_INTERVAL_MS);
+      this.mountResizeBridge(retained);
     }
 
     Object.assign(webview.style, {
@@ -179,6 +185,10 @@ class BrowserWebviewRegistry {
   }
 
   private stopBoundsSync(retained: RetainedWebview): void {
+    retained.restoreInteraction?.();
+    retained.restoreInteraction = undefined;
+    retained.interactionBridge?.remove();
+    retained.interactionBridge = undefined;
     retained.resizeObserver?.disconnect();
     retained.resizeObserver = undefined;
     if (retained.boundsPollTimer !== undefined) {
@@ -199,15 +209,124 @@ class BrowserWebviewRegistry {
   private syncBounds(retained: RetainedWebview): void {
     if (!retained.visible || !retained.host) return;
     const bounds = retained.host.getBoundingClientRect();
-    const boundsKey = `${bounds.left},${bounds.top},${bounds.width},${bounds.height}`;
+    const clippedByAncestor = this.isClippedByCollapsedAncestor(retained.host);
+    const boundsKey = `${clippedByAncestor},${bounds.left},${bounds.top},${bounds.width},${bounds.height}`;
     if (retained.lastBoundsKey === boundsKey) return;
     retained.lastBoundsKey = boundsKey;
+
+    // The draggable panel keeps its fixed-width child mounted while its clipping
+    // ancestor collapses to zero. Checking the host alone therefore misses the
+    // closed state and leaves the guest's last compositor frame on screen.
+    if (clippedByAncestor || bounds.width <= 0 || bounds.height <= 0) {
+      Object.assign(retained.webview.style, {
+        height: '800px',
+        left: '-10000px',
+        opacity: '0',
+        pointerEvents: 'none',
+        top: '0',
+        width: '1200px',
+      });
+      if (retained.interactionBridge) {
+        retained.interactionBridge.style.pointerEvents = 'none';
+        retained.interactionBridge.style.visibility = 'hidden';
+      }
+      return;
+    }
+
     Object.assign(retained.webview.style, {
       height: `${bounds.height}px`,
       left: `${bounds.left}px`,
+      opacity: '1',
       top: `${bounds.top}px`,
       width: `${bounds.width}px`,
     });
+    if (!retained.restoreInteraction) retained.webview.style.pointerEvents = 'auto';
+    if (retained.interactionBridge) {
+      const isRtl = getComputedStyle(retained.host).direction === 'rtl';
+      const bridgeLeft = isRtl ? bounds.right - RESIZE_BRIDGE_WIDTH / 2 : bounds.left - 5;
+      Object.assign(retained.interactionBridge.style, {
+        height: `${bounds.height}px`,
+        left: `${bridgeLeft}px`,
+        visibility: 'visible',
+        top: `${bounds.top}px`,
+      });
+      if (!retained.restoreInteraction) retained.interactionBridge.style.pointerEvents = 'auto';
+    }
+  }
+
+  private isClippedByCollapsedAncestor(host: HTMLElement): boolean {
+    let element = host.parentElement;
+    while (element && element !== document.body) {
+      const bounds = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      if (
+        (bounds.width <= 0 && style.overflowX !== 'visible') ||
+        (bounds.height <= 0 && style.overflowY !== 'visible')
+      ) {
+        return true;
+      }
+      element = element.parentElement;
+    }
+    return false;
+  }
+
+  private mountResizeBridge(retained: RetainedWebview): void {
+    const overlayHost = getHiddenHost().parentElement;
+    if (!overlayHost) return;
+
+    const bridge = document.createElement('div');
+    bridge.setAttribute('aria-hidden', 'true');
+    bridge.dataset.browserResizeBridge = 'true';
+    Object.assign(bridge.style, {
+      cursor: 'col-resize',
+      pointerEvents: 'auto',
+      position: 'fixed',
+      width: `${RESIZE_BRIDGE_WIDTH}px`,
+      zIndex: '1',
+    });
+
+    const restoreInteraction = () => {
+      window.removeEventListener('blur', restoreInteraction);
+      window.removeEventListener('mouseup', restoreInteraction, true);
+      retained.restoreInteraction = undefined;
+      bridge.style.pointerEvents = 'auto';
+      if (retained.visible && retained.webview.style.opacity === '1') {
+        retained.webview.style.pointerEvents = 'auto';
+      }
+    };
+
+    bridge.addEventListener('mousedown', (event) => {
+      if (event.button !== 0) return;
+
+      retained.webview.style.pointerEvents = 'none';
+      bridge.style.pointerEvents = 'none';
+      retained.restoreInteraction = restoreInteraction;
+
+      const resizeHandle = retained.host
+        ?.closest('.ant-draggable-panel')
+        ?.querySelector<HTMLElement>(RESIZE_HANDLE_SELECTOR);
+      if (!resizeHandle) {
+        restoreInteraction();
+        return;
+      }
+
+      window.addEventListener('blur', restoreInteraction, { once: true });
+      window.addEventListener('mouseup', restoreInteraction, { capture: true, once: true });
+      resizeHandle.dispatchEvent(
+        new MouseEvent('mousedown', {
+          bubbles: true,
+          button: event.button,
+          buttons: event.buttons,
+          clientX: event.clientX,
+          clientY: event.clientY,
+          screenX: event.screenX,
+          screenY: event.screenY,
+        }),
+      );
+    });
+
+    overlayHost.append(bridge);
+    retained.interactionBridge = bridge;
   }
 
   private evictColdWebviews(): void {

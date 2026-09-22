@@ -11,16 +11,6 @@ vi.mock('electron', () => ({
   },
 }));
 
-// Mock logger
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  }),
-}));
-
 // Mock menu platform implementation
 const mockBuildAndSetAppMenu = vi.fn();
 const mockBuildContextMenu = vi.fn();

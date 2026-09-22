@@ -50,9 +50,10 @@ export class SystemAgentService {
    */
   async generateTopicTitle(params: {
     lastAssistantContent: string;
+    topicId: string;
     userPrompt: string;
   }): Promise<string | null> {
-    const { userPrompt, lastAssistantContent } = params;
+    const { userPrompt, lastAssistantContent, topicId } = params;
 
     try {
       const { model, provider } = await this.getTaskModelConfig('topic');
@@ -80,11 +81,12 @@ export class SystemAgentService {
           schema: TOPIC_TITLE_JSON_SCHEMA,
         },
         {
-          metadata: { trigger: RequestTrigger.Topic },
+          metadata: { topicId, trigger: RequestTrigger.Topic },
           tracing: {
             promptVersion: TOPIC_TITLE_PROMPT_VERSION,
             scenario: TRACING_SCENARIOS.TopicTitle,
             schemaName: TOPIC_TITLE_JSON_SCHEMA.name,
+            topicId,
           } satisfies TracingOptions,
         },
       );

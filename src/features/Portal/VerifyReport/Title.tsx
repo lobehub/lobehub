@@ -1,6 +1,6 @@
 import { memo } from 'react';
 
-import { useVerifyReportBundle } from '@/features/Verify/hooks';
+import { useVerifyReportBundle } from '@/features/Acceptance/hooks';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 

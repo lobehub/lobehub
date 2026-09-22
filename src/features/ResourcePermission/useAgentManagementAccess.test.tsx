@@ -17,10 +17,6 @@ vi.mock('@/features/ResourcePermission/useResourceAccess', () => ({
   useResourceAccess: () => testState.permission,
 }));
 
-vi.mock('@/hooks/usePermission', () => ({
-  usePermission: () => ({ allowed: true }),
-}));
-
 vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: (state: { agentMap: Record<string, unknown> }) => unknown) =>
     selector({ agentMap: testState.agent ? { 'agent-1': testState.agent } : {} }),

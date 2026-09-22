@@ -110,6 +110,15 @@ export function defineConfig(config: CustomNextConfig) {
           headers: securityHeaders,
           source: '/:path*',
         },
+        // Agent Share visitor pages live under `/agent/:slugOrId` and are
+        // reachable by anyone holding the link. Keep them out of search
+        // indexes (privacy) — the SPA shell is static per variant, so a
+        // per-route `<meta name="robots">` is not an option; the header is.
+        // Listed after the global rule so it overrides `x-robots-tag: all`.
+        {
+          headers: [{ key: 'x-robots-tag', value: 'noindex, nofollow' }],
+          source: '/agent/:path*',
+        },
         {
           headers: [
             {

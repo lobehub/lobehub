@@ -1,6 +1,8 @@
 /**
  * @vitest-environment node
  */
+import { readFile } from 'node:fs/promises';
+
 import { NextRequest } from 'next/server';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -97,15 +99,36 @@ describe('defineConfig Share SPA rewrite', () => {
     );
     const desktopTopic = await run('http://localhost:3010/share/t/topic-1?hl=en-US');
     const desktopPage = await run('http://localhost:3010/share/page/docs_1?hl=en-US');
+    const desktopArtifact = await run('http://localhost:3010/share/artifact/42?hl=en-US');
 
     expect(new URL(mobileTopic!).pathname).toBe('/spa-share/en-US/share/t/topic-1');
     expect(new URL(desktopTopic!).pathname).toBe('/spa-share/en-US/share/t/topic-1');
     expect(new URL(desktopPage!).pathname).toBe('/spa-share/en-US/share/page/docs_1');
+    expect(new URL(desktopArtifact!).pathname).toBe('/spa-share/en-US/share/artifact/42');
   });
 
   it('leaves non-share paths that merely start with the prefix in the main SPA', async () => {
     const rewrite = await run('http://localhost:3010/shared-workspace/settings?hl=en-US');
 
     expect(new URL(rewrite!).pathname).toMatch(/^\/spa\/[^/]+\/shared-workspace\/settings$/);
+  });
+});
+
+describe('Acceptance installation guide', () => {
+  it('serves the public Markdown asset without authentication or SPA rewrites', async () => {
+    const { auth } = await import('@/auth');
+    vi.mocked(auth.api.getSession).mockClear();
+    const response = await middleware(new NextRequest('http://localhost:3010/acceptance/skill.md'));
+
+    expect(response?.headers.get('x-middleware-next')).toBe('1');
+    expect(response?.headers.get('x-middleware-rewrite')).toBeNull();
+    expect(response?.headers.get('location')).toBeNull();
+    expect(auth.api.getSession).not.toHaveBeenCalled();
+
+    const guide = await readFile('public/acceptance/skill.md', 'utf8');
+    expect(guide).toContain('npm install -g @lobehub/cli');
+    expect(guide).toContain('lh login');
+    expect(guide).toContain('lh acceptance install');
+    expect(guide).toContain('.agents/skills/acceptance/SKILL.md');
   });
 });

@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { coverageConfigDefaults, defineConfig } from 'vitest/config';
+import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   plugins: [
@@ -26,13 +26,17 @@ export default defineConfig({
       '@/server/services': resolve(__dirname, '../../apps/server/src/services'),
       '@/server/modules': resolve(__dirname, '../../apps/server/src/modules'),
       '@': resolve(__dirname, '../../src'),
-
     },
     coverage: {
-      all: false,
       exclude: [
         // https://github.com/lobehub/lobe-chat/pull/7265
-        ...coverageConfigDefaults.exclude,
+        // Vitest 4+ ships an empty `coverageConfigDefaults.exclude`; keep the previous
+        // default exclusions explicitly so the coverage set does not silently grow.
+        '**/node_modules/**',
+        '**/dist/**',
+        '**/cypress/**',
+        '**/.{idea,git,cache,output,temp}/**',
+        '**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build,eslint,prettier}.config.*',
         'src/server/core/dbForTest.ts',
       ],
       include: ['src/models/**/*.ts', 'src/server/**/*.ts'],
@@ -43,11 +47,8 @@ export default defineConfig({
       TEST_SERVER_DB: '1',
     },
     environment: 'node',
-    poolOptions: {
-      forks: {
-        singleFork: true,
-      },
-    },
+    isolate: false,
+    maxWorkers: 1,
     setupFiles: './tests/setup-db.ts',
   },
 });

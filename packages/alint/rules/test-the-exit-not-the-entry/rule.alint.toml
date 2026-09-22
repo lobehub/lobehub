@@ -1,0 +1,17 @@
+name = "test-the-exit-not-the-entry"
+builtInAgent = "basic-structured"
+instruction = """
+You are reviewing one Vitest test file from LobeHub.
+
+Team rule: a test must assert the exit of the behaviour, not only its entry. "Entry" means proving that some function was invoked (`toHaveBeenCalled`, `toHaveBeenCalledWith`, `toHaveBeenCalledTimes`). "Exit" means the observable outcome the caller cares about: returned value, state after the action, the row that was written, the event that was emitted, the error that surfaced, the UI that changed. Tests that stop at the entry pass when the action can no longer be committed, when the mocked collaborator would have rejected the call, or when the system does not react after the call; those are exactly the regressions LobeHub keeps shipping.
+
+Report each test case (`it(...)` / `test(...)`) whose only assertions are call-shape assertions on mocks or spies, while the code under test has an observable exit the test could have asserted: a return value, a store/state change, a persisted or returned record, a dispatched message, a thrown or rejected error. Use the line of the `it(` / `test(` call. In the message, name what was only asserted as called and what outcome went unasserted. In the suggestion, say which exit to assert and how (for example "assert the store's `topics` map after the action" or "assert the resolved value").
+
+Do not report:
+- tests of thin delegation wrappers whose entire contract is forwarding arguments to one collaborator;
+- tests explicitly about the call contract (argument shape, call count under retry, ordering) where the outcome is asserted in a sibling test in the same `describe`;
+- tests that assert both the call and an outcome;
+- tests that assert absence of a call as a guard ("does not call X when Y").
+
+If uncertain, use low confidence rather than forcing a finding.
+"""

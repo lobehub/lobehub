@@ -41,7 +41,8 @@ const mockUpdateToolMessage = vi.fn();
 const mockGetMessages = vi.fn();
 
 const mockToastInfo = vi.fn();
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   toast: { info: (...args: unknown[]) => mockToastInfo(...args) },
 }));
 
@@ -72,11 +73,13 @@ vi.mock('@/services/thread', () => ({
 const mockStartSession = vi.fn();
 const mockSendPrompt = vi.fn();
 const mockStopSession = vi.fn();
+const mockCancelSession = vi.fn();
 const mockGetSessionInfo = vi.fn();
 const mockGetClaudeCodeIdentity = vi.fn(async (..._args: any[]) => null);
 
 vi.mock('@/services/electron/heterogeneousAgent', () => ({
   heterogeneousAgentService: {
+    cancelSession: (...args: unknown[]) => mockCancelSession(...args),
     getClaudeCodeIdentity: (...args: any[]) => mockGetClaudeCodeIdentity(...args),
     getSessionInfo: (...args: any[]) => mockGetSessionInfo(...args),
     sendPrompt: (...args: any[]) => mockSendPrompt(...args),
@@ -125,10 +128,18 @@ vi.mock('@lobechat/const', async (importOriginal) => {
 // Desktop notification IPC — dynamically imported inside `notifyCompletion`.
 const mockShowNotification = vi.fn(async (..._args: any[]) => {});
 const mockSetBadgeCount = vi.fn(async (..._args: any[]) => {});
+const mockGetNotificationSoundFile = vi.fn(async (..._args: any[]) => undefined);
+const mockPlayCompletionSound = vi.fn(async (..._args: any[]) => {});
 vi.mock('@/services/electron/desktopNotification', () => ({
   desktopNotificationService: {
     setBadgeCount: (...args: any[]) => mockSetBadgeCount(...args),
     showNotification: (...args: any[]) => mockShowNotification(...args),
+  },
+}));
+vi.mock('@/services/electron/completionSound', () => ({
+  completionSoundService: {
+    getNotificationSoundFile: (...args: any[]) => mockGetNotificationSoundFile(...args),
+    play: (...args: any[]) => mockPlayCompletionSound(...args),
   },
 }));
 
@@ -142,10 +153,12 @@ function setupIpcCapture() {
       ipcRenderer: {
         on: vi.fn((channel: string, handler: (...args: any[]) => void) => {
           listeners.set(channel, handler);
+          return () => {
+            if (listeners.get(channel) === handler) listeners.delete(channel);
+          };
         }),
-        removeListener: vi.fn((channel: string, handler: (...args: any[]) => void) => {
-          if (listeners.get(channel) === handler) listeners.delete(channel);
-        }),
+        // A separately bridged callback does not preserve the listener proxy identity.
+        removeListener: vi.fn(),
       },
     },
   };
@@ -244,6 +257,7 @@ function createMockStore(overrides: Record<string, any> = {}) {
     internal_dispatchMessage: vi.fn(),
     internal_toggleToolCallingStreaming: vi.fn(),
     markTopicUnread: vi.fn(),
+    messagesMap: {},
     operations: {
       'op-1': {
         context: { agentId: 'agent-1', scope: 'main', topicId: 'topic-1' },
@@ -261,6 +275,7 @@ function createMockStore(overrides: Record<string, any> = {}) {
         operationId: `sub-op-${subOpCounter}`,
       };
     }),
+    topicDataMap: {},
     updateTopicMetadata: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   } as any;
@@ -516,6 +531,8 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetNotificationSoundFile.mockResolvedValue(undefined);
+    mockPlayCompletionSound.mockResolvedValue(undefined);
     ipc = setupIpcCapture();
     // Register the IPC session's agent type from the params the executor
     // hands to startSession, so the helper picks the right adapter when the
@@ -529,6 +546,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     });
     mockSendPrompt.mockResolvedValue(undefined);
     mockStopSession.mockResolvedValue(undefined);
+    mockCancelSession.mockResolvedValue(undefined);
     // Mirror the desktop main: `getSessionInfo` returns whatever the producer
     // pipeline's adapter has extracted from the JSONL stream so far. Tests
     // that never emit an init / thread.started event get `agentSessionId:
@@ -658,29 +676,147 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     return { get, store };
   }
 
+  it.each([
+    { provider: { command: 'pi', type: 'pi' }, expectedOperations: ['op-1', 'op-2'] },
+    { provider: { command: 'claude', type: 'claude-code' }, expectedOperations: ['op-1', 'op-2'] },
+    {
+      provider: { command: 'pi', env: { LOBEHUB_OPERATION_ID: 'user-override' }, type: 'pi' },
+      expectedOperations: ['user-override', 'user-override'],
+    },
+  ] satisfies {
+    provider: HeterogeneousProviderConfig;
+    expectedOperations: (string | undefined)[];
+  }[])(
+    'preserves each turn identity and user env overrides: $provider',
+    async ({ provider, expectedOperations }) => {
+      for (const operationId of ['op-1', 'op-2']) {
+        await runWithEvents(
+          [
+            () =>
+              ipc.emitStreamEvent('ipc-sess-1', {
+                data: { reason: 'complete' },
+                operationId,
+                type: 'agent_runtime_end',
+              }),
+          ],
+          {
+            params: { heterogeneousProvider: provider, operationId },
+            store: createMockStore({ topicDataMap: {} }),
+          },
+        );
+      }
+
+      const environments = mockStartSession.mock.calls.map(([params]) => params.env);
+      expect(environments).toEqual(
+        expectedOperations.map((operationId) => ({
+          LOBEHUB_AGENT_ID: 'agent-1',
+          ...(operationId ? { LOBEHUB_OPERATION_ID: operationId } : {}),
+          LOBEHUB_TOPIC_ID: 'topic-1',
+        })),
+      );
+      expect(mockSendPrompt.mock.calls.map(([params]) => params.operationId)).toEqual([
+        'op-1',
+        'op-2',
+      ]);
+    },
+  );
+
+  it('releases all IPC subscriptions after a run settles', async () => {
+    await runWithEvents([ccInit(), ccResult()]);
+
+    expect([...ipc.getListeners().keys()]).toEqual([]);
+  });
+
+  describe('cancellation coordination', () => {
+    /**
+     * @example “Send now” awaits the renderer cancellation hook before dispatching a replacement.
+     */
+    it('returns the desktop session cancellation promise from the operation cancel hook', async () => {
+      // ROOT CAUSE:
+      //
+      // The operation hook started cancelSession but returned undefined. QueueTray
+      // therefore believed cancellation had settled and resumed the same native
+      // Codex thread while the previous writer was still shutting down.
+      //
+      // Before: () => { cancelSession(...).catch(...) }
+      // After: async () => await cancelSession(...)
+      let cancelHandler: (() => Promise<void>) | undefined;
+      let resolveCancellation!: () => void;
+      let resolvePrompt!: () => void;
+      mockCancelSession.mockReturnValue(
+        new Promise<void>((resolve) => {
+          resolveCancellation = resolve;
+        }),
+      );
+      mockSendPrompt.mockReturnValue(
+        new Promise<void>((resolve) => {
+          resolvePrompt = resolve;
+        }),
+      );
+      const store = createMockStore({
+        onOperationCancel: vi.fn(
+          (_operationId: string, handler: () => Promise<void>) => (cancelHandler = handler),
+        ),
+      });
+      const get = vi.fn(() => store);
+      const executor = executeHeterogeneousAgent(get, defaultParams);
+
+      await vi.waitFor(() => expect(cancelHandler).toBeDefined());
+      let cancellationSettled = false;
+      const cancellation = cancelHandler!().then(() => {
+        cancellationSettled = true;
+      });
+      await Promise.resolve();
+
+      expect(mockCancelSession).toHaveBeenCalledWith('ipc-sess-1');
+      expect(cancellationSettled).toBe(false);
+
+      resolveCancellation();
+      await cancellation;
+      ipc.emitComplete('ipc-sess-1');
+      resolvePrompt();
+      await executor;
+    });
+
+    /**
+     * @example Desktop cannot confirm that the native process exited after interruption.
+     */
+    it('rejects the operation cancel hook when desktop cancellation fails', async () => {
+      // ROOT CAUSE:
+      //
+      // The renderer logged cancelSession failures but resolved its operation
+      // hook. The operation layer then treated a still-live native writer as a
+      // successful cancellation.
+      //
+      // Before: catch(error) logged and returned undefined.
+      // After: catch(error) logs and rethrows to the operation confirmation layer.
+      let cancelHandler: (() => Promise<void>) | undefined;
+      let resolvePrompt!: () => void;
+      const cancellationError = new Error('process did not exit after SIGKILL');
+      mockCancelSession.mockRejectedValue(cancellationError);
+      mockSendPrompt.mockReturnValue(
+        new Promise<void>((resolve) => {
+          resolvePrompt = resolve;
+        }),
+      );
+      const store = createMockStore({
+        onOperationCancel: vi.fn(
+          (_operationId: string, handler: () => Promise<void>) => (cancelHandler = handler),
+        ),
+      });
+      const get = vi.fn(() => store);
+      const executor = executeHeterogeneousAgent(get, defaultParams);
+
+      await vi.waitFor(() => expect(cancelHandler).toBeDefined());
+      await expect(cancelHandler!()).rejects.toBe(cancellationError);
+
+      ipc.emitComplete('ipc-sess-1');
+      resolvePrompt();
+      await executor;
+    });
+  });
+
   describe('Claude Code Desktop-local API binding', () => {
-    let previousLab: ReturnType<typeof useUserStore.getState>['preference']['lab'];
-
-    const setClaudeCodeApiModeLab = (enabled: boolean) => {
-      useUserStore.setState((state) => ({
-        preference: {
-          ...state.preference,
-          lab: { ...state.preference.lab, enableAgentProviderBinding: enabled },
-        },
-      }));
-    };
-
-    beforeEach(() => {
-      previousLab = useUserStore.getState().preference.lab;
-      setClaudeCodeApiModeLab(true);
-    });
-
-    afterEach(() => {
-      useUserStore.setState((state) => ({
-        preference: { ...state.preference, lab: previousLab },
-      }));
-    });
-
     const apiProvider = {
       apiConfig: { model: 'api-primary', providerId: 'anthropic-direct' },
       args: ['--model', 'stale-arg-model', '--effort', 'high'],
@@ -746,7 +882,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(mockGetClaudeCodeIdentity).not.toHaveBeenCalled();
     });
 
-    it('uses the deployment provider inside API mode when the Labs experiment is enabled', async () => {
+    it('uses the deployment provider inside API mode', async () => {
       await runWithEvents([ccResult()], {
         params: { heterogeneousProvider: serverDefaultApiProvider },
       });
@@ -762,6 +898,30 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       );
       expect(mockSelectAccountForAgent).not.toHaveBeenCalled();
       expect(mockGetClaudeCodeIdentity).not.toHaveBeenCalled();
+    });
+
+    it('passes a Kimi Code deployment-provider reference to Desktop main', async () => {
+      const kimiServerDefaultProvider = {
+        apiConfig: { model: 'kimi-k2.6', source: 'server-default' as const },
+        authMode: 'api' as const,
+        command: 'kimi',
+        type: 'kimi-code' as const,
+      } satisfies HeterogeneousProviderConfig;
+
+      await runWithEvents([], {
+        params: { heterogeneousProvider: kimiServerDefaultProvider },
+      });
+
+      expect(mockStartSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentType: 'kimi-code',
+          providerBinding: {
+            apiConfig: { model: 'kimi-k2.6', source: 'server-default' },
+            kind: 'server-default',
+            resumeBindingKey: undefined,
+          },
+        }),
+      );
     });
 
     it.each(['lobehub/claude-server', 'lobehub-default'])(
@@ -791,47 +951,6 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         ).toBe(true);
       },
     );
-
-    it('blocks the deployment provider before spawn when the Labs experiment is disabled', async () => {
-      setClaudeCodeApiModeLab(false);
-      const store = createMockStore();
-
-      await executeHeterogeneousAgent(
-        vi.fn(() => store),
-        {
-          ...defaultParams,
-          heterogeneousProvider: serverDefaultApiProvider,
-        },
-      );
-
-      expect(mockStartSession).not.toHaveBeenCalled();
-      expect(mockUpdateMessageError).toHaveBeenCalledWith(
-        'ast-initial',
-        expect.objectContaining({ message: expect.stringMatching(/labDisabled|Labs experiment/) }),
-        expect.anything(),
-      );
-    });
-
-    it('fails before spawn when the Labs experiment is disabled', async () => {
-      configureDirectProvider();
-      setClaudeCodeApiModeLab(false);
-      const store = createMockStore();
-
-      await executeHeterogeneousAgent(
-        vi.fn(() => store),
-        {
-          ...defaultParams,
-          heterogeneousProvider: apiProvider,
-        },
-      );
-
-      expect(mockStartSession).not.toHaveBeenCalled();
-      expect(mockUpdateMessageError).toHaveBeenCalledWith(
-        'ast-initial',
-        expect.objectContaining({ message: expect.stringMatching(/labDisabled|Labs experiment/) }),
-        expect.anything(),
-      );
-    });
 
     it('fails before spawn when the binding reference is incomplete', async () => {
       const store = createMockStore();
@@ -1593,6 +1712,43 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   // ────────────────────────────────────────────────────
 
   describe('error handling', () => {
+    const authMetadata = {
+      attribution: 'user',
+      category: 'auth',
+      countAsFailure: false,
+      errorRef: 'H1001',
+      isFallback: false,
+      numericId: 1001,
+      retryable: false,
+      severity: 'warning',
+    };
+
+    it('preserves structured quota fields for a flattened local CLI error', async () => {
+      const store = createMockStore();
+      mockSendPrompt.mockRejectedValueOnce({
+        message: "You've hit your weekly limit · resets 10pm (Asia/Shanghai)",
+      });
+      await executeHeterogeneousAgent(
+        vi.fn(() => store),
+        defaultParams,
+      );
+      await flush();
+      expect(mockUpdateMessageError).toHaveBeenCalledWith(
+        'ast-initial',
+        expect.objectContaining({
+          errorRef: 'H2001',
+          attribution: 'user',
+          retryable: false,
+          body: expect.objectContaining({
+            agentType: 'claude-code',
+            code: 'rate_limit',
+            details: { kind: 'usage_limit' },
+          }),
+        }),
+        expect.any(Object),
+      );
+    });
+
     it('should persist accumulated content on error', async () => {
       const store = createMockStore();
       const get = vi.fn(() => store);
@@ -1658,6 +1814,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(mockUpdateMessageError).toHaveBeenCalledWith(
         'ast-initial',
         {
+          ...authMetadata,
           body: expect.objectContaining({
             agentType: 'claude-code',
             code: HeterogeneousAgentSessionErrorCode.AuthRequired,
@@ -1676,6 +1833,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
           value: {
             content: '',
             error: {
+              ...authMetadata,
               body: expect.objectContaining({
                 agentType: 'claude-code',
                 code: HeterogeneousAgentSessionErrorCode.AuthRequired,
@@ -1709,6 +1867,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(mockUpdateMessageError).toHaveBeenCalledWith(
         'ast-initial',
         {
+          ...authMetadata,
           body: expect.objectContaining({
             agentType: 'claude-code',
             code: HeterogeneousAgentSessionErrorCode.AuthRequired,
@@ -1727,6 +1886,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
           value: {
             content: '',
             error: {
+              ...authMetadata,
               body: expect.objectContaining({
                 agentType: 'claude-code',
                 code: HeterogeneousAgentSessionErrorCode.AuthRequired,
@@ -1777,6 +1937,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(mockUpdateMessageError).toHaveBeenCalledWith(
         'ast-initial',
         {
+          ...authMetadata,
           body: expect.objectContaining({
             agentType: 'claude-code',
             code: HeterogeneousAgentSessionErrorCode.AuthRequired,
@@ -1795,6 +1956,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
           value: {
             content: '',
             error: {
+              ...authMetadata,
               body: expect.objectContaining({
                 agentType: 'claude-code',
                 code: HeterogeneousAgentSessionErrorCode.AuthRequired,
@@ -1896,7 +2058,15 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(mockUpdateMessageError).toHaveBeenCalledWith(
         'ast-initial',
         {
-          body: cliError,
+          attribution: 'user',
+          category: 'environment',
+          countAsFailure: false,
+          errorRef: 'H8001',
+          isFallback: false,
+          numericId: 8001,
+          retryable: false,
+          severity: 'warning',
+          body: { ...cliError, details: { kind: 'cli_not_found' } },
           message: 'Claude Code CLI was not found',
           type: 'AgentRuntimeError',
         },
@@ -1914,7 +2084,15 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
           type: 'updateMessage',
           value: {
             error: {
-              body: cliError,
+              attribution: 'user',
+              category: 'environment',
+              countAsFailure: false,
+              errorRef: 'H8001',
+              isFallback: false,
+              numericId: 8001,
+              retryable: false,
+              severity: 'warning',
+              body: { ...cliError, details: { kind: 'cli_not_found' } },
               message: 'Claude Code CLI was not found',
               type: 'AgentRuntimeError',
             },
@@ -2085,6 +2263,58 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
           agentType: 'trae',
           args: ['--feature=test'],
           initialModel: 'gpt-5.4',
+        }),
+      );
+    });
+
+    it('should leave TRAE model selection to the managed profile in API mode', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+
+      await executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        heterogeneousProvider: {
+          apiConfig: { model: 'api-model', providerId: 'openai' },
+          args: ['--feature=test'],
+          authMode: 'api',
+          command: 'traecli',
+          model: 'stale-subscription-model',
+          type: 'trae' as const,
+        },
+      });
+
+      expect(mockStartSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentType: 'trae',
+          initialModel: undefined,
+          providerBinding: {
+            apiConfig: { model: 'api-model', providerId: 'openai' },
+            kind: 'provider',
+            resumeBindingKey: undefined,
+          },
+        }),
+      );
+    });
+
+    it('should pass the selected Devin model through ACP and native args', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+
+      await executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        heterogeneousProvider: {
+          args: ['--agent-type', 'coding'],
+          command: 'devin',
+          model: 'claude-sonnet-4-6-thinking',
+          type: 'devin' as const,
+        },
+      });
+
+      expect(mockStartSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentType: 'devin',
+          args: ['--agent-type', 'coding', '--model', 'claude-sonnet-4-6-thinking'],
+          initialModel: 'claude-sonnet-4-6-thinking',
         }),
       );
     });
@@ -6048,6 +6278,45 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
       expect(mockShowNotification).not.toHaveBeenCalled();
       expect(mockSetBadgeCount).not.toHaveBeenCalled();
+    });
+
+    it('summarizes an audio-first topic after heterogeneous completion', async () => {
+      const messages = [
+        {
+          audioList: [{ alt: 'voice.webm', id: 'audio-1', url: 'https://example.com/voice.webm' }],
+          content: '',
+          id: 'user-1',
+          role: 'user',
+        },
+        {
+          children: [
+            {
+              content: 'Analyzing the recording.',
+              id: 'assistant-tool',
+              tools: [{ apiName: 'analyzeMedia', id: 'tool-1' }],
+            },
+            { content: 'The recording asks how to list files.', id: 'assistant-answer' },
+          ],
+          content: '',
+          id: 'assistant-group',
+          role: 'assistantGroup',
+        },
+      ];
+      const summaryTopicTitle = vi.fn().mockResolvedValue(undefined);
+      const store = createMockStore({
+        messagesMap: { 'main_agent-1_topic-1': messages },
+        summaryTopicTitle,
+        topicDataMap: {
+          'agent-1__main': {
+            items: [{ id: 'topic-1', title: 'defaultTitle' }],
+            total: 1,
+          },
+        },
+      });
+
+      await runToComplete(store, [ccInit(), ccText('msg_01', 'done'), ccResult()]);
+
+      expect(summaryTopicTitle).toHaveBeenCalledWith('topic-1', messages);
     });
 
     // ── 2. metadata-save failure isolation (guarded) ──

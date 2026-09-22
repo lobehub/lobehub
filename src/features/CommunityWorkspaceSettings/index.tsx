@@ -1,19 +1,8 @@
 'use client';
 
 import { OFFICIAL_URL } from '@lobechat/const';
-import {
-  Avatar,
-  Block,
-  Center,
-  Flexbox,
-  Icon,
-  Input,
-  Tag,
-  Text,
-  TextArea,
-  Tooltip,
-} from '@lobehub/ui';
-import { Button, Tabs, toast } from '@lobehub/ui/base-ui';
+import { Block, Center, Flexbox, Icon, Input, TextArea, Tooltip } from '@lobehub/ui';
+import { Avatar, Button, Tabs, Tag, Text, toast } from '@lobehub/ui/base-ui';
 import type { TableColumnsType, UploadProps } from 'antd';
 import { Input as AntInput, Table, Upload } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';

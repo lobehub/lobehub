@@ -26,10 +26,6 @@ const { mockConfirm } = vi.hoisted(() => ({
 }));
 
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
-vi.mock('../utils/logger', () => ({
-  log: { debug: vi.fn(), error: vi.fn(), heartbeat: vi.fn(), info: vi.fn(), warn: vi.fn() },
-  setVerbose: vi.fn(),
-}));
 vi.mock('../utils/format', async (importOriginal) => {
   const actual = await importOriginal<typeof FormatUtils>();
   return { ...actual, confirm: mockConfirm };

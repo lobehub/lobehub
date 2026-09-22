@@ -14,7 +14,7 @@ describe('shikiCdnUrl', () => {
     expect(shikiCdnUrl(source, v)).toBe(url);
   });
 
-  it.each(['react', '@/features/Verify/Acceptance'])('leaves %s bundled', (source) => {
+  it.each(['react', '@/features/Acceptance/Viewer'])('leaves %s bundled', (source) => {
     expect(shikiCdnUrl(source, v)).toBeUndefined();
   });
 });

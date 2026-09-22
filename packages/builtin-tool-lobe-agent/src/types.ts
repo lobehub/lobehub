@@ -9,6 +9,7 @@ export const LobeAgentApiName = {
   createTodos: 'createTodos',
   updatePlan: 'updatePlan',
   updateTodos: 'updateTodos',
+  vent: 'vent',
 } as const;
 
 export type LobeAgentApiNameType = (typeof LobeAgentApiName)[keyof typeof LobeAgentApiName];
@@ -24,6 +25,90 @@ export type {
   AskUserQuestionItem,
   AskUserQuestionOption,
 } from '@lobechat/builtin-tool-user-interaction';
+
+// ==================== Vent ====================
+
+/**
+ * Friction categories an agent may vent about. These describe blockers in the
+ * agent's own working conditions, reported back to the platform builders — not
+ * user-facing answers.
+ */
+export const VENT_CATEGORIES = [
+  'missing_tool',
+  'schema_mismatch',
+  'doc_conflict',
+  'platform_bug',
+  'env_limitation',
+  'other',
+] as const;
+
+/** Severity describing how badly the friction blocked the task. */
+export const VENT_SEVERITIES = ['low', 'medium', 'high'] as const;
+
+/** Evidence reference type accepted alongside a vent. */
+export const VENT_EVIDENCE_REF_TYPES = [
+  'tool_call',
+  'message',
+  'operation',
+  'topic',
+  'task',
+  'source',
+] as const;
+
+/** Friction category reported by a running agent. */
+export type VentCategory = (typeof VENT_CATEGORIES)[number];
+
+/** Severity assigned by the running agent to one vent. */
+export type VentSeverity = (typeof VENT_SEVERITIES)[number];
+
+/** Evidence reference type accepted alongside a vent. */
+export type VentEvidenceRefType = (typeof VENT_EVIDENCE_REF_TYPES)[number];
+
+/** Optional reference that grounds one vent report. */
+export interface VentEvidenceRef {
+  /** Stable evidence identifier in its source domain. */
+  id: string;
+  /** Optional short note explaining why this evidence matters. */
+  summary?: string;
+  /** Evidence object type. */
+  type: VentEvidenceRefType;
+}
+
+/** Parameters for the vent API. */
+export interface VentParams {
+  /** How many times the agent failed at this before venting. */
+  attempts?: number;
+  /** Friction category the vent is about. */
+  category: VentCategory;
+  /** What happened, what was expected, and what is blocked. */
+  details: string;
+  /** Evidence references that ground the report. */
+  evidenceRefs?: VentEvidenceRef[];
+  /** Severity describing how badly the friction blocked the task. */
+  severity: VentSeverity;
+  /** One-line summary of the friction. */
+  summary: string;
+  /** Tool / API / surface involved, when one specific component is to blame. */
+  toolName?: string;
+}
+
+export type VentRejectionReason = 'invalid_category' | 'invalid_severity' | 'rate_limited';
+
+export type VentStateReason = VentRejectionReason | 'missing_context' | 'runtime_error' | null;
+
+/** State persisted on the vent tool message for inspector display. */
+export interface VentState {
+  /** Friction category for inspector display. */
+  category?: VentCategory;
+  /** Rejection or runtime reason. */
+  reason?: VentStateReason;
+  /** Whether the vent crossed the recording boundary. */
+  recorded: boolean;
+  /** Severity for inspector display. */
+  severity?: VentSeverity;
+  /** Stable vent id for recorded reports. */
+  ventId?: null | string;
+}
 
 export interface AnalyzeMediaParams {
   question: string;
@@ -158,8 +243,12 @@ export interface TodoUpdateOperation {
   status?: TodoStatus;
   /** For 'add': the text to add */
   text?: string;
-  /** Operation type */
-  type: TodoUpdateOperationType;
+  /**
+   * Operation type. Required by the manifest schema, but weak
+   * instruction-following models omit it in practice, so the runtime infers it
+   * from the other fields when the intent is unambiguous.
+   */
+  type?: TodoUpdateOperationType;
 }
 
 /**

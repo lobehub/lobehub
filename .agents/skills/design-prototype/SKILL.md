@@ -1,6 +1,6 @@
 ---
 name: design-prototype
-description: Produce an interactive single-file HTML design prototype using the REAL LobeHub design system (@lobehub/ui + antd + antd-style tokens) with production-style React — no build step, opens directly in a browser. Use when asked for a design prototype / interactive mockup / 交互原型 / 出个原型 / 设计稿 HTML for a page or flow, or to explore a redesign before committing to implementation.
+description: 'Use for interactive HTML prototypes (交互原型) with the real LobeHub UI stack. Excludes production UI implementation.'
 ---
 
 # Design Prototype

@@ -1,8 +1,8 @@
 'use client';
 
 import type { DeviceListItem } from '@lobechat/types';
-import { Avatar, DropdownMenu, Flexbox, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
-import { Button, confirmModal } from '@lobehub/ui/base-ui';
+import { DropdownMenu, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Avatar, Button, confirmModal, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import {
@@ -158,9 +158,12 @@ const DeviceItem = memo<DeviceItemProps>(({ device, isCurrent, onSelect, selecte
   // CONNECTED", not "last active". The copy says exactly that; it becomes a
   // true last-active once a writer stamps liveness.
   const activityText = online
-    ? t('devices.channel.connected', {
-        time: dayjs(channels[0]?.connectedAt ?? device.lastSeen).fromNow(),
-      })
+    ? `${t('devices.status.onlineConnections', { count: channels.length })} · ${t(
+        'devices.channel.connected',
+        {
+          time: dayjs(channels[0]?.connectedAt ?? device.lastSeen).fromNow(),
+        },
+      )}`
     : t('devices.lastSeen', { time: dayjs(device.lastSeen).fromNow() });
 
   // Publish / make-private for workspace enrollments. Reuses the

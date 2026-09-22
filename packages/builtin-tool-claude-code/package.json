@@ -5,6 +5,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./client": "./src/client/index.ts",
+    "./client/displayControls": "./src/client/Render/displayControls.ts",
     "./client/labels": "./src/client/labels.ts"
   },
   "main": "./src/index.ts",

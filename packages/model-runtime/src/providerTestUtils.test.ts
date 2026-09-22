@@ -1,39 +1,35 @@
-import OpenAI from 'openai';
-import { describe, it, vi } from 'vitest';
+// @vitest-environment node
+import type { ILobeAgentRuntimeErrorType } from '@lobechat/types';
+import { describe } from 'vitest';
 
+import { createOpenAICompatibleRuntime } from './core/openaiCompatibleFactory';
 import { testProvider } from './providerTestUtils';
 
+// Provider plumbing compares error codes as strings; this suite intentionally
+// uses non-canonical codes to prove pass-through, which the factory's narrow
+// ILobeAgentRuntimeErrorType cannot express.
+const customErrorType = (value: string) => value as ILobeAgentRuntimeErrorType;
+
+// testProvider registers its own suites, so it must be called at suite-definition
+// time. Build the runtime with the real factory so the generated tests exercise
+// the actual chat/error/debug behaviour they assert.
+const createTestRuntime = () =>
+  createOpenAICompatibleRuntime({
+    baseURL: 'https://default.test',
+    debug: {
+      chatCompletion: () => process.env.TEST_DEBUG === '1',
+    },
+    errorType: {
+      bizError: customErrorType('TestBizError'),
+      invalidAPIKey: customErrorType('InvalidAPIKey'),
+    },
+    provider: 'TestProvider',
+  });
+
 describe('testProvider', () => {
-  it('should run provider tests correctly', () => {
-    class MockRuntime {
-      baseURL: string;
-      client: any;
-
-      constructor({
-        apiKey,
-        baseURL = 'https://default.test',
-      }: {
-        apiKey?: string;
-        baseURL?: string;
-      }) {
-        if (!apiKey) throw { errorType: 'InvalidAPIKey' };
-        this.baseURL = baseURL;
-        this.client = {
-          chat: {
-            completions: {
-              create: vi.fn().mockResolvedValue(new ReadableStream()),
-            },
-          },
-        };
-      }
-
-      async chat(params: any) {
-        return this.client.chat.completions.create(params);
-      }
-    }
-
+  describe('should run provider tests correctly', () => {
     testProvider({
-      Runtime: MockRuntime,
+      Runtime: createTestRuntime(),
       bizErrorType: 'TestBizError',
       chatDebugEnv: 'TEST_DEBUG',
       chatModel: 'test-model',
@@ -43,79 +39,25 @@ describe('testProvider', () => {
     });
   });
 
-  it('should handle OpenAI API errors correctly', async () => {
-    class MockRuntime {
-      baseURL: string;
-      client: any;
-
-      constructor({ apiKey }: { apiKey?: string }) {
-        if (!apiKey) throw { errorType: 'InvalidAPIKey' };
-        this.baseURL = 'test';
-        this.client = {
-          chat: {
-            completions: {
-              create: vi.fn().mockRejectedValue(
-                new OpenAI.APIError(
-                  400,
-                  {
-                    error: { message: 'Test Error' },
-                    status: 400,
-                  },
-                  'Test Error',
-                  new Headers(),
-                ),
-              ),
-            },
-          },
-        };
-      }
-
-      async chat(params: any) {
-        return this.client.chat.completions.create(params);
-      }
-    }
-
+  describe('should handle OpenAI API errors correctly', () => {
     testProvider({
-      Runtime: MockRuntime,
+      Runtime: createTestRuntime(),
       bizErrorType: 'TestBizError',
       chatDebugEnv: 'TEST_DEBUG',
       chatModel: 'test-model',
-      defaultBaseURL: 'test',
+      defaultBaseURL: 'https://default.test',
       invalidErrorType: 'InvalidAPIKey',
       provider: 'TestProvider',
     });
   });
 
-  it('should handle debug stream correctly', () => {
-    class MockRuntime {
-      baseURL: string;
-      client: any;
-
-      constructor({ apiKey }: { apiKey?: string }) {
-        if (!apiKey) throw { errorType: 'InvalidAPIKey' };
-        this.baseURL = 'test';
-        this.client = {
-          chat: {
-            completions: {
-              create: vi.fn().mockResolvedValue({
-                tee: () => [new ReadableStream(), { toReadableStream: () => new ReadableStream() }],
-              }),
-            },
-          },
-        };
-      }
-
-      async chat(params: any) {
-        return this.client.chat.completions.create(params);
-      }
-    }
-
+  describe('should handle debug stream correctly', () => {
     testProvider({
-      Runtime: MockRuntime,
+      Runtime: createTestRuntime(),
       bizErrorType: 'TestBizError',
       chatDebugEnv: 'TEST_DEBUG',
       chatModel: 'test-model',
-      defaultBaseURL: 'test',
+      defaultBaseURL: 'https://default.test',
       invalidErrorType: 'InvalidAPIKey',
       provider: 'TestProvider',
     });

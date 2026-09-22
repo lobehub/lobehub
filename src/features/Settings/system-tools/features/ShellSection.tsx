@@ -2,8 +2,8 @@
 
 import { type WindowsShellMode } from '@lobechat/electron-client-ipc';
 import { type FormGroupItemType } from '@lobehub/ui';
-import { Form, Text } from '@lobehub/ui';
-import { Select } from '@lobehub/ui/base-ui';
+import { Form } from '@lobehub/ui';
+import { Select, Text } from '@lobehub/ui/base-ui';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';

@@ -1,0 +1,42 @@
+---
+title: 在 LobeHub 中使用 Meta
+description: 在 LobeHub 中配置官方 Meta Model API，使用 Muse Spark 进行对话。
+tags:
+  - LobeHub
+  - Meta
+  - Muse Spark
+  - API 密钥
+---
+
+# 在 LobeHub 中使用 Meta
+
+[Meta Model API](https://dev.meta.ai/) 提供 Muse Spark 的 API 访问。使用此服务商需要 Meta Model API 密钥。API 用量由 Meta 单独计费，具体费用及限制请查看官方[价格与速率限制](https://dev.meta.ai/docs/pricing-rate-limits)。
+
+<Steps>
+  ### 步骤一：创建 API 密钥
+
+  - 使用具有 API 访问权限的账户登录 [Model API 控制台](https://dev.meta.ai/)。
+  - 打开 **API keys**，点击 **Create API key**，填写密钥名称后点击 **Create**。
+  - 复制并妥善保存密钥。Meta 只会展示一次密钥，管理方式请查看[身份验证指南](https://dev.meta.ai/docs/authentication)。
+
+  ### 步骤二：在 LobeHub 中配置 Meta
+
+  - 打开**设置 → AI 服务商**，找到并启用 **Meta**。
+  - 填入 API 密钥。如果自部署实例的管理员已配置服务端密钥，可以直接使用该配置，无需再填写个人密钥。
+  - 保留默认 API 基础地址 `https://api.meta.ai/v1`；使用兼容代理时再修改。
+  - 执行连通性检查，然后为助手选择可用的 Muse Spark 模型，发送一条简短消息。
+</Steps>
+
+## API 兼容性
+
+LobeHub 的 Meta 集成使用 **Responses API** 处理对话和结构化输出。自定义代理必须支持基础地址下的 `/responses` 路径；不要把完整的 `/v1/responses` 接口地址填为基础地址。请求通过 LobeHub 服务端发送，因此服务端必须能够访问 API。此服务商不支持浏览器直连请求。
+
+Meta 也提供其他 API 格式，区别见官方[API 选择指南](https://dev.meta.ai/docs/protocols)。可用模型取决于账户的 API 访问权限，请参阅[官方模型目录](https://dev.meta.ai/docs/models)。
+
+## 自部署与排查
+
+管理员可在服务端设置 `META_API_KEY`，启用 Meta 并提供共享密钥。`META_PROXY_URL` 用于覆盖基础地址，`META_MODEL_LIST` 用于自定义模型列表，详见 [Meta 环境变量](/zh/docs/self-hosting/environment-variables/model-provider#meta)。
+
+- 身份验证失败时，检查密钥是否为有效的 Meta Model API 密钥，以及是否已被撤销。
+- 连通性检查失败时，确认所选模型对当前账户可用，且服务端或代理可以访问 Responses API。
+- Meta 返回 HTTP 429 时，减少并发请求，稍后重试。同一团队的多个 API 密钥共享速率限制。

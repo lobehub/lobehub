@@ -5,7 +5,11 @@ import { resolveKnowledgeFileContents } from './resolveKnowledgeFileContents';
 const { mockParseFile, MockDocumentService } = vi.hoisted(() => {
   const mockParseFile = vi.fn();
   return {
-    MockDocumentService: vi.fn().mockImplementation(() => ({ parseFile: mockParseFile })),
+    // Constructible on purpose: the resolver does `new DocumentService(db, userId, workspaceId)`,
+    // and an arrow function cannot be used as a constructor under Vitest 5.
+    MockDocumentService: vi.fn().mockImplementation(function () {
+      return { parseFile: mockParseFile };
+    }),
     mockParseFile,
   };
 });

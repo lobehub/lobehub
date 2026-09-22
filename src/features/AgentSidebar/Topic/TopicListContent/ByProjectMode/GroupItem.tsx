@@ -1,5 +1,14 @@
 import { AGENT_CHAT_URL } from '@lobechat/const';
-import { AccordionItem, ActionIcon, Center, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import { Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import {
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
+  accordionStyles,
+  AccordionTrigger,
+  ActionIcon,
+  Text,
+} from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { FolderClosedIcon, FolderOpenIcon, type LucideIcon, PlusIcon } from 'lucide-react';
@@ -246,40 +255,51 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
     ) : undefined;
 
   return (
-    <AccordionItem
-      action={action}
-      alwaysShowAction={hasCollapsedIndicators}
-      itemKey={id}
-      paddingBlock={4}
-      paddingInline={4}
-      title={
-        <Flexbox horizontal align="center" gap={8} height={24} style={{ overflow: 'hidden' }}>
-          <Center flex={'none'} height={24} width={28}>
-            <Icon
-              color={cssVar.colorTextTertiary}
-              icon={ProjectFolderIcon}
-              size={{ size: 15, strokeWidth: 1.5 }}
+    <AccordionItem value={id}>
+      <AccordionHeader className={'accordion-header'}>
+        <AccordionTrigger style={{ paddingBlock: 4, paddingInline: 4 }}>
+          <Flexbox horizontal align="center" gap={8} height={24} style={{ overflow: 'hidden' }}>
+            <Center flex={'none'} height={24} width={28}>
+              <Icon
+                color={cssVar.colorTextTertiary}
+                icon={ProjectFolderIcon}
+                size={{ size: 15, strokeWidth: 1.5 }}
+              />
+            </Center>
+            <Text ellipsis fontSize={14} style={{ color: cssVar.colorTextSecondary, flex: 1 }}>
+              {title}
+            </Text>
+          </Flexbox>
+        </AccordionTrigger>
+        {action && (
+          <div
+            className={cx(
+              'accordion-action',
+              accordionStyles.action,
+              accordionStyles.actionBorderless,
+              hasCollapsedIndicators && accordionStyles.actionAlwaysVisible,
+            )}
+          >
+            {action}
+          </div>
+        )}
+      </AccordionHeader>
+      <AccordionPanel contentStyle={{ padding: 0 }}>
+        <Flexbox gap={1} paddingBlock={1}>
+          {children.map((topic) => (
+            <TopicItem
+              fav={topic.favorite}
+              id={topic.id}
+              key={topic.id}
+              metadata={topic.metadata}
+              runStartedAt={topic.runStartedAt}
+              status={topic.status}
+              title={topic.title}
+              userId={topic.userId}
             />
-          </Center>
-          <Text ellipsis fontSize={14} style={{ color: cssVar.colorTextSecondary, flex: 1 }}>
-            {title}
-          </Text>
+          ))}
         </Flexbox>
-      }
-    >
-      <Flexbox gap={1} paddingBlock={1}>
-        {children.map((topic) => (
-          <TopicItem
-            fav={topic.favorite}
-            id={topic.id}
-            key={topic.id}
-            metadata={topic.metadata}
-            status={topic.status}
-            title={topic.title}
-            userId={topic.userId}
-          />
-        ))}
-      </Flexbox>
+      </AccordionPanel>
     </AccordionItem>
   );
 }, isEqual);

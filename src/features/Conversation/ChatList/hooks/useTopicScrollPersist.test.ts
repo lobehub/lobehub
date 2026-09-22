@@ -48,6 +48,216 @@ describe('useTopicScrollPersist', () => {
   });
 
   describe('initial restore', () => {
+    it('lets a message deep link override the saved scroll position', async () => {
+      saveScrollSnapshot('main_agt_1_tpc_a', {
+        atBottom: false,
+        offset: 5000,
+        savedAt: Date.now(),
+      });
+      const handle = createFakeVList({ scrollSize: 6000 });
+      const onHandled = vi.fn();
+
+      renderHook(() =>
+        useTopicScrollPersist({
+          contextKey: 'main_agt_1_tpc_a',
+          dataSourceLength: 50,
+          headerOffset: 1,
+          messageDeepLink: {
+            displayMessageId: 'assistant-group',
+            id: 'assistant-child',
+            index: 12,
+            navigationKey: 'navigation-1',
+            onHandled,
+          },
+          virtuaRef: refOf(handle),
+        }),
+      );
+
+      await advanceFrames(4);
+
+      expect(handle.scrollToIndex).toHaveBeenCalledWith(13, { align: 'center' });
+      expect(handle.scrollTo).not.toHaveBeenCalled();
+      expect(onHandled).toHaveBeenCalledTimes(1);
+    });
+
+    it('centers the exact nested message after its virtual row mounts', async () => {
+      const handle = createFakeVList({ scrollSize: 6000 });
+      const container = document.createElement('div');
+      const target = document.createElement('div');
+      target.id = 'assistant-child';
+      container.append(target);
+      document.body.append(container);
+      const originalScrollIntoView = Element.prototype.scrollIntoView;
+      const scrollIntoView = vi.fn();
+      Element.prototype.scrollIntoView = scrollIntoView;
+
+      try {
+        renderHook(() =>
+          useTopicScrollPersist({
+            containerRef: { current: container },
+            contextKey: 'main_agt_1_tpc_a',
+            dataSourceLength: 50,
+            messageDeepLink: {
+              displayMessageId: 'assistant-group',
+              id: 'assistant-child',
+              index: 12,
+              navigationKey: 'navigation-1',
+            },
+            virtuaRef: refOf(handle),
+          }),
+        );
+
+        await advanceFrames(4);
+
+        expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center' });
+      } finally {
+        container.remove();
+        Element.prototype.scrollIntoView = originalScrollIntoView;
+      }
+    });
+
+    it('keeps the deep link pending when only the owning row is rendered', async () => {
+      const handle = createFakeVList({ scrollSize: 6000 });
+      const container = document.createElement('div');
+      const topLevelMessage = document.createElement('div');
+      topLevelMessage.id = 'assistant-group';
+      container.append(topLevelMessage);
+      document.body.append(container);
+      const onHandled = vi.fn();
+      const originalScrollIntoView = Element.prototype.scrollIntoView;
+      const scrollIntoView = vi.fn();
+      Element.prototype.scrollIntoView = scrollIntoView;
+
+      try {
+        renderHook(() =>
+          useTopicScrollPersist({
+            containerRef: { current: container },
+            contextKey: 'main_agt_1_tpc_a',
+            dataSourceLength: 50,
+            messageDeepLink: {
+              displayMessageId: 'assistant-group',
+              id: 'assistant-child',
+              index: 12,
+              navigationKey: 'navigation-1',
+              onHandled,
+            },
+            virtuaRef: refOf(handle),
+          }),
+        );
+
+        await advanceFrames(40);
+
+        expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center' });
+        expect(onHandled).not.toHaveBeenCalled();
+      } finally {
+        container.remove();
+        Element.prototype.scrollIntoView = originalScrollIntoView;
+      }
+    });
+
+    it('consumes a deep link when animation frames are suspended', async () => {
+      const handle = createFakeVList({ scrollSize: 6000 });
+      const container = document.createElement('div');
+      const target = document.createElement('div');
+      target.id = 'assistant-child';
+      container.append(target);
+      document.body.append(container);
+      const onHandled = vi.fn();
+      const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+      const originalScrollIntoView = Element.prototype.scrollIntoView;
+      const scrollIntoView = vi.fn();
+      globalThis.requestAnimationFrame = vi.fn();
+      Element.prototype.scrollIntoView = scrollIntoView;
+
+      try {
+        renderHook(() =>
+          useTopicScrollPersist({
+            containerRef: { current: container },
+            contextKey: 'main_agt_1_tpc_a',
+            dataSourceLength: 50,
+            messageDeepLink: {
+              displayMessageId: 'assistant-group',
+              id: 'assistant-child',
+              index: 12,
+              navigationKey: 'navigation-1',
+              onHandled,
+            },
+            virtuaRef: refOf(handle),
+          }),
+        );
+
+        await vi.advanceTimersByTimeAsync(32);
+
+        expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center' });
+        expect(onHandled).toHaveBeenCalledTimes(1);
+      } finally {
+        container.remove();
+        globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+        Element.prototype.scrollIntoView = originalScrollIntoView;
+      }
+    });
+
+    it('cancels a pending snapshot restore when a deep link arrives', async () => {
+      saveScrollSnapshot('main_agt_1_tpc_a', {
+        atBottom: false,
+        offset: 5000,
+        savedAt: Date.now(),
+      });
+      const handle = createFakeVList({ scrollSize: 1000, viewportSize: 800 });
+      const { rerender } = renderHook(
+        ({ navigationKey }: { navigationKey?: string }) =>
+          useTopicScrollPersist({
+            contextKey: 'main_agt_1_tpc_a',
+            dataSourceLength: 50,
+            messageDeepLink: navigationKey
+              ? {
+                  displayMessageId: 'target',
+                  id: 'target',
+                  index: 8,
+                  navigationKey,
+                }
+              : undefined,
+            virtuaRef: refOf(handle),
+          }),
+        { initialProps: { navigationKey: undefined as string | undefined } },
+      );
+
+      await advanceFrames(3);
+      rerender({ navigationKey: 'navigation-1' });
+      await advanceFrames(4);
+      handle.scrollSize = 6000;
+      await advanceFrames(6);
+
+      expect(handle.scrollToIndex).toHaveBeenCalledWith(8, { align: 'center' });
+      expect(handle.scrollTo).not.toHaveBeenCalled();
+    });
+
+    it('handles another hash navigation within the same topic', async () => {
+      const handle = createFakeVList({ scrollSize: 6000 });
+      const { rerender } = renderHook(
+        ({ index, navigationKey }: { index: number; navigationKey: string }) =>
+          useTopicScrollPersist({
+            contextKey: 'main_agt_1_tpc_a',
+            dataSourceLength: 50,
+            messageDeepLink: {
+              displayMessageId: `message-${index}`,
+              id: `message-${index}`,
+              index,
+              navigationKey,
+            },
+            virtuaRef: refOf(handle),
+          }),
+        { initialProps: { index: 8, navigationKey: 'navigation-1' } },
+      );
+
+      await advanceFrames(4);
+      rerender({ index: 20, navigationKey: 'navigation-2' });
+      await advanceFrames(4);
+
+      expect(handle.scrollToIndex).toHaveBeenNthCalledWith(1, 8, { align: 'center' });
+      expect(handle.scrollToIndex).toHaveBeenNthCalledWith(2, 20, { align: 'center' });
+    });
+
     it('falls back to scrollToIndex(last, end) when there is no snapshot', async () => {
       const handle = createFakeVList({ scrollSize: 5000 });
       renderHook(() =>

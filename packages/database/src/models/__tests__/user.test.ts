@@ -3,8 +3,21 @@ import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { messages, nextauthAccounts, topics, users, userSettings } from '../../schemas';
+import {
+  agents,
+  chatGroups,
+  goalNodeDecisions,
+  goalNodes,
+  goals,
+  messages,
+  nextauthAccounts,
+  sessions,
+  topics,
+  users,
+  userSettings,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { AGENT_TRANSFER_PENDING_OWNER_DELETE, AgentTransferJobModel } from '../agentTransferJob';
 import type { ListUsersForMemoryExtractorCursor } from '../user';
 import { UserModel, UserNotFoundError } from '../user';
 
@@ -347,6 +360,156 @@ describe('UserModel', () => {
     });
   });
 
+  describe('mergeToolInterventionSetting', () => {
+    it('should create the settings row when none exists', async () => {
+      await userModel.mergeToolInterventionSetting({ approvalMode: 'allow-list' });
+
+      const settings = await serverDB.query.userSettings.findFirst({
+        where: eq(userSettings.id, userId),
+      });
+
+      expect(settings?.tool).toEqual({ humanIntervention: { approvalMode: 'allow-list' } });
+    });
+
+    it('should merge approvalMode while preserving sibling tool keys', async () => {
+      await serverDB.insert(userSettings).values({
+        id: userId,
+        tool: {
+          humanIntervention: { allowList: ['bash/bash'], approvalMode: 'manual' },
+          uninstalledBuiltinTools: ['dalle'],
+        },
+      });
+
+      await userModel.mergeToolInterventionSetting({ approvalMode: 'auto-run' });
+
+      const settings = await serverDB.query.userSettings.findFirst({
+        where: eq(userSettings.id, userId),
+      });
+
+      expect(settings?.tool).toEqual({
+        humanIntervention: { allowList: ['bash/bash'], approvalMode: 'auto-run' },
+        uninstalledBuiltinTools: ['dalle'],
+      });
+    });
+
+    it('should union appendAllowList with the stored list, preserving approvalMode', async () => {
+      await serverDB.insert(userSettings).values({
+        id: userId,
+        tool: { humanIntervention: { allowList: ['bash/bash'], approvalMode: 'auto-run' } },
+      });
+
+      await userModel.mergeToolInterventionSetting({
+        appendAllowList: ['bash/bash', 'search/search', 'search/search'],
+      });
+
+      const settings = await serverDB.query.userSettings.findFirst({
+        where: eq(userSettings.id, userId),
+      });
+
+      expect(settings?.tool).toEqual({
+        humanIntervention: {
+          allowList: ['bash/bash', 'search/search'],
+          approvalMode: 'auto-run',
+        },
+      });
+    });
+
+    it('should not drop either change when two merges overlap (multi-tab race)', async () => {
+      await serverDB.insert(userSettings).values({
+        id: userId,
+        tool: { humanIntervention: { allowList: ['bash/bash'], approvalMode: 'manual' } },
+      });
+
+      // The regression this guards: a JS-side read-merge-write lets both calls
+      // read the same snapshot so the last write drops the other change. The
+      // atomic SQL merge must land both regardless of interleaving.
+      await Promise.all([
+        userModel.mergeToolInterventionSetting({ approvalMode: 'auto-run' }),
+        userModel.mergeToolInterventionSetting({
+          appendAllowList: ['web-browsing/crawlSinglePage'],
+        }),
+      ]);
+
+      const settings = await serverDB.query.userSettings.findFirst({
+        where: eq(userSettings.id, userId),
+      });
+
+      expect(settings?.tool).toEqual({
+        humanIntervention: {
+          allowList: ['bash/bash', 'web-browsing/crawlSinglePage'],
+          approvalMode: 'auto-run',
+        },
+      });
+    });
+  });
+
+  describe('replaceUninstalledBuiltinToolsSetting', () => {
+    it('should create the settings row for the personal scope when none exists', async () => {
+      await userModel.replaceUninstalledBuiltinToolsSetting({
+        uninstalledBuiltinTools: ['dalle'],
+      });
+
+      const settings = await serverDB.query.userSettings.findFirst({
+        where: eq(userSettings.id, userId),
+      });
+
+      expect(settings?.tool).toEqual({ uninstalledBuiltinTools: ['dalle'] });
+    });
+
+    it('should replace only the workspace slot, preserving other slots and humanIntervention', async () => {
+      await serverDB.insert(userSettings).values({
+        id: userId,
+        tool: {
+          humanIntervention: { approvalMode: 'auto-run' },
+          uninstalledBuiltinTools: ['dalle'],
+          uninstalledBuiltinToolsByWorkspace: { ws_other: ['calculator'] },
+        },
+      });
+
+      await userModel.replaceUninstalledBuiltinToolsSetting({
+        uninstalledBuiltinTools: ['web-browsing'],
+        workspaceId: 'ws_1',
+      });
+
+      const settings = await serverDB.query.userSettings.findFirst({
+        where: eq(userSettings.id, userId),
+      });
+
+      expect(settings?.tool).toEqual({
+        humanIntervention: { approvalMode: 'auto-run' },
+        uninstalledBuiltinTools: ['dalle'],
+        uninstalledBuiltinToolsByWorkspace: {
+          ws_1: ['web-browsing'],
+          ws_other: ['calculator'],
+        },
+      });
+    });
+
+    it('should not drop an approvalMode change when an uninstall write overlaps it', async () => {
+      await serverDB.insert(userSettings).values({
+        id: userId,
+        tool: { humanIntervention: { approvalMode: 'manual' } },
+      });
+
+      // The interleaving from the review: an install/uninstall snapshot-write
+      // committing after an approvalMode change used to restore the stale mode.
+      // Both writers patch their own key atomically now, so both must land.
+      await Promise.all([
+        userModel.mergeToolInterventionSetting({ approvalMode: 'auto-run' }),
+        userModel.replaceUninstalledBuiltinToolsSetting({ uninstalledBuiltinTools: ['dalle'] }),
+      ]);
+
+      const settings = await serverDB.query.userSettings.findFirst({
+        where: eq(userSettings.id, userId),
+      });
+
+      expect(settings?.tool).toEqual({
+        humanIntervention: { approvalMode: 'auto-run' },
+        uninstalledBuiltinTools: ['dalle'],
+      });
+    });
+  });
+
   describe('updatePreference', () => {
     it('should update user preference', async () => {
       await userModel.updatePreference({
@@ -486,6 +649,299 @@ describe('UserModel', () => {
     });
 
     describe('deleteUser', () => {
+      it('commits linked topicless messages before a pause and resumes the remainder', async () => {
+        await serverDB.insert(agents).values({ id: 'topicless-agent', userId });
+        await serverDB.insert(sessions).values({ id: 'topicless-session', userId });
+        await serverDB.insert(chatGroups).values({ id: 'topicless-group', userId });
+        await serverDB.insert(messages).values(
+          Array.from({ length: 5 }, (_, index) => ({
+            agentId: 'topicless-agent',
+            groupId: 'topicless-group',
+            sessionId: 'topicless-session',
+            id: `linked-topicless-${index}`,
+            role: 'user',
+            userId,
+          })),
+        );
+        let checks = 0;
+        await expect(
+          UserModel.deleteUserInBatches(serverDB, userId, {
+            batchSize: 2,
+            shouldContinue: () => ++checks <= 1,
+          }),
+        ).resolves.toBe(false);
+        expect(
+          await serverDB.query.messages.findMany({ where: eq(messages.userId, userId) }),
+        ).toHaveLength(3);
+        await expect(
+          UserModel.deleteUserInBatches(serverDB, userId, { batchSize: 2 }),
+        ).resolves.toBe(true);
+        expect(
+          await serverDB.query.users.findFirst({ where: eq(users.id, userId) }),
+        ).toBeUndefined();
+      });
+
+      it('rolls back earlier cascades when the shared final deadline is exhausted', async () => {
+        await serverDB
+          .insert(goals)
+          .values({ id: 'deadline-goal', title: 'Keep on rollback', userId });
+        let elapsed = 0;
+        const now = vi.spyOn(Date, 'now').mockImplementation(() => elapsed);
+        const transaction = serverDB.transaction.bind(serverDB);
+        const transactionSpy = vi.spyOn(serverDB, 'transaction').mockImplementation((callback) =>
+          transaction(async (tx) => {
+            const execute = tx.execute.bind(tx);
+            vi.spyOn(tx, 'execute').mockImplementation((...args) => {
+              const result = execute(...args);
+              elapsed += 60;
+              return result;
+            });
+            return callback(tx);
+          }),
+        );
+        try {
+          await expect(
+            UserModel.deleteUser(serverDB, userId, { transactionTimeoutMs: 100 }),
+          ).rejects.toThrow('transaction deadline exceeded');
+        } finally {
+          now.mockRestore();
+          transactionSpy.mockRestore();
+        }
+        expect(
+          await serverDB.query.goals.findFirst({ where: eq(goals.id, 'deadline-goal') }),
+        ).toBeDefined();
+        expect(await serverDB.query.users.findFirst({ where: eq(users.id, userId) })).toBeDefined();
+      });
+
+      it('preserves linked topicless rows when a transfer appears after selection', async () => {
+        await serverDB.insert(agents).values({ id: 'pending-topicless-agent', userId });
+        await serverDB.insert(messages).values({
+          id: 'pending-topicless-message',
+          agentId: 'pending-topicless-agent',
+          role: 'user',
+          userId,
+        });
+        const guard = vi
+          .spyOn(AgentTransferJobModel, 'hasPendingJobTouchingUser')
+          .mockResolvedValueOnce(false)
+          .mockResolvedValueOnce(true);
+        try {
+          await expect(
+            UserModel.deleteUserInBatches(serverDB, userId, { batchSize: 1 }),
+          ).rejects.toThrow(AGENT_TRANSFER_PENDING_OWNER_DELETE);
+        } finally {
+          guard.mockRestore();
+        }
+        expect(
+          await serverDB.query.messages.findFirst({
+            where: eq(messages.id, 'pending-topicless-message'),
+          }),
+        ).toBeDefined();
+      });
+      it.each([0, Number.NaN, 1.5, 2_147_483_648])(
+        'rejects invalid batched statement timeout %s before deleting user data',
+        async (timeout) => {
+          await serverDB.insert(messages).values({
+            id: 'message-invalid-timeout',
+            role: 'user',
+            userId,
+          });
+
+          await expect(
+            UserModel.deleteUserInBatches(serverDB, userId, {
+              batchSize: 1,
+              finalStatementTimeoutMs: timeout,
+            }),
+          ).rejects.toThrow(
+            'Account deletion statement timeout must be between 1 and 2147483647 milliseconds',
+          );
+
+          expect(
+            await serverDB.query.users.findFirst({ where: eq(users.id, userId) }),
+          ).toBeDefined();
+          expect(
+            await serverDB.query.messages.findFirst({
+              where: eq(messages.id, 'message-invalid-timeout'),
+            }),
+          ).toBeDefined();
+        },
+      );
+
+      it('commits message batches and resumes after the final transfer guard blocks deletion', async () => {
+        await serverDB.insert(topics).values({ id: 'topic-batched-delete', userId });
+        await serverDB.insert(messages).values(
+          Array.from({ length: 5 }, (_, index) => ({
+            id: `message-batched-delete-${index}`,
+            role: 'user',
+            topicId: 'topic-batched-delete',
+            userId,
+          })),
+        );
+
+        const pendingTransfer = vi
+          .spyOn(AgentTransferJobModel, 'hasPendingJobTouchingUser')
+          .mockResolvedValueOnce(false)
+          .mockResolvedValueOnce(false)
+          .mockResolvedValueOnce(false)
+          .mockResolvedValueOnce(false)
+          .mockResolvedValueOnce(true);
+        try {
+          await expect(
+            UserModel.deleteUserInBatches(serverDB, userId, {
+              batchSize: 2,
+              finalStatementTimeoutMs: 120_000,
+            }),
+          ).rejects.toThrow();
+        } finally {
+          pendingTransfer.mockRestore();
+        }
+
+        expect(await serverDB.query.users.findFirst({ where: eq(users.id, userId) })).toBeDefined();
+        expect(
+          await serverDB.query.messages.findMany({ where: eq(messages.userId, userId) }),
+        ).toEqual([]);
+
+        await UserModel.deleteUserInBatches(serverDB, userId, {
+          batchSize: 2,
+          finalStatementTimeoutMs: 120_000,
+        });
+
+        expect(
+          await serverDB.query.users.findFirst({ where: eq(users.id, userId) }),
+        ).toBeUndefined();
+        expect(await serverDB.query.topics.findMany({ where: eq(topics.userId, userId) })).toEqual(
+          [],
+        );
+      });
+
+      it('stops between committed batches and resumes without repeating completed work', async () => {
+        await serverDB.insert(messages).values(
+          Array.from({ length: 5 }, (_, index) => ({
+            id: `message-deadline-${index}`,
+            role: 'user',
+            userId,
+          })),
+        );
+        let checks = 0;
+
+        await expect(
+          UserModel.deleteUserInBatches(serverDB, userId, {
+            batchSize: 2,
+            shouldContinue: () => ++checks <= 2,
+          }),
+        ).resolves.toBe(false);
+
+        expect(await serverDB.query.users.findFirst({ where: eq(users.id, userId) })).toBeDefined();
+        expect(
+          await serverDB.query.messages.findMany({ where: eq(messages.userId, userId) }),
+        ).toHaveLength(1);
+
+        await expect(
+          UserModel.deleteUserInBatches(serverDB, userId, { batchSize: 2 }),
+        ).resolves.toBe(true);
+        expect(
+          await serverDB.query.users.findFirst({ where: eq(users.id, userId) }),
+        ).toBeUndefined();
+      });
+
+      it('preserves a topic and its remaining messages after ownership moves between batches', async () => {
+        const topicId = 'topic-transferred-during-delete';
+        await serverDB.insert(topics).values({ id: topicId, userId });
+        await serverDB.insert(messages).values(
+          Array.from({ length: 3 }, (_, index) => ({
+            id: `message-transferred-during-delete-${index}`,
+            role: 'user',
+            topicId,
+            userId,
+          })),
+        );
+        let checks = 0;
+
+        await expect(
+          UserModel.deleteUserInBatches(serverDB, userId, {
+            batchSize: 1,
+            shouldContinue: () => ++checks <= 3,
+          }),
+        ).resolves.toBe(false);
+
+        await serverDB.update(topics).set({ userId: otherUserId }).where(eq(topics.id, topicId));
+        await serverDB
+          .update(messages)
+          .set({ userId: otherUserId })
+          .where(eq(messages.topicId, topicId));
+
+        await expect(
+          UserModel.deleteUserInBatches(serverDB, userId, { batchSize: 1 }),
+        ).resolves.toBe(true);
+        expect(
+          await serverDB.query.topics.findFirst({ where: eq(topics.id, topicId) }),
+        ).toBeDefined();
+        expect(
+          await serverDB.query.messages.findMany({ where: eq(messages.topicId, topicId) }),
+        ).toHaveLength(1);
+      });
+
+      it('drains multiple small topics in one committed topic batch', async () => {
+        const topicIds = Array.from({ length: 3 }, (_, index) => `topic-small-batch-${index}`);
+        await serverDB.insert(topics).values(topicIds.map((id) => ({ id, userId })));
+        await serverDB.insert(messages).values(
+          topicIds.map((topicId, index) => ({
+            id: `message-small-batch-${index}`,
+            role: 'user',
+            topicId,
+            userId,
+          })),
+        );
+        let checks = 0;
+
+        await expect(
+          UserModel.deleteUserInBatches(serverDB, userId, {
+            batchSize: 10,
+            shouldContinue: () => ++checks <= 2,
+          }),
+        ).resolves.toBe(false);
+
+        expect(await serverDB.query.users.findFirst({ where: eq(users.id, userId) })).toBeDefined();
+        expect(await serverDB.query.topics.findMany({ where: eq(topics.userId, userId) })).toEqual(
+          [],
+        );
+        expect(
+          await serverDB.query.messages.findMany({ where: eq(messages.userId, userId) }),
+        ).toEqual([]);
+      });
+
+      it('stops before a topic batch when a transfer becomes pending after the initial guard', async () => {
+        const topicId = 'topic-transfer-started-during-delete';
+        await serverDB.insert(topics).values({ id: topicId, userId });
+        await serverDB.insert(messages).values({
+          id: 'message-transfer-started-during-delete',
+          role: 'user',
+          topicId,
+          userId,
+        });
+
+        const pendingTransfer = vi
+          .spyOn(AgentTransferJobModel, 'hasPendingJobTouchingUser')
+          .mockResolvedValueOnce(false)
+          .mockResolvedValueOnce(true);
+        try {
+          await expect(
+            UserModel.deleteUserInBatches(serverDB, userId, { batchSize: 1 }),
+          ).rejects.toThrow(AGENT_TRANSFER_PENDING_OWNER_DELETE);
+        } finally {
+          pendingTransfer.mockRestore();
+        }
+
+        expect(
+          await serverDB.query.topics.findFirst({ where: eq(topics.id, topicId) }),
+        ).toBeDefined();
+        expect(
+          await serverDB.query.messages.findFirst({
+            where: eq(messages.id, 'message-transfer-started-during-delete'),
+          }),
+        ).toBeDefined();
+      });
+
       it('should delete a user', async () => {
         await UserModel.deleteUser(serverDB, userId);
 
@@ -494,6 +950,104 @@ describe('UserModel', () => {
         });
 
         expect(user).toBeUndefined();
+      });
+
+      it('deletes a user whose goal decision also references the user', async () => {
+        const [goal] = await serverDB
+          .insert(goals)
+          .values({ title: 'Delete account regression', userId })
+          .returning();
+        const [node] = await serverDB
+          .insert(goalNodes)
+          .values({ goalId: goal.id, kind: 'decision', title: 'Confirm deletion' })
+          .returning();
+        await serverDB.insert(goalNodeDecisions).values({
+          authority: 'user',
+          nodeId: node.id,
+          question: 'Delete this account?',
+          requestedUserId: userId,
+        });
+
+        await UserModel.deleteUser(serverDB, userId);
+
+        expect(
+          await serverDB.query.users.findFirst({ where: eq(users.id, userId) }),
+        ).toBeUndefined();
+        expect(
+          await serverDB.query.goals.findFirst({ where: eq(goals.id, goal.id) }),
+        ).toBeUndefined();
+        expect(
+          await serverDB.query.goalNodes.findFirst({ where: eq(goalNodes.id, node.id) }),
+        ).toBeUndefined();
+        expect(
+          await serverDB.query.goalNodeDecisions.findFirst({
+            where: eq(goalNodeDecisions.nodeId, node.id),
+          }),
+        ).toBeUndefined();
+      });
+
+      it('purges share-visitor topics and messages when the visitor is deleted', async () => {
+        // Visitor conversations live under the CREATOR's userId with
+        // topics.senderId = visitor. There is no FK from topics.senderId to
+        // users, so the users cascade cannot reach them; deleteUser must
+        // clean them up explicitly.
+        const creatorId = userId;
+        const visitorId = otherUserId;
+        const visitorTopicId = 'topic-share-visitor';
+        const creatorTopicId = 'topic-creator-own';
+
+        await serverDB.insert(topics).values([
+          { id: visitorTopicId, senderId: visitorId, title: 'visitor chat', userId: creatorId },
+          { id: creatorTopicId, title: 'creator own chat', userId: creatorId },
+        ]);
+        await serverDB.insert(messages).values([
+          {
+            content: 'hello from visitor',
+            id: 'msg-visitor-1',
+            role: 'user',
+            topicId: visitorTopicId,
+            userId: creatorId,
+          },
+        ]);
+
+        await UserModel.deleteUser(serverDB, visitorId);
+
+        const remainingTopics = await serverDB.query.topics.findMany();
+        expect(remainingTopics.map((t) => t.id).sort()).toEqual([creatorTopicId]);
+
+        const remainingMessages = await serverDB.query.messages.findMany();
+        expect(remainingMessages).toHaveLength(0);
+
+        const creator = await serverDB.query.users.findFirst({
+          where: eq(users.id, creatorId),
+        });
+        expect(creator).toBeDefined();
+      });
+
+      it('batches messages in a share-visitor topic without deleting the host account', async () => {
+        await serverDB.insert(topics).values({
+          id: 'topic-visitor-batched',
+          senderId: otherUserId,
+          userId,
+        });
+        await serverDB.insert(messages).values(
+          Array.from({ length: 5 }, (_, index) => ({
+            id: `message-visitor-batched-${index}`,
+            role: 'user',
+            topicId: 'topic-visitor-batched',
+            userId,
+          })),
+        );
+
+        await UserModel.deleteUserInBatches(serverDB, otherUserId, { batchSize: 2 });
+
+        expect(await serverDB.query.users.findFirst({ where: eq(users.id, userId) })).toBeDefined();
+        expect(
+          await serverDB.query.topics.findFirst({ where: eq(topics.id, 'topic-visitor-batched') }),
+        ).toBeUndefined();
+        expect(
+          await serverDB.query.messages.findMany({ where: eq(messages.userId, userId) }),
+        ).toEqual([]);
       });
     });
 
@@ -594,6 +1148,19 @@ describe('UserModel', () => {
       it('should skip ids that do not exist', async () => {
         const result = await UserModel.getDisplayInfoByIds(serverDB, [userId, 'ghost']);
         expect(result.map((r) => r.id)).toEqual([userId]);
+      });
+    });
+
+    describe('getEmailsByIds', () => {
+      it('should return empty array for empty ids without querying', async () => {
+        expect(await UserModel.getEmailsByIds(serverDB, [])).toEqual([]);
+      });
+
+      it('should return id + email pairs only', async () => {
+        const result = await UserModel.getEmailsByIds(serverDB, [userId]);
+        expect(result).toHaveLength(1);
+        expect(Object.keys(result[0]).sort()).toEqual(['email', 'id']);
+        expect(result[0].id).toBe(userId);
       });
     });
 

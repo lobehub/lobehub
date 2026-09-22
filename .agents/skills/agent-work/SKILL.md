@@ -1,6 +1,6 @@
 ---
 name: agent-work
-description: 'Agent Work registry (works / work_versions): how agent outputs — github/linear entities, files, documents, tasks — get registered, deduped, and rendered as cards, and how to extend it with a new skill provider, a new shell CLI scanner, or a new Work type.'
+description: 'Use for the Agent Work output registry: registration, deduplication, cards, skill providers, CLI scanners and Work types.'
 user-invocable: false
 ---
 

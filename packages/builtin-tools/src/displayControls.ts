@@ -1,7 +1,5 @@
-import {
-  ClaudeCodeIdentifier,
-  resolveClaudeCodeRenderDisplayControl,
-} from '@lobechat/builtin-tool-claude-code/client';
+import { ClaudeCodeIdentifier } from '@lobechat/builtin-tool-claude-code';
+import { resolveClaudeCodeRenderDisplayControl } from '@lobechat/builtin-tool-claude-code/client/displayControls';
 import { type RenderDisplayControl } from '@lobechat/types';
 
 import { CodexRenderDisplayControls } from './codex/displayControls';

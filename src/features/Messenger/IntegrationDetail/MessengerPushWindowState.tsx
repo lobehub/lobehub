@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Icon, Skeleton, Tag, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Button, Skeleton, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { CheckCircle2Icon, ClockIcon, MoonIcon, RefreshCwIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -85,7 +85,7 @@ export const MessengerPushWindowState = memo<MessengerPushWindowStateProps>(
         </Flexbox>
       );
 
-    if (!status) return <Skeleton.Button active size="small" style={{ width: 220 }} />;
+    if (!status) return <Skeleton height={28} width={220} />;
 
     if (status.deliverability === 'always')
       return (

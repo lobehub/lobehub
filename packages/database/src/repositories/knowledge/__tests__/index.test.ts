@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { CUSTOM_DOCUMENT_FILE_TYPE, RESOURCE_CONTENT_PREVIEW_SOURCE_LENGTH } from '@lobechat/const';
 import { FilesTabs, SortType } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -224,6 +225,47 @@ describe('KnowledgeRepo', () => {
       expect(result.length).toBeGreaterThan(0);
       expect(result.every((item) => item.id !== 'other-file')).toBe(true);
       expect(result.every((item) => item.id !== 'other-doc')).toBe(true);
+    });
+
+    it('should omit document bodies from summary queries', async () => {
+      const content = `Preview body ${'x'.repeat(RESOURCE_CONTENT_PREVIEW_SOURCE_LENGTH)}`;
+      await serverDB.insert(documents).values({
+        content,
+        editorData: { root: { children: [{ text: 'Large editor payload' }] } },
+        fileType: CUSTOM_DOCUMENT_FILE_TYPE,
+        id: 'doc-summary',
+        source: 'internal://note/doc-summary',
+        sourceType: 'topic',
+        title: 'Summary projection',
+        totalCharCount: 42,
+        totalLineCount: 1,
+        userId,
+      });
+
+      const [summary] = await knowledgeRepo.query({
+        includeContent: false,
+        q: 'Summary projection',
+      });
+      const [full] = await knowledgeRepo.query({ q: 'Summary projection' });
+      const [withPreview] = await knowledgeRepo.query({
+        includeContent: false,
+        includeContentPreview: true,
+        q: 'Summary projection',
+      });
+
+      expect(summary).toMatchObject({
+        content: null,
+        editorData: null,
+        id: 'doc-summary',
+        name: 'Summary projection',
+      });
+      expect(summary.contentPreviewSource).toBeUndefined();
+      expect(withPreview).toMatchObject({ content: null, editorData: null });
+      expect(withPreview.contentPreviewSource).toHaveLength(RESOURCE_CONTENT_PREVIEW_SOURCE_LENGTH);
+      expect(full).toMatchObject({
+        content,
+        editorData: { root: { children: [{ text: 'Large editor payload' }] } },
+      });
     });
 
     it('should return uploader info for current user owned files and documents', async () => {
@@ -466,6 +508,8 @@ describe('KnowledgeRepo', () => {
       // Create test documents
       await serverDB.insert(documents).values([
         {
+          content: 'Recent document body',
+          editorData: { root: { children: [{ text: 'Recent editor payload' }] } },
           id: 'recent-doc-1',
           userId,
           title: 'Recent Note',
@@ -496,6 +540,17 @@ describe('KnowledgeRepo', () => {
       const result = await knowledgeRepo.queryRecent(1);
 
       expect(result).toHaveLength(1);
+    });
+
+    it('should return summaries without document bodies', async () => {
+      const [page] = await knowledgeRepo.queryRecent(1, 'page');
+
+      expect(page).toMatchObject({
+        content: null,
+        editorData: null,
+        id: 'recent-doc-1',
+        name: 'Recent Note',
+      });
     });
   });
 
@@ -1464,6 +1519,91 @@ describe('KnowledgeRepo', () => {
       // from this branch so we're just asserting the call succeeds without
       // an unexpected error caused by hidden clauses.
       await expect(knowledgeRepo.query({ visibility: 'private' })).resolves.toBeDefined();
+    });
+
+    it('should not hand out a page id another member cannot open', async () => {
+      // A workspace-public file whose derived document stayed creator-private:
+      // the file legitimately lists for every member, but the page behind it is
+      // only readable by its creator. Surfacing that page id makes the library
+      // show an entry that 404s on click.
+      await serverDB.insert(knowledgeBases).values({ id: 'kb-vis', userId, name: 'Vis KB' });
+      await serverDB.insert(files).values({
+        id: 'vis-file-shared',
+        userId: otherUserId,
+        workspaceId,
+        visibility: 'public',
+        name: 'shared.md',
+        fileType: 'text/markdown',
+        size: 10,
+        url: 'https://example.com/shared.md',
+      });
+      await serverDB.insert(documents).values({
+        id: 'vis-doc-hidden',
+        userId: otherUserId,
+        workspaceId,
+        visibility: 'private',
+        fileId: 'vis-file-shared',
+        title: 'Hidden Page',
+        fileType: CUSTOM_DOCUMENT_FILE_TYPE,
+        sourceType: 'file',
+        source: 'https://example.com/shared.md',
+        totalCharCount: 5,
+        totalLineCount: 1,
+      });
+      await serverDB.insert(knowledgeBaseFiles).values({
+        knowledgeBaseId: 'kb-vis',
+        fileId: 'vis-file-shared',
+        userId: otherUserId,
+        workspaceId,
+      });
+
+      const result = await wsRepo.query({ knowledgeBaseId: 'kb-vis' });
+
+      const row = result.find((item) => item.fileId === 'vis-file-shared');
+      expect(row).toBeDefined();
+      expect(row?.documentId).toBeFalsy();
+      // The row now addresses the file it really is, so opening it lands on the
+      // file preview instead of a page the caller is not allowed to read.
+      expect(row?.id).toBe('vis-file-shared');
+    });
+
+    it('should still carry the page id when the caller can open it', async () => {
+      await serverDB.insert(knowledgeBases).values({ id: 'kb-vis-ok', userId, name: 'Vis KB OK' });
+      await serverDB.insert(files).values({
+        id: 'vis-file-open',
+        userId: otherUserId,
+        workspaceId,
+        visibility: 'public',
+        name: 'open.md',
+        fileType: 'text/markdown',
+        size: 10,
+        url: 'https://example.com/open.md',
+      });
+      await serverDB.insert(documents).values({
+        id: 'vis-doc-open',
+        userId: otherUserId,
+        workspaceId,
+        visibility: 'public',
+        fileId: 'vis-file-open',
+        title: 'Open Page',
+        fileType: CUSTOM_DOCUMENT_FILE_TYPE,
+        sourceType: 'file',
+        source: 'https://example.com/open.md',
+        totalCharCount: 5,
+        totalLineCount: 1,
+      });
+      await serverDB.insert(knowledgeBaseFiles).values({
+        knowledgeBaseId: 'kb-vis-ok',
+        fileId: 'vis-file-open',
+        userId: otherUserId,
+        workspaceId,
+      });
+
+      const result = await wsRepo.query({ knowledgeBaseId: 'kb-vis-ok' });
+
+      const row = result.find((item) => item.fileId === 'vis-file-open');
+      expect(row?.documentId).toBe('vis-doc-open');
+      expect(row?.id).toBe('vis-doc-open');
     });
   });
 });

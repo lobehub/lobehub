@@ -1,12 +1,15 @@
 import react from '@vitejs/plugin-react';
 import { codeInspectorPlugin } from 'code-inspector-plugin';
-import type { ModulePreloadOptions } from 'vite';
+import type { ModulePreloadOptions, Plugin } from 'vite';
 
+import { viteCompletionSounds } from './completionSounds';
 import { viteEmotionSpeedy } from './emotionSpeedy';
 import { lobeIconImports } from './lobeIconImports';
+import { lobeUiImports } from './lobeUiImports';
 import { viteMarkdownImport } from './markdownImport';
 import { viteNodeModuleStub } from './nodeModuleStub';
 import { vitePlatformResolve } from './platformResolve';
+import { viteStaticStylesPrecompile } from './staticStylesPrecompile';
 
 /**
  * Shared manual chunk naming — groups leaf-node modules to reduce chunk file count.
@@ -315,20 +318,80 @@ export const sharedRollupOutput = {
 };
 
 interface SharedRolldownOutputOptions {
+  // The $initial split assumes one HTML entry: a constant-name catch-all would
+  // merge every entry's static graph, so multi-entry builds (the desktop
+  // renderer's main/overlay/popup) keep rolldown's entry-set chunking.
+  splitInitial?: boolean;
   strictExecutionOrder?: boolean;
 }
 
-export const createSharedRolldownOutput = (options: SharedRolldownOutputOptions = {}) => ({
-  chunkFileNames: sharedChunkFileNames,
-  strictExecutionOrder: options.strictExecutionOrder ?? true,
-  codeSplitting: {
-    groups: [
-      {
-        name: (moduleId: string) => sharedManualChunks(moduleId) ?? null,
-      },
-    ],
+// @lobehub/ui members on the first-screen path of dist/desktop, measured with
+// bundle-size-gate --type entry-graph. lobeUiImports splits the barrel into one
+// module per member; folding the eager ones back into one chunk keeps the heavy
+// members (Markdown, Mermaid, EmojiPicker, Highlighter, Image) on lazy routes.
+const UI_CORE_MEMBER_RE =
+  /^(?:Accordion|ActionIcon|Block|Collapse|ConfigProvider|Flex|FluentEmoji|Grid|Hotkey|Icon|Img|Modal|MotionProvider|Skeleton|Text|ThemeProvider|color|styles|utils|hooks\/use(?:IsClient|NativeButton|TextOverflow)|icons\/lucideExtra|base-ui\/(?:ActionIcon|Avatar|Button|Checkbox|ContextMenu|Modal|Popover|Switch|Text|Toast|Tooltip|controlSize|focusRing|zIndex))(?:\/|\.)/;
+
+const isUiCoreModule = (id: string) => {
+  const member = id.replaceAll('\\', '/').split('/node_modules/@lobehub/ui/es/')[1];
+
+  return Boolean(member && UI_CORE_MEMBER_RE.test(member));
+};
+
+interface Group {
+  name: string | ((id: string) => string | null);
+  priority: number;
+  test?: RegExp | ((id: string) => boolean);
+}
+
+// Groups apply to the entry's static graph only. Off the first screen, a
+// monolithic vendor chunk makes every route pay for members it never renders,
+// so lazy modules fall back to entry-set chunking. Named lazy chunks survive
+// only where the file name is a routing contract (i18n/, devtools/).
+const isNamedLazyChunk = (name: string) => name.startsWith('i18n-') || name.startsWith('devtools-');
+
+// Every module left over in the entry's static graph is needed for the first
+// paint anyway, so folding them into one chunk costs nothing on first load and
+// stops the entry-set splitter from fanning them out into dozens of small files.
+const splitByInitial = (groups: Group[]) => [
+  ...groups.map((g) => ({ ...g, priority: g.priority + 10, tags: ['$initial' as const] })),
+  {
+    name: (id: string) => {
+      const name = sharedManualChunks(id);
+      return name && isNamedLazyChunk(name) ? name : null;
+    },
+    priority: 3,
   },
-});
+  { name: 'app-initial', priority: 0, tags: ['$initial' as const] },
+];
+
+// Recursive dependency capture ignores the $initial tag: a lazy group would
+// drag first-screen modules into its chunk and the entry would then preload it.
+// Groups capture only matched modules; dependencies fall back to automatic
+// entry-set chunking. Requires preserveEntrySignatures: 'allow-extension'.
+export const createSharedRolldownOutput = (options: SharedRolldownOutputOptions = {}) => {
+  const groups: Group[] = [
+    {
+      name: (moduleId: string) => sharedManualChunks(moduleId) ?? null,
+      priority: 3,
+    },
+    {
+      name: 'vendor-antd',
+      priority: 2,
+      test: /[\\/]node_modules[\\/](?:antd|@ant-design|@rc-component)[\\/]/,
+    },
+    { name: 'vendor-ui-core', priority: 1, test: isUiCoreModule },
+  ];
+  const splitInitial = options.splitInitial ?? true;
+
+  return {
+    chunkFileNames: sharedChunkFileNames,
+    strictExecutionOrder: options.strictExecutionOrder ?? true,
+    codeSplitting: splitInitial
+      ? { groups: splitByInitial(groups), includeDependenciesRecursively: false }
+      : { groups },
+  };
+};
 
 type Platform = 'web' | 'mobile' | 'desktop' | 'auth';
 
@@ -341,10 +404,25 @@ interface SharedRendererOptions {
 
 export function sharedRendererPlugins(options: SharedRendererOptions) {
   return [
+    viteCompletionSounds(),
     viteEmotionSpeedy(),
     viteMarkdownImport(),
     viteNodeModuleStub(),
     vitePlatformResolve(options.platform),
+
+    // Editor.tsx takes the provider-only entry so the editor runtime stays off
+    // the first screen. In dev that entry is prebundled separately from
+    // @lobehub/editor/react, which the editors use, giving the app a second
+    // EditorContext; point the dev import back at the one bundle.
+    isDev &&
+      ({
+        enforce: 'pre',
+        name: 'lobe-dev-editor-provider',
+        resolveId(source, importer) {
+          if (source !== '@lobehub/editor/react/EditorProvider') return null;
+          return this.resolve('@lobehub/editor/react', importer, { skipSelf: true });
+        },
+      } satisfies Plugin),
 
     isDev && {
       name: 'lobe-dev-strip-manifest',
@@ -361,7 +439,8 @@ export function sharedRendererPlugins(options: SharedRendererOptions) {
         hotKeys: ['altKey', 'ctrlKey'],
       }),
     react(),
-    ...(options.platform === 'desktop' ? [] : lobeIconImports()),
+    viteStaticStylesPrecompile(),
+    ...(options.platform === 'desktop' ? [] : [...lobeIconImports(), ...lobeUiImports()]),
   ];
 }
 
@@ -432,7 +511,4 @@ export const sharedOptimizeDeps = {
 // snapshots. They must still share one LexicalComposerContext at runtime.
 export const sharedRendererDedupe = ['@lobehub/editor', 'react', 'react-dom'];
 
-export const __testing = {
-  sharedChunkFileNames,
-  sharedManualChunks,
-};
+export const __testing = { isUiCoreModule, sharedChunkFileNames, sharedManualChunks };

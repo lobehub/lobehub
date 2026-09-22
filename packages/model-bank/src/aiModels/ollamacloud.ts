@@ -122,35 +122,6 @@ const ollamaCloudModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
     },
-    contextWindowTokens: 204_800,
-    description:
-      'MiniMax-M2.5 is a state-of-the-art large language model designed for real-world productivity and coding tasks.',
-    displayName: 'MiniMax M2.5',
-    family: 'minimax',
-    generation: 'minimax-m2.5',
-    id: 'minimax-m2.5',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      vision: true,
-    },
-    contextWindowTokens: 262_144,
-    description:
-      'Kimi K2.5 is an open-source, native multimodal agentic model that seamlessly integrates vision and language understanding with advanced agentic capabilities, instant and thinking modes, as well as conversational and agentic paradigms.',
-    displayName: 'Kimi K2.5',
-    family: 'kimi',
-    generation: 'kimi-k2.5',
-    id: 'kimi-k2.5',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
     contextWindowTokens: 131_072,
     description:
       'GPT-OSS 20B is an open-source LLM from OpenAI using MXFP4 quantization, suitable for high-end consumer GPUs or Apple Silicon Macs. It performs well in dialogue generation, coding, and reasoning tasks, supporting function calling and tool use.',

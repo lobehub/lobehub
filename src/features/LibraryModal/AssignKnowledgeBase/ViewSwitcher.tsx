@@ -1,4 +1,5 @@
-import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { Grid3x3Icon, ListIcon } from 'lucide-react';
 import { memo } from 'react';

@@ -1,5 +1,6 @@
 import { type FlexboxProps } from '@lobehub/ui';
-import { Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { HelpCircleIcon } from 'lucide-react';
 import { type CSSProperties, type ReactNode } from 'react';

@@ -6,6 +6,7 @@ export interface PreferenceSliceState {
   preferencesInit: boolean;
   preferencesPage: number;
   preferencesQuery?: string;
+  preferencesSearchError?: unknown;
   preferencesSearchLoading?: boolean;
   preferencesSort?: 'capturedAt' | 'scorePriority';
   preferencesTotal: number;
@@ -17,6 +18,8 @@ export const preferenceInitialState: PreferenceSliceState = {
   preferencesInit: false,
   preferencesPage: 1,
   preferencesQuery: undefined,
+  preferencesSearchError: undefined,
+  preferencesSearchLoading: undefined,
   preferencesSort: undefined,
   preferencesTotal: 0,
 };

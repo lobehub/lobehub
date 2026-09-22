@@ -11,6 +11,15 @@ class AgentBotProviderService {
     return lambdaClient.agentBotProvider.getByAgentId.query({ agentId });
   };
 
+  /**
+   * Credentials in the clear, for writing an importable export file. Separate
+   * from `getByAgentId` on purpose: that one masks, and the export is the only
+   * place allowed to ask for the real values.
+   */
+  exportByAgentId = async (agentId: string) => {
+    return lambdaClient.agentBotProvider.exportByAgentId.query({ agentId });
+  };
+
   getRuntimeStatus = async (params: {
     applicationId: string;
     platform: string;
@@ -70,6 +79,14 @@ class AgentBotProviderService {
 
   lineFetchBotInfo = async (channelAccessToken: string) => {
     return lambdaClient.agentBotProvider.lineFetchBotInfo.mutate({ channelAccessToken });
+  };
+
+  feishuFetchOwnerId = async (params: {
+    appId: string;
+    appSecret: string;
+    platform: 'feishu' | 'lark';
+  }) => {
+    return lambdaClient.agentBotProvider.feishuFetchOwnerId.mutate(params);
   };
 
   wechatGetQrCode = async () => {

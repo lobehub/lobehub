@@ -1,12 +1,13 @@
 'use client';
 
-import { Flexbox, Input, Text } from '@lobehub/ui';
-import { Button, Switch } from '@lobehub/ui/base-ui';
+import { Flexbox, Input } from '@lobehub/ui';
+import { Button, Switch, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { snakeCase } from 'es-toolkit/compat';
 import { ListRestartIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 
+import { devDockPanelStyles } from '@/features/DevDock/panelStyles';
 import { useServerConfigStore } from '@/store/serverConfig';
 import {
   type FeatureFlagKey,
@@ -19,19 +20,7 @@ const styles = createStaticStyles(({ css }) => ({
   body: css`
     overflow: auto;
     flex: 1;
-
     min-height: 0;
-    padding-block: 4px;
-    padding-inline: 4px;
-  `,
-  container: css`
-    display: flex;
-    flex-direction: column;
-
-    width: 100%;
-    max-width: 720px;
-    height: 100%;
-    margin-inline: auto;
   `,
   empty: css`
     padding-block: 32px;
@@ -51,12 +40,21 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   toolbar: css`
     display: flex;
-    gap: 12px;
+    flex-shrink: 0;
     align-items: center;
 
-    padding-block: 8px;
-    padding-inline: 12px;
+    height: 44px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+  `,
+  toolbarFilter: css`
+    display: flex;
+    flex-shrink: 0;
+    gap: 6px;
+    align-items: center;
+
+    height: 100%;
+    padding-inline: 12px;
+    border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
 }));
 
@@ -86,20 +84,25 @@ const Panel = memo(() => {
   }, [flagKeys, overrides, overriddenOnly, search]);
 
   if (!originalFlags)
-    return <div className={styles.empty}>Server feature flags are not loaded yet.</div>;
+    return (
+      <div className={devDockPanelStyles.root}>
+        <div className={styles.empty}>Server feature flags are not loaded yet.</div>
+      </div>
+    );
 
   return (
-    <div className={styles.container}>
+    <div className={devDockPanelStyles.root}>
       <div className={styles.toolbar}>
         <Input
           allowClear
+          className={devDockPanelStyles.searchInput}
           placeholder={'Search flag name…'}
           size={'small'}
-          style={{ flex: 1 }}
           value={search}
+          variant={'borderless'}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <Flexbox horizontal align={'center'} gap={6}>
+        <Flexbox horizontal className={styles.toolbarFilter}>
           <Switch checked={overriddenOnly} size={'small'} onChange={setOverriddenOnly} />
           <Text style={{ fontSize: 12, whiteSpace: 'nowrap' }} type={'secondary'}>
             overridden only
