@@ -1,3 +1,4 @@
+import type { ComponentProps } from 'react';
 import { Center, FileTypeIcon, Flexbox, Icon } from '@lobehub/ui';
 import { Button, Text } from '@lobehub/ui/base-ui';
 import { Upload } from 'antd';
@@ -15,6 +16,22 @@ import { useFileStore } from '@/store/file';
 import { ResourceSourceFilter } from '@/types/files';
 
 const ICON_SIZE = 80;
+
+/**
+ * The empty-state Upload cards sit inside the ResourceManager DragUploadZone,
+ * whose container also consumes the same native drop and uploads the files a
+ * second time. antd handles the drop on the card itself, so isolate each card
+ * and stop the event from bubbling to the container.
+ */
+const DropIsolatedUpload = (props: ComponentProps<typeof Upload>) => (
+  <div
+    onDrop={(e) => {
+      e.stopPropagation();
+    }}
+  >
+    <Upload {...props} />
+  </div>
+);
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   actionTitle: css`
@@ -133,7 +150,7 @@ const EmptyPlaceholder = () => {
             />
           </Flexbox>
         )}
-        <Upload
+        <DropIsolatedUpload
           multiple={true}
           showUploadList={false}
           beforeUpload={async (file) => {
@@ -151,8 +168,8 @@ const EmptyPlaceholder = () => {
               size={ICON_SIZE}
             />
           </Flexbox>
-        </Upload>
-        <Upload
+        </DropIsolatedUpload>
+        <DropIsolatedUpload
           directory
           multiple={true}
           showUploadList={false}
@@ -178,7 +195,7 @@ const EmptyPlaceholder = () => {
               type={'folder'}
             />
           </Flexbox>
-        </Upload>
+        </DropIsolatedUpload>
       </Flexbox>
     </Center>
   );
