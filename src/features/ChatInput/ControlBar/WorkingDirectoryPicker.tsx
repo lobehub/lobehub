@@ -554,7 +554,13 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
       {selectedDir ? (
         <DirIcon repoType={recents.find((r) => r.path === selectedDir)?.repoType} />
       ) : (
-        <Icon icon={FolderIcon} size={14} />
+        // Empty state: dashed outline + muted color read as "not set yet"; the
+        // Tooltip below already hints t('workingDirectory.title').
+        <Icon
+          icon={FolderIcon}
+          size={14}
+          style={{ color: cssVar.colorTextQuaternary, strokeDasharray: '3 2' }}
+        />
       )}
       <span className={styles.buttonLabel}>{displayName}</span>
       <Icon icon={ChevronDownIcon} size={12} />
