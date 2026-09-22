@@ -324,6 +324,38 @@ describe('recoverInterruptedHeteroRuns', () => {
     expect(chatStore.updateTopicStatus).not.toHaveBeenCalled();
   });
 
+  it('recovers a topic left awaiting human input', async () => {
+    // AskUserQuestion parks the topic as waitingForHuman; the restart killed
+    // the CLI and its intervention bridge, and the stale-topic watchdog only
+    // looks at `running`, so nothing else would ever reset it.
+    mockGetTopicDetail.mockResolvedValue({ ...topic, status: 'waitingForHuman' });
+    mockProbeTranscriptReplay.mockResolvedValue({ available: true, complete: false });
+    mockRunHetero
+      .mockResolvedValueOnce({ assistantMessageId: 'a-new', replayComplete: false })
+      .mockResolvedValueOnce({ assistantMessageId: 'a-cont' });
+
+    const results = await recoverInterruptedHeteroRuns();
+
+    expect(results).toEqual([{ outcome: 'resumed', topicId: 'topic-1' }]);
+    expect(mockRunHetero).toHaveBeenCalledTimes(2);
+  });
+
+  it('settles a stranded waitingForHuman topic when the replay cannot run', async () => {
+    mockGetTopicDetail.mockResolvedValue({ ...topic, status: 'waitingForHuman' });
+    mockProbeTranscriptReplay.mockResolvedValue({ available: false, reason: 'gone' });
+
+    const results = await recoverInterruptedHeteroRuns();
+
+    expect(results).toEqual([
+      { outcome: 'skipped', reason: 'no-transcript: gone', topicId: 'topic-1' },
+    ]);
+    expect(chatStore.updateTopicStatus).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      status: 'active',
+      topicId: 'topic-1',
+    });
+  });
+
   it('leaves a topic alone when a newer turn took it over while the app was down', async () => {
     // Another device started a turn after our run was spawned: its user row is
     // newer than the ledger entry. Touching it would delete that live run's

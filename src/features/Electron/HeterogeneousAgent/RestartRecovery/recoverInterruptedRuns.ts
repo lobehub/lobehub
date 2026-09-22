@@ -56,6 +56,15 @@ interface InterruptedRun {
   topicId?: string;
 }
 
+/**
+ * Topic states a restart can leave stranded. `running` is the ordinary one;
+ * `waitingForHuman` is written when the CLI raised an AskUserQuestion, and a
+ * restart kills both the CLI and its intervention bridge — nothing else ever
+ * resets it, because the stale-topic watchdog only looks at `running`.
+ */
+const isInterruptedTopicStatus = (status: string | null | undefined): boolean =>
+  status === 'running' || status === 'waitingForHuman';
+
 const toTime = (value: UIChatMessage['createdAt']): number => {
   const time = typeof value === 'number' ? value : new Date(value as any).getTime();
   return Number.isFinite(time) ? time : 0;
@@ -90,7 +99,9 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
   const topic = await topicService.getTopicDetail(topicId);
   if (!topic) return { outcome: 'skipped', reason: 'topic-missing', topicId };
   // Settled elsewhere already (another device, the stale-run watchdog, the user).
-  if (topic.status !== 'running') return { outcome: 'skipped', reason: 'not-running', topicId };
+  if (!isInterruptedTopicStatus(topic.status)) {
+    return { outcome: 'skipped', reason: 'not-running', topicId };
+  }
 
   const chatStore = useChatStore.getState();
   const settle = () => chatStore.updateTopicStatus({ agentId, status: 'active', topicId });
@@ -175,7 +186,7 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
       return { outcome: 'skipped', reason: 'no-user-turn', topicId };
     }
 
-    // The topic is `running` — but is it running OUR run? Another device may
+    // The topic is still in flight — but is it OUR run? Another device may
     // have started a newer turn on it while this desktop was down. Its user row
     // postdates our spawn, and recovering would delete that live run's output
     // and replay a stale session over it. Leave the topic completely alone:
@@ -252,9 +263,9 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
       chatStore.failOperation(operationId, { message, type: 'RestartRecoveryError' });
     }
     // The executor writes its own terminal status once it owns the run, so
-    // only a topic still marked running is put down here.
+    // only a topic still stuck in flight is put down here.
     const current = await topicService.getTopicDetail(topicId).catch(() => null);
-    if (current?.status === 'running') await settle().catch(() => {});
+    if (isInterruptedTopicStatus(current?.status)) await settle().catch(() => {});
     return { outcome: 'failed', reason: message, topicId };
   } finally {
     // Reconcile with the server snapshot now that nothing is streaming. Only
