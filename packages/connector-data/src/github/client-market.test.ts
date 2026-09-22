@@ -20,6 +20,9 @@ const createProxy = () =>
     if (input.endpoint === '/repos/lobehub/lobehub/contributors') {
       return { data: [{ contributions: 12, login: 'octocat' }], status: 200 };
     }
+    if (input.endpoint === '/repos/lobehub/lobehub/branches') {
+      return { data: [{ name: 'canary', protected: true }, { name: 'main' }, {}], status: 200 };
+    }
     if (input.endpoint === '/graphql') {
       const body = input.body as { query?: string };
       if (body.query?.includes('ConnectorDataGitHubProfile')) {
@@ -102,5 +105,22 @@ describe('createGitHubMarketConnectorClient', () => {
       pronouns: 'they/them',
       websiteUrl: 'https://lobehub.com',
     });
+  });
+
+  it('lists a repository branches through the REST proxy', async () => {
+    const proxyOAuthRequest = createProxy();
+    const transport = createGitHubMarketTransport({ market: { proxyOAuthRequest } });
+
+    await expect(
+      transport.listRepositoryBranches({ owner: 'lobehub', perPage: 100, repository: 'lobehub' }),
+    ).resolves.toEqual([{ name: 'canary' }, { name: 'main' }, { name: null }]);
+
+    expect(proxyOAuthRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        endpoint: '/repos/lobehub/lobehub/branches',
+        method: 'GET',
+        parameters: [{ in: 'query', name: 'per_page', value: 100 }],
+      }),
+    );
   });
 });
