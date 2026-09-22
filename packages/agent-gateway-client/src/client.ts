@@ -91,6 +91,7 @@ export class AgentStreamClient extends TypedEmitter {
     this.token = options.token;
     this.autoReconnect = options.autoReconnect ?? true;
     this.resumeOnConnect = options.resumeOnConnect ?? false;
+    this.lastEventId = options.lastEventId ?? '';
   }
 
   // ─── Public API ───

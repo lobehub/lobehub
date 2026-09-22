@@ -282,6 +282,23 @@ describe('createOperationClient', () => {
     expect(late).not.toHaveBeenCalled();
   });
 
+  it('exposes the applied cursor so another transport can resume from it', async () => {
+    const mux = createMux();
+    const ws = await readyMux(mux);
+    const client = createOperationClient(mux, 'op-1');
+    expect(client.lastEventId).toBe('');
+
+    client.connect();
+    ws.simulateMessage(agentEvent('7'));
+    ws.simulateMessage(agentEvent('8'));
+    expect(client.lastEventId).toBe('8');
+
+    // Still readable after the subscription ends — the v1 handoff reads it
+    // right as it tears this client down.
+    client.disconnect();
+    expect(client.lastEventId).toBe('8');
+  });
+
   it('reconnect() resubscribes from the last applied event id without emitting disconnected', async () => {
     const mux = createMux();
     const ws = await readyMux(mux);

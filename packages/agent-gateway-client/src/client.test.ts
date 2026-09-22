@@ -162,6 +162,30 @@ describe('AgentStreamClient', () => {
       expect(JSON.parse(ws.sent[1])).toEqual({ lastEventId: '', type: 'resume', wantStatus: true });
     });
 
+    it('resumes from a cursor handed over by another transport', async () => {
+      // The v1 fallback picks up a run the multiplexed socket was streaming:
+      // the first resume must start after what that socket already delivered,
+      // and without the from-scratch buffering (nothing needs deduplicating).
+      const client = createClient({ lastEventId: '42', resumeOnConnect: true });
+      const ws = await connectAndAuth(client);
+
+      expect(JSON.parse(ws.sent[1])).toEqual({
+        lastEventId: '42',
+        type: 'resume',
+        wantStatus: true,
+      });
+
+      const onEvent = vi.fn();
+      client.on('agent_event', onEvent);
+      ws.simulateMessage({
+        event: { data: {}, stepIndex: 0, timestamp: 1, type: 'stream_chunk' },
+        id: '43',
+        type: 'agent_event',
+      } as any);
+      // Delivered live, not held in a resume buffer.
+      expect(onEvent).toHaveBeenCalledOnce();
+    });
+
     it('should not connect if already connected', async () => {
       const client = createClient();
       await connectAndAuth(client);

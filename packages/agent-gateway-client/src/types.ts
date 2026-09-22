@@ -504,6 +504,15 @@ export interface AgentStreamClientOptions {
   autoReconnect?: boolean;
   /** Gateway WebSocket URL base (e.g. https://gateway.lobehub.com) */
   gatewayUrl: string;
+  /**
+   * Last event id this operation has already applied, when the stream is being
+   * picked up from another transport (the v1 fallback after the multiplexed
+   * socket gave up). Both protocols read ids from the same per-operation
+   * sequence, so the first `resume` replays only what came after it — events
+   * the client already consumed, `tool_execute` included, are not delivered
+   * twice. Absent ⇒ replay from the beginning.
+   */
+  lastEventId?: string;
   /** Operation ID to subscribe to */
   operationId: string;
   /**

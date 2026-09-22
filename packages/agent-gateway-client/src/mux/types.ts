@@ -195,6 +195,14 @@ export interface GatewayMuxClientOptions {
    * even with nothing subscribed.
    */
   keepAlive?: boolean;
+  /**
+   * Consecutive dial failures after which the mux declares itself unavailable
+   * and emits `unavailable` instead of retrying forever (default: 3).
+   *
+   * Only honoured when someone listens for `unavailable`: a standalone client
+   * with no fallback keeps its original behaviour (retry with backoff).
+   */
+  maxDialFailures?: number;
 }
 
 export type GatewayMuxStatus = 'connected' | 'connecting' | 'disconnected';
@@ -206,6 +214,13 @@ export interface GatewayMuxClientEvents {
   lifecycle: (lifecycle: MuxOpLifecycleMessage) => void;
   reconnecting: (delay: number) => void;
   status_changed: (status: GatewayMuxStatus) => void;
+  /**
+   * This deployment cannot serve protocol v2 to this client: the token could
+   * not be minted, `/v2/ws` is not there, or the hub refused the token past
+   * the auth-retry budget. Terminal — the mux stops dialing and the owner is
+   * expected to fall back to the v1 per-operation socket.
+   */
+  unavailable: (reason: string) => void;
 }
 
 // ─── Operation subscription ───

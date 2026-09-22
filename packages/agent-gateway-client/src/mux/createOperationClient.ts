@@ -28,6 +28,11 @@ export interface OperationClient {
   readonly connectionStatus: ConnectionStatus;
   /** Unsubscribe; emits `disconnected` like v1. */
   disconnect: () => void;
+  /**
+   * Highest event id applied so far — the cursor another transport must resume
+   * from if this operation moves off the shared socket.
+   */
+  readonly lastEventId: string;
   on: <K extends keyof OperationClientEvents>(
     event: K,
     listener: OperationClientEvents[K],
@@ -132,6 +137,9 @@ export const createOperationClient = (
   return {
     get connectionStatus() {
       return status;
+    },
+    get lastEventId() {
+      return subscription?.lastEventId || lastEventId;
     },
     connect,
     disconnect: () => {

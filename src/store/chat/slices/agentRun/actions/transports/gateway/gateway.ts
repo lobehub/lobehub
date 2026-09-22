@@ -9,6 +9,7 @@ import {
   type MuxOpLifecycleMessage,
   type OperationClient,
   type OperationClientOptions,
+  type ToolResultPayload,
 } from '@lobechat/agent-gateway-client';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import type {
@@ -27,6 +28,7 @@ import {
   getRuntimeCanManageAgent,
 } from '@/helpers/agentManagementAccess';
 import { resolveExecutionTarget, resolveWorkspaceScoped } from '@/helpers/executionTarget';
+import { trackProductUsageEvent } from '@/libs/analytics/productUsageEvent';
 import {
   aiAgentService,
   type ResumeApprovalParam,
@@ -62,7 +64,12 @@ import { createGatewayEventBuffer } from './gatewayEventBuffer';
 import { createGatewayEventHandler, isCompletedRuntimeEnd } from './gatewayEventHandler';
 import { createGatewayEventRouter } from './gatewayEventRouter';
 import { createGatewayMemberStreamHandler } from './gatewayMemberStreamHandler';
-import { type GatewayMuxIdentity, getGatewayMux } from './muxRegistry';
+import {
+  type GatewayMuxIdentity,
+  getGatewayMux,
+  isGatewayMuxUnavailable,
+  markGatewayMuxUnavailable,
+} from './muxRegistry';
 import { flagQueuedMessagesOnRunStart, syncQueuedMessagesFlag } from './queuedMessagesFlag';
 
 const getGatewayServerConfig = () =>
@@ -218,6 +225,12 @@ export interface ConnectGatewayParams {
    */
   gatewayUrl: string;
   /**
+   * Last event id this operation has already applied. Set when the stream is
+   * picked up from another transport, so the resume replays only what came
+   * after it instead of re-delivering events the run already handled.
+   */
+  lastEventId?: string;
+  /**
    * Callback for each agent event received
    */
   onEvent?: (event: AgentStreamEvent) => void;
@@ -308,6 +321,18 @@ export class GatewayActionImpl {
   /** Muxes whose `lifecycle` stream already feeds `gatewayFeed`. */
   readonly #feedAttachedMuxes = new WeakSet<GatewayMuxClient>();
 
+  /** Muxes already wired to re-establish their operations on v1. */
+  readonly #fallbackAttachedMuxes = new WeakSet<GatewayMuxClient>();
+
+  /**
+   * How to re-establish each mux-backed operation on the v1 transport, kept
+   * per live connection so a mux that gives up mid-run can hand its runs over
+   * instead of leaving them without a stream. Tagged with the mux it rides on,
+   * because the owner and share-visitor identities have separate sockets and
+   * only the failing one's operations move.
+   */
+  readonly #muxFallbacks = new Map<string, { mux: GatewayMuxClient; redial: () => void }>();
+
   constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
     void _api;
     this.#set = set;
@@ -340,6 +365,69 @@ export class GatewayActionImpl {
   };
 
   /**
+   * Hand every operation on this mux back to the v1 per-operation socket once
+   * the mux declares protocol v2 unusable.
+   *
+   * Attached once per mux. `connectToGateway` is re-entered with the original
+   * params, and `isGatewayMuxUnavailable` now routes it to `createClient`, so
+   * the run keeps the same handlers and resumes from the server's buffer
+   * instead of surfacing as a stalled stream.
+   */
+  #attachMuxFallback = (mux: GatewayMuxClient, identity: GatewayMuxIdentity): void => {
+    if (this.#fallbackAttachedMuxes.has(mux)) return;
+    this.#fallbackAttachedMuxes.add(mux);
+    mux.on('unavailable', (reason) => {
+      markGatewayMuxUnavailable(identity);
+      const affected = [...this.#muxFallbacks.entries()].filter(([, entry]) => entry.mux === mux);
+      for (const [operationId] of affected) this.#muxFallbacks.delete(operationId);
+      // Telemetry must never be what keeps a run from recovering.
+      void trackProductUsageEvent({
+        name: 'gateway_transport_fallback',
+        properties: { operation_count: affected.length, reason },
+      }).catch(() => {});
+      for (const [operationId, entry] of affected) {
+        // Taken before the redial: its disconnect unsubscribes the old
+        // operation, which drops whatever is still queued, and the tool that
+        // produced these was already told they were sent.
+        const pendingToolResults = mux.takePendingToolResults(operationId);
+        try {
+          entry.redial();
+        } catch (error) {
+          console.error('[Gateway] failed to fall back to the v1 transport:', error);
+          continue;
+        }
+        if (pendingToolResults.length > 0) {
+          this.#deliverOnConnect(operationId, pendingToolResults);
+        }
+      }
+    });
+  };
+
+  /**
+   * Send tool results over an operation's connection as soon as it is up.
+   *
+   * The v1 client has no outbound queue — `sendToolResult` on a socket that is
+   * still connecting just returns false — so results carried over from a mux
+   * wait for `connected` here. Anything that still cannot be sent then is left
+   * to the server's own tool timeout, the same as a v1 result sent into a dead
+   * socket today.
+   */
+  #deliverOnConnect = (operationId: string, results: ToolResultPayload[]): void => {
+    const client = this.#get().gatewayConnections[operationId]?.client;
+    if (!client) return;
+
+    // The v1 client's `on` hands back no unsubscribe, so the listener goes
+    // inert once everything has been delivered instead of detaching.
+    let remaining = results;
+    const flush = () => {
+      if (remaining.length === 0) return;
+      remaining = remaining.filter((result) => !client.sendToolResult(result));
+    };
+    client.on('connected', flush);
+    if (this.#get().gatewayConnections[operationId]?.status === 'connected') flush();
+  };
+
+  /**
    * Connect to the Agent Gateway for a specific operation.
    * Creates an AgentStreamClient, manages its lifecycle, and wires up event callbacks.
    */
@@ -351,6 +439,7 @@ export class GatewayActionImpl {
       gatewayUrl,
       token,
       topicId,
+      lastEventId,
       onEvent,
       onSessionComplete,
       resumeOnConnect,
@@ -363,18 +452,49 @@ export class GatewayActionImpl {
     // not inherit the creator's Labs preference. Owner runs keep the existing
     // opt-in rollout: a connection keeps the transport it was opened with
     // even if the toggle flips mid-run.
+    const muxIdentity: GatewayMuxIdentity = { agentShareId, gatewayUrl };
     const useGatewayMux =
-      Boolean(agentShareId) || labPreferSelectors.enableGatewayMux(useUserStore.getState());
+      (Boolean(agentShareId) || labPreferSelectors.enableGatewayMux(useUserStore.getState())) &&
+      !isGatewayMuxUnavailable(muxIdentity);
     let muxClient: OperationClient | undefined;
     if (useGatewayMux) {
-      const mux = this.resolveGatewayMux({ agentShareId, gatewayUrl });
+      const mux = this.resolveGatewayMux(muxIdentity);
       this.#attachGatewayFeed(mux);
+      this.#attachMuxFallback(mux, muxIdentity);
       // The mux mints its own token via `getToken` on every dial, so `token`
       // is unused here and `auth_expired` never fires on this client.
-      muxClient = this.createMuxClient(mux, operationId, { executor, resumeOnConnect });
+      const operationMuxClient = this.createMuxClient(mux, operationId, {
+        executor,
+        ...(lastEventId && { lastEventId }),
+        resumeOnConnect,
+      });
+      muxClient = operationMuxClient;
+      // Re-establishing on v1 always resumes: the run has been executing on the
+      // server the whole time the mux was failing to reach it, so a fresh
+      // subscribe would skip everything it missed. And it resumes from the
+      // mux's cursor, read at the moment of the handoff: both protocols number
+      // events from the same per-operation sequence, and replaying from the
+      // start would re-apply streamed chunks and re-run `tool_execute` events
+      // this tab already executed.
+      this.#muxFallbacks.set(operationId, {
+        mux,
+        redial: () =>
+          this.connectToGateway({
+            ...params,
+            lastEventId: operationMuxClient.lastEventId || lastEventId,
+            resumeOnConnect: true,
+          }),
+      });
     }
     const client: GatewayConnection['client'] =
-      muxClient ?? this.createClient({ gatewayUrl, operationId, resumeOnConnect, token });
+      muxClient ??
+      this.createClient({
+        gatewayUrl,
+        ...(lastEventId && { lastEventId }),
+        operationId,
+        resumeOnConnect,
+        token,
+      });
 
     // Track connection in store
     this.#set(
@@ -578,8 +698,12 @@ export class GatewayActionImpl {
     const serverConfig = getGatewayServerConfig();
     if (!serverConfig?.agentGatewayUrl || !serverConfig.enableGatewayMode) return;
 
-    const mux = this.resolveGatewayMux({ gatewayUrl: serverConfig.agentGatewayUrl });
+    const identity: GatewayMuxIdentity = { gatewayUrl: serverConfig.agentGatewayUrl };
+    if (isGatewayMuxUnavailable(identity)) return;
+
+    const mux = this.resolveGatewayMux(identity);
     this.#attachGatewayFeed(mux);
+    this.#attachMuxFallback(mux, identity);
     mux.connect().catch(() => {
       // The mux keeps retrying with backoff; failures surface on its own
       // `error` / `reconnecting` listeners.
@@ -1712,6 +1836,7 @@ export class GatewayActionImpl {
   };
 
   private internal_cleanupGatewayConnection = (operationId: string): void => {
+    this.#muxFallbacks.delete(operationId);
     this.#set(
       (state) => {
         const { [operationId]: _, ...rest } = state.gatewayConnections;
