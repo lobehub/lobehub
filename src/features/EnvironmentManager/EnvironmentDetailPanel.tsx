@@ -157,23 +157,26 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(
               </Flexbox>
             )}
 
-            <PanelSection
-              desc={t('environments.instances.desc')}
-              icon={LayersIcon}
-              last={!canEdit}
-              title={t('environments.instances.title')}
-            >
-              <InstanceSection
-                adding={adding}
-                editable={canEdit}
-                environmentId={environment.id}
-                onAddingChange={onAddingChange}
-                onBrowse={setBrowsing}
-              />
-            </PanelSection>
+            {/* One column with no gap: the rail is drawn by each section and
+                meets the next one's icon exactly, so any space between them
+                would show as a break in the line. */}
+            <Flexbox>
+              <PanelSection
+                desc={t('environments.instances.desc')}
+                icon={LayersIcon}
+                last={!canEdit}
+                title={t('environments.instances.title')}
+              >
+                <InstanceSection
+                  adding={adding}
+                  editable={canEdit}
+                  environmentId={environment.id}
+                  onAddingChange={onAddingChange}
+                  onBrowse={setBrowsing}
+                />
+              </PanelSection>
 
-            {canEdit && (
-              <Flexbox>
+              {canEdit && (
                 <EnvironmentForm
                   environment={environment}
                   onSave={({ configuration, description, name }) =>
@@ -185,8 +188,8 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(
                     })
                   }
                 />
-              </Flexbox>
-            )}
+              )}
+            </Flexbox>
           </>
         )}
       </Flexbox>
