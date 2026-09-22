@@ -24,6 +24,7 @@ import {
   RedisKeys,
 } from '@/libs/redis';
 import { getServerDefaultAgentConfig } from '@/server/globalConfig';
+import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 
 import { type UpdateAgentResult } from './type';
 
@@ -93,16 +94,31 @@ export class AgentService {
     action: (service: AgentService, shares: AgentShareModel) => Promise<T>,
   ): Promise<T> {
     if (!AGENT_SHARE_ALLOWED_PROVIDERS) {
-      return action(this, new AgentShareModel(this.db, this.userId));
+      return action(this, new AgentShareModel(this.db, this.userId, this.workspaceId));
     }
     return this.db.transaction(async (transaction) => {
       const tx = transaction as LobeChatDatabase;
-      if (!(await AgentShareModel.lockOwnedAgentRow(tx, agentId, this.userId))) {
+      if (
+        !(await AgentShareModel.lockScopedAgentRow(tx, agentId, {
+          userId: this.userId,
+          workspaceId: this.workspaceId,
+        }))
+      ) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
+      }
+      if (this.workspaceId) {
+        await assertCanPerformResourceAction({
+          action: 'manage',
+          db: tx,
+          resourceId: agentId,
+          resourceType: 'agent',
+          userId: this.userId,
+          workspaceId: this.workspaceId,
+        });
       }
       return action(
         new AgentService(tx, this.userId, this.workspaceId),
-        new AgentShareModel(tx, this.userId),
+        new AgentShareModel(tx, this.userId, this.workspaceId),
       );
     });
   }
@@ -336,7 +352,9 @@ export class AgentService {
     value: PartialDeep<AgentItem>,
   ): Promise<UpdateAgentResult> {
     if (AGENT_SHARE_ALLOWED_PROVIDERS && ('model' in value || 'provider' in value)) {
-      const share = await new AgentShareModel(this.db, this.userId).getByAgentId(agentId);
+      const share = await new AgentShareModel(this.db, this.userId, this.workspaceId).getByAgentId(
+        agentId,
+      );
       if (share?.visibility === 'link') {
         const selection = await this.assertShareModelAllowed(agentId, value);
         value = { ...value, ...selection };

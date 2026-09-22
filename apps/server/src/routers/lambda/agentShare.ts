@@ -91,7 +91,7 @@ const agentShareProcedure = wsCompatProcedure.use(serverDatabase).use(async (opt
 
   return opts.next({
     ctx: {
-      agentService: new AgentService(ctx.serverDB, ctx.userId),
+      agentService: new AgentService(ctx.serverDB, ctx.userId, workspaceId),
       agentShareModel: new AgentShareModel(ctx.serverDB, ctx.userId, workspaceId, {
         authorizeMutation: workspaceId
           ? (db, agentId) =>

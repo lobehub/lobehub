@@ -10,8 +10,13 @@ import { UserModel } from '@/database/models/user';
 import type * as RedisModule from '@/libs/redis';
 import { initializeRedisWithPrefix, isRedisEnabled, RedisKeys } from '@/libs/redis';
 import { parseAgentConfig } from '@/server/globalConfig/parseDefaultAgent';
+import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 
 import { AgentService } from './index';
+
+vi.mock('@/server/services/resourcePermission', () => ({
+  assertCanPerformResourceAction: vi.fn(),
+}));
 
 vi.mock('@/business/agent-share', () => ({
   AGENT_SHARE_ALLOWED_PROVIDERS: ['lobehub'],
@@ -39,7 +44,7 @@ vi.mock('@/database/models/agent', () => ({
 }));
 
 vi.mock('@/database/models/agentShare', () => ({
-  AgentShareModel: Object.assign(vi.fn(), { lockOwnedAgentRow: vi.fn() }),
+  AgentShareModel: Object.assign(vi.fn(), { lockScopedAgentRow: vi.fn() }),
 }));
 
 vi.mock('@/database/models/user', () => ({
@@ -843,7 +848,11 @@ describe('AgentService', () => {
       agent = { ...storedAgent };
       visibility = 'link';
       mockDb.transaction = vi.fn(async (action) => action(mockDb));
-      vi.mocked(AgentShareModel.lockOwnedAgentRow).mockResolvedValue({ id: 'agent-1', slug: null });
+      vi.mocked(AgentShareModel.lockScopedAgentRow).mockResolvedValue({
+        id: 'agent-1',
+        slug: null,
+        workspaceId: null,
+      });
       mockUserModel.getUserSettingsDefaultAgentConfig.mockResolvedValue({});
       vi.mocked(parseAgentConfig).mockReturnValue({ provider: 'lobehub' });
       vi.mocked(AgentModel).mockImplementation(function () {
@@ -861,11 +870,29 @@ describe('AgentService', () => {
       service = new AgentService(mockDb, mockUserId);
     });
 
+    it('preserves workspace scope and rechecks management permission under the lock', async () => {
+      const workspaceService = new AgentService(mockDb, mockUserId, 'workspace-1');
+      await workspaceService.withShareModelLock('agent-1', async () => undefined);
+      expect(AgentShareModel.lockScopedAgentRow).toHaveBeenCalledWith(mockDb, 'agent-1', {
+        userId: mockUserId,
+        workspaceId: 'workspace-1',
+      });
+      expect(assertCanPerformResourceAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'manage',
+          db: mockDb,
+          resourceId: 'agent-1',
+          workspaceId: 'workspace-1',
+        }),
+      );
+      expect(AgentShareModel).toHaveBeenCalledWith(mockDb, mockUserId, 'workspace-1');
+    });
+
     it('rechecks visibility after acquiring the publication lock', async () => {
       visibility = 'private';
-      vi.mocked(AgentShareModel.lockOwnedAgentRow).mockImplementationOnce(async () => {
+      vi.mocked(AgentShareModel.lockScopedAgentRow).mockImplementationOnce(async () => {
         visibility = 'link';
-        return { id: 'agent-1', slug: null };
+        return { id: 'agent-1', slug: null, workspaceId: null };
       });
       await expect(
         service.updateAgentConfig('agent-1', { provider: 'openai' }),
@@ -874,9 +901,9 @@ describe('AgentService', () => {
     });
 
     it('validates the provider after an earlier configuration writer releases the lock', async () => {
-      vi.mocked(AgentShareModel.lockOwnedAgentRow).mockImplementationOnce(async () => {
+      vi.mocked(AgentShareModel.lockScopedAgentRow).mockImplementationOnce(async () => {
         agent.provider = 'openai';
-        return { id: 'agent-1', slug: null };
+        return { id: 'agent-1', slug: null, workspaceId: null };
       });
       const publish = vi.fn();
       await expect(
