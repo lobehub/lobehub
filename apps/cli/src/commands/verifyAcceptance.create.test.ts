@@ -38,7 +38,7 @@ beforeEach(() => {
     },
     verify: { createRun: { mutate: createRun } },
   } as unknown as Awaited<ReturnType<typeof getTrpcClient>>);
-  ensure.mockImplementation(async (input) => ({ ...input, id: acceptanceId, status: 'open' }));
+  ensure.mockImplementation(async (input) => ({ ...input, id: acceptanceId, status: 'pending' }));
 });
 
 afterEach(() => {
@@ -62,7 +62,7 @@ describe('acceptance create', () => {
       acceptanceId,
       acceptanceUrl,
       requirement,
-      status: 'open',
+      status: 'pending',
       subject,
     });
     expect(jsonOutput()).not.toHaveProperty('verifyRunId');
