@@ -243,6 +243,8 @@ export interface HeterogeneousAgentExecutorParams {
   replayTranscript?: boolean;
   /** Claude profile root the interrupted run's transcript was written under. */
   replayTranscriptConfigDir?: string;
+  /** ISO spawn time of the interrupted run; pins the replay to that run's own turn. */
+  replayTranscriptStartedAt?: string;
   /** CC session ID from previous execution in this topic (for --resume) */
   resumeBindingKey?: string;
   resumeSessionId?: string;
@@ -502,6 +504,7 @@ export const executeHeterogeneousAgent = async (
     pageSelections,
     replayTranscript,
     replayTranscriptConfigDir,
+    replayTranscriptStartedAt,
     resumeBindingKey,
     resumeSessionId,
     workingDirectory,
@@ -2597,7 +2600,9 @@ export const executeHeterogeneousAgent = async (
       // `/goal` travels as system-context instructions; the CLI gets only the
       // request so its own `/goal` command does not take the message over.
       prompt: stripGoalCommand(message),
-      ...(replayTranscript ? { replayTranscript: true, replayTranscriptConfigDir } : {}),
+      ...(replayTranscript
+        ? { replayTranscript: true, replayTranscriptConfigDir, replayTranscriptStartedAt }
+        : {}),
       ...(resumeReplayMessages?.length ? { resumeReplayMessages } : {}),
       sessionId: ipcRunSessionId,
       systemContext: systemContext || undefined,

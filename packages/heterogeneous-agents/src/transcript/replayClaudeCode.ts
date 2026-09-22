@@ -36,6 +36,12 @@ export interface ClaudeCodeReplayTurn {
   lines: string[];
   /** Text of the user prompt that opened the turn (for diagnostics / matching). */
   promptText: string;
+  /**
+   * ISO time the CLI appended that prompt record. Written by the CLI on this
+   * machine, so it shares a clock with the ledger's `startedAt` — the durable
+   * half of {@link claudeCodeReplayTurnMatchesPrompt}.
+   */
+  promptTimestamp?: string;
   /** Transcript record uuid of that prompt. */
   promptUuid: string;
   /** Number of assistant / tool_result records replayed. */
@@ -116,17 +122,27 @@ const normalizePrompt = (value: string): string => value.replaceAll(/\s+/g, ' ')
  * A resumed session keeps one transcript across turns, so a restart that lands
  * before the CLI appended the new prompt leaves the PREVIOUS completed turn as
  * the last one on disk. Replaying that under the new prompt would silently
- * rewrite the conversation, so the turn has to be matched to the prompt the
- * interrupted run was given.
+ * rewrite the conversation, so the turn has to be pinned to the run.
  *
- * Containment rather than equality: what the CLI recorded may carry an
- * injected preamble or drop a slash command, and a false mismatch only costs
- * the replay — a false match corrupts the topic.
+ * Two gates, and the first is the one that holds:
+ * - `notBefore`: the CLI cannot have recorded this run's prompt before the run
+ *   was spawned, so a turn older than the spawn is somebody else's. Both times
+ *   are written on this machine (the ledger by Electron main, the record by the
+ *   CLI), so the comparison stays inside one clock.
+ * - text: containment rather than equality, because what the CLI recorded may
+ *   carry an injected preamble or drop a slash command. On its own it accepts
+ *   an adjacent prompt (`continue` against a recorded `continue fixing tests`),
+ *   which is exactly what the timestamp gate rules out.
  */
 export const claudeCodeReplayTurnMatchesPrompt = (
   turn: ClaudeCodeReplayTurn,
   expectedPrompt: string | undefined,
+  notBefore?: string,
 ): boolean => {
+  const floor = notBefore ? Date.parse(notBefore) : Number.NaN;
+  const recordedAt = turn.promptTimestamp ? Date.parse(turn.promptTimestamp) : Number.NaN;
+  if (Number.isFinite(floor) && Number.isFinite(recordedAt) && recordedAt < floor) return false;
+
   const expected = normalizePrompt(expectedPrompt ?? '');
   const recorded = normalizePrompt(turn.promptText);
   // Nothing to compare against — the caller did not pin a prompt.
@@ -290,6 +306,7 @@ export const buildClaudeCodeReplayTurn = (content: string): ClaudeCodeReplayTurn
     complete,
     lines,
     promptText: textOfContent(prompt.message?.content),
+    promptTimestamp: typeof prompt.timestamp === 'string' ? prompt.timestamp : undefined,
     promptUuid: prompt.uuid,
     recordCount,
     sessionId,

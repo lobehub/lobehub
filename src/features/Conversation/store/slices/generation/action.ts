@@ -246,6 +246,8 @@ export const runHeterogeneousFromExistingMessage = async (
     replayTranscript?: boolean;
     /** Claude profile root the interrupted run's transcript was written under. */
     replayTranscriptConfigDir?: string;
+    /** ISO spawn time of the interrupted run; pins the replay to that run's own turn. */
+    replayTranscriptStartedAt?: string;
     /** Topic row when the caller already holds it (not necessarily in the paginated store). */
     topic?: ChatTopic;
   },
@@ -264,6 +266,7 @@ export const runHeterogeneousFromExistingMessage = async (
     prompt,
     replayTranscript,
     replayTranscriptConfigDir,
+    replayTranscriptStartedAt,
     topic: topicOverride,
   } = params;
   const agentId = context.agentId;
@@ -327,7 +330,9 @@ export const runHeterogeneousFromExistingMessage = async (
     imageList: imageList?.length ? imageList : undefined,
     message: prompt,
     operationId: heteroOpId,
-    ...(replayTranscript ? { replayTranscript: true, replayTranscriptConfigDir } : {}),
+    ...(replayTranscript
+      ? { replayTranscript: true, replayTranscriptConfigDir, replayTranscriptStartedAt }
+      : {}),
     resumeBindingKey,
     resumeSessionId,
     workingDirectory,

@@ -362,6 +362,12 @@ interface SendPromptParams {
    */
   replayTranscriptConfigDir?: string;
   /**
+   * ISO spawn time of the interrupted run whose transcript is being replayed.
+   * Pins the replay to that run's own turn — see
+   * `claudeCodeReplayTurnMatchesPrompt`.
+   */
+  replayTranscriptStartedAt?: string;
+  /**
    * Prior conversation turns used to rebuild a Claude Code transcript that the
    * CLI garbage-collected (`cleanupPeriodDays`, default 30 days). Only consumed
    * when resuming and the on-disk transcript is missing — see
@@ -2053,6 +2059,16 @@ export default class HeterogeneousAgentCtr {
           });
         }
       },
+      onProcessSpawn: ({ args, command, pid }) => {
+        // The SDK launches a real Claude executable, so this run has an orphan
+        // to reap after a hard crash exactly like a spawned CLI does. Patched
+        // rather than recorded up front: the ledger entry is written before
+        // `run()` even starts the transport.
+        this.getInflightRuns()?.patch(session.sessionId, {
+          ...describeHeteroCliProcess(command, args),
+          pid,
+        });
+      },
       onRawMessage: (line) => this.appendCliTraceFile(traceSession, 'stdout.jsonl', line),
       onRuntimeStatus: (status) => {
         this.broadcast('heteroAgentRuntimeStatus', status);
@@ -2072,8 +2088,8 @@ export default class HeterogeneousAgentCtr {
 
     session.sdkSession = sdkSession;
     // The SDK is a Claude Code transport like any other, so a restart mid-run
-    // has to find this turn on the ledger. No pid: the session runs in-process,
-    // leaving no detached tree for recovery to reap.
+    // has to find this turn on the ledger. The CLI child it spawns is entered
+    // through `onProcessSpawn` once it exists.
     this.recordInflightRun({
       command: path.basename(commandPath),
       configDir: spawnEnv.CLAUDE_CONFIG_DIR ?? session.hostedProviderBinding?.profileDir,
@@ -3332,13 +3348,17 @@ export default class HeterogeneousAgentCtr {
 
   /**
    * Runs this machine had in flight when the previous desktop process went
-   * away, handed over exactly once — and only those belonging to the caller's
-   * workspace. Each is reaped first: a session that is
-   * still in memory (renderer reload, main survived) is stopped like a
-   * cancel, and a CLI left over from a crashed main (spawned detached, so it
-   * outlives its parent) is signalled after its command line is checked, so
-   * a recycled pid never gets an unrelated process killed. The caller replays
-   * the on-disk transcript and resumes from there.
+   * away — only those belonging to the caller's user and workspace. Each is
+   * reaped first: a session that is still in memory (renderer reload, main
+   * survived) is stopped like a cancel, and a CLI left over from a crashed
+   * main (spawned detached, so it outlives its parent) is signalled after its
+   * command line is checked, so a recycled pid never gets an unrelated
+   * process killed. The caller replays the on-disk transcript, resumes from
+   * there, and calls {@link releaseInterruptedRun} when it is done.
+   *
+   * Entries are CLAIMED, not consumed: recovery spans several renderer steps
+   * and a crash in the middle would otherwise strand the topic with no token
+   * left to retry it. The claim count bounds the retries.
    */
   async listInterruptedRuns(params?: {
     userId?: string;
@@ -3346,44 +3366,59 @@ export default class HeterogeneousAgentCtr {
   }): Promise<HeteroInflightRun[]> {
     const registry = this.getInflightRuns();
     if (!registry) return [];
-    const runs = registry.takeAll();
     const recoverable: HeteroInflightRun[] = [];
-    for (const run of runs) {
+    for (const entry of registry.list()) {
       // Topic lookups run through the caller's user and workspace scope, so a
       // run recorded under either a different account (same Electron profile,
       // someone signed in after) or a different workspace would resolve as a
-      // missing topic. Put it back and wait for the launch that owns it — the
-      // workspace is undefined for personal space, which is why the user has
-      // to be compared too.
+      // missing topic. Leave it for the launch that owns it — the workspace is
+      // undefined for personal space, which is why the user is compared too.
       const sameOwner =
-        (run.userId ?? undefined) === (params?.userId ?? undefined) &&
-        (run.workspaceId ?? undefined) === (params?.workspaceId ?? undefined);
-      if (!sameOwner) {
-        registry.upsert(run);
-        continue;
-      }
-      // Expired entries are handed over untouched: the renderer only settles
-      // their topic, and there is nothing left of the process to reap.
-      if (run.expired) {
-        recoverable.push(run);
-        continue;
-      }
+        (entry.userId ?? undefined) === (params?.userId ?? undefined) &&
+        (entry.workspaceId ?? undefined) === (params?.workspaceId ?? undefined);
+      if (!sameOwner) continue;
+
+      const run = registry.claim(entry);
       let safe = false;
       try {
         safe = await this.reapInterruptedRun(run);
       } catch (error) {
         logger.warn('Failed to reap interrupted run:', { error, ipcSessionId: run.ipcSessionId });
       }
-      if (safe) {
+
+      // An expired run is handed over for a status-only cleanup, but age only
+      // makes its transcript stale — it says nothing about the process. An
+      // orphan hung in a long-running tool is still reaped above; when even
+      // that cannot be confirmed, the topic is released anyway rather than
+      // left spinning, since the entry itself is already spent.
+      if (run.expired) {
+        if (!safe) {
+          logger.warn('Expired run may still be alive; settling its topic anyway:', {
+            ipcSessionId: run.ipcSessionId,
+            pid: run.pid,
+          });
+        }
         recoverable.push(run);
         continue;
       }
+
       // Safety could not be established (identity unreadable, the tree outlived
-      // SIGKILL, the reap threw). `takeAll` already emptied the file, so put the
-      // entry back or this run loses its only recovery token for good.
-      registry.upsert(run);
+      // SIGKILL, the reap threw). Withhold the run: replaying or resuming next
+      // to a live writer is worse than waiting. The claim stays on the entry,
+      // so the next launch tries again.
+      if (!safe) continue;
+      recoverable.push(run);
     }
     return recoverable;
+  }
+
+  /**
+   * Drop a claimed run from the ledger. The renderer owns this call: recovery
+   * is only over once the topic has been replayed, resumed or settled, and
+   * until then the entry has to survive another crash.
+   */
+  async releaseInterruptedRun(params: { ipcSessionId: string }): Promise<void> {
+    this.getInflightRuns()?.release(params.ipcSessionId);
   }
 
   /**
@@ -3457,6 +3492,8 @@ export default class HeterogeneousAgentCtr {
     cwd: string;
     /** Prompt the interrupted run was given — see claudeCodeReplayTurnMatchesPrompt. */
     expectedPrompt?: string;
+    /** ISO spawn time of the interrupted run; an older turn on disk is not it. */
+    notBefore?: string;
     sessionId: string;
   }): Promise<ReturnType<typeof buildClaudeCodeReplayTurn>> {
     const filePath = await resolveClaudeCodeTranscriptPath(params);
@@ -3474,8 +3511,9 @@ export default class HeterogeneousAgentCtr {
     // A resumed session shares one transcript across turns, so a restart that
     // lands before the CLI recorded the new prompt leaves the PREVIOUS turn as
     // the last one. Replaying that under the new prompt would rewrite the
-    // conversation and report success.
-    if (!claudeCodeReplayTurnMatchesPrompt(turn, params.expectedPrompt)) {
+    // conversation and report success. The spawn time settles it: the CLI
+    // cannot have written this run's prompt before the run existed.
+    if (!claudeCodeReplayTurnMatchesPrompt(turn, params.expectedPrompt, params.notBefore)) {
       throw new Error(
         `Claude Code transcript ${params.sessionId} last turn does not match the interrupted prompt`,
       );
@@ -3494,6 +3532,8 @@ export default class HeterogeneousAgentCtr {
     cwd?: string;
     /** Prompt of the interrupted run; a transcript whose last turn is a different one is rejected. */
     expectedPrompt?: string;
+    /** ISO spawn time of the interrupted run; a turn recorded before it is not this run's. */
+    notBefore?: string;
     sessionId?: string;
   }): Promise<HeteroTranscriptReplayProbe> {
     if (params.agentType !== 'claude-code') {
@@ -3507,6 +3547,7 @@ export default class HeterogeneousAgentCtr {
         configDir: params.configDir,
         cwd: params.cwd,
         expectedPrompt: params.expectedPrompt,
+        notBefore: params.notBefore,
         sessionId: params.sessionId,
       });
       return { available: true, complete: turn!.complete };
@@ -3542,6 +3583,7 @@ export default class HeterogeneousAgentCtr {
       cwd: session.cwd,
       // The prompt this run was given — re-checked here, not just at probe time.
       expectedPrompt: params.prompt,
+      notBefore: params.replayTranscriptStartedAt,
       sessionId: session.agentSessionId,
     }))!;
 

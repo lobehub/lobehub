@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   HETERO_INFLIGHT_RUN_MAX_AGE_MS,
+  HETERO_INFLIGHT_RUN_MAX_CLAIMS,
   type HeteroInflightRun,
   HeteroInflightRunRegistry,
 } from './inflightRunRegistry';
@@ -36,7 +37,6 @@ describe('HeteroInflightRunRegistry', () => {
 
   it('starts empty when the file does not exist', () => {
     expect(registry.list()).toEqual([]);
-    expect(registry.takeAll()).toEqual([]);
   });
 
   it('persists upserts across instances and creates parent directories', () => {
@@ -68,7 +68,38 @@ describe('HeteroInflightRunRegistry', () => {
     expect(registry.list().map((r) => r.ipcSessionId)).toEqual(['s2']);
   });
 
-  it('takeAll flags stale runs instead of dropping them', () => {
+  it('keeps a claimed run on the ledger until it is released', () => {
+    registry.upsert(run('s1'));
+
+    // The renderer still has to reap, replay and settle; a crash before that
+    // would otherwise leave the topic with no token to retry it.
+    const claimed = registry.claim(run('s1'));
+    expect(claimed.claimCount).toBe(1);
+    expect(claimed.expired).toBeUndefined();
+    expect(registry.list()).toEqual([
+      expect.objectContaining({ claimCount: 1, ipcSessionId: 's1' }),
+    ]);
+
+    registry.release('s1');
+    expect(registry.list()).toEqual([]);
+  });
+
+  it('spends a run that keeps being claimed without ever being released', () => {
+    registry.upsert(run('s1'));
+
+    let entry = registry.list()[0];
+    for (let index = 1; index < HETERO_INFLIGHT_RUN_MAX_CLAIMS; index++) {
+      entry = registry.claim(entry);
+      expect(entry.expired).toBeUndefined();
+      entry = registry.list()[0];
+    }
+
+    // The last handover is status-only cleanup, and the entry goes with it.
+    expect(registry.claim(entry)).toMatchObject({ expired: true });
+    expect(registry.list()).toEqual([]);
+  });
+
+  it('claim flags stale runs and drops them, leaving fresh ones in place', () => {
     const now = Date.parse('2026-09-21T10:00:00.000Z');
     registry.upsert(run('fresh'));
     registry.upsert(
@@ -80,14 +111,13 @@ describe('HeteroInflightRunRegistry', () => {
 
     // An expired entry still comes back: its topic may be parked mid-run and
     // the stale-topic watchdog only ever looks at `running`.
-    const taken = registry.takeAll(now);
-    expect(taken.map((r) => [r.ipcSessionId, r.expired ?? false])).toEqual([
+    const claimed = registry.list().map((entry) => registry.claim(entry, now));
+    expect(claimed.map((r) => [r.ipcSessionId, r.expired ?? false])).toEqual([
       ['fresh', false],
       ['stale', true],
       ['broken', true],
     ]);
-    expect(registry.list()).toEqual([]);
-    expect(registry.takeAll(now)).toEqual([]);
+    expect(registry.list().map((r) => r.ipcSessionId)).toEqual(['fresh']);
   });
 
   it('treats an unreadable file as empty instead of throwing', () => {

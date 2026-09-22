@@ -152,24 +152,51 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
   // would clobber a live run even though no rows get deleted.
   const allMessages = await messageService.getMessages(context);
   const mainChain = mainChainOf(allMessages);
-  const userTurn = mainChain.findLast((message) => message.role === 'user');
 
-  // A newer user turn postdates our spawn: that turn is not ours.
-  const startedAt = run.startedAt ? Date.parse(run.startedAt) : Number.NaN;
-  if (userTurn && Number.isFinite(startedAt) && toTime(userTurn.createdAt) > startedAt) {
-    return { outcome: 'skipped', reason: 'topic-taken-over', topicId };
+  // The run's own assistant row, when it lived long enough to persist one.
+  // Ownership is then decided between rows that all carry the SAME clock (the
+  // database's): comparing a server timestamp against the local spawn time
+  // would read this topic's own user turn as a takeover on a desktop whose
+  // clock runs behind the server.
+  const ownRoot = run.assistantMessageId
+    ? mainChain.find((message) => message.id === run.assistantMessageId)
+    : undefined;
+  const ownBranch = ownRoot ? new Set(collectBranch(mainChain, ownRoot.id)) : undefined;
+
+  // Prefer the user row our own branch hangs off; only a run that never got a
+  // row of its own has to guess at the topic's last turn.
+  const ownUserTurn = ownRoot
+    ? mainChain.find((message) => message.id === ownRoot.parentId && message.role === 'user')
+    : undefined;
+  const userTurn = ownUserTurn ?? mainChain.findLast((message) => message.role === 'user');
+
+  if (ownBranch) {
+    // Rows are ordered by one clock, so the newest row on the main chain says
+    // it all: anything outside our branch means the topic moved on without us.
+    const newest = mainChain.at(-1);
+    if (newest && !ownBranch.has(newest.id)) {
+      return { outcome: 'skipped', reason: 'topic-taken-over', topicId };
+    }
+  } else {
+    // Nothing of ours on the topic to anchor against. The spawn time is all
+    // that is left — a cross-clock comparison, so it is only trusted to spot a
+    // user turn that clearly postdates the run.
+    const startedAt = run.startedAt ? Date.parse(run.startedAt) : Number.NaN;
+    if (userTurn && Number.isFinite(startedAt) && toTime(userTurn.createdAt) > startedAt) {
+      return { outcome: 'skipped', reason: 'topic-taken-over', topicId };
+    }
   }
 
-  // A regeneration hangs a NEW assistant branch off the SAME user row, so the
-  // timestamp above cannot see it. The newest branch under that row has to be
-  // the one we recorded.
+  // A regeneration hangs a NEW assistant branch off the SAME user row. When the
+  // row we recorded is gone but another branch stands in its place, that branch
+  // is somebody else's answer.
   const branchRoots = userTurn
     ? mainChain
         .filter((message) => message.parentId === userTurn.id && message.role !== 'user')
         .sort((a, b) => toTime(a.createdAt) - toTime(b.createdAt))
     : [];
   const newestRoot = branchRoots.at(-1);
-  if (run.assistantMessageId && newestRoot && newestRoot.id !== run.assistantMessageId) {
+  if (run.assistantMessageId && !ownRoot && newestRoot) {
     return { outcome: 'skipped', reason: 'topic-taken-over', topicId };
   }
 
@@ -186,9 +213,9 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
     return { outcome: 'skipped', reason: 'unsupported-run', topicId };
   }
 
-  // Every failure from here on has to put the topic down: `listInterruptedRuns`
-  // already consumed the ledger entry, so nothing will retry this run and the
-  // topic would otherwise spin until the two-hour stale watchdog notices.
+  // Every failure from here on has to put the topic down: returning a result
+  // releases the ledger entry, so nothing will retry this run and the topic
+  // would otherwise spin until the two-hour stale watchdog notices.
   let operationId: string | undefined;
   try {
     await ensureAgentLoaded(agentId);
@@ -253,6 +280,9 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
       // still be the PREVIOUS one when the restart beat the CLI to recording
       // this prompt. Replaying that would rewrite the conversation.
       expectedPrompt: userTurn.content,
+      // The CLI cannot have recorded this run's prompt before the run existed,
+      // which is what tells two adjacent prompts apart when their text does not.
+      notBefore: run.startedAt,
       sessionId: resumeSessionId,
     });
     if (!probe.available) {
@@ -264,10 +294,7 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
     // transcript holds in full — replace it rather than try to stitch. Scoped
     // to the run's own branch: earlier completed answers under the same user
     // row are somebody's history, not this run's leftovers.
-    const branchRootId =
-      (run.assistantMessageId && mainChain.some((m) => m.id === run.assistantMessageId)
-        ? run.assistantMessageId
-        : newestRoot?.id) ?? undefined;
+    const branchRootId = ownRoot?.id ?? newestRoot?.id;
     const staleIds = branchRootId ? collectBranch(mainChain, branchRootId) : [];
     if (staleIds.length > 0) await messageService.removeMessages(staleIds, context);
 
@@ -296,6 +323,7 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
       // The transcript sits under the profile the interrupted run used, which
       // this turn's own account routing may no longer resolve to.
       replayTranscriptConfigDir: run.configDir,
+      replayTranscriptStartedAt: run.startedAt,
       topic: topic as ChatTopic,
     });
 
@@ -372,14 +400,29 @@ export const recoverInterruptedHeteroRuns = async (): Promise<RestartRecoveryRes
   const byTopic = new Map<string, InterruptedRun>();
   const unkeyed: InterruptedRun[] = [];
   for (const run of runs) {
-    if (run.topicId) byTopic.set(run.topicId, run);
-    else unkeyed.push(run);
+    if (!run.topicId) {
+      unkeyed.push(run);
+      continue;
+    }
+    const superseded = byTopic.get(run.topicId);
+    byTopic.set(run.topicId, run);
+    // The newer entry recovers this topic, so the one it replaces is spent —
+    // left claimed, it would be retried at every launch until it runs out.
+    if (superseded) {
+      await heterogeneousAgentService
+        .releaseInterruptedRun(superseded.ipcSessionId)
+        .catch(() => {});
+    }
   }
 
   const results: RestartRecoveryResult[] = [];
   for (const run of [...byTopic.values(), ...unkeyed]) {
     try {
       results.push(await recoverRun(run));
+      // Recovery reached an outcome, so the ledger entry has done its job.
+      // It is only released here: main hands entries over as CLAIMS, which is
+      // what lets a crash in the middle of all this be retried at next launch.
+      await heterogeneousAgentService.releaseInterruptedRun(run.ipcSessionId).catch(() => {});
     } catch (error) {
       console.error('[restartRecovery] recovery failed:', run.topicId, error);
       results.push({

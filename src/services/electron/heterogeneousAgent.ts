@@ -54,6 +54,7 @@ class HeterogeneousAgentService {
     replayTranscript?: boolean;
     /** Claude profile root the transcript was written under (restart recovery). */
     replayTranscriptConfigDir?: string;
+    replayTranscriptStartedAt?: string;
     /** Prior turns used to rebuild a GC-ed Claude Code transcript before `--resume`. */
     resumeReplayMessages?: HeteroSessionImportMessage[];
     sessionId: string;
@@ -89,6 +90,14 @@ class HeterogeneousAgentService {
     return this.ipc.heterogeneousAgent.listInterruptedRuns(owner);
   }
 
+  /**
+   * Give a claimed run back once its recovery has an outcome. Until this call
+   * the entry stays on the ledger, so a crash mid-recovery can retry it.
+   */
+  async releaseInterruptedRun(ipcSessionId: string) {
+    return this.ipc.heterogeneousAgent.releaseInterruptedRun({ ipcSessionId });
+  }
+
   /** Whether the on-disk CLI transcript for a run can be replayed, without spawning anything. */
   async probeTranscriptReplay(params: {
     agentType: string;
@@ -96,6 +105,8 @@ class HeterogeneousAgentService {
     cwd?: string;
     /** Prompt of the interrupted run; a transcript ending on a different turn is rejected. */
     expectedPrompt?: string;
+    /** ISO spawn time of the interrupted run; a turn recorded before it is not this run's. */
+    notBefore?: string;
     sessionId?: string;
   }): Promise<{ available: boolean; complete?: boolean; reason?: string }> {
     return this.ipc.heterogeneousAgent.probeTranscriptReplay(params);

@@ -365,4 +365,24 @@ describe('claudeCodeReplayTurnMatchesPrompt', () => {
   it('does not gate when the caller pinned no prompt', () => {
     expect(claudeCodeReplayTurnMatchesPrompt(turn, undefined)).toBe(true);
   });
+
+  it('surfaces the time the CLI recorded the prompt', () => {
+    expect(turn.promptTimestamp).toBe('2026-09-21T02:00:00.000Z');
+  });
+
+  it('rejects an older turn whose text merely contains the new prompt', () => {
+    // The dangerous case text matching cannot see: a follow-up (`second`) the
+    // CLI never got to record, next to a finished turn (`second request`) that
+    // contains it. The run was spawned after that turn was written, so it
+    // cannot be the one it answers.
+    expect(claudeCodeReplayTurnMatchesPrompt(turn, 'second', '2026-09-21T02:00:30.000Z')).toBe(
+      false,
+    );
+  });
+
+  it('accepts the turn the CLI recorded after the run was spawned', () => {
+    expect(
+      claudeCodeReplayTurnMatchesPrompt(turn, 'second request', '2026-09-21T01:59:59.000Z'),
+    ).toBe(true);
+  });
 });

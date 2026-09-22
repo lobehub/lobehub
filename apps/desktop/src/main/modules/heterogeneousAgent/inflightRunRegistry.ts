@@ -23,6 +23,12 @@ export interface HeteroInflightRun {
    * user row, and recovery must not touch the others.
    */
   assistantMessageId?: string;
+  /**
+   * How many launches have taken this entry for recovery. The entry survives
+   * a handover (see {@link HeteroInflightRunRegistry.claim}), so this is what
+   * stops a recovery that keeps dying from being retried forever.
+   */
+  claimCount?: number;
   /** Basename of the spawned executable (e.g. `claude`), used to verify a pid before signalling it. */
   command?: string;
   /**
@@ -33,9 +39,10 @@ export interface HeteroInflightRun {
   configDir?: string;
   cwd?: string;
   /**
-   * Set on read when the entry is past {@link HETERO_INFLIGHT_RUN_MAX_AGE_MS}.
-   * Too old to replay, but its topic may still be parked mid-run, so the entry
-   * is handed over for a status-only cleanup instead of being dropped.
+   * Set on {@link HeteroInflightRunRegistry.claim} when the entry is past
+   * {@link HETERO_INFLIGHT_RUN_MAX_AGE_MS} or out of claims. Not replayable
+   * any more, but its topic may still be parked mid-run, so the entry is
+   * handed over for a status-only cleanup instead of being dropped silently.
    */
   expired?: boolean;
   /** Desktop IPC session id (`AgentSession.sessionId`). */
@@ -64,8 +71,15 @@ export interface HeteroInflightRun {
   workspaceId?: string;
 }
 
-/** Runs older than this are dropped on read — their context is stale, not resumable. */
+/** Runs older than this are no longer replayed — their transcript is stale. */
 export const HETERO_INFLIGHT_RUN_MAX_AGE_MS = 48 * 60 * 60 * 1000;
+
+/**
+ * Handovers one entry gets before it is spent. A recovery that dies mid-way
+ * has to be retryable, but an entry that kills every launch it is handed to
+ * must not come back a fourth time.
+ */
+export const HETERO_INFLIGHT_RUN_MAX_CLAIMS = 3;
 
 /**
  * Crash-safe ledger of in-flight local CLI runs, kept as a small JSON file
@@ -120,23 +134,39 @@ export class HeteroInflightRunRegistry {
   }
 
   /**
-   * Hand every recorded run to the caller and clear the file, so a recovery
-   * that itself dies cannot loop on the same entries at every launch.
+   * Hand one run to a recovery attempt.
    *
-   * Entries past {@link HETERO_INFLIGHT_RUN_MAX_AGE_MS} come back flagged
-   * `expired` rather than dropped: their transcript is too old to replay, but
-   * the topic they left parked (`running`, or `waitingForHuman` on a question
-   * nobody can answer any more) still needs someone to put it down.
+   * The entry STAYS in the file: the renderer still has to reap, probe,
+   * replay and settle, and if it dies (or the whole app crashes again) part
+   * way through, this entry is the only token that can pick the topic back
+   * up. {@link release} removes it once recovery has reached an outcome.
+   *
+   * The returned view is flagged `expired` when the entry is past
+   * {@link HETERO_INFLIGHT_RUN_MAX_AGE_MS} or has used up its claims: too old
+   * (or too dangerous) to replay, but the topic it left parked still needs a
+   * status-only cleanup, and that last handover removes it right away so it
+   * cannot be retried again.
    */
-  takeAll(now: number = Date.now()): HeteroInflightRun[] {
-    const runs = this.list();
-    if (runs.length === 0) return [];
-    this.write([]);
-    return runs.map((run) => {
-      const startedAt = Date.parse(run.startedAt);
-      const fresh = Number.isFinite(startedAt) && now - startedAt <= HETERO_INFLIGHT_RUN_MAX_AGE_MS;
-      return fresh ? run : { ...run, expired: true };
-    });
+  claim(run: HeteroInflightRun, now: number = Date.now()): HeteroInflightRun {
+    const claimCount = (run.claimCount ?? 0) + 1;
+    const startedAt = Date.parse(run.startedAt);
+    const tooOld = !Number.isFinite(startedAt) || now - startedAt > HETERO_INFLIGHT_RUN_MAX_AGE_MS;
+    const spent = claimCount >= HETERO_INFLIGHT_RUN_MAX_CLAIMS;
+
+    if (tooOld || spent) {
+      this.remove(run.ipcSessionId);
+      return { ...run, claimCount, expired: true };
+    }
+    this.patch(run.ipcSessionId, { claimCount });
+    return { ...run, claimCount };
+  }
+
+  /**
+   * Drop an entry whose recovery has reached an outcome. Called by the
+   * renderer, which is the only side that knows the topic was settled.
+   */
+  release(ipcSessionId: string): void {
+    this.remove(ipcSessionId);
   }
 
   private write(runs: HeteroInflightRun[]): void {

@@ -5,10 +5,12 @@ import { recoverInterruptedHeteroRuns } from './recoverInterruptedRuns';
 
 const mockListInterruptedRuns = vi.fn();
 const mockProbeTranscriptReplay = vi.fn();
+const mockReleaseInterruptedRun = vi.fn(async (..._args: unknown[]) => {});
 vi.mock('@/services/electron/heterogeneousAgent', () => ({
   heterogeneousAgentService: {
     listInterruptedRuns: (...args: unknown[]) => mockListInterruptedRuns(...args),
     probeTranscriptReplay: (...args: unknown[]) => mockProbeTranscriptReplay(...args),
+    releaseInterruptedRun: (...args: unknown[]) => mockReleaseInterruptedRun(...args),
   },
 }));
 
@@ -164,6 +166,7 @@ describe('recoverInterruptedHeteroRuns', () => {
       cwd: '/repo',
       // Pins the transcript's last turn to the prompt this run was given.
       expectedPrompt: 'do the thing',
+      notBefore: run.startedAt,
       sessionId: 'cc-1',
     });
     // The probe identity comes from the resolver the run itself uses.
@@ -313,6 +316,7 @@ describe('recoverInterruptedHeteroRuns', () => {
       configDir: '/profile',
       cwd: '/repo',
       expectedPrompt: 'do the thing',
+      notBefore: run.startedAt,
       sessionId: 'cc-from-ledger',
     });
     // The run itself sees the patched topic so resume resolves from it, and the
@@ -594,5 +598,47 @@ describe('recoverInterruptedHeteroRuns', () => {
 
     expect(results).toHaveLength(1);
     expect(mockRunHetero).toHaveBeenCalledTimes(1);
+    // The superseded entry is spent too, or it would be retried every launch.
+    expect(mockReleaseInterruptedRun).toHaveBeenCalledWith('ipc-1');
+    expect(mockReleaseInterruptedRun).toHaveBeenCalledWith('ipc-later');
+  });
+
+  it('releases the ledger entry once recovery has an outcome', async () => {
+    mockRunHetero.mockResolvedValue({ assistantMessageId: 'a-new', replayComplete: true });
+
+    await recoverInterruptedHeteroRuns();
+
+    expect(mockReleaseInterruptedRun).toHaveBeenCalledWith('ipc-1');
+  });
+
+  it('keeps the ledger entry when recovery dies before reaching an outcome', async () => {
+    // Main hands entries over as claims precisely for this: the topic is still
+    // mid-run, and the entry is the only thing that can pick it up next launch.
+    mockGetTopicDetail.mockRejectedValue(new Error('renderer went away'));
+
+    const results = await recoverInterruptedHeteroRuns();
+
+    expect(results).toEqual([
+      { outcome: 'failed', reason: 'renderer went away', topicId: 'topic-1' },
+    ]);
+    expect(mockReleaseInterruptedRun).not.toHaveBeenCalled();
+  });
+
+  it('recovers its own turn when the desktop clock runs behind the database', async () => {
+    // `startedAt` is stamped by Electron main, message rows by the server. A
+    // desktop a few minutes behind would read this topic's OWN user turn as a
+    // newer takeover; the recorded assistant row settles it without a clock.
+    mockListInterruptedRuns.mockResolvedValue([
+      { ...run, assistantMessageId: 'a1', startedAt: new Date(150).toISOString() },
+    ]);
+    mockRunHetero.mockResolvedValue({ assistantMessageId: 'a-new', replayComplete: true });
+
+    const results = await recoverInterruptedHeteroRuns();
+
+    expect(results).toEqual([{ outcome: 'replayed', topicId: 'topic-1' }]);
+    expect(mockRemoveMessages).toHaveBeenCalledWith(['a1', 't1'], {
+      agentId: 'agent-1',
+      topicId: 'topic-1',
+    });
   });
 });
