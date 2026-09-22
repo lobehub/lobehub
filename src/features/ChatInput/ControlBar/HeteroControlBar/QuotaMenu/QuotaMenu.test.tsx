@@ -264,6 +264,15 @@ const liveSessionReading = (capturedAt: number) => ({
   utilization: 8,
 });
 
+/** Persisted quota can render before the initial load finishes; focus is ignored while loading. */
+const waitForQuotaIdle = async () => {
+  await waitFor(() => expect(screen.getByTestId('refresh').hasAttribute('disabled')).toBe(false));
+  // Let the focus listener's effect observe loading=false before dispatching focus.
+  await act(async () => {
+    await Promise.resolve();
+  });
+};
+
 const codexSnapshot = (
   overrides: Partial<ElectronClientIpcModule.CodexQuotaSnapshot> = {},
 ): ElectronClientIpcModule.CodexQuotaSnapshot => ({
@@ -1005,6 +1014,7 @@ describe('ClaudeCodeQuotaMenu', () => {
 
     // Fresh persisted data: nothing hits the live API on mount…
     expect(await screen.findByText('92%')).toBeTruthy();
+    await waitForQuotaIdle();
     expect(mockService.getClaudeCodeQuota).not.toHaveBeenCalled();
 
     // …but regaining focus revalidates (the main-process cache rate-limits it).
@@ -1107,6 +1117,7 @@ describe('ClaudeCodeQuotaMenu', () => {
     render(<ClaudeCodeQuotaMenu />);
 
     expect(await screen.findByText('92%')).toBeTruthy();
+    await waitForQuotaIdle();
 
     await act(async () => {
       window.dispatchEvent(new Event('focus'));
@@ -1128,6 +1139,7 @@ describe('ClaudeCodeQuotaMenu', () => {
     render(<ClaudeCodeQuotaMenu />);
 
     expect(await screen.findByText('92%')).toBeTruthy();
+    await waitForQuotaIdle();
 
     await act(async () => {
       window.dispatchEvent(new Event('focus'));
@@ -1150,6 +1162,7 @@ describe('ClaudeCodeQuotaMenu', () => {
     render(<ClaudeCodeQuotaMenu />);
 
     expect(await screen.findByText('92%')).toBeTruthy();
+    await waitForQuotaIdle();
 
     await act(async () => {
       window.dispatchEvent(new Event('focus'));
