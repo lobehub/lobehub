@@ -336,6 +336,22 @@ If you need to use Azure OpenAI to provide model services, you can refer to the 
 - Default: `-`
 - Example: `-all,+meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo,+meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo`
 
+## Token Market
+
+### `TOKENMARKET_API_KEY`
+
+- Type: Required
+- Description: The API key created in the Token Market console.
+- Default: `-`
+- Example: `sk-xxxxxx...xxxxxx`
+
+### `TOKENMARKET_MODEL_LIST`
+
+- Type: Optional
+- Description: Used to specify a custom Token Market model list. Model definition syntax rules see [model-list][model-list]
+- Default: `-`
+- Example: `-all,+gpt-5.4-mini,+claude-sonnet-5`
+
 ## Fireworks AI
 
 ### `FIREWORKSAI_API_KEY`

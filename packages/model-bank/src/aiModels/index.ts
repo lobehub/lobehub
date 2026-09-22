@@ -71,6 +71,7 @@ import { default as supergrok } from './superGrok';
 import { default as taichu } from './taichu';
 import { default as tencentcloud } from './tencentcloud';
 import { default as togetherai } from './togetherai';
+import { default as tokenmarket } from './tokenmarket';
 import { default as unsloth } from './unsloth';
 import { default as upstage } from './upstage';
 import { default as v0 } from './v0';
@@ -183,6 +184,7 @@ const staticModelMap: ModelsMap = {
   taichu,
   tencentcloud,
   togetherai,
+  tokenmarket,
   unsloth,
   upstage,
   v0,
