@@ -87,6 +87,26 @@ export class AgentService {
     return selection;
   }
 
+  /** Serialize provider changes and publication on the existing shared-agent row lock. */
+  async withShareModelLock<T>(
+    agentId: string,
+    action: (service: AgentService, shares: AgentShareModel) => Promise<T>,
+  ): Promise<T> {
+    if (!AGENT_SHARE_ALLOWED_PROVIDERS) {
+      return action(this, new AgentShareModel(this.db, this.userId));
+    }
+    return this.db.transaction(async (transaction) => {
+      const tx = transaction as LobeChatDatabase;
+      if (!(await AgentShareModel.lockOwnedAgentRow(tx, agentId, this.userId))) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
+      }
+      return action(
+        new AgentService(tx, this.userId, this.workspaceId),
+        new AgentShareModel(tx, this.userId),
+      );
+    });
+  }
+
   /** Pin inherited defaults so later account changes cannot alter a published model. */
   async prepareShareModel(agentId: string) {
     const selection = await this.assertShareModelAllowed(agentId);
@@ -298,6 +318,20 @@ export class AgentService {
    * reducing the need for separate refresh calls and improving performance.
    */
   async updateAgentConfig(
+    agentId: string,
+    value: PartialDeep<AgentItem>,
+  ): Promise<UpdateAgentResult> {
+    if (
+      AGENT_SHARE_ALLOWED_PROVIDERS &&
+      !this.workspaceId &&
+      ('model' in value || 'provider' in value)
+    ) {
+      return this.withShareModelLock(agentId, (service) => service.saveAgentConfig(agentId, value));
+    }
+    return this.saveAgentConfig(agentId, value);
+  }
+
+  private async saveAgentConfig(
     agentId: string,
     value: PartialDeep<AgentItem>,
   ): Promise<UpdateAgentResult> {

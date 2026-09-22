@@ -41,7 +41,14 @@ vi.mock('@lobechat/business-const', async () => {
 const mockAssertShareModelAllowed = vi.fn();
 vi.mock('@/server/services/agent', () => ({
   AgentService: vi.fn(function () {
-    return { prepareShareModel: mockAssertShareModelAllowed };
+    return {
+      prepareShareModel: mockAssertShareModelAllowed,
+      withShareModelLock: (_id: string, action: (service: unknown, shares: unknown) => unknown) =>
+        action(
+          { prepareShareModel: mockAssertShareModelAllowed },
+          { create: mockCreate, updateVisibility: mockUpdateVisibility },
+        ),
+    };
   }),
 }));
 

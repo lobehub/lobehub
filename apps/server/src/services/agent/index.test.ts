@@ -38,7 +38,9 @@ vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn(),
 }));
 
-vi.mock('@/database/models/agentShare', () => ({ AgentShareModel: vi.fn() }));
+vi.mock('@/database/models/agentShare', () => ({
+  AgentShareModel: Object.assign(vi.fn(), { lockOwnedAgentRow: vi.fn() }),
+}));
 
 vi.mock('@/database/models/user', () => ({
   UserModel: vi.fn(),
@@ -840,6 +842,8 @@ describe('AgentService', () => {
     beforeEach(() => {
       agent = { ...storedAgent };
       visibility = 'link';
+      mockDb.transaction = vi.fn(async (action) => action(mockDb));
+      vi.mocked(AgentShareModel.lockOwnedAgentRow).mockResolvedValue({ id: 'agent-1', slug: null });
       mockUserModel.getUserSettingsDefaultAgentConfig.mockResolvedValue({});
       vi.mocked(parseAgentConfig).mockReturnValue({ provider: 'lobehub' });
       vi.mocked(AgentModel).mockImplementation(function () {
@@ -855,6 +859,33 @@ describe('AgentService', () => {
       });
       vi.mocked(isRedisEnabled).mockReturnValue(false);
       service = new AgentService(mockDb, mockUserId);
+    });
+
+    it('rechecks visibility after acquiring the publication lock', async () => {
+      visibility = 'private';
+      vi.mocked(AgentShareModel.lockOwnedAgentRow).mockImplementationOnce(async () => {
+        visibility = 'link';
+        return { id: 'agent-1', slug: null };
+      });
+      await expect(
+        service.updateAgentConfig('agent-1', { provider: 'openai' }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      expect(agent.provider).toBe('lobehub');
+    });
+
+    it('validates the provider after an earlier configuration writer releases the lock', async () => {
+      vi.mocked(AgentShareModel.lockOwnedAgentRow).mockImplementationOnce(async () => {
+        agent.provider = 'openai';
+        return { id: 'agent-1', slug: null };
+      });
+      const publish = vi.fn();
+      await expect(
+        service.withShareModelLock('agent-1', async (lockedService) => {
+          await lockedService.prepareShareModel('agent-1');
+          publish();
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      expect(publish).not.toHaveBeenCalled();
     });
 
     it('rejects changing a shared agent to a third-party provider without saving it', async () => {
