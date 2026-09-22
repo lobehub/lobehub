@@ -82,6 +82,14 @@ export interface StaleToolResultTrimConfig {
    */
   minTotalToolChars?: number;
   /**
+   * Head chars kept when an old `readPage` result is trimmed. Unlike
+   * `snapshot` (interaction state that dies with the next navigation),
+   * readPage text is source material the model may quote in its final
+   * answer, so the lead of the page stays available.
+   * @default 1000
+   */
+  pageTextKeepChars?: number;
+  /**
    * Warm-cache break-even: assumed number of remaining LLM steps the current
    * turn will run. The trim fires on a warm cache only when
    * `estimate × saved × readPrice > rewriteDelta × warmSafetyMargin`.
@@ -151,7 +159,6 @@ export const cacheEconomicsForProvider = (provider?: string): CacheEconomics =>
 const READ_APIS = new Set(['readFile']);
 const WRITE_APIS = new Set(['writeFile', 'editFile']);
 const COMMAND_APIS = new Set(['runCommand', 'getCommandOutput']);
-const BROWSER_PAGE_APIS = new Set(['snapshot', 'readPage']);
 const CRAWL_APIS = new Set(['search', 'crawlSinglePage', 'crawlMultiPages']);
 
 interface PluginInfo {
@@ -278,6 +285,7 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
       enabled: config.enabled ?? true,
       keepRecentMessages: config.keepRecentMessages ?? 20,
       minTotalToolChars: config.minTotalToolChars ?? 100_000,
+      pageTextKeepChars: config.pageTextKeepChars ?? 1000,
       warmRemainingStepsEstimate: config.warmRemainingStepsEstimate ?? 20,
       warmSafetyMargin: config.warmSafetyMargin ?? 1.5,
     };
@@ -526,10 +534,25 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
       return undefined;
     }
 
-    if (identifier === BROWSER && BROWSER_PAGE_APIS.has(apiName)) {
+    if (identifier === BROWSER && apiName === 'snapshot') {
+      // Snapshots are interaction state (element refs for clicking) — they die
+      // with the next navigation and are pure dead weight afterwards.
       return {
-        content: `[browser ${apiName} result trimmed — stale page state. Take a new snapshot if you need the current page.]`,
+        content: `[browser snapshot result trimmed — stale page state. Take a new snapshot if you need the current page.]`,
         rule: 'staleBrowserPage',
+      };
+    }
+
+    if (identifier === BROWSER && apiName === 'readPage') {
+      // readPage is different: the extracted text is source material the model
+      // may quote or summarize in its final answer, not interaction state.
+      // Dropping it wholesale can lose the only copy of a source in a long
+      // research session — keep a head excerpt like the crawl rules do, so the
+      // lead (title, URL, abstract) stays quotable, and say how to re-extract.
+      if (content.length <= this.config.pageTextKeepChars) return undefined;
+      return {
+        content: `${content.slice(0, this.config.pageTextKeepChars)}\n[... trimmed ${content.length - this.config.pageTextKeepChars} chars of an earlier readPage result. Call readPage again on the page if you need the full text.]`,
+        rule: 'stalePageText',
       };
     }
 

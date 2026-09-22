@@ -111,7 +111,7 @@ describe('StaleToolResultTrimProcessor', () => {
   it('trims stale browser snapshots outside the recency window', async () => {
     const messages = [
       toolMessage('lobe-browser', 'snapshot', '- button "写作" [ref=e1]\n'.repeat(100)),
-      toolMessage('lobe-browser', 'readPage', 'page text '.repeat(100)),
+      toolMessage('lobe-browser', 'snapshot', '- button "大纲" [ref=e2]\n'.repeat(100)),
       ...recencyPadding(3),
     ];
 
@@ -120,6 +120,35 @@ describe('StaleToolResultTrimProcessor', () => {
     expect(result.messages[0].content).toContain('stale page state');
     expect(result.messages[1].content).toContain('stale page state');
     expect(result.metadata.staleToolResultTrim?.byRule).toEqual({ staleBrowserPage: 2 });
+  });
+
+  // Codex P1: readPage text is source material for the final answer, not
+  // interaction state — keep a head excerpt like the crawl rules instead of
+  // dropping it wholesale.
+  it('keeps a head excerpt of old readPage text instead of dropping it', async () => {
+    const pageText = `Page: Example (https://example.com)\n${'article body '.repeat(500)}`;
+    const messages = [toolMessage('lobe-browser', 'readPage', pageText), ...recencyPadding(3)];
+
+    const result = await createProcessor().process(createContext(messages));
+
+    const content = result.messages[0].content as string;
+    // the lead (title, URL, start of the article) stays quotable
+    expect(content.startsWith('Page: Example (https://example.com)')).toBe(true);
+    expect(content).toContain('trimmed');
+    expect(content).toContain('readPage again');
+    expect(content.length).toBeLessThan(pageText.length);
+    expect(result.metadata.staleToolResultTrim?.byRule).toEqual({ stalePageText: 1 });
+  });
+
+  it('leaves short readPage results intact', async () => {
+    const messages = [
+      toolMessage('lobe-browser', 'readPage', 'short page text'),
+      ...recencyPadding(3),
+    ];
+
+    const result = await createProcessor().process(createContext(messages));
+
+    expect(result.messages[0].content).toBe('short page text');
   });
 
   it('keeps the head and tail of old command output', async () => {
