@@ -425,13 +425,14 @@ export default {
     'Sharing is off. Turn it on to get a link you can hand out — turning it off again only pauses it, and the same link resumes whenever you turn it back on.',
   'share.settings.link.publishDisabled':
     'Sharing is not available on your account yet. You can still turn off a share you already published.',
-  'share.settings.link.modelDisabledTitle': 'This model cannot be shared',
+  'share.settings.link.modelDisabledTitle': 'Switch model providers to enable sharing',
   'share.settings.link.changeModel': 'Change model',
-  'share.settings.modelRestriction.title': 'Sharing is on: only LobeHub models are available',
+  'share.settings.modelRestriction.title':
+    'Sharing is on: models are limited to the LobeHub provider',
   'share.settings.modelRestriction.description':
-    'To use models from other providers, turn off sharing first.',
+    'To choose a model from another provider, turn off sharing first.',
   'share.settings.link.modelDisabled':
-    'Only LobeHub models can be shared. Switch this Agent to a LobeHub model before turning sharing on.',
+    'Your current model uses another provider. Choose a model provided by LobeHub, then turn on sharing.',
   'share.settings.link.slugError.invalid':
     'Use lowercase letters, numbers and hyphens only, and don’t start or end with a hyphen.',
   'share.settings.link.slugError.reserved': 'This word is reserved. Please pick another one.',
@@ -446,8 +447,8 @@ export default {
   'share.settings.link.workspaceDesc':
     'Anyone signed in who has the link can chat with this Agent. Runs execute in the Workspace and are charged to its budget.',
   'share.settings.notice.desc':
-    'Visitors don’t just read this Agent — they run it. Every reply is generated on your account and charged to your balance, and the Agent acts with whatever access you grant below.',
-  'share.settings.notice.title': 'Visitors run this Agent on your account',
+    'Visitors can use the tools and data you allow below. Review permissions and the monthly spend cap before sharing.',
+  'share.settings.notice.title': 'You pay for visitor usage.',
   'share.settings.notice.workspaceDesc':
     'Visitors don’t just read this Agent — they run it. Every reply is generated in the Workspace and charged to its shared budget, without consuming the creator’s or another member’s quota. The Agent only acts with the visitor access you grant below.',
   'share.settings.notice.workspaceTitle': 'Visitors run this Agent on the Workspace budget',
