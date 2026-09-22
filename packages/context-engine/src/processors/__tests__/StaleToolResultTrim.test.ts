@@ -491,8 +491,8 @@ describe('StaleToolResultTrimProcessor', () => {
     // default window, not a full-file read.
     it('treats an omitted loc as the default [0, 200] window', async () => {
       const messages = [
-        readFileResult('/a.ts', 'first-window', undefined),
-        readFileResult('/a.ts', 'first-window-again', undefined),
+        readFileResult('/a.ts', 'x'.repeat(500), undefined),
+        readFileResult('/a.ts', 'y'.repeat(500), undefined),
         ...recencyPadding(3),
       ];
 
@@ -511,6 +511,49 @@ describe('StaleToolResultTrimProcessor', () => {
       const result = await createProcessor().process(createContext(messages));
 
       expect(result.messages[0].content).toBe('middle chunk');
+    });
+
+    // Regression (Codex P2): an image read whose result is trimmed must also
+    // drop pluginState.images, or MessageContentProcessor still sends the
+    // stale image as image_url parts.
+    it('clears image attachments when an image read result is trimmed', async () => {
+      const imageRead = toolMessage('lobe-local-system', 'readFile', '[Image: design.png]', {
+        plugin: {
+          apiName: 'readFile',
+          arguments: JSON.stringify({ path: '/design.png' }),
+          identifier: 'lobe-local-system',
+        },
+        pluginState: {
+          images: [
+            { fileId: 'f1', mediaType: 'image/png', url: 'https://files.example.com/x.png' },
+          ],
+          path: '/design.png',
+        },
+      });
+      const messages = [imageRead, writeFileResult('/design.png'), ...recencyPadding(3)];
+
+      const result = await createProcessor().process(createContext(messages));
+
+      expect(result.messages[0].content).toContain('superseded by a later write');
+      expect((result.messages[0].pluginState as any).images).toBeUndefined();
+    });
+
+    // Regression (Codex P2): a result barely over the keep threshold would
+    // grow once the trim notice is appended — never admit it.
+    it('rejects replacements that would grow the payload', async () => {
+      const messages = [
+        toolMessage('lobe-web-browsing', 'crawlSinglePage', 'p'.repeat(101)),
+        ...recencyPadding(3),
+      ];
+
+      const result = await new StaleToolResultTrimProcessor({
+        crawlKeepChars: 100,
+        keepRecentMessages: 3,
+        minTotalToolChars: 0,
+      }).process(createContext(messages));
+
+      expect(result.messages[0].content).toBe('p'.repeat(101));
+      expect(result.metadata.staleToolResultTrim?.trimmedMessages ?? 0).toBe(0);
     });
   });
 

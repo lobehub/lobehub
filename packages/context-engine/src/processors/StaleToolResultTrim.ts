@@ -367,6 +367,12 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
 
       const trimmed = this.trimMessage(message, index, lastWriteIndexByPath, readWindowsByPath);
       if (trimmed === undefined || trimmed.content === message.content) continue;
+      // Never admit a replacement that grows the payload — a result barely over
+      // the keep threshold would come back longer once the notice is appended.
+      // Image reads are exempt: the dropped attachment dwarfs any notice.
+      const hasImages =
+        ((message.pluginState as { images?: unknown[] } | undefined)?.images?.length ?? 0) > 0;
+      if (!hasImages && trimmed.content.length >= message.content.length) continue;
       candidates.push({ content: trimmed.content, index, rule: trimmed.rule });
     }
 
@@ -457,7 +463,14 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
 
       savedChars += (message.content as string).length - candidate.content.length;
       byRule[candidate.rule] = (byRule[candidate.rule] ?? 0) + 1;
-      return { ...message, content: candidate.content };
+      // A trimmed image read must not keep its attachments: MessageContentProcessor
+      // (later in the pipeline) would still turn pluginState.images into
+      // model-visible image_url parts, billing the stale image while the text
+      // claims the result was trimmed.
+      const pluginState = (message.pluginState as { images?: unknown } | undefined)?.images
+        ? { ...(message.pluginState as Record<string, unknown>), images: undefined }
+        : message.pluginState;
+      return { ...message, content: candidate.content, pluginState };
     });
 
     const trimmedMessages = candidates.length;
