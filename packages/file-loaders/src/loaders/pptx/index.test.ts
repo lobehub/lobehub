@@ -16,12 +16,24 @@ let loader: FileLoaderInterface;
 
 const testFile = fixturePath('test.pptx'); // Use .pptx
 const nonExistentFile = fixturePath('nonexistent.pptx'); // Use .pptx
+// One text box whose two lines are separated by Shift+Enter, and one whose two
+// lines are separate paragraphs.
+const softLineBreakFile = fixturePath('soft-line-breaks.pptx');
 
 beforeEach(() => {
   loader = new PptxLoader(); // Instantiate PptxLoader
 });
 
 describe('PptxLoader', () => {
+  it('should keep a soft line break inside a paragraph', async () => {
+    const pages = await loader.loadPages(softLineBreakFile);
+
+    // Shift+Enter is an `a:br` between two runs; dropping it glues the words.
+    expect(pages[0].pageContent).toContain('ADDRESS LINE ONE\nADDRESS LINE TWO');
+    // Separate paragraphs are unchanged, and adjacent runs still concatenate.
+    expect(pages[0].pageContent).toContain('PARA ONE\nPARA TWO');
+  });
+
   // Describe PptxLoader
   it('should load pages correctly from a PPTX file (one page per slide)', async () => {
     const pages = await loader.loadPages(testFile);

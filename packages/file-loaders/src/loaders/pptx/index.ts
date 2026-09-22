@@ -8,6 +8,40 @@ import { extractFiles, parseString } from '../../utils/parser-utils';
 
 const log = debug('file-loaders:pptx');
 
+const ELEMENT_NODE = 1;
+
+/**
+ * Reads one paragraph in document order.
+ *
+ * `a:br` is a soft line break — Shift+Enter inside a single paragraph — and it
+ * sits *between* two `a:r` runs rather than inside one. Collecting only the
+ * `a:t` nodes therefore drops it, and the words on either side arrive glued
+ * together: "ADDRESS LINE ONE" + "ADDRESS LINE TWO" as one line with no space.
+ * Adjacent runs still concatenate directly, because they really are contiguous
+ * text.
+ */
+const readParagraphText = (paragraphNode: Node): string => {
+  let text = '';
+
+  const visit = (node: Node) => {
+    for (let index = 0; index < node.childNodes.length; index += 1) {
+      const child = node.childNodes[index];
+      if (child.nodeType !== ELEMENT_NODE) continue;
+
+      if (child.nodeName === 'a:t') {
+        text += child.textContent ?? '';
+      } else if (child.nodeName === 'a:br') {
+        text += '\n';
+      } else {
+        visit(child);
+      }
+    }
+  };
+
+  visit(paragraphNode);
+  return text;
+};
+
 /**
  * Represents a loader for PPTX files using extracted utility functions.
  *
@@ -75,12 +109,7 @@ export class PptxLoader implements FileLoaderInterface {
             log(`Found ${paragraphNodes.length} paragraph nodes in slide ${index + 1}`);
 
             const slideText = Array.from(paragraphNodes)
-              .map((pNode) => {
-                const textNodes = pNode.getElementsByTagName('a:t');
-                return Array.from(textNodes)
-                  .map((tNode) => (tNode.childNodes[0] ? tNode.childNodes[0].nodeValue : ''))
-                  .join(''); // Join text within a paragraph without spaces
-              })
+              .map((pNode) => readParagraphText(pNode))
               .filter((text) => text.length > 0) // Filter out empty paragraphs
               .join('\n'); // Join paragraphs with newline
 
