@@ -95,6 +95,21 @@ export class ConnectorToolModel {
       });
   };
 
+  /** Remove explicitly retired tools without treating a partial manifest as authoritative. */
+  deleteToolsByNames = async (userConnectorId: string, toolNames: string[]): Promise<void> => {
+    if (toolNames.length === 0) return;
+
+    await this.db
+      .delete(userConnectorTools)
+      .where(
+        and(
+          eq(userConnectorTools.userConnectorId, userConnectorId),
+          inArray(userConnectorTools.toolName, toolNames),
+          this.ownership(),
+        ),
+      );
+  };
+
   /**
    * Prune a connector's tools down to `keepToolNames` — deletes any row whose
    * toolName is not in the list. Used to give a manifest refresh replace (not
