@@ -658,36 +658,6 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'o4-mini-deep-research is a faster, more affordable deep-research model for complex multi-step research. It can search and synthesize web information and access your own data via MCP connectors.',
-    displayName: 'o4-mini Deep Research',
-    family: 'o-series',
-    generation: 'o4',
-    id: 'o4-mini-deep-research',
-    knowledgeCutoff: '2024-06',
-    maxOutput: 100_000,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-06-26',
-    settings: {
-      extendParams: ['reasoningEffort'],
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
-      vision: true,
-    },
-    contextWindowTokens: 200_000,
-    description:
       'o3-pro uses more compute to think deeper and consistently deliver better answers, available only via the Responses API.',
     displayName: 'o3-pro',
     family: 'o-series',
@@ -732,36 +702,6 @@ const aihubmixChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2025-04-16',
-    settings: {
-      extendParams: ['reasoningEffort'],
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
-      vision: true,
-    },
-    contextWindowTokens: 200_000,
-    description:
-      'o3-deep-research is our most advanced deep-research model for complex multi-step research. It can search and synthesize web information and access your own data via MCP connectors.',
-    displayName: 'o3 Deep Research',
-    family: 'o-series',
-    generation: 'o3',
-    id: 'o3-deep-research',
-    knowledgeCutoff: '2024-06',
-    maxOutput: 100_000,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 40, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-06-26',
     settings: {
       extendParams: ['reasoningEffort'],
       searchImpl: 'params',
@@ -844,26 +784,6 @@ const aihubmixChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2025-04-14',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      vision: true,
-    },
-    contextWindowTokens: 128_000,
-    description:
-      'ChatGPT-4o is a dynamic model updated in real time. It combines strong language understanding and generation for large-scale use cases like customer support, education, and technical assistance.',
-    displayName: 'ChatGPT-4o',
-    family: 'gpt',
-    generation: 'gpt-4o',
-    id: 'chatgpt-4o-latest',
-    knowledgeCutoff: '2023-10',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
     type: 'chat',
   },
   {
@@ -956,53 +876,6 @@ const aihubmixChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'Flagship model for enterprise use cases like data extraction, coding, and summarization, with deep knowledge in finance, healthcare, law, and science.',
-    displayName: 'Grok 3',
-    family: 'grok',
-    generation: 'grok-3',
-    id: 'grok-3',
-    knowledgeCutoff: '2024-11',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-04-03',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'Lightweight model that thinks before responding. Fast and smart for logic tasks not requiring deep domain knowledge, with access to raw reasoning traces.',
-    displayName: 'Grok 3 Mini',
-    family: 'grok',
-    generation: 'grok-3',
-    id: 'grok-3-mini',
-    knowledgeCutoff: '2024-11',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-04-03',
-    settings: {
-      extendParams: ['reasoningEffort'],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
       reasoning: true,
       search: true,
       structuredOutput: true,
@@ -1078,43 +951,6 @@ const aihubmixChatModels: AIChatModelCard[] = [
       structuredOutput: true,
       vision: true,
     },
-    contextWindowTokens: 200_000,
-    description:
-      'Claude Opus 4.5 is Anthropic’s flagship model, combining top-tier intelligence with scalable performance for complex, high-quality reasoning tasks.',
-    displayName: 'Claude Opus 4.5',
-    family: 'claude-opus',
-    generation: 'claude-4.5',
-    id: 'claude-opus-4-5-20251101',
-    knowledgeCutoff: '2025-05',
-    maxOutput: 64_000,
-    pricing: {
-      units: [
-        { name: 'textInput_cacheRead', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 25, strategy: 'fixed', unit: 'millionTokens' },
-        {
-          lookup: { prices: { '1h': 10, '5m': 6.25 }, pricingParams: ['ttl'] },
-          name: 'textInput_cacheWrite',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-      ],
-    },
-    releasedAt: '2025-11-24',
-    settings: {
-      extendParams: ['disableContextCaching', 'enableReasoning', 'reasoningBudgetToken'],
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
-      structuredOutput: true,
-      vision: true,
-    },
     contextWindowTokens: 1_000_000,
     description: 'Claude Sonnet 4.6 is Anthropic’s best combination of speed and intelligence.',
     displayName: 'Claude Sonnet 4.6',
@@ -1154,81 +990,6 @@ const aihubmixChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-      search: true,
-      structuredOutput: true,
-      vision: true,
-    },
-    contextWindowTokens: 200_000,
-    description:
-      'Sonnet 4.5 is the world’s best model for agents, coding, and computer use. It is also our most accurate and detailed model on long-running tasks, with enhanced knowledge in coding, finance, and cybersecurity.',
-    displayName: 'Claude Sonnet 4.5',
-    family: 'claude-sonnet',
-    generation: 'claude-4.5',
-    id: 'claude-sonnet-4-5-20250929',
-    knowledgeCutoff: '2025-01',
-    maxOutput: 64_000,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
-        {
-          lookup: { prices: { '1h': 6, '5m': 3.75 }, pricingParams: ['ttl'] },
-          name: 'textInput_cacheWrite',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-      ],
-    },
-    releasedAt: '2025-09-29',
-    settings: {
-      extendParams: ['disableContextCaching', 'enableReasoning', 'reasoningBudgetToken'],
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
-      structuredOutput: true,
-      vision: true,
-    },
-    contextWindowTokens: 200_000,
-    description:
-      'Claude Haiku 4.5 is Anthropic’s fastest and smartest Haiku model, with lightning speed and extended reasoning.',
-    displayName: 'Claude Haiku 4.5',
-    enabled: true,
-    family: 'claude-haiku',
-    generation: 'claude-4.5',
-    id: 'claude-haiku-4-5-20251001',
-    knowledgeCutoff: '2025-02',
-    maxOutput: 64_000,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
-        {
-          lookup: { prices: { '1h': 2, '5m': 1.25 }, pricingParams: ['ttl'] },
-          name: 'textInput_cacheWrite',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-      ],
-    },
-    releasedAt: '2025-10-16',
-    settings: {
-      extendParams: ['disableContextCaching', 'enableReasoning', 'reasoningBudgetToken'],
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
     },
     contextWindowTokens: 131_072,
     description:
@@ -1248,47 +1009,6 @@ const aihubmixChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
-      reasoning: true,
-      structuredOutput: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'Upgraded to version 250528; a fully-capable R1 deployed on ByteDance Volcano Cloud, 671B total parameters with up to 64K input. Currently the most stable and recommended.',
-    displayName: 'DeepSeek R1',
-    family: 'deepseek',
-    generation: 'deepseek-r1',
-    id: 'DeepSeek-R1',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 65_536,
-    description:
-      'Deployed by Microsoft; DeepSeek R1 has been upgraded to DeepSeek-R1-0528. The update increases compute and post-training algorithm optimizations, significantly improving reasoning depth and inference. It performs strongly on math, coding, and general logic benchmarks, approaching leading models like O3 and Gemini 2.5 Pro.',
-    displayName: 'DeepSeek R1 0528 (Azure)',
-    family: 'deepseek',
-    generation: 'deepseek-r1',
-    id: 'azure-DeepSeek-R1-0528',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 1.6, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
     },
     contextWindowTokens: 131_072,
     description:
@@ -1301,25 +1021,6 @@ const aihubmixChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput', rate: 0.272, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 1.088, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 65_536,
-    description:
-      'Provider: sophnet. DeepSeek V3 Fast is the high-TPS version of DeepSeek V3 0324, full-precision (non-quantized) with stronger code and math and faster responses.',
-    displayName: 'DeepSeek V3 (Fast)',
-    family: 'deepseek',
-    generation: 'deepseek-v3',
-    id: 'DeepSeek-V3-Fast',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.55, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2.2, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -1417,103 +1118,6 @@ const aihubmixChatModels: AIChatModelCard[] = [
     releasedAt: '2026-02-19',
     settings: {
       extendParams: ['thinkingLevel3', 'urlContext'],
-      searchImpl: 'params',
-      searchProvider: 'google',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      audio: true,
-      functionCall: true,
-      reasoning: true,
-      search: true,
-      structuredOutput: true,
-      video: true,
-      vision: true,
-    },
-    contextWindowTokens: 1_048_576 + 65_536,
-    description:
-      "Gemini 3.1 Flash-Lite Preview is Google's most cost-efficient multimodal model, optimized for high-volume agentic tasks, translation, and data processing.",
-    displayName: 'Gemini 3.1 Flash-Lite Preview',
-    family: 'gemini',
-    generation: 'gemini-3.1',
-    id: 'gemini-3.1-flash-lite-preview',
-    knowledgeCutoff: '2025-01',
-    maxOutput: 65_536,
-    pricing: {
-      units: [
-        { name: 'textInput_cacheRead', rate: 0.025, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2026-03-04',
-    settings: {
-      extendParams: ['thinkingLevel', 'urlContext'],
-      searchImpl: 'params',
-      searchProvider: 'google',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      audio: true,
-      functionCall: true,
-      reasoning: true,
-      search: true,
-      video: true,
-      vision: true,
-    },
-    contextWindowTokens: 1_048_576 + 65_536,
-    description:
-      'Gemini 3 Pro is Google’s most intelligent model with SOTA reasoning and multimodal understanding, plus strong agent and vibe-coding capabilities.',
-    displayName: 'Gemini 3 Pro Preview',
-    family: 'gemini',
-    generation: 'gemini-3',
-    id: 'gemini-3-pro-preview',
-    knowledgeCutoff: '2025-01',
-    maxOutput: 65_536,
-    pricing: {
-      units: [
-        {
-          name: 'textInput_cacheRead',
-          strategy: 'tiered',
-          tiers: [
-            { rate: 0.2, upTo: 200_000 },
-            { rate: 0.4, upTo: 'infinity' },
-          ],
-          unit: 'millionTokens',
-        },
-        {
-          name: 'textInput',
-          strategy: 'tiered',
-          tiers: [
-            { rate: 2, upTo: 200_000 },
-            { rate: 4, upTo: 'infinity' },
-          ],
-          unit: 'millionTokens',
-        },
-        {
-          name: 'textOutput',
-          strategy: 'tiered',
-          tiers: [
-            { rate: 12, upTo: 200_000 },
-            { rate: 18, upTo: 'infinity' },
-          ],
-          unit: 'millionTokens',
-        },
-        {
-          lookup: { prices: { '1h': 4.5 }, pricingParams: ['ttl'] },
-          name: 'textInput_cacheWrite',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-      ],
-    },
-    releasedAt: '2025-11-18',
-    settings: {
-      extendParams: ['thinkingLevel2', 'urlContext'],
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -1756,56 +1360,280 @@ const aihubmixChatModels: AIChatModelCard[] = [
     releasedAt: '2025-07-22',
     type: 'chat',
   },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'Qwen3 thinking-mode open-source model. Compared to the previous version (Qwen3-30B-A3B), it significantly improves logic, general ability, knowledge, and creativity, suitable for hard reasoning scenarios.',
-    displayName: 'Qwen3 30B A3B Thinking 2507',
-    family: 'qwen',
-    generation: 'qwen3',
-    id: 'qwen3-30b-a3b-thinking-2507',
-    maxOutput: 32_768,
-    organization: 'Qwen',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0.12, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 1.2, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-07-30',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'Compared to the previous version (Qwen3-30B-A3B), overall Chinese/English and multilingual general ability is significantly improved. Subjective open-ended tasks are specially optimized for stronger preference alignment and more helpful responses.',
-    displayName: 'Qwen3 30B A3B Instruct 2507',
-    family: 'qwen',
-    generation: 'qwen3',
-    id: 'qwen3-30b-a3b-instruct-2507',
-    maxOutput: 32_768,
-    organization: 'Qwen',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0.12, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.48, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-07-29',
-    type: 'chat',
-  },
 ];
 
 const aihubmixImageModels: AIImageModelCard[] = [
+  {
+    description:
+      "GPT-Image-2.5 Flare is OpenAI's latest image model, the fastest and suited for everyday high-quality image generation. It accepts text and image inputs and produces image outputs. The model supports quality settings: low, medium, high, xhigh, max, and auto.",
+    displayName: 'GPT Image 2.5 Flare',
+    enabled: true,
+    id: 'gpt-image-2.5-flare',
+    // The probed schema for this model only confirms `size` accepts 'auto' or a
+    // WIDTHxHEIGHT string (gateway validates pixel/aspect/divisibility limits
+    // server-side); it doesn't enumerate which exact sizes are valid. Reusing the
+    // sibling gpt-image-2's already-vetted enum as a known-reasonable default set,
+    // not independently confirmed for this specific model.
+    parameters: gptImage2Schema,
+    pricing: {
+      units: [
+        { name: 'imageInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageOutput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput_cacheRead', rate: 1.25, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-09-08',
+    type: 'image',
+  },
+  {
+    description:
+      'GPT Image 2.5 Sunburst is OpenAI’s latest image model, capable of generating and editing images from text and image inputs. It is suitable for workflows that require extremely high editing precision. The model supports quality settings: low, medium, high, xhigh, max, and auto.',
+    displayName: 'GPT Image 2.5 Sunburst',
+    enabled: true,
+    id: 'gpt-image-2.5-sunburst',
+    // Same caveat as gpt-image-2.5-flare above: size enum borrowed from the sibling
+    // gpt-image-2 entry, not independently confirmed for this model.
+    parameters: gptImage2Schema,
+    pricing: {
+      units: [
+        { name: 'imageInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageOutput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput_cacheRead', rate: 1.25, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-09-08',
+    type: 'image',
+  },
+  {
+    description:
+      'GPT Image 1.5 is a new image generation model powered by OpenAI’s flagship visual capabilities, comprehensively upgraded for high-quality creative and production workflows. It delivers significant improvements in instruction understanding, fine-grained image editing, and detail preservation, while achieving up to 4x faster generation compared to previous versions.',
+    displayName: 'GPT Image 1.5',
+    enabled: true,
+    id: 'gpt-image-1.5',
+    // Not gptImage1Schema: that schema's `size` enum includes the literal 'auto', but the
+    // probed request schema for this model (`/call/schema/models/gpt-image-1.5/endpoints`)
+    // only confirms '1024x1024' | '1536x1024' | '1024x1536' | null — 'auto' is not a
+    // verified accepted value here, so it's dropped to avoid a default that the gateway
+    // may reject.
+    parameters: {
+      imageUrls: { default: [], maxCount: 1, maxFileSize: 5 * 1024 * 1024 },
+      prompt: { default: '' },
+      size: {
+        default: '1024x1024',
+        enum: ['1024x1024', '1536x1024', '1024x1536'],
+      },
+    },
+    pricing: {
+      units: [
+        { name: 'imageInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-11-25',
+    type: 'image',
+  },
+  {
+    description:
+      "MAI-Image-2.6 is Microsoft's latest image-generation and editing model. It can generate images from text prompts and supports image-guided editing in multiple aspect ratios.",
+    displayName: 'Mai Image 2.6',
+    enabled: true,
+    id: 'mai-image-2.6',
+    // enum values confirmed via the probed request schema; the schema itself declares
+    // no default for `resolution`, so '1K' below is a UI-convenience pick (a value known
+    // to be in the confirmed enum), not a gateway-reported default.
+    parameters: {
+      imageUrls: { default: [] },
+      prompt: { default: '' },
+      resolution: { default: '1K', enum: ['512', '1K', '2K', '4K'] },
+    },
+    pricing: {
+      units: [
+        { name: 'imageInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageOutput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-09-05',
+    type: 'image',
+  },
+  {
+    description:
+      'MAI-Image-2.6 Flash is Microsoft’s low-latency version of the latest image model MAI-Image-2.6. It supports image generation in multiple aspect ratios and image-guided editing.',
+    displayName: 'Mai Image 2.6 Flash',
+    enabled: true,
+    id: 'mai-image-2.6-flash',
+    // Same caveat as mai-image-2.6 above: '1K' default is a UI-convenience pick, not
+    // gateway-reported.
+    parameters: {
+      imageUrls: { default: [] },
+      prompt: { default: '' },
+      resolution: { default: '1K', enum: ['512', '1K', '2K', '4K'] },
+    },
+    pricing: {
+      units: [
+        { name: 'imageInput', rate: 1.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageOutput', rate: 1.75, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-09-05',
+    type: 'image',
+  },
+  {
+    description:
+      "Agnes Image 2.1 Flash is Agnes AI's high-performance image generation and image editing model, supporting text-to-image, image-to-image, and multi-image composition. It is suitable for creative design, marketing visuals, e-commerce product images, and social content production.",
+    displayName: 'Agnes Image 2.1 Flash',
+    enabled: true,
+    id: 'agnes-image-2.1-flash',
+    parameters: {
+      aspectRatio: {
+        default: '1:1',
+        enum: ['1:1', '2:3', '3:2', '3:4', '4:3', '9:16', '16:9', '21:9'],
+      },
+      imageUrls: { default: [] },
+      prompt: { default: '' },
+    },
+    pricing: {
+      units: [
+        { name: 'imageInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'image',
+  },
+  {
+    description:
+      'The Qwen-Image-2.0 series accelerated models integrate image generation and image editing; they offer more professional text rendering with support for 1k-token instructions, finer realistic textures and delicate portrayal of photorealistic scenes, and stronger semantic adherence. The accelerated version effectively achieves an optimal balance between model quality and performance.',
+    displayName: 'Qwen Image 2.0',
+    enabled: true,
+    id: 'qwen-image-2.0',
+    parameters: {
+      imageUrls: { default: [] },
+      prompt: { default: '' },
+    },
+    pricing: {
+      units: [
+        { name: 'imageInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-03-03',
+    type: 'image',
+  },
+  {
+    description:
+      'The Qwen-Image-2.0 full-powered models achieve the integration of image generation and image editing; they offer more professional text rendering with support for 1k-token instructions, more refined photorealistic textures and delicate depiction of realistic scenes, and stronger semantic adherence. The full-powered version delivers the strongest text rendering capability and realism in the 2.0 series.',
+    displayName: 'Qwen Image 2.0 Pro',
+    enabled: true,
+    id: 'qwen-image-2.0-pro',
+    parameters: {
+      imageUrls: { default: [] },
+      prompt: { default: '' },
+    },
+    pricing: {
+      units: [
+        { name: 'imageInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-03-03',
+    type: 'image',
+  },
+  {
+    description:
+      'GLM-Image is Zhipu AI’s new flagship image generation model. The model is trained entirely on domestic chips and adopts an original hybrid architecture combining "autoregressive + diffusion decoder," balancing global instruction understanding with local detail depiction. It overcomes generation challenges in knowledge-intensive scenarios such as posters, PPTs, and popular science illustrations.',
+    displayName: 'GLM Image',
+    enabled: true,
+    id: 'glm-image',
+    // The probed request schema (`/call/schema/models/glm-image/endpoints`) only lists
+    // `prompt`, `size`, `n`, `model`, `async`, `extra` as top-level fields — `size` there
+    // is a free-form `^\d+x\d+$` pattern with no enum, and there is no top-level
+    // `resolution` or `watermark` field. `resolution`/`watermark` are therefore dropped
+    // here: adding UI controls for fields the gateway doesn't accept as top-level params
+    // risks the request being rejected. The `size` enum below is reused from the
+    // already-vetted native Zhipu entry for the same underlying model
+    // (packages/model-bank/src/aiModels/zhipu.ts) as a known-good subset of sizes — the
+    // gateway probe's own default ('1280x1280') matches it exactly, but the full set of
+    // sizes aihubmix itself accepts beyond this subset is unconfirmed.
+    parameters: {
+      prompt: { default: '' },
+      size: {
+        default: '1280x1280',
+        enum: [
+          '1280x1280',
+          '1568x1056',
+          '1056x1568',
+          '1472x1088',
+          '1088x1472',
+          '1728x960',
+          '960x1728',
+        ],
+      },
+    },
+    pricing: {
+      units: [
+        { name: 'imageInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    // The aihubmix `/v1/models` listing has no release_date for this model; this date
+    // matches the repo's own native Zhipu entry (zhipu.ts) for the same model and is
+    // independently corroborated by Zhipu AI's own GLM-Image announcement (2026-01-14).
+    releasedAt: '2026-01-14',
+    type: 'image',
+  },
+  {
+    description:
+      'Wanxiang 2.7 — image generation and editing: supports text-to-image, text-to-multi-image, image-to-multi-image, image editing, multi-image reference generation, and interactive editing, with stronger performance in text rendering, subject consistency, and following complex instructions.',
+    displayName: 'Wan2.7 Image',
+    enabled: true,
+    id: 'wan2.7-image',
+    // enum values confirmed via the probed request schema; the schema itself declares no
+    // default for `aspect_ratio`, so '1:1' below is a UI-convenience pick (a value known
+    // to be in the confirmed enum), not a gateway-reported default.
+    parameters: {
+      aspectRatio: {
+        default: '1:1',
+        enum: ['1:1', '2:3', '3:2', '3:4', '4:3', '9:16', '16:9', '21:9', '9:21'],
+      },
+      imageUrls: { default: [] },
+      prompt: { default: '' },
+    },
+    pricing: {
+      units: [
+        { name: 'imageInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-05-29',
+    type: 'image',
+  },
+  {
+    description:
+      'Wanxiang 2.7 — image generation and editing: supports text-to-image, text-to-multi-image, image-to-multi-image, image editing, multi-image reference generation, and interactive editing, with stronger performance in text rendering, subject consistency, and following complex instructions.',
+    displayName: 'Wan2.7 Image Pro',
+    enabled: true,
+    id: 'wan2.7-image-pro',
+    // Same caveat as wan2.7-image above: '1:1' default is a UI-convenience pick, not
+    // gateway-reported.
+    parameters: {
+      aspectRatio: {
+        default: '1:1',
+        enum: ['1:1', '2:3', '3:2', '3:4', '4:3', '9:16', '16:9', '21:9', '9:21'],
+      },
+      imageUrls: { default: [] },
+      prompt: { default: '' },
+    },
+    pricing: {
+      units: [
+        { name: 'imageInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-05-29',
+    type: 'image',
+  },
+  // Restored: originally in this PR's removal list as "no longer exists upstream", but
+  // a live check of aihubmix's /v1/models catalog confirms retire_stage is still
+  // "active" for both of the following — the earlier removal was a misjudgment.
   {
     description:
       "Gemini 3.1 Flash Lite Image (Nano Banana 2 Lite) is Google's fastest and most cost-efficient image generation model, built for high-volume generation and editing.",
