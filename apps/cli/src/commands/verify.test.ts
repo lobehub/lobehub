@@ -43,7 +43,10 @@ const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
 }));
 
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
-vi.mock('../settings', () => ({ resolveServerUrl: () => 'https://app.lobehub.com' }));
+vi.mock('../settings', () => ({
+  loadActiveWorkspace: () => undefined,
+  resolveServerUrl: () => 'https://app.lobehub.com',
+}));
 describe('verify rubric config commands', () => {
   let consoleSpy: ReturnType<typeof vi.spyOn>;
 
@@ -640,6 +643,7 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
 
   beforeEach(() => {
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.stubEnv('LOBEHUB_WORKSPACE_ID', '');
     mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
     const verify = mockTrpcClient.verify as Record<string, any>;
     verify.createRun = { mutate: vi.fn().mockResolvedValue({ id: 'run-new' }) };
@@ -658,6 +662,7 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
 
   afterEach(() => {
     consoleSpy.mockRestore();
+    vi.unstubAllEnvs();
     delete process.env.LOBEHUB_TOPIC_ID;
     rmSync(dir, { force: true, recursive: true });
   });
@@ -776,27 +781,65 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
     );
   });
 
-  it('appends a re-verification round directly to an existing acceptance', async () => {
-    mockTrpcClient.acceptance.getBundle.query.mockResolvedValue({
-      acceptance: {
-        id: 'acceptance-existing',
-        status: 'delivered',
-        subjectId: 'standalone-subject',
-        subjectType: 'standalone',
-      },
-    });
+  it.each([null, 'workspace-1'])(
+    'appends a re-verification round when both scopes are %s',
+    async (workspaceId) => {
+      vi.stubEnv('LOBEHUB_WORKSPACE_ID', workspaceId ?? '');
+      mockTrpcClient.acceptance.getBundle.query.mockResolvedValue({
+        acceptance: {
+          id: 'acceptance-existing',
+          status: 'delivered',
+          subjectId: 'standalone-subject',
+          subjectType: 'standalone',
+          workspaceId,
+        },
+      });
 
-    await run(['ingest-report', dir, '--acceptance', 'acceptance-existing', '--json']);
+      await run(['ingest-report', dir, '--acceptance', 'acceptance-existing', '--json']);
 
-    expect(mockTrpcClient.acceptance.getBundle.query).toHaveBeenCalledWith({
-      id: 'acceptance-existing',
-    });
-    expect(mockTrpcClient.acceptance.ensure.mutate).not.toHaveBeenCalled();
-    expect(mockTrpcClient.acceptance.attachRun.mutate).toHaveBeenCalledWith({
-      acceptanceId: 'acceptance-existing',
-      verifyRunId: 'run-new',
-    });
-  });
+      expect(mockTrpcClient.acceptance.ensure.mutate).not.toHaveBeenCalled();
+      expect(mockTrpcClient.acceptance.attachRun.mutate).toHaveBeenCalledWith({
+        acceptanceId: 'acceptance-existing',
+        verifyRunId: 'run-new',
+      });
+      expect(mockTrpcClient.verify.upsertReport.mutate).toHaveBeenCalled();
+      expect(process.env.LOBEHUB_WORKSPACE_ID).toBe(workspaceId ?? '');
+    },
+  );
+
+  it.each([
+    { current: '', hint: 'LOBEHUB_WORKSPACE_ID=workspace-target', target: 'workspace-target' },
+    {
+      current: 'workspace-current',
+      hint: 'LOBEHUB_WORKSPACE_ID=workspace-target',
+      target: 'workspace-target',
+    },
+    { current: 'workspace-current', hint: 'lh workspace use --personal', target: null },
+  ])(
+    'rejects scope $current → $target before any remote writes',
+    async ({ current, target, hint }) => {
+      vi.stubEnv('LOBEHUB_WORKSPACE_ID', current);
+      mockTrpcClient.acceptance.getBundle.query.mockResolvedValue({
+        acceptance: {
+          id: 'acceptance-existing',
+          status: 'delivered',
+          subjectId: 'standalone-subject',
+          subjectType: 'standalone',
+          workspaceId: target,
+        },
+      });
+
+      await expect(
+        run(['ingest-report', dir, '--acceptance', 'acceptance-existing', '--json']),
+      ).rejects.toThrow(hint);
+
+      expect(mockTrpcClient.acceptance.ensure.mutate).not.toHaveBeenCalled();
+      expect(mockTrpcClient.verify.createRun.mutate).not.toHaveBeenCalled();
+      expect(mockTrpcClient.acceptance.attachRun.mutate).not.toHaveBeenCalled();
+      expect(mockTrpcClient.verify.upsertReport.mutate).not.toHaveBeenCalled();
+      expect(process.env.LOBEHUB_WORKSPACE_ID).toBe(current);
+    },
+  );
 
   it('passes a non-coding scenario and its context bag through to the run', async () => {
     const verify = mockTrpcClient.verify as Record<string, any>;
