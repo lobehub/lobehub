@@ -7,21 +7,6 @@ import type { LucideIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 
 const styles = createStaticStyles(({ css }) => ({
-  /**
-   * The rail the icons sit on. Drawn as a border on the body rather than an
-   * element of its own so it starts under the icon and ends with the content,
-   * which is what makes a run of sections read as one column rather than a
-   * stack of unrelated blocks.
-   */
-  body: css`
-    margin-inline-start: 15px;
-    padding-inline-start: 25px;
-    border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  /** The last section has nothing below it, so its rail would end in mid-air. */
-  bodyLast: css`
-    border-inline-start-color: transparent;
-  `,
   icon: css`
     display: flex;
     flex: none;
@@ -36,6 +21,19 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextSecondary};
 
     background: ${cssVar.colorBgContainer};
+  `,
+  /**
+   * The connector, as its own element in the icon's column rather than a border
+   * on the content beside it. A border there began below the icon row and ended
+   * with the content, so every heading left a gap the width of its own icon and
+   * the rail arrived in pieces. Stretched to fill what the content leaves over,
+   * it meets the next section's icon exactly.
+   */
+  line: css`
+    flex: 1;
+    width: 1px;
+    margin-block: 4px;
+    background: ${cssVar.colorBorderSecondary};
   `,
 }));
 
@@ -64,16 +62,18 @@ interface PanelSectionProps {
  * holds the fields.
  */
 const PanelSection = memo<PanelSectionProps>(({ children, desc, icon, last, notice, title }) => (
-  <Flexbox>
-    <Flexbox horizontal align={'center'} gap={12}>
+  <Flexbox horizontal align={'stretch'} gap={12}>
+    <Flexbox align={'center'} style={{ flex: 'none' }}>
       <span className={styles.icon}>
         <Icon icon={icon} size={15} />
       </span>
-      <Text weight={600}>{title}</Text>
+      {!last && <div className={styles.line} />}
     </Flexbox>
-    <Flexbox className={last ? `${styles.body} ${styles.bodyLast}` : styles.body} gap={12}>
+
+    <Flexbox flex={1} gap={12} paddingBlock={'4px 24px'} style={{ minWidth: 0 }}>
+      <Text weight={600}>{title}</Text>
       {(desc || notice) && (
-        <Flexbox gap={4} paddingBlock={'8px 0'}>
+        <Flexbox gap={4}>
           {desc && (
             <Text fontSize={12} type={'secondary'}>
               {desc}
@@ -82,9 +82,7 @@ const PanelSection = memo<PanelSectionProps>(({ children, desc, icon, last, noti
           {notice}
         </Flexbox>
       )}
-      <Flexbox gap={16} paddingBlock={'4px 24px'}>
-        {children}
-      </Flexbox>
+      <Flexbox gap={16}>{children}</Flexbox>
     </Flexbox>
   </Flexbox>
 ));
