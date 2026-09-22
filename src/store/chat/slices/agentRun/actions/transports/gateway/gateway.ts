@@ -1413,17 +1413,22 @@ export class GatewayActionImpl {
         // terminal-missing fallback so the op never sticks `running`.
         if (!terminalReceived) this.#get().completeOperation(gatewayOpId);
 
-        // A terminal resume status is ambiguous only for an external hetero
-        // producer: an older or degraded Gateway may have no initialized DO
-        // session while the CLI is still alive and streaming via heteroIngest.
-        // Preserve unknown (`undefined`) during rolling deploys; new normal
-        // runtimes explicitly return `heteroType: null`. A raw session_complete,
-        // real terminal event, or auth failure remains authoritative.
-        const preserveExternalProducer =
-          !terminalReceived &&
-          !authFailed &&
-          completion?.source === 'resume_status' &&
-          result.heteroType !== null;
+        // An external hetero producer does not run on this socket: the CLI
+        // streams through `heteroIngest` and ends the run through
+        // `heteroFinish`, so nothing the transport observes proves it stopped.
+        // A terminal resume status can mean the Gateway simply has no
+        // initialized DO session; a raw `session_complete` or a terminal
+        // `status_change` can arrive for a run that is still producing; and on
+        // the multiplexed socket ONE auth failure is fanned out to every
+        // operation on the tab. Settling on any of those clears
+        // `topic.metadata.runningOperation`, after which the server discards
+        // every later batch as stale — the CLI keeps burning tokens and its
+        // whole output is thrown away. Only an in-band terminal for THIS op
+        // (`terminalReceived`) is authoritative; otherwise leave the settle to
+        // the server, which owns `heteroFinish` and the liveness lease behind
+        // it. Preserve unknown (`undefined`) during rolling deploys too; new
+        // normal runtimes explicitly return `heteroType: null`.
+        const preserveExternalProducer = !terminalReceived && result.heteroType !== null;
         if (preserveExternalProducer) return;
 
         const effectiveSucceeded = isSuccessfulGatewayCompletion({
@@ -1698,17 +1703,15 @@ export class GatewayActionImpl {
         // the preserved external producer case below) must close it here.
         if (!terminalReceived) this.#get().completeOperation(gatewayOpId);
 
-        // A reconnect is passive. Preserve only an external/rolling-unknown
-        // producer whose terminal resume status may mean "Gateway session was
-        // never initialized" rather than "producer ended". New normal runtime
-        // markers carry `heteroType: null`; old markers omit the field, so the
-        // rolling-deploy fallback is deliberately fail-safe. Raw session_complete,
-        // terminal events and auth failures are authoritative and settle below.
-        const preserveExternalProducer =
-          !terminalReceived &&
-          !authFailed &&
-          completion?.source === 'resume_status' &&
-          heteroType !== null;
+        // A reconnect is passive, and an external producer's output never
+        // travelled over this socket in the first place — see the same guard in
+        // `executeGatewayAgent`. No transport signal (terminal resume status,
+        // raw `session_complete`, terminal `status_change`, or an auth failure
+        // fanned out across the multiplexed socket) proves such a run ended, and
+        // settling on one discards everything it produces afterwards. New normal
+        // runtime markers carry `heteroType: null`; old markers omit the field,
+        // so the rolling-deploy fallback is deliberately fail-safe.
+        const preserveExternalProducer = !terminalReceived && heteroType !== null;
         if (preserveExternalProducer) {
           return;
         }
