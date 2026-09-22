@@ -370,7 +370,7 @@
   "share.settings.usage.fileStorageOff": "{{used}} · ekler kapalı",
   "share.settings.usage.loadFailed": "Kullanım yüklenemedi",
   "share.settings.usage.monthlySpend": "Bu ayın harcaması",
-  "share.settings.usage.spendOfLimit": "${{spend}} / ${{limit}}",
+  "share.settings.usage.spendOfLimit": "{{spend}} / {{limit}}",
   "share.settings.usage.title": "Kullanım",
   "share.settings.usage.views": "Ziyaretler",
   "share.settings.usage.visitors": "Ziyaretçiler",

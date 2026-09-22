@@ -370,7 +370,7 @@
   "share.settings.usage.fileStorageOff": "{{used}} · Anhänge deaktiviert",
   "share.settings.usage.loadFailed": "Nutzung konnte nicht geladen werden",
   "share.settings.usage.monthlySpend": "Ausgaben dieses Monats",
-  "share.settings.usage.spendOfLimit": "${{spend}} von ${{limit}}",
+  "share.settings.usage.spendOfLimit": "{{spend}} von {{limit}}",
   "share.settings.usage.title": "Nutzung",
   "share.settings.usage.views": "Besuche",
   "share.settings.usage.visitors": "Besucher",

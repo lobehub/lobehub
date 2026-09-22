@@ -370,7 +370,7 @@
   "share.settings.usage.fileStorageOff": "{{used}} · پیوست‌ها غیرفعال هستند",
   "share.settings.usage.loadFailed": "استفاده بارگذاری نشد",
   "share.settings.usage.monthlySpend": "هزینه این ماه",
-  "share.settings.usage.spendOfLimit": "${{spend}} از ${{limit}}",
+  "share.settings.usage.spendOfLimit": "{{spend}} از {{limit}}",
   "share.settings.usage.title": "استفاده",
   "share.settings.usage.views": "بازدیدها",
   "share.settings.usage.visitors": "بازدیدکنندگان",

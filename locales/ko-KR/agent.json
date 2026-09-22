@@ -370,7 +370,7 @@
   "share.settings.usage.fileStorageOff": "{{used}} · 첨부 파일 비활성화됨",
   "share.settings.usage.loadFailed": "사용량을 로드할 수 없습니다",
   "share.settings.usage.monthlySpend": "이번 달 지출",
-  "share.settings.usage.spendOfLimit": "${{spend}} / ${{limit}}",
+  "share.settings.usage.spendOfLimit": "{{spend}} / {{limit}}",
   "share.settings.usage.title": "사용량",
   "share.settings.usage.views": "방문 수",
   "share.settings.usage.visitors": "방문자",

@@ -370,7 +370,7 @@
   "share.settings.usage.fileStorageOff": "{{used}} · đính kèm đã tắt",
   "share.settings.usage.loadFailed": "Không thể tải dữ liệu sử dụng",
   "share.settings.usage.monthlySpend": "Chi tiêu tháng này",
-  "share.settings.usage.spendOfLimit": "${{spend}} trong ${{limit}}",
+  "share.settings.usage.spendOfLimit": "{{spend}} trong {{limit}}",
   "share.settings.usage.title": "Sử dụng",
   "share.settings.usage.views": "Lượt truy cập",
   "share.settings.usage.visitors": "Khách truy cập",

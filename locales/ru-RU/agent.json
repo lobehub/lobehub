@@ -370,7 +370,7 @@
   "share.settings.usage.fileStorageOff": "{{used}} · вложения отключены",
   "share.settings.usage.loadFailed": "Не удалось загрузить данные об использовании",
   "share.settings.usage.monthlySpend": "Расходы за этот месяц",
-  "share.settings.usage.spendOfLimit": "${{spend}} из ${{limit}}",
+  "share.settings.usage.spendOfLimit": "{{spend}} из {{limit}}",
   "share.settings.usage.title": "Использование",
   "share.settings.usage.views": "Посещения",
   "share.settings.usage.visitors": "Посетители",
