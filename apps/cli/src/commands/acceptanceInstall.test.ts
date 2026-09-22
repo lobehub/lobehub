@@ -110,11 +110,14 @@ describe('acceptance skill installation', () => {
     ]);
   });
 
-  it('supports forcing an install and selecting a tag', async () => {
+  it.each(['0.5.0', 'v0.5.0'])('supports forcing an install from tag %s', async (version) => {
     await run('install');
     const skillPath = path.join(directory, '.agents/skills/acceptance/SKILL.md');
     await writeFile(skillPath, 'local copy');
-    await run('install', '--force', '--skill-version', '0.5.0');
+    query.mockResolvedValueOnce({ ...bundle, source: { ...bundle.source, ref: 'v0.5.0' } });
+
+    await run('install', '--force', '--skill-version', version);
+
     expect(await readFile(skillPath, 'utf8')).toBe(content);
     expect(query).toHaveBeenLastCalledWith({ identifier: 'acceptance', version: '0.5.0' });
   });
@@ -150,15 +153,63 @@ describe('acceptance skill installation', () => {
     expect(query).toHaveBeenCalledTimes(1);
   });
 
-  it('does not overwrite a pinned installation when an older server ignores the requested version', async () => {
+  it('rejects a matching tag whose declared version differs from the requested version', async () => {
     await run('install');
-    query.mockResolvedValueOnce({ ...bundle, version: '0.4.3' });
+    query.mockResolvedValueOnce({
+      ...bundle,
+      source: { ...bundle.source, ref: 'v0.5.0' },
+      version: '0.4.3',
+    });
 
     await expect(run('update', '--skill-version', 'v0.5.0')).rejects.toThrow(
-      'Requested acceptance skill 0.5.0, but the server returned 0.4.3',
+      'Requested acceptance skill 0.5.0 from tag v0.5.0, but the server returned version 0.4.3',
     );
     expect(await readFile(path.join(directory, '.agents/skills/acceptance/SKILL.md'), 'utf8')).toBe(
       content,
     );
+  });
+
+  it.each([undefined, 'HEAD', 'v0.4.3'])(
+    'rejects a matching version with source ref %s before changing installed files',
+    async (ref) => {
+      await mkdir(path.join(directory, '.claude'));
+      await run('install');
+      const skillDir = path.join(directory, '.agents/skills/acceptance');
+      await writeFile(path.join(skillDir, 'old.md'), 'keep this resource');
+      query.mockResolvedValueOnce({
+        ...bundle,
+        content: content.replace('# Acceptance', '# Different content with the same version'),
+        files: { 'unexpected.md': 'must not be written' },
+        source: ref === undefined ? undefined : { ...bundle.source, ref },
+      });
+
+      await expect(run('update', '--skill-version', 'v0.5.0')).rejects.toThrow(
+        `from ${ref ?? 'an unknown source'}. Update your server to support skill tag selection.`,
+      );
+
+      expect(await readFile(path.join(skillDir, 'SKILL.md'), 'utf8')).toBe(content);
+      for (const [file, expected] of Object.entries(bundle.files)) {
+        expect(await readFile(path.join(skillDir, file), 'utf8')).toBe(expected);
+      }
+      expect(await readFile(path.join(skillDir, 'old.md'), 'utf8')).toBe('keep this resource');
+      await expect(readFile(path.join(skillDir, 'unexpected.md'))).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
+      expect(await readlink(path.join(directory, '.claude/skills'))).toBe('../.agents/skills');
+    },
+  );
+
+  it('allows an unpinned update from a legacy server without source metadata', async () => {
+    await run('install');
+    const updated = content.replace('# Acceptance', '# Updated default content');
+    const { source: _source, ...legacyBundle } = bundle;
+    query.mockResolvedValueOnce({ ...legacyBundle, content: updated });
+
+    await run('update');
+
+    expect(await readFile(path.join(directory, '.agents/skills/acceptance/SKILL.md'), 'utf8')).toBe(
+      updated,
+    );
+    expect(query).toHaveBeenLastCalledWith({ identifier: 'acceptance' });
   });
 });

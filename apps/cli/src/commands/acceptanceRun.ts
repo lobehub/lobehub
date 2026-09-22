@@ -73,11 +73,14 @@ async function installAction(options: InstallOptions): Promise<void> {
     identifier: options.skill,
     ...(version === undefined ? {} : { version }),
   });
-  // Older servers ignore unknown input fields. Never replace a pinned skill
-  // with their default bundle if the server has not been upgraded yet.
-  if (version !== undefined && bundle.version !== version) {
+  // Older servers ignore the requested version. A matching version label alone
+  // does not prove that the content was resolved from the requested tag.
+  if (
+    version !== undefined &&
+    (bundle.version !== version || bundle.source?.ref !== `v${version}`)
+  ) {
     throw new Error(
-      `Requested acceptance skill ${version}, but the server returned ${bundle.version ?? 'an unversioned bundle'}. Update your server to support skill tag selection.`,
+      `Requested acceptance skill ${version} from tag v${version}, but the server returned version ${bundle.version ?? 'unknown'} from ${bundle.source?.ref ?? 'an unknown source'}. Update your server to support skill tag selection.`,
     );
   }
 
