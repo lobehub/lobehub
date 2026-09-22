@@ -654,6 +654,9 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
       ensure: { mutate: vi.fn().mockResolvedValue({ id: 'acceptance-1' }) },
       getBundle: { query: vi.fn() },
     };
+    mockTrpcClient.workspace = {
+      getById: { query: vi.fn().mockResolvedValue({ id: 'workspace-1' }) },
+    };
 
     dir = mkdtempSync(path.join(tmpdir(), 'lh-ingest-'));
     writeFileSync(path.join(dir, 'result.json'), JSON.stringify({ cases: [] }));
@@ -804,8 +807,41 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
       });
       expect(mockTrpcClient.verify.upsertReport.mutate).toHaveBeenCalled();
       expect(process.env.LOBEHUB_WORKSPACE_ID).toBe(workspaceId ?? '');
+      if (!workspaceId) expect(mockTrpcClient.workspace.getById.query).not.toHaveBeenCalled();
     },
   );
+
+  it.each([
+    { effectiveWorkspace: null, name: 'revoked workspace membership' },
+    { effectiveWorkspace: { id: 'workspace-other' }, name: 'a different server workspace' },
+    { effectiveWorkspace: new Error('Workspace lookup unavailable'), name: 'a failed lookup' },
+  ])('rejects $name before creating a run', async ({ effectiveWorkspace }) => {
+    vi.stubEnv('LOBEHUB_WORKSPACE_ID', 'workspace-1');
+    mockTrpcClient.acceptance.getBundle.query.mockResolvedValue({
+      acceptance: {
+        id: 'acceptance-existing',
+        status: 'delivered',
+        subjectId: 'standalone-subject',
+        subjectType: 'standalone',
+        workspaceId: 'workspace-1',
+      },
+    });
+    const query = mockTrpcClient.workspace.getById.query;
+    if (effectiveWorkspace instanceof Error) query.mockRejectedValue(effectiveWorkspace);
+    else query.mockResolvedValue(effectiveWorkspace);
+
+    await expect(
+      run(['ingest-report', dir, '--acceptance', 'acceptance-existing', '--json']),
+    ).rejects.toThrow(
+      effectiveWorkspace instanceof Error ? effectiveWorkspace.message : 'No run was created.',
+    );
+
+    expect(mockTrpcClient.acceptance.ensure.mutate).not.toHaveBeenCalled();
+    expect(mockTrpcClient.verify.createRun.mutate).not.toHaveBeenCalled();
+    expect(mockTrpcClient.acceptance.attachRun.mutate).not.toHaveBeenCalled();
+    expect(mockTrpcClient.verify.upsertReport.mutate).not.toHaveBeenCalled();
+    expect(process.env.LOBEHUB_WORKSPACE_ID).toBe('workspace-1');
+  });
 
   it.each([
     { current: '', hint: 'LOBEHUB_WORKSPACE_ID=workspace-target', target: 'workspace-target' },

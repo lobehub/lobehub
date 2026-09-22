@@ -717,6 +717,16 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
         `Acceptance "${acceptance.id}" belongs to ${target}, but the CLI is using ${current}. ${hint} No run was created.`,
       );
     }
+    if (targetWorkspaceId) {
+      // Revoked membership can make the server fall back to personal scope
+      // even when the locally selected workspace still matches the target.
+      const workspace = await client.workspace.getById.query();
+      if (workspace?.id !== targetWorkspaceId) {
+        throw new Error(
+          `The server did not resolve workspace "${targetWorkspaceId}" for this account. Check your access with 'lh workspace list' before retrying. No run was created.`,
+        );
+      }
+    }
     plan = plan?.map((item) => ({
       ...item,
       sourceCriterionId:
