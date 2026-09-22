@@ -549,6 +549,8 @@
   "unknownError": "Unknown error",
   "update": "Update",
   "updateAgent": "Update Agent Information",
+  "updateUnsupported.action": "Download Latest Version",
+  "updateUnsupported.desc": "This installation format cannot update itself. Download the latest build to upgrade.",
   "upgradeVersion.action": "Upgrade",
   "upgradeVersion.hasNew": "Update available",
   "upgradeVersion.newVersion": "Update available: {{version}}",
