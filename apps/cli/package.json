@@ -25,6 +25,7 @@
     "prepublishOnly": "npm run build && npm run man:generate",
     "test": "bunx vitest run --config vitest.config.mts --silent='passed-only'",
     "test:coverage": "bunx vitest run --config vitest.config.mts --coverage",
+    "test:e2e": "bunx vitest run --config vitest.e2e.config.mts --silent='passed-only'",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {

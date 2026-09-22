@@ -85,3 +85,35 @@ which lh
 lh --help
 lh agent <TAB>
 ```
+
+## Tests
+
+The default `test` and `test:coverage` scripts run offline unit tests only. Live
+E2E uses a separate config and never replaces or removes your selected CLI home.
+It always runs this checkout's `dist/index.js`, not a globally installed `lh` or
+a caller-supplied `LH_CLI_PATH`.
+
+From `apps/cli`, prepare a dedicated test account (never your everyday account):
+
+```bash
+bun run build
+export LOBEHUB_CLI_HOME=.lobehub-e2e
+export LOBEHUB_SERVER=https://your-test-server.example
+node dist/index.js login --server "$LOBEHUB_SERVER"
+node dist/index.js whoami
+
+# Explicitly authorize real writes for this test account/server.
+export LOBEHUB_E2E_ALLOW_WRITES=1
+bun run test:e2e e2e/model.e2e.test.ts --testTimeout=60000 --hookTimeout=60000
+```
+
+Without a selected home, server, write opt-in, built CLI, or valid authentication,
+the live setup fails before fixture creation. A directory name does not itself
+isolate server data: sign in with a dedicated test identity. Model tests own a
+temporary provider, including the remote-model clearing case. Other suites may
+create data or consume model credits, so do not run them on a personal account.
+Collection alone (`bunx vitest list --config vitest.e2e.config.mts`) needs no login.
+Signal and VFS tests additionally require their documented Agent ID variables.
+Search fixtures wait up to 60 seconds for asynchronous indexing; a timeout fails
+the suite rather than accepting empty results. The command above supplies a live
+network budget explicitly; this does not change unit-test timeouts or enable retries.
