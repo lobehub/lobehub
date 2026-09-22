@@ -340,7 +340,7 @@ describe('AgentShareModel', () => {
 
     // `deleteByAgentId` is the hard-teardown path, deliberately NOT what the
     // disable flow uses (see the cycle test below).
-    it('updates visibility, and hard-deletes the share on demand', async () => {
+    it('updates visibility and deletes only the share when explicitly requested', async () => {
       const created = await agentShareModel.create(agentId);
       await serverDB.insert(topics).values({
         agentId,
@@ -360,7 +360,7 @@ describe('AgentShareModel', () => {
           .select()
           .from(topics)
           .where(eq(topics.id, 'agent-share-legacy-visitor-topic')),
-      ).toHaveLength(0);
+      ).toHaveLength(1);
     });
 
     it('returns null for missing shares', async () => {

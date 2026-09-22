@@ -3708,7 +3708,6 @@ table topics {
   content text
   editor_data jsonb
   agent_id text
-  agent_share_id uuid
   group_id text
   project_id text
   project_working_directory_id uuid
@@ -3745,7 +3744,6 @@ table topics {
     session_id [name: 'topics_session_id_idx']
     group_id [name: 'topics_group_id_idx']
     agent_id [name: 'topics_agent_id_idx']
-    (agent_share_id, sender_id) [name: 'topics_agent_share_sender_id_idx']
     project_id [name: 'topics_project_id_idx']
     project_working_directory_id [name: 'topics_project_working_directory_id_idx']
     trigger [name: 'topics_trigger_idx']

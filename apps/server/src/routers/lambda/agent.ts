@@ -46,7 +46,6 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentService } from '@/server/services/agent';
 import { EditLockService } from '@/server/services/editLock';
-import { FileService } from '@/server/services/file';
 import { publishResourceEvent } from '@/server/services/resourceEvents';
 import {
   assertCanEditResource,
@@ -1137,10 +1136,6 @@ export const agentRouter = router({
           ctx.userId,
           input.targetVisibility,
           {
-            onRevokedShareFiles: (urls) =>
-              new FileService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined).deleteFiles(
-                urls,
-              ),
             rejectForeignTopicCommentAuthors: isWorkspaceNonOwner(ctx),
           },
         );
@@ -1182,7 +1177,8 @@ export const agentRouter = router({
           throw new TRPCError({
             cause: { data: { code: TransferErrorCode.SharedTransferBlocked } },
             code: 'PRECONDITION_FAILED',
-            message: 'This agent has a share link, so its owner cannot be changed.',
+            message:
+              'This agent cannot be transferred while a share link exists, including paused links.',
           });
         }
         throw error;
@@ -1327,10 +1323,6 @@ export const agentRouter = router({
           ctx.userId,
           input.targetVisibility,
           {
-            onRevokedShareFiles: (urls) =>
-              new FileService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined).deleteFiles(
-                urls,
-              ),
             rejectForeignTopicCommentAuthors: isWorkspaceNonOwner(ctx),
           },
         );
@@ -1370,7 +1362,8 @@ export const agentRouter = router({
           throw new TRPCError({
             cause: { data: { code: TransferErrorCode.SharedTransferBlocked } },
             code: 'PRECONDITION_FAILED',
-            message: 'One of these agents has a share link, so its owner cannot be changed.',
+            message:
+              'These agents cannot be transferred while a share link exists, including paused links.',
           });
         }
         throw error;

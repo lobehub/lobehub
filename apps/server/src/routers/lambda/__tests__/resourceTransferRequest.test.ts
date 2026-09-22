@@ -174,15 +174,15 @@ describe('resourceTransferRequestRouter', () => {
       expect(mockInvalidate).toHaveBeenCalledWith('agent', ['agent-1']);
     });
 
-    it('surfaces PRECONDITION_FAILED (and keeps the request pending) when the agent is still shared', async () => {
+    it('keeps the request pending when a share row still exists', async () => {
       mockFindById.mockResolvedValue(pendingRequest);
       mockExecuteAcceptedTransfer.mockRejectedValue(new Error(AGENT_SHARED_TRANSFER_BLOCKED));
 
       await expect(caller.accept({ requestId: 'req-1' })).rejects.toMatchObject({
         code: 'PRECONDITION_FAILED',
       });
-      // Recoverable: the previous owner can disable sharing and the recipient
-      // can retry, so the request must NOT be invalidated.
+      // A paused share still blocks ownership transfer; keep the request
+      // pending so the initiator can cancel it or retry after row removal.
       expect(mockInvalidate).not.toHaveBeenCalled();
       expect(mockInvalidateRequest).not.toHaveBeenCalled();
     });

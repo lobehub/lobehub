@@ -474,7 +474,7 @@ describe('agentShareRouter', () => {
         userViewCount: 42,
         visitorCount: 3,
       });
-      expect(mockCountShareVisitors).toHaveBeenCalledWith({ shareId: 'share-1' });
+      expect(mockCountShareVisitors).toHaveBeenCalledWith({ agentId: 'agent-1' });
       // Keyed by the share INSTANCE, not the agent: a share that was turned
       // off and re-created must not inherit the old instance's bytes.
       expect(mockCountAgentShareUsage).toHaveBeenCalledWith('share-1');

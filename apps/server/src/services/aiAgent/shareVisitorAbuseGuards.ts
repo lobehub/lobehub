@@ -122,10 +122,7 @@ export const reserveShareVisitorTopicOrThrow = async (params: {
     const txTopicModel = new TopicModel(tx, ownerId, workspaceId, undefined, {
       includeShareVisitor: true,
     });
-    const currentCount = await txTopicModel.countBySender({
-      senderId: visitorUserId,
-      shareId: expectedShareId,
-    });
+    const currentCount = await txTopicModel.countBySender({ agentId, senderId: visitorUserId });
 
     // Fail closed: a visitor already at (or somehow past) the cap never gets
     // another topic, even if `create`'s own params disagree with `agentId`.

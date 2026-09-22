@@ -16,7 +16,6 @@ import {
   gt,
   ilike,
   inArray,
-  isNotNull,
   isNull,
   like,
   ne,
@@ -209,12 +208,9 @@ export const AGENT_OWNED_BY_GROUP = 'AGENT_OWNED_BY_GROUP';
 export const AGENT_OWNERSHIP_STALE = 'AGENT_OWNERSHIP_STALE';
 
 /**
- * Legacy transfer error code retained for API/UI compatibility.
- *
- * Current transfer paths reconcile the share lifecycle instead: crossing a
- * tenancy boundary hard-revokes the old share, while same-Workspace ownership
- * handover keeps public links and pauses private ones. Older callers may still
- * map this code when talking to a server predating that lifecycle.
+ * A share binds its grants, billing scope and visitor history to the current
+ * agent owner and workspace. Transfers remain unsupported while any share row
+ * exists, including paused shares; disabling a link must not bypass the guard.
  */
 export const AGENT_SHARED_TRANSFER_BLOCKED = 'AGENT_SHARED_TRANSFER_BLOCKED';
 
@@ -232,8 +228,6 @@ export class AgentOwnedByGroupError extends Error {
 }
 
 interface AgentTransferOptions {
-  /** Best-effort deletion of dedicated visitor-upload objects after their DB rows commit. */
-  onRevokedShareFiles?: (urls: string[]) => Promise<void>;
   rejectForeignTopicCommentAuthors?: boolean;
 }
 
@@ -2090,7 +2084,7 @@ export class AgentModel {
   ): Promise<{ agentId: string; slug: string | null; transferJobId: string | null }[]> => {
     if (agentIds.length === 0) return [];
 
-    const { results, revokedShareFileUrls } = await this.db.transaction(async (trx) => {
+    return this.db.transaction(async (trx) => {
       // 1. Verify all agents exist and belong to current scope. FOR UPDATE so
       // two concurrent transfers of the same agent serialize HERE, before the
       // pending-job guard below: the loser re-reads after the winner commits
@@ -2136,82 +2130,15 @@ export class AgentModel {
       const ownedGroups = await this.findOwnedGroupMemberships(trx, agentIds);
       if (ownedGroups.length > 0) throw new AgentOwnedByGroupError(ownedGroups);
 
-      // 1d. Reconcile public-share identity before moving the Agent. A share
-      // belongs to one durable tenancy principal, not just an agent id:
-      // crossing a personal/workspace boundary or changing workspaces must
-      // hard-revoke the old URL. The FK cascade removes its visitor topics so
-      // creating a new share later cannot resurrect the old audience's data.
-      //
-      // A same-workspace owner handover keeps that tenancy principal but pauses
-      // every external link until the recipient explicitly reviews and
-      // republishes it. This deliberately does not follow General Access edit
-      // grants: share management remains creator/admin authority.
-      const hardRevokeAgentIds = foundAgents
-        .filter(
-          (agent) =>
-            agent.workspaceId !== targetWorkspaceId ||
-            (agent.workspaceId === null && agent.userId !== targetUserId),
-        )
-        .map((agent) => agent.id);
-      let revokedShareFileUrls: string[] = [];
-      if (hardRevokeAgentIds.length > 0) {
-        const sharesToRevoke = await trx
-          .select({ id: agentShares.id })
-          .from(agentShares)
-          .where(inArray(agentShares.agentId, hardRevokeAgentIds));
-        const shareIds = sharesToRevoke.map((share) => share.id);
-
-        if (shareIds.length > 0) {
-          // Visitor uploads are dedicated objects (never global-file dedup
-          // entries). Remove their hidden accounting rows in the same
-          // transaction as the hard revoke, then delete the storage objects
-          // through the post-commit callback below.
-          const revokedFiles = await trx
-            .select({ id: files.id, url: files.url })
-            .from(files)
-            .where(inArray(sql<string>`${files.metadata} -> 'agentShare' ->> 'shareId'`, shareIds));
-          if (revokedFiles.length > 0) {
-            await trx.delete(files).where(
-              inArray(
-                files.id,
-                revokedFiles.map((file) => file.id),
-              ),
-            );
-            revokedShareFileUrls = revokedFiles.map((file) => file.url);
-          }
-        }
-
-        // Rows written by an older server during rollout have no share FK and
-        // therefore cannot participate in the cascade below. They are visitor
-        // rows by construction (`senderId IS NOT NULL`), so remove them from
-        // every hard-revoked Agent before a new share can be created.
-        await trx
-          .delete(topics)
-          .where(
-            and(
-              inArray(topics.agentId, hardRevokeAgentIds),
-              isNotNull(topics.senderId),
-              isNull(topics.agentShareId),
-            ),
-          );
-
-        await trx.delete(agentShares).where(inArray(agentShares.agentId, hardRevokeAgentIds));
-      }
-
-      const pauseShareAgentIds = foundAgents
-        .filter(
-          (agent) =>
-            agent.workspaceId !== null &&
-            agent.workspaceId === targetWorkspaceId &&
-            agent.userId !== targetUserId,
-        )
-        .map((agent) => agent.id);
-      if (pauseShareAgentIds.length > 0) {
-        await trx
-          .update(agentShares)
-          .set({ updatedAt: new Date(), visibility: 'private' })
-          .where(inArray(agentShares.agentId, pauseShareAgentIds));
-      }
+      // 1d. Keep the share owner and tenancy stable. Check paused shares too:
+      // disabling a link retains its grants and visitor history. The Agent row
+      // lock also serializes this guard with AgentShareModel.create.
+      const [existingShare] = await trx
+        .select({ id: agentShares.id })
+        .from(agentShares)
+        .where(inArray(agentShares.agentId, agentIds))
+        .limit(1);
+      if (existingShare) throw new Error(AGENT_SHARED_TRANSFER_BLOCKED);
 
       // 2. Resolve slug conflicts in the target scope with a single query:
       //    fetch every existing slug that could collide (exact match or
@@ -2632,30 +2559,12 @@ export class AgentModel {
       // everything reaching here is a `referenced` link the caller confirmed.
       await trx.delete(chatGroupsAgents).where(inArray(chatGroupsAgents.agentId, agentIds));
 
-      return {
-        results: agentIds.map((id) => ({
-          agentId: id,
-          slug: resolvedSlugs.get(id) ?? agentById.get(id)?.slug ?? null,
-          transferJobId,
-        })),
-        revokedShareFileUrls,
-      };
+      return agentIds.map((id) => ({
+        agentId: id,
+        slug: resolvedSlugs.get(id) ?? agentById.get(id)?.slug ?? null,
+        transferJobId,
+      }));
     });
-
-    if (revokedShareFileUrls.length > 0) {
-      try {
-        await options.onRevokedShareFiles?.(revokedShareFileUrls);
-      } catch (error) {
-        // The transfer and file-row deletion have already committed, so a storage outage must not
-        // make callers retry an operation that can no longer be replayed from the original scope.
-        console.error(
-          '[AgentModel.transferAgents] Failed to delete revoked Agent Share files after commit',
-          error,
-        );
-      }
-    }
-
-    return results;
   };
 
   /**
@@ -2707,15 +2616,13 @@ export class AgentModel {
     const ownedGroups = await this.findOwnedGroupMemberships(trx, [agentId]);
     if (ownedGroups.length > 0) throw new AgentOwnedByGroupError(ownedGroups);
 
-    // The Workspace remains the billing/data principal, but creator-scoped
-    // grants do not: allowReadMemory would immediately switch to the
-    // recipient's personal memory after the owner id changes. Pause every
-    // inherited link until the recipient explicitly reviews and republishes
-    // it, regardless of the Agent's internal Workspace visibility.
-    await trx
-      .update(agentShares)
-      .set({ updatedAt: new Date(), visibility: 'private' })
-      .where(and(eq(agentShares.agentId, agentId), eq(agentShares.workspaceId, this.workspaceId)));
+    /** Reject before mutation so the transfer request and share remain unchanged. */
+    const [existingShare] = await trx
+      .select({ id: agentShares.id })
+      .from(agentShares)
+      .where(eq(agentShares.agentId, agentId))
+      .limit(1);
+    if (existingShare) throw new Error(AGENT_SHARED_TRANSFER_BLOCKED);
 
     // A PRIVATE agent stops resolving for everyone but the recipient. Groups
     // that reference it and are NOT the recipient's would render a silent hole

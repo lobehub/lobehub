@@ -34,7 +34,9 @@ if (!goalGraphMigration) throw new Error('Goal Graph migration not found');
 const agentShareTenancyMigration = readMigrationFiles({
   migrationsFolder: path.join(__dirname, '../../../migrations'),
 }).find((migration) =>
-  migration.sql.some((statement) => statement.includes('topics_agent_share_id_agent_shares_id_fk')),
+  migration.sql.some((statement) =>
+    statement.includes('agent_shares_workspace_id_workspaces_id_fk'),
+  ),
 );
 
 if (!agentShareTenancyMigration) throw new Error('Agent Share tenancy migration not found');
@@ -377,32 +379,27 @@ describe('0148 Goal Graph migration', () => {
 });
 
 describe('0169 Workspace Agent Share tenancy migration', () => {
-  it('leaves historical topic reconciliation to the bounded backfill script', () => {
-    expect(agentShareTenancyMigration.sql.join('\n')).not.toContain('UPDATE "topics"');
-  });
-
-  it('requeues visitor objects for durable cleanup before deleting stale shares', async () => {
+  it('preserves existing shares, visitor topics and uploads across repeated migration runs', async () => {
     const client = new PGlite();
 
     try {
       await setupAgentShareTenancyMigrationDependencies(client);
+      const originalShares = await client.query('SELECT id, agent_id FROM agent_shares');
+      const originalTopics = await client.query('SELECT * FROM topics');
+      const originalFiles = await client.query('SELECT * FROM files');
+
+      await runAgentShareTenancyMigration(client);
       await runAgentShareTenancyMigration(client);
 
-      const shares = await client.query('SELECT id FROM agent_shares');
-      const topics = await client.query('SELECT id FROM topics');
-      const files = await client.query('SELECT id FROM files');
-      const uploads = await client.query<{
-        expires_at: Date;
-        file_id: string | null;
-        status: string;
-      }>('SELECT status, file_id, expires_at FROM file_uploads');
-
-      expect(shares.rows).toEqual([]);
-      expect(topics.rows).toEqual([]);
-      expect(files.rows).toEqual([]);
-      expect(uploads.rows).toHaveLength(1);
-      expect(uploads.rows[0]).toMatchObject({ file_id: null, status: 'active' });
-      expect(new Date(uploads.rows[0].expires_at).getTime()).toBeLessThanOrEqual(Date.now());
+      expect((await client.query('SELECT id, agent_id FROM agent_shares')).rows).toEqual(
+        originalShares.rows,
+      );
+      expect((await client.query('SELECT * FROM topics')).rows).toEqual(originalTopics.rows);
+      expect((await client.query('SELECT * FROM files')).rows).toEqual(originalFiles.rows);
+      expect((await client.query('SELECT * FROM file_uploads')).rows).toEqual([]);
+      expect((await client.query('SELECT workspace_id FROM agent_shares')).rows).toEqual([
+        { workspace_id: null },
+      ]);
     } finally {
       await client.close();
     }

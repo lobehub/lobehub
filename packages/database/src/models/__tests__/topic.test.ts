@@ -6,7 +6,6 @@ import { getTestDB } from '../../core/getTestDB';
 import {
   agentOperations,
   agents,
-  agentShares,
   chatGroups,
   messages,
   sessions,
@@ -378,15 +377,10 @@ describe('TopicModel', () => {
       // own topic sidebar (`query({ agentId })`) must never surface them —
       // only the visitor-scoped `queryBySender` should.
       await serverDB.insert(agents).values({ id: 'agent-share', userId });
-      const [share] = await serverDB
-        .insert(agentShares)
-        .values({ agentId: 'agent-share', visibility: 'link' })
-        .returning();
       await serverDB.insert(topics).values([
         { agentId: 'agent-share', id: 't-creator', title: 'creator', userId },
         {
           agentId: 'agent-share',
-          agentShareId: share.id,
           id: 't-visitor',
           senderId: 'visitor-user-x',
           title: 'visitor',
@@ -399,8 +393,8 @@ describe('TopicModel', () => {
       expect(total).toBe(1);
 
       const visitorItems = await topicModel.queryBySender({
+        agentId: 'agent-share',
         senderId: 'visitor-user-x',
-        shareId: share.id,
       });
       expect(visitorItems.map((t) => t.id)).toEqual(['t-visitor']);
     });
@@ -581,153 +575,10 @@ describe('TopicModel', () => {
   });
 
   describe('queryBySender', () => {
-    it('keeps rolling-deploy visitor topics visible before the share backfill finishes', async () => {
-      await serverDB.insert(agents).values({ id: 'agent-share-legacy-topic', userId });
-      const [share] = await serverDB
-        .insert(agentShares)
-        .values({
-          agentId: 'agent-share-legacy-topic',
-          createdAt: new Date('2026-01-02T00:00:00.000Z'),
-          visibility: 'link',
-        })
-        .returning();
-      await serverDB.insert(topics).values([
-        {
-          agentId: 'agent-share-legacy-topic',
-          createdAt: new Date('2026-01-03T00:00:00.000Z'),
-          id: 't-visitor-legacy-current-share',
-          senderId: 'visitor-user-legacy',
-          title: 'legacy current share',
-          userId,
-        },
-        {
-          agentId: 'agent-share-legacy-topic',
-          createdAt: new Date('2026-01-01T00:00:00.000Z'),
-          id: 't-visitor-legacy-old-share',
-          senderId: 'visitor-user-legacy',
-          title: 'legacy old share',
-          userId,
-        },
-      ]);
-
-      await expect(
-        topicModel.queryBySender({ senderId: 'visitor-user-legacy', shareId: share.id }),
-      ).resolves.toEqual([expect.objectContaining({ id: 't-visitor-legacy-current-share' })]);
-      await expect(
-        topicModel.countBySender({ senderId: 'visitor-user-legacy', shareId: share.id }),
-      ).resolves.toBe(1);
-      await expect(topicModel.countShareVisitors({ shareId: share.id })).resolves.toEqual({
-        topicCount: 1,
-        visitorCount: 1,
-      });
-      await expect(
-        topicModel.findByIdForShareVisitor({
-          senderId: 'visitor-user-legacy',
-          shareId: share.id,
-          topicId: 't-visitor-legacy-current-share',
-        }),
-      ).resolves.toMatchObject({ id: 't-visitor-legacy-current-share' });
-      await expect(
-        topicModel.findByIdForShareVisitor({
-          senderId: 'visitor-user-legacy',
-          shareId: share.id,
-          topicId: 't-visitor-legacy-old-share',
-        }),
-      ).resolves.toBeUndefined();
-    });
-
-    it('keeps Workspace visitor topics visible after an owner handover', async () => {
-      const workspaceId = 'topic-share-handover-workspace';
-      const senderId = 'topic-share-handover-visitor';
-
-      await serverDB.insert(workspaces).values({
-        id: workspaceId,
-        name: 'Topic share handover workspace',
-        primaryOwnerId: userId,
-        slug: 'topic-share-handover-workspace',
-      });
-      await serverDB.insert(agents).values({
-        id: 'agent-share-handover',
-        userId,
-        workspaceId,
-      });
-      const [share] = await serverDB
-        .insert(agentShares)
-        .values({ agentId: 'agent-share-handover', visibility: 'link', workspaceId })
-        .returning();
-      await serverDB.insert(topics).values({
-        agentId: 'agent-share-handover',
-        agentShareId: share.id,
-        id: 't-visitor-handover',
-        senderId,
-        title: 'handover visitor topic',
-        userId,
-        workspaceId,
-      });
-
-      const oldOwnerModel = new TopicModel(serverDB, userId, workspaceId);
-      const newOwnerModel = new TopicModel(serverDB, otherUserId, workspaceId);
-
-      await expect(
-        newOwnerModel.queryBySender({ senderId, shareId: share.id }),
-      ).resolves.toHaveLength(1);
-      await expect(newOwnerModel.countBySender({ senderId, shareId: share.id })).resolves.toBe(1);
-      await expect(newOwnerModel.countShareVisitors({ shareId: share.id })).resolves.toEqual({
-        topicCount: 1,
-        visitorCount: 1,
-      });
-
-      // The old owner remains in the same raw Workspace scope as a sanity
-      // check that this is not a special case for the replacement owner.
-      await expect(
-        oldOwnerModel.queryBySender({ senderId, shareId: share.id }),
-      ).resolves.toHaveLength(1);
-    });
-
-    it('keeps personal share visitor topics bound to their owner', async () => {
-      await serverDB.insert(agents).values({ id: 'agent-share-personal-scope', userId });
-      const [share] = await serverDB
-        .insert(agentShares)
-        .values({ agentId: 'agent-share-personal-scope', visibility: 'link' })
-        .returning();
-      await serverDB.insert(topics).values({
-        agentId: 'agent-share-personal-scope',
-        agentShareId: share.id,
-        id: 't-visitor-personal-scope',
-        senderId: 'topic-share-personal-visitor',
-        title: 'personal visitor topic',
-        userId,
-      });
-
-      const otherOwnerModel = new TopicModel(serverDB, otherUserId);
-
-      await expect(
-        otherOwnerModel.queryBySender({
-          senderId: 'topic-share-personal-visitor',
-          shareId: share.id,
-        }),
-      ).resolves.toEqual([]);
-      await expect(
-        otherOwnerModel.countBySender({
-          senderId: 'topic-share-personal-visitor',
-          shareId: share.id,
-        }),
-      ).resolves.toBe(0);
-      await expect(otherOwnerModel.countShareVisitors({ shareId: share.id })).resolves.toEqual({
-        topicCount: 0,
-        visitorCount: 0,
-      });
-    });
-
     it('projects only the visitor-safe runningOperation fields, stripping the rest of metadata', async () => {
       await serverDB.insert(agents).values({ id: 'agent-share-running', userId });
-      const [share] = await serverDB
-        .insert(agentShares)
-        .values({ agentId: 'agent-share-running', visibility: 'link' })
-        .returning();
       await serverDB.insert(topics).values({
         agentId: 'agent-share-running',
-        agentShareId: share.id,
         id: 't-visitor-running',
         metadata: {
           // Creator-only fields that must never reach a visitor.
@@ -749,8 +600,8 @@ describe('TopicModel', () => {
       });
 
       const [item] = await topicModel.queryBySender({
+        agentId: 'agent-share-running',
         senderId: 'visitor-user-running',
-        shareId: share.id,
       });
 
       expect(item.runningOperation).toEqual({
@@ -768,13 +619,8 @@ describe('TopicModel', () => {
 
     it('returns a null runningOperation when the topic has no active run', async () => {
       await serverDB.insert(agents).values({ id: 'agent-share-idle', userId });
-      const [share] = await serverDB
-        .insert(agentShares)
-        .values({ agentId: 'agent-share-idle', visibility: 'link' })
-        .returning();
       await serverDB.insert(topics).values({
         agentId: 'agent-share-idle',
-        agentShareId: share.id,
         id: 't-visitor-idle',
         senderId: 'visitor-user-idle',
         title: 'idle',
@@ -782,8 +628,8 @@ describe('TopicModel', () => {
       });
 
       const [item] = await topicModel.queryBySender({
+        agentId: 'agent-share-idle',
         senderId: 'visitor-user-idle',
-        shareId: share.id,
       });
 
       expect(item.runningOperation).toBeNull();

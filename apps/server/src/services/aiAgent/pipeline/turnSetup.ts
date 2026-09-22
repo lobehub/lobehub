@@ -511,7 +511,6 @@ export const setupTurn = async (
     // (sidebar row, message bucket). Absent → the model mints one as before.
     const newTopicParams = {
       agentId: resolvedAgentId,
-      agentShareId: shareGate?.shareId,
       // Persist the group association when running inside a group conversation.
       // Without it the topic is created group-less and only shows under the
       // member agent's topic list — never in the group sidebar (which queries
@@ -529,9 +528,7 @@ export const setupTurn = async (
       // `TopicModel`'s creator-facing reads (`query`, `count`, `queryTopics`,
       // `queryRecent`, `rank`) filter out via `notShareVisitorTopic()`, and
       // what lets shareChat scope reads per visitor (`queryBySender` /
-      // `countBySender`). `agentShareId` is the durable share-instance boundary:
-      // manual disable/re-enable preserves history, while hard revocation
-      // deletes the share and cascades its visitor topics.
+      // `countBySender`).
       senderId: shareGate?.visitorUserId,
       title:
         title !== undefined

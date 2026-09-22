@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
+import { AGENT_SHARED_TRANSFER_BLOCKED } from '../../models/agent';
 import { AGENT_TRANSFER_IN_PROGRESS } from '../../models/agentTransferJob';
 import { ChatGroupModel } from '../../models/chatGroup';
 import {
@@ -13,6 +14,7 @@ import {
 } from '../../models/topicComment';
 import { agents } from '../../schemas/agent';
 import { agentHistoryJobAgents, agentHistoryJobs } from '../../schemas/agentHistoryJob';
+import { agentShares } from '../../schemas/agentShare';
 import { chatGroups, chatGroupsAgents } from '../../schemas/chatGroup';
 import { messagePlugins, messages } from '../../schemas/message';
 import { threads, topics } from '../../schemas/topic';
@@ -1565,6 +1567,10 @@ describe('AgentGroupRepository', () => {
           workspaceId,
         },
       ]);
+      const [referencedShare] = await serverDB
+        .insert(agentShares)
+        .values({ agentId: 'transfer-member', visibility: 'link', workspaceId })
+        .returning();
       await serverDB.insert(chatGroupsAgents).values([
         {
           agentId: 'transfer-supervisor',
@@ -1645,6 +1651,9 @@ describe('AgentGroupRepository', () => {
         where: (a, { eq }) => eq(a.id, 'transfer-member'),
       });
       expect(referencedMember!.workspaceId).toBe(workspaceId);
+      expect(
+        await serverDB.select().from(agentShares).where(eq(agentShares.id, referencedShare.id)),
+      ).toEqual([referencedShare]);
 
       const junctions = await serverDB.query.chatGroupsAgents.findMany({
         where: (cga, { eq }) => eq(cga.chatGroupId, 'transfer-group'),
@@ -1694,6 +1703,75 @@ describe('AgentGroupRepository', () => {
       expect(comment.updatedAt).toEqual(originalCommentUpdatedAt);
       expect(mention.workspaceId).toBe(targetWorkspaceId);
     });
+
+    it.each(['link', 'private'] as const)(
+      'rejects the whole group transfer when an owned member has a %s share',
+      async (visibility) => {
+        const targetWorkspaceId = `agent-group-blocked-target-${visibility}`;
+        await serverDB.insert(workspaces).values({
+          id: targetWorkspaceId,
+          name: 'Blocked Target Workspace',
+          primaryOwnerId: userId,
+          slug: targetWorkspaceId,
+        });
+
+        const [group] = await serverDB
+          .insert(chatGroups)
+          .values({
+            id: `blocked-group-${visibility}`,
+            title: 'Blocked Group',
+            userId,
+            workspaceId,
+          })
+          .returning();
+        const [ownedAgent] = await serverDB
+          .insert(agents)
+          .values({
+            id: `blocked-supervisor-${visibility}`,
+            title: 'Blocked Supervisor',
+            userId,
+            virtual: true,
+            workspaceId,
+          })
+          .returning();
+        const [share] = await serverDB
+          .insert(agentShares)
+          .values({ agentId: ownedAgent.id, visibility, workspaceId })
+          .returning();
+        const [junction] = await serverDB
+          .insert(chatGroupsAgents)
+          .values({
+            agentId: ownedAgent.id,
+            chatGroupId: group.id,
+            role: 'supervisor',
+            userId,
+            workspaceId,
+          })
+          .returning();
+
+        const wsRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
+
+        await expect(
+          wsRepo.transferToWorkspace(group.id, targetWorkspaceId, userId),
+        ).rejects.toThrow(AGENT_SHARED_TRANSFER_BLOCKED);
+
+        expect(await serverDB.select().from(chatGroups).where(eq(chatGroups.id, group.id))).toEqual(
+          [group],
+        );
+        expect(await serverDB.select().from(agents).where(eq(agents.id, ownedAgent.id))).toEqual([
+          ownedAgent,
+        ]);
+        expect(
+          await serverDB.select().from(agentShares).where(eq(agentShares.id, share.id)),
+        ).toEqual([share]);
+        expect(
+          await serverDB
+            .select()
+            .from(chatGroupsAgents)
+            .where(eq(chatGroupsAgents.agentId, ownedAgent.id)),
+        ).toEqual([junction]);
+      },
+    );
 
     it('aborts when the group leaves the source scope before the lock is taken', async () => {
       // The scope check runs outside the transaction. A racing transfer small

@@ -72,7 +72,6 @@ const TopicModelMock = vi.fn(function () {
   return {
     countBySender: mockCountBySender,
     findById: mockFindById,
-    findByIdForShareVisitor: mockFindById,
     isRunningOperationAlive: mockIsRunningOperationAlive,
     queryBySender: mockQueryBySender,
   };
@@ -230,7 +229,6 @@ const share = {
 
 const visitorTopic = {
   agentId: share.agentId,
-  agentShareId: share.shareId,
   id: 'tpc_visitor',
   metadata: { runningOperation: { operationId: 'op-1' } },
   senderId: VISITOR,
@@ -1098,19 +1096,20 @@ describe('shareChatRouter', () => {
   });
 
   describe('getTopics', () => {
-    it("returns only the visitor's own topics via shareId + senderId scoping", async () => {
+    it("returns only the visitor's own topics via agentId + senderId scoping", async () => {
       const caller = await createCaller();
       await caller.getTopics({ shareId: 'share-1' });
 
       // Topic model is creator-scoped; the query narrows to this visitor's own
-      // topics on this exact share instance. A hard revoke and later re-share
-      // must not expose the retired share's visitor namespace.
+      // topics on this agent. `agent_shares` is 1:1 per agent, so `(agentId,
+      // senderId)` identifies the share conversation without a share-instance
+      // column on `topics`.
       expect(TopicModelMock).toHaveBeenCalledWith(expect.anything(), OWNER, undefined, undefined, {
         includeShareVisitor: true,
       });
       expect(mockQueryBySender).toHaveBeenCalledWith({
+        agentId: share.agentId,
         senderId: VISITOR,
-        shareId: share.shareId,
       });
     });
 
@@ -1126,15 +1125,15 @@ describe('shareChatRouter', () => {
       await caller.getTopics({ shareId: 'share-1' });
 
       expect(mockQueryBySender).toHaveBeenCalledWith({
+        agentId: share.agentId,
         senderId: VISITOR,
-        shareId: share.shareId,
       });
     });
   });
 
   describe('getMessages', () => {
-    it('rejects a topic from a retired share instance of the same agent', async () => {
-      mockFindById.mockResolvedValue({ ...visitorTopic, agentShareId: 'share-old' });
+    it('rejects a topic on a different agent of the same creator', async () => {
+      mockFindById.mockResolvedValue({ ...visitorTopic, agentId: 'agt_other' });
       const caller = await createCaller();
 
       await expect(

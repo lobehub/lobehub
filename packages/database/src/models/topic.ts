@@ -42,7 +42,6 @@ import type { TopicItem } from '../schemas';
 import {
   agentOperations,
   agents,
-  agentShares,
   chatGroups,
   messagePlugins,
   messages,
@@ -189,8 +188,6 @@ const pickVisitorRunningOperation = (
 
 export interface CreateTopicParams {
   agentId?: string | null;
-  /** Share instance that owns a visitor topic. Null for ordinary conversations. */
-  agentShareId?: string | null;
   favorite?: boolean;
   groupId?: string | null;
   messages?: string[];
@@ -444,9 +441,11 @@ export class TopicModel {
    * ownership already scopes to the user there).
    *
    * `mine()` deliberately does NOT AND {@link notShareVisitor} — it is the
-   * per-user variant of {@link workspaceScope}. Creator-facing destructive
-   * sweeps that reach for `mine()` still get the visitor exclusion by AND-ing
-   * {@link notShareVisitor} themselves.
+   * per-user variant of {@link workspaceScope} and the share-scoped methods
+   * ({@link queryBySender} / {@link countBySender} / {@link countShareVisitors})
+   * layer their own `senderId` predicate on top of it. Creator-facing
+   * destructive sweeps that reach for `mine()` still get the visitor
+   * exclusion by AND-ing {@link notShareVisitor} themselves.
    */
   private mine = () => and(this.workspaceScope(), eq(topics.userId, this.userId));
 
@@ -461,10 +460,9 @@ export class TopicModel {
    * true`, so the share runtime opts in explicitly and every other caller
    * gets the visitor guard for free.
    *
-   * The visitor-scoped counterparts ({@link queryBySender}, {@link countBySender},
-   * {@link countShareVisitors}) intentionally do the opposite — they match on
-   * `senderId`, not exclude it — and use {@link workspaceScope} so Workspace
-   * owner handovers do not hide existing visitor topics.
+   * The visitor-scoped counterparts ({@link queryBySender}, {@link countBySender})
+   * intentionally do the opposite — they match on `senderId`, not exclude
+   * it — and use {@link mine} (which skips this helper).
    */
   private notShareVisitor = () => (this.includeShareVisitor ? undefined : notShareVisitorTopic());
   // **************** Query *************** //
@@ -1323,58 +1321,18 @@ export class TopicModel {
   // **************** Agent Share (visitor-scoped) *************** //
 
   /**
-   * Transitional scope for visitor topics created before `agentShareId` was
-   * available on every rolling-deploy writer.
-   *
-   * The timestamp boundary is essential: a hard-revoked share can later be
-   * recreated for the same Agent, and an older null-scoped topic must never be
-   * inherited by that new share instance. Once the bounded backfill has
-   * converged, the first indexed branch serves every normal read.
-   */
-  private shareVisitorScope = (shareId: string) =>
-    or(
-      eq(topics.agentShareId, shareId),
-      and(
-        isNull(topics.agentShareId),
-        sql`EXISTS (
-          SELECT 1
-          FROM ${agentShares}
-          WHERE ${agentShares.id} = ${shareId}
-            AND ${agentShares.agentId} = ${topics.agentId}
-            AND ${agentShares.createdAt} <= ${topics.createdAt}
-        )`,
-      ),
-    );
-
-  /** Ownership- and share-scoped visitor lookup, including rollout-era null rows. */
-  findByIdForShareVisitor = async (params: {
-    senderId: string;
-    shareId: string;
-    topicId: string;
-  }): Promise<TopicItem | undefined> => {
-    const [topic] = await this.db
-      .select()
-      .from(topics)
-      .where(
-        and(
-          this.workspaceScope(),
-          eq(topics.id, params.topicId),
-          eq(topics.senderId, params.senderId),
-          this.shareVisitorScope(params.shareId),
-        ),
-      )
-      .limit(1);
-
-    return topic;
-  };
-
-  /**
    * Share-visitor topic list for one visitor on one shared agent. The model is
    * constructed with the CREATOR's userId (visitor topics carry it), so the
    * caller — the shareChat router — must have already authorized the visitor
-   * via the share access check; `shareId` + `senderId` are the per-visitor
-   * boundary. A manual disable keeps the share row and therefore its topics;
-   * a hard revoke deletes the share row and cascades its visitor topics.
+   * via the share access check; `agentId` + `senderId` together are the
+   * per-visitor boundary.
+   *
+   * `agent_shares` is 1:1 per agent (`agent_shares_agent_id_unique`), so
+   * `agentId` alone identifies which share a visitor topic belongs to — there
+   * is no `topics.share_id` column to scope by. Turning sharing off and back
+   * on keeps the same row and the same `agentId`, so a returning visitor's
+   * older conversations DO resurface under the republished share. That is the
+   * accepted trade-off of not carrying a share id on the row.
    *
    * Selects a visitor-facing DTO instead of the full row: the visitor surface
    * only renders id/title/runningOperation, and the row also carries
@@ -1385,7 +1343,7 @@ export class TopicModel {
    * column — leaves this method; see {@link VisitorRunningOperation}.
    */
   queryBySender = async (
-    { senderId, shareId }: { senderId: string; shareId: string },
+    { agentId, senderId }: { agentId: string; senderId: string },
     { pageSize = VISITOR_TOPIC_PAGE_SIZE }: { pageSize?: number } = {},
   ): Promise<VisitorTopicItem[]> => {
     const rows = await this.db
@@ -1397,9 +1355,7 @@ export class TopicModel {
         updatedAt: topics.updatedAt,
       })
       .from(topics)
-      .where(
-        and(this.workspaceScope(), this.shareVisitorScope(shareId), eq(topics.senderId, senderId)),
-      )
+      .where(and(this.mine(), eq(topics.agentId, agentId), eq(topics.senderId, senderId)))
       .orderBy(desc(topics.updatedAt))
       .limit(pageSize);
 
@@ -1411,24 +1367,20 @@ export class TopicModel {
 
   /**
    * Per-visitor topic count on a shared agent — drives `maxTopicsPerVisitor`.
-   * Same `(shareId, senderId)` scoping as {@link queryBySender}. Workspace
-   * shares use the raw workspace scope rather than the mutable share owner so
-   * visitor topics remain readable after an owner handover. Personal shares
-   * remain bound to `userId` by {@link buildWorkspaceWhere}.
+   * Same `(agentId, senderId)` scoping as {@link queryBySender}; see that
+   * method's JSDoc for why there is no share-id dimension.
    */
   countBySender = async ({
+    agentId,
     senderId,
-    shareId,
   }: {
+    agentId: string;
     senderId: string;
-    shareId: string;
   }): Promise<number> => {
     const result = await this.db
       .select({ count: count(topics.id) })
       .from(topics)
-      .where(
-        and(this.workspaceScope(), this.shareVisitorScope(shareId), eq(topics.senderId, senderId)),
-      );
+      .where(and(this.mine(), eq(topics.agentId, agentId), eq(topics.senderId, senderId)));
 
     return result[0].count;
   };
@@ -1439,18 +1391,18 @@ export class TopicModel {
    *
    * Counterpart to {@link countBySender}, which counts ONE visitor. Both rely
    * on `senderId` being non-null only for share-originated topics, so the
-   * creator's own conversations with the same agent are excluded. Workspace
-   * shares use the raw workspace scope so the numbers survive a mutable owner
-   * handover; personal shares remain user-scoped by `buildWorkspaceWhere`.
+   * creator's own conversations with the same agent are excluded. Scoped by
+   * `this.mine()` like every other read here, so the numbers can only ever
+   * describe rows the caller owns.
    *
-   * `shareId` is the durable share dimension: a disable → re-enable cycle keeps
-   * counting earlier conversations because the row is preserved, while a hard
-   * revoke removes both the share and its visitor topics.
+   * `agentShares` is 1:1 per agent, so `agentId` alone is the share dimension
+   * — see {@link queryBySender} for why a disable → re-enable cycle keeps
+   * counting the earlier conversations.
    */
   countShareVisitors = async ({
-    shareId,
+    agentId,
   }: {
-    shareId: string;
+    agentId: string;
   }): Promise<{ topicCount: number; visitorCount: number }> => {
     const [result] = await this.db
       .select({
@@ -1458,9 +1410,7 @@ export class TopicModel {
         visitorCount: countDistinct(topics.senderId),
       })
       .from(topics)
-      .where(
-        and(this.workspaceScope(), this.shareVisitorScope(shareId), isNotNull(topics.senderId)),
-      );
+      .where(and(this.mine(), eq(topics.agentId, agentId), isNotNull(topics.senderId)));
 
     return {
       topicCount: Number(result?.topicCount ?? 0),

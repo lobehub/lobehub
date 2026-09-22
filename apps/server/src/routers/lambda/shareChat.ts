@@ -51,11 +51,12 @@ const log = debug('lobe-server:router:shareChat');
  * scoping. Every
  * read/write here is therefore manually authorized: resolve the share via
  * {@link resolveLinkShareOrThrow}, then require
- * `topic.senderId === visitor && topic.agentShareId === share.shareId`
+ * `topic.senderId === visitor && topic.agentId === share.agentId`
  * ({@link findVisitorTopicOrThrow}).
  *
- * The durable `topics.agentShareId` boundary keeps a pause resumable while a
- * hard revoke removes the old visitor namespace entirely.
+ * A visitor topic is tied to its share through `(agentId, senderId)`. Turning
+ * sharing off and back on keeps the same share row, so that visitor's older
+ * conversations remain available and continue counting toward the topic cap.
  *
  * Workspace identity is resolved from the share row, never from visitor
  * headers, and is threaded through every model/service that persists data or
@@ -99,24 +100,16 @@ const resolveLinkShareOrThrow = async (db: LobeChatDatabase, shareId: string, vi
 
 /**
  * Resolve a visitor-owned share topic or fail closed. The topic row belongs to
- * the creator (creator-scoped TopicModel), so the senderId + shareId match is
+ * the creator (creator-scoped TopicModel), so the senderId + agentId match is
  * the ONLY thing standing between a visitor and the creator's other topics.
  */
 const findVisitorTopicOrThrow = async (
   topicModel: TopicModel,
-  params: { shareId: string; topicId: string; visitorUserId: string },
+  params: { agentId: string; topicId: string; visitorUserId: string },
 ) => {
-  const topic = await topicModel.findByIdForShareVisitor({
-    senderId: params.visitorUserId,
-    shareId: params.shareId,
-    topicId: params.topicId,
-  });
+  const topic = await topicModel.findById(params.topicId);
 
-  if (
-    !topic ||
-    topic.senderId !== params.visitorUserId ||
-    (topic.agentShareId !== null && topic.agentShareId !== params.shareId)
-  ) {
+  if (!topic || topic.senderId !== params.visitorUserId || topic.agentId !== params.agentId) {
     throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic not found' });
   }
 
@@ -197,7 +190,7 @@ const authorizeVisitorRunningOperation = async (
     includeShareVisitor: true,
   });
   const topic = await findVisitorTopicOrThrow(topicModel, {
-    shareId: share.shareId,
+    agentId: share.agentId,
     topicId: input.topicId,
     visitorUserId,
   });
@@ -651,7 +644,7 @@ export const shareChatRouter = router({
       // topic/message INSERT inside `AiAgentService.execAgent`.
       if (input.topicId) {
         await findVisitorTopicOrThrow(topicModel, {
-          shareId: share.shareId,
+          agentId: share.agentId,
           topicId: input.topicId,
           visitorUserId: ctx.userId,
         });
@@ -668,8 +661,8 @@ export const shareChatRouter = router({
         }
       } else {
         const topicCount = await topicModel.countBySender({
+          agentId: share.agentId,
           senderId: ctx.userId,
-          shareId: share.shareId,
         });
         if (topicCount >= maxTopicsPerVisitor) {
           throw new TRPCError({
@@ -799,7 +792,7 @@ export const shareChatRouter = router({
       { includeShareVisitor: true },
     );
     await findVisitorTopicOrThrow(topicModel, {
-      shareId: share.shareId,
+      agentId: share.agentId,
       topicId: input.topicId,
       visitorUserId: ctx.userId,
     });
@@ -856,8 +849,8 @@ export const shareChatRouter = router({
         { includeShareVisitor: true },
       );
       return topicModel.queryBySender({
+        agentId: share.agentId,
         senderId: ctx.userId,
-        shareId: share.shareId,
       });
     }),
 
@@ -981,7 +974,7 @@ export const shareChatRouter = router({
         { includeShareVisitor: true },
       );
       const topic = await findVisitorTopicOrThrow(topicModel, {
-        shareId: share.shareId,
+        agentId: share.agentId,
         topicId: input.topicId,
         visitorUserId: ctx.userId,
       });

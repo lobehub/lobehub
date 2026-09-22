@@ -209,7 +209,7 @@ describe('shareRouter', () => {
         'owner-user',
         undefined,
       );
-      expect(countShareVisitors).toHaveBeenCalledWith({ shareId: 'agent-share-1' });
+      expect(countShareVisitors).toHaveBeenCalledWith({ agentId: 'agent-1' });
       expect(AgentShareModel.findBySlugOrId).toHaveBeenCalledWith(
         expect.anything(),
         'shared-agent',

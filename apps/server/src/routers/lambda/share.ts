@@ -147,7 +147,7 @@ export const shareRouter = router({
               share.ownerId,
               share.workspaceId ?? undefined,
             );
-            const counts = await topicModel.countShareVisitors({ shareId: share.shareId });
+            const counts = await topicModel.countShareVisitors({ agentId: share.agentId });
             stats = { conversations: counts.topicCount, visitors: counts.visitorCount };
           } catch (error) {
             log('failed to count share visitors for %s: %O', share.shareId, error);

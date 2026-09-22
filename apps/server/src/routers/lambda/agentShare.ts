@@ -224,7 +224,7 @@ export const agentShareRouter = router({
       resolvedShare.workspaceId ?? undefined,
     );
     const [visitors, monthlySpend, fileStorageUsed] = await Promise.all([
-      topicModel.countShareVisitors({ shareId: share.id }),
+      topicModel.countShareVisitors({ agentId: input.agentId }),
       getAgentShareMonthlySpend({
         agentId: input.agentId,
         ownerUserId: resolvedShare.ownerId,

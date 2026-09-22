@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "74a3fa66-2b9c-4748-9d01-4df9d62e8490",
+  "id": "46668212-500d-4b5e-85b1-bc1d19b485f5",
   "policies": {},
   "prevId": "22193fe3-f6d8-433b-97b1-89f5c50ecb65",
   "roles": {},
@@ -31285,12 +31285,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "agent_share_id": {
-          "name": "agent_share_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "group_id": {
           "name": "group_id",
           "type": "text",
@@ -31575,28 +31569,6 @@
           "method": "btree",
           "with": {}
         },
-        "topics_agent_share_sender_id_idx": {
-          "name": "topics_agent_share_sender_id_idx",
-          "columns": [
-            {
-              "expression": "agent_share_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "sender_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"topics\".\"agent_share_id\" is not null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "topics_project_id_idx": {
           "name": "topics_project_id_idx",
           "columns": [
@@ -31771,15 +31743,6 @@
           "tableFrom": "topics",
           "tableTo": "agents",
           "columnsFrom": ["agent_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "topics_agent_share_id_agent_shares_id_fk": {
-          "name": "topics_agent_share_id_agent_shares_id_fk",
-          "tableFrom": "topics",
-          "tableTo": "agent_shares",
-          "columnsFrom": ["agent_share_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
