@@ -1,47 +1,39 @@
 'use client';
 
-import { isDesktop } from '@lobechat/const';
 import type { DeviceListItem } from '@lobechat/types';
 import { Block, Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import { cx } from 'antd-style';
-import { CheckIcon, ChevronDownIcon } from 'lucide-react';
+import { CheckIcon, ChevronDownIcon, FolderIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { formatLockedControlTooltip } from '@/features/ChatInput/utils/lockedControlTooltip';
-import { useDeviceList } from '@/features/DeviceManager/useDeviceList';
-import {
-  ExecutionTargetDeviceStatus,
-  ExecutionTargetIcon,
-  groupExecutionTargetDevices,
-} from '@/features/ExecutionTargetPicker';
-import { resolveExecutionTarget } from '@/helpers/executionTarget';
-import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
-import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { ExecutionTargetDeviceStatus, ExecutionTargetIcon } from '@/features/ExecutionTargetPicker';
 
 import { taskExecutionStyles as styles } from './taskExecutionStyles';
+import { deviceLabel, useTaskRunTarget } from './useTaskRunTarget';
 
 interface TaskDeviceChipProps {
   /** The assignee whose execution environment is inherited when nothing is pinned. */
   agentId: string;
   /**
    * Row class for the trigger. Omitted → the composer's compact chip; the task
-   * detail's properties rail passes its own full-width row class instead.
+   * detail's header row passes its own chip-sized class instead.
    */
   className?: string;
+  /**
+   * The directory the run will use, rendered as a muted line inside the popover.
+   * The directory axis is only choosable for some targets, so for the rest the
+   * state has to be legible HERE — next to the target that determines it —
+   * instead of nowhere.
+   */
+  directoryHint?: string;
   disabled?: boolean;
   /** Pinned device, or `undefined` to inherit the assignee agent's target. */
   onChange: (deviceId: string | undefined) => void;
   value?: string;
 }
-
-const deviceLabel = (
-  device: Pick<DeviceListItem, 'deviceId' | 'friendlyName' | 'hostname'>,
-  unknownLabel: string,
-) => device.friendlyName || device.hostname || unknownLabel;
 
 /**
  * Where a task's runs execute.
@@ -53,41 +45,29 @@ const deviceLabel = (
  * "inherit the agent" and "pin a device" — offering "Cloud Sandbox" as a third
  * row would be a control that silently does nothing whenever the agent's own
  * target is a device.
+ *
+ * The machines are listed flat. There are at most a handful, they are all the
+ * same kind of thing, and the grouping our chat picker needs (personal vs the
+ * workspace pool, where a workspace agent's list is *filtered* by group) has no
+ * counterpart here — a task pins a specific machine the user can see.
  */
 const TaskDeviceChip = memo<TaskDeviceChipProps>(
-  ({ agentId, className, disabled, onChange, value }) => {
+  ({ agentId, className, directoryHint, disabled, onChange, value }) => {
     const { t } = useTranslation('chat');
     const [open, setOpen] = useState(false);
-    const { data: devices, isLoading } = useDeviceList();
 
-    const isHetero = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
-    const { agencyConfig, canSelectExecutionTarget, isPreferenceLoading, workspaceScoped } =
-      useEffectiveAgencyConfig(agentId);
-    const deviceRoutingAvailable = useIsGatewayModeEnabled(agentId);
+    const { canSelect, devices, inheritedLabel, inheritedTarget, isPending } = useTaskRunTarget(
+      agentId,
+      value,
+    );
 
     // The agent's policy is author-controlled: the server's resolver would drop
     // this pin, so the control must not pretend it can set one.
-    const isLocked = disabled || isPreferenceLoading || !canSelectExecutionTarget;
+    const isLocked = disabled || isPending || !canSelect;
 
     const pinned = value ? devices?.find((device) => device.deviceId === value) : undefined;
     const unknownLabel = t('heteroAgent.executionTarget.unknownDevice');
-
-    // What the run will do when the task pins nothing — shown as the summary
-    // and as the "Follow the agent" row's description, so inheritance is
-    // legible instead of a black box.
-    const inheritedTarget = resolveExecutionTarget(agencyConfig, {
-      clientExecutionAvailable: isDesktop,
-      deviceRoutingAvailable,
-      isHetero,
-      workspaceScoped,
-    });
-    const inheritedLabel = (() => {
-      if (inheritedTarget === 'device') {
-        const bound = devices?.find((device) => device.deviceId === agencyConfig?.boundDeviceId);
-        return bound ? deviceLabel(bound, unknownLabel) : unknownLabel;
-      }
-      return t(`heteroAgent.executionTarget.${inheritedTarget}`);
-    })();
+    const isInheriting = !value;
 
     const handleSelect = useCallback(
       (deviceId: string | undefined) => {
@@ -97,9 +77,6 @@ const TaskDeviceChip = memo<TaskDeviceChipProps>(
       },
       [isLocked, onChange],
     );
-
-    const groups = groupExecutionTargetDevices(devices ?? []);
-    const isInheriting = !value;
 
     const renderDeviceRow = (device: DeviceListItem) => {
       const isActive = device.deviceId === value;
@@ -148,29 +125,28 @@ const TaskDeviceChip = memo<TaskDeviceChipProps>(
           {isInheriting && <Icon className={styles.check} icon={CheckIcon} size={14} />}
         </Flexbox>
 
-        {isLoading && (
+        {isPending && (
           <div className={styles.sectionTitle}>{t('heteroAgent.executionTarget.loading')}</div>
         )}
-        {!isLoading && groups.personal.length > 0 && (
-          <>
-            <div className={styles.sectionTitle}>
-              {t('heteroAgent.executionTarget.personalGroup')}
-            </div>
-            <div className={styles.scroll}>{groups.personal.map(renderDeviceRow)}</div>
-          </>
+        {!isPending && devices && devices.length > 0 && (
+          <div className={styles.scroll}>{devices.map(renderDeviceRow)}</div>
         )}
-        {!isLoading && groups.workspace.length > 0 && (
-          <>
-            <div className={styles.sectionTitle}>
-              {t('heteroAgent.executionTarget.workspaceGroup')}
-            </div>
-            <div className={styles.scroll}>{groups.workspace.map(renderDeviceRow)}</div>
-          </>
+        {!isPending && devices?.length === 0 && (
+          <div className={styles.emptyHint}>{t('heteroAgent.executionTarget.noDevices')}</div>
         )}
-        {!isLoading && groups.personal.length === 0 && groups.workspace.length === 0 && (
-          <div className={styles.rowDesc} style={{ paddingBlock: 6, paddingInline: 8 }}>
-            {t('heteroAgent.executionTarget.noDevices')}
-          </div>
+
+        {directoryHint && (
+          <Flexbox
+            horizontal
+            align={'center'}
+            className={styles.hint}
+            gap={4}
+            style={{ paddingBlock: 6 }}
+          >
+            <Icon icon={FolderIcon} size={12} />
+            <span>{t('taskExecution.workingDirectory')}</span>
+            <span className={styles.hintValue}>· {directoryHint}</span>
+          </Flexbox>
         )}
       </Flexbox>
     );

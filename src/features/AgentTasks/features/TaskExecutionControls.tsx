@@ -1,15 +1,31 @@
 'use client';
 
-import type { TaskExecutionConfig } from '@lobechat/types';
-import { applyTaskReposSelection, hasTaskExecutionSelection } from '@lobechat/types';
+import type { TaskExecutionConfig, WorkingDirConfig } from '@lobechat/types';
+import {
+  applyTaskDirectorySelection,
+  applyTaskReposSelection,
+  clearTaskDirectorySelection,
+  getWorkingDirEffectivePath,
+  hasTaskExecutionSelection,
+} from '@lobechat/types';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { FolderIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useEffectiveAgentMode } from '@/features/ChatInput/hooks/useEffectiveAgentMode';
+import {
+  getWorkingDirectoryName,
+  getWorkingDirectoryPathString,
+} from '@/helpers/workingDirectoryPath';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
 import TaskDeviceChip from './TaskDeviceChip';
+import { taskExecutionStyles as styles } from './taskExecutionStyles';
 import TaskRepoChip from './TaskRepoChip';
+import TaskWorkingDirectoryChip from './TaskWorkingDirectoryChip';
+import { useTaskRunTarget } from './useTaskRunTarget';
 
 interface TaskExecutionControlsProps {
   /** The assignee whose execution environment a task inherits by default. */
@@ -23,16 +39,19 @@ interface TaskExecutionControlsProps {
 /**
  * Where this task will run, next to the other task properties.
  *
- * Two chips, matching the two axes the run contract can actually honour:
+ * Two axes, and the second one is decided by the first:
  *
- * - **run location** — pin a machine, or follow the assignee agent. Always
- *   shown for an agent that has an execution environment at all.
- * - **working directory** — a repo selection. The chip hides itself on any
- *   surface where a repo identifier would not be the directory the run uses.
+ * - **run location** — pin a machine, or follow the assignee agent.
+ * - **working directory** — expressed in the units of the target the run lands
+ *   on: an absolute path when it lands on a machine, a cloud repo identifier
+ *   when it lands in the sandbox. When the target leaves nothing choosable the
+ *   directory is reported as a muted line instead of an interactive control.
  *
  * Everything the task leaves unset falls back to the assignee agent, so a task
- * created without touching either chip behaves exactly as tasks did before this
- * existed.
+ * created without touching either axis behaves exactly as tasks did before this
+ * existed. Changing the target clears the directory, because the two describe
+ * the same thing in different units — a leftover selection would be a path the
+ * cloud run cannot use, or a repo name nothing on the machine resolves.
  */
 const TaskExecutionControls = memo<TaskExecutionControlsProps>((props) => {
   const { assigneeAgentId } = props;
@@ -43,12 +62,15 @@ const TaskExecutionControls = memo<TaskExecutionControlsProps>((props) => {
 const TaskExecutionControlsInner = memo<
   Omit<TaskExecutionControlsProps, 'assigneeAgentId'> & { assigneeAgentId: string }
 >(({ assigneeAgentId, disabled, onChange, value }) => {
+  const { t } = useTranslation('chat');
   const isHetero = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(assigneeAgentId));
   const { isAgentRuntimeMode, isPreferenceLoading } = useEffectiveAgentMode(assigneeAgentId);
   // Heterogeneous agents always execute somewhere; a plain agent only has an
   // execution environment in agent mode (chat mode means "no tools, no device").
   // Same gate the chat composer uses for this cluster.
   const canExecuteSomewhere = isHetero || isAgentRuntimeMode;
+
+  const target = useTaskRunTarget(assigneeAgentId, value?.boundDeviceId);
 
   // Both callbacks funnel through here so callers only ever receive `undefined`
   // ("inherit everything") or a selection with at least one real axis set —
@@ -62,7 +84,12 @@ const TaskExecutionControlsInner = memo<
 
   const handleDeviceChange = useCallback(
     (deviceId?: string) => {
-      emit({ ...value, boundDeviceId: deviceId });
+      emit(
+        clearTaskDirectorySelection({
+          ...value,
+          boundDeviceId: deviceId,
+        }),
+      );
     },
     [emit, value],
   );
@@ -74,22 +101,56 @@ const TaskExecutionControlsInner = memo<
     [emit, value],
   );
 
+  const handleDirectoryChange = useCallback(
+    (config?: WorkingDirConfig) => {
+      emit(applyTaskDirectorySelection(value, config));
+    },
+    [emit, value],
+  );
+
   if (isPreferenceLoading || !canExecuteSomewhere) return null;
+
+  // What the run actually starts in: the task's own choice first, then the
+  // chain the runtime falls back to. Shown as the muted hint so "inherit" is
+  // legible as a concrete directory instead of a black box.
+  const selectedDirectory =
+    getWorkingDirEffectivePath(value?.workingDirectoryConfig) ??
+    getWorkingDirectoryPathString(value?.workingDirectory);
+  const effectiveDirectory = selectedDirectory ?? target.inheritedDirectory?.path;
+  const directorySummary = effectiveDirectory
+    ? (getWorkingDirectoryName(effectiveDirectory) ?? effectiveDirectory)
+    : t('taskExecution.followAgent');
 
   return (
     <>
       <TaskDeviceChip
         agentId={assigneeAgentId}
+        directoryHint={directorySummary}
         disabled={disabled}
         value={value?.boundDeviceId}
         onChange={handleDeviceChange}
       />
-      <TaskRepoChip
-        agentId={assigneeAgentId}
-        disabled={disabled}
-        value={value?.repos}
-        onChange={handleReposChange}
-      />
+      {target.directoryKind === 'device' && target.deviceId ? (
+        <TaskWorkingDirectoryChip
+          deviceId={target.deviceId}
+          disabled={disabled}
+          value={value?.workingDirectoryConfig}
+          onChange={handleDirectoryChange}
+        />
+      ) : target.directoryKind === 'repo' ? (
+        <TaskRepoChip
+          agentId={assigneeAgentId}
+          disabled={disabled}
+          value={value?.repos}
+          onChange={handleReposChange}
+        />
+      ) : (
+        <Flexbox horizontal align={'center'} className={styles.hint} gap={4}>
+          <Icon icon={FolderIcon} size={12} />
+          <span>{t('taskExecution.workingDirectory')}</span>
+          <span className={styles.hintValue}>· {directorySummary}</span>
+        </Flexbox>
+      )}
     </>
   );
 });
