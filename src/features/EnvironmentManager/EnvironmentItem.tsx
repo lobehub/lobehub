@@ -17,6 +17,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
+import { formatSize } from '@/utils/format';
 
 import { repositoryPath } from './repository';
 import { useCanEditEnvironment } from './useCanEditEnvironment';
@@ -24,13 +25,19 @@ import { type SandboxEnvironment, useEnvironmentActions } from './useEnvironment
 
 const styles = createStaticStyles(({ css }) => ({
   /**
-   * The counts. `flex: none` and no ellipsis: they are the shortest thing on
-   * the line, so a long repository path has to truncate itself rather than
-   * squeeze out the answer to "how many instances does this have".
+   * The counts. They shrink last: a long repository path gives way first
+   * (its shrink weight is far higher), but with the panel open the list is a
+   * third of the frame and even the facts alone can outrun it, so they
+   * truncate rather than run under the avatar and the menu.
    */
   facts: css`
-    flex: none;
+    overflow: hidden;
+    flex: 0 1 auto;
+
+    min-width: 0;
+
     font-size: ${cssVar.fontSizeSM};
+    text-overflow: ellipsis;
     white-space: nowrap;
   `,
   iconTile: css`
@@ -55,6 +62,10 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   repository: css`
     overflow: hidden;
+    flex: 0 1000 auto;
+
+    min-width: 0;
+
     font-size: ${cssVar.fontSizeSM};
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -97,6 +108,11 @@ interface EnvironmentItemProps {
   onCreateInstance: () => void;
   onSelect: () => void;
   selected?: boolean;
+  /**
+   * Bytes kept by this environment's instances, or `null` when the snapshot
+   * store could not be reached and the sizes are unknown rather than zero.
+   */
+  storageBytes?: number | null;
 }
 
 /**
@@ -109,7 +125,7 @@ interface EnvironmentItemProps {
  * lives in the panel this row opens.
  */
 const EnvironmentItem = memo<EnvironmentItemProps>(
-  ({ environment, instanceCount, onCreateInstance, onSelect, selected }) => {
+  ({ environment, instanceCount, onCreateInstance, onSelect, selected, storageBytes }) => {
     const { t } = useTranslation('setting');
     const { t: tCommon } = useTranslation('common');
     const actions = useEnvironmentActions();
@@ -227,6 +243,16 @@ const EnvironmentItem = memo<EnvironmentItemProps>(
               {instanceCount === 0
                 ? t('environments.instances.empty')
                 : t('environments.instances.count', { count: instanceCount })}
+              {/* Snapshot storage, not live disk: what the instances have
+                  kept, which is what a plan's quota is spent on. Shown only
+                  once something has been kept — instances that were never
+                  used add up to nothing, and "0.0 KB" reads as a fault. */}
+              {typeof storageBytes === 'number' && storageBytes > 0 && (
+                <>
+                  {' · '}
+                  {t('environments.meta.storage', { size: formatSize(storageBytes) })}
+                </>
+              )}
               {' · '}
               {t('environments.meta.createdAt', {
                 time: dayjs(environment.createdAt).fromNow(),

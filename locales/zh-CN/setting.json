@@ -563,6 +563,7 @@
   "environments.meta.createdAt": "创建于 {{time}}",
   "environments.meta.creator": "创建者",
   "environments.meta.creatorTooltip": "由 {{name}} 创建",
+  "environments.meta.storage": "占用 {{size}}",
   "environments.meta.unknownCreator": "未知",
   "environments.mine": "我的环境",
   "environments.nameLabel": "名称",

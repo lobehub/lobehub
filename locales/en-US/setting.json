@@ -563,6 +563,7 @@
   "environments.meta.createdAt": "Created {{time}}",
   "environments.meta.creator": "Created by",
   "environments.meta.creatorTooltip": "Created by {{name}}",
+  "environments.meta.storage": "Using {{size}}",
   "environments.meta.unknownCreator": "Unknown",
   "environments.mine": "My environments",
   "environments.nameLabel": "Name",

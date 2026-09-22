@@ -3871,6 +3871,7 @@ When I am ___, I need ___
   'environments.meta.unknownCreator': 'Unknown',
   'environments.meta.created': 'Created',
   'environments.meta.createdAt': 'Created {{time}}',
+  'environments.meta.storage': 'Using {{size}}',
   'environments.detail.close': 'Close',
   'environments.form.desc':
     'What an instance is built from — where the code comes from and what makes it usable.',
