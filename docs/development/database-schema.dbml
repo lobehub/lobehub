@@ -4414,6 +4414,7 @@ table works {
   user_id text [not null]
   workspace_id text
   visibility text [not null]
+  metadata jsonb
   deleted_at "timestamp with time zone"
   is_deleted boolean
   created_at "timestamp with time zone" [not null, default: `now()`]

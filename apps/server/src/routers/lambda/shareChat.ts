@@ -9,7 +9,9 @@ import {
 } from '@lobechat/const';
 import type { ChatMessageError } from '@lobechat/types';
 import {
+  agentShareDocumentAccessScope,
   agentShareFileAccessScope,
+  agentShareWorkAccessScope,
   ChatErrorType,
   entityIdPattern,
   RequestTrigger,
@@ -22,6 +24,7 @@ import { z } from 'zod';
 import { checkAgentShareSpendAllowance } from '@/business/server/agent-share/spendGate';
 import { serverDBEnv } from '@/config/db';
 import { AgentShareModel } from '@/database/models/agentShare';
+import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { FileUploadModel } from '@/database/models/fileUpload';
 import { MessageModel, sanitizeVisitorError } from '@/database/models/message';
@@ -780,54 +783,111 @@ export const shareChatRouter = router({
       }
     }),
 
+  /**
+   * One document a visitor's share run produced (the open target of a
+   * `document` Work card). Read under the visitor's share document scope, so
+   * only a document stamped with exactly this share/topic/visitor resolves —
+   * the creator's own documents and other visitors' documents 404.
+   */
+  getDocument: shareChatProcedure
+    .input(ShareTopicScopeSchema.extend({ documentId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      const share = await resolveLinkShareOrThrow(ctx.serverDB, input.shareId, ctx.userId);
+
+      const topicModel = new TopicModel(
+        ctx.serverDB,
+        share.ownerId,
+        share.workspaceId ?? undefined,
+        undefined,
+        { includeShareVisitor: true },
+      );
+      await findVisitorTopicOrThrow(topicModel, {
+        agentId: share.agentId,
+        topicId: input.topicId,
+        visitorUserId: ctx.userId,
+      });
+
+      const documentModel = new DocumentModel(
+        ctx.serverDB,
+        share.ownerId,
+        share.workspaceId ?? undefined,
+        undefined,
+        agentShareDocumentAccessScope({
+          shareId: share.shareId,
+          topicId: input.topicId,
+          visitorUserId: ctx.userId,
+        }),
+      );
+      const document = await documentModel.findById(input.documentId);
+      if (!document) throw new TRPCError({ code: 'NOT_FOUND', message: 'Document not found' });
+
+      // Narrow projection: no metadata / source / owner columns cross the
+      // share boundary — the visitor only needs what the read-only viewer shows.
+      return {
+        content: document.content,
+        fileType: document.fileType,
+        id: document.id,
+        title: document.title,
+        updatedAt: document.updatedAt,
+      };
+    }),
+
   /** Messages of one visitor-owned share topic. */
-  getMessages: shareChatProcedure.input(ShareTopicScopeSchema).query(async ({ input, ctx }) => {
-    const share = await resolveLinkShareOrThrow(ctx.serverDB, input.shareId, ctx.userId);
+  getMessages: shareChatProcedure
+    .input(ShareTopicScopeSchema.extend({ includeFileWorks: z.boolean().optional() }))
+    .query(async ({ input, ctx }) => {
+      const share = await resolveLinkShareOrThrow(ctx.serverDB, input.shareId, ctx.userId);
 
-    const topicModel = new TopicModel(
-      ctx.serverDB,
-      share.ownerId,
-      share.workspaceId ?? undefined,
-      undefined,
-      { includeShareVisitor: true },
-    );
-    await findVisitorTopicOrThrow(topicModel, {
-      agentId: share.agentId,
-      topicId: input.topicId,
-      visitorUserId: ctx.userId,
-    });
+      const topicModel = new TopicModel(
+        ctx.serverDB,
+        share.ownerId,
+        share.workspaceId ?? undefined,
+        undefined,
+        { includeShareVisitor: true },
+      );
+      await findVisitorTopicOrThrow(topicModel, {
+        agentId: share.agentId,
+        topicId: input.topicId,
+        visitorUserId: ctx.userId,
+      });
 
-    const messageModel = new MessageModel(
-      ctx.serverDB,
-      share.ownerId,
-      share.workspaceId ?? undefined,
-      undefined,
-      { includeShareVisitor: true },
-    );
-    const fileService = new FileService(
-      ctx.serverDB,
-      share.ownerId,
-      share.workspaceId ?? undefined,
-    );
+      const messageModel = new MessageModel(
+        ctx.serverDB,
+        share.ownerId,
+        share.workspaceId ?? undefined,
+        undefined,
+        { includeShareVisitor: true },
+      );
+      const fileService = new FileService(
+        ctx.serverDB,
+        share.ownerId,
+        share.workspaceId ?? undefined,
+      );
 
-    // queryForVisitor strips the creator's `sender` identity, and — unless the
-    // share opts in via `showModelInfo` / `showErrorDetails` — the spend/model
-    // snapshot and raw error payload too. Share messages persist under the
-    // CREATOR's account (see the module doc above), so the raw `query()` result
-    // would otherwise leak the creator's account identity to the visitor.
-    return messageModel.queryForVisitor(
-      // skipWorks: Work summaries join live task/version state of the CREATOR's
-      // account — never serve them to a visitor surface.
-      { skipWorks: true, topicId: input.topicId },
-      {
-        postProcessUrl: (path, file) => fileService.getFileAccessUrl({ id: file.id, url: path }),
-        redaction: {
-          showErrorDetails: share.shareConfig.showErrorDetails,
-          showModelInfo: share.shareConfig.showModelInfo,
+      // queryForVisitor strips the creator's `sender` identity, and — unless the
+      // share opts in via `showModelInfo` / `showErrorDetails` — the spend/model
+      // snapshot and raw error payload too. Share messages persist under the
+      // CREATOR's account (see the module doc above), so the raw `query()` result
+      // would otherwise leak the creator's account identity to the visitor.
+      return messageModel.queryForVisitor(
+        { includeFileWorks: input.includeFileWorks, topicId: input.topicId },
+        {
+          postProcessUrl: (path, file) => fileService.getFileAccessUrl({ id: file.id, url: path }),
+          redaction: {
+            showErrorDetails: share.shareConfig.showErrorDetails,
+            showModelInfo: share.shareConfig.showModelInfo,
+          },
+          // Work summaries are assembled under the visitor's OWN share scope:
+          // only Works registered from this share topic resolve, never the
+          // creator's ordinary Works (see `workMatchesAccessScope`).
+          workAccessScope: agentShareWorkAccessScope({
+            shareId: share.shareId,
+            topicId: input.topicId,
+            visitorUserId: ctx.userId,
+          }),
         },
-      },
-    );
-  }),
+      );
+    }),
 
   /** The visitor's own topics on this shared agent. */
   getTopics: shareChatProcedure

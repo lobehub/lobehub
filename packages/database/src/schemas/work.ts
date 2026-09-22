@@ -1,4 +1,5 @@
 import type {
+  WorkMetadata,
   WorkResourceType,
   WorkType,
   WorkVersionChangeType,
@@ -98,6 +99,11 @@ export const works = pgTable(
      * Ignored in personal mode where the row is implicitly private to its owner.
      */
     visibility: text('visibility').$type<WorkVisibility>().notNull(),
+    /**
+     * Server-owned provenance, e.g. `agentShare` for Works registered by a
+     * share visitor's run (see `WorkAccessScope`). Null for ordinary Works.
+     */
+    metadata: jsonb('metadata').$type<WorkMetadata>(),
 
     /** Recycle bin — see `schemas/trash.ts`. */
     ...softDeleteColumns(),

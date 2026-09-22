@@ -22,6 +22,7 @@ import {
   isDeviceToolIdentifier,
   logDeviceToolAudit,
 } from '@/server/services/aiAgent/deviceToolAudit';
+import { resolveRunWorkAccessScope } from '@/server/services/workRegistration';
 
 import type { RuntimeExecutorContext } from '../context';
 import { dispatchClientTool } from '../dispatchClientTool';
@@ -50,7 +51,21 @@ export class ServerToolTransport implements ToolTransport {
   }
 
   async registerWork(registration: ToolWorkRegistration, state: AgentState): Promise<void> {
+    const topicId = state.origin?.topicId;
+    // A share visitor's run registers under the share scope of its visitor
+    // topic; without a topic there is no scope to serve it back through, so
+    // fail closed rather than leak an unscoped Work into the creator's lists.
+    const accessScope = resolveRunWorkAccessScope({
+      shareVisitor: this.ctx.agentShareVisitor,
+      topicId,
+    });
+    if (accessScope === null) {
+      log('registerWork skipped: share visitor run has no topic (op=%s)', this.ctx.operationId);
+      return;
+    }
+
     await registerWorkFromIntent({
+      accessScope,
       agentId: state.origin?.agentId ?? null,
       intent: registration.intent,
       rootOperationId: this.ctx.operationId,
@@ -61,7 +76,7 @@ export class ServerToolTransport implements ToolTransport {
       sourceToolName: registration.sourceToolName,
       state: registration.state,
       threadId: state.origin?.threadId,
-      topicId: state.origin?.topicId,
+      topicId,
       userId: this.ctx.userId,
       workspaceId: state.origin?.workspaceId ?? this.ctx.workspaceId,
     });

@@ -1,5 +1,5 @@
 import { INBOX_SESSION_ID } from '@lobechat/const';
-import { MessageGroupType } from '@lobechat/types';
+import { agentShareWorkAccessScope, MessageGroupType } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -29,6 +29,7 @@ import {
 } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { MessageModel, toVisitorMessage } from '../../message';
+import { WorkModel } from '../../work';
 import { codeEmbedding } from '../fixtures/embedding';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -1555,6 +1556,88 @@ describe('MessageModel Query Tests', () => {
       const result = await messageModel.queryForVisitor({ topicId: visitorTopicId });
 
       expect(result.map((item) => item.id)).toEqual(['visitor-direct-msg']);
+    });
+
+    describe('Work summaries', () => {
+      const provenance = { shareId: 'share-works', topicId: visitorTopicId, visitorUserId };
+      const rootOperationId = 'op-visitor-works';
+
+      beforeEach(async () => {
+        await serverDB.insert(messages).values({
+          content: 'visitor reply',
+          id: 'visitor-anchor-msg',
+          metadata: { work: { rootOperationId } },
+          role: 'assistant',
+          topicId: visitorTopicId,
+          userId,
+        });
+        // A file Work the visitor's run registered under the share scope.
+        await new WorkModel(
+          serverDB,
+          userId,
+          undefined,
+          agentShareWorkAccessScope(provenance),
+        ).registerFile({
+          cumulativeCost: 0.42,
+          cumulativeUsage: { capturedAt: '2026-01-01T00:00:00.000Z', usage: { totalTokens: 9 } },
+          filePath: '/mnt/data/report.md',
+          metadata: { fileId: 'file-report', filePath: '/mnt/data/report.md' },
+          rootOperationId,
+          title: 'report.md',
+          toolCallId: `op:${rootOperationId}`,
+          toolIdentifier: 'lobe-cloud-sandbox',
+          toolName: 'writeFile',
+          topicId: visitorTopicId,
+          userId,
+        });
+      });
+
+      const findAnchor = (rows: { id: string }[]) =>
+        rows.find((item) => item.id === 'visitor-anchor-msg') as any;
+
+      it('skips Work assembly entirely without a share scope (fail closed)', async () => {
+        const result = await messageModel.queryForVisitor({
+          includeFileWorks: true,
+          topicId: visitorTopicId,
+        });
+
+        expect(findAnchor(result).works).toBeUndefined();
+      });
+
+      it('serves the share-scoped Works with the creator spend redacted', async () => {
+        const result = await messageModel.queryForVisitor(
+          { includeFileWorks: true, topicId: visitorTopicId },
+          { workAccessScope: agentShareWorkAccessScope(provenance) },
+        );
+
+        const works = findAnchor(result).works;
+        expect(works).toHaveLength(1);
+        expect(works[0]).toMatchObject({ title: 'report.md', totalCost: null, type: 'file' });
+        expect(works[0].event).toMatchObject({ cumulativeCost: null, cumulativeUsage: null });
+      });
+
+      it('keeps the spend snapshot when the share exposes model info', async () => {
+        const result = await messageModel.queryForVisitor(
+          { includeFileWorks: true, topicId: visitorTopicId },
+          {
+            redaction: { showModelInfo: true },
+            workAccessScope: agentShareWorkAccessScope(provenance),
+          },
+        );
+
+        const works = findAnchor(result).works;
+        expect(works[0]).toMatchObject({ totalCost: 0.42 });
+        expect(works[0].event.cumulativeUsage).toMatchObject({ usage: { totalTokens: 9 } });
+      });
+
+      it('never resolves the visitor Works through the creator scope', async () => {
+        const result = await messageModel.query(
+          { includeFileWorks: true, topicId: visitorTopicId },
+          { allowShareVisitor: true },
+        );
+
+        expect(findAnchor(result).works).toBeUndefined();
+      });
     });
 
     it('honours an explicit allowShareVisitor opt-in (agent runtime path)', async () => {

@@ -4,8 +4,10 @@ import { ChatErrorType, RequestTrigger } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { NotifyAgentInterventionRequiredParams } from '@/business/server/agent-run/agentInterventionReview';
+import { WorkModel } from '@/database/models/work';
 import * as agentSignalService from '@/server/services/agentSignal';
 import * as verifyServices from '@/server/services/verify';
+import type * as WorkRegistrationModule from '@/server/services/workRegistration';
 import { registerWorksForOperation } from '@/server/services/workRegistration';
 
 import {
@@ -51,7 +53,10 @@ vi.mock('../agentInterventionNotification', () => ({
   buildRuntimeInterventionNotification: mockBuildRuntimeInterventionNotification,
 }));
 
-vi.mock('@/server/services/workRegistration', () => ({
+vi.mock('@/server/services/workRegistration', async (importOriginal) => ({
+  // Keep the real scope resolver: it is pure, and the share-visitor test below
+  // asserts the scope it derives reaches both the scan and the anchor lookup.
+  ...(await importOriginal<typeof WorkRegistrationModule>()),
   registerWorksForOperation: vi.fn(),
 }));
 
@@ -1783,5 +1788,53 @@ describe('CompletionLifecycle.registerFileWorks', () => {
 
     await expect(lifecycle.registerFileWorks('op-1', {} as any)).resolves.toBeUndefined();
     expect(mockRegister).toHaveBeenCalledTimes(1);
+  });
+
+  it('registers and anchors a share visitor run under its visitor-topic share scope', async () => {
+    mockRegister.mockClear();
+    vi.mocked(WorkModel).mockClear();
+    mockRegister.mockResolvedValue({ attempted: 1, failed: 0 });
+    mockListWorks.mockResolvedValue([{ id: 'visitor-file-work' }]);
+    const lifecycle = buildLifecycle();
+    const update = vi
+      .spyOn(lifecycle['messageModel'], 'update')
+      .mockResolvedValue({ success: true });
+    const shareVisitor = { agentId: 'agt_1', shareId: 'share-1', visitorUserId: 'visitor-1' };
+    const state = {
+      metadata: { workAssistantMessageId: 'final-assistant' },
+      origin: { sourceMessageId: 'source-user', topicId: 'tpc_visitor', userId: 'user-1' },
+      principal: { actor: { shareVisitor } },
+    };
+
+    await lifecycle.registerFileWorks('op-1', state);
+
+    expect(mockRegister).toHaveBeenCalledWith(
+      expect.objectContaining({ agentShareVisitor: shareVisitor, operationId: 'op-1' }),
+    );
+    // The anchor lookup must read through the SAME scope the scan wrote under,
+    // or the visitor's Work is never found and the chip never renders.
+    expect(vi.mocked(WorkModel)).toHaveBeenCalledWith(expect.anything(), 'user-1', undefined, {
+      shareId: 'share-1',
+      topicId: 'tpc_visitor',
+      type: 'agentShare',
+      visitorUserId: 'visitor-1',
+    });
+    expect(update).toHaveBeenCalledWith('final-assistant', {
+      metadata: { work: { rootOperationId: 'op-1', userMessageId: 'source-user' } },
+    });
+  });
+
+  it('skips a share visitor run that has no topic instead of registering unscoped', async () => {
+    mockRegister.mockClear();
+    const lifecycle = buildLifecycle();
+    const state = {
+      metadata: {},
+      origin: { userId: 'user-1' },
+      principal: { actor: { shareVisitor: { shareId: 'share-1', visitorUserId: 'visitor-1' } } },
+    };
+
+    await expect(lifecycle.registerFileWorks('op-1', state)).resolves.toBeUndefined();
+    expect(mockRegister).not.toHaveBeenCalled();
+    expect(state.metadata).not.toHaveProperty('_fileWorksRegistered');
   });
 });

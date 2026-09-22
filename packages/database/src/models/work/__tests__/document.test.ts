@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { agentShareDocumentAccessScope } from '@lobechat/types';
+import { agentShareDocumentAccessScope, agentShareWorkAccessScope } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -119,6 +119,69 @@ describe('WorkModel · document', () => {
     expect(await serverDB.select().from(works).where(eq(works.resourceId, doc.documentId))).toEqual(
       [],
     );
+  });
+
+  it('registers an Agent Share document under the matching share scope only', async () => {
+    const provenance = { shareId: 'share-work', topicId, visitorUserId: 'visitor-work' };
+    const agentDocumentModel = new AgentDocumentModel(
+      serverDB,
+      userId,
+      undefined,
+      agentShareDocumentAccessScope(provenance),
+    );
+    const doc = await agentDocumentModel.create(agentId, 'visitor-note.md', 'Visitor draft');
+
+    // The share-scoped registrar (what a visitor's run uses) resolves the share
+    // document and stamps the Work with the same provenance.
+    const shareWorkModel = new WorkModel(
+      serverDB,
+      userId,
+      undefined,
+      agentShareWorkAccessScope(provenance),
+    );
+    const work = await shareWorkModel.registerDocument({
+      agentDocumentId: doc.id,
+      agentId,
+      changeType: 'created',
+      documentId: doc.documentId,
+      rootOperationId: 'op-share-doc-create',
+      toolCallId: 'tool-call-share-doc-create',
+      toolIdentifier: 'lobe-agent-documents',
+      toolName: 'createDocument',
+      topicId,
+    });
+    expect(work).not.toBeNull();
+    const [row] = await serverDB.select().from(works).where(eq(works.id, work!.id));
+    expect(row.metadata).toEqual({ agentShare: provenance });
+
+    // Served back to that visitor topic …
+    const shareSummaries = await shareWorkModel.listSummariesByRootOperations({
+      rootOperationIds: ['op-share-doc-create'],
+    });
+    expect(shareSummaries['op-share-doc-create']).toHaveLength(1);
+    expect(shareSummaries['op-share-doc-create'][0]).toMatchObject({
+      resourceId: doc.documentId,
+      type: 'document',
+    });
+
+    // … but never to the creator's ordinary surfaces, nor to another visitor topic.
+    const ordinary = await new WorkModel(serverDB, userId).listSummariesByRootOperations({
+      rootOperationIds: ['op-share-doc-create'],
+    });
+    expect(ordinary['op-share-doc-create']).toEqual([]);
+    const otherTopic = new WorkModel(
+      serverDB,
+      userId,
+      undefined,
+      agentShareWorkAccessScope({ ...provenance, topicId: 'other-visitor-topic' }),
+    );
+    const otherSummaries = await otherTopic.listSummariesByRootOperations({
+      rootOperationIds: ['op-share-doc-create'],
+    });
+    expect(otherSummaries['op-share-doc-create']).toEqual([]);
+    expect(
+      await otherTopic.listByRootOperation({ rootOperationId: 'op-share-doc-create' }),
+    ).toEqual([]);
   });
 
   it('uses the document content prefix when document description is empty', async () => {

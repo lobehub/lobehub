@@ -1183,6 +1183,13 @@
       "when": 1789892818833,
       "tag": "0168_scm_integration",
       "breakpoints": true
+    },
+    {
+      "idx": 169,
+      "version": "7",
+      "when": 1790066710949,
+      "tag": "0169_works_metadata",
+      "breakpoints": true
     }
   ],
   "version": "6"
