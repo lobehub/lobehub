@@ -1,4 +1,4 @@
-import type { DeviceGitPullRequestCheck, DeviceGitPullRequestDetail } from '@lobechat/types';
+import type { DeviceGitLinkedPullRequest, DeviceGitPullRequestCheck } from '@lobechat/types';
 import { cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -52,7 +52,9 @@ export const DOCK_ICON: Record<DockIcon, LucideIcon> = {
 
 export type PullRequestVisualState = 'closed' | 'draft' | 'merged' | 'open';
 
-export const getDetailVisual = (detail: DeviceGitPullRequestDetail) => {
+export const getDetailVisual = (
+  detail: Pick<DeviceGitLinkedPullRequest, 'isDraft' | 'mergedAt' | 'state'>,
+) => {
   const state = getPullRequestState(detail);
   if (state === 'open' && detail.isDraft)
     return {
