@@ -880,11 +880,18 @@ export const shareChatRouter = router({
           // Work summaries are assembled under the visitor's OWN share scope:
           // only Works registered from this share topic resolve, never the
           // creator's ordinary Works (see `workMatchesAccessScope`).
-          workAccessScope: agentShareWorkAccessScope({
-            shareId: share.shareId,
-            topicId: input.topicId,
-            visitorUserId: ctx.userId,
-          }),
+          //
+          // Gated on the client's `includeFileWorks` opt-in: pre-Works clients
+          // (rolling deploys, cached sessions, lagging desktop builds) never
+          // send it and have no share-aware open handler for the cards, so
+          // they keep the old Work-free response instead of dead cards.
+          workAccessScope: input.includeFileWorks
+            ? agentShareWorkAccessScope({
+                shareId: share.shareId,
+                topicId: input.topicId,
+                visitorUserId: ctx.userId,
+              })
+            : undefined,
         },
       );
     }),

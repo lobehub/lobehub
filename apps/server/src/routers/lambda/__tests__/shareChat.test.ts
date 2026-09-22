@@ -1177,6 +1177,19 @@ describe('shareChatRouter', () => {
       );
     });
 
+    it('keeps the Work-free response for clients that do not opt in', async () => {
+      // Pre-Works clients (rolling deploys, cached sessions, lagging desktop
+      // builds) omit `includeFileWorks` and cannot open visitor Work cards, so
+      // no share scope is supplied and queryForVisitor skips Work assembly.
+      const caller = await createCaller();
+      await caller.getMessages({ shareId: 'share-1', topicId: 'tpc_visitor' });
+
+      expect(mockMessageQueryForVisitor).toHaveBeenCalledWith(
+        { includeFileWorks: undefined, topicId: 'tpc_visitor' },
+        expect.objectContaining({ workAccessScope: undefined }),
+      );
+    });
+
     it('uses the visitor-redacted read path, never the raw creator-scoped query()', async () => {
       // Regression: getMessages must call `queryForVisitor` (which strips the
       // creator's sender/spend fields), not `query()` — see message.ts
