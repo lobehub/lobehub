@@ -38,10 +38,10 @@
 
 import { getHeterogeneousAgentConfigOrThrow } from '../config';
 import {
-  CLI_CREDIT_LIMIT_PATTERNS,
+  classifyCliQuotaMessage,
   CLI_SERVER_THROTTLE_PATTERNS,
   CLI_USER_RATE_LIMIT_PATTERNS,
-} from '../errors/claudeCodeQuota';
+} from '../errors/cliQuota';
 import type { HeteroErrorKind } from '../errors/specs';
 import { imagePlaceholder } from '../imageEcho';
 import type {
@@ -874,11 +874,9 @@ const getRateLimitTerminalError = (
 
   // A credit/balance limit shares the `rate_limit` guide but not its remedy:
   // waiting for a reset never clears it, so it is a distinct taxonomy kind.
-  const kind: HeteroErrorKind = CLI_CREDIT_LIMIT_PATTERNS.some((pattern) =>
-    pattern.test(rawMessage),
-  )
-    ? 'credit_limit'
-    : 'usage_limit';
+  // A `rate_limit_info`-only rejection (no quota wording in the text) is a
+  // plan window by definition — that structured event only ever reports one.
+  const kind: HeteroErrorKind = classifyCliQuotaMessage(rawMessage)?.kind ?? 'usage_limit';
 
   return {
     agentType,

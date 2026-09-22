@@ -1,5 +1,6 @@
 import type { AgentInterventionRequestData } from '@lobechat/agent-gateway-client';
 
+import { isEchoedErrorText } from '../errors/echo';
 import type { SubagentIntent, SubagentReduceCtx } from '../subagentCoordinator';
 import { getEventScope, reduceSubagentRuns } from '../subagentCoordinator';
 import type { ToolCallPayload } from '../types';
@@ -57,8 +58,6 @@ const copyState = (s: MainAgentRunState): MainAgentRunState => ({
 
 // ─── Echo suppression (pure; mirrors both engines' shouldSuppressTerminalErrorEcho) ───
 
-const normalizeErrorText = (value?: string) => value?.replaceAll(/\s+/g, ' ').trim();
-
 /**
  * CC sometimes streams the error string into `content` BEFORE emitting the
  * structured error event (e.g. AuthRequired echoes the stderr line). Only
@@ -72,9 +71,7 @@ const shouldSuppressTerminalErrorEcho = (content: string, errorData: unknown): b
     { clearEchoedContent?: boolean; code?: string; message?: string; stderr?: string } | undefined;
   // Keep in sync with the interpreters' ECHO_TRIGGER_CODES.
   if (!body?.clearEchoedContent && body?.code !== 'AuthRequired') return false;
-  const normalizedContent = normalizeErrorText(content);
-  const normalizedError = normalizeErrorText(body?.stderr || body?.message);
-  return !!normalizedContent && !!normalizedError && normalizedContent === normalizedError;
+  return isEchoedErrorText(content, body?.stderr || body?.message);
 };
 
 // ─── Subagent delegation ───

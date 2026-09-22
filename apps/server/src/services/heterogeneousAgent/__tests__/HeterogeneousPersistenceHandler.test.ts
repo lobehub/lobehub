@@ -1591,7 +1591,9 @@ describe('HeterogeneousPersistenceHandler', () => {
         operationId: 'op-1',
         topicId: 'topic-1',
       });
-      h.messages.get('asst-1')!.content = '...';
+      // The CLI echoed the failure into the answer before reporting it — that
+      // echo is what `clearEchoedContent` drops.
+      h.messages.get('asst-1')!.content = "You've hit your session limit";
       h.topicModel.findById.mockResolvedValue({
         agentId: null,
         id: 'topic-1',
@@ -1625,6 +1627,44 @@ describe('HeterogeneousPersistenceHandler', () => {
         type: 'AgentRuntimeError',
       });
       expect(asst.content).toBe('');
+    });
+
+    it('finish() keeps real work when a quota error only marks an echo', async () => {
+      // Kimi Code can burn a full run and only then hit its weekly window. The
+      // finish error carries clearEchoedContent (every rate_limit does), but
+      // the streamed answer is not an echo of it and must survive.
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+      h.messages.get('asst-1')!.content = 'Refactored the adapter and ran the tests.';
+      h.topicModel.findById.mockResolvedValue({
+        agentId: null,
+        id: 'topic-1',
+        metadata: {},
+      });
+
+      await h.handler.finish({
+        assistantMessageId: 'asst-1',
+        error: {
+          body: {
+            agentType: 'kimi-code',
+            clearEchoedContent: true,
+            code: 'rate_limit',
+            details: { kind: 'usage_limit' },
+          },
+          message: "You've reached your weekly (7-day) usage limit.",
+          type: 'AgentRuntimeError',
+        },
+        operationId: 'op-1',
+        result: 'error',
+        topicId: 'topic-1',
+      });
+
+      const asst = h.messages.get('asst-1')!;
+      expect(asst.content).toBe('Refactored the adapter and ran the tests.');
+      expect(asst.error).toMatchObject({ body: { agentType: 'kimi-code', code: 'rate_limit' } });
     });
 
     it('finish() with no state stays a no-op for a stale operation (mismatched runningOperation)', async () => {

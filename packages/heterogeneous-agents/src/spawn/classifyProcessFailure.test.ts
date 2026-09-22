@@ -289,6 +289,32 @@ describe('classifyHeteroProcessFailure', () => {
     ).toMatchObject({ agentType: 'amp', code: 'auth_required', command: 'amp' });
   });
 
+  it('classifies a spent subscription the CLI reported through its auth layer', () => {
+    // Kimi Code exits with `provider.auth_error` for a quota rejection; signing
+    // in again never clears it, so the quota wording has to win over auth.
+    expect(
+      classifyHeteroProcessFailure({
+        agentType: 'kimi-code',
+        detail:
+          "error: failed to run prompt: provider.auth_error: 403 You've reached your weekly (7-day) usage limit. Your quota will reset when the current 7-day window ends.",
+      }),
+    ).toMatchObject({
+      agentType: 'kimi-code',
+      code: 'rate_limit',
+      details: { kind: 'usage_limit' },
+      rateLimitInfo: { rateLimitType: 'seven_day', status: 'rejected' },
+    });
+  });
+
+  it('still reads a real Kimi Code sign-in failure as auth', () => {
+    expect(
+      classifyHeteroProcessFailure({
+        agentType: 'kimi-code',
+        detail: 'error: failed to run prompt: provider.auth_error: 401 Unauthorized',
+      }),
+    ).toMatchObject({ agentType: 'kimi-code', code: 'auth_required', command: 'kimi' });
+  });
+
   it('returns undefined for unsupported agent types', () => {
     expect(
       classifyHeteroProcessFailure({

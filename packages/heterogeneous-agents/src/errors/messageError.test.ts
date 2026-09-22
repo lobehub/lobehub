@@ -19,6 +19,31 @@ describe('heterogeneous message errors', () => {
     });
     expect(normalizeHeterogeneousMessageError(result)).toEqual(result);
   });
+  it('recovers a Kimi Code quota rejection the CLI printed as a bare message', () => {
+    const result = normalizeHeterogeneousMessageError(
+      {
+        type: 'AgentRuntimeError',
+        message:
+          "error: failed to run prompt: provider.auth_error: 403 You've reached your weekly (7-day) usage limit. Your quota will reset when the current 7-day window ends.",
+      },
+      'kimi-code',
+    );
+    expect(result).toMatchObject({
+      errorRef: 'H2001',
+      countAsFailure: false,
+      body: {
+        agentType: 'kimi-code',
+        code: 'rate_limit',
+        details: { kind: 'usage_limit' },
+        rateLimitInfo: { rateLimitType: 'seven_day', status: 'rejected' },
+      },
+    });
+    expect(readHeterogeneousErrorContext(result)).toEqual({
+      agentType: 'kimi-code',
+      kind: 'usage_limit',
+      rateLimitType: 'seven_day',
+    });
+  });
   it('does not classify temporary throttling as exhausted quota', () => {
     const error = {
       type: 'AgentRuntimeError' as const,

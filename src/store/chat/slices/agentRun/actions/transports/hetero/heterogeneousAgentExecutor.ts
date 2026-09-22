@@ -22,7 +22,10 @@ import {
   type SubagentIntent,
   type SubagentRunSnapshot,
 } from '@lobechat/heterogeneous-agents';
-import { normalizeHeterogeneousMessageError } from '@lobechat/heterogeneous-agents/errors';
+import {
+  isEchoedErrorText,
+  normalizeHeterogeneousMessageError,
+} from '@lobechat/heterogeneous-agents/errors';
 import { formatContextSelections, formatPageSelections } from '@lobechat/prompts';
 import type {
   ChatMessageError,
@@ -98,8 +101,6 @@ const markSkipMessageFetch = (event: AgentStreamEvent): void => {
   event.data = { ...event.data, skipMessageFetch: true };
 };
 
-const normalizeErrorText = (value?: string) => value?.replaceAll(/\s+/g, ' ').trim();
-
 const maybeClassifyCliAuthRequiredError = (
   error: unknown,
   agentType?: string,
@@ -134,12 +135,7 @@ const shouldSuppressTerminalErrorEcho = (content: string, error: ChatMessageErro
     return false;
   }
 
-  const normalizedContent = normalizeErrorText(content);
-  const normalizedRawError = normalizeErrorText(
-    errorBody?.stderr || errorBody?.message || error.message,
-  );
-
-  return !!normalizedContent && !!normalizedRawError && normalizedContent === normalizedRawError;
+  return isEchoedErrorText(content, errorBody?.stderr || errorBody?.message || error.message);
 };
 
 const toRawHeterogeneousAgentMessageError = (
