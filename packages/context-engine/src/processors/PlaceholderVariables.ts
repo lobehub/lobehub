@@ -1,3 +1,4 @@
+import { PLUGIN_SCHEMA_SEPARATOR } from '@lobechat/const/plugin';
 import { truncateSurrogateSafe } from '@lobechat/utils';
 import debug from 'debug';
 
@@ -89,9 +90,65 @@ export const formatPlaceholderValues = (values: PlaceholderValueMap): Record<str
     Object.entries(values).map(([key, value]) => [key, resolvePlaceholderValue(value)]),
   );
 
+/**
+ * Tool results whose content is a platform-authored *template* that still needs
+ * hydrating at the payload boundary.
+ *
+ * Every other tool result is a *record* of what a tool actually returned, and
+ * must be handed to the model byte-for-byte. Substituting into it is wrong on
+ * two counts:
+ *
+ * 1. It lies. An agent that runs `git diff` over a locale file holding
+ *    `"Updated {{time}}"` should see that file's real contents, not the
+ *    harness's clock.
+ * 2. It breaks the prompt cache, permanently. The value moves between calls, so
+ *    the rewritten message diverges from the prefix the provider has already
+ *    cached, and every token after it is re-processed at the uncached price for
+ *    the rest of the run. That exact diff broke the prefix on 134 of 136 calls
+ *    of one operation — 43M re-processed tokens, $15 for a single run.
+ *
+ * Keyed by tool identifier → API names. This is the same activation surface
+ * `ActivationResultTrimProcessor` recognises: an activated skill that is NOT
+ * injected into the system prompt keeps its tool result as the only channel for
+ * the SKILL.md body, and that body references `{{agent_id}}` / `{{topic_id}}`.
+ */
+export const HYDRATED_TOOL_RESULTS: Readonly<Record<string, readonly string[]>> = {
+  // Literal copies of `LobeActivatorIdentifier` / `SkillsIdentifier` — same
+  // rationale as ActivationResultTrimProcessor: both are frozen wire values,
+  // and importing the tool packages here would invert the dependency.
+  'lobe-activator': ['activateTools', 'activateSkill'],
+  'lobe-skills': ['activateSkill'],
+};
+
+/**
+ * Resolve a tool message's `(identifier, apiName)`.
+ *
+ * Prefers the structured `plugin` field the flatten processors re-attach, and
+ * falls back to the wire name (`identifier____apiName`) for payload-shaped
+ * messages that no longer carry it.
+ */
+const resolveToolIdentity = (message: any): { apiName?: string; identifier?: string } => {
+  const plugin = message?.plugin as { apiName?: string; identifier?: string } | undefined;
+  if (plugin?.identifier) return { apiName: plugin.apiName, identifier: plugin.identifier };
+
+  const name = message?.name;
+  if (typeof name === 'string' && name.includes(PLUGIN_SCHEMA_SEPARATOR)) {
+    const [identifier, apiName] = name.split(PLUGIN_SCHEMA_SEPARATOR);
+    return { apiName, identifier };
+  }
+
+  return {};
+};
+
 export interface PlaceholderVariablesConfig {
   /** Recursive parsing depth, default is 2 */
   depth?: number;
+  /**
+   * Tool identifier → API names whose `role: 'tool'` results get hydrated.
+   * Defaults to {@link HYDRATED_TOOL_RESULTS}; every tool result outside it is
+   * passed through untouched.
+   */
+  hydratedToolResults?: Readonly<Record<string, readonly string[]>>;
   /** Variable generators mapping, key is variable name, value is generator function */
   variableGenerators: Record<string, () => string>;
 }
@@ -308,6 +365,25 @@ export class PlaceholderVariablesProcessor extends BaseProcessor {
     super(options);
   }
 
+  /**
+   * Whether a message's `{{...}}` tokens may be substituted.
+   *
+   * Everything the harness itself assembles — system prompt, injected blocks,
+   * user and assistant turns — is fair game, so a user who writes `{{time}}`
+   * still gets a live clock. Tool results are not: they are records, and only
+   * the activation tools listed in {@link HYDRATED_TOOL_RESULTS} return a
+   * template that still needs hydrating.
+   */
+  private shouldHydrate(message: any): boolean {
+    if (message?.role !== 'tool') return true;
+
+    const { apiName, identifier } = resolveToolIdentity(message);
+    if (!identifier || !apiName) return false;
+
+    const allowlist = this.config.hydratedToolResults ?? HYDRATED_TOOL_RESULTS;
+    return allowlist[identifier]?.includes(apiName) ?? false;
+  }
+
   protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
     const clonedContext = this.cloneContext(context);
 
@@ -343,6 +419,13 @@ export class PlaceholderVariablesProcessor extends BaseProcessor {
     // Process placeholder variables for each message
     for (let i = 0; i < clonedContext.messages.length; i++) {
       const message = clonedContext.messages[i];
+
+      // A tool result outside the hydration allowlist is a verbatim record of
+      // what the tool returned — never rewrite it. See HYDRATED_TOOL_RESULTS.
+      if (!this.shouldHydrate(message)) {
+        log('Skipping non-hydrated tool result at %d (name=%s)', i, message.name);
+        continue;
+      }
 
       const contentPreview = buildContentPreview(message.content);
 
