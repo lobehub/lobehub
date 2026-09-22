@@ -5,7 +5,7 @@ import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
 import { Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ContainerIcon, PlusIcon, RefreshCwIcon } from 'lucide-react';
-import { memo, type ReactNode, useState } from 'react';
+import { memo, type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
@@ -82,7 +82,7 @@ interface EnvironmentManagerProps {
 
 const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) => {
   const { t } = useTranslation('setting');
-  const { data, error, isLoading, mutate } = useEnvironments(visibility);
+  const { data, error, isValidating, mutate } = useEnvironments(visibility);
   const { data: instanceData, mutate: refreshInstances } = useInstances();
 
   const [selectedId, setSelectedId] = useState<string>();
@@ -92,6 +92,21 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
   const [adding, setAdding] = useState(false);
   // Whether a refresh the user asked for is still running.
   const [refreshing, setRefreshing] = useState(false);
+  /**
+   * Whether the first fetch of THIS mount has come back.
+   *
+   * A pool visited earlier is still in SWR's cache, so switching back to it
+   * rendered last time's answer instantly and revalidated behind the scenes —
+   * no skeleton, no sign anything was happening, and a list that may already
+   * have been wrong. Switching tabs is the question being asked again, so it
+   * waits for the new answer. Only the first fetch after a mount gates; later
+   * background revalidations must not throw away a list the reader is using.
+   */
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    if (!isValidating) setReady(true);
+  }, [isValidating]);
 
   const environments = data?.environments ?? [];
   const instances = instanceData?.instances ?? [];
@@ -163,11 +178,14 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
 
   const list = (
     <AsyncBoundary
-      data={data}
+      // Both gated on the same signal, because the boundary reads `data` as
+      // "has anything settled": handing it the cache while saying the fetch is
+      // still running would show that cache, which is the thing being avoided.
+      data={ready ? data : undefined}
       error={error}
       errorVariant={'block'}
       isEmpty={environments.length === 0}
-      isLoading={isLoading}
+      isLoading={!ready}
       empty={
         // Inside the same frame the rows land in, sized to the skeleton's
         // rows: loading, empty and loaded are one surface whose contents
