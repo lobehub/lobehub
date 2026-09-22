@@ -40,6 +40,7 @@ const InstanceSection = memo<InstanceSectionProps>(
           snapshotsUnavailable={data?.snapshotsUnavailable ?? false}
           onAddingChange={onAddingChange}
           onRemove={actions.removeInstance}
+          onRename={actions.renameInstance}
           onCreate={({ name, workingDirectory }) =>
             actions.createInstance({ environmentId, name, workingDirectory })
           }

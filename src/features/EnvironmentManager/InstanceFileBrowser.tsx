@@ -110,6 +110,16 @@ const styles = createStaticStyles(({ css }) => ({
  */
 const looksBinary = (content: string) => content.includes(String.fromCharCode(0));
 
+/**
+ * The execution plane answers 404 for a directory that is not there, and an
+ * instance that has never run does not have one: the row is created in the
+ * database, while the folder appears the first time a conversation works in it.
+ * That is a normal state, not a failure — and writing here makes the folder,
+ * because the write endpoint creates parents.
+ */
+const isMissingDirectory = (error: unknown) =>
+  (error as { data?: { code?: string } })?.data?.code === 'NOT_FOUND';
+
 interface InstanceFileBrowserProps {
   /** The instance's directory, relative to the workspace root. */
   root: string;
@@ -354,7 +364,7 @@ const InstanceFileBrowser = memo<InstanceFileBrowserProps>(({ root }) => {
             <Flexbox gap={8} padding={16}>
               <Skeleton.Text rows={5} />
             </Flexbox>
-          ) : listing.error ? (
+          ) : listing.error && !isMissingDirectory(listing.error) ? (
             <Flexbox padding={16}>
               <Text fontSize={12} type={'danger'}>
                 {t('environments.files.listFailed')}
@@ -363,7 +373,11 @@ const InstanceFileBrowser = memo<InstanceFileBrowserProps>(({ root }) => {
           ) : entries.length === 0 && !creating ? (
             <Flexbox padding={16}>
               <Text fontSize={12} type={'secondary'}>
-                {t('environments.files.empty')}
+                {t(
+                  listing.error && cwd === root
+                    ? 'environments.files.unusedInstance'
+                    : 'environments.files.empty',
+                )}
               </Text>
             </Flexbox>
           ) : (
