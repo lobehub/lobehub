@@ -1211,17 +1211,17 @@ export const acceptanceRouter = router({
     }),
 
   /**
-   * The user rejects the delivery. The comment is a re-tasking input: it is
+   * The user rejects the delivery. An optional comment is a re-tasking input: it is
    * recorded on the current round's decision and seeds the next repair/verify
    * round (spawned by the runtime for agent rounds, or by the next
    * `lh verify ingest-report` for harness rounds).
    */
   reject: acceptanceWriteProcedure
-    .input(z.object({ comment: z.string().min(1).max(2000), id: z.string() }))
+    .input(z.object({ comment: z.string().trim().max(2000).optional(), id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
 
-      return service.reject(acceptance.id, input.comment);
+      return service.reject(acceptance.id, input.comment || undefined);
     }),
 
   /**

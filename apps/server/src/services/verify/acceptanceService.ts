@@ -879,7 +879,7 @@ export class AcceptanceService {
   };
 
   /**
-   * The user rejects the delivery. The comment is the re-tasking input: it is
+   * The user rejects the delivery. An optional comment is a re-tasking input: it is
    * recorded on the round's decision detail, where the next repair/verify round
    * picks it up. (Spawning the repair run itself is the runtime's job — for
    * agent-bound rounds via the repair pipeline, for ingested rounds via the
@@ -889,7 +889,7 @@ export class AcceptanceService {
    * coordinator on the following tick, which reads the rejected round's
    * decision detail through the prompt builder.
    */
-  reject = async (acceptanceId: string, comment: string): Promise<AcceptanceItem> => {
+  reject = async (acceptanceId: string, comment?: string): Promise<AcceptanceItem> => {
     await this.requireDecidableAcceptance(acceptanceId);
 
     const settled = await this.stampDecision(acceptanceId, 'reject', comment);

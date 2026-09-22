@@ -237,7 +237,7 @@ export class VerifyService {
   acceptDelivery = (id: string, comment?: string) =>
     lambdaClient.acceptance.accept.mutate({ comment, id });
 
-  rejectDelivery = (id: string, comment: string) =>
+  rejectDelivery = (id: string, comment?: string) =>
     lambdaClient.acceptance.reject.mutate({ comment, id });
 
   /**

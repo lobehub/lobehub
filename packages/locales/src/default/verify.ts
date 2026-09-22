@@ -140,7 +140,7 @@ export default {
     'Confirmed {{done}} / {{total}} checks — {{rest}} awaiting your review',
   'acceptance.bar.progressDone': 'All {{total}} checks confirmed — ready to accept',
   'acceptance.bar.progressZero': '{{total}} checks awaiting your review',
-  'acceptance.bar.rejectComment': 'Reject with comment',
+  'acceptance.bar.rejectComment': 'Reject delivery',
   'acceptance.bar.rerun': 'Fix',
   'acceptance.bar.rerunDrafted': 'Drafted into your composer — review and send it.',
   'acceptance.bar.rerunSent': 'Sent to the origin conversation — the repair round is starting.',
@@ -341,9 +341,8 @@ export default {
   'acceptance.origin.backToRuns': 'Back to runs',
   'acceptance.origin.openTopic': 'Open topic',
   'acceptance.reject.description':
-    'Your reason becomes input for the next repair round; this is not a passive comment.',
-  'acceptance.reject.placeholder':
-    'Describe what must change before this delivery can be accepted.',
+    'Return this delivery for another repair round. You can optionally add a reason to guide the repairs.',
+  'acceptance.reject.placeholder': 'Reason (optional), e.g. add screenshot evidence for dark mode…',
   'acceptance.reportDrawer.close': 'Close the round report',
   'acceptance.review.accept': 'Accept',
   'acceptance.review.acceptAll': 'Accept all',
@@ -385,13 +384,14 @@ export default {
   'acceptance.review.regionCommentsEmpty':
     'Drag on the image to circle a region — its comment lands here.',
   'acceptance.review.reject': 'Reject with comment',
+  'acceptance.review.rejectWithRegions': 'Reject with region comments',
   'acceptance.review.rejectDescription':
     'Reject "{{title}}" — your feedback is what the next verification round acts on.',
   'acceptance.review.rejectPlaceholder': 'What is wrong, and what do you expect instead…',
   'acceptance.review.rejectedHint': 'You rejected this check — the next round reads your feedback.',
   'acceptance.review.removeRegion': 'Remove this region',
   'acceptance.review.revertToAccept': 'Undo send-back · mark accepted',
-  'acceptance.review.revertToReject': 'Change to reject with comment',
+  'acceptance.review.revertToReject': 'Change to reject with region comments',
   'acceptance.review.supplement': 'Additional notes (optional)',
   'acceptance.review.supplementButton': 'Notes',
   'acceptance.review.supplementButtonDraft': 'Notes · draft saved',
