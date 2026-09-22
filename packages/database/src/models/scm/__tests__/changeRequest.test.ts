@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { eq } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import { acceptances, scmWebhookDeliveries, users } from '../../../schemas';
@@ -545,6 +545,44 @@ describe('ScmChangeRequestModel', () => {
 
     const after = await ScmInstallationModel.findById(serverDB, installation.id);
     expect((after?.repositories ?? []).map((r) => r.externalId).sort()).toEqual(['2', '3', '4']);
+  });
+
+  it('changes pendingWake in place, without reading the metadata bag first', async () => {
+    const row = await ScmChangeRequestModel.upsert(serverDB, {
+      ...snapshot,
+      metadata: { lobehubCommentId: 'c-1' },
+    });
+
+    // Deliveries for one pull request are handled concurrently, so a
+    // read-modify-write on the whole column would let one handler erase
+    // what another stored in between — the tracking comment id here, which
+    // would then be posted a second time. The invariant is stronger than
+    // any interleaving a test can stage: these two never read the row.
+    const reads = vi.fn();
+    const watched = new Proxy(serverDB, {
+      get(target, prop, receiver) {
+        if (prop === 'select') reads();
+        return Reflect.get(target, prop, receiver);
+      },
+    }) as typeof serverDB;
+
+    await ScmChangeRequestModel.markPendingWake(watched, row.id, 'ci_failed');
+    // First reason of the burst wins; a second mark is a no-op.
+    await ScmChangeRequestModel.markPendingWake(watched, row.id, 'review_commented');
+    expect(reads).not.toHaveBeenCalled();
+
+    let after = await ScmChangeRequestModel.findById(serverDB, row.id);
+    expect(after?.metadata).toMatchObject({
+      lobehubCommentId: 'c-1',
+      pendingWake: { reason: 'ci_failed' },
+    });
+
+    await ScmChangeRequestModel.clearPendingWake(watched, row.id);
+    expect(reads).not.toHaveBeenCalled();
+
+    after = await ScmChangeRequestModel.findById(serverDB, row.id);
+    expect(after?.metadata.pendingWake).toBeUndefined();
+    expect(after?.metadata.lobehubCommentId).toBe('c-1');
   });
 
   it('counts wakes up to the cap, and keeps the rest of the metadata bag', async () => {

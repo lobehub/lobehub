@@ -72,6 +72,15 @@ const cell = (text: string) =>
     .replaceAll(/\s*\n\s*/g, ' ')
     .trim();
 
+/**
+ * A conversation title is written by a user or a model, and it goes into a
+ * link label on a public pull request. Left alone, a `](` in it closes our
+ * link early and everything after it becomes markdown of the author's
+ * choosing — including another link. Escape what can end a label or start
+ * emphasis, on top of the table-cell rules.
+ */
+const label = (text: string) => cell(text.replaceAll(/[\\[\]()*_`~<>]/g, String.raw`\$&`));
+
 export interface TrackingCommentInput {
   acceptance?: { id: string; status: AcceptanceStatus; url: string } | null;
   conversation?: { title?: string | null; url: string } | null;
@@ -87,7 +96,7 @@ export const buildTrackingComment = (input: TrackingCommentInput): string => {
   const acceptanceCell = acceptance ? `[${acceptance.id.slice(0, 8)}](${acceptance.url})` : '—';
   const statusCell = acceptance ? (ACCEPTANCE_STATUS[acceptance.status] ?? acceptance.status) : '—';
   const conversationCell = conversation
-    ? `[${cell(conversation.title?.trim() || 'Open conversation')} ↗︎](${conversation.url})`
+    ? `[${label(conversation.title?.trim() || 'Open conversation')} ↗︎](${conversation.url})`
     : '—';
   const notificationCell =
     notification && notification.count > 0

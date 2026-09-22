@@ -14,6 +14,7 @@ import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis'
 import { AiAgentService } from '@/server/services/aiAgent';
 import { AcceptanceService } from '@/server/services/verify/acceptanceService';
 
+import type { GitHubReviewFeedback } from './github/app';
 import {
   fetchGitHubJobLogTail,
   fetchGitHubReviewFeedback,
@@ -126,7 +127,23 @@ export class ScmControlService {
         if (!(await this.isEnabled(row, WAKE_PREFERENCE[kind]))) {
           return { detail: `${WAKE_PREFERENCE[kind]} is off`, outcome: 'skipped' };
         }
-        return this.wakeAndRefresh(row, kind);
+        // The webhook already carries the text that triggered this wake, and
+        // it is the only copy we are sure of: the list endpoint can be rate
+        // limited, fail, or not show the review yet. Carry it along so the
+        // agent is never woken with "the review carried no text".
+        const trigger: GitHubReviewFeedback | undefined =
+          event.type === 'review' && event.review.body?.trim()
+            ? {
+                association,
+                author: event.actor?.login ?? 'unknown',
+                body: event.review.body,
+                line: event.review.line,
+                path: event.review.path,
+                submittedAt: event.occurredAt?.toISOString(),
+                url: event.review.url ?? undefined,
+              }
+            : undefined;
+        return this.wakeAndRefresh(row, kind, trigger);
       }
       default: {
         return { detail: `${kind} needs no action`, outcome: 'skipped' };
@@ -328,8 +345,9 @@ export class ScmControlService {
   private wakeAndRefresh = async (
     row: ScmChangeRequestItem,
     reason: ScmWakeReason,
+    trigger?: GitHubReviewFeedback,
   ): Promise<ScmControlOutcome> => {
-    const outcome = await this.wake(row, reason);
+    const outcome = await this.wake(row, reason, trigger);
     if (outcome.outcome === 'woken') await this.refreshComment(row.id);
     return outcome;
   };
@@ -368,6 +386,7 @@ export class ScmControlService {
   private wake = async (
     row: ScmChangeRequestItem,
     reason: ScmWakeReason,
+    trigger?: GitHubReviewFeedback,
   ): Promise<ScmControlOutcome> => {
     if (row.isDraft) return { detail: 'draft pull request', outcome: 'skipped' };
     if (row.state !== 'open') return { detail: `pull request is ${row.state}`, outcome: 'skipped' };
@@ -389,7 +408,7 @@ export class ScmControlService {
     const topic = await topicModel.findById(row.topicId);
     if (!topic?.agentId) return { detail: 'conversation has no agent', outcome: 'skipped' };
 
-    const prompt = await this.buildPrompt(row, reason);
+    const prompt = await this.buildPrompt(row, reason, trigger);
     const running = Boolean(topic.metadata?.runningOperation);
 
     // Take the slot before starting anything: the check above read a row
@@ -448,7 +467,11 @@ export class ScmControlService {
     return { operationId, outcome: 'woken', reason };
   };
 
-  private buildPrompt = async (row: ScmChangeRequestItem, reason: ScmWakeReason) => {
+  private buildPrompt = async (
+    row: ScmChangeRequestItem,
+    reason: ScmWakeReason,
+    trigger?: GitHubReviewFeedback,
+  ) => {
     if (reason === 'ci_failed') {
       const logs: Record<string, string | null> = {};
       if (row.installationId) {
@@ -484,8 +507,15 @@ export class ScmControlService {
       : [];
     // The window may also hold comments from people the repository does not
     // trust; the agent is told about the trusted ones only.
+    const trusted = feedback.filter((item) => SCM_TRUSTED_ASSOCIATIONS.has(item.association));
+    const known = new Set(trusted.map((item) => item.url ?? `${item.author}:${item.body}`));
+    const all =
+      trigger && !known.has(trigger.url ?? `${trigger.author}:${trigger.body}`)
+        ? [...trusted, trigger]
+        : trusted;
+
     return buildReviewPrompt({
-      feedback: feedback.filter((item) => SCM_TRUSTED_ASSOCIATIONS.has(item.association)),
+      feedback: all.sort((a, b) => (a.submittedAt ?? '').localeCompare(b.submittedAt ?? '')),
       reason,
       row,
     });

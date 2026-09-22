@@ -47,6 +47,25 @@ describe('tracking comment', () => {
     );
   });
 
+  it('keeps a hostile conversation title inside its own link label', () => {
+    const body = buildTrackingComment({
+      conversation: {
+        title: '](https://evil.example) [click me',
+        url: 'https://app.test/agent/a/tpc_1',
+      },
+      marker,
+      updatedAt: new Date('2026-09-20T15:12:00Z'),
+    });
+
+    // The title is a user- or model-written string on a public pull
+    // request: unescaped, `](` would close our link and let the rest of it
+    // become markdown of the author's choosing.
+    expect(body).not.toContain('https://evil.example)');
+    expect(body).toContain(
+      String.raw`[\]\(https://evil.example\) \[click me ↗︎](https://app.test/agent/a/tpc_1)`,
+    );
+  });
+
   it('shows dashes for what is not linked yet', () => {
     const body = buildTrackingComment({ marker, updatedAt: new Date('2026-01-05T00:07:00Z') });
     expect(body).toContain('| — | — | — | — | Jan 5, 2026 12:07am |');

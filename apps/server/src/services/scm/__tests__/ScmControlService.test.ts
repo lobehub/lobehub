@@ -449,6 +449,66 @@ describe('ScmControlService — wake', () => {
     ).toMatchObject({ outcome: 'woken' });
   });
 
+  it('wakes with the review text from the webhook when the list endpoint gives nothing', async () => {
+    const topic = await createTopic();
+    const row = await ScmChangeRequestModel.upsert(serverDB, {
+      ...baseRow,
+      links: { topicId: topic.id },
+    });
+    // Rate limited, transiently failing, or simply not showing the review
+    // yet — all three look like this.
+    mocks.reviewFeedback.mockResolvedValue([]);
+
+    const event = {
+      ...reviewEvent('maintainer', 'member'),
+      review: {
+        body: 'Please rename the helper, it shadows the model method.',
+        externalId: 'r1',
+        line: 12,
+        path: 'src/a.ts',
+        url: 'https://github.com/arvinxx/sandbox/pull/5#r1',
+      },
+    } as Extract<ScmInboundEvent, { type: 'review' }>;
+
+    expect(await control().handle({ event, kind: 'review_changes_requested', row })).toMatchObject({
+      outcome: 'woken',
+    });
+
+    const prompt = mocks.execAgent.mock.calls[0][0].prompt as string;
+    expect(prompt).toContain('Please rename the helper, it shadows the model method.');
+    expect(prompt).toContain('src/a.ts');
+  });
+
+  it('does not repeat the triggering review when the list endpoint already has it', async () => {
+    const topic = await createTopic();
+    const row = await ScmChangeRequestModel.upsert(serverDB, {
+      ...baseRow,
+      links: { topicId: topic.id },
+    });
+    mocks.reviewFeedback.mockResolvedValue([
+      {
+        association: 'member',
+        author: 'maintainer',
+        body: 'Rename the helper.',
+        url: 'https://github.com/arvinxx/sandbox/pull/5#r1',
+      },
+    ]);
+
+    const event = {
+      ...reviewEvent('maintainer', 'member'),
+      review: {
+        body: 'Rename the helper.',
+        externalId: 'r1',
+        url: 'https://github.com/arvinxx/sandbox/pull/5#r1',
+      },
+    } as Extract<ScmInboundEvent, { type: 'review' }>;
+
+    await control().handle({ event, kind: 'review_changes_requested', row });
+
+    const prompt = mocks.execAgent.mock.calls[0][0].prompt as string;
+    expect(prompt.match(/Rename the helper\./g)).toHaveLength(1);
+  });
+
   it('drops a pending wake when the automation was switched off in between', async () => {
     const topic = await createTopic();
     const row = await ScmChangeRequestModel.upsert(serverDB, {
