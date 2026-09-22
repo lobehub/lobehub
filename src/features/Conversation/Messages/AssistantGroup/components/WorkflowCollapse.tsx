@@ -56,7 +56,7 @@ interface WorkflowCollapseProps {
   blocks: RenderableAssistantContentBlock[];
   /**
    * Fixed default expand level. When set, overrides the built-in defaults
-   * (streaming `semi`, completion `full`) for the initial state and resets.
+   * (streaming `semi`, completion `collapsed`) for the initial state and resets.
    * Users can still toggle locally. Pass an object to override only one
    * phase (e.g. `{ streaming: 'collapsed' }`). Undefined = built-in defaults.
    * Pending intervention still forces open.
@@ -205,23 +205,11 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
       [defaultWorkflowExpandLevel],
     );
     const streamingInitialLevel: WorkflowExpandLevel = streamingDefault ?? 'semi';
-    // Completion defaults to the full list, not a summary-only row: the whole
-    // point of opening a finished turn (or its ProcessFold) is seeing what ran,
-    // and semi's height cap forces a third hop (⤢) for long tool lists. The
-    // base-ui panel unmounts children when folded, so history messages kept at
-    // full pay no render cost while the fold is closed. Consumers pin the old
-    // summary row with defaultWorkflowExpandLevel='collapsed'.
-    const completionInitialLevel: WorkflowExpandLevel = completionDefault ?? 'full';
-    /** Where a manual re-expand from collapsed lands. Derived from the
-     *  *effective* completion level rather than the raw prop: the production
-     *  caller always passes `{ streaming: <setting> }` and no completion phase,
-     *  so keying off `completionDefault` alone reopened at the legacy `semi`
-     *  cap while the same workflow had just rendered at `full`. Consumers that
-     *  pin completion below full keep that compact level; a `full` streaming
-     *  phase keeps the fully expanded experience heterogeneous agents need
-     *  (all 40+ tool calls visible after a re-expand). */
-    const manualExpandLevel: WorkflowExpandLevel =
-      streamingDefault === 'full' || completionInitialLevel === 'full' ? 'full' : 'semi';
+    // A finished turn folds back down to its summary row: opening a topic
+    // should read as a conversation, not as a wall of every tool that ran.
+    // Inspecting the list stays one click away — and that click lands on the
+    // full list (see manualExpandLevel), so nothing is three hops deep.
+    const completionInitialLevel: WorkflowExpandLevel = completionDefault ?? 'collapsed';
 
     const [expandLevel, setExpandLevel] = useState<WorkflowExpandLevel>(() =>
       allComplete ? completionInitialLevel : streamingInitialLevel,
@@ -266,6 +254,20 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
     ]);
 
     const streaming = !allComplete;
+    /** Where a manual open from the summary row lands. Opening a finished
+     *  workflow means "show me everything that ran", so it goes straight to the
+     *  full list — semi's height cap would force a second hop (⤢) on exactly
+     *  the long tool lists people open the row for. A streaming workflow keeps
+     *  the constrained list, whose auto-scroll follows the live steps, unless a
+     *  consumer (heterogeneous agents) pinned that phase to full. Consumers
+     *  pinning an explicit open level keep it in both phases. */
+    const manualExpandLevel: WorkflowExpandLevel = streaming
+      ? streamingDefault === 'full'
+        ? 'full'
+        : 'semi'
+      : completionDefault === 'semi'
+        ? 'semi'
+        : 'full';
     const forceExpanded = streaming && pendingInterventionPresent;
     const isExpanded = forceExpanded || expandLevel !== 'collapsed';
 
