@@ -44,6 +44,13 @@ const Field = memo<{ children: ReactNode; desc?: ReactNode; label: ReactNode }>(
 
 Field.displayName = 'EnvironmentFormField';
 
+/**
+ * Which part of the specification the form is showing. The panel splits the
+ * form across two tabs, but it is still one form with one draft and one save:
+ * the tab only decides which fields are on screen.
+ */
+export type EnvironmentFormSection = 'settings' | 'variables';
+
 interface EnvironmentFormProps {
   environment: SandboxEnvironment;
   onSave: (params: {
@@ -51,6 +58,7 @@ interface EnvironmentFormProps {
     description: string;
     name: string;
   }) => Promise<void>;
+  section: EnvironmentFormSection;
 }
 
 interface GitSource {
@@ -129,7 +137,7 @@ const toSpecification = (state: FormState): SandboxEnvironmentSpecification => {
  * invalidates every copy the moment focus leaves it is a field people are
  * afraid to click into.
  */
-const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave }) => {
+const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave, section }) => {
   const { t } = useTranslation('setting');
   const configuration = (environment.configuration ?? {}) as SandboxEnvironmentSpecification;
 
@@ -205,166 +213,182 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave }) => 
     }
   };
 
+  const showSettings = section === 'settings';
+
   return (
     <Flexbox>
-      <PanelSection
-        desc={t('environments.form.desc')}
-        icon={InfoIcon}
-        title={t('environments.form.basics')}
-      >
-        <Field label={t('environments.nameLabel')}>
-          <Input
-            placeholder={t('environments.namePlaceholder')}
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-          />
-        </Field>
-        <Field label={t('environments.form.description')}>
-          <Input
-            placeholder={t('environments.form.descriptionPlaceholder')}
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-          />
-        </Field>
-      </PanelSection>
+      {showSettings && (
+        <>
+          <PanelSection
+            desc={t('environments.form.desc')}
+            icon={InfoIcon}
+            title={t('environments.form.basics')}
+          >
+            <Field label={t('environments.nameLabel')}>
+              <Input
+                placeholder={t('environments.namePlaceholder')}
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+              />
+            </Field>
+            <Field label={t('environments.form.description')}>
+              <Input
+                placeholder={t('environments.form.descriptionPlaceholder')}
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+              />
+            </Field>
+          </PanelSection>
 
-      <PanelSection
-        desc={t('environments.form.sourcesHint')}
-        icon={FolderGit2Icon}
-        title={t('environments.form.sources')}
-        notice={
-          /* On the first section the execution plane does not act on, and
+          <PanelSection
+            desc={t('environments.form.sourcesHint')}
+            icon={FolderGit2Icon}
+            title={t('environments.form.sources')}
+            notice={
+              /* On the first section the execution plane does not act on, and
              worded for all of them. An instance's own directory does persist —
              that part was verified end to end — so a panel-wide "none of this
              works yet" would call a working feature broken. */
-          <Text fontSize={12} type={'warning'}>
-            {t('environments.form.pending')}
-          </Text>
-        }
-      >
-        {/* One repository, so no list and no way to add a second. The same
+              <Text fontSize={12} type={'warning'}>
+                {t('environments.form.pending')}
+              </Text>
+            }
+          >
+            {/* One repository, so no list and no way to add a second. The same
             picker the create dialog uses, so the two agree on what choosing a
             repository looks like; branch and folder stay free text because
             they narrow a choice already made rather than making one. */}
-        <GithubRepositoryPicker value={selection} onChange={pickRepository} />
+            <GithubRepositoryPicker value={selection} onChange={pickRepository} />
 
-        {source && (
-          <Flexbox horizontal align={'center'} gap={8}>
-            <Input
-              placeholder={t('environments.form.ref')}
-              style={{ flex: 1 }}
-              value={source.ref ?? ''}
-              onChange={(event) => updateSource(0, { ref: event.target.value })}
-            />
-            <Input
-              placeholder={t('environments.form.path')}
-              style={{ flex: 1 }}
-              value={source.path ?? ''}
-              onChange={(event) => updateSource(0, { path: event.target.value })}
-            />
-          </Flexbox>
-        )}
-      </PanelSection>
+            {source && (
+              <Flexbox horizontal align={'center'} gap={8}>
+                <Input
+                  placeholder={t('environments.form.ref')}
+                  style={{ flex: 1 }}
+                  value={source.ref ?? ''}
+                  onChange={(event) => updateSource(0, { ref: event.target.value })}
+                />
+                <Input
+                  placeholder={t('environments.form.path')}
+                  style={{ flex: 1 }}
+                  value={source.path ?? ''}
+                  onChange={(event) => updateSource(0, { path: event.target.value })}
+                />
+              </Flexbox>
+            )}
+          </PanelSection>
 
-      <PanelSection icon={TerminalIcon} title={t('environments.form.setup')}>
-        <Field desc={t('environments.form.bootstrapHint')} label={t('environments.form.bootstrap')}>
-          <TextArea
-            autoSize={{ maxRows: 10, minRows: 3 }}
-            placeholder={'pnpm install'}
-            value={state.bootstrapCommand}
-            onChange={(event) => patch({ bootstrapCommand: event.target.value })}
-          />
-        </Field>
-        <Field
-          desc={t('environments.form.maintenanceHint')}
-          label={t('environments.form.maintenance')}
-        >
-          <TextArea
-            autoSize={{ maxRows: 6, minRows: 2 }}
-            placeholder={'git pull --ff-only'}
-            value={state.maintenanceCommand}
-            onChange={(event) => patch({ maintenanceCommand: event.target.value })}
-          />
-        </Field>
-      </PanelSection>
+          <PanelSection icon={TerminalIcon} title={t('environments.form.setup')}>
+            <Field
+              desc={t('environments.form.bootstrapHint')}
+              label={t('environments.form.bootstrap')}
+            >
+              <TextArea
+                autoSize={{ maxRows: 10, minRows: 3 }}
+                placeholder={'pnpm install'}
+                value={state.bootstrapCommand}
+                onChange={(event) => patch({ bootstrapCommand: event.target.value })}
+              />
+            </Field>
+            <Field
+              desc={t('environments.form.maintenanceHint')}
+              label={t('environments.form.maintenance')}
+            >
+              <TextArea
+                autoSize={{ maxRows: 6, minRows: 2 }}
+                placeholder={'git pull --ff-only'}
+                value={state.maintenanceCommand}
+                onChange={(event) => patch({ maintenanceCommand: event.target.value })}
+              />
+            </Field>
+          </PanelSection>
+        </>
+      )}
 
-      <PanelSection
-        /* Said plainly because the shape cannot enforce it: a text field cannot
+      {section === 'variables' && (
+        <PanelSection
+          last
+          /* Said plainly because the shape cannot enforce it: a text field cannot
            tell a region from a token. */
-        desc={t('environments.form.envHint')}
-        icon={KeyRoundIcon}
-        title={t('environments.form.env')}
-      >
-        {state.env.map(([key, value], index) => (
-          <Flexbox horizontal align={'center'} gap={8} key={index}>
-            <Input
-              placeholder={'NODE_ENV'}
-              style={{ flex: 1 }}
-              value={key}
-              onChange={(event) =>
-                patch({
-                  env: state.env.map((pair, at) =>
-                    at === index ? [event.target.value, pair[1]] : pair,
-                  ),
-                })
-              }
-            />
-            <Input
-              placeholder={'production'}
-              style={{ flex: 1 }}
-              value={value}
-              onChange={(event) =>
-                patch({
-                  env: state.env.map((pair, at) =>
-                    at === index ? [pair[0], event.target.value] : pair,
-                  ),
-                })
-              }
-            />
-            <ActionIcon
-              icon={Trash2Icon}
+          desc={t('environments.form.envHint')}
+          icon={KeyRoundIcon}
+          title={t('environments.form.env')}
+        >
+          {state.env.map(([key, value], index) => (
+            <Flexbox horizontal align={'center'} gap={8} key={index}>
+              <Input
+                placeholder={'NODE_ENV'}
+                style={{ flex: 1 }}
+                value={key}
+                onChange={(event) =>
+                  patch({
+                    env: state.env.map((pair, at) =>
+                      at === index ? [event.target.value, pair[1]] : pair,
+                    ),
+                  })
+                }
+              />
+              <Input
+                placeholder={'production'}
+                style={{ flex: 1 }}
+                value={value}
+                onChange={(event) =>
+                  patch({
+                    env: state.env.map((pair, at) =>
+                      at === index ? [pair[0], event.target.value] : pair,
+                    ),
+                  })
+                }
+              />
+              <ActionIcon
+                icon={Trash2Icon}
+                size={'small'}
+                title={t('environments.form.removeEnv')}
+                onClick={() => patch({ env: state.env.filter((_, at) => at !== index) })}
+              />
+            </Flexbox>
+          ))}
+          <Flexbox horizontal>
+            <Button
+              icon={<Icon icon={PlusIcon} />}
               size={'small'}
-              title={t('environments.form.removeEnv')}
-              onClick={() => patch({ env: state.env.filter((_, at) => at !== index) })}
+              onClick={() => patch({ env: [...state.env, ['', '']] })}
+            >
+              {t('environments.form.addEnv')}
+            </Button>
+          </Flexbox>
+        </PanelSection>
+      )}
+
+      {showSettings && (
+        <PanelSection last icon={HardDriveIcon} title={t('environments.form.runtime')}>
+          <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
+            <Flexbox gap={2}>
+              <Text fontSize={12} weight={500}>
+                {t('environments.form.internetAccess')}
+              </Text>
+              <Text fontSize={12} type={'secondary'}>
+                {t('environments.form.internetAccessHint')}
+              </Text>
+            </Flexbox>
+            <Switch
+              checked={state.internetAccess}
+              onChange={(internetAccess) => patch({ internetAccess })}
             />
           </Flexbox>
-        ))}
-        <Flexbox horizontal>
-          <Button
-            icon={<Icon icon={PlusIcon} />}
-            size={'small'}
-            onClick={() => patch({ env: [...state.env, ['', '']] })}
-          >
-            {t('environments.form.addEnv')}
-          </Button>
-        </Flexbox>
-      </PanelSection>
+          <Field desc={t('environments.form.excludeHint')} label={t('environments.form.exclude')}>
+            <TextArea
+              autoSize={{ maxRows: 8, minRows: 2 }}
+              placeholder={'dist\n.cache'}
+              value={state.excludePaths}
+              onChange={(event) => patch({ excludePaths: event.target.value })}
+            />
+          </Field>
+        </PanelSection>
+      )}
 
-      <PanelSection last icon={HardDriveIcon} title={t('environments.form.runtime')}>
-        <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
-          <Flexbox gap={2}>
-            <Text fontSize={12} weight={500}>
-              {t('environments.form.internetAccess')}
-            </Text>
-            <Text fontSize={12} type={'secondary'}>
-              {t('environments.form.internetAccessHint')}
-            </Text>
-          </Flexbox>
-          <Switch
-            checked={state.internetAccess}
-            onChange={(internetAccess) => patch({ internetAccess })}
-          />
-        </Flexbox>
-        <Field desc={t('environments.form.excludeHint')} label={t('environments.form.exclude')}>
-          <TextArea
-            autoSize={{ maxRows: 8, minRows: 2 }}
-            placeholder={'dist\n.cache'}
-            value={state.excludePaths}
-            onChange={(event) => patch({ excludePaths: event.target.value })}
-          />
-        </Field>
-      </PanelSection>
-
+      {/* Shown on whichever tab is open: a draft may span both, and the save
+          writes all of it. */}
       {dirty && (
         <Flexbox horizontal align={'center'} gap={12} justify={'flex-end'}>
           <Text fontSize={12} type={'secondary'}>
