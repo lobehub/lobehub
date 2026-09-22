@@ -13,7 +13,6 @@
   "workingDirectory.branchesLoadFailed": "Nie udało się załadować gałęzi",
   "workingDirectory.branchesLoading": "Ładowanie gałęzi…",
   "workingDirectory.branchesNoMatch": "Brak pasujących gałęzi",
-  "workingDirectory.branchesTruncated": "{{count}} więcej — wpisz, aby filtrować",
   "workingDirectory.browseDescription": "Wybierz folder na podłączonym urządzeniu.",
   "workingDirectory.browseFolders": "Przeglądaj foldery",
   "workingDirectory.cancel": "Anuluj",
