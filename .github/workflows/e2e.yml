@@ -34,7 +34,7 @@ on:
       - '.github/workflows/bundle-analyzer.yml'
 
 permissions:
-  actions: write
+  actions: read
   contents: read
   pull-requests: write
 
@@ -59,24 +59,7 @@ env:
   S3_ENDPOINT: https://e2e-mock-s3.localhost
 
 jobs:
-  # Check for duplicate runs
-  check-duplicate-run:
-    name: Check Duplicate Run
-    runs-on: ubuntu-latest
-    outputs:
-      should_skip: ${{ steps.skip_check.outputs.should_skip }}
-    steps:
-      - id: skip_check
-        uses: fkirc/skip-duplicate-actions@v5
-        with:
-          concurrent_skipping: 'same_content_newer'
-          skip_after_successful_duplicate: 'true'
-          do_not_skip: '["workflow_dispatch", "schedule"]'
-
   e2e:
-    needs: check-duplicate-run
-    if: >-
-      github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' || needs.check-duplicate-run.outputs.should_skip != 'true'
     name: Test Web App
     runs-on: ubuntu-latest
     services:

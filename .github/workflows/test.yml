@@ -34,7 +34,7 @@ on:
       - '.github/workflows/bundle-analyzer.yml'
 
 permissions:
-  actions: write
+  actions: read
   contents: read
 
 concurrency:
@@ -42,24 +42,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Check for duplicate runs
-  check-duplicate-run:
-    name: Check Duplicate Run
-    runs-on: ubuntu-latest
-    outputs:
-      should_skip: ${{ steps.skip_check.outputs.should_skip }}
-    steps:
-      - id: skip_check
-        uses: fkirc/skip-duplicate-actions@v5
-        with:
-          concurrent_skipping: 'same_content_newer'
-          skip_after_successful_duplicate: 'true'
-          do_not_skip: '["workflow_dispatch", "schedule"]'
-
   # Package tests - all packages in single job to save runner resources
   test-packages:
-    needs: check-duplicate-run
-    if: needs.check-duplicate-run.outputs.should_skip != 'true'
     runs-on: ubuntu-latest
     name: Test Packages
     env:
@@ -75,6 +59,9 @@ jobs:
           git remote add origin "https://github.com/${REPOSITORY}.git"
           git fetch --no-tags --depth=1 origin "${REF_SHA}"
           git checkout --force FETCH_HEAD
+
+      - name: Verify preview build filtering
+        run: node --test scripts/vercelIgnoredBuildStep.test.cjs
 
       - name: Setup environment
         uses: ./.github/actions/setup-env
@@ -194,8 +181,6 @@ jobs:
 
   # App tests - run sharded tests
   test-app:
-    needs: check-duplicate-run
-    if: needs.check-duplicate-run.outputs.should_skip != 'true'
     strategy:
       matrix:
         shard: [1, 2, 3]
@@ -230,45 +215,6 @@ jobs:
           flags: app
           name: app-shard-${{ matrix.shard }}
 
-  # Keep the historical check name as a lightweight all-shard gate.
-  merge-app-coverage:
-    needs: [check-duplicate-run, test-app]
-    if: >-
-      ${{
-        always() &&
-        (
-          needs.check-duplicate-run.result != 'success' ||
-          needs.check-duplicate-run.outputs.should_skip != 'true'
-        )
-      }}
-    name: Merge and Upload App Coverage
-    runs-on: ubuntu-latest
-    steps:
-      - name: Verify app shards
-        env:
-          DUPLICATE_RESULT: ${{ needs.check-duplicate-run.result }}
-          SHOULD_SKIP: ${{ needs.check-duplicate-run.outputs.should_skip }}
-          TEST_RESULT: ${{ needs.test-app.result }}
-        run: |
-          set -euo pipefail
-
-          if [ "$DUPLICATE_RESULT" != 'success' ]; then
-            echo "::error::Duplicate-run check did not complete successfully."
-            exit 1
-          fi
-
-          if [ "$SHOULD_SKIP" = 'true' ]; then
-            echo 'The duplicate run check skipped this workflow.'
-            exit 0
-          fi
-
-          if [ "$TEST_RESULT" != 'success' ]; then
-            echo "::error::App test shards did not all pass: $TEST_RESULT"
-            exit 1
-          fi
-
-          echo 'All app test shards passed.'
-
   # Windows-only verification of the local shell execution strategy.
   # The unit tests mock process.platform and fs.existsSync, so they prove
   # nothing about real Windows behaviour: argument tokenization by the Windows
@@ -276,8 +222,6 @@ jobs:
   # detection cascade against real install paths. The driver script only needs
   # node builtins, so this job skips the monorepo install entirely.
   test-windows-shell:
-    needs: check-duplicate-run
-    if: needs.check-duplicate-run.outputs.should_skip != 'true'
     name: Test Windows Shell
 
     runs-on: windows-latest
@@ -295,8 +239,6 @@ jobs:
         run: bun run packages/local-file-shell/scripts/verify-windows-shell.ts
 
   test-desktop:
-    needs: check-duplicate-run
-    if: needs.check-duplicate-run.outputs.should_skip != 'true'
     name: ALint & Test Desktop App
 
     runs-on: ubuntu-latest
@@ -400,8 +342,6 @@ jobs:
           fi
 
   test-server:
-    needs: check-duplicate-run
-    if: needs.check-duplicate-run.outputs.should_skip != 'true'
     strategy:
       matrix:
         shard: [1, 2]
@@ -438,48 +378,7 @@ jobs:
           flags: server
           name: server-shard-${{ matrix.shard }}
 
-  # Keep the historical check name as a lightweight all-shard gate.
-  merge-server-coverage:
-    needs: [check-duplicate-run, test-server]
-    if: >-
-      ${{
-        always() &&
-        (
-          needs.check-duplicate-run.result != 'success' ||
-          needs.check-duplicate-run.outputs.should_skip != 'true'
-        )
-      }}
-    name: Merge and Upload Server Coverage
-    runs-on: ubuntu-latest
-    steps:
-      - name: Verify server shards
-        env:
-          DUPLICATE_RESULT: ${{ needs.check-duplicate-run.result }}
-          SHOULD_SKIP: ${{ needs.check-duplicate-run.outputs.should_skip }}
-          TEST_RESULT: ${{ needs.test-server.result }}
-        run: |
-          set -euo pipefail
-
-          if [ "$DUPLICATE_RESULT" != 'success' ]; then
-            echo "::error::Duplicate-run check did not complete successfully."
-            exit 1
-          fi
-
-          if [ "$SHOULD_SKIP" = 'true' ]; then
-            echo 'The duplicate run check skipped this workflow.'
-            exit 0
-          fi
-
-          if [ "$TEST_RESULT" != 'success' ]; then
-            echo "::error::Server test shards did not all pass: $TEST_RESULT"
-            exit 1
-          fi
-
-          echo 'All server test shards passed.'
-
   test-databsae:
-    needs: check-duplicate-run
-    if: needs.check-duplicate-run.outputs.should_skip != 'true'
     name: Test Database
 
     runs-on: ubuntu-latest
