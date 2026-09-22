@@ -63,6 +63,27 @@ describe('credentials.validity', () => {
     expect(outcome.fix).toContain('LOBEHUB_CLI_API_KEY');
   });
 
+  /**
+   * The probe knows a refresh timed out and says so; the check used to print its own generic
+   * "log in again" underneath, so doctor gave two contradictory instructions at once.
+   */
+  it("keeps the probe's own remedy instead of prescribing a fresh login", async () => {
+    credential.value = {
+      error:
+        'Could not reach the server to refresh the access token: fetch failed. The stored login is untouched, so this is the network or the server rather than a signed-out session.',
+      fix: 'Retry in a moment; the stored login does not need renewing.',
+      kind: 'stored',
+      origin: 'stored login',
+      tokenType: 'jwt',
+    };
+
+    const outcome = await runCheck(credentialChecks, 'credentials.validity');
+
+    expect(outcome.status).toBe('fail');
+    expect(outcome.fix).toContain('Retry in a moment');
+    expect(outcome.fix).not.toMatch(/run .*login/i);
+  });
+
   it('fails an expired token that could not refresh', async () => {
     credential.value = {
       expiresAt: Math.floor(Date.now() / 1000) - 600,
