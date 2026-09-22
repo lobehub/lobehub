@@ -82,18 +82,16 @@ interface EnvironmentManagerProps {
 
 const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) => {
   const { t } = useTranslation('setting');
-  const { data, error, isLoading, isValidating, mutate } = useEnvironments(visibility);
-  const {
-    data: instanceData,
-    isValidating: instancesValidating,
-    mutate: refreshInstances,
-  } = useInstances();
+  const { data, error, isLoading, mutate } = useEnvironments(visibility);
+  const { data: instanceData, mutate: refreshInstances } = useInstances();
 
   const [selectedId, setSelectedId] = useState<string>();
   // Whether the selected environment opens with its instance-create form
   // showing. The row's "new instance" action is a shortcut into the panel, not
   // a second way to make one.
   const [adding, setAdding] = useState(false);
+  // Whether a refresh the user asked for is still running.
+  const [refreshing, setRefreshing] = useState(false);
 
   const environments = data?.environments ?? [];
   const instances = instanceData?.instances ?? [];
@@ -111,12 +109,23 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
     setAdding(true);
   };
 
-  // Both lists, because the two halves of what this page shows are fetched
-  // separately and the slow one — instance state, which needs the execution
-  // plane — is the one worth a manual refresh.
-  const refresh = () => {
-    void mutate();
-    void refreshInstances();
+  /**
+   * Both lists, because the two halves of what this page shows are fetched
+   * separately and the slow one — instance state, which needs the execution
+   * plane — is the one worth a manual refresh.
+   *
+   * The spinner is driven by this call rather than by SWR's `isValidating`,
+   * which is true of every fetch the page makes. Read off that flag the button
+   * span on a tab switch and on any background revalidation, reporting work
+   * nobody asked it to do and, worse, implying the click had already happened.
+   */
+  const refresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([mutate(), refreshInstances()]);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   /**
@@ -138,7 +147,7 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
       )}
       <Button
         icon={<Icon icon={RefreshCwIcon} />}
-        loading={isValidating || instancesValidating}
+        loading={refreshing}
         title={t('environments.refresh')}
         onClick={refresh}
       />
