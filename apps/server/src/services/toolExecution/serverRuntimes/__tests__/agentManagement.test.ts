@@ -11,6 +11,7 @@ const {
   mockGetAssistantList,
   mockQueryAgents,
   mockGetAgentConfigById,
+  mockServiceUpdateConfig,
   mockUpdateConfig,
   mockFindById,
   mockCreatePlugin,
@@ -21,7 +22,14 @@ const {
   mockGetAgentConfigById: vi.fn(),
   mockGetAssistantList: vi.fn(),
   mockQueryAgents: vi.fn(),
+  mockServiceUpdateConfig: vi.fn(),
   mockUpdateConfig: vi.fn(),
+}));
+
+vi.mock('@/server/services/agent', () => ({
+  AgentService: vi.fn(function () {
+    return { updateAgentConfig: mockServiceUpdateConfig };
+  }),
 }));
 
 vi.mock('@/database/models/agent', () => ({
@@ -79,6 +87,19 @@ const makeAgents = (count: number, startIndex = 0) =>
 describe('agentManagementRuntime', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockServiceUpdateConfig.mockImplementation((...args) => mockUpdateConfig(...args));
+  });
+
+  it('does not persist a model change rejected by the shared-agent policy', async () => {
+    mockGetAgentConfigById.mockResolvedValue({ id: 'agent-1', provider: 'lobehub' });
+    mockServiceUpdateConfig.mockRejectedValueOnce(new Error('Shared agent provider is restricted'));
+    const result = await createRuntime().updateAgent({
+      agentId: 'agent-1',
+      config: { model: 'gpt-4o', provider: 'openai' },
+    });
+    expect(result.success).toBe(false);
+    expect(result.content).toContain('Shared agent provider is restricted');
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
   });
 
   it('declares the agent management runtime identifier', () => {

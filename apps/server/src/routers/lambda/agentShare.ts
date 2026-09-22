@@ -176,8 +176,7 @@ export const agentShareRouter = router({
       await assertCanManageAgentShare(ctx, input.agentId);
       await assertAgentShareCreationEnabled(ctx.userId);
 
-      if (input.visibility === 'link')
-        await ctx.agentService.assertShareModelAllowed(input.agentId);
+      if (input.visibility === 'link') await ctx.agentService.prepareShareModel(input.agentId);
 
       return ctx.agentShareModel.create(input.agentId, input.visibility);
     }),
@@ -339,7 +338,7 @@ export const agentShareRouter = router({
       // as `enableShare`; going back to `private` unpublishes and stays open.
       if (input.visibility === 'link') {
         await assertAgentShareCreationEnabled(ctx.userId);
-        await ctx.agentService.assertShareModelAllowed(input.agentId);
+        await ctx.agentService.prepareShareModel(input.agentId);
       }
 
       return requireShare(

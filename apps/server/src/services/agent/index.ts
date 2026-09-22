@@ -76,13 +76,21 @@ export class AgentService {
     const agent = await this.agentModel.getAgentConfigById(agentId);
     if (!agent) throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
 
-    const { provider } = await this.resolveModelSelection({ ...agent, ...patch });
+    const selection = await this.resolveModelSelection({ ...agent, ...patch });
+    const { provider } = selection;
     if (!AGENT_SHARE_ALLOWED_PROVIDERS.includes(provider)) {
       throw new TRPCError({
         code: 'BAD_REQUEST',
         message: `Shared agents only support models from: ${AGENT_SHARE_ALLOWED_PROVIDERS.join(', ')}. Switch providers or turn off sharing first.`,
       });
     }
+    return selection;
+  }
+
+  /** Pin inherited defaults so later account changes cannot alter a published model. */
+  async prepareShareModel(agentId: string) {
+    const selection = await this.assertShareModelAllowed(agentId);
+    if (selection) await this.agentModel.updateConfig(agentId, selection);
   }
 
   async createInbox() {
@@ -295,7 +303,10 @@ export class AgentService {
   ): Promise<UpdateAgentResult> {
     if (AGENT_SHARE_ALLOWED_PROVIDERS && ('model' in value || 'provider' in value)) {
       const share = await new AgentShareModel(this.db, this.userId).getByAgentId(agentId);
-      if (share?.visibility === 'link') await this.assertShareModelAllowed(agentId, value);
+      if (share?.visibility === 'link') {
+        const selection = await this.assertShareModelAllowed(agentId, value);
+        value = { ...value, ...selection };
+      }
     }
 
     // 1. Execute update

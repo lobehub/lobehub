@@ -903,9 +903,28 @@ describe('AgentService', () => {
       });
     });
 
+    it('pins inherited defaults when publishing before account defaults change', async () => {
+      agent.provider = null;
+      await service.prepareShareModel('agent-1');
+      mockUserModel.getUserSettingsDefaultAgentConfig.mockResolvedValue({
+        config: { provider: 'openai' },
+      });
+      expect(agent.provider).toBe('lobehub');
+      await expect(service.assertShareModelAllowed('agent-1')).resolves.toMatchObject({
+        provider: 'lobehub',
+      });
+    });
+
+    it('pins an inherited provider when clearing a shared selection', async () => {
+      await service.updateAgentConfig('agent-1', { provider: null });
+      expect(agent.provider).toBe('lobehub');
+    });
+
     it('resolves inherited providers before publishing', async () => {
       agent.provider = null;
-      await expect(service.assertShareModelAllowed('agent-1')).resolves.toBeUndefined();
+      await expect(service.assertShareModelAllowed('agent-1')).resolves.toMatchObject({
+        provider: 'lobehub',
+      });
       mockUserModel.getUserSettingsDefaultAgentConfig.mockResolvedValue({
         config: { provider: 'openai' },
       });
