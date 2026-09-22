@@ -369,8 +369,13 @@ export class VerifyRunModel {
           planConfirmedAt: new Date(),
           scenario: target.scenario ?? source.scenario,
           source: source.source ?? target.source,
-          // Ingested rounds carry no rollup status: the report settles them.
-          status: null,
+          // The survivor takes over the source's identity, so it takes over its
+          // pipeline status too. An ingested round carries none and the report
+          // settles it, which is what nulls the draft's own `planned` here. A LIVE
+          // round folded mid-flight keeps its status instead: `claimEvidenceCollection`
+          // and `claimVerifying` only move a run that still has one, so clearing it
+          // would strand the run — and its Task — with nothing able to judge it.
+          status: source.status,
         })
         .where(eq(verifyRuns.id, targetRunId))
         .returning();

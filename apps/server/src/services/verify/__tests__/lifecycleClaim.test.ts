@@ -192,10 +192,14 @@ describe('runVerifyOnCompletion — verification claim', () => {
    */
   it('follows the row the attach settled on when the round is folded', async () => {
     findByOperation.mockResolvedValue({ ...confirmedRun, acceptanceId: null });
+    // Shaped like a real fold: a different row, still claimable. That the survivor
+    // keeps the live status is guaranteed by `VerifyRunModel.foldIntoRound`'s own
+    // test against the database.
     attachTaskRunToAcceptance.mockResolvedValue({
       ...confirmedRun,
       acceptanceId: 'acceptance-1',
       id: 'folded-run',
+      status: 'planned',
     });
     operationFindById.mockResolvedValue({
       agentId: 'builder',

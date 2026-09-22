@@ -288,6 +288,28 @@ describe('VerifyRunModel.foldIntoRound', () => {
     expect(await model().listByAcceptance(acceptance.id)).toHaveLength(1);
   });
 
+  /**
+   * Regression: the survivor was always written with a null status. Folding a live
+   * builder round into a leftover draft therefore produced a row no claim can move
+   * — `claimEvidenceCollection` wants `planned`, `claimVerifying` wants `planned`
+   * or `collecting_evidence` — so completion returned without collecting evidence
+   * or judging, and the Task was stranded.
+   */
+  it('keeps a live round claimable after folding it into a draft', async () => {
+    const { draft } = await draftRound();
+    const incoming = await model().create({
+      plan: [item('case-1')],
+      status: 'planned',
+      title: 'builder run',
+    });
+    await model().confirmPlan(incoming.id);
+
+    const folded = await model().foldIntoRound(incoming.id, draft.id);
+
+    expect(folded.status).toBe('planned');
+    expect(await model().claimEvidenceCollection(folded.id)).toBe(true);
+  });
+
   it('refuses to fold into a round that already executed or a run already chained', async () => {
     const { acceptance, draft } = await draftRound();
     await model().confirmPlan(draft.id);
