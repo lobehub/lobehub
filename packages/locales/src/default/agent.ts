@@ -470,6 +470,7 @@ export default {
   'share.settings.usage.fileStorageOff': '{{used}} · attachments off',
   'share.settings.usage.loadFailed': 'Usage could not be loaded',
   'share.settings.usage.monthlySpend': 'This month’s spend',
+  'share.settings.usage.spendOfLimit': '${{spend}} of ${{limit}}',
   'share.settings.usage.spendOfLimitCredits': '{{spend}} of {{limit}} credits',
   'share.settings.usage.title': 'Usage',
   'share.settings.usage.views': 'Visits',

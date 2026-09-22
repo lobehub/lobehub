@@ -406,6 +406,7 @@
   "share.settings.usage.fileStorageOff": "{{used}} · 附件已关闭",
   "share.settings.usage.loadFailed": "用量加载失败",
   "share.settings.usage.monthlySpend": "本月消耗",
+  "share.settings.usage.spendOfLimit": "${{spend}} / ${{limit}}",
   "share.settings.usage.spendOfLimitCredits": "{{spend}} / {{limit}} 积分",
   "share.settings.usage.title": "用量",
   "share.settings.usage.views": "访问次数",
