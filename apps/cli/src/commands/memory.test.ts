@@ -102,7 +102,10 @@ describe('memory command', () => {
 
   describe('create', () => {
     it('should create an identity memory', async () => {
-      mockTrpcClient.userMemory.createIdentity.mutate.mockResolvedValue({ id: 'mem-1' });
+      mockTrpcClient.userMemory.createIdentity.mutate.mockResolvedValue({
+        identityId: 'identity-1',
+        userMemoryId: 'mem-1',
+      });
 
       const program = createProgram();
       await program.parseAsync([
@@ -120,6 +123,8 @@ describe('memory command', () => {
         expect.objectContaining({ description: 'Software dev', type: 'professional' }),
       );
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('mem-1'));
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('identity: identity-1'));
+      expect(consoleSpy).not.toHaveBeenCalledWith(expect.stringContaining('unknown'));
     });
   });
 
