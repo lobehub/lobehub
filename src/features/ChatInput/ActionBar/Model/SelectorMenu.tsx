@@ -77,6 +77,7 @@ interface SelectorMenuProps {
   effort: ReasoningEffortControl;
   enabledList?: EnabledProviderWithModels[];
   model: string;
+  modelNotice?: ReactNode;
   onModelChange: (params: { model: string; provider: string }) => Promise<void>;
   openOnHover?: boolean;
   placement?: DropdownPlacement;
@@ -97,6 +98,7 @@ const SelectorMenu = memo<SelectorMenuProps>(
     effort,
     enabledList,
     model,
+    modelNotice,
     onModelChange,
     openOnHover = false,
     placement = 'topLeft',
@@ -182,6 +184,7 @@ const SelectorMenu = memo<SelectorMenuProps>(
                   <ModelSwitchSubmenuPopup
                     enabledList={enabledList}
                     model={model}
+                    notice={modelNotice}
                     provider={provider}
                     onModelChange={onModelChange}
                     onOpenChange={handleModelPanelOpenChange}

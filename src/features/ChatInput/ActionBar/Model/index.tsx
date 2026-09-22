@@ -1,4 +1,5 @@
 import { Tooltip } from '@lobehub/ui';
+import { Alert } from '@lobehub/ui/base-ui';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -19,7 +20,7 @@ import { useActionBarContext } from '../context';
 import SelectorMenu from './SelectorMenu';
 
 const ModelSwitch = memo(() => {
-  const { t } = useTranslation('chat');
+  const { t } = useTranslation(['chat', 'agent']);
   const { dropdownPlacement } = useActionBarContext();
   const agentId = useAgentId();
   const {
@@ -41,6 +42,14 @@ const ModelSwitch = memo(() => {
     !activeTopicId && isShared && AGENT_SHARE_ALLOWED_PROVIDERS
       ? chatModels.filter((item) => AGENT_SHARE_ALLOWED_PROVIDERS?.includes(item.id))
       : undefined;
+  const modelNotice = enabledList ? (
+    <Alert
+      showIcon
+      description={t('share.settings.modelRestriction.description', { ns: 'agent' })}
+      title={t('share.settings.modelRestriction.title', { ns: 'agent' })}
+      type={'info'}
+    />
+  ) : undefined;
   const topicModel = useChatStore(topicSelectors.activeTopicModel);
   const updateTopicModel = useChatStore((s) => s.updateTopicModel);
   const model = topicModel?.model ?? agentModel;
@@ -96,6 +105,7 @@ const ModelSwitch = memo(() => {
         effort={effort}
         enabledList={enabledList}
         model={model}
+        modelNotice={modelNotice}
         placement={dropdownPlacement ?? 'topRight'}
         provider={provider}
         onModelChange={handleModelChange}
@@ -112,6 +122,7 @@ const ModelSwitch = memo(() => {
     <ModelSwitchPanel
       enabledList={enabledList}
       model={model}
+      notice={modelNotice}
       openOnHover={false}
       placement={dropdownPlacement ?? 'topRight'}
       provider={provider}

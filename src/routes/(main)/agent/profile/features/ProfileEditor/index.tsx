@@ -9,7 +9,7 @@ import {
 import type { HeterogeneousApiConfig, HeterogeneousAuthMode } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import type { TabsItem } from '@lobehub/ui/base-ui';
-import { Tabs } from '@lobehub/ui/base-ui';
+import { Alert, Tabs } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { Wrench } from 'lucide-react';
@@ -60,7 +60,7 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const ProfileEditor = memo(() => {
-  const { t } = useTranslation('setting');
+  const { t } = useTranslation(['setting', 'agent']);
   const { allowed: canEdit } = usePermission('edit_own_content');
   const agentId = useAgentStore((s) => s.activeAgentId || '');
   const config = useAgentStore(agentSelectors.getAgentConfigById(agentId), isEqual);
@@ -259,6 +259,14 @@ const ProfileEditor = memo(() => {
                 <div className={styles.configLabel}>{t('settingAgent.runtimeConfig.title')}</div>
                 <RunPriorityHint agentId={agentId} />
               </Flexbox>
+              {isShared && AGENT_SHARE_ALLOWED_PROVIDERS && (
+                <Alert
+                  showIcon
+                  description={t('share.settings.modelRestriction.description', { ns: 'agent' })}
+                  title={t('share.settings.modelRestriction.title', { ns: 'agent' })}
+                  type={'info'}
+                />
+              )}
               <Flexbox horizontal align={'center'} gap={12} justify={'flex-start'} wrap={'wrap'}>
                 <ModelSelect
                   initialWidth
