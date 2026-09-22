@@ -68,7 +68,7 @@ describe('HeteroInflightRunRegistry', () => {
     expect(registry.list().map((r) => r.ipcSessionId)).toEqual(['s2']);
   });
 
-  it('takeAll returns the runs once and drops stale ones', () => {
+  it('takeAll flags stale runs instead of dropping them', () => {
     const now = Date.parse('2026-09-21T10:00:00.000Z');
     registry.upsert(run('fresh'));
     registry.upsert(
@@ -78,7 +78,14 @@ describe('HeteroInflightRunRegistry', () => {
     );
     registry.upsert(run('broken', { startedAt: 'not-a-date' }));
 
-    expect(registry.takeAll(now).map((r) => r.ipcSessionId)).toEqual(['fresh']);
+    // An expired entry still comes back: its topic may be parked mid-run and
+    // the stale-topic watchdog only ever looks at `running`.
+    const taken = registry.takeAll(now);
+    expect(taken.map((r) => [r.ipcSessionId, r.expired ?? false])).toEqual([
+      ['fresh', false],
+      ['stale', true],
+      ['broken', true],
+    ]);
     expect(registry.list()).toEqual([]);
     expect(registry.takeAll(now)).toEqual([]);
   });

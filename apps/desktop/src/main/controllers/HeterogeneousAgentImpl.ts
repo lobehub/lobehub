@@ -3296,11 +3296,26 @@ export default class HeterogeneousAgentCtr {
     const runs = registry.takeAll();
     const recoverable: HeteroInflightRun[] = [];
     for (const run of runs) {
+      // Expired entries are handed over untouched: the renderer only settles
+      // their topic, and there is nothing left of the process to reap.
+      if (run.expired) {
+        recoverable.push(run);
+        continue;
+      }
+      let safe = false;
       try {
-        if (await this.reapInterruptedRun(run)) recoverable.push(run);
+        safe = await this.reapInterruptedRun(run);
       } catch (error) {
         logger.warn('Failed to reap interrupted run:', { error, ipcSessionId: run.ipcSessionId });
       }
+      if (safe) {
+        recoverable.push(run);
+        continue;
+      }
+      // Safety could not be established (identity unreadable, the tree outlived
+      // SIGKILL, the reap threw). `takeAll` already emptied the file, so put the
+      // entry back or this run loses its only recovery token for good.
+      registry.upsert(run);
     }
     return recoverable;
   }

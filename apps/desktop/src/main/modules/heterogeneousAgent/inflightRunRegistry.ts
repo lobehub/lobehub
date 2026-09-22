@@ -32,6 +32,12 @@ export interface HeteroInflightRun {
    */
   configDir?: string;
   cwd?: string;
+  /**
+   * Set on read when the entry is past {@link HETERO_INFLIGHT_RUN_MAX_AGE_MS}.
+   * Too old to replay, but its topic may still be parked mid-run, so the entry
+   * is handed over for a status-only cleanup instead of being dropped.
+   */
+  expired?: boolean;
   /** Desktop IPC session id (`AgentSession.sessionId`). */
   ipcSessionId: string;
   operationId: string;
@@ -105,15 +111,20 @@ export class HeteroInflightRunRegistry {
   /**
    * Hand every recorded run to the caller and clear the file, so a recovery
    * that itself dies cannot loop on the same entries at every launch.
-   * Entries past {@link HETERO_INFLIGHT_RUN_MAX_AGE_MS} are dropped silently.
+   *
+   * Entries past {@link HETERO_INFLIGHT_RUN_MAX_AGE_MS} come back flagged
+   * `expired` rather than dropped: their transcript is too old to replay, but
+   * the topic they left parked (`running`, or `waitingForHuman` on a question
+   * nobody can answer any more) still needs someone to put it down.
    */
   takeAll(now: number = Date.now()): HeteroInflightRun[] {
     const runs = this.list();
     if (runs.length === 0) return [];
     this.write([]);
-    return runs.filter((run) => {
+    return runs.map((run) => {
       const startedAt = Date.parse(run.startedAt);
-      return Number.isFinite(startedAt) && now - startedAt <= HETERO_INFLIGHT_RUN_MAX_AGE_MS;
+      const fresh = Number.isFinite(startedAt) && now - startedAt <= HETERO_INFLIGHT_RUN_MAX_AGE_MS;
+      return fresh ? run : { ...run, expired: true };
     });
   }
 

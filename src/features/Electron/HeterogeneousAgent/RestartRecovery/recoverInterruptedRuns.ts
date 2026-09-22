@@ -52,6 +52,8 @@ interface InterruptedRun {
   assistantMessageId?: string;
   configDir?: string;
   cwd?: string;
+  /** Too old to replay; hand the topic a status-only cleanup and stop there. */
+  expired?: boolean;
   ipcSessionId: string;
   /** ISO timestamp of the spawn — the ownership token for the topic's latest turn. */
   startedAt?: string;
@@ -127,13 +129,54 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
 
   const topic = await topicService.getTopicDetail(topicId);
   if (!topic) return { outcome: 'skipped', reason: 'topic-missing', topicId };
-  // Settled elsewhere already (another device, the stale-run watchdog, the user).
-  if (!isInterruptedTopicStatus(topic.status)) {
-    return { outcome: 'skipped', reason: 'not-running', topicId };
-  }
+
+  // `active` counts too, but only with a recorded assistant row to verify
+  // ownership against: the stale-run watchdog flips an unclaimed topic there
+  // after two hours, and its sweep means nobody picked the run up — not that it
+  // finished. Every other status is somebody's decision (archived, failed,
+  // scheduled, read) and is left alone.
+  const claimable =
+    isInterruptedTopicStatus(topic.status) ||
+    (topic.status === 'active' && !!run.assistantMessageId);
+  if (!claimable) return { outcome: 'skipped', reason: 'not-running', topicId };
 
   const chatStore = useChatStore.getState();
   const settle = () => chatStore.updateTopicStatus({ agentId, status: 'active', topicId });
+  const context: ConversationContext = { agentId, topicId };
+
+  // Ownership comes before ANY write or settling exit. Another device may be
+  // running this topic right now, and settling it — or patching its metadata —
+  // would clobber a live run even though no rows get deleted.
+  const allMessages = await messageService.getMessages(context);
+  const mainChain = mainChainOf(allMessages);
+  const userTurn = mainChain.findLast((message) => message.role === 'user');
+
+  // A newer user turn postdates our spawn: that turn is not ours.
+  const startedAt = run.startedAt ? Date.parse(run.startedAt) : Number.NaN;
+  if (userTurn && Number.isFinite(startedAt) && toTime(userTurn.createdAt) > startedAt) {
+    return { outcome: 'skipped', reason: 'topic-taken-over', topicId };
+  }
+
+  // A regeneration hangs a NEW assistant branch off the SAME user row, so the
+  // timestamp above cannot see it. The newest branch under that row has to be
+  // the one we recorded.
+  const branchRoots = userTurn
+    ? mainChain
+        .filter((message) => message.parentId === userTurn.id && message.role !== 'user')
+        .sort((a, b) => toTime(a.createdAt) - toTime(b.createdAt))
+    : [];
+  const newestRoot = branchRoots.at(-1);
+  if (run.assistantMessageId && newestRoot && newestRoot.id !== run.assistantMessageId) {
+    return { outcome: 'skipped', reason: 'topic-taken-over', topicId };
+  }
+
+  // Past the replay window. The transcript is too stale to reproduce, but the
+  // topic is still parked mid-run with nobody left to release it — and the
+  // stale-run watchdog only ever looks at `running`.
+  if (run.expired) {
+    await settle();
+    return { outcome: 'skipped', reason: 'expired', topicId };
+  }
 
   if (run.agentType !== 'claude-code') {
     await settle();
@@ -153,8 +196,6 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
       await settle();
       return { outcome: 'skipped', reason: 'provider-mismatch', topicId };
     }
-
-    const context: ConversationContext = { agentId, topicId };
 
     // The topic's resume metadata is written by the renderer as the stream
     // starts; a quit that lands between main patching the ledger and that write
@@ -207,32 +248,9 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
       return { outcome: 'skipped', reason: `no-transcript: ${probe.reason ?? 'unknown'}`, topicId };
     }
 
-    const allMessages = await messageService.getMessages(context);
-    const mainChain = mainChainOf(allMessages);
-    const userTurn = mainChain.findLast((message) => message.role === 'user');
     if (!userTurn) {
       await settle();
       return { outcome: 'skipped', reason: 'no-user-turn', topicId };
-    }
-
-    // The topic is still in flight — but is it OUR run? Another device may
-    // have started a newer turn while this desktop was down. Recovering would
-    // delete that live run's output and replay a stale session over it. Leave
-    // the topic completely alone: settling would clobber its status too.
-    const startedAt = run.startedAt ? Date.parse(run.startedAt) : Number.NaN;
-    if (Number.isFinite(startedAt) && toTime(userTurn.createdAt) > startedAt) {
-      return { outcome: 'skipped', reason: 'topic-taken-over', topicId };
-    }
-
-    // A regeneration hangs a NEW assistant branch off the SAME user row, so the
-    // timestamp above cannot see it. The newest branch under that row has to be
-    // the one we recorded.
-    const branchRoots = mainChain
-      .filter((message) => message.parentId === userTurn.id && message.role !== 'user')
-      .sort((a, b) => toTime(a.createdAt) - toTime(b.createdAt));
-    const newestRoot = branchRoots.at(-1);
-    if (run.assistantMessageId && newestRoot && newestRoot.id !== run.assistantMessageId) {
-      return { outcome: 'skipped', reason: 'topic-taken-over', topicId };
     }
 
     // Everything the interrupted turn persisted is a partial view of what the

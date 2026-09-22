@@ -420,6 +420,63 @@ describe('recoverInterruptedHeteroRuns', () => {
     });
   });
 
+  it('still recovers a topic the stale-run watchdog already flipped to active', async () => {
+    // The watchdog's two-hour sweep only means nobody claimed the run; the
+    // ledger entry proves it never settled, so the partial turn is still owed
+    // a replay.
+    mockListInterruptedRuns.mockResolvedValue([{ ...run, assistantMessageId: 'a1' }]);
+    mockGetTopicDetail.mockResolvedValue({ ...topic, status: 'active' });
+    mockRunHetero.mockResolvedValue({ assistantMessageId: 'a-new', replayComplete: true });
+
+    const results = await recoverInterruptedHeteroRuns();
+
+    expect(results).toEqual([{ outcome: 'replayed', topicId: 'topic-1' }]);
+    expect(mockRemoveMessages).toHaveBeenCalledWith(['a1', 't1'], {
+      agentId: 'agent-1',
+      topicId: 'topic-1',
+    });
+  });
+
+  it('does not settle a topic another device took over, even when the probe fails', async () => {
+    // Ownership is decided before any write: probing the other device's newer
+    // session against our old profile fails, and settling on that would
+    // clobber its live status.
+    mockListInterruptedRuns.mockResolvedValue([{ ...run, assistantMessageId: 'a1' }]);
+    mockGetMessages.mockResolvedValue([
+      ...messages,
+      { content: 'newer run', createdAt: 900, id: 'a-newer', parentId: 'u1', role: 'assistant' },
+    ]);
+    mockProbeTranscriptReplay.mockResolvedValue({ available: false, reason: 'gone' });
+
+    const results = await recoverInterruptedHeteroRuns();
+
+    expect(results).toEqual([
+      { outcome: 'skipped', reason: 'topic-taken-over', topicId: 'topic-1' },
+    ]);
+    expect(chatStore.updateTopicStatus).not.toHaveBeenCalled();
+    expect(chatStore.updateTopicMetadata).not.toHaveBeenCalled();
+    expect(mockProbeTranscriptReplay).not.toHaveBeenCalled();
+  });
+
+  it('settles an expired run instead of replaying it', async () => {
+    // Past the replay window the transcript is unusable, but a waitingForHuman
+    // topic would otherwise stay parked forever — the watchdog only sees
+    // `running`.
+    mockListInterruptedRuns.mockResolvedValue([{ ...run, expired: true }]);
+    mockGetTopicDetail.mockResolvedValue({ ...topic, status: 'waitingForHuman' });
+
+    const results = await recoverInterruptedHeteroRuns();
+
+    expect(results).toEqual([{ outcome: 'skipped', reason: 'expired', topicId: 'topic-1' }]);
+    expect(chatStore.updateTopicStatus).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      status: 'active',
+      topicId: 'topic-1',
+    });
+    expect(mockRunHetero).not.toHaveBeenCalled();
+    expect(mockRemoveMessages).not.toHaveBeenCalled();
+  });
+
   it('leaves a topic alone when a newer turn took it over while the app was down', async () => {
     // Another device started a turn after our run was spawned: its user row is
     // newer than the ledger entry. Touching it would delete that live run's
