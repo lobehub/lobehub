@@ -86,7 +86,7 @@ describe('buildOperationInitRequest', () => {
     expect('createdAt' in request.approvedToolEntries[0]).toBe(false);
   });
 
-  // A deferred init (LOBE-13745) has to carry this request on the operation
+  // A deferred init has to carry this request on the operation
   // state through Redis, which is JSON. A `Date`, a `Buffer` or a model instance
   // sneaking into the request would survive the send path and silently degrade
   // there, so hold the line here instead.

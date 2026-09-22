@@ -1172,7 +1172,7 @@ export class AiAgentService {
     // Stages 5–18 — the run's init: the tool surface, the message/context
     // assembly, and the human decision a resumed approval turns into the first
     // context. One call so the same work can later run in the step-0 worker
-    // instead of on the send path (LOBE-13745).
+    // instead of on the send path.
     const initRequest = buildOperationInitRequest({
       additionalPluginIds,
       agentSlug,
