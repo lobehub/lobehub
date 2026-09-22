@@ -146,10 +146,12 @@ describe('WorkflowCollapse', () => {
     vi.useRealTimers();
   });
 
-  it('defaults to expanded while streaming', () => {
+  it('defaults to the full list while streaming', () => {
     render(<WorkflowCollapse assistantMessageId="msg-1" blocks={makeBlocks()} />);
 
     expect(getExpandedKeys()).toBe('["workflow"]');
+    // 'Collapse' is the full level's toggle label; 'Expand fully' would mean semi.
+    expect(screen.getByRole('button', { name: 'Collapse' })).toBeInTheDocument();
   });
 
   it("respects defaultWorkflowExpandLevel='collapsed' while streaming", () => {
@@ -325,6 +327,9 @@ describe('WorkflowCollapse', () => {
 
     expect(screen.getByText('Awaiting your confirmation')).toBeInTheDocument();
     expect(screen.queryByText('Working...')).not.toBeInTheDocument();
+    // The forced open lands on the full list like every other open does — the
+    // card asking for confirmation must not be under the cap's scroll.
+    expect(screen.getByRole('button', { name: 'Collapse' })).toBeInTheDocument();
   });
 
   it('pauses and hides elapsed time while confirmation is pending', () => {
@@ -461,17 +466,11 @@ describe('WorkflowCollapse', () => {
   });
 
   it('cycles expand levels via the toggle button', () => {
+    // The ⤢ toggle is the only way into the capped level now: everything that
+    // opens on its own opens full, and the toggle narrows it back down.
     render(<WorkflowCollapse assistantMessageId="msg-1" blocks={makeBlocks()} />);
 
-    const toggleButton = screen.getByRole('button', { name: 'Expand fully' });
     expect(getExpandedKeys()).toBe('["workflow"]');
-
-    act(() => {
-      toggleButton.click();
-    });
-
-    expect(getExpandedKeys()).toBe('["workflow"]');
-    expect(screen.getByRole('button', { name: 'Collapse' })).toBeInTheDocument();
 
     act(() => {
       screen.getByRole('button', { name: 'Collapse' }).click();
@@ -479,9 +478,16 @@ describe('WorkflowCollapse', () => {
 
     expect(getExpandedKeys()).toBe('["workflow"]');
     expect(screen.getByRole('button', { name: 'Expand fully' })).toBeInTheDocument();
+
+    act(() => {
+      screen.getByRole('button', { name: 'Expand fully' }).click();
+    });
+
+    expect(getExpandedKeys()).toBe('["workflow"]');
+    expect(screen.getByRole('button', { name: 'Collapse' })).toBeInTheDocument();
   });
 
-  it('expands to semi when accordion header is clicked from collapsed', () => {
+  it('expands to full when the accordion header is clicked from collapsed', () => {
     render(
       <WorkflowCollapse
         assistantMessageId="msg-1"
@@ -499,7 +505,8 @@ describe('WorkflowCollapse', () => {
     });
 
     expect(getExpandedKeys()).toBe('["workflow"]');
-    expect(screen.getByRole('button', { name: 'Expand fully' })).toBeInTheDocument();
+    // 'Collapse' is the full level's toggle label; 'Expand fully' would mean semi.
+    expect(screen.getByRole('button', { name: 'Collapse' })).toBeInTheDocument();
   });
 
   it('opens a finished workflow at full on the production prop shape', () => {
@@ -573,9 +580,9 @@ describe('WorkflowCollapse', () => {
     expect(screen.getByRole('button', { name: 'Expand fully' })).toBeInTheDocument();
   });
 
-  it('keeps the streaming list at semi when opened mid-run', () => {
-    // While steps are still arriving the constrained list is what auto-scrolls
-    // with them; only heterogeneous agents (streaming: 'full') opt out.
+  it('opens a streaming workflow at full too', () => {
+    // A run whose live list is pinned shut (the settings toggle off) still
+    // opens on the full list when the user asks for it mid-run.
     render(
       <WorkflowCollapse
         assistantMessageId="msg-1"
@@ -590,11 +597,24 @@ describe('WorkflowCollapse', () => {
       screen.getByRole('button', { name: 'toggle-accordion-header' }).click();
     });
 
+    expect(screen.getByRole('button', { name: 'Collapse' })).toBeInTheDocument();
+  });
+
+  it('opens a streaming workflow at semi only when that phase pins semi', () => {
+    render(
+      <WorkflowCollapse
+        assistantMessageId="msg-1"
+        blocks={makeBlocks()}
+        defaultWorkflowExpandLevel={{ streaming: 'semi' }}
+      />,
+    );
+
     expect(screen.getByRole('button', { name: 'Expand fully' })).toBeInTheDocument();
   });
 
   it('manual expand jumps to full while streaming when that phase defaults to full', () => {
-    // Heterogeneous agents want all 40+ tool calls visible mid-run.
+    // Heterogeneous agents pin streaming to full explicitly; all 40+ tool
+    // calls stay visible mid-run and across a close/reopen.
     render(
       <WorkflowCollapse
         assistantMessageId="msg-1"
@@ -619,14 +639,10 @@ describe('WorkflowCollapse', () => {
     expect(screen.getByRole('button', { name: 'Collapse' })).toBeInTheDocument();
   });
 
-  it('collapses to collapsed when accordion header is clicked from full', () => {
+  it('keeps a user-opened workflow open across a rerender', () => {
     const { rerender } = render(
       <WorkflowCollapse assistantMessageId="msg-1" blocks={makeBlocks()} />,
     );
-
-    act(() => {
-      screen.getByRole('button', { name: 'Expand fully' }).click();
-    });
 
     expect(screen.getByRole('button', { name: 'Collapse' })).toBeInTheDocument();
 
