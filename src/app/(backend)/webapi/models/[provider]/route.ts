@@ -59,7 +59,7 @@ export const GET = checkAuth(async (req, { params, userId, serverDB }) => {
     // Read user's provider config from database
     const agentRuntime = await initModelRuntimeFromDB(serverDB, userId, provider, workspaceId);
 
-    const list = await agentRuntime.models();
+    const list = (await agentRuntime.models()) ?? [];
 
     return NextResponse.json(list);
   } catch (e) {

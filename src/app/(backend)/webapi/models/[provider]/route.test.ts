@@ -235,6 +235,22 @@ describe('GET handler', () => {
   });
 
   describe('success cases', () => {
+    it('should return an empty list when the runtime does not support model fetching', async () => {
+      const mockParams = Promise.resolve({ provider: 'bedrock' });
+
+      const mockRuntime: LobeRuntimeAI = {
+        baseURL: 'abc',
+        chat: vi.fn(),
+      };
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue(new ModelRuntime(mockRuntime));
+
+      const response = await GET(request, { params: mockParams });
+      const responseBody = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(responseBody).toEqual([]);
+    });
+
     it('should return model list on success', async () => {
       const mockParams = Promise.resolve({ provider: 'openai' });
 
