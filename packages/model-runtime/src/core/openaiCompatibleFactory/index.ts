@@ -198,6 +198,8 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
   apiKey?: string;
   baseURL?: string;
   chatCompletion?: {
+    /** Select the provider's input_audio payload schema. */
+    audioInputSchema?: 'openai' | 'xiaomimimo';
     /**
      * When set, the factory runs a pre-flight token estimate against the
      * provided model list before dispatching to upstream. If the estimated
@@ -726,6 +728,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           'chat_completions',
         );
         const messages = await convertOpenAIMessages(postPayload.messages, {
+          audioInputSchema: chatCompletion?.audioInputSchema,
           forceImageBase64: chatCompletion?.forceImageBase64,
           forceVideoBase64: chatCompletion?.forceVideoBase64,
           model: postPayload.model,

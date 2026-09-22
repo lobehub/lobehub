@@ -21,6 +21,15 @@ testProvider({
 
 describe('LobeXiaomiMiMoAI - custom features', () => {
   describe('chatCompletion.handlePayload', () => {
+    it.each(['mimo-v2.6-flash', 'mimo-v2.6-pro', 'mimo-v2.6-pro-ultraspeed'])(
+      'should set the documented default output limit for %s',
+      (model) => {
+        const result = params.chatCompletion!.handlePayload!({ model } as any);
+
+        expect(result.max_completion_tokens).toBe(131_072);
+      },
+    );
+
     it('should map max_tokens to max_completion_tokens', () => {
       const payload = {
         max_tokens: 1000,

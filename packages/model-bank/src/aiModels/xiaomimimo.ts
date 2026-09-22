@@ -1,6 +1,91 @@
 import type { AIChatModelCard } from '../types/aiModel';
 
+const mimoV26Abilities = {
+  audio: true,
+  functionCall: true,
+  reasoning: true,
+  search: true,
+  structuredOutput: true,
+  video: true,
+  vision: true,
+} as const;
+
 const xiaomimimoChatModels: AIChatModelCard[] = [
+  {
+    abilities: mimoV26Abilities,
+    contextWindowTokens: 1_000_000,
+    description:
+      'MiMo-V2.6 Pro UltraSpeed delivers the full Pro capability at up to 20 times the output speed for latency-sensitive tasks.',
+    displayName: 'MiMo-V2.6 Pro UltraSpeed',
+    enabled: true,
+    family: 'mimo',
+    id: 'mimo-v2.6-pro-ultraspeed',
+    maxOutput: 131_072,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 60, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-09-22',
+    settings: {
+      extendParams: ['enableReasoning'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: mimoV26Abilities,
+    contextWindowTokens: 1_000_000,
+    description:
+      'MiMo-V2.6 Pro is an omni-modal flagship for complex, long-horizon coding and agentic tasks.',
+    displayName: 'MiMo-V2.6 Pro',
+    enabled: true,
+    family: 'mimo',
+    id: 'mimo-v2.6-pro',
+    maxOutput: 131_072,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.025, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-09-22',
+    settings: {
+      extendParams: ['enableReasoning'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: mimoV26Abilities,
+    contextWindowTokens: 1_000_000,
+    description:
+      'MiMo-V2.6 Flash is an affordable omni-modal agent model with strong coding and tool-use performance.',
+    displayName: 'MiMo-V2.6 Flash',
+    enabled: true,
+    family: 'mimo',
+    id: 'mimo-v2.6-flash',
+    maxOutput: 131_072,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.02, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-09-22',
+    settings: {
+      extendParams: ['enableReasoning'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
   {
     abilities: {
       functionCall: true,
@@ -34,6 +119,7 @@ const xiaomimimoChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      audio: true,
       functionCall: true,
       reasoning: true,
       search: true,

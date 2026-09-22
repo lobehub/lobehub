@@ -134,7 +134,7 @@ interface RouteAttemptContext {
   user?: string;
 }
 
-const RAW_AUDIO_API_TYPES = new Set<ApiType>(['google', 'openai', 'vertexai']);
+const RAW_AUDIO_API_TYPES = new Set<ApiType>(['google', 'openai', 'vertexai', 'xiaomimimo']);
 
 const hasRawAudioInput = (payload: ChatStreamPayload) =>
   payload.messages.some(

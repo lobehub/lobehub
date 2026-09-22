@@ -1414,6 +1414,7 @@ describe('createRouterRuntime', () => {
         baseRuntimeMap: {
           google: CompatibleRuntime,
           openai: CompatibleRuntime,
+          xiaomimimo: CompatibleRuntime,
         },
       }));
 
@@ -1440,6 +1441,7 @@ describe('createRouterRuntime', () => {
               { apiKey: 'google-key', apiType: 'google' },
               { apiKey: 'xai-key', apiType: 'xai' },
               { apiKey: 'openai-key', apiType: 'openai' },
+              { apiKey: 'xiaomi-key', apiType: 'xiaomimimo' },
               { apiKey: 'vertex-key', apiType: 'vertexai' },
             ],
             runtime: UnsupportedRuntime as any,
@@ -1464,7 +1466,7 @@ describe('createRouterRuntime', () => {
       });
 
       expect(result).toBe('vertex-response');
-      expect(attemptedRoutes).toEqual(['google-key', 'openai-key', 'vertexai']);
+      expect(attemptedRoutes).toEqual(['google-key', 'openai-key', 'xiaomi-key', 'vertexai']);
       expect(unsupportedChat).not.toHaveBeenCalled();
       expect(vertexChat).toHaveBeenCalledTimes(1);
     });
