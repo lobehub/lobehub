@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  applyTaskDirectorySelection,
+  applyTaskReposSelection,
+  clearTaskDirectorySelection,
   hasTaskExecutionSelection,
   readTaskExecutionConfig,
   toTaskExecutionConfigPatch,
@@ -85,5 +88,47 @@ describe('toTaskExecutionConfigPatch', () => {
     expect(readTaskExecutionConfig({ execution: toTaskExecutionConfigPatch(execution) })).toEqual(
       execution,
     );
+  });
+});
+
+describe('directory axis', () => {
+  it('a repo selection writes the directory as a github repo', () => {
+    expect(applyTaskReposSelection({ boundDeviceId: 'device-a' }, ['lobehub/lobehub'])).toEqual({
+      boundDeviceId: 'device-a',
+      repos: ['lobehub/lobehub'],
+      workingDirectory: 'lobehub/lobehub',
+      workingDirectoryConfig: { path: 'lobehub/lobehub', repoType: 'github' },
+    });
+  });
+
+  it('a directory selection drops the repo — a path is not a repo', () => {
+    // The bug this guards: pinning a machine while keeping a repo selection
+    // stores a repo identifier as the run's directory on that machine.
+    expect(
+      applyTaskDirectorySelection(
+        { boundDeviceId: 'device-a', repos: ['lobehub/lobehub'] },
+        { path: '/srv/app' },
+      ),
+    ).toEqual({
+      boundDeviceId: 'device-a',
+      repos: undefined,
+      workingDirectory: '/srv/app',
+      workingDirectoryConfig: { path: '/srv/app' },
+    });
+  });
+
+  it('clearing the directory keeps the target', () => {
+    expect(
+      clearTaskDirectorySelection({
+        boundDeviceId: 'device-a',
+        repos: ['lobehub/lobehub'],
+        workingDirectory: 'lobehub/lobehub',
+      }),
+    ).toEqual({
+      boundDeviceId: 'device-a',
+      repos: undefined,
+      workingDirectory: undefined,
+      workingDirectoryConfig: undefined,
+    });
   });
 });

@@ -1,14 +1,13 @@
 'use client';
 
 import { Github } from '@lobehub/icons';
-import { Block, Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
+import { Checkbox, Text } from '@lobehub/ui/base-ui';
 import { cx } from 'antd-style';
 import { CheckIcon, ChevronDownIcon, SquircleDashed } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useWorkspaceSurface } from '@/features/ChatInput/ControlBar/useWorkspaceSurface';
 import { formatLockedControlTooltip } from '@/features/ChatInput/utils/lockedControlTooltip';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -20,7 +19,7 @@ interface TaskRepoChipProps {
   agentId: string;
   /**
    * Row class for the trigger. Omitted → the composer's compact chip; the task
-   * detail's properties rail passes its own full-width row class instead.
+   * detail's header row passes its own chip-sized class instead.
    */
   className?: string;
   disabled?: boolean;
@@ -33,6 +32,11 @@ const getRepoName = (repo: string) => repo.split('/').findLast(Boolean) || repo;
 
 /**
  * The working directory a task's runs start in, expressed as a repo selection.
+ *
+ * Only offered when the run lands in the cloud sandbox — the caller decides
+ * that from the task's TARGET, because a repo identifier is the directory only
+ * there. On a machine the directory is a path, and a repo name stored as one
+ * would be a value the run cannot use.
  *
  * Reads the same source the chat composer's repo switcher does — the agent's
  * `heterogeneousProvider.env.GITHUB_REPOS` — so the two surfaces cannot offer
@@ -58,13 +62,6 @@ const TaskRepoChip = memo<TaskRepoChipProps>(
     // array on every render and invalidate the callback each time.
     const selected = useMemo(() => value ?? [], [value]);
 
-    // Only the cloud surface has a repo *identifier* as its directory. On a
-    // device surface the directory is an absolute path on that machine, and a
-    // repo sub-path written there would be a value the run cannot use — so the
-    // task inherits the agent's directory instead of being offered this picker.
-    const isHetero = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
-    const surface = useWorkspaceSurface(agentId, isHetero);
-
     const toggleRepo = useCallback(
       (repo: string) => {
         if (disabled) return;
@@ -80,7 +77,7 @@ const TaskRepoChip = memo<TaskRepoChipProps>(
 
     // No configured repos means no repo surface for this agent at all — better
     // absent than an empty picker that can only ever say "nothing here".
-    if (availableRepos.length === 0 || surface !== 'cloudRepo') return null;
+    if (availableRepos.length === 0) return null;
 
     const chipLabel =
       selected.length === 0
@@ -121,11 +118,13 @@ const TaskRepoChip = memo<TaskRepoChipProps>(
                 key={repo}
                 onClick={() => toggleRepo(repo)}
               >
-                <div
-                  className={`${styles.checkIndicator} ${isChecked ? styles.checkIndicatorChecked : ''}`}
-                >
-                  {isChecked && <Icon icon={CheckIcon} size={12} />}
-                </div>
+                {/* The row is the control; the box reports the state. Rendered
+                    through the design-system checkbox so the glyph, the corner
+                    and the contrast follow the theme instead of a hand-rolled
+                    box that only looked right in one of them. */}
+                <span className={styles.checkboxSlot}>
+                  <Checkbox checked={isChecked} />
+                </span>
                 <span className={styles.icon}>
                   <Github size={16} />
                 </span>
@@ -140,21 +139,15 @@ const TaskRepoChip = memo<TaskRepoChipProps>(
       </Flexbox>
     );
 
-    const chip = (
-      <Block
-        clickable
-        horizontal
-        align="center"
-        className={cx(className ?? styles.chip, disabled && styles.triggerDisabled)}
-        gap={6}
-        variant={'borderless'}
-      >
+    // The muted directory trigger, not a chip — see `directoryTrigger`.
+    const trigger = (
+      <div className={cx(className ?? styles.directoryTrigger, disabled && styles.triggerDisabled)}>
         {selected.length > 0 ? <Github size={14} /> : <Icon icon={SquircleDashed} size={14} />}
         <Text ellipsis className={styles.chipLabel} fontSize={12}>
           {chipLabel}
         </Text>
         <Icon icon={ChevronDownIcon} size={12} />
-      </Block>
+      </div>
     );
 
     if (disabled) {
@@ -165,7 +158,7 @@ const TaskRepoChip = memo<TaskRepoChipProps>(
             t('taskExecution.fixedTip'),
           )}
         >
-          {chip}
+          {trigger}
         </Tooltip>
       );
     }
@@ -179,7 +172,7 @@ const TaskRepoChip = memo<TaskRepoChipProps>(
         trigger="click"
         onOpenChange={setOpen}
       >
-        {chip}
+        {trigger}
       </Popover>
     );
   },

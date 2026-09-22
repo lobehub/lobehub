@@ -32,26 +32,100 @@ export const taskExecutionStyles = createStaticStyles(({ css }) => ({
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
+  /**
+   * The directory axis' trigger — deliberately NOT the chip the run location
+   * wears.
+   *
+   * Where a run goes is the task's one real decision; the directory follows from
+   * that target and is inherited most of the time. Giving the two the same
+   * weight reads as two equal choices. This is the muted text affordance the
+   * chat composer's own directory / repo pickers use, so the two surfaces agree
+   * on the hierarchy as well.
+   */
+  directoryTrigger: css`
+    cursor: pointer;
+
+    display: flex;
+    flex: none;
+    gap: 6px;
+    align-items: center;
+
+    min-width: 0;
+    padding-block: 2px;
+    padding-inline: 6px;
+    border-radius: 4px;
+
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
+    white-space: nowrap;
+
+    transition: background 0.2s;
+
+    &:hover {
+      background: ${cssVar.colorFillTertiary};
+    }
+  `,
   check: css`
     flex: none;
     margin-inline-start: auto;
     color: ${cssVar.colorPrimary};
   `,
-  checkIndicator: css`
+  /** Provenance tag on a directory row (the device's own default). */
+  badge: css`
+    flex: none;
+
+    padding-inline: 5px;
+    border-radius: 999px;
+
+    font-size: 10px;
+    line-height: 15px;
+    color: ${cssVar.colorTextTertiary};
+
+    background: ${cssVar.colorFillSecondary};
+  `,
+  /**
+   * Slot for the design-system checkbox in a clickable row: the ROW is the
+   * control, so the box must not take the click a second time.
+   */
+  checkboxSlot: css`
+    pointer-events: none;
+    display: inline-flex;
+    flex: none;
+  `,
+  emptyHint: css`
+    padding-block: 12px;
+    padding-inline: 8px;
+
+    font-size: 12px;
+    color: ${cssVar.colorTextQuaternary};
+    text-align: center;
+  `,
+  /**
+   * A selection the task does NOT own, reported rather than offered.
+   *
+   * The directory axis follows the target: on a machine it is a path, in the
+   * cloud it is a repo, and when the task's target leaves nothing choosable the
+   * honest answer is a muted line saying what the run will use — not an
+   * interactive chip that looks like it can change something.
+   */
+  hint: css`
     display: flex;
     flex: none;
+    gap: 4px;
     align-items: center;
-    justify-content: center;
 
-    width: 20px;
-    height: 20px;
-    border: 1.5px solid ${cssVar.colorBorder};
-    border-radius: 4px;
+    min-width: 0;
+    padding-inline: 6px;
+
+    font-size: 12px;
+    color: ${cssVar.colorTextQuaternary};
+    white-space: nowrap;
   `,
-  checkIndicatorChecked: css`
-    border-color: ${cssVar.colorPrimary};
-    color: #fff;
-    background: ${cssVar.colorPrimary};
+  hintValue: css`
+    overflow: hidden;
+    max-width: 200px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
   icon: css`
     flex: none;

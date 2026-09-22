@@ -121,6 +121,40 @@ export const applyTaskReposSelection = (
 });
 
 /**
+ * Point the directory axis at an explicit directory on the run's machine.
+ *
+ * The device surface's counterpart of {@link applyTaskReposSelection}: there the
+ * directory is an absolute path on the device, so a repo selection is dropped —
+ * a repo identifier means nothing to a run that is not in the cloud sandbox.
+ */
+export const applyTaskDirectorySelection = (
+  execution: TaskExecutionConfig | undefined,
+  config?: WorkingDirConfig,
+): TaskExecutionConfig => ({
+  ...execution,
+  repos: undefined,
+  workingDirectory: config?.path,
+  workingDirectoryConfig: config,
+});
+
+/**
+ * Drop the directory axis entirely.
+ *
+ * Used when the run's TARGET changes, because the two axes describe the same
+ * thing in different units: `lobehub/lobehub` is a cloud repo, `/srv/app` is a
+ * directory on one machine. Carrying either one across a target change would
+ * leave a selection that silently describes a machine the run is no longer on.
+ */
+export const clearTaskDirectorySelection = (
+  execution: TaskExecutionConfig | undefined,
+): TaskExecutionConfig => ({
+  ...execution,
+  repos: undefined,
+  workingDirectory: undefined,
+  workingDirectoryConfig: undefined,
+});
+
+/**
  * The persisted shape of an execution selection.
  *
  * Every axis is written explicitly and a cleared axis becomes `null`, because
