@@ -535,6 +535,7 @@
   "environments.github.reviewAccess": "Review access",
   "environments.hasInstances": "Remove its instances first",
   "environments.instances.add": "New instance",
+  "environments.instances.confirm": "Create",
   "environments.instances.count_one": "{{count}} instance",
   "environments.instances.count_other": "{{count}} instances",
   "environments.instances.create": "New instance",

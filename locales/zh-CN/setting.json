@@ -535,6 +535,7 @@
   "environments.github.reviewAccess": "检查授权范围",
   "environments.hasInstances": "请先删掉它的实例",
   "environments.instances.add": "新建实例",
+  "environments.instances.confirm": "创建",
   "environments.instances.count_one": "{{count}} 个实例",
   "environments.instances.count_other": "{{count}} 个实例",
   "environments.instances.create": "创建实例",
