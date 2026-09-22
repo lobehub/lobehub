@@ -4,7 +4,7 @@ import { isSafeSandboxCwd } from '@lobechat/builtin-tool-cloud-sandbox';
 import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { ActionIcon, Button, Input, Tag, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { FolderOpenIcon, PlusIcon, Trash2Icon } from 'lucide-react';
+import { CheckIcon, FolderOpenIcon, PencilIcon, PlusIcon, Trash2Icon, XIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -56,9 +56,178 @@ interface InstanceListProps {
   onAddingChange: (adding: boolean) => void;
   onCreate: (params: { name: string; workingDirectory: string }) => Promise<void>;
   onRemove: (id: string) => Promise<void>;
+  /** Only the label: the folder holds the built state and cannot move. */
+  onRename: (params: { id: string; name: string }) => Promise<void>;
   /** Sizes are missing rather than zero when the sandbox could not be reached. */
   snapshotsUnavailable: boolean;
 }
+
+interface InstanceRowProps {
+  editable: boolean;
+  instance: SandboxInstance;
+  onRemove: (id: string) => Promise<void>;
+  onRename: (params: { id: string; name: string }) => Promise<void>;
+  snapshotsUnavailable: boolean;
+}
+
+/**
+ * One instance, either as it is or with its name open for editing.
+ *
+ * The name is the only thing that can change here. The folder is where the
+ * built state lives, and the execution plane has no rename that carries one
+ * folder to another, so editing shows it locked with the reason rather than
+ * as a field that would fail on save.
+ */
+const InstanceRow = memo<InstanceRowProps>(
+  ({ editable, instance, onRemove, onRename, snapshotsUnavailable }) => {
+    const { t } = useTranslation('setting');
+
+    const [editing, setEditing] = useState(false);
+    const [draft, setDraft] = useState(instance.name);
+    const [saving, setSaving] = useState(false);
+
+    const startEditing = () => {
+      setDraft(instance.name);
+      setEditing(true);
+    };
+
+    const canSave = Boolean(draft.trim()) && draft.trim() !== instance.name;
+
+    const save = async () => {
+      if (!canSave) {
+        setEditing(false);
+        return;
+      }
+      setSaving(true);
+      try {
+        await onRename({ id: instance.id, name: draft.trim() });
+        setEditing(false);
+      } catch (error) {
+        toast.error(
+          (error as { message?: string })?.message || t('environments.instances.renameFailed'),
+        );
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    if (editing) {
+      return (
+        <Flexbox className={styles.row} gap={8}>
+          <Input
+            autoFocus
+            disabled={saving}
+            placeholder={t('environments.instances.namePlaceholder')}
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                void save();
+              }
+              if (event.key === 'Escape') setEditing(false);
+            }}
+          />
+          <Flexbox horizontal align={'center'} gap={8}>
+            <Flexbox flex={1} gap={2}>
+              <Text fontSize={12} type={'secondary'}>
+                {instance.workingDirectory}
+              </Text>
+              <Text fontSize={12} type={'secondary'}>
+                {t('environments.instances.directoryLocked')}
+              </Text>
+            </Flexbox>
+            <ActionIcon
+              disabled={saving}
+              icon={XIcon}
+              size={'small'}
+              title={t('environments.cancel')}
+              onClick={() => setEditing(false)}
+            />
+            <ActionIcon
+              disabled={!canSave}
+              icon={CheckIcon}
+              loading={saving}
+              size={'small'}
+              title={t('environments.instances.rename')}
+              onClick={save}
+            />
+          </Flexbox>
+        </Flexbox>
+      );
+    }
+
+    return (
+      <Flexbox horizontal align={'center'} className={styles.row} gap={8}>
+        <Flexbox flex={1} gap={2}>
+          <Flexbox horizontal align={'center'} gap={6}>
+            <Text fontSize={13} weight={500}>
+              {instance.name}
+            </Text>
+            {instance.stale && (
+              <Tooltip title={t('environments.instances.staleHint')}>
+                <Tag color={'warning'} size={'small'}>
+                  {t('environments.instances.stale')}
+                </Tag>
+              </Tooltip>
+            )}
+          </Flexbox>
+          <Text fontSize={12} type={'secondary'}>
+            {instance.workingDirectory}
+          </Text>
+        </Flexbox>
+        <Text fontSize={12} type={'secondary'}>
+          {/* An instance that was created but never used has no snapshot,
+          which is a normal state and not an error. */}
+          {snapshotsUnavailable
+            ? '—'
+            : instance.snapshot
+              ? formatSize(instance.snapshot.bytes)
+              : t('environments.instances.unused')}
+        </Text>
+        {/* Reading what an instance kept is not an edit, so it stays
+        available in an environment someone else published — that is
+        most of what having access to one is for. */}
+        <ActionIcon
+          icon={FolderOpenIcon}
+          size={'small'}
+          title={t('environments.files.browse')}
+          onClick={() => openInstanceFileBrowser(instance)}
+        />
+        {editable && (
+          <ActionIcon
+            icon={PencilIcon}
+            size={'small'}
+            title={t('environments.instances.rename')}
+            onClick={startEditing}
+          />
+        )}
+        {editable && (
+          <ActionIcon
+            icon={Trash2Icon}
+            size={'small'}
+            title={t('environments.instances.remove')}
+            // A rejected promise here used to disappear: the row stayed, and
+            // a refused delete was indistinguishable from a click that did
+            // nothing. The execution plane refuses while a conversation is
+            // still using the instance, and that reason is the one worth
+            // showing.
+            onClick={() =>
+              onRemove(instance.id).catch((error: unknown) =>
+                toast.error(
+                  (error as { message?: string })?.message ||
+                    t('environments.instances.removeFailed'),
+                ),
+              )
+            }
+          />
+        )}
+      </Flexbox>
+    );
+  },
+);
+
+InstanceRow.displayName = 'InstanceRow';
 
 /**
  * The instances of one environment.
@@ -68,7 +237,16 @@ interface InstanceListProps {
  * have them overwrite each other's work.
  */
 const InstanceList = memo<InstanceListProps>(
-  ({ adding, editable, instances, onAddingChange, onCreate, onRemove, snapshotsUnavailable }) => {
+  ({
+    adding,
+    editable,
+    instances,
+    onAddingChange,
+    onCreate,
+    onRemove,
+    onRename,
+    snapshotsUnavailable,
+  }) => {
     const { t } = useTranslation('setting');
 
     const [name, setName] = useState('');
@@ -104,63 +282,14 @@ const InstanceList = memo<InstanceListProps>(
         {instances.length > 0 && (
           <Flexbox className={styles.list}>
             {instances.map((instance) => (
-              <Flexbox horizontal align={'center'} className={styles.row} gap={8} key={instance.id}>
-                <Flexbox flex={1} gap={2}>
-                  <Flexbox horizontal align={'center'} gap={6}>
-                    <Text fontSize={13} weight={500}>
-                      {instance.name}
-                    </Text>
-                    {instance.stale && (
-                      <Tooltip title={t('environments.instances.staleHint')}>
-                        <Tag color={'warning'} size={'small'}>
-                          {t('environments.instances.stale')}
-                        </Tag>
-                      </Tooltip>
-                    )}
-                  </Flexbox>
-                  <Text fontSize={12} type={'secondary'}>
-                    {instance.workingDirectory}
-                  </Text>
-                </Flexbox>
-                <Text fontSize={12} type={'secondary'}>
-                  {/* An instance that was created but never used has no snapshot,
-                  which is a normal state and not an error. */}
-                  {snapshotsUnavailable
-                    ? '—'
-                    : instance.snapshot
-                      ? formatSize(instance.snapshot.bytes)
-                      : t('environments.instances.unused')}
-                </Text>
-                {/* Reading what an instance kept is not an edit, so it stays
-                available in an environment someone else published — that is
-                most of what having access to one is for. */}
-                <ActionIcon
-                  icon={FolderOpenIcon}
-                  size={'small'}
-                  title={t('environments.files.browse')}
-                  onClick={() => openInstanceFileBrowser(instance)}
-                />
-                {editable && (
-                  <ActionIcon
-                    icon={Trash2Icon}
-                    size={'small'}
-                    title={t('environments.instances.remove')}
-                    // A rejected promise here used to disappear: the row stayed, and
-                    // a refused delete was indistinguishable from a click that did
-                    // nothing. The execution plane refuses while a conversation is
-                    // still using the instance, and that reason is the one worth
-                    // showing.
-                    onClick={() =>
-                      onRemove(instance.id).catch((error: unknown) =>
-                        toast.error(
-                          (error as { message?: string })?.message ||
-                            t('environments.instances.removeFailed'),
-                        ),
-                      )
-                    }
-                  />
-                )}
-              </Flexbox>
+              <InstanceRow
+                editable={editable}
+                instance={instance}
+                key={instance.id}
+                snapshotsUnavailable={snapshotsUnavailable}
+                onRemove={onRemove}
+                onRename={onRename}
+              />
             ))}
           </Flexbox>
         )}

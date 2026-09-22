@@ -3853,6 +3853,10 @@ When I am ___, I need ___
   'environments.instances.stale': 'Needs rebuild',
   'environments.instances.staleHint': 'The specification changed after this instance was built.',
   'environments.instances.remove': 'Delete instance',
+  'environments.instances.rename': 'Rename instance',
+  'environments.instances.renameFailed': 'Could not rename this instance',
+  'environments.instances.directoryLocked':
+    'The folder cannot be changed after the instance is built — delete it and create another to move it.',
   'environments.instances.duplicateDirectory': 'Another instance already uses this folder',
   'environments.instances.snapshotsUnavailable':
     "Sizes unavailable — this instance's storage could not be reached",
@@ -3910,4 +3914,6 @@ When I am ___, I need ___
   'environments.instances.directoryLabel': 'Directory',
   'environments.files.up': 'Up one level',
   'environments.files.openHint': 'Double-click a folder to open it, or a file to edit it',
+  'environments.files.unusedInstance':
+    'This instance has not run yet, so its directory does not exist. Creating a file or folder here will make it.',
 };
