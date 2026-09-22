@@ -124,12 +124,15 @@ const getKnowledgeItemStatusMap = async (
   fileItems: Array<{
     chunkTaskId?: string | null;
     embeddingTaskId?: string | null;
+    fileId?: string | null;
     id: string;
   }>,
 ): Promise<Map<string, KnowledgeItemStatus>> => {
   if (fileItems.length === 0) return new Map();
 
-  const fileIds = fileItems.map((item) => item.id);
+  // Derived documents key their chunks by the backing file id, not the page id.
+  const chunkCountKeys = fileItems.map((item) => item.fileId ?? item.id);
+  const fileIds = [...new Set(chunkCountKeys)];
   const chunkTaskIds = [
     ...new Set(fileItems.map((item) => item.chunkTaskId).filter(Boolean)),
   ] as string[];
@@ -159,15 +162,20 @@ const getKnowledgeItemStatusMap = async (
 
   return new Map(
     fileItems.map((item) => {
-      const chunkTask = item.chunkTaskId ? chunkTaskMap.get(item.chunkTaskId) : null;
-      const embeddingTask = item.embeddingTaskId
-        ? embeddingTaskMap.get(item.embeddingTaskId)
-        : null;
+      // Derived docs carry no async tasks of their own; inherit the backing
+      // file's task ids when the file row is part of the same batch.
+      const backingFile = item.fileId
+        ? fileItems.find((candidate) => candidate.id === item.fileId)
+        : undefined;
+      const chunkTaskId = item.chunkTaskId ?? backingFile?.chunkTaskId ?? null;
+      const embeddingTaskId = item.embeddingTaskId ?? backingFile?.embeddingTaskId ?? null;
+      const chunkTask = chunkTaskId ? chunkTaskMap.get(chunkTaskId) : null;
+      const embeddingTask = embeddingTaskId ? embeddingTaskMap.get(embeddingTaskId) : null;
 
       return [
         item.id,
         {
-          chunkCount: chunkCountMap.get(item.id) ?? null,
+          chunkCount: chunkCountMap.get(item.fileId ?? item.id) ?? null,
           chunkingError: (chunkTask?.error as IAsyncTaskError | null | undefined) ?? null,
           chunkingStatus: (chunkTask?.status as AsyncTaskStatus | null | undefined) ?? null,
           embeddingError: (embeddingTask?.error as IAsyncTaskError | null | undefined) ?? null,
@@ -580,8 +588,11 @@ export const fileRouter = router({
     // Filter out folders from Documents category when in Inbox (no knowledgeBaseId)
     const filteredItems = filterKnowledgeItems(itemsToProcess, input.knowledgeBaseId);
 
-    // Process files (add chunk info and async task status)
-    const fileItems = filteredItems.filter((item) => item.sourceType === 'file');
+    // Process files (add chunk info and async task status). Derived documents
+    // (docs_) back onto a file whose chunks carry the real counts and task
+    // statuses, so include them too — otherwise they render a permanent
+    // "no chunks / not embedded" empty state in the list.
+    const fileItems = filteredItems.filter((item) => item.sourceType === 'file' || !!item.fileId);
     const statusMap = await getKnowledgeItemStatusMap(ctx, fileItems);
 
     // Resolve file access URLs and raw Markdown previews with bounded concurrency:
@@ -645,19 +656,23 @@ export const fileRouter = router({
             visibility: item.visibility,
           } as FileListItem;
         }
+        // Derived documents resolve their chunk count and task statuses from
+        // the backing file via the shared status map; fall back to the empty
+        // state only when no backing file is present.
+        const status = statusMap.get(item.id);
         return {
-          chunkCount: null,
-          chunkingError: null,
-          chunkingStatus: null,
+          chunkCount: status?.chunkCount ?? null,
+          chunkingError: status?.chunkingError ?? null,
+          chunkingStatus: status?.chunkingStatus ?? null,
           ...(includeContent ? { content: item.content } : {}),
           ...(includeContent ? { editorData: item.editorData } : {}),
           ...(includeContentPreview ? { contentPreview } : {}),
           createdAt: item.createdAt,
-          embeddingError: null,
-          embeddingStatus: null,
+          embeddingError: status?.embeddingError ?? null,
+          embeddingStatus: status?.embeddingStatus ?? null,
           fileId: item.fileId,
           fileType: item.fileType,
-          finishEmbedding: false,
+          finishEmbedding: status?.finishEmbedding ?? false,
           id: item.id,
           metadata: item.metadata,
           name: item.name,
