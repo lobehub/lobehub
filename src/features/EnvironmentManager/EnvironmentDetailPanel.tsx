@@ -7,6 +7,7 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import {
   ContainerIcon,
+  HistoryIcon,
   KeyRoundIcon,
   LayersIcon,
   LockIcon,
@@ -18,8 +19,9 @@ import { useTranslation } from 'react-i18next';
 
 import EnvironmentForm, { type EnvironmentFormSection } from './EnvironmentForm';
 import InstanceSection from './InstanceSection';
-import PanelSection from './PanelSection';
 import { repositoryPath } from './repository';
+import SessionHistorySection from './SessionHistorySection';
+import TabPane from './TabPane';
 import { useCanEditEnvironment } from './useCanEditEnvironment';
 import { type SandboxEnvironment, useEnvironmentActions, useInstances } from './useEnvironmentData';
 
@@ -58,7 +60,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-type DetailTab = 'instances' | EnvironmentFormSection;
+type DetailTab = 'instances' | 'sessions' | EnvironmentFormSection;
 
 interface EnvironmentDetailPanelProps {
   /** Open with the instance-create form showing — the row's shortcut lands here. */
@@ -165,72 +167,70 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(
           </Flexbox>
         )}
 
-        {/* Instances are what everyone with access comes here for; variables
-            and settings reshape the environment, which only its editor may do,
-            so a read-only panel has one section and no tab bar to pick from. */}
-        {canEdit && (
-          <Tabs
-            activeKey={tab}
-            items={[
-              {
-                icon: <Icon icon={LayersIcon} size={16} />,
-                key: 'instances',
-                label: t('environments.instances.title'),
-              },
-              {
-                icon: <Icon icon={KeyRoundIcon} size={16} />,
-                key: 'variables',
-                label: t('environments.form.env'),
-              },
-              {
-                icon: <Icon icon={SettingsIcon} size={16} />,
-                key: 'settings',
-                label: t('environments.detail.tabs.settings'),
-              },
-            ]}
-            onChange={(key) => setTab(key as DetailTab)}
-          />
-        )}
+        {/* Instances and their run history are what everyone with access
+            comes here for; variables and settings reshape the environment,
+            which only its editor may do, so a read-only panel keeps the first
+            two tabs and drops the rest. */}
+        <Tabs
+          activeKey={tab}
+          items={[
+            {
+              icon: <Icon icon={LayersIcon} size={16} />,
+              key: 'instances',
+              label: t('environments.instances.title'),
+            },
+            {
+              icon: <Icon icon={HistoryIcon} size={16} />,
+              key: 'sessions',
+              label: t('environments.sessions.title'),
+            },
+            ...(canEdit
+              ? [
+                  {
+                    icon: <Icon icon={KeyRoundIcon} size={16} />,
+                    key: 'variables',
+                    label: t('environments.form.env'),
+                  },
+                  {
+                    icon: <Icon icon={SettingsIcon} size={16} />,
+                    key: 'settings',
+                    label: t('environments.detail.tabs.settings'),
+                  },
+                ]
+              : []),
+          ]}
+          onChange={(key) => setTab(key as DetailTab)}
+        />
 
-        {/* One column with no gap: the rail is drawn by each section and
-                meets the next one's icon exactly, so any space between them
-                would show as a break in the line. */}
+        {/* One column with no gap: the settings rail is drawn by each of its
+            sections and meets the next one's icon exactly, so any space
+            between them would show as a break in the line. */}
         <Flexbox>
           {tab === 'instances' && (
-            <PanelSection
-              last
-              desc={t('environments.instances.desc')}
-              icon={LayersIcon}
-              title={t('environments.instances.title')}
-            >
+            <TabPane desc={t('environments.instances.desc')}>
               <InstanceSection
                 adding={adding}
                 editable={canEdit}
                 environmentId={environment.id}
                 onAddingChange={onAddingChange}
               />
-            </PanelSection>
+            </TabPane>
           )}
 
-          {/* Mounted whenever the panel can edit, whichever tab is open, so a
-              draft typed under one tab survives a look at the other and both
-              are written by the one save. Hidden with a display switch rather
-              than unmounted for that reason. */}
-          {canEdit && (
-            <div style={{ display: tab === 'instances' ? 'none' : undefined }}>
-              <EnvironmentForm
-                environment={environment}
-                section={tab === 'variables' ? 'variables' : 'settings'}
-                onSave={({ configuration, description, name }) =>
-                  actions.updateEnvironment({
-                    configuration,
-                    description,
-                    id: environment.id,
-                    name,
-                  })
-                }
-              />
-            </div>
+          {tab === 'sessions' && (
+            <TabPane desc={t('environments.sessions.desc')}>
+              <SessionHistorySection environmentId={environment.id} />
+            </TabPane>
+          )}
+
+          {/* Every field saves itself, so nothing is lost by unmounting the
+              form on a tab switch and each tab mounts only what it shows. */}
+          {canEdit && (tab === 'variables' || tab === 'settings') && (
+            <EnvironmentForm
+              environment={environment}
+              section={tab}
+              onSave={(changes) => actions.updateEnvironment({ ...changes, id: environment.id })}
+            />
           )}
         </Flexbox>
       </Flexbox>

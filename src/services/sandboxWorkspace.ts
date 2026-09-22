@@ -92,6 +92,15 @@ class SandboxWorkspaceService {
     params: { environmentId?: string; topicId?: string; withSizes?: boolean } = {},
   ) => lambdaClient.sandboxWorkspace.listInstances.query(params);
 
+  /**
+   * The run history of every instance of one environment, newest first: each
+   * sandbox session that ran it and each build of it, with how it ended and
+   * whether its snapshot was saved. Read from the control plane's records —
+   * no sandbox session, no wait.
+   */
+  listInstanceSessions = async (params: { environmentId: string; limit?: number }) =>
+    lambdaClient.sandboxWorkspace.listInstanceSessions.query(params);
+
   /** One instance, from the database alone — no sandbox session, no wait. */
   getInstance = async (params: { id: string }) =>
     lambdaClient.sandboxWorkspace.getInstance.query(params);
@@ -147,6 +156,10 @@ class SandboxWorkspaceService {
    * picker that is a state to resolve, not an error.
    */
   listGithubRepositories = async () => lambdaClient.sandboxWorkspace.listGithubRepositories.query();
+
+  /** The branches of one repository, or `connected: false` when GitHub is not linked. */
+  listGithubBranches = async (params: { owner: string; repository: string }) =>
+    lambdaClient.sandboxWorkspace.listGithubBranches.query(params);
 
   readFile = async (params: { path: string; topicId?: string }) =>
     lambdaClient.sandboxWorkspace.readFile.query(params);
