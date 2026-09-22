@@ -29,6 +29,7 @@ import { fileChatSelectors, useFileStore } from '@/store/file';
 
 import { buildMessageContextSelections } from '../../ChatInput/utils/contextSelections';
 import WideScreenContainer from '../../WideScreenContainer';
+import { useUnexpiredInterventions } from '../hooks/useDeadlineClock';
 import InterventionBar from '../InterventionBar';
 import {
   dataSelectors,
@@ -36,6 +37,7 @@ import {
   useConversationStore,
   useConversationStoreApi,
 } from '../store';
+import { isSamePendingInterventionList } from '../store/slices/data/pendingInterventions';
 import TodoProgress from '../TodoProgress';
 import InputCompletionErrorAlert from './InputCompletionErrorAlert';
 import LinkedGoalTray from './LinkedGoalTray';
@@ -262,15 +264,13 @@ const ChatInput = memo<ChatInputProps>(
     // Pending interventions — use custom equality to prevent infinite re-render loop.
     // The selector creates new array/object refs each call; without equality check,
     // any store update → new ref → re-render → Intervention's store writes → loop.
-    const pendingInterventions = useConversationStore(
+    const selectedInterventions = useConversationStore(
       dataSelectors.pendingInterventions,
-      (a, b) => {
-        if (a.length !== b.length) return false;
-        return a.every(
-          (item, i) => item.toolCallId === b[i].toolCallId && item.requestArgs === b[i].requestArgs,
-        );
-      },
+      isSamePendingInterventionList,
     );
+    // The selector only re-runs on store changes; drop a card the moment its
+    // producer stops waiting even when nothing in the store moves.
+    const pendingInterventions = useUnexpiredInterventions(selectedInterventions);
     const hasPendingInterventions = pendingInterventions.length > 0;
 
     // Send message error from ConversationStore

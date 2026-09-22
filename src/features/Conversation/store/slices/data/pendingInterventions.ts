@@ -2,6 +2,7 @@ import {
   type ChatToolPayloadWithResult,
   classifyToolInterventionPresentation,
   isHeterogeneousInterventionExpired,
+  readHeterogeneousInterventionDeadline,
   type ToolIntervention,
   type UIChatMessage,
 } from '@lobechat/types';
@@ -20,6 +21,12 @@ export interface PendingIntervention {
    */
   assistantGroupId?: string;
   batchId?: string;
+  /**
+   * Producer's wall-clock deadline (unix ms) when it stamped one. Carried so
+   * consumers can drop the card the moment it passes — the list itself is only
+   * recomputed when the store changes, and nothing changes at the deadline.
+   */
+  deadline?: number;
   identifier: string;
   intervention: ToolIntervention & { status: 'pending' };
   operationId?: string;
@@ -27,6 +34,23 @@ export interface PendingIntervention {
   toolCallId: string;
   toolMessageId: string;
 }
+
+/**
+ * Equality for selector results. The selector builds fresh arrays on every
+ * store update; comparing by identity would re-render (and let interventions
+ * write back into the store) in a loop.
+ */
+export const isSamePendingInterventionList = (
+  a: PendingIntervention[],
+  b: PendingIntervention[],
+): boolean =>
+  a.length === b.length &&
+  a.every(
+    (item, i) =>
+      item.toolCallId === b[i].toolCallId &&
+      item.requestArgs === b[i].requestArgs &&
+      item.deadline === b[i].deadline,
+  );
 
 export const getPendingInterventions = (
   displayMessages: UIChatMessage[],
@@ -50,6 +74,7 @@ export const getPendingInterventions = (
         // A standalone tool row parents directly to its calling assistant.
         assistantGroupId: msg.parentId,
         batchId: msg.pluginIntervention.batchId,
+        deadline: readHeterogeneousInterventionDeadline(msg.pluginState),
         identifier: msg.plugin.identifier,
         intervention: msg.pluginIntervention as ToolIntervention & { status: 'pending' },
         operationId: msg.pluginIntervention.operationId,
@@ -155,6 +180,7 @@ const collectPendingTools = (
         apiName: tool.apiName,
         assistantGroupId,
         batchId: tool.intervention.batchId,
+        deadline: readHeterogeneousInterventionDeadline(tool.result?.state),
         identifier: tool.identifier,
         intervention: tool.intervention as ToolIntervention & { status: 'pending' },
         operationId: tool.intervention.operationId,

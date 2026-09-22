@@ -281,6 +281,12 @@ describe('canApproveInterventionBatch', () => {
       expect(getPendingInterventions([askUserGroup(Date.now() + HOUR)])).toHaveLength(1);
     });
 
+    it('carries the producer deadline so consumers can expire the card live', () => {
+      const deadline = Date.now() + HOUR;
+      expect(getPendingInterventions([askUserToolRow(deadline)])[0].deadline).toBe(deadline);
+      expect(getPendingInterventions([askUserGroup(deadline)])[0].deadline).toBe(deadline);
+    });
+
     it('keeps a card whose producer never stamped a deadline', () => {
       // Without the producer's clock we cannot claim it gave up.
       const noDeadline = askUserToolRow(0);

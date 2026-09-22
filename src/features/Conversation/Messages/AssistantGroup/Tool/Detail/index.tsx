@@ -1,13 +1,10 @@
 import { getBuiltinStreaming } from '@lobechat/builtin-tools/streamings';
-import {
-  type ChatToolResult,
-  isHeterogeneousInterventionExpired,
-  type ToolIntervention,
-} from '@lobechat/types';
+import { type ChatToolResult, type ToolIntervention } from '@lobechat/types';
 import { safeParsePartialJSON } from '@lobechat/utils';
 import { Flexbox } from '@lobehub/ui';
 import { memo, Suspense } from 'react';
 
+import { useIsTimedOutUnanswered } from '../../../../hooks/useDeadlineClock';
 import AbortResponse from './AbortResponse';
 import LoadingPlaceholder from './LoadingPlaceholder';
 import RejectedResponse from './RejectedResponse';
@@ -58,8 +55,9 @@ const Render = memo<RenderProps>(
     // (`getPendingInterventions` drops it), so the inline row is the only place
     // left to say what happened — returning null here would leave a silent gap
     // where the tool call was.
-    const timedOut =
-      intervention?.status === 'pending' && isHeterogeneousInterventionExpired(result?.state);
+    // Live: flips at the producer's deadline even when nothing else re-renders
+    // this row, so the row speaks up the moment the card leaves the screen.
+    const timedOut = useIsTimedOutUnanswered(intervention, result?.state);
 
     // Pending interventions are rendered in the bottom InterventionBar, not inline
     if (!timedOut && toolMessageId && intervention?.status === 'pending' && !disableEditing) {

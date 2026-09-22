@@ -7,6 +7,7 @@ import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { type Operation, type OperationType } from '@/store/chat/slices/operation/types';
 
+import { useUnexpiredInterventions } from './hooks/useDeadlineClock';
 import {
   contextSelectors,
   conversationSelectors,
@@ -14,6 +15,7 @@ import {
   messageStateSelectors,
   useConversationStore,
 } from './store';
+import { isSamePendingInterventionList } from './store/slices/data/pendingInterventions';
 
 const log = debug('lobe-render:features:Conversation');
 
@@ -67,9 +69,11 @@ const AssistantTurnSettledWatcher = () => {
       : false,
   );
 
-  const pendingInterventionCount = useConversationStore(
-    (s) => dataSelectors.pendingInterventions(s).length,
-  );
+  // Same list the InterventionBar shows: an expired card must not keep the turn
+  // counted as waiting on the user just because nothing re-ran the selector.
+  const pendingInterventionCount = useUnexpiredInterventions(
+    useConversationStore(dataSelectors.pendingInterventions, isSamePendingInterventionList),
+  ).length;
 
   const armedSettledMessageIdRef = useRef<string>(undefined);
   const firedSettledMessageIdRef = useRef<string>(undefined);

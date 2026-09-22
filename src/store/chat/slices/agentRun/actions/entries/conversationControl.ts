@@ -472,16 +472,28 @@ export class ConversationControlActionImpl {
    * permanently non-actionable.
    *
    * Settle it after a bounded wait rather than handing the buttons back. The
-   * server accepted the answer for delivery, so from the user's side the
-   * question IS answered; re-offering it would ask them to answer a second time
-   * and risk a duplicate answer landing on a producer that already has one.
-   * `approved` is what the local desktop path stamps on submit for the same
-   * reason. A later real producer result simply overwrites this.
+   * server accepted the user's decision for delivery, so from their side the
+   * question IS resolved; re-offering it would ask them to decide a second time
+   * and risk a duplicate landing on a producer that already has one. The
+   * terminal state is the one the user chose — an answer settles `approved`, a
+   * skip or cancel settles `rejected` — matching what the local desktop path
+   * stamps immediately. A later real producer result simply overwrites this.
    */
   #scheduleHeteroInterventionSettle = (
     toolMessageId: string,
+    actionType: 'submit' | 'skip' | 'cancel',
     context: OptimisticUpdateContext,
   ): void => {
+    const settled: Partial<ToolIntervention> =
+      actionType === 'submit'
+        ? { resolving: false, status: 'approved' }
+        : {
+            rejectedReason: actionType === 'skip' ? 'User skipped' : 'User cancelled',
+            resolving: false,
+            skipped: actionType === 'skip',
+            status: 'rejected',
+          };
+
     setTimeout(() => {
       const intervention = dbMessageSelectors.getDbMessageById(toolMessageId)(
         this.#get(),
@@ -494,14 +506,10 @@ export class ConversationControlActionImpl {
       // top-level `pluginIntervention` (what the card list is built from) once
       // the server echoes, so a failed or slow write would leave the card on
       // screen — the exact state this settle exists to end.
-      this.#dispatchInterventionState(
-        toolMessageId,
-        { resolving: false, status: 'approved' },
-        context,
-      );
+      this.#dispatchInterventionState(toolMessageId, settled, context);
       void this.#get().optimisticUpdateMessagePlugin(
         toolMessageId,
-        { intervention: { resolving: false, status: 'approved' } },
+        { intervention: settled },
         context,
       );
     }, HETERO_INTERVENTION_ACK_TIMEOUT_MS);
@@ -1767,7 +1775,7 @@ export class ConversationControlActionImpl {
         if (actionType === 'submit') {
           await this.setInterventionAnswers(toolMessageId, payload ?? {}, sourceOptimisticContext);
         }
-        this.#scheduleHeteroInterventionSettle(toolMessageId, sourceOptimisticContext);
+        this.#scheduleHeteroInterventionSettle(toolMessageId, actionType, sourceOptimisticContext);
         return;
       }
     }
@@ -1908,7 +1916,7 @@ export class ConversationControlActionImpl {
                 toolCallId,
               },
         );
-        this.#scheduleHeteroInterventionSettle(toolMessageId, optimisticContext);
+        this.#scheduleHeteroInterventionSettle(toolMessageId, actionType, optimisticContext);
       }
     } catch (err) {
       console.error('[submitHeteroIntervention] submitIntervention failed:', err);

@@ -3759,6 +3759,96 @@ describe('ConversationControl actions', () => {
       vi.useRealTimers();
     });
 
+    it.each([
+      {
+        actionType: 'skip' as const,
+        expected: {
+          rejectedReason: 'User skipped',
+          resolving: false,
+          skipped: true,
+          status: 'rejected',
+        },
+      },
+      {
+        actionType: 'cancel' as const,
+        expected: {
+          rejectedReason: 'User cancelled',
+          resolving: false,
+          skipped: false,
+          status: 'rejected',
+        },
+      },
+    ])(
+      'settles an unacknowledged $actionType as the decision the user made, not as an answer',
+      async ({ actionType, expected }) => {
+        // Regression: the settle timer runs for every remote action but always
+        // stamped `approved`, so an accepted skip/cancel that never got a
+        // producer ACK was rendered and persisted as an approved answer.
+        vi.useFakeTimers();
+        const { result } = renderHook(() => useChatStore());
+
+        const agentId = 'hetero-agent';
+        const topicId = 'hetero-topic';
+        const chatKey = messageMapKey({ agentId, topicId });
+        const assistantMessage = createMockMessage({
+          id: `assistant-${actionType}`,
+          role: 'assistant',
+        });
+        const toolMessage = createMockMessage({
+          id: `tool-${actionType}`,
+          parentId: assistantMessage.id,
+          plugin: {
+            apiName: 'askUserQuestion',
+            arguments: '{}',
+            identifier: 'lobe-claude-code',
+            type: 'default',
+          },
+          pluginIntervention: { status: 'pending' },
+          role: 'tool',
+          tool_call_id: `call-${actionType}`,
+        } as any);
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeThreadId: undefined,
+            activeTopicId: topicId,
+            dbMessagesMap: { [chatKey]: [assistantMessage, toolMessage] },
+            messagesMap: { [chatKey]: [assistantMessage, toolMessage] },
+            messageOperationMap: { [assistantMessage.id]: `gc-op-${actionType}` },
+            operations: {},
+          });
+        });
+
+        const pluginSpy = vi
+          .spyOn(result.current, 'optimisticUpdateMessagePlugin')
+          .mockResolvedValue(undefined);
+        vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
+        vi.spyOn(result.current, 'updateTopicStatus').mockResolvedValue(undefined as any);
+
+        await act(async () => {
+          await result.current.submitHeteroIntervention(toolMessage.id, actionType);
+        });
+        pluginSpy.mockClear();
+
+        await act(async () => {
+          vi.advanceTimersByTime(30 * 1000);
+        });
+
+        expect(pluginSpy).toHaveBeenCalledWith(
+          toolMessage.id,
+          { intervention: expected },
+          expect.anything(),
+        );
+        const settled = dbMessageSelectors.getDbMessageById(toolMessage.id)(
+          useChatStore.getState(),
+        );
+        expect(settled?.pluginIntervention).toMatchObject(expected);
+
+        vi.useRealTimers();
+      },
+    );
+
     it('leaves an acknowledged card alone when the settle timer fires', async () => {
       vi.useFakeTimers();
       const { result } = renderHook(() => useChatStore());
