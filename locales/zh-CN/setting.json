@@ -474,6 +474,7 @@
   "environments.createFailed": "环境没能创建",
   "environments.desc": "一次沙箱运行需要的周边：代码仓库、初始化命令、环境变量。由它建出来的每个实例，文件都能跨会话保留。",
   "environments.detail.close": "关闭",
+  "environments.detail.tabs.settings": "设置",
   "environments.duplicateName": "你已经有一个同名的环境了",
   "environments.empty": "还没有环境",
   "environments.emptyPublished": "还没有环境发布到这个工作区",

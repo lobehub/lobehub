@@ -474,6 +474,7 @@
   "environments.createFailed": "Could not create the environment",
   "environments.desc": "What a sandbox run needs around it: a repository, its setup, its variables. Each instance built from one keeps its own files between sessions.",
   "environments.detail.close": "Close",
+  "environments.detail.tabs.settings": "Settings",
   "environments.duplicateName": "You already have an environment with this name",
   "environments.empty": "No environments yet",
   "environments.emptyPublished": "Nothing published to this workspace yet",

@@ -3873,6 +3873,7 @@ When I am ___, I need ___
   'environments.meta.createdAt': 'Created {{time}}',
   'environments.meta.storage': 'Using {{size}}',
   'environments.detail.close': 'Close',
+  'environments.detail.tabs.settings': 'Settings',
   'environments.form.desc':
     'What an instance is built from — where the code comes from and what makes it usable.',
   'environments.form.pending':
