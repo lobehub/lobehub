@@ -772,6 +772,7 @@ export const createRouterRuntime = ({
               if (!params.onRouteSuccess) return;
 
               try {
+                /** Report failures here so the request tracker only waits for the handled task. */
                 const task = Promise.resolve(
                   params.onRouteSuccess({
                     channelId,
@@ -785,7 +786,9 @@ export const createRouterRuntime = ({
                     userId: routeAttemptUserId,
                     weighted,
                   }),
-                );
+                ).catch((error) => {
+                  console.error('[RouterRuntime] onRouteSuccess callback failed:', error);
+                });
                 routeTasks?.track(task);
                 await task;
               } catch (error) {

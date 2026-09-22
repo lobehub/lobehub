@@ -931,6 +931,40 @@ describe('createRouterRuntime', () => {
       expect(settled).toBe(true);
     });
 
+    it('reports a managed route success failure only once', async () => {
+      const error = new Error('affinity unavailable');
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const onRouteSuccess = vi.fn().mockRejectedValue(error);
+      let requestSettled!: Promise<void>;
+      class MockRuntime implements LobeRuntimeAI {
+        chat = async (_payload: unknown, options?: ChatMethodOptions) =>
+          createChatResponse(options, { final: { text: 'answer' }, text: 'answer' });
+      }
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        onRouteAttemptFinished: vi.fn(),
+        onRouteSuccess,
+        routers: [{ apiType: 'openai', models: ['gpt-4'], options: {}, runtime: MockRuntime }],
+        scheduleRouteRequestSettled: (settled) => {
+          requestSettled = settled;
+        },
+        shouldFallbackChatAttempt: () => true,
+      });
+
+      const response = await new Runtime().chat({ messages: [], model: 'gpt-4' });
+      expect(await response.text()).toBe('answer');
+      await requestSettled;
+      expect(onRouteSuccess).toHaveBeenCalledOnce();
+      expect(onRouteSuccess).toHaveBeenCalledWith(
+        expect.objectContaining({ routeRequestManaged: true }),
+      );
+      expect(consoleError).toHaveBeenCalledOnce();
+      expect(consoleError).toHaveBeenCalledWith(
+        '[RouterRuntime] onRouteSuccess callback failed:',
+        error,
+      );
+    });
+
     it('settles request work when the streamed response is cancelled', async () => {
       let requestSettled!: Promise<void>;
       class MockRuntime implements LobeRuntimeAI {
