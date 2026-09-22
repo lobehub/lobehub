@@ -3,13 +3,15 @@
 import { Flexbox, Input } from '@lobehub/ui';
 import { ActionIcon, Button, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { ArrowUpIcon, FolderIcon, HouseIcon } from 'lucide-react';
+import { ArrowUpIcon, HouseIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useFetchDeviceDirectory } from '@/store/device/directoryHooks';
+
+import { getFolderIcon } from './folderIcons';
 
 interface RemoteDirectoryBrowserProps {
   defaultPath?: string;
@@ -102,7 +104,7 @@ export const RemoteDirectoryBrowser = ({
                 aria-disabled={loading || !entry.readable}
                 disabled={loading || !entry.readable}
                 flex={'none'}
-                icon={FolderIcon}
+                icon={getFolderIcon(entry.name)}
                 key={entry.path + entry.name}
                 role={'button'}
                 tabIndex={loading || !entry.readable ? -1 : 0}

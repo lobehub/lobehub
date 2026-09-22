@@ -534,7 +534,9 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
         <ChooseLocalFolderRow defaultPath={selectedDir} onPick={pick} />
       ) : (
         <AddRemoteFolderRow
-          defaultCwd={deviceDefaultCwd}
+          // Start the browser at the directory this conversation actually runs in
+          // (topic / agent override first), not the bare home folder.
+          defaultCwd={selectedDir || deviceDefaultCwd}
           deviceId={targetDeviceId}
           onBeforeOpen={() => setOpen(false)}
           onPick={pick}
