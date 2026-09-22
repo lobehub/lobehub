@@ -378,6 +378,7 @@
   "share.settings.profile.saved": "Profile saved",
   "share.settings.profile.title": "Public profile",
   "share.settings.tabs.access": "Access",
+  "share.settings.tabs.profile": "Public profile",
   "share.settings.tabs.stats": "Stats",
   "share.settings.title": "Share Agent",
   "share.settings.tools.apiGrantedCount": "{{granted}} of {{total}} APIs granted",

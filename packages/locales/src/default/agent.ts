@@ -460,6 +460,7 @@ export default {
     'Off by default: your model and provider choice stays hidden.',
   'share.settings.permissions.title': 'Permissions',
   'share.settings.tabs.access': 'Access',
+  'share.settings.tabs.profile': 'Public profile',
   'share.settings.tabs.stats': 'Stats',
   'share.settings.title': 'Share Agent',
   'share.settings.usage.conversations': 'Conversations',

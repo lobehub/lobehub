@@ -378,6 +378,7 @@
   "share.settings.profile.saved": "宣传页内容已保存",
   "share.settings.profile.title": "宣传页内容",
   "share.settings.tabs.access": "授权",
+  "share.settings.tabs.profile": "宣传页",
   "share.settings.tabs.stats": "统计",
   "share.settings.title": "分享助手",
   "share.settings.tools.apiGrantedCount": "已开放 {{granted}}/{{total}} 个接口",
