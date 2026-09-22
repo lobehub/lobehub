@@ -107,6 +107,27 @@ describe('streamAgentEvents', () => {
     expect(stdoutSpy).toHaveBeenCalledWith('world!');
   });
 
+  it('should distinguish waiting for human approval from successful completion', async () => {
+    const body = createSSEStream([
+      sseMessage('data', {
+        data: { reason: 'waiting_for_human', stepCount: 1 },
+        operationId: 'op1',
+        stepIndex: 0,
+        timestamp: Date.now(),
+        type: 'agent_runtime_end',
+      }),
+    ]);
+
+    fetchSpy.mockResolvedValue(new Response(body, { status: 200 }));
+
+    await streamAgentEvents('https://example.com/stream', {});
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Agent waiting for human approval'),
+    );
+    expect(consoleSpy).not.toHaveBeenCalledWith(expect.stringContaining('Agent finished'));
+  });
+
   it('should output JSON when json option is true', async () => {
     const events = [
       {
@@ -357,6 +378,34 @@ describe('streamAgentEventsViaWebSocket', () => {
     expect(stdoutSpy).toHaveBeenCalledWith('Hello WS!');
   });
 
+  it('should distinguish waiting for human approval on the WebSocket path', async () => {
+    const promise = streamAgentEventsViaWebSocket({
+      gatewayUrl: 'https://gw.test.com',
+      operationId: 'op-1',
+      token: 'test-token',
+    });
+
+    await flush();
+    capturedWs!.simulateMessage({
+      event: {
+        data: { reason: 'waiting_for_human', stepCount: 1 },
+        operationId: 'op-1',
+        stepIndex: 0,
+        timestamp: 1,
+        type: 'agent_runtime_end',
+      },
+      id: '1',
+      type: 'agent_event',
+    });
+
+    await promise;
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Agent waiting for human approval'),
+    );
+    expect(consoleSpy).not.toHaveBeenCalledWith(expect.stringContaining('Agent finished'));
+  });
+
   it('should output JSON when json option is set', async () => {
     const promise = streamAgentEventsViaWebSocket({
       gatewayUrl: 'https://gw.test.com',
@@ -452,7 +501,7 @@ describe('streamAgentEventsViaWebSocket', () => {
     capturedWs!.onclose?.({ code: 1011, reason: 'gateway shutdown', type: 'close' });
 
     await expect(promise).rejects.toThrow(
-      'Agent gateway WebSocket closed before completion: [object Object]',
+      'Agent gateway WebSocket closed before completion (code 1011: gateway shutdown)',
     );
   });
 
