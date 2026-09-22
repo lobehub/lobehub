@@ -298,12 +298,18 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
     // Added: enable refresh token rotation
     rotateRefreshToken: true,
 
+    // Every route is written with the `/oidc` prefix because the provider is
+    // mounted under it and the adapter hands it the untouched pathname. A route
+    // left at its default (e.g. `/jwks`) is therefore unreachable: the request
+    // arrives as `/oidc/jwks` and the provider answers 404.
     routes: {
       authorization: '/oidc/auth',
       code_verification: '/oidc/device',
       device_authorization: '/oidc/device/auth',
       end_session: '/oidc/session/end',
+      jwks: '/oidc/jwks',
       token: '/oidc/token',
+      userinfo: '/oidc/me',
     },
     // 3. Scopes definition
     scopes: defaultScopes,

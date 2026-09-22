@@ -24,13 +24,10 @@ import { appendHourlyWorkflowRunId, isHourlyMemoryExtractionCancelled } from './
 const { upstashWorkflowExtraHeaders } = parseMemoryExtractionConfig();
 const WORKFLOW_PATH = 'api/workflows/memory-user-memory/pipelines/chat-topic/process-topics';
 
-const CEPA_LAYERS: LayersEnum[] = [
-  LayersEnum.Context,
-  LayersEnum.Experience,
-  LayersEnum.Preference,
-  LayersEnum.Activity,
-];
+// Experience extraction is retired — see processTopic.ts.
+const CEPA_LAYERS: LayersEnum[] = [LayersEnum.Context, LayersEnum.Preference, LayersEnum.Activity];
 const IDENTITY_LAYERS: LayersEnum[] = [LayersEnum.Identity];
+const ALL_LAYERS: LayersEnum[] = [...CEPA_LAYERS, ...IDENTITY_LAYERS];
 
 export const processTopicsHandler = (context: WorkflowContext<MemoryExtractionPayloadInput>) =>
   upstashWorkflowTracer.startActiveSpan(
@@ -150,6 +147,16 @@ export const processTopicsHandler = (context: WorkflowContext<MemoryExtractionPa
         // former context.invoke). triggerProcessTopic applies a per-user flowControl key so a single
         // user's concurrent process-topic runs stay bounded; the hard per-user, per-run topic
         // ceiling is enforced upstream in process-user-topics.
+        // An explicit request keeps only the layers still extracted; a request naming nothing but
+        // the retired Experience layer has no work left and does not fan out at all.
+        const requestedLayers = payload.layers.length
+          ? payload.layers.filter((layer) => ALL_LAYERS.includes(layer))
+          : ALL_LAYERS;
+        if (requestedLayers.length === 0) {
+          span.setStatus({ code: SpanStatusCode.OK });
+          return { processedTopics: 0, processedUsers: 0, skipped: true };
+        }
+
         for (const [index, topicId] of payload.topicIds.entries()) {
           const stepName = `memory:user-memory:extract:users:${userId}:topics:${topicId}:trigger:${index}`;
           const guard = await checkGuard(context, WORKFLOW_PATH, {
@@ -166,9 +173,7 @@ export const processTopicsHandler = (context: WorkflowContext<MemoryExtractionPa
               userId,
               {
                 ...buildWorkflowPayloadInput(payload),
-                layers: payload.layers.length
-                  ? payload.layers
-                  : [...CEPA_LAYERS, ...IDENTITY_LAYERS],
+                layers: requestedLayers,
                 topicIds: [topicId],
                 userId,
                 userIds: [userId],

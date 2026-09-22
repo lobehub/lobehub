@@ -131,7 +131,8 @@ regardless.
 6. **Screen-recording preflight, only for OS-capture surfaces.** macOS
    `screencapture`/osascript returns a fully black frame when Screen Recording
    permission is missing _or_ the display is asleep. Gate on
-   `.agents/acceptance/scripts/check-screen-recording.sh` (exit 0 = safe), and keep
+   `bash .agents/skills/acceptance/scripts/check-screen-recording.sh`
+   (only exit 0 confirms permission and a measured non-black frame), and keep
    the display awake for the session with `caffeinate -dimsu &`. CDP capture
    (`agent-browser screenshot`, `cdp-screenshot.sh`, `record-app-screen.sh`) is
    unaffected.
@@ -192,18 +193,27 @@ will not take the intended path, call the server endpoint directly.
 ### Step 4 — Run
 
 Project scripts live in `.agents/acceptance/scripts/` and are described in
-`PROJECT.md` §5. The generic capture toolchain:
+`PROJECT.md` §5:
 
-| Script                      | Use                                                                 |
-| --------------------------- | ------------------------------------------------------------------- |
-| `report-init.sh`            | Scaffold a report directory grouped by acceptance subject           |
-| `fixture.mjs`               | Per-check fixtures: `init-check`, `list`, `compose`                 |
-| `record-gif.sh`             | Frame sequence → GIF for time-based behavior                        |
-| `check-screen-recording.sh` | Preflight for OS capture (permission + display awake)               |
-| `cdp-screenshot.sh`         | Electron/Chrome screenshot over raw CDP (bypasses the daemon)       |
-| `capture-app-window.sh`     | Screenshot one app window (macOS OS capture)                        |
-| `record-app-screen.sh`      | Record an app screen (CDP frames → video + gallery)                 |
-| `agent-browser-klm.mjs`     | Wrap an `agent-browser` action and append its interaction-cost atom |
+| Script                  | Use                                                                 |
+| ----------------------- | ------------------------------------------------------------------- |
+| `report-init.sh`        | Scaffold a report directory grouped by acceptance subject           |
+| `fixture.mjs`           | Per-check fixtures: `init-check`, `list`, `compose`                 |
+| `record-gif.sh`         | Frame sequence → GIF for time-based behavior                        |
+| `capture-app-window.sh` | Screenshot one app window (macOS OS capture)                        |
+| `record-app-screen.sh`  | Record an app screen (CDP frames → video + gallery)                 |
+| `agent-browser-klm.mjs` | Wrap an `agent-browser` action and append its interaction-cost atom |
+
+Generic capture helpers come from the installed skill, not the project layer:
+
+```bash
+bash .agents/skills/acceptance/scripts/check-screen-recording.sh --json
+bash .agents/skills/acceptance/scripts/cdp-screenshot.sh --port 9222 --out "$DIR/assets/window.png"
+```
+
+Follow [`screenshot-helpers.md`](../skills/acceptance/references/screenshot-helpers.md)
+for prerequisites and exit codes. A missing tool or an undetermined check is not
+a pass.
 
 macOS automation patterns: [`references/osascript.md`](./references/osascript.md).
 Screen recording: [`references/record-app-screen.md`](./references/record-app-screen.md).

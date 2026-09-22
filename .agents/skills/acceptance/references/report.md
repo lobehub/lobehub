@@ -1,0 +1,408 @@
+# Structured Report Rounds (`lh acceptance run ingest`)
+
+Per-criterion `result submit` (SKILL.md Step 3) assumes a verify plan already
+exists. When it doesn't — a standalone delivery, or any run where **you** author
+the checks, which is the usual case — publish a **structured report round**
+instead: a self-contained directory that
+`lh acceptance run ingest` uploads as one immutable verification round. The
+acceptance page renders itself from `result.json`: provenance, the overall
+conclusion, and the check list from `plan[]` paired with `cases[]`, each with
+its evidence inline — **images render as figures, before/after pairs render
+under tinted comparison bands**. A chat-only summary or a bare markdown report
+never gets that rendering; the structured round does.
+
+## Contents
+
+- [No operation ID needed](#no-operation-id-needed)
+- [Directory layout](#directory-layout)
+- [Workflow](#workflow)
+- [result.json schema](#resultjson-schema)
+- [Rules](#rules)
+
+Rule of thumb: **plan exists → per-criterion submit; you author the checks →
+structured round ingest.** Never mix both for the same delivery round.
+
+## No operation id needed
+
+`--operation` is optional on every command in this skill. Without one, author
+the checks and use one of these first-class paths:
+
+A round is immutable, so **allocate a fresh directory before every ingest** —
+never point a second ingest at a directory you already published:
+
+```bash
+# $1 = subject key (see Directory layout), $2 = a short slug for this round.
+new_round() {
+  dir=".acceptances/$1/$(date +%Y%m%d-%H%M%S)-$2"
+  mkdir -p "$dir/assets" && printf '%s' "$dir"
+}
+```
+
+```bash
+# A. first external-project round — creates a standalone acceptance.
+# It has no subject yet, so group it under `standalone-<slug>` until the
+# returned acceptance id gives the tree its permanent name.
+REPORT_DIR=$(new_round standalone-checkout-flow first-pass)
+lh acceptance run ingest "$REPORT_DIR" \
+  --requirement "<one-sentence business goal>" --json
+
+# Re-verification after a fix — a NEW round on the SAME acceptance.
+REPORT_DIR=$(new_round standalone-checkout-flow repair)
+lh acceptance run ingest "$REPORT_DIR" --acceptance "$ACCEPTANCE_ID" --json
+
+# Attach to a subject you were told to use — a Task, Topic, or Document.
+# Group the round under that same subject so the tree and the page agree.
+REPORT_DIR=$(new_round topic-tpc_xxx first-pass)
+lh acceptance run ingest "$REPORT_DIR" --subject topic:tpc_xxx --json
+
+# B. atomic fallback — create the round first, then submit into it with --run
+RUN=$(lh acceptance run create --title "…" --goal "…" --json | jq -r .id)
+lh acceptance run result submit --run "$RUN" --item "$CHECK_ITEM_ID" …
+```
+
+Prefer **A**: per-criterion submits without a plan produce checks with no
+declared intent, so the page has nothing to pair the outcome against.
+
+## Directory layout
+
+Rounds live under `.acceptances/`, grouped by the delivery they belong to:
+
+```
+.acceptances/
+├── .gitignore                     # `*` — the whole tree stays out of git
+└── <subject-key>/                 # topic-tpc_x | task-T-12 | document-doc_x
+    │                              # standalone-<slug> until an acceptance id exists
+    ├── acceptance.json            # which acceptance these rounds belong to
+    └── <YYYYMMDD-HHMMSS>-<slug>/  # ONE round — never write into an existing one
+        ├── result.json            # THE report — the page renders from this
+        ├── proposal.md            # what this round delivers, posted to the discussion
+        ├── report.md              # narrative tail only (verdict, follow-ups, score)
+        └── assets/                # evidence referenced from cases[].evidence
+```
+
+Three things the shape buys, none of them cosmetic:
+
+- **The subject key mirrors `--subject <type>:<id>`**, so a directory listing
+  answers what the acceptance page answers: which delivery is this, and how many
+  rounds has it had. A flat `./acceptance-report` answers neither. A standalone
+  round has no subject to key on, so group it under `standalone-<slug>` and keep
+  every later round of that delivery in the same directory.
+- **A round is immutable**, so its directory name carries the timestamp and is
+  written once. Re-verification after a fix creates the NEXT directory; reusing
+  one silently destroys the evidence a reviewer already decided against.
+- **The tree is git-invisible.** `.acceptances/.gitignore` contains `*`, which
+  ignores the whole directory including itself, so evidence binaries never land
+  as untracked noise and the project's own `.gitignore` is never rewritten.
+  Create that file before writing evidence; a general-purpose skill installer
+  does not seed it. `lh acceptance run ingest` also ensures it exists.
+
+Writing a round somewhere else still works — `ingest` takes an explicit path —
+but then keeping it out of git is on you.
+
+## Workflow
+
+1. **Write `plan[]` BEFORE you run anything.** Each item is
+   `{ id, title, category, verifier, method, expected, requiredEvidence,
+supersedes? }`.
+   A planned item that never produces a case renders as **未执行** rather than
+   vanishing — cut coverage in the open.
+   Every item is an outcome the reader can judge — never a programmatic gate
+   ([what is not an acceptance check](#what-is-not-an-acceptance-check)).
+   **Copy the shapes in this file rather than reconstructing them**: a
+   plausible-but-wrong nested shape parses as JSON, is dropped on ingest, and
+   the round publishes green with its evidence silently degraded. Read every
+   ingest warning as a failed publish.
+   Before executing the **first round only**, send the draft for
+   [acceptance-checker plan review](acceptance-checker.md) and save the agreed plan and
+   requirement mapping after resolving material gaps. In follow-up rounds the
+   primary carries the agreed plan forward and inspects it itself.
+2. **Collect evidence into `assets/` as you test.** Screenshots must be
+   **visually verified with the Read tool before being cited** — never cite an
+   image you haven't looked at. For metrics, time series, model or benchmark
+   comparisons, distributions, matrices, and tables, use native Acceptance
+   structured visualizations: put review-sized values in `cases[].datasets`,
+   declare the view in `cases[].visualizations`, and retain the raw CSV/JSON,
+   benchmark output, trace, profile, or vectors in `evidence`. Do not generate a
+   PNG/GIF when a supported renderer can faithfully express the data. See
+   [Structured visualizations](#structured-visualizations).
+3. **Fill `cases[]` as you go** — one entry per tested behavior
+   (`{ id, name, category, surface, status, observation, evidence }`), reusing
+   the plan item's `id`. `status`: `pass` / `fail` / `blocked` (couldn't run —
+   a blocked case is not a pass).
+   Keep `observation` brief and reviewer-facing; follow
+   [checklist explanation guidance](../SKILL.md#keep-checklist-explanations-brief).
+   Detailed reasoning and execution records belong in evidence attachments.
+4. **Set `title` and `summary.verdict`** (`pass` / `fail` / `partial`) — without
+   them the run lists as "未命名验证" with a permanent amber "?" glyph. Write the
+   one-paragraph verdict into `summary.conclusion`.
+5. **Write `proposal.md` — the round's own note to the reviewer.** What this
+   round delivers and where you want their eyes, the way a person writes a pull
+   request description: a few sentences, in the language the user is conversing
+   in. `ingest` posts it into the acceptance's discussion as a message on this
+   round, so it is the first thing a reviewer reads and they can answer it in
+   place. It is NOT the verification write-up — do not restate the checks or the
+   verdict, those are `result.json` and `report.md`. Every round gets one: the
+   first says what the delivery is, later ones say what changed since the
+   feedback. Skip it only when there is genuinely nothing to say beyond the
+   checks.
+6. **`report.md` is the narrative tail only** — this-round notes, follow-ups,
+   score. Do NOT repeat the scope block or a case table; those double up on the
+   page. Write it in the language the user is conversing in.
+7. **Review, then publish:** hand the completed plan, report, original evidence,
+   and an explicit file list with relevant diff text or prepared diff artifact
+   paths (including in-round repairs, base and tested revision, and affected case IDs)
+   to the acceptance-checker for a quick evidence review using [acceptance-checker.md](acceptance-checker.md)
+   (first round only, one quick check with no checker re-review after fixes;
+   the diff helps identify updates and affected agreed cases.
+   The acceptance-checker limits code reading to the supplied materials and must not run `git diff` or
+   expand the file list. It checks the report and artifacts, without reopening requirements
+   or expanding into code review. State repairs and affected cases in plain language). Resolve
+   findings and record review limitations in the narrative tail before declaring
+   a pass. The primary publishes; the acceptance-checker does not operate the product or
+   upload results.
+
+   ```bash
+   lh acceptance run ingest "$REPORT_DIR" --source agent-testing --json
+   ```
+
+   On the first ingest, add `--requirement "<one-sentence business goal>"`.
+   Describe the durable goal of the whole acceptance, not this round's narrower
+   implementation scope.
+
+   Grouping needs nothing from you: the command attaches the round to the
+   conversation it was invoked from when it can, and otherwise creates a
+   standalone acceptance. Pass `--subject` only when you were told which Task,
+   Topic, or Document owns the work. To publish a repair into that same history, add
+   `--acceptance <acceptanceId>` using the ID printed by the first ingest. The
+   command uploads cases + evidence + report body and prints
+   `/acceptance/<acceptanceId>` plus its `?r=<roundIndex>` snapshot form —
+   the only link the final reply exposes (SKILL.md, Final handoff).
+
+## result.json schema
+
+Every `cases[].evidence` file entry must use `{ "path": "...", "description": "..." }`.
+Describe the file's contents and relevance to the criterion, following the
+[shared description requirements](evidence.md#file-versus-inline-content).
+Do not copy the legacy bare-path form: ingestion accepts it for compatibility,
+but its filename fallback does not satisfy the description requirement.
+
+```json
+{
+  "cases": [
+    {
+      "id": "1",
+      "category": "Task hierarchy",
+      "name": "task tree returns nested children",
+      "surface": "cli",
+      "status": "pass",
+      "observation": "root returned 3 nested children, depth 2",
+      "evidence": [
+        {
+          "path": "assets/task-tree.txt",
+          "description": "Task tree command output showing the root and its 3 nested children at depth 2."
+        }
+      ]
+    },
+    {
+      "id": "2",
+      "category": "Model quality",
+      "name": "candidate model improves average precision",
+      "surface": "cli",
+      "status": "pass",
+      "observation": "average precision improved from 0.742 to 0.796",
+      "evidence": [
+        {
+          "path": "assets/evaluation.json",
+          "description": "Evaluation results comparing baseline and candidate average precision, including the observed change from 0.742 to 0.796."
+        }
+      ],
+      "datasets": [
+        {
+          "id": "model-metrics",
+          "fields": [
+            { "key": "metric", "type": "string" },
+            { "key": "baseline", "type": "number" },
+            { "key": "candidate", "type": "number" }
+          ],
+          "rows": [{ "metric": "Average precision", "baseline": 0.742, "candidate": 0.796 }]
+        }
+      ],
+      "visualizations": [
+        {
+          "id": "model-comparison",
+          "type": "metric-comparison",
+          "version": 1,
+          "dataset": "model-metrics",
+          "title": "Model quality comparison",
+          "encoding": {
+            "label": "metric",
+            "before": "baseline",
+            "after": "candidate"
+          }
+        }
+      ]
+    }
+  ],
+  "createdAt": "2026-06-11T15:30:00+08:00",
+  "entry": "<cli> task list --tree",
+  "plan": [
+    {
+      "id": "1",
+      "title": "task tree returns nested children",
+      "category": "Task hierarchy",
+      "verifier": "program",
+      "method": "<cli> task list --tree against a 3-level fixture",
+      "expected": "root shows 3 nested children at depth 2",
+      "requiredEvidence": ["text"]
+    },
+    {
+      "id": "2",
+      "title": "candidate model improves average precision",
+      "category": "Model quality",
+      "verifier": "program",
+      "method": "Evaluate the baseline and candidate on the same held-out dataset",
+      "expected": "candidate average precision exceeds the baseline",
+      "requiredEvidence": ["text"]
+    }
+  ],
+  "summary": {
+    "total": 2,
+    "passed": 2,
+    "failed": 0,
+    "blocked": 0,
+    "verdict": "pass",
+    "conclusion": "Both checks passed: the task tree returned the expected hierarchy, and the candidate model improved average precision from 0.742 to 0.796."
+  },
+  "surfaces": ["cli"],
+  "title": "Verify task hierarchy and model quality"
+}
+```
+
+Optional fields: `branch` / `commit` / `pullRequest` (provenance line; when
+`branch` is set without `pullRequest`, ingest asks `gh` for the PR),
+`summary.score` (0–100, only when the verdict has a subjective component),
+`subject` (usually passed via `--subject` instead).
+
+### Structured visualizations
+
+A case containing reviewable structured data should provide `datasets[]` plus
+`visualizations[]`. Supported version-1 renderers are `metric-comparison`,
+`line-chart`, `bar-chart`, `scatter-plot`, `heatmap`, and `table`. Each
+visualization references one dataset by `id` and maps declared fields through
+`encoding`.
+
+Inline datasets use declared `fields[]` and object `rows[]`; keep them to a
+review-sized summary. Retain raw benchmark results, CSV/JSON, traces, profiles,
+and vectors in `evidence`: the visualization is a decision aid, not a replacement
+for the audit trail. Do not merely upload a data file and expect Acceptance to
+infer a chart; declare both the dataset and visualization explicitly.
+
+Native renderers are the default because they preserve machine-readable values,
+accessibility, theme adaptation, and consistent comparison semantics. Generate a
+static chart only when none of the supported renderers can faithfully represent
+the result, and explain that limitation in the case observation.
+
+Every visualization requires unique non-empty `id`, `type`, `dataset`, and
+`version: 1`; `dataset` must reference a declared dataset id. `title` and
+`context` are optional non-empty strings. Every encoding field name below must
+reference a field declared by that dataset.
+
+| Renderer            | Required encoding                                              | Optional encoding                                                                         |
+| ------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `metric-comparison` | `label`, `before`, `after`                                     | `beforeSamples`, `afterSamples`, `direction`, `statistic`, `target`, `unit`               |
+| `line-chart`        | `x`, non-empty `series[]`; each series requires `field`        | series `label`, series `style` (`muted` \| `primary` \| `accent`), `xLabel`, `yLabel`     |
+| `bar-chart`         | `category`, non-empty `series[]`; each series requires `field` | series `label`, `valueLabel`                                                              |
+| `scatter-plot`      | `x`, `y`                                                       | `color`, `label`, `xLabel`, `yLabel`                                                      |
+| `heatmap`           | `x`, `y`, `value`                                              | none                                                                                      |
+| `table`             | none; `encoding` itself may be omitted                         | non-empty `columns[]`; `highlights[]` entries require `field` and `mode` (`min` \| `max`) |
+
+One shape for every renderer — `id`, `type`, `version: 1`, `dataset`, and an
+`encoding` whose field names are keys of that dataset (see the `line-chart`
+below; the other types differ only in the encoding keys listed above):
+
+```json
+{
+  "dataset": "training",
+  "encoding": {
+    "x": "step",
+    "series": [
+      { "field": "baselineLoss", "label": "Baseline", "style": "muted" },
+      { "field": "candidateLoss", "label": "Candidate", "style": "primary" }
+    ],
+    "xLabel": "Step",
+    "yLabel": "Loss"
+  },
+  "id": "loss-over-time",
+  "type": "line-chart",
+  "version": 1
+}
+```
+
+Dataset field `type` is one of `boolean`, `category`, `number`, `string`, or
+`temporal`; field keys and dataset/view ids must be unique. Rows may contain only
+declared keys with string, number, boolean, or null values. The combined inline
+row limit is 10,000.
+
+### Closed vocabularies — the pipeline acts on these, they are not labels
+
+| field                           | values                                                                                                | what it does                                                                                                         |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `verifier`                      | `program` \| `agent` \| `llm` (default `agent`)                                                       | How the verdict is reached. A command-asserted check is `program`; calling it `agent` hides what actually judged it. |
+| `requiredEvidence`              | `screenshot` \| `gif` \| `video` \| `audio` \| `text` \| `markdown` \| `dom_snapshot` \| `transcript` | The artifact this check **must** produce. The coverage gate **fails** an item whose required medium is missing.      |
+| `surfaces` / per-case `surface` | `web` \| `desktop` \| `cli` \| `mobile` \| `bot` (`electron` → `desktop`)                             | The product surface a check ran **on**. A test kind (`unit`, `backend`) or runtime mode is not a surface.            |
+
+`category` names the user-facing requirement area (e.g. `Task hierarchy`,
+`Rate-limit recovery`) — never a technical surface. `method` / `expected` stay
+free prose; they render under the check next to the outcome.
+
+### What is not an acceptance check
+
+The repo's own gates — tests, coverage, `type-check`, lint, format, a clean
+build, "CI passes" — are never `plan[]` / `cases[]` items, under any phrasing;
+they are one line in `report.md` under **Verification**. Ingest drops matching
+items (matched on title, category, AND `method`), warns, and recounts `summary`;
+a gates-only round fails to publish. Full rule: SKILL.md.
+
+### Before/after comparison pairs
+
+The page renders a complete pair under tinted bands (red `before`, green
+`after`). Both halves need the same string `id`; use `layout: "horizontal"` for
+a left/right comparison and `layout: "vertical"` for a top/bottom comparison.
+When omitted, `layout` defaults to `horizontal`. Add a `label` stating the
+measured delta on each side:
+
+```json
+"evidence": [
+  { "path": "assets/before.png",
+    "description": "Topic row before the change, showing the original 11px text size.",
+    "comparison": { "id": "topic-row", "role": "before", "layout": "horizontal", "label": "before: 11px" } },
+  { "path": "assets/after.png",
+    "description": "The same topic row after the change, showing the updated 12px text size.",
+    "comparison": { "id": "topic-row", "role": "after", "layout": "horizontal", "label": "after: 12px" } }
+]
+```
+
+Choose the layout by comparison intent, not by the source image dimensions:
+
+- `horizontal` — before on the left, after on the right. Use it when the reader
+  should compare the same region across two versions at a glance. This is the
+  normal choice for full-page or full-window before/after screenshots.
+- `vertical` — before on top, after below. Use it when preserving each image's
+  full width matters more than simultaneous scanning, such as a very wide,
+  shallow toolbar or timeline strip.
+
+A comparison pair means the same view in two states — sequential steps of a
+flow are ordinary ordered evidence with captions, not a pair.
+
+## Rules
+
+- **No evidence, no claim** — every `pass`/`fail` in `cases[]` links at least
+  one asset.
+- **Non-visual behavioral claims need dual text evidence** — attach a concise
+  reviewer-facing reasoning document and a separate audit-facing execution
+  artifact containing the exact command/request and observed values. Neither
+  unsupported prose nor an unexplained log dump is sufficient.
+- **Report failures faithfully** — a failing case with clear evidence is a good
+  report; a vague green one is not.
+- If coverage was cut, say so in `report.md` — silent truncation reads as
+  "covered everything".

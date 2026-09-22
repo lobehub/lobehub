@@ -17,6 +17,8 @@ export interface RouteAttemptResult {
   providerId: string;
   remark?: string;
   requestId?: string;
+  /** A request-scoped task owns this attempt's asynchronous reporting. */
+  routeRequestManaged?: boolean;
   routerId?: string;
   startedAt?: number;
   success: boolean;

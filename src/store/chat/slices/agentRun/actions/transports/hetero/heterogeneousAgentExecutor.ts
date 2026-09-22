@@ -497,6 +497,10 @@ export const executeHeterogeneousAgent = async (
   // from the FINAL env (so an agent-env override is attributed correctly, not
   // the routed choice). Read by the per-turn usage→ledger hook below.
   let runExternalAccountId: string | undefined;
+  // Settles when that identity read finishes, one way or another. Ledger rows
+  // are permanent, so a turn must never be submitted before this settles — an
+  // early unattributed row is one the later assignment cannot repair.
+  let runIdentitySettled: Promise<unknown> = Promise.resolve();
 
   // Usage ledger: one turn's spend, attributed to the account the run is on —
   // the "our own cost" half calibration crosses with the provider's utilization
@@ -510,28 +514,47 @@ export const executeHeterogeneousAgent = async (
     usage: unknown;
   }) => {
     if (
-      adapterType !== 'claude-code' ||
-      (heterogeneousProvider.authMode ?? 'subscription') !== 'subscription'
+      (adapterType !== 'claude-code' && adapterType !== 'codex') ||
+      (heterogeneousProvider.authMode ?? 'subscription') !== 'subscription' ||
+      // turn_metadata can carry only model/provider — nothing to ledger.
+      !intent.usage
     )
       return;
-    const u = intent.usage as ModelUsage;
-    agentQuotaService
-      .recordUsage({
-        agentId: context.agentId,
-        externalAccountId: runExternalAccountId,
-        messageId: intent.messageId,
-        model: intent.model,
-        operationId,
-        provider: 'claude-code',
-        topicId: context.topicId ?? undefined,
-        usage: {
-          cacheRead: u.inputCachedTokens,
-          cacheWrite5m: u.inputWriteCacheTokens,
-          input: u.inputCacheMissTokens,
-          output: u.totalOutputTokens,
-        },
-      })
-      .catch(() => {});
+    const submit = () => {
+      const u = intent.usage as ModelUsage;
+      agentQuotaService
+        .recordUsage({
+          agentId: context.agentId,
+          externalAccountId: runExternalAccountId,
+          messageId: intent.messageId,
+          model: intent.model,
+          operationId,
+          provider: adapterType,
+          topicId: context.topicId ?? undefined,
+          usage:
+            adapterType === 'codex'
+              ? {
+                  // Codex has no cache-write tier, and its reasoning output bills
+                  // at the output rate as its own ledger tier — split it out of
+                  // the plain output count.
+                  cacheRead: u.inputCachedTokens,
+                  input: u.inputCacheMissTokens,
+                  output:
+                    u.totalOutputTokens === undefined
+                      ? undefined
+                      : u.totalOutputTokens - (u.outputReasoningTokens ?? 0),
+                  reasoning: u.outputReasoningTokens,
+                }
+              : {
+                  cacheRead: u.inputCachedTokens,
+                  cacheWrite5m: u.inputWriteCacheTokens,
+                  input: u.inputCacheMissTokens,
+                  output: u.totalOutputTokens,
+                },
+        })
+        .catch(() => {});
+    };
+    runIdentitySettled.then(submit, submit);
   };
 
   // Shared run lifecycle — hetero owns its terminal lifecycle here
@@ -1970,7 +1993,7 @@ export const executeHeterogeneousAgent = async (
     // agent-env CLAUDE_CONFIG_DIR beats routing, and unbound agents use the
     // default login). Falls back to the routed choice when the file read fails.
     if (adapterType === 'claude-code' && !providerBindingActive) {
-      heterogeneousAgentService
+      runIdentitySettled = heterogeneousAgentService
         .getClaudeCodeIdentity({ env: sessionEnv })
         .then((identity) => {
           runExternalAccountId = identity?.externalAccountId ?? quotaAccountPlan.externalAccountId;
@@ -1978,6 +2001,21 @@ export const executeHeterogeneousAgent = async (
         .catch(() => {
           runExternalAccountId = quotaAccountPlan.externalAccountId;
         });
+    }
+    if (adapterType === 'codex' && !providerBindingActive) {
+      // Same attribution contract as Claude, but Codex has no per-account spawn
+      // mapping (resolveQuotaAccountSpawnPlan returns NO_ROUTING), so the live
+      // sampler identity is the only source. A sampler failure leaves the run
+      // unattributed rather than misattributed.
+      runIdentitySettled = heterogeneousAgentService
+        .getCodexQuota({
+          command: resolveHeterogeneousAgentCommand(adapterType, heterogeneousProvider.command),
+          env: sessionEnv,
+        })
+        .then((snapshot) => {
+          runExternalAccountId = snapshot?.identity?.externalAccountId ?? undefined;
+        })
+        .catch(() => {});
     }
     ipcRunSessionId = result.sessionId;
     if (!ipcRunSessionId) throw new Error('Agent session returned no sessionId');

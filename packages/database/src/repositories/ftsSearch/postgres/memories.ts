@@ -1,4 +1,5 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { LayersEnum } from '@lobechat/types';
+import { and, eq, ne, sql } from 'drizzle-orm';
 
 import { userMemories } from '../../../schemas';
 import type { FtsSearchBackendResponse, FtsSearchMemoryResult } from '../types';
@@ -36,7 +37,12 @@ export async function searchMemories(
     })
     .from(userMemories)
     .where(
-      and(eq(userMemories.userId, context.userId), dialect.match(MEMORY_FIELDS, preparedQuery)),
+      and(
+        eq(userMemories.userId, context.userId),
+        // Experience memory is retired and has no page to land on; keep it out of unified search.
+        ne(userMemories.memoryLayer, LayersEnum.Experience),
+        dialect.match(MEMORY_FIELDS, preparedQuery),
+      ),
     )
     .orderBy(sql`${score} DESC`)
     .limit(limit);

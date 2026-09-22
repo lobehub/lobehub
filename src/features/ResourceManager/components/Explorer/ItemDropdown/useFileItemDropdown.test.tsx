@@ -10,6 +10,8 @@ interface SendToMessengerParams {
 
 const mocks = vi.hoisted(() => ({
   activeWorkspaceId: null as string | null,
+  activeWorkspaceSlug: null as string | null,
+  copyToClipboard: vi.fn(async (_text: string) => undefined),
   confirmModal: vi.fn(),
   deleteResource: vi.fn<() => Promise<void>>(async () => {}),
   dropTreeNodes: vi.fn(async () => undefined),
@@ -56,6 +58,13 @@ vi.mock('@/store/library', () => ({ useKnowledgeBaseStore: () => [vi.fn(), vi.fn
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => mocks.activeWorkspaceId,
 }));
+vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
+  useActiveWorkspaceSlug: () => mocks.activeWorkspaceSlug,
+}));
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  copyToClipboard: mocks.copyToClipboard,
+}));
 
 vi.mock('@/store/tree', () => ({
   useTreeStore: Object.assign(() => vi.fn(), {
@@ -78,6 +87,51 @@ const pushedFile = () => mocks.useSendToMessengerMenuItem.mock.calls.at(-1)![0].
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.activeWorkspaceId = null;
+  mocks.activeWorkspaceSlug = null;
+});
+
+/** @example Sharing a workspace page copies a link other members can open. */
+describe('useFileItemDropdown — copy link', () => {
+  // ROOT CAUSE:
+  //
+  // Workspace routes live under `/:workspaceSlug`, but the copied page link was
+  // built as `${origin}/resource?file=…` regardless of scope, so recipients
+  // opened it in the personal scope where the workspace page does not resolve.
+  const copyLink = async (params: Record<string, unknown> = {}) => {
+    const { result } = renderHook(() =>
+      useFileItemDropdown({ ...baseParams, fileType: 'custom/document', ...params } as any),
+    );
+    const item = result.current.menuItems().find((entry) => entry?.key === 'copyUrl') as any;
+    await item.onClick({ domEvent: { stopPropagation: vi.fn() } });
+    return mocks.copyToClipboard.mock.calls.at(-1)![0];
+  };
+
+  it('prefixes the page link with the active workspace slug', async () => {
+    mocks.activeWorkspaceId = 'ws-1';
+    mocks.activeWorkspaceSlug = 'acme';
+    await expect(copyLink({ id: 'docs_abc' })).resolves.toBe(
+      'https://app.example.com/acme/resource?file=docs_abc',
+    );
+  });
+
+  it('keeps the library page link inside the workspace', async () => {
+    mocks.activeWorkspaceId = 'ws-1';
+    mocks.activeWorkspaceSlug = 'acme';
+    await expect(copyLink({ id: 'docs_abc', libraryId: 'kb_1' })).resolves.toBe(
+      'https://app.example.com/acme/resource/library/kb_1?file=docs_abc',
+    );
+  });
+
+  it('leaves the personal-scope page link unprefixed', async () => {
+    await expect(copyLink({ id: 'docs_abc' })).resolves.toBe(
+      'https://app.example.com/resource?file=docs_abc',
+    );
+  });
+
+  it('copies the storage URL for a regular file regardless of workspace', async () => {
+    mocks.activeWorkspaceSlug = 'acme';
+    await expect(copyLink({ fileType: 'markdown' })).resolves.toBe(baseParams.url);
+  });
 });
 
 describe('useFileItemDropdown — visibility toggles', () => {

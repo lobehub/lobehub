@@ -111,7 +111,7 @@ export const MemoryManifest: BuiltinToolManifest = {
             description:
               'Optional memory layers to search. Must be an array even for one layer, for example ["preference"].',
             items: {
-              enum: ['activity', 'context', 'experience', 'identity', 'preference'],
+              enum: ['activity', 'context', 'identity', 'preference'],
               type: 'string',
             },
             type: 'array',
@@ -164,7 +164,6 @@ export const MemoryManifest: BuiltinToolManifest = {
             properties: {
               activities: { minimum: 0, type: 'integer' },
               contexts: { minimum: 0, type: 'integer' },
-              experiences: { minimum: 0, type: 'integer' },
               identities: { minimum: 0, type: 'integer' },
               preferences: { minimum: 0, type: 'integer' },
             },
@@ -199,7 +198,7 @@ export const MemoryManifest: BuiltinToolManifest = {
             description:
               'Optional memory layers to scope the taxonomy lookup. Must be an array even for one layer.',
             items: {
-              enum: ['activity', 'context', 'experience', 'identity', 'preference'],
+              enum: ['activity', 'context', 'identity', 'preference'],
               type: 'string',
             },
             type: 'array',
@@ -534,126 +533,6 @@ export const MemoryManifest: BuiltinToolManifest = {
           'memoryCategory',
           'tags',
           'withActivity',
-        ],
-        type: 'object',
-      },
-    },
-    {
-      description:
-        'Record an experience memory capturing situation, actions, reasoning, outcomes, and confidence. Use for lessons, playbooks, or transferable know-how.',
-      name: MemoryApiName.addExperienceMemory,
-      parameters: {
-        additionalProperties: false,
-        properties: {
-          details: {
-            description: 'Optional detailed information',
-            type: 'string',
-          },
-          memoryCategory: {
-            description: 'Memory category',
-            type: 'string',
-          },
-          memoryType: {
-            description: 'Memory type',
-            enum: MEMORY_TYPES,
-            type: 'string',
-          },
-          summary: {
-            description: 'Concise overview of this specific memory',
-            type: 'string',
-          },
-          sourceIds: {
-            description:
-              'Stable source message ids that support this memory. Use [] when unavailable.',
-            items: { type: 'string' },
-            type: ['array', 'null'],
-          },
-          tags: {
-            description: 'Model generated tags that summarize the experience facets',
-            items: { type: 'string' },
-            type: 'array',
-          },
-          title: {
-            description: 'Brief descriptive title',
-            type: 'string',
-          },
-          withExperience: {
-            additionalProperties: false,
-            properties: {
-              action: {
-                description: 'Narrative describing actions taken or behaviors exhibited',
-                type: 'string',
-              },
-              keyLearning: {
-                description: 'Narrative describing key insights or lessons learned',
-                type: 'string',
-              },
-              knowledgeValueScore: {
-                description:
-                  'Numeric score (0-1) describing how reusable and shareable this experience is',
-                maximum: 1,
-                minimum: 0,
-                type: 'number',
-              },
-              labels: {
-                description: 'Model generated tags that summarize the experience facets',
-                items: { type: 'string' },
-                type: 'array',
-              },
-              possibleOutcome: {
-                description: 'Narrative describing potential outcomes or learnings',
-                type: 'string',
-              },
-              problemSolvingScore: {
-                description:
-                  'Numeric score (0-1) describing how effectively the problem was solved',
-                maximum: 1,
-                minimum: 0,
-                type: 'number',
-              },
-              reasoning: {
-                description: 'Narrative describing the thought process or motivations',
-                type: 'string',
-              },
-              scoreConfidence: {
-                description:
-                  'Numeric score (0-1 (0% to 100%)) describing confidence in the experience details',
-                maximum: 1,
-                minimum: 0,
-                type: 'number',
-              },
-              situation: {
-                description: 'Narrative describing the situation or event',
-                type: 'string',
-              },
-              type: {
-                description: 'Type of experience being recorded',
-                type: 'string',
-              },
-            },
-            required: [
-              'situation',
-              'reasoning',
-              'action',
-              'possibleOutcome',
-              'keyLearning',
-              'type',
-              'labels',
-              'problemSolvingScore',
-              'scoreConfidence',
-              'knowledgeValueScore',
-            ],
-            type: 'object',
-          },
-        },
-        required: [
-          'details',
-          'memoryCategory',
-          'memoryType',
-          'summary',
-          'tags',
-          'title',
-          'withExperience',
         ],
         type: 'object',
       },
@@ -1001,7 +880,7 @@ export const MemoryManifest: BuiltinToolManifest = {
   meta: {
     avatar: '🧠',
     description:
-      'Store and recall user preferences, activities, identities, and experiences across conversations',
+      'Store and recall user preferences, activities, identities, and contexts across conversations',
     title: 'Memory',
   },
   systemRole: systemPrompt,

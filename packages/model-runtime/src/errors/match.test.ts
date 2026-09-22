@@ -577,3 +577,213 @@ describe('2026-09 triage harvest (production residue)', () => {
     expect(matchErrorPattern({ message: 'Forbidden', provider: 'lobehub' })).toBeUndefined();
   });
 });
+
+describe('2026-09 production residue — second harvest', () => {
+  // Every message below is a verbatim upstream error observed in production.
+  // None of the patterns they exercise match first-party provider errors.
+  const cases: [string, string][] = [
+    // ExceededContextWindow
+    [
+      'Input token count (272370) exceeds system limit (262144) (request id: 021789663165372e56)',
+      AgentRuntimeErrorType.ExceededContextWindow,
+    ],
+    [
+      'channel input token limit exceeded: estimated input tokens 141238 > limit 131072 (request id: 2026092210)',
+      AgentRuntimeErrorType.ExceededContextWindow,
+    ],
+    // InsufficientQuota
+    [
+      'need pre-deduct ＄0.061, balance ＄0.000 is insufficient (request id: 2026092211)',
+      AgentRuntimeErrorType.InsufficientQuota,
+    ],
+    [
+      'The request failed because your account has an overdue balance. Request id: 021789663165',
+      AgentRuntimeErrorType.InsufficientQuota,
+    ],
+    [
+      "User's credit limit is insufficient, remaining credit limit: ＄0.00 (request id: 2026092212)",
+      AgentRuntimeErrorType.InsufficientQuota,
+    ],
+    [
+      'hết credit (ví Pay-as-you-go), số dư: 0 (request id: 2026092213)',
+      AgentRuntimeErrorType.InsufficientQuota,
+    ],
+    [
+      "You've reached your usage limit for this billing cycle. Your quota will be refreshed in the next cycle.",
+      AgentRuntimeErrorType.InsufficientQuota,
+    ],
+    [
+      'This prompt is longer than the free tier allows for a single request. Shorten it, or add credits to use this model.',
+      AgentRuntimeErrorType.InsufficientQuota,
+    ],
+    [
+      'user [12] quota [3400] preConsumedQuota [51000] is not enough',
+      AgentRuntimeErrorType.InsufficientQuota,
+    ],
+    [
+      '403 "You have run out of credits or need a Grok subscription. Add credits at https://x.ai or upgrade."',
+      AgentRuntimeErrorType.InsufficientQuota,
+    ],
+    [
+      "Not enough credit to cover this request's estimated maximum cost. Shorten the request, or top up.",
+      AgentRuntimeErrorType.InsufficientQuota,
+    ],
+    [
+      'You have reached your specified workspace API usage limits. You will regain access on 2026-10-01 at 00:00 UTC.',
+      AgentRuntimeErrorType.InsufficientQuota,
+    ],
+    [
+      '403 "Your newly created team doesn\'t have any credits or licenses yet. You can purchase those on the billing page."',
+      AgentRuntimeErrorType.InsufficientQuota,
+    ],
+    ['403 "insufficient_gpt_quota"', AgentRuntimeErrorType.InsufficientQuota],
+    [
+      '订阅额度不足或未配置订阅: subscription quota insufficient, need=1 (request id: 2026092214)',
+      AgentRuntimeErrorType.InsufficientQuota,
+    ],
+    [
+      'You have insufficient credits to make this request. Please purchase more credits to continue using the service.',
+      AgentRuntimeErrorType.InsufficientQuota,
+    ],
+    ['{"error":"余额不足"}', AgentRuntimeErrorType.InsufficientQuota],
+    ['403 No active subscription found for this group', AgentRuntimeErrorType.InsufficientQuota],
+    // RateLimitExceeded
+    [
+      'LLM stream error: ResourceExhausted: Worker local total request limit reached (8/8)',
+      AgentRuntimeErrorType.RateLimitExceeded,
+    ],
+    [
+      "429 Rate limit exceeded. Refer to 'x-ratelimit-*' headers for details, and 'retry-after' header for when to retry.",
+      AgentRuntimeErrorType.RateLimitExceeded,
+    ],
+    [
+      '您已达到总请求数限制：5分钟内最多请求5次，包括失败次数，请检查您的请求是否正确 (request id: 2026092215)',
+      AgentRuntimeErrorType.RateLimitExceeded,
+    ],
+    // ProviderServiceUnavailable
+    [
+      'This model is temporarily at capacity. Please try again shortly or use a different model.',
+      AgentRuntimeErrorType.ProviderServiceUnavailable,
+    ],
+    // NoAvailableChannel
+    ['{"detail":"暂无可用凭证"}', AgentRuntimeErrorType.NoAvailableChannel],
+    [
+      'No available Gemini accounts: no available accounts',
+      AgentRuntimeErrorType.NoAvailableChannel,
+    ],
+    // ModelNotFound
+    [
+      'Publisher model `projects/open-command-1/locations/global/publishers/google/models/gemini-3.1-pro-preview` was not found or your project does not have access to it.',
+      AgentRuntimeErrorType.ModelNotFound,
+    ],
+    [
+      'Invalid model. Please select a different model to continue.',
+      AgentRuntimeErrorType.ModelNotFound,
+    ],
+    [
+      "Unknown model 'zyloo/claude-sonnet-5'. See zyloo.io/models for the supported list.",
+      AgentRuntimeErrorType.ModelNotFound,
+    ],
+    [
+      'The model gemini-2.5-flash-free has been retired and is no longer available. (tid: 2026092216)',
+      AgentRuntimeErrorType.ModelNotFound,
+    ],
+    [
+      '{"error":{"message":"Requested model DeepSeek-V4-Flash not supported","type":"invalid_request_error","param":null,"code":null}}',
+      AgentRuntimeErrorType.ModelNotFound,
+    ],
+    // InvalidProviderAPIKey
+    [
+      'Request had invalid authentication credentials. Expected OAuth 2 access token, login cookie or other valid authentication credential.',
+      AgentRuntimeErrorType.InvalidProviderAPIKey,
+    ],
+    ['API key 已过期', AgentRuntimeErrorType.InvalidProviderAPIKey],
+    // PermissionDenied
+    [
+      "Permission denied: Consumer 'api_key:AIzaSyXXXX' has been suspended.",
+      AgentRuntimeErrorType.PermissionDenied,
+    ],
+    [
+      'Access to model denied. Please make sure you are eligible for using the model.',
+      AgentRuntimeErrorType.PermissionDenied,
+    ],
+    [
+      'The latest version of this model is only available hosted in China and requires explicit opt in: https://example.com/docs',
+      AgentRuntimeErrorType.PermissionDenied,
+    ],
+    // CapabilityNotSupported
+    [
+      'registry.ollama.ai/library/gemma3:4b does not support tools',
+      AgentRuntimeErrorType.CapabilityNotSupported,
+    ],
+    [
+      'The requested model does not support the coding plan feature. Please refer to the documentation to select a compatible model.',
+      AgentRuntimeErrorType.CapabilityNotSupported,
+    ],
+    [
+      'Reasoning is mandatory for this endpoint and cannot be disabled.',
+      AgentRuntimeErrorType.CapabilityNotSupported,
+    ],
+    // ContentModeration
+    [
+      'Your prompt or reference material was rejected by content moderation. Please revise it and submit again. (request id: 2026092217)',
+      AgentRuntimeErrorType.ContentModeration,
+    ],
+    // UserConfigError
+    [
+      'anthropic-workspace-id is required when authenticating with an identity-linked API key; send the id of the workspace.',
+      AgentRuntimeErrorType.UserConfigError,
+    ],
+    [
+      'This host has been retired. Point your base URL at https://api.example.com — your API key is unchanged.',
+      AgentRuntimeErrorType.UserConfigError,
+    ],
+    ['404 Replit AI Integrations is not configured', AgentRuntimeErrorType.UserConfigError],
+    [
+      'The product is not activated, please confirm that you have activated products and try again after activation.',
+      AgentRuntimeErrorType.UserConfigError,
+    ],
+  ];
+
+  it.each(cases)('classifies %j', (message, expected) => {
+    expect(
+      matchErrorPattern({ errorType: AgentRuntimeErrorType.ProviderBizError, message })?.code,
+    ).toBe(expected);
+    expect(isUserSideError(AgentRuntimeErrorType.ProviderBizError, message)).toBe(true);
+  });
+
+  it('keeps `Requested model` as the model-not-found discriminator', () => {
+    // The relay wraps both rejections in the same JSON envelope, so a bare
+    // `not supported","type":"invalid_request_error"` substring would also
+    // claim parameter rejections and hand the user model-not-found guidance.
+    expect(
+      matchErrorPattern({
+        message:
+          '{"error":{"message":"Parameter temperature is not supported","type":"invalid_request_error","param":null,"code":null}}',
+      })?.code,
+    ).not.toBe(AgentRuntimeErrorType.ModelNotFound);
+  });
+
+  it('leaves plain account-suspension messages on AccountDeactivated', () => {
+    // The PermissionDenied section is matched before AccountDeactivated, so the
+    // consumer-suspension entry must stay scoped to the Google wording.
+    for (const message of [
+      'Your account has been suspended.',
+      '403 Your account has been suspended. Please contact support.',
+    ]) {
+      expect(matchErrorPattern({ message })?.code).toBe(AgentRuntimeErrorType.AccountDeactivated);
+    }
+  });
+
+  it('leaves the two first-party-colliding candidates unclassified', () => {
+    // Both phrases also reach us from the first-party provider, so they were
+    // held back from this round rather than narrowed: keeping our own failures
+    // visible outranks classifying a few more upstream rows.
+    for (const message of [
+      'System protection triggered by request burst. Please slow down traffic growth.',
+      'The current model cannot be routed at the moment, please try again later. (tid: 2026092218)',
+    ]) {
+      expect(matchErrorPattern({ message, provider: 'lobehub' })).toBeUndefined();
+    }
+  });
+});

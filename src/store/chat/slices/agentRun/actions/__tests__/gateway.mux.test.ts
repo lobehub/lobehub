@@ -240,6 +240,33 @@ describe('GatewayActionImpl (enableGatewayMux lab)', () => {
       expect(state.gatewayConnections['op-1'].client).toBe(v1Client);
     });
 
+    it('uses the share-scoped mux by default when the lab flag is off', () => {
+      mockLab.enableGatewayMux = false;
+      const { action, mux, muxClient, state, v1Client } = createTestAction();
+
+      action.connectToGateway({
+        agentShareId: 'share-1',
+        executor: true,
+        gatewayUrl: GATEWAY_URL,
+        operationId: 'op-1',
+        token: 'unused-in-mux',
+        topicId: 'topic-1',
+      });
+
+      expect(action.resolveGatewayMux).toHaveBeenCalledWith({
+        agentShareId: 'share-1',
+        gatewayUrl: GATEWAY_URL,
+      });
+      expect(action.createMuxClient).toHaveBeenCalledWith(mux, 'op-1', {
+        executor: true,
+        resumeOnConnect: undefined,
+      });
+      expect(action.createClient).not.toHaveBeenCalled();
+      expect(muxClient.connect).toHaveBeenCalled();
+      expect(v1Client.connect).not.toHaveBeenCalled();
+      expect(state.gatewayConnections['op-1']).toEqual({ client: muxClient, status: 'connecting' });
+    });
+
     it('resolves the page-wide registry mux by default', () => {
       const { action } = createTestAction();
       action.resolveGatewayMux = getGatewayMux;

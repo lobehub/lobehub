@@ -1914,7 +1914,8 @@ export class AgentRuntimeService {
         // Context: contextEngine.input (agentDocuments) was ~2.7MB/step,
         // hitting Upstash Redis 10MB limit. Bypassing events keeps the heavy
         // payload in trace only, reducing per-step Redis state by ~500x.
-        let contextEnginePayload: { input: unknown; output: unknown } | undefined;
+        let contextEnginePayload:
+          { input: unknown; metadata?: unknown; output: unknown } | undefined;
 
         // Create Agent and Runtime instances
         // Use agentState.metadata which contains the full app context (topicId, agentId, etc.)
@@ -1973,8 +1974,8 @@ export class AgentRuntimeService {
           agentState,
           operationId,
           stepIndex,
-          tracingContextEngine: (input, output) => {
-            contextEnginePayload = { input, output };
+          tracingContextEngine: (input, output, metadata) => {
+            contextEnginePayload = { input, metadata, output };
           },
         });
 
@@ -4067,7 +4068,7 @@ export class AgentRuntimeService {
     agentState?: any;
     operationId: string;
     stepIndex: number;
-    tracingContextEngine?: (input: unknown, output: unknown) => void;
+    tracingContextEngine?: (input: unknown, output: unknown, metadata?: unknown) => void;
   }) {
     const state = agentState as AgentState | undefined;
     const modelRuntimeConfig = state?.modelRuntimeConfig;

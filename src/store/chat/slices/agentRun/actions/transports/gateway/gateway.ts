@@ -359,11 +359,14 @@ export class GatewayActionImpl {
     // Disconnect existing connection for this operation if any
     this.disconnectFromGateway(operationId);
 
-    // Read the lab flag once per connect (non-reactive, like the other prefs
-    // `isGatewayModeEnabled` consults): a connection keeps the transport it
-    // was opened with even if the toggle flips mid-run.
+    // Share visitors default to protocol v2 because the public surface does
+    // not inherit the creator's Labs preference. Owner runs keep the existing
+    // opt-in rollout: a connection keeps the transport it was opened with
+    // even if the toggle flips mid-run.
+    const useGatewayMux =
+      Boolean(agentShareId) || labPreferSelectors.enableGatewayMux(useUserStore.getState());
     let muxClient: OperationClient | undefined;
-    if (labPreferSelectors.enableGatewayMux(useUserStore.getState())) {
+    if (useGatewayMux) {
       const mux = this.resolveGatewayMux({ agentShareId, gatewayUrl });
       this.#attachGatewayFeed(mux);
       // The mux mints its own token via `getToken` on every dial, so `token`

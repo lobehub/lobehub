@@ -534,9 +534,19 @@ export const tryReuseInterventionContinuation = async (
   };
 };
 
+/**
+ * What the resume context needs from an approved entry. `createdAt` orders the
+ * batch while the claim is being built and is not needed here, so this shape
+ * stays JSON-safe — see `OperationInitRequest`.
+ */
+export type ApprovedToolEntry = Pick<
+  ClaimedApprovalResume['approvedToolEntries'][number],
+  'plugin' | 'toolMessageId'
+>;
+
 export interface BuildApprovalResumeContextInput {
   approvalOwnerAssistantId?: string;
-  approvedToolEntries: ClaimedApprovalResume['approvedToolEntries'];
+  approvedToolEntries: ApprovedToolEntry[];
   assistantMessageId: string;
   /** The base context built at step 16 — returned unchanged on a fresh send. */
   initialContext: AgentRuntimeContext;

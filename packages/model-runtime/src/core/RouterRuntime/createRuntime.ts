@@ -56,6 +56,7 @@ import { getChatAttemptObservation, observeChatAttempt } from './chatAttempt';
 import type { ChatStreamFallbackAttempt } from './chatStreamFallback';
 import { createChatStreamFallbackResponse } from './chatStreamFallback';
 import type { RouteAttemptFinished, RouteAttemptResult, RouteAttemptStart } from './routeAttempt';
+import { createRouteRequestTasks } from './routeRequestTasks';
 
 export type { RouteAttemptResult } from './routeAttempt';
 
@@ -163,7 +164,9 @@ export interface RouteSuccessParams {
   firstChannelId?: string;
   method: RouterRuntimeMethod;
   model: string;
+  routeRequestManaged?: boolean;
   routerId?: string;
+  trackDeferredWork?: (task: Promise<void>) => void;
   userId?: string;
   weighted: boolean;
 }
@@ -242,6 +245,8 @@ export interface CreateRouterRuntimeOptions<T extends Record<string, any> = any>
     ) => ChatStreamPayload;
   };
   routers: Routers;
+  /** Register once while the request context is available. */
+  scheduleRouteRequestSettled?: (settled: Promise<void>) => void | Promise<void>;
   shouldFallbackChatAttempt?: (result: RouteAttemptFinished) => boolean | Promise<boolean>;
   shouldStopFallback?: (params: {
     error: unknown;
@@ -657,14 +662,22 @@ export const createRouterRuntime = ({
       }
       const firstChannelId = routerOptions[0]?.id;
       const weighted = routerOptions.some((option) => option.weight !== undefined);
+      const routeTasks = params.scheduleRouteRequestSettled
+        ? await createRouteRequestTasks(params.scheduleRouteRequestSettled)
+        : undefined;
 
       const reportReturnedAttempt = (
         attempt: RouteAttemptStart,
         result: Partial<RouteAttemptResult> & Pick<RouteAttemptResult, 'durationMs' | 'success'>,
       ) => {
-        params.onRouteAttempt?.({ ...attempt, ...result } as RouteAttemptResult).catch((error) => {
+        if (!params.onRouteAttempt) return;
+        try {
+          const task = params.onRouteAttempt({ ...attempt, ...result } as RouteAttemptResult);
+          if (routeTasks) routeTasks.track(task);
+          else task.catch((error) => log('onRouteAttempt callback error: %O', error));
+        } catch (error) {
           log('onRouteAttempt callback error: %O', error);
-        });
+        }
       };
 
       const shouldContinueAfterRequestError = async (error: unknown, optionIndex: number) => {
@@ -712,6 +725,7 @@ export const createRouterRuntime = ({
           providerId: id,
           remark,
           requestId,
+          routeRequestManaged: Boolean(routeTasks),
           routerId: matchedRouter.id,
           startedAt: Date.now(),
           userId: routeAttemptUserId,
@@ -723,7 +737,11 @@ export const createRouterRuntime = ({
             options,
             attempt,
             payload.stream !== false,
-            params.onRouteAttemptFinished!,
+            (result) => {
+              const task = params.onRouteAttemptFinished!(result);
+              if (routeTasks) routeTasks.track(Promise.resolve(task));
+              else return task;
+            },
             { deferCallbacks: true },
           );
           const durationMs = Date.now() - attempt.startedAt;
@@ -754,16 +772,25 @@ export const createRouterRuntime = ({
               if (!params.onRouteSuccess) return;
 
               try {
-                await params.onRouteSuccess({
-                  channelId,
-                  channelWeight: optionItem.weight,
-                  firstChannelId,
-                  method: routeContext.method,
-                  model: payload.model,
-                  routerId: matchedRouter.id,
-                  userId: routeAttemptUserId,
-                  weighted,
+                /** Report failures here so the request tracker only waits for the handled task. */
+                const task = Promise.resolve(
+                  params.onRouteSuccess({
+                    channelId,
+                    channelWeight: optionItem.weight,
+                    firstChannelId,
+                    method: routeContext.method,
+                    model: payload.model,
+                    routerId: matchedRouter.id,
+                    routeRequestManaged: Boolean(routeTasks),
+                    trackDeferredWork: routeTasks?.track,
+                    userId: routeAttemptUserId,
+                    weighted,
+                  }),
+                ).catch((error) => {
+                  console.error('[RouterRuntime] onRouteSuccess callback failed:', error);
                 });
+                routeTasks?.track(task);
+                await task;
               } catch (error) {
                 // Affinity storage must not turn a successful upstream response into a fallback.
                 console.error('[RouterRuntime] onRouteSuccess callback failed:', error);
@@ -798,18 +825,24 @@ export const createRouterRuntime = ({
         }
       };
 
-      return createChatStreamFallbackResponse({
-        shouldFallback: async (result) => {
-          try {
-            return Boolean(await params.shouldFallbackChatAttempt?.(result));
-          } catch (error) {
-            log('shouldFallbackChatAttempt callback error: %O', error);
-            return false;
-          }
-        },
-        startAttempt,
-        totalAttempts: routerOptions.length,
-      });
+      try {
+        return await createChatStreamFallbackResponse({
+          onSettled: routeTasks?.settle,
+          shouldFallback: async (result) => {
+            try {
+              return Boolean(await params.shouldFallbackChatAttempt?.(result));
+            } catch (error) {
+              log('shouldFallbackChatAttempt callback error: %O', error);
+              return false;
+            }
+          },
+          startAttempt,
+          totalAttempts: routerOptions.length,
+        });
+      } catch (error) {
+        routeTasks?.settle();
+        throw error;
+      }
     }
 
     private async runWithFallback<T>(

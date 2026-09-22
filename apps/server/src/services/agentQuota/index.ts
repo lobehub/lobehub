@@ -33,7 +33,7 @@ import {
   QuotaCostSource,
 } from '@/database/types/agentQuota';
 
-import { claudeModelPrice } from './pricing';
+import { claudeModelPrice, codexModelPrice } from './pricing';
 
 const readQuotaWindowMetadata = (raw: Record<string, unknown> | null) => ({
   ...(typeof raw?.windowMinutes === 'number' &&
@@ -242,10 +242,21 @@ export class AgentQuotaService {
     if (!externalEventId) return;
 
     const account = params.externalAccountId
-      ? await this.accounts.findByExternalId(params.provider, params.externalAccountId)
+      ? ((await this.accounts.findByExternalId(params.provider, params.externalAccountId)) ??
+        // A first-run turn can arrive before any snapshot ingestion created the
+        // account row. Create it here or the turn is permanently unattributed —
+        // later snapshot ingestion does not backfill existing ledger rows. The
+        // remaining identity fields are enriched by the next snapshot upsert.
+        (await this.accounts.upsertByIdentity(params.provider, {
+          externalAccountId: params.externalAccountId,
+        })))
       : null;
 
-    const price = params.model ? claudeModelPrice(params.model) : null;
+    const price = params.model
+      ? params.provider === 'codex'
+        ? codexModelPrice(params.model)
+        : claudeModelPrice(params.model)
+      : null;
     const costUsd = price ? computeTurnCostUsd(params.usage, price) : null;
 
     const row = {
@@ -405,7 +416,7 @@ export class AgentQuotaService {
    */
   selectForAgent = async (
     agentId: string,
-    options: { modelScope?: string; now?: number } = {},
+    options: { modelScope?: string; now?: number; provider?: string } = {},
   ): Promise<{
     accountId: string;
     credentialMode: string;
@@ -430,9 +441,19 @@ export class AgentQuotaService {
 
   private selectAccountId = async (
     agentId: string,
-    options: { modelScope?: string; now?: number },
+    options: { modelScope?: string; now?: number; provider?: string },
   ): Promise<{ accountId: string; reason: 'pinned' | 'balanced' } | null> => {
-    const bindings = (await this.bindings.listByAgent(agentId)).filter((b) => b.enabled);
+    let bindings = (await this.bindings.listByAgent(agentId)).filter((b) => b.enabled);
+    // Bindings are written provider-blind; a caller that names its provider
+    // must never be routed onto another provider's account, pinned or pooled.
+    if (options.provider) {
+      const candidates = await Promise.all(
+        bindings.map((binding) => this.accounts.findById(binding.accountId)),
+      );
+      bindings = bindings.filter(
+        (binding, index) => candidates[index]?.provider === options.provider,
+      );
+    }
     const pinned = bindings.find((b) => b.role === QuotaBindingRole.pinned);
     if (pinned) return { accountId: pinned.accountId, reason: 'pinned' };
 

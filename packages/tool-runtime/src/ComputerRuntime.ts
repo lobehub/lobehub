@@ -160,17 +160,43 @@ export abstract class ComputerRuntime {
         startLine: args.startLine,
         totalCharCount: r.totalCharCount,
         totalLines: r.totalLineCount ?? r.totalLines,
+        truncated: r.truncated === true ? true : undefined,
       };
 
-      const lineRange: [number, number] | undefined =
-        args.startLine !== undefined && args.endLine !== undefined
-          ? [args.startLine, args.endLine]
+      // Number every returned line (1-based gutter) and, when the window
+      // stops before EOF, prefix a `(lines 1-1000 of 2545)` marker. Rendering
+      // only the caller-supplied args here meant a default-window read looked
+      // identical to a full read, and the model had to burn extra turns
+      // discovering the file was truncated.
+      const hasLoc = Array.isArray(r.loc) && r.loc.length === 2;
+      // The loc-less fallback is the cloud sandbox path (local reads always
+      // return `loc`): its `startLine`/`endLine` args are 1-based inclusive
+      // and independently optional, so normalize to the 0-based
+      // end-exclusive window the formatter computes with — passing [1, 200]
+      // through raw would label a full 200-line read as "(lines 1-199 of
+      // ...)". An endLine-only read stops mid-file and needs the marker; a
+      // startLine-only read runs to EOF (window end = totalLines).
+      const fallbackEnd = args.endLine ?? r.totalLineCount ?? r.totalLines;
+      const lineRange: [number, number] | undefined = hasLoc
+        ? [r.loc[0], r.loc[1]]
+        : (args.startLine !== undefined || args.endLine !== undefined) && fallbackEnd !== undefined
+          ? [Math.max((args.startLine ?? 1) - 1, 0), fallbackEnd]
           : undefined;
+
+      // `loc` is 0-based end-exclusive while the cloud sandbox's
+      // `startLine`/`endLine` args are 1-based inclusive; either way the first
+      // returned line's 1-based number is loc[0] + 1 or startLine.
+      const firstLineNumber = hasLoc ? r.loc[0] + 1 : (args.startLine ?? 1);
 
       const content = formatFileContent({
         content: fileContent,
+        firstLineNumber,
         lineRange,
-        path: args.path,
+        totalLines: r.totalLineCount ?? r.totalLines,
+        // When the service cut the content at its char cap, the window's tail
+        // was never delivered — a "(lines 1-1000 of N)" marker would claim
+        // coverage the payload doesn't have, so it is suppressed.
+        truncated: r.truncated === true,
       });
 
       return { content, state, success: true };

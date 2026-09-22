@@ -9,12 +9,21 @@ Its two siblings:
 - [`PROCESS.md`](./PROCESS.md) — the run process (plan gate, execution rules,
   publishing, teardown).
 - `.agents/skills/acceptance/` — the portable skill: what a check, evidence,
-  report, and round are. In this repository that path is a symlink onto the
-  skill's source, `packages/builtin-skills/src/acceptance/`.
+  report, and round are. This is a committed, generated snapshot of
+  [`lobehub/acceptance`](https://github.com/lobehub/acceptance), the only maintenance
+  source. Update it from the repository's current default branch with
+  `bun apps/cli/src/index.ts acceptance update --json`, then review and commit the
+  downloaded files. The JSON records the exact source commit; publishing a tag
+  or release is not required. Do not hand-edit this installed copy.
+  `.claude/skills` shares `.agents/skills`.
 
-Every script referenced below lives under `.agents/acceptance/scripts/`, including
-the generic capture toolchain (`report-init.sh`, `cdp-screenshot.sh`,
-`record-gif.sh`, `check-screen-recording.sh`, …).
+Project helpers (`report-init.sh`, `record-gif.sh`, `capture-app-window.sh`, …)
+live under `.agents/acceptance/scripts/`. Generic CDP capture and screen-recording
+preflight live only under `.agents/skills/acceptance/scripts/`; invoke their shell
+scripts with `bash`. See the installed skill's
+[`screenshot-helpers.md`](../skills/acceptance/references/screenshot-helpers.md)
+for commands, prerequisites, and exit codes. Do not copy these implementations
+into the project layer.
 
 ## 1. Project summary
 
@@ -354,7 +363,7 @@ in `.agents/acceptance/references/agent-gateway.md`.
 - **OS-capture surfaces are macOS-only** (bot channels, `capture-app-window.sh`,
   osascript screenshots): they come out black without Screen Recording (TCC)
   permission or when the display is asleep/locked. CDP-based evidence
-  (`agent-browser screenshot`, `.agents/acceptance/scripts/cdp-screenshot.sh`) is
+  (`agent-browser screenshot`, `bash .agents/skills/acceptance/scripts/cdp-screenshot.sh`) is
   unaffected. Electron runs on Linux/cloud only under `xvfb-run`, and there OS
   capture does not work — prefer CDP evidence for cloud-portable runs.
 

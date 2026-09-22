@@ -18,7 +18,6 @@ export default {
   'navigation.lobehub': 'LobeHub',
   'navigation.memory': 'Memory',
   'navigation.memoryContexts': 'Memory - Contexts',
-  'navigation.memoryExperiences': 'Memory - Experiences',
   'navigation.memoryIdentities': 'Memory - Identities',
   'navigation.document': 'Document',
   'navigation.memoryPreferences': 'Memory - Preferences',

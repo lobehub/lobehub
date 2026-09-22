@@ -1,3 +1,4 @@
+import { LayersEnum } from '@lobechat/types';
 import {
   and,
   eq,
@@ -112,6 +113,8 @@ export const hydrateUserMemories = async (
           hits.map(({ id }) => id),
         ),
         eq(userMemories.userId, scope.userId),
+        // Experience memory is retired and has no page to land on; keep it out of unified search.
+        ne(userMemories.memoryLayer, LayersEnum.Experience),
       ),
     );
 

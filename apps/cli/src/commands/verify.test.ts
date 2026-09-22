@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -33,7 +33,6 @@ const { mockTrpcClient } = vi.hoisted(() => ({
       createRubric: { mutate: vi.fn() },
       deleteRun: { mutate: vi.fn() },
       getRubric: { query: vi.fn() },
-      getSkillBundle: { query: vi.fn() },
       updateRubric: { mutate: vi.fn() },
     },
   },
@@ -178,74 +177,6 @@ describe('verify evidence upload command', () => {
 
     expect(exitSpy).toHaveBeenCalledWith(1);
     expect(mockGetTrpcClient).not.toHaveBeenCalled();
-  });
-});
-
-describe('verify init command', () => {
-  let consoleSpy: ReturnType<typeof vi.spyOn>;
-  let dir: string;
-
-  beforeEach(() => {
-    consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
-    mockTrpcClient.verify.getSkillBundle.query.mockReset().mockResolvedValue({
-      content: '# Acceptance SKILL',
-      files: { 'references/plan-format.md': 'plan', 'surfaces/cli.md': 'cli' },
-      identifier: 'acceptance',
-      name: 'acceptance',
-    });
-    dir = mkdtempSync(path.join(tmpdir(), 'verify-init-'));
-  });
-
-  afterEach(() => {
-    consoleSpy.mockRestore();
-    rmSync(dir, { force: true, recursive: true });
-  });
-
-  const run = async (args: string[]) => {
-    const program = new Command();
-    program.exitOverride();
-    registerVerifyCommand(program);
-    await program.parseAsync(['node', 'lh', 'verify', ...args]);
-  };
-
-  it('defaults to the acceptance skill and writes it into .agents/skills/acceptance', async () => {
-    await run(['init', '--dir', dir]);
-
-    expect(mockTrpcClient.verify.getSkillBundle.query).toHaveBeenCalledWith({
-      identifier: 'acceptance',
-    });
-    const skillDir = path.join(dir, '.agents', 'skills', 'acceptance');
-    expect(readFileSync(path.join(skillDir, 'SKILL.md'), 'utf8')).toBe('# Acceptance SKILL');
-    expect(readFileSync(path.join(skillDir, 'references/plan-format.md'), 'utf8')).toBe('plan');
-    expect(readFileSync(path.join(skillDir, 'surfaces/cli.md'), 'utf8')).toBe('cli');
-  });
-
-  it('skips existing files without --force and overwrites with it', async () => {
-    const skillFile = path.join(dir, '.agents', 'skills', 'acceptance', 'SKILL.md');
-    await run(['init', '--dir', dir]);
-
-    // server now serves updated content
-    mockTrpcClient.verify.getSkillBundle.query.mockResolvedValue({
-      content: '# Updated SKILL',
-      files: {},
-      identifier: 'acceptance',
-      name: 'acceptance',
-    });
-
-    await run(['init', '--dir', dir]); // no --force → keep existing
-    expect(readFileSync(skillFile, 'utf8')).toBe('# Acceptance SKILL');
-
-    await run(['init', '--dir', dir, '--force']); // --force → overwrite
-    expect(readFileSync(skillFile, 'utf8')).toBe('# Updated SKILL');
-  });
-
-  it('reports the written/skipped counts as JSON', async () => {
-    await run(['init', '--dir', dir, '--json']);
-    const out = JSON.parse(consoleSpy.mock.calls.map((c) => String(c[0])).join(''));
-    expect(out.skill).toBe('acceptance');
-    expect(out.written).toContain('SKILL.md');
-    expect(existsSync(path.join(out.dir, 'SKILL.md'))).toBe(true);
   });
 });
 
@@ -1348,77 +1279,6 @@ describe('lh acceptance — canonical run tree', () => {
 
     const output = JSON.parse(consoleSpy.mock.calls.map((call) => String(call[0])).join(''));
     expect(output.url).toBe('https://app.lobehub.com/verify/run_1');
-  });
-
-  it('exposes `acceptance install` defaulting to the acceptance skill', async () => {
-    const dir = mkdtempSync(path.join(tmpdir(), 'acceptance-install-'));
-    mockTrpcClient.verify.getSkillBundle.query.mockReset().mockResolvedValue({
-      content: '# Acceptance SKILL',
-      files: {},
-      identifier: 'acceptance',
-      name: 'acceptance',
-    });
-    await run(['install', '--dir', dir]);
-    expect(mockTrpcClient.verify.getSkillBundle.query).toHaveBeenCalledWith({
-      identifier: 'acceptance',
-    });
-    expect(existsSync(path.join(dir, '.agents', 'skills', 'acceptance', 'SKILL.md'))).toBe(true);
-    rmSync(dir, { force: true, recursive: true });
-  });
-
-  it('reports the installed version and leaves it in the SKILL.md on disk', async () => {
-    // The version is what a later install compares against, so it has to survive
-    // in two places: the JSON result, and the frontmatter of the materialized
-    // file (the copy a builder actually reads).
-    const dir = mkdtempSync(path.join(tmpdir(), 'acceptance-version-'));
-    mockTrpcClient.verify.getSkillBundle.query.mockReset().mockResolvedValue({
-      content: '---\nname: acceptance\nversion: 1.0.0\n---\n\n# Acceptance SKILL',
-      files: {},
-      identifier: 'acceptance',
-      name: 'acceptance',
-      version: '1.0.0',
-    });
-
-    await run(['install', '--dir', dir, '--json']);
-
-    const printed = JSON.parse(consoleSpy.mock.calls.at(-1)![0] as string);
-    expect(printed.version).toBe('1.0.0');
-    expect(
-      readFileSync(path.join(dir, '.agents', 'skills', 'acceptance', 'SKILL.md'), 'utf8'),
-    ).toContain('version: 1.0.0');
-    rmSync(dir, { force: true, recursive: true });
-  });
-
-  it('removes stale materialized resources on `acceptance update`', async () => {
-    const dir = mkdtempSync(path.join(tmpdir(), 'acceptance-update-'));
-    mockTrpcClient.verify.getSkillBundle.query.mockReset().mockResolvedValueOnce({
-      content: '# Acceptance SKILL',
-      files: {
-        'references/auth.md': '# Mixed auth',
-        'references/recording.md': '# Mixed recording',
-      },
-      identifier: 'acceptance',
-      name: 'acceptance',
-    });
-    await run(['install', '--dir', dir]);
-
-    mockTrpcClient.verify.getSkillBundle.query.mockResolvedValueOnce({
-      content: '# Acceptance SKILL v2',
-      files: {
-        'references/auth-web.md': '# Web auth',
-        'references/recording-cdp.md': '# CDP recording',
-      },
-      identifier: 'acceptance',
-      name: 'acceptance',
-    });
-    await run(['update', '--dir', dir]);
-
-    const skillDir = path.join(dir, '.agents', 'skills', 'acceptance');
-    expect(existsSync(path.join(skillDir, 'references', 'auth.md'))).toBe(false);
-    expect(existsSync(path.join(skillDir, 'references', 'recording.md'))).toBe(false);
-    expect(existsSync(path.join(skillDir, 'references', 'auth-web.md'))).toBe(true);
-    expect(existsSync(path.join(skillDir, 'references', 'recording-cdp.md'))).toBe(true);
-    rmSync(dir, { force: true, recursive: true });
   });
 
   it('does NOT attach the run subtree to the deprecated `verify acceptance` alias', async () => {

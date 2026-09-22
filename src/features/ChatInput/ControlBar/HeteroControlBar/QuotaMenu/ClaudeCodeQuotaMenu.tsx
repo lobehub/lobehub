@@ -243,10 +243,12 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
       getRefreshErrorText={getRefreshErrorText}
       getUnavailableText={getUnavailableText}
       getWindows={getWindows}
-      renderHeader={(quota) => <QuotaAccountSwitcher placement="top" snapshot={quota} />}
       sourceKey={sourceKey}
       title={t('heteroAgent.claudeQuota.title')}
       tooltip={t('heteroAgent.claudeQuota.tooltip')}
+      renderHeader={(quota) => (
+        <QuotaAccountSwitcher placement="top" provider="claude-code" snapshot={quota} />
+      )}
     />
   );
 });

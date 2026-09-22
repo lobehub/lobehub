@@ -1347,6 +1347,8 @@ export default {
   'settingsSearch.tabKeywords.hotkey': 'hotkey, shortcut, keyboard',
   'settingsSearch.tabKeywords.labels': 'labels, tags, grouping',
   'settingsSearch.tabKeywords.labs': 'labs, experiment, beta, preview, developer',
+  'settingsSearch.tabKeywords.integrations':
+    'integrations, github, pull request, ci, review, merge, repository',
   'settingsSearch.tabKeywords.memory': 'memory, memories, personalization',
   'settingsSearch.tabKeywords.messenger':
     'messenger, chat platform, bot, telegram, slack, discord, wechat',
@@ -1715,6 +1717,7 @@ When I am ___, I need ___
   'tab.llm': 'Language Model',
   'tab.manualFill': 'Manually Fill In',
   'tab.manualFill.desc': 'Configure a custom MCP skill manually',
+  'tab.integrations': 'Integrations',
   'tab.memory': 'Memory',
   'tab.messenger': 'Messenger',
   'tab.notification': 'Notifications',

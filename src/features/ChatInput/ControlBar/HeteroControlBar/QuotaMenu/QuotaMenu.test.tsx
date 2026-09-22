@@ -9,6 +9,8 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { openQuotaCalendarModal } from '@/features/AgentQuotaCalendar';
+
 import HeteroControlBar from '..';
 import ClaudeCodeQuotaMenu from './ClaudeCodeQuotaMenu';
 import CodexQuotaMenu from './CodexQuotaMenu';
@@ -262,6 +264,15 @@ const liveSessionReading = (capturedAt: number) => ({
   utilization: 8,
 });
 
+/** Persisted quota can render before the initial load finishes; focus is ignored while loading. */
+const waitForQuotaIdle = async () => {
+  await waitFor(() => expect(screen.getByTestId('refresh').hasAttribute('disabled')).toBe(false));
+  // Let the focus listener's effect observe loading=false before dispatching focus.
+  await act(async () => {
+    await Promise.resolve();
+  });
+};
+
 const codexSnapshot = (
   overrides: Partial<ElectronClientIpcModule.CodexQuotaSnapshot> = {},
 ): ElectronClientIpcModule.CodexQuotaSnapshot => ({
@@ -314,6 +325,7 @@ beforeEach(() => {
   mockQuotaService.ingestKimiCodeSnapshot.mockClear();
   mockQuotaService.listAccounts.mockResolvedValue([]);
   mockQuotaService.listBindings.mockResolvedValue([]);
+  vi.mocked(openQuotaCalendarModal).mockClear();
 });
 
 describe('HeteroControlBar', () => {
@@ -517,9 +529,43 @@ describe('KimiCodeQuotaMenu', () => {
 
     expect(await screen.findByText('heteroAgent.kimiCodeQuota.unavailableNotFound')).toBeTruthy();
   });
+
+  it('opens the usage calendar for the kimi-code account from the header switcher', async () => {
+    mockService.getKimiCodeQuota.mockResolvedValue(
+      kimiCodeSnapshot({
+        identity: { displayName: 'Kimi User', externalAccountId: 'kimi-ext-1' },
+        session: { resetsAt: null, usedPercent: 20, windowMinutes: 300 },
+      }),
+    );
+
+    render(<KimiCodeQuotaMenu />);
+
+    fireEvent.click(await screen.findByTestId('calendar'));
+
+    expect(openQuotaCalendarModal).toHaveBeenCalledWith({
+      externalAccountId: 'kimi-ext-1',
+      provider: 'kimi-code',
+    });
+  });
 });
 
 describe('ClaudeCodeQuotaMenu', () => {
+  it('opens the usage calendar for the claude-code account from the header switcher', async () => {
+    mockQuotaService.listAccounts.mockResolvedValue([persistedAccount(Date.now() - 60_000)]);
+    mockQuotaService.getLatestReadings.mockResolvedValue([
+      persistedSessionReading(Date.now() - 60_000),
+    ]);
+
+    render(<ClaudeCodeQuotaMenu />);
+
+    fireEvent.click(await screen.findByTestId('calendar'));
+
+    expect(openQuotaCalendarModal).toHaveBeenCalledWith({
+      externalAccountId: 'ext-1',
+      provider: 'claude-code',
+    });
+  });
+
   it('renders session, weekly, and model-scoped windows from the snapshot', async () => {
     mockService.getClaudeCodeQuota.mockResolvedValue(
       claudeSnapshot({
@@ -968,6 +1014,7 @@ describe('ClaudeCodeQuotaMenu', () => {
 
     // Fresh persisted data: nothing hits the live API on mount…
     expect(await screen.findByText('92%')).toBeTruthy();
+    await waitForQuotaIdle();
     expect(mockService.getClaudeCodeQuota).not.toHaveBeenCalled();
 
     // …but regaining focus revalidates (the main-process cache rate-limits it).
@@ -1070,6 +1117,7 @@ describe('ClaudeCodeQuotaMenu', () => {
     render(<ClaudeCodeQuotaMenu />);
 
     expect(await screen.findByText('92%')).toBeTruthy();
+    await waitForQuotaIdle();
 
     await act(async () => {
       window.dispatchEvent(new Event('focus'));
@@ -1091,6 +1139,7 @@ describe('ClaudeCodeQuotaMenu', () => {
     render(<ClaudeCodeQuotaMenu />);
 
     expect(await screen.findByText('92%')).toBeTruthy();
+    await waitForQuotaIdle();
 
     await act(async () => {
       window.dispatchEvent(new Event('focus'));
@@ -1113,6 +1162,7 @@ describe('ClaudeCodeQuotaMenu', () => {
     render(<ClaudeCodeQuotaMenu />);
 
     expect(await screen.findByText('92%')).toBeTruthy();
+    await waitForQuotaIdle();
 
     await act(async () => {
       window.dispatchEvent(new Event('focus'));
@@ -1123,6 +1173,24 @@ describe('ClaudeCodeQuotaMenu', () => {
 });
 
 describe('CodexQuotaMenu', () => {
+  it('opens the usage calendar for the codex account from the header switcher', async () => {
+    mockService.getCodexQuota.mockResolvedValue(
+      codexSnapshot({
+        identity: { displayName: 'Codex User', externalAccountId: 'codex-ext-1' },
+        session: { resetsAt: null, usedPercent: 19, windowMinutes: 300 },
+      }),
+    );
+
+    render(<CodexQuotaMenu command="codex" />);
+
+    fireEvent.click(await screen.findByTestId('calendar'));
+
+    expect(openQuotaCalendarModal).toHaveBeenCalledWith({
+      externalAccountId: 'codex-ext-1',
+      provider: 'codex',
+    });
+  });
+
   it.each([
     [
       'failed to fetch codex rate limits: error sending request for url (https://chatgpt.com/backend-api/wham/usage)',
