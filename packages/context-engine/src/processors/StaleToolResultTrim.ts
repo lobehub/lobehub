@@ -260,7 +260,10 @@ const toEpochMs = (value: unknown): number | undefined => {
 export class StaleToolResultTrimProcessor extends BaseProcessor {
   readonly name = 'StaleToolResultTrimProcessor';
 
-  private config: Required<Omit<StaleToolResultTrimConfig, 'enabled'>> & { enabled: boolean };
+  private config: Required<Omit<StaleToolResultTrimConfig, 'economics' | 'enabled'>> & {
+    economics: CacheEconomics;
+    enabled: boolean;
+  };
 
   constructor(config: StaleToolResultTrimConfig = {}, options: ProcessorOptions = {}) {
     super(options);
@@ -271,6 +274,7 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
       cacheWritePrice: config.cacheWritePrice ?? economics.writePrice,
       commandKeepChars: config.commandKeepChars ?? 500,
       crawlKeepChars: config.crawlKeepChars ?? 1000,
+      economics,
       enabled: config.enabled ?? true,
       keepRecentMessages: config.keepRecentMessages ?? 20,
       minTotalToolChars: config.minTotalToolChars ?? 100_000,
