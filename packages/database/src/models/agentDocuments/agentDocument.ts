@@ -579,7 +579,6 @@ export class AgentDocumentModel {
         title: params.title,
         totalCharCount: stats.totalCharCount,
         totalLineCount: stats.totalLineCount,
-        updatedAt,
       })
       .where(and(eq(documents.id, existing.documentId), this.documentOwnership()));
 

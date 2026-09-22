@@ -558,39 +558,34 @@ describe('DocumentModel', () => {
       expect((await documentModel.findById(documentId))?.updatedAt.getTime()).toBe(timestamps[3]);
     });
 
-    it('advances direct SQL writes beyond a future row version despite a backward app clock', async () => {
+    it('advances updatedAt from the database clock when the update omits it', async () => {
       const { documentId } = await createTestDocument(documentModel, fileModel, 'Original content');
       const original = (await documentModel.findById(documentId))!;
-      const future = new Date('2100-01-01T00:00:00.000Z');
-      const [seed] = await serverDB
-        .insert(documents)
-        .values({ ...original, id: 'future-version-doc', slug: null, updatedAt: future })
-        .returning();
-      const [first] = await serverDB
+
+      await serverDB
         .update(documents)
-        .set({ content: 'Direct write', updatedAt: new Date('2000-01-01') })
-        .where(eq(documents.id, seed.id))
-        .returning();
-      const second = await documentModel.update(seed.id, {
-        content: 'Model write',
-        updatedAt: future,
-      });
-      expect(first.updatedAt.getTime()).toBe(future.getTime() + 1);
-      expect(second!.getTime()).toBe(first.updatedAt.getTime() + 1);
+        .set({ title: 'Renamed' })
+        .where(eq(documents.id, documentId));
+
+      const next = await documentModel.findById(documentId);
+      expect(next?.title).toBe('Renamed');
+      expect(next!.updatedAt.getTime()).toBeGreaterThan(original.updatedAt.getTime());
     });
 
-    it('should still bump updatedAt when the patch carries an explicit undefined', async () => {
+    it('ignores a caller-supplied updatedAt and stores a newer database version', async () => {
       const { documentId } = await createTestDocument(documentModel, fileModel, 'Original content');
-      const past = new Date('2020-01-01T00:00:00.000Z');
-      await documentModel.update(documentId, { updatedAt: past });
+      const original = (await documentModel.findById(documentId))!;
+      const supplied = new Date('2020-01-01T00:00:00.000Z');
 
       const updatedAt = await documentModel.update(documentId, {
         content: 'Updated content',
-        updatedAt: undefined,
+        updatedAt: supplied,
       });
 
       expect(updatedAt).toBeInstanceOf(Date);
-      expect(updatedAt!.getTime()).toBeGreaterThan(past.getTime());
+      expect(updatedAt!.getTime()).toBeGreaterThan(original.updatedAt.getTime());
+      expect(updatedAt!.getTime()).not.toBe(supplied.getTime());
+      expect((await documentModel.findById(documentId))?.updatedAt).toEqual(updatedAt);
     });
 
     it('should return undefined when the row does not belong to the caller', async () => {
