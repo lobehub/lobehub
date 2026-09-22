@@ -159,7 +159,7 @@ moved into Profile (PasswordRow / SSO / Email). Dead surface to prune.
   skeleton; silent autosave failure; error-as-empty); walk mobile to confirm the missing
   Devices/Messenger/Notification tabs (⑦); measure settings-tab-switch INP.
 
-## 6 — Phase B: per-tab deep-dive queue (sub-issues under LOBE-11078)
+## 6 — Phase B: per-tab deep-dive queue (sub-issues)
 
 The systemic 🔴 (①②③) are **cross-cutting** — file as ONE "settings resilience" issue, not
 per tab. Then deep-audit each tab (`/ux-audit <tab>`), priority by user-path heat:

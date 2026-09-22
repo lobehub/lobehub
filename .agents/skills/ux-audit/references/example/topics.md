@@ -1,8 +1,8 @@
 # Worked example — Agent topics / 话题列表 (topic management) audit
 
 A real run of this skill against the per-agent topic-management page
-(`/agent/:aid/topics` → `src/features/AgentTopicManager`), 2026-07-02 (LOBE-11217, under the
-Chat / 会话 UX-Audit parent LOBE-11145). Use it as a **template for the output shape**, not as
+(`/agent/:aid/topics` → `src/features/AgentTopicManager`), 2026-07-02, under the
+Chat / 会话 UX-Audit parent. Use it as a **template for the output shape**, not as
 current-state truth (the code moves; re-verify before citing).
 
 Surface = a scrolling management view over one agent's topics: **chrome** = `NavHeader` +

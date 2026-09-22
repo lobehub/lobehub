@@ -1,7 +1,7 @@
 # Worked example — Tasks list /kanban (任务列表) audit
 
 A real run of this skill against the **agent tasks list** — the cross-agent list/kanban board
-(`/tasks`) and its agent-scoped twin (`/agent/:aid/tasks`), 2026-07 (LOBE-11219). Use it as a
+(`/tasks`) and its agent-scoped twin (`/agent/:aid/tasks`), 2026-07. Use it as a
 template for the output shape, not as current-state truth (the code moves; re-verify before
 citing).
 

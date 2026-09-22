@@ -1,6 +1,6 @@
 # Worked example — Memory (记忆) module audit
 
-A real run of this skill against the **Memory module**, 2026-07 (LOBE-11150) — a personal-AI-memory
+A real run of this skill against the **Memory module**, 2026-07 — a personal-AI-memory
 management area: a **home persona** dashboard + five isomorphic list surfaces
 (identities / contexts / preferences / experiences / activities), each with a filter bar, grid /
 timeline views, a right-side detail panel, and an "Analyze" flow that extracts memory from chat

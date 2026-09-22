@@ -1,7 +1,7 @@
 # Worked example — Task detail /run-monitor (任务详情) audit
 
 A real run of this skill against the **single-task detail** — the cross-agent `/task/:taskId`
-and its agent-scoped twin `/agent/:aid/task/:taskId`, 2026-07 (LOBE-11220). The detail doubles as
+and its agent-scoped twin `/agent/:aid/task/:taskId`, 2026-07. The detail doubles as
 an **async agent-run monitor**: a live activity feed, subtasks, comments, artifacts, and
 schedule / verify / model config. Use it as a template for the output shape, not as current-state
 truth (the code moves; re-verify before citing).

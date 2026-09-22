@@ -2,7 +2,7 @@
 
 本文档记录了在 LobeHub E2E 测试开发中的经验和最佳实践。
 
-Related: [LOBE-2417](https://linear.app/lobehub/issue/LOBE-2417/建立核心产品功能-e2e-测试体验基准线)
+本文档沉淀自「建立核心产品功能 E2E 测试体验基准线」的实践。
 
 ## 测试策略：体验驱动的 E2E 测试
 

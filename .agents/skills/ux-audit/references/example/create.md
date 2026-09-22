@@ -1,8 +1,8 @@
 # Worked example — Create surfaces (视频创作 / 图像创作) audit
 
 A real run of this skill against the two desktop **generation** surfaces —
-`src/routes/(main)/(create)/video` and `.../image` — 2026-07 (LOBE-11151, under the
-desktop-main-area audit LOBE-11098). Use it as a **template for the output shape**, not as
+`src/routes/(main)/(create)/video` and `.../image` — 2026-07, under the desktop-main-area
+audit. Use it as a **template for the output shape**, not as
 current-state truth (the code moves; re-verify before citing).
 
 The two surfaces are **near-identical**: both compose the shared shell

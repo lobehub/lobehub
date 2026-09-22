@@ -48,14 +48,14 @@ APP_URL=http://localhost:3010 bun run test:response-compliance -- \
 
 Available `--filter` values:
 
-| ID                   | Description                            | Related Issue |
-| -------------------- | -------------------------------------- | ------------- |
-| `basic-response`     | Simple text generation (non-streaming) | LOBE-5858     |
-| `streaming-response` | SSE streaming lifecycle + events       | LOBE-5859     |
-| `system-prompt`      | System role message handling           | LOBE-5858     |
-| `tool-calling`       | Function tool definition + call output | LOBE-5860     |
-| `image-input`        | Multimodal image URL content           | —             |
-| `multi-turn`         | Conversation history via input items   | LOBE-5861     |
+| ID                   | Description                            |
+| -------------------- | -------------------------------------- |
+| `basic-response`     | Simple text generation (non-streaming) |
+| `streaming-response` | SSE streaming lifecycle + events       |
+| `system-prompt`      | System role message handling           |
+| `tool-calling`       | Function tool definition + call output |
+| `image-input`        | Multimodal image URL content           |
+| `multi-turn`         | Conversation history via input items   |
 
 ## Environment Variables
 
