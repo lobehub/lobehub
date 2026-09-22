@@ -169,7 +169,8 @@ export class AgentShareProfileModel {
         {
           ...work,
           totalCost: costs.get(work.id) ?? null,
-          url: sanitizeExternalUrl(work.url) ?? null,
+          /** File URLs can be bearer download links; featuring a Work is not a download grant. */
+          url: work.type === 'external' ? (sanitizeExternalUrl(work.url) ?? null) : null,
         },
       ]),
     );

@@ -136,6 +136,18 @@ describe('AgentShareProfileModel', () => {
     expect(await model.getStats(agent)).toEqual(before);
   });
 
+  it('withholds file download URLs while retaining explicitly external links', async () => {
+    await addWork('file-download', {
+      type: 'file',
+      resourceType: 'file',
+      url: 'https://example.com/f/private-file',
+    });
+    await addWork('external-link');
+    const items = await model.listFeaturedWorks(agent, ['file-download', 'external-link']);
+    expect(items[0].url).toBeNull();
+    expect(items[1].url).toBe('https://github.com/example/repo/issues/1');
+  });
+
   it('pages creator candidates and keeps selected Works available outside the page', async () => {
     await addWork('newest');
     await addWork('middle');
