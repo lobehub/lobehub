@@ -3908,4 +3908,6 @@ When I am ___, I need ___
   'environments.form.runtime': 'Runtime and storage',
   'environments.instances.confirm': 'Create',
   'environments.instances.directoryLabel': 'Directory',
+  'environments.files.up': 'Up one level',
+  'environments.files.openHint': 'Double-click a folder to open it, or a file to edit it',
 };
