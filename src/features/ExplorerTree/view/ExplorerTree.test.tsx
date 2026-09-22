@@ -9,7 +9,7 @@ import type { AgentDocumentItem } from '@/features/AgentDocumentsExplorer/types'
 import { canGoNative } from '@/libs/contextMenu/canGoNative';
 import { toNativeTemplate } from '@/libs/contextMenu/toNativeTemplate';
 
-import type { ExplorerTreeHandle } from '../types';
+import type { ExplorerTreeHandle, ExplorerTreeNode } from '../types';
 import ExplorerTree, { getItemPathFromEventPath } from './ExplorerTree';
 
 const showContextMenu = vi.hoisted(() => vi.fn());
@@ -134,6 +134,37 @@ describe('ExplorerTree', () => {
       expect.objectContaining({ id: 'folder', isFolder: true }),
       'Archive',
     );
+  });
+
+  it('survives a selected node whose parent folder turns into a file', () => {
+    // @pierre/trees asks for the directory child index of every intermediate
+    // path segment before checking that the segment is a directory, so looking
+    // up `Notes/readme.md` once `Notes` is a file throws "Unknown directory
+    // child index for node N" instead of resolving to nothing. resetPaths
+    // re-resolves the previous selection against the new store, so a refresh
+    // that reshapes the tree under a selected row used to kill the whole route.
+    const folderTree: ExplorerTreeNode<undefined>[] = [
+      { id: 'notes', isFolder: true, name: 'Notes', parentId: null },
+      { id: 'notes-child', isFolder: false, name: 'readme.md', parentId: 'notes' },
+      // keeps `readme.md` interned as a segment after `Notes` stops being a folder
+      { id: 'archive', isFolder: true, name: 'Archive', parentId: null },
+      { id: 'archive-child', isFolder: false, name: 'readme.md', parentId: 'archive' },
+    ];
+    const flattenedTree: ExplorerTreeNode<undefined>[] = [
+      { id: 'notes', isFolder: false, name: 'Notes', parentId: null },
+      { id: 'archive', isFolder: true, name: 'Archive', parentId: null },
+      { id: 'archive-child', isFolder: false, name: 'readme.md', parentId: 'archive' },
+    ];
+
+    const { container, rerender } = render(
+      <ExplorerTree nodes={folderTree} selectedIds={['notes-child']} />,
+    );
+
+    // the selection prop stays put: the row it points at is what disappears
+    expect(() =>
+      rerender(<ExplorerTree nodes={flattenedTree} selectedIds={['notes-child']} />),
+    ).not.toThrow();
+    expect(container.querySelector('file-tree-container')).toBeInstanceOf(HTMLElement);
   });
 
   it('resolves the clicked segment inside a flattened directory row', () => {
