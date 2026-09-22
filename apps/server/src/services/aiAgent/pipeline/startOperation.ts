@@ -172,6 +172,14 @@ export const startOperation = async (
             // creation time. See `AgentShareGate.shareId`'s JSDoc for why the
             // id itself is the revocation token.
             shareId: shareGate.shareId,
+            // Mirrors `shareConfig.skillGrants` so the skill runtime can
+            // re-check every load against the SAME allowlist the skill pool was
+            // assembled from. Assembly alone is not enough: `activateSkill`
+            // resolves a model-supplied skill NAME, so a name the pool never
+            // offered still reaches the runtime. Passed through verbatim —
+            // `undefined` vs `[]` is load-bearing (see
+            // `AgentShareConfig.skillGrants`), so it must not be defaulted here.
+            skillGrants: shareGate.shareConfig.skillGrants,
             showErrorDetails: shareGate.shareConfig.showErrorDetails,
             showModelInfo: shareGate.shareConfig.showModelInfo,
             visitorUserId: shareGate.visitorUserId,

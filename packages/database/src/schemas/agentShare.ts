@@ -55,6 +55,26 @@ export interface AgentShareConfig {
    */
   showModelInfo?: boolean;
   /**
+   * Skills visitors may load, by skill identifier. Deliberately separate from
+   * {@link toolGrants}: a skill grant governs BOTH the tool path
+   * (`lobe-skills.activateSkill` / `readReference`) and the no-tool path (a
+   * pinned skill's body is injected straight into context, see
+   * `operationPrep`'s pinned-content branch), so it cannot hang off a tool
+   * entry that may legitimately be absent.
+   *
+   * Tri-state, and the distinction is load-bearing:
+   * - `undefined` — never configured; read paths fall back to skill ids found
+   *   in `toolGrants` (how skills were granted before this field existed).
+   * - `[]` — explicit full revocation. NEVER falls back, never merges.
+   * - non-empty — exactly these skills, nothing else.
+   *
+   * The legacy fallback intersects `toolGrants` with the run's real skill
+   * candidates rather than reading it as a skill list: tool and skill ids share
+   * one namespace, so a plain tool grant must not be mistaken for a skill grant
+   * (see `filterSkillsByShareGate`).
+   */
+  skillGrants?: string[];
+  /**
    * Custom URL slug for this share's public link (e.g. `/agent/my-cool-bot`).
    * Uniqueness is enforced at the APPLICATION level
    * (`AgentShareModel.updateSlug`), not by a DB constraint/index — acceptable

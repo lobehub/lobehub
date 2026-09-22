@@ -84,6 +84,15 @@ export interface AgentShareVisitorContext {
   /** `AgentShareConfig.showModelInfo` — gates visitor-facing model/provider/usage redaction. */
   showModelInfo?: boolean;
   /**
+   * Mirrors `shareConfig.skillGrants` so the skill runtime can enforce the same
+   * per-skill allowlist the operation's skill pool was built from. Tri-state —
+   * `undefined` means "never configured, fall back to skill ids in
+   * `toolGrants`", `[]` means explicit full revocation. Carried separately from
+   * {@link toolGrants} because a skill grant also governs the no-tool
+   * pinned-content path.
+   */
+  skillGrants?: string[];
+  /**
    * Mirrors `shareConfig.toolGrants` so tool runtimes that resolve their
    * target outside `toolManifestMap` (e.g. `activateSkill`,
    * `lobe-topic-reference`) can apply the same allowlist the assembled tool set

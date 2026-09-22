@@ -338,6 +338,7 @@ describe('skillsRuntime', () => {
       'lh agent edit agt_123 -s "new prompt"',
       'user-1',
       'workspace-1',
+      false,
     );
     expect(mocks.sandboxService.callTool).toHaveBeenCalledWith('runCommand', {
       command: 'LOBEHUB_WORKSPACE_ID=workspace-1 npx -y @lobehub/cli agent edit agt_123',
@@ -371,6 +372,7 @@ describe('skillsRuntime', () => {
       'lh agent edit agt_123 -s "new prompt"',
       'user-1',
       'workspace-1',
+      false,
     );
   });
 
@@ -405,6 +407,7 @@ describe('skillsRuntime', () => {
       'lh agent edit agt_123 -t x',
       'user-1',
       'workspace-1',
+      false,
     );
     expect(mocks.sandboxService.callTool).toHaveBeenCalledWith(
       'execScript',
@@ -523,6 +526,153 @@ describe('skillsRuntime', () => {
       const result = await runtime.activateSkill({ name: 'user-skill' });
 
       expect(result.success).toBe(true);
+    });
+  });
+
+  /**
+   * Agent Share's per-skill allowlist, enforced where the content is actually
+   * handed out rather than only where the tool is assembled. The gate upstream
+   * already trims `<available_skills>`, but the model can name any string, and
+   * a DB miss falls through to the builtin / agent-document lists — so every
+   * door has to answer the same question.
+   */
+  describe('agent share skill grants', () => {
+    const buildVisitorRuntime = async (skillGrants: string[]) => {
+      const { skillsRuntime } = await import('../skills');
+
+      return skillsRuntime.factory({
+        agentId: 'agent-1',
+        agentShareVisitor: { skillGrants },
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      } as never);
+    };
+
+    beforeEach(() => {
+      mocks.findByName.mockImplementation(async (name: string) =>
+        name === 'user-skill'
+          ? {
+              content: '# User skill',
+              id: 'user-skill-id',
+              identifier: 'user-skill-identifier',
+              name: 'user-skill',
+              resources: [{ path: 'notes.md' }],
+            }
+          : undefined,
+      );
+      mocks.findById.mockImplementation(async (id: string) =>
+        id === 'user-skill-id'
+          ? {
+              content: '# User skill',
+              id: 'user-skill-id',
+              identifier: 'user-skill-identifier',
+              name: 'user-skill',
+              resources: [{ path: 'notes.md' }],
+            }
+          : undefined,
+      );
+      mocks.readResource.mockResolvedValue({ content: 'secret notes', path: 'notes.md' });
+    });
+
+    it('activates a DB skill the creator granted', async () => {
+      const runtime = await buildVisitorRuntime(['user-skill-identifier']);
+
+      expect((await runtime.activateSkill({ name: 'user-skill' })).success).toBe(true);
+    });
+
+    it('refuses a DB skill the creator did not grant, even though the row exists', async () => {
+      const runtime = await buildVisitorRuntime(['some-other-skill']);
+
+      expect((await runtime.activateSkill({ name: 'user-skill' })).success).toBe(false);
+    });
+
+    it('refuses every skill when the creator revoked all of them', async () => {
+      const runtime = await buildVisitorRuntime([]);
+
+      expect((await runtime.activateSkill({ name: 'user-skill' })).success).toBe(false);
+    });
+
+    it('refuses readReference on an ungranted skill', async () => {
+      // A second door into the same content: `readReference` streams the
+      // skill's attached files, so blocking only `activateSkill` would leave the
+      // reference files readable to any visitor who guesses a path.
+      const runtime = await buildVisitorRuntime(['some-other-skill']);
+
+      const result = await runtime.readReference({ id: 'user-skill', path: 'notes.md' });
+
+      expect(result.success).toBe(false);
+      expect(mocks.readResource).not.toHaveBeenCalled();
+    });
+
+    it('allows readReference on a granted skill', async () => {
+      // Pins the test above to the GRANT rather than to a lookup miss.
+      const runtime = await buildVisitorRuntime(['user-skill-identifier']);
+
+      const result = await runtime.readReference({ id: 'user-skill', path: 'notes.md' });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toBe('secret notes');
+    });
+
+    it('does not leak ungranted skill names in the not-found catalog', async () => {
+      // `activateSkill`'s failure message echoes the full skill list back to the
+      // model. Unfiltered, a visitor learns the names and descriptions of every
+      // skill the creator owns just by guessing one wrong name.
+      mocks.findAll.mockResolvedValue({
+        data: [
+          { description: 'Internal audit checklist', identifier: 'secret', name: 'secret-skill' },
+          { description: 'Public', identifier: 'user-skill-identifier', name: 'user-skill' },
+        ],
+        total: 2,
+      });
+      const runtime = await buildVisitorRuntime(['user-skill-identifier']);
+
+      const result = await runtime.activateSkill({ name: 'no-such-skill' });
+
+      expect(result.success).toBe(false);
+      expect(result.content).not.toContain('secret-skill');
+      expect(result.content).not.toContain('Internal audit checklist');
+      expect(result.content).toContain('user-skill');
+    });
+
+    it('drops ungranted agent-document skills before they reach the runtime', async () => {
+      // The DB lookup misses for these, so they resolve off the injected
+      // builtin list instead — a fall-through path the DB check never sees.
+      mocks.getAgentSkills.mockResolvedValue([
+        {
+          content: '# Granted bundle',
+          description: 'granted',
+          identifier: 'agent-skills:granted',
+          name: 'granted-bundle',
+        },
+        {
+          content: '# Secret bundle',
+          description: 'secret',
+          identifier: 'agent-skills:secret',
+          name: 'secret-bundle',
+        },
+      ]);
+      const runtime = await buildVisitorRuntime(['agent-skills:granted']);
+
+      expect((await runtime.activateSkill({ name: 'granted-bundle' })).success).toBe(true);
+      expect((await runtime.activateSkill({ name: 'secret-bundle' })).success).toBe(false);
+    });
+
+    it('leaves a non-share run completely unfiltered', async () => {
+      // No `agentShareVisitor` means no per-skill allowlist at all: the creator's
+      // own run must keep reaching every skill it owns.
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        agentId: 'agent-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      expect((await runtime.activateSkill({ name: 'user-skill' })).success).toBe(true);
     });
   });
 

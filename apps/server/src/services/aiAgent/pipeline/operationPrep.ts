@@ -31,7 +31,7 @@ import { FileService } from '@/server/services/file';
 
 import { pruneRegeneratedBranch } from '../pruneRegeneratedBranch';
 import { resolveDeviceWorkingDirectoryConfig } from '../resolveDeviceWorkingDirectory';
-import { applyShareGateToToolSet, filterPluginsByShareGate } from '../shareGate';
+import { applyShareGateToToolSet, filterSkillsByShareGate } from '../shareGate';
 import type { ExecRunContext, InternalExecAgentParams, ResolvedWorkspaceInit } from '../types';
 import { isWorkspaceCacheFresh, upsertWorkspaceScan } from '../workspaceInitCache';
 import type { ToolDiscoveryResult } from './toolDiscovery';
@@ -801,18 +801,31 @@ export const prepareOperation = async (
     // device-only builtin gate are the shared rules in `@lobechat/mecha`; this
     // pipeline supplies the four sources and the run's facts.
     //
-    // A shared run only sees skills its share configuration allows. The
-    // allowlist is an id-list intersection (`filterPluginsByShareGate`), not
-    // tool-specific, so the pool stays the single enforcement point — an
-    // empty or missing allowlist collapses it to nothing.
+    // A shared run only sees skills its share configuration allows —
+    // `shareConfig.skillGrants`, the creator's explicit per-skill list, NOT the
+    // tool picker (`filterSkillsByShareGate`, which keeps the pre-`skillGrants`
+    // `toolGrants` reading as a fallback for shares saved before the field
+    // existed). The pool is the FIRST enforcement point, not the only one:
+    // `activateSkill` takes a model-supplied name, so the skill runtime
+    // re-checks the same grant at load time.
     const shareAllowedSkillIds = shareGate
-      ? filterPluginsByShareGate(
+      ? filterSkillsByShareGate(
           [...projectMetas, ...dbMetas, ...agentSkillMetas, ...builtinMetas].map(
             (skill) => skill.identifier,
           ),
           shareGate,
         )
       : undefined;
+
+    // Whether a skill is PINNED is the agent's own configuration; the share
+    // only decides whether the visitor may reach it. `agentPlugins` has already
+    // been narrowed by the TOOL grants (`filterPluginsByShareGate` in
+    // `toolDiscovery`), which drops a skill the creator granted as a skill
+    // rather than as a tool — leaving it un-pinned for the visitor (no content
+    // injection) and, under `manual` mode, dropped from the pool entirely. Add
+    // back exactly the ids that are both genuinely pinned on the agent AND
+    // allowed by this share's skill grants; nothing else widens.
+    const shareEnabledSkillIds = shareAllowedSkillIds?.filter((id) => pinnedSkillIds.has(id)) ?? [];
 
     // Device-only builtin skills are gated on the run's execution plan, not
     // the compile-time `isDesktop` constant (always false on the server). Use
@@ -832,7 +845,7 @@ export const prepareOperation = async (
       {
         canExecuteOnDevice: executionPlan ? isDeviceCapablePlan(executionPlan) : false,
         disabledIds: disabledPluginIds,
-        enabledPluginIds: agentPlugins ?? [],
+        enabledPluginIds: [...new Set([...(agentPlugins ?? []), ...shareEnabledSkillIds])],
         shareAllowedIds: shareAllowedSkillIds,
         skillActivateMode: agentConfig.chatConfig?.skillActivateMode,
       },

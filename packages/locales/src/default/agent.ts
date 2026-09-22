@@ -483,6 +483,15 @@ export default {
   'share.settings.usage.title': 'Usage',
   'share.settings.usage.views': 'Visits',
   'share.settings.usage.visitors': 'Visitors',
+  'share.settings.skills.availableGroup': 'Not granted · {{count}}',
+  'share.settings.skills.desc':
+    'Only the skills you tick here can be loaded during a visitor run. A skill you grant runs on your account, with whatever its instructions say.',
+  'share.settings.skills.empty': 'This Agent has no skills that can be granted to visitors.',
+  'share.settings.skills.grantedEmpty':
+    'No skills granted yet — visitors cannot load any. Pick from the list below to grant one.',
+  'share.settings.skills.grantedGroup': 'Granted to visitors · {{count}}',
+  'share.settings.skills.loading': 'Loading skills…',
+  'share.settings.skills.title': 'Skills visitors can use',
   'share.settings.tools.desc':
     'Only the tools you tick here can be called during a visitor run. Tools that could reach your device or local files are never offered.',
   'share.settings.tools.apiNotAvailableToVisitors':

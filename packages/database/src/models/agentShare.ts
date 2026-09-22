@@ -52,6 +52,14 @@ const normalizeAgentShareConfig = (
   monthlySpendLimit: config?.monthlySpendLimit ?? DEFAULT_AGENT_SHARE_CONFIG.monthlySpendLimit,
   showErrorDetails: config?.showErrorDetails ?? DEFAULT_AGENT_SHARE_CONFIG.showErrorDetails,
   showModelInfo: config?.showModelInfo ?? DEFAULT_AGENT_SHARE_CONFIG.showModelInfo,
+  /**
+   * Deliberately NOT defaulted: `skillGrants` is tri-state and `undefined`
+   * (never configured, legacy `toolGrants` fallback applies) must stay
+   * distinguishable from `[]` (explicit full revocation). Filling a default
+   * here would silently revoke every skill on rows written before this field
+   * existed.
+   */
+  skillGrants: config?.skillGrants,
   slug: config?.slug,
   toolGrants: config?.toolGrants ?? DEFAULT_AGENT_SHARE_CONFIG.toolGrants,
 });

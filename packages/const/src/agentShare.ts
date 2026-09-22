@@ -200,6 +200,41 @@ export const hasShareToolGrant = (
   identifier: string,
 ): boolean => grants.has(identifier);
 
+/**
+ * The skills a share visitor's run may load, as an intersection of the run's
+ * real skill candidates with what the creator granted.
+ *
+ * Takes `candidateIds` rather than returning the raw grant list on purpose:
+ * tool and skill identifiers share ONE namespace, so the legacy `toolGrants`
+ * fallback below can only be read as a skill grant for an id that is actually a
+ * skill in this run. Without the intersection, a plain tool grant (e.g.
+ * `lobe-web-browsing`) would read as a grant for a same-named skill.
+ *
+ * Tri-state on `skillGrants`, matching `AgentShareConfig.skillGrants`:
+ * - `undefined` — never configured. Falls back to skill ids present in
+ *   `toolGrants`, which is how skills were granted before `skillGrants`
+ *   existed, so shares saved earlier keep working.
+ * - `[]` — explicit full revocation. Returns nothing; NEVER falls back to
+ *   `toolGrants` and never merges with it.
+ * - non-empty — exactly these ids, intersected with the candidates.
+ *
+ * This is the single source of truth for "which skills is this visitor allowed
+ * to see and load", shared by the operation's skill-pool assembly and the skill
+ * runtime's load-time enforcement so the two cannot drift.
+ */
+export const resolveShareAllowedSkillIds = (
+  candidateIds: string[],
+  grants: { skillGrants?: string[]; toolGrants?: AgentShareToolGrant[] },
+): string[] => {
+  if (grants.skillGrants) {
+    const granted = new Set(grants.skillGrants);
+    return candidateIds.filter((id) => granted.has(id));
+  }
+
+  const legacy = resolveShareToolGrants(grants.toolGrants);
+  return candidateIds.filter((id) => legacy.has(id));
+};
+
 /** Whether `identifier`'s specific `apiName` is granted — toolset-level grants every API. */
 export const isShareToolApiGranted = (
   grants: Map<string, ShareToolGrant>,

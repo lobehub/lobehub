@@ -1254,6 +1254,11 @@ export const shareKeys = {
     agentId,
   ]),
   artifact: def('share:artifact', (id: string) => ['share:artifact', id]),
+  /** Candidates for the creator-side share skill picker, keyed by agentId. */
+  grantableSkills: def('share:grantableSkills', (agentId: string) => [
+    'share:grantableSkills',
+    agentId,
+  ]),
   pageDocument: def('share:pageDocument', (documentId: string) => [
     'share:pageDocument',
     documentId,

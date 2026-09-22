@@ -38,5 +38,5 @@ export const skillsPrompts = (skills: SkillItem[]) => {
 ${skillTags}
 </available_skills>
 
-Use the runSkill tool to activate a skill when needed.${filesystemHint}`;
+Use the activateSkill tool to activate a skill when needed.${filesystemHint}`;
 };

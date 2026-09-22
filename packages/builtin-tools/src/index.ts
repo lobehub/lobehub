@@ -38,7 +38,11 @@ import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import { selfFeedbackIntentManifest } from '@lobechat/builtin-tool-self-iteration';
 import { SkillMaintainerManifest } from '@lobechat/builtin-tool-skill-maintainer';
 import { SkillStoreManifest } from '@lobechat/builtin-tool-skill-store';
-import { resolveSkillsManifest, SkillsManifest } from '@lobechat/builtin-tool-skills';
+import {
+  resolveSkillsManifest,
+  resolveSkillsRestrictedManifest,
+  SkillsManifest,
+} from '@lobechat/builtin-tool-skills';
 import { TaskManifest } from '@lobechat/builtin-tool-task';
 import { TopicReferenceManifest } from '@lobechat/builtin-tool-topic-reference';
 import { UserInteractionManifest } from '@lobechat/builtin-tool-user-interaction';
@@ -210,7 +214,7 @@ export const runtimeManagedToolIds = [
  * (`apps/server/src/services/toolExecution/serverRuntimes/*`), not just its
  * manifest. For the rationale behind every DENIED identifier
  * (`lobe-agent-management`, `lobe-task`, `lobe-creds`, `lobe-message`,
- * `lobe-skill-store`, `lobe-agent-builder`, `lobe-skills`,
+ * `lobe-skill-store`, `lobe-agent-builder`,
  * `lobe-group-agent-builder`, `lobe-group-management`, `agent-signal-review`,
  * `lobe-user-interaction`, `lobe-activator`,
  * `lobe-local-system`, `lobe-browser`, `lobe-remote-device`,
@@ -241,6 +245,15 @@ export const AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS = new Set<string>([
   KnowledgeBaseManifest.identifier,
   MemoryManifest.identifier,
   AgentDocumentsManifest.identifier,
+  // `lobe-skills`: a skill-driven agent is broken the moment it is shared
+  // without this, since skills are loaded on demand through this tool. It is
+  // allowed only in the narrow shape `DATA_TOOL_ACCESS_RULES` gives it —
+  // `activateSkill` / `readReference` on skills the creator explicitly listed
+  // in `shareConfig.skillGrants`, enforced again at load time in the server
+  // runtime so the model cannot name a skill outside that list. Every other
+  // API of the tool is blocked. See the positive-evidence doc block in
+  // `shareGate.ts`.
+  SkillsManifest.identifier,
 ]);
 
 /**
@@ -299,6 +312,10 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     // actual execution environment (cloud sandbox as fallback / offline
     // degradation), so the model never assumes they run on the user's machine.
     resolveManifest: resolveSkillsManifest,
+    // Agent Share projection: only `activateSkill` / `readReference` survive
+    // the gate, so the full five-API systemRole is replaced with one that
+    // describes just those two.
+    resolveRestrictedManifest: resolveSkillsRestrictedManifest,
     type: 'builtin',
   },
   {
