@@ -2,6 +2,9 @@ name: E2E CI
 
 on:
   push:
+    branches:
+      - main
+      - canary
     paths-ignore:
       - '**/*.md'
       - 'docs/**'
@@ -40,9 +43,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Same-repo PRs get their pull_request run skipped as a duplicate of the push run,
-  # so the size gates must also run on pushes to feature branches.
-  SIZE_GATE_ENABLED: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref != 'refs/heads/canary' && github.ref != 'refs/heads/main') }}
+  # Size gates run on every PR. Main/canary pushes run the full E2E job and publish
+  # their baselines, while the PR run owns the comparison gate.
+  SIZE_GATE_ENABLED: ${{ github.event_name == 'pull_request' }}
   APP_URL: http://localhost:3006
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
   DATABASE_DRIVER: node
