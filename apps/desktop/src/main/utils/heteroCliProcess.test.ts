@@ -4,6 +4,7 @@ import {
   commandLineLooksLikeHeteroCli,
   describeHeteroCliProcess,
   isProcessAlive,
+  tokenizeCommandLine,
   waitForProcessExit,
 } from './heteroCliProcess';
 
@@ -59,6 +60,50 @@ describe('commandLineLooksLikeHeteroCli', () => {
       }),
     ).toBe(false);
     expect(commandLineLooksLikeHeteroCli(undefined, { agentType: 'claude-code' })).toBe(false);
+  });
+});
+
+describe('tokenizeCommandLine', () => {
+  it('keeps a quoted path with spaces as one token', () => {
+    expect(
+      tokenizeCommandLine('"C:\\Program Files\\nodejs\\node.exe" "C:\\app\\cli.js" -p'),
+    ).toEqual(['C:\\Program Files\\nodejs\\node.exe', 'C:\\app\\cli.js', '-p']);
+  });
+
+  it('splits an unquoted line on whitespace', () => {
+    expect(tokenizeCommandLine('  /usr/bin/node  /opt/cli.js   -p ')).toEqual([
+      '/usr/bin/node',
+      '/opt/cli.js',
+      '-p',
+    ]);
+  });
+});
+
+describe('commandLineLooksLikeHeteroCli with quoted Windows paths', () => {
+  const run = {
+    agentType: 'claude-code',
+    command: 'node',
+    scriptPath: 'C:\\app\\node_modules\\@anthropic-ai\\claude-code\\cli.js',
+  };
+
+  it('matches the real orphan whose executable path is quoted', () => {
+    // Splitting on whitespace yielded `"C:\Program` and `Files\nodejs\node.exe"`,
+    // so the genuine orphan failed its own check and was left running.
+    expect(
+      commandLineLooksLikeHeteroCli(
+        '"C:\\Program Files\\nodejs\\node.exe" "C:\\app\\node_modules\\@anthropic-ai\\claude-code\\cli.js" -p',
+        run,
+      ),
+    ).toBe(true);
+  });
+
+  it('still rejects a quoted node process running something else', () => {
+    expect(
+      commandLineLooksLikeHeteroCli(
+        '"C:\\Program Files\\nodejs\\node.exe" "C:\\other\\server.js"',
+        run,
+      ),
+    ).toBe(false);
   });
 });
 

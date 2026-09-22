@@ -3291,14 +3291,15 @@ export default class HeterogeneousAgentCtr {
     const registry = this.getInflightRuns();
     if (!registry) return [];
     const runs = registry.takeAll();
+    const recoverable: HeteroInflightRun[] = [];
     for (const run of runs) {
       try {
-        await this.reapInterruptedRun(run);
+        if (await this.reapInterruptedRun(run)) recoverable.push(run);
       } catch (error) {
         logger.warn('Failed to reap interrupted run:', { error, ipcSessionId: run.ipcSessionId });
       }
     }
-    return runs;
+    return recoverable;
   }
 
   /**
@@ -3306,30 +3307,39 @@ export default class HeterogeneousAgentCtr {
    * renderer reads its transcript and resumes the session: a still-running
    * orphan would keep flushing records under the replay's feet and then be a
    * second writer on the same session id. Same TERM → wait → KILL ladder as
-   * `stopSession`; a tree that survives even that is logged and left alone.
+   * `stopSession`.
+   *
+   * Returns false when a process matching this run is STILL alive afterwards.
+   * The caller then withholds the run: replaying or resuming next to a live
+   * writer is worse than leaving the topic for the stale-run watchdog.
    */
-  private async reapInterruptedRun(run: HeteroInflightRun): Promise<void> {
+  private async reapInterruptedRun(run: HeteroInflightRun): Promise<boolean> {
     if (this.sessions.has(run.ipcSessionId)) {
       await this.stopSession({ sessionId: run.ipcSessionId });
-      if (run.pid) await waitForProcessExit(run.pid, 5000);
-      return;
+      if (!run.pid) return true;
+      if (await waitForProcessExit(run.pid, 5000)) return true;
+      logger.warn('Stopped session is still alive; withholding recovery:', { pid: run.pid });
+      return false;
     }
-    if (!run.pid || !isProcessAlive(run.pid)) return;
+    if (!run.pid || !isProcessAlive(run.pid)) return true;
 
     const commandLine = await readProcessCommandLine(run.pid);
+    // A pid that no longer looks like our CLI was recycled, so the original
+    // process is gone and the run is safe to recover.
     if (!commandLineLooksLikeHeteroCli(commandLine, run)) {
       logger.info('Skipping pid reuse for interrupted run:', { commandLine, pid: run.pid });
-      return;
+      return true;
     }
     logger.info('Reaping orphaned CLI from previous desktop process:', {
       agentType: run.agentType,
       pid: run.pid,
     });
     killProcessTreeByPid(run.pid, 'SIGTERM');
-    if (await waitForProcessExit(run.pid, 3000)) return;
+    if (await waitForProcessExit(run.pid, 3000)) return true;
     killProcessTreeByPid(run.pid, 'SIGKILL');
-    if (await waitForProcessExit(run.pid, 2000)) return;
-    logger.warn('Orphaned CLI did not exit after SIGKILL:', { pid: run.pid });
+    if (await waitForProcessExit(run.pid, 2000)) return true;
+    logger.warn('Orphaned CLI survived SIGKILL; withholding recovery:', { pid: run.pid });
+    return false;
   }
 
   /**

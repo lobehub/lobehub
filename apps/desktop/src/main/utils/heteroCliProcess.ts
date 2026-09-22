@@ -10,6 +10,40 @@ const tokenIdentity = (token: string): string => {
 };
 
 /**
+ * Split a command line into argv tokens, honouring quotes. Windows'
+ * `Win32_Process.CommandLine` quotes any executable installed under a path
+ * with spaces (`"C:\\Program Files\\nodejs\\node.exe" …`); splitting on
+ * whitespace would yield `"C:\\Program` and `Files\\nodejs\\node.exe"`, and the
+ * real orphan would then fail its own identity check.
+ */
+export const tokenizeCommandLine = (commandLine: string): string[] => {
+  const tokens: string[] = [];
+  let current = '';
+  let quote: string | undefined;
+
+  for (const char of commandLine) {
+    if (quote) {
+      if (char === quote) quote = undefined;
+      else current += char;
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (/\s/.test(char)) {
+      if (current) tokens.push(current);
+      current = '';
+      continue;
+    }
+    current += char;
+  }
+  if (current) tokens.push(current);
+
+  return tokens;
+};
+
+/**
  * Spawn-time identity of a CLI run, recorded so a later launch can tell the
  * original process from whatever inherited its pid.
  */
@@ -56,7 +90,14 @@ export const commandLineLooksLikeHeteroCli = (
   run: { agentType: string } & HeteroCliProcessIdentity,
 ): boolean => {
   if (!commandLine) return false;
-  if (run.scriptPath && !commandLine.includes(run.scriptPath)) return false;
+
+  const tokens = tokenizeCommandLine(commandLine);
+  if (tokens.length === 0) return false;
+
+  if (run.scriptPath) {
+    const script = run.scriptPath.toLowerCase();
+    if (!tokens.some((token) => token.toLowerCase() === script)) return false;
+  }
 
   const needles = new Set(
     [run.command, run.agentType]
@@ -65,13 +106,10 @@ export const commandLineLooksLikeHeteroCli = (
   );
   if (needles.size === 0) return false;
 
-  return commandLine
-    .trim()
-    .split(/\s+/)
-    .some((token, index) => {
-      const isProgramPosition = index === 0 || /[/\\]/.test(token);
-      return isProgramPosition && needles.has(tokenIdentity(token));
-    });
+  return tokens.some((token, index) => {
+    const isProgramPosition = index === 0 || /[/\\]/.test(token);
+    return isProgramPosition && needles.has(tokenIdentity(token));
+  });
 };
 
 const run = (file: string, args: string[]): Promise<string | undefined> =>
