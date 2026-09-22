@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import {
+  agentHistoryJobs,
   agents,
   agentShares,
   agentsKnowledgeBases,
@@ -80,6 +81,8 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  /** Transfer jobs intentionally survive user deletion and need explicit fixture cleanup. */
+  await serverDB.delete(agentHistoryJobs).where(eq(agentHistoryJobs.sourceUserId, ownerId));
   await serverDB.delete(users);
 });
 
