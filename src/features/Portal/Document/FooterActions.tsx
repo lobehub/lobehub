@@ -33,6 +33,13 @@ const styles = createStaticStyles(({ css }) => ({
 interface FooterActionsProps {
   agentId: string;
   documentId: string;
+  /**
+   * File-backed documents keep their data behind `fileId` with an empty
+   * markdown `content`, so the Markdown export would download an empty file.
+   * Mirrors the standalone page menu, which filters out export when
+   * `fileBacked` is set.
+   */
+  fileBacked?: boolean;
   title?: string;
 }
 
@@ -42,7 +49,7 @@ interface FooterActionsProps {
  * doc-anchored chat topic (created on demand via `getOrCreateChatTopic`);
  * "Export" downloads the current markdown content.
  */
-const FooterActions = memo<FooterActionsProps>(({ agentId, documentId, title }) => {
+const FooterActions = memo<FooterActionsProps>(({ agentId, documentId, fileBacked, title }) => {
   const { t } = useTranslation(['chat', 'file', 'common']);
 
   const switchTopic = useChatStore((s) => s.switchTopic);
@@ -114,9 +121,11 @@ const FooterActions = memo<FooterActionsProps>(({ agentId, documentId, title }) 
       >
         {t('agentDocument.portal.chatWithDocument', { ns: 'chat' })}
       </Button>
-      <Button block icon={Download} type={'default'} onClick={() => void handleExport()}>
-        {t('agentDocument.portal.export', { ns: 'chat' })}
-      </Button>
+      {!fileBacked && (
+        <Button block icon={Download} type={'default'} onClick={() => void handleExport()}>
+          {t('agentDocument.portal.export', { ns: 'chat' })}
+        </Button>
+      )}
     </Flexbox>
   );
 });

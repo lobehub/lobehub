@@ -87,12 +87,12 @@ interface HeaderProps {
 const Header = memo<HeaderProps>(({ onOpenDocumentsIndex }) => {
   const { t } = useTranslation(['chat', 'file', 'common']);
   const {
+    cancelEdit,
     commitEdit,
     draft,
     editing,
     isLoading,
     metaLocked,
-    savedTitle,
     setDraft,
     startEdit,
     syncIdleDraft,
@@ -119,14 +119,15 @@ const Header = memo<HeaderProps>(({ onOpenDocumentsIndex }) => {
         event.preventDefault();
         inputRef.current?.blur();
       } else if (event.key === 'Escape') {
-        // Restore the saved title AND leave edit mode — Escape is a cancel,
-        // so the input must not stay focused for further typing.
+        // Cancel BEFORE blurring: blur fires `commitEdit` synchronously with
+        // the still-edited draft, so the cancel flag is what turns that commit
+        // into a no-op instead of persisting the cancelled title.
         event.preventDefault();
-        setDraft(savedTitle);
+        cancelEdit();
         inputRef.current?.blur();
       }
     },
-    [savedTitle, setDraft],
+    [cancelEdit],
   );
 
   const menuItems = useMemo<DropdownItem[]>(() => {

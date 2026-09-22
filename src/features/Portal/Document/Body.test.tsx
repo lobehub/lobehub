@@ -87,7 +87,11 @@ vi.mock('@/features/FloatingChatPanel', () => ({
 }));
 
 vi.mock('./FooterActions', () => ({
-  default: () => <div data-testid="footer-actions" />,
+  default: ({ fileBacked }: { fileBacked?: boolean }) => (
+    <div data-testid="footer-actions">
+      {!fileBacked && <button data-testid="footer-export" type={'button'} />}
+    </div>
+  ),
 }));
 // The body no longer resolves a doc-anchored topic itself — the footer's chat
 // entry calls `getOrCreateChatTopic` on demand. Keep the mock registered so the
@@ -153,6 +157,20 @@ describe('DocumentBody', () => {
     expect(screen.queryByTestId('highlight-editor')).toBeNull();
     expect(screen.queryByTestId('editor-canvas')).toBeNull();
     expect(screen.getByTestId('footer-actions')).toBeTruthy();
+  });
+
+  it('hides the markdown export for a file-backed preview', () => {
+    // ROOT CAUSE:
+    // A file-backed document's markdown `content` is empty — its data lives
+    // behind `fileId` — so exporting here would download an empty `.md`
+    // instead of the displayed file. Mirrors the standalone page menu, which
+    // already filters out export when `fileBacked` is set.
+    mockDocumentMeta.current = { content: '', fileId: 'file-original', filename: 'source.unknown' };
+    render(<DocumentBody />);
+    /** @example The footer stays (chat-to-edit still applies)… */
+    expect(screen.getByTestId('footer-actions')).toBeTruthy();
+    /** @example …but the markdown export button is gone. */
+    expect(screen.queryByTestId('footer-export')).toBeNull();
   });
 
   beforeEach(() => {
