@@ -390,8 +390,10 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
           },
           {
             click: () => {
-              // @ts-expect-error cache directory seems to be temporarily missing from type definitions
-              const cachePath = app.getPath('cache');
+              // 'cache' is a valid getPath name at runtime but absent from
+              // Electron's declared name union — keep the member call and
+              // narrow only the argument's type.
+              const cachePath = app.getPath('cache' as Parameters<typeof app.getPath>[0]);
 
               const updaterCachePath = path.join(cachePath, `${app.getName()}-updater`);
               shell.openPath(updaterCachePath).catch((err) => {

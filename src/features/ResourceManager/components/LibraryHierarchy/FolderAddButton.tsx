@@ -244,7 +244,6 @@ const FolderAddButton = memo<FolderAddButtonProps>(({ folderId }) => {
             id={folderUploadInputId}
             style={{ display: 'none' }}
             type="file"
-            // @ts-expect-error - webkitdirectory is not in the React types
             webkitdirectory=""
             onChange={handleFolderUploadWithClose}
           />

@@ -28,7 +28,8 @@ const manifest = async (): Promise<MetadataRoute.Manifest> => {
       import('@/libs/metadata/manifest'),
     ]);
 
-  // @ts-expect-error - manifestModule.generate returns extended manifest with custom properties
+  // `generate()` returns the ExtendedManifest — it intentionally carries
+  // LobeHub-specific fields beyond Next's `MetadataRoute.Manifest` schema.
   return manifestModule.generate({
     description: `${BRANDING_NAME} is a work-and-lifestyle space to find, build, and collaborate with agent teams that grow with you.`,
     icons: [
@@ -99,7 +100,7 @@ const manifest = async (): Promise<MetadataRoute.Manifest> => {
             url: '/screenshots/shot-5.desktop.png',
           },
         ],
-  });
+  }) as MetadataRoute.Manifest;
 };
 
 export default manifest;
