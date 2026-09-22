@@ -1,14 +1,22 @@
 'use client';
 
 import { Github } from '@lobehub/icons';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Avatar, Tag, Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Avatar, Tabs, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ContainerIcon, LayersIcon, LockIcon, XIcon } from 'lucide-react';
-import { memo, type ReactNode } from 'react';
+import dayjs from 'dayjs';
+import {
+  ContainerIcon,
+  KeyRoundIcon,
+  LayersIcon,
+  LockIcon,
+  SettingsIcon,
+  XIcon,
+} from 'lucide-react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import EnvironmentForm from './EnvironmentForm';
+import EnvironmentForm, { type EnvironmentFormSection } from './EnvironmentForm';
 import InstanceSection from './InstanceSection';
 import PanelSection from './PanelSection';
 import { repositoryPath } from './repository';
@@ -23,6 +31,16 @@ const styles = createStaticStyles(({ css }) => ({
   header: css`
     padding-block-end: 16px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+  `,
+  /** The same dot the row uses between its facts. */
+  metaDivider: css`
+    flex: none;
+
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+
+    background: ${cssVar.colorTextQuaternary};
   `,
   iconTile: css`
     display: flex;
@@ -40,14 +58,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-/** Section label — one treatment for every field heading in the panel. */
-const FieldLabel = memo<{ children: ReactNode }>(({ children }) => (
-  <Text fontSize={12} type={'secondary'} weight={500}>
-    {children}
-  </Text>
-));
-
-FieldLabel.displayName = 'EnvironmentFieldLabel';
+type DetailTab = 'instances' | EnvironmentFormSection;
 
 interface EnvironmentDetailPanelProps {
   /** Open with the instance-create form showing — the row's shortcut lands here. */
@@ -76,6 +87,9 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(
     const actions = useEnvironmentActions();
     const { data } = useInstances();
     const canEdit = useCanEditEnvironment()(environment);
+    // Local to the panel and reset with it (the panel is keyed on the
+    // environment), so opening another environment lands on its instances.
+    const [tab, setTab] = useState<DetailTab>('instances');
 
     const repository = repositoryPath(environment.configuration);
     const creator =
@@ -96,7 +110,13 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(
             <Text ellipsis weight={600}>
               {environment.name}
             </Text>
-            <Flexbox horizontal align={'center'} gap={8}>
+            {/* One line of facts under the name, the way the row does it,
+                rather than a labelled block of its own below the header: who
+                made it and when are context for the name, not fields to
+                fill in. The absolute time here, the relative one in the row:
+                the list is scanned for "is this recent", the panel is read
+                for "when". */}
+            <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
               <Tag size={'small'}>
                 {instanceCount === 0
                   ? t('environments.instances.empty')
@@ -105,6 +125,24 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(
               {environment.workspaceId && environment.visibility === 'public' && (
                 <Tag size={'small'}>{t('environments.visibility.publicTag')}</Tag>
               )}
+              <Flexbox horizontal align={'center'} gap={6}>
+                {/* Name as the avatar value — see EnvironmentItem for why `title` alone does not reach the fallback text. */}
+                <Avatar avatar={environment.creator?.avatar || creator} size={16} title={creator} />
+                <Text fontSize={12} type={'secondary'}>
+                  {creator}
+                </Text>
+              </Flexbox>
+              <span className={styles.metaDivider} />
+              {/* The same relative phrasing as the row, so the panel does not
+                  answer "when" in a different voice; the exact instant is a
+                  hover away. */}
+              <Tooltip title={new Date(environment.createdAt).toLocaleString()}>
+                <Text fontSize={12} type={'secondary'}>
+                  {t('environments.meta.createdAt', {
+                    time: dayjs(environment.createdAt).fromNow(),
+                  })}
+                </Text>
+              </Tooltip>
             </Flexbox>
           </Flexbox>
           <ActionIcon
@@ -113,23 +151,6 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(
             title={t('environments.detail.close')}
             onClick={onClose}
           />
-        </Flexbox>
-
-        <Flexbox horizontal gap={32}>
-          <Flexbox gap={8}>
-            <FieldLabel>{t('environments.meta.creator')}</FieldLabel>
-            <Flexbox horizontal align={'center'} gap={8}>
-              {/* Name as the avatar value — see EnvironmentItem for why `title` alone does not reach the fallback text. */}
-              <Avatar avatar={environment.creator?.avatar || creator} size={24} title={creator} />
-              <Text>{creator}</Text>
-            </Flexbox>
-          </Flexbox>
-          <Flexbox gap={8}>
-            <FieldLabel>{t('environments.meta.created')}</FieldLabel>
-            {/* The absolute time here, the relative one in the row: the list is
-                scanned for "is this recent", the panel is read for "when". */}
-            <Text>{new Date(environment.createdAt).toLocaleString()}</Text>
-          </Flexbox>
         </Flexbox>
 
         {/* Said plainly, rather than letting someone discover it by typing into
@@ -144,36 +165,72 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(
           </Flexbox>
         )}
 
+        {/* Instances are what everyone with access comes here for; variables
+            and settings reshape the environment, which only its editor may do,
+            so a read-only panel has one section and no tab bar to pick from. */}
+        {canEdit && (
+          <Tabs
+            activeKey={tab}
+            items={[
+              {
+                icon: <Icon icon={LayersIcon} size={16} />,
+                key: 'instances',
+                label: t('environments.instances.title'),
+              },
+              {
+                icon: <Icon icon={KeyRoundIcon} size={16} />,
+                key: 'variables',
+                label: t('environments.form.env'),
+              },
+              {
+                icon: <Icon icon={SettingsIcon} size={16} />,
+                key: 'settings',
+                label: t('environments.detail.tabs.settings'),
+              },
+            ]}
+            onChange={(key) => setTab(key as DetailTab)}
+          />
+        )}
+
         {/* One column with no gap: the rail is drawn by each section and
                 meets the next one's icon exactly, so any space between them
                 would show as a break in the line. */}
         <Flexbox>
-          <PanelSection
-            desc={t('environments.instances.desc')}
-            icon={LayersIcon}
-            last={!canEdit}
-            title={t('environments.instances.title')}
-          >
-            <InstanceSection
-              adding={adding}
-              editable={canEdit}
-              environmentId={environment.id}
-              onAddingChange={onAddingChange}
-            />
-          </PanelSection>
+          {tab === 'instances' && (
+            <PanelSection
+              last
+              desc={t('environments.instances.desc')}
+              icon={LayersIcon}
+              title={t('environments.instances.title')}
+            >
+              <InstanceSection
+                adding={adding}
+                editable={canEdit}
+                environmentId={environment.id}
+                onAddingChange={onAddingChange}
+              />
+            </PanelSection>
+          )}
 
+          {/* Mounted whenever the panel can edit, whichever tab is open, so a
+              draft typed under one tab survives a look at the other and both
+              are written by the one save. Hidden with a display switch rather
+              than unmounted for that reason. */}
           {canEdit && (
-            <EnvironmentForm
-              environment={environment}
-              onSave={({ configuration, description, name }) =>
-                actions.updateEnvironment({
-                  configuration,
-                  description,
-                  id: environment.id,
-                  name,
-                })
-              }
-            />
+            <div style={{ display: tab === 'instances' ? 'none' : undefined }}>
+              <EnvironmentForm
+                environment={environment}
+                section={tab === 'variables' ? 'variables' : 'settings'}
+                onSave={({ configuration, description, name }) =>
+                  actions.updateEnvironment({
+                    configuration,
+                    description,
+                    id: environment.id,
+                    name,
+                  })
+                }
+              />
+            </div>
           )}
         </Flexbox>
       </Flexbox>
