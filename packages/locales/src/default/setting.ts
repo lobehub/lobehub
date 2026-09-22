@@ -4029,4 +4029,5 @@ When I am ___, I need ___
   'environments.form.setup': 'Setup',
   'environments.form.runtime': 'Runtime and storage',
   'environments.instances.confirm': 'Create',
+  'environments.instances.directoryLabel': 'Directory',
 };
