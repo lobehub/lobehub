@@ -1,12 +1,43 @@
 import { Readability } from '@mozilla/readability';
 import { Window } from 'happy-dom';
-import type { TranslatorConfigObject } from 'node-html-markdown';
+import type { TranslatorConfigFactory, TranslatorConfigObject } from 'node-html-markdown';
 import { NodeHtmlMarkdown } from 'node-html-markdown';
 
 import type { FilterOptions } from '../type';
 
 /** Truncate HTML to 1 MB before DOM parsing to prevent CPU spikes on large pages */
 export const MAX_HTML_SIZE = 1024 * 1024;
+
+/**
+ * node-html-markdown converts a table cell with a restricted set of child
+ * translators that holds no block element, so every boundary inside the cell
+ * disappears without a trace: `Mon-Fri<br>9:00-17:00` becomes
+ * `Mon-Fri9:00-17:00`, and two paragraphs become one run-on word. Its cell
+ * postprocess also escapes the pipe with `.replace('|', '\\|')`, a string
+ * argument, so only the *first* pipe in a cell is escaped and the rest still
+ * split the row into columns the header does not have.
+ */
+const withTableCellFixes = (instance: NodeHtmlMarkdown): NodeHtmlMarkdown => {
+  instance.tableCellTranslators.set('br', { content: ' ', recurse: false }, false);
+  instance.tableCellTranslators.set('p,div,li', { postfix: ' ' }, false);
+
+  const cellTranslator: TranslatorConfigFactory = ({ visitor }) => ({
+    childTranslators: visitor.instance.tableCellTranslators,
+    postfix: ' |',
+    postprocess: ({ content }) =>
+      content
+        .replaceAll('|', String.raw`\|`)
+        .replaceAll(/\s+/g, ' ')
+        .trim(),
+    prefix: ' ',
+    surroundingNewlines: false,
+  });
+
+  instance.tableTranslators.set('th,td', cellTranslator, true);
+  instance.tableRowTranslators.set('th,td', cellTranslator, true);
+
+  return instance;
+};
 
 const cleanObj = <T extends object>(
   obj: T,
@@ -69,7 +100,7 @@ export const htmlToMarkdown = (
         : {}
     ) as TranslatorConfigObject;
 
-    const nodeHtmlMarkdown = new NodeHtmlMarkdown({}, customTranslators);
+    const nodeHtmlMarkdown = withTableCellFixes(new NodeHtmlMarkdown({}, customTranslators));
 
     const content = nodeHtmlMarkdown.translate(htmlNode);
 
