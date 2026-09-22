@@ -119,7 +119,6 @@ function createMockV1Client() {
     emit,
     on,
     reconnect: vi.fn(async () => {}),
-    sendInterrupt: vi.fn(),
     sendToolResult: vi.fn(() => true),
     updateToken: vi.fn(),
   };
@@ -135,7 +134,6 @@ function createMockOperationClient(): OperationClient & Emitter {
     emit,
     on: on as OperationClient['on'],
     reconnect: vi.fn(async () => {}),
-    sendInterrupt: vi.fn(),
     sendToolResult: vi.fn(() => true),
     updateToken: vi.fn(),
   };

@@ -671,7 +671,7 @@ describe('GatewayMuxClient', () => {
   });
 
   describe('outbound op messages', () => {
-    it('sends tool_result and interrupt with the operationId', async () => {
+    it('sends tool_result with the operationId', async () => {
       const { mux } = createMux();
       const ws = await connectAndReady(mux);
       const sub = mux.subscribe('op-1');
@@ -679,7 +679,6 @@ describe('GatewayMuxClient', () => {
       expect(
         sub.sendToolResult({ content: '{"ok":true}', success: true, toolCallId: 'call_1' }),
       ).toBe(true);
-      expect(sub.sendInterrupt()).toBe(true);
 
       expect(ws.ofType('tool_result')).toEqual([
         {
@@ -690,7 +689,9 @@ describe('GatewayMuxClient', () => {
           type: 'tool_result',
         },
       ]);
-      expect(ws.ofType('interrupt')).toEqual([{ operationId: 'op-1', type: 'interrupt' }]);
+      // A subscription has no way to send `interrupt`: the op DO ignores the
+      // frame, so cancellation goes through `aiAgent.interruptTask` instead.
+      expect(ws.ofType('interrupt')).toEqual([]);
     });
 
     it('queues tool_result while disconnected and flushes after resubscribe', async () => {
@@ -703,7 +704,6 @@ describe('GatewayMuxClient', () => {
       expect(sub.sendToolResult({ content: 'late', success: true, toolCallId: 'call_1' })).toBe(
         true,
       );
-      expect(sub.sendInterrupt()).toBe(false);
 
       await vi.advanceTimersByTimeAsync(500);
       const ws2 = await settle();
@@ -748,7 +748,6 @@ describe('GatewayMuxClient', () => {
       const sub = mux.subscribe('op-1');
       sub.unsubscribe();
       expect(sub.sendToolResult({ content: null, success: false, toolCallId: 'x' })).toBe(false);
-      expect(sub.sendInterrupt()).toBe(false);
     });
   });
 

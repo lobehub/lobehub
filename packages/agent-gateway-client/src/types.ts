@@ -356,10 +356,6 @@ export interface HeartbeatMessage {
   type: 'heartbeat';
 }
 
-export interface InterruptMessage {
-  type: 'interrupt';
-}
-
 /**
  * Client → Server: tool execution result, correlated by toolCallId.
  */
@@ -383,8 +379,13 @@ export interface ToolResultMessage {
   workRegistration?: any;
 }
 
-export type ClientMessage =
-  AuthMessage | HeartbeatMessage | InterruptMessage | ResumeMessage | ToolResultMessage;
+/**
+ * The gateway also accepts an `interrupt` frame, but its op DO ignores it and
+ * a stop needs server-side work the socket cannot do (cancelling device/hetero
+ * processes, settling the operation and topic rows). Cancellation therefore
+ * goes through `aiAgent.interruptTask`, and no client here ever sends one.
+ */
+export type ClientMessage = AuthMessage | HeartbeatMessage | ResumeMessage | ToolResultMessage;
 
 // Server → Client
 export interface AuthSuccessMessage {

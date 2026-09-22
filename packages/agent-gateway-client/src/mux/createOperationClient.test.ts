@@ -139,7 +139,7 @@ const agentEvent = (
 /** The store's `GatewayConnection['client']` contract (kept in sync by hand). */
 type StoreClient = Pick<
   AgentStreamClient,
-  'connect' | 'disconnect' | 'on' | 'reconnect' | 'sendInterrupt' | 'sendToolResult' | 'updateToken'
+  'connect' | 'disconnect' | 'on' | 'reconnect' | 'sendToolResult' | 'updateToken'
 >;
 
 describe('createOperationClient', () => {
@@ -323,7 +323,7 @@ describe('createOperationClient', () => {
     ]);
   });
 
-  it('sendToolResult / sendInterrupt go out with the operationId; false before connect', async () => {
+  it('sendToolResult goes out with the operationId; false before connect', async () => {
     const mux = createMux();
     const ws = await readyMux(mux);
     const client = createOperationClient(mux, 'op-1');
@@ -334,8 +334,6 @@ describe('createOperationClient', () => {
     expect(client.sendToolResult({ content: '{"a":1}', success: true, toolCallId: 'call_1' })).toBe(
       true,
     );
-    client.sendInterrupt();
-
     expect(ws.ofType('tool_result')).toEqual([
       {
         content: '{"a":1}',
@@ -345,7 +343,9 @@ describe('createOperationClient', () => {
         type: 'tool_result',
       },
     ]);
-    expect(ws.ofType('interrupt')).toEqual([{ operationId: 'op-1', type: 'interrupt' }]);
+    // No client here can send `interrupt`: the op DO ignores it and a stop
+    // must go through `aiAgent.interruptTask` instead.
+    expect(ws.ofType('interrupt')).toEqual([]);
   });
 
   it('socket loss surfaces reconnecting, not disconnected; resubscribes after reconnect', async () => {

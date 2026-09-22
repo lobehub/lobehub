@@ -136,11 +136,6 @@ class OperationSubscriptionImpl implements OperationSubscription {
     });
   }
 
-  sendInterrupt(): boolean {
-    if (!this._active) return false;
-    return this.mux.sendForSubscription(this, { operationId: this.operationId, type: 'interrupt' });
-  }
-
   sendToolConfirmation(toolCallId: string, approved: boolean): boolean {
     if (!this._active) return false;
     return this.mux.sendForSubscription(this, {

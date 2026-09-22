@@ -44,14 +44,9 @@ export interface MuxUserInputMessage {
   type: 'user_input';
 }
 
-export interface MuxInterruptMessage {
-  operationId: string;
-  type: 'interrupt';
-}
-
+/** See `ClientMessage` in ../types for why `interrupt` is not sendable here. */
 export type MuxClientMessage =
   | MuxHeartbeatMessage
-  | MuxInterruptMessage
   | MuxSubscribeMessage
   | MuxToolConfirmationMessage
   | MuxToolResultMessage
@@ -246,7 +241,6 @@ export interface OperationSubscription {
     listener: OperationSubscriptionEvents[K],
   ) => () => void;
   operationId: string;
-  sendInterrupt: () => boolean;
   sendToolConfirmation: (toolCallId: string, approved: boolean) => boolean;
   /** Queued while the socket is down (TTL 120s) and flushed after resubscribe. */
   sendToolResult: (result: ToolResultPayload) => boolean;

@@ -156,7 +156,10 @@ Existing routes unchanged. New:
    status in the lifecycle notification only.
 
 Leave `interrupt` as-is (documented no-op; the web client interrupts via tRPC). Do not
-attempt to implement it.
+attempt to implement it. The hub still accepts and forwards the frame for wire
+compatibility, but no client in this repo sends one: `sendInterrupt` was removed from both
+`AgentStreamClient` and `OperationSubscription` so nothing can be wired to a stop that the
+op DO silently drops.
 
 ### 3.2 Init metadata
 
@@ -325,7 +328,6 @@ interface OperationSubscription {
   on<K extends keyof AgentStreamClientEvents>(event: K, cb: AgentStreamClientEvents[K]): () => void;
   // plus 'resume_complete': (info: { status?: SessionStatus; gap: boolean; pending?: boolean }) => void
   sendToolResult(result: ToolResultPayload): boolean; // queued while disconnected, TTL 120s
-  sendInterrupt(): boolean;
   unsubscribe(): void;
 }
 ```
@@ -348,7 +350,7 @@ Behavior:
 - `createOperationClient(mux, operationId, { resumeOnConnect?, lastEventId?, executor? })`
   returns an object structurally compatible with the store's
   `GatewayConnection['client']` Pick (`connect`, `disconnect`, `on`, `reconnect`,
-  `sendInterrupt`, `sendToolResult`, `updateToken`): `connect` = subscribe, `disconnect` =
+  `sendToolResult`, `updateToken`): `connect` = subscribe, `disconnect` =
   unsubscribe, `reconnect` = unsubscribe+subscribe with lastEventId, `updateToken` = no-op
   (token comes from `getToken`). Emits the same `AgentStreamClientEvents`
   (`connected` when `resume_complete`/first event arrives or immediately if the socket is

@@ -140,13 +140,6 @@ export class AgentStreamClient extends TypedEmitter {
   }
 
   /**
-   * Send an interrupt command to stop the running agent.
-   */
-  sendInterrupt(): void {
-    this.sendMessage({ type: 'interrupt' });
-  }
-
-  /**
    * Send a tool execution result back to the server.
    * Correlated by toolCallId; the server's agent loop is blocked on BLPOP until this arrives.
    * Returns true when the payload was handed off to the WebSocket, false when no live socket

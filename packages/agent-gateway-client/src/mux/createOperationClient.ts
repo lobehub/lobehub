@@ -20,7 +20,7 @@ export interface OperationClientOptions {
 
 /**
  * Structurally compatible with the store's
- * `Pick<AgentStreamClient, 'connect' | 'disconnect' | 'on' | 'reconnect' | 'sendInterrupt' | 'sendToolResult' | 'updateToken'>`.
+ * `Pick<AgentStreamClient, 'connect' | 'disconnect' | 'on' | 'reconnect' | 'sendToolResult' | 'updateToken'>`.
  */
 export interface OperationClient {
   /** Subscribe this operation on the shared socket (idempotent while active). */
@@ -34,7 +34,6 @@ export interface OperationClient {
   ) => () => void;
   /** Unsubscribe + resubscribe from the last applied event id. */
   reconnect: () => Promise<void>;
-  sendInterrupt: () => void;
   sendToolResult: (result: ToolResultPayload) => boolean;
   /** No-op: the mux fetches a fresh token via `getToken` on every dial. */
   updateToken: (token: string) => void;
@@ -156,9 +155,6 @@ export const createOperationClient = (
     reconnect: async () => {
       release();
       connect();
-    },
-    sendInterrupt: () => {
-      subscription?.sendInterrupt();
     },
     sendToolResult: (result) => subscription?.sendToolResult(result) ?? false,
     updateToken: () => {},

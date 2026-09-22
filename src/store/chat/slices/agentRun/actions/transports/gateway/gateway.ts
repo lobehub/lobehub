@@ -186,15 +186,16 @@ type Setter = StoreSetter<ChatStore>;
 // ─── Types ───
 
 export interface GatewayConnection {
+  /**
+   * Cancellation is deliberately absent: the Gateway never carries a stop. The
+   * op DO ignores an `interrupt` frame on both protocol versions, and a stop
+   * also has to cancel device/hetero processes and settle the operation +
+   * topic rows — work only the server can do. Stopping a run goes through
+   * `cancelOperation`, whose handler calls `aiAgent.interruptTask`.
+   */
   client: Pick<
     AgentStreamClient,
-    | 'connect'
-    | 'disconnect'
-    | 'on'
-    | 'reconnect'
-    | 'sendInterrupt'
-    | 'sendToolResult'
-    | 'updateToken'
+    'connect' | 'disconnect' | 'on' | 'reconnect' | 'sendToolResult' | 'updateToken'
   >;
   status: ConnectionStatus;
 }
@@ -534,16 +535,6 @@ export class GatewayActionImpl {
 
     conn.client.disconnect();
     this.internal_cleanupGatewayConnection(operationId);
-  };
-
-  /**
-   * Send an interrupt command to stop the agent for a specific operation.
-   */
-  interruptGatewayAgent = (operationId: string): void => {
-    const conn = this.#get().gatewayConnections[operationId];
-    if (!conn) return;
-
-    conn.client.sendInterrupt();
   };
 
   /**

@@ -570,18 +570,6 @@ describe('AgentStreamClient', () => {
     });
   });
 
-  describe('interrupt', () => {
-    it('should send interrupt message', async () => {
-      const client = createClient();
-      const ws = await connectAndAuth(client);
-
-      client.sendInterrupt();
-      const interruptMsg = ws.sent.find((s) => JSON.parse(s).type === 'interrupt');
-      expect(interruptMsg).toBeDefined();
-      expect(JSON.parse(interruptMsg!)).toEqual({ type: 'interrupt' });
-    });
-  });
-
   describe('sendToolResult', () => {
     it('should send a successful tool_result message', async () => {
       const client = createClient();

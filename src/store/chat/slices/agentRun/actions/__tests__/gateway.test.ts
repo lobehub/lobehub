@@ -149,7 +149,6 @@ function createMockClient(): GatewayConnection['client'] & {
       set.add(listener);
     }),
     reconnect: vi.fn(async () => {}),
-    sendInterrupt: vi.fn(),
     sendToolResult: vi.fn(() => true),
     updateToken: vi.fn(),
   };
@@ -518,27 +517,6 @@ describe('GatewayActionImpl', () => {
     it('should be a no-op for unknown operationId', () => {
       const { action } = createTestAction();
       action.disconnectFromGateway('nonexistent');
-    });
-  });
-
-  describe('interruptGatewayAgent', () => {
-    it('should send interrupt to the client', () => {
-      const { action, mockClient } = createTestAction();
-
-      action.connectToGateway({
-        gatewayUrl: 'https://gateway.test.com',
-        operationId: 'op-1',
-        token: 'test-token',
-        topicId: TEST_TOPIC_ID,
-      });
-
-      action.interruptGatewayAgent('op-1');
-      expect(mockClient.sendInterrupt).toHaveBeenCalledOnce();
-    });
-
-    it('should be a no-op for unknown operationId', () => {
-      const { action } = createTestAction();
-      action.interruptGatewayAgent('nonexistent');
     });
   });
 
