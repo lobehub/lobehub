@@ -41,7 +41,12 @@ const ReasoningTokenSlider = memo<MaxTokenSliderProps>(({ value, onChange, defau
   };
 
   const options = useMemo(
-    () => [1, 2, 4, 8, 16, 32, 64].map((item) => ({ label: `${item}k`, value: exponent(item) })),
+    () =>
+      [1, 2, 4, 8, 16, 32, 64].map((item) => ({
+        label: `${item}k`,
+        style: { overflowWrap: 'normal' as const, whiteSpace: 'nowrap' as const },
+        value: exponent(item),
+      })),
     [],
   );
 
