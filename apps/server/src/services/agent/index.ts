@@ -1,6 +1,6 @@
 import { type BuiltinAgentSlug } from '@lobechat/builtin-agents';
 import { BUILTIN_AGENTS } from '@lobechat/builtin-agents';
-import { AGENT_SHARE_ALLOWED_PROVIDERS, DEFAULT_PROVIDER } from '@lobechat/business-const';
+import { DEFAULT_PROVIDER } from '@lobechat/business-const';
 import { DEFAULT_AGENT_CONFIG, DEFAULT_MODEL } from '@lobechat/const';
 import { type LobeChatDatabase } from '@lobechat/database';
 import { type AgentItem, type LobeAgentChatConfig, type LobeAgentConfig } from '@lobechat/types';
@@ -9,6 +9,7 @@ import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { type PartialDeep } from 'type-fest';
 
+import { AGENT_SHARE_ALLOWED_PROVIDERS } from '@/business/agent-share';
 import { AgentModel } from '@/database/models/agent';
 import { AgentShareModel } from '@/database/models/agentShare';
 import { SessionModel } from '@/database/models/session';

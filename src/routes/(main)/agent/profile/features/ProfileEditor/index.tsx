@@ -1,6 +1,5 @@
 'use client';
 
-import { AGENT_SHARE_ALLOWED_PROVIDERS } from '@lobechat/business-const';
 import { isDesktop } from '@lobechat/const';
 import {
   isHeterogeneousProviderBindingSupported,
@@ -17,6 +16,7 @@ import { Wrench } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { AGENT_SHARE_ALLOWED_PROVIDERS } from '@/business/agent-share';
 import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
 import { resolveServerDefaultAgentModels } from '@/features/HeterogeneousAgent/modelPicker';
 import ModelSelect from '@/features/ModelSelect';

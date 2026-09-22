@@ -6,9 +6,6 @@ export * from './url';
 
 export const ENABLE_BUSINESS_FEATURES = false;
 
-/** Allowed model providers for shared agents; undefined leaves selection unrestricted. */
-export const AGENT_SHARE_ALLOWED_PROVIDERS: readonly string[] | undefined = undefined;
-
 /**
  * Master switch for the (now removed) conversational agent-onboarding flow.
  *

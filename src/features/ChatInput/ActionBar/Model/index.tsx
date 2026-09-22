@@ -1,8 +1,8 @@
-import { AGENT_SHARE_ALLOWED_PROVIDERS } from '@lobechat/business-const';
 import { Tooltip } from '@lobehub/ui';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { AGENT_SHARE_ALLOWED_PROVIDERS } from '@/business/agent-share';
 import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';

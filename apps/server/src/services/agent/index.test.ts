@@ -13,8 +13,7 @@ import { parseAgentConfig } from '@/server/globalConfig/parseDefaultAgent';
 
 import { AgentService } from './index';
 
-vi.mock('@lobechat/business-const', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+vi.mock('@/business/agent-share', () => ({
   AGENT_SHARE_ALLOWED_PROVIDERS: ['lobehub'],
 }));
 
