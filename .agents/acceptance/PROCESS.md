@@ -329,9 +329,15 @@ What is specific to this repository:
      ```bash
      publish_lh() {
        env -u LOBEHUB_JWT -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME \
-         LOBEHUB_SERVER=https://app.lobehub.com lh "$@"
+         -u LOBEHUB_WORKSPACE_ID LOBEHUB_SERVER=https://app.lobehub.com lh "$@"
      }
      ```
+
+     Clear the inherited workspace together with its credential: an environment
+     workspace ID overrides the stored login's scope and may belong to another
+     account or server. Clearing it does **not** force personal scope — the
+     selected login may have a saved workspace. Verify the intended scope below
+     before publishing; do not silently move a workspace acceptance to personal.
 
    - **Unknown provenance or no usable production credential:** stop before any
      authenticated request. Ask for the intended production profile/credential;
@@ -342,8 +348,21 @@ What is specific to this repository:
 
 3. **Preflight and publish with exactly the same environment and CLI binary.**
    Run `publish_lh doctor --offline --json` to confirm the selected source,
-   target, and personal/workspace scope. Then use a read-only authenticated
-   request as the gate; only proceed on success:
+   target, and personal/workspace scope against the intended acceptance target.
+   If a workspace is intended, run `publish_lh workspace list --json` with the
+   selected production credential and confirm that the exact target ID is
+   present. Only then restore that verified ID if needed: in the stored-login
+   wrapper above, add `LOBEHUB_WORKSPACE_ID=<verified-production-workspace-id>`
+   after the `-u` options and before `lh`. Repeat the offline check after any
+   wrapper change. If personal scope is intended, confirm no workspace resolves;
+   if a saved workspace still resolves, stop and select the intended profile
+   rather than publishing under that saved scope.
+
+   Neither a successful offline doctor nor `acceptance run list` proves
+   workspace membership: an unauthorized workspace header may fall back to
+   personal scope. Stop if the intended scope cannot be established. Once it is
+   verified, use a read-only authenticated request as the final gate; only
+   proceed on success:
 
    ```bash
    publish_lh acceptance run list --json \
