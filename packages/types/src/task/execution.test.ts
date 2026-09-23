@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyTaskDirectorySelection,
   applyTaskReposSelection,
+  applyTaskTargetSelection,
   clearTaskDirectorySelection,
   clearTaskReposSelection,
   hasTaskExecutionSelection,
@@ -127,6 +128,49 @@ describe('directory axis', () => {
       }),
     ).toEqual({
       boundDeviceId: 'device-a',
+      repos: undefined,
+      workingDirectory: undefined,
+      workingDirectoryConfig: undefined,
+    });
+  });
+});
+
+describe('applyTaskTargetSelection', () => {
+  it('clears the directory when the target really changes', () => {
+    const pinnedA = applyTaskReposSelection({ boundDeviceId: 'device-a' }, ['lobehub/lobehub']);
+
+    expect(applyTaskTargetSelection(pinnedA, 'device-b')).toEqual({
+      boundDeviceId: 'device-b',
+      repos: undefined,
+      workingDirectory: undefined,
+      workingDirectoryConfig: undefined,
+    });
+  });
+
+  it('is a no-op when the target in force is re-picked', () => {
+    // A task following an agent bound to a device can hold a directory on that
+    // machine; clicking the checked row must not delete it.
+    const followingWithDirectory = applyTaskDirectorySelection(undefined, { path: '/srv/app' });
+    const pinnedA = applyTaskDirectorySelection(
+      { boundDeviceId: 'device-a' },
+      { path: '/srv/app' },
+    );
+
+    expect(applyTaskTargetSelection(followingWithDirectory, undefined)).toBe(
+      followingWithDirectory,
+    );
+    expect(applyTaskTargetSelection(pinnedA, 'device-a')).toBe(pinnedA);
+    expect(applyTaskTargetSelection(undefined, undefined)).toBeUndefined();
+  });
+
+  it('clears the directory when a pin starts following the agent again', () => {
+    const pinnedA = applyTaskDirectorySelection(
+      { boundDeviceId: 'device-a' },
+      { path: '/srv/app' },
+    );
+
+    expect(applyTaskTargetSelection(pinnedA, undefined)).toEqual({
+      boundDeviceId: undefined,
       repos: undefined,
       workingDirectory: undefined,
       workingDirectoryConfig: undefined,

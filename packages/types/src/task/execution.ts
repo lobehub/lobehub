@@ -184,6 +184,26 @@ export const clearTaskDirectorySelection = (
 });
 
 /**
+ * Point the run-location axis at a machine, or back at the assignee's own target.
+ *
+ * Re-selecting the target already in force is a NO-OP — the same reference comes
+ * back — because the directory is dropped only when the target actually CHANGES:
+ * the two axes describe the same thing in different units (`lobehub/lobehub` is
+ * a cloud repo, `/srv/app` is a path on one machine), so a change invalidates the
+ * directory, while re-picking the checked row must not delete one the task
+ * legitimately keeps. That case is real: a task following an agent that is bound
+ * to a device can hold an explicit directory on that machine, and clicking the
+ * checked "Follow the agent" row — or the already-pinned device — used to wipe it.
+ */
+export const applyTaskTargetSelection = (
+  execution: TaskExecutionConfig | undefined,
+  deviceId?: string,
+): TaskExecutionConfig | undefined =>
+  deviceId === execution?.boundDeviceId
+    ? execution
+    : clearTaskDirectorySelection({ ...execution, boundDeviceId: deviceId });
+
+/**
  * The persisted shape of an execution selection.
  *
  * Every axis is written explicitly and a cleared axis becomes `null`, because

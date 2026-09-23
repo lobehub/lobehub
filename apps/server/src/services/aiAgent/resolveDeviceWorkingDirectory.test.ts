@@ -193,3 +193,78 @@ describe('resolveDeviceWorkingDirectoryConfig', () => {
     ).toEqual(agentChoice);
   });
 });
+
+describe('repo identifiers are never a device cwd', () => {
+  const repos = ['lobehub/lobehub'];
+
+  it('skips an initial repo-derived directory and falls through to the machine', () => {
+    // A Task can carry a repo selection whose assignee agent is later switched
+    // to a device (or a cloud-surface topic can be resumed on one). `owner/repo`
+    // is not a path on that machine, and the initial metadata sits ABOVE the
+    // device default in the precedence — so the run would spawn its CLI in a
+    // directory that does not exist instead of the device's own default.
+    expect(
+      resolveDeviceWorkingDirectory({
+        deviceDefaultCwd: '/Users/me/app',
+        deviceId: 'device-1',
+        initialWorkingDirectory: 'lobehub/lobehub',
+        repos,
+      }),
+    ).toBe('/Users/me/app');
+  });
+
+  it('skips a rich initial config whose path is a repo', () => {
+    expect(
+      resolveDeviceWorkingDirectoryConfig({
+        deviceDefaultCwd: '/Users/me/app',
+        deviceId: 'device-1',
+        initialWorkingDirectoryConfig: { path: 'lobehub/lobehub', repoType: 'github' },
+        repos,
+      }),
+    ).toEqual({ path: '/Users/me/app' });
+  });
+
+  it('prefers the agent per-device pick over a skipped repo directory', () => {
+    expect(
+      resolveDeviceWorkingDirectory({
+        deviceDefaultCwd: '/Users/me/app',
+        deviceId: 'device-1',
+        initialWorkingDirectory: 'lobehub/lobehub',
+        repos,
+        workingDirByDevice: { 'device-1': '/Users/me/project' },
+      }),
+    ).toBe('/Users/me/project');
+  });
+
+  it('skips a topic-level repo identifier, so a resumed topic cannot pin a machine to it', () => {
+    expect(
+      resolveDeviceWorkingDirectory({
+        deviceDefaultCwd: '/Users/me/app',
+        deviceId: 'device-1',
+        repos,
+        topicWorkingDirectory: 'lobehub/lobehub',
+      }),
+    ).toBe('/Users/me/app');
+  });
+
+  it('only skips a directory the run actually declares as a repo', () => {
+    // Machine paths are absolute, so shape-matching would be wrong: the guard
+    // has to be the run's own repo list, not "looks like owner/repo".
+    expect(
+      resolveDeviceWorkingDirectory({
+        deviceDefaultCwd: '/Users/me/app',
+        deviceId: 'device-1',
+        initialWorkingDirectory: '/Users/me/lobehub/lobehub',
+        repos,
+      }),
+    ).toBe('/Users/me/lobehub/lobehub');
+
+    expect(
+      resolveDeviceWorkingDirectory({
+        deviceDefaultCwd: '/Users/me/app',
+        deviceId: 'device-1',
+        initialWorkingDirectory: 'lobehub/lobehub',
+      }),
+    ).toBe('lobehub/lobehub');
+  });
+});

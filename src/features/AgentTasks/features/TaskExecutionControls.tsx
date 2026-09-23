@@ -4,7 +4,7 @@ import type { TaskExecutionConfig, WorkingDirConfig } from '@lobechat/types';
 import {
   applyTaskDirectorySelection,
   applyTaskReposSelection,
-  clearTaskDirectorySelection,
+  applyTaskTargetSelection,
   getWorkingDirEffectivePath,
   hasTaskExecutionSelection,
 } from '@lobechat/types';
@@ -51,7 +51,9 @@ interface TaskExecutionControlsProps {
  * created without touching either axis behaves exactly as tasks did before this
  * existed. Changing the target clears the directory, because the two describe
  * the same thing in different units — a leftover selection would be a path the
- * cloud run cannot use, or a repo name nothing on the machine resolves.
+ * cloud run cannot use, or a repo name nothing on the machine resolves. Re-picking
+ * the target already in force is a no-op, so the checked row never deletes a
+ * directory the task holds.
  */
 const TaskExecutionControls = memo<TaskExecutionControlsProps>((props) => {
   const { assigneeAgentId } = props;
@@ -76,20 +78,21 @@ const TaskExecutionControlsInner = memo<
   // ("inherit everything") or a selection with at least one real axis set —
   // never an object of empty values that would be persisted as a no-op.
   const emit = useCallback(
-    (next: TaskExecutionConfig) => {
-      onChange(hasTaskExecutionSelection(next) ? next : undefined);
+    (next?: TaskExecutionConfig) => {
+      onChange(next && hasTaskExecutionSelection(next) ? next : undefined);
     },
     [onChange],
   );
 
   const handleDeviceChange = useCallback(
     (deviceId?: string) => {
-      emit(
-        clearTaskDirectorySelection({
-          ...value,
-          boundDeviceId: deviceId,
-        }),
-      );
+      const next = applyTaskTargetSelection(value, deviceId);
+      // Re-picking the target already in force is a no-op: the directory is
+      // dropped on a target CHANGE, and a no-op that cleared it would delete a
+      // directory the task legitimately holds (an explicit directory on an
+      // agent-bound device, or the checked "Follow the agent" row).
+      if (next === value) return;
+      emit(next);
     },
     [emit, value],
   );

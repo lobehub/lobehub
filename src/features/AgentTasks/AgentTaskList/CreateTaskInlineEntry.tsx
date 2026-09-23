@@ -236,10 +236,15 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     if (draftHydratedKey === draftStorageKey) return;
     setDraftHydratedKey(draftStorageKey);
 
-    // Reset to baseline for the new scope before hydrating.
+    // Reset to baseline for the new scope before hydrating. The run location is
+    // part of that baseline: a device or directory picked for the previous
+    // scope's agents may not even be reachable in the new one, and this
+    // component stays mounted across the switch (the `return` below skips
+    // hydration only — it must not keep the previous scope's selection).
     editor.cleanDocument?.();
     setPriority(0);
     setVisibility(defaultVisibility);
+    setExecution(undefined);
     if (!lockAssignee) setAssigneeAgentId(agentId);
     setAssigneeUserId(undefined);
 
