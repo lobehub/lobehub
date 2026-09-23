@@ -1314,11 +1314,26 @@ export default {
   'sandboxWorkspace.setUpEnvironmentDesc': 'A persistent directory lives in an environment',
   'sandboxWorkspace.newInstance': 'New instance',
   'sandboxWorkspace.setUpEnvironment': 'Set up an environment',
-  'sandboxWorkspace.manageEnvironments': 'Manage environments',
+  'sandboxWorkspace.manage': 'Manage',
+  // The menu names the thing it picks — an instance of an environment —
+  // rather than the slot it fills. The explainer carries the distinction,
+  // because "environment" and "instance of one" is the whole model.
+  'sandboxWorkspace.pickerTitle': 'Environment Instance',
+  'sandboxWorkspace.pickerInfoTooltip':
+    'An environment describes what a run needs around it — repositories, setup, variables. An instance is one working copy of it, with its own folder and its own installed packages; conversations run inside an instance and keep what they leave there.',
   'sandboxWorkspace.environmentsUnavailable': 'Environments could not be loaded',
-  'sandboxWorkspace.privateTag': 'Private',
-  'sandboxWorkspace.publicAgentHint':
-    'Public agents can only use workspace environments. Publish this environment to the workspace first to use it here.',
+  // Pool captions inside a workspace, in the execution-target menu's words:
+  // which pool an environment is in decides who else can reach what a run
+  // leaves behind. A personal account has one pool and needs neither.
+  'sandboxWorkspace.privateGroup': 'Private Environments',
+  'sandboxWorkspace.workspaceGroup': 'Workspace Environments',
+  // Says where the hidden ones went. Dropped from the list rather than
+  // dimmed, the way the execution-target menu drops a workspace agent's
+  // personal devices, so this is the only place they are accounted for.
+  'sandboxWorkspace.publicAgentHint_one':
+    '{{count}} private environment is hidden — a public agent can only use workspace environments. Publish it to use it here.',
+  'sandboxWorkspace.publicAgentHint_other':
+    '{{count}} private environments are hidden — a public agent can only use workspace environments. Publish one to use it here.',
   'sandboxWorkspace.privateInstanceBlocked':
     '“{{name}}” is in a private environment, which a public agent cannot use. This topic runs in a temporary working directory instead.',
   'search.grounding.imageSearchQueries': 'Image Search Keywords',
