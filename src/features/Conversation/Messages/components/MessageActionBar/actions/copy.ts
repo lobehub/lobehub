@@ -4,7 +4,7 @@ import { Copy } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { cleanSpeakerTag } from '@/store/chat/utils/cleanSpeakerTag';
+import { cleanBotPromptTags } from '@/store/chat/utils/parseReferencedMessage';
 import { unescapeMarkdown } from '@/store/chat/utils/unescapeMarkdown';
 
 import { defineAction } from '../defineAction';
@@ -17,7 +17,7 @@ export const copyAction = defineAction({
     return useMemo(() => {
       const raw =
         ctx.role === 'group' ? (ctx.contentBlock?.content ?? ctx.data.content) : ctx.data.content;
-      const content = ctx.role === 'user' ? unescapeMarkdown(cleanSpeakerTag(raw)) : raw;
+      const content = ctx.role === 'user' ? unescapeMarkdown(cleanBotPromptTags(raw)) : raw;
 
       return {
         handleClick: async () => {

@@ -18,6 +18,7 @@ import {
   updateBotRuntimeStatus,
 } from '@/server/services/gateway/runtimeStatus';
 
+import { warnAttachmentFailures } from '../attachmentDelivery';
 import {
   type BotPlatformRuntimeContext,
   type BotProviderConfig,
@@ -478,7 +479,8 @@ class WechatGatewayClient implements PlatformClient {
         await this.api.sendMessage(targetId, text, token);
       }
       if (attachments?.length) {
-        await sendWechatAttachments(this.api, targetId, attachments, token);
+        const sent = await sendWechatAttachments(this.api, targetId, attachments, token);
+        warnAttachmentFailures('bot-platform:wechat:reply', sent.failures);
       }
     };
 

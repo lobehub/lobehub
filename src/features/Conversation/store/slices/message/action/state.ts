@@ -4,7 +4,7 @@ import { type StateCreator } from 'zustand';
 
 import { messageService } from '@/services/message';
 import { useChatStore } from '@/store/chat';
-import { cleanSpeakerTag } from '@/store/chat/utils/cleanSpeakerTag';
+import { cleanBotPromptTags } from '@/store/chat/utils/parseReferencedMessage';
 
 import { type Store as ConversationStore } from '../../../action';
 import { isSameConversationContext } from '../../../utils/contextGuard';
@@ -89,7 +89,7 @@ export const messageStateSlice: StateCreator<
   copyMessage: async (id, content) => {
     const { hooks } = get();
 
-    await copyToClipboard(cleanSpeakerTag(content));
+    await copyToClipboard(cleanBotPromptTags(content));
 
     // ===== Hook: onMessageCopied =====
     if (hooks.onMessageCopied) {

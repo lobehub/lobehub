@@ -162,7 +162,30 @@ export interface SendDirectMessageParams {
   userId: string;
 }
 
-export interface SendDirectMessageState {
+/**
+ * One outbound attachment that did NOT reach the user, and why. Mirrors the
+ * server's `AttachmentFailure` so the tool result can name the file and the
+ * cause instead of the model assuming every attachment landed.
+ */
+export interface SendAttachmentFailure {
+  /** Loader error or platform error text, when there is one. */
+  detail?: string;
+  name?: string;
+  reason: 'over-budget-no-link' | 'source-unavailable' | 'upload-failed';
+  type: SendMessageAttachment['type'];
+}
+
+/**
+ * Attachment outcome shared by every send state. Both fields are absent when
+ * the send carried no attachments; `attachmentFailures` is absent when every
+ * attachment landed.
+ */
+export interface SendAttachmentsOutcome {
+  attachmentFailures?: SendAttachmentFailure[];
+  attachmentsDelivered?: number;
+}
+
+export interface SendDirectMessageState extends SendAttachmentsOutcome {
   channelId?: string;
   messageId?: string;
   platform?: string;
@@ -211,7 +234,7 @@ export interface SendMessageParams {
   replyTo?: string;
 }
 
-export interface SendMessageState {
+export interface SendMessageState extends SendAttachmentsOutcome {
   channelId?: string;
   messageId?: string;
   platform?: string;
@@ -502,7 +525,7 @@ export interface ReplyToThreadParams {
   threadId: string;
 }
 
-export interface ReplyToThreadState {
+export interface ReplyToThreadState extends SendAttachmentsOutcome {
   messageId?: string;
   threadId?: string;
 }

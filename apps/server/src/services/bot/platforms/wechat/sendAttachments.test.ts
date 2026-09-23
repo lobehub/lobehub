@@ -182,6 +182,59 @@ describe('sendWechatAttachments', () => {
     expect(api.sendMessage.mock.calls[0][1]).toContain('b.zip');
   });
 
+  it('counts deliveries and carries the loader reason for a lost source', async () => {
+    const api = makeApi();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 403 }));
+
+    const result = await sendWechatAttachments(
+      api as any,
+      'user-1',
+      [
+        { fetchUrl: 'https://cdn.example.com/gone.docx', name: 'gone.docx', type: 'file' },
+        { data: Buffer.from('ok').toString('base64'), name: 'ok.png', type: 'image' },
+      ],
+      'token-1',
+    );
+
+    expect(result.delivered).toBe(1);
+    expect(result.failures).toEqual([
+      { detail: 'HTTP 403', name: 'gone.docx', reason: 'source-unavailable', type: 'file' },
+    ]);
+    expect(result.undelivered).toEqual([
+      { fetchUrl: 'https://cdn.example.com/gone.docx', name: 'gone.docx', type: 'file' },
+    ]);
+  });
+
+  it('names the QR re-login when iLink refuses the upload with session timeout (-14)', async () => {
+    const api = makeApi();
+    api.uploadCdnMedia.mockRejectedValueOnce(
+      Object.assign(
+        new Error(
+          'getuploadurl returned empty upload_param: {"errcode":-14,"errmsg":"session timeout"}',
+        ),
+        { code: -14 },
+      ),
+    );
+
+    const result = await sendWechatAttachments(
+      api as any,
+      'user-1',
+      [{ data: Buffer.from('doc').toString('base64'), name: 'a.docx', type: 'file' }],
+      'token-1',
+    );
+
+    expect(result.delivered).toBe(0);
+    expect(result.failures).toEqual([
+      {
+        detail: expect.stringContaining('WeChat bot session expired (errcode -14)'),
+        name: 'a.docx',
+        reason: 'upload-failed',
+        type: 'file',
+      },
+    ]);
+    expect(result.failures[0].detail).toContain('session timeout');
+  });
+
   it('skips an over-budget attachment with no fetchUrl instead of uploading it', async () => {
     const api = makeApi();
     budgetMocks.compressImageToBudget.mockResolvedValueOnce(undefined);

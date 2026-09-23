@@ -1940,6 +1940,7 @@ export class AgentBridgeService {
    */
   private formatPrompt(message: Message, client?: PlatformClient): string {
     return formatPromptUtil(message as any, {
+      resolveMentions: client?.resolveMentions?.bind(client),
       sanitizeUserInput: client?.sanitizeUserInput?.bind(client),
     });
   }

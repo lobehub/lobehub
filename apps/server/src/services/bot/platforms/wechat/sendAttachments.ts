@@ -1,5 +1,9 @@
 import type { MessageItem, WechatApiClient } from '@lobechat/chat-adapter-wechat';
-import { MessageItemType, WechatUploadMediaType } from '@lobechat/chat-adapter-wechat';
+import {
+  MessageItemType,
+  WECHAT_RET_CODES,
+  WechatUploadMediaType,
+} from '@lobechat/chat-adapter-wechat';
 import debug from 'debug';
 
 import {
@@ -8,7 +12,8 @@ import {
   PLATFORM_ATTACHMENT_BUDGETS,
   splitFallbackMessages,
 } from '../attachmentBudget';
-import { loadAttachmentBuffer } from '../loadAttachmentBuffer';
+import type { AttachmentFailure } from '../attachmentDelivery';
+import { loadAttachmentBufferWithDetail } from '../loadAttachmentBuffer';
 
 const log = debug('bot-platform:wechat:send-attachments');
 
@@ -34,23 +39,34 @@ export interface WechatOutboundAttachment {
 
 /**
  * Why one attachment never reached the user. Carried back to the delivery
- * boundary instead of printed here: `detail` holds the iLink `errmsg`, which is
- * the part that actually diagnoses a refused upload, and the boundary is the
- * only place that knows the push it belongs to.
+ * boundary instead of printed here: `detail` holds the iLink `errmsg` (or the
+ * loader's reason), which is the part that actually diagnoses a lost
+ * attachment, and the boundary is the only place that knows the send it
+ * belongs to. The shape is shared with every other platform sender.
  */
-export interface WechatAttachmentFailure {
-  /** Platform error text, when the failure came from an iLink call. */
-  detail?: string;
-  name?: string;
-  reason: 'over-budget-no-link' | 'source-unavailable' | 'upload-failed';
-  type: WechatOutboundAttachment['type'];
-}
+export type WechatAttachmentFailure = AttachmentFailure;
 
 export interface WechatAttachmentSendResult {
+  /** Attachments that reached the user, as media or as a download link. */
+  delivered: number;
   /** Describes the same attachments as `undelivered`. */
   failures: WechatAttachmentFailure[];
   undelivered: WechatOutboundAttachment[];
 }
+
+/**
+ * iLink answers `errcode -14 / session timeout` on the upload leg when the
+ * bot's login session is no longer valid (protocol-spec §9): only a fresh QR
+ * login fixes it, and no retry with a different payload will. Say so, because
+ * this text is what the agent — and the person reading its reply — get to see.
+ */
+const describeWechatUploadError = (error: unknown): string => {
+  const message = error instanceof Error ? error.message : String(error);
+  const code = (error as { code?: unknown } | null)?.code;
+  if (code === WECHAT_RET_CODES.SESSION_EXPIRED)
+    return `WeChat bot session expired (errcode -14): the bot must be logged in again by scanning its QR code before media can be sent; ${message}`;
+  return message;
+};
 
 const mapAttachmentTypeToUploadMediaType = (
   type: WechatOutboundAttachment['type'],
@@ -135,12 +151,20 @@ export const sendWechatAttachments = async (
   const undelivered: WechatOutboundAttachment[] = [];
   const failures: WechatAttachmentFailure[] = [];
 
+  let delivered = 0;
+
   for (const attachment of attachments) {
     try {
-      let buffer = await loadAttachmentBuffer(attachment);
+      const loaded = await loadAttachmentBufferWithDetail(attachment);
+      let buffer = loaded.buffer;
       if (!buffer) {
-        log('sendWechatAttachments: no resolvable bytes for "%s"', attachment.name ?? '(unnamed)');
+        log(
+          'sendWechatAttachments: no resolvable bytes for "%s": %s',
+          attachment.name ?? '(unnamed)',
+          loaded.error,
+        );
         failures.push({
+          detail: loaded.error,
           name: attachment.name,
           reason: 'source-unavailable',
           type: attachment.type,
@@ -199,6 +223,7 @@ export const sendWechatAttachments = async (
         buffer.length,
       );
       await api.sendItem(toUserId, item, contextToken);
+      delivered += 1;
     } catch (error) {
       // iLink refusing an upload is the other half of "it sent a link instead
       // of the picture". The message is the diagnostic part — it carries the
@@ -211,7 +236,7 @@ export const sendWechatAttachments = async (
         error,
       );
       failures.push({
-        detail: error instanceof Error ? error.message : String(error),
+        detail: describeWechatUploadError(error),
         name: attachment.name,
         reason: 'upload-failed',
         type: attachment.type,
@@ -225,6 +250,8 @@ export const sendWechatAttachments = async (
   for (const message of linkMessages) {
     await api.sendMessage(toUserId, message, contextToken);
   }
+  // A link counts as delivered only once its message has actually gone out.
+  delivered += fallbackLines.length;
 
-  return { failures, undelivered };
+  return { delivered, failures, undelivered };
 };

@@ -1,5 +1,8 @@
 // @vitest-environment node
-import { EnvHttpProxyAgent, getGlobalDispatcher, setGlobalDispatcher } from 'undici';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
+
+import { Agent, EnvHttpProxyAgent, getGlobalDispatcher, setGlobalDispatcher } from 'undici';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ lookup: vi.fn() }));
@@ -10,7 +13,7 @@ vi.mock('@/envs/file', () => ({
   fileEnv: { S3_ENDPOINT: 'http://minio.internal:9000', S3_PUBLIC_DOMAIN: undefined },
 }));
 
-const { fetchPublicUrl, redactUrlForLog } = await import('./publicUrlFetch');
+const { fetchPublicUrl, pinnedLookup, redactUrlForLog } = await import('./publicUrlFetch');
 
 const ok = () => ({ headers: new Headers(), ok: true, status: 200 }) as any;
 
@@ -356,6 +359,49 @@ describe('fetchPublicUrl', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     expect(await fetchPublicUrl('https://cdn.example.com/loop', 1000)).toBeUndefined();
+  });
+});
+
+describe('pinnedLookup', () => {
+  // undici's connector calls `lookup` with `{ all: true }` and reads
+  // `addresses[0].address`. Answering with the 3-arg `dns.lookup` tuple there
+  // made it read `undefined` and fail EVERY pinned request with
+  // "Invalid IP address: undefined" — which is every caller-supplied
+  // `fetchUrl`, on every platform, for a month. This is the contract the
+  // mocked-fetch tests above cannot see.
+  it('answers the array form when asked with all: true', () => {
+    const callback = vi.fn();
+
+    pinnedLookup('93.184.216.34', 4)('cdn.example.com', { all: true }, callback);
+
+    expect(callback).toHaveBeenCalledWith(null, [{ address: '93.184.216.34', family: 4 }]);
+  });
+
+  it('answers the tuple form when asked without all', () => {
+    const callback = vi.fn();
+
+    pinnedLookup('93.184.216.34', 4)('cdn.example.com', {}, callback);
+
+    expect(callback).toHaveBeenCalledWith(null, '93.184.216.34', 4);
+  });
+
+  it('lets a real pinned Agent reach a server by hostname', async () => {
+    // A hostname (not an IP literal) is what triggers the lookup; the pin is
+    // what makes `pinned.invalid` reach the local server at all.
+    const server = createServer((_req, res) => res.end('ok'));
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as AddressInfo;
+    const dispatcher = new Agent({ connect: { lookup: pinnedLookup('127.0.0.1', 4) } });
+
+    try {
+      const response = await fetch(`http://pinned.invalid:${port}/`, { dispatcher } as RequestInit);
+
+      expect(response.status).toBe(200);
+      expect(await response.text()).toBe('ok');
+    } finally {
+      await dispatcher.close();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 });
 
