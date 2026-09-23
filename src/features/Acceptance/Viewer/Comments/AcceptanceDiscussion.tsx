@@ -1,7 +1,7 @@
 'use client';
 
 import type { AcceptanceCommentItem } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { BadgeCheck, GitCommitHorizontal } from 'lucide-react';
@@ -9,7 +9,6 @@ import { nanoid } from 'nanoid';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useActivityTime } from '@/hooks/useActivityTime';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
 import { buildAuthReturnUrl, currentReturnPath } from '@/utils/authReturnUrl';
@@ -23,6 +22,7 @@ import type { DiscussionEntry } from './discussionTimeline';
 import { buildDiscussionTimeline } from './discussionTimeline';
 import { useAcceptanceComments } from './hooks';
 import { styles, TIMELINE_NODE } from './styles';
+import TimelineEvent from './TimelineEvent';
 
 /** Enough room to start writing without the box dominating the column. */
 const COMPOSER_MIN_HEIGHT = 80;
@@ -70,33 +70,6 @@ const local = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorFillQuaternary};
   `,
 }));
-
-/** A round landing or an approval — a dot on the rail and one line of text. */
-const TimelineEvent = memo<{ at: Date; icon: typeof BadgeCheck; text: string }>(
-  ({ at, icon, text }) => {
-    const time = useActivityTime(at);
-    return (
-      <Flexbox
-        horizontal
-        align={'center'}
-        className={cx(styles.timelineEntry, styles.eventEntry)}
-        gap={12}
-      >
-        <span className={styles.eventDot}>
-          <Icon icon={icon} size={12} />
-        </span>
-        <Flexbox horizontal align={'center'} className={styles.event} gap={8} wrap={'wrap'}>
-          <span>{text}</span>
-          <span className={styles.meta} title={time.title}>
-            {time.text}
-          </span>
-        </Flexbox>
-      </Flexbox>
-    );
-  },
-);
-
-TimelineEvent.displayName = 'AcceptanceTimelineEvent';
 
 /**
  * A round. With a note it IS the agent's turn: one entry whose header says

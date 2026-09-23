@@ -33,12 +33,12 @@ const dayjsLocaleLoaders: Record<string, DayjsLocaleGlobEntry> = {
   'zh-tw': () => import('dayjs/locale/zh-tw'),
 };
 
-const updateDayjs = async (lang: string) => {
+const loadDayjsLocale = async (lang: string) => {
   const locale = normalizeDayjsLocale(lang);
   const loader = dayjsLocaleLoaders[locale] ?? dayjsLocaleLoaders.en;
   const mod = await loadDayjsLocaleModule(loader!);
 
-  dayjs.locale(mod.default);
+  return mod.default;
 };
 
 interface WorkbenchLocaleProps extends PropsWithChildren {
@@ -54,15 +54,21 @@ const WorkbenchLocale = memo<WorkbenchLocaleProps>(({ children, defaultLang, res
   if (!i18n.instance.isInitialized) void i18n.init({ initAsync: !resources });
 
   useEffect(() => {
-    if (defaultLang && i18n.instance.language !== defaultLang) {
-      void i18n.changeLanguage(defaultLang);
-    }
+    if (defaultLang) void i18n.changeLanguage(defaultLang);
   }, [defaultLang, i18n]);
 
   useEffect(() => {
+    let localeRequest = 0;
     const applyLocale = async (nextLang: string) => {
+      const request = ++localeRequest;
+      const [nextAntdLocale, nextDayjsLocale] = await Promise.all([
+        getAntdLocale(nextLang),
+        loadDayjsLocale(nextLang),
+      ]);
+      if (request !== localeRequest) return;
+
+      dayjs.locale(nextDayjsLocale);
       setLang(nextLang);
-      const [nextAntdLocale] = await Promise.all([getAntdLocale(nextLang), updateDayjs(nextLang)]);
       setAntdLocale(nextAntdLocale);
     };
 
@@ -70,6 +76,7 @@ const WorkbenchLocale = memo<WorkbenchLocaleProps>(({ children, defaultLang, res
     i18n.instance.on('languageChanged', applyLocale);
 
     return () => {
+      localeRequest++;
       i18n.instance.off('languageChanged', applyLocale);
     };
   }, [defaultLang, i18n]);

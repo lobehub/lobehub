@@ -39,11 +39,18 @@ export const createWorkbenchI18n = (lang?: string, bundledResources?: Record<str
     .createInstance()
     .use(initReactI18next)
     .use(resourcesToBackend(loadWorkbenchNamespace));
+  let languageRequest = 0;
 
   return {
     changeLanguage: async (nextLocale: string) => {
+      const request = ++languageRequest;
       // Register namespaces only for live changes: SSR must use its bundled resources synchronously.
       await instance.loadNamespaces([...workbenchNamespaces]);
+      if (request !== languageRequest) return;
+
+      await instance.loadLanguages(nextLocale);
+      if (request !== languageRequest) return;
+
       await instance.changeLanguage(nextLocale);
     },
     init: (params: { initAsync?: boolean } = {}) =>

@@ -2,6 +2,7 @@ import type { AcceptanceCommentItem, AcceptanceCommentThread } from '@lobechat/t
 import { describe, expect, it } from 'vitest';
 
 import { buildDiscussionTimeline, messageThreads, regionThreads } from './discussionTimeline';
+import { groupCommentThreads } from './threads';
 
 let seq = 0;
 const item = (overrides: Partial<AcceptanceCommentItem> = {}): AcceptanceCommentItem => {
@@ -96,6 +97,56 @@ describe('discussion split', () => {
 });
 
 describe('buildDiscussionTimeline', () => {
+  it('preserves approvals and interleaves replies from separate threads with round events', () => {
+    const first = item({ createdAt: new Date('2026-09-01T10:00:00Z'), id: 'first' });
+    const second = item({ createdAt: new Date('2026-09-01T10:10:00Z'), id: 'second' });
+    const approval = item({
+      createdAt: new Date('2026-09-01T10:15:00Z'),
+      id: 'approval',
+      kind: 'approval',
+    });
+    const reply = item({
+      createdAt: new Date('2026-09-01T10:20:00Z'),
+      id: 'reply',
+      parentCommentId: first.id,
+    });
+    const items = [first, second, approval, reply];
+    const timeline = buildDiscussionTimeline({
+      approvals: items.filter((item) => item.kind === 'approval'),
+      items,
+      rounds: [{ createdAt: '2026-09-01T10:05:00Z', id: 'run', roundIndex: 2 }],
+      threads: groupCommentThreads(items),
+    });
+
+    expect(
+      timeline.map((entry) =>
+        entry.kind === 'message'
+          ? entry.comment.id
+          : entry.kind === 'approval'
+            ? entry.approval.id
+            : `round-${entry.roundIndex}`,
+      ),
+    ).toEqual(['first', 'round-2', 'second', 'approval', 'reply']);
+  });
+
+  it('uses the surviving latest proposal once in its round, not as a discussion message', () => {
+    const old = item({ contextRunId: 'run', id: 'old', kind: 'proposal' });
+    const latest = item({ contextRunId: 'run', id: 'latest', kind: 'proposal' });
+    const deleted = item({ contextRunId: 'run', deletedAt: new Date(), kind: 'proposal' });
+    const items = [old, latest, deleted];
+    const threads = groupCommentThreads(items);
+    const timeline = buildDiscussionTimeline({
+      approvals: [],
+      items,
+      rounds: [{ createdAt: '2026-09-01T10:00:00Z', id: 'run', roundIndex: 2 }],
+      threads,
+    });
+
+    expect(messageThreads(threads)).toEqual([]);
+    expect(timeline).toHaveLength(1);
+    expect(timeline[0]).toMatchObject({ kind: 'round', proposal: { id: 'latest' }, roundIndex: 2 });
+  });
+
   it('interleaves messages, rounds and approvals oldest first', () => {
     const early = thread(item({ createdAt: new Date(2026, 8, 9, 10, 0) }));
     const late = thread(item({ createdAt: new Date(2026, 8, 9, 12, 0) }));
