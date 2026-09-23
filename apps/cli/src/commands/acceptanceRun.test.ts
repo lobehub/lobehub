@@ -251,6 +251,92 @@ describe('acceptance publication with missing evidence', () => {
     expect(process.exitCode).toBe(1);
   });
 
+  it('accounts for draft-only checks and incoming checks using the folded plan', async () => {
+    client.acceptance.attachRun.mutate.mockResolvedValue({
+      id: 'draft-run',
+      plan: [
+        {
+          id: 'draft-response',
+          verifierConfig: { requiredEvidence: [{ type: 'text' }] },
+        },
+        {
+          id: 'draft-screen',
+          verifierConfig: { requiredEvidence: [{ type: 'screenshot' }] },
+        },
+        { id: 'response', verifierConfig: { requiredEvidence: [{ type: 'text' }] } },
+      ],
+      roundIndex: 1,
+    });
+    await writeFile(
+      path.join(dir, 'result.json'),
+      JSON.stringify({
+        cases: [
+          { evidence: ['output.txt'], id: 'draft-response', name: '草稿回复', status: 'passed' },
+          { evidence: ['output.txt'], id: 'response', name: '收到回复', status: 'passed' },
+        ],
+        plan: [{ id: 'response', requiredEvidence: ['text'], title: '收到回复' }],
+        summary: { passed: 2, total: 2, verdict: 'passed' },
+      }),
+    );
+
+    await run('ingest', dir, '--json');
+
+    expect(result()).toMatchObject({
+      cases: 2,
+      missingEvidence: [{ checkItemId: 'draft-screen', types: ['screenshot'] }],
+      planItems: 3,
+      publicationStatus: 'partial',
+      unexecuted: ['draft-screen'],
+      unplanned: [],
+      verifyRunId: 'draft-run',
+    });
+    expect(finalReport()).toMatchObject({
+      failedChecks: 0,
+      passedChecks: 2,
+      totalChecks: 3,
+      uncertainChecks: 1,
+      verdict: 'uncertain',
+      verifyRunId: 'draft-run',
+    });
+    expect(
+      client.verify.ingestResult.mutate.mock.calls.map(([input]) => input.checkItemId),
+    ).toEqual(['draft-response', 'response']);
+    expect(process.exitCode).toBe(1);
+    expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('new round'));
+  });
+
+  it.each([false, true])(
+    'uses the draft evidence requirement for a shared check (screenshot present: %s)',
+    async (hasScreenshot) => {
+      client.acceptance.attachRun.mutate.mockResolvedValue({
+        id: 'draft-run',
+        plan: [{ id: 'screen', verifierConfig: { requiredEvidence: [{ type: 'screenshot' }] } }],
+        roundIndex: 1,
+      });
+      await report(['text'], hasScreenshot ? ["screen's shot.png"] : ['output.txt']);
+
+      await run('ingest', dir, '--json');
+
+      expect(result()).toMatchObject({
+        missingEvidence: hasScreenshot ? [] : [{ checkItemId: 'screen', types: ['screenshot'] }],
+        publicationStatus: hasScreenshot ? 'complete' : 'partial',
+        unexecuted: [],
+        unplanned: [],
+      });
+      expect(finalCheck()).toMatchObject({
+        verdict: hasScreenshot ? 'passed' : 'uncertain',
+        verifyRunId: 'draft-run',
+      });
+      expect(finalReport()).toMatchObject({
+        passedChecks: hasScreenshot ? 1 : 0,
+        totalChecks: 1,
+        uncertainChecks: hasScreenshot ? undefined : 1,
+        verdict: hasScreenshot ? 'passed' : 'uncertain',
+      });
+      expect(process.exitCode).toBe(hasScreenshot ? undefined : 1);
+    },
+  );
+
   it('exposes shell-independent upload arguments without escaping path or description', async () => {
     const description = `User's "input" $HOME %TEMP% & | \`literal\``;
     await writeFile(

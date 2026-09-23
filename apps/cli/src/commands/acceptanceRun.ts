@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import path from 'node:path';
 
 import { acceptanceSubjectTypes } from '@lobechat/const/verify';
+import type { VerifyAgentPlanConfig, VerifyCheckItem } from '@lobechat/types';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
@@ -656,7 +657,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
 
   // What the run set out to check, written before it ran. Paired with the
   // results by `id`, so the report can show a planned item that never ran.
-  let plan = planFromResult(result, droppedIds);
+  let plan: VerifyCheckItem[] | undefined = planFromResult(result, droppedIds);
 
   const goal = options.goal ?? (typeof result.focus === 'string' ? result.focus : undefined);
   const title = options.title ?? result.title;
@@ -792,6 +793,8 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   //     returns, which is the draft round when this run was folded into one.
   const acceptanceId = acceptance.id;
   const attached = await client.acceptance.attachRun.mutate({ acceptanceId, verifyRunId: run.id });
+  // Folding preserves the draft's checks and their evidence requirements.
+  plan = attached?.plan ?? plan;
   const runId = attached?.id ?? run.id;
   if (runId !== run.id)
     console.log(pc.dim(`Folded into the acceptance's draft round ${attached.roundIndex ?? ''}`));
@@ -842,7 +845,9 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
     evidenceCount += uploaded.count;
     inlined += uploaded.inlined;
     failedEvidence.push(...uploaded.failedEvidence.map((failure) => ({ ...failure, checkItemId })));
-    const required = plan?.find((item) => item.id === checkItemId)?.verifierConfig.requiredEvidence;
+    const config = plan?.find((item) => item.id === checkItemId)?.verifierConfig as
+      VerifyAgentPlanConfig | undefined;
+    const required = config?.requiredEvidence;
     const gaps = [...new Set(required?.map((spec) => spec.type) ?? [])].filter(
       (type) => !uploaded.types.has(type),
     );
@@ -862,9 +867,8 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
 
   const unexecuted = plan?.filter((item) => !seenCheckItemIds.has(item.id)) ?? [];
   for (const item of unexecuted) {
-    const types = [
-      ...new Set(item.verifierConfig.requiredEvidence?.map((spec) => spec.type) ?? []),
-    ];
+    const config = item.verifierConfig as VerifyAgentPlanConfig;
+    const types = [...new Set(config.requiredEvidence?.map((spec) => spec.type) ?? [])];
     if (types.length === 0) continue;
     missingEvidence.push({ checkItemId: item.id, types });
     // Count the gap without inventing an execution result for an unexecuted check.
@@ -957,7 +961,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
     log.warn(
       'Report saved, but evidence publication is incomplete. Keep the local artifacts; retry only the missing evidence, not the whole ingest. Supplementing evidence does not change recorded verdicts.',
     );
-    if (unexecuted.some((item) => item.verifierConfig.requiredEvidence?.length)) {
+    if (missingEvidence.some(({ checkItemId }) => !seenCheckItemIds.has(checkItemId))) {
       log.warn(
         'Unexecuted checks have no result to attach evidence to. Execute them and publish a new round on the same acceptance; do not re-ingest this unchanged report.',
       );
