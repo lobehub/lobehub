@@ -258,19 +258,12 @@ describe('usePortTunnels', () => {
       expect(result.current.detectionAvailable).toBe(true);
     });
 
-    it('labels an exposed link with the process detected on its port', () => {
+    it('drops a port from the detected list once it has a link', () => {
       tunnels.value = [link];
       detection.data = { ports: [port({ port: 3000 })], supported: true };
 
-      const { result } = setup();
-
-      // Exposed rows sit on top of the same list, so they carry the same
-      // "node · This project" label as a detected row.
-      expect(result.current.detectedByPort.get(3000)).toMatchObject({
-        command: 'node',
-        inProject: true,
-      });
-      expect(result.current.detected).toEqual([]);
+      // The exposed row on top already shows it, with its link.
+      expect(setup().result.current).toMatchObject({ detected: [], otherPorts: [] });
     });
 
     it('reports no detection for a device that cannot answer', () => {

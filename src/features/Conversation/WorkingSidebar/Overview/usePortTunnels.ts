@@ -52,12 +52,11 @@ export const usePortTunnels = (options: {
    * project's own ports count as "available": a dev machine listens on dozens
    * of unrelated ports (databases, Docker, system services).
    */
-  const { byPort, detected, others } = useMemo(() => {
+  const { detected, others } = useMemo(() => {
     const ports = detection.data?.ports ?? [];
     const exposed = new Set((tunnels ?? []).map((link) => link.port));
     const fresh = ports.filter((p) => !exposed.has(p.port));
     return {
-      byPort: new Map(ports.map((p) => [p.port, p])),
       detected: fresh.filter((p) => p.inProject),
       others: fresh.filter((p) => !p.inProject),
     };
@@ -180,8 +179,6 @@ export const usePortTunnels = (options: {
     copyLink,
     creatingPort,
     detected,
-    /** Detection info by port, to label exposed links with their process. */
-    detectedByPort: byPort,
     /** False when the device can't detect (offline, or a client that predates it). */
     detectionAvailable: !!detection.data?.supported,
     // Validating, not loading: a manual rescan keeps the old data and must still spin.

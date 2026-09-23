@@ -9,7 +9,14 @@ import {
   DropdownMenuTrigger,
 } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { GlobeIcon, LoaderCircleIcon, RadarIcon, RefreshCwIcon, XIcon } from 'lucide-react';
+import {
+  CopyIcon,
+  GlobeIcon,
+  LoaderCircleIcon,
+  RadarIcon,
+  RefreshCwIcon,
+  XIcon,
+} from 'lucide-react';
 import {
   type KeyboardEvent,
   memo,
@@ -96,6 +103,17 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-weight: 500;
     color: ${cssVar.colorPrimary};
   `,
+  host: css`
+    overflow: hidden;
+    flex: 1;
+
+    min-width: 0;
+
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
   header: css`
     display: flex;
     align-items: center;
@@ -140,32 +158,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorInfo};
 
     background: transparent;
-  `,
-  copy: css`
-    cursor: pointer;
-
-    flex-shrink: 0;
-
-    height: 20px;
-    padding-block: 0;
-    padding-inline: 6px;
-    border: none;
-    border-radius: 4px;
-
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorPrimary};
-
-    background: transparent;
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimaryBorder};
-      outline-offset: 1px;
-    }
   `,
   spacer: css`
     flex: 1;
@@ -217,7 +209,6 @@ const PortSwitcher = memo<PortSwitcherProps>(({ active, deviceId, workingDirecto
     copyLink,
     creatingPort,
     detected,
-    detectedByPort,
     detectionAvailable,
     detectionLoading,
     error,
@@ -273,20 +264,36 @@ const PortSwitcher = memo<PortSwitcherProps>(({ active, deviceId, workingDirecto
         void openLink(link);
       }}
     >
-      <Tooltip title={link.hostname}>
-        <Icon
-          icon={busySlug === link.slug ? LoaderCircleIcon : GlobeIcon}
-          size={14}
-          spin={busySlug === link.slug}
-        />
-      </Tooltip>
-      {renderLabel(link.port, detectedByPort.get(link.port))}
+      <Icon
+        icon={busySlug === link.slug ? LoaderCircleIcon : GlobeIcon}
+        size={14}
+        spin={busySlug === link.slug}
+      />
+      {/* The link itself, so the row says where the port is reachable; copy sits
+          right beside it. A link starts with its port (`5199--slug.lobe.sh`),
+          so the port is drawn as the link's own prefix instead of repeated
+          before it — that leaves room for the whole domain. */}
+      <span className={styles.host} title={link.hostname}>
+        {link.hostname.startsWith(`${link.port}--`) ? (
+          <>
+            <span className={styles.port}>{link.port}</span>
+            {link.hostname.slice(String(link.port).length)}
+          </>
+        ) : (
+          link.hostname
+        )}
+      </span>
       <span className={styles.actions}>
-        {/* Sharing is the point of an exposed port, so copy reads as an action
-            like "Open", not as a glyph to discover. */}
-        <button className={styles.copy} type={'button'} {...ownPress(() => void copyLink(link))}>
-          {t('workingPanel.overview.ports.copy')}
-        </button>
+        <Tooltip title={t('workingPanel.overview.ports.copy')}>
+          <button
+            aria-label={t('workingPanel.overview.ports.copy')}
+            className={styles.action}
+            type={'button'}
+            {...ownPress(() => void copyLink(link))}
+          >
+            <Icon icon={CopyIcon} size={13} />
+          </button>
+        </Tooltip>
         <Tooltip title={t('workingPanel.overview.ports.revoke')}>
           <button
             aria-label={t('workingPanel.overview.ports.revoke')}
