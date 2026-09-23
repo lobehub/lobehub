@@ -35,7 +35,9 @@ const LOOPBACK_NO_PROXY = ['localhost', '127.0.0.1', '::1', '[::1]'];
  * Bun snapshots them at startup, so a source run under `bun` with a proxy set
  * still needs `[::1]` in `NO_PROXY` from the environment.
  */
-export const ensureLoopbackBypassesProxy = (env: NodeJS.ProcessEnv = process.env): void => {
+export const ensureLoopbackBypassesProxy = (
+  env: Record<string, string | undefined> = process.env,
+): void => {
   const hasProxy = [
     'HTTP_PROXY',
     'HTTPS_PROXY',

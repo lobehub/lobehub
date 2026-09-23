@@ -52,7 +52,7 @@ describe('LoopbackResolver', () => {
 describe('ensureLoopbackBypassesProxy', () => {
   it('adds every loopback spelling, including bracketed ::1, when a proxy is set', () => {
     // The common setting that still proxies `http://[::1]:5173/`.
-    const env: NodeJS.ProcessEnv = {
+    const env: Record<string, string | undefined> = {
       HTTP_PROXY: 'http://127.0.0.1:7890',
       NO_PROXY: 'localhost, 127.0.0.1, ::1',
     };
@@ -63,13 +63,16 @@ describe('ensureLoopbackBypassesProxy', () => {
   });
 
   it('keeps existing exclusions and does not duplicate', () => {
-    const env: NodeJS.ProcessEnv = { https_proxy: 'http://p:1', no_proxy: 'corp.local,[::1]' };
+    const env: Record<string, string | undefined> = {
+      https_proxy: 'http://p:1',
+      no_proxy: 'corp.local,[::1]',
+    };
     ensureLoopbackBypassesProxy(env);
     expect(env.no_proxy).toBe('corp.local,[::1],localhost,127.0.0.1,::1');
   });
 
   it('leaves the environment alone when no proxy is configured', () => {
-    const env: NodeJS.ProcessEnv = { NO_PROXY: 'corp.local' };
+    const env: Record<string, string | undefined> = { NO_PROXY: 'corp.local' };
     ensureLoopbackBypassesProxy(env);
     expect(env).toEqual({ NO_PROXY: 'corp.local' });
   });
