@@ -261,7 +261,6 @@
   "acceptance.review.regionCommentsEmpty": "اسحب على الصورة لتحديد منطقة — يتم وضع تعليقها هنا.",
   "acceptance.review.regionImage": "الصورة {{image}} · المنطقة {{region}}",
   "acceptance.review.reject": "رفض مع تعليق",
-  "acceptance.review.rejectDescription": "رفض \"{{title}}\" — ملاحظاتك هي ما تعمل عليه الجولة التحقق التالية.",
   "acceptance.review.rejectPlaceholder": "ما الخطأ، وما الذي تتوقعه بدلاً من ذلك…",
   "acceptance.review.rejectedHint": "لقد رفضت هذا الفحص — الجولة التالية تقرأ ملاحظاتك.",
   "acceptance.review.removeAttachment": "إزالة المرفق",

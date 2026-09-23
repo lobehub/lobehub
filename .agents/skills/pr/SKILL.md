@@ -21,7 +21,7 @@ user-invocable: true
 - `git log --oneline origin/canary..HEAD` — unpushed commits
 - `gh pr list --head "$(git branch --show-current)" --json number,title,state,url` — existing PR
 - `git diff --stat --stat-count=20 origin/canary..HEAD` — change summary
-- `env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME lh acceptance run list --json` — the published acceptance round for this branch (match on `branch`)
+- Reuse an existing acceptance link from the task when it covers the delivered behavior. If a lookup is needed, first follow [Publish auth preflight](../../acceptance/PROCESS.md#publish-auth-preflight), then run `publish_lh acceptance run list --json` and match on `branch`. Do not blindly unset API keys: the production credential may exist only in the environment. A lookup never requires creating a new round.
 
 ### 2. Handle uncommitted changes on default branch
 

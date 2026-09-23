@@ -261,7 +261,6 @@
   "acceptance.review.regionCommentsEmpty": "Arrastra sobre la imagen para marcar una región — su comentario aparecerá aquí.",
   "acceptance.review.regionImage": "Imagen {{image}} · Región {{region}}",
   "acceptance.review.reject": "Rechazar con comentario",
-  "acceptance.review.rejectDescription": "Rechazar \"{{title}}\" — tus comentarios son lo que la próxima ronda de verificación tomará en cuenta.",
   "acceptance.review.rejectPlaceholder": "Qué está mal y qué esperas en su lugar…",
   "acceptance.review.rejectedHint": "Rechazaste esta verificación — la próxima ronda leerá tus comentarios.",
   "acceptance.review.removeAttachment": "Eliminar adjunto",

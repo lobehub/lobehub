@@ -513,6 +513,14 @@ const dispatchClaimedAgentIntervention = async (
     }
 
     if (dispatchProbe.state !== 'dispatched' && shouldDispatchRuntimeAction) {
+      /**
+       * A continuation is a fresh operation started by the user resolving an
+       * intervention, and the durable app context does not carry the parked
+       * run's trigger. Without an explicit trigger every LLM call in the
+       * continuation lands in route attempt logs with an unknown source.
+       */
+      const continuationTrigger = RequestTrigger.Chat;
+
       switch (runtimeAction.type) {
         case 'execute_custom_interaction': {
           const customAction = runtimeAction.input.action;
@@ -555,6 +563,7 @@ const dispatchClaimedAgentIntervention = async (
                 toolCallId: runtimeAction.toolCallId,
               },
               topicStartReservationId: deterministicContinuationOperationId,
+              trigger: continuationTrigger,
             });
           }
           break;
@@ -583,6 +592,7 @@ const dispatchClaimedAgentIntervention = async (
               ? { resumeApproval: singleDecision }
               : { resumeApprovals: runtimeAction.decisions }),
             topicStartReservationId: deterministicContinuationOperationId,
+            trigger: continuationTrigger,
           });
           break;
         }
@@ -606,6 +616,7 @@ const dispatchClaimedAgentIntervention = async (
               toolCallId: runtimeAction.toolCallId,
             },
             topicStartReservationId: deterministicContinuationOperationId,
+            trigger: continuationTrigger,
           });
           break;
         }

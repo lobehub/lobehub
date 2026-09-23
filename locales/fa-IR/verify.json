@@ -261,7 +261,6 @@
   "acceptance.review.regionCommentsEmpty": "روی تصویر بکشید تا منطقه‌ای را دایره کنید — نظر آن در اینجا قرار می‌گیرد.",
   "acceptance.review.regionImage": "تصویر {{image}} · ناحیه {{region}}",
   "acceptance.review.reject": "رد با نظر",
-  "acceptance.review.rejectDescription": "رد \"{{title}}\" — بازخورد شما چیزی است که دور تأیید بعدی بر اساس آن عمل می‌کند.",
   "acceptance.review.rejectPlaceholder": "چه چیزی اشتباه است و چه انتظاری دارید…",
   "acceptance.review.rejectedHint": "شما این بررسی را رد کرده‌اید — دور بعدی بازخورد شما را می‌خواند.",
   "acceptance.review.removeAttachment": "حذف پیوست",

@@ -261,7 +261,6 @@
   "acceptance.review.regionCommentsEmpty": "Trascina sull'immagine per cerchiare una regione — il suo commento apparirà qui.",
   "acceptance.review.regionImage": "Immagine {{image}} · Regione {{region}}",
   "acceptance.review.reject": "Rifiuta con commento",
-  "acceptance.review.rejectDescription": "Rifiuta \"{{title}}\" — il tuo feedback è ciò su cui agirà il prossimo ciclo di verifica.",
   "acceptance.review.rejectPlaceholder": "Cosa c'è di sbagliato e cosa ti aspetti invece…",
   "acceptance.review.rejectedHint": "Hai rifiutato questo controllo — il prossimo ciclo legge il tuo feedback.",
   "acceptance.review.removeAttachment": "Rimuovi allegato",

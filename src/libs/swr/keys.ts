@@ -1240,6 +1240,15 @@ export const shareKeys = {
     'share:agentShareStats',
     agentId,
   ]),
+  agentShareEligibleWorks: def(
+    'share:agentShareEligibleWorks',
+    (agentId: string, offset: number, includeWorkIds: readonly string[]) => [
+      'share:agentShareEligibleWorks',
+      agentId,
+      offset,
+      includeWorkIds,
+    ],
+  ),
   agentShareStatus: def('share:agentShareStatus', (agentId: string) => [
     'share:agentShareStatus',
     agentId,

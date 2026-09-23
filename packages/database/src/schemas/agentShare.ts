@@ -1,4 +1,4 @@
-import type { AgentShareToolGrant } from '@lobechat/types';
+import type { AgentShareDemoCase, AgentShareToolGrant } from '@lobechat/types';
 import { index, integer, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 import { timestamps } from './_helpers';
@@ -16,6 +16,10 @@ export interface AgentShareConfig {
    * a shared conversation. Defaults to `false`.
    */
   allowReadMemory?: boolean;
+  /** Visitor trial scenarios, maintained independently of agents.openingQuestions. */
+  demoCases?: AgentShareDemoCase[];
+  /** Ordered, explicitly selected creator Works for this share's public profile. */
+  featuredWorkIds?: string[];
   /**
    * Total bytes this share's visitor uploads may occupy in the Agent's owning
    * scope (settled files plus in-flight reservations). Mandatory like

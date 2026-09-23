@@ -261,7 +261,6 @@
   "acceptance.review.regionCommentsEmpty": "Görsel üzerinde bir bölgeyi daire içine almak için sürükleyin — yorumu buraya düşer.",
   "acceptance.review.regionImage": "Görsel {{image}} · Bölge {{region}}",
   "acceptance.review.reject": "Yorumla reddet",
-  "acceptance.review.rejectDescription": "\"{{title}}\" öğesini reddet — geri bildiriminiz bir sonraki doğrulama turunda işleme alınır.",
   "acceptance.review.rejectPlaceholder": "Neyin yanlış olduğunu ve bunun yerine ne beklediğinizi açıklayın…",
   "acceptance.review.rejectedHint": "Bu kontrolü reddettiniz — bir sonraki tur geri bildiriminizi okur.",
   "acceptance.review.removeAttachment": "Eki kaldır",

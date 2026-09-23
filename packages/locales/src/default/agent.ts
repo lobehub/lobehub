@@ -425,6 +425,14 @@ export default {
     'Sharing is off. Turn it on to get a link you can hand out — turning it off again only pauses it, and the same link resumes whenever you turn it back on.',
   'share.settings.link.publishDisabled':
     'Sharing is not available on your account yet. You can still turn off a share you already published.',
+  'share.settings.link.modelDisabledTitle': 'Switch model providers to enable sharing',
+  'share.settings.link.changeModel': 'Change model',
+  'share.settings.modelRestriction.title':
+    'Sharing is on: models are limited to the LobeHub provider',
+  'share.settings.modelRestriction.description':
+    'To choose a model from another provider, turn off sharing first.',
+  'share.settings.link.modelDisabled':
+    'Your current model uses another provider. Choose a model provided by LobeHub, then turn on sharing.',
   'share.settings.link.slugError.invalid':
     'Use lowercase letters, numbers and hyphens only, and don’t start or end with a hyphen.',
   'share.settings.link.slugError.reserved': 'This word is reserved. Please pick another one.',
@@ -439,8 +447,8 @@ export default {
   'share.settings.link.workspaceDesc':
     'Anyone signed in who has the link can chat with this Agent. Runs execute in the Workspace and are charged to its budget.',
   'share.settings.notice.desc':
-    'Visitors don’t just read this Agent — they run it. Every reply is generated on your account and charged to your balance, and the Agent acts with whatever access you grant below.',
-  'share.settings.notice.title': 'Visitors run this Agent on your account',
+    'Visitors can use the tools and data you allow below. Review permissions and the monthly spend cap before sharing.',
+  'share.settings.notice.title': 'You pay for visitor usage.',
   'share.settings.notice.workspaceDesc':
     'Visitors don’t just read this Agent — they run it. Every reply is generated in the Workspace and charged to its shared budget, without consuming the creator’s or another member’s quota. The Agent only acts with the visitor access you grant below.',
   'share.settings.notice.workspaceTitle': 'Visitors run this Agent on the Workspace budget',
@@ -460,6 +468,7 @@ export default {
     'Off by default: your model and provider choice stays hidden.',
   'share.settings.permissions.title': 'Permissions',
   'share.settings.tabs.access': 'Access',
+  'share.settings.tabs.profile': 'Public profile',
   'share.settings.tabs.stats': 'Stats',
   'share.settings.title': 'Share Agent',
   'share.settings.usage.conversations': 'Conversations',
@@ -469,6 +478,7 @@ export default {
   'share.settings.usage.fileStorageOff': '{{used}} · attachments off',
   'share.settings.usage.loadFailed': 'Usage could not be loaded',
   'share.settings.usage.monthlySpend': 'This month’s spend',
+  'share.settings.usage.spendOfLimit': '${{spend}} of ${{limit}}',
   'share.settings.usage.spendOfLimitCredits': '{{spend}} of {{limit}} credits',
   'share.settings.usage.title': 'Usage',
   'share.settings.usage.views': 'Visits',
@@ -545,7 +555,7 @@ export default {
   'share.visitor.profile.metrics.visitors': 'People who used it',
   'share.visitor.profile.metrics.visitorsCaption': 'visitors',
   'share.visitor.profile.starters.desc': 'Pick one and it goes straight into the composer.',
-  'share.visitor.profile.starters.title': 'Not sure where to start?',
+  'share.visitor.profile.starters.title': 'Try these',
   'share.visitor.profile.terms.account':
     'It runs on the creator’s account, and every reply is paid for by them.',
   'share.visitor.profile.terms.accountWorkspace':
@@ -661,4 +671,59 @@ export default {
   'transferRequest.untitledResource': 'Untitled',
   'transferRequest.withdraw': 'Withdraw',
   'transferRequest.withdrawnToast': 'Transfer request withdrawn.',
+  'share.visitor.profile.metrics.unknown': 'No data yet',
+  'share.visitor.profile.metrics.lastDelivered': 'Latest delivery',
+  'share.visitor.profile.metrics.lastDeliveredCaption': 'most recent update',
+  'share.visitor.profile.metrics.works': 'Total works',
+  'share.visitor.profile.metrics.worksCaption': 'creator deliveries',
+  'share.visitor.profile.metrics.duration': 'Average duration',
+  'share.visitor.profile.metrics.durationCaption': 'per operation',
+  'share.visitor.profile.metrics.cost': 'Average cost',
+  'share.visitor.profile.metrics.costCaption': 'per work · paid by the creator',
+  'share.visitor.profile.works.title': 'Featured works',
+  'share.visitor.profile.works.desc': 'Selected by the creator. See what this agent can deliver.',
+  'share.visitor.profile.works.untitled': 'Untitled work',
+  'share.visitor.profile.works.open': 'Open work',
+  'share.visitor.profile.works.type.document': 'Document',
+  'share.visitor.profile.works.type.task': 'Task',
+  'share.visitor.profile.works.type.file': 'File',
+  'share.visitor.profile.works.type.external': 'Linked work',
+  'share.settings.profile.title': 'Public profile',
+  'share.settings.profile.desc':
+    'Choose what visitors see before starting a conversation. Changes are published when you save.',
+  'share.settings.profile.save': 'Save profile',
+  'share.settings.profile.saved': 'Profile saved',
+  'share.settings.profile.saveError': 'Could not save. Your draft is preserved. Try again.',
+  'share.settings.profile.invalid':
+    'Each example needs a task prompt. Keep at most 20 examples and 100 featured works.',
+  'share.settings.profile.demoCases.item': 'Example {{number}}',
+  'share.settings.profile.demoCases.promptLabel': 'Task prompt (required)',
+  'share.settings.profile.demoCases.promptHint':
+    'Shown as the example title. Clicking it fills the visitor’s chat input without sending.',
+  'share.settings.profile.demoCases.descriptionLabel': 'Description (optional)',
+  'share.settings.profile.demoCases.descriptionHint':
+    'Shown below the task prompt to explain what this agent can help with. This text is not added to the chat.',
+  'share.settings.profile.demoCases.title': 'Example tasks',
+  'share.settings.profile.demoCases.desc':
+    'Write examples for visitors to try. These are separate from the agent’s opening questions.',
+  'share.settings.profile.demoCases.add': 'Add example',
+  'share.settings.profile.demoCases.empty': 'No examples published yet.',
+  'share.settings.profile.demoCases.prompt': 'Task prompt',
+  'share.settings.profile.demoCases.promptPlaceholder': 'What would you ask this agent to do?',
+  'share.settings.profile.demoCases.description': 'Description',
+  'share.settings.profile.demoCases.descriptionPlaceholder':
+    'Explain the expected result (optional)',
+  'share.settings.profile.demoCases.remove': 'Remove example',
+  'share.settings.profile.featuredWorks.title': 'Featured works',
+  'share.settings.profile.featuredWorks.desc':
+    'Choose this agent’s works to showcase. Visitor works are never included.',
+  'share.settings.profile.featuredWorks.selected': 'Selected: {{count}} / 100',
+  'share.settings.profile.featuredWorks.select': 'Feature',
+  'share.settings.profile.featuredWorks.withdraw': 'Remove',
+  'share.settings.profile.featuredWorks.empty':
+    'No eligible works yet. Create a work with this agent first.',
+  'share.settings.profile.featuredWorks.loadFailed': 'Could not load works. Try again.',
+  'share.settings.profile.featuredWorks.reload': 'Retry',
+  'share.settings.profile.featuredWorks.loadMore': 'Load more works',
+  'share.settings.profile.featuredWorks.unavailable': 'Unavailable work',
 } as const;

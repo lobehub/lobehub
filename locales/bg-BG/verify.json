@@ -261,7 +261,6 @@
   "acceptance.review.regionCommentsEmpty": "Плъзнете върху изображението, за да очертаете регион — неговият коментар ще се появи тук.",
   "acceptance.review.regionImage": "Изображение {{image}} · Регион {{region}}",
   "acceptance.review.reject": "Откажете с коментар",
-  "acceptance.review.rejectDescription": "Откажете \"{{title}}\" — вашата обратна връзка е това, върху което следващият кръг на проверка ще работи.",
   "acceptance.review.rejectPlaceholder": "Какво не е наред и какво очаквате вместо това…",
   "acceptance.review.rejectedHint": "Вие отказахте тази проверка — следващият кръг ще прочете вашата обратна връзка.",
   "acceptance.review.removeAttachment": "Премахнете прикачения файл",

@@ -335,6 +335,49 @@ describe('AgentShareModel', () => {
   });
 
   describe('owner operations', () => {
+    it('persists demo cases independently and retains them through unrelated patches', async () => {
+      await agentShareModel.create(agentId);
+      const demoCases = [
+        { prompt: 'Review this change', description: 'Identify regression risks' },
+      ];
+      await agentShareModel.updateConfig(agentId, { demoCases });
+      await agentShareModel.updateConfig(agentId, { maxTurnsPerTopic: 8 });
+      expect((await agentShareModel.getByAgentId(agentId))?.shareConfig.demoCases).toEqual(
+        demoCases,
+      );
+      expect(
+        (await AgentShareModel.findBySlugOrId(serverDB, 'shareable-agent'))?.shareConfig.demoCases,
+      ).toEqual(demoCases);
+      const [agent] = await serverDB
+        .select({ openingQuestions: agents.openingQuestions })
+        .from(agents)
+        .where(eq(agents.id, agentId));
+      expect(agent.openingQuestions ?? []).toEqual([]);
+      await agentShareModel.updateConfig(agentId, { demoCases: [] });
+      expect((await agentShareModel.getByAgentId(agentId))?.shareConfig.demoCases).toEqual([]);
+    });
+
+    it('does not let another owner replace profile content', async () => {
+      await agentShareModel.create(agentId);
+      expect(
+        await otherAgentShareModel.updateConfig(agentId, {
+          demoCases: [{ prompt: 'Injected', description: '' }],
+        }),
+      ).toBeNull();
+      expect((await agentShareModel.getByAgentId(agentId))?.shareConfig.demoCases).toEqual([]);
+    });
+
+    it('rejects unknown selected Works without partially saving the patch', async () => {
+      await agentShareModel.create(agentId);
+      await expect(
+        agentShareModel.updateConfig(agentId, {
+          demoCases: [{ prompt: 'Do not save', description: '' }],
+          featuredWorkIds: ['missing-work'],
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      expect((await agentShareModel.getByAgentId(agentId))?.shareConfig.demoCases).toEqual([]);
+    });
+
     it('normalizes a legacy null config to conservative defaults', async () => {
       const [legacyShare] = await serverDB.insert(agentShares).values({ agentId }).returning();
 
@@ -344,6 +387,8 @@ describe('AgentShareModel', () => {
       expect(ownerShare?.shareConfig).toEqual({
         allowCreatorViewSessions: false,
         allowReadMemory: false,
+        demoCases: [],
+        featuredWorkIds: [],
         maxFileStorage: 512 * 1024 * 1024,
         maxTopicsPerVisitor: 5,
         maxTurnsPerTopic: 20,
@@ -375,7 +420,7 @@ describe('AgentShareModel', () => {
 
       // The slug seeded from the agent's profile slug at `create` survives a
       // full config overwrite — it is owner-facing url state, not config.
-      const expected = { ...config, slug: 'shareable-agent' };
+      const expected = { demoCases: [], featuredWorkIds: [], ...config, slug: 'shareable-agent' };
       expect(updated?.shareConfig).toEqual(expected);
       expect(readBack?.shareConfig).toEqual(expected);
     });

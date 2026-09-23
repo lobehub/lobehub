@@ -9,12 +9,14 @@ import { getAgentShareMonthlySpend } from '@/business/server/agent-share/spendGa
 import { withRbacPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentShareModel } from '@/database/models/agentShare';
+import { AgentShareProfileModel } from '@/database/models/agentShareProfile';
 import { FileModel } from '@/database/models/file';
 import { RbacModel } from '@/database/models/rbac';
 import { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { AgentService } from '@/server/services/agent';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 
 import { assertAgentShareCreationEnabled } from './_helpers/agentShareFeatureGate';
@@ -46,6 +48,22 @@ export const agentShareConfigSchema = z
   .object({
     allowCreatorViewSessions: z.boolean().optional(),
     allowReadMemory: z.boolean().optional(),
+    demoCases: z
+      .array(
+        z
+          .object({
+            description: z.string().trim().max(2000),
+            prompt: z.string().trim().min(1).max(10000),
+          })
+          .strict(),
+      )
+      .max(20)
+      .optional(),
+    featuredWorkIds: z
+      .array(z.string().trim().min(1))
+      .max(100)
+      .refine((ids) => new Set(ids).size === ids.length, 'Duplicate featured Work')
+      .optional(),
     /** Bytes; `0` is a real value (attachments off), so non-negative rather than positive. */
     maxFileStorage: z.number().int().nonnegative().optional(),
     /**
@@ -90,6 +108,7 @@ const agentShareProcedure = wsCompatProcedure.use(serverDatabase).use(async (opt
 
   return opts.next({
     ctx: {
+      agentService: new AgentService(ctx.serverDB, ctx.userId, workspaceId),
       agentShareModel: new AgentShareModel(ctx.serverDB, ctx.userId, workspaceId, {
         authorizeMutation: workspaceId
           ? (db, agentId) =>
@@ -103,6 +122,7 @@ const agentShareProcedure = wsCompatProcedure.use(serverDatabase).use(async (opt
               })
           : undefined,
       }),
+      agentShareProfileModel: new AgentShareProfileModel(ctx.serverDB, ctx.userId),
     },
   });
 });
@@ -173,6 +193,13 @@ export const agentShareRouter = router({
     .mutation(async ({ input, ctx }) => {
       await assertCanManageAgentShare(ctx, input.agentId);
       await assertAgentShareCreationEnabled(ctx.userId);
+
+      if (input.visibility === 'link') {
+        return ctx.agentService.withShareModelLock(input.agentId, async (service, shares) => {
+          await service.prepareShareModel(input.agentId);
+          return shares.create(input.agentId, 'link');
+        });
+      }
 
       return ctx.agentShareModel.create(input.agentId, input.visibility);
     }),
@@ -284,6 +311,28 @@ export const agentShareRouter = router({
       ),
     ),
 
+  /** Owner-only candidate Works for the share profile editor. */
+  listEligibleWorks: agentShareProcedure
+    .input(
+      agentIdInput.extend({
+        includeWorkIds: z
+          .array(z.string().trim().min(1))
+          .max(100)
+          .refine((ids) => new Set(ids).size === ids.length, 'Duplicate selected Work')
+          .optional(),
+        limit: z.number().int().positive().max(50).optional(),
+        offset: z.number().int().nonnegative().max(10000).optional(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      requireShare(await ctx.agentShareModel.getByAgentId(input.agentId));
+      return ctx.agentShareProfileModel.listEligibleWorks(input.agentId, {
+        includeWorkIds: input.includeWorkIds ?? [],
+        limit: input.limit,
+        offset: input.offset,
+      });
+    }),
+
   updateShareConfig: agentShareProcedure
     .input(
       z
@@ -332,7 +381,13 @@ export const agentShareRouter = router({
       await assertCanManageAgentShare(ctx, input.agentId);
       // Flipping to `link` publishes the share, so it is the same capability
       // as `enableShare`; going back to `private` unpublishes and stays open.
-      if (input.visibility === 'link') await assertAgentShareCreationEnabled(ctx.userId);
+      if (input.visibility === 'link') {
+        await assertAgentShareCreationEnabled(ctx.userId);
+        return ctx.agentService.withShareModelLock(input.agentId, async (service, shares) => {
+          await service.prepareShareModel(input.agentId);
+          return requireShare(await shares.updateVisibility(input.agentId, 'link'));
+        });
+      }
 
       return requireShare(
         await ctx.agentShareModel.updateVisibility(input.agentId, input.visibility),

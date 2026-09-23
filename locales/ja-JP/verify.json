@@ -261,7 +261,6 @@
   "acceptance.review.regionCommentsEmpty": "画像上でドラッグして領域を囲みます — コメントはここに表示されます。",
   "acceptance.review.regionImage": "画像 {{image}} · 領域 {{region}}",
   "acceptance.review.reject": "コメント付きで拒否",
-  "acceptance.review.rejectDescription": "「{{title}}」を拒否 — あなたのフィードバックが次の検証ラウンドで使用されます。",
   "acceptance.review.rejectPlaceholder": "何が問題で、代わりに何を期待するか…",
   "acceptance.review.rejectedHint": "このチェックを拒否しました — 次のラウンドがあなたのフィードバックを読み取ります。",
   "acceptance.review.removeAttachment": "添付ファイルを削除",

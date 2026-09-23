@@ -186,17 +186,30 @@ stale standalone install: a recently added workspace package fails to resolve �
 - Invocation: from source, no rebuild — `cd apps/cli && bun src/index.ts <cmd>`
   (referred to as `$CLI`). CLI-side code changes take effect immediately.
 
-- Auth: see §3 CLI. Source the seeded profile first:
-  `source .records/env/agent-testing-cli.env`. It sets `LOBE_API_KEY` /
-  `LOBEHUB_CLI_API_KEY`, `LOBEHUB_SERVER=http://localhost:3010`, and
-  `LOBEHUB_CLI_HOME=.lobehub-dev` for isolated settings.
+- Auth: see §3 CLI. Load `.records/env/agent-testing-cli.env` only inside the
+  local-test subshell below. It sets `LOBE_API_KEY` / `LOBEHUB_CLI_API_KEY`,
+  `LOBEHUB_SERVER=http://localhost:3010`, and `LOBEHUB_CLI_HOME=.lobehub-dev`
+  for isolated settings.
 
-- **Local-run vs publish env distinction:** those seeded overrides are for
-  _running_ the local backend test. They are WRONG for _publishing_ — a localhost
-  run yields a verify URL nobody else can open, and the local stub S3 makes
-  evidence upload fail. Strip them for the publish step (the skill's Step 6 does
-  `env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME lh verify ingest-report …`
-  so `lh` uses production defaults + the user's real `~/.lobehub` login).
+- **Local-run vs publish env distinction:** seeded credentials are only for the
+  local backend. Load the test profile inside a subshell so it does not overwrite
+  production credentials in the parent shell; remove any inherited production
+  JWT inside that subshell because it would override the seeded API key:
+
+  ```bash
+  (
+    unset LOBEHUB_JWT
+    source .records/env/agent-testing-cli.env
+    lh whoami
+    # Run the local CLI test commands here.
+  )
+  ```
+
+  For publication or existing-round lookup, follow
+  [Publish auth preflight](PROCESS.md#publish-auth-preflight). Preserve known
+  production credentials; do not blindly clear API keys or assume `~/.lobehub`
+  contains a login. Never change only the server URL while retaining a local
+  test credential.
 
 - Standalone install: `cd apps/cli && pnpm install` (root install does not cover it).
 

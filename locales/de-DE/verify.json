@@ -261,7 +261,6 @@
   "acceptance.review.regionCommentsEmpty": "Ziehen Sie auf dem Bild, um einen Bereich zu markieren — sein Kommentar wird hier angezeigt.",
   "acceptance.review.regionImage": "Bild {{image}} · Bereich {{region}}",
   "acceptance.review.reject": "Mit Kommentar ablehnen",
-  "acceptance.review.rejectDescription": "Lehnen Sie \"{{title}}\" ab — Ihr Feedback ist die Grundlage für die nächste Überprüfungsrunde.",
   "acceptance.review.rejectPlaceholder": "Was ist falsch und was erwarten Sie stattdessen…",
   "acceptance.review.rejectedHint": "Sie haben diese Überprüfung abgelehnt — die nächste Runde berücksichtigt Ihr Feedback.",
   "acceptance.review.removeAttachment": "Anhang entfernen",

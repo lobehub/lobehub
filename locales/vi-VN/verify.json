@@ -261,7 +261,6 @@
   "acceptance.review.regionCommentsEmpty": "Kéo trên hình ảnh để khoanh vùng — nhận xét của nó sẽ xuất hiện ở đây.",
   "acceptance.review.regionImage": "Hình ảnh {{image}} · Vùng {{region}}",
   "acceptance.review.reject": "Từ chối với nhận xét",
-  "acceptance.review.rejectDescription": "Từ chối \"{{title}}\" — phản hồi của bạn là những gì vòng xác minh tiếp theo sẽ thực hiện.",
   "acceptance.review.rejectPlaceholder": "Có gì sai, và bạn mong đợi điều gì thay thế…",
   "acceptance.review.rejectedHint": "Bạn đã từ chối kiểm tra này — vòng tiếp theo sẽ đọc phản hồi của bạn.",
   "acceptance.review.removeAttachment": "Xóa tệp đính kèm",

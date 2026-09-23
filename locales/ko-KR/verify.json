@@ -261,7 +261,6 @@
   "acceptance.review.regionCommentsEmpty": "이미지에서 영역을 드래그하여 원을 그리세요 — 해당 댓글이 여기에 표시됩니다.",
   "acceptance.review.regionImage": "이미지 {{image}} · 영역 {{region}}",
   "acceptance.review.reject": "의견과 함께 거부",
-  "acceptance.review.rejectDescription": "\"{{title}}\"을(를) 거부 — 귀하의 피드백은 다음 검증 라운드에서 반영됩니다.",
   "acceptance.review.rejectPlaceholder": "무엇이 잘못되었는지, 그리고 기대하는 바는 무엇인지…",
   "acceptance.review.rejectedHint": "이 검사를 거부했습니다 — 다음 라운드에서 귀하의 피드백을 참조합니다.",
   "acceptance.review.removeAttachment": "첨부 파일 제거",

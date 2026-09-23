@@ -27,6 +27,13 @@ class AgentShareService {
     return lambdaClient.agentShare.getWorkspaceShareAudit.query(input);
   }
 
+  async listEligibleWorks(
+    agentId: string,
+    params?: { includeWorkIds?: string[]; limit?: number; offset?: number },
+  ) {
+    return lambdaClient.agentShare.listEligibleWorks.query({ agentId, ...params });
+  }
+
   /** Resolve a share's visitor-facing metadata, by its custom slug or its raw share id. */
   async getSharedAgent(slugOrId: string) {
     // The visitor page renders its own login prompt on UNAUTHORIZED; opt out of

@@ -261,7 +261,6 @@
   "acceptance.review.regionCommentsEmpty": "在圖片上拖動以圈出區域 — 其評論將顯示在此處。",
   "acceptance.review.regionImage": "圖片 {{image}} · 區域 {{region}}",
   "acceptance.review.reject": "拒絕並評論",
-  "acceptance.review.rejectDescription": "拒絕「{{title}}」— 您的反饋將成為下一次驗證回合的依據。",
   "acceptance.review.rejectPlaceholder": "問題是什麼，您期望的結果是什麼…",
   "acceptance.review.rejectedHint": "您拒絕了此檢查 — 下一回合將參考您的反饋。",
   "acceptance.review.removeAttachment": "移除附件",

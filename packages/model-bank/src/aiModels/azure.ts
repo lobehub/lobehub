@@ -10,6 +10,208 @@ const azureChatModels: AIChatModelCard[] = [
       vision: true,
     },
     config: {
+      deploymentName: 'gpt-6-astra',
+    },
+    contextWindowTokens: 1_050_000,
+    description:
+      'OpenAI’s most capable model for complex reasoning, coding, computer use, research, and document creation.',
+    displayName: 'GPT-6 Astra',
+    enabled: true,
+    id: 'gpt-6-astra',
+    maxOutput: 128_000,
+    pricing: {
+      units: [
+        {
+          name: 'textInput',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 10, upTo: 272_000 },
+            { rate: 20, upTo: 'infinity' },
+          ],
+        },
+        {
+          name: 'textInput_cacheRead',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 1, upTo: 272_000 },
+            { rate: 2, upTo: 'infinity' },
+          ],
+        },
+        {
+          name: 'textInput_cacheWrite',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 12.5, upTo: 272_000 },
+            { rate: 25, upTo: 'infinity' },
+          ],
+        },
+        {
+          name: 'textOutput',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 50, upTo: 272_000 },
+            { rate: 75, upTo: 'infinity' },
+          ],
+        },
+      ],
+    },
+    releasedAt: '2026-09-03',
+    settings: {
+      extendParams: ['gpt6ReasoningEffort', 'textVerbosity'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+    family: 'gpt',
+    generation: 'gpt-6',
+    knowledgeCutoff: '2026-04',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    config: {
+      deploymentName: 'gpt-6-sol',
+    },
+    contextWindowTokens: 1_050_000,
+    description: 'GPT-6 Sol is built for complex coding and agentic workflows.',
+    displayName: 'GPT-6 Sol',
+    enabled: true,
+    family: 'gpt',
+    generation: 'gpt-6',
+    id: 'gpt-6-sol',
+    knowledgeCutoff: '2026-04',
+    maxOutput: 128_000,
+    pricing: {
+      units: [
+        {
+          name: 'textInput',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 2, upTo: 272_000 },
+            { rate: 4, upTo: 'infinity' },
+          ],
+        },
+        {
+          name: 'textInput_cacheRead',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.2, upTo: 272_000 },
+            { rate: 0.4, upTo: 'infinity' },
+          ],
+        },
+        {
+          name: 'textInput_cacheWrite',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 2.5, upTo: 272_000 },
+            { rate: 5, upTo: 'infinity' },
+          ],
+        },
+        {
+          name: 'textOutput',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 10, upTo: 272_000 },
+            { rate: 15, upTo: 'infinity' },
+          ],
+        },
+      ],
+    },
+    releasedAt: '2026-09-22',
+    settings: {
+      extendParams: ['gpt5_6ReasoningEffort', 'textVerbosity'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    config: {
+      deploymentName: 'gpt-6-luna',
+    },
+    contextWindowTokens: 1_050_000,
+    description: 'GPT-6 Luna is OpenAI’s most efficient model for focused, high-volume tasks.',
+    displayName: 'GPT-6 Luna',
+    enabled: true,
+    family: 'gpt',
+    generation: 'gpt-6',
+    id: 'gpt-6-luna',
+    knowledgeCutoff: '2026-05',
+    maxOutput: 128_000,
+    pricing: {
+      units: [
+        {
+          name: 'textInput',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.1, upTo: 272_000 },
+            { rate: 0.2, upTo: 'infinity' },
+          ],
+        },
+        {
+          name: 'textInput_cacheRead',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.01, upTo: 272_000 },
+            { rate: 0.02, upTo: 'infinity' },
+          ],
+        },
+        {
+          name: 'textInput_cacheWrite',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.125, upTo: 272_000 },
+            { rate: 0.25, upTo: 'infinity' },
+          ],
+        },
+        {
+          name: 'textOutput',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.5, upTo: 272_000 },
+            { rate: 0.75, upTo: 'infinity' },
+          ],
+        },
+      ],
+    },
+    releasedAt: '2026-09-22',
+    settings: {
+      extendParams: ['gpt5_6ReasoningEffort', 'textVerbosity'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    config: {
       deploymentName: 'gpt-5.4',
     },
     contextWindowTokens: 1_050_000,

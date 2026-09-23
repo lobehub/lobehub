@@ -474,7 +474,7 @@ export const AcceptanceCheckRow = memo<{
                     disabled={reviewPending}
                     icon={MessageSquareX}
                     size={'small'}
-                    title={t('acceptance.review.rejectWithRegions')}
+                    title={t('acceptance.review.reject')}
                     onClick={(event) => {
                       event.stopPropagation();
                       openReject();
@@ -911,7 +911,7 @@ export const AcceptanceCheckRow = memo<{
                         openReject();
                       }}
                     >
-                      {t('acceptance.review.rejectWithRegions')}
+                      {t('acceptance.review.reject')}
                     </Button>
                     <Button
                       disabled={reviewPending && !accepting}

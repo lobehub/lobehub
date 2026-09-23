@@ -1094,6 +1094,8 @@ export class AgentRuntimeService {
           continuation: interventionResolution,
           defaultTaskAssigneeAgentId: appContext?.defaultTaskAssigneeAgentId,
           documentId: appContext?.documentId ?? undefined,
+          editingAgentId: appContext?.editingAgentId,
+          editingGroupId: appContext?.editingGroupId,
           groupId: appContext?.groupId ?? undefined,
           lineage: {
             isSubAgent: appContext?.isSubAgent,
