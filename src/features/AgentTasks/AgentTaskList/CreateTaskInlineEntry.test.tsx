@@ -496,6 +496,36 @@ describe('CreateTaskInlineEntry', () => {
     });
   });
 
+  it('drops the previous scope’s run location when the destination has no draft', async () => {
+    // The composer stays mounted across a workspace/agent switch, and the reset
+    // runs before the destination draft is read — a scope with no draft returns
+    // early, so the run location has to be part of the baseline. Otherwise the
+    // new scope inherits a device (or a directory) picked for the old one and
+    // creates its task there, where it may not even be reachable.
+    editorMarkdownMock.value = 'Coordinate the release';
+    const { rerender } = render(<CreateTaskInlineEntry variant="hero" />);
+
+    fireEvent.click(screen.getByTestId('pin-device'));
+    await waitFor(() =>
+      expect(screen.getByTestId('execution-controls')).toHaveAttribute('data-pinned', 'device-a'),
+    );
+
+    activeWorkspaceMock.id = 'workspace-3';
+    // The real workspace hook publishes a store update. Change one prop here as
+    // well so the memoized test component observes the mocked hook value.
+    rerender(<CreateTaskInlineEntry placeholder="Empty workspace" variant="hero" />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId('execution-controls')).toHaveAttribute('data-pinned', ''),
+    );
+    await waitFor(() => {
+      const draft = JSON.parse(
+        localStorage.getItem('lobehub:task-create-draft:workspace-3:all') || '{}',
+      );
+      expect(draft.execution).toBeUndefined();
+    });
+  });
+
   it('drops an incompatible restored member when the assigned agent is private', async () => {
     localStorage.setItem(
       'lobehub:task-create-draft:workspace-1:all',
