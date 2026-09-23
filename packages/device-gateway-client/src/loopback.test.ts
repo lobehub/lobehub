@@ -71,6 +71,33 @@ describe('ensureLoopbackBypassesProxy', () => {
     expect(env.no_proxy).toBe('corp.local,[::1],localhost,127.0.0.1,::1');
   });
 
+  it("carries one casing's exclusions into the other instead of replacing them", () => {
+    // Only one casing holds the corporate bypass list. A tool that prefers the
+    // other casing must still see it, not a loopback-only list.
+    const env: Record<string, string | undefined> = {
+      HTTP_PROXY: 'http://proxy:8080',
+      no_proxy: '.corp.internal,10.0.0.0/8',
+    };
+    ensureLoopbackBypassesProxy(env);
+
+    const expected = '.corp.internal,10.0.0.0/8,localhost,127.0.0.1,::1,[::1]';
+    expect(env.NO_PROXY).toBe(expected);
+    expect(env.no_proxy).toBe(expected);
+  });
+
+  it('merges exclusions that differ between the two casings', () => {
+    const env: Record<string, string | undefined> = {
+      HTTP_PROXY: 'http://proxy:8080',
+      NO_PROXY: 'a.internal,localhost',
+      no_proxy: 'b.internal',
+    };
+    ensureLoopbackBypassesProxy(env);
+
+    const expected = 'a.internal,localhost,b.internal,127.0.0.1,::1,[::1]';
+    expect(env.NO_PROXY).toBe(expected);
+    expect(env.no_proxy).toBe(expected);
+  });
+
   it('leaves the environment alone when no proxy is configured', () => {
     const env: Record<string, string | undefined> = { NO_PROXY: 'corp.local' };
     ensureLoopbackBypassesProxy(env);

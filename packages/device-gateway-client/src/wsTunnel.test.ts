@@ -223,6 +223,31 @@ describe('WebSocket relay backpressure', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
+  it.each(['error', 'close'] as const)(
+    'probes the loopback address again after a dial that fails with %s before opening',
+    async (event) => {
+      const upstream = fakeUpstream();
+      const probe = vi.fn(async () => true);
+      const host = new DeviceTunnelHost({
+        createUpstreamSocket: () => upstream.socket as never,
+        loopback: new LoopbackResolver(probe),
+        send: () => {},
+      });
+
+      open(host, 'r1');
+      await vi.waitFor(() => expect(probe).toHaveBeenCalledTimes(1));
+      await Promise.resolve();
+      await Promise.resolve();
+      // The server went away (e.g. restarted on the other address family).
+      if (event === 'error') upstream.emit('error', new Error('ECONNREFUSED'));
+      else upstream.emit('close', 1006, Buffer.from(''));
+
+      // HMR reconnects immediately: the stale cached host must not be reused.
+      open(host, 'r2');
+      await vi.waitFor(() => expect(probe).toHaveBeenCalledTimes(2));
+    },
+  );
+
   it('pauses a fast producer above the high mark and resumes once drained', async () => {
     const { backlog, host, upstream } = await setupFake();
 

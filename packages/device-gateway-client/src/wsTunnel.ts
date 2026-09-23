@@ -145,10 +145,16 @@ export class DeviceWsTunnelHost {
       this.applyBackpressure(tunnel);
     });
 
+    // A dial that never completed may have hit the wrong loopback address (the
+    // server restarted on the other family); drop the cached answer so the
+    // next attempt — HMR reconnects right away — probes again.
+    const forgetHost = () => this.options.loopback?.forget(target.port);
+
     socket.on('close', (code, reason) => {
       if (tunnel.closed) return;
       this.release(tunnel);
       if (!tunnel.opened) {
+        forgetHost();
         this.options.send({
           connId,
           error: 'UPSTREAM_CLOSED',
@@ -165,6 +171,7 @@ export class DeviceWsTunnelHost {
       // Before the handshake completes the gateway is still waiting on an ack;
       // after it, the browser needs a close.
       if (!tunnel.opened) {
+        forgetHost();
         this.release(tunnel);
         this.fail(connId, error);
         return;

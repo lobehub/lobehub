@@ -48,14 +48,21 @@ export const ensureLoopbackBypassesProxy = (
   ].some((name) => !!env[name]);
   if (!hasProxy) return;
 
+  // Tools disagree on which casing wins, so both end up holding the same list:
+  // everything either one already excluded, plus loopback. Writing loopback
+  // alone into the casing that was unset would make a tool that prefers it
+  // drop the user's own exclusions (e.g. a corporate bypass list).
+  const entries: string[] = [];
   for (const name of ['NO_PROXY', 'no_proxy']) {
-    const entries = (env[name] ?? '')
-      .split(',')
-      .map((entry) => entry.trim())
-      .filter(Boolean);
-    const missing = LOOPBACK_NO_PROXY.filter((host) => !entries.includes(host));
-    if (missing.length > 0) env[name] = [...entries, ...missing].join(',');
+    for (const entry of (env[name] ?? '').split(',')) {
+      const host = entry.trim();
+      if (host && !entries.includes(host)) entries.push(host);
+    }
   }
+  for (const host of LOOPBACK_NO_PROXY) if (!entries.includes(host)) entries.push(host);
+
+  const merged = entries.join(',');
+  for (const name of ['NO_PROXY', 'no_proxy']) if (env[name] !== merged) env[name] = merged;
 };
 
 const CACHE_TTL_MS = 30_000;
