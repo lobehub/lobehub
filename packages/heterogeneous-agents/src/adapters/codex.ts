@@ -14,7 +14,7 @@ import {
   CODEX_COMMAND_OUTPUT_MAX_LENGTH,
   truncateCodexCommandOutput,
 } from '../utils/codexCommandOutput';
-import { isCodexCapacityError } from '../utils/codexErrors';
+import { isCodexCapacityError, isCodexTransientStreamError } from '../utils/codexErrors';
 import { toCodexUsageData, toTurnUsageFromCumulative } from '../utils/codexUsage';
 
 const CODEX_IDENTIFIER = 'codex';
@@ -799,6 +799,13 @@ export class CodexAdapter implements AgentEventAdapter {
   private stepIndex = 0;
   private terminalEndEmitted = false;
   private terminalErrorEmitted = false;
+  /**
+   * Last in-flight stream retry ("Reconnecting... 2/5") that we deliberately did
+   * not treat as terminal. Codex keeps running after one, but if the stream then
+   * ends without any terminal event the run really did die mid-retry — surface
+   * this message instead of settling silently.
+   */
+  private lastStreamRetryMessage?: string;
 
   constructor(options: { initialCumulativeUsage?: UsageData | undefined } = {}) {
     this.lastCumulativeUsage = options.initialCumulativeUsage;
@@ -822,7 +829,14 @@ export class CodexAdapter implements AgentEventAdapter {
       case 'turn.completed': {
         return this.handleTurnCompleted(raw);
       }
-      case 'error':
+      case 'error': {
+        // Codex reuses `error` for in-flight stream retries ("Reconnecting... 2/5")
+        // and the exec JSONL form carries no `willRetry` flag, so the message is
+        // the only signal that this turn is still running.
+        const message = getCodexTerminalErrorMessage(raw);
+        if (isCodexTransientStreamError(message)) return this.handleStreamRetry(message);
+        return this.handleTerminalError(raw);
+      }
       case 'turn.failed': {
         return this.handleTerminalError(raw);
       }
@@ -849,6 +863,19 @@ export class CodexAdapter implements AgentEventAdapter {
 
   flush(): HeterogeneousAgentEvent[] {
     return this.drainPendingToolEndEvents();
+  }
+
+  /**
+   * Codex restarts the upstream request behind a `Reconnecting...` error, so the
+   * turn can still finish. Only when the stream ends without any terminal event
+   * do we know the retry never recovered — then the retry message is the best
+   * explanation we have.
+   */
+  validateCompletion(): HeterogeneousAgentEvent[] {
+    if (this.terminalEndEmitted || this.terminalErrorEmitted) return [];
+    if (!this.lastStreamRetryMessage) return [];
+
+    return this.handleTerminalError({ message: this.lastStreamRetryMessage });
   }
 
   private handleTurnCompleted(raw: any): HeterogeneousAgentEvent[] {
@@ -886,6 +913,12 @@ export class CodexAdapter implements AgentEventAdapter {
     events.push(this.makeEvent('agent_runtime_end', interrupted ? { reason: 'interrupted' } : {}));
 
     return events;
+  }
+
+  private handleStreamRetry(message: string): HeterogeneousAgentEvent[] {
+    this.lastStreamRetryMessage = message;
+
+    return [this.makeEvent('stream_retry', { message })];
   }
 
   private handleTerminalError(raw: any): HeterogeneousAgentEvent[] {
