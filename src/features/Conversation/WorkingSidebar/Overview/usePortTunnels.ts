@@ -32,7 +32,6 @@ export const usePortTunnels = (options: {
 }) => {
   const { active, cwd, deviceId, onOpened, open } = options;
   const { t } = useTranslation('chat');
-  const [port, setPort] = useState('');
   const [busySlug, setBusySlug] = useState<string>();
   /** The port being exposed — typed or detected — so its row can show progress. */
   const [creatingPort, setCreatingPort] = useState<number>();
@@ -53,10 +52,12 @@ export const usePortTunnels = (options: {
    * project's own ports count as "available": a dev machine listens on dozens
    * of unrelated ports (databases, Docker, system services).
    */
-  const { detected, others } = useMemo(() => {
+  const { byPort, detected, others } = useMemo(() => {
+    const ports = detection.data?.ports ?? [];
     const exposed = new Set((tunnels ?? []).map((link) => link.port));
-    const fresh = (detection.data?.ports ?? []).filter((p) => !exposed.has(p.port));
+    const fresh = ports.filter((p) => !exposed.has(p.port));
     return {
+      byPort: new Map(ports.map((p) => [p.port, p])),
       detected: fresh.filter((p) => p.inProject),
       others: fresh.filter((p) => !p.inProject),
     };
@@ -143,16 +144,10 @@ export const usePortTunnels = (options: {
     [mutate, t],
   );
 
-  /** Expose a port and open it. Without an argument, uses the typed port. */
+  /** Expose a detected port and open it. */
   const exposePort = useCallback(
-    async (detectedPort?: number) => {
-      const parsed = detectedPort ?? Number(port.trim());
-      if (
-        (detectedPort === undefined && !port.trim()) ||
-        !Number.isInteger(parsed) ||
-        parsed < 1 ||
-        parsed > 65_535
-      ) {
+    async (target: number) => {
+      if (!Number.isInteger(target) || target < 1 || target > 65_535) {
         toast.error(t('workingPanel.overview.ports.invalidPort'));
         return;
       }
@@ -163,10 +158,9 @@ export const usePortTunnels = (options: {
         return;
       }
 
-      setCreatingPort(parsed);
+      setCreatingPort(target);
       try {
-        const link = await deviceService.createTunnel({ deviceId, port: parsed });
-        if (detectedPort === undefined) setPort('');
+        const link = await deviceService.createTunnel({ deviceId, port: target });
         await mutate();
         // Choosing a port means "let me see it" — open it without a second click.
         navigateTab(tab, link.openUrl);
@@ -178,15 +172,16 @@ export const usePortTunnels = (options: {
         setCreatingPort(undefined);
       }
     },
-    [deviceId, mutate, navigateTab, onOpened, port, reserveTab, t],
+    [deviceId, mutate, navigateTab, onOpened, reserveTab, t],
   );
 
   return {
     busySlug,
     copyLink,
-    creating: creatingPort !== undefined,
     creatingPort,
     detected,
+    /** Detection info by port, to label exposed links with their process. */
+    detectedByPort: byPort,
     /** False when the device can't detect (offline, or a client that predates it). */
     detectionAvailable: !!detection.data?.supported,
     detectionLoading: detection.isLoading,
@@ -194,12 +189,10 @@ export const usePortTunnels = (options: {
     exposePort,
     isLoading,
     openLink,
-    port,
     refresh: mutate,
     refreshDetected: detection.mutate,
     otherPorts: others as DeviceListeningPort[],
     revokeLink,
-    setPort,
     tunnels: tunnels ?? [],
   };
 };

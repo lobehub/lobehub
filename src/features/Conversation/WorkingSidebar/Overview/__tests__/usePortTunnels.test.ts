@@ -98,28 +98,22 @@ describe('usePortTunnels', () => {
     });
     const { result } = setup();
 
-    act(() => result.current.setPort('3000'));
-    await act(() => result.current.exposePort());
+    await act(() => result.current.exposePort(3000));
 
     expect(createTunnel).toHaveBeenCalledWith({ deviceId: 'device-1', port: 3000 });
-    // Typing a port means "let me see it": no second click to open it.
+    // Choosing a port means "let me see it": no second click to open it.
     expect(tab.location.href).toBe('https://3000--abcdefgh.lobe.sh/?token=fresh');
-    expect(result.current.port).toBe('');
     expect(onOpened).toHaveBeenCalled();
   });
 
-  it.each(['0', '70000', 'abc', '', '  ', '80.5'])(
-    'refuses %j without calling the server',
-    async (value) => {
-      const { result } = setup();
+  it.each([0, 70_000, 80.5, Number.NaN])('refuses %j without calling the server', async (value) => {
+    const { result } = setup();
 
-      act(() => result.current.setPort(value));
-      await act(() => result.current.exposePort());
+    await act(() => result.current.exposePort(value));
 
-      expect(toastError).toHaveBeenCalledWith('workingPanel.overview.ports.invalidPort');
-      expect(createTunnel).not.toHaveBeenCalled();
-    },
-  );
+    expect(toastError).toHaveBeenCalledWith('workingPanel.overview.ports.invalidPort');
+    expect(createTunnel).not.toHaveBeenCalled();
+  });
 
   it('opens an existing link with a freshly minted token, never the stored URL', async () => {
     tunnels.value = [link];
@@ -159,13 +153,12 @@ describe('usePortTunnels', () => {
     createTunnel.mockRejectedValue(new Error('offline'));
     const { result } = setup();
 
-    act(() => result.current.setPort('5173'));
-    await act(() => result.current.exposePort());
+    await act(() => result.current.exposePort(5173));
 
     expect(toastError).toHaveBeenCalledWith('workingPanel.overview.ports.createFailed');
     // The reserved tab must not be left sitting on about:blank.
     expect(tab.close).toHaveBeenCalled();
-    expect(result.current.creating).toBe(false);
+    expect(result.current.creatingPort).toBeUndefined();
   });
 
   it('never navigates to a non-http URL the server might return', async () => {
@@ -263,16 +256,19 @@ describe('usePortTunnels', () => {
       expect(result.current.detectionAvailable).toBe(true);
     });
 
-    it('exposes a detected port in one click, without touching the typed field', async () => {
-      createTunnel.mockResolvedValue({ ...link, openUrl: `${link.url}?token=fresh`, port: 5173 });
+    it('labels an exposed link with the process detected on its port', () => {
+      tunnels.value = [link];
+      detection.data = { ports: [port({ port: 3000 })], supported: true };
+
       const { result } = setup();
 
-      act(() => result.current.setPort('8080'));
-      await act(() => result.current.exposePort(5173));
-
-      expect(createTunnel).toHaveBeenCalledWith({ deviceId: 'device-1', port: 5173 });
-      expect(tab.location.href).toBe(`${link.url}?token=fresh`);
-      expect(result.current.port).toBe('8080');
+      // Exposed rows sit on top of the same list, so they carry the same
+      // "node · This project" label as a detected row.
+      expect(result.current.detectedByPort.get(3000)).toMatchObject({
+        command: 'node',
+        inProject: true,
+      });
+      expect(result.current.detected).toEqual([]);
     });
 
     it('reports no detection for a device that cannot answer', () => {

@@ -1,5 +1,5 @@
 import type { DeviceListeningPort } from '@lobechat/types';
-import { Icon, Input, Tooltip } from '@lobehub/ui';
+import { Icon, Tooltip } from '@lobehub/ui';
 import {
   DropdownMenuItem,
   DropdownMenuPopup,
@@ -13,13 +13,14 @@ import {
   CopyIcon,
   GlobeIcon,
   LoaderCircleIcon,
-  PlugZapIcon,
   RadarIcon,
   RefreshCwIcon,
   XIcon,
 } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { memo, type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import type { DeviceTunnelLink } from '@/store/device';
 
 import { OverviewRow, PickerGlyph } from './OverviewRow';
 import { usePortTunnels } from './usePortTunnels';
@@ -31,8 +32,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     display: flex;
     flex-shrink: 0;
     align-items: center;
+    justify-content: center;
 
-    padding: 2px;
+    width: 20px;
+    height: 20px;
+    padding: 0;
     border: none;
     border-radius: 4px;
 
@@ -50,6 +54,30 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       outline-offset: 1px;
     }
   `,
+  actions: css`
+    display: flex;
+    flex-shrink: 0;
+    gap: 2px;
+    align-items: center;
+
+    /* Pull the last glyph flush with the text trailing of the other rows. */
+    margin-inline-end: -4px;
+  `,
+  available: css`
+    font-size: 12px;
+    color: ${cssVar.colorPrimary};
+  `,
+  command: css`
+    overflow: hidden;
+    flex-shrink: 1;
+
+    min-width: 0;
+
+    font-size: 12px;
+    color: ${cssVar.colorTextSecondary};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
   container: css`
     display: flex;
     flex-direction: column;
@@ -62,51 +90,37 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
   `,
-  retry: css`
-    cursor: pointer;
-
-    padding: 0;
-    border: none;
-
+  expose: css`
+    flex-shrink: 0;
     font-size: 12px;
-    color: ${cssVar.colorInfo};
-
-    background: transparent;
+    font-weight: 500;
+    color: ${cssVar.colorPrimary};
   `,
-  state: css`
+  header: css`
     display: flex;
-    gap: 6px;
     align-items: center;
+    justify-content: space-between;
 
-    padding-block: 10px;
-    padding-inline: 8px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  host: css`
-    overflow: hidden;
-    flex: 1;
-
-    min-width: 0;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  hint: css`
-    padding-block: 6px 2px;
-    padding-inline: 8px;
+    padding-block: 6px 4px;
+    padding-inline: 8px 4px;
 
     font-size: 11px;
-    line-height: 16px;
-    color: ${cssVar.colorTextQuaternary};
+    font-weight: 500;
+    color: ${cssVar.colorTextTertiary};
   `,
   item: css`
     display: flex;
     gap: 8px;
     align-items: center;
+  `,
+  othersList: css`
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+
+    /* A dev machine listens on dozens of ports; the list scrolls inside the
+       menu instead of pushing it past the viewport. */
+    max-height: 200px;
   `,
   port: css`
     flex-shrink: 0;
@@ -115,28 +129,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 12px;
     font-weight: 500;
     color: ${cssVar.colorText};
-  `,
-  detectedItem: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-  `,
-  expose: css`
-    flex-shrink: 0;
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorPrimary};
-  `,
-  command: css`
-    overflow: hidden;
-    flex: 1;
-
-    min-width: 0;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
   `,
   projectTag: css`
     flex-shrink: 0;
@@ -151,24 +143,31 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     background: ${cssVar.colorSuccessBg};
   `,
-  sectionHeader: css`
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding-inline-end: 4px;
-  `,
-  available: css`
-    font-size: 12px;
-    color: ${cssVar.colorPrimary};
-  `,
-  othersList: css`
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
+  retry: css`
+    cursor: pointer;
 
-    /* A dev machine listens on dozens of ports; the list scrolls inside the
-       menu instead of pushing it past the viewport. */
-    max-height: 200px;
+    padding: 0;
+    border: none;
+
+    font-size: 12px;
+    color: ${cssVar.colorInfo};
+
+    background: transparent;
+  `,
+  spacer: css`
+    flex: 1;
+    min-width: 0;
+  `,
+  state: css`
+    display: flex;
+    gap: 6px;
+    align-items: center;
+
+    padding-block: 10px;
+    padding-inline: 8px;
+
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
   `,
   toggle: css`
     cursor: pointer;
@@ -187,14 +186,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       color: ${cssVar.colorText};
     }
   `,
-  section: css`
-    padding-block: 6px 4px;
-    padding-inline: 8px;
-
-    font-size: 11px;
-    font-weight: 500;
-    color: ${cssVar.colorTextTertiary};
-  `,
 }));
 
 interface PortSwitcherProps {
@@ -206,9 +197,13 @@ interface PortSwitcherProps {
 }
 
 /**
- * Exposes a port on the working device as a link. Opening is a two-step by
- * design: the stored link is clean, and the token that opens it is minted per
- * click, so nothing long-lived sits in the UI or the clipboard.
+ * The ports of the working device, as one list: ports that already have a link
+ * sit on top (open, copy, stop), the project's running servers follow with one
+ * click to expose, and everything else listening on the machine is folded away.
+ *
+ * Opening is two-step by design: the stored link is clean, and the token that
+ * opens it is minted per click, so nothing long-lived sits in the UI or the
+ * clipboard.
  */
 const PortSwitcher = memo<PortSwitcherProps>(({ active, deviceId, workingDirectory }) => {
   const { t } = useTranslation('chat');
@@ -220,9 +215,9 @@ const PortSwitcher = memo<PortSwitcherProps>(({ active, deviceId, workingDirecto
   const {
     busySlug,
     copyLink,
-    creating,
     creatingPort,
     detected,
+    detectedByPort,
     detectionAvailable,
     detectionLoading,
     error,
@@ -230,17 +225,77 @@ const PortSwitcher = memo<PortSwitcherProps>(({ active, deviceId, workingDirecto
     isLoading,
     openLink,
     otherPorts,
-    port,
     refresh,
     refreshDetected,
     revokeLink,
-    setPort,
     tunnels,
   } = usePortTunnels({ active, cwd: workingDirectory, deviceId, onOpened: close, open });
 
+  /** Port, process, then the project tag right after it; trailing goes last. */
+  const renderLabel = (port: number, info?: DeviceListeningPort) => (
+    <>
+      <span className={styles.port}>{port}</span>
+      {info?.command && (
+        <span className={styles.command} title={info.cwd}>
+          {info.command}
+        </span>
+      )}
+      {info?.inProject && (
+        <span className={styles.projectTag}>
+          {t('workingPanel.overview.ports.detected.inProject')}
+        </span>
+      )}
+      <span className={styles.spacer} />
+    </>
+  );
+
+  const actionButton = (label: string, icon: typeof CopyIcon, onPress: () => void) => (
+    <Tooltip title={label}>
+      <button
+        aria-label={label}
+        className={styles.action}
+        type={'button'}
+        // Enter/Space must act on this button, not fall through to the menu
+        // item and open the tunnel instead.
+        onKeyDown={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          onPress();
+        }}
+      >
+        <Icon icon={icon} size={13} />
+      </button>
+    </Tooltip>
+  );
+
+  const renderLink = (link: DeviceTunnelLink) => (
+    <DropdownMenuItem
+      className={styles.item}
+      key={link.slug}
+      onClick={(event) => {
+        event.preventDefault();
+        void openLink(link);
+      }}
+    >
+      <Tooltip title={link.hostname}>
+        <Icon
+          icon={busySlug === link.slug ? LoaderCircleIcon : GlobeIcon}
+          size={14}
+          spin={busySlug === link.slug}
+        />
+      </Tooltip>
+      {renderLabel(link.port, detectedByPort.get(link.port))}
+      <span className={styles.actions}>
+        {actionButton(t('workingPanel.overview.ports.copy'), CopyIcon, () => void copyLink(link))}
+        {actionButton(t('workingPanel.overview.ports.revoke'), XIcon, () => void revokeLink(link))}
+      </span>
+    </DropdownMenuItem>
+  );
+
   const renderDetected = (item: DeviceListeningPort) => (
     <DropdownMenuItem
-      className={styles.detectedItem}
+      className={styles.item}
       key={item.port}
       onClick={(event) => {
         event.preventDefault();
@@ -252,18 +307,45 @@ const PortSwitcher = memo<PortSwitcherProps>(({ active, deviceId, workingDirecto
         size={14}
         spin={creatingPort === item.port}
       />
-      <span className={styles.port}>{item.port}</span>
-      <span className={styles.command} title={item.cwd}>
-        {item.command}
-      </span>
-      {item.inProject && (
-        <span className={styles.projectTag}>
-          {t('workingPanel.overview.ports.detected.inProject')}
-        </span>
-      )}
+      {renderLabel(item.port, item)}
       <span className={styles.expose}>{t('workingPanel.overview.ports.detected.expose')}</span>
     </DropdownMenuItem>
   );
+
+  let body: ReactNode;
+  if (isLoading) {
+    body = (
+      <div className={styles.state}>
+        <Icon spin icon={LoaderCircleIcon} size={13} />
+        {t('workingPanel.overview.ports.loading')}
+      </div>
+    );
+  } else if (error) {
+    // "We couldn't ask" must not read as "nothing is open".
+    body = (
+      <div className={styles.state}>
+        {t('workingPanel.overview.ports.loadFailed')}
+        <button className={styles.retry} type={'button'} onClick={() => void refresh()}>
+          {tCommon('retry')}
+        </button>
+      </div>
+    );
+  } else if (tunnels.length === 0 && detected.length === 0) {
+    body = (
+      <div className={styles.empty}>
+        {detectionAvailable
+          ? t('workingPanel.overview.ports.detected.none')
+          : t('workingPanel.overview.ports.unavailable')}
+      </div>
+    );
+  } else {
+    body = (
+      <>
+        {tunnels.map(renderLink)}
+        {detected.map(renderDetected)}
+      </>
+    );
+  }
 
   return (
     <DropdownMenuRoot open={open} onOpenChange={setOpen}>
@@ -290,146 +372,47 @@ const PortSwitcher = memo<PortSwitcherProps>(({ active, deviceId, workingDirecto
         <DropdownMenuPositioner placement={'bottomLeft'} sideOffset={8}>
           <DropdownMenuPopup>
             <div className={styles.container}>
-              {detectionAvailable && (
+              <div className={styles.header}>
+                {t('workingPanel.overview.ports.title')}
+                {detectionAvailable && (
+                  <Tooltip title={t('workingPanel.overview.ports.detected.refresh')}>
+                    <button
+                      aria-label={t('workingPanel.overview.ports.detected.refresh')}
+                      className={styles.action}
+                      type={'button'}
+                      onKeyDown={(event) => event.stopPropagation()}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        void refreshDetected();
+                      }}
+                    >
+                      <Icon icon={RefreshCwIcon} size={12} spin={detectionLoading} />
+                    </button>
+                  </Tooltip>
+                )}
+              </div>
+
+              {body}
+
+              {otherPorts.length > 0 && (
                 <>
-                  <div className={styles.sectionHeader}>
-                    <div className={styles.section}>
-                      {t('workingPanel.overview.ports.detected.heading')}
-                    </div>
-                    <Tooltip title={t('workingPanel.overview.ports.detected.refresh')}>
-                      <button
-                        aria-label={t('workingPanel.overview.ports.detected.refresh')}
-                        className={styles.action}
-                        type={'button'}
-                        onKeyDown={(event) => event.stopPropagation()}
-                        onClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          void refreshDetected();
-                        }}
-                      >
-                        <Icon icon={RefreshCwIcon} size={12} spin={detectionLoading} />
-                      </button>
-                    </Tooltip>
-                  </div>
-                  {detected.length === 0 ? (
-                    <div className={styles.empty}>
-                      {t('workingPanel.overview.ports.detected.none')}
-                    </div>
-                  ) : (
-                    detected.map(renderDetected)
-                  )}
-                  {otherPorts.length > 0 && (
-                    <>
-                      <button
-                        className={styles.toggle}
-                        type={'button'}
-                        onClick={() => setShowOthers((value) => !value)}
-                      >
-                        {showOthers
-                          ? t('workingPanel.overview.ports.detected.hideOthers')
-                          : t('workingPanel.overview.ports.detected.others', {
-                              count: otherPorts.length,
-                            })}
-                      </button>
-                      {showOthers && (
-                        <div className={styles.othersList}>{otherPorts.map(renderDetected)}</div>
-                      )}
-                    </>
+                  <button
+                    className={styles.toggle}
+                    type={'button'}
+                    onClick={() => setShowOthers((value) => !value)}
+                  >
+                    {showOthers
+                      ? t('workingPanel.overview.ports.detected.hideOthers')
+                      : t('workingPanel.overview.ports.detected.others', {
+                          count: otherPorts.length,
+                        })}
+                  </button>
+                  {showOthers && (
+                    <div className={styles.othersList}>{otherPorts.map(renderDetected)}</div>
                   )}
                 </>
               )}
-
-              <div className={styles.section}>{t('workingPanel.overview.ports.heading')}</div>
-
-              {isLoading ? (
-                <div className={styles.state}>
-                  <Icon spin icon={LoaderCircleIcon} size={13} />
-                  {t('workingPanel.overview.ports.loading')}
-                </div>
-              ) : error ? (
-                // "We couldn't ask" must not read as "nothing is open".
-                <div className={styles.state}>
-                  {t('workingPanel.overview.ports.loadFailed')}
-                  <button className={styles.retry} type={'button'} onClick={() => void refresh()}>
-                    {tCommon('retry')}
-                  </button>
-                </div>
-              ) : tunnels.length === 0 ? (
-                <div className={styles.empty}>{t('workingPanel.overview.ports.empty')}</div>
-              ) : (
-                tunnels.map((link) => (
-                  <DropdownMenuItem
-                    className={styles.item}
-                    key={link.slug}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      void openLink(link);
-                    }}
-                  >
-                    <Icon
-                      icon={busySlug === link.slug ? LoaderCircleIcon : GlobeIcon}
-                      size={14}
-                      spin={busySlug === link.slug}
-                    />
-                    <span className={styles.port}>{link.port}</span>
-                    <span className={styles.host}>{link.hostname}</span>
-                    <Tooltip title={t('workingPanel.overview.ports.copy')}>
-                      <button
-                        aria-label={t('workingPanel.overview.ports.copy')}
-                        className={styles.action}
-                        type={'button'}
-                        // Enter/Space must act on this button, not fall through
-                        // to the menu item and open the tunnel instead.
-                        onKeyDown={(event) => event.stopPropagation()}
-                        onClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          void copyLink(link);
-                        }}
-                      >
-                        <Icon icon={CopyIcon} size={13} />
-                      </button>
-                    </Tooltip>
-                    <Tooltip title={t('workingPanel.overview.ports.revoke')}>
-                      <button
-                        aria-label={t('workingPanel.overview.ports.revoke')}
-                        className={styles.action}
-                        type={'button'}
-                        onKeyDown={(event) => event.stopPropagation()}
-                        onClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          void revokeLink(link);
-                        }}
-                      >
-                        <Icon icon={XIcon} size={13} />
-                      </button>
-                    </Tooltip>
-                  </DropdownMenuItem>
-                ))
-              )}
-
-              <div className={styles.section}>{t('workingPanel.overview.ports.expose')}</div>
-              <Input
-                disabled={creating}
-                placeholder={t('workingPanel.overview.ports.addPlaceholder')}
-                size={'small'}
-                value={port}
-                prefix={
-                  <Icon
-                    icon={creating ? LoaderCircleIcon : PlugZapIcon}
-                    size={14}
-                    spin={creating}
-                  />
-                }
-                onChange={(e) => setPort(e.target.value)}
-                onKeyDown={(event) => {
-                  event.stopPropagation();
-                  if (event.key === 'Enter') void exposePort();
-                }}
-              />
-              <div className={styles.hint}>{t('workingPanel.overview.ports.hint')}</div>
             </div>
           </DropdownMenuPopup>
         </DropdownMenuPositioner>
