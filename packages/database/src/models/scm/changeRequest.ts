@@ -9,10 +9,10 @@ import type {
   ScmReviewDecision,
   ScmUpsertChangeRequestParams,
 } from '@lobechat/types';
-import { and, desc, eq, isNull, lt, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 
 import type { ScmChangeRequestItem } from '../../schemas';
-import { scmChangeRequests } from '../../schemas';
+import { scmChangeRequests, scmInstallations } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 
 /**
@@ -185,19 +185,40 @@ export class ScmChangeRequestModel {
       .orderBy(desc(scmChangeRequests.updatedAt));
 
   /** Change requests visible to a scope, newest activity first. */
+  /**
+   * What this scope should see: its own change requests, plus everything on
+   * the installations it connected.
+   *
+   * The two are no longer the same set. A row belongs to whoever opened the
+   * pull request, which may be a member using their personal agent, while
+   * the installation belongs to the workspace — without the second half a
+   * workspace would stop seeing pull requests on its own repositories.
+   */
   static listByScope = async (
     db: LobeChatDatabase,
     scope: { userId: string; workspaceId?: string | null },
     options: { limit?: number } = {},
   ): Promise<ScmChangeRequestItem[]> => {
-    const scopeCondition = scope.workspaceId
+    const owned = scope.workspaceId
       ? eq(scmChangeRequests.workspaceId, scope.workspaceId)
       : and(eq(scmChangeRequests.userId, scope.userId), isNull(scmChangeRequests.workspaceId));
+
+    const connected = db
+      .select({ id: scmInstallations.id })
+      .from(scmInstallations)
+      .where(
+        and(
+          isNull(scmInstallations.revokedAt),
+          scope.workspaceId
+            ? eq(scmInstallations.workspaceId, scope.workspaceId)
+            : and(eq(scmInstallations.userId, scope.userId), isNull(scmInstallations.workspaceId)),
+        ),
+      );
 
     return db
       .select()
       .from(scmChangeRequests)
-      .where(scopeCondition)
+      .where(or(owned, inArray(scmChangeRequests.installationId, connected)))
       .orderBy(desc(scmChangeRequests.updatedAt))
       .limit(options.limit ?? 50);
   };
