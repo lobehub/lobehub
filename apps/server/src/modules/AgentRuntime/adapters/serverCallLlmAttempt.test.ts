@@ -4,10 +4,20 @@ import type { ChatMethodOptions, ModelRuntime } from '@lobechat/model-runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { RuntimeExecutorContext } from '../context';
+import { formatErrorForState } from '../formatErrorForState';
 import { createServerCallLlmAttempt } from './serverCallLlmAttempt';
 import type { ServerCallLlmTooling } from './serverCallLlmTooling';
 
 const recordModelCompletionFailureMock = vi.hoisted(() => vi.fn());
+
+/**
+ * Behaves like a real runtime error hook: the trace id is attached only after an async side
+ * effect (writing the error log), so the attempt must await the hook before rethrowing.
+ */
+const attachTraceIdLater = async (error: { _responseBody?: unknown }) => {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  error._responseBody = { traceId: 'trace-1' };
+};
 
 vi.mock('@lobechat/model-runtime', async () => {
   const { isEmptyModelCompletion, ModelEmptyError } =
@@ -325,10 +335,11 @@ describe('ServerCallLlmAttempt', () => {
     expect(recordModelCompletionFailureMock).not.toHaveBeenCalled();
   });
 
-  it('reports an in-band stream error to the runtime error hooks', async () => {
+  it('stores an in-band stream error with the trace id attached by the error hook', async () => {
     const { attempt, handleChatStreamError } = createAttempt(async ({ callback }) => {
       await callback?.onError?.({ errorType: 'ProviderBizError', message: 'Provider timed out' });
     });
+    handleChatStreamError.mockImplementation(attachTraceIdLater);
 
     const error = await attempt.execute().catch((error: unknown) => error);
 
@@ -339,9 +350,10 @@ describe('ServerCallLlmAttempt', () => {
       }),
       payload: expect.objectContaining({ model: 'test-model' }),
     });
+    expect(formatErrorForState(error).body).toMatchObject({ traceId: 'trace-1' });
   });
 
-  it('reports a response body failure after every routed fallback failed', async () => {
+  it('stores a fallback failure raised mid-stream with the error hook trace id', async () => {
     const fallbackError = {
       error: { message: 'Access to Anthropic models is not allowed for this account.' },
       errorType: 'ProviderBizError',
@@ -359,8 +371,11 @@ describe('ServerCallLlmAttempt', () => {
         ),
     );
 
+    handleChatStreamError.mockImplementation(attachTraceIdLater);
+
     await expect(attempt.execute()).rejects.toBe(fallbackError);
     expect(handleChatStreamError).toHaveBeenCalledWith(fallbackError, expect.anything());
+    expect(formatErrorForState(fallbackError).body).toMatchObject({ traceId: 'trace-1' });
   });
 
   it('leaves errors thrown by chat() and empty completions to their own handlers', async () => {
