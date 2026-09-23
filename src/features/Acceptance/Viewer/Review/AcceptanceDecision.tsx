@@ -1,5 +1,6 @@
 'use client';
 
+import { buildAcceptanceRepairPrompt } from '@lobechat/prompts';
 import { copyToClipboard, Flexbox } from '@lobehub/ui';
 import { Button, Text, toast } from '@lobehub/ui/base-ui';
 import dayjs from 'dayjs';
@@ -14,7 +15,6 @@ import { verifyService } from '@/services/verify';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
 import { checkFilterState, isException } from '../Checks/checkState';
-import { buildRepairPrompt } from '../Checks/checkWork';
 import { useAcceptanceComments } from '../Comments/hooks';
 import { flowPlanPhase } from '../Plan/planReview';
 import { acceptanceCheckPath } from '../routes';
@@ -182,7 +182,7 @@ const AcceptanceDecision = ({ onDraftToComposer }: AcceptanceDecisionProps) => {
     }
   };
 
-  const repairPrompt = buildRepairPrompt(acceptance.id);
+  const repairPrompt = buildAcceptanceRepairPrompt(acceptance.id);
 
   return (
     <>
