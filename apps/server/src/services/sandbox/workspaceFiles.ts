@@ -219,6 +219,22 @@ export const createSandboxWorkspaceClient = ({
     },
 
     /**
+     * Re-measure the directory and return the workspace with the fresh figure.
+     *
+     * Separate from {@link getWorkspace}, which reads the stored number: this
+     * one walks the volume, and it also stamps the workspace as active. So it
+     * belongs on something the user asked for — a refresh button — and never
+     * on a page load, where it would keep every workspace it displays
+     * permanently young and hide the idle ones from any later sweep.
+     */
+    refreshUsage: async (params: RequestContext = {}): Promise<SandboxWorkspaceInfo> =>
+      request(`${CURRENT_WORKSPACE}/usage`, {
+        body: JSON.stringify({ topicId: params.topicId }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      }),
+
+    /**
      * Needs a live sandbox session, so it can take seconds on a cold start —
      * a caller rendering this must show it is loading rather than treat it as
      * data it already has.

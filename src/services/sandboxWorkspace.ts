@@ -150,6 +150,13 @@ class SandboxWorkspaceService {
   /** Quota and last measured usage of the workspace directory. */
   getWorkspace = async () => lambdaClient.sandboxWorkspace.getWorkspace.query();
 
+  /**
+   * Walk the workspace and answer with the fresh figure. For a refresh the
+   * user asked for — {@link getWorkspace} reads what was last measured, which
+   * is what a page load should show.
+   */
+  refreshWorkspaceUsage = async () => lambdaClient.sandboxWorkspace.refreshWorkspaceUsage.mutate();
+
   listFiles = async (
     params: { instanceId?: string; path?: string; recursive?: boolean; topicId?: string } = {},
   ) => lambdaClient.sandboxWorkspace.listFiles.query(params);

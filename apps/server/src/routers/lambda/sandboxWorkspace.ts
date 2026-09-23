@@ -617,6 +617,19 @@ export const sandboxWorkspaceRouter = router({
     ctx.client.getWorkspace().catch(mapWorkspaceError),
   ),
 
+  /**
+   * Re-measure the workspace and answer with the fresh figure.
+   *
+   * A mutation rather than a query because it writes: it walks the volume and
+   * stamps the workspace as active. Kept off page load for that reason — the
+   * settings page reads the stored number and offers this on its refresh
+   * button, so a page nobody asked to refresh cannot keep an idle workspace
+   * looking busy.
+   */
+  refreshWorkspaceUsage: entitledProcedure.mutation(async ({ ctx }) =>
+    ctx.client.refreshUsage().catch(mapWorkspaceError),
+  ),
+
   /** Specifications only. Nothing here needs a sandbox session to answer. */
   listEnvironments: environmentProcedure
     .input(z.object({ visibility: visibilitySchema.optional() }).optional())

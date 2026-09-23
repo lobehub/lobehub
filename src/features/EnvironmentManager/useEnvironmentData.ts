@@ -10,6 +10,7 @@ import {
 
 const ENVIRONMENTS_KEY = 'sandbox-environments';
 const INSTANCES_KEY = 'sandbox-environment-instances';
+const WORKSPACE_KEY = 'sandbox-workspace-info';
 
 /**
  * Specifications. Answered from the database alone, so this settles fast and is
@@ -76,6 +77,38 @@ export const useInstances = () => {
   }, [rows.mutate, sizes.mutate]);
 
   return { data, error: rows.error, isLoading: rows.isLoading, mutate };
+};
+
+/**
+ * How much of the workspace's storage is used, and how much it has.
+ *
+ * Reads the stored figure rather than measuring: a page load must not walk the
+ * volume, and — more to the point — must not stamp the workspace as active,
+ * which is the signal a later idle sweep selects on. `refresh` is the
+ * measurement, and it belongs on something the user clicked.
+ *
+ * The figure can be null on a workspace nothing has measured yet; that is a
+ * state to render, not an error. So is the absence of a workspace entirely:
+ * this is a paid feature, and an account without one simply has no meter.
+ */
+export const useWorkspaceUsage = () => {
+  const swr = useClientDataSWR<Awaited<ReturnType<typeof sandboxWorkspaceService.getWorkspace>>>(
+    [WORKSPACE_KEY],
+    () => sandboxWorkspaceService.getWorkspace(),
+    // The number moves when a session writes, not while someone reads the
+    // page; refocusing the tab is not a reason to ask again.
+    { revalidateOnFocus: false },
+  );
+
+  const refresh = useCallback(async () => {
+    // Optimistically publish what the measurement returns, so the meter moves
+    // with the click instead of after a second round trip.
+    await swr.mutate(() => sandboxWorkspaceService.refreshWorkspaceUsage(), {
+      revalidate: false,
+    });
+  }, [swr.mutate]);
+
+  return { data: swr.data, error: swr.error, isLoading: swr.isLoading, refresh };
 };
 
 const SESSIONS_KEY = 'sandbox-environment-sessions';

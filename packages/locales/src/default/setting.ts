@@ -3833,6 +3833,11 @@ When I am ___, I need ___
   'environments.instances.removeConfirmContent':
     'Its folder and everything it kept — installed packages, reports, data — will be deleted. This cannot be undone.',
   'environments.remove': 'Delete environment',
+  'environments.storage.used': '{{used}} of {{total}}',
+  'environments.storage.unmeasured': 'Storage not measured yet · {{total}} available',
+  'environments.storage.measuredAt': 'Measured {{time}}. Refresh to measure again.',
+  'environments.storage.over':
+    'Over the storage limit. Saving a file is refused until you delete something.',
   'environments.duplicateName': 'You already have an environment with this name',
   'environments.hasInstances': 'Remove its instances first',
   'environments.unavailable.title': 'Persistent sandbox is not available here',
