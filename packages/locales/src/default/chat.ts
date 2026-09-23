@@ -2710,6 +2710,9 @@ export default {
   'workingPanel.overview.ports.hint':
     'The link carries a one-time token and only opens for people who can reach this device.',
   'workingPanel.overview.ports.invalidPort': 'Enter a port between 1 and 65535',
+  'workingPanel.overview.ports.loadFailed': "Couldn't load ports",
+  'workingPanel.overview.ports.loading': 'Loading…',
+  'workingPanel.overview.ports.popupBlocked': 'Allow pop-ups for this site to open the link',
   'workingPanel.overview.ports.more': '+{{count}}',
   'workingPanel.overview.ports.none': 'None',
   'workingPanel.overview.ports.openFailed': 'Could not open the link',

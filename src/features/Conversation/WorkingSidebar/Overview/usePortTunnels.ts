@@ -1,3 +1,4 @@
+import { isDesktop } from '@lobechat/const';
 import { copyToClipboard } from '@lobehub/ui';
 import { toast } from '@lobehub/ui/base-ui';
 import { useCallback, useState } from 'react';
@@ -20,27 +21,56 @@ export const usePortTunnels = (deviceId: string, open: boolean, onOpened: () => 
   const [busySlug, setBusySlug] = useState<string>();
   const [creating, setCreating] = useState(false);
 
-  const { data: tunnels = [], mutate } = useFetchDeviceTunnels(deviceId, open);
+  const { data: tunnels, error, isLoading, mutate } = useFetchDeviceTunnels(deviceId, open);
 
-  const openExternal = useCallback((url: string) => {
-    // Defense in depth: only ever hand http(s) to the shell.
-    if (isSafeExternalUrl(url)) window.open(url, '_blank', 'noopener,noreferrer');
+  /**
+   * Claim the tab while the click is still the browser's idea of user
+   * activation — minting the token is a round trip, and a `window.open` after
+   * it gets blocked as a popup. Desktop needs none of this: `window.open` is
+   * routed to `shell.openExternal`, and a reserved `about:blank` would just
+   * launch an empty browser tab.
+   */
+  const reserveTab = useCallback((): Window | null => {
+    if (isDesktop) return null;
+    const tab = window.open('about:blank', '_blank');
+    // `noopener` can't be used here (it makes `open` return null, leaving
+    // nothing to navigate), so sever the link while the tab is still
+    // same-origin instead.
+    if (tab) tab.opener = null;
+    return tab;
+  }, []);
+
+  const navigateTab = useCallback((tab: Window | null, url: string) => {
+    // Defense in depth: only ever hand http(s) to a tab or the shell.
+    if (!isSafeExternalUrl(url)) {
+      tab?.close();
+      return;
+    }
+    if (tab) tab.location.href = url;
+    else window.open(url, '_blank', 'noopener,noreferrer');
   }, []);
 
   const openLink = useCallback(
     async (link: DeviceTunnelLink) => {
+      const tab = reserveTab();
+      if (!tab && !isDesktop) {
+        toast.error(t('workingPanel.overview.ports.popupBlocked'));
+        return;
+      }
+
       setBusySlug(link.slug);
       try {
         const { openUrl } = await deviceService.openTunnel({ slug: link.slug });
-        openExternal(openUrl);
+        navigateTab(tab, openUrl);
         onOpened();
       } catch {
+        tab?.close();
         toast.error(t('workingPanel.overview.ports.openFailed'));
       } finally {
         setBusySlug(undefined);
       }
     },
-    [onOpened, openExternal, t],
+    [navigateTab, onOpened, reserveTab, t],
   );
 
   const copyLink = useCallback(
@@ -81,20 +111,40 @@ export const usePortTunnels = (deviceId: string, open: boolean, onOpened: () => 
       return;
     }
 
+    const tab = reserveTab();
+    if (!tab && !isDesktop) {
+      toast.error(t('workingPanel.overview.ports.popupBlocked'));
+      return;
+    }
+
     setCreating(true);
     try {
       const link = await deviceService.createTunnel({ deviceId, port: parsed });
       setPort('');
       await mutate();
       // Typing a port means "let me see it" — open it without a second click.
-      openExternal(link.openUrl);
+      navigateTab(tab, link.openUrl);
       onOpened();
     } catch {
+      tab?.close();
       toast.error(t('workingPanel.overview.ports.createFailed'));
     } finally {
       setCreating(false);
     }
-  }, [deviceId, mutate, onOpened, openExternal, port, t]);
+  }, [deviceId, mutate, navigateTab, onOpened, port, reserveTab, t]);
 
-  return { busySlug, copyLink, creating, exposePort, openLink, port, revokeLink, setPort, tunnels };
+  return {
+    busySlug,
+    copyLink,
+    creating,
+    error,
+    exposePort,
+    isLoading,
+    openLink,
+    port,
+    refresh: mutate,
+    revokeLink,
+    setPort,
+    tunnels: tunnels ?? [],
+  };
 };

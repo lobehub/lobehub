@@ -16,18 +16,28 @@ import { usePortTunnels } from './usePortTunnels';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   action: css`
+    cursor: pointer;
+
     display: flex;
     flex-shrink: 0;
     align-items: center;
 
     padding: 2px;
+    border: none;
     border-radius: 4px;
 
     color: ${cssVar.colorTextTertiary};
 
+    background: transparent;
+
     &:hover {
       color: ${cssVar.colorText};
       background: ${cssVar.colorFillSecondary};
+    }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimaryBorder};
+      outline-offset: 1px;
     }
   `,
   container: css`
@@ -39,6 +49,28 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   empty: css`
     padding-block: 10px;
     padding-inline: 8px;
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  retry: css`
+    cursor: pointer;
+
+    padding: 0;
+    border: none;
+
+    font-size: 12px;
+    color: ${cssVar.colorInfo};
+
+    background: transparent;
+  `,
+  state: css`
+    display: flex;
+    gap: 6px;
+    align-items: center;
+
+    padding-block: 10px;
+    padding-inline: 8px;
+
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
   `,
@@ -96,11 +128,24 @@ interface PortSwitcherProps {
  */
 const PortSwitcher = memo<PortSwitcherProps>(({ children, deviceId }) => {
   const { t } = useTranslation('chat');
+  const { t: tCommon } = useTranslation('common');
   const [open, setOpen] = useState(false);
   const close = useCallback(() => setOpen(false), []);
 
-  const { busySlug, copyLink, creating, exposePort, openLink, port, revokeLink, setPort, tunnels } =
-    usePortTunnels(deviceId, open, close);
+  const {
+    busySlug,
+    copyLink,
+    creating,
+    error,
+    exposePort,
+    isLoading,
+    openLink,
+    port,
+    refresh,
+    revokeLink,
+    setPort,
+    tunnels,
+  } = usePortTunnels(deviceId, open, close);
 
   return (
     <DropdownMenuRoot open={open} onOpenChange={setOpen}>
@@ -111,7 +156,20 @@ const PortSwitcher = memo<PortSwitcherProps>(({ children, deviceId }) => {
             <div className={styles.container}>
               <div className={styles.section}>{t('workingPanel.overview.ports.heading')}</div>
 
-              {tunnels.length === 0 ? (
+              {isLoading ? (
+                <div className={styles.state}>
+                  <Icon spin icon={LoaderCircleIcon} size={13} />
+                  {t('workingPanel.overview.ports.loading')}
+                </div>
+              ) : error ? (
+                // "We couldn't ask" must not read as "nothing is open".
+                <div className={styles.state}>
+                  {t('workingPanel.overview.ports.loadFailed')}
+                  <button className={styles.retry} type={'button'} onClick={() => void refresh()}>
+                    {tCommon('retry')}
+                  </button>
+                </div>
+              ) : tunnels.length === 0 ? (
                 <div className={styles.empty}>{t('workingPanel.overview.ports.empty')}</div>
               ) : (
                 tunnels.map((link) => (
@@ -131,9 +189,13 @@ const PortSwitcher = memo<PortSwitcherProps>(({ children, deviceId }) => {
                     <span className={styles.port}>{link.port}</span>
                     <span className={styles.host}>{link.hostname}</span>
                     <Tooltip title={t('workingPanel.overview.ports.copy')}>
-                      <span
+                      <button
+                        aria-label={t('workingPanel.overview.ports.copy')}
                         className={styles.action}
-                        role={'button'}
+                        type={'button'}
+                        // Enter/Space must act on this button, not fall through
+                        // to the menu item and open the tunnel instead.
+                        onKeyDown={(event) => event.stopPropagation()}
                         onClick={(event) => {
                           event.preventDefault();
                           event.stopPropagation();
@@ -141,12 +203,14 @@ const PortSwitcher = memo<PortSwitcherProps>(({ children, deviceId }) => {
                         }}
                       >
                         <Icon icon={CopyIcon} size={13} />
-                      </span>
+                      </button>
                     </Tooltip>
                     <Tooltip title={t('workingPanel.overview.ports.revoke')}>
-                      <span
+                      <button
+                        aria-label={t('workingPanel.overview.ports.revoke')}
                         className={styles.action}
-                        role={'button'}
+                        type={'button'}
+                        onKeyDown={(event) => event.stopPropagation()}
                         onClick={(event) => {
                           event.preventDefault();
                           event.stopPropagation();
@@ -154,7 +218,7 @@ const PortSwitcher = memo<PortSwitcherProps>(({ children, deviceId }) => {
                         }}
                       >
                         <Icon icon={XIcon} size={13} />
-                      </span>
+                      </button>
                     </Tooltip>
                   </DropdownMenuItem>
                 ))
