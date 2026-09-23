@@ -38,6 +38,7 @@ const mockInstanceFindOwnedById = vi.fn();
 const mockInstanceQuery = vi.fn();
 
 vi.mock('@/database/models/environmentInstance', () => ({
+  InstanceDirectoryOverlapError: class InstanceDirectoryOverlapError extends Error {},
   EnvironmentInstanceModel: vi.fn(function () {
     return {
       create: mockInstanceCreate,
@@ -52,17 +53,18 @@ vi.mock('@/database/models/environmentInstance', () => ({
 }));
 
 const mockTopicFindByIds = vi.fn();
+const mockTopicModel = vi.hoisted(() => vi.fn());
 
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn(function () {
-    return { findByIds: mockTopicFindByIds };
-  }),
+  TopicModel: mockTopicModel,
 }));
 
 const mockCopyEnvironment = vi.fn();
 const mockDeleteEnvironment = vi.fn();
 const mockListEnvironmentSessions = vi.fn();
 const mockWriteFile = vi.fn();
+const mockListFiles = vi.fn();
+const mockReadFile = vi.fn();
 
 vi.mock('@/server/services/market', () => ({
   MarketService: vi.fn(function () {
@@ -71,6 +73,8 @@ vi.mock('@/server/services/market', () => ({
         copyEnvironment: mockCopyEnvironment,
         deleteEnvironment: mockDeleteEnvironment,
         listEnvironmentSessions: mockListEnvironmentSessions,
+        listFiles: mockListFiles,
+        readFile: mockReadFile,
         writeFile: mockWriteFile,
       }),
     };
@@ -88,8 +92,10 @@ vi.mock('@/server/services/connectorData', () => ({
 }));
 
 const mockResolveClaim = vi.fn();
+const mockResolveSessionConfig = vi.fn();
 
 vi.mock('@/server/services/sandbox', () => ({
+  resolveSandboxSessionConfig: mockResolveSessionConfig,
   resolveSandboxWorkspaceClaim: mockResolveClaim,
 }));
 
@@ -194,13 +200,20 @@ describe('sandboxWorkspaceRouter', () => {
   });
 
   describe('writeFile', () => {
+    const instanceId = '9b2c7e1a-4d3f-4a8b-9c1d-2e3f4a5b6c7d';
+
+    beforeEach(() => {
+      mockInstanceFindOwnedById.mockResolvedValue({ id: instanceId, workingDirectory: 'work' });
+    });
+
     it('passes the contents through to the execution plane', async () => {
       mockWriteFile.mockResolvedValue({ path: 'work/notes.md' });
 
       await sandboxWorkspaceRouter
         .createCaller(ctx)
-        .writeFile({ content: '# notes', path: 'work/notes.md' });
+        .writeFile({ content: '# notes', instanceId, path: 'work/notes.md' });
 
+      expect(mockInstanceFindOwnedById).toHaveBeenCalledWith(instanceId);
       expect(mockWriteFile).toHaveBeenCalledWith({ content: '# notes', path: 'work/notes.md' });
     });
 
@@ -208,7 +221,7 @@ describe('sandboxWorkspaceRouter', () => {
       await expect(
         sandboxWorkspaceRouter
           .createCaller(ctx)
-          .writeFile({ content: 'x', path: '../../etc/passwd' }),
+          .writeFile({ content: 'x', instanceId, path: '../../etc/passwd' }),
       ).rejects.toThrow();
 
       expect(mockWriteFile).not.toHaveBeenCalled();
@@ -216,12 +229,95 @@ describe('sandboxWorkspaceRouter', () => {
 
     it('refuses a body past the size ceiling before it reaches the plane', async () => {
       await expect(
-        sandboxWorkspaceRouter
-          .createCaller(ctx)
-          .writeFile({ content: 'x'.repeat(1024 * 1024 + 1), path: 'work/big.txt' }),
+        sandboxWorkspaceRouter.createCaller(ctx).writeFile({
+          content: 'x'.repeat(1024 * 1024 + 1),
+          instanceId,
+          path: 'work/big.txt',
+        }),
       ).rejects.toThrow();
 
       expect(mockWriteFile).not.toHaveBeenCalled();
+    });
+  });
+
+  // A workspace root is shared by every member and holds every instance's
+  // directory, so a path alone authorizes nothing there: each call is confined
+  // to one instance — readable if visible, writable only by its owner.
+  describe('file routes', () => {
+    const instanceId = '9b2c7e1a-4d3f-4a8b-9c1d-2e3f4a5b6c7d';
+
+    it('refuses a workspace write that names no instance', async () => {
+      await expect(
+        sandboxWorkspaceRouter.createCaller(ctx).writeFile({ content: 'x', path: 'work/a.txt' }),
+      ).rejects.toThrow('INSTANCE_REQUIRED');
+      expect(mockWriteFile).not.toHaveBeenCalled();
+    });
+
+    it('refuses a write into an instance the caller does not own', async () => {
+      // Published instances are readable by everyone who runs in them, but
+      // only the owner shapes them.
+      mockInstanceFindOwnedById.mockResolvedValue(undefined);
+
+      await expect(
+        sandboxWorkspaceRouter
+          .createCaller(ctx)
+          .writeFile({ content: 'x', instanceId, path: 'work/a.txt' }),
+      ).rejects.toThrow('Instance not found');
+      expect(mockWriteFile).not.toHaveBeenCalled();
+    });
+
+    it("refuses a path outside the instance's directory", async () => {
+      mockInstanceFindOwnedById.mockResolvedValue({ id: instanceId, workingDirectory: 'work' });
+
+      for (const path of ['other/a.txt', 'workshop/a.txt']) {
+        await expect(
+          sandboxWorkspaceRouter.createCaller(ctx).writeFile({ content: 'x', instanceId, path }),
+        ).rejects.toThrow('PATH_OUTSIDE_INSTANCE');
+      }
+      expect(mockWriteFile).not.toHaveBeenCalled();
+    });
+
+    it("lists the instance's own directory when no path is given", async () => {
+      mockInstanceFindById.mockResolvedValue({ id: instanceId, workingDirectory: 'work' });
+      mockListFiles.mockResolvedValue({ entries: [] });
+
+      await sandboxWorkspaceRouter.createCaller(ctx).listFiles({ instanceId });
+
+      expect(mockInstanceFindById).toHaveBeenCalledWith(instanceId);
+      expect(mockListFiles).toHaveBeenCalledWith(expect.objectContaining({ path: 'work' }));
+    });
+
+    it("reads a conversation's files through the instance its runs resolve to", async () => {
+      // The same resolution a run takes, so a public agent's conversation is
+      // held to published instances here too.
+      mockResolveSessionConfig.mockResolvedValue({ cwd: 'work', mode: 'persistent' });
+      mockReadFile.mockResolvedValue({ content: '' });
+
+      await sandboxWorkspaceRouter
+        .createCaller(ctx)
+        .readFile({ path: 'work/a.txt', topicId: 'topic-1' });
+      await expect(
+        sandboxWorkspaceRouter
+          .createCaller(ctx)
+          .readFile({ path: 'other/a.txt', topicId: 'topic-1' }),
+      ).rejects.toThrow('PATH_OUTSIDE_INSTANCE');
+
+      mockResolveSessionConfig.mockResolvedValue({ mode: 'ephemeral' });
+      await expect(
+        sandboxWorkspaceRouter.createCaller(ctx).listFiles({ topicId: 'topic-1' }),
+      ).rejects.toThrow('INSTANCE_REQUIRED');
+
+      expect(mockReadFile).toHaveBeenCalledTimes(1);
+    });
+
+    it('leaves a personal root to its owner', async () => {
+      mockWriteFile.mockResolvedValue({ path: 'notes.md' });
+
+      await sandboxWorkspaceRouter
+        .createCaller({ ...ctx, workspaceId: undefined })
+        .writeFile({ content: 'x', path: 'notes.md' });
+
+      expect(mockWriteFile).toHaveBeenCalled();
     });
   });
 
@@ -346,7 +442,42 @@ describe('sandboxWorkspaceRouter', () => {
         { environmentId, id: instanceA, name: 'Data' },
         { environmentId, id: instanceB, name: 'Web' },
       ]);
-      mockTopicFindByIds.mockResolvedValue([{ id: 'topic-1', title: 'Quarterly report' }]);
+      mockTopicModel.mockImplementation(function () {
+        return { findByIds: mockTopicFindByIds };
+      });
+      mockTopicFindByIds.mockResolvedValue([
+        { id: 'topic-1', title: 'Quarterly report', userId: 'user-1' },
+      ]);
+    });
+
+    // In the personal scope a workspace topic never matches, so every row of a
+    // workspace environment would lose its title. The workspace scope also
+    // reaches colleagues' topics, which keep their id only.
+    it('names the workspace topics the caller started, and only those', async () => {
+      mockListEnvironmentSessions.mockImplementation(async ({ name }: { name: string }) => ({
+        nextBefore: null,
+        sessions:
+          name === instanceA
+            ? [
+                record({ id: 1, topicId: 'topic-1' }),
+                record({ id: 2, sessionUserId: 'user-2', topicId: 'topic-2' }),
+              ]
+            : [],
+      }));
+      mockTopicFindByIds.mockResolvedValue([
+        { id: 'topic-1', title: 'Quarterly report', userId: 'user-1' },
+        { id: 'topic-2', title: 'A colleague topic', userId: 'user-2' },
+      ]);
+
+      const result = await sandboxWorkspaceRouter
+        .createCaller(ctx)
+        .listInstanceSessions({ environmentId });
+
+      expect(mockTopicModel).toHaveBeenCalledWith(ctx.serverDB, 'user-1', 'ws-1');
+      expect(Object.fromEntries(result.sessions.map((s) => [s.topicId, s.topicTitle]))).toEqual({
+        'topic-1': 'Quarterly report',
+        'topic-2': null,
+      });
     });
 
     it('merges every instance history newest first, naming the instance and the topic', async () => {
@@ -413,8 +544,22 @@ describe('sandboxWorkspaceRouter', () => {
         .createCaller(ctx)
         .listGithubBranches({ owner: 'lobehub', repository: 'lobehub' });
 
-      expect(result).toEqual({ branches: ['canary', 'main'], connected: true });
+      expect(result).toEqual({ branches: ['canary', 'main'], connected: true, truncated: false });
       expect(mockListRepositoryBranches).toHaveBeenCalledWith('lobehub', 'lobehub');
+    });
+
+    // At the ceiling the list may be partial; the picker falls back to typing
+    // so a branch past it can still be entered.
+    it('says when the list reached the ceiling and may be partial', async () => {
+      mockListRepositoryBranches.mockResolvedValue(
+        Array.from({ length: 1000 }, (_, index) => `branch-${index}`),
+      );
+
+      const result = await sandboxWorkspaceRouter
+        .createCaller(ctx)
+        .listGithubBranches({ owner: 'lobehub', repository: 'lobehub' });
+
+      expect(result.truncated).toBe(true);
     });
 
     it('answers not connected rather than failing when GitHub is unavailable', async () => {
@@ -432,7 +577,7 @@ describe('sandboxWorkspaceRouter', () => {
         .createCaller(ctx)
         .listGithubBranches({ owner: 'lobehub', repository: 'lobehub' });
 
-      expect(result).toEqual({ branches: [], connected: false });
+      expect(result).toEqual({ branches: [], connected: false, truncated: false });
     });
   });
 });

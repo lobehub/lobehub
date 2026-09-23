@@ -90,13 +90,27 @@ export const resolveSandboxSessionConfig = async ({
   if (!claim || !topicId) return { claim, mode: DEFAULT_SANDBOX_MODE };
 
   try {
-    const topic = await new TopicModel(serverDB, userId).findById(topicId);
+    // Scoped to the workspace the run is in: without it the model reads the
+    // personal scope (`workspace_id IS NULL`), a workspace topic never
+    // resolves, and every workspace run silently loses its instance.
+    const topic = await new TopicModel(serverDB, userId, workspaceId ?? undefined).findById(
+      topicId,
+    );
     if (topic?.metadata?.sandboxMode !== 'persistent') {
       return { claim, mode: DEFAULT_SANDBOX_MODE };
     }
 
+    // Where a persistent run goes when it has no usable instance. In a
+    // personal account that is the account's own root. In a workspace the root
+    // is shared by every member and holds every instance's directory — private
+    // ones included — so a run with nothing it may use there gets a temporary
+    // directory instead, and the composer says so.
+    const fallback: SandboxSessionConfig = workspaceId
+      ? { claim, mode: DEFAULT_SANDBOX_MODE }
+      : { claim, mode: 'persistent' };
+
     const instanceId = topic.metadata.sandboxInstanceId;
-    if (!instanceId) return { claim, mode: 'persistent' };
+    if (!instanceId) return fallback;
 
     // A workspace-public agent runs on its caller's session, and a private
     // environment's captured state can hold that caller's credentials — so a
@@ -108,9 +122,9 @@ export const resolveSandboxSessionConfig = async ({
         : null;
 
     // Deleted, never this member's, or private under a public agent. Any way,
-    // the conversation still runs, at the workspace root under the default
-    // environment — the alternative is a topic that cannot run at all until
-    // someone edits a database row. The composer names the private case.
+    // the conversation still runs, in the fallback above — the alternative is
+    // a topic that cannot run at all until someone edits a database row. The
+    // composer names the private case.
     const instance = await new EnvironmentInstanceModel(
       serverDB,
       userId,
@@ -119,7 +133,7 @@ export const resolveSandboxSessionConfig = async ({
     ).findById(instanceId);
     if (!instance) {
       log('Ignoring unresolvable sandboxInstanceId on topic %s: %o', topicId, instanceId);
-      return { claim, mode: 'persistent' };
+      return fallback;
     }
 
     // The directory and the snapshot are one choice, so a bad half discards the
@@ -130,7 +144,7 @@ export const resolveSandboxSessionConfig = async ({
     const { id, workingDirectory } = instance;
     if (!isSafeSandboxCwd(workingDirectory) || !isSafeSandboxEnvironmentId(id)) {
       log('Ignoring unusable instance %s on topic %s: %o', id, topicId, workingDirectory);
-      return { claim, mode: 'persistent' };
+      return fallback;
     }
 
     return { claim, cwd: workingDirectory, environment: id, mode: 'persistent' };

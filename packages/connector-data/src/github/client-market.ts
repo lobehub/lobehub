@@ -142,11 +142,14 @@ export const createGitHubMarketTransport = ({
         };
       });
     },
-    listRepositoryBranches: async ({ owner, perPage, repository }) => {
+    listRepositoryBranches: async ({ owner, page, perPage, repository }) => {
       const data = await proxy({
         endpoint: `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/branches`,
         method: 'GET',
-        parameters: [{ in: 'query', name: 'per_page', value: perPage }],
+        parameters: [
+          { in: 'query', name: 'per_page', value: perPage },
+          ...(page ? [{ in: 'query' as const, name: 'page', value: page }] : []),
+        ],
       });
       if (!Array.isArray(data)) {
         throw new Error('GitHub Market branch response is invalid');

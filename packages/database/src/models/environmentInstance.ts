@@ -1,5 +1,5 @@
 import type { EnvironmentInstanceConfiguration } from '@lobechat/types';
-import { and, asc, eq, getTableColumns, inArray } from 'drizzle-orm';
+import { and, asc, eq, getTableColumns, inArray, isNull, or, sql } from 'drizzle-orm';
 
 import type { EnvironmentInstanceItem, NewEnvironmentInstance } from '../schemas';
 import { environmentInstances, environments } from '../schemas';
@@ -43,6 +43,19 @@ export interface CreateEnvironmentInstanceParams extends EnvironmentInstanceBind
  * shared environment must not let anyone reshape it, add copies to it, or
  * delete the copies other people are working in.
  */
+/**
+ * A new instance's directory would sit inside another instance's, or contain
+ * one. Two instances on overlapping trees restore their captured state over
+ * each other's files, which is the mixing separate instances exist to prevent —
+ * the unique index only catches the identical path.
+ */
+export class InstanceDirectoryOverlapError extends Error {
+  constructor(readonly workingDirectory: string) {
+    super('OVERLAPPING_INSTANCE_DIRECTORY');
+    this.name = 'InstanceDirectoryOverlapError';
+  }
+}
+
 export class EnvironmentInstanceModel {
   private db: LobeChatDatabase;
   private userId: string;
@@ -171,6 +184,33 @@ export class EnvironmentInstanceModel {
       .limit(1);
 
     if (!environment) return undefined;
+
+    // Across every instance on the same storage, not only the ones this member
+    // can see: a colleague's private instance occupies its directory just the
+    // same. Only whether one overlaps is read, never which.
+    const [overlapping] = await this.db
+      .select({ id: environmentInstances.id })
+      .from(environmentInstances)
+      .where(
+        and(
+          eq(environmentInstances.kind, binding.kind),
+          binding.deviceId
+            ? eq(environmentInstances.deviceId, binding.deviceId)
+            : and(
+                isNull(environmentInstances.deviceId),
+                eq(environmentInstances.provider, binding.provider ?? ''),
+                eq(environmentInstances.providerScope, binding.providerScope ?? ''),
+                eq(environmentInstances.providerResourceId, binding.providerResourceId ?? ''),
+              ),
+          or(
+            sql`starts_with(${environmentInstances.workingDirectory}, ${`${workingDirectory}/`})`,
+            sql`starts_with(${workingDirectory}, ${environmentInstances.workingDirectory} || '/')`,
+          ),
+        ),
+      )
+      .limit(1);
+
+    if (overlapping) throw new InstanceDirectoryOverlapError(workingDirectory);
 
     const [row] = await this.db
       .insert(environmentInstances)

@@ -83,9 +83,10 @@ const compact = (configuration: SandboxEnvironmentSpecification): SandboxEnviron
  * a request to show the one that is set. Empty means the repository's default
  * branch, which is what the build checks out when none is named.
  *
- * Falls back to typing when GitHub is not connected or the list could not be
- * read — the repository may still be reachable to the build, and a field
- * that refuses to accept a value would block it for nothing.
+ * Falls back to typing when GitHub is not connected, the list could not be
+ * read, or the list is only part of the repository's branches — the branch may
+ * still be reachable to the build, and a field that refuses to accept a value
+ * would block it for nothing.
  */
 const BranchField = memo<{
   onSave: (ref: string) => Promise<void>;
@@ -100,7 +101,7 @@ const BranchField = memo<{
     () => sandboxWorkspaceService.listGithubBranches({ owner, repository }),
   );
 
-  const canPick = !error && data?.connected !== false;
+  const canPick = !error && data?.connected !== false && !data?.truncated;
 
   return (
     <InlineField

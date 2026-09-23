@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   EnvironmentInstanceModel: vi.fn(),
+  TopicModel: vi.fn(),
   findById: vi.fn(),
   getAgentVisibility: vi.fn(),
   findInstanceById: vi.fn(),
@@ -16,9 +17,7 @@ vi.mock('../entitlement', () => ({
 }));
 
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn(function () {
-    return { findById: mocks.findById };
-  }),
+  TopicModel: mocks.TopicModel,
 }));
 
 vi.mock('@/database/models/agent', () => ({
@@ -53,6 +52,10 @@ describe('resolveSandboxSessionConfig', () => {
     findInstanceById.mockReset();
     getAgentVisibility.mockReset();
     mocks.EnvironmentInstanceModel.mockReset();
+    mocks.TopicModel.mockReset();
+    mocks.TopicModel.mockImplementation(function () {
+      return { findById };
+    });
     mocks.EnvironmentInstanceModel.mockImplementation(function () {
       return { findById: findInstanceById };
     });
@@ -129,7 +132,9 @@ describe('resolveSandboxSessionConfig', () => {
   // A workspace-public agent runs on its caller's session; a private
   // environment's captured state can hold that caller's credentials. The
   // instance is looked up as the public agent, so a private one does not
-  // resolve and the run falls back — the composer tells the person why.
+  // resolve. The run falls back to a temporary directory, never to the shared
+  // workspace root, where the private instance's directory would still be
+  // reachable — and the composer tells the person why.
   it('looks the instance up as a public agent inside a workspace', async () => {
     findById.mockResolvedValue({
       agentId: 'agent-shared',
@@ -140,8 +145,11 @@ describe('resolveSandboxSessionConfig', () => {
 
     await expect(resolve({ workspaceId: 'ws-1' })).resolves.toEqual({
       claim: CLAIM,
-      mode: 'persistent',
+      mode: 'ephemeral',
     });
+    // The topic is read in the workspace's scope; in the personal scope a
+    // workspace topic does not resolve and the run would lose its instance.
+    expect(mocks.TopicModel).toHaveBeenCalledWith(serverDB, 'user_1', 'ws-1');
     expect(getAgentVisibility).toHaveBeenCalledWith('agent-shared');
     expect(mocks.EnvironmentInstanceModel).toHaveBeenCalledWith(
       serverDB,
@@ -149,6 +157,30 @@ describe('resolveSandboxSessionConfig', () => {
       'ws-1',
       'public',
     );
+  });
+
+  // A workspace root is shared by every member and holds every instance's
+  // directory, so no run lands there by falling back — deleted instance,
+  // unusable directory or none chosen alike. A personal root is the owner's
+  // own, which is why the tests above still expect it there.
+  it('never falls back to the shared root inside a workspace', async () => {
+    findInstanceById.mockResolvedValue(undefined);
+    await expect(resolve({ workspaceId: 'ws-1' })).resolves.toEqual({
+      claim: CLAIM,
+      mode: 'ephemeral',
+    });
+
+    findInstanceById.mockResolvedValue({ id: INSTANCE_ID, workingDirectory: '../other-user' });
+    await expect(resolve({ workspaceId: 'ws-1' })).resolves.toEqual({
+      claim: CLAIM,
+      mode: 'ephemeral',
+    });
+
+    findById.mockResolvedValue({ metadata: { sandboxMode: 'persistent' } });
+    await expect(resolve({ workspaceId: 'ws-1' })).resolves.toEqual({
+      claim: CLAIM,
+      mode: 'ephemeral',
+    });
   });
 
   // Personal agents default to 'public' without meaning it, and every

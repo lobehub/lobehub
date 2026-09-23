@@ -64,10 +64,13 @@ const CreateInstanceContent = memo<CreateInstanceContentProps>(({ environmentId,
       // A directory another instance already uses is fixed by typing a
       // different one, so it belongs next to the field rather than in a toast
       // that outlives the dialog.
+      const code = (cause as { message?: string })?.message;
       setError(
-        (cause as { message?: string })?.message === 'DUPLICATE_INSTANCE_DIRECTORY'
+        code === 'DUPLICATE_INSTANCE_DIRECTORY'
           ? t('environments.instances.duplicateDirectory')
-          : describeError(cause, t, t('environments.instances.createFailed')),
+          : code === 'OVERLAPPING_INSTANCE_DIRECTORY'
+            ? t('environments.instances.overlappingDirectory')
+            : describeError(cause, t, t('environments.instances.createFailed')),
       );
     } finally {
       setCreating(false);

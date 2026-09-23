@@ -10,6 +10,7 @@
  */
 const CODE_KEYS: Record<string, string> = {
   ENVIRONMENT_HAS_INSTANCES: 'environments.hasInstances',
+  PATH_OUTSIDE_INSTANCE: 'environments.files.invalidPath',
 };
 
 const readIssues = (message: string): string[] | undefined => {

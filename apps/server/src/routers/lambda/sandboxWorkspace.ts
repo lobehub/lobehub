@@ -1,17 +1,24 @@
 import { isSafeSandboxCwd } from '@lobechat/builtin-tool-cloud-sandbox';
 import { ConnectorDataError } from '@lobechat/connector-data';
+import { MAX_REPOSITORY_BRANCHES } from '@lobechat/connector-data/github';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { EnvironmentModel } from '@/database/models/environment';
-import { EnvironmentInstanceModel } from '@/database/models/environmentInstance';
+import {
+  EnvironmentInstanceModel,
+  InstanceDirectoryOverlapError,
+} from '@/database/models/environmentInstance';
 import { TopicModel } from '@/database/models/topic';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { ConnectorDataService } from '@/server/services/connectorData';
 import { MarketService } from '@/server/services/market';
-import { resolveSandboxWorkspaceClaim } from '@/server/services/sandbox';
+import {
+  resolveSandboxSessionConfig,
+  resolveSandboxWorkspaceClaim,
+} from '@/server/services/sandbox';
 import { SandboxWorkspaceFilesError } from '@/server/services/sandbox/workspaceFiles';
 
 /**
@@ -246,6 +253,16 @@ const isDuplicateInstanceDirectory = (error: unknown): boolean =>
   getPostgresErrorField(error, 'constraint') === INSTANCE_DIRECTORY_CONSTRAINT;
 
 const rethrowDuplicateInstanceDirectory = (error: unknown): never => {
+  // The same fix for the person — pick another folder — but a different
+  // sentence, since the folder itself is not taken.
+  if (error instanceof InstanceDirectoryOverlapError) {
+    throw new TRPCError({
+      cause: error,
+      code: 'CONFLICT',
+      message: 'OVERLAPPING_INSTANCE_DIRECTORY',
+    });
+  }
+
   if (isDuplicateInstanceDirectory(error)) {
     throw new TRPCError({
       cause: error,
@@ -359,10 +376,80 @@ const instanceProcedure = environmentProcedure.use(async (opts) => {
   });
 });
 
+/**
+ * The directory a file route may touch, as a path relative to the workspace
+ * root; `''` is the whole root.
+ *
+ * A workspace's root is shared by every member and holds every instance's
+ * directory, so a path alone authorizes nothing: it is confined to one
+ * instance, reached through the same rules as everywhere else. Reads follow
+ * visibility — a published instance is readable by the members who run in it.
+ * Writes stay with the instance's owner, as every other write to an instance
+ * does. A conversation's own files are read through the instance its runs
+ * resolve to, so a public agent's conversation is held to published ones.
+ *
+ * A personal account's root belongs to its owner alone, which is the one case
+ * where no instance is needed.
+ */
+const resolveFileRoot = async (
+  ctx: {
+    instanceModel: EnvironmentInstanceModel;
+    serverDB: Parameters<typeof resolveSandboxSessionConfig>[0]['serverDB'];
+    userId: string;
+    workspaceId?: string | null;
+  },
+  { instanceId, topicId }: { instanceId?: string; topicId?: string },
+  access: 'read' | 'write',
+): Promise<string> => {
+  if (instanceId) {
+    const instance =
+      access === 'write'
+        ? await ctx.instanceModel.findOwnedById(instanceId)
+        : await ctx.instanceModel.findById(instanceId);
+    if (!instance) throw new TRPCError({ code: 'NOT_FOUND', message: 'Instance not found' });
+
+    return instance.workingDirectory;
+  }
+
+  if (!ctx.workspaceId) return '';
+
+  if (access === 'read' && topicId) {
+    const { cwd } = await resolveSandboxSessionConfig({
+      isShareVisitorRun: false,
+      serverDB: ctx.serverDB,
+      topicId,
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
+    if (cwd) return cwd;
+  }
+
+  throw new TRPCError({ code: 'FORBIDDEN', message: 'INSTANCE_REQUIRED' });
+};
+
+/** Whether `path` is `root` itself or somewhere beneath it. */
+const isWithinRoot = (path: string, root: string) =>
+  !root || path === root || path.startsWith(`${root}/`);
+
+const assertWithinRoot = (path: string, root: string) => {
+  if (!isWithinRoot(path, root)) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'PATH_OUTSIDE_INSTANCE' });
+  }
+};
+
+/** Names the instance a file route works in; see {@link resolveFileRoot}. */
+const instanceIdSchema = idSchema.optional();
+
 export const sandboxWorkspaceRouter = router({
-  createDirectory: entitledProcedure
-    .input(z.object({ path: relativePathSchema, topicId: topicIdSchema }))
-    .mutation(async ({ ctx, input }) => ctx.client.createDirectory(input).catch(mapWorkspaceError)),
+  createDirectory: instanceProcedure
+    .input(
+      z.object({ instanceId: instanceIdSchema, path: relativePathSchema, topicId: topicIdSchema }),
+    )
+    .mutation(async ({ ctx, input: { instanceId, ...input } }) => {
+      assertWithinRoot(input.path, await resolveFileRoot(ctx, { instanceId }, 'write'));
+
+      return ctx.client.createDirectory(input).catch(mapWorkspaceError);
+    }),
 
   /**
    * Whether this caller has a persistent workspace at all. The client pairs it
@@ -460,8 +547,10 @@ export const sandboxWorkspaceRouter = router({
           })
           .catch((error: unknown) => {
             // Someone else took this directory between the check and the
-            // insert. Not a conflict the caller can act on — try the next one.
+            // insert, or it nests with another instance's. Not a conflict the
+            // caller can act on — try the next one.
             if (isDuplicateInstanceDirectory(error)) return undefined;
+            if (error instanceof InstanceDirectoryOverlapError) return undefined;
             throw error;
           });
 
@@ -634,11 +723,20 @@ export const sandboxWorkspaceRouter = router({
             .filter((id): id is string => !!id && id !== MANAGEMENT_TOPIC_ID),
         ),
       ];
+      // Read in the workspace's scope — the personal scope matches no
+      // workspace topic at all — and then narrowed to the caller's own, since
+      // a workspace scope also reaches what other members may see.
       const topics =
         topicIds.length > 0
-          ? await new TopicModel(ctx.serverDB, ctx.userId).findByIds(topicIds).catch(() => [])
+          ? await new TopicModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined)
+              .findByIds(topicIds)
+              .catch(() => [])
           : [];
-      const titles = new Map(topics.map((topic) => [topic.id, topic.title]));
+      const titles = new Map(
+        topics
+          .filter((topic) => topic.userId === ctx.userId)
+          .map((topic) => [topic.id, topic.title]),
+      );
 
       return {
         sessions: merged.map((session) => ({
@@ -649,19 +747,37 @@ export const sandboxWorkspaceRouter = router({
       };
     }),
 
-  listFiles: entitledProcedure
+  listFiles: instanceProcedure
     .input(
       z.object({
+        instanceId: instanceIdSchema,
         path: relativePathSchema.optional(),
         recursive: z.boolean().optional(),
         topicId: topicIdSchema,
       }),
     )
-    .query(async ({ ctx, input }) => ctx.client.listFiles(input).catch(mapWorkspaceError)),
+    .query(async ({ ctx, input: { instanceId, ...input } }) => {
+      const root = await resolveFileRoot(ctx, { instanceId, topicId: input.topicId }, 'read');
+      // No path means "the top of what may be listed", which inside a
+      // workspace is the instance's directory, not the shared root.
+      const path = input.path ?? (root || undefined);
+      if (path !== undefined) assertWithinRoot(path, root);
 
-  readFile: entitledProcedure
-    .input(z.object({ path: relativePathSchema, topicId: topicIdSchema }))
-    .query(async ({ ctx, input }) => ctx.client.readFile(input).catch(mapWorkspaceError)),
+      return ctx.client.listFiles({ ...input, path }).catch(mapWorkspaceError);
+    }),
+
+  readFile: instanceProcedure
+    .input(
+      z.object({ instanceId: instanceIdSchema, path: relativePathSchema, topicId: topicIdSchema }),
+    )
+    .query(async ({ ctx, input: { instanceId, ...input } }) => {
+      assertWithinRoot(
+        input.path,
+        await resolveFileRoot(ctx, { instanceId, topicId: input.topicId }, 'read'),
+      );
+
+      return ctx.client.readFile(input).catch(mapWorkspaceError);
+    }),
 
   /**
    * Write a file's whole contents, creating it and its parents if needed.
@@ -671,15 +787,20 @@ export const sandboxWorkspaceRouter = router({
    * endpoint declares none, and an unbounded string arrives in memory on both
    * sides before anything touches a disk.
    */
-  writeFile: entitledProcedure
+  writeFile: instanceProcedure
     .input(
       z.object({
         content: z.string().max(MAX_FILE_CONTENT_BYTES),
+        instanceId: instanceIdSchema,
         path: relativePathSchema,
         topicId: topicIdSchema,
       }),
     )
-    .mutation(async ({ ctx, input }) => ctx.client.writeFile(input).catch(mapWorkspaceError)),
+    .mutation(async ({ ctx, input: { instanceId, ...input } }) => {
+      assertWithinRoot(input.path, await resolveFileRoot(ctx, { instanceId }, 'write'));
+
+      return ctx.client.writeFile(input).catch(mapWorkspaceError);
+    }),
 
   /** Refused while instances still reference it — those go first. */
   removeEnvironment: environmentProcedure
@@ -742,13 +863,17 @@ export const sandboxWorkspaceRouter = router({
 
       try {
         const client = await service.getGitHubClient();
+        const branches = await client.listRepositoryBranches(input.owner, input.repository);
 
         return {
-          branches: await client.listRepositoryBranches(input.owner, input.repository),
+          branches,
           connected: true,
+          // At the ceiling the list may be missing branches, and a picker
+          // that only offers what it was given would make those unselectable.
+          truncated: branches.length >= MAX_REPOSITORY_BRANCHES,
         };
       } catch (error) {
-        if (isGithubUnavailable(error)) return { branches: [], connected: false };
+        if (isGithubUnavailable(error)) return { branches: [], connected: false, truncated: false };
 
         throw error;
       }
@@ -772,15 +897,26 @@ export const sandboxWorkspaceRouter = router({
     }
   }),
 
-  removeFile: entitledProcedure
+  removeFile: instanceProcedure
     .input(
       z.object({
+        instanceId: instanceIdSchema,
         path: relativePathSchema,
         recursive: z.boolean().optional(),
         topicId: topicIdSchema,
       }),
     )
-    .mutation(async ({ ctx, input }) => ctx.client.deleteFile(input).catch(mapWorkspaceError)),
+    .mutation(async ({ ctx, input: { instanceId, ...input } }) => {
+      const root = await resolveFileRoot(ctx, { instanceId }, 'write');
+      assertWithinRoot(input.path, root);
+      // The instance's own directory is its identity, not a file in it:
+      // removing it would orphan the row and the snapshot that name it.
+      if (root && input.path === root) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'PATH_OUTSIDE_INSTANCE' });
+      }
+
+      return ctx.client.deleteFile(input).catch(mapWorkspaceError);
+    }),
 
   /**
    * Edits the specification. Existing instances keep the one they were created

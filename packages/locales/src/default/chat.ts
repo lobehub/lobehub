@@ -1320,7 +1320,7 @@ export default {
   'sandboxWorkspace.publicAgentHint':
     'Public agents can only use workspace environments. Publish this environment to the workspace first to use it here.',
   'sandboxWorkspace.privateInstanceBlocked':
-    '“{{name}}” is in a private environment, which a public agent cannot use. This topic runs in the default environment instead.',
+    '“{{name}}” is in a private environment, which a public agent cannot use. This topic runs in a temporary working directory instead.',
   'search.grounding.imageSearchQueries': 'Image Search Keywords',
   'search.grounding.imageTitle': 'Found {{count}} images',
   'chatMode.agent': 'Agent',

@@ -1493,7 +1493,7 @@
   "sandboxWorkspace.newInstance": "新建实例",
   "sandboxWorkspace.persistentUpsell": "持久化工作目录",
   "sandboxWorkspace.persistentUpsellDesc": "跨运行、跨话题保留文件",
-  "sandboxWorkspace.privateInstanceBlocked": "「{{name}}」属于私人环境，公共 Agent 无法使用，本话题已改用默认环境运行。",
+  "sandboxWorkspace.privateInstanceBlocked": "「{{name}}」属于私人环境，公共 Agent 无法使用，本话题已改用临时目录运行。",
   "sandboxWorkspace.privateTag": "私人",
   "sandboxWorkspace.publicAgentHint": "公共 Agent 仅可使用工作区环境。要在这里使用该环境，请先将其发布到工作区。",
   "sandboxWorkspace.setUpEnvironment": "去创建环境",

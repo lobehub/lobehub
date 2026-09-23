@@ -22,6 +22,14 @@ import type {
   GitHubUserProfile,
 } from './types';
 
+const BRANCH_PAGE_SIZE = 100;
+
+/**
+ * The most branches {@link GitHubConnectorClient.listRepositoryBranches}
+ * returns. A list of exactly this length may be partial.
+ */
+export const MAX_REPOSITORY_BRANCHES = 1000;
+
 export interface GitHubConnectorClient {
   getUserProfile: () => Promise<GitHubUserProfile>;
   getUserProfileReadme: () => Promise<string | undefined>;
@@ -108,9 +116,23 @@ export function createGitHubConnectorClient({
     listRecentPullRequests: async () => (await getRepositories()).pulls,
     listRecentRepositories: async () => (await getRepositories()).recent,
     listRepositoryBranches: async (owner, repository) => {
-      const branches = await transport.listRepositoryBranches({ owner, perPage: 100, repository });
+      // GitHub pages at 100. Walked to a ceiling rather than to the end: a
+      // repository with thousands of branches would otherwise be thousands of
+      // requests behind one picker. A caller that gets exactly the ceiling back
+      // should treat the list as partial.
+      const names: string[] = [];
+      for (let page = 1; page <= MAX_REPOSITORY_BRANCHES / BRANCH_PAGE_SIZE; page += 1) {
+        const branches = await transport.listRepositoryBranches({
+          owner,
+          page,
+          perPage: BRANCH_PAGE_SIZE,
+          repository,
+        });
+        for (const { name } of branches) if (name) names.push(name);
+        if (branches.length < BRANCH_PAGE_SIZE) break;
+      }
 
-      return branches.flatMap(({ name }) => (name ? [name] : []));
+      return names;
     },
     listRepositoryContributors: (repository) => loadRepositoryContributors(transport, repository),
     listAccessibleRepositories: async () => {
