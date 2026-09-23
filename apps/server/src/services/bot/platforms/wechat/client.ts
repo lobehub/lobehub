@@ -479,7 +479,9 @@ class WechatGatewayClient implements PlatformClient {
         await this.api.sendMessage(targetId, text, token);
       }
       if (attachments?.length) {
-        const sent = await sendWechatAttachments(this.api, targetId, attachments, token);
+        const sent = await sendWechatAttachments(this.api, targetId, attachments, token, {
+          applicationId: this.applicationId,
+        });
         warnAttachmentFailures('bot-platform:wechat:reply', sent.failures);
       }
     };

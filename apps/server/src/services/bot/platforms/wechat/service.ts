@@ -108,6 +108,7 @@ export class WechatMessageService implements MessageRuntimeService {
         params.channelId,
         params.attachments,
         contextToken,
+        { applicationId: this.applicationId },
       );
       warnAttachmentFailures('bot-platform:wechat:sendMessage', attachments.failures);
     }

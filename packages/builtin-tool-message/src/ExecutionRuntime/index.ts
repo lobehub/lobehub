@@ -126,6 +126,7 @@ export type {
   ListPlatformsState,
   ListThreadsParams,
   ListThreadsState,
+  MessageSendRoute,
   MessengerInfo,
   MessengerLinkInfo,
   MessengerPlatformInfo,

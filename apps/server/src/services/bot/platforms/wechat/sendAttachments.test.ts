@@ -242,6 +242,25 @@ describe('sendWechatAttachments', () => {
     expect(result.failures[0].detail).toContain('session timeout');
   });
 
+  it('names the exact bot (App ID) whose session expired, so the right one gets rescanned', async () => {
+    const api = makeApi();
+    api.uploadCdnMedia.mockRejectedValueOnce(
+      Object.assign(new Error('getuploadurl returned empty upload_param'), { code: -14 }),
+    );
+
+    const result = await sendWechatAttachments(
+      api as any,
+      'user-1',
+      [{ data: Buffer.from('doc').toString('base64'), name: 'a.docx', type: 'file' }],
+      'token-1',
+      { applicationId: '253fce3e22ec@im.bot' },
+    );
+
+    expect(result.failures[0].detail).toContain(
+      'WeChat bot 253fce3e22ec@im.bot session expired (errcode -14)',
+    );
+  });
+
   it('skips an over-budget attachment with no fetchUrl instead of uploading it', async () => {
     const api = makeApi();
     budgetMocks.compressImageToBudget.mockResolvedValueOnce(undefined);
