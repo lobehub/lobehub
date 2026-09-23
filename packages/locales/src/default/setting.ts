@@ -3915,9 +3915,10 @@ When I am ___, I need ___
   'environments.instances.count_other': '{{count}} instances',
   'environments.instances.add': 'New instance',
   'environments.instances.namePlaceholder': 'Instance name',
-  'environments.instances.directoryPlaceholder': 'reports/q3',
-  'environments.instances.directoryHint':
-    'Where this instance keeps what you want to keep — reports, data, exports. Source code lives with the environment, not here.',
+  // One line, because the field fills itself in from the name: almost nobody
+  // has a decision to make here, and a paragraph over a solved field reads as
+  // a warning that something is about to go wrong.
+  'environments.instances.directoryHint': 'Folder path. Cannot be changed once created.',
   'environments.instances.unused': 'Never used',
   'environments.instances.remove': 'Delete instance',
   'environments.instances.rename': 'Rename instance',
@@ -4009,13 +4010,20 @@ When I am ___, I need ___
   'environments.files.removeConfirmFile': 'This file will be deleted. This cannot be undone.',
   'environments.files.removeConfirmDirectory':
     'This folder and everything in it will be deleted. This cannot be undone.',
-  'environments.total_one': '{{count}} environment',
-  'environments.total_other': '{{count}} environments',
   'environments.mine': 'My environments',
   'environments.form.basics': 'Basics',
   'environments.form.setup': 'Setup',
   'environments.form.runtime': 'Runtime and storage',
   'environments.instances.confirm': 'Create',
+  'environments.instances.save': 'Save',
+  // Materializing an instance: the clone and the bootstrap. Minutes long by
+  // nature, which is why it is a state of the row rather than a spinner on a
+  // button, and why the log is one click away instead of gone.
+  'environments.instances.building': 'Building — cloning and installing',
+  'environments.instances.buildFailed': 'Build failed',
+  'environments.instances.rebuild': 'Rebuild',
+  'environments.instances.showLog': 'Show log',
+  'environments.instances.hideLog': 'Hide log',
   'environments.instances.directoryLabel': 'Directory',
   'environments.files.up': 'Up one level',
   'environments.files.openHint': 'Double-click a folder to open it, or a file to edit it',

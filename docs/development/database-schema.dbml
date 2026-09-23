@@ -1389,6 +1389,8 @@ table environment_instances {
   configuration jsonb
   enabled boolean [not null, default: true]
   status text [not null, default: 'pending']
+  build_id text
+  build_error text
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]

@@ -1,3 +1,4 @@
+import type { EnvironmentConfiguration } from '@lobechat/types';
 import debug from 'debug';
 
 const log = debug('lobe-server:sandbox:workspace-files');
@@ -92,6 +93,40 @@ export interface SandboxSessionRecord {
   snapshotError: string | null;
   startedAt: string;
   topicId: string | null;
+}
+
+/**
+ * Who holds which instance right now. Its own call rather than a field on the
+ * environment listing: occupancy is a Redis read, while a listing reads the
+ * volume, and a composer menu that only wants to mark a row "running" must not
+ * be the reason a sandbox starts on a deployment without a files function.
+ */
+/** A build in flight, or the verdict on one that finished. */
+export interface SandboxBuildStatus {
+  buildId: string;
+  /** Log since the requested offset; empty when nothing new has been written. */
+  chunk: string;
+  environment: string;
+  /** The process's exit status once it has one; null while running. */
+  exitCode: number | null;
+  /** Where to resume the log from on the next poll. */
+  logOffset: number;
+  seconds: number;
+  /**
+   * Which revision of the specification the finished environment was built
+   * from, read back from the manifest the runtime published. Null while
+   * running and on a failure: nothing is published on that path, so there is
+   * no revision to record.
+   */
+  specDigest: string | null;
+  state: 'running' | 'succeeded' | 'failed';
+}
+
+export interface SandboxOccupancy {
+  /** Held right now. An instance nobody holds is absent. */
+  held: { name: string; own: boolean }[];
+  /** The lease store did not answer, so `held` is empty for want of one. */
+  unavailable: boolean;
 }
 
 export interface SandboxSessionList {
@@ -265,6 +300,57 @@ export const createSandboxWorkspaceClient = ({
 
       return request(
         `${CURRENT_WORKSPACE}/environments/${encodeURIComponent(params.name)}/sessions${suffix}`,
+      );
+    },
+
+    /**
+     * Which of `names` a running sandbox holds, and whether the holder is this
+     * topic's own session. Control plane only — no sandbox, no volume.
+     */
+    readOccupancy: async (params: {
+      names: string[];
+      topicId?: string;
+    }): Promise<SandboxOccupancy> => {
+      const query = new URLSearchParams({ names: params.names.join(',') });
+      if (params.topicId) query.set('topicId', params.topicId);
+
+      return request(`${CURRENT_WORKSPACE}/environments/occupancy?${query.toString()}`);
+    },
+
+    /**
+     * Start building an environment from its specification.
+     *
+     * Returns as soon as the build has started: a bootstrap running an install
+     * is minutes long, so it is polled through {@link buildStatus} rather than
+     * awaited. The specification carries NO credential — the execution plane
+     * holds the GitHub connection and attaches one on the way past, so a token
+     * never passes through here.
+     */
+    buildEnvironment: async (params: {
+      name: string;
+      specification: EnvironmentConfiguration;
+      topicId?: string;
+    }): Promise<{ buildId: string }> =>
+      request(`${CURRENT_WORKSPACE}/environments/${encodeURIComponent(params.name)}/build`, {
+        body: JSON.stringify({ specification: params.specification, topicId: params.topicId }),
+        method: 'POST',
+      }),
+
+    /** Poll a build, pulling its log from `logOffset` on. */
+    buildStatus: async (params: {
+      buildId: string;
+      logOffset?: number;
+      name: string;
+      topicId?: string;
+    }): Promise<SandboxBuildStatus> => {
+      const query = new URLSearchParams();
+      if (params.logOffset !== undefined) query.set('logOffset', String(params.logOffset));
+      if (params.topicId) query.set('topicId', params.topicId);
+      const suffix = query.size > 0 ? `?${query.toString()}` : '';
+
+      return request(
+        `${CURRENT_WORKSPACE}/environments/${encodeURIComponent(params.name)}` +
+          `/build/${encodeURIComponent(params.buildId)}${suffix}`,
       );
     },
 

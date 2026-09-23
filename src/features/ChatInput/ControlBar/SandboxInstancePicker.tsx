@@ -1,7 +1,8 @@
 'use client';
 
+import { Github } from '@lobehub/icons';
 import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Skeleton, Text } from '@lobehub/ui/base-ui';
+import { Skeleton, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   AppWindowMacIcon,
@@ -19,7 +20,7 @@ import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
 import { openSandboxWorkspaceUpsell } from '@/business/client/features/SandboxWorkspaceUpsell';
-import { openCreateInstanceModal } from '@/features/EnvironmentManager/CreateInstanceModal';
+import { repositoryPath } from '@/features/EnvironmentManager/repository';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { sandboxWorkspaceService } from '@/services/sandboxWorkspace';
 
@@ -30,24 +31,20 @@ import { workingDirectoryChipStyles } from './workingDirectoryChipStyles';
 export type { SandboxSelection } from './useSandboxMode';
 
 const styles = createStaticStyles(({ css }) => ({
-  environment: css`
-    padding-block: 6px 2px;
-    padding-inline: 8px;
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
+  /** The environment and the directory on an instance's second line. */
+  environmentRow: css`
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
   /**
-   * The caption and its one action on a single line. Making a copy is a
-   * property of the environment, so it belongs beside its name — as a whole
-   * row it cost one line per environment, and a menu of four spent four lines
-   * saying "New instance".
+   * The pool caption, in the execution-target menu's own shape. The space
+   * above it is what makes it a section start instead of one more line: two
+   * grey captions stacked with even spacing read as a pair, not as a heading
+   * over its contents.
    */
-  environmentRow: css`
-    padding-block: 6px 2px;
-    padding-inline: 8px 4px;
-  `,
-  /** The pool caption, in the execution-target menu's own shape. */
   groupLabel: css`
+    margin-block-start: 6px;
     padding-block: 4px;
     padding-inline: 8px;
 
@@ -136,15 +133,14 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 /**
- * The shape the environment section is about to take: a group caption over a
- * row the size of an instance. Without it the section is simply absent while
+ * The shape the instance list is about to take: a caption over a row. Without it the section is simply absent while
  * the list loads and then snaps into either a list or a "create one" row — and
  * an empty gap where a choice belongs reads as "there is nothing here", which
  * is the one thing it does not yet know.
  */
 const EnvironmentSectionSkeleton = memo(() => (
   <Flexbox gap={2}>
-    <Skeleton.Text className={styles.environment} rows={1} style={{ width: 96 }} />
+    <Skeleton.Text className={styles.environmentRow} rows={1} style={{ width: 96 }} />
     <div className={styles.skeletonRow}>
       <Skeleton.Avatar shape={'square'} size={28} />
       <Flexbox flex={1} gap={4}>
@@ -187,10 +183,11 @@ const INSTANCE_ICON = AppWindowMacIcon;
  *
  * The temporary directory comes first because it is what a run gets by
  * choosing nothing — naming it keeps that state visible and lets a run go back
- * to it. Below it, each environment and its instances; an instance is a folder
- * plus everything installed into it, which is why they are listed under their
- * environment rather than beside it, and why an environment with none still
- * gets a row that makes one.
+ * to it. Below it, the instances themselves, flat: an instance is the only
+ * thing here files can actually go into, and nesting each one under its
+ * environment spent a line per environment to say what the instance's own
+ * second line already says. Environments are named there, and made on the
+ * environment page — this menu picks, it does not author.
  *
  * Names, not sizes: sizes live in the snapshot store, which needs a live sandbox
  * session to answer, and a picker that takes seconds to open is a picker people
@@ -210,7 +207,7 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
     // Fetched while CLOSED whenever an instance is bound, because the chip names
     // it by looking it up in this list: gating the list on `open` alone leaves
     // the closed chip with nothing to look up.
-    const { data, mutate } = useSWR(
+    const { data, isLoading: instancesLoading } = useSWR(
       entitled && (open || boundInstanceId) ? ['sandbox-instances', topicId] : null,
       () => sandboxWorkspaceService.listInstances({ topicId, withSizes: false }),
       { revalidateOnFocus: false },
@@ -246,26 +243,46 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
     const selectable = environments.filter((environment) => !isBlocked(environment.id));
     const hiddenPrivateCount = environments.length - selectable.length;
 
-    // Inside a workspace an environment belongs to one of two pools, and which
-    // one decides who else can reach what a run leaves behind — so the menu
-    // says which pool it is looking at, the way the execution-target menu
-    // splits private from workspace devices. A personal account has one pool
-    // and no such question, so it stays flat.
+    const environmentById = new Map(
+      environments.map((environment) => [environment.id, environment]),
+    );
+
+    // The menu lists instances, not environments. An environment is what an
+    // instance was made from — it names the instance and supplies its icon —
+    // but it is not itself a place files can go, so it no longer gets a row of
+    // its own to nest under. Making one is the environment page's job.
+    const selectableInstances = instances.filter((instance) => {
+      const environment = environmentById.get(instance.environmentId);
+      return Boolean(environment) && !isBlocked(instance.environmentId);
+    });
+
+    // Inside a workspace an instance belongs to one of two pools, through its
+    // environment, and which one decides who else can reach what a run leaves
+    // behind — so the menu says which pool it is looking at, the way the
+    // execution-target menu splits private from workspace devices. A personal
+    // account has one pool and no such question, so it stays flat.
     const inWorkspace = selectable.some((environment) => Boolean(environment.workspaceId));
+    const poolOf = (instance: (typeof instances)[number]) =>
+      environmentById.get(instance.environmentId)?.visibility === 'private'
+        ? 'private'
+        : 'workspace';
     const privatePool = inWorkspace
-      ? selectable.filter((environment) => environment.visibility === 'private')
+      ? selectableInstances.filter((instance) => poolOf(instance) === 'private')
       : [];
     const workspacePool = inWorkspace
-      ? selectable.filter((environment) => environment.visibility !== 'private')
+      ? selectableInstances.filter((instance) => poolOf(instance) === 'workspace')
       : [];
 
-    // Counted on what is left after that filter, not on the raw list. An agent
-    // whose only environments are private would otherwise render neither a
-    // choice nor the prompt to make one — the exact hole the device menu
-    // documents at its own empty-state accounting.
-    // Only once the list has actually arrived: an undefined list is "not known
-    // yet", not "none", and a list that FAILED is a third thing the menu names.
-    const hasNoEnvironments = Boolean(environmentData) && selectable.length === 0;
+    // Only once BOTH lists have arrived: undefined is "not known yet", not
+    // "none", and instances alone cannot be judged — an instance whose
+    // environment is hidden from this agent is not one of this menu's choices.
+    const listsReady = Boolean(environmentData) && Boolean(data);
+    const hasNoInstances = listsReady && selectableInstances.length === 0;
+    // Which of the two empty states this is. With no environment at all there
+    // is nothing to make an instance of, so the row says to set one up; with
+    // an environment but no instance, the environment page is where the copy
+    // gets made.
+    const hasNoEnvironments = hasNoInstances && selectable.length === 0;
 
     const select = async (selection: SandboxSelection) => {
       setOpen(false);
@@ -277,65 +294,92 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
       action();
     };
 
-    // The same dialog the settings page opens, so the instance is named and
-    // given its directory here too rather than conjured with a derived name.
-    // Bound to the conversation as soon as it exists — that is what asking for
-    // it from the composer was for.
-    const createIn = (environmentId: string) =>
-      leaveTo(() =>
-        openCreateInstanceModal({
-          environmentId,
-          onCreated: (created) => {
-            void mutate();
-            void onChange({ instanceId: created.id, mode: 'persistent' });
-          },
-        }),
+    const renderInstance = (instance: (typeof instances)[number]) => {
+      const environment = environmentById.get(instance.environmentId);
+      // What the environment builds from, marked the way the settings list
+      // marks it. Read from the environment because that is where a checkout
+      // is declared, but shown here, because an instance is the row a person
+      // picks between and "which repo is this" is what they are asking. The
+      // instance's own directory cannot answer it: that is a folder inside the
+      // workspace, which a repository icon would misread.
+      const repository = repositoryPath(environment?.configuration);
+      // Somebody else's run. The execution plane allows one session per
+      // instance — the second writer meets a 409 ENVIRONMENT_IN_USE — so
+      // offering it would be offering a choice the next message refuses. Its
+      // own topic's run is the opposite case: that conversation is the one
+      // running, and taking its instance away mid-run is the last thing to do.
+      const occupied = instance.inUse && !instance.inUseByThisTopic;
+      // A build holds the very same lease — it is the exclusive writer while
+      // it publishes — so it needs no rule of its own here, only its own word.
+      // "Running" on an instance that is still being assembled would send
+      // someone looking for the conversation that is using it.
+      const preparing = instance.status === 'pending';
+      // Nothing has been cloned or installed into it yet. Selectable all the
+      // same: a build that failed is retried from the settings page, and a
+      // conversation pointed at the instance is how someone gets back to it.
+      const unbuilt = instance.status === 'error';
+
+      return (
+        <OptionRow
+          active={instance.id === boundInstanceId}
+          // Already this conversation's own instance: it stays selectable
+          // however the lease reads, because "you cannot pick what you are
+          // already using" is never the right thing to tell someone.
+          disabled={(occupied || preparing) && instance.id !== boundInstanceId}
+          icon={repository ? <Github size={16} /> : <Icon icon={INSTANCE_ICON} size={16} />}
+          key={instance.id}
+          label={instance.name}
+          desc={
+            <span className={styles.environmentRow}>
+              {environment
+                ? `${environment.name} · ${instance.workingDirectory}`
+                : instance.workingDirectory}
+            </span>
+          }
+          tag={
+            preparing
+              ? t('sandboxWorkspace.building')
+              : unbuilt
+                ? t('sandboxWorkspace.buildFailed')
+                : instance.inUse
+                  ? t('sandboxWorkspace.running')
+                  : undefined
+          }
+          onClick={() => void select({ instanceId: instance.id, mode: 'persistent' })}
+        />
       );
-
-    const renderEnvironment = (environment: (typeof selectable)[number]) => (
-      <Flexbox gap={2} key={environment.id}>
-        <Flexbox
-          horizontal
-          align={'center'}
-          className={styles.environmentRow}
-          gap={4}
-          justify={'space-between'}
-        >
-          <Text ellipsis className={styles.environment} style={{ padding: 0 }}>
-            {environment.name}
-          </Text>
-          <ActionIcon
-            icon={PlusIcon}
-            size={'small'}
-            title={t('sandboxWorkspace.newInstance')}
-            onClick={() => createIn(environment.id)}
-          />
-        </Flexbox>
-
-        {instances
-          .filter((instance) => instance.environmentId === environment.id)
-          .map((instance) => (
-            <OptionRow
-              active={instance.id === boundInstanceId}
-              desc={instance.workingDirectory}
-              icon={<Icon icon={INSTANCE_ICON} size={16} />}
-              key={instance.id}
-              label={instance.name}
-              onClick={() => void select({ instanceId: instance.id, mode: 'persistent' })}
-            />
-          ))}
-      </Flexbox>
-    );
+    };
 
     // The chip names what was chosen — an instance, or the temporary directory
     // once it has been picked on purpose — and otherwise the slot itself, the
     // same words the local chip shows before a folder is chosen. The default
     // is not a choice, so it does not get named as one.
-    const chip = current
-      ? { icon: currentBlocked ? LockIcon : INSTANCE_ICON, label: current.name }
+    // A node rather than an icon component, because the repository mark is not
+    // a lucide glyph and the chip has to be able to show it: the chip names the
+    // instance the menu named, so a row that reads as a checkout cannot
+    // collapse back into a generic window once the menu closes.
+    const chipIcon = (() => {
+      if (!current) {
+        return value.mode === 'ephemeral' ? (
+          <Icon icon={TimerIcon} size={14} />
+        ) : (
+          <Icon icon={FolderIcon} size={14} />
+        );
+      }
+      if (currentBlocked) return <Icon icon={LockIcon} size={14} />;
+
+      return repositoryPath(environmentById.get(current.environmentId)?.configuration) ? (
+        <Github size={14} />
+      ) : (
+        <Icon icon={INSTANCE_ICON} size={14} />
+      );
+    })();
+
+    const chipLabel = current
+      ? current.name
       : value.mode === 'ephemeral'
-        ? { icon: TimerIcon, label: t('sandboxWorkspace.ephemeral') }
-        : { icon: FolderIcon, label: t('workingDirectory.title', { ns: 'device' }) };
+        ? t('sandboxWorkspace.ephemeral')
+        : t('workingDirectory.title', { ns: 'device' });
 
     // Built before the popover on purpose. The dev-time code inspector marks one
     // file per session by appending an invisible element inside that file's FIRST
@@ -372,6 +416,15 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
           </Text>
         )}
 
+        {/* This conversation's own instance, held by another one. It stays
+            bound — the lease may well be free again by the next message — but
+            saying nothing would leave a 409 to do the explaining. */}
+        {current && !currentBlocked && current.inUse && !current.inUseByThisTopic && (
+          <Text className={styles.blockedNotice}>
+            {t('sandboxWorkspace.instanceBusy', { name: current.name })}
+          </Text>
+        )}
+
         <Flexbox className={styles.temporary}>
           <OptionRow
             active={value.mode === 'ephemeral'}
@@ -396,37 +449,47 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
           />
         )}
 
-        {entitled && environmentsLoading && <EnvironmentSectionSkeleton />}
+        {entitled && (environmentsLoading || instancesLoading) && <EnvironmentSectionSkeleton />}
 
         {entitled && environmentError && (
           <Text className={styles.notice}>{t('sandboxWorkspace.environmentsUnavailable')}</Text>
         )}
 
-        {entitled && hasNoEnvironments && (
-          // Nothing to choose from yet, so the row is the way to make one.
+        {entitled && hasNoInstances && (
+          // Nothing to choose from yet. Both roads lead to the same page —
+          // the row only changes which step it names, because "set up an
+          // environment" reads as a dead end to someone who already has one.
           <OptionRow
-            desc={t('sandboxWorkspace.setUpEnvironmentDesc')}
             icon={<Icon icon={PlusIcon} size={16} />}
-            label={t('sandboxWorkspace.setUpEnvironment')}
+            desc={t(
+              hasNoEnvironments
+                ? 'sandboxWorkspace.setUpEnvironmentDesc'
+                : 'sandboxWorkspace.noInstancesDesc',
+            )}
+            label={t(
+              hasNoEnvironments
+                ? 'sandboxWorkspace.setUpEnvironment'
+                : 'sandboxWorkspace.noInstances',
+            )}
             onClick={() => leaveTo(() => navigate('/settings/environments'))}
           />
         )}
 
         {entitled &&
           !inWorkspace &&
-          selectable.map((environment) => renderEnvironment(environment))}
+          selectableInstances.map((instance) => renderInstance(instance))}
 
         {entitled && inWorkspace && privatePool.length > 0 && (
           <>
             <div className={styles.groupLabel}>{t('sandboxWorkspace.privateGroup')}</div>
-            {privatePool.map((environment) => renderEnvironment(environment))}
+            {privatePool.map((instance) => renderInstance(instance))}
           </>
         )}
 
         {entitled && inWorkspace && workspacePool.length > 0 && (
           <>
             <div className={styles.groupLabel}>{t('sandboxWorkspace.workspaceGroup')}</div>
-            {workspacePool.map((environment) => renderEnvironment(environment))}
+            {workspacePool.map((instance) => renderInstance(instance))}
           </>
         )}
 
@@ -463,8 +526,8 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
             }
           >
             <div className={cx(workingDirectoryChipStyles.chip, currentBlocked && styles.blocked)}>
-              <Icon icon={chip.icon} size={14} />
-              <span className={workingDirectoryChipStyles.label}>{chip.label}</span>
+              {chipIcon}
+              <span className={workingDirectoryChipStyles.label}>{chipLabel}</span>
               <Icon icon={ChevronDownIcon} size={12} />
             </div>
           </Tooltip>

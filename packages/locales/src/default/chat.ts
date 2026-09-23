@@ -1312,8 +1312,12 @@ export default {
   'sandboxWorkspace.persistentUpsell': 'Persistent working directory',
   'sandboxWorkspace.persistentUpsellDesc': 'Keep files across runs and topics',
   'sandboxWorkspace.setUpEnvironmentDesc': 'A persistent directory lives in an environment',
-  'sandboxWorkspace.newInstance': 'New instance',
   'sandboxWorkspace.setUpEnvironment': 'Set up an environment',
+  // The other empty state: environments exist, none has been materialized
+  // into a working copy yet. Naming the environment page rather than opening
+  // a dialog here — this menu picks between instances, it does not make them.
+  'sandboxWorkspace.noInstances': 'Create an instance',
+  'sandboxWorkspace.noInstancesDesc': 'Your environments have no working copy yet',
   'sandboxWorkspace.manage': 'Manage',
   // The menu names the thing it picks — an instance of an environment —
   // rather than the slot it fills. The explainer carries the distinction,
@@ -1322,6 +1326,19 @@ export default {
   'sandboxWorkspace.pickerInfoTooltip':
     'An environment describes what a run needs around it — repositories, setup, variables. An instance is one working copy of it, with its own folder and its own installed packages; conversations run inside an instance and keep what they leave there.',
   'sandboxWorkspace.environmentsUnavailable': 'Environments could not be loaded',
+  // One conversation at a time per instance: the execution plane takes a
+  // lease and answers the second writer with 409 ENVIRONMENT_IN_USE, because
+  // two runs snapshotting one folder means whichever ends last silently
+  // discards the other's work. The tag says which rows that applies to before
+  // the first message meets the refusal.
+  'sandboxWorkspace.running': 'Running',
+  // A build holds the same single-writer lease a run does, so it is refused
+  // for the same reason — but it is not a conversation, and saying "running"
+  // would send someone looking for one.
+  'sandboxWorkspace.building': 'Building',
+  'sandboxWorkspace.buildFailed': 'Not built',
+  'sandboxWorkspace.instanceBusy':
+    '{{name}} is running in another conversation. This one keeps it, and picks it up when that run ends.',
   // Pool captions inside a workspace, in the execution-target menu's words:
   // which pool an environment is in decides who else can reach what a run
   // leaves behind. A personal account has one pool and needs neither.
