@@ -4022,6 +4022,15 @@ When I am ___, I need ___
   'environments.instances.building': 'Building — cloning and installing',
   'environments.instances.buildFailed': 'Build failed',
   'environments.instances.rebuild': 'Rebuild',
+  'environments.instances.build': 'Build',
+  'environments.instances.buildConfirmTitle': 'Build instance {{name}}?',
+  'environments.instances.buildStartFailed': 'Could not start the build',
+  'environments.instances.inUse':
+    'A conversation is using this instance — rebuild it once that run ends',
+  'environments.instances.notBuilt': 'Not built yet — nothing has been cloned or installed',
+  'environments.instances.rebuildConfirmContent':
+    "This clears the instance's folder, then clones the code again and runs the setup script. Everything in it now — changes made in conversations, installed packages, reports, data — will be lost. This cannot be undone.",
+  'environments.instances.rebuildConfirmTitle': 'Rebuild instance {{name}}?',
   'environments.instances.showLog': 'Show log',
   'environments.instances.hideLog': 'Hide log',
   'environments.instances.directoryLabel': 'Directory',

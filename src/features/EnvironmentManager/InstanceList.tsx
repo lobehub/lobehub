@@ -6,11 +6,13 @@ import { ActionIcon, Button, confirmModal, Skeleton, Text, toast } from '@lobehu
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   CircleAlertIcon,
+  CircleDashedIcon,
   FolderOpenIcon,
   LayersIcon,
   Loader2Icon,
   PencilIcon,
   PlusIcon,
+  RotateCcwIcon,
   Trash2Icon,
 } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -19,6 +21,7 @@ import { useTranslation } from 'react-i18next';
 import { formatSize } from '@/utils/format';
 
 import { openCreateInstanceModal, openEditInstanceModal } from './CreateInstanceModal';
+import { describeError } from './errorMessage';
 import { openInstanceFileBrowser } from './InstanceFileBrowser';
 import type { SandboxInstance } from './useEnvironmentData';
 import { useInstanceBuild } from './useEnvironmentData';
@@ -93,7 +96,8 @@ interface InstanceRowProps {
 }
 
 /**
- * What a build is doing, and what it left behind when it failed.
+ * What a build is doing, what it left behind when it failed, or that there has
+ * never been one.
  *
  * The log is collapsed by default and opened on demand: while everything is
  * going right it is thousands of lines nobody reads, and the one time it
@@ -101,38 +105,50 @@ interface InstanceRowProps {
  */
 const BuildLine = memo<{
   error?: string | null;
-  failed: boolean;
   log: string;
-  onRetry: () => void;
-  running: boolean;
-}>(({ error, failed, log, onRetry, running }) => {
+  /** Absent for someone who cannot build this instance; the button goes too. */
+  onBuild?: () => void;
+  state: 'failed' | 'running' | 'unbuilt';
+}>(({ error, log, onBuild, state }) => {
   const { t } = useTranslation('setting');
   const [open, setOpen] = useState(false);
 
   // The accumulated stream while it runs; the stored tail once it is over —
   // the runtime drops a finished build's log, so after a reload the row's own
-  // record is all there is.
-  const text = log || error || '';
+  // record is all there is. An instance never built has no log at all.
+  const text = state === 'unbuilt' ? '' : log || error || '';
 
   return (
     <Flexbox gap={6}>
       <Flexbox horizontal align={'center'} gap={8}>
-        {running ? (
+        {state === 'running' ? (
           <Icon spin icon={Loader2Icon} size={13} />
-        ) : (
+        ) : state === 'failed' ? (
           <Icon icon={CircleAlertIcon} size={13} style={{ color: cssVar.colorError }} />
+        ) : (
+          <Icon icon={CircleDashedIcon} size={13} style={{ color: cssVar.colorTextTertiary }} />
         )}
-        <Text fontSize={12} type={failed && !running ? 'danger' : 'secondary'}>
-          {t(running ? 'environments.instances.building' : 'environments.instances.buildFailed')}
+        <Text fontSize={12} type={state === 'failed' ? 'danger' : 'secondary'}>
+          {t(
+            state === 'running'
+              ? 'environments.instances.building'
+              : state === 'failed'
+                ? 'environments.instances.buildFailed'
+                : 'environments.instances.notBuilt',
+          )}
         </Text>
         {text && (
           <Button size={'small'} type={'text'} onClick={() => setOpen(!open)}>
             {t(open ? 'environments.instances.hideLog' : 'environments.instances.showLog')}
           </Button>
         )}
-        {!running && (
-          <Button size={'small'} type={'text'} onClick={onRetry}>
-            {t('environments.instances.rebuild')}
+        {state !== 'running' && onBuild && (
+          <Button size={'small'} type={'text'} onClick={onBuild}>
+            {t(
+              state === 'unbuilt'
+                ? 'environments.instances.build'
+                : 'environments.instances.rebuild',
+            )}
           </Button>
         )}
       </Flexbox>
@@ -168,6 +184,33 @@ const InstanceRow = memo<InstanceRowProps>(
     // looking at.
     const building = instance.status === 'pending' && Boolean(instance.buildId);
     const { log, state } = useInstanceBuild(instance.id, building);
+    // Made before instances built themselves, or its build request never
+    // arrived: pending with nothing to follow. Without saying so the row looks
+    // settled while the folder behind it is empty.
+    const unbuilt = instance.status === 'pending' && !instance.buildId && instance.buildable;
+
+    // Every build started from the row is asked first, the first one included:
+    // a build replaces the folder with a fresh checkout, and an instance that
+    // was never built may still hold what conversations wrote into it.
+    const confirmBuild = () =>
+      confirmModal({
+        cancelText: t('cancel', { ns: 'common' }),
+        content: t('environments.instances.rebuildConfirmContent'),
+        okButtonProps: { danger: true },
+        okText: t(unbuilt ? 'environments.instances.build' : 'environments.instances.rebuild'),
+        // Refusals leave the row as it was — "a conversation is using it" is
+        // the usual one — so the toast is the only place the reason can go.
+        onOk: () =>
+          onBuild(instance.id).catch((error: unknown) =>
+            toast.error(describeError(error, t, t('environments.instances.buildStartFailed'))),
+          ),
+        title: t(
+          unbuilt
+            ? 'environments.instances.buildConfirmTitle'
+            : 'environments.instances.rebuildConfirmTitle',
+          { name: instance.name },
+        ),
+      });
 
     return (
       <Flexbox className={styles.row} gap={6}>
@@ -230,6 +273,23 @@ const InstanceRow = memo<InstanceRowProps>(
             title={t('environments.files.browse')}
             onClick={() => openInstanceFileBrowser(instance)}
           />
+          {/* Rebuilding a working copy is how it gets back to a clean checkout,
+            so it sits with the row's own actions once the instance is ready.
+            An instance a conversation holds is refused by the server, and
+            said so here first rather than after a confirmation. Absent when
+            the definition clones and installs nothing: there is nothing a
+            rebuild would redo. */}
+          {editable && instance.status === 'ready' && instance.buildable && (
+            <ActionIcon
+              disabled={instance.inUse}
+              icon={RotateCcwIcon}
+              size={'small'}
+              title={t(
+                instance.inUse ? 'environments.instances.inUse' : 'environments.instances.rebuild',
+              )}
+              onClick={confirmBuild}
+            />
+          )}
           {editable && (
             <ActionIcon
               icon={PencilIcon}
@@ -273,15 +333,16 @@ const InstanceRow = memo<InstanceRowProps>(
         {/* The build, on its own line under the row rather than as a status
             word beside the size. It is minutes long and it can fail, and a
             failure is only useful with the log that caused it — none of which
-            fits in a column. Absent entirely once an instance is ready, which
-            is where it spends its life. */}
-        {(building || instance.status === 'error') && (
+            fits in a column. Also there for an instance never built, whose
+            folder is empty however settled the row looks. Absent once an
+            instance is ready, which is where it spends its life. */}
+        {(building || unbuilt || instance.status === 'error') && (
           <BuildLine
             error={instance.buildError}
-            failed={instance.status === 'error'}
             log={log}
-            running={building && state !== 'failed'}
-            onRetry={() => void onBuild(instance.id)}
+            state={building && state !== 'failed' ? 'running' : unbuilt ? 'unbuilt' : 'failed'}
+            // Building a copy is the owner's; everyone else reads the state.
+            onBuild={editable ? confirmBuild : undefined}
           />
         )}
       </Flexbox>
