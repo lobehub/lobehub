@@ -1615,6 +1615,17 @@ When I am ___, I need ___
   'storageOverage.noPaymentMethod': 'Please add a payment method to enable storage pay-as-you-go.',
   'storageOverage.rate':
     'About {{limitedMonthlyRate}}/GB/month for a limited time (regular {{regularMonthlyRate}}).',
+  // The sandbox workspace is the same bargain on different storage, so only
+  // what actually differs is restated: what it is, what it costs, and what
+  // stops when it is turned off. Everything else — consent terms, cap,
+  // payment-method prompt — is shared word for word.
+  'storageOverage.sandbox.title': 'Sandbox Storage Pay-as-you-go',
+  'storageOverage.sandbox.desc':
+    "Bill for sandbox workspace storage beyond your plan's included size, instead of stopping at it.",
+  'storageOverage.sandbox.rate': 'About {{regularMonthlyRate}}/GB/month.',
+  'storageOverage.sandbox.consent.rate': 'About {{regularMonthlyRate}}/GB/month.',
+  'storageOverage.sandbox.disableConfirm.blockWrites':
+    'If your workspace is still above the included size, agents will be unable to write to it.',
   'storageOverage.subscriptionRequired.action': 'View plans',
   'storageOverage.subscriptionRequired.desc':
     'Subscribe to a plan to enable storage pay-as-you-go for overage usage.',
