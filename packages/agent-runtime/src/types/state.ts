@@ -84,6 +84,10 @@ export interface AgentRunOrigin {
   /** Default assignee for tasks the run creates. */
   defaultTaskAssigneeAgentId?: string;
   documentId?: string;
+  /** Agent a builder run configures; the run itself is owned by the builtin builder. */
+  editingAgentId?: string;
+  /** Group a group-builder run configures. */
+  editingGroupId?: string;
   groupId?: string;
   // --- Run tree ---
   lineage?: AgentRunLineage;

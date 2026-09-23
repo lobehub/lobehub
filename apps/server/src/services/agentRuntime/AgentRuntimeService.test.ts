@@ -549,6 +549,23 @@ describe('AgentRuntimeService', () => {
       });
     });
 
+    it('freezes the builder editing target on the run origin', async () => {
+      await service.createOperation({
+        ...mockParams,
+        appContext: {
+          editingAgentId: 'agt_target',
+          editingGroupId: 'grp_target',
+          scope: 'agent_builder',
+        },
+      });
+
+      const [, state] = mockCoordinator.saveAgentState.mock.calls[0];
+      expect(state.origin).toMatchObject({
+        editingAgentId: 'agt_target',
+        editingGroupId: 'grp_target',
+      });
+    });
+
     it('records the approval mode as a run policy', async () => {
       await service.createOperation({
         ...mockParams,
