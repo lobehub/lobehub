@@ -141,6 +141,7 @@ export class GatewayClient extends EventEmitter {
     this.connectTimeoutMs = options.connectTimeoutMs ?? CONNECT_TIMEOUT;
     if (options.tunnel !== false) {
       this.tunnelHost = new DeviceTunnelHost({
+        backlog: () => this.ws?.bufferedAmount ?? 0,
         logger: this.logger,
         send: (frame) => this.sendMessage(frame),
       });

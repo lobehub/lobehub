@@ -54,6 +54,11 @@ const noopLogger: GatewayClientLogger = {
 export type TunnelFetch = (url: string, init: RequestInit) => Promise<Response>;
 
 export interface DeviceTunnelHostOptions {
+  /**
+   * Bytes queued on the gateway socket but not yet written — lets WebSocket
+   * tunnels pause a fast local producer instead of buffering without bound.
+   */
+  backlog?: () => number;
   /** Injectable for tests; defaults to a `ws` client socket. */
   createUpstreamSocket?: TunnelUpstreamFactory;
   /** Injectable for tests; defaults to global `fetch`. */
@@ -110,6 +115,7 @@ export class DeviceTunnelHost {
     this.maxConcurrent = options.maxConcurrent ?? 32;
     this.send = options.send;
     this.sockets = new DeviceWsTunnelHost({
+      backlog: options.backlog,
       createSocket: options.createUpstreamSocket,
       logger: this.logger,
       send: options.send,

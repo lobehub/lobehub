@@ -27,7 +27,10 @@ export interface TunnelUpstreamSocket {
     (event: 'message', listener: (data: Buffer, isBinary: boolean) => void): unknown;
     (event: 'open', listener: () => void): unknown;
   };
+  /** Stop reading from the upstream socket (TCP backpressure reaches the app). */
+  pause: () => void;
   readonly protocol: string;
+  resume: () => void;
   send: (data: Buffer | string) => void;
   terminate: () => void;
 }
@@ -49,9 +52,24 @@ const sendableCode = (code?: number, fallback = 1000) =>
     ? code
     : fallback;
 
+/**
+ * Relay backpressure. Frames to the gateway go through a socket whose `send`
+ * never blocks, so a local app emitting faster than the uplink drains would
+ * grow this process's memory without bound. Above the high mark the upstream
+ * is paused (its TCP window then pushes back on the app) until the queue
+ * drains below the low mark. The hard cap is a backstop for a queue that
+ * keeps growing anyway — it closes the tunnel with 1013 "try again later".
+ */
+export const WS_RELAY_HIGH_WATER = 4 * 1024 * 1024;
+export const WS_RELAY_LOW_WATER = 1024 * 1024;
+export const WS_RELAY_HARD_LIMIT = 32 * 1024 * 1024;
+const WS_RELAY_DRAIN_POLL_MS = 50;
+
 interface WsTunnel {
   closed: boolean;
   connId: string;
+  /** Polls the backlog while the upstream is paused. */
+  drainTimer?: ReturnType<typeof setInterval>;
   opened: boolean;
   socket: TunnelUpstreamSocket;
 }
@@ -61,6 +79,8 @@ export class DeviceWsTunnelHost {
 
   constructor(
     private options: {
+      /** Bytes queued on the gateway socket but not yet written out. */
+      backlog?: () => number;
       createSocket?: TunnelUpstreamFactory;
       logger: GatewayClientLogger;
       send: (frame: TunnelClientFrame) => void;
@@ -109,12 +129,12 @@ export class DeviceWsTunnelHost {
         data: isBinary ? data.toString('base64') : data.toString('utf8'),
         type: 'tunnel_ws_message',
       });
+      this.applyBackpressure(tunnel);
     });
 
     socket.on('close', (code, reason) => {
       if (tunnel.closed) return;
-      tunnel.closed = true;
-      this.tunnels.delete(connId);
+      this.release(tunnel);
       if (!tunnel.opened) {
         this.options.send({
           connId,
@@ -132,8 +152,7 @@ export class DeviceWsTunnelHost {
       // Before the handshake completes the gateway is still waiting on an ack;
       // after it, the browser needs a close.
       if (!tunnel.opened) {
-        tunnel.closed = true;
-        this.tunnels.delete(connId);
+        this.release(tunnel);
         this.fail(connId, error);
         return;
       }
@@ -152,8 +171,7 @@ export class DeviceWsTunnelHost {
   close(frame: TunnelWsCloseMessage): void {
     const tunnel = this.tunnels.get(frame.connId);
     if (!tunnel || tunnel.closed) return;
-    tunnel.closed = true;
-    this.tunnels.delete(frame.connId);
+    this.release(tunnel);
     try {
       tunnel.socket.close(sendableCode(frame.code), (frame.reason ?? '').slice(0, 100));
     } catch {
@@ -164,10 +182,49 @@ export class DeviceWsTunnelHost {
   /** Drop every upstream socket, e.g. when the device socket goes away. */
   closeAll(): void {
     for (const tunnel of this.tunnels.values()) {
-      tunnel.closed = true;
+      this.release(tunnel);
       tunnel.socket.terminate();
     }
-    this.tunnels.clear();
+  }
+
+  // ─── internals ───
+
+  private applyBackpressure(tunnel: WsTunnel): void {
+    const backlog = this.options.backlog?.() ?? 0;
+
+    if (backlog > WS_RELAY_HARD_LIMIT) {
+      this.options.logger.warn(`[tunnel] ws ${tunnel.connId} relay backlog ${backlog}B, closing`);
+      this.release(tunnel);
+      tunnel.socket.close(1013, 'RELAY_BACKLOG');
+      this.options.send({
+        code: 1013,
+        connId: tunnel.connId,
+        reason: 'RELAY_BACKLOG',
+        type: 'tunnel_ws_close',
+      });
+      return;
+    }
+
+    if (backlog <= WS_RELAY_HIGH_WATER || tunnel.drainTimer) return;
+
+    tunnel.socket.pause();
+    tunnel.drainTimer = setInterval(() => {
+      if (tunnel.closed) return;
+      if ((this.options.backlog?.() ?? 0) > WS_RELAY_LOW_WATER) return;
+      clearInterval(tunnel.drainTimer);
+      tunnel.drainTimer = undefined;
+      tunnel.socket.resume();
+    }, WS_RELAY_DRAIN_POLL_MS);
+  }
+
+  /** Mark closed, forget it, and stop any drain polling. */
+  private release(tunnel: WsTunnel): void {
+    tunnel.closed = true;
+    this.tunnels.delete(tunnel.connId);
+    if (tunnel.drainTimer) {
+      clearInterval(tunnel.drainTimer);
+      tunnel.drainTimer = undefined;
+    }
   }
 
   private fail(connId: string, error: unknown) {

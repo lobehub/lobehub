@@ -1,11 +1,12 @@
 import { Buffer } from 'node:buffer';
 import type { AddressInfo } from 'node:net';
 
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type WebSocket as ServerSocket, WebSocketServer } from 'ws';
 
 import { DeviceTunnelHost } from './tunnel';
 import type { TunnelClientFrame } from './types';
+import { WS_RELAY_HARD_LIMIT, WS_RELAY_HIGH_WATER, WS_RELAY_LOW_WATER } from './wsTunnel';
 
 // A real upstream WebSocket server, standing in for a dev server's HMR socket.
 let server: WebSocketServer;
@@ -177,5 +178,101 @@ describe('WebSocket tunnels', () => {
 
     await closed;
     expect(host.activeCount).toBe(0);
+  });
+});
+
+describe('WebSocket relay backpressure', () => {
+  /** A fake upstream whose events the test fires by hand. */
+  const fakeUpstream = () => {
+    const handlers: Record<string, (...args: any[]) => void> = {};
+    const socket = {
+      close: vi.fn(),
+      on: (event: string, listener: (...args: any[]) => void) => {
+        handlers[event] = listener;
+      },
+      pause: vi.fn(),
+      protocol: '',
+      resume: vi.fn(),
+      send: vi.fn(),
+      terminate: vi.fn(),
+    };
+    return { emit: (event: string, ...args: any[]) => handlers[event]?.(...args), socket };
+  };
+
+  const setupFake = () => {
+    const upstream = fakeUpstream();
+    const backlog = { value: 0 };
+    const frames: TunnelClientFrame[] = [];
+    const host = new DeviceTunnelHost({
+      backlog: () => backlog.value,
+      createUpstreamSocket: () => upstream.socket as never,
+      send: (frame) => frames.push(frame),
+    });
+    open(host, 'b1');
+    upstream.emit('open');
+    return { backlog, frames, host, upstream };
+  };
+
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('pauses a fast producer above the high mark and resumes once drained', () => {
+    const { backlog, host, upstream } = setupFake();
+
+    backlog.value = WS_RELAY_HIGH_WATER + 1;
+    upstream.emit('message', Buffer.from('hmr update'), false);
+    expect(upstream.socket.pause).toHaveBeenCalledTimes(1);
+
+    // Still above the low mark: stays paused.
+    backlog.value = WS_RELAY_LOW_WATER + 1;
+    vi.advanceTimersByTime(200);
+    expect(upstream.socket.resume).not.toHaveBeenCalled();
+
+    backlog.value = 0;
+    vi.advanceTimersByTime(100);
+    expect(upstream.socket.resume).toHaveBeenCalledTimes(1);
+    host.closeAll('TEST');
+  });
+
+  it('keeps relaying without pausing while the uplink keeps up', () => {
+    const { backlog, frames, host, upstream } = setupFake();
+
+    backlog.value = 1024;
+    upstream.emit('message', Buffer.from('a'), false);
+    upstream.emit('message', Buffer.from('b'), false);
+
+    expect(upstream.socket.pause).not.toHaveBeenCalled();
+    expect(frames.filter((f) => f.type === 'tunnel_ws_message')).toHaveLength(2);
+    host.closeAll('TEST');
+  });
+
+  it('closes with 1013 when the backlog blows past the hard cap', () => {
+    const { backlog, frames, host, upstream } = setupFake();
+
+    backlog.value = WS_RELAY_HARD_LIMIT + 1;
+    upstream.emit('message', Buffer.from('x'), false);
+
+    expect(upstream.socket.close).toHaveBeenCalledWith(1013, 'RELAY_BACKLOG');
+    expect(frames).toContainEqual({
+      code: 1013,
+      connId: 'b1',
+      reason: 'RELAY_BACKLOG',
+      type: 'tunnel_ws_close',
+    });
+    expect(host.activeCount).toBe(0);
+  });
+
+  it('stops polling the backlog once the tunnel is gone', () => {
+    const { backlog, host, upstream } = setupFake();
+
+    backlog.value = WS_RELAY_HIGH_WATER + 1;
+    upstream.emit('message', Buffer.from('x'), false);
+    host.closeAll('DEVICE_DISCONNECTED');
+
+    backlog.value = 0;
+    vi.advanceTimersByTime(500);
+    // A closed tunnel must not be resumed by a leftover timer.
+    expect(upstream.socket.resume).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
   });
 });
