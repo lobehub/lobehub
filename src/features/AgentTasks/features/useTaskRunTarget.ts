@@ -58,8 +58,15 @@ export interface TaskRunTarget {
    * is pinned somewhere else.
    */
   inheritedTarget: DeviceExecutionTarget;
+  /** Whether a task-level pin is what puts the run on {@link deviceId}. */
   isDeviceTarget: boolean;
   isPending: boolean;
+  /**
+   * The task's own pin, and only when the assignee's policy lets it take
+   * effect. Callers must read this rather than the raw stored value: a pin the
+   * run side drops must not be shown as the target.
+   */
+  pinnedDeviceId?: string;
 }
 
 /**
@@ -71,9 +78,9 @@ export interface TaskRunTarget {
  * directory of a device run.
  *
  * The task's own pin wins over the agent's target: the run contract routes a
- * `requestedDeviceId` regardless of the agent's stored target (an
- * author-`fixed` policy is the one exception, and there the control is locked
- * rather than silently ignored).
+ * `requestedDeviceId` regardless of the agent's stored target. An author-`fixed`
+ * policy is the exception — the run side drops the requested device for it, so
+ * this reports the inherited target instead of the stored pin.
  */
 export const useTaskRunTarget = (agentId: string, pinnedDeviceId?: string): TaskRunTarget => {
   const { t } = useTranslation('chat');
@@ -93,10 +100,20 @@ export const useTaskRunTarget = (agentId: string, pinnedDeviceId?: string): Task
     workspaceScoped,
   });
 
-  const isDeviceTarget = !!pinnedDeviceId;
-  const effectiveTarget: DeviceExecutionTarget = isDeviceTarget ? 'device' : inheritedTarget;
-  const deviceId =
-    pinnedDeviceId ?? (inheritedTarget === 'device' ? agencyConfig?.boundDeviceId : undefined);
+  // A `fixed` selection policy is an author-controlled contract, and the run
+  // side already honours it: the planner drops a requested device for it
+  // (`resolveExecutionPlan`), and `turnSetup` writes no topic-bound device. So a
+  // pin left on the task must NOT be presented as the run's target — nor used to
+  // resolve a directory on a machine the run never reaches, which the topic
+  // metadata would then still carry.
+  const pinApplies = !!pinnedDeviceId && canSelectExecutionTarget;
+  const isDeviceTarget = pinApplies;
+  const effectiveTarget: DeviceExecutionTarget = pinApplies ? 'device' : inheritedTarget;
+  const deviceId = pinApplies
+    ? pinnedDeviceId
+    : inheritedTarget === 'device'
+      ? agencyConfig?.boundDeviceId
+      : undefined;
 
   const rawDeviceDefaultCwd = useDeviceStore(deviceSelectors.getDeviceDefaultCwd(deviceId));
   const deviceDefaultCwd = getWorkingDirectoryPathString(rawDeviceDefaultCwd);
@@ -127,8 +144,17 @@ export const useTaskRunTarget = (agentId: string, pinnedDeviceId?: string): Task
     workspaceScoped,
   });
 
-  const directoryKind: TaskDirectoryKind =
-    isDeviceTarget && deviceId ? 'device' : surface === 'cloudRepo' ? 'repo' : 'none';
+  // The machine in force can come from the task's own pin OR from the assignee
+  // (a bound `device` target) — both mean the run starts in a path on that
+  // machine, so both must offer the directory control. Requiring a TASK-level
+  // pin here left an inherited device run with a non-interactive hint and no way
+  // to choose a directory, even though the stored config and the runner support
+  // a directory without one.
+  const directoryKind: TaskDirectoryKind = deviceId
+    ? 'device'
+    : surface === 'cloudRepo'
+      ? 'repo'
+      : 'none';
 
   const unknownLabel = t('heteroAgent.executionTarget.unknownDevice');
   const inheritedLabel = (() => {
@@ -150,5 +176,6 @@ export const useTaskRunTarget = (agentId: string, pinnedDeviceId?: string): Task
     inheritedTarget,
     isDeviceTarget,
     isPending: isPreferenceLoading || isDevicesLoading,
+    pinnedDeviceId: pinApplies ? pinnedDeviceId : undefined,
   };
 };
