@@ -41,6 +41,11 @@ export const createWorkbenchI18n = (lang?: string, bundledResources?: Record<str
     .use(resourcesToBackend(loadWorkbenchNamespace));
 
   return {
+    changeLanguage: async (nextLocale: string) => {
+      // Register namespaces only for live changes: SSR must use its bundled resources synchronously.
+      await instance.loadNamespaces([...workbenchNamespaces]);
+      await instance.changeLanguage(nextLocale);
+    },
     init: (params: { initAsync?: boolean } = {}) =>
       instance.init({
         defaultNS: 'verify',

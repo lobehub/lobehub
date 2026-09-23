@@ -3,6 +3,7 @@
 import { ConfigProvider } from 'antd';
 import dayjs from 'dayjs';
 import { memo, type PropsWithChildren, useEffect, useState } from 'react';
+import { I18nextProvider } from 'react-i18next';
 import { isRtlLang } from 'rtl-detect';
 
 import type { DayjsLocaleGlobEntry } from '@/utils/dayjsLocale';
@@ -53,6 +54,12 @@ const WorkbenchLocale = memo<WorkbenchLocaleProps>(({ children, defaultLang, res
   if (!i18n.instance.isInitialized) void i18n.init({ initAsync: !resources });
 
   useEffect(() => {
+    if (defaultLang && i18n.instance.language !== defaultLang) {
+      void i18n.changeLanguage(defaultLang);
+    }
+  }, [defaultLang, i18n]);
+
+  useEffect(() => {
     const applyLocale = async (nextLang: string) => {
       setLang(nextLang);
       const [nextAntdLocale] = await Promise.all([getAntdLocale(nextLang), updateDayjs(nextLang)]);
@@ -68,9 +75,11 @@ const WorkbenchLocale = memo<WorkbenchLocaleProps>(({ children, defaultLang, res
   }, [defaultLang, i18n]);
 
   return (
-    <ConfigProvider direction={isRtlLang(lang) ? 'rtl' : 'ltr'} locale={antdLocale}>
-      {children}
-    </ConfigProvider>
+    <I18nextProvider i18n={i18n.instance}>
+      <ConfigProvider direction={isRtlLang(lang) ? 'rtl' : 'ltr'} locale={antdLocale}>
+        {children}
+      </ConfigProvider>
+    </I18nextProvider>
   );
 });
 

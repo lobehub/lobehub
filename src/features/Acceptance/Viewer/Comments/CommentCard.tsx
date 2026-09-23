@@ -21,8 +21,8 @@ import { useActivityTime } from '@/hooks/useActivityTime';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
-import { AttachmentThumbs } from '../Evidence/attachments';
 import { commentAnchorUrl } from './anchor';
+import CommentContent from './CommentContent';
 import CommentReactions from './CommentReactions';
 import { styles } from './styles';
 
@@ -211,17 +211,7 @@ const CommentCard = memo<CommentCardProps>(
           )}
         </Flexbox>
         <div className={variant === 'boxed' ? styles.body : styles.panelBody}>
-          {comment.deletedAt ? (
-            <span className={styles.deleted}>{t('acceptance.comments.deleted')}</span>
-          ) : (
-            comment.content
-          )}
-          {/* Exhibits, under the words rather than inside them. */}
-          {comment.attachments.length > 0 && (
-            <div className={styles.attachments}>
-              <AttachmentThumbs attachments={comment.attachments} size={'comment'} />
-            </div>
-          )}
+          <CommentContent comment={comment} />
           {onReact && (
             <CommentReactions
               reactions={comment.reactions}

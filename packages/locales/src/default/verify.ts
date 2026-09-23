@@ -1,4 +1,13 @@
 export default {
+  'acceptance.share.title': 'Share',
+  'acceptance.share.makePublic': 'Allow access with the link',
+  'acceptance.share.makePrivate': 'Restrict access',
+  'acceptance.share.publicHint':
+    'Anyone with the link will be able to read this acceptance, all its rounds, evidence and comments. Signed-in visitors can also comment and annotate. Review the content before making it public.',
+  'acceptance.share.privateHint':
+    'Only the creator and workspace members will be able to read this acceptance and its rounds. Copies already downloaded cannot be recalled.',
+  'acceptance.share.saved': 'Sharing permissions updated',
+  'acceptance.share.copyFailed': 'Could not copy the link. Copy it from the address bar.',
   'flow.graphView': 'Graph',
   'flow.outlineView': 'Steps',
   'flow.plan.requestChanges': 'Request changes',
@@ -186,6 +195,7 @@ export default {
   'acceptance.comments.reply': 'Reply',
   'acceptance.comments.addReaction': 'Add reaction',
   'acceptance.comments.resolve': 'Mark resolved',
+  'acceptance.comments.resolved': 'Resolved',
   'acceptance.comments.reopen': 'Reopen',
   'acceptance.comments.resolvedSummary': 'Resolved · {{name}} · {{count}} message(s)',
   'acceptance.comments.collapseThread': 'Collapse',
