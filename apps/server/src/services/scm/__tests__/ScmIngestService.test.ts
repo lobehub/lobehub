@@ -315,6 +315,52 @@ describe('ScmIngestService', () => {
     await serverDB.delete(users).where(eq(users.id, orgOwner));
   });
 
+  it('keeps the routed owner when a later event resolves nothing', async () => {
+    const orgOwner = 'scm-ingest-org-owner-2';
+    await serverDB.insert(users).values({ id: orgOwner });
+    const [workspace] = await serverDB
+      .insert(workspaces)
+      .values({ name: 'ws', primaryOwnerId: orgOwner, slug: 'scm-ingest-ws-2' })
+      .returning();
+    await ScmInstallationModel.bind(serverDB, {
+      accountExternalId: '1',
+      accountLogin: 'lobehub',
+      accountType: 'organization',
+      installationId: String(fx.installation.id),
+      provider: 'github',
+      repositorySelection: 'all',
+      userId: orgOwner,
+      workspaceId: workspace.id,
+    });
+    await serverDB.insert(scmIdentities).values({
+      externalLogin: 'arvinxx',
+      externalUserId: '42',
+      provider: 'github',
+      userId,
+    });
+    // Personal acceptance, named in the fixture body.
+    await serverDB
+      .insert(acceptances)
+      .values({ id: acceptanceId, subjectId: 's', subjectType: 'standalone', userId });
+
+    await ingest('pull_request', fx.pullRequestEvent('opened'));
+    let row = await ScmChangeRequestModel.findByIdentity(
+      serverDB,
+      'github',
+      'lobehub/lobehub',
+      19_719,
+    );
+    expect(row).toMatchObject({ acceptanceId, userId, workspaceId: null });
+
+    // The link is edited out of the body and nothing else points at the
+    // pull request. That is less context, not a new owner.
+    await ingest('pull_request', fx.pullRequestEvent('edited', { body: 'No links here.' }));
+    row = await ScmChangeRequestModel.findById(serverDB, row!.id);
+    expect(row).toMatchObject({ acceptanceId, userId, workspaceId: null });
+
+    await serverDB.delete(users).where(eq(users.id, orgOwner));
+  });
+
   it('maintains the installation from lifecycle events', async () => {
     const installation = await bindInstallation();
 

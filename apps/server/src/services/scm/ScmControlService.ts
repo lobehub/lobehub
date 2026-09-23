@@ -81,6 +81,10 @@ export class ScmControlService {
     // has since left — or been made a viewer — would still get merges
     // accepting and failures waking runs in that workspace.
     if (!(await this.ownerCanStillWrite(params.row))) {
+      // The gate is for what we do on the author's behalf. The Work row only
+      // records what GitHub reported, and a merge left unmirrored would sit
+      // in the workspace as an open Work forever.
+      if (params.kind === 'merged') await this.mirrorMerge(params.row);
       return { detail: 'owner can no longer write to this workspace', outcome: 'skipped' };
     }
 
@@ -103,9 +107,7 @@ export class ScmControlService {
         // The Work row mirrors what GitHub says about the pull request, so
         // it follows the merge whatever the automation switches say; only
         // the acceptance verdict is opt-out.
-        if (row.workId) {
-          await this.db.update(works).set({ status: 'merged' }).where(eq(works.id, row.workId));
-        }
+        await this.mirrorMerge(row);
         if (!(await this.isEnabled(row, 'acceptOnMerge'))) {
           return { detail: 'acceptOnMerge is off', outcome: 'skipped' };
         }
@@ -176,10 +178,27 @@ export class ScmControlService {
     !row.workspaceId ||
     canWriteScmScope(this.db, row.userId, row.workspaceId);
 
+  /** The Work row mirrors GitHub; it follows a merge whatever else is decided. */
+  private mirrorMerge = async (row: ScmChangeRequestItem): Promise<void> => {
+    if (!row.workId) return;
+    await this.db.update(works).set({ status: 'merged' }).where(eq(works.id, row.workId));
+  };
+
+  /**
+   * The switches belong to whoever connected the installation, not to the
+   * row's owner. With author routing those are different people, and an
+   * installer's explicit opt-out — no accepting on merge, no comments on
+   * private repositories — must not be undone by an author's defaults.
+   */
   private preference = async (
     row: ScmChangeRequestItem,
-  ): Promise<GithubIntegrationPreference | undefined> =>
-    (await new UserModel(this.db, row.userId).getUserPreference())?.integration?.github;
+  ): Promise<GithubIntegrationPreference | undefined> => {
+    const installation = row.installationId
+      ? await ScmInstallationModel.findById(this.db, row.installationId)
+      : null;
+    const userId = installation?.userId ?? row.userId;
+    return (await new UserModel(this.db, userId).getUserPreference())?.integration?.github;
+  };
 
   // --------------- tracking comment ---------------
 

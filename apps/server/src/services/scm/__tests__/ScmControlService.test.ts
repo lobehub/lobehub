@@ -634,7 +634,72 @@ describe('ScmControlService — wake', () => {
     }
     expect(mocks.execAgent).not.toHaveBeenCalled();
 
+    // The merge itself is still mirrored: the gate covers what we do on the
+    // author's behalf, not the record of what GitHub reported.
+    const [work] = await serverDB
+      .insert(works)
+      .values({
+        resourceId: 'arvinxx/sandbox#5',
+        resourceType: 'github_pull_request',
+        status: 'open',
+        toolIdentifier: 'lobe-local-system',
+        toolName: 'runCommand',
+        type: 'external',
+        userId,
+        visibility: 'private',
+      })
+      .returning();
+    expect(
+      await control().handle({
+        event: changeRequestEvent('merged'),
+        kind: 'merged',
+        row: { ...row, state: 'merged', workId: work.id },
+      }),
+    ).toMatchObject({ outcome: 'skipped' });
+    const [mirrored] = await serverDB.select().from(works).where(eq(works.id, work.id));
+    expect(mirrored.status).toBe('merged');
+
     await serverDB.delete(workspaces).where(eq(workspaces.id, workspace.id));
+  });
+
+  it("reads the switches of whoever connected the installation, not the author's", async () => {
+    // The org owner connected the installation and turned accepting on
+    // merge off; the author routed to never touched their switches.
+    const installer = 'scm-control-installer';
+    await serverDB.insert(users).values({
+      id: installer,
+      preference: { integration: { github: { acceptOnMerge: false } } } as any,
+    });
+    const installation = await ScmInstallationModel.bind(serverDB, {
+      accountExternalId: '1',
+      accountLogin: 'lobehub',
+      accountType: 'organization',
+      installationId: '90001',
+      provider: 'github',
+      repositorySelection: 'all',
+      userId: installer,
+    });
+    const [acceptance] = await serverDB
+      .insert(acceptances)
+      .values({ status: 'delivered', subjectId: 's', subjectType: 'standalone', userId })
+      .returning();
+    const row = await ScmChangeRequestModel.upsert(serverDB, {
+      ...baseRow,
+      links: { acceptanceId: acceptance.id, installationId: installation.id },
+      metadata: { routedBy: 'author' },
+      state: 'merged',
+    });
+
+    expect(
+      await control().handle({ event: changeRequestEvent('merged'), kind: 'merged', row }),
+    ).toMatchObject({ detail: 'acceptOnMerge is off', outcome: 'skipped' });
+    const [after] = await serverDB
+      .select()
+      .from(acceptances)
+      .where(eq(acceptances.id, acceptance.id));
+    expect(after.status).toBe('delivered');
+
+    await serverDB.delete(users).where(eq(users.id, installer));
   });
 
   it('reports a failed wake without counting it', async () => {
