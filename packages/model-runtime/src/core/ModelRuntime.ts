@@ -102,7 +102,12 @@ export interface ModelRuntimeHooks {
    * Called when a chat stream fails after `chat()` has already returned its response: an
    * in-band provider `error` event, or a body read failure such as every routed fallback
    * failing mid-stream. `onChatError` never sees these. Same side-effect contract (sanitize,
-   * log, record), but leave billing alone — stream outcomes settle through `onChatFinal`.
+   * log, record, release held reservations).
+   *
+   * `onChatFinal` may or may not have run first: a committed attempt delivers it before the
+   * error surfaces, but a routed fallback whose earlier attempts were discarded and whose last
+   * attempt failed to start delivers none. Releases here must therefore be no-ops once
+   * `onChatFinal` has charged the request.
    */
   onChatStreamError?: (
     error: unknown,

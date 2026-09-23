@@ -378,6 +378,25 @@ describe('ServerCallLlmAttempt', () => {
     expect(formatErrorForState(fallbackError).body).toMatchObject({ traceId: 'trace-1' });
   });
 
+  it('stores a plain stream read failure with the error hook trace id', async () => {
+    const readError = new TypeError('terminated');
+    const { attempt, chat, handleChatStreamError } = createAttempt(async () => {});
+    chat.mockImplementationOnce(
+      async () =>
+        new Response(
+          new ReadableStream({
+            pull(controller) {
+              controller.error(readError);
+            },
+          }),
+        ),
+    );
+    handleChatStreamError.mockImplementation(attachTraceIdLater);
+
+    await expect(attempt.execute()).rejects.toBe(readError);
+    expect(formatErrorForState(readError).body).toMatchObject({ traceId: 'trace-1' });
+  });
+
   it('leaves errors thrown by chat() and empty completions to their own handlers', async () => {
     const { attempt: rejected, handleChatStreamError: rejectedHook } = createAttempt(async () => {
       throw new Error('upstream request failed');
