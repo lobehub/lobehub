@@ -84,7 +84,34 @@ describe('MessageExecutionRuntime.sendMessage', () => {
     expect(output.success).toBe(false);
     expect(output.content).toMatch(/^Nothing was delivered\./);
     expect(output.content).not.toContain('Message sent');
-    expect(output.content).toContain('the user received nothing');
+    expect(output.content).toContain('No text or embed was given');
+  });
+
+  it('counts a delivered embed as delivery when there is no text and every attachment failed', async () => {
+    // Discord posts the embed on the text leg even with empty content, so the
+    // user did receive something — only the attachment is missing.
+    const runtime = runtimeWith(
+      vi.fn().mockResolvedValue({
+        attachmentFailures: [{ name: 'chart.png', reason: 'source-unavailable', type: 'image' }],
+        attachmentsDelivered: 0,
+        channelId: 'c1',
+        messageId: 'm1',
+        platform: 'discord',
+      }),
+    );
+
+    const output = await runtime.sendMessage({
+      attachments: [{ fetchUrl: 'https://x/chart.png', name: 'chart.png', type: 'image' }],
+      channelId: 'c1',
+      content: '',
+      embeds: [{ title: 'Weekly report' }],
+      platform: 'discord',
+    });
+
+    expect(output.success).toBe(true);
+    expect(output.content).toMatch(/^Message sent to discord:c1/);
+    expect(output.content).toContain('- "chart.png" (image): source-unavailable');
+    expect(output.content).not.toContain('Nothing was delivered');
   });
 
   it('still reports partial loss when some attachments landed', async () => {

@@ -167,8 +167,6 @@ Each item is \`{ type: 'image' | 'file' | 'video' | 'audio', name?, mimeType?, f
 - **QQ** — group + c2c support full rich-media (URL only — base64 degrades). Guild + DMS degrade everything to text-links.
 
 For platforms with degradation rules, prefer URL-sourced \`image\` attachments when you want maximum compatibility. The runtime never throws on a degraded attachment — it logs and falls back so the reply still reaches the user.
-
-**Always read the send result before telling the user a file was sent.** When an attachment could not be delivered, the tool result contains a \`WARNING: N of M attachment(s) were NOT delivered\` block naming each file and the reason (and \`state.attachmentFailures\` carries the same list). In that case do NOT say the file is attached — tell the user which files could not be sent and share a download link for each instead.
 </attachments>
 
 <embeds>

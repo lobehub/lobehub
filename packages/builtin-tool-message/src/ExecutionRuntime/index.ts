@@ -264,12 +264,12 @@ export interface MessageExecutionRuntimeOptions {
  * The failed attachments are named, with the reason, and the model is told
  * to fall back to a download link instead of claiming delivery.
  *
- * `success` stays true while SOMETHING reached the user (text, or at least one
- * attachment). When there was no text and every attachment failed, nothing was
+ * `success` stays true while SOMETHING reached the user (text, an embed, or
+ * at least one attachment). When there was no text and every attachment failed, nothing was
  * delivered and the call is reported as failed.
  */
 const describeAttachmentOutcome = (
-  params: { attachments?: SendMessageAttachment[]; content?: string },
+  params: { attachments?: SendMessageAttachment[]; content?: string; embeds?: unknown[] },
   state: SendAttachmentsOutcome,
   /** The success line, used verbatim while something reached the user. */
   sentLine: string,
@@ -282,7 +282,10 @@ const describeAttachmentOutcome = (
     (f) =>
       `- "${f.name ?? '(unnamed)'}" (${f.type}): ${f.reason}${f.detail ? ` — ${f.detail}` : ''}`,
   );
-  const nothingDelivered = (state.attachmentsDelivered ?? 0) === 0 && !params.content?.trim();
+  // Embeds ride the text leg (Discord posts them even with empty content), so
+  // a delivered embed counts as something reaching the user.
+  const nothingDelivered =
+    (state.attachmentsDelivered ?? 0) === 0 && !params.content?.trim() && !params.embeds?.length;
   const content = [
     // Never open with "Message sent" when nothing was: the lead line is what a
     // skimming model reads first.
@@ -290,7 +293,7 @@ const describeAttachmentOutcome = (
     `WARNING: ${failures.length} of ${requested} attachment(s) were NOT delivered:`,
     ...lines,
     nothingDelivered
-      ? 'No text was given and every attachment failed, so the user received nothing. Do not tell them a file was sent.'
+      ? 'No text or embed was given and every attachment failed, so the user received nothing. Do not tell them a file was sent.'
       : 'Only the text (and any attachments not listed above) reached the user. Do NOT claim these files were attached — tell the user which files could not be delivered and share a download link for each instead.',
   ].join('\n');
   return { content, success: !nothingDelivered };
