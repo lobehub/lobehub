@@ -103,7 +103,7 @@ export const openAcceptModal = (options: AcceptContentProps): ModalInstance =>
   });
 
 interface RejectContentProps {
-  /** Perform the reject with the reason; resolve true to close. */
+  /** Perform the reject with an optional reason; resolve true to close. */
   onConfirm: (comment: string) => Promise<boolean>;
 }
 
@@ -115,7 +115,6 @@ const RejectContent = memo<RejectContentProps>(({ onConfirm }) => {
 
   const handleConfirm = async () => {
     const trimmed = comment.trim();
-    if (!trimmed) return;
     setLoading(true);
     try {
       if (await onConfirm(trimmed)) close();
@@ -139,12 +138,7 @@ const RejectContent = memo<RejectContentProps>(({ onConfirm }) => {
         <Button disabled={loading} onClick={close}>
           {translate('acceptance.actions.cancel')}
         </Button>
-        <Button
-          disabled={!comment.trim()}
-          loading={loading}
-          type={'primary'}
-          onClick={handleConfirm}
-        >
+        <Button loading={loading} type={'primary'} onClick={handleConfirm}>
           {translate('acceptance.actions.confirmReject')}
         </Button>
       </Flexbox>
@@ -154,7 +148,7 @@ const RejectContent = memo<RejectContentProps>(({ onConfirm }) => {
 
 RejectContent.displayName = 'AcceptanceRejectContent';
 
-/** Reject dialog — the reason is required: it is the next round's input, not a note. */
+/** Reject dialog — an optional reason adds context for the next repair round. */
 export const openRejectModal = (options: RejectContentProps): ModalInstance =>
   createModal({
     content: <RejectContent {...options} />,

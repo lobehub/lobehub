@@ -243,6 +243,7 @@
   "preview.downloadFile": "Baixar Arquivo",
   "preview.raw": "Bruto",
   "preview.render": "Pré-visualização",
+  "preview.tooLarge": "Este arquivo é muito grande para visualizar. Baixe-o para ver seu conteúdo.",
   "preview.unsupportedFileAndContact": "Este formato de arquivo não é suportado para visualização online no momento. Se desejar solicitar suporte, <1>entre em contato conosco</1>.",
   "resource": "Recurso",
   "resourceList.batchCopyDescription": "Clone os recursos selecionados para outro espaço de trabalho.",

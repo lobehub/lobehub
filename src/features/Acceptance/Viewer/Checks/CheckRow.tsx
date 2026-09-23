@@ -46,6 +46,7 @@ import type { CheckProposal } from '../Review/proposal';
 import { classifyProposalEdit } from '../Review/proposal';
 import ProposalCard from '../Review/ProposalCard';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
+import { canCommentOnAcceptanceEvidence } from '../visibility';
 import {
   AcceptedNote,
   collectEvidenceById,
@@ -226,7 +227,9 @@ export const AcceptanceCheckRow = memo<{
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [proposalOverlays, checkThreads, comments.canComment, canResolveThread, authorColor]);
     const canCommentEvidence =
-      comments.canComment && Boolean(check.result) && hasAnnotatableEvidence(check);
+      canCommentOnAcceptanceEvidence(bundle, comments.canComment) &&
+      Boolean(check.result) &&
+      hasAnnotatableEvidence(check);
     const openEvidenceComment = () =>
       openEvidenceCommentModal({
         evidence: check.evidence,

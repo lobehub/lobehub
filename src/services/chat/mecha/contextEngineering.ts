@@ -360,7 +360,7 @@ export const contextEngineering = async ({
 
   log('Input messages count: %d', messages.length);
 
-  const processed = await runContextEngineering(snapshot);
+  const { messages: processed } = await runContextEngineering(snapshot);
 
   log('Output messages count: %d', processed.length);
 

@@ -172,13 +172,14 @@ export interface AgentDocumentsRuntimeOptions {
     documentId: string;
   }) => MaybePromise<string | undefined>;
   /**
-   * Fired after a document-mutating tool call finishes (create / remove /
-   * rename / copy) so the host can invalidate client-side caches. This is the
-   * only refresh signal for the server-runtime path — where the tool executes
-   * on the gateway and the client service layer (which normally invalidates)
-   * never runs. Invoked from the executor's `onAfterCall` lifecycle hook.
+   * Fired after a document-mutating tool call finishes so the host can
+   * invalidate client-side caches. This is the only refresh signal for the
+   * server-runtime path — where the tool executes on the gateway and the
+   * client service layer (which normally invalidates) never runs. Invoked from
+   * the executor's `onAfterCall` lifecycle hook. `documentId` is set only when
+   * the call wrote the body or metadata of an existing `documents` row.
    */
-  onDocumentsMutated?: () => MaybePromise<void>;
+  onDocumentsMutated?: (params: { documentId?: string }) => MaybePromise<void>;
 }
 
 export class AgentDocumentsExecutionRuntime {
@@ -194,8 +195,8 @@ export class AgentDocumentsExecutionRuntime {
    * mutation ran client- or server-side — covering the server-runtime path the
    * inline client service invalidation can't reach.
    */
-  notifyMutated(): Promise<void> {
-    return Promise.resolve(this.options.onDocumentsMutated?.());
+  notifyMutated(params: { documentId?: string } = {}): Promise<void> {
+    return Promise.resolve(this.options.onDocumentsMutated?.(params));
   }
 
   private resolveAgentId(context?: AgentDocumentOperationContext) {

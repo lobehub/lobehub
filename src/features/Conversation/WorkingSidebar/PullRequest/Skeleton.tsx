@@ -3,11 +3,9 @@ import { Flexbox } from '@lobehub/ui';
 import { Skeleton } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
-import { useTranslation } from 'react-i18next';
-
-import { getPullRequestState } from '@/features/AgentSidebar/Topic/List/Item/metaCardData';
 
 import { sectionStyles } from '../Overview/sectionStyles';
+import PrHead, { PrStatePill, PrTitle } from './Head';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   dock: css`
@@ -15,10 +13,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-block: 8px 10px;
     padding-inline: 8px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  head: css`
-    padding-block: 10px 8px;
-    padding-inline: 8px;
   `,
   root: css`
     flex: 1;
@@ -50,31 +44,29 @@ const SectionTitle = ({ width = 64 }: { width?: number }) => (
 );
 
 const PullRequestSkeleton = memo(({ summary }: { summary?: DeviceGitLinkedPullRequest }) => {
-  const { t } = useTranslation('chat');
   return (
     <Flexbox className={styles.root}>
       <Flexbox className={styles.root}>
-        <div className={styles.head}>
-          {summary ? (
+        <PrHead
+          meta={
             <>
-              <div>
-                #{summary.number} {summary.title}
-              </div>
-              <div>
-                {t(
-                  `workingPanel.pr.state.${summary.isDraft && getPullRequestState(summary) === 'open' ? 'draft' : getPullRequestState(summary)}`,
-                )}
-              </div>
+              {summary ? (
+                <PrStatePill pr={summary} />
+              ) : (
+                <Skeleton height={20} radius={6} width={56} />
+              )}
+              <Skeleton height={18} radius={4} width={96} />
+              <Skeleton height={18} radius={4} width={64} />
             </>
-          ) : (
-            <Skeleton.Text fontSize={15} rows={2} width={['92%', '60%']} />
-          )}
-          <Flexbox horizontal align={'center'} gap={6} style={{ marginBlockStart: 6 }}>
-            <Skeleton height={20} radius={6} width={56} />
-            <Skeleton height={18} radius={4} width={96} />
-            <Skeleton height={18} radius={4} width={64} />
-          </Flexbox>
-        </div>
+          }
+          title={
+            summary ? (
+              <PrTitle number={summary.number} title={summary.title} />
+            ) : (
+              <Skeleton.Text fontSize={15} rows={2} width={['92%', '60%']} />
+            )
+          }
+        />
         <Flexbox className={sectionStyles.section}>
           <SectionTitle width={72} />
           <div className={styles.sectionBody}>

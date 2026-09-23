@@ -428,6 +428,8 @@ export interface OperationCreationParams {
     clientIp?: string;
     defaultTaskAssigneeAgentId?: string;
     documentId?: string | null;
+    editingAgentId?: string;
+    editingGroupId?: string;
     groupId?: string | null;
     isSubAgent?: boolean;
     /**

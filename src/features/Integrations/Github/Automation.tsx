@@ -1,0 +1,142 @@
+'use client';
+
+import type { GithubIntegrationPreference } from '@lobechat/types';
+import { Block, Flexbox, Icon } from '@lobehub/ui';
+import { Switch, Text } from '@lobehub/ui/base-ui';
+import { createStaticStyles } from 'antd-style';
+import {
+  CircleXIcon,
+  GitMergeIcon,
+  GlobeIcon,
+  LockIcon,
+  type LucideIcon,
+  MessageSquareTextIcon,
+} from 'lucide-react';
+import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { useUserStore } from '@/store/user';
+import { preferenceSelectors } from '@/store/user/selectors';
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  card: css`
+    padding-block: 2px;
+    padding-inline: 16px;
+    border-radius: ${cssVar.borderRadiusLG};
+    background: ${cssVar.colorFillQuaternary};
+  `,
+  icon: css`
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+
+    width: 32px;
+    height: 32px;
+    border-radius: ${cssVar.borderRadius};
+
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorFillTertiary};
+  `,
+  row: css`
+    padding-block: 12px;
+
+    &:not(:last-child) {
+      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+    }
+  `,
+}));
+
+type SwitchKey = keyof GithubIntegrationPreference;
+
+/** One glyph per switch, so a row reads at a glance before the title does. */
+const ICONS: Record<SwitchKey, LucideIcon> = {
+  acceptOnMerge: GitMergeIcon,
+  commentOnPrivateRepositories: LockIcon,
+  commentOnPublicRepositories: GlobeIcon,
+  wakeOnCiFailure: CircleXIcon,
+  wakeOnReview: MessageSquareTextIcon,
+};
+
+interface SwitchGroup {
+  /** Switches whose absent value means on; the rest default to off. */
+  defaultOn: SwitchKey[];
+  id: 'automation' | 'comments';
+  keys: SwitchKey[];
+}
+
+const GROUPS: SwitchGroup[] = [
+  {
+    defaultOn: ['acceptOnMerge', 'wakeOnCiFailure', 'wakeOnReview'],
+    id: 'automation',
+    keys: ['acceptOnMerge', 'wakeOnCiFailure', 'wakeOnReview'],
+  },
+  {
+    defaultOn: ['commentOnPrivateRepositories'],
+    id: 'comments',
+    keys: ['commentOnPrivateRepositories', 'commentOnPublicRepositories'],
+  },
+];
+
+/**
+ * What LobeHub does on its own when GitHub reports activity, and what it
+ * writes back. The server reads the same preference before acting, so a
+ * switch here is the whole opt-out (or opt-in, for public-repo comments).
+ */
+const Automation = memo(() => {
+  const { t } = useTranslation('integration');
+  const [isPreferenceInit, preference, updatePreference] = useUserStore((s) => [
+    preferenceSelectors.isPreferenceInit(s),
+    s.preference.integration?.github,
+    s.updatePreference,
+  ]);
+
+  const toggle = (key: SwitchKey, next: boolean) =>
+    updatePreference({ integration: { github: { ...preference, [key]: next } } });
+
+  return (
+    <>
+      {GROUPS.map((group) => (
+        <Flexbox gap={12} key={group.id}>
+          <Flexbox gap={4}>
+            <Text strong style={{ fontSize: 16 }}>
+              {t(`github.${group.id}.title`)}
+            </Text>
+            <Text type="secondary">{t(`github.${group.id}.description`)}</Text>
+          </Flexbox>
+          <Block className={styles.card} variant={'filled'}>
+            {group.keys.map((key) => {
+              const checked = group.defaultOn.includes(key)
+                ? preference?.[key] !== false
+                : preference?.[key] === true;
+              return (
+                <Flexbox horizontal align="center" className={styles.row} gap={14} key={key}>
+                  <span className={styles.icon}>
+                    <Icon icon={ICONS[key]} size={16} />
+                  </span>
+                  <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
+                    <Text strong>{t(`github.${group.id}.${key}.title` as any)}</Text>
+                    <Text style={{ fontSize: 13 }} type="secondary">
+                      {t(`github.${group.id}.${key}.description` as any)}
+                    </Text>
+                  </Flexbox>
+                  <Switch
+                    checked={checked}
+                    loading={!isPreferenceInit}
+                    style={{ flex: 'none', marginInlineStart: 10 }}
+                    onChange={(next: boolean) => toggle(key, next)}
+                  />
+                </Flexbox>
+              );
+            })}
+          </Block>
+        </Flexbox>
+      ))}
+    </>
+  );
+});
+
+Automation.displayName = 'GithubIntegrationAutomation';
+
+export default Automation;

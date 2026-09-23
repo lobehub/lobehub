@@ -41,6 +41,8 @@ import { DEFAULT_BOT_HISTORY_LIMIT } from '@lobechat/const';
 
 import type { MessageRuntimeService } from '@/server/services/toolExecution/serverRuntimes/message/adapters/types';
 
+import type { AttachmentSendResult } from '../attachmentDelivery';
+import { attachmentDeliveryState, warnAttachmentFailures } from '../attachmentDelivery';
 import type { DiscordApi } from './api';
 import { MAX_DISCORD_HISTORY_LIMIT } from './const';
 import { normalizeDiscordEmbeds } from './embeds';
@@ -77,18 +79,23 @@ export class DiscordMessageService implements MessageRuntimeService {
     content: string,
     attachments: SendMessageParams['attachments'],
     rawEmbeds?: SendMessageParams['embeds'],
-  ): Promise<{ id: string } | undefined> {
+  ): Promise<{ delivery?: AttachmentSendResult; message: { id: string } | undefined }> {
     const embeds = normalizeDiscordEmbeds(rawEmbeds);
 
     if (!attachments?.length) {
-      return this.api.createMessage(channelId, content, undefined, embeds);
+      return { message: await this.api.createMessage(channelId, content, undefined, embeds) };
     }
 
-    const files = await materializeAttachmentsForDiscord(attachments);
+    const { failures, files } = await materializeAttachmentsForDiscord(attachments);
+    warnAttachmentFailures('bot-platform:discord:postToChannel', failures);
+    const delivery: AttachmentSendResult = { delivered: files.length, failures };
     if (files.length === 0) {
       // All attachments failed to materialize — fall back to text-only so the
       // reply still reaches the user.
-      return this.api.createMessage(channelId, content, undefined, embeds);
+      return {
+        delivery,
+        message: await this.api.createMessage(channelId, content, undefined, embeds),
+      };
     }
 
     // Discord caps attachments per message at 10. The first batch carries the
@@ -105,32 +112,42 @@ export class DiscordMessageService implements MessageRuntimeService {
       );
       if (i === 0) firstResult = result;
     }
-    return firstResult;
+    return { delivery, message: firstResult };
   }
 
   // ==================== Direct Messaging ====================
 
   sendDirectMessage = async (params: SendDirectMessageParams): Promise<SendDirectMessageState> => {
     const dmChannel = await this.api.createDMChannel(params.userId);
-    const result = await this.postToChannel(
+    const { delivery, message } = await this.postToChannel(
       dmChannel.id,
       params.content,
       params.attachments,
       params.embeds,
     );
-    return { channelId: dmChannel.id, messageId: result?.id, platform: 'discord' };
+    return {
+      channelId: dmChannel.id,
+      messageId: message?.id,
+      platform: 'discord',
+      ...attachmentDeliveryState(delivery),
+    };
   };
 
   // ==================== Core Message Operations ====================
 
   sendMessage = async (params: SendMessageParams): Promise<SendMessageState> => {
-    const result = await this.postToChannel(
+    const { delivery, message } = await this.postToChannel(
       params.channelId,
       params.content,
       params.attachments,
       params.embeds,
     );
-    return { channelId: params.channelId, messageId: result?.id, platform: 'discord' };
+    return {
+      channelId: params.channelId,
+      messageId: message?.id,
+      platform: 'discord',
+      ...attachmentDeliveryState(delivery),
+    };
   };
 
   readMessages = async (params: ReadMessagesParams): Promise<ReadMessagesState> => {
@@ -317,13 +334,17 @@ export class DiscordMessageService implements MessageRuntimeService {
   replyToThread = async (params: ReplyToThreadParams): Promise<ReplyToThreadState> => {
     // Discord threads ARE channels — posting to a thread id goes through the
     // same `channelMessages` route, so we reuse the shared attachments path.
-    const result = await this.postToChannel(
+    const { delivery, message } = await this.postToChannel(
       params.threadId,
       params.content,
       params.attachments,
       params.embeds,
     );
-    return { messageId: result?.id, threadId: params.threadId };
+    return {
+      messageId: message?.id,
+      threadId: params.threadId,
+      ...attachmentDeliveryState(delivery),
+    };
   };
 
   // ==================== Platform-Specific: Polls ====================

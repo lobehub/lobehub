@@ -288,13 +288,14 @@ export const resourceTransferRequestRouter = router({
           });
         }
         if (error.message === AGENT_SHARED_TRANSFER_BLOCKED) {
-          // Not permanently stale: once the share row is removed (no product
-          // entry point yet — see the `transferAgents` guard) the recipient
-          // can retry, so the request stays pending.
+          // A share row, including a paused row, blocks ownership transfer.
+          // Keep this request pending so it can be canceled or retried only
+          // after the share row is actually removed.
           throw new TRPCError({
             cause: { data: { code: TransferErrorCode.SharedTransferBlocked } },
             code: 'PRECONDITION_FAILED',
-            message: 'This agent has a share link, so its owner cannot be changed.',
+            message:
+              'This agent cannot be transferred while a share link exists, including paused links.',
           });
         }
       }

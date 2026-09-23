@@ -16,6 +16,7 @@ import {
   documents,
   files,
   knowledgeBaseFiles,
+  nextDocumentUpdatedAt,
   works,
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
@@ -343,16 +344,19 @@ export class DocumentModel {
     // visibility is intentionally not updatable via this path. The only legal
     // transition is `private → public` via `publishToWorkspace`; strip any
     // incoming value so callers can't sneak around the one-way rule.
-    const { metadata, visibility: _ignored, ...patch } = value;
+    const { metadata, updatedAt: _updatedAt, visibility: _ignored, ...patch } = value;
 
-    return this.db
+    const [row] = await this.db
       .update(documents)
       .set({
         ...patch,
         ...(metadata !== undefined && { metadata: this.scopeMetadata(metadata) }),
-        updatedAt: new Date(),
+        updatedAt: nextDocumentUpdatedAt(),
       })
-      .where(and(this.readScope(), eq(documents.id, id)));
+      .where(and(this.readScope(), eq(documents.id, id)))
+      .returning({ updatedAt: documents.updatedAt });
+
+    return row?.updatedAt;
   };
 
   /**
@@ -377,7 +381,7 @@ export class DocumentModel {
     return this.db.transaction(async (trx) => {
       const result = await (trx as LobeChatDatabase)
         .update(documents)
-        .set({ updatedAt: new Date(), visibility })
+        .set({ visibility })
         .where(and(eq(documents.id, rootId), this.ownership(), eq(documents.userId, this.userId)))
         .returning({ fileId: documents.fileId, id: documents.id });
 
@@ -609,7 +613,7 @@ export class DocumentModel {
 
       await (trx as LobeChatDatabase)
         .update(documents)
-        .set({ ...ownershipUpdate, ...visibilityUpdate, updatedAt: new Date() })
+        .set({ ...ownershipUpdate, ...visibilityUpdate })
         .where(inArray(documents.id, ids));
 
       if (targetWorkspaceId) {

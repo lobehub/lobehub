@@ -103,6 +103,7 @@ export interface UpdateDocumentOutput {
   historyAppended: boolean;
   id: string;
   savedAt?: string;
+  updatedAt: string;
 }
 
 export interface SaveDocumentHistoryInput {

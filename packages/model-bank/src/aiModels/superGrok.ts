@@ -17,6 +17,30 @@ const superGrokChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 500_000,
     description:
+      "SpaceXAI's flagship model for long-running coding, agentic tasks, and knowledge work — configurable reasoning (low/medium/high/xhigh).",
+    displayName: 'Grok 4.7',
+    enabled: true,
+    family: 'grok',
+    generation: 'grok-4.7',
+    id: 'grok-4.7',
+    knowledgeCutoff: '2026-05',
+    releasedAt: '2026-09-21',
+    settings: {
+      extendParams: ['grok4_7ReasoningEffort'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 500_000,
+    description:
       "SpaceXAI's flagship model for coding, agentic tasks, and knowledge work — configurable reasoning (low/medium/high/xhigh).",
     displayName: 'Grok 4.6',
     enabled: true,

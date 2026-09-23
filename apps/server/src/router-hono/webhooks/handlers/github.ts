@@ -10,6 +10,7 @@ import {
   normalizeGitHubEvent,
 } from '@/server/services/scm/github/normalize';
 import { verifyGitHubSignature } from '@/server/services/scm/github/signature';
+import { ScmControlService } from '@/server/services/scm/ScmControlService';
 import { ScmIngestService } from '@/server/services/scm/ScmIngestService';
 
 /**
@@ -80,7 +81,18 @@ export const githubWebhook = async (c: Context): Promise<Response> => {
   const key = { deliveryId, provider: 'github' as const };
   try {
     const normalized = normalizeGitHubEvent(event, payload);
-    const outcome = await new ScmIngestService(db).apply(normalized);
+    const ingest = new ScmIngestService(db);
+    const control = new ScmControlService(db);
+    ingest.onChangeRequestEvent = async (params) => {
+      const result = await control.handle(params);
+      log(
+        'control %s -> %s %s',
+        params.kind,
+        result.outcome,
+        'detail' in result ? (result.detail ?? '') : '',
+      );
+    };
+    const outcome = await ingest.apply(normalized);
     await ScmWebhookDeliveryModel.settle(db, key, {
       error: outcome.detail,
       status: outcome.status,

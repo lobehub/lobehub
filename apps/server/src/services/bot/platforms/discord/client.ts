@@ -10,6 +10,7 @@ import {
   updateBotRuntimeStatus,
 } from '@/server/services/gateway/runtimeStatus';
 
+import { warnAttachmentFailures } from '../attachmentDelivery';
 import {
   type BotPlatformRuntimeContext,
   type BotProviderConfig,
@@ -24,6 +25,11 @@ import { formatUsageStats } from '../utils';
 import { DiscordApi } from './api';
 import { isSoloDiscordBotThread } from './chatComposition';
 import { DISCORD_BOT_TOKEN_PATTERN, DISCORD_PUBLIC_KEY_PATTERN } from './const';
+import {
+  collectDiscordMentionNames,
+  resolveDiscordMentions,
+  sanitizeDiscordUserInput,
+} from './mentions';
 import { patchDiscordForwardedInteractions } from './patch';
 import { batchDiscordFiles, materializeAttachmentsForDiscord } from './sendAttachments';
 
@@ -269,7 +275,8 @@ class DiscordGatewayClient implements PlatformClient {
           await discord.createMessage(channelId, text);
           return;
         }
-        const files = await materializeAttachmentsForDiscord(attachments);
+        const { failures, files } = await materializeAttachmentsForDiscord(attachments);
+        warnAttachmentFailures('bot-platform:discord:reply', failures);
         if (files.length === 0) {
           await discord.createMessage(channelId, text);
           return;
@@ -449,8 +456,12 @@ class DiscordGatewayClient implements PlatformClient {
     return [];
   }
 
-  sanitizeUserInput(text: string): string {
-    return text.replaceAll(new RegExp(`<@!?${this.applicationId}>\\s*`, 'g'), '').trim();
+  resolveMentions(text: string, message?: unknown): string {
+    return resolveDiscordMentions(text, collectDiscordMentionNames(message));
+  }
+
+  sanitizeUserInput(text: string, message?: unknown): string {
+    return sanitizeDiscordUserInput(text, this.applicationId, message);
   }
 
   shouldSubscribe(threadId: string): boolean {

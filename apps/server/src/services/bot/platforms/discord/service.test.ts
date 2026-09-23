@@ -93,12 +93,14 @@ describe('DiscordMessageService.sendMessage', () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValueOnce(new Response(null, { status: 500 }) as any);
 
-    await service.sendMessage({
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const result = await service.sendMessage({
       attachments: [{ fetchUrl: 'https://cdn.example.com/broken.png', type: 'image' }],
       channelId: 'ch-1',
       content: 'still send the text',
       platform: 'discord',
     });
+    warn.mockRestore();
 
     // Only a single text-only call should be made — no files arg.
     expect(api.createMessage).toHaveBeenCalledTimes(1);
@@ -108,6 +110,24 @@ describe('DiscordMessageService.sendMessage', () => {
       undefined,
       undefined,
     );
+    // ...and the state says which attachment was lost, and why. This suite
+    // runs the real SSRF guard in front of the stubbed fetch, so the detail
+    // depends on whether the sandbox can resolve the hostname — the reason
+    // does not.
+    expect(result).toEqual({
+      attachmentFailures: [
+        {
+          detail: expect.any(String),
+          name: undefined,
+          reason: 'source-unavailable',
+          type: 'image',
+        },
+      ],
+      attachmentsDelivered: 0,
+      channelId: 'ch-1',
+      messageId: 'msg-1',
+      platform: 'discord',
+    });
   });
 });
 

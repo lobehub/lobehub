@@ -8,8 +8,12 @@
  */
 
 export interface AgentShareSupport {
+  /** Whether this agent currently has an active link share. */
+  isShared: boolean | undefined;
   /** Whether a *new* share may be published right now. */
   publishable: boolean;
+  /** Whether the agent's effective model provider may be shared. */
+  shareModelAllowed: boolean;
   /** Whether the share management surface applies to this agent at all. */
   supported: boolean;
   /**
@@ -19,6 +23,12 @@ export interface AgentShareSupport {
   visible: boolean | undefined;
 }
 
-const UNSUPPORTED: AgentShareSupport = { publishable: false, supported: false, visible: false };
+const UNSUPPORTED: AgentShareSupport = {
+  isShared: false,
+  publishable: false,
+  shareModelAllowed: true,
+  supported: false,
+  visible: false,
+};
 
 export const useAgentShareSupported = (_agentId?: null | string): AgentShareSupport => UNSUPPORTED;

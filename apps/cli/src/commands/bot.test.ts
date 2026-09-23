@@ -1,3 +1,4 @@
+import { BOT_CREDENTIAL_MASK } from '@lobechat/const';
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -12,6 +13,8 @@ const { mockTrpcClient } = vi.hoisted(() => ({
       delete: { mutate: vi.fn() },
       getByAgentId: { query: vi.fn() },
       list: { query: vi.fn() },
+      listPlatforms: { query: vi.fn() },
+      testConnection: { mutate: vi.fn() },
       update: { mutate: vi.fn() },
     },
   },
@@ -27,7 +30,9 @@ describe('bot command', () => {
   let consoleSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+    exitSpy = vi.spyOn(process, 'exit').mockImplementation((code) => {
+      throw new Error(`process.exit ${code}`);
+    });
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
     for (const method of Object.values(mockTrpcClient.agentBotProvider)) {
@@ -35,6 +40,32 @@ describe('bot command', () => {
         (fn as ReturnType<typeof vi.fn>).mockReset();
       }
     }
+    mockTrpcClient.agentBotProvider.listPlatforms.query.mockResolvedValue([
+      {
+        id: 'discord',
+        schema: [
+          {
+            key: 'credentials',
+            properties: [
+              { key: 'botToken', required: true },
+              { key: 'publicKey', required: true },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'telegram',
+        schema: [
+          {
+            key: 'credentials',
+            properties: [
+              { key: 'botToken', required: true },
+              { key: 'secretToken', required: false },
+            ],
+          },
+        ],
+      },
+    ]);
   });
 
   afterEach(() => {
@@ -113,6 +144,9 @@ describe('bot command', () => {
 
   describe('view', () => {
     it('should display bot details', async () => {
+      mockTrpcClient.agentBotProvider.list.query.mockResolvedValue([
+        { agentId: 'agent1', id: 'b1', platform: 'discord' },
+      ]);
       mockTrpcClient.agentBotProvider.getByAgentId.query.mockResolvedValue([
         {
           applicationId: 'app123',
@@ -124,17 +158,19 @@ describe('bot command', () => {
       ]);
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'bot', 'view', 'b1', '--agent', 'agent1']);
+      await program.parseAsync(['node', 'test', 'bot', 'view', 'b1']);
 
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('discord'));
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('app123'));
     });
 
     it('should error when bot not found', async () => {
-      mockTrpcClient.agentBotProvider.getByAgentId.query.mockResolvedValue([]);
+      mockTrpcClient.agentBotProvider.list.query.mockResolvedValue([]);
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'bot', 'view', 'nonexistent', '--agent', 'agent1']);
+      await expect(
+        program.parseAsync(['node', 'test', 'bot', 'view', 'nonexistent']),
+      ).rejects.toThrow('process.exit 1');
 
       expect(log.error).toHaveBeenCalledWith(expect.stringContaining('not found'));
       expect(exitSpy).toHaveBeenCalledWith(1);
@@ -201,20 +237,22 @@ describe('bot command', () => {
 
     it('should reject invalid platform', async () => {
       const program = createProgram();
-      await program.parseAsync([
-        'node',
-        'test',
-        'bot',
-        'add',
-        '--agent',
-        'agent1',
-        '--platform',
-        'invalid',
-        '--app-id',
-        'x',
-        '--bot-token',
-        'x',
-      ]);
+      await expect(
+        program.parseAsync([
+          'node',
+          'test',
+          'bot',
+          'add',
+          '--agent',
+          'agent1',
+          '--platform',
+          'invalid',
+          '--app-id',
+          'x',
+          '--bot-token',
+          'x',
+        ]),
+      ).rejects.toThrow('process.exit 1');
 
       expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Invalid platform'));
       expect(exitSpy).toHaveBeenCalledWith(1);
@@ -222,21 +260,23 @@ describe('bot command', () => {
 
     it('should reject missing required credentials', async () => {
       const program = createProgram();
-      await program.parseAsync([
-        'node',
-        'test',
-        'bot',
-        'add',
-        '--agent',
-        'agent1',
-        '--platform',
-        'discord',
-        '--app-id',
-        'app123',
-        '--bot-token',
-        'tok123',
-        // missing --public-key
-      ]);
+      await expect(
+        program.parseAsync([
+          'node',
+          'test',
+          'bot',
+          'add',
+          '--agent',
+          'agent1',
+          '--platform',
+          'discord',
+          '--app-id',
+          'app123',
+          '--bot-token',
+          'tok123',
+          // missing --public-key
+        ]),
+      ).rejects.toThrow('process.exit 1');
 
       expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Missing required'));
       expect(exitSpy).toHaveBeenCalledWith(1);
@@ -244,23 +284,89 @@ describe('bot command', () => {
   });
 
   describe('update', () => {
-    it('should update bot credentials', async () => {
+    const mockExistingBot = (credentials: Record<string, string>) => {
+      mockTrpcClient.agentBotProvider.list.query.mockResolvedValue([
+        { agentId: 'agent1', id: 'b1', platform: 'discord' },
+      ]);
+      mockTrpcClient.agentBotProvider.getByAgentId.query.mockResolvedValue([
+        { agentId: 'agent1', credentials, id: 'b1', platform: 'discord', settings: {} },
+      ]);
+    };
+
+    it('preserves the existing public key when updating the token', async () => {
+      mockExistingBot({ botToken: BOT_CREDENTIAL_MASK, publicKey: 'public-key' });
       mockTrpcClient.agentBotProvider.update.mutate.mockResolvedValue({});
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'bot', 'update', 'b1', '--bot-token', 'new-token']);
 
-      expect(mockTrpcClient.agentBotProvider.update.mutate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          credentials: { botToken: 'new-token' },
-          id: 'b1',
-        }),
-      );
+      expect(mockTrpcClient.agentBotProvider.update.mutate).toHaveBeenCalledWith({
+        credentials: { botToken: 'new-token', publicKey: 'public-key' },
+        id: 'b1',
+      });
+    });
+
+    it('preserves the existing token mask when updating the public key', async () => {
+      mockExistingBot({ botToken: BOT_CREDENTIAL_MASK, publicKey: 'old-public-key' });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'bot',
+        'update',
+        'b1',
+        '--public-key',
+        'new-public-key',
+      ]);
+
+      expect(mockTrpcClient.agentBotProvider.update.mutate).toHaveBeenCalledWith({
+        credentials: { botToken: BOT_CREDENTIAL_MASK, publicKey: 'new-public-key' },
+        id: 'b1',
+      });
+    });
+
+    it('does not send credentials for a settings-only update', async () => {
+      mockExistingBot({ botToken: BOT_CREDENTIAL_MASK, publicKey: 'public-key' });
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'bot', 'update', 'b1', '--dm-policy', 'open']);
+
+      expect(mockTrpcClient.agentBotProvider.update.mutate).toHaveBeenCalledWith({
+        id: 'b1',
+        settings: { dmPolicy: 'open' },
+      });
+    });
+
+    it('does not carry credentials from the old platform when changing platform', async () => {
+      mockExistingBot({ botToken: BOT_CREDENTIAL_MASK, publicKey: 'discord-public-key' });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'bot',
+        'update',
+        'b1',
+        '--platform',
+        'telegram',
+        '--bot-token',
+        'telegram-token',
+      ]);
+
+      expect(mockTrpcClient.agentBotProvider.update.mutate).toHaveBeenCalledWith({
+        credentials: { botToken: 'telegram-token' },
+        id: 'b1',
+        platform: 'telegram',
+      });
     });
 
     it('should error when no changes specified', async () => {
+      mockExistingBot({ botToken: BOT_CREDENTIAL_MASK, publicKey: 'public-key' });
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'bot', 'update', 'b1']);
+      await expect(program.parseAsync(['node', 'test', 'bot', 'update', 'b1'])).rejects.toThrow(
+        'process.exit 1',
+      );
 
       expect(log.error).toHaveBeenCalledWith(expect.stringContaining('No changes'));
       expect(exitSpy).toHaveBeenCalledWith(1);
@@ -320,13 +426,16 @@ describe('bot command', () => {
 
   describe('connect', () => {
     it('should connect a bot', async () => {
+      mockTrpcClient.agentBotProvider.list.query.mockResolvedValue([
+        { agentId: 'agent1', id: 'b1', platform: 'discord' },
+      ]);
       mockTrpcClient.agentBotProvider.getByAgentId.query.mockResolvedValue([
         { applicationId: 'app123', id: 'b1', platform: 'discord' },
       ]);
       mockTrpcClient.agentBotProvider.connectBot.mutate.mockResolvedValue({ status: 'connected' });
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'bot', 'connect', 'b1', '--agent', 'agent1']);
+      await program.parseAsync(['node', 'test', 'bot', 'connect', 'b1']);
 
       expect(mockTrpcClient.agentBotProvider.connectBot.mutate).toHaveBeenCalledWith({
         applicationId: 'app123',
@@ -336,18 +445,12 @@ describe('bot command', () => {
     });
 
     it('should error when bot not found', async () => {
-      mockTrpcClient.agentBotProvider.getByAgentId.query.mockResolvedValue([]);
+      mockTrpcClient.agentBotProvider.list.query.mockResolvedValue([]);
 
       const program = createProgram();
-      await program.parseAsync([
-        'node',
-        'test',
-        'bot',
-        'connect',
-        'nonexistent',
-        '--agent',
-        'agent1',
-      ]);
+      await expect(
+        program.parseAsync(['node', 'test', 'bot', 'connect', 'nonexistent']),
+      ).rejects.toThrow('process.exit 1');
 
       expect(log.error).toHaveBeenCalledWith(expect.stringContaining('not found'));
       expect(exitSpy).toHaveBeenCalledWith(1);

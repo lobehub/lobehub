@@ -817,6 +817,8 @@ describe('aiAgentRouter — remote Human-in-the-loop', () => {
           taskId: 'task-runtime',
         }),
         taskId: 'task-runtime',
+        // The continuation must keep the chat trigger so its LLM calls are not logged as unknown.
+        trigger: 'chat',
       }),
     );
     expect(aiAgentService.repairInterventionContinuationTopicAnchor).toHaveBeenCalledWith(
@@ -873,6 +875,9 @@ describe('aiAgentRouter — remote Human-in-the-loop', () => {
     ).rejects.toThrow('durable completion failed');
 
     expect(aiAgentService.execAgent).toHaveBeenCalledTimes(1);
+    expect(aiAgentService.execAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ trigger: 'chat' }),
+    );
     // Runtime dispatch already happened; releasing the claim here could let a
     // second actor execute it again. The idempotent published hook is retried
     // under the same resolutionRequestId instead.

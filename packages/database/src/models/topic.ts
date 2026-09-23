@@ -427,7 +427,7 @@ export class TopicModel {
    * Raw workspace/user scope, WITHOUT the visitor exclusion. Backing store for
    * both {@link ownership} and {@link mine}, and the escape hatch for methods
    * that must see visitor rows independent of the instance flag
-   * ({@link queryBySender} / {@link countBySender} / {@link countVisitors}).
+   * ({@link queryBySender} / {@link countBySender} / {@link countShareVisitors}).
    */
   private workspaceScope = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, topics);
@@ -442,7 +442,7 @@ export class TopicModel {
    *
    * `mine()` deliberately does NOT AND {@link notShareVisitor} — it is the
    * per-user variant of {@link workspaceScope} and the share-scoped methods
-   * ({@link queryBySender} / {@link countBySender} / {@link countVisitors})
+   * ({@link queryBySender} / {@link countBySender} / {@link countShareVisitors})
    * layer their own `senderId` predicate on top of it. Creator-facing
    * destructive sweeps that reach for `mine()` still get the visitor
    * exclusion by AND-ing {@link notShareVisitor} themselves.

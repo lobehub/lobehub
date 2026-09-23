@@ -1,4 +1,5 @@
 {
+  "FilePreview.actions.download": "Изтегляне на изходния файл",
   "FilePreview.tabs.chunk": "Фрагмент",
   "FilePreview.tabs.file": "Файл",
   "Plugins": "Умения",

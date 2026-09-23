@@ -16,6 +16,7 @@ import { getHiddenBuiltinModelsForUser } from '@/business/server/aiProvider';
 import { AgentModel } from '@/database/models/agent';
 import { PluginModel } from '@/database/models/plugin';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
+import { AgentService } from '@/server/services/agent';
 import { DiscoverService } from '@/server/services/discover';
 import { filterHiddenProviderModels } from '@/utils/aiProvider';
 
@@ -37,6 +38,7 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
     const userId = context.userId;
 
     const agentModel = new AgentModel(context.serverDB, userId, context.workspaceId);
+    const agentService = new AgentService(context.serverDB, userId, context.workspaceId);
     const pluginModel = new PluginModel(context.serverDB, userId, context.workspaceId);
     const aiInfraRepos = new AiInfraRepos(context.serverDB, userId, {}, context.workspaceId);
     /**
@@ -224,12 +226,7 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
           }
 
           if (Object.keys(finalConfig).length > 0) {
-            // Domain tool plugins support structured entries, while the DB
-            // model's JSONB column still carries its legacy string[] annotation.
-            await agentModel.updateConfig(
-              agentId,
-              finalConfig as unknown as Parameters<typeof agentModel.updateConfig>[1],
-            );
+            await agentService.updateAgentConfig(agentId, finalConfig);
             const nonPluginFields = Object.keys(finalConfig).filter((f) => f !== 'plugins');
             if (nonPluginFields.length > 0) {
               updatedParts.push(`config fields: ${nonPluginFields.join(', ')}`);

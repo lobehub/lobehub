@@ -2106,6 +2106,42 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(store.completeOperation).toHaveBeenCalledWith('op-1');
     });
 
+    it('forwards replayTranscript to sendPrompt and returns the replay outcome', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+      const ipc = setupIpcCapture();
+      mockSendPrompt.mockImplementationOnce(async (params: any) => {
+        // Desktop main streams the transcript and completes the session itself.
+        ipc.emitRawLine(params.sessionId, ccInit('cc-session-1'));
+        ipc.emitRawLine(params.sessionId, ccText('msg-1', 'replayed answer'));
+        ipc.emitRawLine(params.sessionId, ccResult());
+        ipc.emitComplete(params.sessionId);
+        return { replay: { complete: false, recordCount: 1 } };
+      });
+
+      const outcome = await executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        replayTranscript: true,
+        resumeSessionId: 'cc-session-1',
+      });
+
+      expect(mockSendPrompt).toHaveBeenCalledWith(
+        expect.objectContaining({ replayTranscript: true, sessionId: 'ipc-sess-1' }),
+      );
+      expect(outcome).toEqual({ replay: { complete: false, recordCount: 1 } });
+    });
+
+    it('returns no outcome for a live run', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+      setupIpcCapture();
+
+      const outcome = await executeHeterogeneousAgent(get, defaultParams);
+
+      expect(mockSendPrompt.mock.calls[0][0].replayTranscript).toBeUndefined();
+      expect(outcome).toBeUndefined();
+    });
+
     it('should forward imageList to heterogeneousAgentService.sendPrompt for Codex runs', async () => {
       const store = createMockStore();
       const get = vi.fn(() => store);
@@ -2123,6 +2159,9 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
       expect(mockSendPrompt).toHaveBeenCalledWith({
         agentId: 'agent-1',
+        // Recorded in the in-flight ledger so restart recovery can scope to
+        // this run's own branch and workspace.
+        assistantMessageId: 'ast-initial',
         imageList,
         operationId: 'op-1',
         prompt: 'test prompt',
@@ -2130,6 +2169,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         systemContext: undefined,
         // Keys the run's in-app browser session (`topic:<topicId>`) in the main process.
         topicId: 'topic-1',
+        workspaceId: undefined,
       });
     });
 
@@ -2942,7 +2982,12 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         const store = createMockStore();
         const get = vi.fn(() => store);
 
-        await expect(executeHeterogeneousAgent(get, defaultParams)).resolves.toBeUndefined();
+        // The run swallows its failure and persists a terminal error instead
+        // of throwing; the outcome is how a caller (restart recovery) tells
+        // that apart from a run that actually finished.
+        await expect(executeHeterogeneousAgent(get, defaultParams)).resolves.toEqual({
+          terminalError: true,
+        });
 
         expect(mockUpdateMessageError).toHaveBeenCalledWith(
           'ast-initial',
@@ -4953,6 +4998,24 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
             heterogeneousProvider: { command: 'kimi', type: 'kimi-code' as const },
           },
         },
+      );
+
+      expect(mockRecordQuotaUsage).not.toHaveBeenCalled();
+    });
+
+    it('does NOT ledger usage during a transcript replay', async () => {
+      // A replay re-reads a turn the provider already billed, and its rows get
+      // fresh message ids — the server dedupes by message id, so ledgering
+      // again would double-count the same spend.
+      await runWithEvents(
+        [
+          ccInit(),
+          ccMessageStart('msg_01', 'claude-opus-4-6'),
+          ccAssistant('msg_01', [{ text: 'Hello', type: 'text' }], { model: 'claude-opus-4-6' }),
+          ccMessageDelta({ input_tokens: 100, output_tokens: 20 }),
+          ccResult(),
+        ],
+        { params: { replayTranscript: true, resumeSessionId: 'cc-session-1' } },
       );
 
       expect(mockRecordQuotaUsage).not.toHaveBeenCalled();

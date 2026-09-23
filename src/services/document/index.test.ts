@@ -87,4 +87,13 @@ describe('DocumentService.updateDocument', () => {
       expect.objectContaining({ breakAutosaveWindow: true, id: 'doc-4' }),
     );
   });
+
+  it('serializes updatedAt to an ISO string, matching savedAt serialization', async () => {
+    const updatedAt = new Date('2026-04-11T00:00:05.000Z');
+    mockMutate.mockResolvedValue({ historyAppended: false, id: 'doc-5', updatedAt });
+
+    const result = await service.updateDocument({ id: 'doc-5', title: 'New Title' });
+
+    expect(result.updatedAt).toBe(updatedAt.toISOString());
+  });
 });

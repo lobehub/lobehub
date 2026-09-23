@@ -531,6 +531,70 @@ describe('DocumentModel', () => {
 
       expect(unchanged?.content).toBe('Original content');
     });
+
+    it('should return the committed updatedAt', async () => {
+      const { documentId } = await createTestDocument(documentModel, fileModel, 'Original content');
+
+      const updatedAt = await documentModel.update(documentId, { content: 'Updated content' });
+
+      const found = await documentModel.findById(documentId);
+      expect(updatedAt).toEqual(found?.updatedAt);
+    });
+
+    it('advances the version for concurrent writes even when callers send the same old timestamp', async () => {
+      const { documentId } = await createTestDocument(documentModel, fileModel, 'Original content');
+      const original = (await documentModel.findById(documentId))!;
+      const versions = await Promise.all(
+        Array.from({ length: 4 }, (_, index) =>
+          documentModel.update(documentId, {
+            content: `Write ${index}`,
+            updatedAt: original.updatedAt,
+          }),
+        ),
+      );
+      const timestamps = versions.map((version) => version!.getTime()).sort((a, b) => a - b);
+      expect(new Set(timestamps).size).toBe(4);
+      expect(timestamps[0]).toBeGreaterThan(original.updatedAt.getTime());
+      expect((await documentModel.findById(documentId))?.updatedAt.getTime()).toBe(timestamps[3]);
+    });
+
+    it('advances updatedAt from the database clock when the update omits it', async () => {
+      const { documentId } = await createTestDocument(documentModel, fileModel, 'Original content');
+      const original = (await documentModel.findById(documentId))!;
+
+      await serverDB
+        .update(documents)
+        .set({ title: 'Renamed' })
+        .where(eq(documents.id, documentId));
+
+      const next = await documentModel.findById(documentId);
+      expect(next?.title).toBe('Renamed');
+      expect(next!.updatedAt.getTime()).toBeGreaterThan(original.updatedAt.getTime());
+    });
+
+    it('ignores a caller-supplied updatedAt and stores a newer database version', async () => {
+      const { documentId } = await createTestDocument(documentModel, fileModel, 'Original content');
+      const original = (await documentModel.findById(documentId))!;
+      const supplied = new Date('2020-01-01T00:00:00.000Z');
+
+      const updatedAt = await documentModel.update(documentId, {
+        content: 'Updated content',
+        updatedAt: supplied,
+      });
+
+      expect(updatedAt).toBeInstanceOf(Date);
+      expect(updatedAt!.getTime()).toBeGreaterThan(original.updatedAt.getTime());
+      expect(updatedAt!.getTime()).not.toBe(supplied.getTime());
+      expect((await documentModel.findById(documentId))?.updatedAt).toEqual(updatedAt);
+    });
+
+    it('should return undefined when the row does not belong to the caller', async () => {
+      const { documentId } = await createTestDocument(documentModel, fileModel, 'Original content');
+
+      const updatedAt = await documentModel2.update(documentId, { content: 'Hacked content' });
+
+      expect(updatedAt).toBeUndefined();
+    });
   });
 
   describe('findBySlug', () => {
@@ -672,6 +736,7 @@ describe('DocumentModel', () => {
 
       const { id: firstId } = await documentModel.create({
         content: 'First document',
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
         fileId: file.id,
         fileType: 'text/plain',
         source: file.url,
@@ -682,6 +747,7 @@ describe('DocumentModel', () => {
 
       await documentModel.create({
         content: 'Second document',
+        createdAt: new Date('2026-01-01T00:00:01.000Z'),
         fileId: file.id,
         fileType: 'text/plain',
         source: file.url,

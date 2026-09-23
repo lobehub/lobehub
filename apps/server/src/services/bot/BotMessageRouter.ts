@@ -485,7 +485,7 @@ export class BotMessageRouter {
       strategy,
       debounceMs,
       (message) => {
-        const text = client.sanitizeUserInput?.(message.text ?? '') ?? message.text;
+        const text = client.sanitizeUserInput?.(message.text ?? '', message) ?? message.text;
         return BotMessageRouter.dispatchTextCommand(text, commands) !== null;
       },
     );
@@ -2308,7 +2308,7 @@ export class BotMessageRouter {
     const regex = new RegExp(`(?:^|\\s)\\/(?:${namePattern})(?:\\s|$|@)`);
     bot.onNewMessage(regex, async (thread, message) => {
       if (message.author.isBot === true) return;
-      const sanitized = client.sanitizeUserInput?.(message.text ?? '') ?? message.text;
+      const sanitized = client.sanitizeUserInput?.(message.text ?? '', message) ?? message.text;
       const result = BotMessageRouter.dispatchTextCommand(sanitized, commands);
       if (!result) return;
       const replyLocale = locale.detectFromMessage(message);

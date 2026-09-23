@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { existsSync, statSync } from 'node:fs';
-import { access, mkdtemp, readdir, readFile, rm, unlink, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readdir, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import * as os from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
@@ -17,6 +17,7 @@ import { AcpRpcResponseError } from '@lobechat/heterogeneous-agents/spawn';
 import { app as electronAppMock } from 'electron';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as heteroCliProcessModule from '../../utils/heteroCliProcess';
 import HeterogeneousAgentCtr, { redactPromptArgs } from '../HeterogeneousAgentImpl';
 
 /**
@@ -24,6 +25,34 @@ import HeterogeneousAgentCtr, { redactPromptArgs } from '../HeterogeneousAgentIm
  * a resumed one (`startSession({ resumeSessionId })`) does not.
  */
 const cliGuideBlock = { text: lobeHubCliGuide, type: 'text' };
+
+/**
+ * Process-table access used by interrupted-run reaping. Real by default; a
+ * test that needs a specific liveness answer sets an override.
+ */
+const heteroProcessOverrides: {
+  isProcessAlive?: (pid: number) => boolean;
+  killProcessTreeByPid?: (pid: number, signal: NodeJS.Signals) => void;
+  readProcessIdentity?: (pid: number) => Promise<{ commandLine?: string; status: string }>;
+  waitForProcessExit?: (pid: number, timeoutMs: number) => Promise<boolean>;
+} = {};
+
+vi.mock('@/utils/heteroCliProcess', async (importOriginal) => {
+  const actual = await importOriginal<typeof heteroCliProcessModule>();
+  return {
+    ...actual,
+    isProcessAlive: (...args: Parameters<typeof actual.isProcessAlive>) =>
+      (heteroProcessOverrides.isProcessAlive ?? actual.isProcessAlive)(...args),
+    killProcessTreeByPid: (...args: Parameters<typeof actual.killProcessTreeByPid>) =>
+      (heteroProcessOverrides.killProcessTreeByPid ?? actual.killProcessTreeByPid)(...args),
+    readProcessIdentity: (...args: Parameters<typeof actual.readProcessIdentity>) =>
+      (heteroProcessOverrides.readProcessIdentity ?? actual.readProcessIdentity)(
+        ...(args as [number]),
+      ),
+    waitForProcessExit: (...args: Parameters<typeof actual.waitForProcessExit>) =>
+      (heteroProcessOverrides.waitForProcessExit ?? actual.waitForProcessExit)(...args),
+  };
+});
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof os>('node:os');
@@ -136,6 +165,7 @@ vi.mock('@/utils/logger', () => ({
 }));
 
 const {
+  claudeSdkSessionAfterSpawnMock,
   claudeSdkSessionCloseMock,
   claudeSdkSessionConstructMock,
   codexAppServerCanReuse,
@@ -175,6 +205,7 @@ const {
   piRpcSessionRebindMock,
   piRpcSessionRunMock,
 } = vi.hoisted(() => ({
+  claudeSdkSessionAfterSpawnMock: vi.fn(async () => {}),
   claudeSdkSessionCloseMock: vi.fn(),
   claudeSdkSessionConstructMock: vi.fn(),
   codexAppServerCanReuse: { value: true },
@@ -233,6 +264,13 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
 
     async run() {
       const now = Date.now();
+      // The real session hands the CLI child it spawns to its host here.
+      this.options.onProcessSpawn?.({
+        args: ['/usr/local/bin/claude', '-p', '--output-format', 'stream-json'],
+        command: '/usr/local/bin/claude',
+        pid: 99_001,
+      });
+      await claudeSdkSessionAfterSpawnMock();
       this.options.onRuntimeStatus({
         activeTasks: [
           {
@@ -631,8 +669,10 @@ vi.mock('@/modules/heterogeneousAgent/kimiCodeQuota', () => ({
 // Captures the most recent spawn() call so sendPrompt tests can assert on argv.
 const spawnCalls: Array<{ args: string[]; command: string; options: any }> = [];
 let nextFakeProc: any = null;
-const { execFileMock } = vi.hoisted(() => ({
+const { execFileMock, onSpawnMock } = vi.hoisted(() => ({
   execFileMock: vi.fn(),
+  /** Runs inside the spawn mock, so a test can move the clock across a spawn. */
+  onSpawnMock: vi.fn(),
 }));
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
@@ -642,6 +682,7 @@ vi.mock('node:child_process', async (importOriginal) => {
     execFile: execFileMock,
     spawn: (command: string, args: string[], options: any) => {
       spawnCalls.push({ args, command, options });
+      onSpawnMock();
       nextFakeProc?.__start?.();
       return nextFakeProc;
     },
@@ -712,6 +753,9 @@ describe('HeterogeneousAgentCtr', () => {
     consumeCodexRateLimitResetCreditMock.mockReset();
     fetchCodexQuotaMock.mockReset();
     fetchKimiCodeQuotaMock.mockReset();
+    onSpawnMock.mockReset();
+    claudeSdkSessionAfterSpawnMock.mockReset();
+    claudeSdkSessionAfterSpawnMock.mockImplementation(async () => {});
     claudeSdkSessionCloseMock.mockReset();
     claudeSdkSessionConstructMock.mockReset();
     codexAppServerCanReuse.value = true;
@@ -1473,6 +1517,83 @@ describe('HeterogeneousAgentCtr', () => {
         .map(([, payload]) => payload.event);
       expect(streamEvents.some((event) => event.type === 'agent_runtime_end')).toBe(true);
       expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+    });
+
+    it('stamps the replay floor before the CLI can record its prompt', async () => {
+      // `startedAt` is the floor a transcript replay is matched against. Taken
+      // after the spawn, the CLI could append this turn's prompt record first
+      // and recovery would then reject its own turn.
+      const start = new Date('2026-09-22T10:00:00.000Z');
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        vi.setSystemTime(start);
+        onSpawnMock.mockImplementation(() => {
+          vi.setSystemTime(new Date(start.getTime() + 5000));
+        });
+        nextFakeProc = createFakeProc().proc;
+        const ctr = new HeterogeneousAgentCtr({
+          appStoragePath,
+          storeManager: { get: vi.fn() },
+        } as any);
+        const { sessionId } = await ctr.startSession({
+          agentType: 'claude-code',
+          command: 'claude',
+        });
+
+        await ctr.sendPrompt({
+          operationId: 'op-floor',
+          prompt: 'do the thing',
+          sessionId,
+          topicId: 'topic-floor',
+        });
+
+        const ledger = JSON.parse(
+          await readFile(path.join(appStoragePath, 'heteroAgent', 'inflight-runs.json'), 'utf8'),
+        ).runs;
+        expect(ledger).toHaveLength(1);
+        // The spawn jumped the clock 5s; a floor taken after it would land there.
+        expect(Date.parse(ledger[0].startedAt)).toBeLessThan(start.getTime() + 5000);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('records the SDK-spawned CLI child on the recovery ledger', async () => {
+      // The SDK launches a real Claude executable: a hard crash leaves an
+      // orphan that keeps writing the transcript a replay would read, and a
+      // PID-less ledger entry looks safe to recover next to it.
+      process.env.LOBE_CLAUDE_CODE_SDK = '1';
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'claude-code',
+        command: 'claude',
+      });
+
+      let ledgerDuringRun: any[] = [];
+      claudeSdkSessionAfterSpawnMock.mockImplementation(async () => {
+        ledgerDuringRun = JSON.parse(
+          await readFile(path.join(appStoragePath, 'heteroAgent', 'inflight-runs.json'), 'utf8'),
+        ).runs;
+      });
+
+      await ctr.sendPrompt({
+        operationId: 'op-sdk-ledger',
+        prompt: 'watch ci',
+        sessionId,
+        topicId: 'topic-sdk',
+      });
+
+      expect(ledgerDuringRun).toEqual([
+        expect.objectContaining({
+          agentType: 'claude-code',
+          command: 'claude',
+          pid: 99_001,
+          topicId: 'topic-sdk',
+        }),
+      ]);
     });
 
     it('does not start the Claude SDK when server-default execution is cancelled during preparation', async () => {
@@ -5440,6 +5561,125 @@ describe('HeterogeneousAgentCtr', () => {
       ctr.afterAppReady();
       const beforeQuit = captureRegisteredHandler(electron.app.on, 'before-quit');
       expect(() => beforeQuit({ preventDefault: vi.fn() })).not.toThrow();
+    });
+  });
+
+  describe('listInterruptedRuns', () => {
+    const DEAD_PID = 2_147_483_000;
+
+    const ledgerPath = () => path.join(appStoragePath, 'heteroAgent', 'inflight-runs.json');
+
+    const seedLedger = async (runs: Record<string, unknown>[]) => {
+      await mkdir(path.dirname(ledgerPath()), { recursive: true });
+      await writeFile(ledgerPath(), JSON.stringify({ runs, version: 1 }), 'utf8');
+    };
+
+    const readLedger = async () =>
+      JSON.parse(await readFile(ledgerPath(), 'utf8')).runs as Record<string, any>[];
+
+    const entry = (extra?: Record<string, unknown>) => ({
+      agentType: 'claude-code',
+      ipcSessionId: 'ipc-1',
+      operationId: 'op-1',
+      pid: DEAD_PID,
+      startedAt: new Date().toISOString(),
+      topicId: 'topic-1',
+      ...extra,
+    });
+
+    const createCtr = () =>
+      new HeterogeneousAgentCtr({ appStoragePath, storeManager: { get: vi.fn() } } as any);
+
+    beforeEach(() => {
+      for (const key of Object.keys(heteroProcessOverrides)) {
+        delete (heteroProcessOverrides as Record<string, unknown>)[key];
+      }
+    });
+
+    it('keeps a claimed run on the ledger until the renderer releases it', async () => {
+      // Recovery spans several renderer steps (reap, probe, replay, settle).
+      // Consuming the entry here would leave the topic stranded if the app
+      // died again half way through, with no token left to retry it.
+      await seedLedger([entry()]);
+      const ctr = createCtr();
+
+      expect(await ctr.listInterruptedRuns({})).toEqual([
+        expect.objectContaining({ claimCount: 1, ipcSessionId: 'ipc-1' }),
+      ]);
+      expect(await readLedger()).toEqual([expect.objectContaining({ claimCount: 1 })]);
+
+      await ctr.releaseInterruptedRun({ ipcSessionId: 'ipc-1' });
+      expect(await readLedger()).toEqual([]);
+    });
+
+    it('reaps an expired run before handing its topic over for cleanup', async () => {
+      // Age only makes the transcript stale; it says nothing about the
+      // process. An orphan hung in a long-running tool is still out there.
+      const killed: [number, NodeJS.Signals][] = [];
+      heteroProcessOverrides.isProcessAlive = () => true;
+      heteroProcessOverrides.readProcessIdentity = async () => ({
+        commandLine: '/usr/local/bin/claude -p --output-format stream-json',
+        status: 'found',
+      });
+      heteroProcessOverrides.killProcessTreeByPid = (pid, signal) => killed.push([pid, signal]);
+      heteroProcessOverrides.waitForProcessExit = async () => true;
+
+      await seedLedger([
+        entry({
+          command: 'claude',
+          pid: 4321,
+          startedAt: new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString(),
+        }),
+      ]);
+
+      const runs = await createCtr().listInterruptedRuns({});
+
+      expect(runs).toEqual([expect.objectContaining({ expired: true, ipcSessionId: 'ipc-1' })]);
+      expect(killed).toEqual([[4321, 'SIGTERM']]);
+      // Spent: nothing is left to claim a second time.
+      expect(await readLedger()).toEqual([]);
+    });
+
+    it('withholds a run whose process survived, leaving the entry for the next launch', async () => {
+      heteroProcessOverrides.isProcessAlive = () => true;
+      heteroProcessOverrides.readProcessIdentity = async () => ({
+        commandLine: '/usr/local/bin/claude -p --output-format stream-json',
+        status: 'found',
+      });
+      heteroProcessOverrides.killProcessTreeByPid = () => {};
+      heteroProcessOverrides.waitForProcessExit = async () => false;
+
+      await seedLedger([entry({ command: 'claude', pid: 4321 })]);
+
+      expect(await createCtr().listInterruptedRuns({})).toEqual([]);
+      expect(await readLedger()).toEqual([expect.objectContaining({ claimCount: 1 })]);
+    });
+
+    it('puts a withheld run back when stopping its live session released the claim', async () => {
+      // Reaping a session this process still holds goes through `stopSession`,
+      // which releases the ledger entry as part of stopping it. A stop that
+      // cannot confirm the child died would otherwise leave the topic stranded
+      // with nothing to retry.
+      heteroProcessOverrides.waitForProcessExit = async () => false;
+      await seedLedger([entry({ command: 'claude', pid: 4321 })]);
+      const ctr = createCtr();
+      (ctr as any).sessions.set('ipc-1', {
+        agentType: 'claude-code',
+        command: 'claude',
+        sessionId: 'ipc-1',
+      });
+
+      expect(await ctr.listInterruptedRuns({})).toEqual([]);
+      expect(await readLedger()).toEqual([expect.objectContaining({ ipcSessionId: 'ipc-1' })]);
+    });
+
+    it('leaves a run recorded by another account on the ledger, unclaimed', async () => {
+      await seedLedger([entry({ userId: 'someone-else' })]);
+
+      expect(await createCtr().listInterruptedRuns({ userId: 'me' })).toEqual([]);
+      const ledger = await readLedger();
+      expect(ledger).toHaveLength(1);
+      expect(ledger[0].claimCount).toBeUndefined();
     });
   });
 });

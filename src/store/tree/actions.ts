@@ -435,7 +435,11 @@ export class TreeActionImpl {
       if (resourceMap.has(itemId)) {
         await useFileStore.getState().moveResource(itemId, toParent || null);
       } else {
-        await resourceService.moveResource(itemId, toParent || null);
+        const cachePatch = await useFileStore
+          .getState()
+          .prepareResourceMoveCachePatch(fromParent || null, toParent || null);
+        const moved = await resourceService.moveResource(itemId, toParent || null);
+        await useFileStore.getState().applyMovedResourceToCaches(moved, cachePatch);
         await useFileStore.getState().refreshFileList();
       }
 
@@ -467,8 +471,13 @@ export class TreeActionImpl {
         // Item visible in Explorer → delegate (handles optimistic Explorer update + API)
         await useFileStore.getState().moveResource(itemId, toParent || null);
       } else {
-        // Item not in Explorer → API only, then refresh Explorer
-        await resourceService.moveResource(itemId, toParent || null);
+        // Item not in Explorer → API only, then patch the folder-list caches
+        // (the explorer's SWR entries for both folders) and refresh Explorer
+        const cachePatch = await useFileStore
+          .getState()
+          .prepareResourceMoveCachePatch(fromParent || null, toParent || null);
+        const moved = await resourceService.moveResource(itemId, toParent || null);
+        await useFileStore.getState().applyMovedResourceToCaches(moved, cachePatch);
         await useFileStore.getState().refreshFileList();
       }
     };
@@ -514,9 +523,21 @@ export class TreeActionImpl {
         promises.push(useFileStore.getState().moveResource(id, toParent || null));
       }
 
-      // Items not in Explorer → API only
+      // Items not in Explorer → API only, then patch the folder-list caches
+      const cachePatch =
+        notInExplorer.length > 0
+          ? await useFileStore
+              .getState()
+              .prepareResourceMoveCachePatch(fromParent || null, toParent || null)
+          : undefined;
       for (const id of notInExplorer) {
-        promises.push(resourceService.moveResource(id, toParent || null));
+        promises.push(
+          resourceService
+            .moveResource(id, toParent || null)
+            .then((moved) =>
+              useFileStore.getState().applyMovedResourceToCaches(moved, cachePatch!),
+            ),
+        );
       }
 
       await Promise.all(promises);

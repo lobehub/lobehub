@@ -754,21 +754,23 @@ export class DocumentService {
       // The lock lease is refreshed by the client heartbeat (acquireDocumentLock),
       // so a save does not need to touch it.
 
-      let savedAt: Date | undefined;
+      const rowUpdated = Object.keys(updates).length > 0 || historyAppended;
+      let updatedAt = currentDocument.updatedAt;
+      if (rowUpdated) {
+        const committedVersion = await documentModel.update(id, updates as Partial<DocumentItem>);
+        if (!committedVersion) throw new Error(`Document not found: ${id}`);
+        updatedAt = committedVersion;
+      }
 
+      const savedAt = historyAppended ? updatedAt : undefined;
       if (historyAppended) {
-        savedAt = new Date();
         await documentHistoryService.createHistory({
           breakAutosaveWindow: params.breakAutosaveWindow,
           documentId: id,
           editorData: currentEditorDataAccepted,
           saveSource: params.saveSource ?? 'autosave',
-          savedAt,
+          savedAt: updatedAt,
         });
-      }
-
-      if (Object.keys(updates).length > 0) {
-        await documentModel.update(id, updates as Partial<DocumentItem>);
       }
 
       if ((params.title !== undefined || params.parentId !== undefined) && currentDocument.fileId) {
@@ -778,13 +780,14 @@ export class DocumentService {
         await fileModel.update(currentDocument.fileId, fileUpdates);
       }
 
-      changed = Object.keys(updates).length > 0 || historyAppended;
+      changed = rowUpdated;
 
       return {
         ...(addedMentionUserIds.length > 0 ? { addedMentionUserIds } : {}),
         historyAppended,
         id,
         savedAt,
+        updatedAt,
       };
     });
 

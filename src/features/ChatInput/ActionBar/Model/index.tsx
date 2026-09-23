@@ -1,8 +1,12 @@
 import { Tooltip } from '@lobehub/ui';
+import { Alert } from '@lobehub/ui/base-ui';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { AGENT_SHARE_ALLOWED_PROVIDERS } from '@/business/agent-share';
+import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
+import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
@@ -16,7 +20,7 @@ import { useActionBarContext } from '../context';
 import SelectorMenu from './SelectorMenu';
 
 const ModelSwitch = memo(() => {
-  const { t } = useTranslation('chat');
+  const { t } = useTranslation(['chat', 'agent']);
   const { dropdownPlacement } = useActionBarContext();
   const agentId = useAgentId();
   const {
@@ -32,6 +36,20 @@ const ModelSwitch = memo(() => {
   // default; a switch pins to the active topic, otherwise updates the agent
   // (via selectModel, which honors workspace member overrides).
   const activeTopicId = useChatStore((s) => s.activeTopicId);
+  const { isShared } = useAgentShareSupported(agentId);
+  const chatModels = useEnabledChatModels();
+  const enabledList =
+    !activeTopicId && isShared && AGENT_SHARE_ALLOWED_PROVIDERS
+      ? chatModels.filter((item) => AGENT_SHARE_ALLOWED_PROVIDERS?.includes(item.id))
+      : undefined;
+  const modelNotice = enabledList ? (
+    <Alert
+      showIcon
+      description={t('share.settings.modelRestriction.description', { ns: 'agent' })}
+      title={t('share.settings.modelRestriction.title', { ns: 'agent' })}
+      type={'info'}
+    />
+  ) : undefined;
   const topicModel = useChatStore(topicSelectors.activeTopicModel);
   const updateTopicModel = useChatStore((s) => s.updateTopicModel);
   const model = topicModel?.model ?? agentModel;
@@ -85,7 +103,9 @@ const ModelSwitch = memo(() => {
         canSelectModel={canSelectModel}
         displayName={displayName}
         effort={effort}
+        enabledList={enabledList}
         model={model}
+        modelNotice={modelNotice}
         placement={dropdownPlacement ?? 'topRight'}
         provider={provider}
         onModelChange={handleModelChange}
@@ -100,7 +120,9 @@ const ModelSwitch = memo(() => {
 
   return (
     <ModelSwitchPanel
+      enabledList={enabledList}
       model={model}
+      notice={modelNotice}
       openOnHover={false}
       placement={dropdownPlacement ?? 'topRight'}
       provider={provider}

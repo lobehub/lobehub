@@ -84,7 +84,7 @@ let connectCalled = false;
 let lastSentToolResponse: any = null;
 let lastSentSystemInfoResponse: any = null;
 vi.mock('@lobechat/device-gateway-client', () => ({
-  GatewayClient: vi.fn().mockImplementation((opts: any) => {
+  GatewayClient: vi.fn().mockImplementation(function (opts: any) {
     clientOptions = opts;
     clientEventHandlers = {};
     connectCalled = false;
@@ -113,8 +113,15 @@ vi.mock('@lobechat/device-gateway-client', () => ({
 
 describe('connect command', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
+  let signalListeners: Map<NodeJS.Signals, Set<(...args: unknown[]) => void>>;
 
   beforeEach(() => {
+    signalListeners = new Map(
+      (['SIGINT', 'SIGTERM'] as const).map((signal) => [
+        signal,
+        new Set(process.listeners(signal)),
+      ]),
+    );
     exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
     mockRunningPid = null;
     mockSpawnedPid = 0;
@@ -122,7 +129,12 @@ describe('connect command', () => {
   });
 
   afterEach(() => {
-    exitSpy.mockRestore();
+    for (const [signal, existing] of signalListeners) {
+      for (const listener of process.listeners(signal)) {
+        if (!existing.has(listener)) process.removeListener(signal, listener);
+      }
+    }
+    vi.restoreAllMocks();
     vi.clearAllMocks();
   });
 

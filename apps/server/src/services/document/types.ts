@@ -78,6 +78,7 @@ export interface UpdateDocumentResult {
   historyAppended: boolean;
   id: string;
   savedAt?: Date;
+  updatedAt: Date;
 }
 
 export interface SaveDocumentHistoryResult {

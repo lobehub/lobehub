@@ -49,6 +49,8 @@ import { DEFAULT_BOT_HISTORY_LIMIT } from '@lobechat/const';
 import type { MessageRuntimeService } from '@/server/services/toolExecution/serverRuntimes/message/adapters/types';
 import { PlatformUnsupportedError } from '@/server/services/toolExecution/serverRuntimes/message/PlatformUnsupportedError';
 
+import type { AttachmentSendResult } from '../attachmentDelivery';
+import { attachmentDeliveryState, warnAttachmentFailures } from '../attachmentDelivery';
 import { MAX_FEISHU_DOCUMENT_CHARS, MAX_FEISHU_HISTORY_LIMIT } from './const';
 import { sendFeishuAttachments } from './sendAttachments';
 
@@ -193,13 +195,16 @@ export class FeishuMessageService implements MessageRuntimeService {
       const result = await this.api.sendMessage(params.channelId, params.content);
       messageId = result.messageId;
     }
+    let attachments: AttachmentSendResult | undefined;
     if (params.attachments?.length) {
-      await sendFeishuAttachments(this.api, params.channelId, params.attachments);
+      attachments = await sendFeishuAttachments(this.api, params.channelId, params.attachments);
+      warnAttachmentFailures(`bot-platform:${this.platformName}:sendMessage`, attachments.failures);
     }
     return {
       channelId: params.channelId,
       messageId,
       platform: this.platformName,
+      ...attachmentDeliveryState(attachments),
     };
   };
 

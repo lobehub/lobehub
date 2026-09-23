@@ -35,11 +35,7 @@ export function registerMemoryCommand(program: Command) {
       const allResults: Record<string, any[]> = {};
 
       for (const cat of categoriesToFetch) {
-        try {
-          allResults[cat] = await fetchCategory(client, cat);
-        } catch {
-          allResults[cat] = [];
-        }
+        allResults[cat] = await fetchCategory(client, cat);
       }
 
       if (options.json !== undefined) {

@@ -212,6 +212,16 @@ describe('applyModelExtendParams', () => {
     expect(result.reasoning_effort).toBe('xhigh');
   });
 
+  it('resolves Grok 4.7 xhigh reasoning effort', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({ grok4_7ReasoningEffort: 'xhigh' }),
+      extendParams: ['grok4_7ReasoningEffort'],
+      model: 'grok-4.7',
+    });
+
+    expect(result.reasoning_effort).toBe('xhigh');
+  });
+
   it('resolves GPT-5.6 Pro mode independently from reasoning effort', () => {
     const result = applyModelExtendParams({
       chatConfig: chatConfig({

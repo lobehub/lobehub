@@ -67,6 +67,7 @@ export const reviewEvent = (state: string) => ({
   pull_request: { number: 19_719 },
   repository,
   review: {
+    author_association: 'COLLABORATOR',
     body: 'Please split the handler.',
     html_url: 'https://github.com/lobehub/lobehub/pull/19719#pullrequestreview-7',
     id: 7,

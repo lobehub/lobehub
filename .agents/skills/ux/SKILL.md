@@ -77,6 +77,10 @@ surface uses (grep `NavItem`, `Accordion`) and compose it; fall to raw elements 
 genuinely novel row. See **[Read §1.10](references/read.md)** for the full pattern; the
 **react** component-priority rule covers the mechanics.
 
+### Review messages in page context・Certainty
+
+Distinguish routine explanations from action-blocking states; do not stack equally prominent warning banners for different roles. Restriction copy must name the current condition and the next action, using precise product entities (for example, distinguish a model from its provider). Verify the whole page, not just the changed component.
+
 ## Checklist modules
 
 Grouped by **interaction type** — the kind of thing the user is doing. Jump to the module

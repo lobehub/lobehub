@@ -52,10 +52,14 @@ vi.mock('@/server/featureFlags', () => ({
 }));
 
 const mockAccessCheck = vi.fn();
+const mockIsRunStillAuthorized = vi.fn();
+const mockLockScopedAgentRow = vi.fn();
 const mockLockUploadAdmission = vi.fn();
 vi.mock('@/database/models/agentShare', () => ({
   AgentShareModel: {
     findByShareIdWithAccessCheck: (...args: any[]) => mockAccessCheck(...args),
+    isRunStillAuthorized: (...args: any[]) => mockIsRunStillAuthorized(...args),
+    lockScopedAgentRow: (...args: any[]) => mockLockScopedAgentRow(...args),
     lockUploadAdmission: (...args: any[]) => mockLockUploadAdmission(...args),
   },
 }));
@@ -220,6 +224,7 @@ const share = {
   },
   shareId: 'share-1',
   visibility: 'link',
+  workspaceId: null,
 };
 
 const visitorTopic = {
@@ -238,6 +243,8 @@ describe('shareChatRouter', () => {
     mocks.businessConst.ENABLE_BUSINESS_FEATURES = true;
     mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShare: true });
     mockAccessCheck.mockResolvedValue(share);
+    mockIsRunStillAuthorized.mockResolvedValue(true);
+    mockLockScopedAgentRow.mockResolvedValue({ id: share.agentId, workspaceId: null });
     mockFindById.mockResolvedValue(visitorTopic);
     mockIsRunningOperationAlive.mockResolvedValue(true);
     mockCountBySender.mockResolvedValue(0);
@@ -392,7 +399,7 @@ describe('shareChatRouter', () => {
 
         await caller.execAgent({ fileIds, prompt: 'look', shareId: 'share-1' });
 
-        expect(FileModelMock).toHaveBeenCalledWith(expect.anything(), OWNER);
+        expect(FileModelMock).toHaveBeenCalledWith(expect.anything(), OWNER, undefined);
         expect(mockFileFindByIds).toHaveBeenCalledWith(fileIds, {
           shareId: share.shareId,
           type: 'agentShare',
@@ -670,11 +677,11 @@ describe('shareChatRouter', () => {
       expect(result.pathname.endsWith('/cat.png')).toBe(true);
       expect(result.url).toBe('https://s3/put');
       // The quota that pays is the one reserved: creator, never the visitor.
-      expect(FileUploadModelMock).toHaveBeenCalledWith(expect.anything(), OWNER);
+      expect(FileUploadModelMock).toHaveBeenCalledWith(expect.anything(), OWNER, undefined);
       expect(mockReserveUpload).toHaveBeenCalledWith(
         expect.objectContaining({ pathname: result.pathname, size: 10, userId: OWNER }),
       );
-      expect(mockReserveUpload.mock.calls[0][0].workspaceId).toBeUndefined();
+      expect(mockReserveUpload.mock.calls[0][0].workspaceId).toBeNull();
       expect(mockCreatePreSignedUrl).toHaveBeenCalledWith(result.pathname, 10);
     });
 
@@ -774,7 +781,7 @@ describe('shareChatRouter', () => {
       const result = await caller.createFile(input);
 
       expect(result).toEqual({ id: 'file-new', url: 'https://s3/get' });
-      expect(FileModelMock).toHaveBeenCalledWith(expect.anything(), OWNER);
+      expect(FileModelMock).toHaveBeenCalledWith(expect.anything(), OWNER, undefined);
       expect(mockFileCreate).toHaveBeenCalledWith(
         expect.objectContaining({
           fileType: 'image/png',
@@ -796,6 +803,34 @@ describe('shareChatRouter', () => {
       expect(mockFileCreate.mock.calls[0][0]).not.toHaveProperty('fileHash');
       expect(mockFileCreate.mock.calls[0][0]).not.toHaveProperty('source');
       expect(mockUploadSettle).toHaveBeenCalledWith('upload-1', 'file-new', expect.anything());
+    });
+
+    it('serializes settlement with Agent transfer and revalidates the share after the lock', async () => {
+      const caller = await createCaller();
+
+      await caller.createFile(input);
+
+      expect(mockLockScopedAgentRow).toHaveBeenCalledWith({ trx: true }, share.agentId, {
+        userId: OWNER,
+        workspaceId: undefined,
+      });
+      expect(mockIsRunStillAuthorized).toHaveBeenCalledWith(
+        { trx: true },
+        { agentId: share.agentId, shareId: share.shareId },
+      );
+      expect(mockLockScopedAgentRow.mock.invocationCallOrder[0]).toBeLessThan(
+        mockUploadFindLatestForUpdate.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('rejects settlement when hard revocation wins the Agent row lock', async () => {
+      mockLockScopedAgentRow.mockResolvedValue(null);
+      const caller = await createCaller();
+
+      await expect(caller.createFile(input)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      expect(mockFileCreate).not.toHaveBeenCalled();
+      expect(mockUploadSettle).not.toHaveBeenCalled();
     });
 
     it('ignores a client-supplied hash instead of registering the object for dedup', async () => {
@@ -872,7 +907,7 @@ describe('shareChatRouter', () => {
 
       await caller.abortUpload({ pathname, shareId: 'share-1' });
 
-      expect(FileUploadServiceMock).toHaveBeenCalledWith(expect.anything(), OWNER);
+      expect(FileUploadServiceMock).toHaveBeenCalledWith(expect.anything(), OWNER, undefined);
       expect(mockUploadRelease).toHaveBeenCalledWith(pathname);
     });
 
@@ -897,7 +932,7 @@ describe('shareChatRouter', () => {
 
       await caller.removeFile({ fileId: 'file-a', shareId: 'share-1' });
 
-      expect(FileModelMock).toHaveBeenCalledWith(expect.anything(), OWNER);
+      expect(FileModelMock).toHaveBeenCalledWith(expect.anything(), OWNER, undefined);
       expect(mockFileFindById).toHaveBeenCalledWith('file-a', {
         accessScope: {
           shareId: share.shareId,
@@ -1067,8 +1102,8 @@ describe('shareChatRouter', () => {
 
       // Topic model is creator-scoped; the query narrows to this visitor's own
       // topics on this agent. `agent_shares` is 1:1 per agent, so `(agentId,
-      // senderId)` unambiguously identifies the share conversation without a
-      // share-instance column on `topics`.
+      // senderId)` identifies the share conversation without a share-instance
+      // column on `topics`.
       expect(TopicModelMock).toHaveBeenCalledWith(expect.anything(), OWNER, undefined, undefined, {
         includeShareVisitor: true,
       });

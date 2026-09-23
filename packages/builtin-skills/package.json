@@ -5,11 +5,15 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./acceptance": "./src/acceptance/index.ts",
     "./manifests": "./src/manifests.ts"
   },
   "main": "./src/index.ts",
   "dependencies": {
-    "@lobechat/artifact-template": "workspace:*"
+    "@lobechat/artifact-template": "workspace:*",
+    "fflate": "^0.8.3",
+    "yaml": "^2.9.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"

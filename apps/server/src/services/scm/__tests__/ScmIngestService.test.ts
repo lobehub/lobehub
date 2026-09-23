@@ -217,6 +217,32 @@ describe('ScmIngestService', () => {
     expect(row).toMatchObject({ ciStatus: 'success', lastEventKind: 'ci_passed' });
   });
 
+  it('does not classify a redelivered failure that lost to a newer success', async () => {
+    await bindInstallation();
+    await ingest('pull_request', fx.pullRequestEvent('opened'));
+
+    // The job was rerun and went green.
+    await ingest(
+      'check_run',
+      fx.checkRunEvent({ completed_at: '2026-09-20T07:00:00Z', conclusion: 'success', id: 9 }),
+    );
+    let row = await ScmChangeRequestModel.findByIdentity(
+      serverDB,
+      'github',
+      'lobehub/lobehub',
+      19_719,
+    );
+    expect(row).toMatchObject({ ciStatus: 'success', lastEventKind: 'ci_passed' });
+
+    // The original failure is redelivered afterwards — we use redelivery as
+    // the recovery path, so this is ordinary traffic. It loses to the newer
+    // result, and must not be classified as a fresh failure: the row is
+    // green, so the wake would carry nothing and still spend a slot.
+    await ingest('check_run', fx.checkRunEvent());
+    row = await ScmChangeRequestModel.findById(serverDB, row!.id);
+    expect(row).toMatchObject({ ciStatus: 'success', lastEventKind: 'ci_passed' });
+  });
+
   it('maintains the installation from lifecycle events', async () => {
     const installation = await bindInstallation();
 

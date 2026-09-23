@@ -261,7 +261,7 @@ describe('DocumentBody', () => {
     expect(screen.queryByTestId('highlight-editor')).toBeNull();
   });
 
-  it('autosaves highlight editor edits after the debounce window', () => {
+  it('autosaves highlight editor edits after the debounce window', async () => {
     mockDocumentMeta.current = { content: 'before', filename: 'config.json' };
 
     render(<DocumentBody />);
@@ -270,8 +270,8 @@ describe('DocumentBody', () => {
     fireEvent.change(editor, { target: { value: 'after' } });
     expect(mockUpdateDocument).not.toHaveBeenCalled();
 
-    act(() => {
-      vi.advanceTimersByTime(5000);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
     });
 
     expect(mockUpdateDocument).toHaveBeenCalledWith({
@@ -290,8 +290,9 @@ describe('DocumentBody', () => {
     fireEvent.change(editor, { target: { value: 'after' } });
     expect(mockUpdateDocument).not.toHaveBeenCalled();
 
-    unmount();
-    await Promise.resolve();
+    await act(async () => {
+      unmount();
+    });
 
     expect(mockUpdateDocument).toHaveBeenCalledWith({
       content: 'after',
@@ -305,8 +306,9 @@ describe('DocumentBody', () => {
 
     const { unmount } = render(<DocumentBody />);
 
-    unmount();
-    await Promise.resolve();
+    await act(async () => {
+      unmount();
+    });
 
     expect(mockUpdateDocument).not.toHaveBeenCalled();
   });

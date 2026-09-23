@@ -7,7 +7,7 @@ import {
 } from '@/server/services/aiAgent/shareVisitorAbuseGuards';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agents, messages, topics, users } from '../../schemas';
+import { agents, agentShares, messages, topics, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentShareModel } from '../agentShare';
 
@@ -35,6 +35,8 @@ import { AgentShareModel } from '../agentShare';
 
 const ownerId = 'share-abuse-guard-race-owner';
 const visitorUserId = 'share-abuse-guard-race-visitor';
+const workspaceId = 'share-abuse-guard-race-workspace';
+const otherWorkspaceId = 'share-abuse-guard-race-other-workspace';
 const serverDB: LobeChatDatabase = await getTestDB();
 
 const cleanup = async () => {
@@ -174,6 +176,60 @@ describe('shareVisitorAbuseGuards — revoked share authorization', () => {
   });
 
   afterAll(cleanup);
+
+  it('derives workspace scope from the Agent when the share row has no workspaceId', async () => {
+    const agentId = 'workspace-share-guard-scope';
+    await serverDB.insert(workspaces).values({
+      id: workspaceId,
+      name: 'Workspace share guard scope',
+      primaryOwnerId: ownerId,
+      slug: 'workspace-share-guard-scope',
+    });
+    await serverDB.insert(agents).values({
+      id: agentId,
+      model: 'gpt-4o',
+      userId: ownerId,
+      workspaceId,
+    });
+    const [share] = await serverDB
+      .insert(agentShares)
+      .values({ agentId, visibility: 'link' })
+      .returning();
+
+    await expect(
+      reserveShareVisitorTopic(
+        {
+          agentId,
+          db: serverDB,
+          expectedShareId: share.id,
+          ownerId,
+          visitorUserId,
+          workspaceId,
+        },
+        { agentId, senderId: visitorUserId, title: 'workspace-scoped topic' },
+      ),
+    ).resolves.toMatchObject({ agentId, workspaceId });
+
+    await expect(
+      reserveShareVisitorTopic(
+        {
+          agentId,
+          db: serverDB,
+          expectedShareId: share.id,
+          ownerId,
+          visitorUserId,
+          workspaceId: otherWorkspaceId,
+        },
+        { agentId, senderId: visitorUserId, title: 'wrong-workspace topic' },
+      ),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    const inserted = await serverDB
+      .select({ title: topics.title })
+      .from(topics)
+      .where(eq(topics.agentId, agentId));
+    expect(inserted).toEqual([{ title: 'workspace-scoped topic' }]);
+  });
 
   it('rejects a new-topic reservation once the owner made the link private, and inserts nothing', async () => {
     const agentId = 'revoked-share-topic-private';

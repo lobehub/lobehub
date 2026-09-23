@@ -9,7 +9,7 @@ import type {
   ScmReviewDecision,
   ScmUpsertChangeRequestParams,
 } from '@lobechat/types';
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull, lt, sql } from 'drizzle-orm';
 
 import type { ScmChangeRequestItem } from '../../schemas';
 import { scmChangeRequests } from '../../schemas';
@@ -575,16 +575,143 @@ export class ScmChangeRequestModel {
       .where(eq(scmChangeRequests.id, id));
   };
 
-  /** Bump the wake counter; returns the new count so the caller can enforce its cap. */
-  static recordWake = async (db: LobeChatDatabase, id: string): Promise<number> => {
-    const existing = await ScmChangeRequestModel.findById(db, id);
-    if (!existing) return 0;
-
-    const wakeCount = existing.wakeCount + 1;
+  /**
+   * Note a wake the debounce window swallowed, for the next delivery to
+   * carry. Touches only its own key: deliveries for one change request are
+   * handled concurrently, so writing the whole metadata column back would
+   * let a read-modify-write erase whatever another handler stored in
+   * between — the tracking comment id, the last wake, held checks.
+   */
+  static markPendingWake = async (
+    db: LobeChatDatabase,
+    id: string,
+    reason: string,
+  ): Promise<void> => {
     await db
       .update(scmChangeRequests)
-      .set({ lastWakeAt: new Date(), updatedAt: new Date(), wakeCount })
+      .set({
+        metadata: sql`${scmChangeRequests.metadata} || ${JSON.stringify({
+          pendingWake: { reason, since: new Date().toISOString() },
+        })}::jsonb`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(scmChangeRequests.id, id),
+          // First reason of the burst wins, as before.
+          sql`not coalesce(jsonb_exists(${scmChangeRequests.metadata}, 'pendingWake'), false)`,
+        ),
+      );
+  };
+
+  static clearPendingWake = async (db: LobeChatDatabase, id: string): Promise<void> => {
+    await db
+      .update(scmChangeRequests)
+      .set({
+        metadata: sql`${scmChangeRequests.metadata} - 'pendingWake'`,
+        updatedAt: new Date(),
+      })
       .where(eq(scmChangeRequests.id, id));
-    return wakeCount;
+  };
+
+  /**
+   * Claim one of the `max` wakes this change request is allowed, atomically.
+   *
+   * The cap has to be enforced by the database, not by the caller: without
+   * Redis there is no debounce, so two webhooks landing together both read
+   * the same `wakeCount` and a read-modify-write would lose one increment.
+   * A conditional `UPDATE … WHERE wake_count < max` lets exactly one of them
+   * through per remaining slot. Returns the new count, or `null` when the
+   * cap is already spent.
+   */
+  static reserveWake = async (
+    db: LobeChatDatabase,
+    id: string,
+    max: number,
+    reason?: string,
+  ): Promise<number | null> => {
+    const now = new Date();
+    // jsonb concat rather than a read-modify-write: it merges the one key
+    // this update owns and leaves every other key as the row has it.
+    const metadata = reason
+      ? sql`${scmChangeRequests.metadata} || ${JSON.stringify({
+          lastWake: { at: now.toISOString(), reason },
+        })}::jsonb`
+      : undefined;
+
+    const [reserved] = await db
+      .update(scmChangeRequests)
+      .set({
+        lastWakeAt: now,
+        ...(metadata ? { metadata } : {}),
+        updatedAt: now,
+        wakeCount: sql`${scmChangeRequests.wakeCount} + 1`,
+      })
+      .where(and(eq(scmChangeRequests.id, id), lt(scmChangeRequests.wakeCount, max)))
+      .returning({ wakeCount: scmChangeRequests.wakeCount });
+
+    return reserved?.wakeCount ?? null;
+  };
+
+  /**
+   * Take the right to post the tracking comment, atomically.
+   *
+   * Posting a comment is irreversible, so the single-writer decision cannot
+   * live in the application: `opened` and the `synchronize` a second later
+   * are handled concurrently, and on a deployment without Redis nothing
+   * else stops them both from seeing an unposted row. A conditional update
+   * on the metadata bag lets exactly one through; the claim goes stale
+   * after `staleAfterMs` so a crashed post does not block the row forever.
+   */
+  static claimCommentSlot = async (
+    db: LobeChatDatabase,
+    id: string,
+    staleAfterMs = 5 * 60 * 1000,
+  ): Promise<boolean> => {
+    const now = new Date();
+    const staleBefore = new Date(now.getTime() - staleAfterMs).toISOString();
+
+    const [claimed] = await db
+      .update(scmChangeRequests)
+      .set({
+        metadata: sql`${scmChangeRequests.metadata} || ${JSON.stringify({
+          commentClaimedAt: now.toISOString(),
+        })}::jsonb`,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(scmChangeRequests.id, id),
+          // Key existence, not `->> … IS NULL`: an IS NULL on an extracted
+          // jsonb value takes the planner down on any bm25-indexed table.
+          sql`coalesce(${scmChangeRequests.metadata} ->> 'lobehubCommentId', '') = ''`,
+          sql`coalesce(${scmChangeRequests.metadata} ->> 'commentClaimedAt', '') < ${staleBefore}`,
+        ),
+      )
+      .returning({ id: scmChangeRequests.id });
+
+    return Boolean(claimed);
+  };
+
+  /** Give the comment slot back when the post never happened. */
+  static releaseCommentSlot = async (db: LobeChatDatabase, id: string): Promise<void> => {
+    await db
+      .update(scmChangeRequests)
+      .set({
+        metadata: sql`${scmChangeRequests.metadata} - 'commentClaimedAt'`,
+        updatedAt: new Date(),
+      })
+      .where(eq(scmChangeRequests.id, id));
+  };
+
+  /** Hand a reserved wake back when the run never started. */
+  static releaseWake = async (db: LobeChatDatabase, id: string): Promise<void> => {
+    await db
+      .update(scmChangeRequests)
+      .set({
+        updatedAt: new Date(),
+        wakeCount: sql`greatest(${scmChangeRequests.wakeCount} - 1, 0)`,
+      })
+      .where(eq(scmChangeRequests.id, id));
   };
 }

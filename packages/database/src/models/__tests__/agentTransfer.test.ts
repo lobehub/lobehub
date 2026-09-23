@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { eq, inArray } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import {
@@ -68,6 +68,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await serverDB.delete(users);
 });
 
@@ -1068,54 +1069,82 @@ describe('AgentModel.transferAgent', () => {
     );
   });
 
-  // Regression: a share carries the previous owner's tool grants, custom
-  // slug, and (in Cloud) monthly spend cap, and its visitor conversations are
-  // stored under (agentId, senderId) within that owner's scope — an ownership
-  // transfer must be REFUSED while the share row exists. See
-  // `AgentModel.transferAgents` step 1d and the `isRunStillAuthorized` doc in
-  // `agentShare.ts`.
-  it('should reject the transfer when the agent still carries a share row', async () => {
-    const model = new AgentModel(serverDB, userId);
-    const agent = await model.create({ title: 'Shared Agent', slug: 'shared-agent' });
+  it.each([
+    { source: null, target: null, recipient: targetUserId, visibility: 'link' },
+    { source: null, target: wsId1, recipient: userId, visibility: 'link' },
+    { source: wsId1, target: null, recipient: userId, visibility: 'link' },
+    { source: wsId1, target: wsId2, recipient: userId, visibility: 'link' },
+    { source: wsId1, target: wsId1, recipient: targetUserId, visibility: 'link' },
+    { source: null, target: wsId1, recipient: userId, visibility: 'private' },
+    { source: wsId1, target: wsId2, recipient: userId, visibility: 'private' },
+    { source: wsId1, target: wsId1, recipient: targetUserId, visibility: 'private' },
+  ] as const)(
+    'rejects a $visibility share transfer from $source to $target for $recipient without changing data',
+    async ({ source, target, recipient, visibility }) => {
+      const model = new AgentModel(serverDB, userId, source ?? undefined);
+      const agent = await model.create({ title: 'Shared Agent', slug: 'shared-agent' });
+      const [share] = await serverDB
+        .insert(agentShares)
+        .values({
+          agentId: agent.id,
+          shareConfig: { monthlySpendLimit: 5 },
+          visibility,
+        })
+        .returning();
+      const [topic] = await serverDB
+        .insert(topics)
+        .values({
+          agentId: agent.id,
+          id: 'shared-agent-visitor-topic',
+          senderId: targetUserId,
+          userId,
+          workspaceId: source,
+        })
+        .returning();
+      const [file] = await serverDB
+        .insert(files)
+        .values({
+          fileType: 'image/png',
+          metadata: { agentShare: { shareId: share.id, visitorUserId: targetUserId } },
+          name: 'visitor.png',
+          size: 42,
+          url: `agent-shares/${share.id}/visitor.png`,
+          userId,
+          workspaceId: source,
+        })
+        .returning();
 
-    await serverDB
-      .insert(agentShares)
-      .values({ agentId: agent.id, shareConfig: { monthlySpendLimit: 5 }, visibility: 'link' });
+      await expect(model.transferAgent(agent.id, target, recipient)).rejects.toThrow(
+        AGENT_SHARED_TRANSFER_BLOCKED,
+      );
 
-    await expect(model.transferAgent(agent.id, null, targetUserId)).rejects.toThrow(
+      expect(await serverDB.select().from(agents).where(eq(agents.id, agent.id))).toEqual([agent]);
+      expect(await serverDB.select().from(agentShares).where(eq(agentShares.id, share.id))).toEqual(
+        [share],
+      );
+      expect(await serverDB.select().from(topics).where(eq(topics.id, topic.id))).toEqual([topic]);
+      expect(await serverDB.select().from(files).where(eq(files.id, file.id))).toEqual([file]);
+    },
+  );
+
+  it('rejects an entire batch when one agent has a paused share', async () => {
+    const model = new AgentModel(serverDB, userId, wsId1);
+    const ordinary = await model.create({ title: 'Ordinary Agent' });
+    const shared = await model.create({ title: 'Shared Agent' });
+    await serverDB.insert(agentShares).values({
+      agentId: shared.id,
+      visibility: 'private',
+    });
+
+    await expect(model.transferAgents([ordinary.id, shared.id], wsId2, userId)).rejects.toThrow(
       AGENT_SHARED_TRANSFER_BLOCKED,
     );
 
-    // Agent stays with the original owner: batch guard fires before any
-    // mutation, so neither `agents.userId` nor the share row change.
-    const [row] = await serverDB.select().from(agents).where(eq(agents.id, agent.id));
-    expect(row.userId).toBe(userId);
-    const remaining = await serverDB
+    const rows = await serverDB
       .select()
-      .from(agentShares)
-      .where(eq(agentShares.agentId, agent.id));
-    expect(remaining).toHaveLength(1);
-  });
-
-  it('should keep the share row on a same-owner personal ↔ workspace round-trip', async () => {
-    const model = new AgentModel(serverDB, userId);
-    const agent = await model.create({ title: 'Roundtrip Agent', slug: 'roundtrip-agent' });
-
-    await serverDB
-      .insert(agentShares)
-      .values({ agentId: agent.id, shareConfig: { monthlySpendLimit: 5 }, visibility: 'link' });
-
-    // Personal → workspace (owner unchanged, share paused via workspaceId join).
-    await model.transferAgent(agent.id, wsId1, userId);
-    let rows = await serverDB.select().from(agentShares).where(eq(agentShares.agentId, agent.id));
-    expect(rows).toHaveLength(1);
-
-    // Workspace → personal, same owner: share resumes.
-    const wsModel = new AgentModel(serverDB, userId, wsId1);
-    await wsModel.transferAgent(agent.id, null, userId);
-    rows = await serverDB.select().from(agentShares).where(eq(agentShares.agentId, agent.id));
-    expect(rows).toHaveLength(1);
-    expect(rows[0].visibility).toBe('link');
+      .from(agents)
+      .where(inArray(agents.id, [ordinary.id, shared.id]));
+    expect(rows).toEqual(expect.arrayContaining([ordinary, shared]));
   });
 });
 
