@@ -47,6 +47,19 @@ export interface SandboxWorkspaceScope {
 export interface SandboxWorkspaceClaim {
   /** Directory name inside the volume — see {@link deriveSandboxWorkspaceKey}. */
   key: string;
+  /**
+   * Whether this subject may write past {@link quotaBytes} and be billed for
+   * what it goes over, the way file storage already works.
+   *
+   * The decision belongs to LobeHub because only LobeHub knows it: it turns on
+   * a plan, a consent, a payment method and a monthly cap. The execution plane
+   * knows none of those, so it is told the answer rather than the inputs.
+   *
+   * Absent means no — an old token, or a deployment that has not adopted this,
+   * enforces the quota as a hard limit, which is the behaviour that cannot
+   * charge anyone by mistake.
+   */
+  overageAllowed?: boolean;
   /** Soft quota for the directory. The execution plane may cap it further, never raise it. */
   quotaBytes: number;
 }
