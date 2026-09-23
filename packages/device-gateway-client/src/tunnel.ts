@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer';
 
 import type { GatewayClientLogger } from './client';
-import { LoopbackResolver } from './loopback';
+import { ensureLoopbackBypassesProxy, LoopbackResolver } from './loopback';
 import type {
   TunnelClientFrame,
   TunnelOpenMessage,
@@ -119,6 +119,8 @@ export class DeviceTunnelHost {
     this.maxConcurrent = options.maxConcurrent ?? 32;
     this.send = options.send;
     this.loopback = options.loopback ?? new LoopbackResolver();
+    // Tunnels dial loopback only; an HTTP proxy must never see that traffic.
+    ensureLoopbackBypassesProxy();
     this.sockets = new DeviceWsTunnelHost({
       loopback: this.loopback,
       backlog: options.backlog,

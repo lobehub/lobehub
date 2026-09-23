@@ -26,14 +26,19 @@ vi.mock('@/services/device', () => ({
   deviceService: { createTunnel, openTunnel, revokeTunnel },
 }));
 
+const tunnelsEnabledArgs = vi.hoisted(() => [] as boolean[]);
+
 vi.mock('@/store/device', () => ({
   useFetchDeviceListeningPorts: () => detection,
-  useFetchDeviceTunnels: () => ({
-    data: tunnels.value,
-    error: tunnels.error,
-    isLoading: tunnels.isLoading,
-    mutate,
-  }),
+  useFetchDeviceTunnels: (_deviceId: string, enabled: boolean) => {
+    tunnelsEnabledArgs.push(enabled);
+    return {
+      data: tunnels.value,
+      error: tunnels.error,
+      isLoading: tunnels.isLoading,
+      mutate,
+    };
+  },
 }));
 
 vi.mock('@lobechat/const', () => ({
@@ -274,5 +279,20 @@ describe('usePortTunnels', () => {
       detection.data = null;
       expect(setup().result.current).toMatchObject({ detected: [], detectionAvailable: false });
     });
+  });
+
+  it('reads the link list while the panel shows, so the badge never counts an exposed port', () => {
+    tunnelsEnabledArgs.length = 0;
+    renderHook(() =>
+      usePortTunnels({
+        active: true,
+        cwd: '/work/app',
+        deviceId: 'device-1',
+        onOpened,
+        open: false,
+      }),
+    );
+    // Menu closed, panel showing: the list must still be requested.
+    expect(tunnelsEnabledArgs.at(-1)).toBe(true);
   });
 });

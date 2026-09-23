@@ -161,6 +161,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 12px;
     color: ${cssVar.colorPrimary};
   `,
+  othersList: css`
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+
+    /* A dev machine listens on dozens of ports; the list scrolls inside the
+       menu instead of pushing it past the viewport. */
+    max-height: 200px;
+  `,
   toggle: css`
     cursor: pointer;
 
@@ -323,7 +332,9 @@ const PortSwitcher = memo<PortSwitcherProps>(({ active, deviceId, workingDirecto
                               count: otherPorts.length,
                             })}
                       </button>
-                      {showOthers && otherPorts.map(renderDetected)}
+                      {showOthers && (
+                        <div className={styles.othersList}>{otherPorts.map(renderDetected)}</div>
+                      )}
                     </>
                   )}
                 </>

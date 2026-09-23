@@ -37,7 +37,15 @@ export const usePortTunnels = (options: {
   /** The port being exposed — typed or detected — so its row can show progress. */
   const [creatingPort, setCreatingPort] = useState<number>();
 
-  const { data: tunnels, error, isLoading, mutate } = useFetchDeviceTunnels(deviceId, open);
+  // Read whenever the panel shows, not only with the menu open: the row's
+  // "N to open" count subtracts already-exposed ports, and without the list it
+  // would count a port that already has a link.
+  const {
+    data: tunnels,
+    error,
+    isLoading,
+    mutate,
+  } = useFetchDeviceTunnels(deviceId, active || open);
   const detection = useFetchDeviceListeningPorts(deviceId, cwd, active);
 
   /**

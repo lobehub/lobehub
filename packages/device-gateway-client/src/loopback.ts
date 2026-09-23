@@ -17,6 +17,45 @@ import net from 'node:net';
  */
 
 const PROBE_TIMEOUT_MS = 1000;
+
+/** Every spelling of loopback a proxy exclusion list might need. */
+const LOOPBACK_NO_PROXY = ['localhost', '127.0.0.1', '::1', '[::1]'];
+
+/**
+ * Make sure loopback traffic never goes to an HTTP proxy.
+ *
+ * A tunnel only ever dials this machine, but with `HTTP_PROXY` set, Node's
+ * env-proxy mode (`NODE_USE_ENV_PROXY=1`) sends requests to the proxy unless
+ * `NO_PROXY` matches the host — and the common `NO_PROXY=...,::1` does not
+ * match the bracketed `[::1]` a URL carries, so the `::1` fallback below
+ * would land on the proxy and come back as its 502. Adding every loopback
+ * spelling is correct for any process: nothing should proxy loopback.
+ *
+ * Node reads these variables per request, so this takes effect immediately.
+ * Bun snapshots them at startup, so a source run under `bun` with a proxy set
+ * still needs `[::1]` in `NO_PROXY` from the environment.
+ */
+export const ensureLoopbackBypassesProxy = (env: NodeJS.ProcessEnv = process.env): void => {
+  const hasProxy = [
+    'HTTP_PROXY',
+    'HTTPS_PROXY',
+    'http_proxy',
+    'https_proxy',
+    'ALL_PROXY',
+    'all_proxy',
+  ].some((name) => !!env[name]);
+  if (!hasProxy) return;
+
+  for (const name of ['NO_PROXY', 'no_proxy']) {
+    const entries = (env[name] ?? '')
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+    const missing = LOOPBACK_NO_PROXY.filter((host) => !entries.includes(host));
+    if (missing.length > 0) env[name] = [...entries, ...missing].join(',');
+  }
+};
+
 const CACHE_TTL_MS = 30_000;
 
 type Probe = (host: string, port: number) => Promise<boolean>;
