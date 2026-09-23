@@ -78,6 +78,27 @@ describe('connector OAuth popup', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it('reports navigation failure and cleans up without accepting a later callback', async () => {
+    Object.defineProperty(popup.location, 'href', {
+      set: () => {
+        throw new Error('Navigation blocked');
+      },
+    });
+
+    await expect(
+      waitForConnectorOAuth(popup, 'connector-1', authorizationUrl),
+    ).rejects.toMatchObject({ reason: 'failed' });
+    expect(popup.close).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+
+    send(popup, 'https://server.example', {
+      connectorId: 'connector-1',
+      success: true,
+      type: 'lobe-connector-oauth',
+    });
+    expect(popup.close).toHaveBeenCalledOnce();
+  });
+
   it('ignores other origins, windows, connectors and malformed success messages', async () => {
     const settled = vi.fn();
     const result = waitForConnectorOAuth(popup, 'connector-1', authorizationUrl).then(settled);
