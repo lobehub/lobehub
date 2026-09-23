@@ -43,6 +43,24 @@ describe('createSandboxWorkspaceClient', () => {
     expect(error.message).toBe('Workspace request failed with status 500');
   });
 
+  it('should send a build its specification as JSON', async () => {
+    // Without the content type the market parses no body at all and answers
+    // every build with "specification: Required".
+    respond(200, { data: { buildId: 'build-1' } });
+
+    await client.buildEnvironment({
+      name: 'env-1',
+      specification: { sources: [{ kind: 'git', url: 'https://github.com/a/b' }] },
+    });
+
+    const [url, init] = (fetch as any).mock.calls[0];
+    expect(url).toBe(
+      'http://market.test/api/v1/sandbox/workspaces/current/environments/env-1/build',
+    );
+    expect(init.headers['Content-Type']).toBe('application/json');
+    expect(JSON.parse(init.body).specification.sources[0].url).toBe('https://github.com/a/b');
+  });
+
   it('should read one environment run history from the control plane', async () => {
     const page = { nextBefore: null, sessions: [] };
     respond(200, { data: page });

@@ -333,6 +333,7 @@ export const createSandboxWorkspaceClient = ({
     }): Promise<{ buildId: string }> =>
       request(`${CURRENT_WORKSPACE}/environments/${encodeURIComponent(params.name)}/build`, {
         body: JSON.stringify({ specification: params.specification, topicId: params.topicId }),
+        headers: { 'Content-Type': 'application/json' },
         method: 'POST',
       }),
 
