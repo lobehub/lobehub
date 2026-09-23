@@ -62,18 +62,6 @@ interface EnvironmentFormProps {
  */
 const DEFAULT_INTERNET_ACCESS = true;
 
-/**
- * Whether a change touches what a build is made from. The same three keys the
- * server compares to mark an instance stale, so the toast and the tag agree.
- */
-const affectsBuild = (
-  before: SandboxEnvironmentSpecification,
-  after: SandboxEnvironmentSpecification,
-): boolean =>
-  (['bootstrapCommand', 'env', 'sources'] as const).some(
-    (key) => JSON.stringify(before[key] ?? null) !== JSON.stringify(after[key] ?? null),
-  );
-
 /** Drop the keys a blank value would otherwise store as empty. */
 const compact = (configuration: SandboxEnvironmentSpecification): SandboxEnvironmentSpecification =>
   Object.fromEntries(
@@ -156,13 +144,7 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave, secti
   const saveConfiguration = async (changes: Partial<SandboxEnvironmentSpecification>) => {
     const next = compact({ ...configuration, ...changes });
     await onSave({ configuration: next });
-    toast.success(
-      t(
-        affectsBuild(configuration, next)
-          ? 'environments.form.savedStale'
-          : 'environments.form.saved',
-      ),
-    );
+    toast.success(t('environments.form.saved'));
   };
 
   /** For controls with no confirm step of their own: a switch, a disconnect. */

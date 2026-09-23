@@ -1490,7 +1490,6 @@
   "sandboxWorkspace.environmentsUnavailable": "Environments could not be loaded",
   "sandboxWorkspace.ephemeral": "Temporary working directory",
   "sandboxWorkspace.ephemeralDesc": "Cleaned up when the sandbox is recycled",
-  "sandboxWorkspace.instanceStale": "Needs rebuild",
   "sandboxWorkspace.manageEnvironments": "Manage environments",
   "sandboxWorkspace.newInstance": "New instance",
   "sandboxWorkspace.persistentUpsell": "Persistent working directory",

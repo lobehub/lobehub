@@ -1490,7 +1490,6 @@
   "sandboxWorkspace.environmentsUnavailable": "环境列表没能读取",
   "sandboxWorkspace.ephemeral": "临时工作目录",
   "sandboxWorkspace.ephemeralDesc": "沙箱回收时会被清理",
-  "sandboxWorkspace.instanceStale": "需要重建",
   "sandboxWorkspace.manageEnvironments": "管理环境",
   "sandboxWorkspace.newInstance": "新建实例",
   "sandboxWorkspace.persistentUpsell": "持久化工作目录",

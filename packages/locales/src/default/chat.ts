@@ -1317,7 +1317,6 @@ export default {
   'sandboxWorkspace.setUpEnvironment': 'Set up an environment',
   'sandboxWorkspace.manageEnvironments': 'Manage environments',
   'sandboxWorkspace.environmentsUnavailable': 'Environments could not be loaded',
-  'sandboxWorkspace.instanceStale': 'Needs rebuild',
   'search.grounding.imageSearchQueries': 'Image Search Keywords',
   'search.grounding.imageTitle': 'Found {{count}} images',
   'chatMode.agent': 'Agent',

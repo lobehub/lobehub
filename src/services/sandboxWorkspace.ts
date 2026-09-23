@@ -49,9 +49,8 @@ class SandboxWorkspaceService {
   }) => lambdaClient.sandboxWorkspace.createEnvironment.mutate(params);
 
   /**
-   * Edits the specification. Nothing is rebuilt — every instance of it just
-   * becomes stale, and rebuilding one discards what that conversation installed
-   * by hand, so it stays the person's call.
+   * Edits the specification. Existing instances keep the one they were created
+   * with; the change shapes what the next instance is built from.
    */
   updateEnvironment = async (params: {
     configuration?: SandboxEnvironmentSpecification;

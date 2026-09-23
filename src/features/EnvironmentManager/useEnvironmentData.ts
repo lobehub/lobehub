@@ -109,9 +109,7 @@ export type SandboxEnvironment = NonNullable<
 >['environments'][number];
 
 /**
- * Mutations, each refreshing exactly the lists it can have changed. Editing a
- * specification touches the instance list too, because that is where staleness
- * is shown and every copy of an edited specification has just become stale.
+ * Mutations, each refreshing exactly the lists it can have changed.
  */
 export const useEnvironmentActions = () => {
   const { mutate: globalMutate } = useSWRConfig();
@@ -177,15 +175,9 @@ export const useEnvironmentActions = () => {
       name?: string;
     }) => {
       await sandboxWorkspaceService.updateEnvironment(params);
-      // The environment list first, and only then the instance list — in that
-      // order, and not together. The instance list is what shows staleness,
-      // so it has to be refreshed, but fetching it with sizes pays a sandbox
-      // cold start of several seconds; and issued in the same tick the two
-      // calls land in one tRPC batch request, so "not awaited" still meant
-      // the save spinner waited for it. Kicked off after the fast one has
-      // returned, it travels alone and the tags catch up when it lands.
+      // Existing instances are untouched by a specification edit, so only the
+      // environment list has anything new to show.
       await refreshEnvironments();
-      void refreshInstances();
     },
   };
 };

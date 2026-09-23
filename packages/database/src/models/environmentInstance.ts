@@ -1,18 +1,10 @@
 import type { EnvironmentInstanceConfiguration } from '@lobechat/types';
-import { and, asc, eq, getTableColumns, inArray, sql } from 'drizzle-orm';
-import type { AnyPgColumn } from 'drizzle-orm/pg-core';
+import { and, asc, eq, getTableColumns, inArray } from 'drizzle-orm';
 
 import type { EnvironmentInstanceItem, NewEnvironmentInstance } from '../schemas';
 import { environmentInstances, environments } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { environmentOwnership, environmentVisibility } from './environment';
-
-/**
- * The part of a specification a build actually depends on, projected so two
- * configurations that differ only in how a session runs compare equal.
- */
-const buildInputs = (column: AnyPgColumn) =>
-  sql`jsonb_build_object('bootstrapCommand', ${column} -> 'bootstrapCommand', 'env', ${column} -> 'env', 'sources', ${column} -> 'sources')`;
 
 /** The binding that says which machine, account or volume an instance lives in. */
 export type EnvironmentInstanceBinding = Pick<
@@ -81,29 +73,14 @@ export class EnvironmentInstanceModel {
   private visible = () => inArray(environmentInstances.environmentId, this.visibleEnvironments());
 
   /**
-   * Instances with the one thing that cannot be read off the row: whether this
-   * copy needs rebuilding.
-   *
-   * Only the fields that change what gets BUILT count — the sources to check
-   * out, the command that makes them usable, and the variables that command
-   * runs under. `internetAccess` and `requirements` are deliberately excluded:
-   * they change how a session runs, not what a build produces, and folding them
-   * in would throw away a multi-gigabyte dependency cache because somebody
-   * moved a memory slider.
-   *
-   * Compared in SQL rather than in JS because `jsonb` equality ignores key
-   * order and duplicate keys, while two objects that serialize differently in
-   * JavaScript may describe exactly the same environment — a comparison done up
-   * here would report half the fleet stale after a harmless re-save.
+   * Every instance the caller can see. Each carries the specification as it
+   * stood when it was created (`configurationSnapshot`); editing the
+   * environment afterwards changes what NEW instances are built from and
+   * leaves existing ones exactly as they are.
    */
-  query = async (
-    params: { environmentId?: string } = {},
-  ): Promise<(EnvironmentInstanceItem & { stale: boolean })[]> =>
+  query = async (params: { environmentId?: string } = {}): Promise<EnvironmentInstanceItem[]> =>
     this.db
-      .select({
-        ...getTableColumns(environmentInstances),
-        stale: sql<boolean>`${buildInputs(environments.configuration)} IS DISTINCT FROM ${buildInputs(environmentInstances.configurationSnapshot)}`,
-      })
+      .select(getTableColumns(environmentInstances))
       .from(environmentInstances)
       .innerJoin(environments, eq(environments.id, environmentInstances.environmentId))
       .where(
