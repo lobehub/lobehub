@@ -1,14 +1,16 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { lazy, Suspense } from 'react';
 import type { LoaderFunctionArgs, MetaFunction } from 'react-router';
-import { useLoaderData, useSearchParams } from 'react-router';
+import { useLoaderData, useRouteLoaderData } from 'react-router';
 import { SWRConfig, unstable_serialize } from 'swr';
 
 import { verifyKeys } from '@/libs/swr/keys';
 
+import WorkbenchLoading from '../../src/shell/WorkbenchLoading';
 import { cloudflareContext } from '../lib/cloudflareContext';
 import { buildPageMeta, truncateDescription, workbenchMetaDescription } from '../lib/seo';
 import { createServerLambdaClient } from '../lib/serverTrpc';
+import type { loader as rootLoader } from '../root';
 
 // The embed never loads the normal host's review and sharing capabilities.
 const AcceptanceDetail = lazy(() => import('../../src/features/acceptance/AcceptanceDetail'));
@@ -44,7 +46,7 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
 
 export default function AcceptanceDetailRoute() {
   const { acceptanceId, bundle } = useLoaderData<typeof loader>();
-  const [searchParams] = useSearchParams();
+  const root = useRouteLoaderData<typeof rootLoader>('root');
 
   return (
     <SWRConfig
@@ -54,8 +56,8 @@ export default function AcceptanceDetailRoute() {
           : {},
       }}
     >
-      <Suspense fallback={null}>
-        {searchParams.get('embed') === '1' ? <AcceptanceEmbed /> : <AcceptanceDetail />}
+      <Suspense fallback={<WorkbenchLoading />}>
+        {root?.embedConfig.embed ? <AcceptanceEmbed /> : <AcceptanceDetail />}
       </Suspense>
     </SWRConfig>
   );

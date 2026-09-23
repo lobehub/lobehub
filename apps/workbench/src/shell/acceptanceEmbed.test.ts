@@ -22,6 +22,15 @@ describe('acceptance embed URL contract', () => {
     ).toEqual({ embed: false, theme: undefined });
   });
 
+  it.each(['/acceptance/report-id/check/check-id', '/acceptance/report-id/check/check-id/'])(
+    'keeps the check detail route %s outside embed mode',
+    (path) => {
+      expect(
+        parseAcceptanceEmbedConfig(`https://workbench.example${path}?embed=1&theme=dark`),
+      ).toEqual({ embed: false, theme: undefined });
+    },
+  );
+
   it('ignores invalid embed and theme values', () => {
     expect(
       parseAcceptanceEmbedConfig(
