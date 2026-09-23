@@ -860,6 +860,18 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
     }
   }
 
+  const unexecuted = plan?.filter((item) => !seenCheckItemIds.has(item.id)) ?? [];
+  for (const item of unexecuted) {
+    const types = [
+      ...new Set(item.verifierConfig.requiredEvidence?.map((spec) => spec.type) ?? []),
+    ];
+    if (types.length === 0) continue;
+    missingEvidence.push({ checkItemId: item.id, types });
+    // Count the gap without inventing an execution result for an unexecuted check.
+    publishedVerdicts.push('uncertain');
+    log.warn(`${item.id}: not executed; required evidence not published: ${types.join(', ')}.`);
+  }
+
   // 3. Write the report. `summary` is the overall conclusion (rendered at
   //    the top of the report page); `content` is the full markdown detail.
   const conclusion =
@@ -874,8 +886,8 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
     typeof summary.score === 'number' ? Math.max(0, Math.min(1, summary.score / 100)) : undefined;
   // The authored counts describe the report the author wrote. Once a
   // programmatic-test check is screened out they no longer match what was
-  // published, so recount from the cases that actually landed — a stats block
-  // that disagrees with the visible check list is worse than no stats.
+  // published, so recount the landed cases and unexecuted evidence gaps — a
+  // stats block that disagrees with the visible check list is worse than no stats.
   const recount = cases.length !== allCases.length || missingEvidence.length > 0;
   const counted = (verdict: Verdict) => publishedVerdicts.filter((v) => v === verdict).length;
   const derivedVerdict = deriveReportVerdict(publishedVerdicts.map((verdict) => ({ verdict })));
@@ -889,7 +901,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
     overallConfidence: score,
     passedChecks: recount ? counted('passed') : summary.passed,
     summary: conclusion,
-    totalChecks: recount ? cases.length : (summary.total ?? cases.length),
+    totalChecks: recount ? publishedVerdicts.length : (summary.total ?? cases.length),
     uncertainChecks: recount
       ? counted('uncertain') || undefined
       : (summary.blocked ?? 0) + (summary.uncertain ?? 0) || undefined,
@@ -945,6 +957,11 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
     log.warn(
       'Report saved, but evidence publication is incomplete. Keep the local artifacts; retry only the missing evidence, not the whole ingest. Supplementing evidence does not change recorded verdicts.',
     );
+    if (unexecuted.some((item) => item.verifierConfig.requiredEvidence?.length)) {
+      log.warn(
+        'Unexecuted checks have no result to attach evidence to. Execute them and publish a new round on the same acceptance; do not re-ingest this unchanged report.',
+      );
+    }
     if (failedEvidence.some((failure) => failure.reason === 'storage_quota')) {
       log.warn(
         'Acceptance evidence uses your personal file storage quota. Free space or upgrade your storage plan, then retry the failed artifacts.',
@@ -972,6 +989,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
         roundUrl,
         scenario,
         subject: subject!.ref,
+        unexecuted: unexecuted.map((item) => item.id),
         unplanned,
         verifyRunId: runId,
       },
@@ -986,10 +1004,12 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
       `${droppedLabels.length > 0 ? pc.yellow(` — ${droppedLabels.length} programmatic-test check(s) dropped`) : ''}`,
   );
   for (const failure of failedEvidence) {
-    console.log(`${pc.yellow('retry')}: ${failure.retryCommand}`);
+    console.log(`${pc.yellow('retry (POSIX shell)')}: ${failure.retryCommand}`);
+    console.log(
+      `${pc.dim('retryArgs (lh, shell disabled)')}: ${JSON.stringify(failure.retryArgs)}`,
+    );
   }
   if (plan?.length) {
-    const unexecuted = plan.filter((item) => !seenCheckItemIds.has(item.id));
     console.log(
       `${pc.bold('plan')}: ${plan.length} item(s)` +
         `${unexecuted.length > 0 ? pc.yellow(` — ${unexecuted.length} planned but not executed`) : ''}` +

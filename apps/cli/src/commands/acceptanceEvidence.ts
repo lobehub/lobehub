@@ -18,7 +18,10 @@ export interface FailedReportEvidence {
   fileId?: string;
   path: string;
   reason: 'file_missing' | 'storage_quota' | 'upload_failed';
+  /** Arguments for lh via a process API with shell disabled, including subcommands. */
+  retryArgs: string[];
   retryCommand: string;
+  retryCommandShell: 'posix';
   type: EvidenceType;
 }
 
@@ -85,7 +88,9 @@ export async function uploadReportEvidence(
         fileId,
         path: absolutePath,
         reason,
+        retryArgs: ['acceptance', 'run', 'evidence', 'upload', ...args],
         retryCommand,
+        retryCommandShell: 'posix',
         type,
       });
       log.warn(`evidence not published: ${path.basename(absolutePath)}: ${message}`);

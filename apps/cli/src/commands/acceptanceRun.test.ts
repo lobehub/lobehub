@@ -182,8 +182,117 @@ describe('acceptance publication with missing evidence', () => {
     expect(printed.join('\n')).toContain('Partially published');
     expect(printed.join('\n')).toContain('https://app.lobehub.com/acceptance/acceptance-1?r=2');
     expect(printed.join('\n')).toContain('evidence upload');
+    expect(printed.join('\n')).toContain('POSIX shell');
+    expect(printed.join('\n')).toContain('retryArgs');
     expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('personal file storage quota'));
     expect(process.exitCode).toBe(1);
+  });
+
+  it.each(['passed', 'failed'])(
+    'accounts for an unexecuted check alongside a %s case',
+    async (verdict) => {
+      await writeFile(
+        path.join(dir, 'result.json'),
+        JSON.stringify({
+          cases: [{ id: 'response', name: '收到回复', status: verdict, evidence: ['output.txt'] }],
+          plan: [
+            { id: 'response', title: '收到回复', requiredEvidence: ['text'] },
+            {
+              id: 'screen',
+              title: '画面展示',
+              requiredEvidence: ['screenshot', 'text', 'screenshot'],
+            },
+          ],
+          summary: { passed: 2, total: 2, verdict: 'passed' },
+        }),
+      );
+
+      await run('ingest', dir, '--json');
+
+      expect(result()).toMatchObject({
+        cases: 1,
+        missingEvidence: [{ checkItemId: 'screen', types: ['screenshot', 'text'] }],
+        publicationStatus: 'partial',
+        unexecuted: ['screen'],
+      });
+      expect(finalReport()).toMatchObject({
+        failedChecks: verdict === 'failed' ? 1 : 0,
+        passedChecks: verdict === 'passed' ? 1 : 0,
+        totalChecks: 2,
+        uncertainChecks: 1,
+        verdict: verdict === 'failed' ? 'failed' : 'uncertain',
+      });
+      expect(client.verify.ingestResult.mutate).toHaveBeenCalledTimes(1);
+      expect(process.exitCode).toBe(1);
+      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('new round'));
+    },
+  );
+
+  it('keeps an entirely unexecuted required-evidence plan uncertain', async () => {
+    await writeFile(
+      path.join(dir, 'result.json'),
+      JSON.stringify({
+        cases: [],
+        plan: [{ id: 'screen', title: '画面展示', requiredEvidence: ['screenshot'] }],
+        summary: { passed: 1, total: 1, verdict: 'passed' },
+      }),
+    );
+
+    await run('ingest', dir, '--json');
+
+    expect(result()).toMatchObject({ publicationStatus: 'partial', unexecuted: ['screen'] });
+    expect(finalReport()).toMatchObject({
+      passedChecks: 0,
+      totalChecks: 1,
+      uncertainChecks: 1,
+      verdict: 'uncertain',
+    });
+    expect(client.verify.ingestResult.mutate).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('exposes shell-independent upload arguments without escaping path or description', async () => {
+    const description = `User's "input" $HOME %TEMP% & | \`literal\``;
+    await writeFile(
+      path.join(dir, 'result.json'),
+      JSON.stringify({
+        cases: [
+          {
+            id: 'screen',
+            name: '画面展示',
+            status: 'passed',
+            evidence: [{ path: "screen's shot.png", description }],
+          },
+        ],
+        plan: [{ id: 'screen', title: '画面展示', requiredEvidence: ['screenshot'] }],
+      }),
+    );
+    vi.mocked(uploadLocalFile).mockRejectedValueOnce(new Error('storage_block:upgrade_required'));
+    await run('ingest', dir, '--json');
+    const failure = result().failedEvidence[0];
+    expect(failure.retryCommandShell).toBe('posix');
+    expect(failure.retryArgs).toEqual([
+      'acceptance',
+      'run',
+      'evidence',
+      'upload',
+      '--check',
+      'result-screen',
+      '--type',
+      'screenshot',
+      '--file',
+      path.join(dir, "screen's shot.png"),
+      '--desc',
+      description,
+    ]);
+
+    const program = new Command();
+    attachAcceptanceRunCommands(program.command('acceptance'));
+    await program.parseAsync(['node', 'lh', ...failure.retryArgs]);
+    expect(client.verify.uploadEvidence.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({ description, fileId: 'file-1' }),
+    );
+    expect(uploadLocalFile).toHaveBeenLastCalledWith(client, path.join(dir, "screen's shot.png"));
   });
 
   it('finishes a complete publication with no failure exit code', async () => {
@@ -225,6 +334,22 @@ describe('acceptance publication with missing evidence', () => {
     await run('ingest', dir, '--json');
     const failure = result().failedEvidence[0];
     expect(failure).toMatchObject({ fileId: 'file-1', reason: 'upload_failed' });
+    expect(failure.retryArgs).toEqual([
+      'acceptance',
+      'run',
+      'evidence',
+      'upload',
+      '--check',
+      'result-screen',
+      '--type',
+      'screenshot',
+      '--file-id',
+      'file-1',
+      '--desc',
+      description,
+      '--metadata',
+      JSON.stringify({ comparison }),
+    ]);
     expect(finalCheck().verdict).toBe('uncertain');
     const originalReport = finalReport();
     const checkWrites = client.verify.ingestResult.mutate.mock.calls.length;
