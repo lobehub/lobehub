@@ -3303,6 +3303,12 @@ export default class HeterogeneousAgentCtr {
       void stdoutDrained
         .then(() => stdoutBroadcastQueue)
         .finally(async () => {
+          // Kimi Code reports token usage only via its on-disk session wire
+          // log, so it can only be collected now that the process has exited.
+          // Broadcast BEFORE `heteroAgentSessionComplete` so the renderer
+          // persists it with the run. No-op for other agent types.
+          broadcastStreamEvents(await pipeline.collectPostRunUsage({ env: spawnEnv }));
+
           // Tear down the AskUserQuestion bridge / temp `mcp.json` for this
           // op. Pending MCP handlers get a `session_ended` cancellation so
           // they return cleanly even if CC was killed mid-tool-call.

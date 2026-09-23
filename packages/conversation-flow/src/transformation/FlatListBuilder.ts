@@ -1174,6 +1174,18 @@ export class FlatListBuilder {
       role: role as any,
     };
 
+    // Heterogeneous agents (e.g. kimi-code) may only learn model/provider at
+    // run end, stamped on the LAST step's assistant row — the group spreads
+    // the FIRST row, so backfill from the last chain assistant carrying one.
+    if (!result.model) {
+      const withModel = assistantChain.findLast((assistant) => !!assistant.model);
+      if (withModel) result.model = withModel.model;
+    }
+    if (!result.provider) {
+      const withProvider = assistantChain.findLast((assistant) => !!assistant.provider);
+      if (withProvider) result.provider = withProvider.provider;
+    }
+
     // Remove fields that should not be in assistantGroup/supervisor
     delete result.imageList;
     delete result.metadata;

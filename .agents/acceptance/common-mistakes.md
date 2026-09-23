@@ -66,6 +66,7 @@ the next free number of that prefix.
 - **L-S22** A per-account cap that a round consumes (artifact deployments) is cleared for the account the surface actually authenticates as, and re-cleared between rounds.
 - **L-S23** A hand-built `node_modules` symlink farm runs unit tests but cannot start the dev server; clone a working checkout's `node_modules` instead of a fresh install, which this lockfile-less repo resolves against a moving registry.
 - **L-S24** Read the dev server's URL from its own log, and treat "ready" as any status but `000` — `/` answers `302` to `/signin` when signed out.
+- **L-S25** `dev:static` 的 Electron 重启会清空 `dist/renderer`（renderer Vite dev server 启动即删 outDir）；`start`/`restart` 后必须重建 renderer 再驱动，否则页面只有 Internal Server Error。
 
 ## Entries
 
@@ -606,3 +607,16 @@ a separate Vite port in the Debug Proxy line); and the app answers `/` with
 **Rule:** take both URLs from the log, never from memory or a default. Probe with
 PROJECT.md's predicate as written — any code but `000` — and confirm health by
 following the redirect, not by demanding `200` at the root.
+
+### L-S25 — dev:static 重启后 dist/renderer 被清空
+
+`since 2026-09-20` · `holds-while: dev.mjs 的 renderer Vite dev server 在启动时删除 renderer outDir`
+
+**Trap:** `DESKTOP_RENDERER_STATIC=1 electron-dev.sh start|restart` 后立刻驱动页面，
+只看到 `Internal Server Error`（静态 handler 报 `ENOENT dist/renderer/apps/desktop/index.html`）。
+dev.mjs 每次启动都会拉起 renderer Vite dev server，而后者启动即清空
+`apps/desktop/dist/renderer`；静态产物是在启动序列里被删的，与是否使用静态模式无关。
+
+**Rule:** 每次 `start`/`restart` 之后、驱动之前，先 `cd apps/desktop && pnpm build:renderer`
+（约 25s）并确认 `dist/renderer/apps/desktop/index.html` 存在。同一个 dev.mjs 生命周期内
+的后续重启不会再次清空；改用 `restart` 而不是 `start` 时也按同一规则处理。

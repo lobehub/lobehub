@@ -6,6 +6,7 @@ import type {
   AgentEventAdapter,
   HeterogeneousAgentEvent,
   HeterogeneousToolResultImage,
+  PostRunUsageOptions,
   UsageData,
 } from '../types';
 import { CodexFileChangeTracker } from './codexFileChangeTracker';
@@ -128,6 +129,20 @@ export class AgentStreamPipeline {
         type: 'agent_runtime_end',
       },
     ]);
+  }
+
+  /**
+   * Run the adapter's post-exit usage hook (Kimi Code reads its session wire
+   * log from disk). Call after {@link flush} and process exit. Always
+   * best-effort: adapters without the hook — or a throwing hook — yield `[]`.
+   */
+  async collectPostRunUsage(options?: PostRunUsageOptions): Promise<AgentStreamEvent[]> {
+    try {
+      const events = (await this.adapter.collectPostRunUsage?.(options)) ?? [];
+      return this.toStreamEvents(events);
+    } catch {
+      return [];
+    }
   }
 
   /**

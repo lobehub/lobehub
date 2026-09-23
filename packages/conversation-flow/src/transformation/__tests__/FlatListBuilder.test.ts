@@ -280,6 +280,158 @@ describe('FlatListBuilder', () => {
       expect(result[1].usage).toBeDefined();
     });
 
+    it('should backfill group model/provider from a later step assistant', () => {
+      // Kimi Code only learns model/provider at run end (stamped on the LAST
+      // step's assistant via turn_metadata); the group spreads the first row.
+      const messages: Message[] = [
+        {
+          content: 'Request',
+          createdAt: 0,
+          id: 'msg-1',
+          role: 'user',
+          updatedAt: 0,
+        },
+        {
+          content: 'Using tool',
+          createdAt: 0,
+          id: 'msg-2',
+          parentId: 'msg-1',
+          role: 'assistant',
+          tools: [
+            { apiName: 'test', arguments: '{}', id: 'tool-1', identifier: 'test', type: 'default' },
+          ],
+          updatedAt: 0,
+        },
+        {
+          content: 'Tool result',
+          createdAt: 0,
+          id: 'tool-1',
+          parentId: 'msg-2',
+          role: 'tool',
+          tool_call_id: 'tool-1',
+          updatedAt: 0,
+        },
+        {
+          content: 'Done',
+          createdAt: 0,
+          id: 'msg-3',
+          metadata: { totalInputTokens: 30, totalOutputTokens: 7 },
+          model: 'kimi-code/k3',
+          parentId: 'tool-1',
+          provider: 'kimi-code',
+          role: 'assistant',
+          updatedAt: 0,
+        },
+      ];
+
+      const builder = createBuilder(messages);
+      const result = builder.flatten(messages);
+
+      expect(result).toHaveLength(2);
+      expect(result[1].role).toBe('assistantGroup');
+      expect(result[1].model).toBe('kimi-code/k3');
+      expect(result[1].provider).toBe('kimi-code');
+      expect(result[1].usage).toMatchObject({ totalInputTokens: 30, totalOutputTokens: 7 });
+    });
+
+    it('should keep the first assistant model/provider when already set', () => {
+      const messages: Message[] = [
+        {
+          content: 'Request',
+          createdAt: 0,
+          id: 'msg-1',
+          role: 'user',
+          updatedAt: 0,
+        },
+        {
+          content: 'Using tool',
+          createdAt: 0,
+          id: 'msg-2',
+          model: 'claude-opus-4-7',
+          parentId: 'msg-1',
+          provider: 'claude-code',
+          role: 'assistant',
+          tools: [
+            { apiName: 'test', arguments: '{}', id: 'tool-1', identifier: 'test', type: 'default' },
+          ],
+          updatedAt: 0,
+        },
+        {
+          content: 'Tool result',
+          createdAt: 0,
+          id: 'tool-1',
+          parentId: 'msg-2',
+          role: 'tool',
+          tool_call_id: 'tool-1',
+          updatedAt: 0,
+        },
+        {
+          content: 'Done',
+          createdAt: 0,
+          id: 'msg-3',
+          model: 'kimi-code/k3',
+          parentId: 'tool-1',
+          provider: 'kimi-code',
+          role: 'assistant',
+          updatedAt: 0,
+        },
+      ];
+
+      const builder = createBuilder(messages);
+      const result = builder.flatten(messages);
+
+      expect(result[1].role).toBe('assistantGroup');
+      expect(result[1].model).toBe('claude-opus-4-7');
+      expect(result[1].provider).toBe('claude-code');
+    });
+
+    it('should leave group model/provider undefined when no assistant carries one', () => {
+      const messages: Message[] = [
+        {
+          content: 'Request',
+          createdAt: 0,
+          id: 'msg-1',
+          role: 'user',
+          updatedAt: 0,
+        },
+        {
+          content: 'Using tool',
+          createdAt: 0,
+          id: 'msg-2',
+          parentId: 'msg-1',
+          role: 'assistant',
+          tools: [
+            { apiName: 'test', arguments: '{}', id: 'tool-1', identifier: 'test', type: 'default' },
+          ],
+          updatedAt: 0,
+        },
+        {
+          content: 'Tool result',
+          createdAt: 0,
+          id: 'tool-1',
+          parentId: 'msg-2',
+          role: 'tool',
+          tool_call_id: 'tool-1',
+          updatedAt: 0,
+        },
+        {
+          content: 'Done',
+          createdAt: 0,
+          id: 'msg-3',
+          parentId: 'tool-1',
+          role: 'assistant',
+          updatedAt: 0,
+        },
+      ];
+
+      const builder = createBuilder(messages);
+      const result = builder.flatten(messages);
+
+      expect(result[1].role).toBe('assistantGroup');
+      expect(result[1].model).toBeUndefined();
+      expect(result[1].provider).toBeUndefined();
+    });
+
     it('should handle user message with branches', () => {
       const messages: Message[] = [
         {
