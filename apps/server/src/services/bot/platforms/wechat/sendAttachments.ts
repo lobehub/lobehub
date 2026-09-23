@@ -1,3 +1,4 @@
+import type { SendMessageAttachmentOutcome } from '@lobechat/builtin-tool-message/delivery';
 import type { MessageItem, WechatApiClient } from '@lobechat/chat-adapter-wechat';
 import { MessageItemType, WechatUploadMediaType } from '@lobechat/chat-adapter-wechat';
 import debug from 'debug';
@@ -49,7 +50,18 @@ export interface WechatAttachmentFailure {
 export interface WechatAttachmentSendResult {
   /** Describes the same attachments as `undelivered`. */
   failures: WechatAttachmentFailure[];
+  outcomes: SendMessageAttachmentOutcome[];
   undelivered: WechatOutboundAttachment[];
+}
+
+export class WechatAttachmentSendError extends Error {
+  readonly result: WechatAttachmentSendResult;
+
+  constructor(result: WechatAttachmentSendResult, cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause), { cause });
+    this.name = 'WechatAttachmentSendError';
+    this.result = result;
+  }
 }
 
 const mapAttachmentTypeToUploadMediaType = (
@@ -131,11 +143,22 @@ export const sendWechatAttachments = async (
   contextToken: string,
 ): Promise<WechatAttachmentSendResult> => {
   const budget = PLATFORM_ATTACHMENT_BUDGETS.wechat;
-  const fallbackLines: string[] = [];
+  const fallbackLines: Array<{
+    attachment: WechatOutboundAttachment;
+    index: number;
+    line: string;
+  }> = [];
   const undelivered: WechatOutboundAttachment[] = [];
   const failures: WechatAttachmentFailure[] = [];
+  const outcomes: SendMessageAttachmentOutcome[] = attachments.map((attachment, index) => ({
+    index,
+    reason: 'prior_failure',
+    status: 'not_attempted',
+    type: attachment.type,
+  }));
 
-  for (const attachment of attachments) {
+  for (const [index, attachment] of attachments.entries()) {
+    let stage: 'prepare' | 'upload' | 'send' = 'prepare';
     try {
       let buffer = await loadAttachmentBuffer(attachment);
       if (!buffer) {
@@ -146,6 +169,12 @@ export const sendWechatAttachments = async (
           type: attachment.type,
         });
         undelivered.push(attachment);
+        outcomes[index] = {
+          index,
+          reason: 'source_unavailable',
+          status: 'failed',
+          type: attachment.type,
+        };
         continue;
       }
 
@@ -171,7 +200,11 @@ export const sendWechatAttachments = async (
           // the rest, but a failing `sendMessage` means the text channel itself
           // is down — swallowing it would let `deliver` resolve and the replay
           // queue drop a payload that was never delivered.
-          fallbackLines.push(buildAttachmentFallbackLine(attachment, attachment.fetchUrl));
+          fallbackLines.push({
+            attachment,
+            index,
+            line: buildAttachmentFallbackLine(attachment, attachment.fetchUrl),
+          });
         } else {
           log('sendWechatAttachments: skipping over-budget attachment without fetchUrl');
           failures.push({
@@ -180,11 +213,18 @@ export const sendWechatAttachments = async (
             type: attachment.type,
           });
           undelivered.push(attachment);
+          outcomes[index] = {
+            index,
+            reason: 'over_budget_no_link',
+            status: 'failed',
+            type: attachment.type,
+          };
         }
         continue;
       }
 
       const mediaType = mapAttachmentTypeToUploadMediaType(attachment.type);
+      stage = 'upload';
       const uploadResult = await api.uploadCdnMedia(toUserId, mediaType, buffer);
       const cdnMedia = {
         aes_key: uploadResult.aesKey,
@@ -198,7 +238,9 @@ export const sendWechatAttachments = async (
         attachment,
         buffer.length,
       );
+      stage = 'send';
       await api.sendItem(toUserId, item, contextToken);
+      outcomes[index] = { index, status: 'accepted', type: attachment.type };
     } catch (error) {
       // iLink refusing an upload is the other half of "it sent a link instead
       // of the picture". The message is the diagnostic part — it carries the
@@ -217,14 +259,50 @@ export const sendWechatAttachments = async (
         type: attachment.type,
       });
       undelivered.push(attachment);
+      outcomes[index] =
+        stage === 'send'
+          ? { index, reason: 'send_unconfirmed', status: 'unknown', type: attachment.type }
+          : {
+              index,
+              reason: stage === 'upload' ? 'upload_failed' : 'prepare_failed',
+              status: 'failed',
+              type: attachment.type,
+            };
     }
   }
 
   // Deliberately outside the loop's try/catch — see the note above.
-  const linkMessages = splitFallbackMessages(fallbackLines, budget.textMaxChars);
+  const linkMessages = splitFallbackMessages(
+    fallbackLines.map(({ line }) => line),
+    budget.textMaxChars,
+  );
   for (const message of linkMessages) {
-    await api.sendMessage(toUserId, message, contextToken);
+    try {
+      await api.sendMessage(toUserId, message, contextToken);
+      for (const fallback of fallbackLines) {
+        if (message.includes(fallback.line)) {
+          outcomes[fallback.index] = {
+            index: fallback.index,
+            reason: 'over_budget',
+            status: 'link_fallback',
+            type: fallback.attachment.type,
+          };
+        }
+      }
+    } catch (error) {
+      for (const fallback of fallbackLines) {
+        if (message.includes(fallback.line)) {
+          outcomes[fallback.index] = {
+            index: fallback.index,
+            reason: 'link_send_unconfirmed',
+            status: 'unknown',
+            type: fallback.attachment.type,
+          };
+        }
+      }
+      throw new WechatAttachmentSendError({ failures, outcomes, undelivered }, error);
+    }
   }
 
-  return { failures, undelivered };
+  return { failures, outcomes, undelivered };
 };
