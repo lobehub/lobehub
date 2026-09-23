@@ -351,14 +351,19 @@ const CloudHeterogeneousConfig = memo<CloudHeterogeneousConfigProps>(
     return (
       <div className={styles.card}>
         <Flexbox gap={16}>
-          {/* ── Claude Code OAuth Token ── */}
-          <TokenSection
-            existingCred={claudeTokenCred}
-            onEnvChange={saveEnv}
-            onSaved={() => refetch()}
-          />
+          {/* ── Claude Code OAuth Token — Claude Code signs in with its own token;
+               every other CLI authenticates through its own configuration. ── */}
+          {provider.type === 'claude-code' && (
+            <>
+              <TokenSection
+                existingCred={claudeTokenCred}
+                onEnvChange={saveEnv}
+                onSaved={() => refetch()}
+              />
 
-          <div className={styles.sectionDivider} />
+              <div className={styles.sectionDivider} />
+            </>
+          )}
 
           {/* ── GitHub OAuth Credential ── */}
           <Flexbox gap={8}>
