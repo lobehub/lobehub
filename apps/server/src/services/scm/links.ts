@@ -1,8 +1,8 @@
 import type { ScmChangeRequestLinks } from '@lobechat/types';
-import { and, desc, eq, inArray, isNotNull, isNull, type SQL, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, or, type SQL, sql } from 'drizzle-orm';
 
 import { ScmIdentityModel } from '@/database/models/scm';
-import { acceptances, verifyRuns, works } from '@/database/schemas';
+import { acceptances, verifyRuns, works, workspaceMembers } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
 /**
@@ -104,25 +104,64 @@ export interface ResolvedChangeRequestLinks {
   workspaceId: string | null;
 }
 
+/**
+ * Not yet decided (`undefined`), personal (`null`), or one workspace.
+ *
+ * The first source that matches fixes this for the ones after it. Left
+ * free, a body-named acceptance in workspace A and a Work in workspace B
+ * could both match and the result would report only one of them — after
+ * which the control half looks the other's topic up in the wrong scope and
+ * silently finds nothing.
+ */
+type ScopePin = string | null | undefined;
+
 const inScope = (
+  db: LobeChatDatabase,
   table: { userId: SQL.Aliased | any; workspaceId: any },
   scope: ScmLinkScope,
-): SQL =>
-  scope.kind === 'author'
-    ? // Everything this person owns, wherever it lives. The records carry
-      // their creator's id in both scopes, so one predicate covers the
-      // personal ones and the ones they made inside a workspace.
-      eq(table.userId, scope.userId)
-    : scope.workspaceId
+  pin: ScopePin,
+): SQL => {
+  const pinned =
+    pin === undefined
+      ? undefined
+      : pin === null
+        ? isNull(table.workspaceId)
+        : eq(table.workspaceId, pin);
+
+  if (scope.kind === 'author') {
+    // Everything this person owns, wherever they can still reach it. The
+    // creator's id stays on a workspace record after they leave, so owning
+    // it once is not enough — an active membership has to back it, or a
+    // former member could still have an old workspace acceptance accepted
+    // by merging a pull request.
+    const memberOf = db
+      .select({ workspaceId: workspaceMembers.workspaceId })
+      .from(workspaceMembers)
+      .where(and(eq(workspaceMembers.userId, scope.userId), isNull(workspaceMembers.deletedAt)));
+
+    return and(
+      eq(table.userId, scope.userId),
+      or(isNull(table.workspaceId), inArray(table.workspaceId, memberOf)),
+      pinned,
+    )!;
+  }
+
+  return and(
+    scope.workspaceId
       ? eq(table.workspaceId, scope.workspaceId)
-      : and(eq(table.userId, scope.userId), isNull(table.workspaceId))!;
+      : and(eq(table.userId, scope.userId), isNull(table.workspaceId)),
+    pinned,
+  )!;
+};
 
 export const resolveChangeRequestLinks = async (
   db: LobeChatDatabase,
   params: ResolveLinksParams,
 ): Promise<ResolvedChangeRequestLinks> => {
   const links: ScmChangeRequestLinks = {};
-  let workspaceId: string | null = null;
+  // Undecided until a source matches; from then on every later source has
+  // to agree with it.
+  let pin: ScopePin;
 
   // 1. Acceptance link in the body — first id that exists in this scope
   // wins. The body is user-controlled and may name a hundred ids, so they
@@ -137,14 +176,14 @@ export const resolveChangeRequestLinks = async (
         workspaceId: acceptances.workspaceId,
       })
       .from(acceptances)
-      .where(and(inArray(acceptances.id, candidates), inScope(acceptances, params.scope)));
+      .where(and(inArray(acceptances.id, candidates), inScope(db, acceptances, params.scope, pin)));
 
     const byId = new Map(rows.map((row) => [row.id, row]));
     for (const id of candidates) {
       const row = byId.get(id);
       if (!row) continue;
       links.acceptanceId = row.id;
-      workspaceId = row.workspaceId ?? null;
+      pin = row.workspaceId ?? null;
       if (row.subjectType === 'topic') links.topicId = row.subjectId;
       if (row.subjectType === 'task') links.taskId = row.subjectId;
       break;
@@ -164,17 +203,15 @@ export const resolveChangeRequestLinks = async (
       and(
         eq(works.resourceType, 'github_pull_request'),
         eq(works.resourceId, resourceId),
-        inScope(works, params.scope),
+        inScope(db, works, params.scope, pin),
       ),
     )
     .orderBy(desc(works.updatedAt))
     .limit(1);
   if (work) {
     links.workId = work.id;
-    if (!links.topicId && work.originTopicId) {
-      links.topicId = work.originTopicId;
-      if (!links.acceptanceId) workspaceId = work.workspaceId ?? null;
-    }
+    pin ??= work.workspaceId ?? null;
+    if (!links.topicId && work.originTopicId) links.topicId = work.originTopicId;
   }
 
   // 3. The acceptance round in this scope that ingested this PR url.
@@ -185,7 +222,7 @@ export const resolveChangeRequestLinks = async (
       .where(
         and(
           isNotNull(verifyRuns.acceptanceId),
-          inScope(verifyRuns, params.scope),
+          inScope(db, verifyRuns, params.scope, pin),
           sql`${verifyRuns.context} -> 'pullRequest' ->> 'url' = ${params.url}`,
         ),
       )
@@ -193,9 +230,9 @@ export const resolveChangeRequestLinks = async (
       .limit(1);
     if (run?.acceptanceId) {
       links.acceptanceId = run.acceptanceId;
-      if (!links.topicId) workspaceId = run.workspaceId ?? null;
+      pin ??= run.workspaceId ?? null;
     }
   }
 
-  return { links, workspaceId };
+  return { links, workspaceId: pin ?? null };
 };

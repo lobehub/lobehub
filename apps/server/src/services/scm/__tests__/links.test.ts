@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { getTestDB } from '@lobechat/database/test-utils';
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
@@ -9,6 +10,7 @@ import {
   users,
   verifyRuns,
   works,
+  workspaceMembers,
   workspaces,
 } from '@/database/schemas';
 
@@ -51,6 +53,18 @@ describe('resolveChangeRequestLinks', () => {
     repoFullName: 'lobehub/lobehub',
     scope: { kind: 'installation', userId, workspaceId: null } as const,
     url: 'https://github.com/lobehub/lobehub/pull/19719',
+  };
+
+  /** A workspace plus an active membership for `member`. */
+  const workspaceWith = async (slug: string, member: string) => {
+    const [workspace] = await serverDB
+      .insert(workspaces)
+      .values({ name: 'ws', primaryOwnerId: member, slug })
+      .returning();
+    await serverDB
+      .insert(workspaceMembers)
+      .values({ role: 'owner', userId: member, workspaceId: workspace.id });
+    return workspace;
   };
 
   /** The links half of the result; the workspace half is asserted on its own. */
@@ -213,10 +227,7 @@ describe('resolveChangeRequestLinks', () => {
   });
 
   it('reports the workspace of the records it matched, not the installation', async () => {
-    const [workspace] = await serverDB
-      .insert(workspaces)
-      .values({ name: 'ws', primaryOwnerId: userId, slug: 'scm-links-ws-match' })
-      .returning();
+    const workspace = await workspaceWith('scm-links-ws-match', userId);
     await serverDB.insert(acceptances).values({
       id: acceptanceId,
       subjectId: 's',
@@ -247,6 +258,69 @@ describe('resolveChangeRequestLinks', () => {
         scope: { kind: 'author', userId },
       }),
     ).toEqual({});
+  });
+
+  it('drops a workspace record once the author has left that workspace', async () => {
+    const workspace = await workspaceWith('scm-links-left-ws', userId);
+    await serverDB.insert(acceptances).values({
+      id: acceptanceId,
+      subjectId: 's',
+      subjectType: 'standalone',
+      userId,
+      workspaceId: workspace.id,
+    });
+    const body = `Acceptance: https://app.lobehub.com/acceptance/${acceptanceId}`;
+    const scope = { kind: 'author', userId } as const;
+
+    expect(await resolve({ ...base, body, scope })).toEqual({ acceptanceId });
+
+    // Membership is soft-deleted, but the creator id stays on the record —
+    // owning it once must not keep it reachable, or a former member could
+    // still have it accepted by merging a pull request.
+    await serverDB
+      .update(workspaceMembers)
+      .set({ deletedAt: new Date() })
+      .where(eq(workspaceMembers.userId, userId));
+
+    expect(await resolve({ ...base, body, scope })).toEqual({});
+  });
+
+  it('keeps every link inside the first scope that matched', async () => {
+    // The body names an acceptance in workspace A; a Work for the same pull
+    // request sits in workspace B. Taking both would report one workspace
+    // and hand the control half a topic that does not live there.
+    const a = await workspaceWith('scm-links-ws-a', userId);
+    const b = await workspaceWith('scm-links-ws-b', userId);
+    await serverDB.insert(acceptances).values({
+      id: acceptanceId,
+      subjectId: 's',
+      subjectType: 'standalone',
+      userId,
+      workspaceId: a.id,
+    });
+    const [topic] = await serverDB.insert(topics).values({ title: 't', userId }).returning();
+    await serverDB.insert(works).values({
+      originTopicId: topic.id,
+      resourceId: 'lobehub/lobehub#19719',
+      resourceType: 'github_pull_request',
+      toolIdentifier: 'lobe-local-system',
+      toolName: 'runCommand',
+      type: 'external',
+      userId,
+      visibility: 'private',
+      workspaceId: b.id,
+    });
+
+    const resolved = await resolveChangeRequestLinks(serverDB, {
+      ...base,
+      body: `Acceptance: https://app.lobehub.com/acceptance/${acceptanceId}`,
+      scope: { kind: 'author', userId },
+    });
+
+    expect(resolved.workspaceId).toBe(a.id);
+    expect(resolved.links).toEqual({ acceptanceId });
+    expect(resolved.links.workId).toBeUndefined();
+    expect(resolved.links.topicId).toBeUndefined();
   });
 
   it('returns nothing when no source matches', async () => {
