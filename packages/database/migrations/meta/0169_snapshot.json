@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "562248df-1956-4cf8-a908-3576f36bc735",
+  "id": "c9cefb63-f02b-468a-8a75-6f59cbcb9552",
   "policies": {},
   "prevId": "22193fe3-f6d8-433b-97b1-89f5c50ecb65",
   "roles": {},
@@ -37233,8 +37233,8 @@
         }
       },
       "indexes": {
-        "works_resource_user_unique": {
-          "name": "works_resource_user_unique",
+        "works_resource_user_scope_unique": {
+          "name": "works_resource_user_scope_unique",
           "columns": [
             {
               "expression": "resource_type",
@@ -37253,6 +37253,12 @@
               "isExpression": false,
               "asc": true,
               "nulls": "last"
+            },
+            {
+              "expression": "COALESCE((metadata -> 'agentShare' ->> 'topicId'), '')",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
             }
           ],
           "isUnique": true,
@@ -37261,8 +37267,8 @@
           "method": "btree",
           "with": {}
         },
-        "works_resource_workspace_unique": {
-          "name": "works_resource_workspace_unique",
+        "works_resource_workspace_scope_unique": {
+          "name": "works_resource_workspace_scope_unique",
           "columns": [
             {
               "expression": "workspace_id",
@@ -37280,6 +37286,12 @@
               "expression": "resource_id",
               "isExpression": false,
               "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "COALESCE((metadata -> 'agentShare' ->> 'topicId'), '')",
+              "asc": true,
+              "isExpression": true,
               "nulls": "last"
             }
           ],

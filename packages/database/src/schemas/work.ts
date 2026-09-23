@@ -7,7 +7,7 @@ import type {
   WorkVersionMetadata,
   WorkVisibility,
 } from '@lobechat/types';
-import { isNotNull, isNull } from 'drizzle-orm';
+import { isNotNull, isNull, sql } from 'drizzle-orm';
 import { index, integer, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 import { idGenerator } from '../utils/idGenerator';
@@ -17,6 +17,20 @@ import { messages } from './message';
 import { threads, topics } from './topic';
 import { users } from './user';
 import { workspaces } from './workspace';
+
+/**
+ * Share scope folded into the resource unique indexes: `''` for ordinary Works,
+ * the visitor topic id for Works a share visitor's run registered (see
+ * `WorkMetadata.agentShare`). A visitor topic belongs to exactly one share and
+ * one visitor, so the topic id alone keys the scope. Without it, an external
+ * resource (stable GitHub/Linear ids) the creator — or another visitor topic —
+ * already registered would hit `ON CONFLICT DO NOTHING`, and the scoped lookup
+ * that follows could never resolve the differently scoped row.
+ *
+ * COALESCE to `''` rather than leaving NULL: Postgres treats NULLs as distinct,
+ * which would stop ordinary Works from deduplicating at all.
+ */
+const workShareScopeKey = sql`COALESCE((metadata -> 'agentShare' ->> 'topicId'), '')`;
 
 /**
  * Stable Work identity. The same underlying task, document, or external
@@ -111,13 +125,13 @@ export const works = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [
-    /** Deduplicates personal Works and serves the personal resource upsert conflict target. */
-    uniqueIndex('works_resource_user_unique')
-      .on(t.resourceType, t.resourceId, t.userId)
+    /** Deduplicates personal Works per share scope; serves the personal resource upsert conflict. */
+    uniqueIndex('works_resource_user_scope_unique')
+      .on(t.resourceType, t.resourceId, t.userId, workShareScopeKey)
       .where(isNull(t.workspaceId)),
-    /** Deduplicates workspace Works and serves the workspace resource upsert conflict target. */
-    uniqueIndex('works_resource_workspace_unique')
-      .on(t.workspaceId, t.resourceType, t.resourceId)
+    /** Deduplicates workspace Works per share scope; serves the workspace resource upsert conflict. */
+    uniqueIndex('works_resource_workspace_scope_unique')
+      .on(t.workspaceId, t.resourceType, t.resourceId, workShareScopeKey)
       .where(isNotNull(t.workspaceId)),
     /** Supports user-scoped ownership filters and cascading cleanup when a user is deleted. */
     index('works_user_id_idx').on(t.userId),

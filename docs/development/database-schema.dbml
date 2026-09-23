@@ -4421,8 +4421,8 @@ table works {
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-    (resource_type, resource_id, user_id) [name: 'works_resource_user_unique', unique]
-    (workspace_id, resource_type, resource_id) [name: 'works_resource_workspace_unique', unique]
+    (resource_type, resource_id, user_id) [name: 'works_resource_user_scope_unique', unique]
+    (workspace_id, resource_type, resource_id) [name: 'works_resource_workspace_scope_unique', unique]
     user_id [name: 'works_user_id_idx']
     workspace_id [name: 'works_workspace_id_idx']
     (workspace_id, visibility, user_id) [name: 'works_workspace_visibility_idx']

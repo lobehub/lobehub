@@ -1,5 +1,6 @@
 // @vitest-environment node
-import { eq } from 'drizzle-orm';
+import { agentShareWorkAccessScope, type RegisterExternalWorkParams } from '@lobechat/types';
+import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { works } from '../../../schemas';
@@ -17,6 +18,52 @@ beforeEach(seedWorkTestData);
 afterEach(cleanupWorkTestData);
 
 describe('WorkModel · github', () => {
+  it('keeps one Work per share scope for the same external resource', async () => {
+    // GitHub/Linear resource ids are stable across runs, so the creator and a
+    // share visitor (both running as the creator) can register the same issue.
+    const issue = (toolCallId: string): RegisterExternalWorkParams => ({
+      changeType: 'updated',
+      identifier: 'lobehub/lobehub#77',
+      patchFields: ['identifier', 'title'],
+      resourceId: 'lobehub/lobehub#77',
+      resourceType: 'github_issue',
+      title: 'Shared issue',
+      toolCallId,
+      toolIdentifier: 'github',
+      toolName: 'get_issue',
+      topicId,
+    });
+    const visitorScope = (visitorTopicId: string) =>
+      agentShareWorkAccessScope({
+        shareId: 'share-github',
+        topicId: visitorTopicId,
+        visitorUserId: 'visitor-github',
+      });
+
+    const creator = new WorkModel(serverDB, userId);
+    const visitorA = new WorkModel(serverDB, userId, undefined, visitorScope('visitor-topic-a'));
+    const visitorB = new WorkModel(serverDB, userId, undefined, visitorScope('visitor-topic-b'));
+
+    const creatorWork = await creator.registerExternal(issue('call-creator'));
+    const visitorWork = await visitorA.registerExternal(issue('call-visitor-a'));
+    const otherVisitorWork = await visitorB.registerExternal(issue('call-visitor-b'));
+    // A repeat in the same scope still dedupes onto that scope's row.
+    const visitorRepeat = await visitorA.registerExternal(issue('call-visitor-a-2'));
+
+    expect(new Set([creatorWork.id, visitorWork.id, otherVisitorWork.id]).size).toBe(3);
+    expect(visitorRepeat.id).toBe(visitorWork.id);
+    expect(await visitorA.listVersions(visitorWork.id)).toHaveLength(2);
+
+    const rows = await serverDB
+      .select({ id: works.id, metadata: works.metadata })
+      .from(works)
+      .where(
+        and(eq(works.resourceType, 'github_issue'), eq(works.resourceId, 'lobehub/lobehub#77')),
+      );
+    expect(rows).toHaveLength(3);
+    expect(rows.find((row) => row.id === creatorWork.id)?.metadata).toBeNull();
+  });
+
   it('registers GitHub issue creates and appends versions for edits', async () => {
     const workModel = new WorkModel(serverDB, userId);
 

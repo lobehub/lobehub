@@ -10,7 +10,7 @@ A **Work** is a durable record of something an agent produced or touched — a G
 
 Two tables (`packages/database/src/schemas/work.ts`):
 
-- `works` — one row per resource. Identity/dedup key: `(resourceType, resourceId)` within the user/workspace scope. `currentVersionId` soft-references the latest version.
+- `works` — one row per resource. Identity/dedup key: `(resourceType, resourceId)` within the user/workspace scope and the share scope (see below). `currentVersionId` soft-references the latest version.
 - `work_versions` — one row per registration event. Dedup: unique `(workId, toolCallId)`, so a retried registration with the same real tool call id is a no-op. Versions carry provenance (source message, producing tool) and operation-level `cumulativeCost` / `cumulativeUsage`.
 
 ## Type registry
@@ -18,6 +18,15 @@ Two tables (`packages/database/src/schemas/work.ts`):
 `packages/database/src/models/work/registry.ts` is the single registry of Work types (`document` / `external` / `file` / `task`): `WORK_TYPE_ADAPTERS` is `satisfies Record<WorkType, WorkTypeAdapter>`, so a type added to `@lobechat/types` without an adapter is a compile error.
 
 **Read-path compatibility gate**: `OPT_IN_WORK_TYPES` (currently `{'file'}`) hides newer types from clients that did not opt in (`includeFileWorks`). Released Electron clients lag by weeks and crash on unknown type descriptors (`descriptor.getIcon` on `undefined`), so a request without the opt-in receives exactly the pre-`file` set. Any NEW Work type must ship behind the same kind of opt-in.
+
+## Access scope (Agent Share visitors)
+
+A share visitor's run executes as the creator, so owner scope alone cannot separate its Works. Every Work read and write takes a `WorkAccessScope` (`packages/types/src/work.ts`): `ordinary` sees only rows without share provenance; `agentShare` sees only rows stamped in `works.metadata.agentShare` with exactly that share/topic/visitor.
+
+- `workOwnership` applies the scope on every path, so a new query built on it inherits the fence. Do not query `works` without it.
+- Any registration path reachable from a visitor run (skill results, completion scans, anchor stamping) must build its `WorkModel` with the run's scope via `resolveRunWorkAccessScope`. A visitor run without a topic yields `null`: skip registration (fail closed) rather than registering unscoped into the creator's lists.
+- The resource unique indexes include the visitor topic id, so the creator and each visitor topic keep separate rows for the same external resource.
+- Visitor read payloads drop the creator's `userId` / `workspaceId` and gate spend on `showModelInfo` (`toVisitorMessage`).
 
 ## Registration write paths
 
