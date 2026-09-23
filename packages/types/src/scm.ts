@@ -221,6 +221,13 @@ export interface ScmChangeRequestLinks {
 export interface ScmUpsertChangeRequestParams extends ScmChangeRequestSnapshot {
   eventAt?: Date;
   eventKind?: ScmChangeRequestEventKind;
+  /**
+   * The owner below is only a fallback for a row that does not exist yet:
+   * an existing row keeps its owner, workspace and `routedBy`. Decided
+   * under the row lock, so a delivery that resolved nothing cannot move a
+   * row another delivery just routed.
+   */
+  keepOwner?: boolean;
   links?: ScmChangeRequestLinks;
   userId: string;
   workspaceId?: string | null;

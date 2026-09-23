@@ -547,6 +547,37 @@ describe('ScmChangeRequestModel', () => {
     expect((after?.repositories ?? []).map((r) => r.externalId).sort()).toEqual(['2', '3', '4']);
   });
 
+  it('keeps an existing owner when told to, whatever owner the delivery carries', async () => {
+    const otherUser = 'scm-model-user-keep';
+    await serverDB.insert(users).values({ id: otherUser });
+    // One delivery routed the pull request to its author, with a link.
+    const [acceptance] = await serverDB
+      .insert(acceptances)
+      .values({ subjectId: 's', subjectType: 'standalone', userId })
+      .returning();
+    const routed = await ScmChangeRequestModel.upsert(serverDB, {
+      ...snapshot,
+      links: { acceptanceId: acceptance.id },
+      metadata: { routedBy: 'author' },
+    });
+
+    // A concurrent one resolved nothing and falls back to someone else.
+    // It must not move the row — which would read as a tenant change and
+    // clear the link the first one stored.
+    const after = await ScmChangeRequestModel.upsert(serverDB, {
+      ...snapshot,
+      keepOwner: true,
+      metadata: { routedBy: 'installation' },
+      userId: otherUser,
+    });
+
+    expect(after.id).toBe(routed.id);
+    expect(after).toMatchObject({ acceptanceId: acceptance.id, userId });
+    expect(after.metadata.routedBy).toBe('author');
+
+    await serverDB.delete(users).where(eq(users.id, otherUser));
+  });
+
   it('changes pendingWake in place, without reading the metadata bag first', async () => {
     const row = await ScmChangeRequestModel.upsert(serverDB, {
       ...snapshot,

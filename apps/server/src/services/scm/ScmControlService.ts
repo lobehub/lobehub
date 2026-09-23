@@ -178,6 +178,17 @@ export class ScmControlService {
     !row.workspaceId ||
     canWriteScmScope(this.db, row.userId, row.workspaceId);
 
+  private conversationIsInstallers = async (row: ScmChangeRequestItem): Promise<boolean> => {
+    if (row.metadata?.routedBy !== 'author' || !row.installationId) return true;
+    const installation = await ScmInstallationModel.findById(this.db, row.installationId);
+    if (!installation) return false;
+    // Inside the installation's own workspace the conversation is the
+    // tenant's; anywhere else it is only the installer's if it is theirs.
+    return installation.workspaceId
+      ? row.workspaceId === installation.workspaceId
+      : !row.workspaceId && row.userId === installation.userId;
+  };
+
   /** The Work row mirrors GitHub; it follows a merge whatever else is decided. */
   private mirrorMerge = async (row: ScmChangeRequestItem): Promise<void> => {
     if (!row.workId) return;
@@ -312,7 +323,13 @@ export class ScmControlService {
     }
 
     let conversation: { title?: string | null; url: string } | null = null;
-    if (row.topicId) {
+    // An author-routed pull request can link someone's personal
+    // conversation, while the comment is posted under the installer's
+    // switches onto a repository that person does not control. Its title
+    // and address are theirs to publish, not the installer's, so the
+    // comment names a conversation only when it belongs to the tenant that
+    // connected the installation.
+    if (row.topicId && (await this.conversationIsInstallers(row))) {
       const topic = await new TopicModel(
         this.db,
         row.userId,

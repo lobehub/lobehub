@@ -178,45 +178,24 @@ export class ScmIngestService {
     // The row follows the records it matched, so the conversation is looked
     // up where it actually lives.
     const matched = Boolean(links.topicId || links.acceptanceId || links.workId);
-    const existing = matched
-      ? null
-      : event.changeRequest.externalId
-        ? await ScmChangeRequestModel.findByExternalId(
-            this.db,
-            'github',
-            event.changeRequest.externalId,
-          )
-        : await ScmChangeRequestModel.findByIdentity(
-            this.db,
-            'github',
-            event.changeRequest.repoFullName,
-            event.changeRequest.number,
-          );
 
-    // A later event that resolves nothing — the acceptance link was edited
-    // out of the body, say — carries less context, not a new owner. Moving
-    // the row would make `upsert` treat it as a tenant change and clear
-    // every link it already had, so keep the scope it was routed to.
-    const owner = existing
-      ? {
-          routedBy: existing.metadata?.routedBy,
-          userId: existing.userId,
-          workspaceId: existing.workspaceId ?? null,
-        }
-      : scope.kind === 'author'
-        ? {
-            routedBy: scope.kind,
-            userId: scope.userId,
-            workspaceId: matched ? workspaceId : installation.workspaceId,
-          }
-        : { routedBy: scope.kind, userId: scope.userId, workspaceId: scope.workspaceId ?? null };
+    // A delivery that resolves nothing — the acceptance link was edited out
+    // of the body, say — carries less context, not a new owner. The owner
+    // below then only seeds a new row; `keepOwner` leaves an existing one
+    // where it was, decided under the row lock so a concurrent delivery
+    // that did match cannot be undone by one that did not.
+    const owner =
+      scope.kind === 'author'
+        ? { userId: scope.userId, workspaceId: matched ? workspaceId : installation.workspaceId }
+        : { userId: scope.userId, workspaceId: scope.workspaceId ?? null };
 
     const row = await ScmChangeRequestModel.upsert(this.db, {
       ...event.changeRequest,
       eventAt: event.occurredAt,
       eventKind: event.kind,
       links: { ...links, installationId: installation.id },
-      metadata: { ...event.changeRequest.metadata, routedBy: owner.routedBy },
+      keepOwner: !matched,
+      metadata: { ...event.changeRequest.metadata, routedBy: scope.kind },
       userId: owner.userId,
       workspaceId: owner.workspaceId,
     });

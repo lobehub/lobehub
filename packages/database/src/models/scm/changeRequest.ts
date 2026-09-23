@@ -323,6 +323,7 @@ export class ScmChangeRequestModel {
         metadata: {
           ...existing?.metadata,
           ...params.metadata,
+          ...(params.keepOwner && existing ? { routedBy: existing.metadata?.routedBy } : {}),
           ...(params.eventAt ? { lastProviderEventAt: params.eventAt.toISOString() } : {}),
           // Once adopted (or superseded by a newer head) the bucket is spent.
           ...(headChanged ? { pendingChecks: undefined } : {}),
@@ -337,6 +338,7 @@ export class ScmChangeRequestModel {
 
       const scopeMoved =
         !!existing &&
+        !params.keepOwner &&
         (existing.userId !== params.userId ||
           (existing.workspaceId ?? null) !== (params.workspaceId ?? null));
       const inherited = scopeMoved ? undefined : existing;
