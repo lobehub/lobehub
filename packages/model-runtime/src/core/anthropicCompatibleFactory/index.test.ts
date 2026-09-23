@@ -583,6 +583,104 @@ describe('createAnthropicCompatibleRuntime', () => {
     );
   });
 
+  it('should keep streaming when a thinking block starts without a signature', async () => {
+    // Aihubmix omits `signature` on thinking `content_block_start`; Anthropic sends ''.
+    const rawEvents = [
+      {
+        message: {
+          content: [],
+          id: 'msg_missing_signature',
+          model: 'claude-opus-5-5',
+          role: 'assistant',
+          stop_reason: null,
+          stop_sequence: null,
+          type: 'message',
+          usage: { input_tokens: 12, output_tokens: 0 },
+        },
+        type: 'message_start',
+      },
+      {
+        content_block: { thinking: '', type: 'thinking' },
+        index: 0,
+        type: 'content_block_start',
+      },
+      {
+        delta: { thinking: 'Plan', type: 'thinking_delta' },
+        index: 0,
+        type: 'content_block_delta',
+      },
+      { index: 0, type: 'content_block_stop' },
+      {
+        content_block: { text: '', type: 'text' },
+        index: 1,
+        type: 'content_block_start',
+      },
+      {
+        delta: { text: 'Final answer', type: 'text_delta' },
+        index: 1,
+        type: 'content_block_delta',
+      },
+      { index: 1, type: 'content_block_stop' },
+      {
+        delta: { stop_reason: 'end_turn', stop_sequence: null },
+        type: 'message_delta',
+        usage: { input_tokens: 12, output_tokens: 8 },
+      },
+      { type: 'message_stop' },
+    ] as unknown as Anthropic.MessageStreamEvent[];
+    const rawStream = {
+      async *[Symbol.asyncIterator]() {
+        for (const event of rawEvents) yield event;
+      },
+    };
+    const messagesCreate = vi.fn(() => ({
+      withResponse: vi.fn().mockResolvedValue({ data: rawStream }),
+    }));
+    const Runtime = createAnthropicCompatibleRuntime({
+      chatCompletion: {
+        handlePayload: (payload) => ({
+          max_tokens: 1024,
+          messages: [{ content: 'Question', role: 'user' }],
+          model: payload.model,
+        }),
+      },
+      customClient: {
+        createClient: () =>
+          ({
+            baseURL: 'https://aihubmix.com',
+            messages: { create: messagesCreate },
+          }) as unknown as Anthropic,
+      },
+      provider: 'test-provider',
+    });
+    const runtime = new Runtime({ apiKey: 'test-key' });
+    const diagnostics: ModelRuntimeDiagnostics = {};
+
+    const response = await runtime.chat(
+      {
+        messages: [{ content: 'Question', role: 'user' }],
+        model: 'claude-opus-5-5',
+        stream: true,
+      },
+      { diagnostics },
+    );
+
+    await expect(response.text()).resolves.toContain('Final answer');
+    expect(diagnostics.providerResponse?.error).toBeUndefined();
+    expect(diagnostics.providerResponse).toEqual(
+      expect.objectContaining({
+        eventCount: rawEvents.length,
+        hasNonWhitespaceText: true,
+        hasNonWhitespaceThinking: true,
+        signatureChars: 0,
+        stopReason: 'end_turn',
+        terminalEventReceived: true,
+        textChars: 'Final answer'.length,
+        thinkingChars: 'Plan'.length,
+      }),
+    );
+  });
+
   it('should strip trailing assistant prefill when a logical id maps to a Claude 5 model', async () => {
     // The prefill strip inside handlePayload sees the logical id; when the
     // mapping only later resolves to a Claude 4.6+/5 upstream id, chat() must
