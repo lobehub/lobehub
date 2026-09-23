@@ -13,8 +13,8 @@ import {
   CopyIcon,
   GlobeIcon,
   LoaderCircleIcon,
-  RadarIcon,
   RefreshCwIcon,
+  ServerIcon,
   XIcon,
 } from 'lucide-react';
 import {
@@ -318,7 +318,7 @@ const PortSwitcher = memo<PortSwitcherProps>(({ active, deviceId, workingDirecto
       }}
     >
       <Icon
-        icon={creatingPort === item.port ? LoaderCircleIcon : RadarIcon}
+        icon={creatingPort === item.port ? LoaderCircleIcon : ServerIcon}
         size={14}
         spin={creatingPort === item.port}
       />
