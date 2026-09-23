@@ -28,6 +28,7 @@ vi.mock('../attachmentBudget', async (importOriginal) => ({
 
 const { PLATFORM_ATTACHMENT_BUDGETS } = await import('../attachmentBudget');
 const { sendWechatAttachments } = await import('./sendAttachments');
+const { WECHAT_RET_CODES } = await import('@lobechat/chat-adapter-wechat');
 
 const MB = 1024 * 1024;
 
@@ -203,6 +204,12 @@ describe('sendWechatAttachments', () => {
     expect(result.undelivered).toEqual([
       { fetchUrl: 'https://cdn.example.com/gone.docx', name: 'gone.docx', type: 'file' },
     ]);
+  });
+
+  it('keeps the local session-expired code in step with the adapter constant', () => {
+    // The sender spells the code out so its per-item catch never touches a
+    // (possibly mocked) adapter module; this pins the two together.
+    expect(WECHAT_RET_CODES.SESSION_EXPIRED).toBe(-14);
   });
 
   it('names the QR re-login when iLink refuses the upload with session timeout (-14)', async () => {

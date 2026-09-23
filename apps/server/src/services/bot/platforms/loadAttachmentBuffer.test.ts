@@ -162,13 +162,27 @@ describe('loadAttachmentBufferWithDetail', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('surfaces the fetch error AND its cause — that is where undici puts the diagnosis', async () => {
+    // Shaped like the real thing: Node's connect error carries a `code`, and
+    // that is what identifies the pinned-lookup failure in a tool result.
+    const error = new TypeError('fetch failed');
+    (error as any).cause = Object.assign(new TypeError('Invalid IP address: undefined'), {
+      code: 'ERR_INVALID_IP_ADDRESS',
+    });
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(error));
+
+    const result = await fetchCappedBufferWithDetail('https://x/f', { limit: 100 });
+
+    expect(result.buffer).toBeUndefined();
+    expect(result.error).toBe('fetch failed: fetch failed (ERR_INVALID_IP_ADDRESS)');
+  });
+
+  it('falls back to the cause message when it carries no code', async () => {
     const error = new TypeError('fetch failed');
     (error as any).cause = new TypeError('Invalid IP address: undefined');
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(error));
 
     const result = await fetchCappedBufferWithDetail('https://x/f', { limit: 100 });
 
-    expect(result.buffer).toBeUndefined();
     expect(result.error).toBe('fetch failed: fetch failed (Invalid IP address: undefined)');
   });
 
