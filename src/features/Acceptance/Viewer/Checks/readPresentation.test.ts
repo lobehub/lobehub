@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   collectGroupFeedback,
+  hasCheckHistory,
   historicalEvidenceContext,
   splitCheckReviews,
 } from './readPresentation';
@@ -52,6 +53,36 @@ describe('read-only check presentation', () => {
     const check = { reviews, userReview: { action: 'reject', stale: true } } as AcceptanceCheck;
 
     expect(splitCheckReviews(check)).toEqual({ historyReviews: reviews });
+  });
+
+  it.each([
+    { expected: false, label: 'not executed', rounds: [] },
+    { expected: false, label: 'first execution', rounds: [1] },
+    { expected: false, label: 'first execution in a later round', rounds: [3] },
+    { expected: true, label: 'two executions with a skipped round', rounds: [1, 3] },
+  ])('shows history only for prior results: $label', ({ expected, rounds }) => {
+    const check = {
+      revisions: rounds.length,
+      // The backend includes the current result, not just previous results.
+      timeline: rounds.map((roundIndex) => ({ roundIndex })),
+    } as AcceptanceCheck;
+
+    expect(hasCheckHistory(check, [])).toBe(expected);
+  });
+
+  it.each([
+    { expected: false, label: 'only the standing verdict', stale: false },
+    { expected: true, label: 'feedback consumed without rerunning the check', stale: true },
+  ])('preserves review-only history: $label', ({ expected, stale }) => {
+    const check = {
+      reviews: [{ id: 'review', roundIndex: 1 }],
+      revisions: 1,
+      timeline: [{ roundIndex: 1 }],
+      userReview: { action: 'reject', stale },
+    } as AcceptanceCheck;
+    const { historyReviews } = splitCheckReviews(check);
+
+    expect(hasCheckHistory(check, historyReviews)).toBe(expected);
   });
 
   it('resolves a replaced region to its original evidence and round', () => {

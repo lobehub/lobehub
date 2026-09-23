@@ -14,6 +14,7 @@ import { checkHeadMeta } from '../Checks/checkStatus';
 import { GroupFeedbackTrail } from '../Checks/GroupFeedbackTrail';
 import {
   collectGroupFeedback,
+  hasCheckHistory,
   historicalEvidenceContext,
   splitCheckReviews,
 } from '../Checks/readPresentation';
@@ -83,7 +84,7 @@ const ReadCheck = ({
   const visualization = readVisualizationManifest(check.result?.metadata);
   const evidenceById = collectEvidenceById(check);
   const { activeReview, historyReviews } = splitCheckReviews(check);
-  const hasHistory = check.timeline.length > 0 || historyReviews.length > 0;
+  const hasHistory = hasCheckHistory(check, historyReviews);
 
   return (
     <details

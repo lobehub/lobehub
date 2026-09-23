@@ -26,6 +26,11 @@ export const splitCheckReviews = (
   };
 };
 
+export const hasCheckHistory = (
+  check: AcceptanceCheck,
+  historyReviews: AcceptanceCheckReviewEntry[],
+): boolean => check.revisions > 1 || historyReviews.length > 0;
+
 export const historicalEvidenceContext = (
   check: AcceptanceCheck,
   evidenceId: string | null | undefined,

@@ -56,7 +56,7 @@ import {
 } from './CheckHistory';
 import { shouldCollapseAfterReview, userReviewState } from './checkState';
 import { STATE_META } from './checkStatus';
-import { splitCheckReviews } from './readPresentation';
+import { hasCheckHistory, splitCheckReviews } from './readPresentation';
 import { checkRowDisclosure } from './rowDisclosure';
 import { styles } from './styles';
 import type { AcceptanceCheck, CheckReviewInput, ProposalDismissInput } from './types';
@@ -145,7 +145,7 @@ export const AcceptanceCheckRow = memo<{
       });
       return map.size > 0 ? map : undefined;
     }, [proposalOpen, check.prediction]);
-    const hasHistory = check.revisions > 1 || historyReviews.length > 0;
+    const hasHistory = hasCheckHistory(check, historyReviews);
 
     // Collaboration: threads circled on this check's evidence. Only inside the
     // viewer — the row also renders in hosts with no acceptance scope.
