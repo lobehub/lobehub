@@ -22,7 +22,7 @@ import {
 } from '../../schemas';
 import { agentHistoryJobAgents, agentHistoryJobs } from '../../schemas/agentHistoryJob';
 import type { LobeChatDatabase } from '../../type';
-import { AgentModel } from '../agent';
+import { AgentModel, BUILTIN_AGENT_CANNOT_DELETE } from '../agent';
 import { AGENT_TRANSFER_IN_PROGRESS } from '../agentTransferJob';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -2016,6 +2016,36 @@ describe('AgentModel', () => {
         expect(result).toBeDefined();
         expect(result?.slug).toBe('task-agent');
         expect(result?.virtual).toBe(true);
+      });
+
+      /** @example Quick Note Analyzer capability edits survive later lazy initialization. */
+      it('preserves user configuration for the Quick Note Analyzer', async () => {
+        const created = await agentModel.getBuiltinAgent('quick-note-analyze');
+        await serverDB
+          .update(agents)
+          .set({
+            chatConfig: { enableAgentMode: true, searchMode: 'auto' },
+            model: 'custom-model',
+            plugins: ['lobe-web-browsing'],
+          })
+          .where(eq(agents.id, created!.id));
+
+        const resolved = await agentModel.getBuiltinAgent('quick-note-analyze');
+
+        /** @example Lazy materialization no longer resets the configured capabilities. */
+        expect(resolved).toMatchObject({
+          chatConfig: { enableAgentMode: true, searchMode: 'auto' },
+          model: 'custom-model',
+          plugins: ['lobe-web-browsing'],
+        });
+      });
+
+      /** @example Product-managed builtin Agents cannot be removed as ordinary content. */
+      it('rejects deletion of the Quick Note Analyzer', async () => {
+        const created = await agentModel.getBuiltinAgent('quick-note-analyze');
+
+        /** @example The stable model error lets every transport map the same protection. */
+        await expect(agentModel.delete(created!.id)).rejects.toThrow(BUILTIN_AGENT_CANNOT_DELETE);
       });
     });
 

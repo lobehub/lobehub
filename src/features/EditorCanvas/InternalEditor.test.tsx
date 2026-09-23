@@ -181,7 +181,8 @@ describe('InternalEditor', () => {
   });
 
   describe('onContentChange callback', () => {
-    it('should call onContentChange when content changes via setDocument', async () => {
+    /** @example A one-shot dirty update reaches persistence without requiring a second edit. */
+    it('reports the first dirty document update', async () => {
       const onContentChange = vi.fn();
       let editorInstance: IEditor | undefined;
 
@@ -200,10 +201,19 @@ describe('InternalEditor', () => {
 
       // Wait for editor to be ready
       await waitFor(() => {
+        /** @example The test mutates the real initialized editor rather than an implementation mock. */
         expect(editorInstance).toBeDefined();
       });
 
-      // Change content using editor API
+      onContentChange.mockClear();
+
+      // ROOT CAUSE:
+      //
+      // `@lobehub/editor` used its first dirty update only to initialize `previousContent`.
+      // A one-shot paste or IME commit therefore never reached `onTextChange` persistence.
+      //
+      // Before: the first `setDocument` required another dirty update before a callback fired.
+      // After: the shared listener snapshots the initial JSON document before observing updates.
       await act(async () => {
         editorInstance!.setDocument('text', 'Hello World');
         await moment();
@@ -211,7 +221,8 @@ describe('InternalEditor', () => {
 
       await waitFor(
         () => {
-          expect(onContentChange).toHaveBeenCalled();
+          /** @example The first and only dirty update produces exactly one content callback. */
+          expect(onContentChange).toHaveBeenCalledTimes(1);
         },
         { timeout: 2000 },
       );

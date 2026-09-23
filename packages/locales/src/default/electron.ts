@@ -23,6 +23,7 @@ export default {
   'navigation.memoryPreferences': 'Memory - Preferences',
   'navigation.newChat': 'New Chat',
   'navigation.noPages': 'No pages yet',
+  'navigation.note': 'Quick Note',
   'navigation.onboarding': 'Onboarding',
   'navigation.page': 'Page',
   'navigation.pages': 'Pages',

@@ -168,7 +168,7 @@ const createOnboardingTasksInputSchema = z
 
 const AVATAR_WEBAPI_PREFIX = '/webapi/';
 const OWNER_SETTING_KEYS = ['defaultAgent', 'image', 'memory', 'systemAgent', 'tts'] as const;
-const MEMBER_SETTING_KEYS = ['tool'] as const;
+const MEMBER_SETTING_KEYS = ['quickNote', 'tool'] as const;
 const WORKSPACE_UPDATE_PERMISSION = 'workspace:update:all';
 const WORKSPACE_CONTENT_PERMISSIONS = ['agent:update:all', 'agent:update:owner'] as const;
 

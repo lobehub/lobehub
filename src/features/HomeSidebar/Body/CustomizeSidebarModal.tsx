@@ -48,6 +48,7 @@ import {
   SIDEBAR_ACCORDION_KEYS,
   SIDEBAR_SPACER_ID,
 } from '@/store/global/selectors/systemStatus';
+import { useServerConfigStore } from '@/store/serverConfig';
 
 // ---------------------------------------------------------------------------
 // Types & constants
@@ -65,6 +66,7 @@ export interface SidebarItemConfig {
 const ALL_SIDEBAR_ITEMS: SidebarItemConfig[] = [
   { id: 'tasks', labelKey: 'tab.tasks', routeId: 'tasks' },
   { id: 'pages', labelKey: 'tab.pages', routeId: 'page' },
+  { id: 'note', labelKey: 'tab.note', routeId: 'note' },
   { id: 'recents', labelKey: 'recents' },
   { id: 'project', labelKey: 'project:sidebar.title' },
   { id: 'private', labelKey: 'navPanel.privateAgents' },
@@ -376,10 +378,12 @@ const CustomizeSidebarContent = memo(() => {
   );
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
   const isWorkspaceMode = !!useActiveWorkspaceSlug();
-  const sortableItemIds = useMemo(
-    () => getSortableSidebarItemIds(isWorkspaceMode),
-    [isWorkspaceMode],
-  );
+  const enableQuickNote = useServerConfigStore((s) => s.featureFlags.enableQuickNote);
+  const sortableItemIds = useMemo(() => {
+    const ids = getSortableSidebarItemIds(isWorkspaceMode);
+    if (!enableQuickNote) ids.delete('note');
+    return ids;
+  }, [isWorkspaceMode, enableQuickNote]);
   const filteredStoreItems = useMemo(
     () => storeItems.filter((id) => sortableItemIds.has(id)),
     [storeItems, sortableItemIds],

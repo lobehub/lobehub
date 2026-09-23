@@ -14,6 +14,7 @@ import { useKnowledgeBaseStore } from '@/store/library';
 import { useMentionStore } from '@/store/mention';
 import { useNotebookStore } from '@/store/notebook';
 import { usePageStore } from '@/store/page';
+import { useQuickNoteStore } from '@/store/quickNote';
 import { useSessionStore } from '@/store/session';
 import { useTaskStore } from '@/store/task';
 import { useToolStore } from '@/store/tool';
@@ -40,6 +41,7 @@ const resetableStores: ResetableStoreApi[] = [
   useMentionStore,
   useNotebookStore,
   usePageStore,
+  useQuickNoteStore,
   useSessionStore,
   useTaskStore,
   useToolStore,

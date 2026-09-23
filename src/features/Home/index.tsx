@@ -10,6 +10,7 @@ import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { useServerConfigStore } from '@/store/serverConfig';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
@@ -336,9 +337,11 @@ const Home = memo(() => {
     { hiddenWidgets, showPortrait: showHomePortrait },
     usageActive,
   );
-  const [mode, setMode] = useState<HomeMode>(() =>
+  const enableQuickNote = useServerConfigStore((s) => s.featureFlags.enableQuickNote);
+  const [selectedMode, setMode] = useState<HomeMode>(() =>
     resolveInitialHomeMode(typeof window === 'undefined' ? '' : window.location.search),
   );
+  const mode = selectedMode === 'note' && !enableQuickNote ? 'chat' : selectedMode;
   const [inputValue, setInputValue] = useState('');
 
   const drawerTopicId = useTaskStore(taskDetailSelectors.activeTopicDrawerTopicId);

@@ -36,6 +36,7 @@ export const FeatureFlagsSchema = z.object({
 
   market: FeatureFlagValue.optional(),
   knowledge_base: FeatureFlagValue.optional(),
+  quick_note: FeatureFlagValue.optional(),
 
   rag_eval: FeatureFlagValue.optional(),
 
@@ -100,6 +101,7 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   token_counter: true,
 
   knowledge_base: true,
+  quick_note: isDev,
   rag_eval: false,
 
   agent_self_iteration: isDev,
@@ -148,6 +150,7 @@ export const mapFeatureFlagsEnvToState = (
     showWelcomeSuggest: evaluateFeatureFlag(config.welcome_suggest, userId),
 
     enableKnowledgeBase: evaluateFeatureFlag(config.knowledge_base, userId),
+    enableQuickNote: evaluateFeatureFlag(config.quick_note, userId),
     enableRAGEval: evaluateFeatureFlag(config.rag_eval, userId),
     enableAgentSelfIteration: evaluateFeatureFlag(config.agent_self_iteration, userId),
     enableAgentOnboarding: evaluateFeatureFlag(config.agent_onboarding, userId),

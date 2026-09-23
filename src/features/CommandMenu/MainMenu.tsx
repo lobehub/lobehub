@@ -19,6 +19,7 @@ import { FEEDBACK } from '@/const/url';
 import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
+import { useServerConfigStore } from '@/store/serverConfig';
 
 import { useCommandMenuContext } from './CommandMenuContext';
 import { CommandItem } from './components';
@@ -26,6 +27,7 @@ import ContextCommands from './ContextCommands';
 import { useCommandMenu } from './useCommandMenu';
 
 const MainMenu = memo(() => {
+  const enableQuickNote = useServerConfigStore((s) => s.featureFlags.enableQuickNote);
   const { pathname, menuContext, setPages, pages, onClose } = useCommandMenuContext();
   const { t } = useTranslation('common');
   const { allowed: canCreate } = usePermission('create_content');
@@ -129,25 +131,27 @@ const MainMenu = memo(() => {
       </Command.Group>
 
       <Command.Group heading={t('cmdk.navigate')}>
-        {getNavigableRoutes().map((route) => {
-          const RouteIcon = route.icon;
-          const keywords = route.keywordsKey
-            ? t(route.keywordsKey as any).split(' ')
-            : route.keywords;
-          return (
-            !pathname?.startsWith(route.pathPrefix) && (
-              <CommandItem
-                icon={<RouteIcon />}
-                key={route.id}
-                keywords={keywords}
-                value={route.id}
-                onSelect={() => handleNavigate(route.path)}
-              >
-                {t(route.cmdkKey as any)}
-              </CommandItem>
-            )
-          );
-        })}
+        {getNavigableRoutes()
+          .filter((route) => route.id !== 'note' || enableQuickNote)
+          .map((route) => {
+            const RouteIcon = route.icon;
+            const keywords = route.keywordsKey
+              ? t(route.keywordsKey as any).split(' ')
+              : route.keywords;
+            return (
+              !pathname?.startsWith(route.pathPrefix) && (
+                <CommandItem
+                  icon={<RouteIcon />}
+                  key={route.id}
+                  keywords={keywords}
+                  value={route.id}
+                  onSelect={() => handleNavigate(route.path)}
+                >
+                  {t(route.cmdkKey as any)}
+                </CommandItem>
+              )
+            );
+          })}
       </Command.Group>
 
       <Command.Group heading={t('cmdk.about')}>

@@ -1,4 +1,8 @@
-import { BUILTIN_AGENT_SLUGS, getAgentPersistConfig } from '@lobechat/builtin-agents';
+import {
+  BUILTIN_AGENT_SLUGS,
+  getAgentPersistConfig,
+  isBuiltinAgentUserConfigurable,
+} from '@lobechat/builtin-agents';
 import { INBOX_SESSION_ID, isHeterogeneousAgentModelId } from '@lobechat/const';
 import type { AgentRankItem, AgentTopicShareSubject, LobeAgentAgencyConfig } from '@lobechat/types';
 import {
@@ -175,6 +179,9 @@ const AGENT_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const RESERVED_AGENT_SLUGS: ReadonlySet<string> = new Set<string>(
   Object.values(BUILTIN_AGENT_SLUGS),
 );
+
+/** Stable model error used when a caller attempts to delete a product-managed builtin Agent. */
+export const BUILTIN_AGENT_CANNOT_DELETE = 'BUILTIN_AGENT_CANNOT_DELETE';
 
 /** One chat group an agent belongs to, as surfaced by the transfer guards. */
 export interface AgentGroupMembershipRef {
@@ -950,11 +957,15 @@ export class AgentModel {
       // lock-then-guard order as transferAgents. A concurrent copy enqueue
       // locks the same source rows, so the guard here cannot run in the window
       // where the enqueue's job row exists but is not yet committed.
-      await trx
-        .select({ id: agents.id })
+      const [target] = await trx
+        .select({ id: agents.id, slug: agents.slug, virtual: agents.virtual })
         .from(agents)
         .where(and(eq(agents.id, agentId), this.ownership()))
         .for('update');
+
+      if (target?.virtual && target.slug && RESERVED_AGENT_SLUGS.has(target.slug)) {
+        throw new Error(BUILTIN_AGENT_CANNOT_DELETE);
+      }
 
       // The junction records every agent an unfinished job still maps, a
       // copy's TARGET included — and a group copy's drain writes those ids into
@@ -1783,7 +1794,7 @@ export class AgentModel {
     });
 
     if (existing) {
-      if (persistConfig?.chatConfig) {
+      if (persistConfig?.chatConfig && !isBuiltinAgentUserConfigurable(slug)) {
         const [updated] = await this.db
           .update(agents)
           .set({ chatConfig: persistConfig.chatConfig })
@@ -1843,10 +1854,14 @@ export class AgentModel {
           { userId: this.userId, workspaceId: this.workspaceId },
           {
             agencyConfig: this.withWorkspaceSelectionPolicyDefaults(undefined),
+            avatar: persistConfig.avatar,
             chatConfig: persistConfig.chatConfig,
+            description: persistConfig.description,
             model: persistConfig.model,
+            plugins: persistConfig.plugins,
             provider: persistConfig.provider,
             slug: persistConfig.slug,
+            title: persistConfig.title,
             virtual: true,
           },
         ),

@@ -6,6 +6,7 @@ import type { HotkeyId } from '@/types/hotkey';
 
 import {
   isAgentProfilePanelRoute,
+  isQuickNotePanelRoute,
   isTaskPanelRoute,
   useToggleRightPanelHotkey,
 } from './globalScope';
@@ -24,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   hotkeyCallback: undefined as (() => void) | undefined,
   pathname: '/',
   toggleAgentBuilderPanel: vi.fn(),
+  toggleAnnotationPanel: vi.fn(),
   toggleRightPanel: vi.fn(),
   toggleTaskAgentPanel: vi.fn(),
   useHotkeyById: vi.fn(),
@@ -52,6 +54,12 @@ vi.mock('@/store/global', () => ({
     }),
 }));
 
+vi.mock('@/store/quickNote', () => ({
+  useQuickNoteStore: {
+    getState: () => ({ toggleAnnotationPanel: mocks.toggleAnnotationPanel }),
+  },
+}));
+
 vi.mock('./useHotkeyById', () => ({
   useHotkeyById: (...args: HotkeyRegistrationArgs) => mocks.useHotkeyById(...args),
 }));
@@ -61,6 +69,7 @@ describe('globalScope hotkeys', () => {
     mocks.hotkeyCallback = undefined;
     mocks.pathname = '/';
     mocks.toggleAgentBuilderPanel.mockReset();
+    mocks.toggleAnnotationPanel.mockReset();
     mocks.toggleRightPanel.mockReset();
     mocks.toggleTaskAgentPanel.mockReset();
     mocks.useHotkeyById.mockReset();
@@ -90,7 +99,30 @@ describe('globalScope hotkeys', () => {
     });
   });
 
+  describe('isQuickNotePanelRoute', () => {
+    it('should match note routes only', () => {
+      expect(isQuickNotePanelRoute('/note')).toBe(true);
+      expect(isQuickNotePanelRoute('/note/abc')).toBe(true);
+      expect(isQuickNotePanelRoute('/ws-slug/note/abc')).toBe(true);
+      expect(isQuickNotePanelRoute('/notes')).toBe(false);
+      expect(isQuickNotePanelRoute('/notebook')).toBe(false);
+    });
+  });
+
   describe('useToggleRightPanelHotkey', () => {
+    it('should toggle the quick note annotation panel on note routes', () => {
+      mocks.pathname = '/note/abc';
+
+      renderHook(() => useToggleRightPanelHotkey());
+
+      act(() => {
+        mocks.hotkeyCallback?.();
+      });
+
+      expect(mocks.toggleAnnotationPanel).toHaveBeenCalledTimes(1);
+      expect(mocks.toggleRightPanel).not.toHaveBeenCalled();
+    });
+
     it('should toggle task agent panel on task routes', () => {
       mocks.pathname = '/tasks';
 

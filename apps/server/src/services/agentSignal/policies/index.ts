@@ -9,6 +9,8 @@ import type { CreateFeedbackDomainJudgePolicyOptions } from './analyzeIntent/fee
 import type { CreateFeedbackSatisfactionJudgePolicyOptions } from './analyzeIntent/feedbackSatisfaction';
 import type { CreateCompletionPolicyOptions } from './completionPolicy';
 import { createCompletionPolicy } from './completionPolicy';
+import type { QuickNoteAnalyzeSourceHandlerOptions } from './quickNoteAnalyze';
+import { createQuickNoteAnalyzePolicy } from './quickNoteAnalyze';
 import type { CreateReviewNightlyPolicyOptions } from './reviewNightly';
 import { createReviewNightlyPolicy } from './reviewNightly';
 
@@ -30,6 +32,7 @@ export interface CreateDefaultAgentSignalPoliciesOptions extends CreateFeedbackD
   feedbackSatisfactionJudge?: CreateFeedbackSatisfactionJudgePolicyOptions;
   nightlyReview?: CreateReviewNightlyPolicyOptions['nightlyReview'];
   procedure?: CreateAnalyzeIntentPolicyOptions['procedure'];
+  quickNoteAnalyze?: QuickNoteAnalyzeSourceHandlerOptions;
   selfFeedbackIntent?: CreateReviewNightlyPolicyOptions['selfFeedbackIntent'];
   selfReflection?: CreateReviewNightlyPolicyOptions['selfReflection'];
   skillIntentClassifier?: CreateAnalyzeIntentPolicyOptions['skillIntentClassifier'];
@@ -50,6 +53,8 @@ const DEFAULT_AGENT_SIGNAL_POLICY_FACTORIES: DefaultAgentSignalPolicyFactory[] =
       selfReflection: options.selfReflection,
     }),
   (options) => [createCompletionPolicy(options.completion ?? {})],
+  (options) =>
+    options.quickNoteAnalyze ? [createQuickNoteAnalyzePolicy(options.quickNoteAnalyze)] : [],
 ];
 
 /**
@@ -72,3 +77,5 @@ export const createDefaultAgentSignalPolicies = (
 ): AgentSignalMiddleware[] => {
   return DEFAULT_AGENT_SIGNAL_POLICY_FACTORIES.flatMap((createPolicy) => createPolicy(options));
 };
+
+export * from './quickNoteAnalyze';

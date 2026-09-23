@@ -1,5 +1,6 @@
 import type { DedupedSourceEventResult } from '@lobechat/agent-signal';
 import {
+  AGENT_SIGNAL_SOURCE_TYPES,
   type AgentSignalSourceEventInput as SharedAgentSignalSourceEventInput,
   type AgentSignalSourceType,
   createSourceEvent,
@@ -113,7 +114,9 @@ export const emitAgentSignalSourceEvent = async <TSourceType extends AgentSignal
   context: AgentSignalExecutionContext,
   options: AgentSignalEmitOptions = {},
 ): Promise<DedupedSourceEventResult | GeneratedAgentSignalEmissionResult | undefined> => {
-  const selfIterationEnabled = await isAgentSignalEnabledForUser(context.db, context.userId);
+  const selfIterationEnabled =
+    input.sourceType === AGENT_SIGNAL_SOURCE_TYPES.quickNoteAnalyzeRequested ||
+    (await isAgentSignalEnabledForUser(context.db, context.userId));
 
   if (!selfIterationEnabled) {
     return undefined;
@@ -159,7 +162,10 @@ export const enqueueAgentSignalSourceEvent = async <TSourceType extends AgentSig
     });
   }
 
-  if (!(await isAgentSignalEnabledForUser(db, context.userId))) {
+  if (
+    input.sourceType !== AGENT_SIGNAL_SOURCE_TYPES.quickNoteAnalyzeRequested &&
+    !(await isAgentSignalEnabledForUser(db, context.userId))
+  ) {
     return {
       accepted: false,
       scopeKey: input.scopeKey ?? resolveSourceScopeKey(input.payload),

@@ -27,6 +27,7 @@ vi.mock('@/store/library', () => ({ useKnowledgeBaseStore: fakeStore() }));
 vi.mock('@/store/mention', () => ({ useMentionStore: fakeStore() }));
 vi.mock('@/store/notebook', () => ({ useNotebookStore: fakeStore() }));
 vi.mock('@/store/page', () => ({ usePageStore: fakeStore() }));
+vi.mock('@/store/quickNote', () => ({ useQuickNoteStore: fakeStore() }));
 vi.mock('@/store/session', () => ({ useSessionStore: fakeStore() }));
 vi.mock('@/store/task', () => ({ useTaskStore: fakeStore() }));
 vi.mock('@/store/tool', () => ({ useToolStore: fakeStore() }));
@@ -48,7 +49,7 @@ describe('stores.reset', () => {
     stores.reset();
 
     expect(resetGatewayMuxRegistry).toHaveBeenCalledTimes(1);
-    expect(storeResets).toHaveLength(19);
+    expect(storeResets).toHaveLength(20);
     for (const reset of storeResets) expect(reset).toHaveBeenCalledTimes(1);
     expect(order[0]).toBe('mux');
   });

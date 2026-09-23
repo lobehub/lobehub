@@ -7,6 +7,26 @@ import {
   mapFeatureFlagsEnvToState,
 } from './schema';
 
+/** @example Quick Note uses the existing boolean and per-user rollout contract. */
+describe('Quick Note feature flag', () => {
+  /** @example Only named internal testers receive an allowlisted feature. */
+  it('maps the whitelist by current user', () => {
+    const config = FeatureFlagsSchema.parse({ quick_note: ['tester'] });
+    /** @example Listed users are enabled. */
+    expect(mapFeatureFlagsEnvToState(config, 'tester').enableQuickNote).toBe(true);
+    /** @example Unlisted users are disabled. */
+    expect(mapFeatureFlagsEnvToState(config, 'other').enableQuickNote).toBe(false);
+    /** @example Anonymous users are disabled. */
+    expect(mapFeatureFlagsEnvToState(config).enableQuickNote).toBe(false);
+  });
+
+  /** @example Operators can also explicitly enable or disable Quick Note globally. */
+  it.each([true, false])('maps the global value %s', (value) => {
+    /** @example Explicit booleans apply to every user. */
+    expect(mapFeatureFlagsEnvToState({ quick_note: value }, 'tester').enableQuickNote).toBe(value);
+  });
+});
+
 describe('FeatureFlagsSchema', () => {
   it('should validate correct feature flags with boolean values', () => {
     const result = FeatureFlagsSchema.safeParse({

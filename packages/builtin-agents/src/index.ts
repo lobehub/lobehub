@@ -2,10 +2,14 @@ import { AGENT_BUILDER } from './agents/agent-builder';
 import { GROUP_AGENT_BUILDER } from './agents/group-agent-builder';
 import { GROUP_SUPERVISOR } from './agents/group-supervisor';
 import { INBOX } from './agents/inbox';
+import { INBOX_INTAKE } from './agents/inbox-intake';
+import { ISSUE_PRD } from './agents/issue-prd';
+import { KNOWLEDGE_CURATOR } from './agents/knowledge-curator';
 import { NIGHTLY_REVIEW } from './agents/nightly-review';
 import { ONBOARDING_TASK_RECOMMENDER } from './agents/onboarding-task-recommender';
 import { ONBOARDING_UNDERSTANDING } from './agents/onboarding-understanding';
 import { PAGE_AGENT } from './agents/page-agent';
+import { QUICK_NOTE_ANALYZE, QUICK_NOTE_DIVE } from './agents/quick-note';
 import { SELF_FEEDBACK_INTENT } from './agents/self-feedback-intent';
 import { SELF_REFLECTION } from './agents/self-reflection';
 import { SKILL_MANAGEMENT } from './agents/skill-management';
@@ -23,12 +27,16 @@ export { AGENT_BUILDER } from './agents/agent-builder';
 export { GROUP_AGENT_BUILDER } from './agents/group-agent-builder';
 export { GROUP_SUPERVISOR } from './agents/group-supervisor';
 export { INBOX } from './agents/inbox';
+export { INBOX_INTAKE } from './agents/inbox-intake';
+export { ISSUE_PRD } from './agents/issue-prd';
+export { KNOWLEDGE_CURATOR } from './agents/knowledge-curator';
 export { NIGHTLY_REVIEW } from './agents/nightly-review';
 export { ONBOARDING_TASK_RECOMMENDER } from './agents/onboarding-task-recommender';
 export { ONBOARDING_UNDERSTANDING } from './agents/onboarding-understanding';
 export { PAGE_AGENT } from './agents/page-agent';
 export type { ProjectCoordinatorContext } from './agents/project-coordinator';
 export { createProjectCoordinatorAgentConfig } from './agents/project-coordinator';
+export { QUICK_NOTE_ANALYZE, QUICK_NOTE_DIVE, quickNoteAnalyzeProtocol } from './agents/quick-note';
 export { SELF_FEEDBACK_INTENT } from './agents/self-feedback-intent';
 export { SELF_REFLECTION } from './agents/self-reflection';
 export { SKILL_MANAGEMENT } from './agents/skill-management';
@@ -44,10 +52,15 @@ export const BUILTIN_AGENTS: Record<BuiltinAgentSlug, BuiltinAgentDefinition> = 
   [BUILTIN_AGENT_SLUGS.groupAgentBuilder]: GROUP_AGENT_BUILDER,
   [BUILTIN_AGENT_SLUGS.groupSupervisor]: GROUP_SUPERVISOR,
   [BUILTIN_AGENT_SLUGS.inbox]: INBOX,
+  [BUILTIN_AGENT_SLUGS.inboxIntake]: INBOX_INTAKE,
+  [BUILTIN_AGENT_SLUGS.issuePrd]: ISSUE_PRD,
+  [BUILTIN_AGENT_SLUGS.knowledgeCurator]: KNOWLEDGE_CURATOR,
   [BUILTIN_AGENT_SLUGS.nightlyReview]: NIGHTLY_REVIEW,
   [BUILTIN_AGENT_SLUGS.onboardingUnderstanding]: ONBOARDING_UNDERSTANDING,
   [BUILTIN_AGENT_SLUGS.onboardingTaskRecommender]: ONBOARDING_TASK_RECOMMENDER,
   [BUILTIN_AGENT_SLUGS.pageAgent]: PAGE_AGENT,
+  [BUILTIN_AGENT_SLUGS.quickNoteAnalyze]: QUICK_NOTE_ANALYZE,
+  [BUILTIN_AGENT_SLUGS.quickNoteDive]: QUICK_NOTE_DIVE,
   [BUILTIN_AGENT_SLUGS.selfFeedbackIntent]: SELF_FEEDBACK_INTENT,
   [BUILTIN_AGENT_SLUGS.selfReflection]: SELF_REFLECTION,
   [BUILTIN_AGENT_SLUGS.skillManagement]: SKILL_MANAGEMENT,
@@ -79,8 +92,23 @@ export const getAgentPersistConfig = (slug: string) => {
   const agent = BUILTIN_AGENTS[slug as BuiltinAgentSlug];
   if (!agent) return undefined;
 
-  return { ...agent.persist, slug: agent.slug };
+  return { avatar: agent.avatar, ...agent.persist, slug: agent.slug };
 };
+
+/**
+ * Reports whether a builtin Agent keeps user-edited model, prompt, and tool configuration.
+ *
+ * Use when:
+ * - Materializing a builtin Agent that doubles as a user-configurable capability profile.
+ *
+ * Expects:
+ * - Unknown slugs are not configurable builtins.
+ *
+ * Returns:
+ * - `true` only for builtins that preserve edits after their first materialization.
+ */
+export const isBuiltinAgentUserConfigurable = (slug: string): boolean =>
+  BUILTIN_AGENTS[slug as BuiltinAgentSlug]?.userConfigurable === true;
 
 /**
  * Get runtime config for a builtin agent

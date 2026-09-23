@@ -24,6 +24,7 @@ const RESERVED_FIRST_SEGMENTS = new Set([
   'me',
   'memory',
   'next-auth',
+  'note',
   'onboarding',
   'page',
   'projects',

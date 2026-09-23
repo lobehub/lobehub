@@ -121,8 +121,9 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
         align={'center'}
         className={styles.container}
         flex={'none'}
+        height={44}
         justify={'space-between'}
-        padding={'8px 6px'}
+        paddingInline={6}
       >
         {leftContent}
         <Flexbox horizontal align={'center'} gap={2} justify={'flex-end'}>

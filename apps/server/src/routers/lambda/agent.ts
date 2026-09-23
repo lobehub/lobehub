@@ -17,6 +17,7 @@ import {
   AGENT_SHARED_TRANSFER_BLOCKED,
   AgentModel,
   AgentOwnedByGroupError,
+  BUILTIN_AGENT_CANNOT_DELETE,
 } from '@/database/models/agent';
 import { AGENT_COPY_IN_PROGRESS } from '@/database/models/agentCopyJob';
 import {
@@ -802,6 +803,12 @@ export const agentRouter = router({
       try {
         result = await ctx.agentModel.delete(input.agentId);
       } catch (error) {
+        if (error instanceof Error && error.message === BUILTIN_AGENT_CANNOT_DELETE) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'Builtin agents cannot be deleted',
+          });
+        }
         if (error instanceof Error && error.message === AGENT_COPY_IN_PROGRESS) {
           throw new TRPCError({
             cause: { data: { code: TransferErrorCode.CopyInProgress } },

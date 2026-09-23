@@ -1,11 +1,12 @@
 import { Flexbox, Icon } from '@lobehub/ui';
 import { Button, Popover } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { ChevronDownIcon, InfinityIcon, ListTodoIcon } from 'lucide-react';
+import { ChevronDownIcon, InfinityIcon, ListTodoIcon, NotebookPenIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
+import { useServerConfigStore } from '@/store/serverConfig';
 
 import type { HomeMode } from '../types';
 import { isHomeModeDisabled, resolvePermittedHomeMode } from './modePermission';
@@ -101,6 +102,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const MODES = [
   { icon: InfinityIcon, key: 'chat' },
   { icon: ListTodoIcon, key: 'task' },
+  { icon: NotebookPenIcon, key: 'note' },
 ] as const;
 
 interface ModeSelectProps {
@@ -110,6 +112,8 @@ interface ModeSelectProps {
 
 const ModeSelect = memo<ModeSelectProps>(({ onChange, value }) => {
   const { t } = useTranslation('home');
+  const enableQuickNote = useServerConfigStore((s) => s.featureFlags.enableQuickNote);
+  const modes = MODES.filter((mode) => mode.key !== 'note' || enableQuickNote);
   const { t: tChat } = useTranslation('chat');
   const { allowed: canCreateContent, reason: createContentReason } =
     usePermission('create_content');
@@ -128,11 +132,11 @@ const ModeSelect = memo<ModeSelectProps>(({ onChange, value }) => {
     [onChange],
   );
 
-  const current = MODES.find((mode) => mode.key === value) ?? MODES[0];
+  const current = modes.find((mode) => mode.key === value) ?? MODES[0];
 
   const content = (
     <Flexbox gap={4} role={'menu'} style={{ maxWidth: 320, minWidth: 280 }}>
-      {MODES.map(({ icon, key }) => {
+      {modes.map(({ icon, key }) => {
         const disabled = isHomeModeDisabled(key, canCreateContent);
 
         return (
@@ -159,7 +163,7 @@ const ModeSelect = memo<ModeSelectProps>(({ onChange, value }) => {
               <Flexbox className={styles.optionText} flex={1}>
                 <div className={styles.optionTitle}>{t(`dashboard.mode.${key}`)}</div>
                 <div className={styles.optionDesc}>
-                  {key === 'chat' ? tChat('chatMode.agentDesc') : t('dashboard.modeDesc.task')}
+                  {key === 'chat' ? tChat('chatMode.agentDesc') : t(`dashboard.modeDesc.${key}`)}
                 </div>
               </Flexbox>
             </Flexbox>

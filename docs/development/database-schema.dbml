@@ -2911,6 +2911,190 @@ table push_tokens {
   }
 }
 
+table quick_note_comment_revisions {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  comment_id uuid [not null]
+  content text [not null]
+  editor_data jsonb
+  editor_user_id text
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    comment_id [name: 'quick_note_comment_revisions_comment_id_idx']
+    editor_user_id [name: 'quick_note_comment_revisions_editor_user_id_idx']
+  }
+}
+
+table quick_note_comments {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  quick_note_id text [not null]
+  user_id text [not null]
+  workspace_id text
+  author_user_id text
+  content text [not null]
+  editor_data jsonb
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    quick_note_id [name: 'quick_note_comments_quick_note_id_idx']
+    user_id [name: 'quick_note_comments_user_id_idx']
+    workspace_id [name: 'quick_note_comments_workspace_id_idx']
+    author_user_id [name: 'quick_note_comments_author_user_id_idx']
+  }
+}
+
+table quick_note_proposals {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  quick_note_id text [not null]
+  run_id uuid [not null]
+  source_history_id varchar(255) [not null]
+  document_id varchar(255) [not null]
+  current_history_id varchar(255) [not null]
+  accepted_history_id varchar(255)
+  kind text [not null]
+  decision_status text [not null, default: 'pending']
+  validity text [not null, default: 'current']
+  user_id text [not null]
+  workspace_id text
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    document_id [name: 'quick_note_proposals_document_id_unique', unique]
+    quick_note_id [name: 'quick_note_proposals_quick_note_id_idx']
+    run_id [name: 'quick_note_proposals_run_id_idx']
+    source_history_id [name: 'quick_note_proposals_source_history_id_idx']
+    current_history_id [name: 'quick_note_proposals_current_history_id_idx']
+    accepted_history_id [name: 'quick_note_proposals_accepted_history_id_idx']
+    (quick_note_id, decision_status, validity) [name: 'quick_note_proposals_decision_validity_idx']
+    user_id [name: 'quick_note_proposals_user_id_idx']
+    workspace_id [name: 'quick_note_proposals_workspace_id_idx']
+  }
+}
+
+table quick_note_resources {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  quick_note_id text [not null]
+  source_history_id varchar(255) [not null]
+  document_id varchar(255)
+  resource_id text [not null]
+  resource_type text [not null]
+  selector jsonb
+  role text [not null]
+  user_id text [not null]
+  workspace_id text
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (quick_note_id, source_history_id, resource_type, resource_id, role) [name: 'quick_note_resources_identity_unique', unique]
+    (quick_note_id, source_history_id, role) [name: 'quick_note_resources_annotation_unique', unique]
+    quick_note_id [name: 'quick_note_resources_quick_note_id_idx']
+    source_history_id [name: 'quick_note_resources_source_history_id_idx']
+    document_id [name: 'quick_note_resources_document_id_idx']
+    (resource_type, resource_id) [name: 'quick_note_resources_resource_idx']
+    user_id [name: 'quick_note_resources_user_id_idx']
+    workspace_id [name: 'quick_note_resources_workspace_id_idx']
+  }
+}
+
+table quick_note_run_inputs {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  run_id uuid [not null]
+  role text [not null]
+  document_history_id varchar(255)
+  comment_revision_id uuid
+  user_id text [not null]
+  workspace_id text
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+
+    (run_id, role, document_history_id) [name: 'quick_note_run_inputs_document_history_unique', unique]
+    (run_id, role, comment_revision_id) [name: 'quick_note_run_inputs_comment_revision_unique', unique]
+    run_id [name: 'quick_note_run_inputs_run_id_idx']
+    document_history_id [name: 'quick_note_run_inputs_document_history_id_idx']
+    comment_revision_id [name: 'quick_note_run_inputs_comment_revision_id_idx']
+    user_id [name: 'quick_note_run_inputs_user_id_idx']
+    workspace_id [name: 'quick_note_run_inputs_workspace_id_idx']
+  }
+}
+
+table quick_note_run_resources {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  run_id uuid [not null]
+  resource_id uuid [not null]
+  document_history_id varchar(255)
+  user_id text [not null]
+  workspace_id text
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (run_id, resource_id) [name: 'quick_note_run_resources_identity_unique', unique]
+    run_id [name: 'quick_note_run_resources_run_id_idx']
+    resource_id [name: 'quick_note_run_resources_resource_id_idx']
+    document_history_id [name: 'quick_note_run_resources_document_history_id_idx']
+    user_id [name: 'quick_note_run_resources_user_id_idx']
+    workspace_id [name: 'quick_note_run_resources_workspace_id_idx']
+  }
+}
+
+table quick_note_runs {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  quick_note_id text [not null]
+  source_history_id varchar(255) [not null]
+  thread_id text
+  operation_id text
+  agent_id text
+  execution_config jsonb
+  kind text [not null]
+  trigger text
+  status text [not null, default: 'pending']
+  error text
+  started_at "timestamp with time zone"
+  completed_at "timestamp with time zone"
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    quick_note_id [name: 'quick_note_runs_quick_note_id_idx']
+    source_history_id [name: 'quick_note_runs_source_history_id_idx']
+    thread_id [name: 'quick_note_runs_thread_id_idx']
+    agent_id [name: 'quick_note_runs_agent_id_idx']
+    operation_id [name: 'quick_note_runs_operation_id_unique', unique]
+    (quick_note_id, kind) [name: 'quick_note_runs_active_kind_unique', unique]
+    status [name: 'quick_note_runs_status_idx']
+  }
+}
+
+table quick_notes {
+  id text [pk, not null]
+  user_id text [not null]
+  workspace_id text
+  document_id varchar(255) [not null]
+  topic_id text [not null]
+  tags text[] [not null, default: `[]`]
+  collection text
+  location text
+  analyze_due_at "timestamp with time zone"
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    document_id [name: 'quick_notes_document_id_unique', unique]
+    topic_id [name: 'quick_notes_topic_id_unique', unique]
+    user_id [name: 'quick_notes_user_id_idx']
+    workspace_id [name: 'quick_notes_workspace_id_idx']
+    analyze_due_at [name: 'quick_notes_analyze_due_at_idx']
+  }
+}
+
 table chunks {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   text text
@@ -3843,6 +4027,7 @@ table user_settings {
   tool jsonb
   image jsonb
   notification jsonb
+  quick_note jsonb
 }
 
 table users {
@@ -4645,6 +4830,46 @@ ref: messages.topic_id - topics.id
 ref: threads.source_message_id - messages.id
 
 ref: messages.message_group_id > message_groups.id
+
+ref: quick_note_comment_revisions.comment_id > quick_note_comments.id
+
+ref: quick_note_comments.quick_note_id > quick_notes.id
+
+ref: quick_note_proposals.source_history_id - document_histories.id
+
+ref: quick_note_proposals.document_id - documents.id
+
+ref: quick_note_proposals.quick_note_id > quick_notes.id
+
+ref: quick_note_proposals.run_id > quick_note_runs.id
+
+ref: quick_note_resources.document_id - documents.id
+
+ref: quick_note_resources.quick_note_id > quick_notes.id
+
+ref: quick_note_resources.source_history_id - document_histories.id
+
+ref: quick_note_run_inputs.comment_revision_id > quick_note_comment_revisions.id
+
+ref: quick_note_run_inputs.document_history_id - document_histories.id
+
+ref: quick_note_run_inputs.run_id > quick_note_runs.id
+
+ref: quick_note_run_resources.document_history_id - document_histories.id
+
+ref: quick_note_run_resources.resource_id > quick_note_resources.id
+
+ref: quick_note_run_resources.run_id > quick_note_runs.id
+
+ref: quick_note_runs.quick_note_id > quick_notes.id
+
+ref: quick_note_runs.source_history_id - document_histories.id
+
+ref: quick_note_runs.thread_id - threads.id
+
+ref: quick_notes.document_id - documents.id
+
+ref: quick_notes.topic_id - topics.id
 
 ref: sessions.group_id - session_groups.id
 

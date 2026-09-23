@@ -24,7 +24,8 @@ export type AgentDocumentInjectionPosition = (typeof AGENT_DOCUMENT_INJECTION_PO
 
 export type AgentDocumentLoadFormat = 'file' | 'raw';
 
-export type AgentDocumentSourceType = 'agent' | 'agent-signal' | 'api' | 'file' | 'topic' | 'web';
+export type AgentDocumentSourceType =
+  'agent' | 'agent-signal' | 'api' | 'file' | 'quick-note' | 'topic' | 'web';
 
 export interface AgentContextDocument {
   content?: string;
