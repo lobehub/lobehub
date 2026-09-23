@@ -1,3 +1,5 @@
+import { runInNewContext } from 'node:vm';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GET } from './route';
@@ -63,6 +65,35 @@ beforeEach(() => {
 });
 
 describe('connector OAuth callback', () => {
+  it.each([true, false])(
+    'delivers status with or without an opener (opener=%s)',
+    async (hasOpener) => {
+      mockSync.mockResolvedValue({ toolCount: 5 });
+      const body = await (await GET(makeReq())).text();
+      const postMessage = vi.fn();
+      const openerPostMessage = vi.fn();
+      runInNewContext(body.match(/<script>([\s\S]*?)<\/script>/)![1], {
+        setTimeout: vi.fn(),
+        window: {
+          location: { origin: 'https://app.example.com' },
+          opener: hasOpener ? { postMessage: openerPostMessage } : null,
+          postMessage,
+        },
+      });
+
+      const expected = {
+        connectorId: 'c1',
+        success: true,
+        synced: true,
+        type: 'lobe-connector-oauth',
+      };
+      expect(postMessage.mock.calls).toEqual([[expected, 'https://app.example.com']]);
+      expect(openerPostMessage.mock.calls).toEqual(
+        hasOpener ? [[expected, 'https://app.example.com']] : [],
+      );
+    },
+  );
+
   it('reports synced:false when auth succeeds but tool sync fails', async () => {
     mockSync.mockRejectedValue(new Error('mcp down'));
 
