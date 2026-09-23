@@ -1,17 +1,23 @@
 import type { HeterogeneousAgentScanMap } from '@lobechat/heterogeneous-agents';
-import type { DeviceListItem } from '@lobechat/types';
+import type { DeviceListItem, LocalHeterogeneousAgentType } from '@lobechat/types';
 import { useCallback, useRef, useState } from 'react';
 
 import { deviceService } from '@/services/device';
 import { binaryService } from '@/services/electron/binary';
+import { useServerConfigStore } from '@/store/serverConfig';
+import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 
 import { CONNECTABLE_PROVIDERS } from './providers';
 
 /**
  * Where the wizard scans for installed agents: the local desktop machine
- * (agents run as desktop subprocesses) or a gateway-connected device.
+ * (agents run as desktop subprocesses), a gateway-connected device, or the
+ * cloud sandbox, whose inventory is what the deployment's runtime image holds.
  */
-export type ScanTarget = { device: DeviceListItem; kind: 'device' } | { kind: 'local' };
+export type ScanTarget =
+  | { device: DeviceListItem; kind: 'device' }
+  | { kind: 'local' }
+  | { kind: 'sandbox' };
 
 export interface AgentScanState {
   agents: HeterogeneousAgentScanMap | null;
@@ -53,9 +59,22 @@ export const scanLocal = async (): Promise<HeterogeneousAgentScanMap> => {
   return Object.fromEntries(entries);
 };
 
+/**
+ * A sandbox has no machine to probe: boxes are created per run, so nothing
+ * exists to detect a binary on before the agent is created. The deployment's
+ * `sandboxAgentTypes` is the inventory — it names what the runtime image was
+ * built with, which is the same question a device scan answers by looking.
+ */
+export const scanSandbox = (
+  agentTypes: readonly LocalHeterogeneousAgentType[],
+): HeterogeneousAgentScanMap =>
+  Object.fromEntries(agentTypes.map((type) => [type, { available: true }]));
+
 export const useAgentScan = () => {
   const [state, setState] = useState<AgentScanState>(IDLE);
   const seqRef = useRef(0);
+
+  const sandboxAgentTypes = useServerConfigStore(serverConfigSelectors.sandboxAgentTypes);
 
   const scan = useCallback(async (target: ScanTarget) => {
     const seq = ++seqRef.current;
@@ -65,6 +84,8 @@ export const useAgentScan = () => {
       let agents: HeterogeneousAgentScanMap;
       if (target.kind === 'local') {
         agents = await scanLocal();
+      } else if (target.kind === 'sandbox') {
+        agents = scanSandbox(sandboxAgentTypes);
       } else {
         const result = await deviceService.scanAgents({ deviceId: target.device.deviceId });
         if (result.error) {
@@ -83,7 +104,7 @@ export const useAgentScan = () => {
           status: 'error',
         });
     }
-  }, []);
+  }, [sandboxAgentTypes]);
 
   const reset = useCallback(() => {
     seqRef.current += 1;

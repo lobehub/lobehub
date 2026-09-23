@@ -1,6 +1,7 @@
 import type { AiFullModelCard } from 'model-bank';
 import type { PartialDeep } from 'type-fest';
 
+import type { LocalHeterogeneousAgentType } from './agent/heterogeneousAgent';
 import type {
   GlobalLLMProviderKey,
   UserDefaultAgent,
@@ -120,6 +121,12 @@ export interface GlobalServerConfig {
   memory?: GlobalMemoryConfig;
   multimodalUnderstanding?: MultimodalUnderstandingConfig;
   oAuthSSOProviders?: string[];
+  /**
+   * Coding-agent CLIs this deployment allows in the cloud sandbox. The client
+   * offers the sandbox as a creation target only when this is non-empty, since
+   * an agent whose binary is not in the runtime image cannot run there.
+   */
+  sandboxAgentTypes?: LocalHeterogeneousAgentType[];
   systemAgent?: PartialDeep<UserServiceModelConfig>;
   telemetry: {
     langfuse?: boolean;

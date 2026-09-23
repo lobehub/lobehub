@@ -2,7 +2,7 @@ import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import { getHeterogeneousAgentConfig } from '@lobechat/heterogeneous-agents';
 import { ChatErrorType, type ErrorType } from '@lobechat/types';
 
-import { sandboxEnv } from '@/envs/sandbox';
+import { resolveCloudSandboxAgentTypes } from '@/server/services/heterogeneousAgent/cloudSandboxAgentTypes';
 
 /**
  * Turn a raw device-gateway dispatch error code into a human-readable headline.
@@ -91,27 +91,11 @@ export const resolveHeteroDispatchErrorType = (raw?: string): ErrorType => {
 };
 
 /**
- * The coding-agent CLIs the official sandbox runtime image carries.
+ * Whether this agent type may run in the cloud sandbox. The set itself is
+ * resolved from the deployment's configuration — see `resolveCloudSandboxAgentTypes`.
  */
-const DEFAULT_CLOUD_SANDBOX_AGENT_TYPES = ['claude-code', 'codex'];
-
-/**
- * Whether this agent type may run in the cloud sandbox.
- *
- * What limits it is the runtime image, not the dispatch path: `spawnHeteroSandbox`
- * launches every type identically, through `lh hetero exec`, which already accepts
- * all of them. So a type can run there exactly when its binary is present in the
- * image — which is a property of the deployment, not of this repository. The
- * default names what the official image ships; a self-hosted deployment that
- * builds its own image widens the set with `HETERO_SANDBOX_AGENT_TYPES`.
- */
-export const supportsCloudHeterogeneousSandbox = (type: HeterogeneousAgentType): boolean => {
-  const configured = sandboxEnv.HETERO_SANDBOX_AGENT_TYPES?.split(',')
-    .map((name) => name.trim())
-    .filter(Boolean);
-
-  return (configured?.length ? configured : DEFAULT_CLOUD_SANDBOX_AGENT_TYPES).includes(type);
-};
+export const supportsCloudHeterogeneousSandbox = (type: HeterogeneousAgentType): boolean =>
+  (resolveCloudSandboxAgentTypes() as string[]).includes(type);
 
 export const getHeterogeneousAgentTitle = (type: HeterogeneousAgentType): string =>
   getHeterogeneousAgentConfig(type)?.title ?? type;

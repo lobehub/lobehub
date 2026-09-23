@@ -1172,6 +1172,10 @@ export default {
   'connectAgent.create.stepConfirm': 'Step 3 of 3 · Name it for your agent list',
   'connectAgent.create.thisDevice': 'This device',
   'connectAgent.create.connectedDevices': 'Connected devices',
+  'connectAgent.create.cloudSandbox': 'Cloud sandbox',
+  'connectAgent.create.cloudSandboxDesc':
+    'Runs agents in a fresh sandbox, created for each conversation',
+  'connectAgent.create.cloudSandboxSection': 'Sandbox',
   'connectAgent.create.localDevice': 'This computer',
   'connectAgent.create.localDeviceDesc': 'Runs agents directly on this machine',
   'connectAgent.create.online': 'Online',

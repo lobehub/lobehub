@@ -1,7 +1,7 @@
 import { ChatErrorType } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { sandboxEnv } from '@/envs/sandbox';
+import { resolveCloudSandboxAgentTypes } from '@/server/services/heterogeneousAgent/cloudSandboxAgentTypes';
 
 import {
   humanizeHeteroDispatchError,
@@ -9,12 +9,12 @@ import {
   supportsCloudHeterogeneousSandbox,
 } from './heteroErrors';
 
-vi.mock('@/envs/sandbox', () => ({
-  sandboxEnv: { HETERO_SANDBOX_AGENT_TYPES: undefined },
+vi.mock('@/server/services/heterogeneousAgent/cloudSandboxAgentTypes', () => ({
+  resolveCloudSandboxAgentTypes: vi.fn(() => ['claude-code', 'codex']),
 }));
 
-const configureAgentTypes = (value: string | undefined) => {
-  (sandboxEnv as { HETERO_SANDBOX_AGENT_TYPES?: string }).HETERO_SANDBOX_AGENT_TYPES = value;
+const configureAgentTypes = (types: string[]) => {
+  vi.mocked(resolveCloudSandboxAgentTypes).mockReturnValue(types as never);
 };
 
 describe('humanizeHeteroDispatchError', () => {
@@ -94,38 +94,24 @@ describe('JSON device-gateway dispatch errors', () => {
 });
 
 describe('supportsCloudHeterogeneousSandbox', () => {
-  beforeEach(() => configureAgentTypes(undefined));
+  beforeEach(() => configureAgentTypes(['claude-code', 'codex']));
 
-  it('admits what the official runtime image ships, and nothing else', () => {
+  it('admits what the resolved set names, and nothing else', () => {
     expect(supportsCloudHeterogeneousSandbox('claude-code')).toBe(true);
     expect(supportsCloudHeterogeneousSandbox('codex')).toBe(true);
     expect(supportsCloudHeterogeneousSandbox('opencode')).toBe(false);
   });
 
-  it('lets a deployment with its own image widen the set', () => {
-    configureAgentTypes('claude-code,codex,opencode');
+  it('follows a deployment that widened the set', () => {
+    configureAgentTypes(['claude-code', 'codex', 'opencode']);
 
     expect(supportsCloudHeterogeneousSandbox('opencode')).toBe(true);
   });
 
-  it('replaces the default rather than extending it, so an image can be narrowed', () => {
-    configureAgentTypes('opencode');
+  it('follows a deployment that narrowed it', () => {
+    configureAgentTypes(['opencode']);
 
     expect(supportsCloudHeterogeneousSandbox('opencode')).toBe(true);
     expect(supportsCloudHeterogeneousSandbox('claude-code')).toBe(false);
-  });
-
-  it('tolerates spacing and empty entries', () => {
-    configureAgentTypes('  opencode , , codex ');
-
-    expect(supportsCloudHeterogeneousSandbox('opencode')).toBe(true);
-    expect(supportsCloudHeterogeneousSandbox('codex')).toBe(true);
-  });
-
-  it('falls back to the default when the value is blank', () => {
-    configureAgentTypes('  ,  ');
-
-    expect(supportsCloudHeterogeneousSandbox('claude-code')).toBe(true);
-    expect(supportsCloudHeterogeneousSandbox('opencode')).toBe(false);
   });
 });
