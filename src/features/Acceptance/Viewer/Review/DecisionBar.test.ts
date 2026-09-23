@@ -22,10 +22,10 @@ describe('DecisionBar copy', () => {
     expect(verify['acceptance.bar.copyReview']).toBe('Copy repair prompt');
     expect(verify['acceptance.bar.rerun']).toBe('Fix');
     expect(verify['acceptance.bar.rerunDrafted']).toBe(
-      'Drafted into your composer — review and send it.',
+      'Added to your composer — review and send it.',
     );
     expect(verify['acceptance.bar.rerunSent']).toBe(
-      'Sent to the origin conversation — the repair round is starting.',
+      'Sent to the source conversation — the repair round is starting.',
     );
   });
 });

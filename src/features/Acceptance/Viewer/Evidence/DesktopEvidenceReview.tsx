@@ -97,8 +97,6 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface DesktopEvidenceReviewProps {
-  /** Names the check in the text-only reject, which has no evidence to point at. */
-  checkTitle: string;
   model: RejectReviewModel;
 }
 
@@ -106,7 +104,7 @@ interface DesktopEvidenceReviewProps {
  * Desktop reject: a wide stage with the region notes parked beside it, and the
  * delivery-wide note plus the decision in a footer that never scrolls away.
  */
-export const DesktopEvidenceReview = memo<DesktopEvidenceReviewProps>(({ checkTitle, model }) => {
+export const DesktopEvidenceReview = memo<DesktopEvidenceReviewProps>(({ model }) => {
   const { t } = useTranslation('verify');
   const {
     activeAnnotations,
@@ -212,9 +210,10 @@ export const DesktopEvidenceReview = memo<DesktopEvidenceReviewProps>(({ checkTi
         )}
         <Flexbox gap={10} style={{ width: '100%' }}>
           <Text fontSize={12} type={'secondary'}>
+            {/* The modal title already names the check; repeating it here reads as an echo. */}
             {hasEvidence
               ? t('acceptance.review.supplement')
-              : t('acceptance.review.rejectDescription', { title: checkTitle })}
+              : t('acceptance.review.rejectDescription')}
           </Text>
           <TextArea
             autoSize={{ maxRows: 5, minRows: 2 }}
