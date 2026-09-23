@@ -398,14 +398,19 @@ function renderEvent(event: AgentStreamEvent, ctx: RenderContext, options: Strea
   }
 }
 
+// Mirrors isParkedStatus in agent-runtime, which apps/cli does not depend on.
+const PARKED_END_LABELS: Record<string, string> = {
+  waiting_for_async_tool: 'Agent waiting for an async tool',
+  waiting_for_human: 'Agent waiting for human approval',
+};
+
 function renderEnd(event: AgentStreamEvent): void {
   console.log();
   const data = event.data || {};
-  const completion =
-    data.reason === 'waiting_for_human'
-      ? `${pc.yellow('!')} Agent waiting for human approval`
-      : `${pc.green('✓')} Agent finished`;
-  const parts: string[] = [completion];
+  const parked = PARKED_END_LABELS[data.reason];
+  const parts: string[] = [
+    parked ? `${pc.yellow('!')} ${parked}` : `${pc.green('✓')} Agent finished`,
+  ];
 
   if (data.stepCount !== undefined) {
     parts.push(`${data.stepCount} step${data.stepCount !== 1 ? 's' : ''}`);
