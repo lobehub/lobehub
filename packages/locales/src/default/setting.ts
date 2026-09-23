@@ -3920,6 +3920,7 @@ When I am ___, I need ___
   'environments.instances.directoryLocked':
     'The folder cannot be changed after the instance is built — delete it and create another to move it.',
   'environments.instances.duplicateDirectory': 'Another instance already uses this folder',
+  'environments.instances.createFailed': 'Could not create the instance',
   'environments.instances.snapshotsUnavailable':
     "Sizes unavailable — this instance's storage could not be reached",
   'environments.form.maintenance': 'Maintenance command',

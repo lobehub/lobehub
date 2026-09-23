@@ -144,8 +144,16 @@ export const useEnvironmentActions = () => {
       name: string;
       workingDirectory: string;
     }) => {
-      await sandboxWorkspaceService.createInstance(params);
+      const created = await sandboxWorkspaceService.createInstance(params);
       await refreshInstances();
+      return {
+        createdAt: created.createdAt,
+        environmentId: created.environmentId,
+        id: created.id,
+        name: created.name,
+        snapshot: null,
+        workingDirectory: created.workingDirectory,
+      } satisfies SandboxInstance;
     },
 
     setEnvironmentVisibility: async (params: { id: string; visibility: EnvironmentVisibility }) => {

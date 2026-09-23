@@ -1486,7 +1486,6 @@
   "runtimeEnv.mode.noneDesc": "Disable runtime environment",
   "runtimeEnv.selectMode": "Select Runtime Environment",
   "runtimeEnv.title": "Runtime Environment",
-  "sandboxWorkspace.creatingInstance": "Creating…",
   "sandboxWorkspace.environmentsUnavailable": "Environments could not be loaded",
   "sandboxWorkspace.ephemeral": "Temporary working directory",
   "sandboxWorkspace.ephemeralDesc": "Cleaned up when the sandbox is recycled",

@@ -1313,7 +1313,6 @@ export default {
   'sandboxWorkspace.persistentUpsellDesc': 'Keep files across runs and topics',
   'sandboxWorkspace.setUpEnvironmentDesc': 'A persistent directory lives in an environment',
   'sandboxWorkspace.newInstance': 'New instance',
-  'sandboxWorkspace.creatingInstance': 'Creating…',
   'sandboxWorkspace.setUpEnvironment': 'Set up an environment',
   'sandboxWorkspace.manageEnvironments': 'Manage environments',
   'sandboxWorkspace.environmentsUnavailable': 'Environments could not be loaded',

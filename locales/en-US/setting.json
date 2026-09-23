@@ -575,6 +575,7 @@
   "environments.instances.count_one": "{{count}} instance",
   "environments.instances.count_other": "{{count}} instances",
   "environments.instances.create": "New instance",
+  "environments.instances.createFailed": "Could not create the instance",
   "environments.instances.desc": "An instance is a working copy of this environment, with its own folder and its own installed packages. Conversations run inside an instance, and several can run side by side without touching each other.",
   "environments.instances.directoryHint": "Where this instance keeps what you want to keep — reports, data, exports. Source code lives with the environment, not here.",
   "environments.instances.directoryLabel": "Directory",

@@ -1486,7 +1486,6 @@
   "runtimeEnv.mode.noneDesc": "禁用运行时环境",
   "runtimeEnv.selectMode": "选择运行环境",
   "runtimeEnv.title": "运行环境",
-  "sandboxWorkspace.creatingInstance": "正在创建…",
   "sandboxWorkspace.environmentsUnavailable": "环境列表没能读取",
   "sandboxWorkspace.ephemeral": "临时工作目录",
   "sandboxWorkspace.ephemeralDesc": "沙箱回收时会被清理",

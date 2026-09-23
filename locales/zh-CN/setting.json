@@ -575,6 +575,7 @@
   "environments.instances.count_one": "{{count}} 个实例",
   "environments.instances.count_other": "{{count}} 个实例",
   "environments.instances.create": "创建实例",
+  "environments.instances.createFailed": "实例没能创建",
   "environments.instances.desc": "实例是这个环境的一份可运行副本，有自己的目录和装好的依赖。对话在实例里运行，多个实例可以并行而互不影响。",
   "environments.instances.directoryHint": "这个实例存放你想留下的东西——报告、数据、导出。源代码跟着环境走，不在这里。",
   "environments.instances.directoryLabel": "目录",
