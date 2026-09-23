@@ -37,14 +37,17 @@ const xiaomimimoChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      audio: true,
       functionCall: true,
       reasoning: true,
       search: true,
       structuredOutput: true,
+      video: true,
+      vision: true,
     },
     contextWindowTokens: 1_000_000,
     description:
-      'MiMo-V2.6-Pro-UltraSpeed serves the same weights as MiMo-V2.6-Pro at up to 20x the output speed for latency-sensitive agents. Text input only.',
+      'MiMo-V2.6-Pro-UltraSpeed serves the same weights as MiMo-V2.6-Pro at up to 20x the output speed for latency-sensitive agents.',
     displayName: 'MiMo-V2.6 Pro UltraSpeed',
     enabled: true,
     family: 'mimo',
