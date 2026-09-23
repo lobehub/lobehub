@@ -5458,7 +5458,11 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         });
         return new Response(source.pipeThrough(createCallbacksTransformer(callbacks)));
       });
-      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({ chat: mockChat } as any);
+      const handleChatStreamError = vi.fn();
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+        chat: mockChat,
+        handleChatStreamError,
+      } as any);
 
       const executors = createRuntimeExecutors(ctx);
       const state = createMockState();
@@ -5483,6 +5487,8 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         await rejectionExpectation;
 
         expect(mockChat).toHaveBeenCalledTimes(6);
+        // Every attempt is its own `chat()` call, so each failed stream is reported once.
+        expect(handleChatStreamError).toHaveBeenCalledTimes(6);
 
         const retryEvents = mockStreamManager.publishStreamEvent.mock.calls.filter(
           ([, event]: [string, { type: string }]) => event.type === 'stream_retry',
