@@ -127,7 +127,12 @@ async function installAction(options: InstallOptions): Promise<void> {
     }
   }
 
-  const link = linkHarnessSkills(baseDir, bundle.identifier);
+  const links = linkHarnessSkills(baseDir, bundle.identifier);
+  // `link` predates `links` and stays as a compatibility alias for the Claude
+  // result — `install --json link` and `.link.kind` readers keep working.
+  const link: LinkResult = links.find((l) => 'link' in l && l.link.startsWith('.claude')) ?? {
+    kind: 'none',
+  };
   // The skill is committed; its OUTPUT is not. Seed the artifact directory's own
   // self-ignoring file now, so the first run's screenshots never land as
   // untracked noise in a repo that has never heard of us.
@@ -137,6 +142,7 @@ async function installAction(options: InstallOptions): Promise<void> {
     dir: skillDir,
     ignored,
     link,
+    links,
     removed,
     skill: bundle.identifier,
     skipped,
@@ -158,27 +164,32 @@ async function installAction(options: InstallOptions): Promise<void> {
     `  ${written.length} written${skipped.length ? `, ${skipped.length} skipped` : ''}${removed.length ? `, ${removed.length} stale removed` : ''}`,
   );
   if (skipped.length > 0) console.log(pc.dim(`  (skipped existing — pass --force to overwrite)`));
-  printWiring(link);
+  printWiring(links);
 }
 
-function printWiring(link: LinkResult): void {
+function printWiring(links: LinkResult[]): void {
   const arrow = pc.dim('  ↳');
-  switch (link.kind) {
-    case 'linked':
-    case 'linked-single': {
-      console.log(`${arrow} linked ${link.link} → ${pc.dim(link.target)}`);
-      break;
-    }
-    case 'already': {
-      console.log(`${arrow} ${pc.dim(`${link.link} already linked`)}`);
-      break;
-    }
-    case 'skipped': {
-      console.log(`${arrow} ${pc.yellow(`skipped ${link.link}: ${link.reason}`)}`);
-      break;
-    }
-    default: {
-      break;
+  for (const link of links) {
+    switch (link.kind) {
+      case 'linked':
+      case 'linked-single': {
+        console.log(`${arrow} linked ${link.link} → ${pc.dim(link.target)}`);
+        break;
+      }
+      case 'already': {
+        console.log(`${arrow} ${pc.dim(`${link.link} already linked`)}`);
+        break;
+      }
+      case 'skipped': {
+        console.log(`${arrow} ${pc.yellow(`skipped ${link.link}: ${link.reason}`)}`);
+        break;
+      }
+      default: {
+        console.log(
+          `${arrow} ${pc.dim('no harness dirs detected — agents that read .agents/skills pick it up automatically')}`,
+        );
+        break;
+      }
     }
   }
 }

@@ -77,6 +77,37 @@ describe('acceptance skill installation', () => {
     });
   });
 
+  it('emits links[] plus the legacy link alias for the Claude result', async () => {
+    await mkdir(path.join(directory, '.claude'));
+    await mkdir(path.join(directory, '.roo'));
+
+    await run('install');
+
+    const result = JSON.parse(vi.mocked(console.log).mock.calls.at(-1)![0] as string);
+    expect(result.links).toEqual([
+      { kind: 'linked', link: '.claude/skills', target: '../.agents/skills' },
+      { kind: 'linked', link: '.roo/skills', target: '../.agents/skills' },
+    ]);
+    // Legacy alias keeps reporting the Claude wiring result, not links[0].
+    expect(result.link).toEqual({
+      kind: 'linked',
+      link: '.claude/skills',
+      target: '../.agents/skills',
+    });
+  });
+
+  it('emits link { kind: none } when no Claude signal exists', async () => {
+    await mkdir(path.join(directory, '.roo'));
+
+    await run('install');
+
+    const result = JSON.parse(vi.mocked(console.log).mock.calls.at(-1)![0] as string);
+    expect(result.link).toEqual({ kind: 'none' });
+    expect(result.links).toEqual([
+      { kind: 'linked', link: '.roo/skills', target: '../.agents/skills' },
+    ]);
+  });
+
   it('leaves the existing skill and stale resources untouched when an update cannot download', async () => {
     const skillDir = path.join(directory, '.agents/skills/acceptance');
     await mkdir(skillDir, { recursive: true });
