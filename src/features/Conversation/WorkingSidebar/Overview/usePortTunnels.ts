@@ -1,12 +1,17 @@
 import { isDesktop } from '@lobechat/const';
+import type { DeviceListeningPort } from '@lobechat/types';
 import { copyToClipboard } from '@lobehub/ui';
 import { toast } from '@lobehub/ui/base-ui';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { isSafeExternalUrl } from '@/features/Work/descriptors';
 import { deviceService } from '@/services/device';
-import { type DeviceTunnelLink, useFetchDeviceTunnels } from '@/store/device';
+import {
+  type DeviceTunnelLink,
+  useFetchDeviceListeningPorts,
+  useFetchDeviceTunnels,
+} from '@/store/device';
 
 /**
  * State and actions behind the Ports row.
@@ -15,13 +20,39 @@ import { type DeviceTunnelLink, useFetchDeviceTunnels } from '@/store/device';
  * that opens it is minted per action, so neither the UI nor the clipboard ever
  * holds a long-lived credential.
  */
-export const usePortTunnels = (deviceId: string, open: boolean, onOpened: () => void) => {
+export const usePortTunnels = (options: {
+  /** Whether the working panel is showing; detection only runs while it is. */
+  active: boolean;
+  /** Project directory, so the device can say which ports are this project's. */
+  cwd?: string;
+  deviceId: string;
+  onOpened: () => void;
+  /** Whether the ports menu is open; the link list is only read while it is. */
+  open: boolean;
+}) => {
+  const { active, cwd, deviceId, onOpened, open } = options;
   const { t } = useTranslation('chat');
   const [port, setPort] = useState('');
   const [busySlug, setBusySlug] = useState<string>();
-  const [creating, setCreating] = useState(false);
+  /** The port being exposed — typed or detected — so its row can show progress. */
+  const [creatingPort, setCreatingPort] = useState<number>();
 
   const { data: tunnels, error, isLoading, mutate } = useFetchDeviceTunnels(deviceId, open);
+  const detection = useFetchDeviceListeningPorts(deviceId, cwd, active);
+
+  /**
+   * Detected ports minus the ones already exposed on this device. Only the
+   * project's own ports count as "available": a dev machine listens on dozens
+   * of unrelated ports (databases, Docker, system services).
+   */
+  const { detected, others } = useMemo(() => {
+    const exposed = new Set((tunnels ?? []).map((link) => link.port));
+    const fresh = (detection.data?.ports ?? []).filter((p) => !exposed.has(p.port));
+    return {
+      detected: fresh.filter((p) => p.inProject),
+      others: fresh.filter((p) => !p.inProject),
+    };
+  }, [detection.data, tunnels]);
 
   /**
    * Claim the tab while the click is still the browser's idea of user
@@ -104,45 +135,61 @@ export const usePortTunnels = (deviceId: string, open: boolean, onOpened: () => 
     [mutate, t],
   );
 
-  const exposePort = useCallback(async () => {
-    const parsed = Number(port.trim());
-    if (!port.trim() || !Number.isInteger(parsed) || parsed < 1 || parsed > 65_535) {
-      toast.error(t('workingPanel.overview.ports.invalidPort'));
-      return;
-    }
+  /** Expose a port and open it. Without an argument, uses the typed port. */
+  const exposePort = useCallback(
+    async (detectedPort?: number) => {
+      const parsed = detectedPort ?? Number(port.trim());
+      if (
+        (detectedPort === undefined && !port.trim()) ||
+        !Number.isInteger(parsed) ||
+        parsed < 1 ||
+        parsed > 65_535
+      ) {
+        toast.error(t('workingPanel.overview.ports.invalidPort'));
+        return;
+      }
 
-    const tab = reserveTab();
-    if (!tab && !isDesktop) {
-      toast.error(t('workingPanel.overview.ports.popupBlocked'));
-      return;
-    }
+      const tab = reserveTab();
+      if (!tab && !isDesktop) {
+        toast.error(t('workingPanel.overview.ports.popupBlocked'));
+        return;
+      }
 
-    setCreating(true);
-    try {
-      const link = await deviceService.createTunnel({ deviceId, port: parsed });
-      setPort('');
-      await mutate();
-      // Typing a port means "let me see it" — open it without a second click.
-      navigateTab(tab, link.openUrl);
-      onOpened();
-    } catch {
-      tab?.close();
-      toast.error(t('workingPanel.overview.ports.createFailed'));
-    } finally {
-      setCreating(false);
-    }
-  }, [deviceId, mutate, navigateTab, onOpened, port, reserveTab, t]);
+      setCreatingPort(parsed);
+      try {
+        const link = await deviceService.createTunnel({ deviceId, port: parsed });
+        if (detectedPort === undefined) setPort('');
+        await mutate();
+        // Choosing a port means "let me see it" — open it without a second click.
+        navigateTab(tab, link.openUrl);
+        onOpened();
+      } catch {
+        tab?.close();
+        toast.error(t('workingPanel.overview.ports.createFailed'));
+      } finally {
+        setCreatingPort(undefined);
+      }
+    },
+    [deviceId, mutate, navigateTab, onOpened, port, reserveTab, t],
+  );
 
   return {
     busySlug,
     copyLink,
-    creating,
+    creating: creatingPort !== undefined,
+    creatingPort,
+    detected,
+    /** False when the device can't detect (offline, or a client that predates it). */
+    detectionAvailable: !!detection.data?.supported,
+    detectionLoading: detection.isLoading,
     error,
     exposePort,
     isLoading,
     openLink,
     port,
     refresh: mutate,
+    refreshDetected: detection.mutate,
+    otherPorts: others as DeviceListeningPort[],
     revokeLink,
     setPort,
     tunnels: tunnels ?? [],

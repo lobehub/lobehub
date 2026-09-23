@@ -8,6 +8,12 @@ export {
 } from './filePreview';
 export { getKimiCodeQuota, type GetKimiCodeQuotaParams } from './kimiCodeQuota';
 export {
+  type ListeningPort,
+  listListeningPorts,
+  type ListListeningPortsParams,
+  type ListListeningPortsResult,
+} from './listeningPorts';
+export {
   defaultGetProjectFileIndex,
   defaultListProjectDirectory,
   defaultSearchProjectFiles,

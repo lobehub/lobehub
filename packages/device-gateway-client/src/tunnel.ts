@@ -1,6 +1,7 @@
 import { Buffer } from 'node:buffer';
 
 import type { GatewayClientLogger } from './client';
+import { LoopbackResolver } from './loopback';
 import type {
   TunnelClientFrame,
   TunnelOpenMessage,
@@ -64,6 +65,8 @@ export interface DeviceTunnelHostOptions {
   /** Injectable for tests; defaults to global `fetch`. */
   fetchImpl?: TunnelFetch;
   logger?: GatewayClientLogger;
+  /** Injectable for tests; defaults to a TCP-probing resolver. */
+  loopback?: LoopbackResolver;
   /** Tunnels served at once. Extra opens are rejected rather than queued. */
   maxConcurrent?: number;
   /** Sends a frame up the device WebSocket. */
@@ -107,6 +110,7 @@ export class DeviceTunnelHost {
   private logger: GatewayClientLogger;
   private maxConcurrent: number;
   private send: (frame: TunnelClientFrame) => void;
+  private loopback: LoopbackResolver;
   private sockets: DeviceWsTunnelHost;
 
   constructor(options: DeviceTunnelHostOptions) {
@@ -114,7 +118,9 @@ export class DeviceTunnelHost {
     this.logger = options.logger ?? noopLogger;
     this.maxConcurrent = options.maxConcurrent ?? 32;
     this.send = options.send;
+    this.loopback = options.loopback ?? new LoopbackResolver();
     this.sockets = new DeviceWsTunnelHost({
+      loopback: this.loopback,
       backlog: options.backlog,
       createSocket: options.createUpstreamSocket,
       logger: this.logger,
@@ -274,10 +280,11 @@ export class DeviceTunnelHost {
           { highWaterMark: 0 },
         );
 
-    // An IPv6 literal needs brackets or the URL is invalid.
-    const authority = target.host.includes(':') ? `[${target.host}]` : target.host;
-
     try {
+      // `localhost` dev servers often listen on `::1` only; see LoopbackResolver.
+      const host = await this.loopback.resolve(target);
+      // An IPv6 literal needs brackets or the URL is invalid.
+      const authority = host.includes(':') ? `[${host}]` : host;
       const response = await this.fetchImpl(`http://${authority}:${target.port}${head.path}`, {
         body,
         // Required by undici whenever the body is a stream.
@@ -320,6 +327,8 @@ export class DeviceTunnelHost {
     } catch (error) {
       if (conn.closed) return;
       const reason = describeError(error);
+      // A cached host may have gone stale (server restarted on the other family).
+      if (!conn.headSent) this.loopback.forget(target.port);
       if (conn.headSent) {
         this.send({ connId: conn.connId, reason, type: 'tunnel_close' });
       } else {

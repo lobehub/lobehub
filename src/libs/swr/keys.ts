@@ -842,6 +842,11 @@ export const deviceKeys = {
     (workspaceId: string | null, deviceId: string, path?: string, cursor?: string) =>
       ['device:browseDirectory', workspaceId, deviceId, path, cursor] as const,
   ),
+  listeningPorts: def(
+    'device:listeningPorts',
+    (workspaceId: string | null, deviceId: string, cwd?: string) =>
+      ['device:listeningPorts', workspaceId, deviceId, cwd] as const,
+  ),
   tunnels: def('device:tunnels', (workspaceId: string | null, deviceId: string) => [
     'device:tunnels',
     workspaceId,

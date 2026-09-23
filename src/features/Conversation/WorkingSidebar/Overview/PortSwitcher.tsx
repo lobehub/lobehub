@@ -1,3 +1,4 @@
+import type { DeviceListeningPort } from '@lobechat/types';
 import { Icon, Input, Tooltip } from '@lobehub/ui';
 import {
   DropdownMenuItem,
@@ -8,10 +9,19 @@ import {
   DropdownMenuTrigger,
 } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { CopyIcon, GlobeIcon, LoaderCircleIcon, PlugZapIcon, XIcon } from 'lucide-react';
-import { memo, type ReactElement, useCallback, useState } from 'react';
+import {
+  CopyIcon,
+  GlobeIcon,
+  LoaderCircleIcon,
+  PlugZapIcon,
+  RadarIcon,
+  RefreshCwIcon,
+  XIcon,
+} from 'lucide-react';
+import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { OverviewRow, PickerGlyph } from './OverviewRow';
 import { usePortTunnels } from './usePortTunnels';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -106,6 +116,68 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-weight: 500;
     color: ${cssVar.colorText};
   `,
+  detectedItem: css`
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  `,
+  expose: css`
+    flex-shrink: 0;
+    font-size: 12px;
+    font-weight: 500;
+    color: ${cssVar.colorPrimary};
+  `,
+  command: css`
+    overflow: hidden;
+    flex: 1;
+
+    min-width: 0;
+
+    font-size: 12px;
+    color: ${cssVar.colorTextSecondary};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  projectTag: css`
+    flex-shrink: 0;
+
+    padding-block: 0;
+    padding-inline: 5px;
+    border-radius: 4px;
+
+    font-size: 11px;
+    line-height: 16px;
+    color: ${cssVar.colorSuccess};
+
+    background: ${cssVar.colorSuccessBg};
+  `,
+  sectionHeader: css`
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-inline-end: 4px;
+  `,
+  available: css`
+    font-size: 12px;
+    color: ${cssVar.colorPrimary};
+  `,
+  toggle: css`
+    cursor: pointer;
+
+    padding-block: 6px;
+    padding-inline: 8px;
+    border: none;
+
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
+    text-align: start;
+
+    background: transparent;
+
+    &:hover {
+      color: ${cssVar.colorText};
+    }
+  `,
   section: css`
     padding-block: 6px 4px;
     padding-inline: 8px;
@@ -117,8 +189,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface PortSwitcherProps {
-  children: ReactElement;
+  /** Whether the working panel is showing; detection only runs while it is. */
+  active: boolean;
   deviceId: string;
+  /** Project directory, so the device can say which ports belong to it. */
+  workingDirectory?: string;
 }
 
 /**
@@ -126,34 +201,134 @@ interface PortSwitcherProps {
  * design: the stored link is clean, and the token that opens it is minted per
  * click, so nothing long-lived sits in the UI or the clipboard.
  */
-const PortSwitcher = memo<PortSwitcherProps>(({ children, deviceId }) => {
+const PortSwitcher = memo<PortSwitcherProps>(({ active, deviceId, workingDirectory }) => {
   const { t } = useTranslation('chat');
   const { t: tCommon } = useTranslation('common');
   const [open, setOpen] = useState(false);
+  const [showOthers, setShowOthers] = useState(false);
   const close = useCallback(() => setOpen(false), []);
 
   const {
     busySlug,
     copyLink,
     creating,
+    creatingPort,
+    detected,
+    detectionAvailable,
+    detectionLoading,
     error,
     exposePort,
     isLoading,
     openLink,
+    otherPorts,
     port,
     refresh,
+    refreshDetected,
     revokeLink,
     setPort,
     tunnels,
-  } = usePortTunnels(deviceId, open, close);
+  } = usePortTunnels({ active, cwd: workingDirectory, deviceId, onOpened: close, open });
+
+  const renderDetected = (item: DeviceListeningPort) => (
+    <DropdownMenuItem
+      className={styles.detectedItem}
+      key={item.port}
+      onClick={(event) => {
+        event.preventDefault();
+        void exposePort(item.port);
+      }}
+    >
+      <Icon
+        icon={creatingPort === item.port ? LoaderCircleIcon : RadarIcon}
+        size={14}
+        spin={creatingPort === item.port}
+      />
+      <span className={styles.port}>{item.port}</span>
+      <span className={styles.command} title={item.cwd}>
+        {item.command}
+      </span>
+      {item.inProject && (
+        <span className={styles.projectTag}>
+          {t('workingPanel.overview.ports.detected.inProject')}
+        </span>
+      )}
+      <span className={styles.expose}>{t('workingPanel.overview.ports.detected.expose')}</span>
+    </DropdownMenuItem>
+  );
 
   return (
     <DropdownMenuRoot open={open} onOpenChange={setOpen}>
-      <DropdownMenuTrigger>{children}</DropdownMenuTrigger>
+      <DropdownMenuTrigger>
+        <OverviewRow
+          interactive
+          icon={GlobeIcon}
+          value={t('workingPanel.overview.ports.title')}
+          trailing={
+            <>
+              {detected.length > 0 && (
+                // A running dev server the user hasn't exposed yet — say so
+                // without making them open the menu.
+                <span className={styles.available}>
+                  {t('workingPanel.overview.ports.detected.available', { count: detected.length })}
+                </span>
+              )}
+              <PickerGlyph />
+            </>
+          }
+        />
+      </DropdownMenuTrigger>
       <DropdownMenuPortal>
         <DropdownMenuPositioner placement={'bottomLeft'} sideOffset={8}>
           <DropdownMenuPopup>
             <div className={styles.container}>
+              {detectionAvailable && (
+                <>
+                  <div className={styles.sectionHeader}>
+                    <div className={styles.section}>
+                      {t('workingPanel.overview.ports.detected.heading')}
+                    </div>
+                    <Tooltip title={t('workingPanel.overview.ports.detected.refresh')}>
+                      <button
+                        aria-label={t('workingPanel.overview.ports.detected.refresh')}
+                        className={styles.action}
+                        type={'button'}
+                        onKeyDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          void refreshDetected();
+                        }}
+                      >
+                        <Icon icon={RefreshCwIcon} size={12} spin={detectionLoading} />
+                      </button>
+                    </Tooltip>
+                  </div>
+                  {detected.length === 0 ? (
+                    <div className={styles.empty}>
+                      {t('workingPanel.overview.ports.detected.none')}
+                    </div>
+                  ) : (
+                    detected.map(renderDetected)
+                  )}
+                  {otherPorts.length > 0 && (
+                    <>
+                      <button
+                        className={styles.toggle}
+                        type={'button'}
+                        onClick={() => setShowOthers((value) => !value)}
+                      >
+                        {showOthers
+                          ? t('workingPanel.overview.ports.detected.hideOthers')
+                          : t('workingPanel.overview.ports.detected.others', {
+                              count: otherPorts.length,
+                            })}
+                      </button>
+                      {showOthers && otherPorts.map(renderDetected)}
+                    </>
+                  )}
+                </>
+              )}
+
               <div className={styles.section}>{t('workingPanel.overview.ports.heading')}</div>
 
               {isLoading ? (

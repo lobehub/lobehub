@@ -64,6 +64,11 @@ class DeviceService {
     return lambdaClient.device.openTunnel.mutate(input);
   }
 
+  /** Ports the device is listening on; `null` when it can't answer. */
+  listListeningPorts(input: Parameters<DeviceClient['listListeningPorts']['query']>[0]) {
+    return lambdaClient.device.listListeningPorts.query(input);
+  }
+
   /** Revoke a link. */
   revokeTunnel(input: Parameters<DeviceClient['revokeTunnel']['mutate']>[0]) {
     return lambdaClient.device.revokeTunnel.mutate(input);

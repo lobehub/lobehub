@@ -40,6 +40,7 @@ import type {
   DeviceGitWorkingTreePatches,
   DeviceGitWorkingTreeStatus,
   DeviceGitWorktreeListItem,
+  DeviceListeningPortsResult,
   DeviceListProjectSkillsResult,
   DeviceLocalFilePreviewResult,
   DeviceMoveProjectFileItem,
@@ -1775,6 +1776,42 @@ export class DeviceGateway {
       const message = error instanceof Error ? error.message : String(error);
       log('executeMessageApi: error — %s', message);
       return { content: `Device message API error: ${message}`, error: message, success: false };
+    }
+  }
+
+  /**
+   * TCP ports the device is listening on that a tunnel can reach, with the
+   * project's own ports marked. Resolves undefined when the device is
+   * offline or predates the RPC — the UI then falls back to manual entry.
+   */
+  async listListeningPorts(params: {
+    cwd?: string;
+    deviceId: string;
+    timeout?: number;
+    userId: string;
+    workspaceId?: string;
+  }): Promise<DeviceListeningPortsResult | undefined> {
+    const { cwd, deviceId, timeout = 10_000, userId, workspaceId } = params;
+    const client = this.getClient();
+    if (!client) return undefined;
+
+    try {
+      const result = await client.invokeRpc<DeviceListeningPortsResult>(
+        { deviceId, timeout, userId, workspaceId },
+        { method: 'listListeningPorts', params: { cwd } },
+      );
+      if (!result.success || !result.data) {
+        log('listListeningPorts: failed for deviceId=%s', deviceId);
+        return undefined;
+      }
+      return result.data;
+    } catch (error) {
+      log(
+        'listListeningPorts: error for deviceId=%s (%s)',
+        deviceId,
+        error instanceof Error ? error.name : typeof error,
+      );
+      return undefined;
     }
   }
 

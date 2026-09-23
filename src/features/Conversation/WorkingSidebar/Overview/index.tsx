@@ -14,7 +14,6 @@ import {
   FileTextIcon,
   GitBranchIcon,
   GitForkIcon,
-  GlobeIcon,
   LaptopIcon,
   RefreshCwIcon,
   TriangleAlertIcon,
@@ -333,14 +332,7 @@ const Overview = memo<OverviewProps>(
         />
 
         {tunnelsEnabled && deviceId && (
-          <PortSwitcher deviceId={deviceId}>
-            <OverviewRow
-              interactive
-              icon={GlobeIcon}
-              trailing={<PickerGlyph />}
-              value={t('workingPanel.overview.ports.title')}
-            />
-          </PortSwitcher>
+          <PortSwitcher active={active} deviceId={deviceId} workingDirectory={workingDirectory} />
         )}
 
         {pullRequest && prVisual && ci && (

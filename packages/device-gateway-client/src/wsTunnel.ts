@@ -3,6 +3,7 @@ import { Buffer } from 'node:buffer';
 import WebSocket from 'ws';
 
 import type { GatewayClientLogger } from './client';
+import type { LoopbackResolver } from './loopback';
 import type {
   TunnelClientFrame,
   TunnelWsCloseMessage,
@@ -71,7 +72,8 @@ interface WsTunnel {
   /** Polls the backlog while the upstream is paused. */
   drainTimer?: ReturnType<typeof setInterval>;
   opened: boolean;
-  socket: TunnelUpstreamSocket;
+  /** Set once the loopback address is resolved and the dial has started. */
+  socket?: TunnelUpstreamSocket;
 }
 
 export class DeviceWsTunnelHost {
@@ -83,6 +85,7 @@ export class DeviceWsTunnelHost {
       backlog?: () => number;
       createSocket?: TunnelUpstreamFactory;
       logger: GatewayClientLogger;
+      loopback?: LoopbackResolver;
       send: (frame: TunnelClientFrame) => void;
     },
   ) {}
@@ -92,11 +95,22 @@ export class DeviceWsTunnelHost {
   }
 
   open(frame: TunnelWsOpenMessage): void {
-    const { connId, head, target } = frame;
+    const { connId } = frame;
     if (this.tunnels.has(connId)) return;
+    // Registered before the async dial, so a close that races it still lands.
+    const tunnel: WsTunnel = { closed: false, connId, opened: false };
+    this.tunnels.set(connId, tunnel);
+    void this.dial(tunnel, frame);
+  }
+
+  private async dial(tunnel: WsTunnel, frame: TunnelWsOpenMessage): Promise<void> {
+    const { connId, head, target } = frame;
+    // `localhost` dev servers often listen on `::1` only; see LoopbackResolver.
+    const host = this.options.loopback ? await this.options.loopback.resolve(target) : target.host;
+    if (tunnel.closed) return;
 
     // An IPv6 literal needs brackets or the URL is invalid.
-    const authority = target.host.includes(':') ? `[${target.host}]` : target.host;
+    const authority = host.includes(':') ? `[${host}]` : host;
     let socket: TunnelUpstreamSocket;
     try {
       socket = (this.options.createSocket ?? defaultFactory)(
@@ -104,12 +118,11 @@ export class DeviceWsTunnelHost {
         head.protocols,
       );
     } catch (error) {
+      this.release(tunnel);
       this.fail(connId, error);
       return;
     }
-
-    const tunnel: WsTunnel = { closed: false, connId, opened: false, socket };
-    this.tunnels.set(connId, tunnel);
+    tunnel.socket = socket;
 
     socket.on('open', () => {
       tunnel.opened = true;
@@ -163,7 +176,7 @@ export class DeviceWsTunnelHost {
   /** A browser message for the upstream socket. */
   message(frame: TunnelWsDataMessage): void {
     const tunnel = this.tunnels.get(frame.connId);
-    if (!tunnel || tunnel.closed || !tunnel.opened) return;
+    if (!tunnel?.socket || tunnel.closed || !tunnel.opened) return;
     tunnel.socket.send(frame.binary ? Buffer.from(frame.data, 'base64') : frame.data);
   }
 
@@ -173,9 +186,9 @@ export class DeviceWsTunnelHost {
     if (!tunnel || tunnel.closed) return;
     this.release(tunnel);
     try {
-      tunnel.socket.close(sendableCode(frame.code), (frame.reason ?? '').slice(0, 100));
+      tunnel.socket?.close(sendableCode(frame.code), (frame.reason ?? '').slice(0, 100));
     } catch {
-      tunnel.socket.terminate();
+      tunnel.socket?.terminate();
     }
   }
 
@@ -183,7 +196,7 @@ export class DeviceWsTunnelHost {
   closeAll(): void {
     for (const tunnel of this.tunnels.values()) {
       this.release(tunnel);
-      tunnel.socket.terminate();
+      tunnel.socket?.terminate();
     }
   }
 
@@ -195,7 +208,7 @@ export class DeviceWsTunnelHost {
     if (backlog > WS_RELAY_HARD_LIMIT) {
       this.options.logger.warn(`[tunnel] ws ${tunnel.connId} relay backlog ${backlog}B, closing`);
       this.release(tunnel);
-      tunnel.socket.close(1013, 'RELAY_BACKLOG');
+      tunnel.socket?.close(1013, 'RELAY_BACKLOG');
       this.options.send({
         code: 1013,
         connId: tunnel.connId,
@@ -207,13 +220,13 @@ export class DeviceWsTunnelHost {
 
     if (backlog <= WS_RELAY_HIGH_WATER || tunnel.drainTimer) return;
 
-    tunnel.socket.pause();
+    tunnel.socket?.pause();
     tunnel.drainTimer = setInterval(() => {
       if (tunnel.closed) return;
       if ((this.options.backlog?.() ?? 0) > WS_RELAY_LOW_WATER) return;
       clearInterval(tunnel.drainTimer);
       tunnel.drainTimer = undefined;
-      tunnel.socket.resume();
+      tunnel.socket?.resume();
     }, WS_RELAY_DRAIN_POLL_MS);
   }
 

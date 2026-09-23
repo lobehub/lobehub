@@ -4,6 +4,7 @@ import type { AddressInfo } from 'node:net';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type WebSocket as ServerSocket, WebSocketServer } from 'ws';
 
+import { LoopbackResolver } from './loopback';
 import { DeviceTunnelHost } from './tunnel';
 import type { TunnelClientFrame } from './types';
 import { WS_RELAY_HARD_LIMIT, WS_RELAY_HIGH_WATER, WS_RELAY_LOW_WATER } from './wsTunnel';
@@ -199,16 +200,22 @@ describe('WebSocket relay backpressure', () => {
     return { emit: (event: string, ...args: any[]) => handlers[event]?.(...args), socket };
   };
 
-  const setupFake = () => {
+  const setupFake = async () => {
     const upstream = fakeUpstream();
     const backlog = { value: 0 };
     const frames: TunnelClientFrame[] = [];
     const host = new DeviceTunnelHost({
       backlog: () => backlog.value,
       createUpstreamSocket: () => upstream.socket as never,
+      // No real TCP probe under fake timers.
+      loopback: new LoopbackResolver(async () => true),
       send: (frame) => frames.push(frame),
     });
     open(host, 'b1');
+    // The dial runs after the (async) loopback resolution.
+    await vi.waitFor(() => expect(upstream.socket).toBeDefined());
+    await Promise.resolve();
+    await Promise.resolve();
     upstream.emit('open');
     return { backlog, frames, host, upstream };
   };
@@ -216,8 +223,8 @@ describe('WebSocket relay backpressure', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  it('pauses a fast producer above the high mark and resumes once drained', () => {
-    const { backlog, host, upstream } = setupFake();
+  it('pauses a fast producer above the high mark and resumes once drained', async () => {
+    const { backlog, host, upstream } = await setupFake();
 
     backlog.value = WS_RELAY_HIGH_WATER + 1;
     upstream.emit('message', Buffer.from('hmr update'), false);
@@ -234,8 +241,8 @@ describe('WebSocket relay backpressure', () => {
     host.closeAll('TEST');
   });
 
-  it('keeps relaying without pausing while the uplink keeps up', () => {
-    const { backlog, frames, host, upstream } = setupFake();
+  it('keeps relaying without pausing while the uplink keeps up', async () => {
+    const { backlog, frames, host, upstream } = await setupFake();
 
     backlog.value = 1024;
     upstream.emit('message', Buffer.from('a'), false);
@@ -246,8 +253,8 @@ describe('WebSocket relay backpressure', () => {
     host.closeAll('TEST');
   });
 
-  it('closes with 1013 when the backlog blows past the hard cap', () => {
-    const { backlog, frames, host, upstream } = setupFake();
+  it('closes with 1013 when the backlog blows past the hard cap', async () => {
+    const { backlog, frames, host, upstream } = await setupFake();
 
     backlog.value = WS_RELAY_HARD_LIMIT + 1;
     upstream.emit('message', Buffer.from('x'), false);
@@ -262,8 +269,8 @@ describe('WebSocket relay backpressure', () => {
     expect(host.activeCount).toBe(0);
   });
 
-  it('stops polling the backlog once the tunnel is gone', () => {
-    const { backlog, host, upstream } = setupFake();
+  it('stops polling the backlog once the tunnel is gone', async () => {
+    const { backlog, host, upstream } = await setupFake();
 
     backlog.value = WS_RELAY_HIGH_WATER + 1;
     upstream.emit('message', Buffer.from('x'), false);

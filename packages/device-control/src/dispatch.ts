@@ -29,6 +29,7 @@ import { getClaudeCodeQuota, type GetClaudeCodeQuotaParams } from './claudeCodeQ
 import { getCodexQuota, type GetCodexQuotaParams } from './codexQuota';
 import { defaultCopyAssetForPublish, defaultReadExternalAssetForPublish } from './filePreview';
 import { getKimiCodeQuota, type GetKimiCodeQuotaParams } from './kimiCodeQuota';
+import { listListeningPorts, type ListListeningPortsParams } from './listeningPorts';
 import { defaultListProjectDirectory } from './projectFileIndex';
 import { prepareSkillDirectory } from './skillDirectory';
 import type {
@@ -98,6 +99,7 @@ export const DEVICE_RPC_METHODS = [
   'pullGitBranch',
   'pushGitBranch',
   'revertGitFile',
+  'listListeningPorts',
 ] as const;
 
 export type DeviceRpcMethod = (typeof DEVICE_RPC_METHODS)[number];
@@ -163,6 +165,10 @@ export const executeDeviceRpc = async (
 
     case 'prepareSkillDirectory': {
       return prepareSkillDirectory(params as PrepareSkillDirectoryParams, deps);
+    }
+
+    case 'listListeningPorts': {
+      return listListeningPorts(params as ListListeningPortsParams);
     }
 
     case 'browseDirectory': {

@@ -951,3 +951,22 @@ export const workingDirConfigSchema = z.object({
   path: z.string(),
   repoType: z.enum(['git', 'github']).optional(),
 });
+
+/** One TCP port a device is listening on that a tunnel can reach. */
+export interface DeviceListeningPort {
+  command?: string;
+  cwd?: string;
+  /** The listening process runs inside the requested project directory. */
+  inProject: boolean;
+  /** Which loopback address reaches it — `ipv6` means `::1` only. */
+  loopback: 'both' | 'ipv4' | 'ipv6';
+  pid?: number;
+  port: number;
+}
+
+/** Result of the `listListeningPorts` device RPC. */
+export interface DeviceListeningPortsResult {
+  ports: DeviceListeningPort[];
+  /** False when the device has no detector for its platform. */
+  supported: boolean;
+}

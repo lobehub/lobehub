@@ -1277,6 +1277,25 @@ export const deviceRouter = router({
       return { ...link, openUrl: await buildTunnelOpenUrl(link.url, ctx) };
     }),
 
+  /**
+   * Ports the device is listening on, so the UI can offer "5173 · vite" to
+   * expose in one click. Gated like creating a tunnel: seeing which ports are
+   * open is only useful to someone allowed to expose them. `null` means the
+   * device couldn't answer (offline, or a client that predates detection).
+   */
+  listListeningPorts: deviceProcedure
+    .input(z.object({ cwd: z.string().optional(), deviceId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      await assertTunnelDeviceWritable(ctx, input.deviceId);
+      const result = await deviceGateway.listListeningPorts({
+        cwd: input.cwd,
+        deviceId: input.deviceId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      return result ?? null;
+    }),
+
   /** Live tunnel links the caller can reach, newest first. */
   listTunnels: deviceProcedure
     .input(z.object({ deviceId: z.string().optional() }).optional())

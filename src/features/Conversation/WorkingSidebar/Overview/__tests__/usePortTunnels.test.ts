@@ -16,12 +16,18 @@ const tunnels = vi.hoisted(() => ({
   value: [] as unknown[] | undefined,
 }));
 const isDesktop = vi.hoisted(() => ({ value: false }));
+const detection = vi.hoisted(() => ({
+  data: undefined as unknown,
+  isLoading: false,
+  mutate: vi.fn(),
+}));
 
 vi.mock('@/services/device', () => ({
   deviceService: { createTunnel, openTunnel, revokeTunnel },
 }));
 
 vi.mock('@/store/device', () => ({
+  useFetchDeviceListeningPorts: () => detection,
   useFetchDeviceTunnels: () => ({
     data: tunnels.value,
     error: tunnels.error,
@@ -55,7 +61,10 @@ const link = {
 };
 
 const onOpened = vi.fn();
-const setup = () => renderHook(() => usePortTunnels('device-1', true, onOpened));
+const setup = () =>
+  renderHook(() =>
+    usePortTunnels({ active: true, cwd: '/work/app', deviceId: 'device-1', onOpened, open: true }),
+  );
 
 /** A pre-opened tab: `window.open` is called before the token round trip. */
 const tab = { close: vi.fn(), location: { href: '' }, opener: {} as unknown };
@@ -66,6 +75,8 @@ beforeEach(() => {
   tunnels.error = undefined;
   tunnels.isLoading = false;
   isDesktop.value = false;
+  detection.data = undefined;
+  detection.isLoading = false;
   tab.location.href = '';
   tab.opener = {};
   vi.stubGlobal(
@@ -217,6 +228,51 @@ describe('usePortTunnels', () => {
       // Callers need the error itself: "couldn't ask" must not render as
       // "nothing is exposed".
       expect(setup().result.current.error).toBeTruthy();
+    });
+  });
+
+  describe('detected ports', () => {
+    const port = (overrides: Record<string, unknown>) => ({
+      command: 'node',
+      inProject: true,
+      loopback: 'both',
+      port: 5173,
+      ...overrides,
+    });
+
+    it('offers the project ports that are not exposed yet, and keeps the rest aside', () => {
+      tunnels.value = [link]; // 3000 is already exposed
+      detection.data = {
+        ports: [
+          port({ port: 3000 }),
+          port({ port: 5173 }),
+          port({ command: 'postgres', inProject: false, port: 5432 }),
+        ],
+        supported: true,
+      };
+
+      const { result } = setup();
+
+      expect(result.current.detected.map((p) => p.port)).toEqual([5173]);
+      expect(result.current.otherPorts.map((p) => p.port)).toEqual([5432]);
+      expect(result.current.detectionAvailable).toBe(true);
+    });
+
+    it('exposes a detected port in one click, without touching the typed field', async () => {
+      createTunnel.mockResolvedValue({ ...link, openUrl: `${link.url}?token=fresh`, port: 5173 });
+      const { result } = setup();
+
+      act(() => result.current.setPort('8080'));
+      await act(() => result.current.exposePort(5173));
+
+      expect(createTunnel).toHaveBeenCalledWith({ deviceId: 'device-1', port: 5173 });
+      expect(tab.location.href).toBe(`${link.url}?token=fresh`);
+      expect(result.current.port).toBe('8080');
+    });
+
+    it('reports no detection for a device that cannot answer', () => {
+      detection.data = null;
+      expect(setup().result.current).toMatchObject({ detected: [], detectionAvailable: false });
     });
   });
 });

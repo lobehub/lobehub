@@ -1,3 +1,5 @@
+import type { DeviceListeningPortsResult } from '@lobechat/types';
+
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useClientDataSWR } from '@/libs/swr';
 import { deviceKeys } from '@/libs/swr/keys';
@@ -28,5 +30,25 @@ export const useFetchDeviceTunnels = (deviceId?: string, enabled = true) => {
     enabled && deviceId ? deviceKeys.tunnels(workspaceId, deviceId) : null,
     async () => deviceService.listTunnels({ deviceId }),
     { revalidateOnFocus: false },
+  );
+};
+
+/**
+ * Ports the device is listening on, for one-click exposure. Asked when the
+ * working panel shows (and on focus) rather than polled: detection spawns a
+ * process on the device, and a port that appears later is one click of
+ * "refresh" away. `null` data means the device couldn't answer.
+ */
+export const useFetchDeviceListeningPorts = (
+  deviceId: string | undefined,
+  cwd: string | undefined,
+  enabled = true,
+) => {
+  const workspaceId = useActiveWorkspaceId();
+
+  return useClientDataSWR<DeviceListeningPortsResult | null>(
+    enabled && deviceId ? deviceKeys.listeningPorts(workspaceId, deviceId, cwd) : null,
+    async () => deviceService.listListeningPorts({ cwd, deviceId: deviceId! }),
+    { revalidateOnFocus: true },
   );
 };
