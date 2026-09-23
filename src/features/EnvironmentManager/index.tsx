@@ -12,6 +12,7 @@ import AsyncBoundary from '@/components/AsyncBoundary';
 import ListSkeleton from '@/components/ListSkeleton';
 
 import { openCreateEnvironmentModal } from './CreateEnvironmentModal';
+import { openCreateInstanceModal } from './CreateInstanceModal';
 import EnvironmentDetailPanel from './EnvironmentDetailPanel';
 import EnvironmentItem from './EnvironmentItem';
 import { useEnvironments, useInstances } from './useEnvironmentData';
@@ -86,10 +87,6 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
   const { data: instanceData, mutate: refreshInstances } = useInstances();
 
   const [selectedId, setSelectedId] = useState<string>();
-  // Whether the selected environment opens with its instance-create form
-  // showing. The row's "new instance" action is a shortcut into the panel, not
-  // a second way to make one.
-  const [adding, setAdding] = useState(false);
   // Whether a refresh the user asked for is still running.
   const [refreshing, setRefreshing] = useState(false);
   /**
@@ -116,12 +113,14 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
 
   const select = (id: string) => {
     setSelectedId((current) => (current === id ? undefined : id));
-    setAdding(false);
   };
 
+  // The row's shortcut: open the environment so the new instance is seen
+  // landing in its list, and ask for the instance in the same dialog the
+  // panel's own button opens.
   const createInstance = (id: string) => {
     setSelectedId(id);
-    setAdding(true);
+    openCreateInstanceModal({ environmentId: id });
   };
 
   /**
@@ -258,10 +257,8 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
                   the selection changes — a description typed for one
                   environment must not survive into another. */}
             <EnvironmentDetailPanel
-              adding={adding}
               environment={selected}
               key={selected.id}
-              onAddingChange={setAdding}
               onClose={() => setSelectedId(undefined)}
             />
           </Flexbox>

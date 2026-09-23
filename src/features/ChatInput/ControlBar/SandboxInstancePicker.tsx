@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
 import { openSandboxWorkspaceUpsell } from '@/business/client/features/SandboxWorkspaceUpsell';
+import { openCreateInstanceModal } from '@/features/EnvironmentManager/CreateInstanceModal';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { sandboxWorkspaceService } from '@/services/sandboxWorkspace';
 
@@ -124,7 +125,6 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
     // "working directory" would be one more pair to keep in step.
     const { t } = useTranslation(['chat', 'device']);
     const [open, setOpen] = useState(false);
-    const [creating, setCreating] = useState<string | undefined>();
     const navigate = useWorkspaceAwareNavigate();
 
     const boundInstanceId = value.mode === 'persistent' ? value.instanceId : undefined;
@@ -157,23 +157,25 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
       await onChange(selection);
     };
 
-    const createIn = async (environmentId: string) => {
-      setCreating(environmentId);
-      try {
-        const created = await sandboxWorkspaceService.createInstanceForEnvironment({
-          environmentId,
-        });
-        await mutate();
-        await select({ instanceId: created.id, mode: 'persistent' });
-      } finally {
-        setCreating(undefined);
-      }
-    };
-
     const leaveTo = (action: () => void) => {
       setOpen(false);
       action();
     };
+
+    // The same dialog the settings page opens, so the instance is named and
+    // given its directory here too rather than conjured with a derived name.
+    // Bound to the conversation as soon as it exists — that is what asking for
+    // it from the composer was for.
+    const createIn = (environmentId: string) =>
+      leaveTo(() =>
+        openCreateInstanceModal({
+          environmentId,
+          onCreated: (created) => {
+            void mutate();
+            void onChange({ instanceId: created.id, mode: 'persistent' });
+          },
+        }),
+      );
 
     // The chip names what was chosen — an instance, or the temporary directory
     // once it has been picked on purpose — and otherwise the slot itself, the
@@ -257,14 +259,8 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
 
               <OptionRow
                 icon={<Icon icon={PlusIcon} size={16} />}
-                label={
-                  creating === environment.id
-                    ? t('sandboxWorkspace.creatingInstance')
-                    : t('sandboxWorkspace.newInstance')
-                }
-                onClick={() => {
-                  if (!creating) void createIn(environment.id);
-                }}
+                label={t('sandboxWorkspace.newInstance')}
+                onClick={() => createIn(environment.id)}
               />
             </Flexbox>
           ))}

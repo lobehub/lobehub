@@ -1,6 +1,5 @@
 'use client';
 
-import { isSafeSandboxCwd } from '@lobechat/builtin-tool-cloud-sandbox';
 import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
 import { ActionIcon, Button, confirmModal, Input, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -18,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 
 import { formatSize } from '@/utils/format';
 
+import { openCreateInstanceModal } from './CreateInstanceModal';
 import { describeError } from './errorMessage';
 import { openInstanceFileBrowser } from './InstanceFileBrowser';
 import type { SandboxInstance } from './useEnvironmentData';
@@ -42,28 +42,17 @@ const styles = createStaticStyles(({ css }) => ({
       border-block-start: 1px solid ${cssVar.colorBorderSecondary};
     }
   `,
-  /** The surface Railway gives the same job: a filled panel, set off from the list above it. */
-  createCard: css`
-    padding: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
-  `,
 }));
 
 interface InstanceListProps {
-  /** Whether the create form is showing. Owned by the caller so the row's
-   *  "new instance" action can open the fold straight into it. */
-  adding: boolean;
   /**
    * Whether the caller owns the environment these belong to. A published
    * environment is one a colleague can run in, not one they can add copies to
    * or delete copies from, so the controls go away rather than fail.
    */
   editable: boolean;
+  environmentId: string;
   instances: SandboxInstance[];
-  onAddingChange: (adding: boolean) => void;
-  onCreate: (params: { name: string; workingDirectory: string }) => Promise<void>;
   onRemove: (id: string) => Promise<void>;
   /** Only the label: the folder holds the built state and cannot move. */
   onRename: (params: { id: string; name: string }) => Promise<void>;
@@ -257,11 +246,9 @@ InstanceRow.displayName = 'InstanceRow';
  */
 const InstanceList = memo<InstanceListProps>(
   ({
-    adding,
     editable,
+    environmentId,
     instances,
-    onAddingChange,
-    onCreate,
     onRemove,
     onRename,
     snapshotsPending,
@@ -269,27 +256,7 @@ const InstanceList = memo<InstanceListProps>(
   }) => {
     const { t } = useTranslation('setting');
 
-    const [name, setName] = useState('');
-    const [workingDirectory, setWorkingDirectory] = useState('');
-    const [busy, setBusy] = useState(false);
-
-    // Checked here against the rule the execution plane applies, so a folder it
-    // would refuse is refused while the person is still typing rather than on
-    // their next message.
-    const canCreate = Boolean(name.trim()) && isSafeSandboxCwd(workingDirectory);
-
-    const create = async () => {
-      if (!canCreate) return;
-      setBusy(true);
-      try {
-        await onCreate({ name: name.trim(), workingDirectory });
-        setName('');
-        setWorkingDirectory('');
-        onAddingChange(false);
-      } finally {
-        setBusy(false);
-      }
-    };
+    const add = () => openCreateInstanceModal({ environmentId });
 
     return (
       <Flexbox gap={8}>
@@ -298,7 +265,7 @@ const InstanceList = memo<InstanceListProps>(
             the half of the story this panel cannot show. The create button
             lives inside it, so an empty list has one call to action rather
             than a placeholder above the same button. */}
-        {instances.length === 0 && !adding && (
+        {instances.length === 0 && (
           <Center paddingBlock={16}>
             <Empty
               descriptionProps={{ fontSize: 13 }}
@@ -307,7 +274,7 @@ const InstanceList = memo<InstanceListProps>(
               title={t('environments.instances.empty')}
               action={
                 editable ? (
-                  <Button icon={<Icon icon={PlusIcon} />} onClick={() => onAddingChange(true)}>
+                  <Button icon={<Icon icon={PlusIcon} />} onClick={add}>
                     {t('environments.instances.add')}
                   </Button>
                 ) : undefined
@@ -343,60 +310,13 @@ const InstanceList = memo<InstanceListProps>(
           </Text>
         )}
 
-        {!editable ? null : adding ? (
-          /* A panel of its own rather than a row squeezed under the list: two
-             fields and a button abreast left each of them too narrow to read,
-             and the button was the one pushed out. Stacked full width with the
-             actions underneath, the shape holds at any panel width — and the
-             form now says how to leave it, which a bare row never did. */
-          <Flexbox className={styles.createCard} gap={12}>
-            <Text weight={500}>{t('environments.instances.add')}</Text>
-
-            {/* Labelled, not just placeholded. Two bare boxes reading "副本名称"
-                and "reports/q3" name neither field and vanish the moment
-                anyone types, leaving a form nobody can check their own answer
-                against. */}
-            <Flexbox gap={6}>
-              <Text fontSize={12} type={'secondary'} weight={500}>
-                {t('environments.nameLabel')}
-              </Text>
-              <Input
-                autoFocus
-                placeholder={t('environments.instances.namePlaceholder')}
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-              />
-            </Flexbox>
-
-            <Flexbox gap={6}>
-              <Text fontSize={12} type={'secondary'} weight={500}>
-                {t('environments.instances.directoryLabel')}
-              </Text>
-              {/* Beside the field it explains, rather than in the footer, where
-                  it was squeezed into a column five lines tall next to buttons
-                  that had room to spare. */}
-              <Text fontSize={12} type={'secondary'}>
-                {t('environments.instances.directoryHint')}
-              </Text>
-              <Input
-                placeholder={t('environments.instances.directoryPlaceholder')}
-                value={workingDirectory}
-                onChange={(event) => setWorkingDirectory(event.target.value)}
-              />
-            </Flexbox>
-
-            <Flexbox horizontal align={'center'} gap={12} justify={'flex-end'}>
-              <Flexbox horizontal gap={8} style={{ flex: 'none' }}>
-                <Button onClick={() => onAddingChange(false)}>{t('environments.cancel')}</Button>
-                <Button disabled={!canCreate} loading={busy} type={'primary'} onClick={create}>
-                  {t('environments.instances.confirm')}
-                </Button>
-              </Flexbox>
-            </Flexbox>
-          </Flexbox>
-        ) : instances.length === 0 ? null : (
+        {/* Below the framed list, as an addition to the set rather than a line
+            in it. The form itself opens as a dialog: the same one the composer
+            uses, so making an instance asks the same two questions wherever
+            it starts. */}
+        {editable && instances.length > 0 && (
           <Flexbox horizontal>
-            <Button icon={<Icon icon={PlusIcon} />} onClick={() => onAddingChange(true)}>
+            <Button icon={<Icon icon={PlusIcon} />} onClick={add}>
               {t('environments.instances.add')}
             </Button>
           </Flexbox>
