@@ -1,3 +1,4 @@
+import { anysearch } from './anysearch';
 import { browserless } from './browserless';
 import { exa } from './exa';
 import { firecrawl } from './firecrawl';
@@ -7,6 +8,7 @@ import { search1api } from './search1api';
 import { tavily } from './tavily';
 
 export const crawlImpls = {
+  anysearch,
   browserless,
   exa,
   firecrawl,

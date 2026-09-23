@@ -59,9 +59,9 @@ Enable Web Search below the Agent chat input. This does not require Agent settin
 
 ### Two Search Options
 
-| Mode | Description |
-| --- | --- |
-| **Smart Search** | The LobeHub-optimized search service, designed for better retrieval results. |
+| Mode                | Description                                                                                                      |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| **Smart Search**    | The LobeHub-optimized search service, designed for better retrieval results.                                     |
 | **Provider Search** | Provider-side search. The interface warns that this option can cause unexpected behavior and is not recommended. |
 
 **Off** is the disabled state, not a third search mode. Select **Off** to disable Web Search.
@@ -70,11 +70,11 @@ If search does not run, check whether Web Search is enabled. Also check search-t
 
 ### Web Search, Browser Tools, and In-App Search
 
-| Capability | Purpose | Boundary |
-| --- | --- | --- |
-| **Web search** | Find internet information through a search provider and read accessible source pages | Does not operate your signed-in browser |
-| **Browser tools** | Open pages, click controls, fill forms, or interact with dynamic pages | Require a browser tool, execution environment, and permissions. Web Search does not grant these |
-| **LobeHub in-app search** | Find Agents, Topics, pages, and other LobeHub content | Searches accessible in-app content, not the internet |
+| Capability                | Purpose                                                                              | Boundary                                                                                        |
+| ------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| **Web search**            | Find internet information through a search provider and read accessible source pages | Does not operate your signed-in browser                                                         |
+| **Browser tools**         | Open pages, click controls, fill forms, or interact with dynamic pages               | Require a browser tool, execution environment, and permissions. Web Search does not grant these |
+| **LobeHub in-app search** | Find Agents, Topics, pages, and other LobeHub content                                | Searches accessible in-app content, not the internet                                            |
 
 To search files or knowledge bases, use their own search tools and check access permissions. A Skill can guide research steps, but the search tools still need to be enabled separately.
 
@@ -87,7 +87,9 @@ To search files or knowledge bases, use their own search tools and check access 
 
 ### Optional: MCP-Based Search Tools
 
-For a specific search backend, connect a search MCP server in **Settings → Connectors**. Examples include Brave Search, Google Search, and DuckDuckGo. This optional connection is separate from built-in web search. It requires service authorization, Agent enablement, and tool policy approval. See [MCP Marketplace](/docs/usage/community/mcp-market).
+For a specific search backend, connect a search MCP server in **Settings → Connectors**. Examples include Brave Search, Google Search, DuckDuckGo, and AnySearch. This optional connection is separate from built-in web search. It requires service authorization, Agent enablement, and tool policy approval. See [MCP Marketplace](/docs/usage/community/mcp-market).
+
+AnySearch's remote MCP endpoint is `https://api.anysearch.com/mcp`. It can be used anonymously and adds vertical-domain search, domain discovery, parallel batch search, and page extraction. If you configure an AnySearch API key, keep the Bearer token in Connector authentication settings.
 
 ## Using Web Search
 
