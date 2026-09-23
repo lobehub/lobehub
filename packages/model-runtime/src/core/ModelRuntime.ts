@@ -98,6 +98,17 @@ export interface ModelRuntimeHooks {
     context: { options?: ChatMethodOptions; payload: ChatStreamPayload },
   ) => void | Promise<void>;
 
+  /**
+   * Called when a chat stream fails after `chat()` has already returned its response: an
+   * in-band provider `error` event, or a body read failure such as every routed fallback
+   * failing mid-stream. `onChatError` never sees these. Same side-effect contract (sanitize,
+   * log, record), but leave billing alone — stream outcomes settle through `onChatFinal`.
+   */
+  onChatStreamError?: (
+    error: unknown,
+    context: { options?: ChatMethodOptions; payload: ChatStreamPayload },
+  ) => void | Promise<void>;
+
   onEmbeddingsError?: (
     error: ChatCompletionErrorPayload,
     context: { options?: EmbeddingsOptions; payload: EmbeddingsPayload },
@@ -241,6 +252,21 @@ export class ModelRuntime {
         }
       }
       throw error;
+    }
+  }
+
+  /**
+   * Report a chat stream failure that surfaced after `chat()` returned, for callers that consume
+   * the response. Hook failures are logged so they never replace the stream error itself.
+   */
+  async handleChatStreamError(
+    error: unknown,
+    context: { options?: ChatMethodOptions; payload: ChatStreamPayload },
+  ) {
+    try {
+      await this._hooks?.onChatStreamError?.(error, context);
+    } catch (hookError) {
+      console.error('[ModelRuntime] onChatStreamError hook failed:', hookError);
     }
   }
 

@@ -657,6 +657,32 @@ describe('ModelRuntime', () => {
 
         await expect(runtime.chat(chatPayload)).resolves.toBeInstanceOf(Response);
       });
+
+      it('handleChatStreamError forwards a stream failure to onChatStreamError', async () => {
+        const streamError = { errorType: 'ProviderBizError', error: { message: 'fail' } };
+        const options = { metadata: { trigger: 'chat' } };
+        const onChatStreamError = vi.fn();
+        const { runtime } = createMockRuntime({ onChatStreamError });
+
+        await runtime.handleChatStreamError(streamError, { options, payload: chatPayload });
+
+        expect(onChatStreamError).toHaveBeenCalledWith(streamError, {
+          options,
+          payload: chatPayload,
+        });
+      });
+
+      it('handleChatStreamError keeps a failing hook from replacing the stream error', async () => {
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const onChatStreamError = vi.fn().mockRejectedValue(new Error('hook failed'));
+        const { runtime } = createMockRuntime({ onChatStreamError });
+
+        await expect(
+          runtime.handleChatStreamError(new Error('stream failed'), { payload: chatPayload }),
+        ).resolves.toBeUndefined();
+        expect(consoleError).toHaveBeenCalled();
+        consoleError.mockRestore();
+      });
     });
 
     describe('generateObject hooks', () => {

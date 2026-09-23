@@ -79,6 +79,7 @@ const createAttempt = (
     await runCallbacks(options!);
     return new Response('done');
   });
+  const handleChatStreamError = vi.fn();
   const events: AgentEvent[] = [];
   const onFirstChunk = vi.fn();
   const attempt = createServerCallLlmAttempt({
@@ -95,7 +96,10 @@ const createAttempt = (
     maxAttempts: 3,
     messageCount: 1,
     model: 'test-model',
-    modelRuntime: { chat } as unknown as Pick<ModelRuntime, 'chat'>,
+    modelRuntime: { chat, handleChatStreamError } as unknown as Pick<
+      ModelRuntime,
+      'chat' | 'handleChatStreamError'
+    >,
     onFirstChunk,
     operationLogId: 'operation-1:2',
     provider: 'test-provider',
@@ -105,7 +109,7 @@ const createAttempt = (
     ...attemptOverrides,
   });
 
-  return { attempt, chat, events, onFirstChunk, publishStreamChunk };
+  return { attempt, chat, events, handleChatStreamError, onFirstChunk, publishStreamChunk };
 };
 
 describe('ServerCallLlmAttempt', () => {
@@ -319,6 +323,72 @@ describe('ServerCallLlmAttempt', () => {
 
     await expect(attempt.execute()).rejects.toThrow('Request aborted');
     expect(recordModelCompletionFailureMock).not.toHaveBeenCalled();
+  });
+
+  it('reports an in-band stream error to the runtime error hooks', async () => {
+    const { attempt, handleChatStreamError } = createAttempt(async ({ callback }) => {
+      await callback?.onError?.({ errorType: 'ProviderBizError', message: 'Provider timed out' });
+    });
+
+    const error = await attempt.execute().catch((error: unknown) => error);
+
+    expect(error).toMatchObject({ message: 'LLM stream error: Provider timed out' });
+    expect(handleChatStreamError).toHaveBeenCalledWith(error, {
+      options: expect.objectContaining({
+        metadata: expect.objectContaining({ operationId: 'operation-1' }),
+      }),
+      payload: expect.objectContaining({ model: 'test-model' }),
+    });
+  });
+
+  it('reports a response body failure after every routed fallback failed', async () => {
+    const fallbackError = {
+      error: { message: 'Access to Anthropic models is not allowed for this account.' },
+      errorType: 'ProviderBizError',
+      provider: 'lobehub',
+    };
+    const { attempt, chat, handleChatStreamError } = createAttempt(async () => {});
+    chat.mockImplementationOnce(
+      async () =>
+        new Response(
+          new ReadableStream({
+            pull(controller) {
+              controller.error(fallbackError);
+            },
+          }),
+        ),
+    );
+
+    await expect(attempt.execute()).rejects.toBe(fallbackError);
+    expect(handleChatStreamError).toHaveBeenCalledWith(fallbackError, expect.anything());
+  });
+
+  it('leaves errors thrown by chat() and empty completions to their own handlers', async () => {
+    const { attempt: rejected, handleChatStreamError: rejectedHook } = createAttempt(async () => {
+      throw new Error('upstream request failed');
+    });
+    await expect(rejected.execute()).rejects.toThrow('upstream request failed');
+    expect(rejectedHook).not.toHaveBeenCalled();
+
+    const { ModelEmptyError } = await import('@lobechat/model-runtime');
+    const emptyError = new ModelEmptyError();
+    const {
+      attempt: empty,
+      chat,
+      handleChatStreamError: emptyHook,
+    } = createAttempt(async () => {});
+    chat.mockImplementationOnce(
+      async () =>
+        new Response(
+          new ReadableStream({
+            pull(controller) {
+              controller.error(emptyError);
+            },
+          }),
+        ),
+    );
+    await expect(empty.execute()).rejects.toBe(emptyError);
+    expect(emptyHook).not.toHaveBeenCalled();
   });
 
   it('salvages a natural-stop answer emitted only in reasoning', async () => {

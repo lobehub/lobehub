@@ -65,6 +65,18 @@ describe('normalizeChatMessageError', () => {
     });
   });
 
+  it('keeps hook display fields when a stream error already carries a provider body', () => {
+    const providerBody = { message: 'Provider timed out', provider: 'lobehub' };
+    const result = normalizeChatMessageError({
+      _responseBody: { traceId: 'trace-1' },
+      body: providerBody,
+      errorType: 'ProviderBizError',
+      message: 'LLM stream error: Provider timed out',
+    });
+
+    expect(result.body).toMatchObject({ ...providerBody, traceId: 'trace-1' });
+  });
+
   it('does not infer a provider outage from an unclassified internal 500', () => {
     expect(normalizeChatMessageError(new Error('500 unexpected internal failure'))).toMatchObject({
       type: 500,
