@@ -234,7 +234,19 @@ const AcceptanceDecision = ({ onDraftToComposer }: AcceptanceDecisionProps) => {
         onRejectComment={() =>
           openRejectModal({
             onConfirm: (comment) =>
-              runAction(() => verifyService.rejectDelivery(acceptance.id, comment)),
+              runAction(async () => {
+                // The server sends the delivery back to its authoring agent when
+                // the rounds name one — say so, since the reject itself is quiet.
+                const { repairDispatch } = await verifyService.rejectDelivery(
+                  acceptance.id,
+                  comment,
+                );
+                if (repairDispatch.dispatched) {
+                  toast.success({ placement: 'top', title: t('acceptance.bar.rerunSent') });
+                } else if (repairDispatch.reason === 'failed') {
+                  toast.error(repairDispatch.error ?? t('acceptance.actionError'));
+                }
+              }),
           })
         }
         onRerun={async () => {

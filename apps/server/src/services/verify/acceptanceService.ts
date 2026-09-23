@@ -926,9 +926,9 @@ export class AcceptanceService {
   /**
    * The user rejects the delivery. An optional comment is a re-tasking input: it is
    * recorded on the round's decision detail, where the next repair/verify round
-   * picks it up. (Spawning the repair run itself is the runtime's job — for
-   * agent-bound rounds via the repair pipeline, for ingested rounds via the
-   * next `lh verify ingest-report`.)
+   * picks it up. (Spawning the repair run is the caller's job — the
+   * `acceptance.reject` procedure sends it back to the origin agent when the
+   * rounds name one; see `dispatchAcceptanceRepair`.)
    *
    * A Goal Task is no exception: its next attempt is started by the Goal
    * coordinator on the following tick, which reads the rejected round's
@@ -1423,6 +1423,21 @@ export class AcceptanceService {
     ]);
     if (!agent && !topic) return null;
     return { agent, topic };
+  };
+
+  /**
+   * The raw authoring conversation behind the latest round that recorded one —
+   * the ids a rejected delivery is sent back to. Unlike {@link resolveOrigin}
+   * nothing is hydrated: the dispatcher re-reads the topic under the caller's
+   * own scope.
+   */
+  findRepairOrigin = async (
+    acceptanceId: string,
+  ): Promise<{ agentId?: string; topicId?: string } | null> => {
+    const runs = await this.runModel.listByAcceptance(acceptanceId);
+    const origin = [...runs].reverse().find((run) => run.metadata?.origin)?.metadata?.origin;
+    if (!origin?.topicId) return null;
+    return { agentId: origin.agentId || undefined, topicId: origin.topicId };
   };
 
   /** The rounds + their per-round data the bundle and the union both read. */

@@ -499,6 +499,22 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
         return;
       }
       console.log(`${pc.red('✗')} Delivery rejected (${result.id}) — next round re-opens it`);
+      const dispatch = result.repairDispatch;
+      if (dispatch?.dispatched) {
+        console.log(
+          `${pc.green('↻')} Sent back to agent ${dispatch.agentId} in topic ${dispatch.topicId} (operation ${dispatch.operationId})`,
+        );
+      } else if (dispatch?.reason === 'failed') {
+        console.log(
+          `${pc.yellow('!')} Repair dispatch failed: ${dispatch.error ?? 'unknown error'}`,
+        );
+      } else {
+        console.log(
+          pc.dim(
+            `No source agent to send it back to — hand the repair over with: lh acceptance feedback ${result.id} --actionable`,
+          ),
+        );
+      }
     });
 
   // The canonical `lh acceptance init` + `lh acceptance run …` tree hangs off the
