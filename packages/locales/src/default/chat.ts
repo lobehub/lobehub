@@ -2707,7 +2707,6 @@ export default {
   'workingPanel.overview.ports.detected.expose': 'Open',
   'workingPanel.overview.ports.detected.heading': 'Detected',
   'workingPanel.overview.ports.detected.hideOthers': 'Hide other ports',
-  'workingPanel.overview.ports.detected.inProject': 'This project',
   'workingPanel.overview.ports.detected.none': 'Nothing from this project is listening yet',
   'workingPanel.overview.ports.detected.others': 'Other ports ({{count}})',
   'workingPanel.overview.ports.detected.refresh': 'Rescan',

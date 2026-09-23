@@ -2567,7 +2567,6 @@
   "workingPanel.overview.ports.detected.expose": "开放",
   "workingPanel.overview.ports.detected.heading": "检测到的端口",
   "workingPanel.overview.ports.detected.hideOthers": "收起其它端口",
-  "workingPanel.overview.ports.detected.inProject": "本项目",
   "workingPanel.overview.ports.detected.none": "这个项目里还没有在跑的服务",
   "workingPanel.overview.ports.detected.others": "其它端口（{{count}}）",
   "workingPanel.overview.ports.detected.refresh": "重新检测",

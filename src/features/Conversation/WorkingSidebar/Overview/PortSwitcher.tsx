@@ -9,15 +9,15 @@ import {
   DropdownMenuTrigger,
 } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
+import { GlobeIcon, LoaderCircleIcon, RadarIcon, RefreshCwIcon, XIcon } from 'lucide-react';
 import {
-  CopyIcon,
-  GlobeIcon,
-  LoaderCircleIcon,
-  RadarIcon,
-  RefreshCwIcon,
-  XIcon,
-} from 'lucide-react';
-import { memo, type ReactNode, useCallback, useState } from 'react';
+  type KeyboardEvent,
+  memo,
+  type MouseEvent,
+  type ReactNode,
+  useCallback,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { DeviceTunnelLink } from '@/store/device';
@@ -130,19 +130,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-weight: 500;
     color: ${cssVar.colorText};
   `,
-  projectTag: css`
-    flex-shrink: 0;
-
-    padding-block: 0;
-    padding-inline: 5px;
-    border-radius: 4px;
-
-    font-size: 11px;
-    line-height: 16px;
-    color: ${cssVar.colorSuccess};
-
-    background: ${cssVar.colorSuccessBg};
-  `,
   retry: css`
     cursor: pointer;
 
@@ -153,6 +140,32 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorInfo};
 
     background: transparent;
+  `,
+  copy: css`
+    cursor: pointer;
+
+    flex-shrink: 0;
+
+    height: 20px;
+    padding-block: 0;
+    padding-inline: 6px;
+    border: none;
+    border-radius: 4px;
+
+    font-size: 12px;
+    font-weight: 500;
+    color: ${cssVar.colorPrimary};
+
+    background: transparent;
+
+    &:hover {
+      background: ${cssVar.colorFillSecondary};
+    }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimaryBorder};
+      outline-offset: 1px;
+    }
   `,
   spacer: css`
     flex: 1;
@@ -170,21 +183,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextTertiary};
   `,
   toggle: css`
-    cursor: pointer;
-
-    padding-block: 6px;
-    padding-inline: 8px;
-    border: none;
-
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
-    text-align: start;
-
-    background: transparent;
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
   `,
 }));
 
@@ -231,7 +231,10 @@ const PortSwitcher = memo<PortSwitcherProps>(({ active, deviceId, workingDirecto
     tunnels,
   } = usePortTunnels({ active, cwd: workingDirectory, deviceId, onOpened: close, open });
 
-  /** Port, process, then the project tag right after it; trailing goes last. */
+  /**
+   * Port, then process. No "this project" tag: the main list only holds the
+   * project's own ports, and the rest are already folded under "Other ports".
+   */
   const renderLabel = (port: number, info?: DeviceListeningPort) => (
     <>
       <span className={styles.port}>{port}</span>
@@ -240,34 +243,26 @@ const PortSwitcher = memo<PortSwitcherProps>(({ active, deviceId, workingDirecto
           {info.command}
         </span>
       )}
-      {info?.inProject && (
-        <span className={styles.projectTag}>
-          {t('workingPanel.overview.ports.detected.inProject')}
-        </span>
-      )}
       <span className={styles.spacer} />
     </>
   );
 
-  const actionButton = (label: string, icon: typeof CopyIcon, onPress: () => void) => (
-    <Tooltip title={label}>
-      <button
-        aria-label={label}
-        className={styles.action}
-        type={'button'}
-        // Enter/Space must act on this button, not fall through to the menu
-        // item and open the tunnel instead.
-        onKeyDown={(event) => event.stopPropagation()}
-        onClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          onPress();
-        }}
-      >
-        <Icon icon={icon} size={13} />
-      </button>
-    </Tooltip>
-  );
+  /**
+   * A small button inside the menu: it acts on its own and never opens the
+   * tunnel. Kept out of the tab order because the menu focuses its first
+   * tabbable element on open, which would land here and pop its tooltip on
+   * every open; the menu items it sits on are reachable with the arrow keys.
+   */
+  const ownPress = (onPress: () => void) => ({
+    // Enter/Space must act on this button, not fall through to the menu item.
+    onKeyDown: (event: KeyboardEvent) => event.stopPropagation(),
+    tabIndex: -1,
+    onClick: (event: MouseEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      onPress();
+    },
+  });
 
   const renderLink = (link: DeviceTunnelLink) => (
     <DropdownMenuItem
@@ -287,8 +282,21 @@ const PortSwitcher = memo<PortSwitcherProps>(({ active, deviceId, workingDirecto
       </Tooltip>
       {renderLabel(link.port, detectedByPort.get(link.port))}
       <span className={styles.actions}>
-        {actionButton(t('workingPanel.overview.ports.copy'), CopyIcon, () => void copyLink(link))}
-        {actionButton(t('workingPanel.overview.ports.revoke'), XIcon, () => void revokeLink(link))}
+        {/* Sharing is the point of an exposed port, so copy reads as an action
+            like "Open", not as a glyph to discover. */}
+        <button className={styles.copy} type={'button'} {...ownPress(() => void copyLink(link))}>
+          {t('workingPanel.overview.ports.copy')}
+        </button>
+        <Tooltip title={t('workingPanel.overview.ports.revoke')}>
+          <button
+            aria-label={t('workingPanel.overview.ports.revoke')}
+            className={styles.action}
+            type={'button'}
+            {...ownPress(() => void revokeLink(link))}
+          >
+            <Icon icon={XIcon} size={13} />
+          </button>
+        </Tooltip>
       </span>
     </DropdownMenuItem>
   );
@@ -381,12 +389,7 @@ const PortSwitcher = memo<PortSwitcherProps>(({ active, deviceId, workingDirecto
                     aria-label={t('workingPanel.overview.ports.detected.refresh')}
                     className={styles.action}
                     type={'button'}
-                    onKeyDown={(event) => event.stopPropagation()}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      void refreshDetected();
-                    }}
+                    {...ownPress(() => void refreshDetected())}
                   >
                     <Icon icon={RefreshCwIcon} size={12} spin={detectionLoading} />
                   </button>
@@ -397,9 +400,9 @@ const PortSwitcher = memo<PortSwitcherProps>(({ active, deviceId, workingDirecto
 
               {otherPorts.length > 0 && (
                 <>
-                  <button
+                  <DropdownMenuItem
                     className={styles.toggle}
-                    type={'button'}
+                    closeOnClick={false}
                     onClick={() => setShowOthers((value) => !value)}
                   >
                     {showOthers
@@ -407,7 +410,7 @@ const PortSwitcher = memo<PortSwitcherProps>(({ active, deviceId, workingDirecto
                       : t('workingPanel.overview.ports.detected.others', {
                           count: otherPorts.length,
                         })}
-                  </button>
+                  </DropdownMenuItem>
                   {showOthers && (
                     <div className={styles.othersList}>{otherPorts.map(renderDetected)}</div>
                   )}
