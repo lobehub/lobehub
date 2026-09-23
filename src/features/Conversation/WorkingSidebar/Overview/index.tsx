@@ -331,10 +331,6 @@ const Overview = memo<OverviewProps>(
           onClick={() => onOpenTab('review')}
         />
 
-        {tunnelsEnabled && deviceId && (
-          <PortSwitcher active={active} deviceId={deviceId} workingDirectory={workingDirectory} />
-        )}
-
         {pullRequest && prVisual && ci && (
           <Tooltip title={`#${pullRequest.number} ${pullRequest.title}`}>
             <div>
@@ -413,7 +409,17 @@ const Overview = memo<OverviewProps>(
               repoType={repoType}
               onClick={() => onOpenTab('files')}
             />
-            <Flexbox className={sectionStyles.section}>{workspaceSection}</Flexbox>
+            <Flexbox className={sectionStyles.section}>
+              {workspaceSection}
+              {/* Outside the git rows: a dev server runs in plain folders too. */}
+              {tunnelsEnabled && deviceId && (
+                <PortSwitcher
+                  active={active}
+                  deviceId={deviceId}
+                  workingDirectory={workingDirectory}
+                />
+              )}
+            </Flexbox>
           </>
         )}
 
