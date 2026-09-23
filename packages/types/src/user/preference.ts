@@ -226,6 +226,11 @@ export const UserLabSchema = z.object({
    * delivery checklist inline)
    */
   enableTopicAcceptance: z.boolean().optional(),
+  /**
+   * expose a port on the working device through a tunnel link, so a dev server
+   * running there can be opened from this UI
+   */
+  enableDeviceTunnel: z.boolean().optional(),
 });
 
 export type UserLab = z.infer<typeof UserLabSchema>;

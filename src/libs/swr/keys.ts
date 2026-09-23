@@ -842,6 +842,11 @@ export const deviceKeys = {
     (workspaceId: string | null, deviceId: string, path?: string, cursor?: string) =>
       ['device:browseDirectory', workspaceId, deviceId, path, cursor] as const,
   ),
+  tunnels: def('device:tunnels', (workspaceId: string | null, deviceId: string) => [
+    'device:tunnels',
+    workspaceId,
+    deviceId,
+  ]),
   gitAheadBehind: def('device:gitAheadBehind', (deviceId: string, path: string) => [
     'device:gitAheadBehind',
     deviceId,

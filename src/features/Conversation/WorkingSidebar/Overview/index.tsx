@@ -14,6 +14,7 @@ import {
   FileTextIcon,
   GitBranchIcon,
   GitForkIcon,
+  GlobeIcon,
   LaptopIcon,
   RefreshCwIcon,
   TriangleAlertIcon,
@@ -42,11 +43,14 @@ import {
   useFetchGitWorktrees,
   useReviewPatches,
 } from '@/store/device';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 import ProgressSection from '../ProgressSection';
 import { collectChangeStats, isLinkedWorktreeCheckout, shouldShowCiLabel } from './overviewData';
 import OverviewHeader from './OverviewHeader';
 import { ChevronRight, OverviewRow, PickerGlyph, rowStyles } from './OverviewRow';
+import PortSwitcher from './PortSwitcher';
 import { sectionStyles } from './sectionStyles';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -92,6 +96,7 @@ const Overview = memo<OverviewProps>(
     const { t: tDevice } = useTranslation('device');
     const { t: tCommon } = useTranslation('common');
     const isHetero = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
+    const tunnelsEnabled = useUserStore(labPreferSelectors.enableDeviceTunnel);
     const topicId = useChatStore((s) => s.activeTopicId);
     const threadId = useChatStore((s) => s.activeThreadId);
     const works = useChatStore((s) =>
@@ -326,6 +331,17 @@ const Overview = memo<OverviewProps>(
           }
           onClick={() => onOpenTab('review')}
         />
+
+        {tunnelsEnabled && deviceId && (
+          <PortSwitcher deviceId={deviceId}>
+            <OverviewRow
+              interactive
+              icon={GlobeIcon}
+              trailing={<PickerGlyph />}
+              value={t('workingPanel.overview.ports.title')}
+            />
+          </PortSwitcher>
+        )}
 
         {pullRequest && prVisual && ci && (
           <Tooltip title={`#${pullRequest.number} ${pullRequest.title}`}>

@@ -14,6 +14,8 @@
   "features.codexAppServer.title": "Codex App Server 运行时",
   "features.desktopSplitView.desc": "在桌面端并排显示两个标签页，支持独立导航和拖拽调整分栏宽度。",
   "features.desktopSplitView.title": "标签页分栏",
+  "features.deviceTunnel.desc": "给工作设备上的端口一个链接，在这里就能打开那台机器上跑着的 dev server。链接只对能访问该设备的人有效。",
+  "features.deviceTunnel.title": "远程端口链接",
   "features.evalCapture.desc": "在消息动作里增加一项，把一轮对话（前置上下文、本轮输入与它产生的回答）捕获成评测用例。",
   "features.evalCapture.title": "把对话保存为评测用例",
   "features.gatewayMux.desc": "当前标签页里的所有智能体运行共用一条网关 WebSocket，而不是每次运行各开一条；断线重连与事件回放在这条共享连接上按运行分别处理。",

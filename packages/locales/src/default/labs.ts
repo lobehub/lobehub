@@ -27,6 +27,9 @@ export default {
   'features.evalCapture.desc':
     'Adds a message action that captures a conversation turn — its prior context, input and the answer it produced — as an evaluation test case.',
   'features.evalCapture.title': 'Save a turn as an eval case',
+  'features.deviceTunnel.desc':
+    'Give a port on the working device a link, so a dev server running there can be opened from here. The link only works for people who can reach that device.',
+  'features.deviceTunnel.title': 'Remote Port Links',
   'features.gatewayMux.desc':
     'Route every agent run in this tab over one shared gateway WebSocket instead of opening a socket per run. Reconnects and event replay are handled per run on the shared connection.',
   'features.gatewayMux.title': 'Single-connection Gateway (experimental)',
