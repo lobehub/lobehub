@@ -58,6 +58,17 @@ const isGithubUnavailable = (error: unknown): boolean =>
   error instanceof ConnectorDataError && error.provider === 'github' && !error.retryable;
 
 /**
+ * Whether building from this definition does anything: an environment that
+ * clones nothing and installs nothing is already everything it will ever be.
+ * Shared by the build itself, which settles such an instance without starting
+ * a sandbox, and the listing, which is how the row knows a rebuild would be a
+ * no-op rather than a folder thrown away.
+ */
+const isBuildable = (
+  specification: { bootstrapCommand?: string | null; sources?: unknown[] | null } | null,
+): boolean => (specification?.sources?.length ?? 0) > 0 || Boolean(specification?.bootstrapCommand);
+
+/**
  * Statuses the execution plane uses deliberately, each carrying something the
  * user can act on. Anything else is a fault on the far side and says so.
  *
@@ -619,8 +630,7 @@ export const sandboxWorkspaceRouter = router({
       // current one: a build has to produce what the instance says it is, and
       // the two differ exactly when the environment moved on.
       const specification = instance.configurationSnapshot;
-      const buildable =
-        (specification?.sources?.length ?? 0) > 0 || Boolean(specification?.bootstrapCommand);
+      const buildable = isBuildable(specification);
 
       // An environment that clones nothing and installs nothing is already
       // everything it is ever going to be. Building it would cold-start a
@@ -630,6 +640,22 @@ export const sandboxWorkspaceRouter = router({
 
         return { buildId: null };
       }
+
+      // A rebuild replaces the folder a conversation may be writing in right
+      // now, so a held instance is refused before the row changes at all. A
+      // lease store that did not answer is not read as "free" — the runtime's
+      // own lease still stands behind this and refuses a second writer.
+      const occupancy = await ctx.client
+        .readOccupancy({ names: [input.id], topicId: input.topicId })
+        .catch(() => ({ held: [], unavailable: true }));
+      if (occupancy.held.some((entry) => entry.name === input.id)) {
+        throw new TRPCError({ code: 'CONFLICT', message: 'INSTANCE_IN_USE' });
+      }
+
+      // What to fall back to if the build never starts. An instance that was
+      // ready still has everything its last build published — a refused start
+      // takes none of it away, so it must not come back reading "failed".
+      const previousStatus = instance.status;
 
       await ctx.instanceModel.update(input.id, { buildError: null, status: 'pending' });
 
@@ -646,10 +672,15 @@ export const sandboxWorkspaceRouter = router({
         // Recorded on the row rather than only thrown: the client that asked
         // may already be gone, and an instance left saying "pending" forever
         // is the one state nothing recovers from.
-        await ctx.instanceModel.update(input.id, {
-          buildError: (error as Error)?.message || 'Could not start the build',
-          status: 'error',
-        });
+        await ctx.instanceModel.update(
+          input.id,
+          previousStatus === 'ready'
+            ? { status: 'ready' }
+            : {
+                buildError: (error as Error)?.message || 'Could not start the build',
+                status: 'error',
+              },
+        );
         throw error;
       }
     }),
@@ -811,6 +842,9 @@ export const sandboxWorkspaceRouter = router({
         instances: instances.map((instance) => ({
           /** Set only while a build is worth polling; cleared with its verdict. */
           buildId: instance.buildId,
+          // From the definition the instance was made from, which is what a
+          // build uses — the environment may have moved on since.
+          buildable: isBuildable(instance.configurationSnapshot),
           buildError: instance.buildError,
           createdAt: instance.createdAt,
           environmentId: instance.environmentId,

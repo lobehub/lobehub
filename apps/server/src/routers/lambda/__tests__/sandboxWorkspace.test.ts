@@ -363,6 +363,7 @@ describe('sandboxWorkspaceRouter', () => {
 
     beforeEach(() => {
       mockResolveSessionConfig.mockResolvedValue({ claim: { key: 'ws-org-1' } });
+      mockReadOccupancy.mockResolvedValue({ held: [], unavailable: false });
     });
 
     it('builds from the definition the instance was created from', async () => {
@@ -423,6 +424,47 @@ describe('sandboxWorkspaceRouter', () => {
         buildError: 'environment in use',
         status: 'error',
       });
+    });
+
+    it('refuses to rebuild an instance a conversation is holding, leaving the row alone', async () => {
+      // A rebuild replaces the folder that conversation is writing in.
+      mockInstanceFindOwnedById.mockResolvedValue({
+        configurationSnapshot: spec,
+        id: buildInstanceId,
+        status: 'ready',
+      });
+      mockReadOccupancy.mockResolvedValue({
+        held: [{ name: buildInstanceId, own: false }],
+        unavailable: false,
+      });
+
+      await expect(
+        sandboxWorkspaceRouter
+          .createCaller(ctx)
+          .startInstanceBuild({ id: buildInstanceId, topicId: 't' }),
+      ).rejects.toThrow('INSTANCE_IN_USE');
+
+      expect(mockBuildEnvironment).not.toHaveBeenCalled();
+      expect(mockInstanceUpdate).not.toHaveBeenCalled();
+    });
+
+    it('puts a ready instance back to ready when its rebuild never starts', async () => {
+      // Nothing was published, so everything the last build left is still
+      // there — reading "failed" would send someone to fix a working copy.
+      mockInstanceFindOwnedById.mockResolvedValue({
+        configurationSnapshot: spec,
+        id: buildInstanceId,
+        status: 'ready',
+      });
+      mockBuildEnvironment.mockRejectedValue(new Error('environment in use'));
+
+      await expect(
+        sandboxWorkspaceRouter
+          .createCaller(ctx)
+          .startInstanceBuild({ id: buildInstanceId, topicId: 't' }),
+      ).rejects.toThrow('environment in use');
+
+      expect(mockInstanceUpdate).toHaveBeenLastCalledWith(buildInstanceId, { status: 'ready' });
     });
   });
 

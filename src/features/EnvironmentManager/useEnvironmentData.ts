@@ -232,6 +232,22 @@ export const useEnvironmentActions = () => {
       await refreshInstances();
     },
 
+    /**
+     * Build an instance someone asked to build from its row — a first build
+     * for one made before instances built themselves, or a rebuild.
+     *
+     * Unlike {@link buildInstance} this rethrows: the person is looking at the
+     * row and just confirmed, and a refusal such as "a conversation is using
+     * it" leaves the row unchanged, so the error is the only place it shows.
+     */
+    rebuildInstance: async (id: string) => {
+      try {
+        await sandboxWorkspaceService.startInstanceBuild({ id });
+      } finally {
+        await refreshInstances();
+      }
+    },
+
     createInstance: async (params: {
       environmentId: string;
       name: string;
@@ -244,6 +260,9 @@ export const useEnvironmentActions = () => {
         // — so the row starts where the server starts it.
         buildError: null,
         buildId: null,
+        // Settled by the build that follows; until then nothing on the row
+        // offers one, since `buildId` is what the row waits on.
+        buildable: false,
         createdAt: created.createdAt,
         environmentId: created.environmentId,
         id: created.id,

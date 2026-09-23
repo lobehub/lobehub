@@ -10,6 +10,7 @@
  */
 const CODE_KEYS: Record<string, string> = {
   ENVIRONMENT_HAS_INSTANCES: 'environments.hasInstances',
+  INSTANCE_IN_USE: 'environments.instances.inUse',
   PATH_OUTSIDE_INSTANCE: 'environments.files.invalidPath',
 };
 
