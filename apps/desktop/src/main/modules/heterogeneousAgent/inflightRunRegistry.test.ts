@@ -69,11 +69,12 @@ describe('HeteroInflightRunRegistry', () => {
   });
 
   it('keeps a claimed run on the ledger until it is released', () => {
+    const now = Date.parse('2026-09-21T10:00:00.000Z');
     registry.upsert(run('s1'));
 
     // The renderer still has to reap, replay and settle; a crash before that
     // would otherwise leave the topic with no token to retry it.
-    const claimed = registry.claim(run('s1'));
+    const claimed = registry.claim(run('s1'), now);
     expect(claimed.claimCount).toBe(1);
     expect(claimed.expired).toBeUndefined();
     expect(registry.list()).toEqual([
@@ -85,17 +86,18 @@ describe('HeteroInflightRunRegistry', () => {
   });
 
   it('spends a run that keeps being claimed without ever being released', () => {
+    const now = Date.parse('2026-09-21T10:00:00.000Z');
     registry.upsert(run('s1'));
 
     let entry = registry.list()[0];
     for (let index = 1; index < HETERO_INFLIGHT_RUN_MAX_CLAIMS; index++) {
-      entry = registry.claim(entry);
+      entry = registry.claim(entry, now);
       expect(entry.expired).toBeUndefined();
       entry = registry.list()[0];
     }
 
     // The last handover is status-only cleanup, and the entry goes with it.
-    expect(registry.claim(entry)).toMatchObject({ expired: true });
+    expect(registry.claim(entry, now)).toMatchObject({ expired: true });
     expect(registry.list()).toEqual([]);
   });
 

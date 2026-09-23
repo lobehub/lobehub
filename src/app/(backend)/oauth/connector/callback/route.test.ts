@@ -72,7 +72,10 @@ describe('connector OAuth callback', () => {
       const body = await (await GET(makeReq())).text();
       const postMessage = vi.fn();
       const openerPostMessage = vi.fn();
-      runInNewContext(body.match(/<script>([\s\S]*?)<\/script>/)![1], {
+      const script = new DOMParser().parseFromString(body, 'text/html').querySelector('script');
+      if (!script?.textContent) throw new Error('Missing callback status script');
+
+      runInNewContext(script.textContent, {
         setTimeout: vi.fn(),
         window: {
           location: { origin: 'https://app.example.com' },
