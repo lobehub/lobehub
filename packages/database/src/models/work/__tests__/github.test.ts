@@ -44,11 +44,17 @@ describe('WorkModel · github', () => {
     const visitorA = new WorkModel(serverDB, userId, undefined, visitorScope('visitor-topic-a'));
     const visitorB = new WorkModel(serverDB, userId, undefined, visitorScope('visitor-topic-b'));
 
-    const creatorWork = await creator.registerExternal(issue('call-creator'));
-    const visitorWork = await visitorA.registerExternal(issue('call-visitor-a'));
-    const otherVisitorWork = await visitorB.registerExternal(issue('call-visitor-b'));
+    const register = async (model: WorkModel, toolCallId: string) => {
+      const work = await model.registerExternal(issue(toolCallId));
+      if (!work) throw new Error(`expected a Work for ${toolCallId}`);
+      return work;
+    };
+
+    const creatorWork = await register(creator, 'call-creator');
+    const visitorWork = await register(visitorA, 'call-visitor-a');
+    const otherVisitorWork = await register(visitorB, 'call-visitor-b');
     // A repeat in the same scope still dedupes onto that scope's row.
-    const visitorRepeat = await visitorA.registerExternal(issue('call-visitor-a-2'));
+    const visitorRepeat = await register(visitorA, 'call-visitor-a-2');
 
     expect(new Set([creatorWork.id, visitorWork.id, otherVisitorWork.id]).size).toBe(3);
     expect(visitorRepeat.id).toBe(visitorWork.id);
