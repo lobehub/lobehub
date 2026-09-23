@@ -146,29 +146,8 @@ git commit -m "📝 docs: 更新安装指南"
 
 请使用 `.github/PULL_REQUEST_TEMPLATE.md` 中的 PR 模板：
 
-```markdown
-## Description
-
-清晰描述此 PR 的改动内容。
-
-## Type of Change
-
-- [ ] ✨ 新功能
-- [ ] 🐛 Bug 修复
-- [ ] 📝 文档
-- [ ] ♻️ 重构
-
-## Checklist
-
-- [ ] 代码符合项目风格指南
-- [ ] 已添加/更新测试
-- [ ] 已更新文档
-- [ ] 所有测试通过
-
-## Related Issues
-
-Fixes #123
-```
+- **Human** — 改了什么、截图、如何测试、验收记录，以及关联 issue（`Fixes #123`、`Fixes LOBE-xxx`）
+- **AI** — 人写的改动删掉这一节。Agent 写的改动，如果作者是外部 collaborator 或其他外部贡献者，模板里的注释指令会要求这个 agent 填写 harness、模型、thinking level，以及这次会话里的全部 user prompt（按顺序、原文照录）。lobehub organization 的正式成员删掉这一节。
 
 **PR 标题中带有 `✨ feat:` 或 `🐛 fix:` 前缀时将自动触发新版本发布。** 不需要发布新版本的改动请使用其他前缀。
 
