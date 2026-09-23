@@ -1472,7 +1472,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
       video: true,
       vision: true,
     },
-    contextWindowTokens: 1_000_000,
+    contextWindowTokens: 1_048_576,
     description:
       'MiMo-V2.6-Pro-UltraSpeed serves the same weights as MiMo-V2.6-Pro at up to 20x the output speed for latency-sensitive agents.',
     displayName: 'MiMo-V2.6 Pro UltraSpeed',
