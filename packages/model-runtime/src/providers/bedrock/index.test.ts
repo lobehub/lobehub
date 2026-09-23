@@ -1436,6 +1436,38 @@ describe('LobeBedrockAI', () => {
       ]);
     });
 
+    it('should not send strict schema tools on Claude Opus 5.5 auto tool_choice', async () => {
+      // Bedrock returns 400 "tools.0.custom.strict: Extra inputs are not permitted".
+      const mockResponse = {
+        body: new TextEncoder().encode(
+          JSON.stringify({
+            content: [{ input: { title: 'Done' }, name: 'title_schema', type: 'tool_use' }],
+          }),
+        ),
+      };
+      vi.spyOn(instance['client'], 'send').mockResolvedValue(mockResponse as any);
+
+      const result = await instance.generateObject({
+        messages: [{ content: 'Create a title.', role: 'user' }],
+        model: 'global.anthropic.claude-opus-5-5',
+        schema: {
+          name: 'title_schema',
+          schema: {
+            additionalProperties: false,
+            properties: { title: { type: 'string' } },
+            required: ['title'],
+            type: 'object',
+          },
+          strict: true,
+        },
+      });
+
+      const body = JSON.parse((InvokeModelCommand as unknown as Mock).mock.calls.at(-1)?.[0].body);
+      expect(result).toEqual({ title: 'Done' });
+      expect(body.tool_choice).toEqual({ type: 'auto' });
+      expect(body.tools[0]).not.toHaveProperty('strict');
+    });
+
     it('should return tool calls when tools are provided', async () => {
       const mockResponse = {
         body: new TextEncoder().encode(
