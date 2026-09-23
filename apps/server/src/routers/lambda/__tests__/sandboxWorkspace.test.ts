@@ -65,6 +65,8 @@ const mockListEnvironmentSessions = vi.fn();
 const mockWriteFile = vi.fn();
 const mockListFiles = vi.fn();
 const mockReadFile = vi.fn();
+const mockGetWorkspace = vi.fn();
+const mockRefreshUsage = vi.fn();
 
 vi.mock('@/server/services/market', () => ({
   MarketService: vi.fn(function () {
@@ -72,9 +74,11 @@ vi.mock('@/server/services/market', () => ({
       getSandboxWorkspaceClient: () => ({
         copyEnvironment: mockCopyEnvironment,
         deleteEnvironment: mockDeleteEnvironment,
+        getWorkspace: mockGetWorkspace,
         listEnvironmentSessions: mockListEnvironmentSessions,
         listFiles: mockListFiles,
         readFile: mockReadFile,
+        refreshUsage: mockRefreshUsage,
         writeFile: mockWriteFile,
       }),
     };
@@ -333,6 +337,43 @@ describe('sandboxWorkspaceRouter', () => {
         code: 'FORBIDDEN',
       });
       expect(mockCreate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('workspace storage', () => {
+    const info = {
+      dir: '/mnt/workspace/ws-user_1',
+      key: 'ws-user_1',
+      quotaBytes: 8_589_934_592,
+      status: 'active',
+      usageBytes: 166_731,
+      usageCheckedAt: '2026-09-23T05:11:00.767Z',
+    };
+
+    it('reads the stored figure without measuring', async () => {
+      // A page load must not walk the volume, and must not stamp the workspace
+      // as active — that is the signal an idle sweep selects on.
+      mockGetWorkspace.mockResolvedValue(info);
+      const caller = sandboxWorkspaceRouter.createCaller(ctx);
+
+      await expect(caller.getWorkspace()).resolves.toMatchObject({ usageBytes: 166_731 });
+      expect(mockRefreshUsage).not.toHaveBeenCalled();
+    });
+
+    it('measures only when the caller asks', async () => {
+      mockRefreshUsage.mockResolvedValue({ ...info, usageBytes: 4_096 });
+      const caller = sandboxWorkspaceRouter.createCaller(ctx);
+
+      await expect(caller.refreshWorkspaceUsage()).resolves.toMatchObject({ usageBytes: 4_096 });
+      expect(mockRefreshUsage).toHaveBeenCalledTimes(1);
+    });
+
+    it('refuses to measure without a workspace claim', async () => {
+      mockResolveClaim.mockResolvedValue(null);
+      const caller = sandboxWorkspaceRouter.createCaller(ctx);
+
+      await expect(caller.refreshWorkspaceUsage()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(mockRefreshUsage).not.toHaveBeenCalled();
     });
   });
 

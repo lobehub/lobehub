@@ -15,7 +15,8 @@ import { openCreateEnvironmentModal } from './CreateEnvironmentModal';
 import { openCreateInstanceModal } from './CreateInstanceModal';
 import EnvironmentDetailPanel from './EnvironmentDetailPanel';
 import EnvironmentItem from './EnvironmentItem';
-import { useEnvironments, useInstances } from './useEnvironmentData';
+import { useEnvironments, useInstances, useWorkspaceUsage } from './useEnvironmentData';
+import WorkspaceUsageMeter from './WorkspaceUsageMeter';
 
 const styles = createStaticStyles(({ css }) => ({
   detailCol: css`
@@ -85,6 +86,7 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
   const { t } = useTranslation('setting');
   const { data, error, isValidating, mutate } = useEnvironments(visibility);
   const { data: instanceData, mutate: refreshInstances } = useInstances();
+  const { refresh: refreshUsage } = useWorkspaceUsage();
 
   const [selectedId, setSelectedId] = useState<string>();
   // Whether a refresh the user asked for is still running.
@@ -136,7 +138,10 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
   const refresh = async () => {
     setRefreshing(true);
     try {
-      await Promise.all([mutate(), refreshInstances()]);
+      // The storage figure rides along, because this is the one moment the
+      // user has asked for a fresh answer — and re-measuring also stamps the
+      // workspace as active, which no page load should do on its own.
+      await Promise.all([mutate(), refreshInstances(), refreshUsage()]);
     } finally {
       setRefreshing(false);
     }
@@ -154,6 +159,9 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
     // neighbour and the count is the first thing to give — it wrapped onto two
     // lines beside buttons that had room to spare.
     <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
+      {/* Before the count, because it is the number that can stop the page
+          working — a workspace over its limit refuses every save. */}
+      <WorkspaceUsageMeter />
       {environments.length > 0 && (
         <Text fontSize={12} style={{ whiteSpace: 'nowrap' }} type={'secondary'} weight={500}>
           {t('environments.total', { count: environments.length })}
