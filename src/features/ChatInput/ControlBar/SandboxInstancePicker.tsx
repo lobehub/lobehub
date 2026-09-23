@@ -1,13 +1,14 @@
 'use client';
 
 import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
-import { Skeleton, Text } from '@lobehub/ui/base-ui';
+import { ActionIcon, Skeleton, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   AppWindowMacIcon,
   ChevronDownIcon,
   FolderClockIcon,
   FolderIcon,
+  InfoIcon,
   LockIcon,
   PlusIcon,
   SettingsIcon,
@@ -35,15 +36,71 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: 12px;
     color: ${cssVar.colorTextSecondary};
   `,
-  footer: css`
-    padding-block-start: 4px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+  /**
+   * The caption and its one action on a single line. Making a copy is a
+   * property of the environment, so it belongs beside its name — as a whole
+   * row it cost one line per environment, and a menu of four spent four lines
+   * saying "New instance".
+   */
+  environmentRow: css`
+    padding-block: 6px 2px;
+    padding-inline: 8px 4px;
   `,
-  header: css`
-    padding-block: 2px 6px;
+  /** The pool caption, in the execution-target menu's own shape. */
+  groupLabel: css`
+    padding-block: 4px;
     padding-inline: 8px;
+
+    font-size: 11px;
+    font-weight: 500;
+    color: ${cssVar.colorTextQuaternary};
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  `,
+  /** Title, its explainer and the way out — the execution-device menu's header. */
+  header: css`
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    justify-content: space-between;
+
+    padding-block: 4px;
+    padding-inline: 8px;
+  `,
+  headerInfo: css`
+    cursor: help;
+    color: ${cssVar.colorTextQuaternary};
+    transition: color 0.2s;
+
+    &:hover {
+      color: ${cssVar.colorTextSecondary};
+    }
+  `,
+  headerTitle: css`
     font-size: 12px;
-    color: ${cssVar.colorTextDescription};
+    font-weight: 500;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  manageButton: css`
+    cursor: pointer;
+
+    display: flex;
+    gap: 3px;
+    align-items: center;
+
+    padding: 0;
+    border: none;
+
+    font-size: 11px;
+    color: ${cssVar.colorTextQuaternary};
+
+    background: none;
+
+    transition: color 0.2s;
+
+    &:hover {
+      color: ${cssVar.colorPrimary};
+    }
   `,
   notice: css`
     padding-block: 8px;
@@ -180,9 +237,35 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
       return Boolean(environment?.workspaceId) && environment?.visibility === 'private';
     };
     const currentBlocked = current ? isBlocked(current.environmentId) : false;
+
+    // What this agent can actually pick. A public agent's own private
+    // environments are dropped rather than dimmed — the execution-target menu
+    // treats a workspace agent's personal devices the same way, and for the
+    // same reason: a list of things that cannot be chosen reads as a fault,
+    // not as help. The one line below says where they went.
+    const selectable = environments.filter((environment) => !isBlocked(environment.id));
+    const hiddenPrivateCount = environments.length - selectable.length;
+
+    // Inside a workspace an environment belongs to one of two pools, and which
+    // one decides who else can reach what a run leaves behind — so the menu
+    // says which pool it is looking at, the way the execution-target menu
+    // splits private from workspace devices. A personal account has one pool
+    // and no such question, so it stays flat.
+    const inWorkspace = selectable.some((environment) => Boolean(environment.workspaceId));
+    const privatePool = inWorkspace
+      ? selectable.filter((environment) => environment.visibility === 'private')
+      : [];
+    const workspacePool = inWorkspace
+      ? selectable.filter((environment) => environment.visibility !== 'private')
+      : [];
+
+    // Counted on what is left after that filter, not on the raw list. An agent
+    // whose only environments are private would otherwise render neither a
+    // choice nor the prompt to make one — the exact hole the device menu
+    // documents at its own empty-state accounting.
     // Only once the list has actually arrived: an undefined list is "not known
     // yet", not "none", and a list that FAILED is a third thing the menu names.
-    const hasNoEnvironments = Boolean(environmentData) && environments.length === 0;
+    const hasNoEnvironments = Boolean(environmentData) && selectable.length === 0;
 
     const select = async (selection: SandboxSelection) => {
       setOpen(false);
@@ -209,6 +292,41 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
         }),
       );
 
+    const renderEnvironment = (environment: (typeof selectable)[number]) => (
+      <Flexbox gap={2} key={environment.id}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={styles.environmentRow}
+          gap={4}
+          justify={'space-between'}
+        >
+          <Text ellipsis className={styles.environment} style={{ padding: 0 }}>
+            {environment.name}
+          </Text>
+          <ActionIcon
+            icon={PlusIcon}
+            size={'small'}
+            title={t('sandboxWorkspace.newInstance')}
+            onClick={() => createIn(environment.id)}
+          />
+        </Flexbox>
+
+        {instances
+          .filter((instance) => instance.environmentId === environment.id)
+          .map((instance) => (
+            <OptionRow
+              active={instance.id === boundInstanceId}
+              desc={instance.workingDirectory}
+              icon={<Icon icon={INSTANCE_ICON} size={16} />}
+              key={instance.id}
+              label={instance.name}
+              onClick={() => void select({ instanceId: instance.id, mode: 'persistent' })}
+            />
+          ))}
+      </Flexbox>
+    );
+
     // The chip names what was chosen — an instance, or the temporary directory
     // once it has been picked on purpose — and otherwise the slot itself, the
     // same words the local chip shows before a folder is chosen. The default
@@ -227,7 +345,26 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
     // more empty child is harmless.
     const content = (
       <Flexbox gap={2} style={{ maxWidth: 360, minWidth: 280 }}>
-        <Text className={styles.header}>{t('workingDirectory.title', { ns: 'device' })}</Text>
+        <div className={styles.header}>
+          <Flexbox horizontal align={'center'} gap={4}>
+            <span className={styles.headerTitle}>{t('sandboxWorkspace.pickerTitle')}</span>
+            <Tooltip title={t('sandboxWorkspace.pickerInfoTooltip')}>
+              <span className={styles.headerInfo}>
+                <Icon icon={InfoIcon} size={12} />
+              </span>
+            </Tooltip>
+          </Flexbox>
+          {entitled && (
+            <button
+              className={styles.manageButton}
+              type={'button'}
+              onClick={() => leaveTo(() => navigate('/settings/environments'))}
+            >
+              <Icon icon={SettingsIcon} size={11} />
+              <span>{t('sandboxWorkspace.manage')}</span>
+            </button>
+          )}
+        </div>
 
         {current && currentBlocked && (
           <Text className={styles.blockedNotice}>
@@ -276,59 +413,30 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
         )}
 
         {entitled &&
-          environments.map((environment) => {
-            // Listed rather than hidden, so a private environment the person
-            // knows they have does not look lost — dimmed, with the reason.
-            const blocked = isBlocked(environment.id);
+          !inWorkspace &&
+          selectable.map((environment) => renderEnvironment(environment))}
 
-            return (
-              <Flexbox gap={2} key={environment.id}>
-                <Text ellipsis className={styles.environment}>
-                  {environment.name}
-                </Text>
+        {entitled && inWorkspace && privatePool.length > 0 && (
+          <>
+            <div className={styles.groupLabel}>{t('sandboxWorkspace.privateGroup')}</div>
+            {privatePool.map((environment) => renderEnvironment(environment))}
+          </>
+        )}
 
-                {blocked && (
-                  <Text className={styles.notice}>{t('sandboxWorkspace.publicAgentHint')}</Text>
-                )}
+        {entitled && inWorkspace && workspacePool.length > 0 && (
+          <>
+            <div className={styles.groupLabel}>{t('sandboxWorkspace.workspaceGroup')}</div>
+            {workspacePool.map((environment) => renderEnvironment(environment))}
+          </>
+        )}
 
-                {instances
-                  .filter((instance) => instance.environmentId === environment.id)
-                  .map((instance) => (
-                    <OptionRow
-                      active={instance.id === boundInstanceId}
-                      desc={instance.workingDirectory}
-                      disabled={blocked}
-                      icon={<Icon icon={INSTANCE_ICON} size={16} />}
-                      key={instance.id}
-                      label={instance.name}
-                      tag={blocked ? t('sandboxWorkspace.privateTag') : undefined}
-                      onClick={() => void select({ instanceId: instance.id, mode: 'persistent' })}
-                    />
-                  ))}
-
-                {!blocked && (
-                  <OptionRow
-                    icon={<Icon icon={PlusIcon} size={16} />}
-                    label={t('sandboxWorkspace.newInstance')}
-                    onClick={() => createIn(environment.id)}
-                  />
-                )}
-              </Flexbox>
-            );
-          })}
-
-        {entitled && (
-          // Selecting an environment and shaping one are different jobs, so
-          // this leaves rather than expands. Not gated on the list having
-          // anything in it: an empty, unknown or failed list is exactly when
-          // the way to the environments page is needed most.
-          <Flexbox className={styles.footer}>
-            <OptionRow
-              icon={<Icon icon={SettingsIcon} size={16} />}
-              label={t('sandboxWorkspace.manageEnvironments')}
-              onClick={() => leaveTo(() => navigate('/settings/environments'))}
-            />
-          </Flexbox>
+        {/* Where the hidden ones went, and how to get one back — the device
+            menu's enroll hint, in this menu's terms. One line however many
+            were dropped; which ones is the settings page's job. */}
+        {entitled && hiddenPrivateCount > 0 && (
+          <Text className={styles.notice}>
+            {t('sandboxWorkspace.publicAgentHint', { count: hiddenPrivateCount })}
+          </Text>
         )}
       </Flexbox>
     );
