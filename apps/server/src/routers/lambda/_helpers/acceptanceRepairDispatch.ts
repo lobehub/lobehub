@@ -1,14 +1,14 @@
-import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { buildAcceptanceRepairPrompt } from '@lobechat/prompts';
-import { RequestTrigger } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
+import { GoalModel } from '@/database/models/goal';
 import { TopicModel } from '@/database/models/topic';
+import type { AcceptanceItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
-import { AiAgentService } from '@/server/services/aiAgent';
 import type { AcceptanceService } from '@/server/services/verify';
 
-import { assertCanUseWorkspaceAgent } from './workspaceAgentGuard';
+import { agentNotifyRouter } from '../agentNotify';
 
 const log = debug('lobe-server:acceptance-repair-dispatch');
 
@@ -18,6 +18,9 @@ const log = debug('lobe-server:acceptance-repair-dispatch');
  *   report) — the reviewer hands the repair prompt over by hand.
  * - `origin_unavailable`: the conversation is gone, not the caller's, or has no
  *   agent to run.
+ * - `forbidden`: the caller may review the delivery but not write to the
+ *   conversation or run its agent.
+ * - `goal_coordinator`: a Goal Task — its coordinator starts the next attempt.
  * - `failed`: the agent could not be started; the reject itself still stands.
  */
 export type AcceptanceRepairDispatch =
@@ -25,70 +28,94 @@ export type AcceptanceRepairDispatch =
   | {
       dispatched: false;
       error?: string;
-      reason: 'failed' | 'no_origin' | 'origin_unavailable' | 'skipped';
+      reason:
+        | 'failed'
+        | 'forbidden'
+        | 'goal_coordinator'
+        | 'no_origin'
+        | 'origin_unavailable'
+        | 'skipped';
     };
 
-interface DispatchContext {
-  apiKeyScopes?: string[] | null;
-  serverDB: LobeChatDatabase;
-  userId: string;
-  workspaceId?: string | null;
-}
+/** The caller's request context — handed to `agentNotify.notify` unchanged. */
+type DispatchContext = Exclude<
+  Parameters<typeof agentNotifyRouter.createCaller>[0],
+  (...args: never[]) => unknown
+> & { serverDB: LobeChatDatabase; userId: string; workspaceId?: string | null };
 
 /**
  * Send a rejected delivery back to the agent that authored it: the repair
- * prompt becomes a user message in the origin topic and the agent runs — the
- * same channel `agentNotify.notify` gives remote callers. Best-effort by
- * design: the reject is already recorded, so a dispatch failure is reported,
- * never thrown.
+ * prompt becomes a user message in the origin topic and the agent runs.
  *
- * The topic is re-read under the CALLER's scope, so a reviewer who may manage
- * the acceptance but does not own its conversation cannot start someone
- * else's agent — they get `origin_unavailable` and fall back to the prompt.
+ * The send goes through `agentNotify.notify` itself rather than a copy of its
+ * side effect, so it carries the same gates — the conversation-write
+ * permission (`message:create`), the workspace agent-use ACL and the caller's
+ * own topic scope. A reviewer who may manage the acceptance but not run its
+ * agent gets `forbidden` / `origin_unavailable` and falls back to the prompt.
+ *
+ * Best-effort by design: the reject is already recorded, so a dispatch failure
+ * is reported, never thrown.
  */
 export const dispatchAcceptanceRepair = async (
   ctx: DispatchContext,
   service: AcceptanceService,
-  acceptanceId: string,
+  acceptance: AcceptanceItem,
 ): Promise<AcceptanceRepairDispatch> => {
-  const origin = await service.findRepairOrigin(acceptanceId);
+  // A Goal Task's next attempt belongs to its coordinator, which reads the
+  // rejected round through the prompt builder and claims the task. A plain
+  // run in the old topic would race it into a second, unaccounted attempt.
+  if (acceptance.subjectType === 'task') {
+    const goal = await new GoalModel(
+      ctx.serverDB,
+      acceptance.userId,
+      acceptance.workspaceId ?? undefined,
+    ).findByGraphTask(acceptance.subjectId);
+    if (goal) return { dispatched: false, reason: 'goal_coordinator' };
+  }
+
+  const origin = await service.findRepairOrigin(acceptance.id);
   if (!origin?.topicId) return { dispatched: false, reason: 'no_origin' };
 
-  const workspaceId = ctx.workspaceId ?? undefined;
-  const topic = await new TopicModel(ctx.serverDB, ctx.userId, workspaceId).findOwnTopicById(
-    origin.topicId,
-  );
+  const topic = await new TopicModel(
+    ctx.serverDB,
+    ctx.userId,
+    ctx.workspaceId ?? undefined,
+  ).findOwnTopicById(origin.topicId);
   const agentId = origin.agentId ?? topic?.agentId ?? undefined;
   if (!topic || !agentId) return { dispatched: false, reason: 'origin_unavailable' };
 
+  let operationId: string | undefined;
   try {
-    await assertCanUseWorkspaceAgent({
+    ({ operationId } = await agentNotifyRouter.createCaller(ctx).notify({
       agentId,
-      db: ctx.serverDB,
-      groupId: topic.groupId,
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-    });
-
-    const result = await new AiAgentService(ctx.serverDB, ctx.userId, {
-      withholdGatewayToken: ctx.apiKeyScopes !== undefined && !isFullAccessApiKey(ctx.apiKeyScopes),
-      workspaceId,
-    }).execAgent({
-      agentId,
-      appContext: { topicId: topic.id },
-      prompt: buildAcceptanceRepairPrompt(acceptanceId),
-      trigger: RequestTrigger.Notify,
-    });
-
-    await service.acceptanceModel.updateStatus(acceptanceId, 'repairing');
-    log('acceptance %s sent back to agent %s in topic %s', acceptanceId, agentId, topic.id);
-    return { agentId, dispatched: true, operationId: result.operationId, topicId: topic.id };
+      content: buildAcceptanceRepairPrompt(acceptance.id),
+      role: 'user',
+      topicId: topic.id,
+    }));
   } catch (error) {
-    console.error('[acceptance] repair dispatch failed for %s: %O', acceptanceId, error);
+    if (error instanceof TRPCError && error.code === 'FORBIDDEN') {
+      return { dispatched: false, reason: 'forbidden' };
+    }
+    console.error('[acceptance] repair dispatch failed for %s: %O', acceptance.id, error);
     return {
       dispatched: false,
       error: error instanceof Error ? error.message : String(error),
       reason: 'failed',
     };
   }
+  if (!operationId) {
+    return { dispatched: false, error: 'The agent run did not start', reason: 'failed' };
+  }
+
+  // The run is live from here: a failed `repairing` stamp must not read as a
+  // failed dispatch, or the caller would retry into a duplicate run. The
+  // aggregate converges when the repair round lands.
+  try {
+    await service.acceptanceModel.updateStatus(acceptance.id, 'repairing');
+  } catch (error) {
+    console.error('[acceptance] marking %s repairing failed: %O', acceptance.id, error);
+  }
+
+  log('acceptance %s sent back to agent %s in topic %s', acceptance.id, agentId, topic.id);
+  return { agentId, dispatched: true, operationId, topicId: topic.id };
 };

@@ -7,6 +7,10 @@ import { getTestDB } from '@lobechat/database/test-utils';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as RbacPermissionModule from '@/business/server/trpc-middlewares/rbacPermission';
+import type * as AcceptanceModelModule from '@/database/models/acceptance';
+import type * as GoalModelModule from '@/database/models/goal';
+
 import { acceptanceRouter } from '../acceptance';
 import { cleanupTestUser, createTestContext, createTestUser } from './integration/setup';
 
@@ -21,6 +25,54 @@ vi.mock('@/server/services/aiAgent', () => ({
     return { execAgent: mockExecAgent };
   }),
 }));
+
+const flags = vi.hoisted(() => ({
+  denyMessageCreate: false,
+  failRepairingStamp: false,
+  goalOwnsTask: false,
+}));
+// OSS stubs the RBAC gate; stand in for Cloud's `message:create` check.
+vi.mock('@/business/server/trpc-middlewares/rbacPermission', async (importOriginal) => {
+  const actual = await importOriginal<typeof RbacPermissionModule>();
+  const { trpc } = await import('@/libs/trpc/lambda/init');
+  const { TRPCError } = await import('@trpc/server');
+  return {
+    ...actual,
+    withScopedPermission: (action: string) =>
+      trpc.middleware(async (opts) => {
+        if (action === 'message:create' && flags.denyMessageCreate) {
+          throw new TRPCError({ code: 'FORBIDDEN' });
+        }
+        return opts.next();
+      }),
+  };
+});
+vi.mock('@/database/models/goal', async (importOriginal) => {
+  const actual = await importOriginal<typeof GoalModelModule>();
+  class GoalModel extends actual.GoalModel {
+    constructor(...args: ConstructorParameters<typeof actual.GoalModel>) {
+      super(...args);
+      const original = this.findByGraphTask;
+      this.findByGraphTask = async (taskId) =>
+        flags.goalOwnsTask ? ({ id: 'goal_1' } as any) : original(taskId);
+    }
+  }
+  return { ...actual, GoalModel };
+});
+vi.mock('@/database/models/acceptance', async (importOriginal) => {
+  const actual = await importOriginal<typeof AcceptanceModelModule>();
+  class AcceptanceModel extends actual.AcceptanceModel {
+    constructor(...args: ConstructorParameters<typeof actual.AcceptanceModel>) {
+      super(...args);
+      const original = this.updateStatus;
+      this.updateStatus = async (id, status) => {
+        if (flags.failRepairingStamp && status === 'repairing') throw new Error('db down');
+        return original(id, status);
+      };
+    }
+  }
+  return { ...actual, AcceptanceModel };
+});
 
 describe('acceptanceRouter reject', () => {
   let userId: string;
@@ -56,6 +108,9 @@ describe('acceptanceRouter reject', () => {
 
   afterEach(async () => {
     mockExecAgent.mockReset();
+    flags.denyMessageCreate = false;
+    flags.failRepairingStamp = false;
+    flags.goalOwnsTask = false;
     await cleanupTestUser(serverDB, strangerId);
     await cleanupTestUser(serverDB, userId);
   });
@@ -136,6 +191,54 @@ describe('acceptanceRouter reject', () => {
       expect(mockExecAgent).not.toHaveBeenCalled();
     });
 
+    it('does not start the agent for a caller without conversation-write permission', async () => {
+      const { topicId } = await seedTopic();
+      await seedOrigin({ topicId });
+      flags.denyMessageCreate = true;
+
+      const caller = acceptanceRouter.createCaller(createTestContext(userId));
+      const result = await caller.reject({ id: acceptanceId });
+
+      expect(result.repairDispatch).toEqual({ dispatched: false, reason: 'forbidden' });
+      expect(result.status).toBe('rejected');
+      expect(mockExecAgent).not.toHaveBeenCalled();
+    });
+
+    it('leaves a Goal Task to its coordinator', async () => {
+      const { topicId } = await seedTopic();
+      await seedOrigin({ topicId });
+      await serverDB
+        .update(acceptances)
+        .set({ subjectId: 'task_goal', subjectType: 'task' })
+        .where(eq(acceptances.id, acceptanceId));
+      flags.goalOwnsTask = true;
+
+      const caller = acceptanceRouter.createCaller(createTestContext(userId));
+      const result = await caller.reject({ id: acceptanceId });
+
+      expect(result.repairDispatch).toEqual({ dispatched: false, reason: 'goal_coordinator' });
+      expect(result.status).toBe('rejected');
+      expect(mockExecAgent).not.toHaveBeenCalled();
+    });
+
+    it('still reports the dispatch when the repairing stamp fails after the run started', async () => {
+      const { agentId, topicId } = await seedTopic();
+      await seedOrigin({ topicId });
+      mockExecAgent.mockResolvedValue({ operationId: 'op_repair' });
+      flags.failRepairingStamp = true;
+
+      const caller = acceptanceRouter.createCaller(createTestContext(userId));
+      const result = await caller.reject({ id: acceptanceId });
+
+      expect(result.repairDispatch).toEqual({
+        agentId,
+        dispatched: true,
+        operationId: 'op_repair',
+        topicId,
+      });
+      expect(mockExecAgent).toHaveBeenCalledTimes(1);
+    });
+
     it('reports a failed agent start without undoing the reject', async () => {
       const { topicId } = await seedTopic();
       await seedOrigin({ topicId });
@@ -146,7 +249,7 @@ describe('acceptanceRouter reject', () => {
 
       expect(result.repairDispatch).toEqual({
         dispatched: false,
-        error: 'device offline',
+        error: 'Failed to trigger agent: device offline',
         reason: 'failed',
       });
       expect(result.status).toBe('rejected');

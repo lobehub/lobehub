@@ -508,10 +508,16 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
         console.log(
           `${pc.yellow('!')} Repair dispatch failed: ${dispatch.error ?? 'unknown error'}`,
         );
+      } else if (dispatch?.reason === 'goal_coordinator') {
+        console.log(pc.dim('Goal task — its coordinator starts the next attempt.'));
       } else {
+        const why =
+          dispatch?.reason === 'forbidden'
+            ? 'Not allowed to run the source agent'
+            : 'No source agent to send it back to';
         console.log(
           pc.dim(
-            `No source agent to send it back to — hand the repair over with: lh acceptance feedback ${result.id} --actionable`,
+            `${why} — hand the repair over with: lh acceptance feedback ${result.id} --actionable`,
           ),
         );
       }
