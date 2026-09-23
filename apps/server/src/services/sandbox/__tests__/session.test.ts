@@ -2,12 +2,14 @@ import type { LobeChatDatabase } from '@lobechat/database';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  EnvironmentInstanceModel: vi.fn(),
   findById: vi.fn(),
+  getAgentVisibility: vi.fn(),
   findInstanceById: vi.fn(),
   resolveSandboxWorkspaceClaim: vi.fn(),
 }));
 
-const { findById, findInstanceById, resolveSandboxWorkspaceClaim } = mocks;
+const { findById, findInstanceById, getAgentVisibility, resolveSandboxWorkspaceClaim } = mocks;
 
 vi.mock('../entitlement', () => ({
   resolveSandboxWorkspaceClaim: mocks.resolveSandboxWorkspaceClaim,
@@ -19,10 +21,14 @@ vi.mock('@/database/models/topic', () => ({
   }),
 }));
 
-vi.mock('@/database/models/environmentInstance', () => ({
-  EnvironmentInstanceModel: vi.fn(function () {
-    return { findById: mocks.findInstanceById };
+vi.mock('@/database/models/agent', () => ({
+  AgentModel: vi.fn(function () {
+    return { getAgentVisibility: mocks.getAgentVisibility };
   }),
+}));
+
+vi.mock('@/database/models/environmentInstance', () => ({
+  EnvironmentInstanceModel: mocks.EnvironmentInstanceModel,
 }));
 
 const { resolveSandboxSessionConfig } = await import('../session');
@@ -45,6 +51,11 @@ describe('resolveSandboxSessionConfig', () => {
     resolveSandboxWorkspaceClaim.mockReset();
     findById.mockReset();
     findInstanceById.mockReset();
+    getAgentVisibility.mockReset();
+    mocks.EnvironmentInstanceModel.mockReset();
+    mocks.EnvironmentInstanceModel.mockImplementation(function () {
+      return { findById: findInstanceById };
+    });
     resolveSandboxWorkspaceClaim.mockResolvedValue(CLAIM);
     findById.mockResolvedValue({
       metadata: { sandboxInstanceId: INSTANCE_ID, sandboxMode: 'persistent' },
@@ -113,6 +124,49 @@ describe('resolveSandboxSessionConfig', () => {
     findInstanceById.mockResolvedValue({ id: INSTANCE_ID, workingDirectory: '../other-user' });
 
     await expect(resolve()).resolves.toEqual({ claim: CLAIM, mode: 'persistent' });
+  });
+
+  // A workspace-public agent runs on its caller's session; a private
+  // environment's captured state can hold that caller's credentials. The
+  // instance is looked up as the public agent, so a private one does not
+  // resolve and the run falls back — the composer tells the person why.
+  it('looks the instance up as a public agent inside a workspace', async () => {
+    findById.mockResolvedValue({
+      agentId: 'agent-shared',
+      metadata: { sandboxInstanceId: INSTANCE_ID, sandboxMode: 'persistent' },
+    });
+    getAgentVisibility.mockResolvedValue('public');
+    findInstanceById.mockResolvedValue(undefined);
+
+    await expect(resolve({ workspaceId: 'ws-1' })).resolves.toEqual({
+      claim: CLAIM,
+      mode: 'persistent',
+    });
+    expect(getAgentVisibility).toHaveBeenCalledWith('agent-shared');
+    expect(mocks.EnvironmentInstanceModel).toHaveBeenCalledWith(
+      serverDB,
+      'user_1',
+      'ws-1',
+      'public',
+    );
+  });
+
+  // Personal agents default to 'public' without meaning it, and every
+  // personal environment is the owner's own — so no agent read, no narrowing.
+  it('does not narrow by agent visibility in personal mode', async () => {
+    findById.mockResolvedValue({
+      agentId: 'agent-personal',
+      metadata: { sandboxInstanceId: INSTANCE_ID, sandboxMode: 'persistent' },
+    });
+
+    await expect(resolve()).resolves.toMatchObject({ environment: INSTANCE_ID });
+    expect(getAgentVisibility).not.toHaveBeenCalled();
+    expect(mocks.EnvironmentInstanceModel).toHaveBeenCalledWith(
+      serverDB,
+      'user_1',
+      undefined,
+      null,
+    );
   });
 
   it('stays ephemeral for a share-visitor run', async () => {

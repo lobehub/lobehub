@@ -1,13 +1,14 @@
 'use client';
 
-import { Flexbox, Icon, Popover } from '@lobehub/ui';
+import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
 import { Skeleton, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   AppWindowMacIcon,
   ChevronDownIcon,
   FolderClockIcon,
   FolderIcon,
+  LockIcon,
   PlusIcon,
   SettingsIcon,
   TimerIcon,
@@ -58,6 +59,19 @@ const styles = createStaticStyles(({ css }) => ({
     padding-block: 8px;
     padding-inline: 8px;
   `,
+  blocked: css`
+    color: ${cssVar.colorWarning};
+  `,
+  blockedNotice: css`
+    padding-block: 8px;
+    padding-inline: 8px;
+    border-radius: ${cssVar.borderRadius};
+
+    font-size: 12px;
+    color: ${cssVar.colorWarningText};
+
+    background: ${cssVar.colorWarningBg};
+  `,
   temporary: css`
     padding-block-end: 4px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
@@ -87,6 +101,13 @@ const EnvironmentSectionSkeleton = memo(() => (
 EnvironmentSectionSkeleton.displayName = 'SandboxInstancePicker.EnvironmentSectionSkeleton';
 
 interface SandboxInstancePickerProps {
+  /**
+   * Whether the conversation's agent is shared with the workspace. Such an
+   * agent runs on its caller's session, and a private environment's captured
+   * state can hold that caller's credentials — so the server will not run it
+   * in one, and the menu says so rather than offering what cannot be used.
+   */
+  agentIsPublic?: boolean;
   /** Whether this plan includes a persistent workspace. Without one, the menu
    *  offers the temporary directory and the way to a plan. */
   entitled: boolean;
@@ -119,7 +140,7 @@ const INSTANCE_ICON = AppWindowMacIcon;
  * stop opening. The settings page is where sizes are worth the wait.
  */
 const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
-  ({ entitled, onChange, topicId, value }) => {
+  ({ agentIsPublic, entitled, onChange, topicId, value }) => {
     // The slot's own name comes from the device namespace on purpose: the local
     // picker and this one are the same slot, and a second string meaning
     // "working directory" would be one more pair to keep in step.
@@ -141,13 +162,24 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
       data: environmentData,
       error: environmentError,
       isLoading: environmentsLoading,
-    } = useSWR(entitled && open ? 'sandbox-environments' : null, () =>
+      // Also while closed when an instance is bound: whether that instance
+      // is still usable depends on its environment's visibility.
+    } = useSWR(entitled && (open || boundInstanceId) ? 'sandbox-environments' : null, () =>
       sandboxWorkspaceService.listEnvironments(),
     );
 
     const instances = data?.instances ?? [];
     const environments = environmentData?.environments ?? [];
     const current = instances.find((instance) => instance.id === boundInstanceId);
+    // The server's rule, mirrored: only inside a workspace, where private and
+    // published are two different things. A personal environment is always
+    // private and always the owner's own, so it stays usable.
+    const isBlocked = (environmentId: string) => {
+      if (!agentIsPublic) return false;
+      const environment = environments.find((item) => item.id === environmentId);
+      return Boolean(environment?.workspaceId) && environment?.visibility === 'private';
+    };
+    const currentBlocked = current ? isBlocked(current.environmentId) : false;
     // Only once the list has actually arrived: an undefined list is "not known
     // yet", not "none", and a list that FAILED is a third thing the menu names.
     const hasNoEnvironments = Boolean(environmentData) && environments.length === 0;
@@ -182,7 +214,7 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
     // same words the local chip shows before a folder is chosen. The default
     // is not a choice, so it does not get named as one.
     const chip = current
-      ? { icon: INSTANCE_ICON, label: current.name }
+      ? { icon: currentBlocked ? LockIcon : INSTANCE_ICON, label: current.name }
       : value.mode === 'ephemeral'
         ? { icon: TimerIcon, label: t('sandboxWorkspace.ephemeral') }
         : { icon: FolderIcon, label: t('workingDirectory.title', { ns: 'device' }) };
@@ -194,8 +226,14 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
     // to wrapping everything in a native <button>, box and all. A Flexbox with one
     // more empty child is harmless.
     const content = (
-      <Flexbox gap={2} style={{ minWidth: 280 }}>
+      <Flexbox gap={2} style={{ maxWidth: 360, minWidth: 280 }}>
         <Text className={styles.header}>{t('workingDirectory.title', { ns: 'device' })}</Text>
+
+        {current && currentBlocked && (
+          <Text className={styles.blockedNotice}>
+            {t('sandboxWorkspace.privateInstanceBlocked', { name: current.name })}
+          </Text>
+        )}
 
         <Flexbox className={styles.temporary}>
           <OptionRow
@@ -238,32 +276,46 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
         )}
 
         {entitled &&
-          environments.map((environment) => (
-            <Flexbox gap={2} key={environment.id}>
-              <Text ellipsis className={styles.environment}>
-                {environment.name}
-              </Text>
+          environments.map((environment) => {
+            // Listed rather than hidden, so a private environment the person
+            // knows they have does not look lost — dimmed, with the reason.
+            const blocked = isBlocked(environment.id);
 
-              {instances
-                .filter((instance) => instance.environmentId === environment.id)
-                .map((instance) => (
+            return (
+              <Flexbox gap={2} key={environment.id}>
+                <Text ellipsis className={styles.environment}>
+                  {environment.name}
+                </Text>
+
+                {blocked && (
+                  <Text className={styles.notice}>{t('sandboxWorkspace.publicAgentHint')}</Text>
+                )}
+
+                {instances
+                  .filter((instance) => instance.environmentId === environment.id)
+                  .map((instance) => (
+                    <OptionRow
+                      active={instance.id === boundInstanceId}
+                      desc={instance.workingDirectory}
+                      disabled={blocked}
+                      icon={<Icon icon={INSTANCE_ICON} size={16} />}
+                      key={instance.id}
+                      label={instance.name}
+                      tag={blocked ? t('sandboxWorkspace.privateTag') : undefined}
+                      onClick={() => void select({ instanceId: instance.id, mode: 'persistent' })}
+                    />
+                  ))}
+
+                {!blocked && (
                   <OptionRow
-                    active={instance.id === boundInstanceId}
-                    desc={instance.workingDirectory}
-                    icon={<Icon icon={INSTANCE_ICON} size={16} />}
-                    key={instance.id}
-                    label={instance.name}
-                    onClick={() => void select({ instanceId: instance.id, mode: 'persistent' })}
+                    icon={<Icon icon={PlusIcon} size={16} />}
+                    label={t('sandboxWorkspace.newInstance')}
+                    onClick={() => createIn(environment.id)}
                   />
-                ))}
-
-              <OptionRow
-                icon={<Icon icon={PlusIcon} size={16} />}
-                label={t('sandboxWorkspace.newInstance')}
-                onClick={() => createIn(environment.id)}
-              />
-            </Flexbox>
-          ))}
+                )}
+              </Flexbox>
+            );
+          })}
 
         {entitled && (
           // Selecting an environment and shaping one are different jobs, so
@@ -295,11 +347,19 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
         onOpenChange={setOpen}
       >
         <div>
-          <div className={workingDirectoryChipStyles.chip}>
-            <Icon icon={chip.icon} size={14} />
-            <span className={workingDirectoryChipStyles.label}>{chip.label}</span>
-            <Icon icon={ChevronDownIcon} size={12} />
-          </div>
+          <Tooltip
+            title={
+              current && currentBlocked
+                ? t('sandboxWorkspace.privateInstanceBlocked', { name: current.name })
+                : undefined
+            }
+          >
+            <div className={cx(workingDirectoryChipStyles.chip, currentBlocked && styles.blocked)}>
+              <Icon icon={chip.icon} size={14} />
+              <span className={workingDirectoryChipStyles.label}>{chip.label}</span>
+              <Icon icon={ChevronDownIcon} size={12} />
+            </div>
+          </Tooltip>
         </div>
       </Popover>
     );

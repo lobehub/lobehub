@@ -47,11 +47,19 @@ export class EnvironmentInstanceModel {
   private db: LobeChatDatabase;
   private userId: string;
   private workspaceId?: string;
+  /** See {@link environmentVisibility}: a public agent reads published environments only. */
+  private callerAgentVisibility?: 'private' | 'public' | null;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    callerAgentVisibility?: 'private' | 'public' | null,
+  ) {
     this.db = db;
     this.userId = userId;
     this.workspaceId = workspaceId;
+    this.callerAgentVisibility = callerAgentVisibility;
   }
 
   /** Environments this member owns, as a subquery the write statements filter through. */
@@ -66,7 +74,7 @@ export class EnvironmentInstanceModel {
     this.db
       .select({ id: environments.id })
       .from(environments)
-      .where(environmentVisibility(this.userId, this.workspaceId));
+      .where(environmentVisibility(this.userId, this.workspaceId, this.callerAgentVisibility));
 
   private ownership = () => inArray(environmentInstances.environmentId, this.ownedEnvironments());
 
@@ -85,7 +93,7 @@ export class EnvironmentInstanceModel {
       .innerJoin(environments, eq(environments.id, environmentInstances.environmentId))
       .where(
         and(
-          environmentVisibility(this.userId, this.workspaceId),
+          environmentVisibility(this.userId, this.workspaceId, this.callerAgentVisibility),
           params.environmentId
             ? eq(environmentInstances.environmentId, params.environmentId)
             : undefined,

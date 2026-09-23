@@ -3,6 +3,7 @@
 import { memo } from 'react';
 
 import SafeBoundary from '@/components/ErrorBoundary';
+import { useAgentStore } from '@/store/agent';
 
 import SandboxInstancePicker from './SandboxInstancePicker';
 import { useSandboxMode } from './useSandboxMode';
@@ -31,11 +32,13 @@ interface SandboxWorkspaceSectionProps {
 const SandboxWorkspaceSectionInner = memo<SandboxWorkspaceSectionProps>(({ agentId }) => {
   const { status } = useSandboxWorkspaceAccess(agentId);
   const { selection, setSelection, topicId } = useSandboxMode(agentId);
+  const agentIsPublic = useAgentStore((s) => s.agentMap[agentId]?.visibility === 'public');
 
   if (status === 'hidden') return null;
 
   return (
     <SandboxInstancePicker
+      agentIsPublic={agentIsPublic}
       entitled={status === 'ready'}
       topicId={topicId}
       value={selection}

@@ -71,9 +71,18 @@ export const environmentOwnership = (userId: string, workspaceId?: string) =>
  * instance carries what a session left in it, so a published environment hands
  * over its captured state too — a bargain identical to sharing a device, and
  * one the confirmation dialog spells out before anyone makes it.
+ *
+ * `callerAgentVisibility: 'public'` narrows it to the published rows alone: a
+ * workspace-public agent runs on its caller's session, and a private
+ * environment's captured state can hold that caller's credentials, so a shared
+ * agent must not reach it. Personal mode is unaffected — there every row is the
+ * owner's own.
  */
-export const environmentVisibility = (userId: string, workspaceId?: string) =>
-  buildWorkspaceWhere({ userId, workspaceId }, environments);
+export const environmentVisibility = (
+  userId: string,
+  workspaceId?: string,
+  callerAgentVisibility?: 'private' | 'public' | null,
+) => buildWorkspaceWhere({ callerAgentVisibility, userId, workspaceId }, environments);
 
 /**
  * The declarative half of an environment: what it should contain, not what it

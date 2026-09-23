@@ -156,6 +156,40 @@ describe('environment visibility', () => {
     });
   });
 
+  // A workspace-public agent runs on its caller's session. Even the creator's
+  // own private instance is out of its reach, since what a session left in it
+  // can include the creator's credentials; a published one stays usable.
+  it('keeps even your own private instances out of reach of a public agent', async () => {
+    const privateEnv = await owner.create({ name: 'Private' });
+    const privateInstance = await addInstance(privateEnv.id, 'secret');
+    const publishedEnv = await owner.create({ name: 'Published', visibility: 'public' });
+    const publishedInstance = await addInstance(publishedEnv.id, 'shared');
+
+    const asPublicAgent = new EnvironmentInstanceModel(serverDB, ownerId, workspaceId, 'public');
+    const asPrivateAgent = new EnvironmentInstanceModel(serverDB, ownerId, workspaceId, 'private');
+
+    await expect(asPublicAgent.findById(privateInstance.id)).resolves.toBeUndefined();
+    await expect(asPublicAgent.findById(publishedInstance.id)).resolves.toMatchObject({
+      id: publishedInstance.id,
+    });
+    await expect(asPublicAgent.query()).resolves.toHaveLength(1);
+
+    await expect(asPrivateAgent.findById(privateInstance.id)).resolves.toMatchObject({
+      id: privateInstance.id,
+    });
+  });
+
+  // Personal agents carry 'public' by default without it meaning anything, and
+  // every personal environment is private — narrowing there would hide them all.
+  it('leaves personal environments reachable whatever the agent says', async () => {
+    const personal = new EnvironmentModel(serverDB, ownerId);
+    const created = await personal.create({ name: 'Personal' });
+    const instance = await addInstance(created.id, 'personal');
+
+    const asPublicAgent = new EnvironmentInstanceModel(serverDB, ownerId, undefined, 'public');
+    await expect(asPublicAgent.findById(instance.id)).resolves.toMatchObject({ id: instance.id });
+  });
+
   it('refuses to publish a personal environment, which has nobody to publish to', async () => {
     const personal = new EnvironmentModel(serverDB, ownerId);
     const created = await personal.create({ name: 'Personal', visibility: 'public' });

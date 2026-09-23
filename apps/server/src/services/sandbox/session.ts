@@ -8,6 +8,7 @@ import {
 import type { LobeChatDatabase } from '@lobechat/database';
 import debug from 'debug';
 
+import { AgentModel } from '@/database/models/agent';
 import { EnvironmentInstanceModel } from '@/database/models/environmentInstance';
 import { TopicModel } from '@/database/models/topic';
 
@@ -97,13 +98,24 @@ export const resolveSandboxSessionConfig = async ({
     const instanceId = topic.metadata.sandboxInstanceId;
     if (!instanceId) return { claim, mode: 'persistent' };
 
-    // Deleted, or never this member's. Either way the conversation still runs,
-    // at the workspace root under the default environment — the alternative is
-    // a topic that cannot run at all until someone edits a database row.
+    // A workspace-public agent runs on its caller's session, and a private
+    // environment's captured state can hold that caller's credentials — so a
+    // shared agent reads published environments only. Personal mode has no
+    // such boundary: its agents default to 'public' without meaning it.
+    const callerAgentVisibility =
+      workspaceId && topic.agentId
+        ? await new AgentModel(serverDB, userId, workspaceId).getAgentVisibility(topic.agentId)
+        : null;
+
+    // Deleted, never this member's, or private under a public agent. Any way,
+    // the conversation still runs, at the workspace root under the default
+    // environment — the alternative is a topic that cannot run at all until
+    // someone edits a database row. The composer names the private case.
     const instance = await new EnvironmentInstanceModel(
       serverDB,
       userId,
       workspaceId ?? undefined,
+      callerAgentVisibility,
     ).findById(instanceId);
     if (!instance) {
       log('Ignoring unresolvable sandboxInstanceId on topic %s: %o', topicId, instanceId);
