@@ -1,0 +1,280 @@
+import { execFile } from 'node:child_process';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { promisify } from 'node:util';
+
+import { Command } from 'commander';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { getTrpcClient } from '../api/client';
+import { log } from '../utils/logger';
+import { uploadLocalFile } from '../utils/uploadLocalFile';
+import { attachAcceptanceRunCommands } from './acceptanceRun';
+
+vi.mock('../api/client', () => ({ getTrpcClient: vi.fn() }));
+vi.mock('../settings', () => ({ resolveServerUrl: () => 'https://app.lobehub.com' }));
+vi.mock('../utils/uploadLocalFile', () => ({ uploadLocalFile: vi.fn() }));
+
+describe('acceptance publication with missing evidence', () => {
+  const client = {
+    acceptance: {
+      attachRun: { mutate: vi.fn() },
+      ensure: { mutate: vi.fn() },
+    },
+    verify: {
+      createRun: { mutate: vi.fn() },
+      ingestResult: { mutate: vi.fn() },
+      uploadEvidence: { mutate: vi.fn() },
+      upsertReport: { mutate: vi.fn() },
+    },
+  };
+  let dir: string;
+  let printed: string[];
+  let originalExitCode: typeof process.exitCode;
+
+  beforeEach(async () => {
+    vi.resetAllMocks();
+    originalExitCode = process.exitCode;
+    process.exitCode = undefined;
+    printed = [];
+    vi.spyOn(console, 'log').mockImplementation((line) => printed.push(String(line)));
+    vi.spyOn(log, 'warn').mockImplementation(() => {});
+    vi.mocked(getTrpcClient).mockResolvedValue(
+      client as unknown as Awaited<ReturnType<typeof getTrpcClient>>,
+    );
+    vi.mocked(uploadLocalFile).mockResolvedValue({ id: 'file-1', url: 'https://files.test/1' });
+    client.acceptance.ensure.mutate.mockResolvedValue({ id: 'acceptance-1' });
+    client.acceptance.attachRun.mutate.mockResolvedValue({ id: 'run-1', roundIndex: 2 });
+    client.verify.createRun.mutate.mockResolvedValue({ id: 'run-1' });
+    client.verify.ingestResult.mutate.mockImplementation(async (input) => ({
+      id: `result-${input.checkItemId}`,
+    }));
+    client.verify.uploadEvidence.mutate.mockResolvedValue({ id: 'evidence-1' });
+    dir = await mkdtemp(path.join(tmpdir(), 'lh-evidence-'));
+    await writeFile(path.join(dir, "screen's shot.png"), 'image fixture');
+    await writeFile(path.join(dir, 'output.txt'), 'Observed the expected response.');
+  });
+
+  afterEach(async () => {
+    process.exitCode = originalExitCode;
+    vi.restoreAllMocks();
+    await rm(dir, { force: true, recursive: true });
+  });
+
+  const run = async (...args: string[]) => {
+    const program = new Command();
+    program.exitOverride();
+    attachAcceptanceRunCommands(program.command('acceptance'));
+    await program.parseAsync(['node', 'lh', 'acceptance', 'run', ...args]);
+  };
+
+  const report = async (requiredEvidence: string[], evidence: string[], verdict = 'passed') => {
+    await writeFile(
+      path.join(dir, 'result.json'),
+      JSON.stringify({
+        cases: [{ evidence, id: 'screen', name: '用户能看到处理结果', status: verdict }],
+        plan: [{ id: 'screen', requiredEvidence, title: '用户能看到处理结果' }],
+        summary: { passed: 1, total: 1, verdict },
+        title: '处理结果展示',
+      }),
+    );
+  };
+
+  const result = () => JSON.parse(printed.at(-1)!);
+  const finalCheck = () => client.verify.ingestResult.mutate.mock.calls.at(-1)![0];
+  const finalReport = () => client.verify.upsertReport.mutate.mock.calls.at(-1)![0];
+
+  it('publishes partial JSON and downgrades a pass when quota blocks required screenshots', async () => {
+    vi.mocked(uploadLocalFile).mockRejectedValue(new Error('storage_block:upgrade_required'));
+    await report(['screenshot', 'text'], ["screen's shot.png", 'output.txt']);
+    const original = await readFile(path.join(dir, 'result.json'), 'utf8');
+
+    await run('ingest', dir, '--json');
+
+    expect(process.exitCode).toBe(1);
+    expect(result()).toMatchObject({
+      acceptanceUrl: 'https://app.lobehub.com/acceptance/acceptance-1',
+      evidence: 1,
+      failedEvidence: [
+        { checkItemId: 'screen', checkResultId: 'result-screen', reason: 'storage_quota' },
+      ],
+      inlined: 1,
+      missingEvidence: [{ checkItemId: 'screen', types: ['screenshot'] }],
+      publicationStatus: 'partial',
+      roundUrl: 'https://app.lobehub.com/acceptance/acceptance-1?r=2',
+    });
+    expect(result().failedEvidence[0].retryCommand).toContain('evidence upload');
+    expect(finalCheck()).toMatchObject({
+      verdict: 'uncertain',
+      toulmin: { limitation: expect.stringContaining('screenshot') },
+    });
+    expect(finalReport()).toMatchObject({
+      passedChecks: 0,
+      totalChecks: 1,
+      uncertainChecks: 1,
+      verdict: 'uncertain',
+    });
+    expect(await readFile(path.join(dir, 'result.json'), 'utf8')).toBe(original);
+  });
+
+  it('does not downgrade a pass when only an optional medium failed', async () => {
+    vi.mocked(uploadLocalFile).mockRejectedValue(new Error('storage_block:upgrade_required'));
+    await report(['text'], ['output.txt', "screen's shot.png"]);
+
+    await run('ingest', dir, '--json');
+
+    expect(process.exitCode).toBe(1);
+    expect(result()).toMatchObject({ missingEvidence: [], publicationStatus: 'partial' });
+    expect(finalCheck().verdict).toBe('passed');
+    expect(finalReport().verdict).toBe('passed');
+  });
+
+  it('counts only attached evidence, but accepts another successful file of the same required type', async () => {
+    await writeFile(path.join(dir, 'second.png'), 'another image');
+    vi.mocked(uploadLocalFile).mockRejectedValueOnce(new Error('storage_block:upgrade_required'));
+    await report(['screenshot'], ["screen's shot.png", 'second.png']);
+
+    await run('ingest', dir, '--json');
+
+    expect(result()).toMatchObject({
+      evidence: 1,
+      missingEvidence: [],
+      publicationStatus: 'partial',
+    });
+    expect(finalCheck().verdict).toBe('passed');
+  });
+
+  it.each(['failed', 'uncertain'])(
+    'preserves an existing %s verdict with missing evidence',
+    async (verdict) => {
+      await report(['screenshot'], ['missing.png'], verdict);
+
+      await run('ingest', dir, '--json');
+
+      expect(result().failedEvidence[0].reason).toBe('file_missing');
+      expect(finalCheck().verdict).toBe(verdict);
+      expect(finalReport().verdict).toBe(verdict);
+      expect(process.exitCode).toBe(1);
+    },
+  );
+
+  it('reports missing required evidence even when no upload was attempted', async () => {
+    await report(['screenshot'], []);
+
+    await run('ingest', dir, '--json');
+
+    expect(result()).toMatchObject({
+      failedEvidence: [],
+      missingEvidence: [{ checkItemId: 'screen', types: ['screenshot'] }],
+      publicationStatus: 'partial',
+    });
+    expect(finalReport().verdict).toBe('uncertain');
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('prints the saved report link and recovery advice without --open', async () => {
+    vi.mocked(uploadLocalFile).mockRejectedValue(new Error('storage_block:upgrade_required'));
+    await report(['screenshot'], ["screen's shot.png"]);
+
+    await run('ingest', dir);
+
+    expect(printed.join('\n')).toContain('Partially published');
+    expect(printed.join('\n')).toContain('https://app.lobehub.com/acceptance/acceptance-1?r=2');
+    expect(printed.join('\n')).toContain('evidence upload');
+    expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('personal file storage quota'));
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('finishes a complete publication with no failure exit code', async () => {
+    await report(['screenshot', 'text'], ["screen's shot.png", 'output.txt']);
+
+    await run('ingest', dir, '--json');
+
+    expect(result()).toMatchObject({
+      evidence: 2,
+      failedEvidence: [],
+      inlined: 1,
+      missingEvidence: [],
+      publicationStatus: 'complete',
+    });
+    expect(finalCheck().verdict).toBe('passed');
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it('retries only the failed attachment, reusing its file and preserving its caption and comparison', async () => {
+    const description = "Before: user's input $(printf should-not-expand)";
+    const comparison = { id: 'input', role: 'before' };
+    await writeFile(
+      path.join(dir, 'result.json'),
+      JSON.stringify({
+        cases: [
+          {
+            evidence: [{ comparison, description, path: "screen's shot.png" }, 'output.txt'],
+            id: 'screen',
+            name: '用户能看到处理结果',
+            status: 'passed',
+          },
+        ],
+        plan: [
+          { id: 'screen', requiredEvidence: ['screenshot', 'text'], title: '用户能看到处理结果' },
+        ],
+      }),
+    );
+    client.verify.uploadEvidence.mutate.mockRejectedValueOnce(new Error('attachment unavailable'));
+    await run('ingest', dir, '--json');
+    const failure = result().failedEvidence[0];
+    expect(failure).toMatchObject({ fileId: 'file-1', reason: 'upload_failed' });
+    expect(finalCheck().verdict).toBe('uncertain');
+    const originalReport = finalReport();
+    const checkWrites = client.verify.ingestResult.mutate.mock.calls.length;
+
+    // Parse with a real POSIX shell: spaces, quotes and command substitutions
+    // in a caption must survive verbatim rather than changing the command.
+    const { stdout } = await promisify(execFile)('sh', [
+      '-c',
+      failure.retryCommand.replace('lh acceptance run evidence upload', 'printf "%s\\0"'),
+    ]);
+    await run('evidence', 'upload', ...stdout.split('\0').filter(Boolean));
+
+    expect(uploadLocalFile).toHaveBeenCalledTimes(1);
+    expect(client.verify.createRun.mutate).toHaveBeenCalledTimes(1);
+    expect(client.verify.ingestResult.mutate).toHaveBeenCalledTimes(checkWrites);
+    expect(client.verify.upsertReport.mutate).toHaveBeenCalledTimes(1);
+    expect(finalReport()).toEqual(originalReport);
+    expect(client.verify.uploadEvidence.mutate.mock.calls.at(-1)![0]).toMatchObject({
+      capturedBy: 'cli',
+      checkResultId: 'result-screen',
+      description,
+      fileId: 'file-1',
+      metadata: { comparison },
+      type: 'screenshot',
+    });
+  });
+
+  it('recounts mixed checks without converting an observed failure into uncertainty', async () => {
+    vi.mocked(uploadLocalFile).mockRejectedValue(new Error('storage_block:upgrade_required'));
+    await writeFile(
+      path.join(dir, 'result.json'),
+      JSON.stringify({
+        cases: [
+          { evidence: ["screen's shot.png"], id: 'screen', name: '画面展示', status: 'passed' },
+          { evidence: ['output.txt'], id: 'response', name: '收到回复', status: 'passed' },
+          { id: 'cancel', name: '取消操作', status: 'failed' },
+        ],
+        plan: [{ id: 'screen', requiredEvidence: ['screenshot'], title: '画面展示' }],
+        summary: { failed: 1, passed: 2, total: 3, verdict: 'failed' },
+      }),
+    );
+
+    await run('ingest', dir, '--json');
+
+    expect(finalReport()).toMatchObject({
+      failedChecks: 1,
+      passedChecks: 1,
+      totalChecks: 3,
+      uncertainChecks: 1,
+      verdict: 'failed',
+    });
+  });
+});

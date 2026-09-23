@@ -30,7 +30,6 @@ the next free number of that prefix.
 - **L-E6** When the Task requires a durable document, create and pin the real artifact; evidence explains a verdict, it is not the deliverable.
 - **L-E9** Check the acceptance's status before ingest; new scoped work on an accepted acceptance goes to a new subject.
 - **L-E10** After any Agent assignment or Task edit, verify the persisted provider/model and the first completed message's metadata before judging quality.
-- **L-E11** Reconcile the evidence count in `result.json` against the ingest JSON; any `[WARN] evidence upload failed` is a failed publish — republish a fresh round.
 - **L-E13** Uncommitted work on a branch that owns a PR: decide provenance explicitly (open the real PR, or say in `report.md` there is none) and re-read `branch`/`commit` at publish time.
 - **L-E14** After an insertion affordance, continue the user's action in the same case and assert node order in persisted `editor_data`; send the payload through the same entry point.
 - **L-E15** A conversation-branch regression is verified by sending the next message through the real composer: DB row, parent on the active spine, render before and after cold reload.
@@ -154,20 +153,6 @@ fallback.
 **Rule:** after every assignment or Task edit, verify the persisted
 provider/model and the first completed assistant message metadata; attach the
 runtime identity to the round.
-
-### L-E11 — Declaring an ingest done without reconciling its evidence count
-
-`since 2026-07-31` · `holds-while: ingest exits 0 after "[WARN] evidence upload failed, skipping <file>"`
-
-**Trap:** the success JSON shows an `acceptanceId` and a round index, the WARN
-above it is read as noise. One skipped half of a `comparison` pair renders alone
-— a lone `before` reads as "the fix never landed".
-
-**Rule:** count evidence items in `result.json` against the ingest JSON's
-`evidence` field; any WARN is a failed publish. Do not retro-attach with
-`acceptance run evidence upload` (no `comparison` metadata → unpaired). Publish
-a fresh round with the complete set and say in `report.md` that it republishes
-the same observations.
 
 ### L-E13 — Publishing uncommitted work onto the branch's unrelated PR
 
