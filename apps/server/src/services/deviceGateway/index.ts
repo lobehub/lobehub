@@ -1782,7 +1782,7 @@ export class DeviceGateway {
   /**
    * TCP ports the device is listening on that a tunnel can reach, with the
    * project's own ports marked. Resolves undefined when the device is
-   * offline or predates the RPC — the UI then falls back to manual entry.
+   * offline or predates the RPC — the UI then says it can't read the ports.
    */
   async listListeningPorts(params: {
     cwd?: string;

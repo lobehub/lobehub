@@ -184,7 +184,8 @@ export const usePortTunnels = (options: {
     detectedByPort: byPort,
     /** False when the device can't detect (offline, or a client that predates it). */
     detectionAvailable: !!detection.data?.supported,
-    detectionLoading: detection.isLoading,
+    // Validating, not loading: a manual rescan keeps the old data and must still spin.
+    detectionLoading: detection.isValidating,
     error,
     exposePort,
     isLoading,

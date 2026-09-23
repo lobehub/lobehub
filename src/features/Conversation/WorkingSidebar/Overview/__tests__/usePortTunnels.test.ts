@@ -19,6 +19,7 @@ const isDesktop = vi.hoisted(() => ({ value: false }));
 const detection = vi.hoisted(() => ({
   data: undefined as unknown,
   isLoading: false,
+  isValidating: false,
   mutate: vi.fn(),
 }));
 
@@ -82,6 +83,7 @@ beforeEach(() => {
   isDesktop.value = false;
   detection.data = undefined;
   detection.isLoading = false;
+  detection.isValidating = false;
   tab.location.href = '';
   tab.opener = {};
   vi.stubGlobal(
@@ -274,6 +276,12 @@ describe('usePortTunnels', () => {
     it('reports no detection for a device that cannot answer', () => {
       detection.data = null;
       expect(setup().result.current).toMatchObject({ detected: [], detectionAvailable: false });
+    });
+
+    it('shows a rescan in progress even though the previous answer is still there', () => {
+      detection.data = { ports: [port({ port: 3000 })], supported: true };
+      detection.isValidating = true;
+      expect(setup().result.current.detectionLoading).toBe(true);
     });
   });
 

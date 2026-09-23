@@ -374,23 +374,23 @@ const PortSwitcher = memo<PortSwitcherProps>(({ active, deviceId, workingDirecto
             <div className={styles.container}>
               <div className={styles.header}>
                 {t('workingPanel.overview.ports.title')}
-                {detectionAvailable && (
-                  <Tooltip title={t('workingPanel.overview.ports.detected.refresh')}>
-                    <button
-                      aria-label={t('workingPanel.overview.ports.detected.refresh')}
-                      className={styles.action}
-                      type={'button'}
-                      onKeyDown={(event) => event.stopPropagation()}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        void refreshDetected();
-                      }}
-                    >
-                      <Icon icon={RefreshCwIcon} size={12} spin={detectionLoading} />
-                    </button>
-                  </Tooltip>
-                )}
+                {/* Kept even when detection is unavailable: a device that just came
+                    back online is otherwise stuck on the stale answer. */}
+                <Tooltip title={t('workingPanel.overview.ports.detected.refresh')}>
+                  <button
+                    aria-label={t('workingPanel.overview.ports.detected.refresh')}
+                    className={styles.action}
+                    type={'button'}
+                    onKeyDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      void refreshDetected();
+                    }}
+                  >
+                    <Icon icon={RefreshCwIcon} size={12} spin={detectionLoading} />
+                  </button>
+                </Tooltip>
               </div>
 
               {body}
