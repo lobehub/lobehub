@@ -172,6 +172,21 @@ describe('loadAttachmentBufferWithDetail', () => {
     expect(result.error).toBe('fetch failed: fetch failed (Invalid IP address: undefined)');
   });
 
+  it('reports the cause code rather than its message when the cause carries one', async () => {
+    // A system error message names the resolved host:port — for a trusted
+    // origin that is our own storage address, which must not reach the model.
+    const error = new TypeError('fetch failed');
+    (error as any).cause = Object.assign(new Error('connect ECONNREFUSED 10.0.0.12:9000'), {
+      code: 'ECONNREFUSED',
+    });
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(error));
+
+    const result = await fetchCappedBufferWithDetail('https://x/f', { limit: 100 });
+
+    expect(result.error).toBe('fetch failed: fetch failed (ECONNREFUSED)');
+    expect(result.error).not.toContain('10.0.0.12');
+  });
+
   it('reports the HTTP status of a non-OK response', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 403 }));
 

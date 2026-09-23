@@ -7,6 +7,7 @@ import {
   splitFallbackMessages,
   summarizeDegradations,
 } from '@/server/services/bot/platforms/attachmentBudget';
+import { warnAttachmentFailures } from '@/server/services/bot/platforms/attachmentDelivery';
 import { DiscordApi } from '@/server/services/bot/platforms/discord/api';
 import {
   batchDiscordFiles,
@@ -107,7 +108,9 @@ export const sendOutboundDirectMessage = async (params: {
         // The first attachment carries the text as its caption; if every
         // attachment fails, fall back to a plain message so the text leg
         // still lands.
-        const { delivered } = await sendTelegramAttachments(api, platformUserId, files, text);
+        const sent = await sendTelegramAttachments(api, platformUserId, files, text);
+        warnAttachmentFailures('messenger:outbound:telegram', sent.failures);
+        const { delivered } = sent;
         textDelivered = delivered > 0;
         if (delivered === 0 && !text && !linkMessages.length)
           throw new Error('All Telegram attachments failed to send');
@@ -123,7 +126,8 @@ export const sendOutboundDirectMessage = async (params: {
       const channel = await api.createDMChannel(platformUserId);
       let textDelivered = false;
       if (files) {
-        const { files: rawFiles } = await materializeAttachmentsForDiscord(files);
+        const { failures, files: rawFiles } = await materializeAttachmentsForDiscord(files);
+        warnAttachmentFailures('messenger:outbound:discord', failures);
         if (rawFiles.length > 0) {
           // First batch carries the text leg; follow-up batches are text-less
           // so the message isn't repeated once per batch.
@@ -147,11 +151,13 @@ export const sendOutboundDirectMessage = async (params: {
         // `files.completeUploadExternal` needs a real channel id (unlike
         // `chat.postMessage`, which resolves a user id), so open the DM first.
         const channel = await api.openConversation(platformUserId);
-        const { delivered: uploaded } = await sendSlackAttachments(api, {
+        const sent = await sendSlackAttachments(api, {
           attachments: files,
           channelId: channel.id,
           initialComment: text,
         });
+        warnAttachmentFailures('messenger:outbound:slack', sent.failures);
+        const { delivered: uploaded } = sent;
         textDelivered = uploaded > 0;
         if (uploaded === 0 && !text && !linkMessages.length)
           throw new Error('All Slack attachments failed to upload');

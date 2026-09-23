@@ -1,9 +1,5 @@
 import type { MessageItem, WechatApiClient } from '@lobechat/chat-adapter-wechat';
-import {
-  MessageItemType,
-  WECHAT_RET_CODES,
-  WechatUploadMediaType,
-} from '@lobechat/chat-adapter-wechat';
+import { MessageItemType, WechatUploadMediaType } from '@lobechat/chat-adapter-wechat';
 import debug from 'debug';
 
 import {
@@ -37,20 +33,11 @@ export interface WechatOutboundAttachment {
   type: 'image' | 'file' | 'video' | 'audio';
 }
 
-/**
- * Why one attachment never reached the user. Carried back to the delivery
- * boundary instead of printed here: `detail` holds the iLink `errmsg` (or the
- * loader's reason), which is the part that actually diagnoses a lost
- * attachment, and the boundary is the only place that knows the send it
- * belongs to. The shape is shared with every other platform sender.
- */
-export type WechatAttachmentFailure = AttachmentFailure;
-
 export interface WechatAttachmentSendResult {
   /** Attachments that reached the user, as media or as a download link. */
   delivered: number;
   /** Describes the same attachments as `undelivered`. */
-  failures: WechatAttachmentFailure[];
+  failures: AttachmentFailure[];
   undelivered: WechatOutboundAttachment[];
 }
 
@@ -60,10 +47,15 @@ export interface WechatAttachmentSendResult {
  * login fixes it, and no retry with a different payload will. Say so, because
  * this text is what the agent — and the person reading its reply — get to see.
  */
+// The adapter's `WECHAT_RET_CODES.SESSION_EXPIRED`, spelled out here: this
+// runs inside the per-item catch below, which must never throw — and suites
+// that mock the adapter module would make the import throw right there.
+const WECHAT_SESSION_EXPIRED = -14;
+
 const describeWechatUploadError = (error: unknown): string => {
   const message = error instanceof Error ? error.message : String(error);
   const code = (error as { code?: unknown } | null)?.code;
-  if (code === WECHAT_RET_CODES.SESSION_EXPIRED)
+  if (code === WECHAT_SESSION_EXPIRED)
     return `WeChat bot session expired (errcode -14): the bot must be logged in again by scanning its QR code before media can be sent; ${message}`;
   return message;
 };
@@ -149,7 +141,7 @@ export const sendWechatAttachments = async (
   const budget = PLATFORM_ATTACHMENT_BUDGETS.wechat;
   const fallbackLines: string[] = [];
   const undelivered: WechatOutboundAttachment[] = [];
-  const failures: WechatAttachmentFailure[] = [];
+  const failures: AttachmentFailure[] = [];
 
   let delivered = 0;
 

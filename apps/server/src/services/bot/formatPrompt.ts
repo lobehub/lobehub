@@ -20,7 +20,13 @@ interface ReferencedRaw {
 
 interface MessageLike {
   author: { fullName?: string; userId: string; userName?: string };
+  /**
+   * The platform payload. Only the fields this module reads are typed; the
+   * rest (e.g. Discord `mentions`) is what `resolveMentions` / `sanitizeUserInput`
+   * dig into per platform, so the shape stays open.
+   */
   raw?: {
+    [key: string]: unknown;
     author?: { avatar?: string | null; global_name?: string | null };
   } & ReferencedRaw;
   text: string;

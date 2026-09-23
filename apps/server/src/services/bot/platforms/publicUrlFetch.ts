@@ -291,13 +291,15 @@ const MAX_REDIRECTS = 5;
  * A `connect.lookup` that answers with the address we already vetted, so
  * undici never resolves the hostname a second time (see `fetchPublicUrl`).
  *
- * The callback has TWO shapes, chosen by `options.all`, and undici asks with
- * `{ all: true }`: it reads `addresses[0].address` off the second argument.
- * Answering with the 3-arg `dns.lookup` tuple there made that `undefined`, and
- * undici threw `Invalid IP address: undefined` — which failed every pinned
- * request, i.e. every caller-supplied `fetchUrl` on every platform, while the
- * senders quietly degraded the attachment. Honour both shapes so the pin
- * cannot depend on which one undici happens to request.
+ * The callback has TWO shapes, chosen by `options.all`. undici passes this
+ * hook straight to `net.connect`, and Node's `lookupAndConnect` asks with
+ * `{ all: true }` whenever `autoSelectFamily` is on (the default since Node 20),
+ * reading `addresses[0].address` off the second argument. Answering with the
+ * 3-arg `dns.lookup` tuple there made that `undefined`, and the connect threw
+ * `Invalid IP address: undefined` — which failed every pinned request, i.e.
+ * every caller-supplied `fetchUrl` on every platform, while the senders
+ * quietly degraded the attachment. Honour both shapes so the pin cannot
+ * depend on which one the runtime happens to request.
  */
 export const pinnedLookup =
   (address: string, family: number): LookupFunction =>

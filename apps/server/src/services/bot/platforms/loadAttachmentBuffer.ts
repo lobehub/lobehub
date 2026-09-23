@@ -125,13 +125,21 @@ export type LoadAttachmentResult =
 
 /**
  * `fetch failed` on its own says nothing — undici puts the diagnosis on
- * `cause` (`Invalid IP address: undefined`, `ECONNREFUSED`, ...).
+ * `cause`. Its `code` (`ECONNREFUSED`, `ENOTFOUND`, `ERR_INVALID_IP_ADDRESS`)
+ * is preferred over its message: this text ends up in the agent's tool result
+ * and in a production log line, and a system error message carries the
+ * resolved `host:port` — for a trusted origin that is our own storage address.
  */
 const describeError = (error: unknown): string => {
   if (!(error instanceof Error)) return String(error);
   const cause = (error as Error & { cause?: unknown }).cause;
-  const causeText =
-    cause instanceof Error ? cause.message : cause === undefined ? undefined : String(cause);
+  let causeText: string | undefined;
+  if (cause instanceof Error) {
+    const code = (cause as Error & { code?: unknown }).code;
+    causeText = typeof code === 'string' && code ? code : cause.message;
+  } else if (cause !== undefined) {
+    causeText = String(cause);
+  }
   return causeText ? `${error.message} (${causeText})` : error.message;
 };
 

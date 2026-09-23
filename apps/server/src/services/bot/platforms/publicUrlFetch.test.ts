@@ -363,8 +363,9 @@ describe('fetchPublicUrl', () => {
 });
 
 describe('pinnedLookup', () => {
-  // undici's connector calls `lookup` with `{ all: true }` and reads
-  // `addresses[0].address`. Answering with the 3-arg `dns.lookup` tuple there
+  // Node's `net.connect` (which undici hands the hook to) calls `lookup` with
+  // `{ all: true }` under `autoSelectFamily` and reads `addresses[0].address`.
+  // Answering with the 3-arg `dns.lookup` tuple there
   // made it read `undefined` and fail EVERY pinned request with
   // "Invalid IP address: undefined" — which is every caller-supplied
   // `fetchUrl`, on every platform, for a month. This is the contract the
