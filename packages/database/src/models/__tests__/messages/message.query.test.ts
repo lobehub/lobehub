@@ -1614,6 +1614,9 @@ describe('MessageModel Query Tests', () => {
         expect(works).toHaveLength(1);
         expect(works[0]).toMatchObject({ title: 'report.md', totalCost: null, type: 'file' });
         expect(works[0].event).toMatchObject({ cumulativeCost: null, cumulativeUsage: null });
+        // The run executes as the creator: their account/workspace ids must not leak.
+        expect(works[0]).not.toHaveProperty('userId');
+        expect(works[0]).not.toHaveProperty('workspaceId');
       });
 
       it('keeps the spend snapshot when the share exposes model info', async () => {
@@ -1628,6 +1631,9 @@ describe('MessageModel Query Tests', () => {
         const works = findAnchor(result).works;
         expect(works[0]).toMatchObject({ totalCost: 0.42 });
         expect(works[0].event.cumulativeUsage).toMatchObject({ usage: { totalTokens: 9 } });
+        // `showModelInfo` exposes spend only, never the creator's identity.
+        expect(works[0]).not.toHaveProperty('userId');
+        expect(works[0]).not.toHaveProperty('workspaceId');
       });
 
       it('never resolves the visitor Works through the creator scope', async () => {
