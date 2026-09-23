@@ -1316,6 +1316,11 @@ export default {
   'sandboxWorkspace.setUpEnvironment': 'Set up an environment',
   'sandboxWorkspace.manageEnvironments': 'Manage environments',
   'sandboxWorkspace.environmentsUnavailable': 'Environments could not be loaded',
+  'sandboxWorkspace.privateTag': 'Private',
+  'sandboxWorkspace.publicAgentHint':
+    'Public agents can only use workspace environments. Publish this environment to the workspace first to use it here.',
+  'sandboxWorkspace.privateInstanceBlocked':
+    '“{{name}}” is in a private environment, which a public agent cannot use. This topic runs in the default environment instead.',
   'search.grounding.imageSearchQueries': 'Image Search Keywords',
   'search.grounding.imageTitle': 'Found {{count}} images',
   'chatMode.agent': 'Agent',
