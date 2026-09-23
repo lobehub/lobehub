@@ -405,6 +405,67 @@ describe('KnowledgeRepo', () => {
       expect(names).not.toContain('other-private-doc.pdf');
     });
 
+    it('should only list derived pages when their backing file is accessible in the requested mode', async () => {
+      await serverDB.insert(files).values([
+        {
+          id: 'private-backing-file',
+          fileType: 'application/pdf',
+          name: 'private.pdf',
+          size: 100,
+          url: 'private-file-url',
+          userId: otherUserId,
+          visibility: 'private',
+          workspaceId,
+        },
+        {
+          id: 'public-backing-file',
+          fileType: 'application/pdf',
+          name: 'public.pdf',
+          size: 100,
+          url: 'public-file-url',
+          userId: otherUserId,
+          visibility: 'public',
+          workspaceId,
+        },
+      ]);
+      await serverDB.insert(documents).values([
+        {
+          id: 'page-behind-private-file',
+          fileId: 'private-backing-file',
+          fileType: 'custom/document',
+          source: 'private-file-url',
+          sourceType: 'file',
+          title: 'Private file page',
+          totalCharCount: 10,
+          totalLineCount: 1,
+          userId: otherUserId,
+          visibility: 'public',
+          workspaceId,
+        },
+        {
+          id: 'page-behind-public-file',
+          fileId: 'public-backing-file',
+          fileType: 'custom/document',
+          source: 'public-file-url',
+          sourceType: 'file',
+          title: 'Public file page',
+          totalCharCount: 10,
+          totalLineCount: 1,
+          userId: otherUserId,
+          visibility: 'public',
+          workspaceId,
+        },
+      ]);
+
+      const repo = new KnowledgeRepo(serverDB, userId, workspaceId);
+      const publicPages = await repo.query({ category: FilesTabs.Pages, visibility: 'public' });
+      const privatePages = await repo.query({ category: FilesTabs.Pages, visibility: 'private' });
+
+      expect(publicPages.map((item) => item.id)).toContain('page-behind-public-file');
+      expect(publicPages.map((item) => item.id)).not.toContain('page-behind-private-file');
+      expect(privatePages.map((item) => item.id)).not.toContain('page-behind-public-file');
+    });
+
     it('should only return caller-owned private documents when visibility=private', async () => {
       const repo = new KnowledgeRepo(serverDB, userId, workspaceId);
 
