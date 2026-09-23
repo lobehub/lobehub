@@ -577,11 +577,6 @@ export const sandboxWorkspaceRouter = router({
           id: instance.id,
           name: instance.name,
           snapshot: byId.get(instance.id) ?? null,
-          // The specification moved after this copy was built, so what is
-          // installed here no longer matches what the environment describes.
-          // Surfaced rather than repaired: rebuilding discards whatever the
-          // conversation installed by hand, and that is the person's call.
-          stale: instance.stale,
           workingDirectory: instance.workingDirectory,
         })),
         snapshotsUnavailable: snapshots === null,
@@ -788,10 +783,9 @@ export const sandboxWorkspaceRouter = router({
     .mutation(async ({ ctx, input }) => ctx.client.deleteFile(input).catch(mapWorkspaceError)),
 
   /**
-   * Edits the specification, which is what makes every instance of it out
-   * of date. Nothing is rebuilt here: a rebuild discards whatever a
-   * conversation installed by hand, so it stays the person's call, made per
-   * copy from the list that now shows them as stale.
+   * Edits the specification. Existing instances keep the one they were created
+   * with — a change here shapes what the NEXT instance is built from and
+   * touches nothing a conversation has already installed or produced.
    */
   updateEnvironment: environmentProcedure
     .input(

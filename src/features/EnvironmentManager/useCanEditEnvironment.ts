@@ -11,9 +11,9 @@ import type { SandboxEnvironment } from './useEnvironmentData';
  * Mirrors the server's `environmentOwnership` filter exactly, so the UI only
  * offers rename / respecify / publish / delete where the matching request would
  * actually succeed. Creator-only, with no workspace-owner escalation — unlike
- * devices, because editing an environment rewrites what somebody else's
- * instances are measured stale against, and an owner has no way to know what
- * that would cost them.
+ * devices, because editing an environment rewrites what somebody else's next
+ * instances are built from, and an owner has no way to know what that would
+ * cost them.
  *
  * A published environment a colleague made is therefore readable and runnable,
  * but not editable. That is the whole shape of publishing one.

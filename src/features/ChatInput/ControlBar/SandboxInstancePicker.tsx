@@ -251,7 +251,6 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
                     icon={<Icon icon={INSTANCE_ICON} size={16} />}
                     key={instance.id}
                     label={instance.name}
-                    tag={instance.stale ? t('sandboxWorkspace.instanceStale') : undefined}
                     onClick={() => void select({ instanceId: instance.id, mode: 'persistent' })}
                   />
                 ))}

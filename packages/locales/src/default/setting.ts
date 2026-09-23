@@ -3971,7 +3971,6 @@ When I am ___, I need ___
   'environments.form.internetAccessHint':
     'Setup always has network access. This controls the conversation itself.',
   'environments.form.saved': 'Saved',
-  'environments.form.savedStale': 'Saved. Every instance now needs a rebuild.',
   'environments.form.editEnv': 'Edit variable',
   'environments.form.changeRepository': 'Change repository',
   'environments.form.disconnect': 'Disconnect',
@@ -3991,8 +3990,6 @@ When I am ___, I need ___
   'environments.instances.directoryHint':
     'Where this instance keeps what you want to keep — reports, data, exports. Source code lives with the environment, not here.',
   'environments.instances.unused': 'Never used',
-  'environments.instances.stale': 'Needs rebuild',
-  'environments.instances.staleHint': 'The specification changed after this instance was built.',
   'environments.instances.remove': 'Delete instance',
   'environments.instances.rename': 'Rename instance',
   'environments.instances.renameFailed': 'Could not rename this instance',

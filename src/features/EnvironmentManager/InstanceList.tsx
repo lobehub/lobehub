@@ -1,8 +1,8 @@
 'use client';
 
 import { isSafeSandboxCwd } from '@lobechat/builtin-tool-cloud-sandbox';
-import { Center, Empty, Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Button, confirmModal, Input, Tag, Text, toast } from '@lobehub/ui/base-ui';
+import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Button, confirmModal, Input, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   CheckIcon,
@@ -184,13 +184,6 @@ const InstanceRow = memo<InstanceRowProps>(
           >
             {instance.workingDirectory}
           </Text>
-          {instance.stale && (
-            <Tooltip title={t('environments.instances.staleHint')}>
-              <Tag color={'warning'} size={'small'}>
-                {t('environments.instances.stale')}
-              </Tag>
-            </Tooltip>
-          )}
         </Flexbox>
         <Text fontSize={12} type={'secondary'}>
           {/* An instance that was created but never used has no snapshot,
