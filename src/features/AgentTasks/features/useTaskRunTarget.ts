@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import { resolveWorkspaceSurface } from '@/features/ChatInput/ControlBar/useWorkspaceSurface';
 import { useDeviceList } from '@/features/DeviceManager/useDeviceList';
+import { devicePoolForAgent } from '@/features/ExecutionTargetPicker';
 import { resolveAgentWorkingDirectoryConfig } from '@/helpers/agentWorkingDirectory';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
@@ -40,6 +41,10 @@ export interface TaskRunTarget {
   canSelect: boolean;
   /** The machine the run lands on (task pin → agent bound device). */
   deviceId?: string;
+  /**
+   * The devices this task may pin — the pool its runs can reach, not every
+   * device the caller can see (see `devicePoolForAgent`).
+   */
   devices?: DeviceListItem[];
   directoryKind: TaskDirectoryKind;
   /** Where the run lands: the task's pin if it has one, else the agent's own target. */
@@ -92,6 +97,15 @@ export const useTaskRunTarget = (agentId: string, pinnedDeviceId?: string): Task
   const legacyAgentWorkingDirectory = useAgentStore(
     (s) => s.localAgentWorkingDirectoryMap[agentId],
   );
+  const agentWorkspaceId = useAgentStore((s) => s.agentMap[agentId]?.workspaceId);
+
+  // The pool a task may pin from must be the pool its runs can reach: a deviceId
+  // carries the identity it was enrolled under, so a workspace agent cannot run
+  // on a personal machine (and vice versa) — and a Task's scheduled runs execute
+  // under the workspace principal, not under whoever is looking at it, so a pin
+  // outside the pool is one automation can never resolve. Same rule the chat
+  // picker applies, shared through `devicePoolForAgent` so the two cannot drift.
+  const pool = devicePoolForAgent(devices, !!agentWorkspaceId);
 
   const inheritedTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,
@@ -159,7 +173,7 @@ export const useTaskRunTarget = (agentId: string, pinnedDeviceId?: string): Task
   const unknownLabel = t('heteroAgent.executionTarget.unknownDevice');
   const inheritedLabel = (() => {
     if (inheritedTarget === 'device') {
-      const bound = devices?.find((device) => device.deviceId === agencyConfig?.boundDeviceId);
+      const bound = pool.find((device) => device.deviceId === agencyConfig?.boundDeviceId);
       return bound ? deviceLabel(bound, unknownLabel) : unknownLabel;
     }
     return t(`heteroAgent.executionTarget.${inheritedTarget}`);
@@ -168,7 +182,7 @@ export const useTaskRunTarget = (agentId: string, pinnedDeviceId?: string): Task
   return {
     canSelect: canSelectExecutionTarget,
     deviceId,
-    devices,
+    devices: pool,
     directoryKind,
     effectiveTarget,
     inheritedDirectory,

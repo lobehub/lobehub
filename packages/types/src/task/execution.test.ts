@@ -4,6 +4,7 @@ import {
   applyTaskDirectorySelection,
   applyTaskReposSelection,
   clearTaskDirectorySelection,
+  clearTaskReposSelection,
   hasTaskExecutionSelection,
   readTaskExecutionConfig,
   toTaskExecutionConfigPatch,
@@ -130,5 +131,42 @@ describe('directory axis', () => {
       workingDirectory: undefined,
       workingDirectoryConfig: undefined,
     });
+  });
+});
+
+describe('clearTaskReposSelection', () => {
+  it('drops a repo selection together with the directory it wrote', () => {
+    // Reassigning a task must not carry the previous agent's repos into the new
+    // agent's runs — the identifier is resolved by that agent's provider env.
+    expect(
+      clearTaskReposSelection(
+        applyTaskReposSelection({ boundDeviceId: 'device-a' }, ['lobehub/lobehub']),
+      ),
+    ).toEqual({
+      boundDeviceId: 'device-a',
+      repos: undefined,
+      workingDirectory: undefined,
+      workingDirectoryConfig: undefined,
+    });
+  });
+
+  it('keeps a machine-local selection: a device pin and a path on that machine', () => {
+    const selection = applyTaskDirectorySelection(
+      { boundDeviceId: 'device-a' },
+      {
+        path: '/srv/app',
+      },
+    );
+
+    expect(clearTaskReposSelection(selection)).toBe(selection);
+  });
+
+  it('returns the input unchanged when there is nothing to drop', () => {
+    // Callers skip the write on reference equality, so this must not build a
+    // fresh object for a selection that has no repo axis.
+    const pin = { boundDeviceId: 'device-a' };
+
+    expect(clearTaskReposSelection(pin)).toBe(pin);
+    expect(clearTaskReposSelection(undefined)).toBeUndefined();
   });
 });

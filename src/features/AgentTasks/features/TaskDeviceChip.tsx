@@ -71,6 +71,17 @@ const TaskDeviceChip = memo<TaskDeviceChipProps>(
       : undefined;
     const unknownLabel = t('heteroAgent.executionTarget.unknownDevice');
     const isInheriting = !pinnedDeviceId;
+    // A pin whose device is not in the pool at all — unshared, deleted, or
+    // enrolled under another identity — must still read as a PINNED run:
+    // falling back to the inherited label would describe a target the run does
+    // not use, and would hide the one control that can clear it. While the list
+    // is still loading that is indistinguishable from "not here yet", so the
+    // inherited label stays until it settles.
+    const pinnedLabel = pinned
+      ? deviceLabel(pinned, unknownLabel)
+      : isPending
+        ? inheritedLabel
+        : unknownLabel;
 
     const handleSelect = useCallback(
       (deviceId: string | undefined) => {
@@ -163,13 +174,13 @@ const TaskDeviceChip = memo<TaskDeviceChipProps>(
         gap={6}
         variant={'borderless'}
       >
-        {pinned ? (
-          <ExecutionTargetIcon devicePlatform={pinned.platform} target={'device'} />
+        {pinnedDeviceId ? (
+          <ExecutionTargetIcon devicePlatform={pinned?.platform} target={'device'} />
         ) : (
           <ExecutionTargetIcon target={inheritedTarget} />
         )}
         <Text ellipsis className={styles.chipLabel} fontSize={12}>
-          {pinned ? deviceLabel(pinned, unknownLabel) : inheritedLabel}
+          {pinnedDeviceId ? pinnedLabel : inheritedLabel}
         </Text>
         <Icon icon={ChevronDownIcon} size={12} />
       </Block>

@@ -13,6 +13,11 @@ import type {
   WorkspaceTreeNode,
 } from '@lobechat/types';
 import {
+  clearTaskReposSelection,
+  readTaskExecutionConfig,
+  toTaskExecutionConfigPatch,
+} from '@lobechat/types';
+import {
   and,
   desc,
   eq,
@@ -2056,7 +2061,41 @@ export class TaskModel {
       if (!before) return null;
 
       const scoped = new TaskModel(runner, this.userId, this.workspaceId);
-      const updated = await scoped.update(id, data);
+
+      // Reassigning a task drops the previous assignee's cloud-repo selection in
+      // this same write: `repos` is resolved by the assignee agent's provider
+      // env, so carrying it to another agent leaves every later run pointing at
+      // a directory that agent cannot open. Machine-local selections (the device
+      // pin and a path on that machine) are the user's own and stay.
+      //
+      // Three guards: only when a previous assignee actually existed (the
+      // runner's "unassigned → inbox agent" fallback has nothing to drop), only
+      // when the assignee really moves, and only when this update does not state
+      // an execution of its own — a writer that moves the assignee AND names a
+      // directory is describing the NEW assignee's run on purpose.
+      const assignedAgentId =
+        data.assigneeAgentId === undefined ? before.assigneeAgentId : data.assigneeAgentId;
+      const currentConfig = (before.config ?? {}) as Record<string, unknown>;
+      const currentExecution = readTaskExecutionConfig(currentConfig);
+      const clearedExecution = clearTaskReposSelection(currentExecution);
+      const statedExecution = (data.config as Record<string, unknown> | undefined)?.execution;
+      const reassignedWithStaleRepos =
+        !!before.assigneeAgentId &&
+        assignedAgentId !== before.assigneeAgentId &&
+        statedExecution === undefined &&
+        clearedExecution !== currentExecution;
+      const writeData: typeof data = reassignedWithStaleRepos
+        ? {
+            ...data,
+            config: {
+              ...currentConfig,
+              ...(data.config as Record<string, unknown> | undefined),
+              execution: toTaskExecutionConfigPatch(clearedExecution),
+            },
+          }
+        : data;
+
+      const updated = await scoped.update(id, writeData);
       if (!updated) return null;
 
       const events: { payload: TaskActivityLogPayload; type: TaskActivityLogType }[] = [];

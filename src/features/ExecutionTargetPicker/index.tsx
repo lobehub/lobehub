@@ -109,6 +109,29 @@ export const groupExecutionTargetDevices = (devices: DeviceListItem[] | undefine
   ),
 });
 
+/**
+ * The devices an agent's runs can actually reach.
+ *
+ * A deviceId encodes the identity it was enrolled under
+ * (`sha256(machineUUID + userId)` for personal, `… + workspace:<id>` for
+ * workspace), so the two pools are not interchangeable: a workspace agent
+ * cannot resolve a personal machine, nor a personal agent a workspace one.
+ * Offering the other pool would let a user pin a machine the run can never use
+ * — and a Task makes that worse than a chat, because its scheduled runs execute
+ * under the workspace principal rather than whoever is looking at it.
+ *
+ * Order is the picker's: the workspace pool lists private rows before public
+ * ones, the personal pool is flat.
+ */
+export const devicePoolForAgent = (
+  devices: DeviceListItem[] | undefined,
+  workspaceAgent: boolean,
+): DeviceListItem[] => {
+  const { personal, privateWorkspace, workspace } = groupExecutionTargetDevices(devices);
+
+  return workspaceAgent ? [...privateWorkspace, ...workspace] : personal;
+};
+
 interface ExecutionTargetIconProps {
   devicePlatform?: string | null;
   size?: number;
