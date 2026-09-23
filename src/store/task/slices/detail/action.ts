@@ -1,4 +1,9 @@
 import type { TaskDetailActivityAuthor, TaskDetailData, TaskDetailSubtask } from '@lobechat/types';
+import {
+  clearTaskReposSelection,
+  readTaskExecutionConfig,
+  toTaskExecutionConfigPatch,
+} from '@lobechat/types';
 import { toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
@@ -476,10 +481,27 @@ export class TaskDetailSliceActionImpl {
       [...(current?.activities ?? []), ...optimisticActivities],
       priorityRow,
     );
+    // Mirror the server's reassign rule (`TaskModel.updateWithLog`) so the
+    // run-location cluster stops showing the previous agent's repos the moment
+    // the assignee flips, instead of one refetch later: `repos` belong to the
+    // assignee's provider env, and the run those repos imply is the sandbox
+    // directory the new agent may not be able to open. Same helper as the
+    // server, so the two cannot drift.
+    const reassignedAgent =
+      assigneeAgentId !== undefined && !!current?.agentId && assigneeAgentId !== current.agentId;
+    const currentExecution = reassignedAgent ? readTaskExecutionConfig(current?.config) : undefined;
+    const clearedExecution = reassignedAgent
+      ? clearTaskReposSelection(currentExecution)
+      : undefined;
+    const clearedConfig =
+      reassignedAgent && clearedExecution !== currentExecution
+        ? { ...current?.config, execution: toTaskExecutionConfigPatch(clearedExecution) }
+        : undefined;
     const optimistic: Partial<TaskDetailData> = {
       ...optimisticRest,
       ...(assigneeAgentId !== undefined ? { agentId: assigneeAgentId } : {}),
       ...(assigneeUserId !== undefined ? { userId: assigneeUserId } : {}),
+      ...(clearedConfig ? { config: clearedConfig } : {}),
       ...(optimisticActivities.length > 0 || priorityRow ? { activities } : {}),
     };
     const payload = options?.actorAgentId ? { ...data, actorAgentId: options.actorAgentId } : data;

@@ -138,6 +138,35 @@ export const applyTaskDirectorySelection = (
 });
 
 /**
+ * Drop the cloud-repo axis, keeping a machine-local selection.
+ *
+ * A repo identifier is resolved by the assignee agent's provider env, so it
+ * belongs to the agent it was chosen for — the same identifier can be
+ * unavailable to another agent and leave the run with a directory it cannot
+ * open. Both assignee-change paths use this: picking another agent while
+ * creating a task, and reassigning an existing one (there the server applies it
+ * inside the write that moves the assignee, see `TaskModel.updateWithLog`).
+ *
+ * A device pin and a path on a machine are the user's own, so they survive the
+ * change — only the repo's own directory (written by
+ * {@link applyTaskReposSelection}) is dropped with it.
+ *
+ * Returns the SAME reference when there is nothing to drop, so callers can tell
+ * "nothing to do" without comparing fields.
+ */
+export const clearTaskReposSelection = (
+  execution?: TaskExecutionConfig,
+): TaskExecutionConfig | undefined =>
+  execution?.repos
+    ? {
+        ...execution,
+        repos: undefined,
+        workingDirectory: undefined,
+        workingDirectoryConfig: undefined,
+      }
+    : execution;
+
+/**
  * Drop the directory axis entirely.
  *
  * Used when the run's TARGET changes, because the two axes describe the same

@@ -6,6 +6,13 @@ import { useTaskRunTarget } from './useTaskRunTarget';
 const DEVICE_AGENT_BOUND = 'device-agent-bound';
 const DEVICE_TASK_PIN = 'device-task-pin';
 
+const PERSONAL_DEVICE = { deviceId: 'device-personal', scope: 'personal' } as const;
+const WORKSPACE_DEVICE = {
+  deviceId: 'device-workspace',
+  scope: 'workspace',
+  visibility: 'public',
+} as const;
+
 const mocks = vi.hoisted(() => ({
   agency: {
     agencyConfig: {} as Record<string, unknown>,
@@ -13,7 +20,8 @@ const mocks = vi.hoisted(() => ({
     isPreferenceLoading: false,
     workspaceScoped: false,
   },
-  devices: [] as { deviceId: string }[],
+  agentState: { agentMap: {} as Record<string, { workspaceId?: string }> },
+  devices: [] as { deviceId: string; scope?: string; visibility?: string }[],
   deviceState: { defaultCwd: {} as Record<string, string>, workingDirs: {} as Record<string, []> },
 }));
 
@@ -35,7 +43,7 @@ vi.mock('@/helpers/gatewayMode', () => ({
 
 vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: (state: unknown) => unknown) =>
-    selector({ localAgentWorkingDirectoryMap: {} }),
+    selector({ agentMap: mocks.agentState.agentMap, localAgentWorkingDirectoryMap: {} }),
 }));
 
 vi.mock('@/store/agent/selectors', () => ({
@@ -63,6 +71,7 @@ beforeEach(() => {
   mocks.agency.agencyConfig = {};
   mocks.agency.canSelectExecutionTarget = true;
   mocks.agency.isPreferenceLoading = false;
+  mocks.agentState.agentMap = {};
   mocks.devices = [];
   mocks.deviceState = { defaultCwd: {}, workingDirs: {} };
 });
@@ -122,5 +131,32 @@ describe('useTaskRunTarget', () => {
     expect(result.current.effectiveTarget).toBe('device');
     expect(result.current.deviceId).toBe(DEVICE_TASK_PIN);
     expect(result.current.directoryKind).toBe('device');
+  });
+
+  it('offers a workspace agent only the workspace pool', () => {
+    // A deviceId carries the identity it was enrolled under, so a personal
+    // machine is not resolvable by a workspace agent's run — and a Task's
+    // scheduled runs use the workspace principal, not the member looking at it.
+    // The pin itself still stands (the run routes to it), which is why the chip
+    // has to render it as a device rather than silently falling back.
+    mocks.agentState.agentMap = { 'agent-1': { workspaceId: 'ws-1' } };
+    mocks.devices = [PERSONAL_DEVICE, WORKSPACE_DEVICE];
+
+    const { result } = renderHook(() => useTaskRunTarget('agent-1', PERSONAL_DEVICE.deviceId));
+
+    expect(result.current.devices?.map((device) => device.deviceId)).toEqual([
+      WORKSPACE_DEVICE.deviceId,
+    ]);
+    expect(result.current.pinnedDeviceId).toBe(PERSONAL_DEVICE.deviceId);
+  });
+
+  it('offers an agent outside a workspace only its own machines', () => {
+    mocks.devices = [PERSONAL_DEVICE, WORKSPACE_DEVICE];
+
+    const { result } = renderHook(() => useTaskRunTarget('agent-1'));
+
+    expect(result.current.devices?.map((device) => device.deviceId)).toEqual([
+      PERSONAL_DEVICE.deviceId,
+    ]);
   });
 });

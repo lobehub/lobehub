@@ -2,6 +2,7 @@ import type { DeviceListItem } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import {
+  devicePoolForAgent,
   executionTargetValue,
   groupExecutionTargetDevices,
   isSharedExecutionTarget,
@@ -114,5 +115,33 @@ describe('ExecutionTargetPicker helpers', () => {
     expect(isSharedExecutionTarget('sandbox')).toBe(true);
     expect(isSharedExecutionTarget('device')).toBe(true);
     expect(isSharedExecutionTarget('local')).toBe(false);
+  });
+});
+
+describe('devicePoolForAgent', () => {
+  const personal = device({ deviceId: 'personal' });
+  const privateWorkspace = device({
+    deviceId: 'private',
+    scope: 'workspace',
+    visibility: 'private',
+  });
+  const publicWorkspace = device({ deviceId: 'public', scope: 'workspace', visibility: 'public' });
+  const all = [personal, privateWorkspace, publicWorkspace];
+
+  it('gives a workspace agent the whole workspace pool, private rows first', () => {
+    // Both pools are keyed by the identity they were enrolled under
+    // (`sha256(machineUUID + userId)` vs `… + workspace:<id>`), so a workspace
+    // run can only resolve the workspace rows — and it resolves every one of
+    // them, whoever enrolled the machine.
+    expect(devicePoolForAgent(all, true)).toEqual([privateWorkspace, publicWorkspace]);
+  });
+
+  it('gives an agent outside a workspace the caller’s personal machines', () => {
+    expect(devicePoolForAgent(all, false)).toEqual([personal]);
+  });
+
+  it('survives an unloaded list', () => {
+    expect(devicePoolForAgent(undefined, true)).toEqual([]);
+    expect(devicePoolForAgent(undefined, false)).toEqual([]);
   });
 });
