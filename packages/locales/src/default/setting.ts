@@ -3996,6 +3996,8 @@ When I am ___, I need ___
   'environments.instances.directoryLocked':
     'The folder cannot be changed after the instance is built — delete it and create another to move it.',
   'environments.instances.duplicateDirectory': 'Another instance already uses this folder',
+  'environments.instances.overlappingDirectory':
+    "This folder is inside another instance's folder, or contains one",
   'environments.instances.createFailed': 'Could not create the instance',
   'environments.instances.snapshotsUnavailable':
     "Sizes unavailable — this instance's storage could not be reached",
@@ -4048,6 +4050,8 @@ When I am ___, I need ___
   'environments.visibility.tabs.workspace': 'Workspace',
   'environments.visibility.tabs.private': 'Private',
   'environments.visibility.publish': 'Publish to Workspace',
+  'environments.visibility.createPublishedConfirmTitle':
+    'Create this environment in the workspace?',
   'environments.visibility.publishConfirmTitle': 'Publish this environment to the workspace?',
   'environments.visibility.publicTag': 'Published',
   'environments.visibility.changeFailed': "Could not change this environment's visibility",

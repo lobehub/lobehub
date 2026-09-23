@@ -132,6 +132,12 @@ const isMissingDirectory = (error: unknown) =>
   (error as { data?: { code?: string } })?.data?.code === 'NOT_FOUND';
 
 interface InstanceFileBrowserProps {
+  /**
+   * The instance being browsed. Every file call names it, because the server
+   * confines each path to this instance's directory — the workspace root around
+   * it is shared with every other instance.
+   */
+  instanceId: string;
   /** The instance's directory, relative to the workspace root. */
   root: string;
 }
@@ -150,19 +156,24 @@ interface InstanceFileBrowserProps {
  * of reaching these files from a settings page, and it is why the listing is
  * fetched per directory rather than recursively up front.
  */
-const InstanceFileBrowser = memo<InstanceFileBrowserProps>(({ root }) => {
+const InstanceFileBrowser = memo<InstanceFileBrowserProps>(({ instanceId, root }) => {
   const { t } = useTranslation('setting');
 
   const [cwd, setCwd] = useState(root);
   const [openFile, setOpenFile] = useState<string | undefined>();
-  const [draft, setDraft] = useState('');
+  // Only the person's edits live here, keyed by the file they were made in;
+  // what was read stays in the SWR cache, which is keyed by path. Reads land
+  // out of order when someone moves between files quickly, and a read that
+  // wrote into shared state would let the last one to arrive win — so Save
+  // could write one file's contents into another.
+  const [edit, setEdit] = useState<{ content: string; path: string } | undefined>();
   const [saving, setSaving] = useState(false);
   const [creating, setCreating] = useState<'directory' | 'file' | undefined>();
   const [newName, setNewName] = useState('');
 
   const listing = useSWR(
     ['sandbox-instance-files', cwd],
-    () => sandboxWorkspaceService.listFiles({ path: cwd }),
+    () => sandboxWorkspaceService.listFiles({ instanceId, path: cwd }),
     {
       // Each listing is a sandbox round trip. A missing directory is an answer,
       // not a failure to retry, and refocusing the window must not re-list.
@@ -171,11 +182,11 @@ const InstanceFileBrowser = memo<InstanceFileBrowserProps>(({ root }) => {
     },
   );
 
-  const file = useSWR(openFile ? ['sandbox-instance-file', openFile] : null, async () => {
-    const result = await sandboxWorkspaceService.readFile({ path: openFile! });
-    setDraft(result.content);
-    return result;
-  });
+  const file = useSWR(
+    openFile ? ['sandbox-instance-file', openFile] : null,
+    ([, path]: [string, string]) => sandboxWorkspaceService.readFile({ instanceId, path }),
+  );
+  const draft = edit && edit.path === openFile ? edit.content : (file.data?.content ?? '');
 
   const entries = [...(listing.data?.entries ?? [])].sort((a, b) =>
     a.isDirectory === b.isDirectory ? a.name.localeCompare(b.name) : a.isDirectory ? -1 : 1,
@@ -190,6 +201,13 @@ const InstanceFileBrowser = memo<InstanceFileBrowserProps>(({ root }) => {
   // exactly the check that would catch a typo in one.
   const fail = (error: unknown, fallback: string) => toast.error(describeError(error, t, fallback));
 
+  // Opening a file starts from what is on disk, not from edits left behind the
+  // last time it was open and closed without saving.
+  const openFileAt = (path: string) => {
+    setEdit(undefined);
+    setOpenFile(path);
+  };
+
   const openDirectory = (path: string) => {
     setCwd(path);
     setOpenFile(undefined);
@@ -200,7 +218,7 @@ const InstanceFileBrowser = memo<InstanceFileBrowserProps>(({ root }) => {
     if (!openFile) return;
     setSaving(true);
     try {
-      await sandboxWorkspaceService.writeFile({ content: draft, path: openFile });
+      await sandboxWorkspaceService.writeFile({ content: draft, instanceId, path: openFile });
       await file.mutate();
       toast.success(t('environments.files.saved'));
     } catch (error) {
@@ -216,8 +234,8 @@ const InstanceFileBrowser = memo<InstanceFileBrowserProps>(({ root }) => {
     const path = `${cwd}/${name}`;
     try {
       await (creating === 'directory'
-        ? sandboxWorkspaceService.createDirectory({ path })
-        : sandboxWorkspaceService.writeFile({ content: '', path }));
+        ? sandboxWorkspaceService.createDirectory({ instanceId, path })
+        : sandboxWorkspaceService.writeFile({ content: '', instanceId, path }));
       setCreating(undefined);
       setNewName('');
       await listing.mutate();
@@ -231,7 +249,7 @@ const InstanceFileBrowser = memo<InstanceFileBrowserProps>(({ root }) => {
       // A directory is removed with everything under it: the API refuses a
       // non-empty one otherwise, which would make the action fail for exactly
       // the directories someone wants gone.
-      await sandboxWorkspaceService.removeFile({ path, recursive: isDirectory });
+      await sandboxWorkspaceService.removeFile({ instanceId, path, recursive: isDirectory });
       if (openFile === path) setOpenFile(undefined);
       await listing.mutate();
     } catch (error) {
@@ -296,7 +314,7 @@ const InstanceFileBrowser = memo<InstanceFileBrowserProps>(({ root }) => {
               className={styles.editor}
               style={{ height: '100%', resize: 'none' }}
               value={draft}
-              onChange={(event) => setDraft(event.target.value)}
+              onChange={(event) => setEdit({ content: event.target.value, path: openFile! })}
             />
           )}
         </Flexbox>
@@ -424,7 +442,7 @@ const InstanceFileBrowser = memo<InstanceFileBrowserProps>(({ root }) => {
                 // Double-click to open, the way a file manager does. A single
                 // click on a whole row is too easy to trigger while reading one.
                 onDoubleClick={() =>
-                  entry.isDirectory ? openDirectory(entry.path) : setOpenFile(entry.path)
+                  entry.isDirectory ? openDirectory(entry.path) : openFileAt(entry.path)
                 }
               >
                 <Icon
@@ -472,9 +490,13 @@ InstanceFileBrowser.displayName = 'InstanceFileBrowser';
  * width the panel does not have, and browsing an instance is its own errand —
  * it should not replace the environment you were reading in order to start it.
  */
-export const openInstanceFileBrowser = (instance: { name: string; workingDirectory: string }) =>
+export const openInstanceFileBrowser = (instance: {
+  id: string;
+  name: string;
+  workingDirectory: string;
+}) =>
   createModal({
-    content: <InstanceFileBrowser root={instance.workingDirectory} />,
+    content: <InstanceFileBrowser instanceId={instance.id} root={instance.workingDirectory} />,
     footer: null,
     maskClosable: true,
     styles: { content: { padding: 0 } },

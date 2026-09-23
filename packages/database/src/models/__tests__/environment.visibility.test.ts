@@ -6,7 +6,7 @@ import { getTestDB } from '../../core/getTestDB';
 import { environmentInstances, environments, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { EnvironmentModel } from '../environment';
-import { EnvironmentInstanceModel } from '../environmentInstance';
+import { EnvironmentInstanceModel, InstanceDirectoryOverlapError } from '../environmentInstance';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -188,6 +188,49 @@ describe('environment visibility', () => {
 
     const asPublicAgent = new EnvironmentInstanceModel(serverDB, ownerId, undefined, 'public');
     await expect(asPublicAgent.findById(instance.id)).resolves.toMatchObject({ id: instance.id });
+  });
+
+  // The unique index only catches the identical path. A folder inside another
+  // instance's, or around one, would put two captured states on one tree —
+  // and a colleague's private instance occupies its folder just the same.
+  it('refuses a directory nested with any other instance on the same storage', async () => {
+    const binding = {
+      kind: 'sandbox' as const,
+      provider: 'test-provider',
+      providerResourceId: 'workspace',
+      providerScope: 'test-scope',
+    };
+    const privateEnv = await owner.create({ name: 'Private' });
+    await ownerInstances.create({
+      ...binding,
+      environmentId: privateEnv.id,
+      name: 'Parent',
+      workingDirectory: 'projects/atlas',
+    });
+
+    const memberEnv = await member.create({ name: 'Mine' });
+    for (const workingDirectory of ['projects/atlas/web', 'projects']) {
+      await expect(
+        memberInstances.create({
+          ...binding,
+          environmentId: memberEnv.id,
+          name: workingDirectory,
+          workingDirectory,
+        }),
+      ).rejects.toBeInstanceOf(InstanceDirectoryOverlapError);
+    }
+
+    // A sibling, and a name that merely shares a prefix, are separate trees.
+    for (const workingDirectory of ['projects/web', 'projects/atlas-2']) {
+      await expect(
+        memberInstances.create({
+          ...binding,
+          environmentId: memberEnv.id,
+          name: workingDirectory,
+          workingDirectory,
+        }),
+      ).resolves.toMatchObject({ workingDirectory });
+    }
   });
 
   it('refuses to publish a personal environment, which has nobody to publish to', async () => {

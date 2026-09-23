@@ -4,6 +4,7 @@ import type { EnvironmentVisibility } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import {
   Button,
+  confirmModal,
   createModal,
   Input,
   ModalFooter,
@@ -13,6 +14,8 @@ import {
 import { t as translate } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 
 import GithubRepositoryPicker, { type GithubRepositorySelection } from './GithubRepositoryPicker';
 import { useEnvironmentActions } from './useEnvironmentData';
@@ -55,9 +58,7 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(({ visibili
     if (nameIsSuggested) setName(selection?.repository ?? '');
   };
 
-  const submit = async () => {
-    if (!trimmed || creating) return;
-
+  const create = async () => {
     setCreating(true);
     setError(undefined);
     try {
@@ -96,6 +97,23 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(({ visibili
     } finally {
       setCreating(false);
     }
+  };
+
+  // Created in the workspace's pool, an environment is published from its
+  // first instance on — and an instance keeps whatever a session leaves in its
+  // home directory, credentials included. So creating one there asks the same
+  // question publishing one does, with the same explanation, rather than
+  // publishing it silently because of which tab happened to be open.
+  const submit = () => {
+    if (!trimmed || creating) return;
+    if (visibility !== 'public') return void create();
+
+    confirmModal({
+      content: <VisibilityConfirmContent variant={'publish'} />,
+      okText: t('environments.create'),
+      onOk: create,
+      title: t('environments.visibility.createPublishedConfirmTitle'),
+    });
   };
 
   return (

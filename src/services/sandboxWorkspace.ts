@@ -72,8 +72,12 @@ class SandboxWorkspaceService {
    * Replaces a file's whole contents, creating it and its parents if needed.
    * Text only — the execution plane carries the body as a JSON string.
    */
-  writeFile = async (params: { content: string; path: string; topicId?: string }) =>
-    lambdaClient.sandboxWorkspace.writeFile.mutate(params);
+  writeFile = async (params: {
+    content: string;
+    instanceId?: string;
+    path: string;
+    topicId?: string;
+  }) => lambdaClient.sandboxWorkspace.writeFile.mutate(params);
 
   /** Refused while instances still reference it — those go first. */
   removeEnvironment = async (params: { id: string }) =>
@@ -133,7 +137,7 @@ class SandboxWorkspaceService {
     lambdaClient.sandboxWorkspace.removeInstance.mutate(params);
 
   /** Create a directory (parents included, idempotent). */
-  createDirectory = async (params: { path: string; topicId?: string }) =>
+  createDirectory = async (params: { instanceId?: string; path: string; topicId?: string }) =>
     lambdaClient.sandboxWorkspace.createDirectory.mutate(params);
 
   /**
@@ -146,8 +150,9 @@ class SandboxWorkspaceService {
   /** Quota and last measured usage of the workspace directory. */
   getWorkspace = async () => lambdaClient.sandboxWorkspace.getWorkspace.query();
 
-  listFiles = async (params: { path?: string; recursive?: boolean; topicId?: string } = {}) =>
-    lambdaClient.sandboxWorkspace.listFiles.query(params);
+  listFiles = async (
+    params: { instanceId?: string; path?: string; recursive?: boolean; topicId?: string } = {},
+  ) => lambdaClient.sandboxWorkspace.listFiles.query(params);
 
   /**
    * Repositories this account can build an environment from. Answers
@@ -160,11 +165,15 @@ class SandboxWorkspaceService {
   listGithubBranches = async (params: { owner: string; repository: string }) =>
     lambdaClient.sandboxWorkspace.listGithubBranches.query(params);
 
-  readFile = async (params: { path: string; topicId?: string }) =>
+  readFile = async (params: { instanceId?: string; path: string; topicId?: string }) =>
     lambdaClient.sandboxWorkspace.readFile.query(params);
 
-  removeFile = async (params: { path: string; recursive?: boolean; topicId?: string }) =>
-    lambdaClient.sandboxWorkspace.removeFile.mutate(params);
+  removeFile = async (params: {
+    instanceId?: string;
+    path: string;
+    recursive?: boolean;
+    topicId?: string;
+  }) => lambdaClient.sandboxWorkspace.removeFile.mutate(params);
 }
 
 export const sandboxWorkspaceService = new SandboxWorkspaceService();

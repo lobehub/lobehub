@@ -11,6 +11,12 @@ describe('describeError', () => {
     );
   });
 
+  it('turns a path the server confined to the instance into the same line', () => {
+    expect(describeError(new Error('PATH_OUTSIDE_INSTANCE'), t, 'fallback')).toBe(
+      '<environments.files.invalidPath>',
+    );
+  });
+
   it('turns a path validation issue list into the localized line instead of raw JSON', () => {
     const issues = JSON.stringify([
       {

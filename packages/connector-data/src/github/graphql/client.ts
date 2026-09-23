@@ -53,6 +53,8 @@ export interface GitHubConnectorTransport {
   /** The branches of one repository, for choosing what an environment checks out. */
   listRepositoryBranches: (input: {
     owner: string;
+    /** 1-based page of `perPage` branches. Omitted means the first. */
+    page?: number;
     perPage: number;
     repository: string;
   }) => Promise<Array<{ name?: string | null }>>;
@@ -207,9 +209,10 @@ export const createOctokitTransport = (accessToken: string): GitHubConnectorTran
         login,
       }));
     },
-    listRepositoryBranches: async ({ owner, perPage, repository }) => {
+    listRepositoryBranches: async ({ owner, page, perPage, repository }) => {
       const response = await octokit.rest.repos.listBranches({
         owner,
+        page,
         per_page: perPage,
         repo: repository,
       });
