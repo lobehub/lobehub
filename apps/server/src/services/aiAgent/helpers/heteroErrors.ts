@@ -2,6 +2,8 @@ import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import { getHeterogeneousAgentConfig } from '@lobechat/heterogeneous-agents';
 import { ChatErrorType, type ErrorType } from '@lobechat/types';
 
+import { sandboxEnv } from '@/envs/sandbox';
+
 /**
  * Turn a raw device-gateway dispatch error code into a human-readable headline.
  * The gateway returns terse machine codes (e.g. `GATEWAY_NOT_CONFIGURED`) which,
@@ -88,8 +90,28 @@ export const resolveHeteroDispatchErrorType = (raw?: string): ErrorType => {
   return (code && HETERO_DISPATCH_ERROR_TYPES[code]) || ChatErrorType.ServerAgentRuntimeError;
 };
 
-export const supportsCloudHeterogeneousSandbox = (type: HeterogeneousAgentType): boolean =>
-  type === 'claude-code' || type === 'codex';
+/**
+ * The coding-agent CLIs the official sandbox runtime image carries.
+ */
+const DEFAULT_CLOUD_SANDBOX_AGENT_TYPES = ['claude-code', 'codex'];
+
+/**
+ * Whether this agent type may run in the cloud sandbox.
+ *
+ * What limits it is the runtime image, not the dispatch path: `spawnHeteroSandbox`
+ * launches every type identically, through `lh hetero exec`, which already accepts
+ * all of them. So a type can run there exactly when its binary is present in the
+ * image — which is a property of the deployment, not of this repository. The
+ * default names what the official image ships; a self-hosted deployment that
+ * builds its own image widens the set with `HETERO_SANDBOX_AGENT_TYPES`.
+ */
+export const supportsCloudHeterogeneousSandbox = (type: HeterogeneousAgentType): boolean => {
+  const configured = sandboxEnv.HETERO_SANDBOX_AGENT_TYPES?.split(',')
+    .map((name) => name.trim())
+    .filter(Boolean);
+
+  return (configured?.length ? configured : DEFAULT_CLOUD_SANDBOX_AGENT_TYPES).includes(type);
+};
 
 export const getHeterogeneousAgentTitle = (type: HeterogeneousAgentType): string =>
   getHeterogeneousAgentConfig(type)?.title ?? type;

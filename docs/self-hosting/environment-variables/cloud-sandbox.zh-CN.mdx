@@ -46,6 +46,20 @@ tags:
 - 默认值：-
 - 示例：`your-market-trusted-client-secret`
 
+### `HETERO_SANDBOX_AGENT_TYPES`
+
+- 类型：可选
+- 描述：允许在云端沙箱中运行的编码 Agent CLI，以逗号分隔。仅在运行时镜像确实包含这些可执行文件时才设置。该值会替换默认值而非追加，因此也可用于收窄范围。无法识别的名称不会匹配到任何类型。
+- 默认值：`claude-code,codex`
+- 示例：`claude-code,codex,opencode`
+
+### `HETERO_SANDBOX_FORWARD_ENV`
+
+- 类型：可选
+- 描述：允许服务端转发进沙箱运行环境的环境变量名，以逗号分隔。这是白名单而非全量透传——只有在此列出且服务端已设置的变量才会被传入。可用于向编码 Agent 传递它自己的模型供应商配置。
+- 默认值：-
+- 示例：`OPENCODE_CONFIG_CONTENT,LITELLM_API_KEY`
+
 ### `ONLYBOXES_BASE_URL`
 
 - 类型：当 `SANDBOX_PROVIDER=onlyboxes` 时必填
@@ -133,4 +147,24 @@ CONSOLE_JIT_SIGNING_KEY=onlyboxes-jit-signing-secret
 <Callout type={'info'}>
   文件导出仍会把沙箱内产物写入 LobeHub 配置的 S3 存储。如果用户需要下载沙箱生成的文件，请同时配置 S3
   相关环境变量。
+</Callout>
+
+## 在自托管沙箱中运行编码 Agent
+
+Claude Code 与 Codex 除了在本地设备或已连接设备上运行，也可以在云端沙箱中运行。服务端启动它们的方式完全一致——在沙箱内执行 `lh hetero exec`——因此可用的类型取决于运行时镜像里装了什么。
+
+若要运行其他 CLI，先把它的可执行文件加入镜像，再在 `HETERO_SANDBOX_AGENT_TYPES` 中列出：
+
+```bash
+HETERO_SANDBOX_AGENT_TYPES=claude-code,codex,opencode
+```
+
+不在 provider binding 支持范围内的 Agent 会从自身的环境变量读取模型供应商配置，按名称转发它们所需的变量：
+
+```bash
+HETERO_SANDBOX_FORWARD_ENV=OPENCODE_CONFIG_CONTENT,LITELLM_API_KEY
+```
+
+<Callout type={'warning'}>
+  被转发的变量都会写入启动沙箱运行的命令中。请只转发 Agent 确实需要的变量，并且不要把密钥交给不由你运维的沙箱。
 </Callout>

@@ -1,7 +1,21 @@
 import { ChatErrorType } from '@lobechat/types';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { humanizeHeteroDispatchError, resolveHeteroDispatchErrorType } from './heteroErrors';
+import { sandboxEnv } from '@/envs/sandbox';
+
+import {
+  humanizeHeteroDispatchError,
+  resolveHeteroDispatchErrorType,
+  supportsCloudHeterogeneousSandbox,
+} from './heteroErrors';
+
+vi.mock('@/envs/sandbox', () => ({
+  sandboxEnv: { HETERO_SANDBOX_AGENT_TYPES: undefined },
+}));
+
+const configureAgentTypes = (value: string | undefined) => {
+  (sandboxEnv as { HETERO_SANDBOX_AGENT_TYPES?: string }).HETERO_SANDBOX_AGENT_TYPES = value;
+};
 
 describe('humanizeHeteroDispatchError', () => {
   it('replaces a bare gateway code with a sentence the user can act on', () => {
@@ -76,5 +90,42 @@ describe('JSON device-gateway dispatch errors', () => {
   ])('preserves unrecognized or malformed responses: %s', (raw) => {
     expect(humanizeHeteroDispatchError(raw)).toBe(raw);
     expect(resolveHeteroDispatchErrorType(raw)).toBe(ChatErrorType.ServerAgentRuntimeError);
+  });
+});
+
+describe('supportsCloudHeterogeneousSandbox', () => {
+  beforeEach(() => configureAgentTypes(undefined));
+
+  it('admits what the official runtime image ships, and nothing else', () => {
+    expect(supportsCloudHeterogeneousSandbox('claude-code')).toBe(true);
+    expect(supportsCloudHeterogeneousSandbox('codex')).toBe(true);
+    expect(supportsCloudHeterogeneousSandbox('opencode')).toBe(false);
+  });
+
+  it('lets a deployment with its own image widen the set', () => {
+    configureAgentTypes('claude-code,codex,opencode');
+
+    expect(supportsCloudHeterogeneousSandbox('opencode')).toBe(true);
+  });
+
+  it('replaces the default rather than extending it, so an image can be narrowed', () => {
+    configureAgentTypes('opencode');
+
+    expect(supportsCloudHeterogeneousSandbox('opencode')).toBe(true);
+    expect(supportsCloudHeterogeneousSandbox('claude-code')).toBe(false);
+  });
+
+  it('tolerates spacing and empty entries', () => {
+    configureAgentTypes('  opencode , , codex ');
+
+    expect(supportsCloudHeterogeneousSandbox('opencode')).toBe(true);
+    expect(supportsCloudHeterogeneousSandbox('codex')).toBe(true);
+  });
+
+  it('falls back to the default when the value is blank', () => {
+    configureAgentTypes('  ,  ');
+
+    expect(supportsCloudHeterogeneousSandbox('claude-code')).toBe(true);
+    expect(supportsCloudHeterogeneousSandbox('opencode')).toBe(false);
   });
 });
