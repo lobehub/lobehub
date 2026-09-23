@@ -56,18 +56,21 @@ const TaskDeviceChip = memo<TaskDeviceChipProps>(
     const { t } = useTranslation('chat');
     const [open, setOpen] = useState(false);
 
-    const { canSelect, devices, inheritedLabel, inheritedTarget, isPending } = useTaskRunTarget(
-      agentId,
-      value,
-    );
+    const { canSelect, devices, inheritedLabel, inheritedTarget, isPending, pinnedDeviceId } =
+      useTaskRunTarget(agentId, value);
 
     // The agent's policy is author-controlled: the server's resolver would drop
     // this pin, so the control must not pretend it can set one.
     const isLocked = disabled || isPending || !canSelect;
 
-    const pinned = value ? devices?.find((device) => device.deviceId === value) : undefined;
+    // Read the EFFECTIVE pin, never the raw prop: an author-fixed policy makes
+    // the run side drop a requested device, and showing the stored one would
+    // name a machine this task's runs never reach.
+    const pinned = pinnedDeviceId
+      ? devices?.find((device) => device.deviceId === pinnedDeviceId)
+      : undefined;
     const unknownLabel = t('heteroAgent.executionTarget.unknownDevice');
-    const isInheriting = !value;
+    const isInheriting = !pinnedDeviceId;
 
     const handleSelect = useCallback(
       (deviceId: string | undefined) => {
@@ -79,7 +82,7 @@ const TaskDeviceChip = memo<TaskDeviceChipProps>(
     );
 
     const renderDeviceRow = (device: DeviceListItem) => {
-      const isActive = device.deviceId === value;
+      const isActive = device.deviceId === pinnedDeviceId;
       return (
         <Flexbox
           horizontal
