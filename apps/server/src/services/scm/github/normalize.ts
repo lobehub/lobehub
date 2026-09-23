@@ -1,4 +1,5 @@
 import type {
+  ScmActorAssociation,
   ScmChangeRequestEventKind,
   ScmChangeRequestSnapshot,
   ScmChangeRequestState,
@@ -32,9 +33,27 @@ const date = (value: unknown): Date | null => {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
-const actor = (user: Json | null | undefined): ScmActor | undefined =>
+const ASSOCIATIONS = new Set<ScmActorAssociation>([
+  'collaborator',
+  'contributor',
+  'member',
+  'none',
+  'owner',
+]);
+
+/** GitHub's `author_association`, normalized; anything unknown stays untrusted. */
+const association = (value: unknown): ScmActorAssociation => {
+  const lowered = String(value ?? '').toLowerCase() as ScmActorAssociation;
+  return ASSOCIATIONS.has(lowered) ? lowered : 'unknown';
+};
+
+const actor = (user: Json | null | undefined, authorAssociation?: unknown): ScmActor | undefined =>
   user && user.id !== undefined && user.login
-    ? { externalId: String(user.id), login: String(user.login) }
+    ? {
+        association: association(authorAssociation),
+        externalId: String(user.id),
+        login: String(user.login),
+      }
     : undefined;
 
 const repository = (repo: Json | null | undefined): ScmInstallationRepository | null =>
@@ -78,8 +97,12 @@ const pullRequestSnapshot = (repo: Json, pr: Json): ScmChangeRequestSnapshot => 
   mergeStateStatus: str(pr.mergeable_state)?.toUpperCase() ?? null,
   mergedAt: date(pr.merged_at),
   mergedByExternalId: str(pr.merged_by?.id),
-  metadata:
-    pr.mergeable === null || pr.mergeable === undefined ? {} : { mergeable: String(pr.mergeable) },
+  metadata: {
+    ...(pr.mergeable === null || pr.mergeable === undefined
+      ? {}
+      : { mergeable: String(pr.mergeable) }),
+    ...(typeof repo.private === 'boolean' ? { repoPrivate: repo.private } : {}),
+  },
   number: Number(pr.number),
   provider: 'github',
   repoExternalId: str(repo.id),
@@ -154,7 +177,7 @@ const normalizePullRequestReview = (payload: Json): ScmInboundEvent => {
   if (!kind) return { reason: `review state ${review.state} not tracked`, type: 'ignored' };
 
   return {
-    actor: actor(review.user),
+    actor: actor(review.user, review.author_association),
     installationId,
     kind,
     number: Number(pr.number),
@@ -186,7 +209,7 @@ const normalizePullRequestReviewComment = (payload: Json): ScmInboundEvent => {
   }
 
   return {
-    actor: actor(comment.user),
+    actor: actor(comment.user, comment.author_association),
     installationId,
     kind: 'review_commented',
     number: Number(pr.number),

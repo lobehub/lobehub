@@ -25,19 +25,22 @@ while [ $# -gt 0 ]; do
 done
 command -v node >/dev/null 2>&1 || { echo '[cdp-shot] Node.js >=22.15 is required.' >&2; exit 7; }
 
+# Give every implicit capture its own path, including concurrent calls on one port.
 # Only an implicit --check output is disposable; never delete a caller's --out.
 if [ -z "$OUT" ]; then
+  capture_dir="$(mktemp -d "${TMPDIR:-/tmp}/acceptance-cdp.XXXXXX")" || exit 5
   if [ "$CHECK" = 1 ]; then
-    capture_dir="$(mktemp -d "${TMPDIR:-/tmp}/acceptance-cdp.XXXXXX")" || exit 5
     trap 'rm -rf "$capture_dir"' EXIT
-    OUT="$capture_dir/shot.png"
-  else
-    OUT="${TMPDIR:-/tmp}/cdp-capture.png"
   fi
+  OUT="$capture_dir/shot.png"
 fi
 node "$SCRIPT_DIR/cdp-capture.cjs" --out "$OUT" ${PASS[@]+"${PASS[@]}"}
 status=$?
-[ "$status" = 0 ] || exit "$status"
+if [ "$status" != 0 ]; then
+  # A failed implicit capture wrote nothing; do not leave its empty directory behind.
+  [ "$CHECK" = 0 ] && [ -n "${capture_dir:-}" ] && rm -rf "$capture_dir"
+  exit "$status"
+fi
 
 if maximum="$(image_brightness "$OUT")"; then
   if [ "$maximum" -lt 12 ]; then

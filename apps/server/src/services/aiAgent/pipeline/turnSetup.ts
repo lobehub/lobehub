@@ -331,6 +331,7 @@ export interface TurnSetupInput {
   conversationAgentId: string;
   createdThreadId?: string;
   cronJobId?: string;
+  externalOrigin?: InternalExecAgentParams['externalOrigin'];
   files?: InternalExecAgentParams['files'];
   modelOverride?: string;
   operationTaskId?: string;
@@ -406,6 +407,7 @@ export const setupTurn = async (
     continuationAssistantId,
     conversationAgentId,
     createdThreadId,
+    externalOrigin,
     cronJobId,
     files,
     modelOverride,
@@ -657,6 +659,8 @@ export const setupTurn = async (
     // Bot-channel turns are inserted under the OWNER's userId; keep the real
     // platform author alongside so the UI can attribute the bubble correctly.
     ...(botSender ? { botSender } : undefined),
+    // A provider event that injected this turn keeps its source on the row.
+    ...(externalOrigin ? { externalOrigin } : undefined),
     // A follow-up queued behind a running turn renders as that turn's
     // continuation; the client's optimistic row is replaced by this one.
     ...(steer ? { steer: true as const } : undefined),

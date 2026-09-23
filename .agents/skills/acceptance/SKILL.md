@@ -184,7 +184,32 @@ transitions or verification conditions. Do not move execution nodes or start a
 new round just to reorganize the checklist; those operations have different
 execution semantics.
 
-1. Use the named acceptance (or create one with `lh acceptance create --help`).
+1. Use the named acceptance, or create one before publishing the flow. If none
+   was named, first run `lh acceptance create --help` and confirm it shows
+   `Usage: lh acceptance create [options]` and `--requirement`. Parent-command
+   help or a zero exit code alone does not prove support. If unavailable, upgrade
+   `@lobehub/cli` to a release that supports this command and check again;
+   updating the skill alone does not upgrade the CLI. If still unavailable,
+   report flow-first creation as blocked. Do not invent a subject ID, upload an
+   empty report, or substitute `lh acceptance run create` (which creates a round).
+
+   ```bash
+   lh acceptance create --title "Checkout recovery" \
+     --requirement "Customers can recover from a declined payment and complete checkout" --json
+   ```
+
+   `--requirement` is a required, nonblank durable business goal; `--title` is
+   optional. Omit `--subject` for a fresh standalone subject, even when an ambient
+   topic exists. Pass `--subject task:<id>`, `topic:<id>`, `document:<id>`, or
+   `standalone:<id>` only for an explicitly supplied subject. Reusing a subject
+   preserves its recorded requirement, title, and state; it does not reopen it.
+   Creation does not create a verification round, report, results, or passing verdict.
+
+   The JSON contains `acceptanceId`, `acceptanceUrl`, `requirement`, `status`,
+   and `subject: { subjectType, subjectId }`. Use `acceptanceId` in all flow
+   commands below, **not** `subject.subjectId` or a verification run ID. Share
+   `acceptanceUrl` verbatim; it already uses the CLI's configured server.
+
    Write a JSON file with `definition: { title, entryNodeId, nodes, edges }`.
    Give nodes and edges stable UUIDs. Each node has `id` and exactly one of
    `criterionId` (existing check asset), `check: { id, title, definition }`
@@ -347,17 +372,35 @@ Before declaring the task done, prove coverage: for each check with
 explicitly; a missing type holds the delivery at `uncertain` no matter how good
 the work is.
 
-The final response MUST include the published acceptance URL together with the
-coverage result — never only a check-result id or a prose claim. Expose only the
-**acceptance** (`/acceptance/<acceptanceId>`), the stable cross-round decision
-surface; append `?r=<roundIndex>` for this round's fixed snapshot.
+The final response for a completed handoff MUST include the published acceptance
+URL together with the coverage result — never only a check-result id or a prose
+claim. Obtain the links from the path you actually executed:
+
+- **Authored round:** copy `acceptanceUrl` returned by
+  `lh acceptance run ingest --json` verbatim. Add its `roundUrl` verbatim when
+  non-null; otherwise the acceptance URL alone is the handoff.
+- **Operation-plan round:** follow the read-only
+  [plan handoff lookup](references/plan-format.md#resolve-the-plan-rounds-handoff-links).
+  It resolves the supplied operation ID to its existing run, acceptance, and
+  round using the CLI's actual server configuration. Copy its
+  `acceptanceUrl` and `roundUrl` output. Do not run authored ingest, create another
+  acceptance, or resubmit evidence merely to obtain a link.
+
+Never guess a host, acceptance ID, or round index. The documented plan lookup is
+the only reconstruction needed for CLIs whose submission output contains only an
+internal run URL. If the run has no acceptance association or the lookup fails,
+report the handoff as blocked and preserve the submitted evidence; do not declare
+delivery complete or fabricate a link.
 Put no images, local paths, local file links, or internal run-page paths in the
 chat reply.
 
 Write the link as a plain-text line, never inside a fenced or inline code block — the
-chat client only linkifies plain text, and a code block makes it unclickable:
+chat client only linkifies plain text, and a code block makes it unclickable.
+Replace each placeholder below with the URL from the selected path; omit the
+`Round` line when `roundUrl` is null:
 
-Acceptance: <https://lobehub.com/acceptance/ACCEPTANCE_ID> (the placeholder is the id ingest printed; it stays inside the URL)
+Acceptance: <acceptanceUrl, verbatim>
+Round: <roundUrl, verbatim>
 Coverage: 2/2 criteria, all required evidence uploaded
 
 ## Portability rules

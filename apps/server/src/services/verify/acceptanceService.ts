@@ -879,6 +879,51 @@ export class AcceptanceService {
   };
 
   /**
+   * A merged pull request accepts the delivery it was linked to. Merging is
+   * the strongest signal a user can give, so unlike {@link accept} this does
+   * not wait for the round to settle: any non-accepted status becomes
+   * `accepted`, a round still in flight is stamped as decided by the merge,
+   * and an acceptance that never had a round is simply closed as accepted.
+   * The decision detail records the merge so the acceptance board and the
+   * verifier-training pipeline can tell it apart from a human verdict.
+   *
+   * Idempotent: an already-accepted acceptance is returned unchanged.
+   */
+  acceptFromScmMerge = async (
+    acceptanceId: string,
+    changeRequest: NonNullable<VerifyRunDecisionDetail['changeRequest']>,
+  ): Promise<AcceptanceItem | null> => {
+    const acceptance = await this.acceptanceModel.findById(acceptanceId);
+    if (!acceptance) return null;
+    if (acceptance.status === 'accepted') return acceptance;
+
+    const runs = await this.runModel.listByAcceptance(acceptanceId);
+    const current = runs.at(-1);
+    if (current) {
+      const detail: VerifyRunDecisionDetail = {
+        changeRequest,
+        decidedAt: new Date().toISOString(),
+        decidedBy: this.actorUserId,
+        source: 'scm_merge',
+      };
+      await this.runModel.setDecision(current.id, 'accept', detail);
+    }
+
+    await this.acceptanceModel.updateStatus(acceptanceId, 'accepted');
+    if (current) this.distilSettledRound(acceptanceId, current.id);
+    if (acceptance.subjectType === 'task') await this.completeTaskSubject(acceptance.subjectId);
+
+    log(
+      'acceptance %s accepted by merge of %s#%d (was %s)',
+      acceptanceId,
+      changeRequest.repoFullName,
+      changeRequest.number,
+      acceptance.status,
+    );
+    return (await this.acceptanceModel.findById(acceptanceId))!;
+  };
+
+  /**
    * The user rejects the delivery. An optional comment is a re-tasking input: it is
    * recorded on the round's decision detail, where the next repair/verify round
    * picks it up. (Spawning the repair run itself is the runtime's job — for

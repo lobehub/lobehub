@@ -4,7 +4,7 @@ import type {
   AcceptanceReviewAnnotation,
   DocumentCommentJson,
 } from '@lobechat/types';
-import { and, count, desc, eq, gte, isNull, ne, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, isNull, ne, sql } from 'drizzle-orm';
 
 import type { AcceptanceCommentRow } from '../schemas/acceptanceComment';
 import { acceptanceComments } from '../schemas/acceptanceComment';
@@ -184,14 +184,15 @@ export class AcceptanceCommentModel {
   };
 
   /**
-   * Every row of one acceptance, oldest first. A discussion on one delivery is
+   * Recent rows of one acceptance, oldest first. A discussion on one delivery is
    * small by nature (a handful of people over a handful of rounds), so the page
    * reads it whole and groups threads client-side.
    *
    * The cap takes the NEWEST rows and hands them back in reading order. Taking
    * the oldest would mean that past the cap a successful post never appears —
    * the write succeeds, the reload drops it, and the author is told nothing.
-   * Losing the far end of a very long history is the better failure.
+   * Retain roots referenced by recent replies even outside that window: they
+   * carry the evidence anchor and resolution state needed to read each reply.
    */
   listByAcceptance = async (acceptanceId: string) => {
     const rows = await this.db
@@ -200,7 +201,31 @@ export class AcceptanceCommentModel {
       .where(eq(acceptanceComments.acceptanceId, acceptanceId))
       .orderBy(desc(acceptanceComments.createdAt), desc(acceptanceComments.id))
       .limit(MAX_COMMENTS_PER_ACCEPTANCE);
-    return rows.reverse();
+    const visibleIds = new Set(rows.map((row) => row.id));
+    const missingRootIds = [
+      ...new Set(
+        rows.flatMap((row) =>
+          row.kind !== 'reaction' && row.parentCommentId && !visibleIds.has(row.parentCommentId)
+            ? [row.parentCommentId]
+            : [],
+        ),
+      ),
+    ];
+    if (missingRootIds.length === 0) return rows.reverse();
+
+    const roots = await this.db
+      .select()
+      .from(acceptanceComments)
+      .where(
+        and(
+          eq(acceptanceComments.acceptanceId, acceptanceId),
+          inArray(acceptanceComments.id, missingRootIds),
+        ),
+      )
+      .orderBy(asc(acceptanceComments.createdAt), asc(acceptanceComments.id));
+    // Missing roots precede the capped window. Keep the DB's ordering (including
+    // timestamp precision and ID tie-breaks) rather than sorting hydrated Dates.
+    return [...roots, ...rows.reverse()];
   };
 
   /**

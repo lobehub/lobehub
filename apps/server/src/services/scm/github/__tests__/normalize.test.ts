@@ -22,7 +22,7 @@ describe('normalizeGitHubEvent', () => {
         headSha: 'a'.repeat(40),
         isDraft: false,
         mergeStateStatus: 'CLEAN',
-        metadata: { mergeable: 'true' },
+        metadata: { mergeable: 'true', repoPrivate: false },
         number: 19_719,
         provider: 'github',
         repoFullName: 'lobehub/lobehub',
@@ -81,7 +81,7 @@ describe('normalizeGitHubEvent', () => {
       expect(
         normalizeGitHubEvent('pull_request_review', fx.reviewEvent('changes_requested')),
       ).toMatchObject({
-        actor: { externalId: '77' },
+        actor: { association: 'collaborator', externalId: '77' },
         kind: 'review_changes_requested',
         number: 19_719,
         review: { body: 'Please split the handler.', externalId: '7' },
@@ -111,6 +111,23 @@ describe('normalizeGitHubEvent', () => {
           action: 'edited',
         }),
       ).toMatchObject({ type: 'ignored' });
+    });
+
+    it('marks an actor the repository does not vouch for as untrusted', () => {
+      // The association decides whether the text may steer an unattended
+      // agent, so anything unexpected has to land outside the trusted set.
+      expect(
+        normalizeGitHubEvent('pull_request_review', {
+          ...fx.reviewEvent('changes_requested'),
+          review: { ...fx.reviewEvent('changes_requested').review, author_association: 'NONE' },
+        }),
+      ).toMatchObject({ actor: { association: 'none' } });
+      expect(
+        normalizeGitHubEvent('pull_request_review', {
+          ...fx.reviewEvent('changes_requested'),
+          review: { ...fx.reviewEvent('changes_requested').review, author_association: undefined },
+        }),
+      ).toMatchObject({ actor: { association: 'unknown' } });
     });
 
     it('maps an inline review comment with its file location', () => {

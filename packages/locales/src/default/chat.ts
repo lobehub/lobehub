@@ -2386,6 +2386,7 @@ export default {
   'tool.intervention.toolAbort': 'You canceled this Skill call',
   'tool.intervention.toolRejected': 'This Skill call was rejected',
   'tool.intervention.questionSkipped': 'You skipped this question',
+  'tool.intervention.questionTimedOut': 'This question timed out before it was answered',
   'tool.intervention.toolSkipped': 'You skipped this step',
   'toolAuth.authorize': 'Authorize',
   'toolAuth.authorizing': 'Authorizing...',

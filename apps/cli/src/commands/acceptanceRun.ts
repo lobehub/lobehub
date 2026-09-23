@@ -7,6 +7,7 @@ import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
+import { resolveWorkspaceId } from '../api/workspace';
 import { resolveServerUrl } from '../settings';
 import { ensureAcceptanceDirIgnored, ensureAcceptanceDirIgnoredFor } from '../utils/acceptanceDir';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
@@ -702,6 +703,30 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   if (requestedAcceptanceId) {
     const bundle = await client.acceptance.getBundle.query({ id: requestedAcceptanceId });
     acceptance = bundle.acceptance;
+    // ID-based reads can cross scopes, but creating a run uses the CLI's scope.
+    // Reject before any writes instead of leaving an unattachable run behind.
+    const currentWorkspaceId = resolveWorkspaceId();
+    const targetWorkspaceId = acceptance.workspaceId ?? undefined;
+    if (currentWorkspaceId !== targetWorkspaceId) {
+      const current = currentWorkspaceId ? `workspace "${currentWorkspaceId}"` : 'personal space';
+      const target = targetWorkspaceId ? `workspace "${targetWorkspaceId}"` : 'personal space';
+      const hint = targetWorkspaceId
+        ? `Set LOBEHUB_WORKSPACE_ID=${targetWorkspaceId} for this command and retry.`
+        : "Unset LOBEHUB_WORKSPACE_ID and run 'lh workspace use --personal', then retry.";
+      throw new Error(
+        `Acceptance "${acceptance.id}" belongs to ${target}, but the CLI is using ${current}. ${hint} No run was created.`,
+      );
+    }
+    if (targetWorkspaceId) {
+      // Revoked membership can make the server fall back to personal scope
+      // even when the locally selected workspace still matches the target.
+      const workspace = await client.workspace.getById.query();
+      if (workspace?.id !== targetWorkspaceId) {
+        throw new Error(
+          `The server did not resolve workspace "${targetWorkspaceId}" for this account. Check your access with 'lh workspace list' before retrying. No run was created.`,
+        );
+      }
+    }
     plan = plan?.map((item) => ({
       ...item,
       sourceCriterionId:

@@ -116,6 +116,7 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     supplementEnter: t('askUserQuestion.supplement.enter'),
     supplementPlaceholder: t('askUserQuestion.supplement.placeholder'),
     timeExpired: '',
+    timeExpiredNoAnswer: '',
     timeRemaining: () => '',
   };
 

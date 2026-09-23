@@ -314,6 +314,7 @@ describe('DocumentAction', () => {
     vi.mocked(documentService.updateDocument).mockResolvedValue({
       historyAppended: false,
       id: 'doc-1',
+      updatedAt: '2026-01-01T00:00:00.000Z',
     });
 
     act(() => {
@@ -346,6 +347,7 @@ describe('DocumentAction', () => {
     vi.mocked(documentService.updateDocument).mockResolvedValue({
       historyAppended: false,
       id: 'doc-1',
+      updatedAt: '2026-01-01T00:00:00.000Z',
     });
 
     act(() => {

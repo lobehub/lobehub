@@ -20,6 +20,24 @@ export type ScmInstallationAccountType = 'organization' | 'user';
 /** Whether the installation covers every repository of the account or a chosen subset. */
 export type ScmRepositorySelection = 'all' | 'selected';
 
+/**
+ * How the provider relates an actor to the repository. GitHub's
+ * `author_association`, lower-cased; `none` covers a passer-by.
+ */
+export type ScmActorAssociation =
+  'collaborator' | 'contributor' | 'member' | 'none' | 'owner' | 'unknown';
+
+/**
+ * Associations whose word is trusted enough to steer an unattended agent.
+ * Anyone below this bar can still comment; their text simply does not
+ * become an instruction with tools behind it.
+ */
+export const SCM_TRUSTED_ASSOCIATIONS: ReadonlySet<ScmActorAssociation> = new Set([
+  'collaborator',
+  'member',
+  'owner',
+]);
+
 /** One repository granted to an installation. Snapshot maintained from provider events. */
 export interface ScmInstallationRepository {
   externalId: string;
@@ -110,12 +128,22 @@ export interface ScmChangeRequestMetadata {
   /** Acceptance links parsed out of the change request body. */
   acceptanceIdsFromBody?: string[];
   /**
+   * Who is currently posting the tracking comment, as an ISO timestamp.
+   * Taken atomically so concurrent deliveries cannot each post one; goes
+   * stale on its own if the post never finishes.
+   */
+  commentClaimedAt?: string;
+  /**
    * Provider-clock timestamp of the newest change-request event applied.
    * Kept apart from the `lastEventAt` column, which also records events we
    * time with our own clock (check results), so ordering only ever compares
    * two provider timestamps.
    */
   lastProviderEventAt?: string;
+  /** The most recent time the agent was notified about this change request, and why. */
+  lastWake?: { at: string; reason: string };
+  /** Provider id of the LobeHub comment posted on this change request, once posted. */
+  lobehubCommentId?: string;
   /** Provider's mergeability verdict, when it exposes one (`MERGEABLE`, `CONFLICTING`, …). */
   mergeable?: string;
   /**
@@ -125,6 +153,13 @@ export interface ScmChangeRequestMetadata {
    * rollup when that job never reports again.
    */
   pendingChecks?: { checks: ScmCheck[]; sha: string };
+  /**
+   * A wake the debounce window swallowed. The next event on this change
+   * request delivers it, so the last failure of a burst is not lost.
+   */
+  pendingWake?: { reason: string; since: string };
+  /** Whether the repository is private, when the provider said. Drives the comment switches. */
+  repoPrivate?: boolean;
   /**
    * Latest effective verdict per reviewer, keyed by provider user id. The
    * change request's `reviewDecision` is the rollup of these: one

@@ -4,6 +4,7 @@ import { safeParsePartialJSON } from '@lobechat/utils';
 import { Flexbox } from '@lobehub/ui';
 import { memo, Suspense } from 'react';
 
+import { useIsTimedOutUnanswered } from '../../../../hooks/useDeadlineClock';
 import AbortResponse from './AbortResponse';
 import LoadingPlaceholder from './LoadingPlaceholder';
 import RejectedResponse from './RejectedResponse';
@@ -50,9 +51,21 @@ const Render = memo<RenderProps>(
     isToolCalling,
     showCustomToolRender,
   }) => {
+    // A question whose producer stopped waiting is no longer offered as a card
+    // (`getPendingInterventions` drops it), so the inline row is the only place
+    // left to say what happened — returning null here would leave a silent gap
+    // where the tool call was.
+    // Live: flips at the producer's deadline even when nothing else re-renders
+    // this row, so the row speaks up the moment the card leaves the screen.
+    const timedOut = useIsTimedOutUnanswered(intervention, result?.state);
+
     // Pending interventions are rendered in the bottom InterventionBar, not inline
-    if (toolMessageId && intervention?.status === 'pending' && !disableEditing) {
+    if (!timedOut && toolMessageId && intervention?.status === 'pending' && !disableEditing) {
       return null;
+    }
+
+    if (timedOut) {
+      return <RejectedResponse timedOut apiName={apiName} />;
     }
 
     if (intervention?.status === 'rejected') {

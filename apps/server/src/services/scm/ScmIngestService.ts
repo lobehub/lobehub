@@ -237,7 +237,16 @@ export class ScmIngestService {
 
       // Emit per-check failure the moment it lands, and the green rollup once
       // nothing is pending — those two are what the control half acts on.
-      const failedNow = event.checks.some(isFailingCheck);
+      //
+      // Read the failure off the *merged* row, not off the payload: a
+      // redelivered or late failure for a check that has since gone green
+      // loses to the newer result in `mergeChecks`, and classifying it from
+      // the payload would wake the agent against a green row with nothing
+      // to fix — and spend one of its three wakes doing it.
+      const arrived = new Set(event.checks.filter(isFailingCheck).map((c) => c.externalId));
+      const failedNow = (result.row.checks ?? []).some(
+        (check) => isFailingCheck(check) && arrived.has(check.externalId),
+      );
       const kind = failedNow
         ? 'ci_failed'
         : result.ciStatus === 'success' && result.previousCiStatus !== 'success'
