@@ -1782,6 +1782,16 @@ When I am ___, I need ___
   'workspace.create.namePlaceholder': 'e.g. Acme Team',
   'workspace.create.submit': 'Create workspace',
   'workspace.billing.credits.label': 'Credits this month',
+  // Sandbox workspace storage, bought in blocks on top of the plan. Phrased as
+  // a total rather than a purchase: someone deciding how much to buy is asking
+  // "will it be enough", and that question is about the sum.
+  'workspace.storageAddon.title': 'Sandbox storage',
+  'workspace.storageAddon.action': 'Add storage',
+  'workspace.storageAddon.desc': 'Bought in blocks of {{size}}, on top of what your plan includes.',
+  'workspace.storageAddon.total': 'Your workspace will have {{total}}.',
+  'workspace.storageAddon.confirm': 'Save',
+  'workspace.storageAddon.cancel': 'Cancel',
+  'workspace.storageAddon.failed': 'Could not change the purchased storage',
   'workspace.billing.basicHint': 'Basic workspace · shared monthly pool',
   'workspace.billing.freeHint': 'Free workspace · shared monthly pool',
   'workspace.billing.platformLine': 'Pro Platform · monthly',
