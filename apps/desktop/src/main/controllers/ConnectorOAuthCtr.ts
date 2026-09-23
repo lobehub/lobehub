@@ -1,5 +1,6 @@
 import path from 'node:path';
 
+import { OFFICIAL_CLOUD_URL, OFFICIAL_URL } from '@lobechat/const/url';
 import { BrowserWindow } from 'electron';
 
 import { preloadDir } from '@/const/dir';
@@ -21,13 +22,16 @@ export default class ConnectorOAuthCtr extends ControllerModule {
   }): Promise<ConnectorOAuthResult> {
     const authorizationUrl = new URL(params.authorizationUrl);
     const remoteUrl = await this.app.getController(RemoteServerConfigCtr).getRemoteServerUrl();
-    const callbackUrl = new URL('/oauth/connector/callback', remoteUrl);
+    const remoteOrigin = new URL(remoteUrl).origin;
+    // Official API and app origins differ; self-hosted servers trust only their own origin.
+    const callbackOrigins = [OFFICIAL_CLOUD_URL, OFFICIAL_URL].includes(remoteOrigin)
+      ? [OFFICIAL_CLOUD_URL, OFFICIAL_URL]
+      : [remoteOrigin];
+    const callbackUrl = callbackOrigins
+      .map((origin) => new URL('/oauth/connector/callback', origin))
+      .find((url) => url.href === authorizationUrl.searchParams.get('redirect_uri'));
     const state = authorizationUrl.searchParams.get('state');
-    if (
-      !['https:', 'http:'].includes(authorizationUrl.protocol) ||
-      authorizationUrl.searchParams.get('redirect_uri') !== callbackUrl.href ||
-      !state
-    ) {
+    if (!['https:', 'http:'].includes(authorizationUrl.protocol) || !callbackUrl || !state) {
       return 'failed';
     }
 

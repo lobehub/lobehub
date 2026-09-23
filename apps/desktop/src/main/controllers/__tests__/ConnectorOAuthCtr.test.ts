@@ -42,18 +42,20 @@ describe('ConnectorOAuthCtr', () => {
   let popup: ReturnType<typeof makePopup>;
   let parent: EventEmitter;
   let controller: ConnectorOAuthCtr;
+  let remoteUrl: string;
 
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
     popup = makePopup();
     parent = new EventEmitter();
+    remoteUrl = 'https://server.example';
     vi.mocked(BrowserWindow).mockImplementation(function () {
       return popup as unknown as BrowserWindow;
     });
     controller = new ConnectorOAuthCtr({
       browserManager: { getMainWindow: () => ({ browserWindow: parent }) },
-      getController: () => ({ getRemoteServerUrl: async () => 'https://server.example' }),
+      getController: () => ({ getRemoteServerUrl: async () => remoteUrl }),
     } as unknown as App);
   });
 
@@ -87,6 +89,50 @@ describe('ConnectorOAuthCtr', () => {
     expect(popup.destroy).toHaveBeenCalledOnce();
     expect(vi.getTimerCount()).toBe(0);
     expect(parent.listenerCount('closed')).toBe(0);
+  });
+
+  it.each([
+    ['https://lobehub.com', 'https://app.lobehub.com/oauth/connector/callback'],
+    ['https://app.lobehub.com/', 'https://lobehub.com/oauth/connector/callback'],
+  ])(
+    'accepts the official callback alias for %s and binds completion to it',
+    async (server, redirectUri) => {
+      remoteUrl = server;
+      const url = new URL(authorizationUrl);
+      url.searchParams.set('redirect_uri', redirectUri);
+      const result = controller.authorize({ ...params, authorizationUrl: url.href });
+      await Promise.resolve();
+      expect(popup.loadURL).toHaveBeenCalledWith(url.href);
+
+      // Even the other trusted official origin cannot complete this attempt.
+      popup.webContents.mainFrame.url = new URL(
+        '/oauth/connector/callback?state=expected-state',
+        server,
+      ).href;
+      send();
+      expect(popup.destroy).not.toHaveBeenCalled();
+      popup.webContents.mainFrame.url = `${redirectUri}?state=expected-state`;
+      send();
+      await expect(result).resolves.toBe('success');
+      expect(vi.getTimerCount()).toBe(0);
+    },
+  );
+
+  it.each([
+    ['https://lobehub.com', 'https://other.lobehub.com/oauth/connector/callback'],
+    ['https://lobehub.com', 'https://app.lobehub.com.evil.example/oauth/connector/callback'],
+    ['https://lobehub.com', 'http://app.lobehub.com/oauth/connector/callback'],
+    ['https://lobehub.com', 'https://app.lobehub.com:8443/oauth/connector/callback'],
+    ['https://lobehub.com', 'https://app.lobehub.com/other'],
+    ['https://server.example', 'https://app.lobehub.com/oauth/connector/callback'],
+  ])('rejects an untrusted redirect from %s to %s', async (server, redirectUri) => {
+    remoteUrl = server;
+    const url = new URL(authorizationUrl);
+    url.searchParams.set('redirect_uri', redirectUri);
+    await expect(controller.authorize({ ...params, authorizationUrl: url.href })).resolves.toBe(
+      'failed',
+    );
+    expect(BrowserWindow).not.toHaveBeenCalled();
   });
 
   it('keeps waiting after an aborted load caused by navigation', async () => {
