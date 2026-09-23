@@ -16,6 +16,8 @@ import HeteroModel from '@/features/ChatInput/ControlBar/HeteroModel';
 import { ChatInput } from '@/features/Conversation';
 import { contextSelectors, useConversationStore } from '@/features/Conversation/store';
 import { useProviderBindingValidation } from '@/features/HeterogeneousAgent/hooks/useProviderBinding';
+import { useServerConfigStore } from '@/store/serverConfig';
+import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import {
   isHeterogeneousSandboxExecutionAvailable,
@@ -115,9 +117,12 @@ const HeterogeneousChatInput = memo(() => {
   });
   const { error: apiBindingValidationError, isReady: isApiBindingStateReady } =
     useProviderBindingValidation(providerType, providerApiConfig);
+  const sandboxAgentTypes = useServerConfigStore(
+    serverConfigSelectors.sandboxAgentTypes,
+  );
   const deviceSelectionRequired =
     !!providerType &&
-    !isHeterogeneousSandboxExecutionAvailable(providerType) &&
+    !isHeterogeneousSandboxExecutionAvailable(providerType, sandboxAgentTypes) &&
     executionTarget === 'none';
 
   const showHeteroModel =
