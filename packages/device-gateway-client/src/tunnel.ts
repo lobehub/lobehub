@@ -8,6 +8,7 @@ import type {
   TunnelServerFrame,
 } from './types';
 import { TUNNEL_CHUNK_SIZE, TUNNEL_FLOW_WINDOW } from './types';
+import { DeviceWsTunnelHost, type TunnelUpstreamFactory } from './wsTunnel';
 
 /**
  * Device half of the HTTP tunnel: turns the gateway's tunnel frames into a real
@@ -53,6 +54,8 @@ const noopLogger: GatewayClientLogger = {
 export type TunnelFetch = (url: string, init: RequestInit) => Promise<Response>;
 
 export interface DeviceTunnelHostOptions {
+  /** Injectable for tests; defaults to a `ws` client socket. */
+  createUpstreamSocket?: TunnelUpstreamFactory;
   /** Injectable for tests; defaults to global `fetch`. */
   fetchImpl?: TunnelFetch;
   logger?: GatewayClientLogger;
@@ -99,16 +102,23 @@ export class DeviceTunnelHost {
   private logger: GatewayClientLogger;
   private maxConcurrent: number;
   private send: (frame: TunnelClientFrame) => void;
+  private sockets: DeviceWsTunnelHost;
 
   constructor(options: DeviceTunnelHostOptions) {
     this.fetchImpl = options.fetchImpl ?? ((url, init) => globalThis.fetch(url, init));
     this.logger = options.logger ?? noopLogger;
     this.maxConcurrent = options.maxConcurrent ?? 32;
     this.send = options.send;
+    this.sockets = new DeviceWsTunnelHost({
+      createSocket: options.createUpstreamSocket,
+      logger: this.logger,
+      send: options.send,
+    });
   }
 
+  /** HTTP requests and WebSockets in flight; both count against the limit. */
   get activeCount(): number {
-    return this.connections.size;
+    return this.connections.size + this.sockets.activeCount;
   }
 
   handleFrame(frame: TunnelServerFrame): void {
@@ -146,6 +156,28 @@ export class DeviceTunnelHost {
         this.closeConnection(frame.connId, frame.reason ?? 'PEER_CLOSED', false);
         return;
       }
+      case 'tunnel_ws_open': {
+        const refusal = this.refuse(frame.target.host);
+        if (refusal) {
+          this.send({
+            connId: frame.connId,
+            error: refusal,
+            ok: false,
+            type: 'tunnel_ws_open_ack',
+          });
+          return;
+        }
+        this.sockets.open(frame);
+        return;
+      }
+      case 'tunnel_ws_message': {
+        this.sockets.message(frame);
+        return;
+      }
+      case 'tunnel_ws_close': {
+        this.sockets.close(frame);
+        return;
+      }
       default: {
         return;
       }
@@ -157,6 +189,14 @@ export class DeviceTunnelHost {
     for (const connId of this.connections.keys()) {
       this.closeConnection(connId, reason, false);
     }
+    this.sockets.closeAll();
+  }
+
+  /** Why an open must be refused, or undefined when it may proceed. */
+  private refuse(host: string): string | undefined {
+    if (!LOOPBACK_HOSTS.has(host)) return 'TUNNEL_TARGET_NOT_LOOPBACK';
+    if (this.activeCount >= this.maxConcurrent) return 'TUNNEL_LIMIT_REACHED';
+    return undefined;
   }
 
   // ─── internals ───
@@ -165,17 +205,9 @@ export class DeviceTunnelHost {
     const { connId, head, target } = frame;
     if (this.connections.has(connId)) return;
 
-    if (!LOOPBACK_HOSTS.has(target.host)) {
-      this.send({
-        connId,
-        error: 'TUNNEL_TARGET_NOT_LOOPBACK',
-        ok: false,
-        type: 'tunnel_open_ack',
-      });
-      return;
-    }
-    if (this.connections.size >= this.maxConcurrent) {
-      this.send({ connId, error: 'TUNNEL_LIMIT_REACHED', ok: false, type: 'tunnel_open_ack' });
+    const refusal = this.refuse(target.host);
+    if (refusal) {
+      this.send({ connId, error: refusal, ok: false, type: 'tunnel_open_ack' });
       return;
     }
 

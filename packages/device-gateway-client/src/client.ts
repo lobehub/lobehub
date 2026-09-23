@@ -408,14 +408,17 @@ export class GatewayClient extends EventEmitter {
         case 'tunnel_open':
         case 'tunnel_data':
         case 'tunnel_ack':
-        case 'tunnel_close': {
+        case 'tunnel_close':
+        case 'tunnel_ws_open':
+        case 'tunnel_ws_message':
+        case 'tunnel_ws_close': {
           if (this.tunnelHost) this.tunnelHost.handleFrame(message);
-          else if (message.type === 'tunnel_open')
+          else if (message.type === 'tunnel_open' || message.type === 'tunnel_ws_open')
             this.sendMessage({
               connId: message.connId,
               error: 'TUNNEL_DISABLED',
               ok: false,
-              type: 'tunnel_open_ack',
+              type: message.type === 'tunnel_open' ? 'tunnel_open_ack' : 'tunnel_ws_open_ack',
             });
           break;
         }

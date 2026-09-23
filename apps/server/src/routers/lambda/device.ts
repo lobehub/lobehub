@@ -1,3 +1,4 @@
+import { TUNNEL_TOKEN_PARAM } from '@lobechat/device-gateway-client';
 import {
   type HeterogeneousAgentScanMap,
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
@@ -96,7 +97,9 @@ const buildTunnelOpenUrl = async (
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
   });
-  return `${url}?token=${encodeURIComponent(token)}`;
+  // A dedicated param, not `?token=`: apps behind a tunnel own that name
+  // (Vite's HMR socket authenticates with it).
+  return `${url}?${TUNNEL_TOKEN_PARAM}=${encodeURIComponent(token)}`;
 };
 
 const canEditWorkspaceDevice = (

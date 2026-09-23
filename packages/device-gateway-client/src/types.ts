@@ -385,13 +385,73 @@ export interface TunnelCloseMessage {
   type: 'tunnel_close';
 }
 
+/**
+ * Query parameter that carries the entry-ticket JWT on a tunnel link. Not
+ * `token`: apps behind a tunnel use `?token=` themselves (Vite's HMR socket).
+ * Mirrors `device-gateway/src/types.ts`.
+ */
+export const TUNNEL_TOKEN_PARAM = '__lobe_tunnel_token';
+
+/** Largest WebSocket message relayed either way; bigger closes with 1009. */
+export const TUNNEL_WS_MAX_MESSAGE = 1024 * 1024;
+
+/** Server → Client: open a WebSocket to `127.0.0.1:<port>` (e.g. dev-server HMR). */
+export interface TunnelWsOpenMessage {
+  connId: string;
+  head: {
+    /** Offered subprotocols, in the browser's order. */
+    protocols: string[];
+    /** Path + query, e.g. `/?token=abc`. */
+    path: string;
+  };
+  target: { host: string; port: number };
+  type: 'tunnel_ws_open';
+}
+
+/** Client → Server: the upstream socket opened (with its subprotocol) or failed. */
+export interface TunnelWsOpenAckMessage {
+  connId: string;
+  error?: string;
+  ok: boolean;
+  protocol?: string;
+  type: 'tunnel_ws_open_ack';
+}
+
+/** Both directions: one WebSocket message. `data` is base64 when `binary`. */
+export interface TunnelWsDataMessage {
+  binary?: boolean;
+  connId: string;
+  data: string;
+  type: 'tunnel_ws_message';
+}
+
+/** Both directions: one side closed. */
+export interface TunnelWsCloseMessage {
+  code?: number;
+  connId: string;
+  reason?: string;
+  type: 'tunnel_ws_close';
+}
+
 /** Tunnel frames the gateway sends down to this device. */
 export type TunnelServerFrame =
-  TunnelAckMessage | TunnelCloseMessage | TunnelDataMessage | TunnelOpenMessage;
+  | TunnelAckMessage
+  | TunnelCloseMessage
+  | TunnelDataMessage
+  | TunnelOpenMessage
+  | TunnelWsCloseMessage
+  | TunnelWsDataMessage
+  | TunnelWsOpenMessage;
 
 /** Tunnel frames this device sends up to the gateway. */
 export type TunnelClientFrame =
-  TunnelAckMessage | TunnelCloseMessage | TunnelDataMessage | TunnelOpenAckMessage;
+  | TunnelAckMessage
+  | TunnelCloseMessage
+  | TunnelDataMessage
+  | TunnelOpenAckMessage
+  | TunnelWsCloseMessage
+  | TunnelWsDataMessage
+  | TunnelWsOpenAckMessage;
 
 /** Client → Server: acknowledgement for an agent_run_request. */
 export interface AgentRunAckMessage {
