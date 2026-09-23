@@ -8,6 +8,7 @@ import BrowserSidebarCtr from './BrowserSidebarCtr';
 import BrowserWindowsCtr from './BrowserWindowsCtr';
 import CliCtr from './CliCtr';
 import CompletionSoundCtr from './CompletionSoundCtr';
+import ConnectorOAuthCtr from './ConnectorOAuthCtr';
 import DevtoolsCtr from './DevtoolsCtr';
 import GatewayConnectionCtr from './GatewayConnectionCtr';
 import GitCtr from './GitCtr';
@@ -43,6 +44,7 @@ export const controllerIpcConstructors = [
   BrowserWindowsCtr,
   CliCtr,
   CompletionSoundCtr,
+  ConnectorOAuthCtr,
   DevtoolsCtr,
   GatewayConnectionCtr,
   GitCtr,

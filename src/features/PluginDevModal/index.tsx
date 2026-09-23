@@ -8,6 +8,8 @@ import { useResponsive } from 'antd-style';
 import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ConnectorOAuthError, openConnectorOAuthPopup } from '@/utils/connectorOAuth';
+
 import MCPManifestForm from './MCPManifestForm';
 import PluginPreview from './PluginPreview';
 
@@ -80,19 +82,29 @@ const DevModal = memo<DevModalProps>(
                 'dev.permissionDenied',
                 'You are not allowed to modify this connector — only the creator or a workspace owner can',
               )
-            : t('dev.saveError'),
+            : error instanceof ConnectorOAuthError
+              ? t(`dev.oauthError.${error.reason}`)
+              : ctx
+                ? t('dev.oauthError.failed')
+                : t('dev.saveError'),
         );
       } finally {
+        ctx?.oauthPopup?.close();
         setSubmitting(false);
       }
     };
 
-    // OAuth needs window.open within the user-gesture tick (browsers block it
+    // Web OAuth needs window.open within the user-gesture tick (browsers block it
     // after an async boundary). Open a blank popup synchronously here, validate,
-    // then hand it to onSave which navigates it to the authorize URL. Shared by
+    // then hand it to onSave. Desktop opens a native window via IPC instead. Shared by
     // the footer save button and the in-form "Authorize" button.
     const runOAuthFlow = async () => {
-      const popup = window.open('about:blank', 'lobe-connector-oauth', 'width=600,height=720');
+      if (submitting) return;
+      const popup = openConnectorOAuthPopup();
+      if (popup === null) {
+        toast.error(t('dev.oauthError.blocked'));
+        return;
+      }
       try {
         const values = (await form.validateFields()) as LobeToolCustomPlugin;
         await doSave(values, { oauthPopup: popup });

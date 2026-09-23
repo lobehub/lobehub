@@ -713,6 +713,11 @@ export default {
   'dev.metaConfig': 'Meta config',
   'dev.modalDesc':
     'Custom Skills can be used for development or directly in conversations. See <1>docs↗</1>',
+  'dev.oauthError.blocked':
+    'The authorization window could not open. Allow popups, or update the desktop app, then try again.',
+  'dev.oauthError.dismissed': 'Authorization was canceled. Click Authorize & Connect to try again.',
+  'dev.oauthError.failed': 'Authorization failed. Check your OAuth settings and try again.',
+  'dev.oauthError.timeout': 'Authorization timed out. Click Authorize & Connect to try again.',
   'dev.openai.importUrl': 'Import from URL',
   'dev.openai.schema': 'Schema',
   'dev.preview.api.noParams': 'No parameters',
