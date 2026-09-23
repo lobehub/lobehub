@@ -38,20 +38,21 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   /**
    * The run that is going on now, framed apart from the trail below it the way
-   * Railway frames the active deployment: tinted, so it is found before the
-   * history is read, with a footer line that says what is happening rather
-   * than what happened.
+   * Railway frames the active deployment, with a footer line that says what is
+   * happening rather than what happened. The frame stays neutral — a solid
+   * info tint reads as a heavy navy block in dark mode — and only the footer's
+   * status line carries the info color.
    */
   active: css`
     overflow: hidden;
-    border: 1px solid ${cssVar.colorInfoBorder};
+    border: 1px solid ${cssVar.colorBorder};
     border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorInfoBg};
+    background: ${cssVar.colorFillQuaternary};
   `,
   activeFooter: css`
     padding-block: 8px;
     padding-inline: 16px;
-    border-block-start: 1px solid ${cssVar.colorInfoBorder};
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
     color: ${cssVar.colorInfo};
   `,
   historyLabel: css`
