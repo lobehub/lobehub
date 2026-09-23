@@ -115,6 +115,21 @@ class SandboxWorkspaceService {
   }) => lambdaClient.sandboxWorkspace.createInstance.mutate(params);
 
   /**
+   * Materializes an instance: clones the environment's sources and runs its
+   * bootstrap. Returns as soon as the build has started.
+   *
+   * Separate from {@link createInstance} because starting one attaches a
+   * sandbox session, which is a cold start — the dialog closes on the insert
+   * and this follows it.
+   */
+  startInstanceBuild = async (params: { id: string; topicId?: string }) =>
+    lambdaClient.sandboxWorkspace.startInstanceBuild.mutate(params);
+
+  /** Follows a build, and settles the instance once it ends. */
+  instanceBuildStatus = async (params: { id: string; logOffset?: number; topicId?: string }) =>
+    lambdaClient.sandboxWorkspace.instanceBuildStatus.query(params);
+
+  /**
    * A new instance of an environment, with its directory derived server-side.
    *
    * What the composer calls: someone picking an environment has not chosen a

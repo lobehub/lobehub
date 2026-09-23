@@ -36,6 +36,7 @@ const mockInstanceDelete = vi.fn();
 const mockInstanceFindById = vi.fn();
 const mockInstanceFindOwnedById = vi.fn();
 const mockInstanceQuery = vi.fn();
+const mockInstanceUpdate = vi.fn();
 
 vi.mock('@/database/models/environmentInstance', () => ({
   InstanceDirectoryOverlapError: class InstanceDirectoryOverlapError extends Error {},
@@ -47,7 +48,7 @@ vi.mock('@/database/models/environmentInstance', () => ({
       findOwnedById: mockInstanceFindOwnedById,
       findByWorkingDirectory: vi.fn(),
       query: mockInstanceQuery,
-      update: vi.fn(),
+      update: mockInstanceUpdate,
     };
   }),
 }));
@@ -67,17 +68,25 @@ const mockListFiles = vi.fn();
 const mockReadFile = vi.fn();
 const mockGetWorkspace = vi.fn();
 const mockRefreshUsage = vi.fn();
+const mockReadOccupancy = vi.fn();
+const mockBuildEnvironment = vi.fn();
+const mockBuildStatus = vi.fn();
+const mockListEnvironments = vi.fn();
 
 vi.mock('@/server/services/market', () => ({
   MarketService: vi.fn(function () {
     return {
       getSandboxWorkspaceClient: () => ({
+        buildEnvironment: mockBuildEnvironment,
+        buildStatus: mockBuildStatus,
         copyEnvironment: mockCopyEnvironment,
         deleteEnvironment: mockDeleteEnvironment,
         getWorkspace: mockGetWorkspace,
         listEnvironmentSessions: mockListEnvironmentSessions,
+        listEnvironments: mockListEnvironments,
         listFiles: mockListFiles,
         readFile: mockReadFile,
+        readOccupancy: mockReadOccupancy,
         refreshUsage: mockRefreshUsage,
         writeFile: mockWriteFile,
       }),
@@ -115,6 +124,7 @@ const uniqueViolation = (constraint: string) => {
 };
 
 const environmentId = '3f2504e0-4f89-11d3-9a0c-0305e82c3301';
+const buildInstanceId = '7b1e9c2a-5d43-4f8a-9c21-8f0e6a3b1d77';
 
 describe('sandboxWorkspaceRouter', () => {
   const ctx: any = { serverDB: {}, userId: 'user-1', workspaceId: 'ws-1' };
@@ -322,6 +332,233 @@ describe('sandboxWorkspaceRouter', () => {
         .writeFile({ content: 'x', path: 'notes.md' });
 
       expect(mockWriteFile).toHaveBeenCalled();
+    });
+  });
+
+  describe('copyInstance', () => {
+    it('arrives ready, because a copy has everything the source built', async () => {
+      // Left at the insert's default it would sit in `pending` with no build
+      // to wait for — which reads as "never built" and offers a rebuild that
+      // would throw the copy away.
+      mockResolveSessionConfig.mockResolvedValue({ claim: { key: 'ws-org-1' } });
+      mockInstanceFindById.mockResolvedValue({
+        environmentId,
+        id: buildInstanceId,
+        workingDirectory: 'src',
+      });
+      mockInstanceCreate.mockResolvedValue({ id: 'copy-1', workingDirectory: 'copy' });
+      mockCopyEnvironment.mockResolvedValue({});
+
+      const result = await sandboxWorkspaceRouter
+        .createCaller(ctx)
+        .copyInstance({ id: buildInstanceId, name: 'copy', workingDirectory: 'copy' });
+
+      expect(mockInstanceUpdate).toHaveBeenCalledWith('copy-1', { status: 'ready' });
+      expect(result.status).toBe('ready');
+    });
+  });
+
+  describe('startInstanceBuild', () => {
+    const spec = { bootstrapCommand: 'pnpm i', sources: [{ kind: 'git', url: 'https://x/y' }] };
+
+    beforeEach(() => {
+      mockResolveSessionConfig.mockResolvedValue({ claim: { key: 'ws-org-1' } });
+    });
+
+    it('builds from the definition the instance was created from', async () => {
+      // Not the environment's current one: a build has to produce what the
+      // instance says it is, and the two differ exactly when it moved on.
+      mockInstanceFindOwnedById.mockResolvedValue({
+        configurationSnapshot: spec,
+        id: buildInstanceId,
+      });
+      mockBuildEnvironment.mockResolvedValue({ buildId: 'b-1' });
+
+      const result = await sandboxWorkspaceRouter
+        .createCaller(ctx)
+        .startInstanceBuild({ id: buildInstanceId, topicId: 'tpc-1' });
+
+      expect(mockBuildEnvironment).toHaveBeenCalledWith({
+        name: buildInstanceId,
+        specification: spec,
+        topicId: 'tpc-1',
+      });
+      expect(result.buildId).toBe('b-1');
+      expect(mockInstanceUpdate).toHaveBeenLastCalledWith(buildInstanceId, { buildId: 'b-1' });
+    });
+
+    it('settles an instance with nothing to build without touching the sandbox', async () => {
+      // Cold-starting a microVM to clone nothing and install nothing would
+      // leave an empty archive behind and minutes on the clock.
+      mockInstanceFindOwnedById.mockResolvedValue({
+        configurationSnapshot: {},
+        id: buildInstanceId,
+      });
+
+      const result = await sandboxWorkspaceRouter
+        .createCaller(ctx)
+        .startInstanceBuild({ id: buildInstanceId, topicId: 'tpc-1' });
+
+      expect(mockBuildEnvironment).not.toHaveBeenCalled();
+      expect(result.buildId).toBeNull();
+      expect(mockInstanceUpdate).toHaveBeenCalledWith(buildInstanceId, { status: 'ready' });
+    });
+
+    it('records a refused build on the row, not only in the response', async () => {
+      // The client that asked may already be gone, and an instance left
+      // saying "pending" forever is the one state nothing recovers from.
+      mockInstanceFindOwnedById.mockResolvedValue({
+        configurationSnapshot: spec,
+        id: buildInstanceId,
+      });
+      mockBuildEnvironment.mockRejectedValue(new Error('environment in use'));
+
+      await expect(
+        sandboxWorkspaceRouter
+          .createCaller(ctx)
+          .startInstanceBuild({ id: buildInstanceId, topicId: 't' }),
+      ).rejects.toThrow('environment in use');
+
+      expect(mockInstanceUpdate).toHaveBeenLastCalledWith(buildInstanceId, {
+        buildError: 'environment in use',
+        status: 'error',
+      });
+    });
+  });
+
+  describe('instanceBuildStatus', () => {
+    beforeEach(() => {
+      mockResolveSessionConfig.mockResolvedValue({ claim: { key: 'ws-org-1' } });
+    });
+
+    it('clears the build id with the verdict', async () => {
+      // The runtime drops a finished build's log on its own schedule, and an
+      // id that outlives it has the UI polling for a log that never comes.
+      mockInstanceFindById.mockResolvedValue({
+        buildId: 'b-1',
+        id: buildInstanceId,
+        status: 'pending',
+      });
+      mockBuildStatus.mockResolvedValue({ chunk: 'done', logOffset: 4, state: 'succeeded' });
+
+      const result = await sandboxWorkspaceRouter
+        .createCaller(ctx)
+        .instanceBuildStatus({ id: buildInstanceId, topicId: 'tpc-1' });
+
+      expect(result.state).toBe('succeeded');
+      expect(mockInstanceUpdate).toHaveBeenCalledWith(buildInstanceId, {
+        buildError: null,
+        buildId: null,
+        status: 'ready',
+      });
+    });
+
+    it('keeps the failure log on the row so the reason outlives the build', async () => {
+      mockInstanceFindById.mockResolvedValue({
+        buildId: 'b-1',
+        id: buildInstanceId,
+        status: 'pending',
+      });
+      mockBuildStatus.mockResolvedValue({ chunk: 'npm ERR! 404', logOffset: 12, state: 'failed' });
+
+      await sandboxWorkspaceRouter
+        .createCaller(ctx)
+        .instanceBuildStatus({ id: buildInstanceId, topicId: 'tpc-1' });
+
+      expect(mockInstanceUpdate).toHaveBeenCalledWith(buildInstanceId, {
+        buildError: 'npm ERR! 404',
+        buildId: null,
+        status: 'error',
+      });
+    });
+
+    it('asks the execution plane nothing when no build is in flight', async () => {
+      mockInstanceFindById.mockResolvedValue({
+        buildId: null,
+        id: buildInstanceId,
+        status: 'ready',
+      });
+
+      const result = await sandboxWorkspaceRouter
+        .createCaller(ctx)
+        .instanceBuildStatus({ id: buildInstanceId, topicId: 'tpc-1' });
+
+      expect(mockBuildStatus).not.toHaveBeenCalled();
+      expect(result.state).toBe('idle');
+    });
+  });
+
+  describe('listInstances', () => {
+    const instance = (id: string) => ({
+      createdAt: new Date(0),
+      environmentId,
+      id,
+      name: id,
+      workingDirectory: id,
+    });
+
+    beforeEach(() => {
+      mockResolveSessionConfig.mockResolvedValue({ claim: { key: 'ws-org-1' } });
+      mockReadOccupancy.mockResolvedValue({ held: [], unavailable: false });
+    });
+
+    it('marks an instance another conversation holds, and tells its own run apart', async () => {
+      // The execution plane allows one session per instance and answers the
+      // second writer with 409, so a picker that cannot tell these apart
+      // either offers a choice the next message refuses, or takes an instance
+      // away from the conversation that is running in it.
+      mockInstanceQuery.mockResolvedValue([
+        instance('inst-a'),
+        instance('inst-b'),
+        instance('inst-c'),
+      ]);
+      mockReadOccupancy.mockResolvedValue({
+        held: [
+          { name: 'inst-a', own: false },
+          { name: 'inst-b', own: true },
+        ],
+        unavailable: false,
+      });
+
+      const result = await sandboxWorkspaceRouter
+        .createCaller(ctx)
+        .listInstances({ topicId: 'tpc-1', withSizes: false });
+
+      expect(mockReadOccupancy).toHaveBeenCalledWith({
+        names: ['inst-a', 'inst-b', 'inst-c'],
+        topicId: 'tpc-1',
+      });
+      expect(result.instances.map((i: any) => [i.id, i.inUse, i.inUseByThisTopic])).toEqual([
+        ['inst-a', true, false],
+        ['inst-b', true, true],
+        ['inst-c', false, false],
+      ]);
+      expect(result.occupancyUnavailable).toBe(false);
+    });
+
+    it('reports occupancy as unknown rather than free when the lease store fails', async () => {
+      // "Free" on the strength of a call that did not answer would let a
+      // picker offer an instance another conversation is actively writing.
+      mockInstanceQuery.mockResolvedValue([instance('inst-a')]);
+      mockReadOccupancy.mockRejectedValue(new Error('market down'));
+
+      const result = await sandboxWorkspaceRouter
+        .createCaller(ctx)
+        .listInstances({ topicId: 'tpc-1', withSizes: false });
+
+      expect(result.occupancyUnavailable).toBe(true);
+      expect(result.instances[0].inUse).toBe(false);
+    });
+
+    it('asks nothing of the execution plane when there are no instances', async () => {
+      mockInstanceQuery.mockResolvedValue([]);
+
+      const result = await sandboxWorkspaceRouter
+        .createCaller(ctx)
+        .listInstances({ topicId: 'tpc-1', withSizes: false });
+
+      expect(mockReadOccupancy).not.toHaveBeenCalled();
+      expect(result.occupancyUnavailable).toBe(false);
     });
   });
 

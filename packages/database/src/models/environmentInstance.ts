@@ -232,7 +232,12 @@ export class EnvironmentInstanceModel {
 
   update = async (
     id: string,
-    params: Partial<Pick<NewEnvironmentInstance, 'configuration' | 'enabled' | 'name' | 'status'>>,
+    params: Partial<
+      Pick<
+        NewEnvironmentInstance,
+        'buildError' | 'buildId' | 'configuration' | 'enabled' | 'name' | 'status'
+      >
+    >,
   ): Promise<EnvironmentInstanceItem | undefined> => {
     const [row] = await this.db
       .update(environmentInstances)

@@ -148,25 +148,21 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
   };
 
   /**
-   * The count, the way to add one, and the way to refetch. Shared by both
-   * layouts because they are the same three things wherever they sit; only the
-   * frame around them differs. The count is dropped at zero — the empty state
-   * right below already says there are none.
+   * The storage meter, the way to add one, and the way to refetch. Shared by
+   * both layouts because they are the same things wherever they sit; only the
+   * frame around them differs.
+   *
+   * No count of environments: the list is right below it and short enough to
+   * take in at a glance, so the number restated what the reader could already
+   * see. The meter stays because it is the one number the page cannot show —
+   * and the one that stops it working when it runs out.
    */
   const actions = (
     // `flex: none`, because this shares a `space-between` row with whatever
     // names the list. Left shrinkable, the group gets compressed by a wide
-    // neighbour and the count is the first thing to give — it wrapped onto two
-    // lines beside buttons that had room to spare.
+    // neighbour.
     <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
-      {/* Before the count, because it is the number that can stop the page
-          working — a workspace over its limit refuses every save. */}
       <WorkspaceUsageMeter />
-      {environments.length > 0 && (
-        <Text fontSize={12} style={{ whiteSpace: 'nowrap' }} type={'secondary'} weight={500}>
-          {t('environments.total', { count: environments.length })}
-        </Text>
-      )}
       <Button
         icon={<Icon icon={RefreshCwIcon} />}
         loading={refreshing}

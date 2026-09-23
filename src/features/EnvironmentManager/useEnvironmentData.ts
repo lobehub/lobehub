@@ -1,5 +1,5 @@
 import type { EnvironmentVisibility } from '@lobechat/types';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useSWRConfig } from 'swr';
 
 import { useClientDataSWR } from '@/libs/swr';
@@ -11,6 +11,7 @@ import {
 const ENVIRONMENTS_KEY = 'sandbox-environments';
 const INSTANCES_KEY = 'sandbox-environment-instances';
 const WORKSPACE_KEY = 'sandbox-workspace-info';
+const BUILD_KEY = 'sandbox-instance-build';
 
 /**
  * Specifications. Answered from the database alone, so this settles fast and is
@@ -111,6 +112,47 @@ export const useWorkspaceUsage = () => {
   return { data: swr.data, error: swr.error, isLoading: swr.isLoading, refresh };
 };
 
+/**
+ * A build in flight, followed until it settles.
+ *
+ * Polling rather than a subscription because the runtime has no way to call
+ * back, and the poll is what moves the instance out of `pending` — so it has
+ * to run while the panel is open, and stop the moment nothing is building.
+ *
+ * The log accumulates across polls: each reply carries only what was written
+ * since the offset it was asked for, which is what keeps a minutes-long
+ * install from resending megabytes on every tick.
+ */
+export const useInstanceBuild = (instanceId: string, active: boolean) => {
+  const [log, setLog] = useState('');
+  const offset = useRef(0);
+  const { mutate: refreshInstances } = useInstances();
+
+  const swr = useClientDataSWR<
+    Awaited<ReturnType<typeof sandboxWorkspaceService.instanceBuildStatus>>
+  >(
+    active ? [BUILD_KEY, instanceId] : null,
+    () =>
+      sandboxWorkspaceService.instanceBuildStatus({ id: instanceId, logOffset: offset.current }),
+    {
+      onSuccess: (data) => {
+        if (data.chunk) {
+          setLog((previous) => previous + data.chunk);
+          offset.current = data.logOffset;
+        }
+        // The row settled on the server during this very call, so the list is
+        // now stale in the one way that matters: the instance still reads as
+        // building.
+        if (data.state !== 'running') void refreshInstances();
+      },
+      refreshInterval: (data) => (data?.state === 'running' ? 2000 : 0),
+      revalidateOnFocus: false,
+    },
+  );
+
+  return { log, state: swr.data?.state };
+};
+
 const SESSIONS_KEY = 'sandbox-environment-sessions';
 
 /**
@@ -172,6 +214,24 @@ export const useEnvironmentActions = () => {
       await refreshEnvironments();
     },
 
+    /**
+     * Materialize an instance. Fired after the insert rather than inside it —
+     * starting a build cold-starts a sandbox, and the dialog must not wait.
+     *
+     * Swallows its failure on purpose: the server has already written the
+     * reason onto the row, and the list is where a person looks for it. A
+     * toast over a dialog that is already closing would say the same thing
+     * somewhere it cannot be read twice.
+     */
+    buildInstance: async (id: string) => {
+      try {
+        await sandboxWorkspaceService.startInstanceBuild({ id });
+      } catch {
+        /* recorded on the instance; the list shows it */
+      }
+      await refreshInstances();
+    },
+
     createInstance: async (params: {
       environmentId: string;
       name: string;
@@ -180,11 +240,20 @@ export const useEnvironmentActions = () => {
       const created = await sandboxWorkspaceService.createInstance(params);
       await refreshInstances();
       return {
+        // No build has been asked for yet — `buildInstance` is the next call
+        // — so the row starts where the server starts it.
+        buildError: null,
+        buildId: null,
         createdAt: created.createdAt,
         environmentId: created.environmentId,
         id: created.id,
+        // A folder that did not exist a moment ago is held by nobody, and has
+        // nothing in it to report a size for.
+        inUse: false,
+        inUseByThisTopic: false,
         name: created.name,
         snapshot: null,
+        status: 'pending',
         workingDirectory: created.workingDirectory,
       } satisfies SandboxInstance;
     },

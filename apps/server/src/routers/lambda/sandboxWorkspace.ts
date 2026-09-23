@@ -500,7 +500,14 @@ export const sandboxWorkspaceRouter = router({
         return mapWorkspaceError(error);
       });
 
-      return created;
+      // A copy starts life with everything the source had built, so it is
+      // ready by arrival — there is nothing to clone and nothing to install.
+      // Left at the insert's default it would sit in `pending` with no build
+      // to wait for, which reads as "never built" and offers a rebuild that
+      // would throw the copy away.
+      await ctx.instanceModel.update(created.id, { status: 'ready' });
+
+      return { ...created, status: 'ready' as const };
     }),
 
   /**
@@ -590,6 +597,116 @@ export const sandboxWorkspaceRouter = router({
       return created;
     }),
 
+  /**
+   * Materialize an instance: clone the environment's sources and run its
+   * bootstrap, into the instance's own stored generation.
+   *
+   * Its own mutation rather than part of `createInstance`, because starting a
+   * build attaches a sandbox session and that is a cold start — seconds, with
+   * a dialog open in front of it. The dialog closes on the insert; the list
+   * shows the instance as pending and this is what the client fires next.
+   *
+   * Returns as soon as the build has started: a bootstrap running an install
+   * is minutes long, and `instanceBuildStatus` is what follows it.
+   */
+  startInstanceBuild: instanceProcedure
+    .input(z.object({ id: idSchema, topicId: topicIdSchema }))
+    .mutation(async ({ ctx, input }) => {
+      const instance = await ctx.instanceModel.findOwnedById(input.id);
+      if (!instance) throw new TRPCError({ code: 'NOT_FOUND', message: 'Instance not found' });
+
+      // The definition this instance was created from, not the environment's
+      // current one: a build has to produce what the instance says it is, and
+      // the two differ exactly when the environment moved on.
+      const specification = instance.configurationSnapshot;
+      const buildable =
+        (specification?.sources?.length ?? 0) > 0 || Boolean(specification?.bootstrapCommand);
+
+      // An environment that clones nothing and installs nothing is already
+      // everything it is ever going to be. Building it would cold-start a
+      // sandbox to do nothing and leave an empty archive behind.
+      if (!buildable) {
+        await ctx.instanceModel.update(input.id, { status: 'ready' });
+
+        return { buildId: null };
+      }
+
+      await ctx.instanceModel.update(input.id, { buildError: null, status: 'pending' });
+
+      try {
+        const { buildId } = await ctx.client.buildEnvironment({
+          name: input.id,
+          specification,
+          topicId: input.topicId,
+        });
+        await ctx.instanceModel.update(input.id, { buildId });
+
+        return { buildId };
+      } catch (error) {
+        // Recorded on the row rather than only thrown: the client that asked
+        // may already be gone, and an instance left saying "pending" forever
+        // is the one state nothing recovers from.
+        await ctx.instanceModel.update(input.id, {
+          buildError: (error as Error)?.message || 'Could not start the build',
+          status: 'error',
+        });
+        throw error;
+      }
+    }),
+
+  /**
+   * Follow a build, and settle the instance once it ends.
+   *
+   * A query that writes, deliberately: the runtime is the only thing that
+   * knows a build finished, nothing calls back, and the row has to end up
+   * right whether or not anyone is still watching. Polling it is what moves
+   * the instance out of `pending`.
+   */
+  instanceBuildStatus: instanceProcedure
+    .input(
+      z.object({
+        id: idSchema,
+        /** Resume the log from here; the reply says where to go next. */
+        logOffset: z.number().int().min(0).optional(),
+        topicId: topicIdSchema,
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const instance = await ctx.instanceModel.findById(input.id);
+      if (!instance) throw new TRPCError({ code: 'NOT_FOUND', message: 'Instance not found' });
+
+      if (!instance.buildId) {
+        return {
+          chunk: '',
+          logOffset: input.logOffset ?? 0,
+          state: instance.status === 'error' ? ('failed' as const) : ('idle' as const),
+        };
+      }
+
+      const status = await ctx.client
+        .buildStatus({
+          buildId: instance.buildId,
+          logOffset: input.logOffset,
+          name: input.id,
+          topicId: input.topicId,
+        })
+        .catch(mapWorkspaceError);
+
+      if (status.state !== 'running') {
+        // The id is cleared with the verdict: the runtime drops a finished
+        // build's log on its own schedule, and an id that outlives it has the
+        // UI polling for a log that will never come back.
+        await ctx.instanceModel.update(input.id, {
+          buildError:
+            status.state === 'failed' ? status.chunk.slice(-2000) || 'Build failed' : null,
+          buildId: null,
+          status: status.state === 'succeeded' ? 'ready' : 'error',
+        });
+      }
+
+      return { chunk: status.chunk, logOffset: status.logOffset, state: status.state };
+    }),
+
   createEnvironment: environmentProcedure
     .input(
       z.object({
@@ -657,8 +774,9 @@ export const sandboxWorkspaceRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const [instances, snapshots] = await Promise.all([
-        ctx.instanceModel.query({ environmentId: input.environmentId }),
+      const instances = await ctx.instanceModel.query({ environmentId: input.environmentId });
+
+      const [snapshots, occupancy] = await Promise.all([
         input.withSizes
           ? ctx.client
               .listEnvironments({ topicId: input.topicId })
@@ -668,19 +786,46 @@ export const sandboxWorkspaceRouter = router({
               // rather than failing a settings page.
               .catch(() => null)
           : [],
+        // Always, and separately from the sizes: this is a Redis read on the
+        // control plane, so it costs the same on every deployment, whereas the
+        // listing above opens the volume. An instance held by another
+        // conversation cannot be run in — the lease answers the second writer
+        // with a 409 — so a picker that does not know is a picker that offers
+        // a choice the first message will refuse.
+        instances.length > 0
+          ? ctx.client
+              .readOccupancy({
+                names: instances.map((instance) => instance.id),
+                topicId: input.topicId,
+              })
+              // Same rule the lease store itself follows: a failure is "not
+              // known", never "free".
+              .catch(() => ({ held: [], unavailable: true }))
+          : { held: [], unavailable: false },
       ]);
 
       const byId = new Map((snapshots ?? []).map((snapshot) => [snapshot.name, snapshot]));
+      const heldBy = new Map(occupancy.held.map((entry) => [entry.name, entry.own]));
 
       return {
         instances: instances.map((instance) => ({
+          /** Set only while a build is worth polling; cleared with its verdict. */
+          buildId: instance.buildId,
+          buildError: instance.buildError,
           createdAt: instance.createdAt,
           environmentId: instance.environmentId,
           id: instance.id,
+          // Held by a running sandbox, and by whom. `own` is this topic's own
+          // run, which its own picker must keep offering; anything else is
+          // another conversation and is what a picker refuses.
+          inUse: heldBy.has(instance.id),
+          inUseByThisTopic: heldBy.get(instance.id) === true,
           name: instance.name,
           snapshot: byId.get(instance.id) ?? null,
+          status: instance.status,
           workingDirectory: instance.workingDirectory,
         })),
+        occupancyUnavailable: occupancy.unavailable,
         snapshotsUnavailable: snapshots === null,
       };
     }),

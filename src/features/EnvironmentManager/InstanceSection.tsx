@@ -4,7 +4,8 @@ import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
 import InstanceList from './InstanceList';
-import { useEnvironmentActions, useInstances } from './useEnvironmentData';
+import { repositoryPath } from './repository';
+import { useEnvironmentActions, useEnvironments, useInstances } from './useEnvironmentData';
 
 interface InstanceSectionProps {
   /** Whether the caller owns the environment; a published one is read-only to everyone else. */
@@ -22,10 +23,19 @@ interface InstanceSectionProps {
  */
 const InstanceSection = memo<InstanceSectionProps>(({ editable, environmentId }) => {
   const { data } = useInstances();
+  const { data: environmentData } = useEnvironments();
   const actions = useEnvironmentActions();
 
   const instances = (data?.instances ?? []).filter(
     (instance) => instance.environmentId === environmentId,
+  );
+
+  // Read here rather than on each row: every instance in this section is built
+  // from the one environment, so the checkout is the section's fact, not the
+  // row's. The rows carry it because they are what a person points at.
+  const repository = repositoryPath(
+    environmentData?.environments.find((environment) => environment.id === environmentId)
+      ?.configuration,
   );
 
   return (
@@ -34,10 +44,11 @@ const InstanceSection = memo<InstanceSectionProps>(({ editable, environmentId })
         editable={editable}
         environmentId={environmentId}
         instances={instances}
+        repository={repository}
         snapshotsPending={data?.snapshotsPending ?? false}
         snapshotsUnavailable={data?.snapshotsUnavailable ?? false}
+        onBuild={actions.buildInstance}
         onRemove={actions.removeInstance}
-        onRename={actions.renameInstance}
       />
     </Flexbox>
   );

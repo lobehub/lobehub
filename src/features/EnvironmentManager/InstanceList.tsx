@@ -1,26 +1,27 @@
 'use client';
 
-import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Button, confirmModal, Input, Text, toast } from '@lobehub/ui/base-ui';
+import { Github } from '@lobehub/icons';
+import { Center, Empty, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Button, confirmModal, Skeleton, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
-  CheckIcon,
+  CircleAlertIcon,
   FolderOpenIcon,
   LayersIcon,
+  Loader2Icon,
   PencilIcon,
   PlusIcon,
   Trash2Icon,
-  XIcon,
 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { formatSize } from '@/utils/format';
 
-import { openCreateInstanceModal } from './CreateInstanceModal';
-import { describeError } from './errorMessage';
+import { openCreateInstanceModal, openEditInstanceModal } from './CreateInstanceModal';
 import { openInstanceFileBrowser } from './InstanceFileBrowser';
 import type { SandboxInstance } from './useEnvironmentData';
+import { useInstanceBuild } from './useEnvironmentData';
 
 const styles = createStaticStyles(({ css }) => ({
   /**
@@ -33,6 +34,24 @@ const styles = createStaticStyles(({ css }) => ({
     overflow: hidden;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
+  `,
+  /** A build's output, when someone opens it — usually because it failed. */
+  log: css`
+    overflow: auto;
+
+    max-height: 220px;
+    margin: 0;
+    padding: 8px;
+    border-radius: ${cssVar.borderRadius};
+
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: 11px;
+    line-height: 1.5;
+    color: ${cssVar.colorTextSecondary};
+    word-break: break-all;
+    white-space: pre-wrap;
+
+    background: ${cssVar.colorFillQuaternary};
   `,
   row: css`
     padding-block: 12px;
@@ -53,9 +72,10 @@ interface InstanceListProps {
   editable: boolean;
   environmentId: string;
   instances: SandboxInstance[];
+  onBuild: (id: string) => Promise<void>;
   onRemove: (id: string) => Promise<void>;
-  /** Only the label: the folder holds the built state and cannot move. */
-  onRename: (params: { id: string; name: string }) => Promise<void>;
+  /** `owner/name` of the environment's checkout, when it builds from one. */
+  repository?: string;
   /** Sizes are still on their way from the execution plane. */
   snapshotsPending: boolean;
   /** Sizes are missing rather than zero when the sandbox could not be reached. */
@@ -65,169 +85,203 @@ interface InstanceListProps {
 interface InstanceRowProps {
   editable: boolean;
   instance: SandboxInstance;
+  onBuild: (id: string) => Promise<void>;
   onRemove: (id: string) => Promise<void>;
-  onRename: (params: { id: string; name: string }) => Promise<void>;
+  repository?: string;
   snapshotsPending: boolean;
   snapshotsUnavailable: boolean;
 }
 
 /**
- * One instance, either as it is or with its name open for editing.
+ * What a build is doing, and what it left behind when it failed.
  *
- * The name is the only thing that can change here. The folder is where the
- * built state lives, and the execution plane has no rename that carries one
- * folder to another, so editing shows it locked with the reason rather than
- * as a field that would fail on save.
+ * The log is collapsed by default and opened on demand: while everything is
+ * going right it is thousands of lines nobody reads, and the one time it
+ * matters is the time the row says it failed.
+ */
+const BuildLine = memo<{
+  error?: string | null;
+  failed: boolean;
+  log: string;
+  onRetry: () => void;
+  running: boolean;
+}>(({ error, failed, log, onRetry, running }) => {
+  const { t } = useTranslation('setting');
+  const [open, setOpen] = useState(false);
+
+  // The accumulated stream while it runs; the stored tail once it is over —
+  // the runtime drops a finished build's log, so after a reload the row's own
+  // record is all there is.
+  const text = log || error || '';
+
+  return (
+    <Flexbox gap={6}>
+      <Flexbox horizontal align={'center'} gap={8}>
+        {running ? (
+          <Icon spin icon={Loader2Icon} size={13} />
+        ) : (
+          <Icon icon={CircleAlertIcon} size={13} style={{ color: cssVar.colorError }} />
+        )}
+        <Text fontSize={12} type={failed && !running ? 'danger' : 'secondary'}>
+          {t(running ? 'environments.instances.building' : 'environments.instances.buildFailed')}
+        </Text>
+        {text && (
+          <Button size={'small'} type={'text'} onClick={() => setOpen(!open)}>
+            {t(open ? 'environments.instances.hideLog' : 'environments.instances.showLog')}
+          </Button>
+        )}
+        {!running && (
+          <Button size={'small'} type={'text'} onClick={onRetry}>
+            {t('environments.instances.rebuild')}
+          </Button>
+        )}
+      </Flexbox>
+      {open && text && <pre className={styles.log}>{text}</pre>}
+    </Flexbox>
+  );
+});
+
+BuildLine.displayName = 'InstanceBuildLine';
+
+/**
+ * One instance, as it is.
+ *
+ * Renaming opens the same dialog that made it, rather than turning the row
+ * into a field: the folder cannot change and the row had nowhere to say so,
+ * so the one thing worth explaining was the one thing an inline editor hid.
  */
 const InstanceRow = memo<InstanceRowProps>(
-  ({ editable, instance, onRemove, onRename, snapshotsPending, snapshotsUnavailable }) => {
+  ({
+    editable,
+    instance,
+    onBuild,
+    onRemove,
+    repository,
+    snapshotsPending,
+    snapshotsUnavailable,
+  }) => {
     const { t } = useTranslation('setting');
 
-    const [editing, setEditing] = useState(false);
-    const [draft, setDraft] = useState(instance.name);
-    const [saving, setSaving] = useState(false);
-
-    const startEditing = () => {
-      setDraft(instance.name);
-      setEditing(true);
-    };
-
-    const canSave = Boolean(draft.trim()) && draft.trim() !== instance.name;
-
-    const save = async () => {
-      if (!canSave) {
-        setEditing(false);
-        return;
-      }
-      setSaving(true);
-      try {
-        await onRename({ id: instance.id, name: draft.trim() });
-        setEditing(false);
-      } catch (error) {
-        toast.error(describeError(error, t, t('environments.instances.renameFailed')));
-      } finally {
-        setSaving(false);
-      }
-    };
-
-    if (editing) {
-      return (
-        <Flexbox className={styles.row} gap={8}>
-          <Input
-            autoFocus
-            disabled={saving}
-            placeholder={t('environments.instances.namePlaceholder')}
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault();
-                void save();
-              }
-              if (event.key === 'Escape') setEditing(false);
-            }}
-          />
-          <Flexbox horizontal align={'center'} gap={8}>
-            <Flexbox flex={1} gap={2}>
-              <Text fontSize={12} type={'secondary'}>
-                {instance.workingDirectory}
-              </Text>
-              <Text fontSize={12} type={'secondary'}>
-                {t('environments.instances.directoryLocked')}
-              </Text>
-            </Flexbox>
-            <ActionIcon
-              disabled={saving}
-              icon={XIcon}
-              size={'small'}
-              title={t('environments.cancel')}
-              onClick={() => setEditing(false)}
-            />
-            <ActionIcon
-              disabled={!canSave}
-              icon={CheckIcon}
-              loading={saving}
-              size={'small'}
-              title={t('environments.instances.rename')}
-              onClick={save}
-            />
-          </Flexbox>
-        </Flexbox>
-      );
-    }
+    // Worth following only while something is in flight. A settled instance
+    // must not keep a poll running: the query writes when a build ends, so an
+    // idle one would be a round trip every two seconds for a row nobody is
+    // looking at.
+    const building = instance.status === 'pending' && Boolean(instance.buildId);
+    const { log, state } = useInstanceBuild(instance.id, building);
 
     return (
-      <Flexbox horizontal align={'center'} className={styles.row} gap={8}>
-        {/* One line: the folder after the name, the way the environment row
+      <Flexbox className={styles.row} gap={6}>
+        <Flexbox horizontal align={'center'} gap={8}>
+          {/* One line: the folder after the name, the way the environment row
             carries its description. It yields first when the row is narrow,
             since the name is what the instance is picked by. */}
-        <Flexbox horizontal align={'baseline'} flex={1} gap={8} style={{ minWidth: 0 }}>
-          <Text ellipsis fontSize={13} style={{ flex: '0 1 auto', minWidth: 0 }} weight={500}>
-            {instance.name}
-          </Text>
-          <Text
-            ellipsis
-            fontSize={12}
-            style={{ flex: '0 1000 auto', minWidth: 0 }}
-            type={'secondary'}
-          >
-            {instance.workingDirectory}
-          </Text>
-        </Flexbox>
-        <Text fontSize={12} type={'secondary'}>
-          {/* An instance that was created but never used has no snapshot,
-          which is a normal state and not an error. */}
-          {snapshotsUnavailable || snapshotsPending
-            ? '—'
-            : instance.snapshot
-              ? formatSize(instance.snapshot.bytes)
-              : t('environments.instances.unused')}
-        </Text>
-        {/* Reading what an instance kept is not an edit, so it stays
+          <Flexbox horizontal align={'center'} flex={1} gap={8} style={{ minWidth: 0 }}>
+            {/* What this copy was cut from. On the instance and not only on the
+              environment header because the row is what gets browsed, renamed
+              and deleted, and its own folder name says nothing about the
+              checkout it holds. */}
+            {repository && (
+              <Tooltip title={repository}>
+                <Flexbox style={{ flex: 'none' }}>
+                  <Github size={14} />
+                </Flexbox>
+              </Tooltip>
+            )}
+            <Text ellipsis fontSize={13} style={{ flex: '0 1 auto', minWidth: 0 }} weight={500}>
+              {instance.name}
+            </Text>
+            <Text
+              ellipsis
+              fontSize={12}
+              style={{ flex: '0 1000 auto', minWidth: 0 }}
+              type={'secondary'}
+            >
+              {instance.workingDirectory}
+            </Text>
+          </Flexbox>
+          {/* Three states, and they are not the same thing. Still on its way
+        from the execution plane is a wait, so it looks like one — a dash there
+        reads as a settled answer and this one has not arrived. Never used is a
+        real answer. The dash is what is left: asked for and not obtained, which
+        the line under the list explains and this repeats on hover. */}
+          {snapshotsPending ? (
+            <Skeleton.Text rows={1} style={{ height: 14, width: 44 }} />
+          ) : (
+            <Tooltip
+              title={
+                snapshotsUnavailable ? t('environments.instances.snapshotsUnavailable') : undefined
+              }
+            >
+              <Text fontSize={12} type={'secondary'}>
+                {snapshotsUnavailable
+                  ? '—'
+                  : instance.snapshot
+                    ? formatSize(instance.snapshot.bytes)
+                    : t('environments.instances.unused')}
+              </Text>
+            </Tooltip>
+          )}
+          {/* Reading what an instance kept is not an edit, so it stays
         available in an environment someone else published — that is
         most of what having access to one is for. */}
-        <ActionIcon
-          icon={FolderOpenIcon}
-          size={'small'}
-          title={t('environments.files.browse')}
-          onClick={() => openInstanceFileBrowser(instance)}
-        />
-        {editable && (
           <ActionIcon
-            icon={PencilIcon}
+            icon={FolderOpenIcon}
             size={'small'}
-            title={t('environments.instances.rename')}
-            onClick={startEditing}
+            title={t('environments.files.browse')}
+            onClick={() => openInstanceFileBrowser(instance)}
           />
-        )}
-        {editable && (
-          <ActionIcon
-            icon={Trash2Icon}
-            size={'small'}
-            title={t('environments.instances.remove')}
-            // Asked first: the delete takes the snapshot with it, and the
-            // icon sits one slot from "browse", so a slip was a lost copy.
-            onClick={() =>
-              confirmModal({
-                content: t('environments.instances.removeConfirmContent'),
-                cancelText: t('cancel', { ns: 'common' }),
-                okButtonProps: { danger: true },
-                okText: t('environments.instances.remove'),
-                // A rejected promise here used to disappear: the row stayed,
-                // and a refused delete was indistinguishable from a click that
-                // did nothing. The execution plane refuses while a
-                // conversation is still using the instance, and that reason
-                // is the one worth showing.
-                onOk: () =>
-                  onRemove(instance.id).catch((error: unknown) =>
-                    toast.error(
-                      (error as { message?: string })?.message ||
-                        t('environments.instances.removeFailed'),
+          {editable && (
+            <ActionIcon
+              icon={PencilIcon}
+              size={'small'}
+              title={t('environments.instances.rename')}
+              onClick={() => openEditInstanceModal(instance)}
+            />
+          )}
+          {editable && (
+            <ActionIcon
+              icon={Trash2Icon}
+              size={'small'}
+              title={t('environments.instances.remove')}
+              // Asked first: the delete takes the snapshot with it, and the
+              // icon sits one slot from "browse", so a slip was a lost copy.
+              onClick={() =>
+                confirmModal({
+                  content: t('environments.instances.removeConfirmContent'),
+                  cancelText: t('cancel', { ns: 'common' }),
+                  okButtonProps: { danger: true },
+                  okText: t('environments.instances.remove'),
+                  // A rejected promise here used to disappear: the row stayed,
+                  // and a refused delete was indistinguishable from a click that
+                  // did nothing. The execution plane refuses while a
+                  // conversation is still using the instance, and that reason
+                  // is the one worth showing.
+                  onOk: () =>
+                    onRemove(instance.id).catch((error: unknown) =>
+                      toast.error(
+                        (error as { message?: string })?.message ||
+                          t('environments.instances.removeFailed'),
+                      ),
                     ),
-                  ),
-                title: t('environments.instances.removeConfirmTitle', { name: instance.name }),
-              })
-            }
+                  title: t('environments.instances.removeConfirmTitle', { name: instance.name }),
+                })
+              }
+            />
+          )}
+        </Flexbox>
+
+        {/* The build, on its own line under the row rather than as a status
+            word beside the size. It is minutes long and it can fail, and a
+            failure is only useful with the log that caused it — none of which
+            fits in a column. Absent entirely once an instance is ready, which
+            is where it spends its life. */}
+        {(building || instance.status === 'error') && (
+          <BuildLine
+            error={instance.buildError}
+            failed={instance.status === 'error'}
+            log={log}
+            running={building && state !== 'failed'}
+            onRetry={() => void onBuild(instance.id)}
           />
         )}
       </Flexbox>
@@ -249,8 +303,9 @@ const InstanceList = memo<InstanceListProps>(
     editable,
     environmentId,
     instances,
+    onBuild,
     onRemove,
-    onRename,
+    repository,
     snapshotsPending,
     snapshotsUnavailable,
   }) => {
@@ -295,10 +350,11 @@ const InstanceList = memo<InstanceListProps>(
                 editable={editable}
                 instance={instance}
                 key={instance.id}
+                repository={repository}
                 snapshotsPending={snapshotsPending}
                 snapshotsUnavailable={snapshotsUnavailable}
+                onBuild={onBuild}
                 onRemove={onRemove}
-                onRename={onRename}
               />
             ))}
           </Flexbox>
