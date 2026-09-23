@@ -578,6 +578,121 @@ describe('ScmChangeRequestModel', () => {
     await serverDB.delete(users).where(eq(users.id, otherUser));
   });
 
+  it('never lets a stale delivery reroute the row or replace its links', async () => {
+    const otherUser = 'scm-model-user-stale';
+    await serverDB.insert(users).values({ id: otherUser });
+    const [older, newer] = await serverDB
+      .insert(acceptances)
+      .values([
+        { subjectId: 'a', subjectType: 'standalone', userId: otherUser },
+        { subjectId: 'b', subjectType: 'standalone', userId },
+      ])
+      .returning();
+
+    // The newer event routed the pull request to `userId`.
+    const routed = await ScmChangeRequestModel.upsert(serverDB, {
+      ...snapshot,
+      eventAt: new Date('2026-09-23T12:00:00Z'),
+      links: { acceptanceId: newer.id },
+      metadata: { routedBy: 'author' },
+    });
+
+    // An older delivery, naming other records under another owner, lands
+    // afterwards. It resolved links, so it is not a keep-owner event.
+    const after = await ScmChangeRequestModel.upsert(serverDB, {
+      ...snapshot,
+      eventAt: new Date('2026-09-23T11:00:00Z'),
+      links: { acceptanceId: older.id },
+      metadata: { routedBy: 'installation' },
+      userId: otherUser,
+    });
+
+    expect(after.id).toBe(routed.id);
+    expect(after).toMatchObject({ acceptanceId: newer.id, userId });
+    expect(after.metadata.routedBy).toBe('author');
+
+    await serverDB.delete(users).where(eq(users.id, otherUser));
+  });
+
+  it('replays the loser of a first-insert race under the lock instead of overwriting', async () => {
+    const otherUser = 'scm-model-user-race';
+    await serverDB.insert(users).values({ id: otherUser });
+    const [acceptance] = await serverDB
+      .insert(acceptances)
+      .values({ subjectId: 's', subjectType: 'standalone', userId })
+      .returning();
+
+    // Both deliveries see no row. One matched and routes to `userId`; the
+    // other matched nothing and only carries a fallback owner.
+    await Promise.all([
+      ScmChangeRequestModel.upsert(serverDB, {
+        ...snapshot,
+        links: { acceptanceId: acceptance.id },
+        metadata: { routedBy: 'author' },
+      }),
+      ScmChangeRequestModel.upsert(serverDB, {
+        ...snapshot,
+        keepOwner: true,
+        metadata: { routedBy: 'installation' },
+        userId: otherUser,
+      }),
+    ]);
+
+    const row = await ScmChangeRequestModel.findByIdentity(
+      serverDB,
+      'github',
+      snapshot.repoFullName,
+      snapshot.number,
+    );
+    // Whichever inserted first, the link survives. When the matched one won,
+    // the other replays with `keepOwner` and leaves it alone; when the
+    // unmatched one won, the matched one replays as a normal routed event.
+    expect(row?.acceptanceId).toBe(acceptance.id);
+    expect(row?.userId).toBe(userId);
+
+    await serverDB.delete(users).where(eq(users.id, otherUser));
+  });
+
+  it('replays a lost first insert against the winner, deterministically', async () => {
+    // The race above only races on a pooled Postgres; PGlite serializes
+    // the two transactions. Stage the loss directly: the unmatched delivery
+    // looked and saw no row, and by the time it inserts the matched one has
+    // committed.
+    const otherUser = 'scm-model-user-staged';
+    await serverDB.insert(users).values({ id: otherUser });
+    const [acceptance] = await serverDB
+      .insert(acceptances)
+      .values({ subjectId: 's', subjectType: 'standalone', userId })
+      .returning();
+
+    const model = ScmChangeRequestModel as unknown as {
+      upsertOnce: (...args: unknown[]) => Promise<unknown>;
+    };
+    const original = model.upsertOnce;
+    const spy = vi.spyOn(model, 'upsertOnce').mockImplementationOnce(async () => {
+      await original(serverDB, {
+        ...snapshot,
+        links: { acceptanceId: acceptance.id },
+        metadata: { routedBy: 'author' },
+      });
+      return null; // the insert hit the unique index and did nothing
+    });
+
+    const row = await ScmChangeRequestModel.upsert(serverDB, {
+      ...snapshot,
+      keepOwner: true,
+      metadata: { routedBy: 'installation' },
+      userId: otherUser,
+    });
+
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(row).toMatchObject({ acceptanceId: acceptance.id, userId });
+    expect(row.metadata.routedBy).toBe('author');
+
+    spy.mockRestore();
+    await serverDB.delete(users).where(eq(users.id, otherUser));
+  });
+
   it('changes pendingWake in place, without reading the metadata bag first', async () => {
     const row = await ScmChangeRequestModel.upsert(serverDB, {
       ...snapshot,
