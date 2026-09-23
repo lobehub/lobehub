@@ -8,7 +8,7 @@ import {
   DropdownMenuRoot,
   DropdownMenuTrigger,
 } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import {
   CopyIcon,
   GlobeIcon,
@@ -81,7 +81,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     min-width: 0;
 
     font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
+    color: ${cssVar.colorTextTertiary};
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
@@ -101,7 +101,19 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     flex-shrink: 0;
     font-size: 12px;
     font-weight: 500;
-    color: ${cssVar.colorPrimary};
+  `,
+  /**
+   * A port that is running but not exposed yet stays one step quieter than an
+   * exposed one; the full text color is kept for what is actually reachable.
+   * Port, glyph and "Open" inherit it, so hover lifts the whole row at once.
+   */
+  idle: css`
+    color: ${cssVar.colorTextSecondary};
+
+    &:hover,
+    &[data-highlighted] {
+      color: ${cssVar.colorText};
+    }
   `,
   host: css`
     overflow: hidden;
@@ -147,6 +159,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 12px;
     font-weight: 500;
     color: ${cssVar.colorText};
+  `,
+  portIdle: css`
+    color: inherit;
   `,
   retry: css`
     cursor: pointer;
@@ -228,7 +243,7 @@ const PortSwitcher = memo<PortSwitcherProps>(({ active, deviceId, workingDirecto
    */
   const renderLabel = (port: number, info?: DeviceListeningPort) => (
     <>
-      <span className={styles.port}>{port}</span>
+      <span className={cx(styles.port, styles.portIdle)}>{port}</span>
       {info?.command && (
         <span className={styles.command} title={info.cwd}>
           {info.command}
@@ -310,7 +325,7 @@ const PortSwitcher = memo<PortSwitcherProps>(({ active, deviceId, workingDirecto
 
   const renderDetected = (item: DeviceListeningPort) => (
     <DropdownMenuItem
-      className={styles.item}
+      className={cx(styles.item, styles.idle)}
       key={item.port}
       onClick={(event) => {
         event.preventDefault();
