@@ -261,7 +261,6 @@
   "acceptance.review.regionCommentsEmpty": "Sleep op de afbeelding om een regio te markeren — de opmerking komt hier terecht.",
   "acceptance.review.regionImage": "Afbeelding {{image}} · Gebied {{region}}",
   "acceptance.review.reject": "Afwijzen met opmerking",
-  "acceptance.review.rejectDescription": "Afwijzen \"{{title}}\" — jouw feedback is wat de volgende verificatieronde gebruikt.",
   "acceptance.review.rejectPlaceholder": "Wat is er mis, en wat verwacht je in plaats daarvan…",
   "acceptance.review.rejectedHint": "Je hebt deze controle afgewezen — de volgende ronde leest jouw feedback.",
   "acceptance.review.removeAttachment": "Bijlage verwijderen",

@@ -261,7 +261,6 @@
   "acceptance.review.regionCommentsEmpty": "Faites glisser sur l'image pour entourer une région — son commentaire apparaîtra ici.",
   "acceptance.review.regionImage": "Image {{image}} · Région {{region}}",
   "acceptance.review.reject": "Rejeter avec un commentaire",
-  "acceptance.review.rejectDescription": "Rejeter \"{{title}}\" — votre retour est ce sur quoi le prochain cycle de vérification se basera.",
   "acceptance.review.rejectPlaceholder": "Quel est le problème, et qu'attendez-vous à la place…",
   "acceptance.review.rejectedHint": "Vous avez rejeté cette vérification — le prochain cycle lira votre retour.",
   "acceptance.review.removeAttachment": "Supprimer la pièce jointe",

@@ -382,7 +382,7 @@ export default {
   'acceptance.review.regionCommentsEmpty':
     'Drag on the image to mark a region. Its comment will appear here.',
   'acceptance.review.reject': 'Reject with comment',
-  'acceptance.review.rejectDescription':
+  'acceptance.review.rejectFeedbackHint':
     'Your feedback is what the next verification round will act on.',
   'acceptance.review.rejectPlaceholder': 'What is wrong, and what do you expect instead…',
   'acceptance.review.rejectedHint':

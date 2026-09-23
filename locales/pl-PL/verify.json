@@ -261,7 +261,6 @@
   "acceptance.review.regionCommentsEmpty": "Przeciągnij na obraz, aby zaznaczyć obszar — jego komentarz pojawi się tutaj.",
   "acceptance.review.regionImage": "Obraz {{image}} · Obszar {{region}}",
   "acceptance.review.reject": "Odrzuć z komentarzem",
-  "acceptance.review.rejectDescription": "Odrzuć \"{{title}}\" — Twoja opinia jest podstawą dla następnej rundy weryfikacji.",
   "acceptance.review.rejectPlaceholder": "Co jest nie tak i czego oczekujesz zamiast tego…",
   "acceptance.review.rejectedHint": "Odrzuciłeś tę kontrolę — następna runda uwzględni Twoją opinię.",
   "acceptance.review.removeAttachment": "Usuń załącznik",

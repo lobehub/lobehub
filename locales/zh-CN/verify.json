@@ -261,7 +261,7 @@
   "acceptance.review.regionCommentsEmpty": "在左侧图片上拖拽圈出区域,评论会出现在这里。",
   "acceptance.review.regionImage": "图片 {{image}} · 区域 {{region}}",
   "acceptance.review.reject": "拒绝并评论",
-  "acceptance.review.rejectDescription": "你的反馈将成为下一轮验证的处理输入。",
+  "acceptance.review.rejectFeedbackHint": "你的反馈将成为下一轮验证的处理输入。",
   "acceptance.review.rejectPlaceholder": "哪里不对、你期望的是什么…",
   "acceptance.review.rejectedHint": "你已拒绝该项——下一轮将读取你的反馈。",
   "acceptance.review.removeAttachment": "移除附件",

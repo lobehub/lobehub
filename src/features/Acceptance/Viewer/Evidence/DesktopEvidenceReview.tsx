@@ -213,7 +213,7 @@ export const DesktopEvidenceReview = memo<DesktopEvidenceReviewProps>(({ model }
             {/* The modal title already names the check; repeating it here reads as an echo. */}
             {hasEvidence
               ? t('acceptance.review.supplement')
-              : t('acceptance.review.rejectDescription')}
+              : t('acceptance.review.rejectFeedbackHint')}
           </Text>
           <TextArea
             autoSize={{ maxRows: 5, minRows: 2 }}
