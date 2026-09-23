@@ -283,6 +283,33 @@ export interface AgentRunRequestMessage {
   workspaceId?: string;
 }
 
+// ─── Tunnel registry ───
+//
+// A registration maps an opaque slug to one device + port, and gives the tunnel
+// its public hostname `<port>--<slug>.lobe.sh`. The registry lives in the
+// gateway; the server creates, lists and revokes entries through the admin API.
+
+export interface GatewayTunnelRegistration {
+  createdAt: number;
+  /** userId of whoever opened the tunnel. */
+  createdBy: string;
+  deviceId: string;
+  expiresAt?: number;
+  /** Public hostname, e.g. `3000--x7k2p9q8.lobe.sh`. */
+  hostname?: string;
+  port: number;
+  /** Owning principal — the gateway routing key (`user:<id>` / `workspace:<id>`). */
+  principal: string;
+  slug: string;
+}
+
+/**
+ * Gateway routing key for a caller. A workspace tunnel is reachable by every
+ * member of that workspace; a personal one only by its owner.
+ */
+export const devicePrincipal = (params: { userId: string; workspaceId?: string }): string =>
+  params.workspaceId ? `workspace:${params.workspaceId}` : `user:${params.userId}`;
+
 // ─── HTTP Tunnel Frames ───
 //
 // A tunnel relays one browser HTTP request to a TCP port on this device as a

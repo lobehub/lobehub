@@ -23,9 +23,10 @@ import { DeviceModel, WorkspaceDevicePrivateConflictError } from '@/database/mod
 import { UserModel } from '@/database/models/user';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { signWorkspaceDeviceToken } from '@/libs/trpc/utils/internalJwt';
+import { signTunnelAccessToken, signWorkspaceDeviceToken } from '@/libs/trpc/utils/internalJwt';
 import { type DeviceAttachment, deviceGateway } from '@/server/services/deviceGateway';
 import { filterAuthorizedDevicePresence } from '@/server/services/deviceGateway/scopedDevicePresence';
+import { deviceTunnels, TUNNEL_MAX_TTL_SECONDS } from '@/server/services/deviceGateway/tunnels';
 
 import { preserveWorkspaceCache } from './deviceWorkingDirs';
 import {
@@ -60,6 +61,44 @@ const SCAN_TIMEOUT_MS = 10_000;
  * Members can therefore self-serve their own machines without touching anyone
  * else's enrollment, while shared cleanup remains an owner action.
  */
+/**
+ * Exposing a port is at least as sensitive as reading the filesystem, so a
+ * workspace device is gated the same way `browseDirectory` gates new paths:
+ * only the enrolling member or a workspace owner.
+ */
+const assertTunnelDeviceWritable = async (
+  ctx: {
+    deviceModel: DeviceModel;
+    userId: string;
+    workspaceId?: string;
+    workspaceRole?: WorkspaceRole;
+  },
+  deviceId: string,
+) => {
+  if (!ctx.workspaceId) return;
+
+  const row = await ctx.deviceModel.findWorkspaceDeviceById(deviceId);
+  if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: 'Workspace device not found.' });
+  if (!canEditWorkspaceDevice(ctx.workspaceRole, ctx.userId, row.userId)) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'Only the enrolling member or a workspace owner can expose a port on this device.',
+    });
+  }
+};
+
+/** Append a freshly minted access token to a tunnel URL. */
+const buildTunnelOpenUrl = async (
+  url: string,
+  ctx: { userId: string; workspaceId?: string },
+): Promise<string> => {
+  const token = await signTunnelAccessToken({
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  });
+  return `${url}?token=${encodeURIComponent(token)}`;
+};
+
 const canEditWorkspaceDevice = (
   role: WorkspaceRole | undefined,
   actorUserId: string,
@@ -1197,6 +1236,86 @@ export const deviceRouter = router({
       ...buildItems(workspaceRows, workspaceOnline, 'workspace'),
     ]);
   }),
+
+  // ─── Tunnel links ───
+  //
+  // A tunnel makes one loopback port on a device reachable at
+  // `https://<port>--<slug>.lobe.sh/`. Creating one is gated exactly like
+  // browsing the device's filesystem: on a workspace device, only the
+  // enrolling member or an owner may expose a port.
+
+  /** Open a link to `port` on a device. */
+  createTunnel: deviceProcedure
+    .input(
+      z.object({
+        deviceId: z.string(),
+        port: z.number().int().min(1).max(65_535),
+        ttlSeconds: z.number().int().positive().max(TUNNEL_MAX_TTL_SECONDS).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await assertTunnelDeviceWritable(ctx, input.deviceId);
+
+      const link = await deviceTunnels.create({
+        deviceId: input.deviceId,
+        port: input.port,
+        ttlSeconds: input.ttlSeconds,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      if (!link) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Device gateway is not configured on this deployment.',
+        });
+      }
+
+      return { ...link, openUrl: await buildTunnelOpenUrl(link.url, ctx) };
+    }),
+
+  /** Live tunnel links the caller can reach, newest first. */
+  listTunnels: deviceProcedure
+    .input(z.object({ deviceId: z.string().optional() }).optional())
+    .query(async ({ ctx, input }) =>
+      deviceTunnels.list({
+        deviceId: input?.deviceId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      }),
+    ),
+
+  /**
+   * Mint the one-shot token that opens an existing link. Tokens are minted per
+   * click rather than stored with the link: the gateway swaps the token for a
+   * session cookie on first use, so the URL in hand stays clean.
+   */
+  openTunnel: deviceProcedure
+    .input(z.object({ slug: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const links = await deviceTunnels.list({ userId: ctx.userId, workspaceId: ctx.workspaceId });
+      const link = links.find((candidate) => candidate.slug === input.slug);
+      if (!link) throw new TRPCError({ code: 'NOT_FOUND', message: 'Tunnel not found.' });
+
+      return { openUrl: await buildTunnelOpenUrl(link.url, ctx), url: link.url };
+    }),
+
+  /** Revoke a link. Its session cookies stop resolving immediately. */
+  revokeTunnel: deviceProcedure
+    .input(z.object({ slug: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const outcome = await deviceTunnels.revoke({
+        slug: input.slug,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      if (outcome === 'forbidden') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'This tunnel belongs to someone else.' });
+      }
+      if (outcome === 'not-found') {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Tunnel not found.' });
+      }
+      return { success: true };
+    }),
 
   /**
    * Mint a short-lived connect token for enrolling a WORKSPACE-owned device.
