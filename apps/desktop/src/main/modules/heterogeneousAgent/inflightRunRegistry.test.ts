@@ -11,6 +11,10 @@ import {
   HeteroInflightRunRegistry,
 } from './inflightRunRegistry';
 
+// Claims are judged against a fixed clock: `startedAt` is pinned, so the real
+// `Date.now()` would age every fixture past the max age a few days later.
+const NOW = Date.parse('2026-09-21T10:00:00.000Z');
+
 const run = (ipcSessionId: string, extra?: Partial<HeteroInflightRun>): HeteroInflightRun => ({
   agentType: 'claude-code',
   ipcSessionId,
@@ -73,7 +77,7 @@ describe('HeteroInflightRunRegistry', () => {
 
     // The renderer still has to reap, replay and settle; a crash before that
     // would otherwise leave the topic with no token to retry it.
-    const claimed = registry.claim(run('s1'));
+    const claimed = registry.claim(run('s1'), NOW);
     expect(claimed.claimCount).toBe(1);
     expect(claimed.expired).toBeUndefined();
     expect(registry.list()).toEqual([
@@ -89,29 +93,28 @@ describe('HeteroInflightRunRegistry', () => {
 
     let entry = registry.list()[0];
     for (let index = 1; index < HETERO_INFLIGHT_RUN_MAX_CLAIMS; index++) {
-      entry = registry.claim(entry);
+      entry = registry.claim(entry, NOW);
       expect(entry.expired).toBeUndefined();
       entry = registry.list()[0];
     }
 
     // The last handover is status-only cleanup, and the entry goes with it.
-    expect(registry.claim(entry)).toMatchObject({ expired: true });
+    expect(registry.claim(entry, NOW)).toMatchObject({ expired: true });
     expect(registry.list()).toEqual([]);
   });
 
   it('claim flags stale runs and drops them, leaving fresh ones in place', () => {
-    const now = Date.parse('2026-09-21T10:00:00.000Z');
     registry.upsert(run('fresh'));
     registry.upsert(
       run('stale', {
-        startedAt: new Date(now - HETERO_INFLIGHT_RUN_MAX_AGE_MS - 1000).toISOString(),
+        startedAt: new Date(NOW - HETERO_INFLIGHT_RUN_MAX_AGE_MS - 1000).toISOString(),
       }),
     );
     registry.upsert(run('broken', { startedAt: 'not-a-date' }));
 
     // An expired entry still comes back: its topic may be parked mid-run and
     // the stale-topic watchdog only ever looks at `running`.
-    const claimed = registry.list().map((entry) => registry.claim(entry, now));
+    const claimed = registry.list().map((entry) => registry.claim(entry, NOW));
     expect(claimed.map((r) => [r.ipcSessionId, r.expired ?? false])).toEqual([
       ['fresh', false],
       ['stale', true],
