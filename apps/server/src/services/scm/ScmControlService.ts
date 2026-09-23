@@ -21,6 +21,7 @@ import {
   postGitHubPullRequestComment,
   updateGitHubPullRequestComment,
 } from './github/app';
+import { canWriteScmScope } from './scope';
 import { buildTrackingComment } from './trackingComment';
 import type { ScmInboundEvent } from './types';
 import { buildCiFailurePrompt, buildReviewPrompt, type ScmWakeReason } from './wakePrompt';
@@ -74,6 +75,15 @@ export class ScmControlService {
   constructor(private db: LobeChatDatabase) {}
 
   handle = async (params: ScmControlEvent): Promise<ScmControlOutcome> => {
+    // An author-routed row points into whatever scope the author's records
+    // live in, and that was decided when the pull request opened. Checks and
+    // reviews reuse the stored row, so without asking again a member who
+    // has since left — or been made a viewer — would still get merges
+    // accepting and failures waking runs in that workspace.
+    if (!(await this.ownerCanStillWrite(params.row))) {
+      return { detail: 'owner can no longer write to this workspace', outcome: 'skipped' };
+    }
+
     const outcome = await this.route(params);
     // A failure the debounce window swallowed rides along with the next
     // event, whatever that event was.
@@ -160,6 +170,11 @@ export class ScmControlService {
     row: ScmChangeRequestItem,
     key: keyof GithubIntegrationPreference,
   ): Promise<boolean> => (await this.preference(row))?.[key] !== false;
+
+  private ownerCanStillWrite = async (row: ScmChangeRequestItem): Promise<boolean> =>
+    row.metadata?.routedBy !== 'author' ||
+    !row.workspaceId ||
+    canWriteScmScope(this.db, row.userId, row.workspaceId);
 
   private preference = async (
     row: ScmChangeRequestItem,

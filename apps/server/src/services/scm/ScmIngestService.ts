@@ -192,6 +192,7 @@ export class ScmIngestService {
       eventAt: event.occurredAt,
       eventKind: event.kind,
       links: { ...links, installationId: installation.id },
+      metadata: { ...event.changeRequest.metadata, routedBy: scope.kind },
       userId: owner.userId,
       workspaceId: owner.workspaceId,
     });

@@ -13,6 +13,8 @@ import {
   users,
   verifyRuns,
   works,
+  workspaceMembers,
+  workspaces,
 } from '@/database/schemas';
 
 import { SCM_MAX_WAKES, ScmControlService } from '../ScmControlService';
@@ -598,6 +600,41 @@ describe('ScmControlService — wake', () => {
     // The switch only governs the verdict; the Work row mirrors GitHub.
     const [flipped] = await serverDB.select().from(works).where(eq(works.id, work.id));
     expect(flipped.status).toBe('merged');
+  });
+
+  it('stops acting on an author-routed row once the author cannot write there', async () => {
+    const [workspace] = await serverDB
+      .insert(workspaces)
+      .values({ name: 'ws', primaryOwnerId: userId, slug: 'scm-control-left-ws' })
+      .returning();
+    await serverDB
+      .insert(workspaceMembers)
+      .values({ role: 'member', userId, workspaceId: workspace.id });
+    const topic = await createTopic();
+    // Routed to the author when the pull request opened, into a workspace
+    // they could write to then.
+    const row = await ScmChangeRequestModel.upsert(serverDB, {
+      ...baseRow,
+      links: { topicId: topic.id },
+      metadata: { routedBy: 'author' },
+      workspaceId: workspace.id,
+    });
+
+    // A later check or review reuses the stored row. Leaving the workspace,
+    // or being made a viewer, has to stop it there.
+    for (const change of [{ role: 'viewer' }, { deletedAt: new Date() }]) {
+      await serverDB
+        .update(workspaceMembers)
+        .set(change)
+        .where(eq(workspaceMembers.workspaceId, workspace.id));
+      expect(await control().handle({ event: checksEvent, kind: 'ci_failed', row })).toEqual({
+        detail: 'owner can no longer write to this workspace',
+        outcome: 'skipped',
+      });
+    }
+    expect(mocks.execAgent).not.toHaveBeenCalled();
+
+    await serverDB.delete(workspaces).where(eq(workspaces.id, workspace.id));
   });
 
   it('reports a failed wake without counting it', async () => {

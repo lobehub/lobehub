@@ -285,6 +285,28 @@ describe('resolveChangeRequestLinks', () => {
     expect(await resolve({ ...base, body, scope })).toEqual({});
   });
 
+  it('does not let a read-only viewer reach workspace records', async () => {
+    const workspace = await workspaceWith('scm-links-viewer-ws', userId);
+    await serverDB.insert(acceptances).values({
+      id: acceptanceId,
+      subjectId: 's',
+      subjectType: 'standalone',
+      userId,
+      workspaceId: workspace.id,
+    });
+    const body = `Acceptance: https://app.lobehub.com/acceptance/${acceptanceId}`;
+    const scope = { kind: 'author', userId } as const;
+
+    // Downgraded after creating it: a viewer cannot accept it in the app,
+    // so a merge must not do it for them.
+    await serverDB
+      .update(workspaceMembers)
+      .set({ role: 'viewer' })
+      .where(eq(workspaceMembers.userId, userId));
+
+    expect(await resolve({ ...base, body, scope })).toEqual({});
+  });
+
   it('keeps every link inside the first scope that matched', async () => {
     // The body names an acceptance in workspace A; a Work for the same pull
     // request sits in workspace B. Taking both would report one workspace

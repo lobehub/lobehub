@@ -167,6 +167,14 @@ export interface ScmChangeRequestMetadata {
    * whatever order the deliveries arrive in.
    */
   reviewers?: Record<string, { at?: string; decision: 'approved' | 'changes_requested' }>;
+  /**
+   * How the owner was decided. `author` rows point at a person's records
+   * wherever they live, so every action on them rechecks that the person
+   * can still write there; `installation` rows (and rows written before
+   * author routing, which carry nothing) belong to the installation's
+   * tenant and need no such check.
+   */
+  routedBy?: 'author' | 'installation';
 }
 
 /** Processing state of one inbound webhook delivery. */

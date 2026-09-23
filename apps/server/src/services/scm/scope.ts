@@ -2,11 +2,14 @@ import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import type { LobeChatDatabase } from '@/database/type';
 
 /**
- * Who may bind a provider installation to a workspace: every active member
- * except read-only viewers. Binding pulls the installation's repositories
- * and pull-request traffic into the whole workspace, which is a write.
+ * Who may write into a workspace through the SCM loop: every active member
+ * except read-only viewers. Binding an installation pulls its repositories
+ * into the whole workspace, and a merge that accepts an acceptance or a
+ * wake that starts a run mutates it — all writes.
  */
-const INSTALLER_ROLES: ReadonlySet<string> = new Set(['owner', 'admin', 'member']);
+export const SCM_WRITE_ROLES = ['owner', 'admin', 'member'] as const;
+
+const INSTALLER_ROLES: ReadonlySet<string> = new Set(SCM_WRITE_ROLES);
 
 export const canManageWorkspaceScm = (role: string | null | undefined): boolean =>
   !!role && INSTALLER_ROLES.has(role);

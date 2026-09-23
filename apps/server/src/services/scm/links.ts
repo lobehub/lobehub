@@ -5,6 +5,8 @@ import { ScmIdentityModel } from '@/database/models/scm';
 import { acceptances, verifyRuns, works, workspaceMembers } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
+import { SCM_WRITE_ROLES } from './scope';
+
 /**
  * Resolve which LobeHub records a provider change request belongs to. Three
  * sources, in order of trust:
@@ -137,7 +139,16 @@ const inScope = (
     const memberOf = db
       .select({ workspaceId: workspaceMembers.workspaceId })
       .from(workspaceMembers)
-      .where(and(eq(workspaceMembers.userId, scope.userId), isNull(workspaceMembers.deletedAt)));
+      .where(
+        and(
+          eq(workspaceMembers.userId, scope.userId),
+          isNull(workspaceMembers.deletedAt),
+          // Linking a record is the first step to mutating it — a merge
+          // accepts it, a failure wakes its agent — and a viewer can do
+          // neither through the app, so they cannot do it through a merge.
+          inArray(workspaceMembers.role, [...SCM_WRITE_ROLES]),
+        ),
+      );
 
     return and(
       eq(table.userId, scope.userId),
