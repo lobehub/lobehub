@@ -16,7 +16,9 @@ AI — an agent produced the diff.
 
 When the AI section is mandatory you MUST fill all four fields. Leaving a placeholder is not done.
 
-1. User prompts. Every user message in the session that produced this pull request, in order, verbatim. Include later corrections. Do not summarize, merge, translate, or skip a turn. One fenced text block per turn. Redact tokens, keys, and passwords in place.
+1. User prompts. Every user message in the session that produced this pull request, in order. Include later corrections. Do not summarize, merge, translate, or skip a turn. One fenced text block per turn.
+   Before you write them into this body, review the whole session for anything that should not be public: credentials, tokens, keys, passwords, PII, customer or private issue data, internal URLs, tool-call details, images, uploaded files, and any other confidential text. Redact each sensitive span in place with `[redacted]`.
+   Show the author the exact text you will publish, and wait for them to confirm it. A public pull request cannot be taken back. Do not open or update the pull request until they confirm.
 2. Harness. The product and version you are running.
 3. Model. The model id this session called.
 4. Thinking level. The thinking or reasoning level this session was set to. Write `n/a` only when this harness has no thinking-level control.
@@ -76,7 +78,9 @@ Thinking level: the level this session was set to, or `n/a` when this harness ha
 
 <!--
 AGENT-INSTRUCTIONS — keep this commented out.
-Paste every user prompt below, in order, verbatim. One fenced block per turn. Do not summarize or skip a turn.
+Review the whole session first. Redact any sensitive content in place with `[redacted]`: credentials, PII, private data, internal URLs, tool-call details, images, uploaded files, and anything else that should not be public.
+Show the author the exact text below and wait for confirmation before publishing.
+Then paste every confirmed user prompt, in order. One fenced block per turn. Do not summarize or skip a turn.
 -->
 
 1.
