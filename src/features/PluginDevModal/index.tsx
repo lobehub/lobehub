@@ -8,10 +8,11 @@ import { useResponsive } from 'antd-style';
 import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ConnectorOAuthError, openConnectorOAuthPopup } from '@/utils/connectorOAuth';
+import { openConnectorOAuthPopup } from '@/utils/connectorOAuth';
 
 import MCPManifestForm from './MCPManifestForm';
 import PluginPreview from './PluginPreview';
+import { getSaveErrorToast } from './saveErrorToast';
 
 interface DevModalProps {
   /** Enable the connector-backed OAuth auth type in the MCP form (see MCPManifestForm). */
@@ -75,19 +76,15 @@ const DevModal = memo<DevModalProps>(
         onOpenChange(false);
       } catch (error) {
         console.error('[DevModal] Install failed:', error);
-        const httpStatus = (error as { data?: { httpStatus?: number } })?.data?.httpStatus;
-        toast.error(
-          httpStatus === 403
+        const { description, titleKey } = getSaveErrorToast(error, Boolean(ctx));
+        const title =
+          titleKey === 'dev.permissionDenied'
             ? t(
                 'dev.permissionDenied',
                 'You are not allowed to modify this connector — only the creator or a workspace owner can',
               )
-            : error instanceof ConnectorOAuthError
-              ? t(`dev.oauthError.${error.reason}`)
-              : ctx
-                ? t('dev.oauthError.failed')
-                : t('dev.saveError'),
-        );
+            : t(titleKey as never);
+        toast.error(description ? { description, title } : title);
       } finally {
         ctx?.oauthPopup?.close();
         setSubmitting(false);
