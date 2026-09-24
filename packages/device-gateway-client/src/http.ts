@@ -315,9 +315,20 @@ export class GatewayHttpClient {
    * dispatcher and correlates the response by `requestId`, so new methods need
    * no per-method gateway route. Distinct from {@link executeToolCall}, which is
    * the LLM-facing tool channel.
+   *
+   * `channel` names the connection to prefer when one device holds several
+   * (e.g. `desktop` alongside `cli`). A gateway that predates the hint ignores
+   * it and picks by its own channel priority, so callers must still handle an
+   * answer from another channel.
    */
   async invokeRpc<T = unknown>(
-    params: { deviceId?: string; timeout?: number; userId: string; workspaceId?: string },
+    params: {
+      channel?: string;
+      deviceId?: string;
+      timeout?: number;
+      userId: string;
+      workspaceId?: string;
+    },
     rpc: { method: string; params?: unknown },
   ): Promise<DeviceRpcResult<T>> {
     const timeout =
@@ -327,6 +338,7 @@ export class GatewayHttpClient {
     const res = await this.post(
       '/api/device/rpc',
       {
+        channel: params.channel,
         deviceId: params.deviceId,
         method: rpc.method,
         params: rpc.params,

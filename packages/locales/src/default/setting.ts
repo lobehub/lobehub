@@ -610,6 +610,25 @@ export default {
   'devices.actions.edit': 'Edit',
   'devices.actions.refresh': 'Refresh',
   'devices.actions.remove': 'Remove',
+  'devices.appUpdate.checkFailed': "Couldn't check for updates: {{message}}",
+  'devices.appUpdate.confirmDesc':
+    'LobeHub on this device will quit and restart. Anything it is running, including agent tasks, will be interrupted.',
+  'devices.appUpdate.confirmTitle': 'Restart and update to v{{version}}?',
+  'devices.appUpdate.downloading': 'Downloading v{{version}}',
+  'devices.appUpdate.installFailed':
+    "The device came back on v{{version}}, so the update didn't apply. Check for updates to try again.",
+  'devices.appUpdate.ready': 'v{{version}} is downloaded and ready to install',
+  'devices.appUpdate.restarting': 'Restarting…',
+  'devices.appUpdate.restartingHint': 'Waiting for the device to come back on v{{version}}',
+  'devices.appUpdate.timedOut':
+    "The device hasn't come back online. Check the app on that machine.",
+  'devices.appUpdate.title': 'App version',
+  'devices.appUpdate.unsupported.cli':
+    'lh connect answered instead of the desktop app. Stop lh connect on this device, then try again.',
+  'devices.appUpdate.unsupported.devBuild': "Development builds can't update themselves.",
+  'devices.appUpdate.unsupported.outdated':
+    "This app version can't be updated remotely. Update it once on the device to enable remote updates.",
+  'devices.appUpdate.updated': 'Updated to v{{version}}',
   'devices.channel.connected': 'Connected {{time}}',
   'devices.currentBadge': 'This device',
   'devices.detail.addDir': 'Add directory',

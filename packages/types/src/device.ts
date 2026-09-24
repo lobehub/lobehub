@@ -372,6 +372,12 @@ export interface DeviceListItem {
   hostname: string | null;
   identitySource: string | null;
   lastSeen: string;
+  /**
+   * What the client reported about itself on its last connect — the desktop
+   * app sends `appVersion` (plus runtime versions), the CLI `cliVersion`.
+   * `undefined` for ghost rows.
+   */
+  metadata?: Record<string, string> | null;
   online: boolean;
   platform: string | null;
   registered: boolean;
@@ -970,3 +976,35 @@ export interface DeviceListeningPortsResult {
   /** False when the device has no detector for its platform. */
   supported: boolean;
 }
+
+// ─── Remote app update ───
+
+/** Mirrors `@lobechat/device-control`'s `AppUpdateStage`. */
+export type DeviceAppUpdateStage =
+  'checking' | 'downloaded' | 'downloading' | 'error' | 'idle' | 'latest' | 'unsupported';
+
+/** Where a device's desktop app update stands, as the device reports it. */
+export interface DeviceAppUpdateState {
+  currentVersion: string;
+  errorMessage?: string;
+  /** Download progress, 0–100, while `stage` is `downloading`. */
+  progress?: number;
+  stage: DeviceAppUpdateStage;
+  /** Version being downloaded or ready to install. */
+  targetVersion?: string;
+}
+
+/**
+ * Why a device couldn't take part in a remote update:
+ * - `unsupported` — the connected client can't update itself remotely (an
+ *   older desktop build, or the CLI answered in the desktop app's place).
+ * - `unavailable` — the device didn't answer (offline, restarting, timeout).
+ */
+export type DeviceAppUpdateFailure = 'unavailable' | 'unsupported';
+
+export type DeviceAppUpdateStateResult =
+  | { state: DeviceAppUpdateState; status: 'ok' }
+  | { message: string; status: DeviceAppUpdateFailure };
+
+export type DeviceAppUpdateInstallResult =
+  { status: 'ok'; targetVersion: string } | { message: string; status: DeviceAppUpdateFailure };

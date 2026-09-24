@@ -44,6 +44,69 @@ describe('DeviceGateway', () => {
     mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = undefined;
   });
 
+  describe('remote app update', () => {
+    const configure = () => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+    };
+    const params = { deviceId: 'device-1', userId: 'user-1' };
+
+    it('asks the desktop channel for the update state', async () => {
+      configure();
+      const state = { currentVersion: '2.1.0', stage: 'downloaded', targetVersion: '2.2.0' };
+      mockClient.invokeRpc.mockResolvedValue({ data: state, success: true });
+
+      await expect(new DeviceGateway().getAppUpdateState(params)).resolves.toEqual({
+        state,
+        status: 'ok',
+      });
+      expect(mockClient.invokeRpc).toHaveBeenCalledWith(
+        expect.objectContaining({ channel: 'desktop', deviceId: 'device-1', userId: 'user-1' }),
+        { method: 'getAppUpdateState' },
+      );
+    });
+
+    it('returns the version the device restarts into', async () => {
+      configure();
+      mockClient.invokeRpc.mockResolvedValue({ data: { targetVersion: '2.2.0' }, success: true });
+
+      await expect(new DeviceGateway().installAppUpdate(params)).resolves.toEqual({
+        status: 'ok',
+        targetVersion: '2.2.0',
+      });
+    });
+
+    it.each([
+      'This device client does not support remote updates',
+      'Unknown device RPC method: checkAppUpdate',
+    ])('reports a client that cannot update remotely as unsupported (%s)', async (error) => {
+      configure();
+      mockClient.invokeRpc.mockResolvedValue({ error, success: false });
+
+      await expect(new DeviceGateway().checkAppUpdate(params)).resolves.toEqual({
+        message: error,
+        status: 'unsupported',
+      });
+    });
+
+    it('reports an unreachable device as unavailable', async () => {
+      configure();
+      mockClient.invokeRpc.mockRejectedValue(new Error('timeout'));
+
+      await expect(new DeviceGateway().getAppUpdateState(params)).resolves.toEqual({
+        message: 'timeout',
+        status: 'unavailable',
+      });
+    });
+
+    it('reports unavailable without a configured gateway', async () => {
+      await expect(new DeviceGateway().installAppUpdate(params)).resolves.toMatchObject({
+        status: 'unavailable',
+      });
+      expect(mockClient.invokeRpc).not.toHaveBeenCalled();
+    });
+  });
+
   describe('isConfigured', () => {
     it('should return false when DEVICE_GATEWAY_URL is not set', () => {
       const proxy = new DeviceGateway();

@@ -837,6 +837,11 @@ export const knowledgeBaseKeys = {
 
 // ---- device -------------------------------------------------------------
 export const deviceKeys = {
+  appUpdateState: def('device:appUpdateState', (workspaceId: string | null, deviceId: string) => [
+    'device:appUpdateState',
+    workspaceId,
+    deviceId,
+  ]),
   browseDirectory: def(
     'device:browseDirectory',
     (workspaceId: string | null, deviceId: string, path?: string, cursor?: string) =>

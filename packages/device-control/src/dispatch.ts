@@ -100,9 +100,15 @@ export const DEVICE_RPC_METHODS = [
   'pushGitBranch',
   'revertGitFile',
   'listListeningPorts',
+  'getAppUpdateState',
+  'checkAppUpdate',
+  'installAppUpdate',
 ] as const;
 
 export type DeviceRpcMethod = (typeof DEVICE_RPC_METHODS)[number];
+
+/** Why a client without the app-update handlers rejects those RPCs. */
+export const APP_UPDATE_UNSUPPORTED_MESSAGE = 'This device client does not support remote updates';
 
 /**
  * Dispatch a generic server-internal device RPC by method name. This is the
@@ -316,6 +322,23 @@ export const executeDeviceRpc = async (
 
     case 'revertGitFile': {
       return revertGitFile(params as { filePath: string; path: string });
+    }
+
+    // Remote app update: only a client that can update itself (the desktop
+    // app) injects these, so the CLI answers with a stable reason instead.
+    case 'getAppUpdateState': {
+      if (!deps.getAppUpdateState) throw new Error(APP_UPDATE_UNSUPPORTED_MESSAGE);
+      return deps.getAppUpdateState();
+    }
+
+    case 'checkAppUpdate': {
+      if (!deps.checkAppUpdate) throw new Error(APP_UPDATE_UNSUPPORTED_MESSAGE);
+      return deps.checkAppUpdate();
+    }
+
+    case 'installAppUpdate': {
+      if (!deps.installAppUpdate) throw new Error(APP_UPDATE_UNSUPPORTED_MESSAGE);
+      return deps.installAppUpdate();
     }
 
     default: {

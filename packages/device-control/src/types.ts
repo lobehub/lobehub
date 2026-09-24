@@ -273,6 +273,14 @@ export interface WorkspaceScanDeps {
  *   (`defaultGetLocalFilePreview`, `defaultGetProjectFileIndex`).
  */
 export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps {
+  /**
+   * Start an app update check on this client; an available update downloads
+   * automatically. Returns right away with the updated state — callers poll
+   * {@link DeviceControlDeps.getAppUpdateState} for progress. Optional: only
+   * the desktop app can update itself, so the CLI omits the three app-update
+   * handlers and the dispatcher fails the RPC with a stable reason.
+   */
+  checkAppUpdate?: () => Promise<AppUpdateState>;
   /** Copy a publish asset (possibly outside the workspace) to a path inside the workspace. */
   copyAssetForPublish?: (params: CopyAssetForPublishParams) => Promise<CopyAssetForPublishResult>;
   /**
@@ -285,10 +293,17 @@ export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps
    * the RPC with a clear reason.
    */
   enrollWorkspace?: (params: EnrollWorkspaceParams) => Promise<EnrollWorkspaceResult>;
+  /** Where this client's app update stands: current version, stage, progress. */
+  getAppUpdateState?: () => Promise<AppUpdateState>;
   /** Read a local file preview (host-gated on desktop; disk read on CLI). */
   getLocalFilePreview: (params: LocalFilePreviewUrlParams) => Promise<LocalFilePreviewResult>;
   /** Build the project file index. */
   getProjectFileIndex: (params: ProjectFileIndexParams) => Promise<ProjectFileIndexResult>;
+  /**
+   * Restart into a downloaded update. Resolves before the app quits so the
+   * response still reaches the caller; rejects when nothing is downloaded.
+   */
+  installAppUpdate?: () => Promise<InstallAppUpdateResult>;
   /** Query a heterogeneous CLI's model catalog on this execution host. */
   listHeterogeneousAgentModels?: (
     params: ListHeterogeneousAgentModelsParams,
@@ -382,4 +397,29 @@ export interface EnrollWorkspaceResult {
 
 export interface UnenrollWorkspaceParams {
   workspaceId: string;
+}
+
+// ─── Remote app update ───
+
+/**
+ * Structural mirror of the desktop updater's stage, plus `unsupported` for a
+ * client that can't update itself (a dev build, or updates turned off).
+ */
+export type AppUpdateStage =
+  'checking' | 'downloaded' | 'downloading' | 'error' | 'idle' | 'latest' | 'unsupported';
+
+export interface AppUpdateState {
+  /** Version the client is running right now. */
+  currentVersion: string;
+  errorMessage?: string;
+  /** Download progress, 0–100. Present while `stage` is `downloading`. */
+  progress?: number;
+  stage: AppUpdateStage;
+  /** Version being downloaded or ready to install. */
+  targetVersion?: string;
+}
+
+export interface InstallAppUpdateResult {
+  /** Version the client restarts into. */
+  targetVersion: string;
 }

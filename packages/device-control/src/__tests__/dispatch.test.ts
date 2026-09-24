@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { executeDeviceRpc } from '../dispatch';
+import { APP_UPDATE_UNSUPPORTED_MESSAGE, executeDeviceRpc } from '../dispatch';
 import type { DeviceControlDeps } from '../types';
 
 let root: string;
@@ -56,6 +56,36 @@ describe('executeDeviceRpc', () => {
   it('throws on an unknown method', async () => {
     await expect(executeDeviceRpc('nope', {}, makeDeps())).rejects.toThrow(
       'Unknown device RPC method: nope',
+    );
+  });
+
+  describe('app update', () => {
+    const state = { currentVersion: '2.1.0', stage: 'downloaded' as const, targetVersion: '2.2.0' };
+
+    it('routes each app-update method to its host handler', async () => {
+      const deps: DeviceControlDeps = {
+        ...makeDeps(),
+        checkAppUpdate: vi.fn(async () => ({ ...state, stage: 'checking' as const })),
+        getAppUpdateState: vi.fn(async () => state),
+        installAppUpdate: vi.fn(async () => ({ targetVersion: '2.2.0' })),
+      };
+
+      await expect(executeDeviceRpc('getAppUpdateState', undefined, deps)).resolves.toEqual(state);
+      await expect(executeDeviceRpc('checkAppUpdate', undefined, deps)).resolves.toMatchObject({
+        stage: 'checking',
+      });
+      await expect(executeDeviceRpc('installAppUpdate', undefined, deps)).resolves.toEqual({
+        targetVersion: '2.2.0',
+      });
+    });
+
+    it.each(['getAppUpdateState', 'checkAppUpdate', 'installAppUpdate'])(
+      'rejects %s with a stable reason on a host that cannot update itself',
+      async (method) => {
+        await expect(executeDeviceRpc(method, undefined, makeDeps())).rejects.toThrow(
+          APP_UPDATE_UNSUPPORTED_MESSAGE,
+        );
+      },
     );
   });
 

@@ -63,11 +63,11 @@ const SCAN_TIMEOUT_MS = 10_000;
  * else's enrollment, while shared cleanup remains an owner action.
  */
 /**
- * Exposing a port is at least as sensitive as reading the filesystem, so a
- * workspace device is gated the same way `browseDirectory` gates new paths:
- * only the enrolling member or a workspace owner.
+ * Gate an action that operates the machine itself — exposing a port, updating
+ * its app — the same way `browseDirectory` gates new paths: on a workspace
+ * device, only the enrolling member or a workspace owner.
  */
-const assertTunnelDeviceWritable = async (
+const assertDeviceOperable = async (
   ctx: {
     deviceModel: DeviceModel;
     userId: string;
@@ -75,6 +75,7 @@ const assertTunnelDeviceWritable = async (
     workspaceRole?: WorkspaceRole;
   },
   deviceId: string,
+  action: string,
 ) => {
   if (!ctx.workspaceId) return;
 
@@ -83,10 +84,16 @@ const assertTunnelDeviceWritable = async (
   if (!canEditWorkspaceDevice(ctx.workspaceRole, ctx.userId, row.userId)) {
     throw new TRPCError({
       code: 'FORBIDDEN',
-      message: 'Only the enrolling member or a workspace owner can expose a port on this device.',
+      message: `Only the enrolling member or a workspace owner can ${action} on this device.`,
     });
   }
 };
+
+/** Exposing a port is at least as sensitive as reading the filesystem. */
+const assertTunnelDeviceWritable = (
+  ctx: Parameters<typeof assertDeviceOperable>[0],
+  deviceId: string,
+) => assertDeviceOperable(ctx, deviceId, 'expose a port');
 
 /** Append a freshly minted access token to a tunnel URL. */
 const buildTunnelOpenUrl = async (
@@ -1179,6 +1186,7 @@ export const deviceRouter = router({
           hostname: d.hostname ?? live?.hostname ?? null,
           identitySource: d.identitySource,
           lastSeen: d.lastSeenAt.toISOString(),
+          metadata: d.metadata,
           online: channels.length > 0,
           platform: d.platform ?? live?.platform ?? null,
           registered: true,
@@ -1294,6 +1302,46 @@ export const deviceRouter = router({
         workspaceId: ctx.workspaceId,
       });
       return result ?? null;
+    }),
+
+  // ─── Remote app update ───
+  //
+  // Update the desktop app on a device from anywhere: check (a found update
+  // downloads on its own), poll progress, then restart into it. Restarting
+  // interrupts whatever the machine is running, so every step is gated like
+  // exposing a port.
+
+  getAppUpdateState: deviceProcedure
+    .input(z.object({ deviceId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      await assertDeviceOperable(ctx, input.deviceId, 'update the app');
+      return deviceGateway.getAppUpdateState({
+        deviceId: input.deviceId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+    }),
+
+  checkAppUpdate: deviceProcedure
+    .input(z.object({ deviceId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await assertDeviceOperable(ctx, input.deviceId, 'update the app');
+      return deviceGateway.checkAppUpdate({
+        deviceId: input.deviceId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+    }),
+
+  installAppUpdate: deviceProcedure
+    .input(z.object({ deviceId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await assertDeviceOperable(ctx, input.deviceId, 'update the app');
+      return deviceGateway.installAppUpdate({
+        deviceId: input.deviceId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
     }),
 
   /** Live tunnel links the caller can reach, newest first. */

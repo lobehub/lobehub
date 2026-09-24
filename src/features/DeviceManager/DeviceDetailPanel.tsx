@@ -7,7 +7,7 @@ import { ActionIcon, Avatar, Button, confirmModal, Tag, Text, toast } from '@lob
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import { FolderOpenIcon, FolderPlusIcon, LockIcon, XIcon } from 'lucide-react';
-import { memo, type ReactNode, useState } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import DirIcon from '@/features/ChatInput/ControlBar/DirIcon';
@@ -17,7 +17,9 @@ import { deviceService } from '@/services/device';
 import { electronSystemService } from '@/services/electron/system';
 import { nextWorkingDirs } from '@/store/device';
 
+import AppUpdateSection from './AppUpdate';
 import { refreshDeviceList } from './const';
+import FieldLabel from './FieldLabel';
 import { getDeviceIcon } from './getDeviceIcon';
 import { useCanEditDevice } from './useCanEditDevice';
 
@@ -81,16 +83,6 @@ const styles = createStaticStyles(({ css }) => ({
     padding-inline: 8px;
   `,
 }));
-
-// Section label — one consistent treatment for every field heading in the panel.
-const FieldLabel = memo<{ children: ReactNode; extra?: ReactNode }>(({ children, extra }) => (
-  <Flexbox horizontal align={'center'} distribution={'space-between'}>
-    <Text fontSize={12} type={'secondary'} weight={500}>
-      {children}
-    </Text>
-    {extra}
-  </Flexbox>
-));
 
 interface DeviceDetailPanelProps {
   device: DeviceListItem;
@@ -335,6 +327,9 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
             </Flexbox>
           )}
         </Flexbox>
+
+        {/* ─── App version + remote update ─── */}
+        <AppUpdateSection canEdit={canEdit} device={device} />
 
         {/* ─── Name ─── */}
         <Flexbox gap={8}>

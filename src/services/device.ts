@@ -69,6 +69,21 @@ class DeviceService {
     return lambdaClient.device.listListeningPorts.query(input);
   }
 
+  /** Where the device's desktop app update stands; never starts a check. */
+  getAppUpdateState(input: Parameters<DeviceClient['getAppUpdateState']['query']>[0]) {
+    return lambdaClient.device.getAppUpdateState.query(input);
+  }
+
+  /** Start an update check on the device; a found update downloads on its own. */
+  checkAppUpdate(input: Parameters<DeviceClient['checkAppUpdate']['mutate']>[0]) {
+    return lambdaClient.device.checkAppUpdate.mutate(input);
+  }
+
+  /** Restart the device's desktop app into its downloaded update. */
+  installAppUpdate(input: Parameters<DeviceClient['installAppUpdate']['mutate']>[0]) {
+    return lambdaClient.device.installAppUpdate.mutate(input);
+  }
+
   /** Revoke a link. */
   revokeTunnel(input: Parameters<DeviceClient['revokeTunnel']['mutate']>[0]) {
     return lambdaClient.device.revokeTunnel.mutate(input);

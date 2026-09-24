@@ -817,6 +817,21 @@ describe('GatewayHttpClient', () => {
       });
     });
 
+    it('forwards the preferred channel when one is given', async () => {
+      mockFetch({ json: vi.fn().mockResolvedValue({ data: {}, success: true }), ok: true });
+
+      await client.invokeRpc(
+        { channel: 'desktop', deviceId: 'device-1', userId: 'user-1' },
+        { method: 'getAppUpdateState' },
+      );
+
+      const [, init] = vi.mocked(fetch).mock.calls[0];
+      expect(JSON.parse((init as any).body)).toMatchObject({
+        channel: 'desktop',
+        method: 'getAppUpdateState',
+      });
+    });
+
     it('returns failure on non-ok response', async () => {
       mockFetch({ ok: false, status: 503, text: vi.fn().mockResolvedValue('offline') });
 

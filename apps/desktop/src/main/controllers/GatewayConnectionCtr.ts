@@ -13,7 +13,10 @@ import {
   resolveRemotePlatformRuntime,
 } from '@lobechat/heterogeneous-agents/scanHost';
 import { type ILocalSystemService, LocalSystemExecutionRuntime } from '@lobechat/tool-runtime';
+import { app as electronApp } from 'electron';
 
+import { updaterConfig } from '@/modules/updater/configs';
+import { createRemoteAppUpdateDeps } from '@/modules/updater/remoteUpdate';
 import AuvService, { type AuvRunCommandParams } from '@/services/auvSrv';
 import { backfillDeviceArchitecture } from '@/services/deviceArchitectureBackfill';
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
@@ -462,6 +465,13 @@ export default class GatewayConnectionCtr extends ControllerModule {
       // Skill-archive cache (`prepareSkillDirectory` RPC): reuse LocalFileCtr's
       // deps so gateway-prepared skills share one cache with the renderer-IPC path.
       ...this.localFileCtr.getSkillDirectoryDeps(),
+      // Remote app update from the web device page, over the same updater the
+      // local "Check for updates" menu drives.
+      ...createRemoteAppUpdateDeps({
+        currentVersion: electronApp.getVersion(),
+        enabled: updaterConfig.enableAppUpdate,
+        getUpdater: () => this.app.getUpdaterManager(),
+      }),
     };
   }
 
