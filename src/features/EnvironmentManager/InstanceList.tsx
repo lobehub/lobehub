@@ -56,6 +56,15 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorFillQuaternary};
   `,
+  /**
+   * A delete in flight. The row is still here because it is still there — the
+   * archive is being removed and the call can still be refused — so it is
+   * dimmed rather than taken away, and its own actions stop responding.
+   */
+  removing: css`
+    pointer-events: none;
+    opacity: 0.5;
+  `,
   row: css`
     padding-block: 12px;
     padding-inline: 16px;
@@ -194,6 +203,10 @@ const InstanceRow = memo<InstanceRowProps>(
     // without this the row would look untouched for that whole time, which is
     // exactly what the dialog used to cover by staying open.
     const [starting, setStarting] = useState(false);
+    // Same bridge for a delete, which is slower still: it cold-starts a sandbox
+    // and then removes the whole archive, gigabytes of it. The row says so and
+    // comes back if the execution plane refuses.
+    const [removing, setRemoving] = useState(false);
 
     // Every build started from the row is asked first, the first one included:
     // a build replaces the folder with a fresh checkout, and an instance that
@@ -227,7 +240,7 @@ const InstanceRow = memo<InstanceRowProps>(
       });
 
     return (
-      <Flexbox className={styles.row} gap={6}>
+      <Flexbox className={removing ? `${styles.row} ${styles.removing}` : styles.row} gap={6}>
         <Flexbox horizontal align={'center'} gap={8}>
           {/* One line: the folder after the name, the way the environment row
             carries its description. It yields first when the row is narrow,
@@ -317,6 +330,7 @@ const InstanceRow = memo<InstanceRowProps>(
           )}
           {editable && (
             <ActionIcon
+              disabled={removing}
               icon={Trash2Icon}
               size={'small'}
               title={t('environments.instances.remove')}
@@ -328,18 +342,33 @@ const InstanceRow = memo<InstanceRowProps>(
                   cancelText: t('cancel', { ns: 'common' }),
                   okButtonProps: { danger: true },
                   okText: t('environments.instances.remove'),
+                  // Not awaited, for the same reason a build is not: removing
+                  // an archive cold-starts a sandbox and then deletes
+                  // gigabytes, and a dialog held open for that reads as a
+                  // delete that might not be working. The row says what is
+                  // happening instead, and stays until the row is actually
+                  // gone.
+                  //
                   // A rejected promise here used to disappear: the row stayed,
                   // and a refused delete was indistinguishable from a click that
                   // did nothing. The execution plane refuses while a
                   // conversation is still using the instance, and that reason
                   // is the one worth showing.
-                  onOk: () =>
-                    onRemove(instance.id).catch((error: unknown) =>
-                      toast.error(
-                        (error as { message?: string })?.message ||
-                          t('environments.instances.removeFailed'),
-                      ),
-                    ),
+                  onOk: () => {
+                    setRemoving(true);
+                    void onRemove(instance.id)
+                      .catch((error: unknown) => {
+                        toast.error(
+                          (error as { message?: string })?.message ||
+                            t('environments.instances.removeFailed'),
+                        );
+                        // Only on failure: a row that really went away unmounts
+                        // with this state, and clearing it on success would
+                        // flash the row back to normal first.
+                        setRemoving(false);
+                      })
+                      .catch(() => {});
+                  },
                   title: t('environments.instances.removeConfirmTitle', { name: instance.name }),
                 })
               }
@@ -353,7 +382,16 @@ const InstanceRow = memo<InstanceRowProps>(
             fits in a column. Also there for an instance never built, whose
             folder is empty however settled the row looks. Absent once an
             instance is ready, which is where it spends its life. */}
-        {(starting || building || unbuilt || instance.status === 'error') && (
+        {removing && (
+          <Flexbox horizontal align={'center'} gap={8}>
+            <Icon spin icon={Loader2Icon} size={13} />
+            <Text fontSize={12} type={'secondary'}>
+              {t('environments.instances.removing')}
+            </Text>
+          </Flexbox>
+        )}
+
+        {!removing && (starting || building || unbuilt || instance.status === 'error') && (
           <BuildLine
             error={instance.buildError}
             log={log}
