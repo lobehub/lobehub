@@ -15,9 +15,12 @@ import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/for
 import { log } from '../utils/logger';
 import type { LinkResult } from '../utils/skillWiring';
 import { linkHarnessSkills } from '../utils/skillWiring';
-import { uploadLocalFile } from '../utils/uploadLocalFile';
 import type { FailedReportEvidence } from './acceptanceEvidence';
-import { uploadReportEvidence } from './acceptanceEvidence';
+import {
+  storageQuotaRecovery,
+  uploadAcceptanceFile,
+  uploadReportEvidence,
+} from './acceptanceEvidence';
 import {
   type Decision,
   DECISIONS,
@@ -368,7 +371,8 @@ async function submitAction(options: SubmitOptions): Promise<void> {
   if (options.file) {
     inlineContent = inlineTextEvidenceForFile(options.file, options.type!);
     if (inlineContent === undefined) {
-      const uploaded = await uploadLocalFile(client, options.file);
+      const uploaded = await uploadAcceptanceFile(client, options.file, options.json);
+      if (!uploaded) return;
       fileId = uploaded.id;
     }
   }
@@ -445,7 +449,8 @@ async function evidenceUploadAction(options: EvidenceUploadOptions): Promise<voi
   if (options.file) {
     inlineContent = inlineTextEvidenceForFile(options.file, options.type);
     if (inlineContent === undefined) {
-      const uploaded = await uploadLocalFile(client, options.file);
+      const uploaded = await uploadAcceptanceFile(client, options.file, options.json);
+      if (!uploaded) return;
       fileId = uploaded.id;
     }
   }
@@ -966,6 +971,9 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
     ? [...seenCheckItemIds].filter((id) => !plan.some((item) => item.id === id))
     : [];
 
+  const recovery = failedEvidence.some((failure) => failure.reason === 'storage_quota')
+    ? storageQuotaRecovery()
+    : undefined;
   const partial = failedEvidence.length > 0 || missingEvidence.length > 0;
   if (partial) {
     process.exitCode = 1;
@@ -977,11 +985,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
         'Unexecuted checks have no result to attach evidence to. Execute them and publish a new round on the same acceptance; do not re-ingest this unchanged report.',
       );
     }
-    if (failedEvidence.some((failure) => failure.reason === 'storage_quota')) {
-      log.warn(
-        'Acceptance evidence uses your personal file storage quota. Free space or upgrade your storage plan, then retry the failed artifacts.',
-      );
-    }
+    if (recovery) log.warn(recovery.message);
   }
 
   if (options.json !== undefined) {
@@ -1000,6 +1004,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
         proposalPosted,
         publicationStatus: partial ? 'partial' : 'complete',
         pullRequest,
+        recovery,
         roundIndex,
         roundUrl,
         scenario,

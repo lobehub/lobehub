@@ -372,6 +372,35 @@ Before declaring the task done, prove coverage: for each check with
 explicitly; a missing type holds the delivery at `uncertain` no matter how good
 the work is.
 
+**Storage limits require a user-facing recovery handoff.** For report ingest,
+atomic evidence upload, or result submission with a file, recognize
+`recovery.reason: "storage_quota"`, `failedEvidence[].reason: "storage_quota"`,
+or a `storage_block:` error. Do not stop at "upload failed" or "noted in the PR":
+
+- In the final response, state that storage limits blocked publication, distinguish
+  locally observed results from uploaded evidence, and report the actual coverage.
+  Include the saved acceptance/round links when available; do not invent them for
+  an atomic submission that failed before saving a result.
+- Give **both clickable options**, in the user's language, using the CLI's
+  `recovery.cleanupUrl` and `recovery.upgradeUrl` verbatim:
+  **clean up unneeded acceptances** or **upgrade the plan**. Explain that cleanup
+  requires selecting "permanently delete all rounds, reports, and evidence files"
+  and cannot be undone. Deleting only the acceptance record or an evidence
+  association does not free file storage. Never delete user data automatically.
+- For an older CLI without recovery URLs, resolve its configured server using
+  `lh doctor --offline --json`, then use `/acceptance` and `/settings/plans` on
+  that server. For LobeHub Cloud, including its `app.lobehub.com` API endpoint,
+  the user-facing links are https://lobehub.com/acceptance and
+  https://lobehub.com/settings/plans . Do not send self-hosted users to Cloud
+  as a remedy for their server's storage limit.
+- Preserve local reports, artifacts, and the returned retry instructions. Stop
+  blind retries until the user has addressed storage. For a partially ingested
+  report, retry only failed artifacts using `failedEvidence[].retryArgs` or
+  `retryCommand`, not the whole ingest. For an atomic upload/submission that saved
+  nothing, retry that command. Supplementing evidence does not change recorded
+  verdicts; read back coverage and do not claim the delivery is complete while
+  required evidence is missing.
+
 The final response for a completed handoff MUST include the published acceptance
 URL together with the coverage result — never only a check-result id or a prose
 claim. Obtain the links from the path you actually executed:
