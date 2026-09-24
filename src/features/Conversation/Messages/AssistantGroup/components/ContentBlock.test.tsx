@@ -14,6 +14,7 @@ const continueHeteroAfterErrorMock = vi.fn();
 const retryFailedAssistantStepMock = vi.fn();
 const navigateMock = vi.fn();
 let isInReasoningMock = false;
+let persistedFinishTypeMock: string | undefined;
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -39,6 +40,11 @@ vi.mock('@/business/client/hooks/useBusinessErrorContent', () => ({
 
 vi.mock('@/business/client/hooks/useRenderBusinessChatErrorMessageExtra', () => ({
   default: () => undefined,
+}));
+
+vi.mock('@/business/client/components/AssistantMessageNotice', () => ({
+  default: ({ finishType }: { finishType?: string }) =>
+    finishType ? <div>{`notice:${finishType}`}</div> : null,
 }));
 
 vi.mock('@/features/Electron/HeterogeneousAgent/StatusGuide', () => ({
@@ -124,6 +130,7 @@ vi.mock('../../../store', () => ({
       continueHeteroAfterError: continueHeteroAfterErrorMock,
       deleteDBMessage: deleteDBMessageMock,
       retryFailedAssistantStep: retryFailedAssistantStepMock,
+      dbMessages: [{ id: 'block-1', metadata: { finishType: persistedFinishTypeMock } }],
       heteroOverloadRetryAttempts: {},
       internal_beginHeteroOverloadWait: vi.fn(),
       internal_endHeteroOverloadWait: vi.fn(),
@@ -142,6 +149,30 @@ describe('AssistantGroup ContentBlock', () => {
     retryFailedAssistantStepMock.mockClear();
     navigateMock.mockClear();
     isInReasoningMock = false;
+    persistedFinishTypeMock = undefined;
+  });
+
+  it('reads the persisted finish reason when the grouped block projection is stale', () => {
+    persistedFinishTypeMock = 'refusal';
+
+    render(<ContentBlock assistantId="assistant-1" content="final answer" id="block-1" />);
+
+    expect(screen.getByText('notice:refusal')).toBeInTheDocument();
+  });
+
+  it('prefers the current block finish reason while persistence catches up', () => {
+    persistedFinishTypeMock = 'end_turn';
+
+    render(
+      <ContentBlock
+        assistantId="assistant-1"
+        content="final answer"
+        id="block-1"
+        metadata={{ finishType: 'refusal' }}
+      />,
+    );
+
+    expect(screen.getByText('notice:refusal')).toBeInTheDocument();
   });
 
   it('delegates a retry to the store instead of hand-rolling delete + continue', () => {

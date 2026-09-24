@@ -46,6 +46,10 @@ const ContentBlock = memo<ContentBlockProps>(
     const groupParentId = useConversationStore(
       (s) => dataSelectors.getDisplayMessageById(assistantId)(s)?.parentId,
     );
+    /** The persisted reason may arrive after the grouped projection without changing its props. */
+    const persistedFinishType = useConversationStore(
+      (s) => s.dbMessages.find((message) => message.id === id)?.metadata?.finishType,
+    );
     const hasTools = !!tools?.length;
     const showReasoning = hasRenderableReasoning(reasoning) || (!reasoning && isReasoning);
     const hasContent = !!content && content !== LOADING_FLAT;
@@ -112,7 +116,7 @@ const ContentBlock = memo<ContentBlockProps>(
           </SafeBoundary>
         )}
 
-        <AssistantMessageNotice finishType={metadata?.finishType} />
+        <AssistantMessageNotice finishType={metadata?.finishType ?? persistedFinishType} />
 
         {showImageItems && (
           <SafeBoundary>
