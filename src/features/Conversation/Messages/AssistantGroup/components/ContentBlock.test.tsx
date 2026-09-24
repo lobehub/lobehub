@@ -7,6 +7,7 @@ import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import ContentBlock from './ContentBlock';
+import { isEmptyBlock } from './groupChain';
 
 const continueGenerationMock = vi.fn();
 const deleteDBMessageMock = vi.fn();
@@ -173,6 +174,18 @@ describe('AssistantGroup ContentBlock', () => {
     );
 
     expect(screen.getByText('notice:refusal')).toBeInTheDocument();
+  });
+
+  it('renders a terminal notice when the grouped block has no content', () => {
+    persistedFinishTypeMock = 'RECITATION';
+    expect(
+      isEmptyBlock({ content: '', id: 'block-1', metadata: { finishType: 'RECITATION' } }),
+    ).toBe(false);
+
+    render(<ContentBlock assistantId="assistant-1" content="" id="block-1" />);
+
+    expect(screen.getByText('notice:RECITATION')).toBeInTheDocument();
+    expect(screen.queryByText('message content')).not.toBeInTheDocument();
   });
 
   it('delegates a retry to the store instead of hand-rolling delete + continue', () => {

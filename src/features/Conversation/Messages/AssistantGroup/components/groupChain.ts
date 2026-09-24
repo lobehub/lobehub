@@ -158,7 +158,8 @@ export const isEmptyBlock = (block: RenderableAssistantContentBlock) =>
   (!block.tools || block.tools.length === 0) &&
   (!block.council || block.council.length === 0) &&
   !block.error &&
-  !block.reasoning;
+  !block.reasoning &&
+  !block.metadata?.finishType;
 
 const toRenderableBlock = (block: AssistantGroupSemanticBlock): RenderableAssistantContentBlock => {
   if (!block.projection) return block;

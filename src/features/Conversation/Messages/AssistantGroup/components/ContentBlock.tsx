@@ -50,6 +50,7 @@ const ContentBlock = memo<ContentBlockProps>(
     const persistedFinishType = useConversationStore(
       (s) => s.dbMessages.find((message) => message.id === id)?.metadata?.finishType,
     );
+    const finishType = metadata?.finishType ?? persistedFinishType;
     const hasTools = !!tools?.length;
     const showReasoning = hasRenderableReasoning(reasoning) || (!reasoning && isReasoning);
     const hasContent = !!content && content !== LOADING_FLAT;
@@ -93,7 +94,7 @@ const ContentBlock = memo<ContentBlockProps>(
     // hasn't started. Mounting the wrapper anyway would consume a flex `gap`
     // slot in the parent block list, visibly pushing the next sibling (e.g. the
     // message footer) down a beat before the block's content appears.
-    if (!showReasoning && !showMessageContent && !showImageItems && !errorBlock) {
+    if (!showReasoning && !showMessageContent && !showImageItems && !errorBlock && !finishType) {
       return null;
     }
 
@@ -116,7 +117,7 @@ const ContentBlock = memo<ContentBlockProps>(
           </SafeBoundary>
         )}
 
-        <AssistantMessageNotice finishType={metadata?.finishType ?? persistedFinishType} />
+        <AssistantMessageNotice finishType={finishType} />
 
         {showImageItems && (
           <SafeBoundary>
