@@ -7,6 +7,8 @@ import { CheckIcon, PencilIcon, XIcon } from 'lucide-react';
 import { type KeyboardEvent, memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
+
 import { describeError } from './errorMessage';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -86,6 +88,7 @@ const InlineField = memo<InlineFieldProps>(
     const { t: tSetting } = useTranslation('setting');
     const [draft, setDraft] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
+    const { compositionProps, isComposingRef } = useIMECompositionEvent();
 
     const editing = draft !== null;
 
@@ -123,7 +126,13 @@ const InlineField = memo<InlineFieldProps>(
       }
       // Enter confirms a single-line value; in a text area it is a newline,
       // and ⌘/Ctrl+Enter confirms instead.
-      if (event.key === 'Enter' && (!multiline || event.metaKey || event.ctrlKey)) {
+      // `isComposingRef` too: the Enter that confirms an IME candidate is an
+      // Enter here as well, and it would save the half-typed value.
+      if (
+        event.key === 'Enter' &&
+        !isComposingRef.current &&
+        (!multiline || event.metaKey || event.ctrlKey)
+      ) {
         event.preventDefault();
         void save();
       }
@@ -177,6 +186,7 @@ const InlineField = memo<InlineFieldProps>(
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
                 onKeyDown={onKeyDown}
+                {...compositionProps}
               />
             ) : (
               <Input
@@ -186,6 +196,7 @@ const InlineField = memo<InlineFieldProps>(
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
                 onKeyDown={onKeyDown}
+                {...compositionProps}
               />
             )}
             <ActionIcon

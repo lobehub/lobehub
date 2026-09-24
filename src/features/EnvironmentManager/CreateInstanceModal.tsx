@@ -14,6 +14,8 @@ import { t as translate } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
+
 import { describeError } from './errorMessage';
 import { suggestInstanceDirectory } from './instanceDirectory';
 import { type SandboxInstance, useEnvironmentActions } from './useEnvironmentData';
@@ -65,6 +67,11 @@ const CreateInstanceContent = memo<CreateInstanceContentProps>(
     // the name picks it up again.
     const [directoryOwned, setDirectoryOwned] = useState(false);
     const [creating, setCreating] = useState(false);
+    // An Enter that confirms an IME candidate is still an Enter to `keydown`,
+    // so without this, typing a Chinese name submitted the dialog on the
+    // keystroke that picked the characters — before they had even reached the
+    // field, which is why it looked like a creation nobody asked for.
+    const { compositionProps, isComposingRef } = useIMECompositionEvent();
     const [error, setError] = useState<string | undefined>();
 
     // Checked here against the rule the execution plane applies, so a folder it
@@ -145,8 +152,9 @@ const CreateInstanceContent = memo<CreateInstanceContentProps>(
                 setError(undefined);
               }}
               onKeyDown={(event) => {
-                if (event.key === 'Enter') void submit();
+                if (event.key === 'Enter' && !isComposingRef.current) void submit();
               }}
+              {...compositionProps}
             />
           </Flexbox>
 
@@ -180,8 +188,9 @@ const CreateInstanceContent = memo<CreateInstanceContentProps>(
                 setError(undefined);
               }}
               onKeyDown={(event) => {
-                if (event.key === 'Enter') void submit();
+                if (event.key === 'Enter' && !isComposingRef.current) void submit();
               }}
+              {...compositionProps}
             />
             {error && (
               <Text fontSize={12} type={'danger'}>
