@@ -368,7 +368,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
      * Without the inbound step, a WeChat conversation held over the System
      * Bot would have its files sent through whatever per-agent WeChat bot the
      * account also has — including a failed one, whose expired session rejects
-     * every upload (LOBE-14350).
+     * every upload.
      */
     const resolveRoute = async (
       params: MessageRouteParams,

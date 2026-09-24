@@ -605,7 +605,7 @@ describe('applyShareGateToToolSet', () => {
   // `lobe-skills` is an always-on builtin, so it reaches the tool set without
   // ever appearing in the owner's `toolGrants`. Its opt-in is the SKILL list:
   // the gate derives a synthetic tool grant from `skillGrants`, then narrows it
-  // to the two read APIs. Regression for LOBE-14266, where the tool was simply
+  // to the two read APIs. Regression for the bug where the tool was simply
   // absent from the allowlist and every skill-driven shared agent broke.
   const buildSkillsToolSet = () => {
     const toolSet = buildToolSet([

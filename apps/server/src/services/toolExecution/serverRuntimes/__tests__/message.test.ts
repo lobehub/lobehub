@@ -622,7 +622,7 @@ describe('messageRuntime', () => {
     });
   });
 
-  // ==================== Connection routing (LOBE-14350) ====================
+  // ==================== Connection routing ====================
   // A WeChat account can hold both a per-agent bot integration and a System
   // Bot connection. Sends must go out through the connection the caller
   // named, or — for the conversation the run is replying in — through the one

@@ -345,7 +345,7 @@ describe('DiscordGatewayClient', () => {
       ],
     };
 
-    it('names every mention and only strips the leading self mention (LOBE-14154)', () => {
+    it('names every mention and only strips the leading self mention', () => {
       const client = createNumericClient();
       expect(client.sanitizeUserInput!('<@111> 我搞了个 <@2000> 来抢你的活', { raw } as any)).toBe(
         '@Shadow Arvin 我搞了个 @Lobo 来抢你的活',

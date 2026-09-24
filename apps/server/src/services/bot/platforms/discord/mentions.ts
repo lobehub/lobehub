@@ -80,7 +80,10 @@ export const stripLeadingBotMention = (text: string, applicationId: string): str
   text.replace(new RegExp(`^(?:\\s*<@!?${applicationId}>)+\\s*`), '');
 
 /**
- * Full inbound-text normalization for Discord (see LOBE-14154):
+ * Full inbound-text normalization for Discord. When a user @-mentions two bots
+ * in one message, the raw text must keep both mentions named and readable so the
+ * model sees the full message — not just the leading part, which it used to
+ * misread as another bot trying to take over:
  * 1. strip the leading self-mention prefix;
  * 2. resolve every remaining user mention to `@name` via the message payload;
  * 3. drop self mentions that could not be named (Gateway path, no `mentions`)

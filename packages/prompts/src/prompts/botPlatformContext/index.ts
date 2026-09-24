@@ -108,7 +108,7 @@ export const formatBotPlatformContext = ({
     // Text replies cannot carry files, so delivering a generated file into this
     // conversation is the one legitimate `sendMessage` here. Without a route
     // hint the model runs `<outbound_routing>` discovery and may pick another
-    // bot on the same platform — one with an expired session (LOBE-14350).
+    // bot on the same platform — one with an expired session.
     'Exception — files: your text reply cannot carry attachments. To deliver a file / image / video / audio into THIS conversation, call `sendMessage` with `attachments` for the current conversation and pass NEITHER `botId` NOR `messengerInstallationId`: the runtime sends it through the same connection this conversation arrived on. Do not run `listBots` / `listMessengers` for this.',
     '`sendMessage` / `sendDirectMessage` should otherwise ONLY be used when the user explicitly asks you to send a message to a DIFFERENT channel or user.',
     '</message_delivery>',

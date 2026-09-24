@@ -84,7 +84,7 @@ describe('stripLeadingBotMention', () => {
 });
 
 describe('sanitizeDiscordUserInput', () => {
-  it('keeps the other bot and the self mention mid-sentence readable (LOBE-14154)', () => {
+  it('keeps the other bot and the self mention mid-sentence readable', () => {
     const text = `<@${SHADOW}> 我搞了个 <@${ME}> 来抢你的活，你怎么说`;
     expect(sanitizeDiscordUserInput(text, ME, makeMessage(mentionsRaw))).toBe(
       '@Shadow Arvin 我搞了个 @Lobo 来抢你的活，你怎么说',
