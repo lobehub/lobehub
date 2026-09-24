@@ -36,6 +36,18 @@ vi.mock('@/server/routers/lambda/video', () => ({
   videoRouter: { createCaller: callerMocks.video },
 }));
 
+const scheduledWork = vi.hoisted(() => ({ inScope: false }));
+vi.mock('@/server/utils/scheduleAfterResponse', () => ({
+  runWithScheduledWorkScope: vi.fn(async (fn: () => Promise<unknown>) => {
+    scheduledWork.inScope = true;
+    try {
+      return await fn();
+    } finally {
+      scheduledWork.inScope = false;
+    }
+  }),
+}));
+
 describe('videoGenerationRuntime', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -147,14 +159,18 @@ describe('videoGenerationRuntime', () => {
   });
 
   it.each([true, false])(
-    'starts provider polling immediately when waitUntilComplete is %s',
+    'creates the video inside a scheduled-work scope when waitUntilComplete is %s',
     async (waitUntilComplete) => {
-      const createVideo = vi.fn().mockResolvedValue({
-        data: {
-          batch: { id: 'batch-1' },
-          generations: [{ asyncTaskId: 'task-1', id: 'generation-1' }],
-        },
-        success: true,
+      let createdInScope = false;
+      const createVideo = vi.fn(async () => {
+        createdInScope = scheduledWork.inScope;
+        return {
+          data: {
+            batch: { id: 'batch-1' },
+            generations: [{ asyncTaskId: 'task-1', id: 'generation-1' }],
+          },
+          success: true,
+        };
       });
       callerMocks.generationTopic.mockReturnValue({
         createTopic: vi.fn().mockResolvedValue('topic-1'),
@@ -189,9 +205,8 @@ describe('videoGenerationRuntime', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(createVideo).toHaveBeenCalledWith(
-        expect.objectContaining({ startPollingImmediately: true }),
-      );
+      expect(createVideo).toHaveBeenCalledOnce();
+      expect(createdInScope).toBe(true);
     },
   );
 

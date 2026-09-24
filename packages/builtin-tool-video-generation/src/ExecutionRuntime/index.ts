@@ -39,10 +39,6 @@ export interface GenerateVideoRuntimeContext {
   signal?: AbortSignal;
 }
 
-export interface VideoGenerationRuntimeOptions {
-  startPollingImmediately?: boolean;
-}
-
 export interface VideoGenerationRuntimeService {
   createGenerationTopic: (type: 'video', title: string) => Promise<string>;
   createVideo: (
@@ -342,11 +338,9 @@ const normalizeReferenceUrls = ({
 };
 
 export class VideoGenerationExecutionRuntime {
-  private options: VideoGenerationRuntimeOptions;
   private service: VideoGenerationRuntimeService;
 
-  constructor(service: VideoGenerationRuntimeService, options: VideoGenerationRuntimeOptions = {}) {
-    this.options = options;
+  constructor(service: VideoGenerationRuntimeService) {
     this.service = service;
   }
 
@@ -361,7 +355,11 @@ export class VideoGenerationExecutionRuntime {
         latencies.map((item) => [getModelLatencyKey(item), item.avgLatencyMs] as const),
       );
     } catch (error) {
-      console.error('Failed to load video model latencies:', error);
+      console.error(
+        'Failed to load video model latencies for %s:',
+        models.map(({ model, provider }) => `${provider}/${model}`).join(', '),
+        error,
+      );
       return new Map();
     }
   }
@@ -566,7 +564,6 @@ export class VideoGenerationExecutionRuntime {
         model,
         params,
         provider,
-        ...(this.options.startPollingImmediately && { startPollingImmediately: true }),
       });
       const item = result.data?.generations?.[0];
 

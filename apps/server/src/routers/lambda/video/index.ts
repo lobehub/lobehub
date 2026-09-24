@@ -10,7 +10,6 @@ import { ChatErrorType, RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
-import pMap from 'p-map';
 import { z } from 'zod';
 
 import { getProviderContentPolicyErrorMessage } from '@/business/server/getProviderContentPolicyErrorMessage';
@@ -35,7 +34,7 @@ import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { FileService } from '@/server/services/file';
-import { getVideoAvgLatency } from '@/server/services/generation/latency';
+import { getVideoAvgLatencies, getVideoLatencyKey } from '@/server/services/generation/latency';
 import { processBackgroundVideoPolling } from '@/server/services/generation/videoBackgroundPolling';
 import { after } from '@/server/utils/scheduleAfterResponse';
 import { AsyncTaskStatus, AsyncTaskType } from '@/types/asyncTask';
@@ -43,7 +42,6 @@ import { AsyncTaskStatus, AsyncTaskType } from '@/types/asyncTask';
 import { createVideoTaskSubmitError } from './error';
 
 const log = debug('lobe-video:lambda');
-const MODEL_LATENCY_QUERY_CONCURRENCY = 5;
 
 const videoProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -77,7 +75,6 @@ const createVideoInputSchema = z.object({
     })
     .passthrough(),
   provider: z.string(),
-  startPollingImmediately: z.boolean().optional(),
 });
 export type CreateVideoServicePayload = z.infer<typeof createVideoInputSchema>;
 
@@ -87,7 +84,7 @@ export const videoRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { userId, serverDB, asyncTaskModel, fileService, generationTopicModel } = ctx;
       const wsId = ctx.workspaceId ?? undefined;
-      const { generationTopicId, provider, model, params, startPollingImmediately } = input;
+      const { generationTopicId, provider, model, params } = input;
 
       const { resolvedModelId } = await resolveBusinessModelMapping(provider, model);
 
@@ -298,7 +295,7 @@ export const videoRouter = router({
             status: AsyncTaskStatus.Processing,
           });
 
-          const pollVideo = async () => {
+          after(async () => {
             log('Background video polling scheduled for task: %s', asyncTaskId);
 
             try {
@@ -322,26 +319,9 @@ export const videoRouter = router({
             } catch (error) {
               console.error('[video] Background polling failed:', error);
             }
-          };
+          });
 
-          /**
-           * The chat tool's server runtime waits for this generation inside the same
-           * request (generateVideo polls status before returning). A plain `after()`
-           * outside a scheduled-work scope — e.g. the default local queue runtime —
-           * defers polling until that request responds, so the wait would never see
-           * a terminal status. Start polling now and let `after()` only retain it.
-           */
-          if (startPollingImmediately) {
-            const pollingPromise = pollVideo();
-            after(() => pollingPromise);
-            log(
-              'Background video polling started immediately and retained after response for task: %s',
-              asyncTaskId,
-            );
-          } else {
-            after(pollVideo);
-            log('After() hook registered for background video polling: %s', asyncTaskId);
-          }
+          log('After() hook registered for background video polling: %s', asyncTaskId);
         }
       } catch (e) {
         console.error('Failed to submit video generation task:', e);
@@ -406,24 +386,16 @@ export const videoRouter = router({
       }),
     )
     .query(async ({ input }) => {
+      const latencies = await getVideoAvgLatencies(input.models);
       const uniqueModels = [
-        ...new Map(input.models.map((item) => [`${item.provider}\0${item.model}`, item])).values(),
+        ...new Map(input.models.map((item) => [getVideoLatencyKey(item), item])).values(),
       ];
 
-      return pMap(
-        uniqueModels,
-        async ({ model, provider }) => {
-          let avgLatencyMs: null | number = null;
-          try {
-            avgLatencyMs = await getVideoAvgLatency(model, provider);
-          } catch (error) {
-            console.error('Failed to load video average latency:', error);
-          }
-
-          return { avgLatencyMs, model, provider };
-        },
-        { concurrency: MODEL_LATENCY_QUERY_CONCURRENCY },
-      );
+      return uniqueModels.map(({ model, provider }) => ({
+        avgLatencyMs: latencies.get(getVideoLatencyKey({ model, provider })) ?? null,
+        model,
+        provider,
+      }));
     }),
 
   getVideoFreeQuota: authedProcedure

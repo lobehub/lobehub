@@ -3,8 +3,9 @@
 import { LoadingOutlined } from '@ant-design/icons';
 import { Block, Center } from '@lobehub/ui';
 import { Progress, Spin } from 'antd';
-import { memo, useEffect, useState } from 'react';
+import { memo } from 'react';
 
+import { MAX_ESTIMATED_PROGRESS, useEstimatedProgress } from '@/hooks/useEstimatedProgress';
 import { ElapsedTime } from '@/routes/(main)/(create)/image/features/GenerationFeed/GenerationItem/ElapsedTime';
 import { AsyncTaskStatus } from '@/types/asyncTask';
 import type { Generation } from '@/types/generation';
@@ -12,40 +13,6 @@ import type { Generation } from '@/types/generation';
 const DEFAULT_AVG_LATENCY_MS = 180_000;
 
 const getSessionStorageKey = (generationId: string) => `generation_start_time_${generationId}`;
-
-const useEstimatedProgress = (generationId: string, avgLatencyMs: number, isActive: boolean) => {
-  const [progress, setProgress] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (!isActive) {
-      setProgress(null);
-      return;
-    }
-
-    const storageKey = getSessionStorageKey(generationId);
-    const startTime = (() => {
-      const stored = sessionStorage.getItem(storageKey);
-      if (stored) return Number(stored);
-
-      const now = Date.now();
-      sessionStorage.setItem(storageKey, now.toString());
-      return now;
-    })();
-
-    const update = () => {
-      const elapsed = Date.now() - startTime;
-      const pct = Math.min(Math.round((elapsed / avgLatencyMs) * 100), 99);
-      setProgress(pct);
-    };
-
-    update();
-    const timer = setInterval(update, 1000);
-
-    return () => clearInterval(timer);
-  }, [isActive, avgLatencyMs, generationId]);
-
-  return progress;
-};
 
 interface VideoLoadingItemProps {
   aspectRatio?: string;
@@ -60,7 +27,11 @@ const VideoLoadingItem = memo<VideoLoadingItemProps>(
       generation.task.status === AsyncTaskStatus.Processing ||
       generation.task.status === AsyncTaskStatus.Pending;
 
-    const progress = useEstimatedProgress(generation.id, latency, isGenerating);
+    const progress = useEstimatedProgress({
+      durationMs: latency,
+      enabled: isGenerating,
+      storageKey: getSessionStorageKey(generation.id),
+    });
 
     return (
       <Block
@@ -78,7 +49,9 @@ const VideoLoadingItem = memo<VideoLoadingItemProps>(
           ) : (
             <Spin indicator={<LoadingOutlined spin />} />
           )}
-          {progress === 99 && <ElapsedTime generationId={generation.id} isActive={isGenerating} />}
+          {progress === MAX_ESTIMATED_PROGRESS && (
+            <ElapsedTime generationId={generation.id} isActive={isGenerating} />
+          )}
         </Center>
       </Block>
     );
