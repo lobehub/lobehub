@@ -1,6 +1,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { memo, useCallback } from 'react';
 
+import AssistantMessageNotice from '@/business/client/components/AssistantMessageNotice';
 import SafeBoundary from '@/components/ErrorBoundary';
 import { LOADING_FLAT } from '@/const/message';
 import ErrorMessageExtra, { useErrorContent } from '@/features/Conversation/Error';
@@ -31,6 +32,7 @@ const ContentBlock = memo<ContentBlockProps>(
     disableEditing,
     disableMarkdownStreaming,
     hasToolsOverride,
+    metadata,
     projectionKey,
   }) => {
     const errorContent = useErrorContent(error);
@@ -109,6 +111,8 @@ const ContentBlock = memo<ContentBlockProps>(
             />
           </SafeBoundary>
         )}
+
+        <AssistantMessageNotice finishType={metadata?.finishType} />
 
         {showImageItems && (
           <SafeBoundary>

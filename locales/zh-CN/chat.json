@@ -1469,6 +1469,7 @@
   "resources.visibility.private": "私人",
   "resources.visibility.privateTooltip": "仅您可见",
   "resources.visibility.workspace": "工作区",
+  "response.contentSafetyNotice": "这次回复受到内容安全限制。若频繁发生，你可能暂时无法使用此模型。",
   "roleAndArchive": "助理档案与记录",
   "runtimeEnv.mode.cloud": "云端沙箱",
   "runtimeEnv.mode.cloudDesc": "在安全的云端沙箱中运行",

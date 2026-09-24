@@ -1,4 +1,6 @@
 export default {
+  'response.contentSafetyNotice':
+    'This reply was limited for content safety reasons. If this happens often, you may temporarily lose access to this model.',
   'goalExperiment.continuedFrom': 'Continued exploration',
   'goalExperiment.drill': 'Explore inside',
   'goalExperiment.drillNamed': 'Explore inside: {{title}}',

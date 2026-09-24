@@ -139,6 +139,10 @@ export default {
     'The content was blocked ({{blockReason}}). Please adjust it and try again.',
   'response.InvalidAccessCode':
     'Invalid access code or empty. Please enter the correct access code or add a custom API Key.',
+  'response.ModelContentModerationCooldown':
+    'This request could not use the selected model or related models because of a temporary content safety restriction. Try again later or choose a different model.',
+  'response.ModelContentModerationCooldownUntil':
+    'The selected model and related models are temporarily unavailable due to content safety restrictions. Access is expected to resume at {{time}}. You can use a different model meanwhile.',
   'response.NoOpenAIAPIKey': 'OpenAI API Key is empty, please add a custom OpenAI API Key',
   'response.PluginApiNotFound':
     "Sorry, the API does not exist in the skill's manifest. Please check if your request method matches the skill manifest API",
