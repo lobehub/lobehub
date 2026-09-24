@@ -337,6 +337,25 @@ describe('videoRouter', () => {
   });
 
   describe('createVideo - pre-charge', () => {
+    it('forwards the request spend origin to pre-charge', async () => {
+      setupMocks();
+      const { chargeBeforeGenerate } =
+        await import('@/business/server/video-generation/chargeBeforeGenerate');
+      const spendOrigin = {
+        agentShare: {
+          agentId: 'agent-share',
+          shareId: 'share-1',
+          visitorUserId: 'visitor-1',
+        },
+        trigger: 'agent_share',
+      };
+
+      const caller = videoRouter.createCaller({ ...mockCtx, spendOrigin });
+      await caller.createVideo(defaultInput);
+
+      expect(chargeBeforeGenerate).toHaveBeenCalledWith(expect.objectContaining({ spendOrigin }));
+    });
+
     it('should return error batch when pre-charge fails', async () => {
       setupMocks();
       const { chargeBeforeGenerate } =

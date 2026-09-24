@@ -2,7 +2,7 @@
 title: 渠道概览
 description: >-
   将 LobeHub 代理连接到外部消息平台，如 Discord、Slack、Telegram、LINE、QQ、微信、飞书和
-  Lark，让用户可以直接在他们喜欢的聊天应用中与 AI 助手互动。
+  Lark；查看 WhatsApp 与 iMessage 的预告状态，让用户可以直接在他们喜欢的聊天应用中与 AI 助手互动。
 tags:
   - 渠道
   - 消息渠道
@@ -15,52 +15,84 @@ tags:
   - 微信
   - 飞书
   - Lark
+  - WhatsApp
+  - iMessage
 ---
 
 # 渠道
 
-渠道功能允许您将 LobeHub 代理连接到外部消息平台。一旦连接，用户可以直接在他们已经使用的聊天应用中与您的 AI 助手互动，无需访问 LobeHub。
+**渠道（Channels）适合把一个 Agent 接到你自己的机器人上。** 你先在 Discord、Slack、Telegram 等平台创建或连接机器人，再在 LobeHub 中把它绑定到一个 Agent。之后，用户给这个机器人发消息，就是在与该 Agent 对话。
+
+```text
+用户 / 群成员 → 你配置的机器人 → 固定绑定的 Agent
+```
+
+## 我该使用渠道还是 Messenger？
+
+- **选择渠道**：你想使用自己的机器人名称和头像，或让同事、客户、群成员使用一个指定的 Agent。
+- **选择 [Messenger](/zh/docs/usage/messenger/overview)**：你只想通过 LobeHub 官方机器人使用自己的 Agent，不想创建机器人或管理 Token。
+
+| | **渠道（Channels）** | **Messenger** |
+| --- | --- | --- |
+| 聊天入口 | 你创建或连接的机器人 | LobeHub 官方机器人或托管服务 |
+| Agent 关系 | 每个渠道固定绑定一个 Agent | 每个账号选择一个当前 Agent，可随时切换 |
+| 谁来使用 | 你、获准用户、团队或社区成员 | 已关联 LobeHub 账号的用户本人 |
+| 配置位置 | **Agent → 渠道** | **设置 → Messenger** |
+| 你需要做什么 | 准备平台机器人或应用凭据，并设置访问范围 | 关联平台账号并选择 Agent |
+
+渠道是否对外开放由访问策略决定。你也可以把自己的机器人限制为仅自己或指定用户使用。
 
 > \[!NOTE]
 >
-> 微信渠道目前需要有效订阅。如果您使用的是没有订阅的社区版，**渠道**设置中可能暂时不会显示微信选项。
+> 微信渠道需要个人付费 Plan。按 [2026-07-08 公告](/zh/changelog/2026-07-08-wechat-chat-adjustment)，新建、重连以及预告期结束后的已有连接均需付费 Plan。公告预计于美国东部时间 2026-07-10 12:00 PM（北京时间 2026-07-11 00:00）生效；未满足条件时可能不显示微信选项。
 
 ## 支持的平台
 
+### 当前可用
+
 | 平台                                        | 描述                                                    |
 | ----------------------------------------- | ----------------------------------------------------- |
-| [Discord](/docs/usage/channels/discord)   | 连接到 Discord 服务器，用于频道聊天和私信                             |
-| [Slack](/docs/usage/channels/slack)       | 连接到 Slack，用于频道和私信对话                                   |
-| [Telegram](/docs/usage/channels/telegram) | 连接到 Telegram，用于私人和群组对话                                |
-| [LINE](/docs/usage/channels/line)         | 通过 LINE Messaging API 连接到 LINE，支持私聊和群聊                |
-| [iMessage](/docs/usage/channels/imessage) | 通过 LobeHub Desktop 本地 BlueBubbles 桥接连接 iMessage（Labs） |
-| [QQ](/docs/usage/channels/qq)             | 连接到 QQ，用于群聊和私信                                        |
-| [微信](/docs/usage/channels/wechat)         | 通过 iLink Bot 连接到微信，用于私聊和群聊（需要有效订阅）                    |
-| [飞书](/docs/usage/channels/feishu)         | 连接到飞书，用于团队协作（中国版）                                     |
-| [Lark](/docs/usage/channels/lark)         | 连接到 Lark，用于团队协作（国际版）                                  |
+| [Discord](/zh/docs/usage/channels/discord)   | 连接到 Discord 服务器，用于频道聊天和私信                             |
+| [Slack](/zh/docs/usage/channels/slack)       | 连接到 Slack，用于频道和私信对话                                   |
+| [Telegram](/zh/docs/usage/channels/telegram) | 连接到 Telegram，用于私人和群组对话                                |
+| [LINE](/zh/docs/usage/channels/line)         | 通过 LINE Messaging API 连接到 LINE，支持私聊和群聊                |
+| [QQ](/zh/docs/usage/channels/qq)             | 连接到 QQ，用于群聊和私信                                        |
+| [微信](/zh/docs/usage/channels/wechat)         | 通过 iLink Bot 连接微信私聊（Pro；群聊支持未确认）                    |
+| [飞书](/zh/docs/usage/channels/feishu)         | 连接到飞书，用于团队协作（中国版）                                     |
+| [Lark](/zh/docs/usage/channels/lark)         | 连接到 Lark，用于团队协作（国际版）                                  |
+
+### 即将上线
+
+| 平台                                           | 状态与说明                                              |
+| -------------------------------------------- | ------------------------------------------------- |
+| [WhatsApp](/zh/docs/usage/channels/whatsapp) | 即将上线；当前不能配置。计划用于移动聊天中的客户支持与跟进。                 |
+| [iMessage](/zh/docs/usage/channels/imessage) | 即将上线；当前为占位入口。已有 Labs 说明不代表该频道已正式开放。             |
 
 ## 工作原理
 
-每个渠道集成都通过将目标平台上的机器人账户与 LobeHub 代理连接来实现。当用户向机器人发送消息时，LobeHub 会通过代理处理消息并将响应发送回同一对话。
+每条渠道连接都属于当前 Agent。平台收到消息后，LobeHub 将消息交给这个 Agent，再把回复发送回原对话。
 
-- **按代理配置** — 每个代理可以拥有自己的一组渠道连接，因此不同的代理可以服务于不同的平台或社区。
-- **同时支持多个渠道** — 单个代理可以同时连接到 Discord、Slack、Telegram、LINE、QQ、微信、飞书和 Lark。LobeHub 会自动将消息路由到正确的代理。
-- **安全的凭据存储** — 所有机器人令牌和应用密钥在存储前都会被加密。
+- **一个 Agent 可以连接多个平台** — 例如同时连接 Discord、Slack 和 Telegram。
+- **不同 Agent 可以使用不同机器人** — 适合分别服务不同团队、客户或社区。
+- **访问范围可以限制** — 支持的平台可分别设置私信、群聊、用户白名单和频道白名单。
+- **凭据加密保存** — Bot Token 和应用密钥在存储前会加密。
 
 ## 快速开始
 
 1. 前往您的代理设置页面，选择 **渠道** 标签
-2. 选择一个平台并按照设置指南操作：
-   - [Discord](/docs/usage/channels/discord)
-   - [Slack](/docs/usage/channels/slack)
-   - [Telegram](/docs/usage/channels/telegram)
-   - [LINE](/docs/usage/channels/line)
-   - [QQ](/docs/usage/channels/qq)
-   - [微信](/docs/usage/channels/wechat)
-   - [飞书](/docs/usage/channels/feishu)
-   - [Lark](/docs/usage/channels/lark)
+2. 选择一个当前可用的平台并按照设置指南操作：
+   - [Discord](/zh/docs/usage/channels/discord)
+   - [Slack](/zh/docs/usage/channels/slack)
+   - [Telegram](/zh/docs/usage/channels/telegram)
+   - [LINE](/zh/docs/usage/channels/line)
+   - [QQ](/zh/docs/usage/channels/qq)
+   - [微信](/zh/docs/usage/channels/wechat)
+   - [飞书](/zh/docs/usage/channels/feishu)
+   - [Lark](/zh/docs/usage/channels/lark)
 
-如果您在渠道列表中看不到 **微信**，请先确认当前账户是否拥有有效订阅。
+WhatsApp 与 iMessage 当前显示为**即将上线**，不能按已开放渠道进行配置。可分别查看 [WhatsApp 状态页](/zh/docs/usage/channels/whatsapp)和 [iMessage 预告页](/zh/docs/usage/channels/imessage)。
+
+如果您在渠道列表中看不到 **微信**，请先确认当前个人账号是否符合上述付费 Plan 要求。
 
 ## 功能支持
 
@@ -70,9 +102,11 @@ tags:
 | --------- | ------- | ----- | -------- | ---- | -- | -- | ---- | ---- |
 | 文本消息      | 是       | 是     | 是        | 是    | 是  | 是  | 是    | 是    |
 | 私人消息      | 是       | 是     | 是        | 是    | 是  | 是  | 是    | 是    |
-| 群组聊天      | 是       | 是     | 是        | 是    | 是  | 是  | 是    | 是    |
+| 群组聊天      | 是       | 是     | 是        | 是    | 是  | 未确认 | 是    | 是    |
 | 表情反应      | 是       | 是     | 是        | 否    | 否  | 否  | 部分支持 | 部分支持 |
 | 图片 / 文件附件 | 是       | 是     | 是        | 仅入站  | 是  | 是  | 是    | 是    |
+
+微信群聊支持尚未从仓库资料中确认，本指南仅说明私聊接入。2026-07-08 公告说明的是付费访问调整，未宣布群聊支持。详见[微信渠道](/zh/docs/usage/channels/wechat)。
 
 ## 允许的用户（全局）
 
@@ -116,7 +150,7 @@ tags:
 
 ### 各平台默认值
 
-所有支持的平台两个策略默认都为 **开放 (Open)**，开箱即用。需要私有化时按渠道改成 **白名单 (Allowlist)** 或 **禁用 (Disabled)** 即可。微信因本身就是 DM 模式，没有这两个策略选项。
+提供这两项策略的平台默认均为 **开放 (Open)**。如需限制访问，可按渠道改为 **白名单 (Allowlist)** 或 **禁用 (Disabled)**。微信接入按私聊说明，不提供上述两个策略选项；不能据此推断支持微信群聊。
 
 ### 如何获取用户的平台 ID
 

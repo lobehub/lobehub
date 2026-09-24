@@ -217,7 +217,12 @@ vi.mock('@lobechat/heterogeneous-agents/scanHost', () => ({
 }));
 
 vi.mock('node:os', () => ({
-  default: { hostname: vi.fn(() => 'mock-hostname'), tmpdir: vi.fn(() => '/tmp') },
+  default: {
+    arch: vi.fn(() => 'arm64'),
+    hostname: vi.fn(() => 'mock-hostname'),
+    release: vi.fn(() => '24.0.0'),
+    tmpdir: vi.fn(() => '/tmp'),
+  },
 }));
 
 vi.mock('@lobechat/device-gateway-client', () => ({
@@ -325,6 +330,10 @@ describe('GatewayConnectionCtr', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(Response.json({ result: { data: { json: [] } } })),
+    );
     vi.useFakeTimers();
     resolveRemotePlatformRuntimeMock.mockImplementation(
       async (type: 'hermes' | 'openclaw', baseEnv: NodeJS.ProcessEnv = process.env) => ({
@@ -355,6 +364,7 @@ describe('GatewayConnectionCtr', () => {
   afterEach(() => {
     ctr.disconnect();
     vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
     vi.useRealTimers();
   });
 
@@ -2196,6 +2206,49 @@ describe('GatewayConnectionCtr', () => {
   });
 
   describe('getDeviceInfo', () => {
+    it('backfills the registered local device when reading its info without reconnecting', async () => {
+      mockStoreGet.mockImplementation((key: string) =>
+        key === 'gatewayDeviceId' ? 'my-device' : false,
+      );
+      mockGatewayConnectionSrv.loadOrCreateDeviceId();
+      const fetchMock = vi.mocked(fetch);
+      fetchMock.mockResolvedValueOnce(
+        Response.json({
+          result: {
+            data: {
+              json: [
+                {
+                  architecture: null,
+                  deviceId: 'my-device',
+                  identitySource: 'machine-id',
+                  registered: true,
+                  scope: 'personal',
+                },
+              ],
+            },
+          },
+        }),
+      );
+
+      const info = await ctr.getDeviceInfo();
+
+      expect(info.deviceId).toBe('my-device');
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(JSON.parse(fetchMock.mock.calls[1][1]!.body as string)).toEqual({
+        json: {
+          architecture: 'arm64',
+          deviceId: 'my-device',
+        },
+      });
+      expect(MockGatewayClient.lastInstance).toBeNull();
+    });
+
+    it('still returns local info if the registry cannot be reached', async () => {
+      mockGatewayConnectionSrv.loadOrCreateDeviceId();
+      vi.mocked(fetch).mockRejectedValueOnce(new Error('offline'));
+      await expect(ctr.getDeviceInfo()).resolves.toMatchObject({ hostname: 'mock-hostname' });
+    });
+
     it('should return device information', async () => {
       mockStoreGet.mockImplementation((key: string) => {
         if (key === 'gatewayEnabled') return true;

@@ -22,7 +22,7 @@ const Header = () => {
   );
 
   const title = document?.filename || document?.title;
-  const isReadonly = !!document && getDocumentRenderMode(document).mode === 'highlight';
+  const isReadonly = !!document && getDocumentRenderMode(document).mode !== 'editor';
 
   if (!documentId) return null;
 

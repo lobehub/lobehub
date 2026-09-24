@@ -53,6 +53,8 @@ export type {
   AgentStreamEventType,
   AgentStreamSessionCompletion,
   ConnectionStatus,
+  MessagePatchData,
+  MessagePatchUpsert,
   SessionStatus,
   StepCompleteData,
   StreamChunkData,

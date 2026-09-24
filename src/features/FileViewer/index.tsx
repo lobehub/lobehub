@@ -20,7 +20,6 @@ import MSDocViewer from './Renderer/MSDoc';
 import type { PDFViewerProps } from './Renderer/PDF';
 import { preloadPDFRenderer } from './Renderer/PDF/loader';
 import VideoViewer from './Renderer/Video';
-import { VERILOG_FILE_EXTENSIONS, VERILOG_FILE_MIME_TYPES } from './verilogSupport';
 
 // File type definitions
 const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp'];
@@ -35,157 +34,6 @@ const IMAGE_MIME_TYPES = new Set([
 
 const VIDEO_EXTENSIONS = ['.mp4', '.webm', '.ogg'];
 const VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm', 'video/ogg', 'mp4', 'webm', 'ogg']);
-
-const CODE_EXTENSIONS = [
-  // JavaScript/TypeScript
-  '.js',
-  '.jsx',
-  '.ts',
-  '.tsx',
-  '.mjs',
-  '.cjs',
-  // Python
-  '.py',
-  '.pyw',
-  // Java/JVM
-  '.java',
-  '.kt',
-  '.kts',
-  '.scala',
-  '.groovy',
-  // C/C++
-  '.c',
-  '.h',
-  '.cpp',
-  '.cxx',
-  '.cc',
-  '.hpp',
-  '.hxx',
-  // Hardware description languages (canonical entries in ./verilogSupport)
-  ...VERILOG_FILE_EXTENSIONS,
-  // Other compiled languages
-  '.cs',
-  '.go',
-  '.rs',
-  '.rb',
-  '.php',
-  '.swift',
-  '.lua',
-  '.r',
-  '.dart',
-  // Shell
-  '.sh',
-  '.bash',
-  '.zsh',
-  // Web
-  '.html',
-  '.htm',
-  '.css',
-  '.scss',
-  '.sass',
-  '.less',
-  // Data formats
-  '.json',
-  '.xml',
-  '.yaml',
-  '.yml',
-  '.toml',
-  '.sql',
-  '.csv',
-  '.tsv',
-  // Functional languages
-  '.ex',
-  '.exs',
-  '.erl',
-  '.hrl',
-  '.clj',
-  '.cljs',
-  '.cljc',
-  // Markdown
-  '.md',
-  '.mdx',
-  // Other
-  '.vim',
-  '.graphql',
-  '.gql',
-  '.txt',
-];
-
-const CODE_MIME_TYPES = new Set([
-  // JavaScript/TypeScript
-  'js',
-  'jsx',
-  'ts',
-  'tsx',
-  'application/javascript',
-  'application/x-javascript',
-  'text/javascript',
-  'application/typescript',
-  'text/typescript',
-  // Python
-  'python',
-  'text/x-python',
-  'application/x-python-code',
-  // Java/JVM
-  'java',
-  'text/x-java-source',
-  'kotlin',
-  'scala',
-  // C/C++
-  'c',
-  'text/x-c',
-  'cpp',
-  'text/x-c++',
-  // Other languages
-  'csharp',
-  'go',
-  'rust',
-  // Hardware description languages (canonical entries in ./verilogSupport)
-  ...VERILOG_FILE_MIME_TYPES,
-  'ruby',
-  'php',
-  'text/x-php',
-  'swift',
-  'lua',
-  'r',
-  'dart',
-  // Shell
-  'bash',
-  'shell',
-  'text/x-shellscript',
-  // Web
-  'html',
-  'text/html',
-  'css',
-  'text/css',
-  'scss',
-  'sass',
-  'less',
-  // Data
-  'json',
-  'application/json',
-  'xml',
-  'text/xml',
-  'application/xml',
-  'yaml',
-  'text/yaml',
-  'application/x-yaml',
-  'toml',
-  'sql',
-  'text/x-sql',
-  'csv',
-  'text/csv',
-  'tsv',
-  'text/tab-separated-values',
-  // Markdown
-  'md',
-  'mdx',
-  ...MARKDOWN_MIME_TYPES,
-  // Other
-  'graphql',
-  'txt',
-  'text/plain',
-]);
 
 // Markdown renders as rich text (with a raw toggle) instead of the highlighted
 // source view — must be checked before the code fallback, whose lists also
@@ -339,7 +187,7 @@ const FileViewer = memo<FileViewerProps>(({ id, style, fileType, url, name }) =>
   // Microsoft Office documents - check before code files to avoid false matches
   // (e.g., 'doc' contains 'c' which would match CODE_EXTENSIONS)
   if (matchesFileType(fileType, name, MSDOC_EXTENSIONS, MSDOC_MIME_TYPES)) {
-    return <MSDocViewer fileId={id} url={url} />;
+    return <MSDocViewer fileId={id} fileName={name} fileType={fileType} url={url} />;
   }
 
   // HTML files should render as a sandboxed preview before the broader code-file fallback.
@@ -352,13 +200,9 @@ const FileViewer = memo<FileViewerProps>(({ id, style, fileType, url, name }) =>
     return <MarkdownViewer fileId={id} url={url} />;
   }
 
-  // Code files (JavaScript, TypeScript, Python, Java, C++, Go, Rust, etc.)
-  if (matchesFileType(fileType, name, CODE_EXTENSIONS, CODE_MIME_TYPES)) {
-    return <CodeViewer fileId={id} fileName={name} url={url} />;
-  }
-
-  // Unsupported file type
-  return <NotSupport fileName={name} style={style} url={url} />;
+  // The former code-extension/MIME list is replaced by byte detection: unknown extensions can still contain text. The loader checks bytes and caps downloads;
+  // binary, oversized, or unreadable content falls back to the download view.
+  return <CodeViewer fileId={id} fileName={name} key={url} url={url} />;
 });
 
 export default FileViewer;

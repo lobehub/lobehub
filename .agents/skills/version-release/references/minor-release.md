@@ -30,7 +30,8 @@ Used to publish a new minor version (e.g. `v2.2.0`), roughly every 4 weeks. The 
 
 4. **Write the PR body as release notes** — Follow `release-notes-style.md`. Compare base is the latest semver tag on main (`git describe --tags --abbrev=0 origin/main`).
 
-5. **Automatic trigger after merge** — `auto-tag-release` detects the title format, uses the version number from the title, bumps `package.json`, tags `v{x.y.z}`, creates the GitHub Release, and dispatches `sync-main-to-canary`.
+5. **While the PR is open** — `release-pr-version.yml` commits `package.json` to the title version if it is not already there.
+6. **After merge** — `auto-tag-release` reads the title version, tags `v{x.y.z}` on the merge commit, and creates the GitHub Release.
 
 ## Scripts
 
@@ -42,6 +43,6 @@ bun run release:branch --minor # Directly specify minor
 ## Hard Rules (specific to Minor)
 
 - PR title format is **strict**: `🚀 release: v{x.y.z}`. Any deviation falls through to patch detection.
-- Do **NOT** manually modify `package.json` version — CI will bump it.
+- Do **NOT** manually modify `package.json` version — CI commits it onto the release PR.
 - Do **NOT** manually create the tag — CI will tag.
 - Highlights bullet count is usually 8–12 (see `release-notes-style.md` size heuristics).

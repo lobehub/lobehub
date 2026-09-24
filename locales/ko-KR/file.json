@@ -243,6 +243,7 @@
   "preview.downloadFile": "파일 다운로드",
   "preview.raw": "원본",
   "preview.render": "미리보기",
+  "preview.tooLarge": "이 파일은 미리보기에는 너무 큽니다. 내용을 보려면 다운로드하세요.",
   "preview.unsupportedFileAndContact": "이 파일 형식은 온라인 미리보기를 지원하지 않습니다. 미리보기 기능이 필요하시면 <1>의견을 보내주세요</1>",
   "resource": "리소스",
   "resourceList.batchCopyDescription": "선택한 리소스를 다른 작업 공간으로 복제합니다.",

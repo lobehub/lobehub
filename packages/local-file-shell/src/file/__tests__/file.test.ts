@@ -31,18 +31,40 @@ describe('file operations', () => {
   // ─── readLocalFile ───
 
   describe('readLocalFile', () => {
-    it('should read file with default line range (0-200)', async () => {
+    it('should read file with default line range (0-1000)', async () => {
       const filePath = path.join(tmpDir, 'test.txt');
-      const lines = Array.from({ length: 300 }, (_, i) => `line ${i}`);
+      const lines = Array.from({ length: 1200 }, (_, i) => `line ${i}`);
       await writeFile(filePath, lines.join('\n'));
 
       const result = await readLocalFile({ path: filePath });
 
-      expect(result.lineCount).toBe(200);
-      expect(result.totalLineCount).toBe(300);
-      expect(result.loc).toEqual([0, 200]);
+      expect(result.lineCount).toBe(1000);
+      expect(result.totalLineCount).toBe(1200);
+      expect(result.loc).toEqual([0, 1000]);
       expect(result.filename).toBe('test.txt');
       expect(result.fileType).toBe('txt');
+    });
+
+    it('should clamp the reported window at EOF for short files', async () => {
+      const filePath = path.join(tmpDir, 'short.txt');
+      await writeFile(filePath, 'a\nb\nc\nd\ne');
+
+      const result = await readLocalFile({ path: filePath });
+
+      expect(result.lineCount).toBe(5);
+      expect(result.loc).toEqual([0, 5]);
+    });
+
+    it('should clamp an explicit range that extends past EOF', async () => {
+      const filePath = path.join(tmpDir, 'past-eof.txt');
+      const lines = Array.from({ length: 10 }, (_, i) => `line ${i}`);
+      await writeFile(filePath, lines.join('\n'));
+
+      const result = await readLocalFile({ loc: [5, 100], path: filePath });
+
+      expect(result.lineCount).toBe(5);
+      expect(result.content).toBe('line 5\nline 6\nline 7\nline 8\nline 9');
+      expect(result.loc).toEqual([5, 10]);
     });
 
     it('should read full content when fullContent is true', async () => {

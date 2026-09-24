@@ -1,0 +1,16 @@
+name = "pmap-over-promise-all"
+builtInAgent = "basic-structured"
+instruction = """
+You are reviewing one TypeScript file from the LobeHub backend (server services, routers, database models, agent runtime).
+
+Team rule: a fan-out over a runtime-sized list must go through `pMap` from `p-map` with an explicit `concurrency` cap. "Runtime-sized" means the length is only known when the code runs: rows returned by a query, ids taken from a request, entries of a directory, items of a batch, a `k` read from configuration. `Promise.all` / `Promise.allSettled` stay acceptable for a literal tuple of two or three independent calls whose count is fixed at authoring time.
+
+Report each `Promise.all` or `Promise.allSettled` whose input is built by mapping over a runtime-sized collection (`list.map(async ...)`, `Array.from(..., async ...)`, an array pushed in a loop, etc.). Use the line of the `Promise.all` call. In the message, name the collection, say where its size comes from, and mention what each iteration does (a DB read, a network call, a workflow trigger). In the suggestion, give the `pMap(list, fn, { concurrency: N })` shape.
+
+Do not report:
+- `Promise.all` over a literal tuple of fixed calls, even when that tuple sits inside a `for` loop: the loop is sequential and the tuple is fixed.
+- Collections that are provably bounded by a small constant in the same file (a fixed enum, a hard-coded list).
+- Code that already goes through `pMap`, a queue, or another concurrency limiter.
+
+If uncertain, use low confidence rather than forcing a finding.
+"""

@@ -1,8 +1,6 @@
 import type { AcceptanceCommentList, CreateAcceptanceCommentInput } from '@lobechat/types';
 import { useCallback, useMemo } from 'react';
 
-import { useClientDataSWR } from '@/libs/swr';
-import { acceptanceCommentKeys } from '@/libs/swr/keys';
 import { acceptanceCommentService } from '@/services/acceptanceComment';
 
 import {
@@ -11,6 +9,7 @@ import {
   summarizeApprovals,
   toggleReaction,
 } from './threads';
+import { useAcceptanceCommentList } from './useAcceptanceCommentList';
 
 const EMPTY: AcceptanceCommentList = { canApprove: false, canComment: false, items: [] };
 
@@ -20,11 +19,7 @@ const EMPTY: AcceptanceCommentList = { canApprove: false, canComment: false, ite
  * the bundle itself never changes because of a comment.
  */
 export const useAcceptanceComments = (acceptanceId: string | undefined) => {
-  const swr = useClientDataSWR<AcceptanceCommentList>(
-    acceptanceId ? acceptanceCommentKeys.list(acceptanceId) : null,
-    () => acceptanceCommentService.list(acceptanceId!),
-    { revalidateOnFocus: true },
-  );
+  const swr = useAcceptanceCommentList(acceptanceId);
   const data = swr.data ?? EMPTY;
   const { mutate } = swr;
 

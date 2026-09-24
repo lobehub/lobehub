@@ -108,6 +108,44 @@ const createService = (
 
 describe('HeterogeneousAgentService', () => {
   describe('normalizeHeterogeneousFinishError', () => {
+    it('enriches a flattened weekly limit with the stable quota fields', () => {
+      expect(
+        normalizeHeterogeneousFinishError('claude-code', {
+          message: "You've hit your weekly limit · resets 10pm (Asia/Shanghai)",
+          type: 'AgentRuntimeError',
+        }),
+      ).toMatchObject({
+        errorRef: 'H2001',
+        attribution: 'user',
+        retryable: false,
+        body: { agentType: 'claude-code', code: 'rate_limit', details: { kind: 'usage_limit' } },
+      });
+    });
+
+    it('turns a Kimi Code quota exit into the rate-limit guide instead of a JSON card', () => {
+      // Verbatim stderr from a real run: Kimi Code reports a spent weekly
+      // window through `provider.auth_error`, and used to land as the generic
+      // AgentRuntimeError catch-all with no reset / schedule / transfer action.
+      expect(
+        normalizeHeterogeneousFinishError('kimi-code', {
+          message:
+            "error: failed to run prompt: provider.auth_error: 403 You've reached your weekly (7-day) usage limit. Your quota will reset when the current 7-day window ends. To continue now, purchase extra usage or upgrade your plan: https://www.kimi.com/membership/subscription?tab=quota",
+          type: 'AgentRuntimeError',
+        }),
+      ).toMatchObject({
+        attribution: 'user',
+        category: 'quota',
+        countAsFailure: false,
+        errorRef: 'H2001',
+        body: {
+          agentType: 'kimi-code',
+          code: 'rate_limit',
+          details: { kind: 'usage_limit' },
+          rateLimitInfo: { rateLimitType: 'seven_day', status: 'rejected' },
+        },
+      });
+    });
+
     it('classifies a flattened Claude Code login failure for the frontend status guide', () => {
       expect(
         normalizeHeterogeneousFinishError('claude-code', {
@@ -120,6 +158,7 @@ describe('HeterogeneousAgentService', () => {
           code: 'auth_required',
           stderr: 'Not logged in · Please run /login',
         },
+        errorRef: 'H1001',
         type: 'AgentRuntimeError',
       });
     });
@@ -145,7 +184,7 @@ describe('HeterogeneousAgentService', () => {
         type: 'AgentRuntimeError',
       };
 
-      expect(normalizeHeterogeneousFinishError('claude-code', error)).toBe(error);
+      expect(normalizeHeterogeneousFinishError('claude-code', error)).toMatchObject(error);
     });
   });
 

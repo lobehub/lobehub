@@ -3,6 +3,7 @@
 import { ConfigProvider } from 'antd';
 import dayjs from 'dayjs';
 import { memo, type PropsWithChildren, useEffect, useState } from 'react';
+import { I18nextProvider } from 'react-i18next';
 import { isRtlLang } from 'rtl-detect';
 
 import type { DayjsLocaleGlobEntry } from '@/utils/dayjsLocale';
@@ -32,12 +33,12 @@ const dayjsLocaleLoaders: Record<string, DayjsLocaleGlobEntry> = {
   'zh-tw': () => import('dayjs/locale/zh-tw'),
 };
 
-const updateDayjs = async (lang: string) => {
+const loadDayjsLocale = async (lang: string) => {
   const locale = normalizeDayjsLocale(lang);
   const loader = dayjsLocaleLoaders[locale] ?? dayjsLocaleLoaders.en;
   const mod = await loadDayjsLocaleModule(loader!);
 
-  dayjs.locale(mod.default);
+  return mod.default;
 };
 
 interface WorkbenchLocaleProps extends PropsWithChildren {
@@ -53,9 +54,21 @@ const WorkbenchLocale = memo<WorkbenchLocaleProps>(({ children, defaultLang, res
   if (!i18n.instance.isInitialized) void i18n.init({ initAsync: !resources });
 
   useEffect(() => {
+    if (defaultLang) void i18n.changeLanguage(defaultLang);
+  }, [defaultLang, i18n]);
+
+  useEffect(() => {
+    let localeRequest = 0;
     const applyLocale = async (nextLang: string) => {
+      const request = ++localeRequest;
+      const [nextAntdLocale, nextDayjsLocale] = await Promise.all([
+        getAntdLocale(nextLang),
+        loadDayjsLocale(nextLang),
+      ]);
+      if (request !== localeRequest) return;
+
+      dayjs.locale(nextDayjsLocale);
       setLang(nextLang);
-      const [nextAntdLocale] = await Promise.all([getAntdLocale(nextLang), updateDayjs(nextLang)]);
       setAntdLocale(nextAntdLocale);
     };
 
@@ -63,14 +76,17 @@ const WorkbenchLocale = memo<WorkbenchLocaleProps>(({ children, defaultLang, res
     i18n.instance.on('languageChanged', applyLocale);
 
     return () => {
+      localeRequest++;
       i18n.instance.off('languageChanged', applyLocale);
     };
   }, [defaultLang, i18n]);
 
   return (
-    <ConfigProvider direction={isRtlLang(lang) ? 'rtl' : 'ltr'} locale={antdLocale}>
-      {children}
-    </ConfigProvider>
+    <I18nextProvider i18n={i18n.instance}>
+      <ConfigProvider direction={isRtlLang(lang) ? 'rtl' : 'ltr'} locale={antdLocale}>
+        {children}
+      </ConfigProvider>
+    </I18nextProvider>
   );
 });
 

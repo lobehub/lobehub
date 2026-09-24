@@ -42,6 +42,8 @@
     "apps/workbench"
   ],
   "scripts": {
+    "alint": "alint",
+    "alint:setup": "bun packages/alint/setup.ts",
     "build": "bun run build:spa && bun run build:spa:auth && bun run build:spa:workbench && bun run build:spa:share && bun run build:spa:copy && bun run build:next",
     "build:analyze": "cross-env NODE_OPTIONS=--max-old-space-size=81920 next experimental-analyze",
     "build:docker": "pnpm run build:spa && pnpm run build:spa:mobile && pnpm run build:spa:auth && pnpm run build:spa:workbench && pnpm run build:spa:share && cross-env WORKBENCH_REQUIRED=1 SHARE_REQUIRED=1 pnpm run build:spa:copy && cross-env NODE_OPTIONS=--max-old-space-size=8192 DOCKER=true next build",
@@ -147,7 +149,7 @@
   },
   "lint-staged": {
     "*.md": [
-      "remark --silent --output --",
+      "remark --silent --silently-ignore --output --",
       "prettier --write --no-error-on-unmatched-pattern"
     ],
     "*.mdx": [
@@ -308,6 +310,7 @@
     "@lobechat/shared-tool-ui": "workspace:*",
     "@lobechat/ssrf-safe-fetch": "workspace:*",
     "@lobechat/tool-runtime": "workspace:*",
+    "@lobechat/tool-view-model": "workspace:*",
     "@lobechat/utils": "workspace:*",
     "@lobechat/web-crawler": "workspace:*",
     "@lobehub/analytics": "^1.6.4",
@@ -350,7 +353,7 @@
     "@xterm/addon-webgl": "^0.18.0",
     "@xterm/xterm": "^5.5.0",
     "@xyflow/react": "^12.11.5",
-    "@zumer/snapdom": "^1.9.14",
+    "@zumer/snapdom": "^2.24.10",
     "ahooks": "^3.9.7",
     "antd": "6.3.5",
     "antd-style": "4.1.0",
@@ -485,6 +488,7 @@
     "zustand-utils": "^2.1.1"
   },
   "devDependencies": {
+    "@alint-js/cli": "0.7.1",
     "@commitlint/cli": "^19.8.1",
     "@edge-runtime/vm": "^5.0.0",
     "@huggingface/tasks": "^0.19.90",

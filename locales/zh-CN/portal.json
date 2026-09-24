@@ -1,4 +1,5 @@
 {
+  "FilePreview.actions.download": "下载源文件",
   "FilePreview.tabs.chunk": "分块",
   "FilePreview.tabs.file": "文件",
   "Plugins": "技能",
@@ -29,6 +30,7 @@
   "artifacts.svg.copySuccess": "图片复制成功",
   "artifacts.svg.download.png": "下载为 PNG",
   "artifacts.svg.download.svg": "下载为 SVG",
+  "document.saveConflict": "文档已在别处更新，正在刷新为最新版本",
   "document.todos.allCompleted": "所有任务已完成",
   "document.todos.title": "任务",
   "emptyArtifactList": "当前 Artifacts 列表为空，请在会话中按需使用技能后再查看",

@@ -9,6 +9,7 @@ import {
   type RegisterSkillToolResultWorkParams,
   type RegisterTaskWorkParams,
   type SkillToolResultWorkInput,
+  type WorkAccessScope,
   type WorkItem,
   type WorkSkillProvider,
 } from '@lobechat/types';
@@ -48,8 +49,19 @@ const SKILL_TOOL_RESULT_NORMALIZERS = {
 export class WorkModel {
   private readonly ctx: WorkContext;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
-    this.ctx = { db, userId, workspaceId };
+  /**
+   * @param accessScope - Agent Share boundary; defaults to the ordinary
+   * (creator-facing) scope. Share-runtime callers pass
+   * `agentShareWorkAccessScope(...)` so registration stamps provenance and
+   * reads stay confined to that visitor topic.
+   */
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    accessScope?: WorkAccessScope,
+  ) {
+    this.ctx = { accessScope, db, userId, workspaceId };
   }
 
   registerTask = (params: RegisterTaskWorkParams): Promise<WorkItem | null> =>

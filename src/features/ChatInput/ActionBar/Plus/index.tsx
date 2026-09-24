@@ -3,7 +3,7 @@
 import { validateVideoFileSize } from '@lobechat/utils/client';
 import type { IconProps } from '@lobehub/ui';
 import { Icon, Popover } from '@lobehub/ui';
-import { Tag, toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui/base-ui';
 import { GlobeOffIcon, SkillsIcon } from '@lobehub/ui/icons';
 import { Upload } from 'antd';
 import { css, cssVar, cx } from 'antd-style';
@@ -143,20 +143,6 @@ const countChip = css`
   color: ${cssVar.colorTextSecondary};
 
   background: ${cssVar.colorFillSecondary};
-`;
-
-const gatewayModeLabel = css`
-  display: inline-flex;
-  gap: 8px;
-  align-items: center;
-  min-width: 0;
-
-  .title {
-    overflow: hidden;
-    min-width: 0;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
 `;
 
 const gatewayModeInfoCard = css`
@@ -445,16 +431,6 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
         label
       );
 
-    const renderGatewayModeLabel = () => (
-      <span className={cx(gatewayModeLabel)}>
-        {/* Brand name — same in every language, so no i18n. */}
-        <span className="title">Agent Gateway</span>
-        <Tag color={'info'} size={'small'} variant={'filled'}>
-          {t('gatewayMode.beta')}
-        </Tag>
-      </span>
-    );
-
     const gatewayModeInfo = (
       <div className={cx(gatewayModeInfoCard)}>
         <img
@@ -554,9 +530,8 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
               checked: isGatewayModeEnabled,
               icon: Cloud,
               key: 'gateway-mode',
-              label: (
-                <PopoverLabel label={renderGatewayModeLabel()} popoverContent={gatewayModeInfo} />
-              ),
+              // Brand name — same in every language, so no i18n.
+              label: <PopoverLabel label={'Agent Gateway'} popoverContent={gatewayModeInfo} />,
               onCheckedChange: handleToggleGatewayMode,
               type: 'switch',
             } as ActionDropdownMenuItems[number],

@@ -1,4 +1,37 @@
 import type { ShareVisibility } from '../topic';
+import type { WorkItem } from '../work';
+
+/** A creator-authored visitor task, independent of the agent's opening questions. */
+export interface AgentShareDemoCase {
+  description: string;
+  /** Displayed as the example task and carried into the visitor's conversation draft. */
+  prompt: string;
+}
+
+/** Explicit public projection: no conversation, message, owner, or tool provenance. */
+export type SharedAgentWork = Pick<
+  WorkItem,
+  | 'createdAt'
+  | 'description'
+  | 'id'
+  | 'identifier'
+  | 'resourceType'
+  | 'status'
+  | 'title'
+  | 'type'
+  | 'updatedAt'
+  | 'url'
+> & { totalCost: number | null };
+
+/** Creator-side delivery aggregates; selection for the showcase does not change the sample. */
+export interface SharedAgentDeliveryStats {
+  /** Mean elapsed seconds across finished operations with valid timestamps. */
+  averageOperationDurationSeconds: number | null;
+  /** Mean measured Work cost; cumulative versions from one operation are not added twice. */
+  averageWorkCost: number | null;
+  lastDeliveredAt: Date | null;
+  workCount: number;
+}
 
 /**
  * The share's own rules, restated for the visitor BEFORE they invest in a
@@ -24,7 +57,7 @@ export interface SharedAgentTerms {
  * Aggregate reach of the share. `views` is a raw page-view counter (not
  * deduplicated); `visitors` and `conversations` come from the share's topics.
  */
-export interface SharedAgentStats {
+export interface SharedAgentStats extends SharedAgentDeliveryStats {
   conversations: number;
   views: number;
   visitors: number;
@@ -54,6 +87,8 @@ export interface SharedAgentData {
     tags: string[];
     title: string | null;
   };
+  /** Who funds visitor execution, without exposing the owning Workspace id. */
+  billingScope: 'personal' | 'workspace';
   /**
    * Who published this share. In a market of user-made agents the creator is
    * the quality signal a visitor has before any usage number exists.
@@ -62,6 +97,8 @@ export interface SharedAgentData {
     avatar: string | null;
     name: string | null;
   };
+  demoCases: AgentShareDemoCase[];
+  featuredWorks: SharedAgentWork[];
   /**
    * True when the requesting user (`ctx.userId`) is the creator of the
    * shared agent — lets the client render owner-only affordances (e.g. an

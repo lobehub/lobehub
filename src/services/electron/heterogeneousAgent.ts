@@ -2,6 +2,7 @@ import type {
   ClaudeCodeQuotaSnapshot,
   CodexQuotaSnapshot,
   CodexRateLimitResetResult,
+  KimiCodeQuotaSnapshot,
 } from '@lobechat/electron-client-ipc';
 import type { HeterogeneousProviderBindingReference } from '@lobechat/heterogeneous-agents';
 import type {
@@ -37,9 +38,23 @@ class HeterogeneousAgentService {
 
   async sendPrompt(params: {
     agentId?: string;
+    /** Assistant row this run streams into — recorded in the in-flight ledger. */
+    assistantMessageId?: string;
+    /** User the run belongs to — recovery is user-scoped. */
+    userId?: string;
+    /** Workspace the run belongs to — recovery is workspace-scoped. */
+    workspaceId?: string;
     imageList?: Array<{ id: string; url: string }>;
     operationId: string;
     prompt: string;
+    /**
+     * Replay the session's on-disk transcript instead of spawning the CLI.
+     * Desktop main resolves with `{ replay: { complete } }`.
+     */
+    replayTranscript?: boolean;
+    /** Claude profile root the transcript was written under (restart recovery). */
+    replayTranscriptConfigDir?: string;
+    replayTranscriptStartedAt?: string;
     /** Prior turns used to rebuild a GC-ed Claude Code transcript before `--resume`. */
     resumeReplayMessages?: HeteroSessionImportMessage[];
     sessionId: string;
@@ -59,6 +74,42 @@ class HeterogeneousAgentService {
 
   async getSessionInfo(sessionId: string) {
     return this.ipc.heterogeneousAgent.getSessionInfo({ sessionId });
+  }
+
+  /**
+   * Local CLI runs the previous desktop process left in flight, handed over
+   * once. Main reaps any surviving process before returning.
+   */
+  /**
+   * Local CLI runs the previous desktop process left in flight, handed over
+   * once. Only runs belonging to this user AND workspace are released: topic
+   * lookups are scoped to both, so an entry recorded elsewhere has to stay on
+   * the ledger until the launch that owns it.
+   */
+  async listInterruptedRuns(owner: { userId?: string; workspaceId?: string }) {
+    return this.ipc.heterogeneousAgent.listInterruptedRuns(owner);
+  }
+
+  /**
+   * Give a claimed run back once its recovery has an outcome. Until this call
+   * the entry stays on the ledger, so a crash mid-recovery can retry it.
+   */
+  async releaseInterruptedRun(ipcSessionId: string) {
+    return this.ipc.heterogeneousAgent.releaseInterruptedRun({ ipcSessionId });
+  }
+
+  /** Whether the on-disk CLI transcript for a run can be replayed, without spawning anything. */
+  async probeTranscriptReplay(params: {
+    agentType: string;
+    configDir?: string;
+    cwd?: string;
+    /** Prompt of the interrupted run; a transcript ending on a different turn is rejected. */
+    expectedPrompt?: string;
+    /** ISO spawn time of the interrupted run; a turn recorded before it is not this run's. */
+    notBefore?: string;
+    sessionId?: string;
+  }): Promise<{ available: boolean; complete?: boolean; reason?: string }> {
+    return this.ipc.heterogeneousAgent.probeTranscriptReplay(params);
   }
 
   async listModels(
@@ -89,6 +140,14 @@ class HeterogeneousAgentService {
     force?: boolean;
   }): Promise<ClaudeCodeQuotaSnapshot> {
     return this.ipc.heterogeneousAgent.getClaudeCodeQuota(params);
+  }
+
+  async getKimiCodeQuota(params?: {
+    env?: Record<string, string>;
+    force?: boolean;
+    kimiCodeHomePath?: string | null;
+  }): Promise<KimiCodeQuotaSnapshot> {
+    return this.ipc.heterogeneousAgent.getKimiCodeQuota(params);
   }
 
   /**

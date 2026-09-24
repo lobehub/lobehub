@@ -666,30 +666,6 @@ describe('lexical filter-only search (no BM25 query)', () => {
     expect(result.activities.map((item) => item.id)).toEqual([kept.id]);
   });
 
-  it('filters experiences by type and tags without running BM25', async () => {
-    const { experience: kept } = await createExperiencePair({
-      memoryTags: ['migration'],
-      tags: ['migration'],
-      title: 'migration lesson',
-      type: 'lesson',
-    });
-    await createExperiencePair({
-      memoryTags: ['other'],
-      tags: ['other'],
-      title: 'other note',
-      type: 'note',
-    });
-
-    const result = await memoryModel.searchMemory({
-      layers: [LayersEnum.Experience],
-      tags: ['migration'],
-      topK: { activities: 0, contexts: 0, experiences: 5, identities: 0, preferences: 0 },
-      types: ['lesson'],
-    });
-
-    expect(result.experiences.map((item) => item.id)).toEqual([kept.id]);
-  });
-
   it('filters contexts by category without running BM25', async () => {
     const { context: kept } = await createContextPair({
       memoryCategory: 'project',
@@ -785,26 +761,27 @@ describe('lexical filter-only search (no BM25 query)', () => {
     expect(result.activities.map((item) => item.id)).toEqual([kept.id]);
   });
 
-  it('filters experiences by category without running BM25', async () => {
-    const { experience: kept } = await createExperiencePair({
-      memoryCategory: 'project',
-      memoryTags: ['migration'],
-      tags: ['migration'],
-    });
+  it('never returns experiences, even when the caller asks for that layer', async () => {
+    /**
+     * @example
+     * Experience memory is retired: an explicit `layers: [Experience]` with a positive topK
+     * still yields an empty bucket and an empty layer meta.
+     */
     await createExperiencePair({
-      memoryCategory: 'personal',
       memoryTags: ['migration'],
       tags: ['migration'],
+      title: 'migration lesson',
+      type: 'lesson',
     });
 
     const result = await memoryModel.searchMemory({
-      categories: ['project'],
       layers: [LayersEnum.Experience],
       tags: ['migration'],
       topK: { activities: 0, contexts: 0, experiences: 5, identities: 0, preferences: 0 },
     });
 
-    expect(result.experiences.map((item) => item.id)).toEqual([kept.id]);
+    expect(result.experiences).toEqual([]);
+    expect(result.meta.layers.experiences).toEqual({ hasMore: false, returned: 0, total: 0 });
   });
 
   it('supports a start-only timeRange filter', async () => {

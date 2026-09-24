@@ -283,6 +283,176 @@ export interface AgentRunRequestMessage {
   workspaceId?: string;
 }
 
+// ─── Tunnel registry ───
+//
+// A registration maps an opaque slug to one device + port, and gives the tunnel
+// its public hostname `<port>--<slug>.lobe.sh`. The registry lives in the
+// gateway; the server creates, lists and revokes entries through the admin API.
+
+export interface GatewayTunnelRegistration {
+  createdAt: number;
+  /** userId of whoever opened the tunnel. */
+  createdBy: string;
+  deviceId: string;
+  expiresAt?: number;
+  /** Public hostname, e.g. `3000--x7k2p9q8.lobe.sh`. */
+  hostname?: string;
+  port: number;
+  /** Owning principal — the gateway routing key (`user:<id>` / `workspace:<id>`). */
+  principal: string;
+  slug: string;
+}
+
+/**
+ * Gateway routing key for a caller. A workspace tunnel is reachable by every
+ * member of that workspace; a personal one only by its owner.
+ */
+export const devicePrincipal = (params: { userId: string; workspaceId?: string }): string =>
+  params.workspaceId ? `workspace:${params.workspaceId}` : `user:${params.userId}`;
+
+// ─── HTTP Tunnel Frames ───
+//
+// A tunnel relays one browser HTTP request to a TCP port on this device as a
+// sequence of JSON frames over the device WebSocket, multiplexed by `connId`.
+// The browser-facing HTTP semantics live on the gateway; the device only sees
+// a target (`127.0.0.1:<port>`) plus a request head and a byte stream.
+//
+// Flow control is credit-based per direction: each side sends at most
+// `TUNNEL_FLOW_WINDOW` unacked bytes and the receiver refills that window with
+// `tunnel_ack`. Exceeding the gateway's hard cap tears the tunnel down, so the
+// device must pace its response body rather than firing it all at once.
+//
+// Frame shapes mirror `device-gateway/src/types.ts`; keep both in step.
+
+/** Bytes per `tunnel_data` frame. */
+export const TUNNEL_CHUNK_SIZE = 64 * 1024;
+/** Unacked bytes one side may have in flight before it must wait. */
+export const TUNNEL_FLOW_WINDOW = 512 * 1024;
+
+export interface TunnelRequestHead {
+  headers: [string, string][];
+  method: string;
+  /** Path + query of the target request, e.g. `/api/items?a=1`. */
+  path: string;
+}
+
+export interface TunnelResponseHead {
+  headers: [string, string][];
+  status: number;
+}
+
+/** Server → Client: open a tunnel to `127.0.0.1:<port>` for one HTTP request. */
+export interface TunnelOpenMessage {
+  connId: string;
+  head: TunnelRequestHead;
+  target: {
+    host: string;
+    port: number;
+  };
+  type: 'tunnel_open';
+}
+
+/** Client → Server: result of a tunnel_open. On success `head` is the response head. */
+export interface TunnelOpenAckMessage {
+  connId: string;
+  error?: string;
+  head?: TunnelResponseHead;
+  ok: boolean;
+  type: 'tunnel_open_ack';
+}
+
+/** Both directions: a body chunk. `fin` marks the last chunk of that direction. */
+export interface TunnelDataMessage {
+  connId: string;
+  /** base64-encoded bytes. */
+  data: string;
+  fin?: boolean;
+  seq: number;
+  type: 'tunnel_data';
+}
+
+/** Both directions: acknowledge `bytes` consumed, refilling the sender's window. */
+export interface TunnelAckMessage {
+  bytes: number;
+  connId: string;
+  type: 'tunnel_ack';
+}
+
+/** Both directions: tear the tunnel down (abort, error, or peer gone). */
+export interface TunnelCloseMessage {
+  connId: string;
+  reason?: string;
+  type: 'tunnel_close';
+}
+
+/**
+ * Query parameter that carries the entry-ticket JWT on a tunnel link. Not
+ * `token`: apps behind a tunnel use `?token=` themselves (Vite's HMR socket).
+ * Mirrors `device-gateway/src/types.ts`.
+ */
+export const TUNNEL_TOKEN_PARAM = '__lobe_tunnel_token';
+
+/** Largest WebSocket message relayed either way; bigger closes with 1009. */
+export const TUNNEL_WS_MAX_MESSAGE = 1024 * 1024;
+
+/** Server → Client: open a WebSocket to `127.0.0.1:<port>` (e.g. dev-server HMR). */
+export interface TunnelWsOpenMessage {
+  connId: string;
+  head: {
+    /** Offered subprotocols, in the browser's order. */
+    protocols: string[];
+    /** Path + query, e.g. `/?token=abc`. */
+    path: string;
+  };
+  target: { host: string; port: number };
+  type: 'tunnel_ws_open';
+}
+
+/** Client → Server: the upstream socket opened (with its subprotocol) or failed. */
+export interface TunnelWsOpenAckMessage {
+  connId: string;
+  error?: string;
+  ok: boolean;
+  protocol?: string;
+  type: 'tunnel_ws_open_ack';
+}
+
+/** Both directions: one WebSocket message. `data` is base64 when `binary`. */
+export interface TunnelWsDataMessage {
+  binary?: boolean;
+  connId: string;
+  data: string;
+  type: 'tunnel_ws_message';
+}
+
+/** Both directions: one side closed. */
+export interface TunnelWsCloseMessage {
+  code?: number;
+  connId: string;
+  reason?: string;
+  type: 'tunnel_ws_close';
+}
+
+/** Tunnel frames the gateway sends down to this device. */
+export type TunnelServerFrame =
+  | TunnelAckMessage
+  | TunnelCloseMessage
+  | TunnelDataMessage
+  | TunnelOpenMessage
+  | TunnelWsCloseMessage
+  | TunnelWsDataMessage
+  | TunnelWsOpenMessage;
+
+/** Tunnel frames this device sends up to the gateway. */
+export type TunnelClientFrame =
+  | TunnelAckMessage
+  | TunnelCloseMessage
+  | TunnelDataMessage
+  | TunnelOpenAckMessage
+  | TunnelWsCloseMessage
+  | TunnelWsDataMessage
+  | TunnelWsOpenAckMessage;
+
 /** Client → Server: acknowledgement for an agent_run_request. */
 export interface AgentRunAckMessage {
   operationId: string;
@@ -298,7 +468,8 @@ export type ClientMessage =
   | MessageApiResponseMessage
   | RpcResponseMessage
   | SystemInfoResponseMessage
-  | ToolCallResponseMessage;
+  | ToolCallResponseMessage
+  | TunnelClientFrame;
 export type ServerMessage =
   | AgentRunRequestMessage
   | AuthExpiredMessage
@@ -308,7 +479,8 @@ export type ServerMessage =
   | MessageApiRequestMessage
   | RpcRequestMessage
   | SystemInfoRequestMessage
-  | ToolCallRequestMessage;
+  | ToolCallRequestMessage
+  | TunnelServerFrame;
 
 // ─── Client Types ───
 

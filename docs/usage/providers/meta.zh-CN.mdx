@@ -12,6 +12,8 @@ tags:
 
 [Meta Model API](https://dev.meta.ai/) 提供 Muse Spark 的 API 访问。使用此服务商需要 Meta Model API 密钥。API 用量由 Meta 单独计费，具体费用及限制请查看官方[价格与速率限制](https://dev.meta.ai/docs/pricing-rate-limits)。
 
+在 LobeHub 中配置时，打开 **应用设置 → AI 服务商**，选择对应服务商并打开右侧开关。
+
 <Steps>
   ### 步骤一：创建 API 密钥
 
@@ -21,7 +23,7 @@ tags:
 
   ### 步骤二：在 LobeHub 中配置 Meta
 
-  - 打开**设置 → AI 服务商**，找到并启用 **Meta**。
+  - 打开 **应用设置 → AI 服务商 → Meta**，然后启用服务商。
   - 填入 API 密钥。如果自部署实例的管理员已配置服务端密钥，可以直接使用该配置，无需再填写个人密钥。
   - 保留默认 API 基础地址 `https://api.meta.ai/v1`；使用兼容代理时再修改。
   - 执行连通性检查，然后为助手选择可用的 Muse Spark 模型，发送一条简短消息。

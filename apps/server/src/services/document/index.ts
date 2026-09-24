@@ -5,8 +5,12 @@ import { type LobeChatDatabase } from '@lobechat/database';
 import { type DocumentItem } from '@lobechat/database/schemas';
 import { documents, files } from '@lobechat/database/schemas';
 import { loadFile, UnsupportedFileTypeError } from '@lobechat/file-loaders';
-import type { FileAccessScope } from '@lobechat/types';
-import { ordinaryFileAccessScope, stripAgentShareFileProvenance } from '@lobechat/types';
+import type { DocumentAccessScope, FileAccessScope } from '@lobechat/types';
+import {
+  ordinaryDocumentAccessScope,
+  ordinaryFileAccessScope,
+  stripAgentShareDocumentProvenance,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { and, eq, sql } from 'drizzle-orm';
@@ -63,6 +67,7 @@ export class DocumentService {
   private editLockService: EditLockService;
   private db: LobeChatDatabase;
   private callerAgentVisibility?: 'private' | 'public' | null;
+  private documentAccessScope: DocumentAccessScope;
 
   private workspaceId?: string;
 
@@ -71,14 +76,22 @@ export class DocumentService {
     userId: string,
     workspaceId?: string,
     callerAgentVisibility?: 'private' | 'public' | null,
+    documentAccessScope: DocumentAccessScope = ordinaryDocumentAccessScope,
   ) {
     this.userId = userId;
     this.db = db;
     this.workspaceId = workspaceId;
     this.callerAgentVisibility = callerAgentVisibility;
+    this.documentAccessScope = documentAccessScope;
     this.fileModel = new FileModel(db, userId, workspaceId);
     this.knowledgeBaseModel = new KnowledgeBaseModel(db, userId, workspaceId);
-    this.documentModel = new DocumentModel(db, userId, workspaceId, callerAgentVisibility);
+    this.documentModel = new DocumentModel(
+      db,
+      userId,
+      workspaceId,
+      callerAgentVisibility,
+      documentAccessScope,
+    );
     this.editLockService = new EditLockService(userId);
   }
 
@@ -146,7 +159,7 @@ export class DocumentService {
       slug,
       visibility,
     } = params;
-    const sanitizedMetadata = stripAgentShareFileProvenance(metadata);
+    const sanitizedMetadata = stripAgentShareDocumentProvenance(metadata);
 
     // Calculate character and line counts
     const totalCharCount = content?.length || 0;
@@ -635,6 +648,7 @@ export class DocumentService {
         this.userId,
         this.workspaceId,
         this.callerAgentVisibility,
+        this.documentAccessScope,
       );
       const fileModel = new FileModel(transactionDb, this.userId, this.workspaceId);
       const documentHistoryService = new DocumentHistoryService(
@@ -740,21 +754,23 @@ export class DocumentService {
       // The lock lease is refreshed by the client heartbeat (acquireDocumentLock),
       // so a save does not need to touch it.
 
-      let savedAt: Date | undefined;
+      const rowUpdated = Object.keys(updates).length > 0 || historyAppended;
+      let updatedAt = currentDocument.updatedAt;
+      if (rowUpdated) {
+        const committedVersion = await documentModel.update(id, updates as Partial<DocumentItem>);
+        if (!committedVersion) throw new Error(`Document not found: ${id}`);
+        updatedAt = committedVersion;
+      }
 
+      const savedAt = historyAppended ? updatedAt : undefined;
       if (historyAppended) {
-        savedAt = new Date();
         await documentHistoryService.createHistory({
           breakAutosaveWindow: params.breakAutosaveWindow,
           documentId: id,
           editorData: currentEditorDataAccepted,
           saveSource: params.saveSource ?? 'autosave',
-          savedAt,
+          savedAt: updatedAt,
         });
-      }
-
-      if (Object.keys(updates).length > 0) {
-        await documentModel.update(id, updates as Partial<DocumentItem>);
       }
 
       if ((params.title !== undefined || params.parentId !== undefined) && currentDocument.fileId) {
@@ -764,13 +780,14 @@ export class DocumentService {
         await fileModel.update(currentDocument.fileId, fileUpdates);
       }
 
-      changed = Object.keys(updates).length > 0 || historyAppended;
+      changed = rowUpdated;
 
       return {
         ...(addedMentionUserIds.length > 0 ? { addedMentionUserIds } : {}),
         historyAppended,
         id,
         savedAt,
+        updatedAt,
       };
     });
 
@@ -902,6 +919,7 @@ export class DocumentService {
           this.userId,
           this.workspaceId,
           this.callerAgentVisibility,
+          this.documentAccessScope,
         );
 
         // Whoever inserted first wins; discard this parse rather than adding a

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { buildBotSender, formatPrompt, formatReferencedMessage } from '../formatPrompt';
 
@@ -102,6 +102,39 @@ describe('formatPrompt', () => {
 
     expect(result).toContain('hello world');
     expect(result).not.toContain('<@!bot123>');
+  });
+
+  it('should pass the message to sanitizeUserInput so platforms can resolve mentions', () => {
+    const msg = { ...baseMessage, raw: { mentions: [] }, text: '<@bot123> hi <@other>' };
+    const sanitize = vi.fn((text: string) => text.replace('<@other>', '@Other'));
+    const result = formatPrompt(msg, { sanitizeUserInput: sanitize });
+
+    expect(sanitize).toHaveBeenCalledWith('<@bot123> hi <@other>', msg);
+    expect(result).toContain('hi @Other');
+  });
+
+  it('should resolve mentions inside the referenced message without stripping them', () => {
+    const msg = {
+      ...baseMessage,
+      raw: {
+        referenced_message: {
+          author: { global_name: 'Bob', username: 'bob' },
+          content: '<@bot123> can <@other> do this?',
+        },
+      },
+      text: '<@bot123> yes',
+    };
+    const resolveMentions = vi.fn((text: string) =>
+      text.replace('<@bot123>', '@Bot').replace('<@other>', '@Other'),
+    );
+    const result = formatPrompt(msg, { resolveMentions, sanitizeUserInput: discordSanitize });
+
+    expect(resolveMentions).toHaveBeenCalledWith('<@bot123> can <@other> do this?', msg);
+    expect(result).toContain(
+      '<referenced_message sender="Bob">@Bot can @Other do this?</referenced_message>',
+    );
+    expect(result).toContain('yes');
+    expect(result).not.toContain('<@bot123> yes');
   });
 
   it('should not strip mentions when no sanitizeUserInput provided', () => {

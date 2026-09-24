@@ -878,6 +878,33 @@ describe('convertOpenAIResponseInputs', () => {
     ]);
   });
 
+  it('should preserve the requested image detail on input_image parts', async () => {
+    const messages: OpenAIChatMessage[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Inspect the circled area' },
+          {
+            type: 'image_url',
+            image_url: { detail: 'high', url: 'data:image/png;base64,test123' },
+          },
+        ],
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages);
+
+    expect(result).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'input_text', text: 'Inspect the circled area' },
+          { detail: 'high', image_url: 'data:image/png;base64,test123', type: 'input_image' },
+        ],
+      },
+    ]);
+  });
+
   it('应该正确转换包含视频的消息', async () => {
     const messages: OpenAIChatMessage[] = [
       {

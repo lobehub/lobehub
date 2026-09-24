@@ -3,6 +3,7 @@ import type { ProjectStatus, ProjectVisibility } from '@lobechat/types';
 import { and, asc, desc, eq, inArray, isNull, max, or, sql } from 'drizzle-orm';
 
 import { agents } from '../schemas/agent';
+import { environments } from '../schemas/environment';
 import { knowledgeBases } from '../schemas/file';
 import {
   projectAgents,
@@ -10,12 +11,15 @@ import {
   projectKnowledgeBases,
   projects,
 } from '../schemas/project';
+import { projectEnvironments } from '../schemas/projectEnvironment';
 import { projectWorks } from '../schemas/projectWork';
 import { tasks } from '../schemas/task';
+import { topics } from '../schemas/topic';
 import { works } from '../schemas/work';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { AgentModel } from './agent';
+import { EnvironmentModel } from './environment';
 
 export interface CreateProjectInput {
   avatar?: string;
@@ -616,5 +620,86 @@ export class ProjectModel {
       .where(and(eq(projects.id, id), this.manageable()))
       .limit(1);
     return project ?? null;
+  }
+
+  /** Link an existing environment to a project; re-attaching is a no-op. */
+  async attachEnvironment(projectId: string, environmentId: string) {
+    if (!(await this.findManageableById(projectId)))
+      throw new Error('Project not found or access denied');
+    const environment = await new EnvironmentModel(
+      this.db,
+      this.userId,
+      this.workspaceId,
+    ).findEnabledById(environmentId);
+    if (!environment) throw new Error('Environment not found or access denied');
+    await this.db
+      .insert(projectEnvironments)
+      .values({
+        projectId,
+        environmentId,
+        workspaceId: this.workspaceId,
+        addedByUserId: this.userId,
+      })
+      .onConflictDoNothing();
+    return { projectId, environmentId };
+  }
+
+  /** Enabled environments linked to this project. */
+  async listEnvironments(projectId: string) {
+    if (!(await this.findById(projectId))) throw new Error('Project not found or access denied');
+    return this.db
+      .select({
+        id: environments.id,
+        name: environments.name,
+        configuration: environments.configuration,
+      })
+      .from(environments)
+      .innerJoin(
+        projectEnvironments,
+        and(
+          eq(projectEnvironments.environmentId, environments.id),
+          eq(projectEnvironments.projectId, projectId),
+          eq(projectEnvironments.enabled, true),
+        ),
+      )
+      .where(
+        and(
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, environments),
+          eq(environments.enabled, true),
+        ),
+      );
+  }
+
+  /** All conversations belonging to the project, with or without a working directory. */
+  async listTopics(projectId: string) {
+    if (!(await this.findById(projectId))) throw new Error('Project not found or access denied');
+    const scope = { userId: this.userId, workspaceId: this.workspaceId };
+    return this.db
+      .select({
+        id: topics.id,
+        createdAt: topics.createdAt,
+        favorite: topics.favorite,
+        metadata: topics.metadata,
+        trigger: topics.trigger,
+        userId: topics.userId,
+        title: topics.title,
+        status: topics.status,
+        agentId: topics.agentId,
+        agentTitle: agents.title,
+        agentName: agents.name,
+        agentAvatar: agents.avatar,
+        updatedAt: topics.updatedAt,
+        projectWorkingDirectoryId: topics.projectWorkingDirectoryId,
+      })
+      .from(topics)
+      .leftJoin(agents, and(eq(agents.id, topics.agentId), buildWorkspaceWhere(scope, agents)))
+      .where(
+        and(
+          eq(topics.projectId, projectId),
+          buildWorkspaceWhere(scope, topics),
+          isNull(topics.deletedAt),
+        ),
+      )
+      .orderBy(desc(topics.updatedAt));
   }
 }

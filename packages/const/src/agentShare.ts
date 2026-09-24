@@ -200,6 +200,32 @@ export const hasShareToolGrant = (
   identifier: string,
 ): boolean => grants.has(identifier);
 
+/**
+ * The skills a share visitor's run may load, as an intersection of the run's
+ * real skill candidates with what the creator granted.
+ *
+ * Default-closed: a share with no `skillGrants` (or an empty one) grants no
+ * skill at all. `toolGrants` is NEVER consulted — skills are not picked in the
+ * tool picker, and tool and skill identifiers share ONE namespace, so reading a
+ * tool grant as a skill grant could only ever widen access by accident.
+ *
+ * Takes `candidateIds` rather than returning the raw grant list so a grant
+ * naming a skill this run does not actually have (deleted since, or belonging
+ * to another build) cannot leak into the pool.
+ *
+ * This is the single source of truth for "which skills is this visitor allowed
+ * to see and load", shared by the operation's skill-pool assembly and the skill
+ * runtime's load-time enforcement so the two cannot drift.
+ */
+export const resolveShareAllowedSkillIds = (
+  candidateIds: string[],
+  grants: { skillGrants?: string[] },
+): string[] => {
+  const granted = new Set(grants.skillGrants ?? []);
+
+  return candidateIds.filter((id) => granted.has(id));
+};
+
 /** Whether `identifier`'s specific `apiName` is granted — toolset-level grants every API. */
 export const isShareToolApiGranted = (
   grants: Map<string, ShareToolGrant>,

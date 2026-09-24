@@ -133,6 +133,7 @@ describe('DocumentAction', () => {
     vi.mocked(documentService.updateDocument).mockResolvedValue({
       historyAppended: false,
       id: 'doc-1',
+      updatedAt: '2026-01-01T00:00:00.000Z',
     });
 
     act(() => {
@@ -182,7 +183,13 @@ describe('DocumentAction', () => {
     const existingResource = createResourceFixture();
 
     let resolveUpdate:
-      ((value: { historyAppended: boolean; id: string; savedAt?: string }) => void) | undefined;
+      | ((value: {
+          historyAppended: boolean;
+          id: string;
+          savedAt?: string;
+          updatedAt: string;
+        }) => void)
+      | undefined;
     vi.mocked(documentService.updateDocument).mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -222,7 +229,7 @@ describe('DocumentAction', () => {
       title: 'Optimistic title',
     });
 
-    resolveUpdate?.({ historyAppended: false, id: 'doc-1' });
+    resolveUpdate?.({ historyAppended: false, id: 'doc-1', updatedAt: '2026-01-01T00:00:00.000Z' });
 
     await act(async () => {
       await pendingUpdate;
@@ -248,6 +255,7 @@ describe('DocumentAction', () => {
     vi.mocked(documentService.updateDocument).mockResolvedValue({
       historyAppended: false,
       id: 'doc-1',
+      updatedAt: '2026-01-01T00:00:00.000Z',
     });
 
     act(() => {
@@ -292,6 +300,74 @@ describe('DocumentAction', () => {
       parentId: undefined,
       title: 'Final title',
     });
+  });
+
+  it('keeps a list row whose library/parent are unknown when its title is saved (LOBE-14152)', async () => {
+    const { result } = renderHook(() => useStore());
+    const existingDocument = createDocumentFixture();
+    // `file.getKnowledgeItems` rows carry neither `knowledgeBaseId` nor `parentId`,
+    // so the merged resource must not be judged "outside the current query".
+    const existingResource = createResourceFixture();
+    delete existingResource.knowledgeBaseId;
+    delete existingResource.parentId;
+
+    vi.mocked(documentService.updateDocument).mockResolvedValue({
+      historyAppended: false,
+      id: 'doc-1',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    });
+
+    act(() => {
+      useStore.setState(
+        {
+          documents: [existingDocument],
+          queryParams: { libraryId: 'kb-1', parentId: null },
+          resourceList: [existingResource],
+          resourceMap: new Map([[existingResource.id, existingResource]]),
+        },
+        false,
+      );
+    });
+
+    await act(async () => {
+      await result.current.updateDocumentOptimistically('doc-1', { title: 'Typed title' });
+    });
+
+    expect(useStore.getState().resourceList.map((item) => item.id)).toEqual(['doc-1']);
+    expect(useStore.getState().resourceMap.get('doc-1')).toMatchObject({ name: 'Typed title' });
+  });
+
+  it('keeps a folder list row with unknown parentId when its title is saved (LOBE-14152)', async () => {
+    const { result } = renderHook(() => useStore());
+    const existingDocument = createDocumentFixture();
+    const existingResource = createResourceFixture();
+    delete existingResource.knowledgeBaseId;
+    delete existingResource.parentId;
+
+    vi.mocked(documentService.updateDocument).mockResolvedValue({
+      historyAppended: false,
+      id: 'doc-1',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    });
+
+    act(() => {
+      useStore.setState(
+        {
+          documents: [existingDocument],
+          queryParams: { libraryId: 'kb-1', parentId: 'weekly-reports' },
+          resourceList: [existingResource],
+          resourceMap: new Map([[existingResource.id, existingResource]]),
+        },
+        false,
+      );
+    });
+
+    await act(async () => {
+      await result.current.updateDocumentOptimistically('doc-1', { title: 'Typed title' });
+    });
+
+    expect(useStore.getState().resourceList.map((item) => item.id)).toEqual(['doc-1']);
+    expect(useStore.getState().resourceMap.get('doc-1')).toMatchObject({ name: 'Typed title' });
   });
 
   it('reverts optimistic resource updates when the sync fails', async () => {

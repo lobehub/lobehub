@@ -177,6 +177,9 @@ export class VerifyService {
   getAcceptanceBundle = (id: string): Promise<AcceptanceBundle> =>
     lambdaClient.acceptance.getBundle.query({ id });
 
+  setAcceptanceVisibility = (id: string, visibility: 'private' | 'public') =>
+    lambdaClient.acceptance.setVisibility.mutate({ id, visibility });
+
   /** The acceptance aggregate for a subject (topic/task/document), or null. */
   getAcceptanceBySubject = (subjectType: AcceptanceSubjectType, subjectId: string) =>
     lambdaClient.acceptance.getBySubject.query({ subjectId, subjectType });
@@ -237,7 +240,7 @@ export class VerifyService {
   acceptDelivery = (id: string, comment?: string) =>
     lambdaClient.acceptance.accept.mutate({ comment, id });
 
-  rejectDelivery = (id: string, comment: string) =>
+  rejectDelivery = (id: string, comment?: string) =>
     lambdaClient.acceptance.reject.mutate({ comment, id });
 
   /**

@@ -16,6 +16,12 @@ jobs:
     timeout-minutes: 30
 
     steps:
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
+          private-key: ${{ secrets.LOBEHUB_BOT_APP_PRIVATE_KEY }}
+
       - name: Configure Git
         run: |
           git config --global user.name "lobehubbot"
@@ -24,6 +30,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.ref }}
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Setup environment
         uses: ./.github/actions/setup-env
@@ -41,7 +48,7 @@ jobs:
         id: cpr
         uses: peter-evans/create-pull-request@v7
         with:
-          token: ${{ secrets.GH_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
           add-paths: |
             locales/**/*.json
           labels: |

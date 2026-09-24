@@ -8,6 +8,8 @@ import { DocumentLoadPosition, getDocumentTemplate, PolicyLoad } from '@lobechat
 import { buildAgentSkillIdentifier } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { DOCUMENT_FOLDER_TYPE } from '@lobechat/database/schemas';
+import type { DocumentAccessScope } from '@lobechat/types';
+import { ordinaryDocumentAccessScope } from '@lobechat/types';
 
 import type {
   AgentDocument,
@@ -24,6 +26,7 @@ import {
   deriveAgentDocumentFields,
   extractMarkdownH1Title,
 } from '@/database/models/agentDocuments';
+import { FileModel } from '@/database/models/file';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
 import { isUuid } from '@/database/utils/uuid';
 
@@ -40,13 +43,20 @@ import {
 } from './headlessEditor';
 
 const MAX_UNIQUE_FILENAME_ATTEMPTS = 1000;
-
 const appendFilenameSuffix = (filename: string, suffix: number): string => {
   const dotIndex = filename.lastIndexOf('.');
 
   if (dotIndex <= 0) return `${filename}-${suffix}`;
 
   return `${filename.slice(0, dotIndex)}-${suffix}${filename.slice(dotIndex)}`;
+};
+
+const appendSpacedFilenameSuffix = (filename: string, suffix: number): string => {
+  const dotIndex = filename.lastIndexOf('.');
+
+  if (dotIndex <= 0) return `${filename} ${suffix}`;
+
+  return `${filename.slice(0, dotIndex)} ${suffix}${filename.slice(dotIndex)}`;
 };
 
 interface UpsertDocumentParams {
@@ -145,6 +155,7 @@ const toAgentDocumentContextPayload = (
 export class AgentDocumentsService {
   private agentDocumentModel: AgentDocumentModel;
   private documentService: DocumentService;
+  private fileModel: FileModel;
   private topicDocumentModel: TopicDocumentModel;
 
   constructor(
@@ -152,13 +163,21 @@ export class AgentDocumentsService {
     userId: string,
     workspaceId?: string,
     callerAgentVisibility?: 'private' | 'public' | null,
+    documentAccessScope: DocumentAccessScope = ordinaryDocumentAccessScope,
   ) {
-    this.agentDocumentModel = new AgentDocumentModel(db, userId, workspaceId);
+    this.agentDocumentModel = new AgentDocumentModel(db, userId, workspaceId, documentAccessScope);
     // Public-agent gate flows through DocumentService → DocumentModel so
     // agentDocuments list / attach / read cannot see the caller's own
     // private documents when the invoking agent itself is workspace-public.
-    this.documentService = new DocumentService(db, userId, workspaceId, callerAgentVisibility);
-    this.topicDocumentModel = new TopicDocumentModel(db, userId, workspaceId);
+    this.documentService = new DocumentService(
+      db,
+      userId,
+      workspaceId,
+      callerAgentVisibility,
+      documentAccessScope,
+    );
+    this.fileModel = new FileModel(db, userId, workspaceId);
+    this.topicDocumentModel = new TopicDocumentModel(db, userId, workspaceId, documentAccessScope);
   }
 
   private async projectDocumentContent<T extends ProjectableAgentDocument>(doc: T): Promise<T>;
@@ -516,6 +535,61 @@ export class AgentDocumentsService {
 
   async associateDocument(agentId: string, documentId: string): Promise<{ id: string }> {
     return this.agentDocumentModel.associate({ agentId, documentId });
+  }
+
+  /**
+   * Attach an uploaded file to the agent's document tree without converting its bytes.
+   *
+   * Use when:
+   * - An upload has completed and needs an entry in the agent's space.
+   *
+   * Expects:
+   * - An accessible file and, when supplied, a folder belonging to this agent.
+   *
+   * Returns:
+   * - A new file-backed document binding with a unique filename in its parent.
+   */
+  async importFile(agentId: string, fileId: string, parentId?: string | null) {
+    const file = await this.fileModel.findById(fileId);
+    if (!file) throw new Error(`File not found: ${fileId}`);
+
+    if (parentId) {
+      const parent = await this.agentDocumentModel.findByDocumentId(agentId, parentId);
+      if (!parent) throw new Error(`Parent folder not found: ${parentId}`);
+      if (parent.fileType !== DOCUMENT_FOLDER_TYPE) {
+        throw new Error(`Parent document is not a folder: ${parentId}`);
+      }
+    }
+
+    const resolvedParentId = parentId ?? null;
+    const baseFilename = buildDocumentFilename(file.name);
+    let filename = baseFilename;
+    let suffix = 2;
+
+    while (
+      await this.agentDocumentModel.findByParentAndFilename(agentId, resolvedParentId, filename)
+    ) {
+      if (suffix > MAX_UNIQUE_FILENAME_ATTEMPTS) {
+        throw new Error(
+          `Unable to generate a unique filename for "${file.name}" after ${MAX_UNIQUE_FILENAME_ATTEMPTS} attempts.`,
+        );
+      }
+
+      filename = appendSpacedFilenameSuffix(baseFilename, suffix);
+      suffix += 1;
+    }
+
+    const createParams = {
+      fileId: file.id,
+      fileType: file.fileType || 'application/octet-stream',
+      ...(resolvedParentId ? { parentId: resolvedParentId } : {}),
+      source: file.url,
+      sourceType: 'file' as const,
+      title: file.name,
+    };
+
+    // Imported bytes stay in files; preview reads the original rather than an editable copy.
+    return this.agentDocumentModel.create(agentId, filename, '', createParams);
   }
 
   async createDocument(

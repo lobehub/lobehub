@@ -94,8 +94,22 @@ class ShareChatService {
   }
 
   async getMessages(shareId: string, topicId: string): Promise<UIChatMessage[]> {
-    const data = await lambdaClient.shareChat.getMessages.query({ shareId, topicId });
+    // Mirrors the owner path's `includeFileWorks` opt-in (see messageService).
+    const data = await lambdaClient.shareChat.getMessages.query({
+      includeFileWorks: true,
+      shareId,
+      topicId,
+    });
     return data as unknown as UIChatMessage[];
+  }
+
+  /**
+   * A document the visitor's own share run produced — the open target of a
+   * `document` Work card on the visitor surface. Resolved server-side under
+   * the visitor's share scope, so any other document 404s.
+   */
+  async getDocument(shareId: string, topicId: string, documentId: string) {
+    return await lambdaClient.shareChat.getDocument.query({ documentId, shareId, topicId });
   }
 
   /**

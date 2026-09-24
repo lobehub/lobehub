@@ -7,8 +7,17 @@ import type {
   FileTreeRowDecoration,
 } from '@pierre/trees';
 import { FileTree as PierreFileTree, useFileTree, useFileTreeSelection } from '@pierre/trees/react';
+import debug from 'debug';
 import type { DragEvent, ForwardedRef, MouseEvent } from 'react';
-import { forwardRef, useImperativeHandle, useLayoutEffect, useMemo, useRef } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import { useSingleton } from '@/hooks/useSingleton';
 
@@ -22,10 +31,31 @@ import type {
 } from '../types';
 import { openExplorerContextMenu } from './ContextMenu';
 
+const log = debug('lobe-explorer-tree');
+
 const asDirectory = (
   handle: FileTreeItemHandle | null | undefined,
 ): FileTreeDirectoryHandle | null =>
   handle && handle.isDirectory() ? (handle as FileTreeDirectoryHandle) : null;
+
+type FileTreeModel = ReturnType<typeof useFileTree>['model'];
+
+// @pierre/trees walks a lookup path segment by segment and asks for each
+// intermediate node's directory child index *before* checking that the node is
+// a directory, so looking up `a/b` while `a` is a file throws
+// "Unknown directory child index for node N" instead of reporting "not found"
+// (path-store/src/canonical.ts, findNodeIdBySegments). Our id → path map can sit
+// a beat behind the store — the tree applies renames and drops optimistically,
+// and a data refresh can turn a folder into a file under the same name — so a
+// stale lookup has to degrade to null instead of taking down the whole route.
+const getItemSafely = (model: FileTreeModel, path: string): FileTreeItemHandle | null => {
+  try {
+    return model.getItem(path);
+  } catch (error) {
+    log('dropping unresolvable path %s: %O', path, error);
+    return null;
+  }
+};
 
 type ExplorerTreeHostEvent = DragEvent<HTMLElement> | MouseEvent<HTMLElement>;
 
@@ -56,12 +86,19 @@ export const getItemPathFromEventPath = (path: EventTarget[]): string | null => 
 const getItemPathFromHostEvent = (event: ExplorerTreeHostEvent): string | null =>
   getItemPathFromEventPath(getComposedPath(event));
 
+interface ExplorerTreeInnerProps<TData> extends ExplorerTreeProps<TData> {
+  /** Remounts this component, and with it the underlying tree model. */
+  requestTreeRebuild: () => void;
+}
+
 function ExplorerTreeInner<TData>(
-  props: ExplorerTreeProps<TData>,
+  props: ExplorerTreeInnerProps<TData>,
   ref: ForwardedRef<ExplorerTreeHandle>,
 ) {
   const propsRef = useRef(props);
   propsRef.current = props;
+
+  const { requestTreeRebuild } = props;
 
   const adapterRef = useSingleton(() => ({
     current: normalizeTree(props.nodes),
@@ -239,7 +276,7 @@ function ExplorerTreeInner<TData>(
       const a = adapterRef.current;
       const nextExpanded: string[] = [];
       for (const [id, path] of a.pathById) {
-        const dir = asDirectory(model.getItem(path));
+        const dir = asDirectory(getItemSafely(model, path));
         if (dir?.isExpanded()) nextExpanded.push(id);
       }
       // Fire only when set differs; cheap comparison via sorted join
@@ -267,11 +304,11 @@ function ExplorerTreeInner<TData>(
     suppressModelEventsRef.current = true;
     try {
       for (const path of currentSelectedPaths) {
-        if (!nextSelectedPathSet.has(path)) model.getItem(path)?.deselect();
+        if (!nextSelectedPathSet.has(path)) getItemSafely(model, path)?.deselect();
       }
       const currentSelectedPathSet = new Set(currentSelectedPaths);
       for (const path of nextSelectedPaths) {
-        if (!currentSelectedPathSet.has(path)) model.getItem(path)?.select();
+        if (!currentSelectedPathSet.has(path)) getItemSafely(model, path)?.select();
       }
     } finally {
       suppressModelEventsRef.current = false;
@@ -286,7 +323,7 @@ function ExplorerTreeInner<TData>(
     const nextExpandedIds: string[] = [];
     const directoryEntries: { dir: FileTreeDirectoryHandle; shouldExpand: boolean }[] = [];
     for (const [id, path] of a.pathById) {
-      const dir = asDirectory(model.getItem(path));
+      const dir = asDirectory(getItemSafely(model, path));
       if (!dir) continue;
       const shouldExpand = nextExpandedIdSet.has(id);
       if (shouldExpand) nextExpandedIds.push(id);
@@ -322,11 +359,11 @@ function ExplorerTreeInner<TData>(
           suppressModelEventsRef.current = true;
           try {
             for (const path of currentSelectedPaths) {
-              if (!nextSelectedPathSet.has(path)) model.getItem(path)?.deselect();
+              if (!nextSelectedPathSet.has(path)) getItemSafely(model, path)?.deselect();
             }
             const currentSelectedPathSet = new Set(currentSelectedPaths);
             for (const path of nextSelectedPaths) {
-              if (!currentSelectedPathSet.has(path)) model.getItem(path)?.select();
+              if (!currentSelectedPathSet.has(path)) getItemSafely(model, path)?.select();
             }
           } finally {
             suppressModelEventsRef.current = false;
@@ -340,7 +377,7 @@ function ExplorerTreeInner<TData>(
         const nextExpandedIds: string[] = [];
         const directoryEntries: { dir: FileTreeDirectoryHandle; shouldExpand: boolean }[] = [];
         for (const [id, path] of next.pathById) {
-          const dir = asDirectory(model.getItem(path));
+          const dir = asDirectory(getItemSafely(model, path));
           if (!dir) continue;
           const shouldExpand = nextExpandedIdSet.has(id);
           if (shouldExpand) nextExpandedIds.push(id);
@@ -363,7 +400,7 @@ function ExplorerTreeInner<TData>(
     if (!nextExpandedIds) {
       nextExpandedIds = [];
       for (const [id, path] of prev.pathById) {
-        const dir = asDirectory(model.getItem(path));
+        const dir = asDirectory(getItemSafely(model, path));
         if (dir?.isExpanded()) nextExpandedIds.push(id);
       }
     }
@@ -383,20 +420,35 @@ function ExplorerTreeInner<TData>(
     lastEmittedSelectedIds.current = remapPathsToIds(nextSelectedPaths, next.idByPath);
     suppressModelEventsRef.current = true;
     try {
+      // resetPaths resolves the *previous* selection against the new store, so a
+      // selected path whose ancestor stops being a directory makes that internal
+      // lookup throw (see getItemSafely). Drop those against the still-matching
+      // old store first — selection is re-applied from nextSelectedPaths below.
+      const survivingSelectedPaths = new Set(nextSelectedPaths);
+      for (const path of model.getSelectedPaths()) {
+        if (!survivingSelectedPaths.has(path)) getItemSafely(model, path)?.deselect();
+      }
       model.resetPaths(next.paths, {
         initialExpandedPaths,
       });
       for (const path of nextSelectedPaths) {
-        model.getItem(path)?.select();
+        getItemSafely(model, path)?.select();
       }
       if (focusedId) {
         const path = next.pathById.get(focusedId);
         if (path) model.focusPath(path);
       }
+    } catch (error) {
+      // The tree keeps more internal paths than we can clear through its public
+      // API (selection anchor, renaming row, focused row), and any of them can
+      // still trip the lookup above mid-reset, leaving the model half-swapped.
+      // Rebuild it from scratch instead of letting the error kill the route.
+      log('resetPaths failed, rebuilding the tree: %O', error);
+      requestTreeRebuild();
     } finally {
       suppressModelEventsRef.current = false;
     }
-  }, [adapterRef, props.nodes, model]);
+  }, [adapterRef, props.nodes, model, requestTreeRebuild]);
 
   useImperativeHandle(
     ref,
@@ -404,17 +456,20 @@ function ExplorerTreeInner<TData>(
       deselect: (id) => {
         const path = adapterRef.current.pathById.get(id);
         if (!path) return;
-        model.getItem(path)?.deselect();
+        getItemSafely(model, path)?.deselect();
       },
       focus: (id) => {
         const path = adapterRef.current.pathById.get(id);
-        if (path) model.focusPath(path);
+        // focusPath resolves the path the same way getItem does, so a handle
+        // here means the follow-up call can no longer throw on a stale path.
+        if (!path || !getItemSafely(model, path)) return;
+        model.focusPath(path);
       },
       getSelectedIds: () => remapPathsToIds(model.getSelectedPaths(), adapterRef.current.idByPath),
       select: (id, opts) => {
         const path = adapterRef.current.pathById.get(id);
         if (!path) return;
-        const item = model.getItem(path);
+        const item = getItemSafely(model, path);
         if (!item) return;
         if (opts?.additive) item.toggleSelect();
         else item.select();
@@ -423,7 +478,7 @@ function ExplorerTreeInner<TData>(
         const want = new Set(ids);
         const a = adapterRef.current;
         for (const [nodeId, path] of a.pathById) {
-          const dir = asDirectory(model.getItem(path));
+          const dir = asDirectory(getItemSafely(model, path));
           if (!dir) continue;
           const shouldExpand = want.has(nodeId);
           if (shouldExpand && !dir.isExpanded()) dir.expand();
@@ -432,7 +487,7 @@ function ExplorerTreeInner<TData>(
       },
       startRenaming: (id) => {
         const path = adapterRef.current.pathById.get(id);
-        if (!path) return;
+        if (!path || !getItemSafely(model, path)) return;
         renamingRef.current = true;
         model.startRenaming(path);
       },
@@ -511,8 +566,28 @@ function ExplorerTreeInner<TData>(
   );
 }
 
-const ExplorerTree = forwardRef(ExplorerTreeInner) as <TData>(
-  props: ExplorerTreeProps<TData> & { ref?: ForwardedRef<ExplorerTreeHandle> },
+const ExplorerTreeInnerWithRef = forwardRef(ExplorerTreeInner) as <TData>(
+  props: ExplorerTreeInnerProps<TData> & { ref?: ForwardedRef<ExplorerTreeHandle> },
 ) => ReturnType<typeof ExplorerTreeInner>;
+
+// Owns the escape hatch for an unusable tree model: bumping the generation
+// remounts the inner component, which builds a fresh model from the current
+// paths. Kept in a parent so the inner component can ask for its own remount.
+function ExplorerTree<TData>({
+  ref,
+  ...props
+}: ExplorerTreeProps<TData> & { ref?: ForwardedRef<ExplorerTreeHandle> }) {
+  const [generation, setGeneration] = useState(0);
+  const requestTreeRebuild = useCallback(() => setGeneration((value) => value + 1), []);
+
+  return (
+    <ExplorerTreeInnerWithRef
+      {...props}
+      key={generation}
+      ref={ref}
+      requestTreeRebuild={requestTreeRebuild}
+    />
+  );
+}
 
 export default ExplorerTree;

@@ -3,7 +3,7 @@ import { CLI_PRIMARY_BIN } from '../constants/identity';
 import { resolveServerUrl } from '../settings';
 import { log } from '../utils/logger';
 import { getUserIdFromApiKey } from './apiKey';
-import { getValidToken } from './refresh';
+import { describeTokenLookup, getValidToken } from './refresh';
 import { pickAuthSource } from './source';
 
 interface ResolveTokenOptions {
@@ -92,7 +92,7 @@ export async function resolveToken(options: ResolveTokenOptions): Promise<Resolv
 
   // Stored credentials, refreshed when the access token is close to expiry.
   const result = await getValidToken();
-  if (result) {
+  if (result.status === 'ok') {
     log.debug('Using stored credentials');
     const { credentials } = result;
     const serverUrl = resolveServerUrl();
@@ -106,8 +106,11 @@ export async function resolveToken(options: ResolveTokenOptions): Promise<Resolv
     return { serverUrl, token: credentials.accessToken, tokenType: 'jwt', userId };
   }
 
+  const report = describeTokenLookup(result);
   log.error(
-    `No authentication found. Run '${CLI_PRIMARY_BIN} login' first, or set ${CLI_API_KEY_ENV}, or provide --token.`,
+    report
+      ? `${report.detail} ${report.fix}`
+      : `No authentication found. Run '${CLI_PRIMARY_BIN} login' first, or set ${CLI_API_KEY_ENV}, or provide --token.`,
   );
   process.exit(1);
 }

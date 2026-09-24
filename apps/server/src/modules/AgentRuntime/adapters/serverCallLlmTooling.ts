@@ -1,4 +1,4 @@
-import type { AgentState } from '@lobechat/agent-runtime';
+import { type AgentState, selectOperationToolSet } from '@lobechat/agent-runtime';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import {
   buildStepSkillDelta,
@@ -59,13 +59,7 @@ export const resolveServerCallLlmTooling = (
   // forbids devices — the same filter the tool executors apply.
   const activeDeviceId = resolveRunActiveDeviceId(state);
   const executionTarget = (state.plan?.execution as ExecutionPlan | undefined)?.target;
-  const operationToolSet: OperationToolSet = state.operationToolSet ?? {
-    enabledToolIds: [],
-    executorMap: state.toolExecutorMap ?? {},
-    manifestMap: state.toolManifestMap ?? {},
-    sourceMap: state.toolSourceMap ?? {},
-    tools: state.tools ?? [],
-  };
+  const operationToolSet: OperationToolSet = selectOperationToolSet(state);
 
   const stepDelta = buildStepToolDelta({
     activeDeviceId,

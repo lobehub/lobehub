@@ -1,5 +1,6 @@
 // @vitest-environment node
-import type { RegisterFileWorkParams } from '@lobechat/types';
+import { agentShareWorkAccessScope, type RegisterFileWorkParams } from '@lobechat/types';
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { works } from '../../../schemas';
@@ -44,6 +45,39 @@ const baseFileParams = (
 });
 
 describe('WorkModel · file', () => {
+  it('fences a share visitor file Work off from the ordinary registry', async () => {
+    const provenance = { shareId: 'share-file', topicId, visitorUserId: 'visitor-file' };
+    const shareWorkModel = new WorkModel(
+      serverDB,
+      userId,
+      undefined,
+      agentShareWorkAccessScope(provenance),
+    );
+
+    const work = await shareWorkModel.registerFile(baseFileParams({ cumulativeCost: 0.42 }));
+    const [row] = await serverDB.select().from(works).where(eq(works.id, work.id));
+    expect(row.metadata).toEqual({ agentShare: provenance });
+
+    const shareSummaries = await shareWorkModel.listSummariesByRootOperations({
+      includeFileWorks: true,
+      rootOperationIds: ['op-file-1'],
+    });
+    expect(shareSummaries['op-file-1']).toHaveLength(1);
+    expect(shareSummaries['op-file-1'][0]).toMatchObject({ id: work.id, totalCost: 0.42 });
+
+    // The creator's ordinary reads never resolve it — the same resource key
+    // registered by the creator later is a distinct, unscoped Work.
+    const ordinary = new WorkModel(serverDB, userId);
+    const ordinarySummaries = await ordinary.listSummariesByRootOperations({
+      includeFileWorks: true,
+      rootOperationIds: ['op-file-1'],
+    });
+    expect(ordinarySummaries['op-file-1']).toEqual([]);
+    expect(
+      await ordinary.listByRootOperation({ includeFileWorks: true, rootOperationId: 'op-file-1' }),
+    ).toEqual([]);
+  });
+
   it('keys resource identity on userId:topicId:filePath and denormalizes path + url', async () => {
     const workModel = new WorkModel(serverDB, userId);
 

@@ -40,6 +40,8 @@ const hasEnteredStreamEndState = (
 };
 
 export interface AgentRuntimeCoordinatorOptions {
+  /** Whether terminal reconciliation is delivered by protocol-v2 message patches. */
+  messagePatchModeResolver?: (state: AgentState) => Promise<boolean>;
   /**
    * Custom state manager implementation
    * Defaults to automatic selection based on Redis availability
@@ -75,11 +77,13 @@ export interface AgentRuntimeCoordinatorOptions {
  * Supports dependency injection, allowing custom implementations to be passed in
  */
 export class AgentRuntimeCoordinator {
+  private messagePatchModeResolver?: (state: AgentState) => Promise<boolean>;
   private stateManager: IAgentStateManager;
   private streamEventManager: IStreamEventManager;
   private uiMessagesResolver?: (state: AgentState) => Promise<UIChatMessage[] | undefined>;
 
   constructor(options?: AgentRuntimeCoordinatorOptions) {
+    this.messagePatchModeResolver = options?.messagePatchModeResolver;
     this.stateManager = options?.stateManager ?? createAgentStateManager();
     this.streamEventManager = options?.streamEventManager ?? createStreamEventManager();
     this.uiMessagesResolver = options?.uiMessagesResolver;
@@ -150,6 +154,16 @@ export class AgentRuntimeCoordinator {
     }
   }
 
+  private async resolveMessagePatchMode(state: AgentState): Promise<boolean> {
+    if (!this.messagePatchModeResolver) return false;
+    try {
+      return await this.messagePatchModeResolver(state);
+    } catch (error) {
+      console.error('Failed to resolve message patch mode:', error);
+      return false;
+    }
+  }
+
   private async publishVisibleOutputEnd(
     operationId: string,
     state: AgentState,
@@ -182,11 +196,13 @@ export class AgentRuntimeCoordinator {
       // Send a terminal event once the operation first enters a terminal state.
       if (hasEnteredStreamEndState(previousState?.status, state.status)) {
         const stepIndex = state.stepCount ?? previousState?.stepCount ?? 0;
+        const messagePatchMode = await this.resolveMessagePatchMode(state);
         if (!hasVisibleOutputEndPublished(state)) {
           await this.publishVisibleOutputEnd(operationId, state, stepIndex);
         }
         await this.streamEventManager.publishAgentRuntimeEnd({
           finalState: state,
+          ...(messagePatchMode && { messagePatchMode: true, messageRevision: stepIndex + 1 }),
           operationId,
           reason: state.status,
           stepIndex,
@@ -218,11 +234,13 @@ export class AgentRuntimeCoordinator {
         // but suppress visible_output_end once the operation marker exists.
         const stepIndex =
           stepResult.stepIndex ?? stepResult.newState.stepCount ?? previousState?.stepCount ?? 0;
+        const messagePatchMode = await this.resolveMessagePatchMode(stepResult.newState);
         if (!hasVisibleOutputEndPublished(stepResult.newState)) {
           await this.publishVisibleOutputEnd(operationId, stepResult.newState, stepIndex);
         }
         await this.streamEventManager.publishAgentRuntimeEnd({
           finalState: stepResult.newState,
+          ...(messagePatchMode && { messagePatchMode: true, messageRevision: stepIndex + 1 }),
           operationId,
           reason: stepResult.newState.status,
           stepIndex,

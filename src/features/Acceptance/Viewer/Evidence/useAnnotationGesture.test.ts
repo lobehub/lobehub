@@ -5,11 +5,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useAnnotationGesture } from './useAnnotationGesture';
 
-const pointer = (x: number, y: number) =>
+const pointer = (x: number, y: number, isPrimary = true) =>
   ({
     clientX: x,
     clientY: y,
-    pointerId: 7,
+    isPrimary,
+    pointerId: isPrimary ? 7 : 8,
     pointerType: 'touch',
     currentTarget: { setPointerCapture: vi.fn() },
     preventDefault: vi.fn(),
@@ -110,6 +111,19 @@ describe('touch annotation gestures', () => {
     act(() => result.current.handlers.onPointerUp(pointer(110, 220)));
     expect(start.preventDefault).not.toHaveBeenCalled();
     expect(start.currentTarget.setPointerCapture).not.toHaveBeenCalled();
+    expect(onDraw).not.toHaveBeenCalled();
+  });
+
+  it('drops the box in progress when a second finger lands (that is a pinch)', () => {
+    const { result, onDraw } = setup(true, 200, 400);
+    act(() => result.current.handlers.onPointerDown(pointer(30, 40)));
+    act(() => result.current.handlers.onPointerMove(pointer(90, 140)));
+    expect(result.current.draft).not.toBeNull();
+
+    act(() => result.current.handlers.onPointerDown(pointer(150, 200, false)));
+    expect(result.current.draft).toBeNull();
+
+    act(() => result.current.handlers.onPointerUp(pointer(120, 180)));
     expect(onDraw).not.toHaveBeenCalled();
   });
 });

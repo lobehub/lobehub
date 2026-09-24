@@ -1,7 +1,7 @@
 import { createLambdaClient, type TrpcClient } from '../api/client';
 import { resolveWorkspaceScope } from '../api/workspace';
 import { getUserIdFromApiKey } from '../auth/apiKey';
-import { getValidToken } from '../auth/refresh';
+import { describeTokenLookup, getValidToken } from '../auth/refresh';
 import type { AuthSourceKind } from '../auth/source';
 import { parseJwtPayload, pickAuthSource } from '../auth/source';
 import { resolveServerUrl } from '../settings';
@@ -55,6 +55,11 @@ export interface CredentialProbe {
   error?: string;
   /** `exp` claim, for JWTs. */
   expiresAt?: number;
+  /**
+   * The remedy for that failure, when the probe knows one more specific than "log in again" —
+   * a refresh that timed out needs a retry, not a re-authentication.
+   */
+  fix?: string;
   kind: AuthSourceKind;
   origin: string;
   serverUrl: string;
@@ -91,13 +96,19 @@ export async function probeCredential(ctx: DoctorContext): Promise<CredentialPro
 
     if (source.kind === 'stored') {
       const refreshed = await getValidToken();
-      if (!refreshed)
+      if (refreshed.status !== 'ok') {
+        const report = describeTokenLookup(refreshed);
+
         return {
           ...base,
-          error: source.token
-            ? 'the stored token has expired and could not be refreshed'
-            : 'no stored login on this machine',
+          error:
+            report?.detail ??
+            (source.token
+              ? 'the stored token has expired and could not be refreshed'
+              : 'no stored login on this machine'),
+          fix: report?.fix,
         };
+      }
       const payload = parseJwtPayload(refreshed.credentials.accessToken);
       return {
         ...base,

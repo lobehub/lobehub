@@ -68,7 +68,11 @@ export interface MuxReadyMessage {
 }
 
 export interface MuxAgentEventMessage {
-  /** `event.operationId` may differ from `operationId` (mirrored member event). */
+  /**
+   * `event.operationId` may differ from `operationId` (mirrored member event),
+   * and is OMITTED when it would repeat it. `GatewayMuxClient` fills it back in
+   * from the envelope before emitting, so readers never see the gap.
+   */
   event: AgentStreamEvent;
   id: string;
   operationId: string;

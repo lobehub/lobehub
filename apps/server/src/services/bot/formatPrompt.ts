@@ -20,15 +20,26 @@ interface ReferencedRaw {
 
 interface MessageLike {
   author: { fullName?: string; userId: string; userName?: string };
+  /**
+   * The platform payload. Only the fields this module reads are typed; the
+   * rest (e.g. Discord `mentions`) is what `resolveMentions` / `sanitizeUserInput`
+   * dig into per platform, so the shape stays open.
+   */
   raw?: {
+    [key: string]: unknown;
     author?: { avatar?: string | null; global_name?: string | null };
   } & ReferencedRaw;
   text: string;
 }
 
 interface FormatPromptOptions {
+  /**
+   * Resolve platform mention tokens to readable names without stripping any.
+   * Applied to referenced (quoted) text, where "who was tagged" is content.
+   */
+  resolveMentions?: (text: string, message?: unknown) => string;
   /** Strip platform-specific bot mention artifacts from user input. */
-  sanitizeUserInput?: (text: string) => string;
+  sanitizeUserInput?: (text: string, message?: unknown) => string;
 }
 
 const wrapReferencedMessage = (sender: string, content: string): string =>
@@ -38,11 +49,14 @@ const wrapReferencedMessage = (sender: string, content: string): string =>
  * Extract referenced (replied-to) message from raw payload
  * and format it as an XML tag for the agent prompt.
  */
-export const formatReferencedMessage = (raw: ReferencedRaw | undefined): string | undefined => {
+export const formatReferencedMessage = (
+  raw: ReferencedRaw | undefined,
+  transformContent: (content: string) => string = (content) => content,
+): string | undefined => {
   const discordRef = raw?.referenced_message;
   if (discordRef?.content) {
     const sender = discordRef.author?.global_name || discordRef.author?.username || 'unknown';
-    return wrapReferencedMessage(sender, discordRef.content);
+    return wrapReferencedMessage(sender, transformContent(discordRef.content));
   }
 
   const telegramRef = raw?.reply_to_message;
@@ -75,11 +89,17 @@ export const formatPrompt = (message: MessageLike, options?: FormatPromptOptions
   let text = message.text;
 
   if (options?.sanitizeUserInput) {
-    text = options.sanitizeUserInput(text);
+    text = options.sanitizeUserInput(text, message);
   }
 
-  // Prepend referenced (quoted/replied) message if present
-  const referencedText = formatReferencedMessage(message.raw);
+  // Prepend referenced (quoted/replied) message if present. Mentions inside
+  // it are only *named*, never stripped: "@Bot do X" quoted back should still
+  // read as addressed to the bot.
+  const resolveMentions = options?.resolveMentions;
+  const referencedText = formatReferencedMessage(
+    message.raw,
+    resolveMentions ? (content) => resolveMentions(content, message) : undefined,
+  );
   if (referencedText) {
     text = `${referencedText}\n${text}`;
   }

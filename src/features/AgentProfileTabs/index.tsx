@@ -62,10 +62,15 @@ const AgentProfileTabs = memo<AgentProfileTabsProps>(({ active, agentId }) => {
     agentSelectors.currentAgentHeterogeneousProviderType,
   );
   const { allowed: canEditContent } = usePermission('edit_own_content');
-  const { canEditResource, isAccessResolved } = useResourceAccess('agent', agentId);
+  const { canEditResource, canManageResource, isAccessResolved } = useResourceAccess(
+    'agent',
+    agentId,
+  );
   const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
 
   const canConfigure = !!isAgentEditable && isAccessResolved && canEditContent && canEditResource;
+  const canManageShare =
+    !!isAgentEditable && isAccessResolved && canEditContent && canManageResource;
   const channelsSupported = supportsMessageChannels(heterogeneousProviderType);
   const { visible: shareVisible } = useAgentShareSupported(agentId);
 
@@ -84,9 +89,9 @@ const AgentProfileTabs = memo<AgentProfileTabsProps>(({ active, agentId }) => {
           share: t('share', { ns: 'common' }),
           statistics: t('usageStats.title', { ns: 'spend' }),
         },
-        shareSupported: shareVisible === true,
+        shareSupported: shareVisible === true && canManageShare,
       }),
-    [active, canConfigure, channelsSupported, shareVisible, t],
+    [active, canConfigure, canManageShare, channelsSupported, shareVisible, t],
   );
 
   // A lone segment is a label, not a switcher.

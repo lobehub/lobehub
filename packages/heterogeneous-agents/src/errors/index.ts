@@ -1,3 +1,7 @@
+export type { CliQuotaClassification } from './cliQuota';
+export { classifyCliQuotaMessage } from './cliQuota';
+export { isEchoedErrorText } from './echo';
+export { normalizeHeterogeneousMessageError, readHeterogeneousErrorContext } from './messageError';
 export type { HeteroErrorKind, HeteroErrorSpec } from './specs';
 export {
   formatHeteroErrorId,

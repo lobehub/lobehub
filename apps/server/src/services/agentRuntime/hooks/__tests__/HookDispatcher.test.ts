@@ -378,6 +378,36 @@ describe('HookDispatcher', () => {
     });
   });
 
+  describe('canDeliver', () => {
+    it('answers per mode: a handler-only hook reaches nobody in queue mode', () => {
+      dispatcher.register(operationId, [
+        { handler: vi.fn(), id: 'local-only', type: 'onComplete' },
+      ]);
+
+      expect(dispatcher.canDeliver(operationId, 'onComplete')).toBe(true);
+
+      vi.mocked(isQueueAgentRuntimeEnabled).mockReturnValue(true);
+      expect(dispatcher.canDeliver(operationId, 'onComplete')).toBe(false);
+    });
+
+    it('counts a webhook hook in both modes', () => {
+      dispatcher.register(operationId, [
+        { handler: vi.fn(), id: 'with-webhook', type: 'onComplete', webhook: { url: '/api/hook' } },
+      ]);
+
+      expect(dispatcher.canDeliver(operationId, 'onComplete')).toBe(true);
+      vi.mocked(isQueueAgentRuntimeEnabled).mockReturnValue(true);
+      expect(dispatcher.canDeliver(operationId, 'onComplete')).toBe(true);
+    });
+
+    it('is false for another type, and for an operation with no hooks at all', () => {
+      dispatcher.register(operationId, [{ handler: vi.fn(), id: 'step', type: 'afterStep' }]);
+
+      expect(dispatcher.canDeliver(operationId, 'onComplete')).toBe(false);
+      expect(dispatcher.canDeliver('unknown', 'onComplete')).toBe(false);
+    });
+  });
+
   describe('unregister', () => {
     it('should remove all hooks for an operation', () => {
       dispatcher.register(operationId, [{ handler: vi.fn(), id: 'hook', type: 'onComplete' }]);

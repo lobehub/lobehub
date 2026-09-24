@@ -359,11 +359,14 @@ export class GatewayActionImpl {
     // Disconnect existing connection for this operation if any
     this.disconnectFromGateway(operationId);
 
-    // Read the lab flag once per connect (non-reactive, like the other prefs
-    // `isGatewayModeEnabled` consults): a connection keeps the transport it
-    // was opened with even if the toggle flips mid-run.
+    // Share visitors default to protocol v2 because the public surface does
+    // not inherit the creator's Labs preference. Owner runs keep the existing
+    // opt-in rollout: a connection keeps the transport it was opened with
+    // even if the toggle flips mid-run.
+    const useGatewayMux =
+      Boolean(agentShareId) || labPreferSelectors.enableGatewayMux(useUserStore.getState());
     let muxClient: OperationClient | undefined;
-    if (labPreferSelectors.enableGatewayMux(useUserStore.getState())) {
+    if (useGatewayMux) {
       const mux = this.resolveGatewayMux({ agentShareId, gatewayUrl });
       this.#attachGatewayFeed(mux);
       // The mux mints its own token via `getToken` on every dial, so `token`
@@ -637,6 +640,8 @@ export class GatewayActionImpl {
     metadata?: Pick<MessageMetadata, 'steer' | 'trigger'>;
     /** Called as soon as phase-1 returns with a persisted user message. */
     onMessageAccepted?: () => void;
+    /** Called when a new topic is persisted, before UI hydration and stream setup. */
+    onTopicCreated?: (topicId: string) => void | Promise<void>;
     /** Called when the gateway session completes (agent finished running) */
     onComplete?: () => void;
     /** Temporary sidebar topic inserted by sendMessage before the server creates the real topic. */
@@ -714,6 +719,7 @@ export class GatewayActionImpl {
       metadata,
       onComplete,
       onMessageAccepted,
+      onTopicCreated,
       optimisticTopic,
       parentMessageId,
       parentOperationId,
@@ -894,6 +900,14 @@ export class GatewayActionImpl {
       console.error('[Gateway] onMessageAccepted callback failed:', error);
     }
 
+    if (isCreateNewTopic && result.topicId) {
+      try {
+        await onTopicCreated?.(result.topicId);
+      } catch (error) {
+        console.error('[Gateway] onTopicCreated callback failed:', error);
+      }
+    }
+
     let hasInterruptedAfterPersistence = false;
     const interruptIfCancelledAfterPersistence = () => {
       if (!abortSignal?.aborted) return false;
@@ -936,6 +950,27 @@ export class GatewayActionImpl {
     });
     const resolvedMessageContext = resolveThread({ ...messageContext, topicId: result.topicId });
     this.#get().moveVoiceMessages(messageContext, resolvedMessageContext);
+
+    if (precreatedResult) {
+      // V2 resolves the intervention before returning this continuation. Apply
+      // that persisted state before subscribing, so the answered form closes
+      // even when the next runtime event is delayed. SWR revalidation alone
+      // can be ignored while the previous operation still appears running.
+      try {
+        const messages = await messageService.getMessages({
+          ...resolvedMessageContext,
+          skipWorks: true,
+        });
+        this.#get().replaceMessages(messages, {
+          context: resolvedMessageContext,
+          preserveWorks: true,
+        });
+      } catch (error) {
+        // The continuation already exists; a failed read must not prevent us
+        // from connecting to it and reconciling through subsequent events.
+        console.error('[Gateway] Failed to refresh messages after intervention resolution:', error);
+      }
+    }
 
     if (result.createdThreadId) {
       // Attachments picked in the subtopic composer were staged under the
@@ -998,10 +1033,23 @@ export class GatewayActionImpl {
         /* non-critical */
       }
 
-      await this.#get().switchTopic(result.topicId, {
-        clearNewKey: true,
-        skipRefreshMessage: true,
-      });
+      if (!messageContext.isolatedTopic) {
+        await this.#get().switchTopic(result.topicId, {
+          clearNewKey: true,
+          // The cleanup targets the blank bucket this send came from — the
+          // user may be viewing a different conversation by now.
+          clearNewKeyContext: {
+            agentId: messageContext.agentId,
+            groupId: messageContext.groupId,
+          },
+          // Guard against yanking the user back if they navigated to another
+          // topic while execAgentTask's persistence round-trip was in flight.
+          // Both ids are accepted: the optimistic-topic re-key above moves
+          // `activeTopicId` from the minted id to the persisted one.
+          onlyIfActiveTopicIn: [messageContext.topicId ?? null, result.topicId],
+          skipRefreshMessage: true,
+        });
+      }
 
       // Refresh the topic list so the new topic appears in topicDataMap (sidebar).
       // Unlike the direct-API sendMessage path (which receives topics[] in the
@@ -1097,6 +1145,11 @@ export class GatewayActionImpl {
                 assistantMessageId: result.assistantMessageId,
                 heteroType: result.heteroType,
                 operationId: result.operationId,
+                // Mirror the server marker's liveness stamp so the optimistic
+                // row carries the same elapsed-time anchor a refresh-created
+                // reconnect will read. `createdAt` is when the server created
+                // the operation — the same instant its own marker stamps.
+                startedAt: result.createdAt,
               },
             },
           },
@@ -1262,6 +1315,12 @@ export class GatewayActionImpl {
     heteroType?: string | null;
     operationId: string;
     scope?: string;
+    /**
+     * Server-written ISO timestamp of when the run claimed the topic — carried
+     * on the topic's `runningOperation` marker so elapsed-time anchors survive
+     * a page refresh even when the messages list hasn't loaded yet.
+     */
+    startedAt?: string;
     threadId?: string | null;
     topicId: string;
   }): Promise<void> => {
@@ -1333,9 +1392,16 @@ export class GatewayActionImpl {
       topicId,
     };
 
-    // Anchor the operation to the run's real start: the assistant message was
-    // created when the run began. Defaulting to Date.now() here would reset
-    // elapsed-time displays (OpStatusTray) to zero on every page refresh.
+    // Anchor the operation to the run's real start so elapsed-time displays
+    // (OpStatusTray, topic-list timers) don't reset on page refresh. Priority:
+    // the marker's server-written `startedAt` stamp → the assistant message's
+    // `createdAt` (the message is created when the run begins) → fall through
+    // to startOperation's Date.now() default.
+    //
+    // The message lookup races this reconnect's SWR against the messages-list
+    // fetch, so on a cold boot `messagesMap` can still be empty — the marker
+    // stamp is what keeps the anchor correct in exactly that case.
+    const markerStartedAt = params.startedAt ? Date.parse(params.startedAt) : Number.NaN;
     const assistantMessage = Object.values(this.#get().messagesMap)
       .flat()
       .find((m) => m.id === assistantMessageId);
@@ -1345,9 +1411,11 @@ export class GatewayActionImpl {
     // converting). Normalize to epoch ms here so the elapsed-time math stays a
     // number — passing a string/Invalid Date straight through makes
     // `Date.now() - startTime` resolve to NaN and renders as "NaN:NaN".
-    const startTime = assistantMessage?.createdAt
+    const assistantMessageStart = assistantMessage?.createdAt
       ? new Date(assistantMessage.createdAt).getTime()
-      : undefined;
+      : Number.NaN;
+
+    const startTime = [markerStartedAt, assistantMessageStart].find(Number.isFinite);
 
     // Create a local operation for UI loading state, stashing the server op id
     // so intervention flows can find it after reconnect as well.
@@ -1355,7 +1423,7 @@ export class GatewayActionImpl {
       context,
       metadata: {
         serverOperationId: operationId,
-        ...(Number.isFinite(startTime) ? { startTime } : {}),
+        ...(startTime !== undefined ? { startTime } : {}),
       },
       type: 'execServerAgentRuntime',
     });

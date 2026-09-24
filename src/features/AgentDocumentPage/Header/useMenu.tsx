@@ -20,6 +20,7 @@ interface UseMenuParams {
   agentDocumentId?: string;
   agentId: string;
   documentId: string;
+  fileBacked?: boolean;
   onDeleted: () => void;
   title?: string;
   updatedAt?: Date | string | null;
@@ -34,6 +35,7 @@ export const useMenu = ({
   agentDocumentId,
   agentId,
   documentId,
+  fileBacked,
   onDeleted,
   title,
   updatedAt,
@@ -169,7 +171,9 @@ export const useMenu = ({
       );
     }
 
-    return items;
+    return fileBacked
+      ? items.filter((item) => item?.key !== 'export' && item?.key !== 'full-width')
+      : items;
   }, [
     activeWorkspaceSlug,
     agentDocumentId,
@@ -177,6 +181,7 @@ export const useMenu = ({
     appOrigin,
     documentId,
     editor,
+    fileBacked,
     lg,
     dateLocale,
     onDeleted,

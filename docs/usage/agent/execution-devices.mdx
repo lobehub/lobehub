@@ -1,0 +1,101 @@
+---
+title: Execution Devices
+description: Choose where an agent executes work, connect a device, set a project directory, and understand browser pairing limits.
+tags:
+  - LobeHub
+  - Execution Devices
+  - Connect Agent
+  - Working Directory
+---
+
+# Execution Devices
+
+An execution device determines where device-based tools and coding agents do their work. It is separate from the interface where you send messages.
+
+You can send tasks from a supported web, desktop, or mobile interface. Available tools and execution modes depend on the selected device and integration.
+
+## Choose an Execution Location
+
+| Option | Where work runs | What to check |
+| --- | --- | --- |
+| This device | The computer connected through the desktop app | Device status, project path, CLI installation, and permissions |
+| Cloud sandbox | A server-side sandbox environment | Available tools, project files, runtimes, and export support |
+| Remote device | Another connected computer | Connection status, project path, CLI installation, and permissions on that computer |
+
+Available options depend on the agent and tool. Prepare project files and CLI sign-in separately on the selected device or cloud environment.
+
+Browser pairing is a separate connection method. It makes a browser tab available as a device, without a desktop installation. Available tools differ from those on a desktop device.
+
+## Select a Device and Project
+
+1. Open the **Execution Device** selector in the chat input.
+2. Select the device that contains the project or supports the required task.
+3. Open **Manage** to inspect devices if necessary.
+4. Check the device name, platform, access scope, and connection status.
+5. Set the working directory to a project path on that device before the first project task.
+
+The device detail panel lists recent directories. A path on your computer is not necessarily present on a remote device or in a cloud sandbox.
+
+The working directory tells the agent which project to work on. It is not an access-control boundary. File access also depends on the tool, approvals, and operating-system permissions.
+
+Device connection and agent connection are separate steps. Connecting a device lets work run there. **Create Agent → Connect External Agents** scans that device and adds agents. See [Connect External Agents](/docs/usage/agent/connect-external-agents) for the workflow. This wizard uses a local desktop or connected computer, not an automatically provisioned cloud sandbox.
+
+## Connect a Device
+
+### Desktop
+
+The desktop app registers your computer automatically. Before work, check the device in the selector. For coding tasks, also check the CLI installation and sign-in.
+
+### Remote Computer
+
+On the computer that will run the tasks, run `lh connect`. Follow the connection instructions shown by your installed CLI.
+
+After connection, select that computer in the device selector. Check its status and project directory before you send a task.
+
+### Via Browser
+
+To connect a browser tab:
+
+1. Open the **Devices** page.
+2. Select **Via Browser**.
+3. Generate a pairing code.
+4. Complete the code exchange shown by the interface.
+5. Check that the current browser tab appears as a device.
+
+No desktop app is required for this pairing method. Pairing alone does not grant native shell execution or unrestricted file access.
+
+Keep the tab open during use. After an interruption, check the device and task status before you send more work.
+
+## Connection Problems and Device Changes
+
+- **Device unavailable**: Check the connection status and the desktop app, CLI connection, or browser tab that provides the device.
+- **Project missing**: Check the path on the selected device, rather than on the computer that shows the chat.
+- **CLI unavailable**: Check the CLI installation, process `PATH`, and authentication on the execution device.
+- **Interrupted task**: Inspect task status, command output, and file changes before a retry. Do not assume rollback or automatic completion.
+- **Different device or directory**: Check the project and CLI again. A saved coding-agent session does not automatically move with the chat history.
+
+Use **Manage** to inspect registered devices and available connection controls. Before you switch devices, check for unfinished tasks on the previous device.
+
+## Tool Permissions and Project Discovery
+
+LobeHub tool permissions determine whether a connector runs directly, asks for approval, or stays off. A connected coding agent also has its own CLI permissions. These layers are separate.
+
+For server-run agents, project discovery scans the bound directory for `.agents/skills`, `.claude/skills`, `AGENTS.md`, and `CLAUDE.md`. The directories contain project skills. The Markdown files contain project instructions.
+
+## Related Releases
+
+- [May 31, 2026: device selection and desktop registration](/changelog/2026-05-31-drag-and-drop-skills)
+- [June 8, 2026: connectors, execution devices, and project discovery](/changelog/2026-06-08-connectors)
+- [June 15, 2026: browser pairing](/changelog/2026-06-15-browser-pairing)
+- [June 22, 2026: Manage and recent directories](/changelog/2026-06-22-delivery-checks)
+- [July 27, 2026: device status and access scope](/changelog/2026-07-27-terminal-and-clearer-errors)
+
+<Cards>
+  <Card href={'/docs/usage/agent/terminal'} title={'Terminal'} />
+
+  <Card href={'/docs/usage/agent/connect-external-agents'} title={'Connect External Agents'} />
+
+  <Card href={'/docs/usage/agent/sandbox'} title={'Cloud Sandbox'} />
+
+  <Card href={'/docs/usage/agent/built-in-browser'} title={'Built-in Browser'} />
+</Cards>

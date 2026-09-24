@@ -1,4 +1,9 @@
-import type { AgentState, CallLLMPayload } from '@lobechat/agent-runtime';
+import {
+  type AgentState,
+  type CallLLMPayload,
+  selectEnableExpertise,
+  selectExpertise,
+} from '@lobechat/agent-runtime';
 import { gatherContextFacts } from '@lobechat/mecha';
 import type { ChatStreamPayload } from '@lobechat/model-runtime';
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
@@ -92,8 +97,8 @@ export const buildServerCallLlmContext = async ({
       },
       agentId,
       disabledPluginIds: state.world?.disabledPluginIds,
-      editingAgentId: state.metadata?.editingAgentId as string | undefined,
-      editingGroupId: state.metadata?.editingGroupId as string | undefined,
+      editingAgentId: state.origin?.editingAgentId,
+      editingGroupId: state.origin?.editingGroupId,
       enabledToolIds: resolved.enabledToolIds,
       executionTarget,
       features: resolveServerConnectorFeatures(),
@@ -127,10 +132,10 @@ export const buildServerCallLlmContext = async ({
     botPlatformContext: state.world?.channel?.botPlatform,
     ...(facts.step.workspaceContext && { workspaceContext: facts.step.workspaceContext }),
     discordContext: state.world?.channel?.discord,
-    enableExpertise: state.enableExpertise,
+    enableExpertise: selectEnableExpertise(state),
     enableHistoryCount: agentConfig.chatConfig?.enableHistoryCount ?? undefined,
     evalContext: state.world?.eval,
-    expertise: state.expertise,
+    expertise: selectExpertise(state),
     forceFinish: state.forceFinish,
     ...(facts.step.groupAgentBuilderContext && {
       groupAgentBuilderContext: facts.step.groupAgentBuilderContext,
@@ -175,53 +180,54 @@ export const buildServerCallLlmContext = async ({
     ...(facts.step.onboardingContext && { onboardingContext: facts.step.onboardingContext }),
   };
 
-  const processedMessages = await agentRuntimeTracer.startActiveSpan(
-    CONTEXT_ENGINEERING_SPAN_NAME,
-    {
-      attributes: buildContextEngineeringAttributes({
-        hasImages: (messagesForContext as Array<{ content?: unknown }>).some(
-          (message) =>
-            Array.isArray(message.content) &&
-            (message.content as Array<{ type?: string }>).some(
-              (part) => part?.type === 'image_url',
-            ),
-        ),
-        historyCompressed:
-          Array.isArray(messagesForContext) &&
-          messagesForContext.some(
-            (message: { role?: string }) => message?.role === 'compressedGroup',
+  const { messages: processedMessages, metadata: ceMetadata } =
+    await agentRuntimeTracer.startActiveSpan(
+      CONTEXT_ENGINEERING_SPAN_NAME,
+      {
+        attributes: buildContextEngineeringAttributes({
+          hasImages: (messagesForContext as Array<{ content?: unknown }>).some(
+            (message) =>
+              Array.isArray(message.content) &&
+              (message.content as Array<{ type?: string }>).some(
+                (part) => part?.type === 'image_url',
+              ),
           ),
-        knowledgeCount:
-          (contextEngineInput.knowledge?.knowledgeBases?.length ?? 0) +
-          (contextEngineInput.knowledge?.fileContents?.length ?? 0),
-        knowledgeInjected:
-          (contextEngineInput.knowledge?.knowledgeBases?.length ?? 0) > 0 ||
-          (contextEngineInput.knowledge?.fileContents?.length ?? 0) > 0,
-        memoryInjected: Boolean(contextEngineInput.userMemory?.memories),
-        messageCount: messagesForContext.length,
-        operationId,
-        stepIndex,
-        systemRoleLength: contextEngineInput.systemRole?.length,
-        toolCount: contextEngineInput.toolsConfig?.tools?.length ?? 0,
-      }),
-    },
-    async (ceSpan) => {
-      try {
-        const result = await serverMessagesEngine(contextEngineInput);
-        ceSpan.setAttribute('lobehub.context.message_count', result.length);
-        return result;
-      } catch (error) {
-        ceSpan.recordException(error as Error);
-        ceSpan.setStatus({
-          code: SpanStatusCode.ERROR,
-          message: error instanceof Error ? error.message : String(error),
-        });
-        throw error;
-      } finally {
-        ceSpan.end();
-      }
-    },
-  );
+          historyCompressed:
+            Array.isArray(messagesForContext) &&
+            messagesForContext.some(
+              (message: { role?: string }) => message?.role === 'compressedGroup',
+            ),
+          knowledgeCount:
+            (contextEngineInput.knowledge?.knowledgeBases?.length ?? 0) +
+            (contextEngineInput.knowledge?.fileContents?.length ?? 0),
+          knowledgeInjected:
+            (contextEngineInput.knowledge?.knowledgeBases?.length ?? 0) > 0 ||
+            (contextEngineInput.knowledge?.fileContents?.length ?? 0) > 0,
+          memoryInjected: Boolean(contextEngineInput.userMemory?.memories),
+          messageCount: messagesForContext.length,
+          operationId,
+          stepIndex,
+          systemRoleLength: contextEngineInput.systemRole?.length,
+          toolCount: contextEngineInput.toolsConfig?.tools?.length ?? 0,
+        }),
+      },
+      async (ceSpan) => {
+        try {
+          const result = await serverMessagesEngine(contextEngineInput);
+          ceSpan.setAttribute('lobehub.context.message_count', result.messages.length);
+          return result;
+        } catch (error) {
+          ceSpan.recordException(error as Error);
+          ceSpan.setStatus({
+            code: SpanStatusCode.ERROR,
+            message: error instanceof Error ? error.message : String(error),
+          });
+          throw error;
+        } finally {
+          ceSpan.end();
+        }
+      },
+    );
 
   const {
     messages: _inputMsgs,
@@ -231,6 +237,7 @@ export const buildServerCallLlmContext = async ({
   ctx.tracingContextEngine?.(
     { ...contextEngineInputLite, toolCount: _toolsConfig?.tools?.length ?? 0 },
     processedMessages,
+    ceMetadata,
   );
 
   return {

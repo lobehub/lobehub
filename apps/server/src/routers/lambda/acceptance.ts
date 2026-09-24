@@ -46,6 +46,10 @@ import {
 } from '@/server/services/verify';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
+import {
+  type AcceptanceRepairDispatch,
+  dispatchAcceptanceRepair,
+} from './_helpers/acceptanceRepairDispatch';
 import { canManageAcceptance, filterManageableAcceptances } from './_helpers/acceptanceWriteScope';
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
 
@@ -1211,18 +1215,46 @@ export const acceptanceRouter = router({
     }),
 
   /**
-   * The user rejects the delivery. The comment is a re-tasking input: it is
+   * The user rejects the delivery. An optional comment is a re-tasking input: it is
    * recorded on the current round's decision and seeds the next repair/verify
-   * round (spawned by the runtime for agent rounds, or by the next
-   * `lh verify ingest-report` for harness rounds).
+   * round. When the rounds name an authoring conversation, the delivery is sent
+   * straight back to that agent and the acceptance moves to `repairing`; the
+   * outcome rides on `repairDispatch` so every surface (UI, CLI, external
+   * callers) reports the same thing. Without one the caller hands the repair
+   * prompt over itself.
    */
   reject: acceptanceWriteProcedure
-    .input(z.object({ comment: z.string().min(1).max(2000), id: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
+    .input(
+      z.object({
+        comment: z.string().trim().max(2000).optional(),
+        /**
+         * Send the delivery back to the agent that authored it (default). Pass
+         * `false` to only record the decision — the caller hands the repair
+         * prompt over itself.
+         */
+        dispatch: z.boolean().optional(),
+        id: z.string(),
+      }),
+    )
+    .mutation(
+      async ({
+        ctx,
+        input,
+      }): Promise<AcceptanceItem & { repairDispatch: AcceptanceRepairDispatch }> => {
+        const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
 
-      return service.reject(acceptance.id, input.comment);
-    }),
+        const rejected = await service.reject(acceptance.id, input.comment || undefined);
+        if (input.dispatch === false) {
+          return { ...rejected, repairDispatch: { dispatched: false, reason: 'skipped' } };
+        }
+
+        const repairDispatch = await dispatchAcceptanceRepair(ctx, service, acceptance);
+        if (!repairDispatch.dispatched) return { ...rejected, repairDispatch };
+
+        const current = await service.acceptanceModel.findById(acceptance.id);
+        return { ...(current ?? rejected), repairDispatch };
+      },
+    ),
 
   /**
    * Rename the acceptance in the caller's list — a display-title override kept

@@ -175,6 +175,7 @@ export const videoRouter = router({
         model,
         params,
         provider,
+        spendOrigin: ctx.spendOrigin,
         userId,
         workspaceId: wsId,
       });

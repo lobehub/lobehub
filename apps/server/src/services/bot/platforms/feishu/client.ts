@@ -16,6 +16,7 @@ import {
   updateBotRuntimeStatus,
 } from '@/server/services/gateway/runtimeStatus';
 
+import { warnAttachmentFailures } from '../attachmentDelivery';
 import { stripMarkdown } from '../stripMarkdown';
 import {
   type BotPlatformRuntimeContext,
@@ -134,7 +135,8 @@ function createMessenger(
         await api.sendMessage(chatId, text);
       }
       if (attachments?.length) {
-        await sendFeishuAttachments(api, chatId, attachments);
+        const sent = await sendFeishuAttachments(api, chatId, attachments);
+        warnAttachmentFailures(`bot-platform:${platform}:reply`, sent.failures);
       }
     },
     editMessage: (messageId, content) =>

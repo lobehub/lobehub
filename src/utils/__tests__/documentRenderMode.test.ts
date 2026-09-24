@@ -8,6 +8,16 @@ import { describe, expect, it } from 'vitest';
 import { getDocumentRenderMode } from '../documentRenderMode';
 
 describe('getDocumentRenderMode', () => {
+  /** @example File associations take precedence over filename-based editor selection. */
+  it('keeps uploads in the file view, including after the backing file is removed', () => {
+    /** @example A Markdown upload is still a file, not an editable page. */
+    expect(getDocumentRenderMode({ fileId: 'file-1', filename: 'note.md' })).toEqual({
+      mode: 'file',
+    });
+    /** @example A removed file displays a missing-file state instead of a blank editor. */
+    expect(getDocumentRenderMode({ fileId: null, sourceType: 'file' })).toEqual({ mode: 'file' });
+  });
+
   it('returns editor for SKILL.md skill index', () => {
     expect(getDocumentRenderMode({ fileType: 'skills/index', title: 'SKILL.md' })).toEqual({
       mode: 'editor',

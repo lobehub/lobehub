@@ -2,8 +2,7 @@
 title: Connect LobeHub to WeChat
 description: >-
   Learn how to connect a WeChat bot to your LobeHub agent via the iLink Bot API,
-  enabling your AI assistant to chat with users on WeChat through private and
-  group conversations.
+  enabling your AI assistant to chat with users on WeChat through direct messages.
 tags:
   - WeChat
   - Message Channels
@@ -13,12 +12,16 @@ tags:
 
 # Connect LobeHub to WeChat
 
-By connecting a WeChat channel to your LobeHub agent, users can interact with the AI assistant through WeChat private chats and group conversations.
+By connecting a WeChat channel to your LobeHub agent, users can interact with the AI assistant through WeChat direct messages. This page covers an Agent channel, not an account link through the official Messenger bot.
 
 ## Prerequisites
 
-- A LobeHub account with an active subscription
+- A paid personal plan
 - A WeChat account
+
+### Paid Access Requirements
+
+The [2026-07-08 announcement](/changelog/2026-07-08-wechat-chat-adjustment) gives an expected effective time of July 10, 2026 at 12:00 PM ET (July 11 at 00:00 Beijing time). New connections and reconnections require a paid personal plan. Continued use of existing connections also requires a paid plan after the notice period. This change affects only WeChat messaging, not LobeHub chat, model usage, or other core features.
 
 ## Step 1: Open Channel Settings
 
@@ -50,20 +53,19 @@ In LobeHub, navigate to your agent's settings, then select the **Channels** tab.
 
 Open WeChat, find your bot contact, and send a message. The bot should respond through your LobeHub agent.
 
-## Adding the Bot to Group Chats
+## Group Chat Support
 
-To use the bot in WeChat groups:
+This guide covers WeChat direct messages only. Existing repository pages conflict on group support. The July 8 announcement changes paid access but does not confirm group-chat support. This guide does not list groups as a confirmed feature or provide group invitation and `@mention` instructions.
 
-1. Add the bot to a WeChat group
-2. @mention the bot or send a message in the group to trigger a response
-3. The bot will reply in the group conversation
+For group chats, first verify support for your current WeChat connection. Alternatively, choose a platform with documented group support in [Channels Overview](/docs/usage/channels/overview).
 
 ## Advanced Settings
 
 | Setting                  | Default | Description                                                                                                                                                                                |
 | ------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Character Limit**      | 2000    | Maximum characters per message (range: 100–2048)                                                                                                                                           |
-| **Message Merge Window** | 5000 ms | How long to wait for additional messages before replying. Only takes effect when **Concurrency Mode** is set to `debounce` — the default `queue` mode processes each message as it arrives |
+| **Concurrency Mode**     | `burst` | Groups images and text that arrive close together into one turn; `debounce` is also available |
+| **Message Merge Window** | 5000 ms | How long `burst` or `debounce` waits for more messages in the same turn |
 | **Show Usage Stats**     | Off     | Display token/cost stats in replies                                                                                                                                                        |
 
 ## How It Works
@@ -71,11 +73,11 @@ To use the bot in WeChat groups:
 Unlike webhook-based platforms (Telegram, Slack), WeChat uses a **long-polling** mechanism via the iLink Bot API:
 
 1. When you scan the QR code, LobeHub obtains a bot token from WeChat's iLink API
-2. LobeHub continuously polls the iLink API for new messages (\~35 second intervals)
+2. LobeHub continuously waits for new messages through the iLink API. A long-poll request typically waits for about 35 seconds, then the next poll starts immediately
 3. When a message arrives, it is routed through the LobeHub agent for processing
 4. The agent's response is sent back to WeChat via the iLink API
 
-This polling is managed by a background cron job, so the connection is maintained automatically.
+A background message gateway maintains the polling connection and reconnects it automatically.
 
 ## Limitations
 
@@ -88,5 +90,5 @@ This polling is managed by a background cron job, so the connection is maintaine
 
 - **QR code expired:** Click **Refresh QR Code** in the modal to generate a new one.
 - **Bot not responding:** The session may have expired. Go to the WeChat channel settings and re-scan the QR code to reconnect.
-- **Delayed responses:** Long-polling has a natural delay of up to 35 seconds between polls. This is expected behavior.
+- **Delayed responses:** The 35-second value is the wait window for one long-poll request, not a delay applied to every message. If delays persist, check the connection and scan again.
 - **Connection lost after some time:** WeChat sessions expire periodically. Re-authenticate by clicking "Scan QR Code to Connect" again.

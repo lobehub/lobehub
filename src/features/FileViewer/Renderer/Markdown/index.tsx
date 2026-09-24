@@ -7,9 +7,11 @@ import { CodeIcon, EyeIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 
 import { useTextFileLoader } from '../../hooks/useTextFileLoader';
+import NotSupport from '../../NotSupport';
 
 const styles = createStaticStyles(({ css }) => ({
   // Same floating-controls treatment as the LocalFile portal's text preview, so
@@ -57,8 +59,16 @@ interface MarkdownViewerProps {
  */
 const MarkdownViewer = memo<MarkdownViewerProps>(({ url }) => {
   const { t } = useTranslation('file');
-  const { fileData, loading } = useTextFileLoader(url);
+  const { error, fileData, loading, tooLarge } = useTextFileLoader(url);
   const [mode, setMode] = useState<PreviewMode>('render');
+
+  if (!loading && fileData === null)
+    return (
+      <Flexbox>
+        {error && <AsyncError error={error} variant={'block'} />}
+        <NotSupport tooLarge={tooLarge} url={url} />
+      </Flexbox>
+    );
 
   if (loading || fileData === null)
     return (

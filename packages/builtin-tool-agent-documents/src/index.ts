@@ -1,6 +1,9 @@
+export { agentShareSystemPrompt } from './agentShareSystemRole';
 export { AgentDocumentsManifest } from './manifest';
+export { resolveAgentDocumentsRestrictedManifest } from './resolveRestrictedManifest';
 export { systemPrompt } from './systemRole';
 export {
+  AGENT_SHARE_DOCUMENT_API_NAMES,
   AgentDocumentsApiName,
   AgentDocumentsIdentifier,
   type CopyDocumentArgs,

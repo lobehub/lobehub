@@ -4,7 +4,7 @@ import superjson from 'superjson';
 import type { LambdaRouter } from '@/server/routers/lambda';
 import type { ToolsRouter } from '@/server/routers/tools';
 
-import { getValidToken } from '../auth/refresh';
+import { describeTokenLookup, getValidToken } from '../auth/refresh';
 import { pickAuthSource } from '../auth/source';
 import { CLI_API_KEY_ENV } from '../constants/auth';
 import { CLI_PRIMARY_BIN } from '../constants/identity';
@@ -50,9 +50,12 @@ async function getAuthAndServer(): Promise<{
   }
 
   const result = await getValidToken();
-  if (!result) {
+  if (result.status !== 'ok') {
+    const report = describeTokenLookup(result);
     log.error(
-      `No authentication found. Run '${CLI_PRIMARY_BIN} login' (or 'npx -y ${cliPackageName} login') first, or set ${CLI_API_KEY_ENV}.`,
+      report
+        ? `${report.detail} ${report.fix}`
+        : `No authentication found. Run '${CLI_PRIMARY_BIN} login' (or 'npx -y ${cliPackageName} login') first, or set ${CLI_API_KEY_ENV}.`,
     );
     process.exit(1);
   }

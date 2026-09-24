@@ -21,7 +21,7 @@ user-invocable: true
 - `git log --oneline origin/canary..HEAD` — unpushed commits
 - `gh pr list --head "$(git branch --show-current)" --json number,title,state,url` — existing PR
 - `git diff --stat --stat-count=20 origin/canary..HEAD` — change summary
-- `env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME lh acceptance run list --json` — the published acceptance round for this branch (match on `branch`)
+- Reuse an existing acceptance link from the task when it covers the delivered behavior. If a lookup is needed, first follow [Publish auth preflight](../../acceptance/PROCESS.md#publish-auth-preflight), then run `publish_lh acceptance run list --json` and match on `branch`. Do not blindly unset API keys: the production credential may exist only in the environment. A lookup never requires creating a new round.
 
 ### 2. Handle uncommitted changes on default branch
 
@@ -54,10 +54,12 @@ A feature or fix needs a published acceptance round before the PR is opened (AGE
 ### 6. Create PR with `gh pr create --base canary`
 
 - Title: `<gitmoji> <type>(<scope>): <description>`
-- Body: based on PR template (`.github/PULL_REQUEST_TEMPLATE.md`), fill checkboxes
+- Body: based on PR template (`.github/PULL_REQUEST_TEMPLATE.md`)
+- Obey the `AGENT-INSTRUCTIONS` HTML comments in that template. Keep them commented out, and do not copy them into the visible description.
 - Link related GitHub issues using magic keywords (`Fixes #123`, `Closes #123`)
 - Link Linear issues if applicable (`Fixes LOBE-xxx`)
-- Put the acceptance link (or the explicit skip reason) under **Test**
+- Put the acceptance link (or the explicit skip reason) under **Test** in the Human section
+- Fill **Human** for every pull request. Fill **AI** only when an agent produced the change and `gh api user/memberships/orgs/lobehub` does not return `"state": "active"`. Then record harness, model, thinking level, and every user prompt from this session, in order. Before those prompts go into the body, review the whole session and redact any sensitive content. Show the author the exact text and wait for confirmation before opening or updating the pull request. A person who wrote the change, or an active lobehub organization member, deletes the AI section.
 - Use HEREDOC for body to preserve formatting
 
 ### 7. Open in browser
@@ -66,13 +68,10 @@ A feature or fix needs a published acceptance round before the PR is opened (AGE
 
 ## PR Template
 
-Use `.github/PULL_REQUEST_TEMPLATE.md` as the body structure. Key sections:
+Use `.github/PULL_REQUEST_TEMPLATE.md` as the body structure. The HTML comments marked `AGENT-INSTRUCTIONS` are mandatory for the agent that fills the body. Two sections:
 
-- **Change Type**: Check the appropriate gitmoji type
-- **Related Issue**: Link GitHub/Linear issues with magic keywords
-- **Description of Change**: Summarize what and why
-- **How to Test**: Describe test approach, check relevant boxes
-- **Acceptance**: the published `https://app.lobehub.com/acceptance/<id>` link, or why the change has no user-visible outcome
+- **Human**: what changed, screenshots, how it was tested, the acceptance link (or why none is needed), and the related issue. Fill this for every pull request.
+- **AI**: delete the whole section when a person wrote the change, or when the author is an active member of the lobehub organization. When an agent wrote the change and the author is an outside collaborator or an external contributor, fill harness (product and version), model id, thinking level (`n/a` when the harness has none), and every user prompt from the session, in order. Review the whole session first and redact any sensitive content. Show the author the exact text and wait for confirmation before publishing. Repeat once per agent session.
 
 ## Notes
 

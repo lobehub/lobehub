@@ -1,11 +1,14 @@
 import type { BuiltinInterventionProps } from '@lobechat/types';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
+  AUTO_SUBMIT_LEAD_MS,
   buildSubmitPayload,
+  DEFAULT_COUNTDOWN_MS,
   FREEFORM_PAYLOAD_KEY,
   isQuestionAnswered,
   readDraft,
+  SUBMIT_SETTLE_FALLBACK_MS,
   SUPPLEMENT_PAYLOAD_KEY,
 } from './draft';
 import { normalizeAskUserQuestions } from './normalize';
@@ -20,6 +23,14 @@ export interface UseAskUserFormParams {
    * `false`, no timer runs) — used by surfaces with no bridge timeout.
    */
   countdownMs?: number;
+  /**
+   * The producer's authoritative wall-clock deadline (unix ms) for this
+   * question. The producer owns the clock — it stops waiting at this instant
+   * no matter when the card mounted — so prefer it over `countdownMs`, which
+   * is mount-relative and therefore restarts a full countdown on every
+   * remount / refresh / tab switch.
+   */
+  deadlineAt?: number;
   /** Preserve the form but disable every action while a remote submit awaits producer ACK. */
   disabled?: boolean;
   onInteractionAction?: BuiltinInterventionProps<AskUserQuestionArgs>['onInteractionAction'];
@@ -32,6 +43,12 @@ export interface UseAskUserFormParams {
 export interface AskUserFormApi {
   activeQuestion?: AskUserQuestionItem;
   activeTab: string;
+  /**
+   * The timeout fallback has fired for this card. Distinguishes "we answered
+   * on your behalf" from "the clock ran out and nothing was sent", which the
+   * footer must not conflate — one is an answer, the other is a dead card.
+   */
+  autoSubmitted: boolean;
   custom: Record<string, string>;
   escapeActive: boolean;
   escapeText: string;
@@ -78,6 +95,7 @@ export interface AskUserFormApi {
 export const useAskUserForm = ({
   args,
   countdownMs,
+  deadlineAt,
   disabled = false,
   onInteractionAction,
   persistedDraft,
@@ -98,18 +116,22 @@ export const useAskUserForm = ({
     () => initial.supplementActive && !initial.escapeActive,
   );
   const [submitting, setSubmitting] = useState(false);
+  const [autoSubmitted, setAutoSubmitted] = useState(false);
   const [activeTab, setActiveTab] = useState<string>(() => {
     // Resume on the first unanswered question rather than always at Q1.
     const idx = questions.findIndex((q) => !isQuestionAnswered(q, initial.picks, initial.custom));
     return String(idx >= 0 ? idx : 0);
   });
 
-  // Countdown is opt-in: only surfaces with a bridge timeout pass `countdownMs`.
-  const countdownEnabled = countdownMs != null;
+  // Countdown is opt-in: only surfaces with a bridge timeout pass a clock.
+  const countdownEnabled = countdownMs != null || deadlineAt != null;
 
-  // Mounted-time deadline; server has its own clock and will return isError if
-  // it expires first. Drift of a few seconds is fine.
-  const deadline = useMemo(() => Date.now() + (countdownMs ?? 0), [countdownMs]);
+  // The producer's deadline wins whenever it sent one: its bridge gives up at
+  // that wall-clock instant regardless of when this card mounted. Re-deriving
+  // the deadline from mount time would hand a remount / refresh / tab switch a
+  // fresh full countdown long after the producer stopped listening.
+  const [mountedAt] = useState(() => Date.now());
+  const deadline = deadlineAt ?? mountedAt + (countdownMs ?? 0);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!countdownEnabled) return;
@@ -117,9 +139,35 @@ export const useAskUserForm = ({
     return () => clearInterval(id);
   }, [countdownEnabled]);
   const expired = countdownEnabled ? now >= deadline : false;
+  // Bound the lead by the budget so a short countdown can't be swallowed whole
+  // by it — the fallback must still be a timeout, not an instant answer.
+  const leadMs = Math.min(
+    AUTO_SUBMIT_LEAD_MS,
+    Math.floor((countdownMs ?? DEFAULT_COUNTDOWN_MS) / 2),
+  );
+  // Submitting after the producer's own deadline is worse than not submitting:
+  // it has already settled the call and stopped polling, so no ACK can come
+  // back and the card parks on `resolving` with every button disabled. Fire
+  // inside the lead window instead, while the bridge still listens. Without a
+  // producer deadline the clock is only a mount-relative guess, so there is no
+  // authoritative instant to be late for and expiry still triggers it.
+  const autoSubmitDue =
+    countdownEnabled && now >= deadline - leadMs && !(deadlineAt != null && expired);
   const hasProviderOwnedOptionIds = questions.some((question) =>
     question.options.some((option) => !!option.id),
   );
+
+  // A resolved `onInteractionAction` means the answer was published, not that
+  // the producer consumed it — the card stays disabled until the host settles
+  // it, which normally happens well before this timer and takes the card off
+  // screen entirely. This is only the floor: a submit that never reached a
+  // transport at all would otherwise leave the form latched forever.
+  const ackTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(ackTimer.current), []);
+  const awaitProducerAck = useCallback(() => {
+    clearTimeout(ackTimer.current);
+    ackTimer.current = setTimeout(() => setSubmitting(false), SUBMIT_SETTLE_FALLBACK_MS);
+  }, []);
 
   /**
    * Submit `payload` exactly as given. Used by the Submit button (with the
@@ -132,12 +180,13 @@ export const useAskUserForm = ({
       setSubmitting(true);
       try {
         await onInteractionAction({ payload, type: 'submit' });
+        awaitProducerAck();
       } catch (err) {
         console.error('[AskUserQuestion] submit failed:', err);
         setSubmitting(false);
       }
     },
-    [disabled, onInteractionAction, submitting],
+    [awaitProducerAck, disabled, onInteractionAction, submitting],
   );
 
   const handleToggle = useCallback(
@@ -368,30 +417,34 @@ export const useAskUserForm = ({
     setSubmitting(true);
     try {
       await onInteractionAction({ type: 'skip' });
+      awaitProducerAck();
     } catch (err) {
       console.error('[AskUserQuestion] skip failed:', err);
       setSubmitting(false);
     }
-  }, [disabled, onInteractionAction, submitting]);
+  }, [awaitProducerAck, disabled, onInteractionAction, submitting]);
 
   const allAnswered = useMemo(
     () => questions.every((q) => isQuestionAnswered(q, picks, custom)),
     [picks, custom, questions],
   );
 
-  // Timeout fallback for legacy question forms: when the countdown hits zero
-  // and the user hasn't submitted, fill option 1 of each unanswered question and submit. Beats
-  // letting the bridge time out into a `cancelled` isError — the model gets a
-  // structured answer it can act on. Single-shot via the `submitting` guard.
+  // Timeout fallback for legacy question forms: shortly BEFORE the deadline,
+  // if the user hasn't submitted, fill option 1 of each unanswered question and
+  // submit. Beats letting the bridge time out into a `cancelled` isError — the
+  // model gets a structured answer it can act on. Single-shot via
+  // `autoSubmitted`, and never fired once `expired`, because an answer the
+  // producer can no longer receive only strands the card.
   //
   // Escape-mode special case: if the user is in escape mode with non-empty text
   // when the clock hits zero, submit that text as-is rather than discarding it.
   useEffect(() => {
-    if (!expired || submitting || disabled || questions.length === 0) return;
+    if (!autoSubmitDue || autoSubmitted || submitting || disabled || questions.length === 0) return;
     // A stable id means this is a provider-owned choice (permission/plan or a
     // newer exact-id question). Never infer consent by selecting option one:
     // let the producer timeout/cancel fail closed.
     if (hasProviderOwnedOptionIds) return;
+    setAutoSubmitted(true);
     if (escapeActive && escapeAvailable && escapeText.trim().length > 0) {
       void submitWith({ [FREEFORM_PAYLOAD_KEY]: escapeText.trim() });
       return;
@@ -412,7 +465,8 @@ export const useAskUserForm = ({
     }
     void submitWith(fallback);
   }, [
-    expired,
+    autoSubmitDue,
+    autoSubmitted,
     submitting,
     disabled,
     questions,
@@ -439,6 +493,7 @@ export const useAskUserForm = ({
   return {
     activeQuestion,
     activeTab,
+    autoSubmitted,
     custom,
     escapeActive: inEscape,
     escapeText,

@@ -1,4 +1,5 @@
 {
+  "FilePreview.actions.download": "下載原始檔案",
   "FilePreview.tabs.chunk": "分塊",
   "FilePreview.tabs.file": "檔案",
   "Plugins": "外掛",

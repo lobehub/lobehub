@@ -19,7 +19,10 @@ const shouldKeepUsageValue = (key: string, value: unknown) => {
 
   if (value !== 0) return true;
 
-  return key === 'inputAudioTokens' || key === 'inputCacheMissTokens';
+  // Explicit zero cache reads distinguish a cache miss from unavailable telemetry.
+  return (
+    key === 'inputAudioTokens' || key === 'inputCacheMissTokens' || key === 'inputCachedTokens'
+  );
 };
 
 /**
@@ -78,7 +81,7 @@ export const convertOpenAIUsage = (
   const totalInputTokens = inputCitationTokens + (usage.prompt_tokens || 0);
 
   const cachedTokens =
-    (usage as any).prompt_cache_hit_tokens || usage.prompt_tokens_details?.cached_tokens;
+    (usage as any).prompt_cache_hit_tokens ?? usage.prompt_tokens_details?.cached_tokens;
   // OpenAI reports aggregate cached prompt tokens, but does not identify how many cached tokens
   // are audio. Do not infer inputCachedAudioTokens from overlapping aggregate counters; callers
   // can handle the unavailable modality split without receiving fabricated usage.
@@ -144,7 +147,7 @@ export const convertOpenAIResponseUsage = (
 ): ModelUsage => {
   // 1. Extract and default primary values
   const totalInputTokens = usage.input_tokens || 0;
-  const inputCachedTokens = usage.input_tokens_details?.cached_tokens || 0;
+  const inputCachedTokens = usage.input_tokens_details?.cached_tokens;
   const inputWriteCacheTokens = readCacheWriteTokens(usage.input_tokens_details);
 
   const totalOutputTokens = usage.output_tokens || 0;
@@ -155,11 +158,12 @@ export const convertOpenAIResponseUsage = (
   // 2. Calculate derived values.
   // Exclude cache writes from the uncached bucket so textInput (1×) and
   // textInput_cacheWrite (1.25×) do not both bill the same tokens.
-  const inputCacheMissTokens = resolveOpenAIInputCacheMissTokens({
-    inputCachedTokens,
-    inputWriteCacheTokens,
-    totalInputTokens,
-  })!;
+  const inputCacheMissTokens =
+    resolveOpenAIInputCacheMissTokens({
+      inputCachedTokens,
+      inputWriteCacheTokens,
+      totalInputTokens,
+    }) ?? totalInputTokens;
 
   // For ResponseUsage, inputTextTokens is effectively totalInputTokens as no further breakdown is given.
   const inputTextTokens = totalInputTokens;

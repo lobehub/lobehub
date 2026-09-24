@@ -6,7 +6,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import * as schema from '../../schemas';
-import { chatGroups, documents, workspaces } from '../../schemas';
+import { chatGroups, documents, userMemories, workspaces } from '../../schemas';
 import type { NewAgent } from '../../schemas/agent';
 import { agents } from '../../schemas/agent';
 import type { NewFile } from '../../schemas/file';
@@ -396,6 +396,36 @@ describe.skipIf(!isServerDB)('FtsSearchRepo', () => {
 
       const otherFile = results.find((r) => r.title === 'other-file.txt');
       expect(otherFile).toBeUndefined();
+    });
+  });
+
+  describe('search - retired memory layers', () => {
+    it('never surfaces experience memories, only the layers that still have a page', async () => {
+      /**
+       * @example
+       * Experience memory is retired and has no page to land on, so a matching experience row
+       * stays out of unified search while a context row with the same title is found.
+       */
+      await serverDB.insert(userMemories).values([
+        {
+          id: 'memory-context-row',
+          lastAccessedAt: new Date(),
+          memoryLayer: 'context',
+          title: 'Migration lesson',
+          userId,
+        },
+        {
+          id: 'memory-experience-row',
+          lastAccessedAt: new Date(),
+          memoryLayer: 'experience',
+          title: 'Migration lesson',
+          userId,
+        },
+      ]);
+
+      const results = await ftsSearchRepo.search({ query: 'Migration lesson', type: 'memory' });
+
+      expect(results.map((r) => r.id)).toEqual(['memory-context-row']);
     });
   });
 

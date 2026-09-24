@@ -1,10 +1,13 @@
 import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { nanoid } from 'nanoid';
 import { useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { KeyedMutator } from 'swr';
 
+import { FILE_UPLOAD_BLACKLIST } from '@/const/file';
 import { useSingleton } from '@/hooks/useSingleton';
 import { agentDocumentService } from '@/services/agentDocument';
+import { useFileStore } from '@/store/file';
 
 import type { AgentDocumentItem } from '../types';
 import { isPendingId, isProtectedManagedSkillItem } from '../types';
@@ -52,6 +55,7 @@ export interface DocumentTreeOps {
     targetId: string | null;
   }) => Promise<void>;
   renameDocument: (id: string, newName: string) => Promise<void>;
+  uploadFiles: (parentId: string | null, files: File[]) => Promise<void>;
 }
 
 export const useDocumentTreeOps = ({
@@ -235,6 +239,59 @@ export const useDocumentTreeOps = ({
       await createPromise;
     },
     [agentId, buildParentPathFromRowId, byRowId, mutate, pendingCreates, pickUniqueFilename, t],
+  );
+
+  const uploadFiles = useCallback(
+    async (parentId: string | null, files: File[]) => {
+      const parentPath = buildParentPathFromRowId(parentId);
+      if (parentPath === null) {
+        toast.error(t('workingPanel.resources.tree.parentMissing'));
+        return;
+      }
+
+      const accepted = files.filter((file) => !FILE_UPLOAD_BLACKLIST.includes(file.name));
+      if (accepted.length === 0) return;
+
+      const parentDocumentId = parentId ? (byRowId.get(parentId)?.documentId ?? null) : null;
+      const { dispatchDockFileList, uploadWithProgress } = useFileStore.getState();
+
+      for (const file of accepted) {
+        const abortController = new AbortController();
+        const uploadId = `upload_${nanoid(12)}`;
+
+        dispatchDockFileList({
+          atStart: true,
+          files: [{ abortController, file, id: uploadId, status: 'pending' }],
+          type: 'addFiles',
+        });
+
+        try {
+          const result = await uploadWithProgress({
+            abortController,
+            file,
+            onStatusUpdate: dispatchDockFileList,
+            skipCheckFileType: true,
+            uploadId,
+          });
+
+          if (!result?.id) continue;
+
+          await agentDocumentService.importFile({
+            agentId,
+            fileId: result.id,
+            parentId: parentDocumentId,
+          });
+          await mutate();
+        } catch (error) {
+          toast.error(
+            error instanceof Error
+              ? `${t('workingPanel.resources.tree.uploadError')}: ${error.message}`
+              : t('workingPanel.resources.tree.uploadError'),
+          );
+        }
+      }
+    },
+    [agentId, buildParentPathFromRowId, byRowId, mutate, t],
   );
 
   const renameDocument = useCallback(
@@ -486,7 +543,8 @@ export const useDocumentTreeOps = ({
       deleteDocuments,
       moveDocument,
       renameDocument,
+      uploadFiles,
     }),
-    [createDocument, createFolder, deleteDocuments, moveDocument, renameDocument],
+    [createDocument, createFolder, deleteDocuments, moveDocument, renameDocument, uploadFiles],
   );
 };

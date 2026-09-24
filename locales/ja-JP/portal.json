@@ -1,4 +1,5 @@
 {
+  "FilePreview.actions.download": "ソースファイルをダウンロード",
   "FilePreview.tabs.chunk": "チャンク",
   "FilePreview.tabs.file": "ファイル",
   "Plugins": "プラグイン",

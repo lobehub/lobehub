@@ -140,6 +140,15 @@ For mapping changes, generation operations, repeat/resume behavior, or deploymen
 [Mapping migration workflow](references/mapping-migrations.md). It routes to the public command guide
 and adds recovery, automation, and local Docker rehearsal rules.
 
+- Treat managed and Serverless Elasticsearch APIs as capability-constrained. Create operational
+  metadata and control indexes with the smallest portable request, and add topology, storage, or
+  index settings only after verifying that the target service supports them; settings accepted by a
+  self-managed cluster may be rejected by a managed service.
+- Make idempotent Elasticsearch resource creation depend on the structured error type, such as
+  `resource_already_exists_exception`, not a broad HTTP status range. Preserve any other creation
+  failure and stop before follow-up reads or mutations instead of turning a rejected request into a
+  misleading verification error.
+
 Elasticsearch cannot change an existing field's type or index-time analyzer in place. The code
 declares the target and Elasticsearch records the live state, per entity:
 
@@ -152,8 +161,9 @@ declares the target and Elasticsearch records the live state, per entity:
   Shared analysis changes alter
   every entity fingerprint and classify as breaking for every entity; bump all affected versions
   and rebuild rather than using in-place upgrades.
-- Every physical index `<alias>-v<n>` carries `_meta.{reindex_run_id, schema_version,
-schema_fingerprint}`; the alias marks the live generation. Indexes created before fingerprints
+- Every physical index `<alias>-v<n>` or same-schema rebuild `<alias>-v<n>-r<runId>` carries
+  `_meta.{reindex_run_id, schema_version, schema_fingerprint}`; the alias marks the live generation.
+  A rebuild suffix is physical identity, not a schema-version bump. Indexes created before fingerprints
   existed may omit the fingerprint, but still need a valid run ID and schema version for sync
   readiness. `_meta.schema_version` wins over the `-v<n>` suffix because an in-place upgrade advances
   `_meta` without renaming the index.
@@ -163,7 +173,8 @@ schema_fingerprint}`; the alias marks the live generation. Indexes created befor
   document to the fields that index maps (every generation is `dynamic: strict`), so a new
   generation can be backfilled beside the live one; a bulk work item is acknowledged only when
   every existing generation accepted it (2xx or 409 conflict).
-- One reindex checkpoint per `(namespace, schemaVersion)` covers the entities on that generation.
+- Canonical migration checkpoints remain keyed by `(namespace, schemaVersion)`. Explicit current-version
+  rebuild checkpoints add `reindexRunId`, so repeated v1 rebuilds never reuse a completed v1 cursor.
   `--apply` groups the requested entities by declared version, treats existing aliases as an
   upgrade (no `--fresh-run`), leaves existing aliases in place, and emits `promotion_pending`. A
   completed first install creates aliases. Promoting a newer generation requires a completed
@@ -174,6 +185,13 @@ schema_fingerprint}`; the alias marks the live generation. Indexes created befor
   `--in-place` requires
   `mappingChange: additive`, widens the live index with `PUT _mapping`, pins the checkpoint to that
   index, and backfills with `external_gte` so concurrent sync writes win.
+- Use `--apply --rebuild-current --entity=<entity> --yes` when projection or capture semantics changed
+  without a physical mapping change and historical documents must be regenerated from PostgreSQL.
+  Deploy runtime support first: sync must recognize `-r<runId>` generations before one is created.
+  Resume with the reported `--run-id=<uuid>`. Promote with the exact
+  `--generation=<alias>-v<n>-r<uuid>` because version-only selection is ambiguous. The old generation
+  remains dual-written for rollback and becomes same-version retirement-eligible only after the
+  promotion records which live run superseded it.
 - Checkpoints are local files, not Drizzle migration history. Preserve `ES_REINDEX_STATE_DIR` across
   invocations. Completed runs skip backfill; incomplete runs resume from saved cursors. Mutating CLI
   commands share a non-expiring Elasticsearch namespace lock, independent of checkpoint location.

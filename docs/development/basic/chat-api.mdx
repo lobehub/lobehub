@@ -1,8 +1,8 @@
 ---
-title: Chat API Client-Server Interaction Logic
+title: Chat API Internals and Client-Server Interaction
 description: >-
-  Explore the client-server interaction logic of LobeHub Chat API, including
-  event sequences and core components.
+  Understand LobeHub internal chat flows, runtimes, and client-server
+  interactions. This is a source development guide, not a public API tutorial.
 tags:
   - Chat API
   - Client-Server Interaction
@@ -11,11 +11,24 @@ tags:
   - MCP
 ---
 
-# Chat API Client-Server Interaction Logic
+# Chat API Internals and Client-Server Interaction
 
-This document explains the implementation logic of
-LobeHub Chat API in client-server interactions,
-including event sequences and core components involved.
+This page is for developers changing or debugging LobeHub source code. It explains internal chat flows, event sequences, and core components.
+
+<Callout type="warning">
+  This is not a public REST API or SDK integration guide. `/webapi/chat/[provider]`, internal tRPC
+  routes, store actions, and ChatService are application implementation details, not a stable
+  external integration contract. Do not infer public authentication, request formats, or
+  compatibility guarantees from the sequence diagram below.
+</Callout>
+
+For CLI, public API, or TypeScript SDK integration, start with [Choose a Development Path](/docs/development/start#choose-a-development-path). The snippets below explain internal control flow; they are not standalone client examples. Compare them with the source for your version.
+
+## Scope
+
+The diagram below focuses on the client-side Agent loop. See [Client-Side vs Server-Side Execution](#client-side-vs-server-side-execution) for server execution. Different transports and execution scenarios do not necessarily follow an identical path.
+
+Here, a "preset task" is an internal helper that calls a model directly. It is not a user-created Task or Scheduled automation. For user-facing work records, see [Task](/docs/usage/getting-started/task).
 
 ## Interaction Sequence Diagram
 
@@ -76,10 +89,7 @@ then calls `executeClientAgent()`.
 
 ### 2. Agent Runtime Drives the Loop
 
-Agent Runtime is the **core execution engine**
-of the entire chat flow. Every chat interaction
-(from simple Q\&A to complex multi-step tool calling)
-is driven by the `AgentRuntime.step()` loop.
+The client-side Agent chat flow described here is driven by the `AgentRuntime.step()` loop. Preset tasks described below call the model directly and bypass this loop.
 
 **Initialization**
 (`src/store/chat/slices/agentRun/actions/transports/client/streamingExecutor.ts`):

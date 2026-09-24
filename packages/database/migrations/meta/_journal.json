@@ -1162,6 +1162,34 @@
       "when": 1789610500888,
       "tag": "0165_expertise_rejection_provenance",
       "breakpoints": true
+    },
+    {
+      "idx": 166,
+      "version": "7",
+      "when": 1789816134383,
+      "tag": "0166_device_architecture",
+      "breakpoints": true
+    },
+    {
+      "idx": 167,
+      "version": "7",
+      "when": 1789835190230,
+      "tag": "0167_user_deletion_fk_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 168,
+      "version": "7",
+      "when": 1789892818833,
+      "tag": "0168_scm_integration",
+      "breakpoints": true
+    },
+    {
+      "idx": 169,
+      "version": "7",
+      "when": 1790152852202,
+      "tag": "0169_works_share_scope",
+      "breakpoints": true
     }
   ],
   "version": "6"

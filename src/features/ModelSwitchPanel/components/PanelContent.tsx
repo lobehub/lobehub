@@ -1,5 +1,5 @@
 import { Flexbox } from '@lobehub/ui';
-import { type ComponentType, type FC } from 'react';
+import { type ComponentType, type FC, type ReactNode } from 'react';
 import { useState } from 'react';
 import { Rnd } from 'react-rnd';
 
@@ -20,6 +20,7 @@ interface PanelContentProps {
   enabledList?: EnabledProviderWithModels[];
   model?: string;
   ModelItemComponent?: ComponentType<any>;
+  notice?: ReactNode;
   onModelChange?: (params: { model: string; provider: string }) => Promise<void>;
   onOpenChange?: (open: boolean) => void;
   pricingMode?: PricingMode;
@@ -30,6 +31,7 @@ export const PanelContent: FC<PanelContentProps> = ({
   ModelItemComponent,
   enabledList: enabledListProp,
   model: modelProp,
+  notice,
   onModelChange: onModelChangeProp,
   onOpenChange,
   pricingMode,
@@ -46,17 +48,22 @@ export const PanelContent: FC<PanelContentProps> = ({
 
   const content = (
     <>
+      {notice && (
+        <Flexbox padding={8} style={{ flexShrink: 0 }}>
+          {notice}
+        </Flexbox>
+      )}
       <Toolbar
+        showGroupModeSwitch
         groupMode={groupMode}
         searchKeyword={searchKeyword}
-        showGroupModeSwitch={isDevMode}
         onGroupModeChange={handleGroupModeChange}
         onSearchKeywordChange={setSearchKeyword}
       />
       <List
         ModelItemComponent={ModelItemComponent}
         enabledList={enabledList}
-        groupMode={isDevMode ? groupMode : 'byModel'}
+        groupMode={groupMode}
         model={modelProp}
         pricingMode={pricingMode}
         provider={providerProp}

@@ -12,7 +12,7 @@ export const systemPrompt = `You have access to a Message tool that provides uni
 
 <bot_management>
 1. **listPlatforms** — List all supported platforms and their required credential fields
-2. **listBots** — List per-agent configured bots for the current agent (with runtime status). Also the primary discovery for sending to others — see \`<outbound_routing>\`.
+2. **listBots** — List per-agent configured bots for the current agent (with runtime \`status\`; a \`failed\` bot is not usable for sending). Also the primary discovery for sending to others — see \`<outbound_routing>\`.
 3. **getBotDetail** — Get detailed info about a specific bot (returns \`settings\` — read this BEFORE \`updateBot\` for any field-level edit)
 4. **createBot** — Create a new per-agent bot integration (requires agentId, platform, applicationId, credentials; optional initial settings)
 5. **updateBot** — Update bot credentials or access-policy settings (DM policy, allowlists, owner userId, etc.)
@@ -24,22 +24,25 @@ export const systemPrompt = `You have access to a Message tool that provides uni
 <outbound_routing>
 **First, check who the recipient is.** If the target is **the user themselves** — "send me a message on Telegram", "DM me the result", "notify me on Slack" — this is NOT a routing problem: call \`sendMessengerPush\` with \`platform\` + \`content\` and stop. It needs no bot, no channel id, and no platform user id, and its availability is decided by the user's **account links** (\`listMessengerLinks\`), NOT by \`listBots\` / \`listMessengers\`. Never conclude "I can't reach <platform>" for a self-targeted send without having actually called \`sendMessengerPush\` — see \`<proactive_push>\`.
 
-The rest of this section is for sending to **someone else** or to a channel.
+The rest of this section is for sending to **someone else**, to a channel, or into the conversation you're in.
 
 The send APIs (\`sendMessage\`, \`sendDirectMessage\`, \`replyToThread\`) can deliver through **two sources** — both use the same underlying platform clients (so attachments / formatting / rate behavior are identical), but they come from different lists:
 
 - **Per-agent bot** (pass \`botId\`) — the agent's own credentials, configured via \`createBot\`. Listed by \`listBots\`. Messages appear with the per-agent bot's identity.
 - **System Bot installation** (pass \`messengerInstallationId\`) — the LobeHub shared bot, connected by the user via Settings → Messenger. Listed by \`listMessengers\`. Messages appear with the LobeHub System Bot identity.
 
-**Two-step routing rule — apply in order:**
+**Routing rule — apply in order:**
 
-1. **Call \`listBots\`.** If any entry has \`platform: "<target>"\` → use its \`botId\` on the send API. Done.
+0. **The target is the conversation you are in right now** (you're running inside an IM conversation — there is a \`<current_conversation>\` block — and you're sending into it, e.g. delivering a generated file): pass **neither** \`botId\` nor \`messengerInstallationId\`. The runtime sends through the exact connection this conversation arrived on. Skip discovery entirely — another bot on the same platform is a different identity and may have a dead session.
+1. **Call \`listBots\`.** If an entry has \`platform: "<target>"\` and its \`status\` is NOT \`failed\` → use its \`botId\` on the send API. Done. A \`failed\` bot's credentials are broken (e.g. an expired WeChat login accepts text but rejects every file); never auto-pick it — continue to step 2, and mention to the user that the bot needs reconnecting.
 2. **Otherwise call \`listMessengers\`.** If any entry has \`platform: "<target>"\` → use its \`id\` as \`messengerInstallationId\` on the send API. Done.
-3. **Neither has the platform → do NOT pick a different platform.** Tell the user: "I can't reach <platform> for you yet. You can either provision a dedicated bot for this agent with \`createBot\`, or install the LobeHub System Bot via Settings → Messenger." Stop. (A self-targeted send should never reach this step — it goes through \`sendMessengerPush\`, which these two lists do not govern.)
+3. **Neither has a usable connection for the platform → do NOT pick a different platform.** Tell the user: "I can't reach <platform> for you yet. You can either provision a dedicated bot for this agent with \`createBot\`, or install the LobeHub System Bot via Settings → Messenger." Stop. (A self-targeted send should never reach this step — it goes through \`sendMessengerPush\`, which these two lists do not govern.)
 
-Per-agent bots always win because they're purpose-built for the current agent and use identity the user explicitly configured. Only fall back to System Bot when the agent has nothing for the platform. If the user **explicitly** asks to route through their System Bot install even when a per-agent bot exists, honor that and call \`listMessengers\` directly.
+For sends elsewhere, healthy per-agent bots come first because they're purpose-built for the current agent and use identity the user explicitly configured. If the user **explicitly** asks to route through their System Bot install even when a per-agent bot exists, honor that and call \`listMessengers\` directly.
 
-The send APIs accept **exactly one** of \`botId\` / \`messengerInstallationId\` — the server will reject both-or-neither.
+Pass **at most one** of \`botId\` / \`messengerInstallationId\` — never both. Omitting both is only for step 0.
+
+When a send reports a WeChat \`errcode -14\` (session expired), the error names the bot's App ID — tell the user to rescan the QR code of **that** bot (per-agent bot settings for a \`listBots\` App ID, Settings → Messenger for a System Bot connection), not whichever WeChat connection comes to mind.
 </outbound_routing>
 
 <system_bot_management>
@@ -201,10 +204,10 @@ Layout rules:
 
 <usage_guidelines>
 - **When the recipient is the user themselves, use \`sendMessengerPush\`** — that includes "DM me", "send me a message on <platform>", "ping me when done". Do not run bot discovery and do not ask for their platform user id; the server resolves it from their account link.
-- **Before any send to someone else (\`sendMessage\` / \`sendDirectMessage\` / \`replyToThread\`)** from the web UI, follow the two-step rule in \`<outbound_routing>\`: \`listBots\` first; if it has no entry for the target platform, fall back to \`listMessengers\`.
-- When you are already inside a platform conversation (e.g. replying in a Discord channel), you already have the channel context — skip discovery and reply directly to the current channel.
+- **Before any send to someone else (\`sendMessage\` / \`sendDirectMessage\` / \`replyToThread\`)** from the web UI, follow the routing rule in \`<outbound_routing>\`: \`listBots\` first (skipping \`failed\` bots); if it has no usable entry for the target platform, fall back to \`listMessengers\`.
+- When you are already inside a platform conversation (e.g. replying in a Discord channel), you already have the channel context — skip discovery and reply directly to the current channel. Sends into that conversation omit \`botId\` / \`messengerInstallationId\` (step 0 of \`<outbound_routing>\`).
 - **When inside a platform conversation**, if the user refers to something contextual (e.g. "look at this issue", "what do you think about this", "summarize above"), use \`readMessages\` to read recent messages in the current channel to understand the context. Do NOT ask the user to repeat or provide details — the context is in the chat history.
-- If neither \`listBots\` nor \`listMessengers\` has an entry for the target platform, surface the install / createBot guidance from \`<outbound_routing>\` rather than silently falling back to a different platform.
+- If neither \`listBots\` nor \`listMessengers\` has a usable entry for the target platform, surface the install / createBot guidance from \`<outbound_routing>\` rather than silently falling back to a different platform.
 - When the user asks to DM **a third party**, use \`sendDirectMessage\` with that person's platform user id. Never use it to reach the user themselves — \`sendMessengerPush\` covers that without an id.
 - **Never ask the user for channel IDs.** Use \`listChannels\` to discover channels yourself. If \`serverId\` is available from \`listBots\`, use it directly. If not, ask the user for the server/guild ID.
 - When the user references a channel by name (e.g. "dev channel"), call \`listChannels\` with the \`serverId\` from bot settings, find the matching channel, then proceed.

@@ -9,6 +9,7 @@ import {
   updateBotRuntimeStatus,
 } from '@/server/services/gateway/runtimeStatus';
 
+import { warnAttachmentFailures } from '../attachmentDelivery';
 import {
   type BotPlatformRuntimeContext,
   type BotProviderConfig,
@@ -56,13 +57,14 @@ function createMessenger(config: BotProviderConfig, platformThreadId: string): P
       const text = messengerContentText(content);
       const attachments = typeof content === 'string' ? undefined : content.attachments;
       if (attachments?.length) {
-        const delivered = await sendSlackAttachments(slack, {
+        const sent = await sendSlackAttachments(slack, {
           attachments,
           channelId,
           initialComment: text,
           threadTs,
         });
-        if (delivered > 0) return;
+        warnAttachmentFailures('bot-platform:slack:reply', sent.failures);
+        if (sent.delivered > 0) return;
         // All attachments failed → fall through to text-only so the reply
         // still reaches the user.
       }

@@ -37,6 +37,11 @@
  */
 
 import { getHeterogeneousAgentConfigOrThrow } from '../config';
+import {
+  classifyCliQuotaMessage,
+  CLI_SERVER_THROTTLE_PATTERNS,
+  CLI_USER_RATE_LIMIT_PATTERNS,
+} from '../errors/cliQuota';
 import type { HeteroErrorKind } from '../errors/specs';
 import { imagePlaceholder } from '../imageEcho';
 import type {
@@ -254,55 +259,6 @@ export interface ClaudeCompatibleAdapterProfile {
   errorSubtypeMessages: Record<string, string>;
   ignoreDuplicateInit: boolean;
 }
-
-/**
- * Genuinely user-side limit wording. Used only as the text fallback for
- * batch CLI / sandbox runs that don't emit a structured `rate_limit_event`
- * (so {@link isUserQuotaRateLimit} can't fire). The ambiguous bare
- * `rate limit` / `rate limited` substring is deliberately NOT here — it also
- * appears in Anthropic's transient server throttle, so leaning on it would
- * reintroduce the very misclassification this set exists to avoid.
- */
-/**
- * Credit/balance exhaustion, e.g. `You've reached your Fable 5 limit. Run
- * /usage-credits to continue or switch models with /model.` It renders the
- * same guide as a plan window, but waiting for a reset never clears it.
- */
-const CLI_CREDIT_LIMIT_PATTERNS = [
-  /you'?ve reached your .{0,40}\blimit\b/i,
-  /\/usage-credits\b/i,
-] as const;
-
-const CLI_USER_RATE_LIMIT_PATTERNS = [
-  /you'?ve hit your limit/i,
-  // CC names the window in the wording it actually ships — `You've hit your
-  // session limit · resets 6:30pm (Asia/Shanghai)` and `You've hit your weekly
-  // limit · resets Jul 3 at 1pm`. Without these the bare `you've hit your
-  // limit` pattern misses every real message, leaving the 429 to fall through
-  // to the overloaded (retry) guide.
-  /you'?ve hit your \S+ limit/i,
-  ...CLI_CREDIT_LIMIT_PATTERNS,
-  /usage limit reached/i,
-  /\blimit reached\b/i,
-  // Gateways/proxies in front of the API localize the same quota rejection,
-  // e.g. `API Error: Request rejected (429) · [1234][已达到 5 小时使用上限，
-  // 2026-06-19 22:00:00 后可继续使用。…]`. English-only patterns classified
-  // these as a transient overload and told the user to just retry.
-  /使用上限/,
-] as const;
-
-/**
- * Anthropic's server-side transient throttle. CC surfaces this as a 429 with
- * a message that explicitly disclaims the user's plan limit ("not your usage
- * limit") — e.g. `API Error: Server is temporarily limiting requests (not your
- * usage limit) · Rate limited`. It clears on its own in moments, so it must be
- * classified as `overloaded` (retry UX), NOT `rate_limit` (which renders a
- * misleading "usage limit reached" reset-time guide).
- */
-const CLI_SERVER_THROTTLE_PATTERNS = [
-  /not your usage limit/i,
-  /server is temporarily limiting requests/i,
-] as const;
 
 /**
  * Transport-level failures: the connection dropped, stalled, or timed out
@@ -918,11 +874,9 @@ const getRateLimitTerminalError = (
 
   // A credit/balance limit shares the `rate_limit` guide but not its remedy:
   // waiting for a reset never clears it, so it is a distinct taxonomy kind.
-  const kind: HeteroErrorKind = CLI_CREDIT_LIMIT_PATTERNS.some((pattern) =>
-    pattern.test(rawMessage),
-  )
-    ? 'credit_limit'
-    : 'usage_limit';
+  // A `rate_limit_info`-only rejection (no quota wording in the text) is a
+  // plan window by definition — that structured event only ever reports one.
+  const kind: HeteroErrorKind = classifyCliQuotaMessage(rawMessage)?.kind ?? 'usage_limit';
 
   return {
     agentType,

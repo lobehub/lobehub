@@ -21,6 +21,8 @@ export interface GatewayFeedEntry {
   status: string;
 }
 
+export type QuestionSubmissionPhase = 'submitting' | 'checking' | 'failed' | 'uncertain';
+
 export interface ChatAIChatState {
   /**
    * Active Agent Gateway WebSocket connections, keyed by operationId
@@ -45,6 +47,8 @@ export interface ChatAIChatState {
    * UI can render a distinct "running on device" state.
    */
   pendingClientToolExecutions: Record<string, boolean>;
+  /** Local UI feedback only; never persisted as the server intervention status. */
+  questionSubmissions: Record<string, QuestionSubmissionPhase>;
   searchWorkflowLoadingIds: string[];
   threadInputEditor: ChatInputEditor | null;
   /**
@@ -61,6 +65,7 @@ export const initialAiChatState: ChatAIChatState = {
   mainConversationScrollToIndex: null,
   mainInputEditor: null,
   pendingClientToolExecutions: {},
+  questionSubmissions: {},
   searchWorkflowLoadingIds: [],
   threadInputEditor: null,
   toolCallingStreamIds: {},

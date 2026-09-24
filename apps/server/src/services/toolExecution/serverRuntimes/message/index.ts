@@ -2,11 +2,12 @@ import {
   MessageToolIdentifier,
   MESSENGER_PUSH_CONTENT_MAX_LENGTH,
 } from '@lobechat/builtin-tool-message';
-import type { BotProviderQuery } from '@lobechat/builtin-tool-message/executionRuntime';
+import type {
+  BotProviderQuery,
+  MessageRuntimeService,
+} from '@lobechat/builtin-tool-message/executionRuntime';
 import { MessageExecutionRuntime } from '@lobechat/builtin-tool-message/executionRuntime';
-import { LarkApiClient } from '@lobechat/chat-adapter-feishu';
-import { QQApiClient } from '@lobechat/chat-adapter-qq';
-import { WechatApiClient } from '@lobechat/chat-adapter-wechat';
+import type { ChatTopicBotContext } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { and, eq } from 'drizzle-orm';
 
@@ -21,6 +22,7 @@ import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import type { SafeMessengerAccountLink } from '@/database/models/messengerAccountLink';
 import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLink';
 import { MessengerInstallationModel } from '@/database/models/messengerInstallation';
+import { TopicModel } from '@/database/models/topic';
 import { agents } from '@/database/schemas';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
@@ -30,25 +32,21 @@ import {
   invalidateBotAfterUpdate,
   mergeBotSettingsForPersist,
 } from '@/server/services/bot/agentBotProviderSettings';
+import type { ResolvedMessageTarget } from '@/server/services/bot/messageTarget';
+import {
+  createMessageServiceForCredentials,
+  resolveBotMessageTarget,
+  resolveMessengerInstallTarget,
+  resolveMessengerKeyTarget,
+} from '@/server/services/bot/messageTarget';
 import { platformRegistry } from '@/server/services/bot/platforms';
-import { DiscordApi } from '@/server/services/bot/platforms/discord/api';
-import { DiscordMessageService } from '@/server/services/bot/platforms/discord/service';
-import { FeishuMessageService } from '@/server/services/bot/platforms/feishu/service';
-import { ImessageDesktopBridgeApi } from '@/server/services/bot/platforms/imessage/desktopBridge';
-import { ImessageMessageService } from '@/server/services/bot/platforms/imessage/service';
-import { QQMessageService } from '@/server/services/bot/platforms/qq/service';
-import { SlackApi } from '@/server/services/bot/platforms/slack/api';
-import { SlackMessageService } from '@/server/services/bot/platforms/slack/service';
-import { TelegramApi } from '@/server/services/bot/platforms/telegram/api';
-import { TelegramMessageService } from '@/server/services/bot/platforms/telegram/service';
 import {
   wechatLegacyTokenKey,
   wechatPendingPushKey,
   wechatWindowKey,
 } from '@/server/services/bot/platforms/wechat/contextWindow';
-import { WechatMessageService } from '@/server/services/bot/platforms/wechat/service';
 import { GatewayService } from '@/server/services/gateway';
-import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
+import { BOT_RUNTIME_STATUSES, getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
 import { getMessengerRouter, messengerPlatformRegistry } from '@/server/services/messenger';
 import { TELEGRAM_INSTALLATION_KEY } from '@/server/services/messenger/installations/telegram';
 import { wechatInstallationKey } from '@/server/services/messenger/installations/wechat';
@@ -57,6 +55,7 @@ import { maybeSynthesizeTelegramInstall } from '@/server/services/messenger/inst
 import { sendMessengerPush } from '@/server/services/messenger/push';
 
 import type { ServerRuntimeRegistration } from '../types';
+import type { MessageRouteParams } from './MessageDispatcherService';
 import { MessageDispatcherService } from './MessageDispatcherService';
 
 /**
@@ -147,7 +146,15 @@ const disconnectWechatAccountLink = async (
 };
 
 /**
- * Resolves credentials for the given platform from the user's configured bot providers.
+ * Resolves credentials for the given platform from the user's configured bot
+ * providers — the platform-level default used when a call names no connection
+ * and does not target the conversation the run is replying in.
+ *
+ * Bots whose runtime status is `failed` are skipped: their credentials are
+ * known-broken (e.g. an expired WeChat iLink session still accepts text but
+ * rejects every media upload), so auto-picking one silently loses whatever the
+ * agent sends. Other statuses are kept — `disconnected` is also the fallback
+ * when no status was ever recorded, which is normal for webhook bots.
  *
  * Every outbound platform service is built through here, so this is also the
  * runtime paid-feature gate: an enabled provider whose plan no longer covers
@@ -160,22 +167,46 @@ const resolveCredentials = async (
   userId: string,
 ): Promise<{ applicationId: string; credentials: Record<string, string> }> => {
   const providers = await providerModel.query({ platform });
-  const enabled = providers.find((p) => p.enabled);
-  if (!enabled?.credentials) {
+  const enabled = providers.filter((p) => p.enabled && p.credentials);
+  if (enabled.length === 0) {
     throw new Error(
       `No enabled ${platform} bot provider found. ` +
         `Please configure a ${platform} integration in your bot settings.`,
     );
   }
+  const statuses = await Promise.all(
+    enabled.map((p) => getBotRuntimeStatus(platform, p.applicationId)),
+  );
+  const usable = enabled.find((_, i) => statuses[i].status !== BOT_RUNTIME_STATUSES.failed);
+  if (!usable) {
+    throw new Error(
+      `Every enabled ${platform} bot is in a failed state (App ID: ${enabled
+        .map((p) => p.applicationId)
+        .join(', ')}). Reconnect it in the bot settings (WeChat: rescan its QR code), ` +
+        'or send through a System Bot connection from `listMessengers`.',
+    );
+  }
   await assertBotFeatureAccess({
     action: 'runtime',
-    applicationId: enabled.applicationId,
+    applicationId: usable.applicationId,
     platform,
     userId,
-    workspaceId: enabled.workspaceId ?? undefined,
+    workspaceId: usable.workspaceId ?? undefined,
   });
-  return { applicationId: enabled.applicationId, credentials: enabled.credentials };
+  return { applicationId: usable.applicationId, credentials: usable.credentials! };
 };
+
+/** Platforms the message tool can reach through a per-agent bot provider. */
+const PROVIDER_PLATFORMS = [
+  'discord',
+  'feishu',
+  'imessage',
+  'lark',
+  'qq',
+  'slack',
+  'telegram',
+  'wechat',
+] as const;
 
 export const messageRuntime: ServerRuntimeRegistration = {
   factory: async (context) => {
@@ -196,98 +227,192 @@ export const messageRuntime: ServerRuntimeRegistration = {
       context.workspaceId ?? undefined,
     );
 
-    const service = new MessageDispatcherService({
-      discord: async () => {
-        const { credentials } = await resolveCredentials(providerModel, 'discord', context.userId!);
-        return new DiscordMessageService(new DiscordApi(credentials.botToken));
-      },
-      feishu: async () => {
-        const { applicationId, credentials } = await resolveCredentials(
-          providerModel,
-          'feishu',
-          context.userId!,
-        );
-        return new FeishuMessageService(
-          new LarkApiClient(applicationId, credentials.appSecret, 'feishu'),
-          'feishu',
-        );
-      },
-      imessage: async () => {
-        const { applicationId, credentials } = await resolveCredentials(
-          providerModel,
-          'imessage',
-          context.userId!,
-        );
-        return new ImessageMessageService(
-          new ImessageDesktopBridgeApi({
-            applicationId,
-            deviceId: credentials.desktopDeviceId,
-            userId: context.userId!,
-          }),
-        );
-      },
-      lark: async () => {
-        const { applicationId, credentials } = await resolveCredentials(
-          providerModel,
-          'lark',
-          context.userId!,
-        );
-        return new FeishuMessageService(
-          new LarkApiClient(applicationId, credentials.appSecret, 'lark'),
-          'lark',
-        );
-      },
-      qq: async () => {
-        const { applicationId, credentials } = await resolveCredentials(
-          providerModel,
-          'qq',
-          context.userId!,
-        );
-        return new QQMessageService(new QQApiClient(applicationId, credentials.appSecret));
-      },
-      slack: async () => {
-        const { credentials } = await resolveCredentials(providerModel, 'slack', context.userId!);
-        return new SlackMessageService(new SlackApi(credentials.botToken));
-      },
-      telegram: async () => {
-        // Per-agent provider takes precedence; fall back to the env-backed
-        // singleton so the synthetic telegram:singleton install actually works.
-        try {
-          const { credentials } = await resolveCredentials(
-            providerModel,
-            'telegram',
-            context.userId!,
+    const userId = context.userId;
+    const serverDB = context.serverDB;
+
+    const serviceForProvider = async (platform: string) => {
+      const { applicationId, credentials } = await resolveCredentials(
+        providerModel,
+        platform,
+        userId,
+      );
+      return createMessageServiceForCredentials(platform, applicationId, credentials, { userId });
+    };
+
+    const serviceFactories: Record<string, () => Promise<MessageRuntimeService>> =
+      Object.fromEntries(
+        PROVIDER_PLATFORMS.map((platform) => [platform, () => serviceForProvider(platform)]),
+      );
+
+    // Per-agent provider takes precedence; fall back to the env-backed
+    // singleton so the synthetic telegram:singleton install actually works.
+    serviceFactories.telegram = async () => {
+      try {
+        return await serviceForProvider('telegram');
+      } catch (error) {
+        // A paid-gate denial is not a "provider missing" condition — falling
+        // back to the env singleton here would bypass the feature gate.
+        if (error instanceof BotFeatureAccessError) throw error;
+        const envConfig = await getMessengerTelegramConfig();
+        if (!envConfig) {
+          throw new Error(
+            'No enabled telegram bot provider found and no env-backed Telegram config available. ' +
+              'Please configure a telegram integration in your bot settings.',
+            { cause: error },
           );
-          return new TelegramMessageService(new TelegramApi(credentials.botToken));
-        } catch (error) {
-          // A paid-gate denial is not a "provider missing" condition — falling
-          // back to the env singleton here would bypass the feature gate.
-          if (error instanceof BotFeatureAccessError) throw error;
-          const envConfig = await getMessengerTelegramConfig();
-          if (!envConfig) {
-            throw new Error(
-              'No enabled telegram bot provider found and no env-backed Telegram config available. ' +
-                'Please configure a telegram integration in your bot settings.',
-              { cause: error },
-            );
-          }
-          return new TelegramMessageService(new TelegramApi(envConfig.botToken));
         }
-      },
-      wechat: async () => {
-        const { applicationId, credentials } = await resolveCredentials(
-          providerModel,
-          'wechat',
-          context.userId!,
+        return createMessageServiceForCredentials('telegram', TELEGRAM_INSTALLATION_KEY, {
+          botToken: envConfig.botToken,
+        });
+      }
+    };
+
+    // No usable per-agent WeChat bot (none, or all failed) → the user's own
+    // System Bot WeChat connection, which is where the user most likely talks
+    // to LobeHub anyway.
+    serviceFactories.wechat = async () => {
+      try {
+        return await serviceForProvider('wechat');
+      } catch (error) {
+        if (error instanceof BotFeatureAccessError) throw error;
+        const link = await new MessengerAccountLinkModel(serverDB, userId).findByPlatform('wechat');
+        if (!link) throw error;
+        return (await resolveMessengerInstallTarget({ serverDB, userId }, link.id)).service;
+      }
+    };
+
+    // The IM conversation this run replies in, as stamped on its topic by the
+    // bot/messenger router. Loaded at most once per runtime, only when a call
+    // actually needs it.
+    let inboundBotContext: Promise<ChatTopicBotContext | undefined> | undefined;
+    const loadInboundBotContext = () => {
+      inboundBotContext ??= (async () => {
+        if (!context.topicId) return undefined;
+        const topic = await new TopicModel(
+          serverDB,
+          userId,
+          context.workspaceId ?? undefined,
+        ).findById(context.topicId);
+        return topic?.metadata?.bot as ChatTopicBotContext | undefined;
+      })();
+      return inboundBotContext;
+    };
+
+    /**
+     * The connection the current conversation arrived on: the System Bot
+     * install (messenger runs carry `messengerInstallationKey`) or the
+     * per-agent bot whose `applicationId` received it. Undefined when that
+     * connection is gone — callers then fall back to platform routing.
+     */
+    const resolveInboundTarget = async (
+      botContext: ChatTopicBotContext,
+    ): Promise<ResolvedMessageTarget | undefined> => {
+      if (botContext.messengerInstallationKey) {
+        return resolveMessengerKeyTarget(botContext.platform, botContext.messengerInstallationKey);
+      }
+      const provider = await providerModel.findEnabledByApplicationId(
+        botContext.platform,
+        botContext.applicationId,
+      );
+      if (!provider) return undefined;
+      await assertBotFeatureAccess({
+        action: 'runtime',
+        applicationId: provider.applicationId,
+        platform: provider.platform,
+        userId,
+        workspaceId: provider.workspaceId ?? undefined,
+      });
+      return {
+        applicationId: provider.applicationId,
+        platform: botContext.platform as ResolvedMessageTarget['platform'],
+        service: createMessageServiceForCredentials(
+          provider.platform,
+          provider.applicationId,
+          provider.credentials as Record<string, any>,
+          { userId },
+        ),
+        settings: {},
+      };
+    };
+
+    const assertTargetPlatform = (
+      target: ResolvedMessageTarget,
+      params: MessageRouteParams,
+      label: string,
+    ) => {
+      if (target.platform !== params.platform) {
+        throw new Error(
+          `${label} is a ${target.platform} connection, but the call targets ${params.platform}.`,
         );
-        return new WechatMessageService(
-          // `baseUrl` is issued during QR confirmation and must be honored when
-          // it differs from the default endpoint (see wechat/protocol-spec.md).
-          new WechatApiClient(credentials.botToken, credentials.botId, credentials.baseUrl),
-          applicationId,
-        );
-      },
-    });
+      }
+    };
+
+    // Resolved connections, cached per routing key for this runtime.
+    const routedServices = new Map<string, MessageRuntimeService>();
+    const cachedRoute = async (
+      key: string,
+      resolve: () => Promise<MessageRuntimeService | undefined>,
+    ) => {
+      const cached = routedServices.get(key);
+      if (cached) return cached;
+      const service = await resolve();
+      if (service) routedServices.set(key, service);
+      return service;
+    };
+
+    /**
+     * Connection priority for every call: explicit `botId` → explicit
+     * `messengerInstallationId` → the connection the current conversation
+     * arrived on (same platform only) → the platform default above.
+     *
+     * Without the inbound step, a WeChat conversation held over the System
+     * Bot would have its files sent through whatever per-agent WeChat bot the
+     * account also has — including a failed one, whose expired session rejects
+     * every upload (LOBE-14350).
+     */
+    const resolveRoute = async (
+      params: MessageRouteParams,
+    ): Promise<MessageRuntimeService | undefined> => {
+      const { botId, messengerInstallationId } = params;
+      if (botId && messengerInstallationId) {
+        throw new Error('Provide at most one of botId or messengerInstallationId.');
+      }
+
+      if (botId) {
+        return cachedRoute(`bot:${botId}`, async () => {
+          const target = await resolveBotMessageTarget(providerModel, botId, { userId });
+          assertTargetPlatform(target, params, `Bot ${botId}`);
+          await assertBotFeatureAccess({
+            action: 'runtime',
+            applicationId: target.applicationId,
+            platform: target.platform,
+            userId,
+            workspaceId: target.provider.workspaceId ?? undefined,
+          });
+          return target.service;
+        });
+      }
+
+      if (messengerInstallationId) {
+        return cachedRoute(`messenger:${messengerInstallationId}`, async () => {
+          const target = await resolveMessengerInstallTarget(
+            { serverDB, userId },
+            messengerInstallationId,
+          );
+          assertTargetPlatform(target, params, `Messenger connection ${messengerInstallationId}`);
+          return target.service;
+        });
+      }
+
+      const botContext = await loadInboundBotContext();
+      if (botContext?.platform !== params.platform) return undefined;
+      return cachedRoute(
+        `inbound:${botContext.platform}`,
+        async () => (await resolveInboundTarget(botContext))?.service,
+      );
+    };
+
+    const service = new MessageDispatcherService(serviceFactories, { resolveRoute });
 
     const botProvider: BotProviderQuery = {
       connectBot: async (botId) => {

@@ -1,17 +1,16 @@
 'use client';
 
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
-import { ActionIcon } from '@lobehub/ui/base-ui';
-import { ChevronUp } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 import * as m from 'motion/react-m';
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { isDesktop } from '@/const/version';
 
 import ApprovalCard from './ApprovalCard';
 import { styles } from './styles';
+import { useApprovalIslandCollapse } from './useApprovalIslandCollapse';
 import { useGlobalPendingApprovals } from './useGlobalPendingApprovals';
 
 const SPRING = { damping: 30, stiffness: 320, type: 'spring' } as const;
@@ -30,14 +29,7 @@ const TOP_OFFSET = isDesktop ? TITLE_BAR_HEIGHT + 8 : 16;
 const GlobalApprovalNotification = memo(() => {
   const { t } = useTranslation('chat');
   const groups = useGlobalPendingApprovals();
-  const [collapsed, setCollapsed] = useState(false);
-
-  // Auto-expand whenever a fresh batch of approvals arrives after being idle.
-  const prevCount = useRef(0);
-  useEffect(() => {
-    if (groups.length > prevCount.current) setCollapsed(false);
-    prevCount.current = groups.length;
-  }, [groups.length]);
+  const [collapsed, setCollapsed] = useApprovalIslandCollapse(groups.length);
 
   const hasApprovals = groups.length > 0;
   // Only ONE card is actionable at a time: the reused `ApprovalActions`
@@ -75,14 +67,6 @@ const GlobalApprovalNotification = memo(() => {
               key="stack"
               transition={SPRING}
             >
-              <m.div layout style={{ alignSelf: 'flex-end', pointerEvents: 'auto' }}>
-                <ActionIcon
-                  icon={ChevronUp}
-                  size="small"
-                  title={t('globalApproval.collapse')}
-                  onClick={() => setCollapsed(true)}
-                />
-              </m.div>
               <AnimatePresence mode="popLayout">
                 {top && (
                   <m.div
@@ -94,7 +78,7 @@ const GlobalApprovalNotification = memo(() => {
                     style={{ pointerEvents: 'auto', width: '100%' }}
                     transition={SPRING}
                   >
-                    <ApprovalCard group={top} />
+                    <ApprovalCard group={top} onCollapse={() => setCollapsed(true)} />
                   </m.div>
                 )}
               </AnimatePresence>

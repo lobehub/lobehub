@@ -30,6 +30,8 @@ export enum RequestTrigger {
   Openapi = 'openapi',
   /** A run the user deferred to a future time (`topic.metadata.scheduledRun`). */
   Scheduled = 'scheduled',
+  /** A provider event on a pull request (CI failure, review) woke the agent that opened it. */
+  Scm = 'scm',
   SemanticSearch = 'semantic_search',
   SignupEmailLLMReview = 'signup_email_llm_review',
   Topic = 'topic',
@@ -81,6 +83,13 @@ export interface AgentShareVisitorContext {
   showErrorDetails?: boolean;
   /** `AgentShareConfig.showModelInfo` — gates visitor-facing model/provider/usage redaction. */
   showModelInfo?: boolean;
+  /**
+   * Mirrors `shareConfig.skillGrants` so the skill runtime can enforce the same
+   * per-skill allowlist the operation's skill pool was built from. Absent or
+   * empty grants no skill. Carried separately from {@link toolGrants} because a
+   * skill grant also governs the no-tool pinned-content path.
+   */
+  skillGrants?: string[];
   /**
    * Mirrors `shareConfig.toolGrants` so tool runtimes that resolve their
    * target outside `toolManifestMap` (e.g. `activateSkill`,
@@ -192,6 +201,8 @@ export const AgentRuntimeErrorType = {
   ProviderServiceUnavailable: 'ProviderServiceUnavailable',
   /** Network timeout / connection drop talking to the provider. */
   ProviderNetworkError: 'ProviderNetworkError',
+  /** Provider timed out while downloading a remote image or file URL. */
+  RemoteMediaDownloadTimeout: 'RemoteMediaDownloadTimeout',
   /** Proxy/router has no channel for the requested model (key pool exhausted, no upstream). */
   NoAvailableChannel: 'NoAvailableChannel',
   /** Upstream content-moderation / safety filter rejected the input or output. */

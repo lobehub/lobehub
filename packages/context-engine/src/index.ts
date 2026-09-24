@@ -43,6 +43,7 @@ export {
   getSlicedMessages,
   GroupMessageFlattenProcessor,
   HistoryTruncateProcessor,
+  HYDRATED_TOOL_RESULTS,
   InputTemplateProcessor,
   MessageCleanupProcessor,
   MessageContentProcessor,

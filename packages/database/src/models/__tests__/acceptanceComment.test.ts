@@ -13,6 +13,7 @@ import {
   verifyEvidence,
   verifyRuns,
 } from '../../schemas';
+import type { AcceptanceCommentRow } from '../../schemas/acceptanceComment';
 import type { LobeChatDatabase } from '../../type';
 import {
   ACCEPTANCE_COMMENT_PARENT_NOT_FOUND,
@@ -199,6 +200,96 @@ describe('AcceptanceCommentModel', () => {
   });
 
   describe('listByAcceptance cap', () => {
+    it('retains old thread roots and their review context for replies inside the cap', async () => {
+      const roots: AcceptanceCommentRow[] = [];
+      for (const clientId of ['open', 'resolved', 'deleted', 'proposal']) {
+        const { comment } = await model.create({
+          acceptanceId,
+          anchor: { checkItemId: 'c2', evidenceId, rect },
+          authorUserId: reviewer,
+          clientId,
+          content: clientId,
+          contextRunId: runId,
+          kind: clientId === 'proposal' ? 'proposal' : 'comment',
+        });
+        await serverDB
+          .update(acceptanceComments)
+          .set({ createdAt: new Date('2025-01-01') })
+          .where(eq(acceptanceComments.id, comment.id));
+        roots.push(comment);
+      }
+      await serverDB.insert(acceptanceComments).values({
+        acceptanceId,
+        authorUserId: owner,
+        clientId: 'old-unrelated',
+        content: 'Outside the recent window and not a thread parent',
+        createdAt: new Date('2025-01-01'),
+      });
+      const { comment: foreign } = await model.create({
+        acceptanceId: otherAcceptanceId,
+        authorUserId: owner,
+        clientId: 'foreign',
+        content: 'A different acceptance',
+      });
+      // Real rows cross the production cap; a small ordering fixture cannot
+      // prove that roots outside the latest 1,000 survive the read.
+      await serverDB.insert(acceptanceComments).values(
+        Array.from({ length: 1000 }, (_, index) => ({
+          acceptanceId,
+          authorUserId: owner,
+          clientId: `padding-${index}`,
+          content: `padding-${index}`,
+          createdAt: new Date(Date.UTC(2026, 0, 1, 0, 0, index)),
+        })),
+      );
+      const replies = [];
+      for (const [index, root] of [...roots, roots[0]].entries()) {
+        const { comment: reply } = await model.create({
+          acceptanceId,
+          authorUserId: owner,
+          clientId: `reply-${index}`,
+          content: `reply-${root.clientId}`,
+          parentCommentId: root.id,
+        });
+        await serverDB
+          .update(acceptanceComments)
+          .set({ createdAt: new Date('2026-09-23') })
+          .where(eq(acceptanceComments.id, reply.id));
+        replies.push(reply);
+      }
+      await model.setResolved(roots[1].id, true, reviewer);
+      await model.delete(roots[2].id, { authorUserId: reviewer });
+
+      const rows = await model.listByAcceptance(acceptanceId);
+      expect(rows).toHaveLength(1004);
+      expect(new Set(rows.map((row) => row.id)).size).toBe(rows.length);
+      for (const root of roots) {
+        expect(rows.find((row) => row.id === root.id)).toMatchObject({
+          anchorRect: rect,
+          checkItemId: 'c2',
+          evidenceId,
+          contextRunId: runId,
+        });
+      }
+      expect(rows.find((row) => row.id === roots[1].id)?.resolvedAt).toBeInstanceOf(Date);
+      expect(rows.find((row) => row.id === roots[2].id)).toMatchObject({
+        content: '',
+        deletedAt: expect.any(Date),
+      });
+      expect(rows.find((row) => row.id === roots[3].id)?.kind).toBe('proposal');
+      expect(
+        rows
+          .slice(-replies.length)
+          .map((row) => row.id)
+          .sort(),
+      ).toEqual(replies.map((row) => row.id).sort());
+      expect(rows.every((row, index) => !index || rows[index - 1].createdAt <= row.createdAt)).toBe(
+        true,
+      );
+      expect(rows.some((row) => row.clientId === 'old-unrelated')).toBe(false);
+      expect(rows.some((row) => row.id === foreign.id)).toBe(false);
+    });
+
     it('keeps the newest rows so a fresh post is never hidden', async () => {
       // The cap is 1000; prove the ordering rule on a stand-in that is small
       // enough to write, by checking the tail rather than the head.

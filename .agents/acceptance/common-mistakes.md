@@ -30,7 +30,6 @@ the next free number of that prefix.
 - **L-E6** When the Task requires a durable document, create and pin the real artifact; evidence explains a verdict, it is not the deliverable.
 - **L-E9** Check the acceptance's status before ingest; new scoped work on an accepted acceptance goes to a new subject.
 - **L-E10** After any Agent assignment or Task edit, verify the persisted provider/model and the first completed message's metadata before judging quality.
-- **L-E11** Reconcile the evidence count in `result.json` against the ingest JSON; any `[WARN] evidence upload failed` is a failed publish — republish a fresh round.
 - **L-E13** Uncommitted work on a branch that owns a PR: decide provenance explicitly (open the real PR, or say in `report.md` there is none) and re-read `branch`/`commit` at publish time.
 - **L-E14** After an insertion affordance, continue the user's action in the same case and assert node order in persisted `editor_data`; send the payload through the same entry point.
 - **L-E15** A conversation-branch regression is verified by sending the next message through the real composer: DB row, parent on the active spine, render before and after cold reload.
@@ -64,6 +63,8 @@ the next free number of that prefix.
 - **L-S20** Read the managed containers' host ports from `docker ps` and pass `DB_PORT`/`REDIS_PORT` to every `init-dev-env.sh` subcommand; `auth_failed` on migrate is a port mismatch.
 - **L-S21** In a worktree, invoke scripts by absolute path and prove the SPA's identity (Vite pid cwd, changed module from the Vite origin) before trusting any gate or evidence.
 - **L-S22** A per-account cap that a round consumes (artifact deployments) is cleared for the account the surface actually authenticates as, and re-cleared between rounds.
+- **L-S23** A hand-built `node_modules` symlink farm runs unit tests but cannot start the dev server; clone a working checkout's `node_modules` instead of a fresh install, which this lockfile-less repo resolves against a moving registry.
+- **L-S24** Read the dev server's URL from its own log, and treat "ready" as any status but `000` — `/` answers `302` to `/signin` when signed out.
 
 ## Entries
 
@@ -152,20 +153,6 @@ fallback.
 **Rule:** after every assignment or Task edit, verify the persisted
 provider/model and the first completed assistant message metadata; attach the
 runtime identity to the round.
-
-### L-E11 — Declaring an ingest done without reconciling its evidence count
-
-`since 2026-07-31` · `holds-while: ingest exits 0 after "[WARN] evidence upload failed, skipping <file>"`
-
-**Trap:** the success JSON shows an `acceptanceId` and a round index, the WARN
-above it is read as noise. One skipped half of a `comparison` pair renders alone
-— a lone `before` reads as "the fix never landed".
-
-**Rule:** count evidence items in `result.json` against the ingest JSON's
-`evidence` field; any WARN is a failed publish. Do not retro-attach with
-`acceptance run evidence upload` (no `comparison` metadata → unpaired). Publish
-a fresh round with the complete set and say in `report.md` that it republishes
-the same observations.
 
 ### L-E13 — Publishing uncommitted work onto the branch's unrelated PR
 
@@ -569,3 +556,38 @@ authenticates as the seeded runtime user, still held three.
 the `user_id` on the seeded API key row) and clear the cap for _that_ id before
 and between rounds. A quota error mid-round is an environment fact until the
 account has been checked; do not debug it as product behaviour.
+
+### L-S23 — Substituting a symlink farm for an install in a fresh worktree
+
+`since 2026-09-18` · `holds-while: pnpm-workspace.yaml sets lockfile: false, and Turbopack resolves next/package.json from the workspace root it detects`
+
+**Trap:** a new worktree has no `node_modules`, and a farm of symlinks into a
+working checkout is quick and makes `vitest` and `tsgo` pass — so the tree looks
+ready. The dev server then dies on `Could not find the Next.js package
+(next/package.json)`, every route 500s, and the visible errors point elsewhere
+(`Failed to resolve import "anser"` from a package-level dependency the farm
+never linked). Falling back to `pnpm install` can fail outright: this repo
+commits no lockfile, so a fresh resolve hits whatever the registry holds today
+(seen: `No matching version found for @aws-sdk/token-providers@3.1134.0`).
+
+**Rule:** for anything that boots the app, copy a working checkout's
+`node_modules` — `cp -Rc` (APFS clonefile) takes \~100s and almost no disk for
+6.8 GB. Copy the per-package `node_modules` too (\~100 of them; the root tree
+alone leaves package-level deps unresolved), then symlink any workspace package
+the branch adds into `node_modules/@lobechat/`. The `@lobechat/*` links inside
+are relative and resolve to the worktree's own `packages/`, which is what keeps
+the code under test in the path. A farm is fine for unit tests only.
+
+### L-S24 — Waiting for a readiness code the server never returns
+
+`since 2026-09-18` · `holds-while: the dev script allocates a free port per run and the app redirects unauthenticated root requests`
+
+**Trap:** polling a remembered port (3010) for HTTP `200`. The script allocates a
+port per run and prints it (`🔁 Next server URL: http://localhost:<port>/`, plus
+a separate Vite port in the Debug Proxy line); and the app answers `/` with
+`302` to `/signin` until the surface is authenticated. Both mistakes read as
+"the server never came up" while it has been serving for minutes.
+
+**Rule:** take both URLs from the log, never from memory or a default. Probe with
+PROJECT.md's predicate as written — any code but `000` — and confirm health by
+following the redirect, not by demanding `200` at the root.

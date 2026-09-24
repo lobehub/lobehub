@@ -5,7 +5,7 @@ import { useTheme as useNextThemesTheme } from 'next-themes';
  * @returns boolean - true if current theme is dark, false otherwise
  */
 export const useIsDark = (): boolean => {
-  const { resolvedTheme } = useNextThemesTheme();
+  const { forcedTheme, resolvedTheme } = useNextThemesTheme();
 
-  return resolvedTheme === 'dark';
+  return (forcedTheme ?? resolvedTheme) === 'dark';
 };

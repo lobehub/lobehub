@@ -88,6 +88,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     display: flex;
     flex-direction: column;
+
+    /* Dialogs live inside the theme's isolated stacking context, so lowering
+       this z-index alone cannot reveal them. Yield without releasing the boot gate. */
+    body:has([role='dialog'][data-open]) & {
+      visibility: hidden;
+    }
   `,
 }));
 

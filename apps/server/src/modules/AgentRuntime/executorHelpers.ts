@@ -7,6 +7,7 @@ import { type ToolType } from '@lobechat/observability-otel/modules/agent-runtim
 import {
   type ChatToolPayload,
   type LobeAgentConfig,
+  type WorkAccessScope,
   type WorkRegistrationIntent,
 } from '@lobechat/types';
 import debug from 'debug';
@@ -107,6 +108,7 @@ export const archiveRuntimeToolResult = async (
  * sidebar refresh gap is tracked as a follow-up.
  */
 export const registerWorkFromIntent = async ({
+  accessScope,
   agentId,
   intent,
   rootOperationId,
@@ -121,6 +123,11 @@ export const registerWorkFromIntent = async ({
   userId,
   workspaceId,
 }: {
+  /**
+   * Agent Share boundary the Work is registered under (see
+   * `resolveRunWorkAccessScope`); omitted = ordinary creator scope.
+   */
+  accessScope?: WorkAccessScope;
   agentId?: string | null;
   intent: WorkRegistrationIntent;
   rootOperationId?: string;
@@ -142,7 +149,7 @@ export const registerWorkFromIntent = async ({
   const cumulative = buildWorkVersionCumulativeUsage({ cost: state.cost, usage: state.usage });
 
   try {
-    const workModel = new WorkModel(serverDB, userId, workspaceId);
+    const workModel = new WorkModel(serverDB, userId, workspaceId, accessScope);
 
     await dispatchWorkRegistrationIntent(
       intent,

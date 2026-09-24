@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { MessageModel } from '@/database/models/message';
+import { WorkModel } from '@/database/models/work';
+
 import { redeployFileWork, registerWorksForOperation } from './registerWorksForOperation';
 import { stateHasEntityFileEdits } from './stateHasEntityFileEdits';
 
@@ -179,6 +182,48 @@ beforeEach(() => {
 });
 
 describe('registerWorksForOperation', () => {
+  it('registers a share visitor run under the share scope with file provenance', async () => {
+    mockListPlugins.mockResolvedValue([writeRow('a', '/mnt/data/deck.pptx')]);
+    const agentShareVisitor = { shareId: 'share-1', visitorUserId: 'visitor-1' };
+
+    await registerWorksForOperation({ ...baseParams, agentShareVisitor });
+
+    // The scan must opt in to share-visitor rows: the visitor's tool messages
+    // hang off a topic with a non-null `senderId`, which the default
+    // `ownership()` predicate excludes (the scan would find nothing).
+    expect(vi.mocked(MessageModel)).toHaveBeenCalledWith(serverDB, 'user-1', undefined, undefined, {
+      includeShareVisitor: true,
+    });
+    // The registry is opened under the share scope of the completing op's
+    // topic, so the Work row is stamped and hidden from the creator's lists.
+    expect(vi.mocked(WorkModel)).toHaveBeenCalledWith(serverDB, 'user-1', undefined, {
+      shareId: 'share-1',
+      topicId: 'topic-1',
+      type: 'agentShare',
+      visitorUserId: 'visitor-1',
+    });
+    // The exported entity file carries the same provenance the visitor upload
+    // path stamps, keeping it out of the creator's library.
+    expect(mockExportAndUploadFile).toHaveBeenCalledWith(
+      '/mnt/data/deck.pptx',
+      'deck.pptx',
+      expect.objectContaining({ metadata: { agentShare: agentShareVisitor } }),
+    );
+    expect(mockRegisterFile).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens the ordinary registry and exports without provenance for a creator run', async () => {
+    mockListPlugins.mockResolvedValue([writeRow('a', '/mnt/data/deck.pptx')]);
+
+    await registerWorksForOperation(baseParams);
+
+    expect(vi.mocked(WorkModel)).toHaveBeenCalledWith(serverDB, 'user-1', undefined, undefined);
+    expect(vi.mocked(MessageModel)).toHaveBeenCalledWith(serverDB, 'user-1', undefined, undefined, {
+      includeShareVisitor: false,
+    });
+    expect(mockExportAndUploadFile.mock.calls[0][2]).not.toHaveProperty('metadata');
+  });
+
   it('registers one file Work version per edited entity file', async () => {
     mockListPlugins.mockResolvedValue([
       writeRow('a', '/mnt/data/deck.pptx'),

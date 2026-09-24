@@ -40,7 +40,7 @@ describe('sendTelegramAttachments', () => {
       'caption text',
     );
 
-    expect(n).toBe(1);
+    expect(n.delivered).toBe(1);
     expect(api.sendPhoto).toHaveBeenCalledWith({
       caption: 'caption text',
       chatId: 'chat-1',
@@ -60,7 +60,7 @@ describe('sendTelegramAttachments', () => {
       },
     ]);
 
-    expect(n).toBe(1);
+    expect(n.delivered).toBe(1);
     expect(api.sendDocument).toHaveBeenCalledWith({
       caption: undefined,
       chatId: 'chat-1',
@@ -121,7 +121,7 @@ describe('sendTelegramAttachments', () => {
         },
       ]);
 
-      expect(n).toBe(1);
+      expect(n.delivered).toBe(1);
     } finally {
       vi.unstubAllGlobals();
     }
@@ -156,7 +156,7 @@ describe('sendTelegramAttachments', () => {
       },
     ]);
 
-    expect(n).toBe(1);
+    expect(n.delivered).toBe(1);
     expect(api.sendDocument).not.toHaveBeenCalled();
     expect(api.sendVideo).toHaveBeenCalledWith({
       caption: undefined,
@@ -186,7 +186,7 @@ describe('sendTelegramAttachments', () => {
         { fetchUrl: 'https://app.example.com/f/huge', name: 'huge.bin', type: 'file' },
       ]);
 
-      expect(n).toBe(0);
+      expect(n.delivered).toBe(0);
     } finally {
       vi.unstubAllGlobals();
     }
@@ -224,7 +224,7 @@ describe('sendTelegramAttachments', () => {
         { fetchUrl: 'https://app.example.com/f/sizeless', name: 'big.bin', type: 'file' },
       ]);
 
-      expect(n).toBe(0);
+      expect(n.delivered).toBe(0);
     } finally {
       vi.unstubAllGlobals();
     }
@@ -250,7 +250,7 @@ describe('sendTelegramAttachments', () => {
         },
       ]);
 
-      expect(n).toBe(0);
+      expect(n.delivered).toBe(0);
     } finally {
       vi.unstubAllGlobals();
     }
@@ -273,7 +273,7 @@ describe('sendTelegramAttachments', () => {
         },
       ]);
 
-      expect(n).toBe(1);
+      expect(n.delivered).toBe(1);
     } finally {
       vi.unstubAllGlobals();
     }
@@ -296,7 +296,7 @@ describe('sendTelegramAttachments', () => {
         { fetchUrl: 'https://cdn.example.com/b.png', type: 'image' },
       ]);
 
-      expect(n).toBe(1);
+      expect(n.delivered).toBe(1);
     } finally {
       vi.unstubAllGlobals();
     }
@@ -324,7 +324,7 @@ describe('sendTelegramAttachments', () => {
         },
       ]);
 
-      expect(n).toBe(1);
+      expect(n.delivered).toBe(1);
     } finally {
       vi.unstubAllGlobals();
     }
@@ -351,7 +351,7 @@ describe('sendTelegramAttachments', () => {
         { data: Buffer.from('bytes').toString('base64'), mimeType, name, type: 'audio' },
       ]);
 
-      expect(n).toBe(1);
+      expect(n.delivered).toBe(1);
       expect(api.sendAudio).not.toHaveBeenCalled();
       expect(api.sendDocument).toHaveBeenCalledWith({
         caption: undefined,
@@ -397,7 +397,7 @@ describe('sendTelegramAttachments', () => {
       'here you go',
     );
 
-    expect(n).toBe(1);
+    expect(n.delivered).toBe(1);
     expect(api.sendDocument).toHaveBeenCalledWith({
       // The caption still rides the first DELIVERED message.
       caption: 'here you go',
@@ -414,8 +414,42 @@ describe('sendTelegramAttachments', () => {
       { data: Buffer.from('x').toString('base64'), name: 'a.bin', type: 'file' },
     ]);
 
-    expect(n).toBe(0);
+    expect(n.delivered).toBe(0);
     expect(api.sendDocument).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports WHY each attachment was lost instead of only counting the rest', async () => {
+    const api = makeApi();
+    api.sendDocument.mockRejectedValueOnce(new Error('Telegram 413'));
+    const error = new TypeError('fetch failed');
+    (error as any).cause = new TypeError('Invalid IP address: undefined');
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(error));
+
+    try {
+      const result = await sendTelegramAttachments(api as any, 'chat-1', [
+        { fetchUrl: 'https://app.example.com/f/file_1', name: 'report.docx', type: 'file' },
+        { data: Buffer.from('x').toString('base64'), name: 'a.bin', type: 'file' },
+        { fetchUrl: 'https://cdn.example.com/ok.png', name: 'ok.png', type: 'image' },
+      ]);
+
+      expect(result.delivered).toBe(1);
+      expect(result.failures).toEqual([
+        {
+          detail: 'fetch failed: fetch failed (Invalid IP address: undefined)',
+          name: 'report.docx',
+          reason: 'source-unavailable',
+          type: 'file',
+        },
+        {
+          detail: 'sendDocument: Telegram 413',
+          name: 'a.bin',
+          reason: 'upload-failed',
+          type: 'file',
+        },
+      ]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('skips attachments with no resolvable source', async () => {
@@ -426,7 +460,7 @@ describe('sendTelegramAttachments', () => {
       { fetchUrl: 'https://cdn.example.com/b.png', type: 'image' },
     ]);
 
-    expect(n).toBe(1);
+    expect(n.delivered).toBe(1);
     expect(api.sendPhoto).toHaveBeenCalledTimes(1);
   });
 });

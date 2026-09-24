@@ -9,6 +9,12 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import AgentDocumentPage from './index';
 
+vi.mock('@/features/FileViewer/FileDocumentPreview', () => ({
+  FileDocumentPreview: ({ fileId }: { fileId?: string | null }) => (
+    <div data-file-id={fileId} data-testid="original-file-preview" />
+  ),
+}));
+
 vi.mock('react-router', () => ({
   useParams: () => ({ aid: 'agent-from-url' }),
 }));
@@ -97,6 +103,23 @@ vi.mock('@/features/FloatingChatPanel', () => ({
 }));
 
 describe('AgentDocumentPage', () => {
+  /** @example Opening an imported file as a page preserves its original-file preview. */
+  it('previews uploads instead of mounting the page editor', () => {
+    // ROOT CAUSE:
+    // The standalone route always mounted PageEditor, even for file-backed records.
+    // It now uses the same file preview as the chat portal and keeps the document chat panel.
+    agentDocumentItemState.current.item = {
+      fileId: 'file-original',
+      filename: 'source.unknown',
+      id: 'agent-document-1',
+    };
+    render(<AgentDocumentPage documentId="docs_uploaded" />);
+    /** @example The uploaded file renders without an editable copy. */
+    expect(screen.getByTestId('original-file-preview').dataset.fileId).toBe('file-original');
+    expect(screen.queryByTestId('page-editor')).toBeNull();
+    expect(screen.getByTestId('floating-chat-panel')).toBeTruthy();
+  });
+
   beforeEach(() => {
     agentDocumentItemState.current = {
       error: undefined,

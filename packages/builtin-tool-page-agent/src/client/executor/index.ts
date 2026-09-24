@@ -42,6 +42,13 @@ const PageAgentApiName = {
   replaceText: 'replaceText',
 } as const;
 
+const DOCUMENT_WRITING_APIS = new Set<string>([
+  PageAgentApiName.initPage,
+  PageAgentApiName.editTitle,
+  PageAgentApiName.modifyNodes,
+  PageAgentApiName.replaceText,
+]);
+
 const summarizeError = (error: unknown) => {
   if (error instanceof Error) {
     return {
@@ -125,66 +132,23 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
     };
   }
 
-  /**
-   * Apply server-side execution result to the renderer.
-   *
-   * The page-agent tool now runs on the server (manifest `executors: ['server']`),
-   * but the renderer still owns the live Lexical instance and the in-memory
-   * document store. When the agent stream delivers `tool_end`, the gateway
-   * event handler routes here so we can:
-   *   1. Push the new `editorData`/`title` into the mounted editor via
-   *      `EditorRuntime.applyServerSnapshot` (which skips the auto-save loop).
-   *   2. Mark `useDocumentStore` clean and update `lastSaved*` so the renderer
-   *      does not re-save what the server just wrote.
-   *
-   * If the editor for this `documentId` is not currently mounted (e.g. user
-   * navigated away), we skip — next open will hydrate from the row directly.
-   */
-  onAfterCall = async ({ result }: ToolAfterCallContext): Promise<void> => {
-    if (!result.success) return;
+  // The page-agent tool runs on the server, so the renderer learns about the
+  // write from `tool_end`. Revalidating the editor SWR key routes the server row
+  // through DocumentStore.reconcileRemote, which is the single place that
+  // decides whether the mounted editor adopts it; pushing the snapshot into the
+  // editor here would hydrate twice and mark the store dirty in between.
+  onAfterCall = async ({ apiName, result }: ToolAfterCallContext): Promise<void> => {
+    if (!result.success || !DOCUMENT_WRITING_APIS.has(apiName)) return;
 
-    const state = result.state as
-      | {
-          documentContent?: unknown;
-          documentEditorData?: unknown;
-          documentId?: unknown;
-          documentTitle?: unknown;
-        }
-      | undefined
-      | null;
-    if (!state || typeof state !== 'object') return;
-
-    const documentId = typeof state.documentId === 'string' ? state.documentId : undefined;
+    const state = result.state as { documentId?: unknown } | undefined | null;
+    const documentId = typeof state?.documentId === 'string' ? state.documentId : undefined;
     if (!documentId) return;
 
-    const content = typeof state.documentContent === 'string' ? state.documentContent : undefined;
-    const title = typeof state.documentTitle === 'string' ? state.documentTitle : undefined;
-    const editorData =
-      state.documentEditorData && typeof state.documentEditorData === 'object'
-        ? (state.documentEditorData as Record<string, unknown>)
-        : undefined;
-    const hasDocumentSnapshot =
-      typeof content === 'string' || typeof title === 'string' || !!editorData;
-
-    if (!hasDocumentSnapshot) return;
-
-    // Only push into the live editor when this runtime is bound to the same
-    // document the server just wrote. Otherwise the snapshot would overwrite
-    // a different page's editor — store-level sync still runs below.
-    if (this.runtime.isReady() && this.runtime.getCurrentDocId() === documentId) {
-      this.runtime.applyServerSnapshot({ content, editorData, title });
-    }
-
-    // Always reconcile the document store: even if the editor isn't mounted,
-    // the row was written and any cached projection should match.
-    // Dynamic import keeps the renderer-only store graph (zustand + tRPC
-    // client) out of this package's static import tree so server-side
-    // unit tests of `executor/server.ts` don't have to load it.
     try {
-      const { getDocumentStoreState } = await import('@/store/document');
-      getDocumentStoreState().applyServerSnapshot(documentId, { content, editorData, title });
+      const { invalidateDocumentMutation } = await import('@/services/document/invalidation');
+      await invalidateDocumentMutation({ documentId });
     } catch (error) {
-      log('[PageAgentExecutor] applyServerSnapshot store sync failed', error);
+      log('[PageAgentExecutor] document revalidation failed', error);
     }
   };
 

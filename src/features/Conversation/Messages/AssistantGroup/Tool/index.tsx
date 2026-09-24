@@ -1,6 +1,5 @@
 import { getBuiltinRender } from '@lobechat/builtin-tools/renders';
 import { getBuiltinStreaming } from '@lobechat/builtin-tools/streamings';
-import { LOADING_FLAT } from '@lobechat/const';
 import { Flexbox } from '@lobehub/ui';
 import { Accordion, Skeleton } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
@@ -17,6 +16,7 @@ import { toolSelectors } from '@/store/tool/selectors';
 import { dataSelectors, useConversationStore } from '../../../store';
 import Actions from './Actions';
 import Inspectors from './Inspector';
+import { hasToolResultBody } from './toolResultBody';
 
 const Debug = dynamic(() => import('./Debug'), {
   loading: () => <Skeleton height={300} width={'100%'} />,
@@ -92,8 +92,7 @@ const Tool = memo<GroupToolProps>(({ assistantMessageId, disableEditing, id }) =
   // This tool's own result is the source of truth for completion. The
   // message-level toolCalling flag stays true while sibling tools are still
   // running, so without this guard a finished tool flips back into "loading".
-  const hasFinishedResult =
-    hasError || (!!result && result.content !== LOADING_FLAT && !!result.content);
+  const hasFinishedResult = hasError || hasToolResultBody(result);
   const looksLikeWaitingForToolResult = !hasError && !isArgumentsStreaming && !hasFinishedResult;
   const isToolCallingFallback = looksLikeWaitingForToolResult && isAssistantMessageBusy;
   const isToolCalling = !hasFinishedResult && (isToolCallingFromOperation || isToolCallingFallback);
@@ -157,6 +156,7 @@ const Tool = memo<GroupToolProps>(({ assistantMessageId, disableEditing, id }) =
                   requestArgs={requestArgs}
                   result={result}
                   toolCallId={id}
+                  toolMessageId={toolMessageId}
                   type={type}
                 />
               )}

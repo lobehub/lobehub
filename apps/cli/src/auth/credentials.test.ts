@@ -4,6 +4,7 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { resolveCliDirName } from '../constants/identity';
 import {
   clearCredentials,
   loadCredentials,
@@ -13,7 +14,7 @@ import {
 
 // Use a fixed temp path to avoid hoisting issues with vi.mock
 const tmpDir = path.join(os.tmpdir(), 'lobehub-cli-test-creds');
-const credentialsDir = path.join(tmpDir, '.lobehub');
+const credentialsDir = path.join(tmpDir, resolveCliDirName());
 const credentialsFile = path.join(credentialsDir, 'credentials.json');
 
 vi.mock('node:os', async (importOriginal) => {

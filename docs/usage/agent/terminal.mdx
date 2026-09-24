@@ -1,0 +1,62 @@
+---
+title: Terminal
+description: Open the terminal from the top-right corner of an agent page to run commands, inspect output, and manage terminal sessions.
+tags:
+  - LobeHub
+  - Terminal
+  - Desktop
+---
+
+# Terminal
+
+Open **Terminal** from the top-right corner of an agent page to enter commands and view output without switching to a separate terminal app. Use it to inspect project files, run scripts, or verify changes made by your agent.
+
+## Open the Terminal
+
+1. Open an agent's chat page in the LobeHub desktop app.
+2. Click **Terminal** in the top-right corner to open the terminal panel.
+3. Check the current directory and switch to your project directory if needed.
+4. Enter a command and press Enter. View its output in the panel.
+
+For example, in a macOS or Linux shell, start by checking the current directory and its files:
+
+```bash
+pwd
+ls
+```
+
+To enter a project, run `cd /path/to/project`, replacing the example path with the actual path. Before running project scripts, read the project's instructions to confirm the commands and dependencies it requires.
+
+## Manage Terminal Sessions
+
+The terminal supports multiple sessions that you can switch between using tabs. Keep different activities separate: for example, run a development server in one session and inspect files or run tests in another.
+
+Right-click a terminal tab to close that session or the other sessions. Before closing sessions, check for running processes you still need.
+
+## Work Alongside Your Agent
+
+Use the terminal for steps you want to perform directly. Use chat to describe your goal, request analysis, or assign work to your agent.
+
+For example:
+
+1. Ask your agent to fix an issue in a project.
+2. Open the terminal and enter the relevant project directory.
+3. Run tests according to the project's instructions and inspect the output.
+4. If a test fails, share the relevant error with your agent to continue troubleshooting.
+
+When you want your agent to analyze terminal output, provide the relevant content in chat. Remove passwords, tokens, and other sensitive information before sharing logs.
+
+## Things to Check
+
+- **Confirm where commands run.** Do not infer the execution location from the device displaying the conversation. When working across devices, check the environment and paths in the terminal. See [Execution Devices](/docs/usage/agent/execution-devices) for where agent tools run.
+- **Manual commands have real effects.** Check the command and target path before deleting files, installing dependencies, or changing configuration.
+- **A terminal is not a cloud sandbox.** Opening the terminal panel does not create an isolated cloud environment. See [Cloud Sandbox](/docs/usage/agent/sandbox) for cloud execution capabilities.
+- **If the entry point is missing.** Check that you are using the desktop app and review your app version. Opening a web chat or pairing a browser does not, by itself, grant access to a local terminal.
+
+<Cards>
+  <Card href={'/docs/usage/agent/execution-devices'} title={'Execution Devices'} />
+
+  <Card href={'/docs/usage/agent/connect-external-agents'} title={'Connect External Agents'} />
+
+  <Card href={'/docs/usage/agent/sandbox'} title={'Cloud Sandbox'} />
+</Cards>

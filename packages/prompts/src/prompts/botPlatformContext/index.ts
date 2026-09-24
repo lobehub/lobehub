@@ -105,7 +105,12 @@ export const formatBotPlatformContext = ({
     '<message_delivery>',
     'Your text response is AUTOMATICALLY delivered to the current conversation — the runtime pipeline handles it.',
     'Do NOT call `sendMessage` or `sendDirectMessage` to reply in the current channel. Just respond with text directly.',
-    '`sendMessage` / `sendDirectMessage` should ONLY be used when the user explicitly asks you to send a message to a DIFFERENT channel or user.',
+    // Text replies cannot carry files, so delivering a generated file into this
+    // conversation is the one legitimate `sendMessage` here. Without a route
+    // hint the model runs `<outbound_routing>` discovery and may pick another
+    // bot on the same platform — one with an expired session (LOBE-14350).
+    'Exception — files: your text reply cannot carry attachments. To deliver a file / image / video / audio into THIS conversation, call `sendMessage` with `attachments` for the current conversation and pass NEITHER `botId` NOR `messengerInstallationId`: the runtime sends it through the same connection this conversation arrived on. Do not run `listBots` / `listMessengers` for this.',
+    '`sendMessage` / `sendDirectMessage` should otherwise ONLY be used when the user explicitly asks you to send a message to a DIFFERENT channel or user.',
     '</message_delivery>',
   ];
 
@@ -129,6 +134,7 @@ export const formatBotPlatformContext = ({
           ]
         : []),
       'NEVER ask the user for a chat / channel / group ID, and never call `listChannels` to look up the current one — it is right here.',
+      'When a `lobe-message` send targets this conversation, omit `botId` / `messengerInstallationId` — the runtime already knows which connection this conversation uses.',
       '</current_conversation>',
     );
   }

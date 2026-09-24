@@ -1,4 +1,5 @@
 import { mutate } from '@/libs/swr';
+import { portalKeys } from '@/libs/swr/keys';
 
 import { agentDocumentSWRKeys, documentSWRKeys, notebookSWRKeys } from './swrKeys';
 
@@ -34,6 +35,7 @@ export const invalidateDocumentMutation = async (
     }
     revalidations.push(mutate(documentSWRKeys.pageDetail(documentId)));
     revalidations.push(mutate(documentSWRKeys.pageMeta(documentId)));
+    revalidations.push(mutate(portalKeys.documentHeader(documentId)));
   }
 
   if (documentId || refreshPageDocuments) {

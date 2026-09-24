@@ -1,9 +1,25 @@
 import { AGENT_DOCUMENT_FILE_TYPE, AGENT_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
-import { and, asc, desc, eq, inArray, isNotNull, isNull, like, ne, or, sql } from 'drizzle-orm';
+import type { DocumentAccessScope } from '@lobechat/types';
+import { ordinaryDocumentAccessScope, stripAgentShareDocumentProvenance } from '@lobechat/types';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  exists,
+  inArray,
+  isNotNull,
+  isNull,
+  like,
+  ne,
+  or,
+  sql,
+} from 'drizzle-orm';
 
 import type { DocumentItem, NewAgentDocument, NewDocument } from '../../schemas';
 import { AGENT_SKILL_TEMPLATE_ID, agentDocuments, documents } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
+import { documentMatchesAccessScope } from '../../utils/documentVisibility';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import { deriveAgentDocumentFields } from './deriveFields';
 import { buildDocumentFilename } from './filename';
@@ -46,6 +62,7 @@ interface AgentDocumentQueryOptions {
 interface AgentDocumentCreateParams {
   createdAt?: Date;
   editorData?: Record<string, any>;
+  fileId?: string;
   fileType?: string;
   loadPosition?: DocumentLoadPosition;
   loadRules?: DocumentLoadRules;
@@ -75,6 +92,7 @@ interface ConvertAgentDocumentToSkillIndexParams {
 interface AgentDocumentListQueryRow {
   description: string | null;
   documentId: string;
+  fileId: string | null;
   filename: string | null;
   fileType: string;
   id: string;
@@ -90,11 +108,18 @@ export class AgentDocumentModel {
   private userId: string;
   private workspaceId?: string;
   private db: LobeChatDatabase;
+  private documentAccessScope: DocumentAccessScope;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    documentAccessScope: DocumentAccessScope = ordinaryDocumentAccessScope,
+  ) {
     this.userId = userId;
     this.workspaceId = workspaceId;
     this.db = db;
+    this.documentAccessScope = documentAccessScope;
   }
 
   /**
@@ -102,15 +127,28 @@ export class AgentDocumentModel {
    * Personal mode → `user_id = ? AND workspace_id IS NULL`; workspace mode → `workspace_id = ?`.
    */
   private agentDocOwnership() {
-    return buildWorkspaceWhere(
-      { userId: this.userId, workspaceId: this.workspaceId },
-      agentDocuments,
+    return and(
+      buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agentDocuments),
+      exists(
+        this.db
+          .select({ id: documents.id })
+          .from(documents)
+          .where(
+            and(
+              eq(documents.id, agentDocuments.documentId),
+              documentMatchesAccessScope(documents.metadata, this.documentAccessScope),
+            ),
+          ),
+      ),
     );
   }
 
   /** Workspace-aware ownership predicate for the backing `documents` rows. */
   private documentOwnership() {
-    return buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documents);
+    return and(
+      buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documents),
+      documentMatchesAccessScope(documents.metadata, this.documentAccessScope),
+    );
   }
 
   private getDocumentStats(content: string) {
@@ -135,6 +173,20 @@ export class AgentDocumentModel {
 
     const description = (frontmatter as Record<string, unknown>).description;
     return typeof description === 'string' ? description : undefined;
+  }
+
+  private scopeMetadata(metadata?: Record<string, any>): Record<string, any> | undefined {
+    const sanitizedMetadata = stripAgentShareDocumentProvenance(metadata);
+    if (this.documentAccessScope.type !== 'agentShare') return sanitizedMetadata;
+
+    return {
+      ...sanitizedMetadata,
+      agentShare: {
+        shareId: this.documentAccessScope.shareId,
+        topicId: this.documentAccessScope.topicId,
+        visitorUserId: this.documentAccessScope.visitorUserId,
+      },
+    };
   }
 
   private toAgentDocument(
@@ -186,6 +238,7 @@ export class AgentDocumentModel {
     const item = {
       description: row.description ?? null,
       documentId: row.documentId,
+      fileId: row.fileId,
       fileType: row.fileType,
       filename,
       id: row.id,
@@ -368,6 +421,7 @@ export class AgentDocumentModel {
     const {
       createdAt,
       editorData,
+      fileId,
       fileType = AGENT_DOCUMENT_FILE_TYPE,
       loadPosition,
       loadRules,
@@ -385,11 +439,12 @@ export class AgentDocumentModel {
     const title = providedTitle?.trim() || filename.replace(/\.[^.]+$/, '');
     const stats = this.getDocumentStats(content);
     const normalizedPolicy = normalizePolicy(loadPosition, loadRules, policy);
+    const scopedMetadata = this.scopeMetadata(metadata);
 
     const documentPayload: NewDocument = {
       content,
       createdAt,
-      description: this.getMetadataDescription(metadata),
+      description: this.getMetadataDescription(scopedMetadata),
       // NOTICE:
       // Agent documents often carry Markdown `content`, but editor history and restore UI
       // depend on this serialized editor snapshot. Service callers that derive content from
@@ -401,7 +456,8 @@ export class AgentDocumentModel {
       fileType,
       filename,
       parentId,
-      metadata,
+      metadata: scopedMetadata,
+      ...(fileId ? { fileId } : {}),
       source: source ?? `agent-document://${agentId}/${encodeURIComponent(filename)}`,
       sourceType,
       title,
@@ -506,23 +562,23 @@ export class AgentDocumentModel {
 
     const stats = this.getDocumentStats(params.content);
     const updatedAt = new Date();
+    const scopedMetadata = this.scopeMetadata(params.metadata);
 
     await trx
       .update(documents)
       .set({
         content: params.content,
-        description: this.getMetadataDescription(params.metadata),
+        description: this.getMetadataDescription(scopedMetadata),
         ...(params.editorData !== undefined && { editorData: params.editorData }),
         filename: params.filename,
         fileType: 'skills/index',
-        metadata: params.metadata,
+        metadata: scopedMetadata,
         parentId: params.parentId,
         source: params.source,
         sourceType: params.sourceType,
         title: params.title,
         totalCharCount: stats.totalCharCount,
         totalLineCount: stats.totalLineCount,
-        updatedAt,
       })
       .where(and(eq(documents.id, existing.documentId), this.documentOwnership()));
 
@@ -641,8 +697,9 @@ export class AgentDocumentModel {
         }
 
         if (metadata !== undefined) {
-          documentUpdate.metadata = metadata;
-          documentUpdate.description = this.getMetadataDescription(metadata);
+          const scopedMetadata = this.scopeMetadata(metadata);
+          documentUpdate.metadata = scopedMetadata;
+          documentUpdate.description = this.getMetadataDescription(scopedMetadata);
         }
 
         await trx
@@ -699,8 +756,8 @@ export class AgentDocumentModel {
       .set({
         ...(params.filename !== undefined && { filename: params.filename }),
         ...(params.metadata !== undefined && {
-          description: this.getMetadataDescription(params.metadata),
-          metadata: params.metadata,
+          description: this.getMetadataDescription(this.scopeMetadata(params.metadata)),
+          metadata: this.scopeMetadata(params.metadata),
         }),
         ...(params.parentId !== undefined && { parentId: params.parentId }),
         ...(params.title !== undefined && { title: params.title }),
@@ -988,6 +1045,7 @@ export class AgentDocumentModel {
       .select({
         description: documents.description,
         documentId: agentDocuments.documentId,
+        fileId: documents.fileId,
         fileType: documents.fileType,
         filename: documents.filename,
         id: agentDocuments.id,
@@ -1170,6 +1228,7 @@ export class AgentDocumentModel {
       .select({
         description: documents.description,
         documentId: agentDocuments.documentId,
+        fileId: documents.fileId,
         fileType: documents.fileType,
         filename: documents.filename,
         id: agentDocuments.id,

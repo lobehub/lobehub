@@ -36,7 +36,7 @@ const dimensionKeys = (provider: HeterogeneousProviderConfig) =>
 
 describe('resolveSelectorShape', () => {
   it('renders nothing for providers with no selector', () => {
-    expect(resolveSelectorShape({ type: 'kimi-code' }, true).kind).toBe('none');
+    expect(resolveSelectorShape({ type: 'openclaw' }, true).kind).toBe('none');
     expect(resolveSelectorShape(undefined, true).kind).toBe('none');
   });
 
@@ -45,6 +45,7 @@ describe('resolveSelectorShape', () => {
   });
 
   it('gives catalog-only providers the bare picker', () => {
+    expect(resolveSelectorShape({ type: 'kimi-code' }, true).kind).toBe('catalog');
     expect(resolveSelectorShape({ type: 'opencode' }, true).kind).toBe('catalog');
     expect(resolveSelectorShape({ type: 'pi' }, true).kind).toBe('catalog');
   });

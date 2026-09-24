@@ -1,16 +1,29 @@
+import { builtinSkills } from '@lobechat/builtin-skills';
 import {
   AGENT_SHARE_DEFAULT_MAX_FILE_STORAGE,
   AGENT_SHARE_VISITOR_TOPIC_LIST_LIMIT,
 } from '@lobechat/const';
+import { assembleSkillPool } from '@lobechat/mecha';
+import { getActivePluginIds, getDisabledPluginIds } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { getAgentShareMonthlySpend } from '@/business/server/agent-share/spendGate';
+import { withRbacPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { AgentModel } from '@/database/models/agent';
 import { AgentShareModel } from '@/database/models/agentShare';
+import { AgentShareProfileModel } from '@/database/models/agentShareProfile';
+import { AgentSkillModel } from '@/database/models/agentSkill';
 import { FileModel } from '@/database/models/file';
+import { RbacModel } from '@/database/models/rbac';
 import { TopicModel } from '@/database/models/topic';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import type { LobeChatDatabase } from '@/database/type';
+import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { AgentService } from '@/server/services/agent';
+import { AgentDocumentsService } from '@/server/services/agentDocuments';
+import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 
 import { assertAgentShareCreationEnabled } from './_helpers/agentShareFeatureGate';
 
@@ -41,6 +54,22 @@ export const agentShareConfigSchema = z
   .object({
     allowCreatorViewSessions: z.boolean().optional(),
     allowReadMemory: z.boolean().optional(),
+    demoCases: z
+      .array(
+        z
+          .object({
+            description: z.string().trim().max(2000),
+            prompt: z.string().trim().min(1).max(10000),
+          })
+          .strict(),
+      )
+      .max(20)
+      .optional(),
+    featuredWorkIds: z
+      .array(z.string().trim().min(1))
+      .max(100)
+      .refine((ids) => new Set(ids).size === ids.length, 'Duplicate featured Work')
+      .optional(),
     /** Bytes; `0` is a real value (attachments off), so non-negative rather than positive. */
     maxFileStorage: z.number().int().nonnegative().optional(),
     /**
@@ -59,6 +88,18 @@ export const agentShareConfigSchema = z
     monthlySpendLimit: z.number().nonnegative().optional(),
     showErrorDetails: z.boolean().optional(),
     showModelInfo: z.boolean().optional(),
+    /**
+     * Skill identifiers the creator opened to visitors. An empty array is
+     * accepted rather than rejected: unticking the last skill is a normal
+     * write, and it reads the same as never having configured the field —
+     * no skill granted.
+     */
+    skillGrants: z
+      .array(z.string().trim().min(1))
+      .refine((ids) => new Set(ids).size === ids.length, {
+        message: 'Duplicate skill identifier in skillGrants',
+      })
+      .optional(),
     /**
      * At most one entry per identifier: two entries for the same tool would
      * make the effective grant depend on the merge rule in
@@ -79,15 +120,69 @@ export const agentShareConfigPatchSchema = agentShareConfigSchema.refine(
   'Config patch cannot be empty',
 );
 
-const agentShareProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+const agentShareProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
+  const workspaceId = ctx.workspaceId ?? undefined;
 
   return opts.next({
     ctx: {
-      agentShareModel: new AgentShareModel(ctx.serverDB, ctx.userId),
+      agentService: new AgentService(ctx.serverDB, ctx.userId, workspaceId),
+      agentShareModel: new AgentShareModel(ctx.serverDB, ctx.userId, workspaceId, {
+        authorizeMutation: workspaceId
+          ? (db, agentId) =>
+              assertCanPerformResourceAction({
+                action: 'manage',
+                db,
+                resourceId: agentId,
+                resourceType: 'agent',
+                userId: ctx.userId,
+                workspaceId,
+              })
+          : undefined,
+      }),
+      agentShareProfileModel: new AgentShareProfileModel(ctx.serverDB, ctx.userId),
     },
   });
 });
+
+const workspaceAgentShareAdminProcedure = agentShareProcedure
+  .use(withRbacPermission('agent:update:all'))
+  .use(async (opts) => {
+    if (!opts.ctx.workspaceId) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: 'Workspace context required' });
+    }
+
+    return opts.next({ ctx: { workspaceId: opts.ctx.workspaceId } });
+  });
+
+interface AgentSharePermissionContext {
+  serverDB: LobeChatDatabase;
+  userId: string;
+  workspaceId?: string | null;
+  workspacePermissionCodes?: string[];
+}
+
+/**
+ * Workspace shares are authority over an Agent, not another General Access
+ * grade: private Agents stay creator-only, while public Agents are manageable
+ * by their creator or a Workspace admin with `agent:update:all`.
+ */
+const assertCanManageAgentShare = async (
+  ctx: AgentSharePermissionContext,
+  agentId: string,
+): Promise<void> => {
+  if (!ctx.workspaceId) return;
+
+  await assertCanPerformResourceAction({
+    action: 'manage',
+    db: ctx.serverDB,
+    grantedPermissions: ctx.workspacePermissionCodes,
+    resourceId: agentId,
+    resourceType: 'agent',
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  });
+};
 
 /** `updateConfig` / `updateVisibility` / `updateSlug` all return `null` when the share (or its owning agent) does not resolve for this caller. */
 const requireShare = <T>(share: T | null): T => {
@@ -106,19 +201,44 @@ export const agentShareRouter = router({
    * locked out in the meantime — `getSharedAgent` and the runtime's
    * `isRunStillAuthorized` both require `link`.
    */
-  disableShare: agentShareProcedure
-    .input(agentIdInput)
-    .mutation(async ({ input, ctx }) =>
-      requireShare(await ctx.agentShareModel.updateVisibility(input.agentId, 'private')),
-    ),
+  disableShare: agentShareProcedure.input(agentIdInput).mutation(async ({ input, ctx }) => {
+    await assertCanManageAgentShare(ctx, input.agentId);
+    return requireShare(await ctx.agentShareModel.updateVisibility(input.agentId, 'private'));
+  }),
 
   enableShare: agentShareProcedure
     .input(agentIdInput.extend({ visibility: z.enum(['private', 'link']).optional() }).strict())
     .mutation(async ({ input, ctx }) => {
+      await assertCanManageAgentShare(ctx, input.agentId);
       await assertAgentShareCreationEnabled(ctx.userId);
+
+      if (input.visibility === 'link') {
+        return ctx.agentService.withShareModelLock(input.agentId, async (service, shares) => {
+          await service.prepareShareModel(input.agentId);
+          return shares.create(input.agentId, 'link');
+        });
+      }
 
       return ctx.agentShareModel.create(input.agentId, input.visibility);
     }),
+
+  /**
+   * Minimal Workspace-wide audit inventory. `agent:update:all` is held by
+   * administrators, while the model projection intentionally omits private
+   * Agent configuration and visitor conversation content.
+   */
+  getWorkspaceShareAudit: workspaceAgentShareAdminProcedure
+    .input(
+      z
+        .object({
+          limit: z.number().int().min(1).max(100).default(50),
+          offset: z.number().int().nonnegative().default(0),
+        })
+        .strict(),
+    )
+    .query(({ input, ctx }) =>
+      AgentShareModel.listWorkspaceSharesForAudit(ctx.serverDB, ctx.workspaceId, input),
+    ),
 
   /**
    * Aggregate usage of one share, for its owner only — `getByAgentId` is
@@ -134,13 +254,28 @@ export const agentShareRouter = router({
    * close the share is to its cap, including drafts visitors never sent.
    */
   getShareStats: agentShareProcedure.input(agentIdInput).query(async ({ input, ctx }) => {
+    await assertCanManageAgentShare(ctx, input.agentId);
     const share = requireShare(await ctx.agentShareModel.getByAgentId(input.agentId));
+    const resolvedShare = requireShare(await AgentShareModel.findByShareId(ctx.serverDB, share.id));
 
-    const topicModel = new TopicModel(ctx.serverDB, ctx.userId);
-    const fileModel = new FileModel(ctx.serverDB, ctx.userId);
+    const topicModel = new TopicModel(
+      ctx.serverDB,
+      resolvedShare.ownerId,
+      resolvedShare.workspaceId ?? undefined,
+    );
+    const fileModel = new FileModel(
+      ctx.serverDB,
+      resolvedShare.ownerId,
+      resolvedShare.workspaceId ?? undefined,
+    );
     const [visitors, monthlySpend, fileStorageUsed] = await Promise.all([
       topicModel.countShareVisitors({ agentId: input.agentId }),
-      getAgentShareMonthlySpend({ agentId: input.agentId, ownerUserId: ctx.userId }),
+      getAgentShareMonthlySpend({
+        agentId: input.agentId,
+        ownerUserId: resolvedShare.ownerId,
+        shareId: share.id,
+        workspaceId: resolvedShare.workspaceId ?? undefined,
+      }),
       fileModel.countAgentShareUsage(share.id),
     ]);
 
@@ -159,9 +294,142 @@ export const agentShareRouter = router({
     };
   }),
 
-  getShareStatus: agentShareProcedure
-    .input(agentIdInput)
-    .query(async ({ input, ctx }) => ctx.agentShareModel.getByAgentId(input.agentId)),
+  getShareStatus: agentShareProcedure.input(agentIdInput).query(async ({ input, ctx }) => {
+    await assertCanManageAgentShare(ctx, input.agentId);
+    return ctx.agentShareModel.getByAgentId(input.agentId);
+  }),
+
+  /**
+   * Administrator emergency stop for any share in the active Workspace,
+   * including private Agents the administrator cannot otherwise configure.
+   */
+  forceDisableWorkspaceShare: workspaceAgentShareAdminProcedure
+    .input(z.object({ shareId: z.string().uuid() }).strict())
+    .mutation(async ({ input, ctx }) =>
+      requireShare(
+        await AgentShareModel.forceDisableWorkspaceShare(
+          ctx.serverDB,
+          ctx.workspaceId,
+          input.shareId,
+          {
+            authorizeMutation: async (db) => {
+              const allowed = await new RbacModel(db, ctx.userId).hasPermission(
+                'agent:update:all',
+                { workspaceId: ctx.workspaceId },
+              );
+              if (!allowed) {
+                throw new TRPCError({
+                  code: 'FORBIDDEN',
+                  message: 'You do not have permission to perform this action.',
+                });
+              }
+            },
+          },
+        ),
+      ),
+    ),
+
+  /** Owner-only candidate Works for the share profile editor. */
+  listEligibleWorks: agentShareProcedure
+    .input(
+      agentIdInput.extend({
+        includeWorkIds: z
+          .array(z.string().trim().min(1))
+          .max(100)
+          .refine((ids) => new Set(ids).size === ids.length, 'Duplicate selected Work')
+          .optional(),
+        limit: z.number().int().positive().max(50).optional(),
+        offset: z.number().int().nonnegative().max(10000).optional(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      requireShare(await ctx.agentShareModel.getByAgentId(input.agentId));
+      return ctx.agentShareProfileModel.listEligibleWorks(input.agentId, {
+        includeWorkIds: input.includeWorkIds ?? [],
+        limit: input.limit,
+        offset: input.offset,
+      });
+    }),
+  /**
+   * Skills this agent could offer a visitor — the candidate list behind the
+   * share settings skill picker, and the set `shareConfig.skillGrants` entries
+   * are chosen from.
+   *
+   * Built through the SAME `assembleSkillPool` a real run uses, on the same
+   * server-side sources, so the picker cannot offer a skill the run would never
+   * assemble (nor hide one it would). Three deliberate differences from a run:
+   *
+   * - no `shareAllowedIds` — the whole point is to list what COULD be granted;
+   * - no project/device skills — those are discovered on the execution device's
+   *   filesystem, and a visitor run never routes a device;
+   * - `canExecuteOnDevice: false`, for the same reason.
+   *
+   * Skills are NOT filtered to the agent's pinned set: a skill is on-demand by
+   * default, so an unpinned skill is exactly the normal case. `manual` mode is
+   * the one exception, and `assembleSkillPool` applies it from
+   * `enabledPluginIds` on its own.
+   *
+   * Authorization matches the other share reads: `assertCanManageAgentShare`
+   * for the workspace case, then `requireShare` on the ownership-scoped
+   * `getByAgentId`. Both matter here — this lists the CREATOR's whole skill
+   * catalog, so a workspace member who cannot manage the Agent must not reach
+   * the reads below.
+   */
+  listGrantableSkills: agentShareProcedure.input(agentIdInput).query(async ({ input, ctx }) => {
+    await assertCanManageAgentShare(ctx, input.agentId);
+    requireShare(await ctx.agentShareModel.getByAgentId(input.agentId));
+
+    const workspaceId = ctx.workspaceId ?? undefined;
+    const agentConfig = await new AgentModel(
+      ctx.serverDB,
+      ctx.userId,
+      workspaceId,
+    ).getAgentConfigById(input.agentId);
+
+    const [dbSkills, agentSkills] = await Promise.all([
+      new AgentSkillModel(ctx.serverDB, ctx.userId, workspaceId)
+        .findAll()
+        .then((result) => result.data),
+      // A bundle-less agent is the common case and throws nothing; a genuine
+      // failure here must not take the whole picker down with it — the DB and
+      // builtin skills are still grantable.
+      new AgentDocumentsService(ctx.serverDB, ctx.userId, workspaceId)
+        .getAgentSkills(input.agentId)
+        .catch(() => []),
+    ]);
+
+    const { skills } = assembleSkillPool(
+      {
+        agentSkills: agentSkills.map((skill) => ({
+          description: skill.description,
+          identifier: skill.identifier,
+          name: skill.name,
+        })),
+        builtin: builtinSkills.map((skill) => ({
+          description: skill.description,
+          identifier: skill.identifier,
+          name: skill.name,
+        })),
+        db: dbSkills.map((skill) => ({
+          description: skill.description ?? '',
+          identifier: skill.identifier,
+          name: skill.name,
+        })),
+      },
+      {
+        canExecuteOnDevice: false,
+        disabledIds: getDisabledPluginIds(agentConfig?.plugins ?? undefined),
+        enabledPluginIds: getActivePluginIds(agentConfig?.plugins ?? undefined),
+        skillActivateMode: agentConfig?.chatConfig?.skillActivateMode,
+      },
+    );
+
+    return skills.map((skill) => ({
+      description: skill.description,
+      identifier: skill.identifier,
+      name: skill.name,
+    }));
+  }),
 
   updateShareConfig: agentShareProcedure
     .input(
@@ -172,9 +440,10 @@ export const agentShareRouter = router({
         })
         .strict(),
     )
-    .mutation(async ({ input, ctx }) =>
-      requireShare(await ctx.agentShareModel.updateConfig(input.agentId, input.config)),
-    ),
+    .mutation(async ({ input, ctx }) => {
+      await assertCanManageAgentShare(ctx, input.agentId);
+      return requireShare(await ctx.agentShareModel.updateConfig(input.agentId, input.config));
+    }),
 
   /**
    * Custom URL slug for this share's public link. Pattern/reserved-word
@@ -192,9 +461,10 @@ export const agentShareRouter = router({
         })
         .strict(),
     )
-    .mutation(async ({ input, ctx }) =>
-      requireShare(await ctx.agentShareModel.updateSlug(input.agentId, input.slug)),
-    ),
+    .mutation(async ({ input, ctx }) => {
+      await assertCanManageAgentShare(ctx, input.agentId);
+      return requireShare(await ctx.agentShareModel.updateSlug(input.agentId, input.slug));
+    }),
 
   updateVisibility: agentShareProcedure
     .input(
@@ -206,9 +476,16 @@ export const agentShareRouter = router({
         .strict(),
     )
     .mutation(async ({ input, ctx }) => {
+      await assertCanManageAgentShare(ctx, input.agentId);
       // Flipping to `link` publishes the share, so it is the same capability
       // as `enableShare`; going back to `private` unpublishes and stays open.
-      if (input.visibility === 'link') await assertAgentShareCreationEnabled(ctx.userId);
+      if (input.visibility === 'link') {
+        await assertAgentShareCreationEnabled(ctx.userId);
+        return ctx.agentService.withShareModelLock(input.agentId, async (service, shares) => {
+          await service.prepareShareModel(input.agentId);
+          return requireShare(await shares.updateVisibility(input.agentId, 'link'));
+        });
+      }
 
       return requireShare(
         await ctx.agentShareModel.updateVisibility(input.agentId, input.visibility),

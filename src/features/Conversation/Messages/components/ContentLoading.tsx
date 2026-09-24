@@ -11,6 +11,7 @@ import { type OperationType, type StreamRetryMetadata } from '@/store/chat/slice
 import { elapsedTimeStyles, shinyTextStyles } from '@/styles/loading';
 
 import { resolveOperationActivity } from '../../utils/operationActivity';
+import { useShowBackgroundRunHint } from '../Contexts/BackgroundRunHintContext';
 
 const ELAPSED_TIME_THRESHOLD = 2100; // Show elapsed time after 2 seconds
 
@@ -41,6 +42,7 @@ interface ContentLoadingProps {
 const ContentLoading = memo<ContentLoadingProps>(({ id, startTime: startTimeOverride }) => {
   const { t } = useTranslation('chat');
   const runningOp = useChatStore(operationSelectors.getDeepestRunningOperationByMessage(id));
+  const showBackgroundRunHint = useShowBackgroundRunHint();
 
   const startTime =
     startTimeOverride !== undefined && Number.isFinite(startTimeOverride)
@@ -115,6 +117,9 @@ const ContentLoading = memo<ContentLoadingProps>(({ id, startTime: startTimeOver
     if (operationType === 'execHeterogeneousAgent') {
       return t('operation.execHeterogeneousAgent', { name: getHeterogeneousAgentName() });
     }
+
+    // Surfaces that turned the hint off fall back to the plain dot loader.
+    if (operationType === 'execServerAgentRuntime' && !showBackgroundRunHint) return undefined;
 
     if (DEDICATED_OPERATION_LABELS.has(operationType)) {
       return t(`operation.${operationType}` as any) as string;

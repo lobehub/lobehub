@@ -6,7 +6,7 @@ description: >-
 tags:
   - LobeHub
   - 入门指南
-  - 助理工作空间
+  - 个人 AI 助理
   - 协作助理
   - 群组
   - 记忆
@@ -27,6 +27,26 @@ LobeHub 是下一代 Agent harness，旨在让 AI 能力大众化。超越一次
 
 LobeHub 是一个工作与生活空间，用于发现、构建并与会随着您一起成长的 Agent 队友协作。在 LobeHub 中，我们将 **Agent 视为工作单元**，提供一个让人类与 Agent 共同进化的基础设施。
 
+LobeHub 将你的助理汇聚在一起：既可以在这里创建助理，也可以[连接外部助理](/zh/docs/usage/agent/connect-external-agents)，接入已有的编程 CLI 和个人助理平台。
+
+### 从一次对话开始
+
+你可以先选择一位**助理（Agent）**，围绕一件事开启一个**话题（Topic）**。需要持续跟进的工作，可以交给**任务（Task）**；需要保存的结果，则可以整理成文档。
+
+| 你想做什么 | 可以使用 |
+| --- | --- |
+| 将已有的外部助理接入 LobeHub | **[连接外部助理](/zh/docs/usage/agent/connect-external-agents)** |
+| 让助理按照某种方法完成工作 | **技能（Skills）**：提供做事方法和配套资料 |
+| 让助理使用外部服务或工具 | **连接器（Connectors）**：接入服务并设置工具权限 |
+| 上传资料，供助理查找和引用 | **资源库（Resource Library）** |
+| 撰写和协作编辑独立文章 | **文稿（Pages）** |
+| 保存这次对话的笔记 | **助理文档库（Agent Documents）**：关联当前话题 |
+| 为同一助理保存跨话题使用的资料 | **助理文档库（Agent Documents）** |
+| 选择工具在哪台电脑上运行 | **执行设备（Execution Devices）**；需要云端代码环境时，可使用**云沙箱（Cloud Sandbox）** |
+
+有些功能仍在测试，或只在特定版本中开放。详见[功能状态说明](/zh/docs/usage/feature-status)。
+
+
 ---
 
 <Image alt={'使用 LobeHub 创建'} cover src={'https://hub-apac-1.lobeobjects.space/blog/assets/2204cde2228fb3f583f3f2c090bc49fb.webp'} />
@@ -36,10 +56,12 @@ LobeHub 是一个工作与生活空间，用于发现、构建并与会随着您
 构建个性化 AI 团队从 **Agent Builder** 开始。您只需描述一次需求，Agent 配置即可立即启动，自动应用配置以便您立刻使用。
 
 - **统一智能**：无缝访问任何模型与任何模态 —— 全部由您掌控。
-- **1 万 + 技能**：通过超过 10,000 个工具和与 MCP 兼容的插件，将 Agent 连接到您每天使用的技能。
+- **技能与连接器**：为助理添加可复用的做事方法，并连接你日常使用的工具。
 
 <Cards>
   <Card href={'/zh/docs/usage/getting-started/agent'} title={'创建自定义助理'} />
+
+  <Card href={'/zh/docs/usage/agent/connect-external-agents'} title={'连接外部助理'} />
 
   <Card href={'/zh/docs/usage/community/agent-market'} title={'助理市场'} />
 </Cards>
@@ -54,13 +76,12 @@ LobeHub 引入了 **Agent Groups**，让您可以像对待真实队友一样与 
 
 - **页面（Pages）**：在同一位置与多个 Agent 共同撰写和润色内容，共享上下文。
 - **日程（Schedule）**：安排运行，让 Agent 在合适的时间完成工作，即使您不在也能继续执行。
-- **项目（Project）**：按项目组织工作，保持一切结构化且易于跟踪。
-- **工作区（Workspace）**：供团队与 Agent 协作的共享空间，确保明确的所有权和组织内的可见性。
+- **项目（Project，Alpha）**：按项目组织相关工作。项目功能仍在测试中，开放范围和操作界面可能随版本调整。
 
 <Cards>
   <Card href={'/zh/docs/usage/agent/agent-team'} title={'助理群组'} />
 
-  <Card href={'/zh/docs/usage/agent/pages'} title={'文稿'} />
+  <Card href={'/zh/docs/usage/getting-started/page'} title={'文稿'} />
 </Cards>
 
 ---
@@ -112,7 +133,7 @@ LobeHub 引入了 **Agent Groups**，让您可以像对待真实队友一样与 
 
 一段快速翻译？轻量模型几毫秒搞定，成本微乎其微。一份需要深度推理的法律分析？交给推理能力最强的模型。
 
-LobeHub 接入了 **70+ 模型**，包括 GPT-5、Claude、Gemini、DeepSeek、Llama、Qwen 等，来自十几家服务商。你可以在对话中随时切换模型，也可以让助理自动为每个回合选择最优模型。如果你的数据需要留在本地，还可以接入本地模型。
+LobeHub 接入了 **70+ 模型**，包括 GPT、Claude、Gemini、DeepSeek、Llama、Qwen 等，来自十几家服务商。你可以在对话中随时切换模型，也可以让助理自动为每个回合选择最优模型。如果你的数据需要留在本地，还可以接入本地模型。
 
 每个助理都可以设置独立的默认模型。你的代码审查员用一个模型，文案用另一个，全自动运行，无需每次手动选择。
 
@@ -122,13 +143,13 @@ LobeHub 接入了 **70+ 模型**，包括 GPT-5、Claude、Gemini、DeepSeek、L
   <Card href={'/zh/docs/usage/getting-started/lobe-ai'} title={'体验 Lobe AI'} />
 </Cards>
 
-### 10,000+ 技能：把助理连接到你的工具链
+### 技能与连接器：让助理使用你的工具
 
 一个只能聊天的助理只发挥了一半的能力。
 
-通过[技能](/zh/docs/usage/agent/skills)，你的助理可以读取 GitHub Issue、查询数据库、发送 Slack 消息、生成 PDF 或预订会议，全部在同一个对话中完成。
+通过[连接器](/zh/docs/usage/agent/connectors)，你的助理可以读取 GitHub Issue、查询数据库、发送 Slack 消息、生成 PDF 或预订会议，全部在同一个对话中完成。
 
-LobeHub 支持[模型上下文协议（MCP）](/zh/docs/usage/community/mcp-market)，这是一个开放标准，将助理连接到一个持续增长的 **10,000+ 工具**生态。从市场一键安装技能，或者自己构建并分享给社区。
+LobeHub 支持[模型上下文协议（MCP）](/zh/docs/usage/community/mcp-market)，这是一个开放标准，将助理连接到一个持续增长的 **10,000+ 工具**生态。从 MCP 市场安装工具连接，或从技能市场为助理添加做事方法。
 
 几个实际场景：
 
@@ -137,31 +158,31 @@ LobeHub 支持[模型上下文协议（MCP）](/zh/docs/usage/community/mcp-mark
 - *「找下个月去东京的机票，800 美元以内」* → 你的助理搜索、比较、呈现带预订链接的选项。
 
 <Cards>
-  <Card href={'/zh/docs/usage/agent/skills'} title={'助理技能'} />
+  <Card href={'/zh/docs/usage/community/skills-market'} title={'助理技能'} />
 
   <Card href={'/zh/docs/usage/community/mcp-market'} title={'MCP 市场'} />
 </Cards>
 
 ### 资源库：给你的助理真正的知识
 
-通用的 AI 回答能应付通用的问题。但当你需要一个了解 *你的* 代码库、*你的* 产品文档、*你的* 公司制度的助理时，[资源库](/zh/docs/usage/agent/resources)就派上用场了。
+通用的 AI 回答能应付通用的问题。但当你需要一个了解 *你的* 代码库、*你的* 产品文档、*你的* 公司制度的助理时，[资源库](/zh/docs/usage/getting-started/resource)就派上用场了。
 
-上传文档、图片、表格、音频或视频。你的助理在对话中引用这些资料，让回答基于你的真实数据，而不仅仅是训练集里的知识。为每个助理建立独立的知识库，或者在空间中共享资源。
+上传文档、图片、表格、音频或视频。你的助理在对话中引用这些资料，让回答基于你的真实数据，而不仅仅是训练集里的知识。将资料整理为知识库，再为助理关联所需的知识库。
 
 想象一个读过你整个帮助中心的客服助理。一个熟悉你所有合同模板的法务助手。一个看过你写的每一份 PRD 的产品经理。这就是资源库在做的事。
 
 <Cards>
-  <Card href={'/zh/docs/usage/agent/resources'} title={'资源库'} />
+  <Card href={'/zh/docs/usage/getting-started/resource'} title={'资源库'} />
 </Cards>
 
 ### 在对话中直接创作视觉内容
 
 需要一张博客文章的封面图？一张架构文档的流程图？一个用来推销创意的快速原型？
 
-直接问你的助理。它使用 GPT Image、Flux 等模型生成图片，并以 Artifact 的形式直接渲染在聊天里。不需要切换到另一个设计工具，不需要导出、下载、再上传。图片就在那里，在上下文中，紧挨着产生它的对话。
+直接告诉助理你的需求。使用图片生成工具调用可用的图片模型；使用 Artifacts 创建可预览的网页、SVG 图形和交互组件。它们是通过[连接器](/zh/docs/usage/agent/connectors)管理的不同能力，实际可用范围取决于模型、权限和执行环境。
 
 <Cards>
-  <Card href={'/zh/docs/usage/agent/artifacts'} title={'Artifacts'} />
+  <Card href={'/zh/docs/usage/agent/connectors'} title={'连接器'} />
 </Cards>
 
 ### 社区：共享的智慧
@@ -172,6 +193,8 @@ LobeHub 的理念以人为本。[社区](/zh/docs/usage/community/agent-market)�
 
 <Cards>
   <Card href={'/zh/docs/usage/community/agent-market'} title={'助理市场'} />
+
+  <Card href={'/zh/docs/usage/community/skills-market'} title={'Skills 市场'} />
 
   <Card href={'/zh/docs/usage/community/mcp-market'} title={'MCP 市场'} />
 
