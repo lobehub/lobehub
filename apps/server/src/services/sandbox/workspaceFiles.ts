@@ -322,17 +322,30 @@ export const createSandboxWorkspaceClient = ({
      *
      * Returns as soon as the build has started: a bootstrap running an install
      * is minutes long, so it is polled through {@link buildStatus} rather than
-     * awaited. The specification carries NO credential — the execution plane
-     * holds the GitHub connection and attaches one on the way past, so a token
-     * never passes through here.
+     * awaited.
+     *
+     * `credentials` is the ONE thing in this call that may be a secret, and it
+     * is separate from the specification on purpose: the stored configuration
+     * has no such field and must never gain one. A token here is scoped to the
+     * repository being cloned and expires on its own; the execution plane
+     * forwards it and the runtime strips it before anything is remembered.
+     * Omitted, the execution plane falls back to its own GitHub connection, so
+     * a caller that cannot mint one takes nothing away.
+     *
+     * Never log this argument.
      */
     buildEnvironment: async (params: {
+      credentials?: { header: string; urlPrefix: string }[];
       name: string;
       specification: EnvironmentConfiguration;
       topicId?: string;
     }): Promise<{ buildId: string }> =>
       request(`${CURRENT_WORKSPACE}/environments/${encodeURIComponent(params.name)}/build`, {
-        body: JSON.stringify({ specification: params.specification, topicId: params.topicId }),
+        body: JSON.stringify({
+          credentials: params.credentials,
+          specification: params.specification,
+          topicId: params.topicId,
+        }),
         headers: { 'Content-Type': 'application/json' },
         method: 'POST',
       }),
