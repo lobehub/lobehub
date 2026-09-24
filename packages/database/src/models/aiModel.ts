@@ -255,7 +255,12 @@ export class AiModelModel {
     const rows = await this.db
       .select({ config: aiModels.config, id: aiModels.id, providerId: aiModels.providerId })
       .from(aiModels)
-      .where(and(this.personalScopeWhere(), sql`${aiModels.config} -> 'chatConfig' IS NOT NULL`));
+      .where(
+        and(
+          this.personalScopeWhere(),
+          sql`COALESCE(jsonb_exists(${aiModels.config}, 'chatConfig'), false)`,
+        ),
+      );
 
     const configs: Record<string, AiModelReasoningConfig> = {};
     for (const row of rows) {
