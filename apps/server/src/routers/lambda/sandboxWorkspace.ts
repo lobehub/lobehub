@@ -20,6 +20,7 @@ import {
   resolveSandboxWorkspaceClaim,
 } from '@/server/services/sandbox';
 import { SandboxWorkspaceFilesError } from '@/server/services/sandbox/workspaceFiles';
+import { resolveScmCloneCredential } from '@/server/services/scm/cloneCredential';
 
 /**
  * Browsing and managing the persistent sandbox workspace.
@@ -659,8 +660,24 @@ export const sandboxWorkspaceRouter = router({
 
       await ctx.instanceModel.update(input.id, { buildError: null, status: 'pending' });
 
+      // Preferred over the execution plane's own GitHub connection, which it
+      // falls back to when this answers null: an App installation is granted
+      // one repository at a time by whoever administers the account, and the
+      // token minted from it is narrower still — this repository, read-only,
+      // expiring within the hour. It is resolved here because the App's
+      // private key lives on this side; the execution plane is handed the
+      // result and never the inputs, the same way it is handed the workspace
+      // claim.
+      const credential = await resolveScmCloneCredential({
+        configuration: specification,
+        db: ctx.serverDB,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+
       try {
         const { buildId } = await ctx.client.buildEnvironment({
+          credentials: credential ? [credential] : undefined,
           name: input.id,
           specification,
           topicId: input.topicId,

@@ -112,6 +112,12 @@ vi.mock('@/server/services/sandbox', () => ({
   resolveSandboxWorkspaceClaim: mockResolveClaim,
 }));
 
+const mockResolveCloneCredential = vi.hoisted(() => vi.fn());
+
+vi.mock('@/server/services/scm/cloneCredential', () => ({
+  resolveScmCloneCredential: mockResolveCloneCredential,
+}));
+
 const { sandboxWorkspaceRouter } = await import('../sandboxWorkspace');
 const { SandboxWorkspaceFilesError } = await import('@/server/services/sandbox/workspaceFiles');
 const { ConnectorDataError } = await import('@lobechat/connector-data');
@@ -364,6 +370,7 @@ describe('sandboxWorkspaceRouter', () => {
     beforeEach(() => {
       mockResolveSessionConfig.mockResolvedValue({ claim: { key: 'ws-org-1' } });
       mockReadOccupancy.mockResolvedValue({ held: [], unavailable: false });
+      mockResolveCloneCredential.mockResolvedValue(null);
     });
 
     it('builds from the definition the instance was created from', async () => {
@@ -380,12 +387,58 @@ describe('sandboxWorkspaceRouter', () => {
         .startInstanceBuild({ id: buildInstanceId, topicId: 'tpc-1' });
 
       expect(mockBuildEnvironment).toHaveBeenCalledWith({
+        credentials: undefined,
         name: buildInstanceId,
         specification: spec,
         topicId: 'tpc-1',
       });
       expect(result.buildId).toBe('b-1');
       expect(mockInstanceUpdate).toHaveBeenLastCalledWith(buildInstanceId, { buildId: 'b-1' });
+    });
+
+    it('carries the App installation credential when one could be minted', async () => {
+      // Resolved on this side because the App's private key lives here; the
+      // execution plane is handed the result and never the inputs.
+      mockInstanceFindOwnedById.mockResolvedValue({
+        configurationSnapshot: spec,
+        id: buildInstanceId,
+      });
+      mockBuildEnvironment.mockResolvedValue({ buildId: 'b-2' });
+      const credential = { header: 'Authorization: Basic x', urlPrefix: 'https://github.com/' };
+      mockResolveCloneCredential.mockResolvedValue(credential);
+
+      await sandboxWorkspaceRouter
+        .createCaller(ctx)
+        .startInstanceBuild({ id: buildInstanceId, topicId: 'tpc-1' });
+
+      expect(mockResolveCloneCredential).toHaveBeenCalledWith({
+        configuration: spec,
+        db: ctx.serverDB,
+        userId: 'user-1',
+        workspaceId: 'ws-1',
+      });
+      expect(mockBuildEnvironment).toHaveBeenCalledWith(
+        expect.objectContaining({ credentials: [credential] }),
+      );
+    });
+
+    it('builds without a credential rather than refusing when none can be minted', async () => {
+      // The execution plane still has its own connection, and a clone that
+      // fails says so in the build log where someone can act on it.
+      mockInstanceFindOwnedById.mockResolvedValue({
+        configurationSnapshot: spec,
+        id: buildInstanceId,
+      });
+      mockBuildEnvironment.mockResolvedValue({ buildId: 'b-3' });
+      mockResolveCloneCredential.mockResolvedValue(null);
+
+      await sandboxWorkspaceRouter
+        .createCaller(ctx)
+        .startInstanceBuild({ id: buildInstanceId, topicId: 'tpc-1' });
+
+      expect(mockBuildEnvironment).toHaveBeenCalledWith(
+        expect.objectContaining({ credentials: undefined }),
+      );
     });
 
     it('settles an instance with nothing to build without touching the sandbox', async () => {
