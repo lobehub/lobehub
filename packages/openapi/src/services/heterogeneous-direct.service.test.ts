@@ -1119,6 +1119,19 @@ describe('describeRelayFailure', () => {
     ],
     [{ errorType: 'RateLimitExceeded', error: 'Slow down' }, 429, true],
     [{ errorType: 'InsufficientQuota', error: 'Balance exhausted' }, 429, false],
+    [
+      { errorType: 'ProviderBizError', error: { status: 429, message: 'Insufficient quota' } },
+      429,
+      false,
+    ],
+    [
+      {
+        errorType: 'InvalidRequestFormat',
+        error: { status: 429, message: 'text content blocks must be non-empty' },
+      },
+      429,
+      false,
+    ],
     [{ errorType: 'ProviderServiceUnavailable', error: 'Overloaded' }, 503, true],
     [{ errorType: 'DatabasePersistError', error: 'Query failed' }, 500, false],
     [{ errorType: 'AgentRuntimeError', error: 'Failed query: select 1' }, 500, false],
@@ -1137,6 +1150,17 @@ describe('describeRelayFailure', () => {
         retryable: true,
         status,
       });
+    }
+  });
+
+  it.each([408, 409, 429, 503])('prioritizes HTTP %s over inferred request errors', (status) => {
+    for (const errorType of ['ProviderBizError', 'UpstreamHttpError']) {
+      expect(
+        describeRelayFailure({
+          error: { status, message: 'text content blocks must be non-empty' },
+          errorType,
+        }),
+      ).toMatchObject({ retryable: true, status });
     }
   });
 

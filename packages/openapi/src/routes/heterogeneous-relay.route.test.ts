@@ -97,12 +97,14 @@ describe('heterogeneous relay route failures', () => {
   );
 
   it.each(['/anthropic/v1/messages', '/openai/v1/responses'])(
-    'does not disable retries for coarse timeout or conflict failures at %s',
+    'preserves transient statuses despite coarse or conflicting messages at %s',
     async (path) => {
-      for (const status of [408, 409]) {
+      for (const status of [408, 409, 429, 503]) {
         for (const error of [
           { status, message: 'No details' },
           { message: `${status} status code (no body)` },
+          { status, message: 'text content blocks must be non-empty' },
+          { message: `${status} text content blocks must be non-empty` },
         ]) {
           invokeServerDefaultModel.mockRejectedValue({ error, errorType: 'ProviderBizError' });
           const response = await app.request(path, {
@@ -118,6 +120,31 @@ describe('heterogeneous relay route failures', () => {
           expect(response.status).toBe(status);
           expect(response.headers.get('x-should-retry')).toBe('true');
         }
+      }
+    },
+  );
+
+  it.each(['/anthropic/v1/messages', '/openai/v1/responses'])(
+    'keeps quota and explicitly typed request failures terminal at %s',
+    async (path) => {
+      for (const [errorType, message] of [
+        ['ProviderBizError', 'Insufficient quota'],
+        ['InvalidRequestFormat', 'text content blocks must be non-empty'],
+      ]) {
+        invokeServerDefaultModel.mockRejectedValue({ error: { message, status: 429 }, errorType });
+        const response = await app.request(path, {
+          body: JSON.stringify({
+            input: 'hello',
+            messages: [],
+            model: 'lobehub/deepseek-v4-pro',
+            stream: true,
+          }),
+          headers: { 'content-type': 'application/json' },
+          method: 'POST',
+        });
+        expect(response.status).toBe(429);
+        expect(response.headers.get('x-should-retry')).toBe('false');
+        expect((await response.json()).error.message).toContain(message);
       }
     },
   );

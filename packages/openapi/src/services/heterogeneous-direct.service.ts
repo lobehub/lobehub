@@ -1053,6 +1053,9 @@ export const describeRelayFailure = (error: unknown) => {
         : 502
       : candidateStatus
   ) as ContentfulStatusCode;
+  // Providers can reuse request-error phrases in transient responses. Let HTTP
+  // semantics win over those inferences, but retain explicit types and quota policy.
+  const inferredRequestError = refinedCode !== undefined && spec?.category === 'request';
 
   return {
     // Never empty. A blank message here would put the caller back where the
@@ -1063,7 +1066,10 @@ export const describeRelayFailure = (error: unknown) => {
         .filter(Boolean)
         .join(' ')
         .trim() || 'Model runtime failed without a message',
-    retryable: classified ? spec.retryable : status >= 500 || [408, 409, 429].includes(status),
+    retryable:
+      classified && !inferredRequestError
+        ? spec.retryable
+        : status >= 500 || [408, 409, 429].includes(status),
     status,
   };
 };
