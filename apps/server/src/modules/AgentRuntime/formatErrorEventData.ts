@@ -1,3 +1,4 @@
+import { ModelEmptyError, ModelRefusalError } from '@lobechat/model-runtime';
 import { pickNonEmptyString, toRecord } from '@lobechat/utils/object';
 
 import { formatErrorForState } from './formatErrorForState';
@@ -32,8 +33,16 @@ export const formatErrorEventData = (error: unknown, phase: string) => {
   const payload = toRecord(error);
   const rawPayloadErrorType = payload?.errorType ?? payload?.type;
   const payloadErrorType = isErrorType(rawPayloadErrorType) ? rawPayloadErrorType : undefined;
-  const structuredError =
-    error instanceof Error || payloadErrorType === undefined
+  /**
+   * Runtime completion errors carry their provider/model diagnostics on the Error instance.
+   * Keep that body so the client can persist it and pick provider-specific UI (e.g. the
+   * official content-safety notice for refusals); other Error instances keep the flat shape.
+   */
+  const isRuntimeCompletionError =
+    error instanceof ModelEmptyError || error instanceof ModelRefusalError;
+  const structuredError = isRuntimeCompletionError
+    ? formatErrorForState(error)
+    : error instanceof Error || payloadErrorType === undefined
       ? undefined
       : formatErrorForState(payload);
   const body = structuredError?.body;
