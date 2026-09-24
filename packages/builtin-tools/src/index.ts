@@ -228,6 +228,9 @@ export const AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS = new Set<string>([
   CalculatorManifest.identifier,
   WebBrowsingManifest.identifier,
   ImageGenerationManifest.identifier,
+  // Like image generation: a visitor run spends the creator's quota, so it still needs the
+  // owner's explicit share tool grant, and its charges carry the share `spendOrigin`.
+  VideoGenerationManifest.identifier,
   VerifyToolManifest.identifier,
   AcceptanceEvidenceManifest.identifier,
   LobeAgentManifest.identifier,

@@ -229,6 +229,18 @@ describe('AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS', () => {
   it('allowlists lobe-cloud-sandbox now that visitor runs get a credential-free sandbox session', () => {
     expect(AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS.has('lobe-cloud-sandbox')).toBe(true);
   });
+
+  it('allowlists video generation but still requires the owner grant to dispatch it', () => {
+    expect(AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS.has('lobe-video-generation')).toBe(true);
+    expect(isShareBlockedBuiltinDispatch({}, 'lobe-video-generation', 'generateVideo')).toBe(true);
+    expect(
+      isShareBlockedBuiltinDispatch(
+        { toolGrants: [{ identifier: 'lobe-video-generation' }] },
+        'lobe-video-generation',
+        'generateVideo',
+      ),
+    ).toBe(false);
+  });
 });
 
 /**
