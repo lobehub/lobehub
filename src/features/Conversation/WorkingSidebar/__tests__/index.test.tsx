@@ -1,3 +1,4 @@
+import type { DeviceGitPullRequestDetail } from '@lobechat/types';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { CSSProperties, MouseEvent, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -7,6 +8,7 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import type { ComposerTarget } from '../../types';
 import AgentWorkingSidebar from '../index';
+import PullRequestSections from '../PullRequest/Sections';
 
 // ─── captured RightPanel props ────────────────────────────────────────────────
 // The real RightPanel is a controlled DraggablePanel; here we stub it so the test
@@ -755,6 +757,65 @@ describe('AgentWorkingSidebar — controlled panel width', () => {
     expect(screen.queryByText('Workspace environment')).not.toBeInTheDocument();
     expect(screen.queryByText('/Users/me/project')).not.toBeInTheDocument();
     expect(filesProps.current).toBeUndefined();
+  });
+});
+
+describe('Pull request Markdown', () => {
+  it('renders standard Markdown without creating raw HTML elements', () => {
+    const rawHtml = '<aside data-raw-html="true">raw HTML</aside>';
+    const detail: DeviceGitPullRequestDetail = {
+      additions: 1,
+      author: 'lobehub',
+      autoMerge: null,
+      baseBehindBy: 0,
+      baseRefName: 'canary',
+      body: `**description-safe**\n\n${rawHtml}`,
+      changedFiles: 1,
+      checks: [],
+      comments: [
+        {
+          author: 'contributor',
+          body: `**comment-safe**\n\n${rawHtml}`,
+          createdAt: '2026-09-24T00:00:00Z',
+          id: 'comment-1',
+        },
+      ],
+      commits: [],
+      deletions: 0,
+      headRefName: 'fix/markdown',
+      headRefOid: 'a'.repeat(40),
+      isCrossRepository: false,
+      isDraft: false,
+      mergeable: 'MERGEABLE',
+      mergeStateStatus: 'CLEAN',
+      number: 1,
+      repo: { name: 'lobehub', owner: 'lobehub' },
+      reviewDecision: null,
+      reviews: [],
+      state: 'open',
+      title: 'Markdown rendering',
+      url: 'https://github.com/lobehub/lobehub/pull/1',
+      viewerCanBypass: false,
+      viewerCanWrite: true,
+    };
+
+    const { container } = render(
+      <PullRequestSections
+        detail={detail}
+        activity={{
+          data: { comments: detail.comments, commits: [], reviews: [] },
+          error: undefined,
+          isValidating: false,
+          mutate: vi.fn(),
+        }}
+        onAction={vi.fn().mockResolvedValue(true)}
+        onOpenTab={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('description-safe', { selector: 'strong' })).toBeInTheDocument();
+    expect(screen.getByText('comment-safe', { selector: 'strong' })).toBeInTheDocument();
+    expect(container.querySelector('[data-raw-html]')).not.toBeInTheDocument();
   });
 });
 
