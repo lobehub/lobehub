@@ -192,6 +192,15 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
     if (newest && !ownBranch.has(newest.id)) {
       return { outcome: 'skipped', reason: 'topic-taken-over', topicId };
     }
+    // The newest row alone is not enough: a run still open after the user sent
+    // the next turn (Claude Code SDK waiting on a background task) can write a
+    // late row into its own branch AFTER that turn finished. A user turn
+    // chained onto our branch means the conversation continued past this run —
+    // replaying would delete rows that turn is parented to (LOBE-14379).
+    const hasFollowUpTurn = mainChain.some(
+      (message) => message.role === 'user' && !!message.parentId && ownBranch.has(message.parentId),
+    );
+    if (hasFollowUpTurn) return { outcome: 'skipped', reason: 'topic-taken-over', topicId };
   } else {
     // Nothing of ours on the topic to anchor against. The spawn time is all
     // that is left — a cross-clock comparison, so it is only trusted to spot a
