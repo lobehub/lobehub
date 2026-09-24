@@ -5,6 +5,7 @@ import {
   createQueueSendNowGate,
   getContextWindowMessages,
   getConversationChatInputUiState,
+  getConversationSendButtonProps,
   toChatInputMessages,
 } from './utils';
 
@@ -120,6 +121,46 @@ describe('getContextWindowMessages', () => {
       }),
     ).toEqual([]);
   });
+});
+
+describe('getConversationSendButtonProps', () => {
+  it.each([false, true])(
+    'keeps uploads disabled with generating=%s despite a host override',
+    (generating) => {
+      const defaults = {
+        disabled: true,
+        generating,
+        onStop: vi.fn(),
+        showSendWhileGenerating: generating,
+      };
+      const overrides = { disabled: false, shape: 'round' as const };
+
+      expect(getConversationSendButtonProps(defaults, overrides, true)).toEqual({
+        ...defaults,
+        disabled: true,
+        shape: 'round',
+      });
+      expect(getConversationSendButtonProps(defaults, overrides, false).disabled).toBe(false);
+    },
+  );
+
+  it.each([
+    { customDisabled: undefined, disabled: true, expected: true },
+    { customDisabled: undefined, disabled: false, expected: false },
+    { customDisabled: true, disabled: false, expected: true },
+    { customDisabled: false, disabled: true, expected: false },
+  ])(
+    'preserves non-upload disabled overrides: $customDisabled / $disabled',
+    ({ customDisabled, disabled, expected }) => {
+      expect(
+        getConversationSendButtonProps(
+          { disabled, generating: false, onStop: vi.fn() },
+          customDisabled === undefined ? undefined : { disabled: customDisabled },
+          false,
+        ).disabled,
+      ).toBe(expected);
+    },
+  );
 });
 
 describe('getConversationChatInputUiState', () => {

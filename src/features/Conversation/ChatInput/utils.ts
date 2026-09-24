@@ -1,6 +1,7 @@
 import type { OpenAIChatMessage, UIChatMessage } from '@lobechat/types';
 
 import type { PlaceholderVariant } from '@/features/ChatInput/InputEditor/Placeholder';
+import type { SendButtonProps } from '@/features/ChatInput/store/initialState';
 import { chatHelpers } from '@/store/chat/helpers';
 
 type SupportedChatInputRole = Extract<OpenAIChatMessage['role'], 'assistant' | 'tool' | 'user'>;
@@ -70,6 +71,17 @@ export const getContextWindowMessages = (
     historyCount?: number;
   },
 ) => toChatInputMessages(chatHelpers.getSlicedMessages(messages, options));
+
+export const getConversationSendButtonProps = (
+  defaults: SendButtonProps,
+  overrides: Partial<SendButtonProps> | undefined,
+  isUploadingFiles: boolean,
+): SendButtonProps => ({
+  ...defaults,
+  ...overrides,
+  // Uploads are a hard gate even when a host explicitly enables sending.
+  disabled: isUploadingFiles || (overrides?.disabled ?? defaults.disabled),
+});
 
 export interface ConversationChatInputUiState {
   placeholderVariant: PlaceholderVariant;
