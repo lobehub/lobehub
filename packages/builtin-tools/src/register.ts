@@ -68,6 +68,7 @@ import {
   ImageGenerationInspectors,
   ImageGenerationManifest,
   ImageGenerationRenders,
+  ImageGenerationStreamings,
 } from '@lobechat/builtin-tool-image-generation/client';
 import {
   KnowledgeBaseInspectors,
@@ -346,6 +347,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     [ClaudeCodeIdentifier]: ClaudeCodeStreamings as Record<string, BuiltinStreaming>,
     [QODER_IDENTIFIER]: ClaudeCodeStreamings as Record<string, BuiltinStreaming>,
     [CloudSandboxManifest.identifier]: CloudSandboxStreamings as Record<string, BuiltinStreaming>,
+    [ImageGenerationManifest.identifier]: ImageGenerationStreamings,
     [GroupAgentBuilderManifest.identifier]: GroupAgentBuilderStreamings as Record<
       string,
       BuiltinStreaming

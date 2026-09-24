@@ -8,3 +8,4 @@ export {
   ImageGenerationRenders,
   ListImageModelsRender,
 } from './Render';
+export { GenerateImageStreaming, ImageGenerationStreamings } from './Streaming';
