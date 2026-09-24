@@ -63,6 +63,48 @@ export class AsyncTaskModel {
     });
   };
 
+  static claimVideoCompletion = async (
+    db: LobeChatDatabase,
+    taskId: string,
+    completionEventId?: string,
+  ) => {
+    const claimedAt = new Date().toISOString();
+    const metadataWithClaim = sql`
+      jsonb_set(
+        COALESCE(${asyncTasks.metadata}, '{}'::jsonb),
+        '{completionClaimedAt}',
+        to_jsonb(${claimedAt}::text),
+        true
+      )
+    `;
+
+    const [claimed] = await db
+      .update(asyncTasks)
+      .set({
+        metadata: completionEventId
+          ? sql`
+              jsonb_set(
+                ${metadataWithClaim},
+                '{completionEventId}',
+                to_jsonb(${completionEventId}::text),
+                true
+              )
+            `
+          : metadataWithClaim,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(asyncTasks.id, taskId),
+          inArray(asyncTasks.status, [AsyncTaskStatus.Pending, AsyncTaskStatus.Processing]),
+          sql`NOT (COALESCE(${asyncTasks.metadata}, '{}'::jsonb) ? 'completionClaimedAt')`,
+        ),
+      )
+      .returning({ id: asyncTasks.id });
+
+    return Boolean(claimed);
+  };
+
   update(taskId: string, value: Partial<AsyncTaskSelectItem>) {
     return this.db
       .update(asyncTasks)

@@ -29,7 +29,7 @@ vi.mock('../../utils/uriParser', () => ({
 }));
 
 vi.mock('@lobechat/utils', () => ({
-  imageUrlToBase64: vi.fn(async (url) => ({
+  imageUrlToBase64: vi.fn(async (_url) => ({
     base64: 'mock-base64-data',
     mimeType: 'image/jpeg',
   })),
@@ -43,6 +43,9 @@ vi.mock('@google/genai', () => ({
 
 describe('createGoogleVideo', () => {
   const mockClient = {
+    interactions: {
+      create: vi.fn(),
+    },
     models: {
       generateVideos: vi.fn(),
     },
@@ -53,6 +56,106 @@ describe('createGoogleVideo', () => {
   });
 
   describe('successful creation', () => {
+    it('should create a background Gemini Omni interaction with a dynamic webhook', async () => {
+      mockClient.interactions.create.mockResolvedValueOnce({ id: 'interactions/omni-123' });
+
+      const payload: CreateVideoPayload = {
+        callbackUrl: 'https://app.example.com/api/webhooks/video/google?token=secret',
+        model: 'gemini-omni-flash-preview',
+        params: {
+          aspectRatio: '9:16',
+          prompt: 'A cat playing guitar',
+        },
+      };
+
+      const result = await createGoogleVideo(mockClient as any, 'google', payload);
+
+      expect(mockClient.interactions.create).toHaveBeenCalledWith({
+        api_version: 'v1beta',
+        background: true,
+        generation_config: { video_config: { task: 'text_to_video' } },
+        input: 'A cat playing guitar',
+        model: 'gemini-omni-flash-preview',
+        response_format: {
+          aspect_ratio: '9:16',
+          delivery: 'uri',
+          type: 'video',
+        },
+        store: true,
+        webhook_config: {
+          uris: ['https://app.example.com/api/webhooks/video/google?token=secret'],
+        },
+      });
+      expect(result).toEqual({ inferenceId: 'interactions/omni-123' });
+    });
+
+    it('should continue a Gemini Omni interaction with only the new edit instruction', async () => {
+      mockClient.interactions.create.mockResolvedValueOnce({ id: 'interactions/edit-456' });
+
+      await createGoogleVideo(mockClient as any, 'google', {
+        model: 'gemini-omni-flash-preview',
+        params: {
+          imageUrl: 'https://example.com/stale-start-frame.jpg',
+          imageUrls: ['https://example.com/stale-reference.jpg'],
+          prompt: 'Make the camera move more slowly',
+        },
+        previousInteractionId: 'interactions/source-123',
+      });
+
+      const request = mockClient.interactions.create.mock.calls[0][0];
+      expect(request).toMatchObject({
+        input: 'Make the camera move more slowly',
+        previous_interaction_id: 'interactions/source-123',
+      });
+      expect(request).not.toHaveProperty('generation_config');
+    });
+
+    it('should infer image-to-video when a stale text task is sent with media', async () => {
+      mockClient.interactions.create.mockResolvedValueOnce({ id: 'interactions/image-456' });
+
+      await createGoogleVideo(mockClient as any, 'google', {
+        model: 'gemini-omni-flash-preview',
+        params: {
+          imageUrls: ['https://example.com/reference.jpg'],
+          prompt: 'Animate this image',
+          task: 'text_to_video',
+        },
+      });
+
+      expect(mockClient.interactions.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          generation_config: { video_config: { task: 'image_to_video' } },
+        }),
+      );
+    });
+
+    it('should preserve all frame inputs and select reference-to-video', async () => {
+      mockClient.interactions.create.mockResolvedValueOnce({ id: 'interactions/reference-789' });
+
+      await createGoogleVideo(mockClient as any, 'google', {
+        model: 'gemini-omni-flash-preview',
+        params: {
+          endImageUrl: 'https://example.com/end.jpg',
+          imageUrl: 'https://example.com/start.jpg',
+          imageUrls: ['https://example.com/one.jpg', 'https://example.com/two.jpg'],
+          prompt: 'Put both characters in the same scene',
+        },
+      });
+
+      expect(mockClient.interactions.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          generation_config: { video_config: { task: 'reference_to_video' } },
+          input: [
+            { data: 'mock-base64-data', mime_type: 'image/jpeg', type: 'image' },
+            { data: 'mock-base64-data', mime_type: 'image/jpeg', type: 'image' },
+            { data: 'mock-base64-data', mime_type: 'image/jpeg', type: 'image' },
+            { data: 'mock-base64-data', mime_type: 'image/jpeg', type: 'image' },
+            { text: 'Put both characters in the same scene', type: 'text' },
+          ],
+        }),
+      );
+    });
+
     it('should create video with basic prompt', async () => {
       const mockOperation = { name: 'operations/test-op-123' };
       mockClient.models.generateVideos.mockResolvedValueOnce(mockOperation);
@@ -478,6 +581,12 @@ describe('createGoogleVideo', () => {
 
 describe('pollGoogleVideoOperation', () => {
   const mockClient = {
+    files: {
+      get: vi.fn(),
+    },
+    interactions: {
+      get: vi.fn(),
+    },
     operations: {
       getVideosOperation: vi.fn(),
     },
@@ -488,6 +597,67 @@ describe('pollGoogleVideoOperation', () => {
   });
 
   describe('successful completion', () => {
+    it('should return inline Gemini Omni video data', async () => {
+      mockClient.interactions.get.mockResolvedValueOnce({
+        id: 'v1_omni-inline',
+        output_video: {
+          data: 'base64-video',
+          mime_type: 'video/mp4',
+        },
+        status: 'completed',
+        usage: {
+          total_output_tokens: 28_960,
+          total_tokens: 29_120,
+        },
+      });
+
+      const result = await pollGoogleVideoOperation(
+        mockClient as any,
+        'v1_omni-inline',
+        'google',
+        'test-api-key',
+      );
+
+      expect(mockClient.interactions.get).toHaveBeenCalledWith('v1_omni-inline', {
+        api_version: 'v1beta',
+      });
+
+      expect(result).toEqual({
+        status: 'success',
+        usage: {
+          completionTokens: 28_960,
+          totalTokens: 29_120,
+        },
+        videoUrl: 'data:video/mp4;base64,base64-video',
+      });
+    });
+
+    it('should wait for a Gemini file and return its authenticated download URI', async () => {
+      mockClient.interactions.get.mockResolvedValueOnce({
+        id: 'interactions/omni-uri',
+        output_video: { type: 'video', uri: 'files/generated-video' },
+        status: 'completed',
+      });
+      mockClient.files.get.mockResolvedValueOnce({
+        downloadUri: 'https://generativelanguage.googleapis.com/download/video',
+        state: 'ACTIVE',
+      });
+
+      const result = await pollGoogleVideoOperation(
+        mockClient as any,
+        'interactions/omni-uri',
+        'google',
+        'test-api-key',
+      );
+
+      expect(mockClient.files.get).toHaveBeenCalledWith({ name: 'files/generated-video' });
+      expect(result).toEqual({
+        headers: { 'x-goog-api-key': 'test-api-key' },
+        status: 'success',
+        videoUrl: 'https://generativelanguage.googleapis.com/download/video',
+      });
+    });
+
     it('should return success when operation is done', async () => {
       const mockOperation = {
         done: true,
@@ -742,6 +912,41 @@ describe('pollGoogleVideoOperation', () => {
   });
 
   describe('pending state', () => {
+    it('should poll a qualified Veo operation resource', async () => {
+      const qualifiedOperation =
+        'projects/test/locations/us-central1/publishers/google/models/veo/operations/test-123';
+      mockClient.operations.getVideosOperation.mockResolvedValueOnce({ done: false });
+
+      const result = await pollGoogleVideoOperation(
+        mockClient as any,
+        qualifiedOperation,
+        'google',
+        'test-api-key',
+      );
+
+      expect(result).toEqual({ status: 'pending' });
+      expect(mockClient.operations.getVideosOperation).toHaveBeenCalledWith({
+        operation: expect.objectContaining({ name: qualifiedOperation }),
+      });
+      expect(mockClient.interactions.get).not.toHaveBeenCalled();
+    });
+
+    it('should return pending while a Gemini Omni interaction is in progress', async () => {
+      mockClient.interactions.get.mockResolvedValueOnce({
+        id: 'interactions/omni-pending',
+        status: 'in_progress',
+      });
+
+      const result = await pollGoogleVideoOperation(
+        mockClient as any,
+        'interactions/omni-pending',
+        'google',
+        'test-api-key',
+      );
+
+      expect(result).toEqual({ status: 'pending' });
+    });
+
     it('should return pending when operation not done', async () => {
       const mockOperation = { done: false };
       mockClient.operations.getVideosOperation.mockResolvedValueOnce(mockOperation);

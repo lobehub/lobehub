@@ -93,6 +93,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 
   useVideoStore.setState({
+    editingGenerationId: 'generation-source',
     isInit: true,
     model: 'video-model-a',
     provider: 'provider-a',
@@ -132,6 +133,7 @@ describe('video generationConfig actions', () => {
       endImageUrl: 'end-custom.png',
     });
     expect(result.current.parameters?.duration).toBe(modelBDefaultValues.duration);
+    expect(result.current.editingGenerationId).toBeUndefined();
   });
 
   it('should clamp preserved reference images to the next model limit', () => {

@@ -1,7 +1,7 @@
 import createDebug from 'debug';
 
 import type { CreateVideoOptions } from '../../core/openaiCompatibleFactory';
-import type { CreateVideoPayload, CreateVideoResponse } from '../../types/video';
+import type { CreateVideoPayload, CreateVideoResult } from '../../types/video';
 import { AgentRuntimeError } from '../../utils/createError';
 
 const log = createDebug('lobe-video:qwen');
@@ -368,7 +368,7 @@ async function createVideoTask(
 export async function createQwenVideo(
   payload: CreateVideoPayload,
   options: CreateVideoOptions,
-): Promise<CreateVideoResponse> {
+): Promise<CreateVideoResult> {
   const { apiKey, baseURL, provider } = options;
   const { model, params } = payload;
 

@@ -7,12 +7,15 @@ export interface GenerationItemProps {
 }
 
 export interface ActionButtonsProps {
+  editTooltip?: string;
   onCopySeed?: () => void;
   onDelete: () => void;
   onDownload?: () => void;
+  onEdit?: () => void;
   seedTooltip?: string;
   showCopySeed?: boolean;
   showDownload?: boolean;
+  showEdit?: boolean;
 }
 
 export interface SuccessStateProps {

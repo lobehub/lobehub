@@ -61,7 +61,10 @@ export class VideoGenerationService {
       headers?: Record<string, string>;
     },
   ): Promise<VideoProcessResult> {
-    log('Processing video from URL: %s', videoUrl);
+    log(
+      'Processing video from source: %s',
+      videoUrl.startsWith('data:') ? 'inline data' : videoUrl,
+    );
 
     let tempVideoPath: string | null = null;
     let tempCoverPath: string | null = null;
@@ -79,10 +82,7 @@ export class VideoGenerationService {
       const fileHash = createHash('sha256').update(videoBuffer).digest('hex');
       const fileSize = videoBuffer.length;
 
-      // Determine MIME type from URL or default to mp4
-      const ext = path.extname(new URL(videoUrl).pathname).toLowerCase();
-      const mimeType = ext === '.webm' ? 'video/webm' : 'video/mp4';
-      const videoExt = ext || '.mp4';
+      const { ext: videoExt, mimeType } = this.resolveVideoFormat(videoUrl);
 
       // Generate S3 keys
       const uuid = nanoid();
@@ -173,9 +173,24 @@ export class VideoGenerationService {
       headers?: Record<string, string>;
     },
   ): Promise<string> {
-    const ext = path.extname(new URL(url).pathname).toLowerCase() || '.mp4';
+    const { ext } = this.resolveVideoFormat(url);
     const tempVideoPath = path.join(os.tmpdir(), `lobe-video-${nanoid()}${ext}`);
     log('Downloading video to: %s', tempVideoPath);
+
+    if (url.startsWith('data:')) {
+      const match = url.match(/^data:(video\/[\w.+-]+);base64,([\s\S]+)$/);
+      if (!match) throw new Error('Invalid video data URI');
+
+      const videoBuffer = Buffer.from(match[2], 'base64');
+      if (videoBuffer.length > VideoGenerationService.MAX_VIDEO_SIZE) {
+        throw new Error(
+          `Video file too large: ${videoBuffer.length} bytes (max ${VideoGenerationService.MAX_VIDEO_SIZE} bytes)`,
+        );
+      }
+
+      await fs.writeFile(tempVideoPath, videoBuffer);
+      return tempVideoPath;
+    }
 
     const response = await fetch(url, {
       headers: options?.headers,
@@ -218,6 +233,22 @@ export class VideoGenerationService {
 
     log('Video downloaded successfully (%d bytes)', downloadedSize);
     return tempVideoPath;
+  }
+
+  private resolveVideoFormat(url: string): { ext: string; mimeType: string } {
+    if (url.startsWith('data:')) {
+      const mimeType = url.slice(5, url.indexOf(';')).toLowerCase();
+      return {
+        ext: mimeType === 'video/webm' ? '.webm' : '.mp4',
+        mimeType: mimeType || 'video/mp4',
+      };
+    }
+
+    const ext = path.extname(new URL(url).pathname).toLowerCase();
+    return {
+      ext: ext || '.mp4',
+      mimeType: ext === '.webm' ? 'video/webm' : 'video/mp4',
+    };
   }
 
   private async getVideoMetadata(videoPath: string): Promise<VideoMetadata> {

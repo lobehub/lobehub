@@ -13,6 +13,7 @@ import {
   type VideoGenerationAsset,
   type VideoGenerationTaskMetadata,
 } from '@lobechat/types';
+import { isRecord } from '@lobechat/utils/object';
 import debug from 'debug';
 import { eq } from 'drizzle-orm';
 import type { Context } from 'hono';
@@ -25,6 +26,7 @@ import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { GenerationModel } from '@/database/models/generation';
 import { generationBatches } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
+import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { VideoGenerationService } from '@/server/services/generation/video';
 import { sanitizeFileName } from '@/utils/sanitizeFileName';
 
@@ -45,8 +47,10 @@ export const videoWebhook = async (c: Context<BlankEnv, '/video/:provider'>) => 
   const provider = c.req.param('provider');
 
   let body: any;
+  let rawBody: string;
   try {
-    body = await c.req.json();
+    rawBody = await c.req.text();
+    body = JSON.parse(rawBody);
   } catch {
     return c.json({ error: 'Invalid JSON body' }, 400);
   }
@@ -63,31 +67,40 @@ export const videoWebhook = async (c: Context<BlankEnv, '/video/:provider'>) => 
     const runtime = ModelRuntime.initializeWithProvider(provider, {
       apiKey: 'webhook-placeholder',
     });
-    const result = await runtime.handleCreateVideoWebhook({ body });
+    const url = new URL(c.req.url);
+    const webhookResult = await runtime.handleCreateVideoWebhook({
+      body,
+      headers: Object.fromEntries(c.req.raw.headers.entries()),
+      model: url.searchParams.get('model') ?? undefined,
+      rawBody,
+      url: c.req.url,
+    });
 
-    if (!result) {
+    if (!webhookResult) {
       return c.json({ error: `Provider ${provider} does not support video webhook` }, 400);
     }
 
     // Skip intermediate statuses (e.g. queued, running)
-    if (result.status === 'pending') {
+    if (webhookResult.status === 'pending') {
       log('Skipping intermediate status for provider: %s', provider);
       return c.json({ success: true });
     }
 
-    log('Webhook parse result: %O', result);
+    log('Webhook parse result: %O', webhookResult);
 
     const db = await getServerDB();
 
     // Find asyncTask by inferenceId
-    const asyncTask = await AsyncTaskModel.findByInferenceId(db, result.inferenceId);
+    const asyncTask = await AsyncTaskModel.findByInferenceId(db, webhookResult.inferenceId);
     if (!asyncTask) {
-      log('AsyncTask not found for inferenceId: %s', result.inferenceId);
-      return c.json({ error: `AsyncTask not found for inferenceId: ${result.inferenceId}` }, 404);
+      log('AsyncTask not found for inferenceId: %s', webhookResult.inferenceId);
+      return c.json(
+        { error: `AsyncTask not found for inferenceId: ${webhookResult.inferenceId}` },
+        404,
+      );
     }
 
     // Verify webhook token to prevent forged callbacks
-    const url = new URL(c.req.url);
     const token = url.searchParams.get('token');
     const metadata = asyncTask.metadata as VideoGenerationTaskMetadata | undefined;
     const expectedToken = metadata?.webhookToken;
@@ -153,6 +166,82 @@ export const videoWebhook = async (c: Context<BlankEnv, '/video/:provider'>) => 
       resolvedModelId,
     });
 
+    let result:
+      | {
+          error: string;
+          inferenceId: string;
+          status: 'error';
+        }
+      | {
+          headers?: Record<string, string>;
+          inferenceId: string;
+          status: 'success';
+          usage?: { completionTokens: number; totalTokens: number };
+          videoUrl: string;
+        };
+
+    if (webhookResult.status === 'completed') {
+      const userRuntime = await initModelRuntimeFromDB(
+        db,
+        asyncTask.userId,
+        provider,
+        asyncTask.workspaceId ?? undefined,
+      );
+      const pollResult = await userRuntime.handlePollVideoStatus(
+        webhookResult.inferenceId,
+        requestedModel,
+        metadata?.route,
+      );
+
+      if (!pollResult) {
+        throw new Error(`Provider ${provider} does not support video polling`);
+      }
+
+      if (pollResult.status === 'pending') {
+        log(
+          'Interaction completed but generated video file is still processing: %s',
+          webhookResult.inferenceId,
+        );
+        return c.json({ error: 'Generated video file is still processing' }, 503);
+      }
+
+      const pollHeaders =
+        'headers' in pollResult && isRecord(pollResult.headers)
+          ? Object.fromEntries(
+              Object.entries(pollResult.headers).filter(
+                (entry): entry is [string, string] => typeof entry[1] === 'string',
+              ),
+            )
+          : undefined;
+
+      result =
+        pollResult.status === 'failed'
+          ? {
+              error: pollResult.error,
+              inferenceId: webhookResult.inferenceId,
+              status: 'error',
+            }
+          : {
+              headers: pollHeaders,
+              inferenceId: webhookResult.inferenceId,
+              status: 'success',
+              usage: pollResult.usage,
+              videoUrl: pollResult.videoUrl,
+            };
+    } else {
+      result = webhookResult;
+    }
+
+    const claimed = await AsyncTaskModel.claimVideoCompletion(
+      db,
+      asyncTask.id,
+      c.req.header('webhook-id') ?? undefined,
+    );
+    if (!claimed) {
+      log('AsyncTask %s completion already claimed, skipping duplicate webhook', asyncTask.id);
+      return c.json({ success: true });
+    }
+
     // Handle error result: refund precharge and mark task as error
     if (result.status === 'error') {
       log('Video generation failed: %s', result.error);
@@ -190,13 +279,17 @@ export const videoWebhook = async (c: Context<BlankEnv, '/video/:provider'>) => 
       asyncTask.userId,
       asyncTask.workspaceId ?? undefined,
     );
-    const processResult = await videoService.processVideoForGeneration(result.videoUrl);
+    const processResult = await videoService.processVideoForGeneration(result.videoUrl, {
+      headers: result.headers,
+    });
 
     const asset: VideoGenerationAsset = {
       coverUrl: processResult.coverKey,
       duration: processResult.duration,
       height: processResult.height,
-      originalUrl: result.videoUrl,
+      interactionId: result.inferenceId,
+      originalUrl: result.videoUrl.startsWith('data:') ? undefined : result.videoUrl,
+      previousGenerationId: metadata?.previousGenerationId,
       thumbnailUrl: processResult.thumbnailKey,
       type: 'video',
       url: processResult.videoKey,

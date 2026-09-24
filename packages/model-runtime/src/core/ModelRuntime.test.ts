@@ -309,17 +309,39 @@ describe('ModelRuntime', () => {
         model: 'sora-1',
         params: { prompt: 'a cat' } as any,
       };
-      const mockResponse = { inferenceId: 'job-1' };
-      const createVideo = vi.fn().mockResolvedValue(mockResponse);
+      const createVideo = vi.fn().mockResolvedValue({ inferenceId: 'job-1' });
 
       // @ts-ignore - injecting a minimal runtime for this case
-      mockModelRuntime['_runtime'] = { createVideo };
+      mockModelRuntime['_runtime'] = {
+        createVideo,
+        getVideoGenerationCapabilities: () => ({ completionModes: ['polling'] }),
+      };
 
-      const options = { metadata: { trigger: 'video' } };
+      const options = {
+        metadata: { trigger: 'video' },
+        preferredCompletionMode: 'webhook' as const,
+      };
       const result = await mockModelRuntime.createVideo(payload, options);
 
       expect(createVideo).toHaveBeenCalledWith(payload, options);
-      expect(result).toBe(mockResponse);
+      expect(result).toEqual({ completionMode: 'polling', inferenceId: 'job-1' });
+    });
+
+    it('should preserve completion mode from an orchestrating runtime', async () => {
+      const payload: CreateVideoPayload = {
+        model: 'sora-1',
+        params: { prompt: 'a cat' } as any,
+      };
+      const response = { completionMode: 'webhook' as const, inferenceId: 'job-2' };
+      const createVideo = vi.fn().mockResolvedValue(response);
+
+      // @ts-ignore - injecting a minimal composite runtime for this case
+      mockModelRuntime['_runtime'] = {
+        createVideo,
+        orchestratesVideoGenerationCompletion: true,
+      };
+
+      await expect(mockModelRuntime.createVideo(payload)).resolves.toBe(response);
     });
 
     it('should handle undefined createVideo method gracefully', async () => {

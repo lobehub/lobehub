@@ -48,7 +48,11 @@ export interface VideoGenerationAsset extends BaseGenerationAsset {
   coverUrl?: string;
   duration?: number;
   height?: number;
+  /** Provider interaction id used to continue stateful video editing. */
+  interactionId?: string;
   originalUrl?: string;
+  /** Previous generated version used as the editing source. */
+  previousGenerationId?: string;
   thumbnailUrl?: string;
   url?: string;
   width?: number;
@@ -63,6 +67,7 @@ export interface GenerationConfig {
   height?: number;
   imageUrl?: string | null;
   imageUrls?: string[];
+  previousGenerationId?: string;
   prompt: string;
   resolution?: string;
   size?: string;

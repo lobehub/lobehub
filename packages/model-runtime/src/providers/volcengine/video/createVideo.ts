@@ -1,7 +1,7 @@
 import createDebug from 'debug';
 
 import type { CreateVideoOptions } from '../../../core/openaiCompatibleFactory';
-import type { CreateVideoPayload, CreateVideoResponse } from '../../../types/video';
+import type { CreateVideoPayload, CreateVideoResult } from '../../../types/video';
 
 const log = createDebug('lobe-video:volcengine');
 
@@ -12,7 +12,7 @@ const log = createDebug('lobe-video:volcengine');
 export async function createVolcengineVideo(
   payload: CreateVideoPayload,
   options: CreateVideoOptions,
-): Promise<CreateVideoResponse> {
+): Promise<CreateVideoResult> {
   const { model, params } = payload;
   const {
     prompt,
@@ -95,5 +95,5 @@ export async function createVolcengineVideo(
     throw new Error('Invalid response: missing task id');
   }
 
-  return { inferenceId: data.id, useWebhook: true };
+  return { inferenceId: data.id };
 }

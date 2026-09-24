@@ -1,7 +1,7 @@
 import createDebug from 'debug';
 
 import type { CreateVideoOptions } from '../../core/openaiCompatibleFactory';
-import type { CreateVideoPayload, CreateVideoResponse } from '../../types/video';
+import type { CreateVideoPayload, CreateVideoResult } from '../../types/video';
 
 const log = createDebug('lobe-video:xai');
 
@@ -86,7 +86,7 @@ export async function pollXAIVideoStatus(
 export async function createXAIVideo(
   payload: CreateVideoPayload,
   options: CreateVideoOptions,
-): Promise<CreateVideoResponse> {
+): Promise<CreateVideoResult> {
   const { model, params } = payload;
   const { prompt, imageUrl, aspectRatio, duration, resolution, size } = params;
 

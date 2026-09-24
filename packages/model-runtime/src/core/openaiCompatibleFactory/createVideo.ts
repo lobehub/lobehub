@@ -3,7 +3,7 @@ import { ModelProvider } from 'model-bank';
 
 import type {
   CreateVideoPayload,
-  CreateVideoResponse,
+  CreateVideoResult,
   PollVideoStatusResult,
 } from '../../types/video';
 import { resolveMappedModelId } from '../../utils/modelIdMapping';
@@ -126,7 +126,7 @@ export async function pollOpenAICompatibleVideoStatus(
 export async function createOpenAICompatibleVideo(
   payload: CreateVideoPayload,
   options: CreateVideoOptions,
-): Promise<CreateVideoResponse> {
+): Promise<CreateVideoResult> {
   const { model, params } = payload;
   const requestModel = resolveMappedModelId(model, options);
   const { prompt, imageUrl, size, duration } = params;
