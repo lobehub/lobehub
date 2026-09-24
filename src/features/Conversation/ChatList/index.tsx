@@ -20,6 +20,7 @@ import WideScreenContainer from '../../WideScreenContainer';
 import SkeletonList from '../components/SkeletonList';
 import MessageItem from '../Messages';
 import type { WorkflowExpandLevelDefault } from '../Messages/AssistantGroup/components/WorkflowCollapse';
+import { BackgroundRunHintContext } from '../Messages/Contexts/BackgroundRunHintContext';
 import { MessageActionProvider } from '../Messages/Contexts/MessageActionProvider';
 import { dataSelectors, inputSelectors, useConversationStore } from '../store';
 import AgentSignalReceiptList from './components/AgentSignalReceiptList';
@@ -77,6 +78,11 @@ export interface ChatListProps {
    */
   headerSlot?: ReactNode;
   /**
+   * Hide the "task keeps running on the server, you can leave" loading copy and
+   * show the plain dot loader instead (e.g. on external visitor surfaces).
+   */
+  hideBackgroundRunHint?: boolean;
+  /**
    * Custom item renderer. If not provided, uses default ChatItem.
    */
   itemContent?: (index: number, id: string) => ReactNode;
@@ -103,6 +109,7 @@ const ChatList = memo<ChatListProps>(
     filterItem,
     footerSlot,
     headerSlot,
+    hideBackgroundRunHint,
     welcome,
     itemContent,
     messageDeepLink,
@@ -289,13 +296,15 @@ const ChatList = memo<ChatListProps>(
         </WideScreenContainer>
       ) : (
         <MessageActionProvider withSingletonActionsBar={!disableActionsBar}>
-          <VirtualizedList
-            dataSource={rowIds}
-            footerSlot={footerSlot}
-            headerSlot={headerSlot}
-            itemContent={itemContent ?? defaultItemContent}
-            messageDeepLink={resolvedMessageDeepLink}
-          />
+          <BackgroundRunHintContext value={!hideBackgroundRunHint}>
+            <VirtualizedList
+              dataSource={rowIds}
+              footerSlot={footerSlot}
+              headerSlot={headerSlot}
+              itemContent={itemContent ?? defaultItemContent}
+              messageDeepLink={resolvedMessageDeepLink}
+            />
+          </BackgroundRunHintContext>
         </MessageActionProvider>
       );
 
