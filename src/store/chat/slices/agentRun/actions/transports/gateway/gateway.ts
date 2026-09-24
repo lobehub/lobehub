@@ -1166,6 +1166,15 @@ export class GatewayActionImpl {
         operationId: result.operationId,
         topicId: result.topicId,
       });
+
+      if (result.topicId) {
+        this.#settleLocalTopicAfterConfirmedStop({
+          agentId: resolvedMessageContext.agentId,
+          groupId: resolvedMessageContext.groupId,
+          operationId: result.operationId,
+          topicId: result.topicId,
+        });
+      }
     });
 
     const eventHandler = createGatewayEventHandler(this.#get, {
@@ -1435,6 +1444,12 @@ export class GatewayActionImpl {
       }
 
       await interruptGatewayTaskOrThrow({ operationId });
+
+      this.#settleLocalTopicAfterConfirmedStop({
+        agentId: context.agentId,
+        operationId,
+        topicId,
+      });
     });
 
     const eventHandler = createGatewayEventHandler(this.#get, {
@@ -1641,6 +1656,31 @@ export class GatewayActionImpl {
       ?.runningOperation?.operationId;
 
     return !!owner && owner !== operationId;
+  };
+
+  /**
+   * Retire the local topic row once the server has confirmed a stop.
+   *
+   * The row's `running` status and `runningOperation` marker are otherwise only
+   * cleared by `onSessionComplete`, i.e. by a terminal frame arriving over the
+   * Gateway socket. A stop the server already acknowledged must not depend on
+   * that frame: when it never lands (socket resubscribing, the op DO's event
+   * buffer hibernated away, or a hetero run taking the `preserveExternalProducer`
+   * early return on a resume status), the input is already idle and the message
+   * shows as interrupted, yet the sidebar row keeps spinning and counting.
+   *
+   * Local only: the server settles its own row (device runs inside
+   * `interruptTask`, native runs at the next step boundary). Ownership-guarded
+   * by `clearLocalRunningOperation`, so a newer run's marker is left alone and
+   * a later terminal frame for this run becomes a no-op.
+   */
+  #settleLocalTopicAfterConfirmedStop = (params: {
+    agentId?: string;
+    groupId?: string;
+    operationId: string;
+    topicId: string;
+  }): void => {
+    this.clearLocalRunningOperation({ ...params, status: 'active' });
   };
 
   private clearLocalRunningOperation = (params: {

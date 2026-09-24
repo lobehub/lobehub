@@ -1540,6 +1540,123 @@ describe('GatewayActionImpl', () => {
       );
     });
 
+    /**
+     * @example A confirmed stop settles the sidebar row without the socket's terminal frame.
+     */
+    it('retires the local topic row once the server confirms the stop', async () => {
+      // ROOT CAUSE:
+      //
+      // Only `onSessionComplete` (a terminal frame over the Gateway socket)
+      // cleared the local topic row's `running` status and marker. When that
+      // frame never arrived after a stop, the input went idle and the message
+      // showed as interrupted, but the sidebar row kept spinning and counting.
+      //
+      // Before: a confirmed interruptTask left the local row running.
+      // After: the confirmed stop clears the marker and pins the row 'active'.
+      const onOperationCancel = vi.fn();
+      const connectToGateway = vi.fn();
+      const internalDispatchTopic = vi.fn();
+      const internalPinTopicStatus = vi.fn();
+      const state: Record<string, any> = {
+        activeAgentId: 'agent-1',
+        activeTopicId: 'topic-1',
+        gatewayConnections: {},
+        topicDataMap: {
+          'agent_agent-1': {
+            items: [
+              {
+                id: 'topic-1',
+                metadata: {
+                  model: 'gpt-4',
+                  runningOperation: { assistantMessageId: 'ast-1', operationId: 'server-op-stop' },
+                },
+                status: 'running',
+              },
+            ],
+          },
+        },
+      };
+      const set = vi.fn((updater: any) => {
+        if (typeof updater === 'function') Object.assign(state, updater(state));
+        else Object.assign(state, updater);
+      });
+      const get = vi.fn(() => ({
+        ...state,
+        associateMessageWithOperation: vi.fn(),
+        completeOperation: vi.fn(),
+        connectToGateway,
+        internal_dispatchTopic: internalDispatchTopic,
+        internal_pinTopicStatus: internalPinTopicStatus,
+        moveQueuedMessages: vi.fn(),
+        moveVoiceMessages: vi.fn(),
+        onOperationCancel,
+        startOperation: vi.fn(() => ({ operationId: 'gw-op-local' })),
+        updateTopicStatus: vi.fn(),
+      })) as any;
+
+      (globalThis as any).window = {
+        global_serverConfigStore: {
+          getState: () => ({ serverConfig: { agentGatewayUrl: 'https://gateway.test.com' } }),
+        },
+      };
+
+      const action = new GatewayActionImpl(set as any, get, undefined);
+      action.createClient = vi.fn(() => createMockClient());
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+        agentId: 'agent-1',
+        assistantMessageId: 'ast-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        message: 'ok',
+        operationId: 'server-op-stop',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'test-token',
+        topicId: 'topic-1',
+        userMessageId: 'usr-1',
+      });
+
+      await action.executeGatewayAgent({
+        context: { agentId: 'agent-1', scope: 'main', threadId: null, topicId: 'topic-1' },
+        message: 'Hello',
+      });
+      const [, handler] = onOperationCancel.mock.calls[0];
+      internalDispatchTopic.mockClear();
+      internalPinTopicStatus.mockClear();
+
+      // An unconfirmed stop must leave the row alone: the run may still be live.
+      vi.mocked(aiAgentService.interruptTask).mockResolvedValueOnce({
+        deviceCancellationConfirmed: false,
+        operationId: 'server-op-stop',
+        success: true,
+      });
+      await expect(handler()).rejects.toThrow();
+      expect(internalDispatchTopic).not.toHaveBeenCalled();
+      expect(internalPinTopicStatus).not.toHaveBeenCalled();
+
+      // No terminal frame ever reaches onSessionComplete in this test.
+      vi.mocked(aiAgentService.interruptTask).mockResolvedValueOnce({
+        operationId: 'server-op-stop',
+        success: true,
+      });
+      await handler();
+
+      expect(internalDispatchTopic).toHaveBeenCalledWith({
+        agentId: 'agent-1',
+        groupId: undefined,
+        id: 'topic-1',
+        type: 'updateTopic',
+        value: { metadata: { model: 'gpt-4', runningOperation: null } },
+      });
+      expect(internalPinTopicStatus).toHaveBeenCalledWith({
+        agentId: 'agent-1',
+        groupId: undefined,
+        status: 'active',
+        topicId: 'topic-1',
+      });
+    });
+
     // Regression: after an error run the gateway session completes
     // and clears the SERVER-side topic metadata, but the local Zustand store copy
     // of `runningOperation` stayed set — so useGatewayReconnect kept firing a
@@ -2428,6 +2545,81 @@ describe('GatewayActionImpl', () => {
 
     afterEach(() => {
       delete (globalThis as any).window;
+    });
+
+    it('retires the local topic row once the server confirms a stop issued after a reconnect', async () => {
+      const onOperationCancel = vi.fn();
+      const internalDispatchTopic = vi.fn();
+      const internalPinTopicStatus = vi.fn();
+      const state: Record<string, any> = {
+        activeAgentId: 'agent-1',
+        gatewayConnections: {},
+        messagesMap: {},
+        topicDataMap: {
+          'agent_agent-1': {
+            items: [
+              {
+                id: 'topic-1',
+                metadata: {
+                  runningOperation: { assistantMessageId: 'ast-1', operationId: 'server-op-1' },
+                },
+                status: 'running',
+              },
+            ],
+          },
+        },
+      };
+      const set = vi.fn((updater: any) => {
+        if (typeof updater === 'function') Object.assign(state, updater(state));
+        else Object.assign(state, updater);
+      });
+      const get = vi.fn(() => ({
+        ...state,
+        associateMessageWithOperation: vi.fn(),
+        connectToGateway: vi.fn(),
+        internal_dispatchTopic: internalDispatchTopic,
+        internal_pinTopicStatus: internalPinTopicStatus,
+        onOperationCancel,
+        startOperation: vi.fn(() => ({ operationId: 'gw-op-reconnect' })),
+      })) as any;
+
+      (globalThis as any).window = {
+        global_serverConfigStore: {
+          getState: () => ({ serverConfig: { agentGatewayUrl: 'https://gateway.test.com' } }),
+        },
+      };
+      vi.mocked(aiAgentService.refreshGatewayToken).mockResolvedValue({
+        token: 'fresh-token',
+      } as any);
+
+      const action = new GatewayActionImpl(set as any, get, undefined);
+      action.createClient = vi.fn(() => createMockClient());
+
+      await action.reconnectToGatewayOperation({
+        agentId: 'agent-1',
+        assistantMessageId: 'ast-1',
+        heteroType: 'kimi-code',
+        operationId: 'server-op-1',
+        topicId: 'topic-1',
+      });
+
+      const [, handler] = onOperationCancel.mock.calls[0];
+      vi.mocked(aiAgentService.interruptTask).mockResolvedValueOnce({
+        operationId: 'server-op-1',
+        success: true,
+      });
+      await handler();
+
+      expect(internalDispatchTopic).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'topic-1',
+          type: 'updateTopic',
+          value: { metadata: { runningOperation: null } },
+        }),
+      );
+      expect(internalPinTopicStatus).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'active', topicId: 'topic-1' }),
+      );
     });
 
     // After a DB rehydrate (e.g. quit + relaunch), `createdAt` can arrive as an
