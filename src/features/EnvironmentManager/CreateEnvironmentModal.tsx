@@ -16,6 +16,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
+import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
 
 import GithubRepositoryPicker, { type GithubRepositorySelection } from './GithubRepositoryPicker';
 import { useEnvironmentActions } from './useEnvironmentData';
@@ -45,6 +46,9 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(({ visibili
   const [nameIsSuggested, setNameIsSuggested] = useState(true);
   const [repository, setRepository] = useState<GithubRepositorySelection | undefined>();
   const [creating, setCreating] = useState(false);
+  // The Enter that confirms an IME candidate reaches `keydown` as an Enter,
+  // so a Chinese name would submit the dialog on the keystroke that picked it.
+  const { compositionProps, isComposingRef } = useIMECompositionEvent();
   const [error, setError] = useState<string | undefined>();
 
   const trimmed = name.trim();
@@ -138,8 +142,9 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(({ visibili
               setError(undefined);
             }}
             onKeyDown={(event) => {
-              if (event.key === 'Enter') void submit();
+              if (event.key === 'Enter' && !isComposingRef.current) void submit();
             }}
+            {...compositionProps}
           />
           {error && (
             <Text fontSize={12} type={'danger'}>

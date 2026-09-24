@@ -7,6 +7,8 @@ import { BracesIcon, CheckIcon, PencilIcon, PlusIcon, Trash2Icon, XIcon } from '
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
+
 import { describeError } from './errorMessage';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -94,6 +96,7 @@ const EnvRow = memo<{
   const { t: tCommon } = useTranslation('common');
   const [draft, setDraft] = useState<Entry | null>(null);
   const [busy, setBusy] = useState(false);
+  const { compositionProps, isComposingRef } = useIMECompositionEvent();
 
   const run = async (action: () => Promise<void>) => {
     setBusy(true);
@@ -124,10 +127,13 @@ const EnvRow = memo<{
           onChange={(event) => setDraft([draft[0], event.target.value])}
           onKeyDown={(event) => {
             if (event.key === 'Escape') setDraft(null);
-            if (event.key === 'Enter' && draft[0].trim()) {
+            // Not the Enter that confirms an IME candidate: a value typed in
+            // Chinese would otherwise save on the keystroke that picked it.
+            if (event.key === 'Enter' && !isComposingRef.current && draft[0].trim()) {
               void run(() => onSave([draft[0].trim(), draft[1]]));
             }
           }}
+          {...compositionProps}
         />
         <ActionIcon
           disabled={!draft[0].trim()}
@@ -197,6 +203,7 @@ const EnvironmentVariables = memo<EnvironmentVariablesProps>(({ entries, onSave 
   const [adding, setAdding] = useState<Entry | null>(null);
   const [raw, setRaw] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const { compositionProps, isComposingRef } = useIMECompositionEvent();
 
   const run = async (action: () => Promise<void>) => {
     setBusy(true);
@@ -321,8 +328,11 @@ const EnvironmentVariables = memo<EnvironmentVariablesProps>(({ entries, onSave 
                 onChange={(event) => setAdding([adding[0], event.target.value])}
                 onKeyDown={(event) => {
                   if (event.key === 'Escape') setAdding(null);
-                  if (event.key === 'Enter' && adding[0].trim()) void addNew();
+                  if (event.key === 'Enter' && !isComposingRef.current && adding[0].trim()) {
+                    void addNew();
+                  }
                 }}
+                {...compositionProps}
               />
               <ActionIcon
                 disabled={!adding[0].trim()}
