@@ -69,14 +69,28 @@ class ProjectFileService {
    */
   async getProjectFileIndex({
     deviceId,
+    sandboxInstanceId,
     sandboxTopicId,
     scope,
   }: {
     deviceId?: string;
+    /**
+     * Which instance's directory to read. Addressed directly rather than left
+     * for the server to derive from the topic, so a tree can be shown before
+     * the conversation exists — the way a device's tree needs no conversation
+     * either.
+     */
+    sandboxInstanceId?: string;
     sandboxTopicId?: string;
     scope: string;
   }): Promise<ProjectFileIndexResult | undefined> {
-    if (sandboxTopicId) return this.getSandboxFileIndex({ scope, topicId: sandboxTopicId });
+    if (sandboxTopicId || sandboxInstanceId) {
+      return this.getSandboxFileIndex({
+        instanceId: sandboxInstanceId,
+        scope,
+        topicId: sandboxTopicId,
+      });
+    }
 
     return deviceId
       ? ((await lambdaClient.device.getProjectFileIndex.query({ deviceId, scope })) ?? undefined)
@@ -94,15 +108,25 @@ class ProjectFileService {
    * and says so.
    */
   private async getSandboxFileIndex({
+    instanceId,
     scope,
     topicId,
   }: {
+    instanceId?: string;
     scope: string;
-    topicId: string;
+    topicId?: string;
   }): Promise<ProjectFileIndexResult | undefined> {
     const [workspace, listing] = await Promise.all([
       sandboxWorkspaceService.getWorkspace(),
-      sandboxWorkspaceService.listFiles({ path: scope || undefined, recursive: true, topicId }),
+      // The topic still travels: it names the warm session the read can go
+      // through, and is what lets a listing be refreshed before it is served.
+      // The instance is the address; the topic is the route.
+      sandboxWorkspaceService.listFiles({
+        instanceId,
+        path: scope || undefined,
+        recursive: true,
+        topicId,
+      }),
     ]);
 
     if (!workspace?.dir) return undefined;
