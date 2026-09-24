@@ -11,6 +11,8 @@ import { useTranslation } from 'react-i18next';
 import { InlineHtmlPreview, isHtmlFile } from '@/components/HtmlPreview';
 import { useOpenEditedFile } from '@/features/Conversation/Messages/EditedFilesCard/useOpenEditedFile';
 
+import { stripFinalLineTerminator } from './buildReadFileState';
+
 const styles = createStaticStyles(({ css, cssVar }) => ({
   actions: css`
     cursor: pointer;
@@ -113,8 +115,7 @@ const ReadFileView = memo<ReadFileViewProps>(
     const resolveOpenInPanel = useOpenEditedFile();
     const filename = filenameProp || path.split('/').pop() || path;
 
-    // A file's trailing newline is not a line of its own.
-    const code = useMemo(() => content.replace(/\n+$/, ''), [content]);
+    const code = useMemo(() => stripFinalLineTerminator(content), [content]);
 
     const lineNumberVars = useMemo(() => {
       const lastLine = firstLineNumber + code.split('\n').length - 1;

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildReadFileState, getFirstLineNumber } from './buildReadFileState';
+import {
+  buildReadFileState,
+  getFirstLineNumber,
+  stripFinalLineTerminator,
+} from './buildReadFileState';
 
 describe('buildReadFileState', () => {
   it('keeps the card for a successful builtin read of an empty file', () => {
@@ -91,7 +95,26 @@ describe('getFirstLineNumber', () => {
     ).toBe(10);
   });
 
+  it('uses the cloud sandbox 1-based startLine when no loc is reported', () => {
+    expect(getFirstLineNumber({ pluginState: { startLine: 201 } })).toBe(201);
+  });
+
   it('starts at line 1 when no range is known', () => {
     expect(getFirstLineNumber({ args: { path: '/repo/a.ts' } })).toBe(1);
+  });
+});
+
+describe('stripFinalLineTerminator', () => {
+  it('drops only the final line terminator', () => {
+    expect(stripFinalLineTerminator('a\nb\n')).toBe('a\nb');
+    expect(stripFinalLineTerminator('a\r\n')).toBe('a');
+  });
+
+  it('keeps intentional trailing blank lines', () => {
+    expect(stripFinalLineTerminator('value\n\n')).toBe('value\n');
+  });
+
+  it('leaves content without a terminator unchanged', () => {
+    expect(stripFinalLineTerminator('value')).toBe('value');
   });
 });
