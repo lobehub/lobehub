@@ -405,7 +405,6 @@ describe('heterogeneous agent model discovery', () => {
       expect.objectContaining({
         cwd: '/repo',
         env: { OPENCODE_CONFIG_DIR: '/config', PATH: '/custom/bin' },
-        maxBuffer: 256 * 1024,
         timeout: 15_000,
       }),
       expect.any(Function),

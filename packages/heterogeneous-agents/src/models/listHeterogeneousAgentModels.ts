@@ -17,7 +17,8 @@ import { resolveHeteroSpawnCommand } from '../spawn/resolveCliCommand';
 import { listTraeAcpModels } from '../spawn/traeAcpSession';
 
 const execFilePromise = promisify(execFile);
-const MODEL_CATALOG_MAX_BUFFER = 256 * 1024;
+// Large catalogs (including Devin's model variants and metadata) exceed 256 KiB.
+const MODEL_CATALOG_MAX_BUFFER = 4 * 1024 * 1024;
 const MODEL_CATALOG_TIMEOUT_MS = 15_000;
 const CODEBUDDY_MODEL_OPTION = '--model <model>';
 const CODEBUDDY_SUPPORTED_MODELS_LABEL = 'Currently supported:';
