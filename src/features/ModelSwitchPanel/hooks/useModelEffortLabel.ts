@@ -14,9 +14,10 @@ import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
  * models without an effort param and while the saved value is still loading,
  * so a row never flashes the fallback before the real value arrives.
  *
- * Rows warm the store through `ensureModelReasoningConfig`, which is a no-op
- * once a model's value is cached (including "nothing saved"), so reopening the
- * panel does not refetch; first-open requests land in one batched tRPC call.
+ * Values come from the runtime-state response, which seeds every enabled
+ * model's entry in one read. `ensureModelReasoningConfig` is only a fallback
+ * for models the snapshot missed; it is a no-op once a key is cached
+ * (including "nothing saved").
  */
 export const useModelEffortLabel = (model: string, provider: string): string | undefined => {
   const { t } = useTranslation('chat');
