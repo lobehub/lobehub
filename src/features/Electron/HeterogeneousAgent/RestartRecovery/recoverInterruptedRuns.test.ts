@@ -537,6 +537,28 @@ describe('recoverInterruptedHeteroRuns', () => {
     expect(mockRemoveMessages).not.toHaveBeenCalled();
   });
 
+  it('keeps a follow-up turn chained onto the run tail instead of replaying over it', async () => {
+    // Claude Code SDK: the first turn stays open waiting on background tasks,
+    // so it never leaves the ledger, while the user sends and finishes a second
+    // turn whose user row hangs off the first turn's tail.
+    mockListInterruptedRuns.mockResolvedValue([{ ...run, assistantMessageId: 'a1' }]);
+    mockGetTopicDetail.mockResolvedValue({ ...topic, status: 'active' });
+    mockGetMessages.mockResolvedValue([
+      ...messages,
+      { content: 'follow up', createdAt: 300, id: 'u2', parentId: 't1', role: 'user' },
+      { content: 'ok', createdAt: 310, id: 'a2', parentId: 'u2', role: 'assistant' },
+    ]);
+
+    const results = await recoverInterruptedHeteroRuns();
+
+    expect(results).toEqual([
+      { outcome: 'skipped', reason: 'topic-taken-over', topicId: 'topic-1' },
+    ]);
+    expect(mockRemoveMessages).not.toHaveBeenCalled();
+    expect(mockRunHetero).not.toHaveBeenCalled();
+    expect(mockReleaseInterruptedRun).toHaveBeenCalledWith('ipc-1');
+  });
+
   it('leaves a topic alone when a newer turn took it over while the app was down', async () => {
     // Another device started a turn after our run was spawned: its user row is
     // newer than the ledger entry. Touching it would delete that live run's

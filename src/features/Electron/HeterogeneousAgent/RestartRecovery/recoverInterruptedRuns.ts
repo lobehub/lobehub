@@ -86,6 +86,14 @@ const toTime = (value: UIChatMessage['createdAt']): number => {
  * The run's own branch: its assistant row plus everything hanging off it. A
  * regenerated turn keeps several assistant branches under one user row, and
  * only this one belongs to the interrupted run.
+ *
+ * Stops at user rows: a later turn hangs its user row off this run's tail, so
+ * walking past it would claim the follow-up conversation as the run's own —
+ * and the replay would delete it. A run never writes user rows of its own
+ * (queued messages are sent as a new turn once it ends), so every user row
+ * below the root is a later turn. This happens with the Claude Code SDK, whose
+ * turn can stay open waiting on background tasks while the user sends the next
+ * one, leaving the earlier run on the ledger (LOBE-14379).
  */
 const collectBranch = (messages: UIChatMessage[], rootId: string): string[] => {
   const childrenByParent = new Map<string, UIChatMessage[]>();
@@ -104,7 +112,9 @@ const collectBranch = (messages: UIChatMessage[], rootId: string): string[] => {
     if (seen.has(id)) continue;
     seen.add(id);
     ids.push(id);
-    for (const child of childrenByParent.get(id) ?? []) queue.push(child.id);
+    for (const child of childrenByParent.get(id) ?? []) {
+      if (child.role !== 'user') queue.push(child.id);
+    }
   }
   return ids;
 };
