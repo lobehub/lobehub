@@ -11,6 +11,8 @@ import { ensureFreshConnectorToken } from './tokens';
 export interface ConnectorToolSyncContext {
   connectorModel: ConnectorModel;
   connectorToolModel: ConnectorToolModel;
+  userId?: string;
+  workspaceId?: string;
 }
 
 /** Build the MCP client connection params (with auth) from a connector row. */
