@@ -2,12 +2,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { videoGenerationRuntime } from '../videoGeneration';
 
+// Narrow shape of the `callerContext` the runtime passes to every
+// `*Router.createCaller`, just enough to type-check the spend-attribution
+// assertions below without pulling in the full tRPC caller context type.
+interface VideoCallerContext {
+  spendOrigin?: {
+    agentShare: { agentId: string; shareId: string; visitorUserId: string };
+    trigger: string;
+  };
+}
+
 const callerMocks = vi.hoisted(() => ({
   aiModel: vi.fn(() => ({})),
   aiProvider: vi.fn(() => ({})),
   generation: vi.fn(() => ({})),
   generationTopic: vi.fn(() => ({})),
-  video: vi.fn(() => ({})),
+  video: vi.fn((_ctx: VideoCallerContext) => ({})),
 }));
 
 vi.mock('@/server/routers/lambda/aiModel', () => ({
@@ -56,6 +66,36 @@ describe('videoGenerationRuntime', () => {
     expect(callerMocks.generation).toHaveBeenCalledWith(callerContext);
     expect(callerMocks.generationTopic).toHaveBeenCalledWith(callerContext);
     expect(callerMocks.video).toHaveBeenCalledWith(callerContext);
+  });
+
+  it('projects share attribution onto the video caller so visitor spend stays attributed', () => {
+    videoGenerationRuntime.factory({
+      agentShareVisitor: {
+        agentId: 'agent-1',
+        allowReadMemory: true,
+        toolGrants: [{ identifier: 'lobe-video-generation' }],
+        shareId: 'share-1',
+        visitorUserId: 'visitor-1',
+      },
+      toolManifestMap: {},
+      userId: 'creator-1',
+    });
+
+    const [callerContext] = callerMocks.video.mock.calls.at(-1)!;
+    expect(callerContext.spendOrigin).toEqual({
+      agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+      trigger: 'agent_share',
+    });
+    // Permission fields of the runtime object must never leak into billing metadata.
+    expect(callerContext.spendOrigin!.agentShare).not.toHaveProperty('allowReadMemory');
+    expect(callerContext.spendOrigin!.agentShare).not.toHaveProperty('toolGrants');
+  });
+
+  it('omits spend attribution for a non-share run', () => {
+    videoGenerationRuntime.factory({ toolManifestMap: {}, userId: 'user-1' });
+
+    const [callerContext] = callerMocks.video.mock.calls.at(-1)!;
+    expect(callerContext.spendOrigin).toBeUndefined();
   });
 
   it('preserves public agent visibility for generated video topics', async () => {

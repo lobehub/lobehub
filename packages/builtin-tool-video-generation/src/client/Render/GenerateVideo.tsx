@@ -104,7 +104,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     display: block;
     width: 100%;
     max-height: 560px;
-    background: #000;
+    background: ${cssVar.colorFillTertiary};
   `,
 }));
 

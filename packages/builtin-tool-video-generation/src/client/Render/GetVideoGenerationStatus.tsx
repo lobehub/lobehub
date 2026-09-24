@@ -25,7 +25,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     width: 100%;
     max-height: 560px;
     border-radius: 8px;
-    background: #000;
+    background: ${cssVar.colorFillTertiary};
   `,
 }));
 

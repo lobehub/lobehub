@@ -324,6 +324,13 @@ export const videoRouter = router({
             }
           };
 
+          /**
+           * The chat tool's server runtime waits for this generation inside the same
+           * request (generateVideo polls status before returning). A plain `after()`
+           * outside a scheduled-work scope — e.g. the default local queue runtime —
+           * defers polling until that request responds, so the wait would never see
+           * a terminal status. Start polling now and let `after()` only retain it.
+           */
           if (startPollingImmediately) {
             const pollingPromise = pollVideo();
             after(() => pollingPromise);

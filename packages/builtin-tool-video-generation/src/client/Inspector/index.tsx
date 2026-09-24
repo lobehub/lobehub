@@ -98,15 +98,16 @@ const VideoGenerationInspector = memo<BuiltinInspectorProps<VideoGenerationInspe
     const Icon = meta.Icon;
 
     return (
-      <div
-        className={cx(
-          inspectorTextStyles.root,
-          styles.root,
-          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-        )}
-      >
+      <div className={cx(inspectorTextStyles.root, styles.root)}>
         <Icon className={styles.icon} size={14} />
-        <span className={styles.label}>{label}</span>
+        <span
+          className={cx(
+            styles.label,
+            (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
+          )}
+        >
+          {label}
+        </span>
         {apiName === VideoGenerationApiName.generateVideo && prompt && (
           <span className={cx(highlightTextStyles.primary, styles.prompt)}>{prompt}</span>
         )}

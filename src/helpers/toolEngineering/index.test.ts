@@ -433,8 +433,9 @@ describe('toolEngineering', () => {
       expect(result.enabledToolIds).not.toContain('lobe-image-generation');
     });
 
-    it('should enable video generation in chat mode when model can call tools', () => {
+    it('should enable video generation in chat mode when the tool is pinned', () => {
       mockCurrentChatConfig = { enableAgentMode: false };
+      mockCurrentAgentPlugins = ['lobe-video-generation'];
 
       const toolsEngine = createAgentToolsEngine({
         model: 'claude-sonnet',
@@ -442,7 +443,7 @@ describe('toolEngineering', () => {
       });
 
       const result = toolsEngine.generateToolsDetailed({
-        toolIds: [],
+        toolIds: ['lobe-video-generation'],
         model: 'claude-sonnet',
         provider: 'anthropic',
       });

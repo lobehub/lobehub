@@ -23,6 +23,12 @@ export const clearGenerationProgressStart = (toolCallId?: string) => {
   if (storageKey) sessionStorage.removeItem(storageKey);
 };
 
+/**
+ * Estimates progress from elapsed time against the recent average latency.
+ * The start time is kept in sessionStorage keyed by tool call so a remount
+ * (scrolling the message away, switching topics) or a page refresh resumes
+ * the estimate instead of restarting it from 0%.
+ */
 const useEstimatedProgress = (estimatedDurationMs?: number, toolCallId?: string) => {
   const [progress, setProgress] = useState<null | number>(null);
 
