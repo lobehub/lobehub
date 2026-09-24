@@ -1038,8 +1038,9 @@ export const describeRelayFailure = (error: unknown) => {
     provider,
   });
   const spec = getErrorCodeSpec(refinedCode ?? String(errorType));
-  // Catch-all specs alone do not establish that an unknown upstream failure is terminal.
-  const classified = spec && !spec.isFallback;
+  // Generic provider buckets defer to HTTP semantics; other categories keep their
+  // explicit retry policy even when marked as monitoring fallbacks.
+  const classified = spec && !(spec.isFallback && spec.category === 'provider');
   const candidateStatus = httpStatus ?? (classified ? spec.httpStatus : 502);
   // Runtime-only 470/471/472 codes are not public HTTP protocol statuses.
   const status = (

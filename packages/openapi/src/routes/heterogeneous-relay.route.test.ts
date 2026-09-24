@@ -71,6 +71,7 @@ describe('heterogeneous relay route failures', () => {
         ['InvalidRequestFormat', 400, false],
         ['RateLimitExceeded', 429, true],
         ['InsufficientQuota', 429, false],
+        ['DatabasePersistError', 500, false],
         ['ProviderBizError', 502, true],
       ] as const) {
         invokeServerDefaultModel.mockRejectedValue({ error: 'fixture failure', errorType });

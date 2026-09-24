@@ -1090,6 +1090,8 @@ describe('describeRelayFailure', () => {
     [{ errorType: 'RateLimitExceeded', error: 'Slow down' }, 429, true],
     [{ errorType: 'InsufficientQuota', error: 'Balance exhausted' }, 429, false],
     [{ errorType: 'ProviderServiceUnavailable', error: 'Overloaded' }, 503, true],
+    [{ errorType: 'DatabasePersistError', error: 'Query failed' }, 500, false],
+    [{ errorType: 'AgentRuntimeError', error: 'Failed query: select 1' }, 500, false],
     [{ errorType: 'ProviderBizError', error: 'Unrecognized upstream failure' }, 502, true],
     [new Error('socket hang up'), 502, true],
   ])('preserves status and retry semantics for %j', (error, status, retryable) => {
