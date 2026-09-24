@@ -210,7 +210,13 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
     const { data, isLoading: instancesLoading } = useSWR(
       entitled && (open || boundInstanceId) ? ['sandbox-instances', topicId] : null,
       () => sandboxWorkspaceService.listInstances({ topicId, withSizes: false }),
-      { revalidateOnFocus: false },
+      // The topic is in the key because occupancy is answered per conversation
+      // — "in use by another one" is a different answer here than there. The
+      // instances themselves are the same list either way, so the first send,
+      // which takes the topic from none to one, must not blank the chip: it
+      // would flash a skeleton for a name that never changed. Kept until the
+      // refetch lands; a moment of last-known occupancy is not worth that.
+      { keepPreviousData: true, revalidateOnFocus: false },
     );
     const {
       data: environmentData,
