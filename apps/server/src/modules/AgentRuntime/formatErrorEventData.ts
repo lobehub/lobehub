@@ -35,8 +35,8 @@ export const formatErrorEventData = (error: unknown, phase: string) => {
   const payloadErrorType = isErrorType(rawPayloadErrorType) ? rawPayloadErrorType : undefined;
   /**
    * Runtime completion errors carry their provider/model diagnostics on the Error instance.
-   * Keep that body so the client can persist it and pick provider-specific UI (e.g. the
-   * official content-safety notice for refusals); other Error instances keep the flat shape.
+   * Keep that body so the client can persist it and render provider-specific error UI;
+   * other Error instances keep the flat shape.
    */
   const isRuntimeCompletionError =
     error instanceof ModelEmptyError || error instanceof ModelRefusalError;
