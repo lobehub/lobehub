@@ -58,9 +58,9 @@ A feature or fix needs a published acceptance round before the PR is opened (AGE
 - Obey the `AGENT-INSTRUCTIONS` HTML comments in that template. Keep them commented out, and do not copy them into the visible description.
 - Link related GitHub issues using magic keywords (`Fixes #123`, `Closes #123`)
 - Link Linear issues if applicable (`Fixes LOBE-xxx`)
-- Put the acceptance link (or the explicit skip reason) under **Test** in the Human section
-- Fill **Human** for every pull request. Fill **AI** only when an agent produced the change and `gh api user/memberships/orgs/lobehub` does not return `"state": "active"`. Then record harness, model, thinking level, and every user prompt from this session, in order. Before those prompts go into the body, review the whole session and redact any sensitive content. Show the author the exact text and wait for confirmation before opening or updating the pull request. A person who wrote the change, or an active lobehub organization member, deletes the AI section.
-- Use HEREDOC for body to preserve formatting
+- Put the acceptance link (or the explicit skip reason) under **Test** in the Summary section.
+- Follow the source-label, privacy, and AI assistance rules in **PR Template** below when creating or updating a PR. Do not request prompt disclosure or block the normal PR workflow waiting for consent to publish a conversation.
+- Write the body to a temporary file and use `--body-file` to preserve formatting.
 
 ### 7. Open in browser
 
@@ -68,10 +68,12 @@ A feature or fix needs a published acceptance round before the PR is opened (AGE
 
 ## PR Template
 
-Use `.github/PULL_REQUEST_TEMPLATE.md` as the body structure. The HTML comments marked `AGENT-INSTRUCTIONS` are mandatory for the agent that fills the body. Two sections:
+Use [`.github/PULL_REQUEST_TEMPLATE.md`](../../../.github/PULL_REQUEST_TEMPLATE.md) as the source of truth for body structure, contribution classification, disclosure eligibility, and required fields. Follow its `AGENT-INSTRUCTIONS` when filling these sections:
 
-- **Human**: what changed, screenshots, how it was tested, the acceptance link (or why none is needed), and the related issue. Fill this for every pull request.
-- **AI**: delete the whole section when a person wrote the change, or when the author is an active member of the lobehub organization. When an agent wrote the change and the author is an outside collaborator or an external contributor, fill harness (product and version), model id, thinking level (`n/a` when the harness has none), and every user prompt from the session, in order. Review the whole session first and redact any sensitive content. Show the author the exact text and wait for confirmation before publishing. Repeat once per agent session.
+- **Summary**: fill for every PR, including the required Contribution source label. AI-assisted work remains labeled `AI-assisted` even when organization membership exempts the author from disclosing details; human review does not make it human-only. Use `Unknown` when the source cannot be established.
+- **AI assistance**: apply the template's organization-member exemption to details only, never to the source label. When required, fill its six fields using the final diff and verification evidence, not private conversation summaries. Use one section per PR, combining tools/models across sessions; report unknown metadata and unperformed review/checks honestly.
+
+Prompts and transcripts are private by default and are not required fields. Only if the author explicitly requests sharing them, review the exact proposed text for sensitive information and obtain confirmation before publishing that text. Authorization to create or update a PR is not consent to publish a conversation. Check attached logs and screenshots for sensitive information too.
 
 ## Notes
 
