@@ -12,7 +12,11 @@ import Group from './Group';
 
 let mockIsCollapsed = false;
 let mockIsGenerating = false;
-let mockDbMessages: { createdAt?: Date | number | string | null; id: string }[] = [];
+let mockDbMessages: {
+  createdAt?: Date | number | string | null;
+  id: string;
+  metadata?: { finishType?: string };
+}[] = [];
 let mockOperations: { metadata: Record<string, unknown>; status: string }[] = [];
 
 vi.mock('@/store/chat', () => ({
@@ -175,6 +179,16 @@ describe('Group', () => {
     mockIsGenerating = false;
     mockDbMessages = [];
     mockOperations = [];
+  });
+
+  it('keeps an empty terminal block when only the persisted message has its finish type', () => {
+    mockDbMessages = [{ id: 'block-1', metadata: { finishType: 'RECITATION' } }];
+
+    render(
+      <Group isLatestItem blocks={[blk({ id: 'block-1' })]} id="assistant-1" messageIndex={0} />,
+    );
+
+    expect(parseAnswerSegment()).toMatchObject({ content: '', id: 'block-1' });
   });
 
   it('keeps a long mixed single-tool block inline in its natural order', () => {
