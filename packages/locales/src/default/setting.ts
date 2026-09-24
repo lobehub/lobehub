@@ -3516,6 +3516,11 @@ When I am ___, I need ___
   'tools.builtins.lobe-image-generation.readme':
     'Opt-in image generation for models without native image output. Pin this tool to enable it in chat or agent mode; leave unpinned to avoid the tool schema cost.',
   'tools.builtins.lobe-image-generation.title': 'Image Generation',
+  'tools.builtins.lobe-video-generation.description':
+    'Generate videos through LobeHub providers from text or reference images.',
+  'tools.builtins.lobe-video-generation.readme':
+    'Opt-in video generation. Pin this tool to enable it in chat or agent mode; leave unpinned to avoid the tool schema cost.',
+  'tools.builtins.lobe-video-generation.title': 'Video Generation',
   'tools.builtins.lobe-web-onboarding.description':
     'Drive the web onboarding flow with a controlled agent runtime',
   'tools.builtins.lobe-web-onboarding.title': 'Web Onboarding',

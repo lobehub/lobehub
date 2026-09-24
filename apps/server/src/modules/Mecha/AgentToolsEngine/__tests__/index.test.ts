@@ -490,7 +490,7 @@ describe('createServerAgentToolsEngine', () => {
     expect(result.enabledToolIds).not.toContain(ImageGenerationManifest.identifier);
   });
 
-  it('should enable VideoGeneration in chat mode when model can call tools', () => {
+  it('should not auto-enable VideoGeneration in chat mode', () => {
     const context = createMockContext();
     const engine = createServerAgentToolsEngine(context, {
       agentConfig: {
@@ -508,17 +508,38 @@ describe('createServerAgentToolsEngine', () => {
       toolIds: [],
     });
 
+    expect(result.enabledToolIds).not.toContain(VideoGenerationManifest.identifier);
+  });
+
+  it('should enable VideoGeneration in chat mode when pinned and model can call tools', () => {
+    const context = createMockContext();
+    const engine = createServerAgentToolsEngine(context, {
+      agentConfig: {
+        chatConfig: { enableAgentMode: false },
+        plugins: [VideoGenerationManifest.identifier],
+      },
+      model: 'claude-sonnet',
+      modelAbilities: { functionCall: true },
+      provider: 'anthropic',
+    });
+
+    const result = engine.generateToolsDetailed({
+      model: 'claude-sonnet',
+      provider: 'anthropic',
+      toolIds: [VideoGenerationManifest.identifier],
+    });
+
     expect(result.enabledToolIds).toContain(VideoGenerationManifest.identifier);
   });
 
-  it('should not enable VideoGeneration in chat mode when model cannot call tools', () => {
+  it('should not enable pinned VideoGeneration in chat mode when model cannot call tools', () => {
     const context = createMockContext({
       isModelSupportToolUse: () => false,
     });
     const engine = createServerAgentToolsEngine(context, {
       agentConfig: {
         chatConfig: { enableAgentMode: false },
-        plugins: [],
+        plugins: [VideoGenerationManifest.identifier],
       },
       model: 'plain-text-model',
       modelAbilities: { functionCall: false },
@@ -528,7 +549,7 @@ describe('createServerAgentToolsEngine', () => {
     const result = engine.generateToolsDetailed({
       model: 'plain-text-model',
       provider: 'test',
-      toolIds: [],
+      toolIds: [VideoGenerationManifest.identifier],
     });
 
     expect(result.enabledToolIds).not.toContain(VideoGenerationManifest.identifier);

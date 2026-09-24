@@ -116,13 +116,13 @@ export const manualModeExcludeToolIds = [
  * (`chatConfig.enableAgentMode === false`). Each one still passes through
  * its own runtime gate (e.g. knowledge base requires `hasEnabledKnowledgeBases`,
  * memory requires the global memory setting, web-browsing requires search
- * enabled, image-generation requires an explicit pin). This list is the
+ * enabled, image/video generation require an explicit pin). This list is the
  * strict outer whitelist.
  *
  * In chat mode, both the server `createServerAgentToolsEngine` and the
  * frontend `createAgentToolsEngine` build their rules from ONLY these
  * identifiers, drop user plugins / `alwaysOnToolIds` entirely (except
- * image-generation, which is re-enabled only when pinned), and disable
+ * image/video generation, which are re-enabled only when pinned), and disable
  * `allowExplicitActivation` so the activator can't smuggle other tools in.
  */
 export const chatModeAllowedToolIds = [
@@ -434,7 +434,7 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
-    hidden: true,
+    // Opt-in video generation: exposed in the Tools popover so users can pin it.
     identifier: VideoGenerationManifest.identifier,
     manifest: VideoGenerationManifest,
     type: 'builtin',
