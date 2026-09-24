@@ -5,7 +5,11 @@ import type {
   OpenAIChatMessage,
   UserMessageContentPart,
 } from '@lobechat/model-runtime';
-import { getErrorCodeSpec, refineErrorCode } from '@lobechat/model-runtime/errors';
+import {
+  collectStatusCodes,
+  getErrorCodeSpec,
+  refineErrorCode,
+} from '@lobechat/model-runtime/errors';
 import type { CodexReasoningEffort } from '@lobechat/types';
 import {
   AgentRuntimeErrorType,
@@ -1020,14 +1024,13 @@ export const describeRelayFailure = (error: unknown) => {
     String(error);
   const provider = typeof payload?.provider === 'string' ? payload.provider : undefined;
   const errorType = payload?.errorType;
-  const upstreamError = isRecord(payload?.error) ? payload.error : undefined;
   // Only provider wrappers use the SDK convention of a leading HTTP status.
   const messageStatus =
     errorType === AgentRuntimeErrorType.ProviderBizError ||
     errorType === AgentRuntimeErrorType.UpstreamHttpError
       ? Number(/^\s*([45]\d{2})\b/.exec(message)?.[1])
       : undefined;
-  const httpStatus = [errorType, payload?.status, upstreamError?.status, messageStatus].find(
+  const httpStatus = [errorType, payload?.status, ...collectStatusCodes(error), messageStatus].find(
     (value): value is number =>
       typeof value === 'number' && Number.isInteger(value) && value >= 400 && value <= 599,
   );

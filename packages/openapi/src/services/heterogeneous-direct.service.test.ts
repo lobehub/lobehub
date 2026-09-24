@@ -1087,6 +1087,36 @@ describe('describeRelayFailure', () => {
     ],
     [{ errorType: 'ProviderBizError', error: { message: 'Field required' } }, 400, false],
     [{ errorType: 'ProviderBizError', error: { status: 403, message: 'Denied' } }, 403, false],
+    [
+      {
+        errorType: 'ProviderBizError',
+        provider: 'google',
+        error: {
+          statusCode: 400,
+          message: 'Opaque rejection',
+          statusCodeText: '[400 Bad Request]',
+        },
+      },
+      400,
+      false,
+    ],
+    [
+      {
+        errorType: 'ProviderBizError',
+        provider: 'bedrock',
+        error: { body: { httpStatusCode: 422 }, message: 'Opaque rejection', type: 'Error' },
+      },
+      422,
+      false,
+    ],
+    [
+      {
+        errorType: 'ProviderBizError',
+        error: { body: { statusCode: 409 }, message: 'Opaque conflict' },
+      },
+      409,
+      true,
+    ],
     [{ errorType: 'RateLimitExceeded', error: 'Slow down' }, 429, true],
     [{ errorType: 'InsufficientQuota', error: 'Balance exhausted' }, 429, false],
     [{ errorType: 'ProviderServiceUnavailable', error: 'Overloaded' }, 503, true],
