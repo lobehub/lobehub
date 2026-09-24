@@ -39,6 +39,8 @@ interface UseFileTreeActionsParams {
   onClearDisplayFilter: () => void;
   onCollapseAll: () => void;
   projectRoot: string;
+  /** Set when the tree is showing a sandbox instance nobody is talking to. */
+  sandboxInstanceId?: string;
   /** Set when the tree is showing a cloud sandbox's workspace rather than a disk. */
   sandboxTopicId?: string;
   treeRef: RefObject<ExplorerTreeHandle | null>;
@@ -79,12 +81,14 @@ export const useFileTreeActions = ({
   onClearDisplayFilter,
   onCollapseAll,
   projectRoot,
+  sandboxInstanceId,
   sandboxTopicId,
   treeRef,
   workingDirectory,
 }: UseFileTreeActionsParams) => {
   const { t } = useTranslation('chat');
-  const isRemote = !!deviceId || !!sandboxTopicId;
+  const isSandbox = !!sandboxTopicId || !!sandboxInstanceId;
+  const isRemote = !!deviceId || isSandbox;
   const openLocalFile = useChatStore((s) => s.openLocalFile);
   const openWorkingSidebar = useGlobalStore((s) => s.openWorkingSidebar);
   const { canOfferFile, publishFile } = usePublishWorkspaceHtmlFromFile({

@@ -49,6 +49,7 @@ import {
   PR_STATE_VISUAL,
 } from '@/features/AgentSidebar/Topic/List/Item/metaCardData';
 import { useRepoType } from '@/features/ChatInput/ControlBar/useRepoType';
+import { useSandboxMode } from '@/features/ChatInput/ControlBar/useSandboxMode';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { getPortalViewWidth } from '@/features/Portal/portalWidth';
 import TopicCommentsSidebar from '@/features/Portal/TopicComments/Sidebar';
@@ -380,17 +381,22 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   // device. Only when the run actually persists: a throwaway box keeps nothing,
   // and pointing the panel at the workspace would let another conversation's
   // files read as this one's.
-  const sandboxMode = useChatStore((s) => topicSelectors.currentTopicMetadata(s)?.sandboxMode);
-  const sandboxInstanceId = useChatStore(
-    (s) => topicSelectors.currentTopicMetadata(s)?.sandboxInstanceId,
-  );
-  const isSandboxExecution = effectiveTarget === 'sandbox' && sandboxMode === 'persistent';
+  // Through the same hook the composer writes with, so the panel sees a choice
+  // the moment it is made. Before a conversation exists the choice is buffered
+  // on the agent rather than stored on a topic, and reading the topic's
+  // metadata directly meant the panel could not see it: the composer said
+  // "cloud sandbox, Lobehub Dev" while the panel showed nothing and explained
+  // nothing. A device's tree needs no conversation either.
+  const { selection: sandboxSelection } = useSandboxMode(activeAgentId ?? '');
+  const sandboxInstanceId = sandboxSelection.instanceId;
+  const isSandboxExecution =
+    effectiveTarget === 'sandbox' && sandboxSelection.mode === 'persistent';
   const sandboxTopicId = isSandboxExecution ? (topicId ?? undefined) : undefined;
   // Scoped to the bound instance's directory, or the workspace root when the
   // run keeps files without one. The empty string IS the root here, which is
   // why the tab's gate is the topic rather than a truthy path.
   const { data: sandboxInstances } = useSWR(
-    sandboxTopicId && sandboxInstanceId ? ['sandbox-instance-dir', sandboxInstanceId] : null,
+    isSandboxExecution && sandboxInstanceId ? ['sandbox-instance-dir', sandboxInstanceId] : null,
     () => sandboxWorkspaceService.getInstance({ id: sandboxInstanceId! }),
   );
   const sandboxDirectory = sandboxInstances?.workingDirectory ?? '';
@@ -408,11 +414,15 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   // sandbox through its workspace API, a device or this machine through the
   // filesystem. A topic can carry a path persisted on a desktop the web client
   // has no way to reach, and that path is not a tree — it is a string.
-  const filesDirectory = sandboxTopicId
-    ? sandboxDirectory
-    : filesystemEnvironmentAvailable
-      ? workingDirectory
-      : undefined;
+  // An instance is what makes a sandbox tree addressable. Persistent mode with
+  // none picked is the workspace root, which the execution plane can only
+  // resolve through a conversation — so that one still waits for the topic.
+  const filesDirectory =
+    isSandboxExecution && (sandboxInstanceId || sandboxTopicId)
+      ? sandboxDirectory
+      : filesystemEnvironmentAvailable
+        ? workingDirectory
+        : undefined;
   const filesAvailable = !isChatMode && filesDirectory !== undefined;
   const reviewAvailable = (isLocalExecution || isDeviceMode) && !!workingDirectory && !!repoType;
   const snapshotConfig =
@@ -1167,6 +1177,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                     <Flexbox className={styles.pane}>
                       <Files
                         deviceId={remoteDeviceId}
+                        sandboxInstanceId={isSandboxExecution ? sandboxInstanceId : undefined}
                         sandboxTopicId={sandboxTopicId}
                         workingDirectory={filesDirectory}
                       />
