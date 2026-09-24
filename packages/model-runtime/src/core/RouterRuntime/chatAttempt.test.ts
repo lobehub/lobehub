@@ -294,6 +294,34 @@ describe('observeChatAttempt', () => {
     }
   });
 
+  it.each([
+    { expectedOutcome: 'completed', text: 'I cannot help with that.' },
+    { expectedOutcome: 'empty', text: '' },
+  ])(
+    'reports the provider finish reason on a $expectedOutcome attempt',
+    async ({ expectedOutcome, text }) => {
+      const finished = vi.fn();
+      const response = await observeChatAttempt(
+        async ({ callback }) => {
+          if (text) await callback?.onText?.(text);
+          await callback?.onFinal?.({ finishReason: 'refusal', text });
+          return new Response('done');
+        },
+        undefined,
+        attempt,
+        true,
+        finished,
+      );
+      await response.text().catch(() => {});
+
+      expect(finished).toHaveBeenCalledTimes(1);
+      expect(finished.mock.calls[0][0]).toMatchObject({
+        finishReason: 'refusal',
+        outcome: expectedOutcome,
+      });
+    },
+  );
+
   it('keeps concurrent attempt identities isolated even with shared options', async () => {
     const finals: OnFinishData[] = [];
     const options: ChatMethodOptions = {

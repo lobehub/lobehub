@@ -164,6 +164,7 @@ export const observeChatAttempt = async (
       diagnostics: attemptDiagnostics,
       durationMs: durationMs ?? completedAt - attempt.startedAt,
       error: finalError,
+      finishReason: finishData?.finishReason,
       outcome,
       speed: finishData?.speed
         ? {

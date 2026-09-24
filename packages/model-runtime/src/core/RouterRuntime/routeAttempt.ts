@@ -40,6 +40,11 @@ export interface RouteAttemptFinished extends RouteAttemptResult {
   attemptId: string;
   completedAt: number;
   diagnostics: ModelRuntimeDiagnostics;
+  /**
+   * Raw terminal finish reason reported by the provider (e.g. `end_turn`, `refusal`,
+   * `content_filter`). Undefined when the attempt ended before the provider sent one.
+   */
+  finishReason?: string;
   outcome: RouteAttemptOutcome;
   requestId: string;
   speed?: ModelPerformance;
