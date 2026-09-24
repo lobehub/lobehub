@@ -84,6 +84,7 @@ import WenxinProvider from './wenxin';
 import XAIProvider from './xai';
 import XiaomiMiMoProvider from './xiaomimimo';
 import XinferenceProvider from './xinference';
+import YAPIProvider from './yapi';
 import ZenMuxProvider from './zenmux';
 import ZeroOneProvider from './zeroone';
 import ZhiPuProvider from './zhipu';
@@ -231,6 +232,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   LongCatProvider,
   StreamLakeProvider,
   AntGroupProvider,
+  YAPIProvider,
 ];
 
 export const filterEnabledModels = (provider: ModelProviderCard) => {
@@ -340,6 +342,7 @@ export { default as WenxinProviderCard } from './wenxin';
 export { default as XAIProviderCard } from './xai';
 export { default as XiaomiMiMoProviderCard } from './xiaomimimo';
 export { default as XinferenceProviderCard } from './xinference';
+export { default as YAPIProviderCard } from './yapi';
 export { default as ZenMuxProviderCard } from './zenmux';
 export { default as ZeroOneProviderCard } from './zeroone';
 export { default as ZhiPuProviderCard } from './zhipu';
