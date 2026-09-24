@@ -23,20 +23,19 @@ export const buildAppUrl = ({ pathname, serverUrl, workspaceSlug }: AppUrlOption
  * `name` only adds the readable slug tail (`/task/T-501/ship-the-thing`); the
  * identifier alone still resolves the task, so omitting it stays valid.
  */
+export const taskPath = (identifier: string, name?: string | null) => {
+  const slug = taskTitleSlug(name);
+
+  return `/task/${encodeURIComponent(identifier)}${slug ? `/${slug}` : ''}`;
+};
+
 export const buildTaskUrl = ({
   identifier,
   name,
   serverUrl,
   workspaceSlug,
-}: Omit<AppUrlOptions, 'pathname'> & { identifier: string; name?: string | null }) => {
-  const slug = taskTitleSlug(name);
-
-  return buildAppUrl({
-    pathname: `/task/${encodeURIComponent(identifier)}${slug ? `/${slug}` : ''}`,
-    serverUrl,
-    workspaceSlug,
-  });
-};
+}: Omit<AppUrlOptions, 'pathname'> & { identifier: string; name?: string | null }) =>
+  buildAppUrl({ pathname: taskPath(identifier, name), serverUrl, workspaceSlug });
 
 export const resolveAppUrlBuilder = async (client: TrpcClient) => {
   const workspace = resolveWorkspaceId() ? await client.workspace.getById.query() : null;
