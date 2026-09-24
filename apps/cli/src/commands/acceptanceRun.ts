@@ -972,7 +972,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
     : [];
 
   const recovery = failedEvidence.some((failure) => failure.reason === 'storage_quota')
-    ? storageQuotaRecovery()
+    ? await storageQuotaRecovery(client)
     : undefined;
   const partial = failedEvidence.length > 0 || missingEvidence.length > 0;
   if (partial) {
