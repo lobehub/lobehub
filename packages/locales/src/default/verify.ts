@@ -208,12 +208,12 @@ export default {
   'acceptance.comments.evidenceFromRound':
     'Evidence from round {{round}} — replaced in a later round',
   'acceptance.comments.evidenceThisRound': 'Current evidence for this check',
-  'acceptance.comments.roundLanded': 'Round {{round}} completed',
+  'acceptance.comments.roundLanded': 'Round {{round}} submitted for review',
   'acceptance.comments.signIn': 'Sign in',
   'acceptance.comments.signInDescription': 'Sign in to comment, reply, and mark up screenshots.',
   'acceptance.comments.signInTitle': 'Join the discussion',
   'acceptance.comments.signUp': 'Sign up',
-  'acceptance.comments.roundCompletedBy': '{{name}} completed round {{round}}',
+  'acceptance.comments.roundCompletedBy': '{{name}} submitted round {{round}} for review',
   'acceptance.comments.approvedBy': '{{name}} approved this delivery',
   'acceptance.comments.approvedByAtRound': '{{name}} approved round {{round}}',
   'acceptance.comments.historicalRegions':

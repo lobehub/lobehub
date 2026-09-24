@@ -1,7 +1,12 @@
 import type { AcceptanceCommentItem, AcceptanceCommentThread } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { buildDiscussionTimeline, messageThreads, regionThreads } from './discussionTimeline';
+import {
+  buildDiscussionTimeline,
+  countDiscussionMessages,
+  messageThreads,
+  regionThreads,
+} from './discussionTimeline';
 import { groupCommentThreads } from './threads';
 
 let seq = 0;
@@ -93,6 +98,73 @@ describe('discussion split', () => {
 
     expect(messageThreads([message, region])).toEqual([message]);
     expect(regionThreads([message, region])).toEqual([region]);
+  });
+});
+
+describe('discussion count', () => {
+  const rounds = [{ createdAt: '2026-09-01T10:00:00Z', id: 'run', roundIndex: 1 }];
+  const count = (items: AcceptanceCommentItem[]) =>
+    countDiscussionMessages({
+      approvals: items.filter((comment) => comment.kind === 'approval'),
+      items,
+      rounds,
+      threads: groupCommentThreads(items),
+    });
+
+  it('counts a round note as the first contribution and a new comment as the second', () => {
+    const proposal = item({ contextRunId: 'run', kind: 'proposal' });
+
+    expect(count([proposal])).toBe(1);
+    expect(count([proposal, item()])).toBe(2);
+  });
+
+  it('counts replies as individual contributions', () => {
+    const root = item();
+    const reply = item({ parentCommentId: root.id });
+
+    expect(count([root, reply])).toBe(2);
+  });
+
+  it('counts only the surviving note displayed for a round', () => {
+    const old = item({ contextRunId: 'run', kind: 'proposal' });
+    const latest = item({ contextRunId: 'run', kind: 'proposal' });
+    const deleted = item({ contextRunId: 'run', deletedAt: new Date(), kind: 'proposal' });
+    const orphan = item({ contextRunId: 'missing-run', kind: 'proposal' });
+
+    expect(count([old, latest, deleted, orphan])).toBe(1);
+  });
+
+  it('excludes bare round events, approvals, empty notes and evidence threads', () => {
+    const region = item({ anchorType: 'evidence', evidenceId: 'ev1' });
+
+    expect(count([])).toBe(0);
+    expect(
+      count([
+        item({ content: '  ', contextRunId: 'run', kind: 'proposal' }),
+        item({ kind: 'approval' }),
+        region,
+        item({ parentCommentId: region.id }),
+      ]),
+    ).toBe(0);
+  });
+
+  it('excludes deleted messages while keeping their surviving replies', () => {
+    const root = item({ deletedAt: new Date() });
+    const reply = item({ parentCommentId: root.id });
+    const deletedReply = item({ deletedAt: new Date(), parentCommentId: root.id });
+
+    expect(count([root])).toBe(0);
+    expect(count([root, reply, deletedReply])).toBe(1);
+  });
+
+  it('counts attachment-only comments once regardless of emoji reactions', () => {
+    const comment = item({
+      attachments: [{ id: 'image', name: 'image.png', url: '/image.png' }],
+      content: '',
+      reactions: [{ authorNames: ['u'], count: 3, emoji: '👍', mine: false }],
+    });
+
+    expect(count([comment])).toBe(1);
   });
 });
 

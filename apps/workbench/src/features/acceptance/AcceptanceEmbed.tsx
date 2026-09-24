@@ -9,7 +9,7 @@ import {
   AcceptanceScope,
   useAcceptanceScope,
 } from '@/features/Acceptance/Viewer/AcceptanceScope';
-import { messageThreads } from '@/features/Acceptance/Viewer/Comments/discussionTimeline';
+import { countDiscussionMessages } from '@/features/Acceptance/Viewer/Comments/discussionTimeline';
 import { groupCommentThreads } from '@/features/Acceptance/Viewer/Comments/threads';
 import { useAcceptanceCommentList } from '@/features/Acceptance/Viewer/Comments/useAcceptanceCommentList';
 import AcceptanceResources from '@/features/Acceptance/Viewer/Evidence/AcceptanceResources';
@@ -67,8 +67,13 @@ const EmbedContent = () => {
       <AcceptanceTabs
         active={tab}
         checkCount={data?.checks.length ?? 0}
-        discussionCount={messageThreads(groupCommentThreads(discussion?.items ?? [])).length}
         resourceCount={resources.size}
+        discussionCount={countDiscussionMessages({
+          approvals: [],
+          items: discussion?.items ?? [],
+          rounds: data?.rounds.map(({ run }) => run) ?? [],
+          threads: groupCommentThreads(discussion?.items ?? []),
+        })}
         onChange={setTab}
       />
       {/* Keep read capabilities mounted so tab and appearance changes preserve disclosure state. */}

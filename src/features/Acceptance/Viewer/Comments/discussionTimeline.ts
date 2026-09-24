@@ -89,3 +89,10 @@ export const buildDiscussionTimeline = ({
 
   return entries.sort((a, b) => a.at.getTime() - b.at.getTime());
 };
+
+/** The discussion badge counts contributions, including the round's own note. */
+export const countDiscussionMessages = (input: BuildInput): number =>
+  buildDiscussionTimeline(input).filter((entry) => {
+    if (entry.kind === 'message') return !entry.comment.deletedAt;
+    return entry.kind === 'round' && Boolean(entry.proposal?.content.trim());
+  }).length;

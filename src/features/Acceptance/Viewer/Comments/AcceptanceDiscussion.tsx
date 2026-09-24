@@ -73,7 +73,7 @@ const local = createStaticStyles(({ css }) => ({
 
 /**
  * A round. With a note it IS the agent's turn: one entry whose header says
- * "<agent> completed round N" and whose body is what they wrote. The landing
+ * "<agent> submitted round N for review" and whose body is what they wrote. The landing
  * and the author are the same sentence, so neither an event row above the note
  * nor a second author line is needed. Without a note it stays the plain event.
  */
@@ -156,12 +156,6 @@ const TimelineMessage = memo<{
 ));
 
 TimelineMessage.displayName = 'AcceptanceTimelineMessage';
-
-/*
- * The rail runs inside the boxes rather than under the avatars, so nothing here
- * needs to sit above the line: the opaque boxes cover it, the event dots stand
- * on it, and the gaps between turns are where it shows.
- */
 
 /**
  * The delivery's chat: one message per turn, strung on a rail with the rounds
@@ -255,11 +249,11 @@ const AcceptanceDiscussion = memo(() => {
       {timeline.length === 0 && (
         <span className={local.empty}>{t('acceptance.comments.empty')}</span>
       )}
-      {timeline.map((entry) => renderEntry(entry))}
+      <Flexbox className={styles.timeline}>{timeline.map((entry) => renderEntry(entry))}</Flexbox>
 
       {/* Last, like GitHub's Conversation: you read the thread, then answer it. */}
       {canComment ? (
-        <Flexbox className={cx(styles.timelineEntry, styles.nodelessEntry, styles.tailEntry)}>
+        <Flexbox className={styles.nodelessEntry}>
           <Flexbox className={styles.composerBlock}>
             <CommentComposer
               minHeight={COMPOSER_MIN_HEIGHT}

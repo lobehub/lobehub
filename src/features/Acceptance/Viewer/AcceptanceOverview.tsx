@@ -10,7 +10,7 @@ import AcceptanceCheckInventory from './Checks/AcceptanceCheckInventory';
 import AcceptanceCheckOwnerToolbar from './Checks/AcceptanceCheckOwnerToolbar';
 import AcceptanceDiscussion from './Comments/AcceptanceDiscussion';
 import { commentIdFromHash } from './Comments/anchor';
-import { messageThreads } from './Comments/discussionTimeline';
+import { countDiscussionMessages } from './Comments/discussionTimeline';
 import { useAcceptanceComments } from './Comments/hooks';
 import ReviewerApprovalBar from './Comments/ReviewerApprovalBar';
 import AcceptanceOriginTopic from './Conversation/AcceptanceOriginTopic';
@@ -64,7 +64,7 @@ export const AcceptanceOverview = ({
   const { acceptanceId, embedded } = useAcceptanceScope();
   const { turn } = useAcceptanceTurn(embedded);
   const { data } = useAcceptanceBundle(acceptanceId);
-  const { threads } = useAcceptanceComments(acceptanceId);
+  const { items, threads } = useAcceptanceComments(acceptanceId);
   const [requestedTab, setTab] = useState<AcceptanceTabKey>();
   // A link to one comment has to land on the tab that shows it. The reader can
   // still leave: their own tab choice, once made, outranks the fragment.
@@ -102,9 +102,14 @@ export const AcceptanceOverview = ({
             <AcceptanceTabs
               active={tab}
               checkCount={checks.length}
-              discussionCount={messageThreads(threads).length}
               flowCount={md ? flowCount : 0}
               resourceCount={resourceCount}
+              discussionCount={countDiscussionMessages({
+                approvals: [],
+                items,
+                rounds: data?.rounds.map(({ run }) => run) ?? [],
+                threads,
+              })}
               onChange={setTab}
             />
           </Flexbox>
