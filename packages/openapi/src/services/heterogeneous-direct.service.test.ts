@@ -1076,6 +1076,38 @@ describe('heterogeneous direct invocation protocol', () => {
  * `API Error: 500 status code (no body)`, retried for 98 seconds.
  */
 describe('describeRelayFailure', () => {
+  it.each([
+    [{ errorType: 403, error: 'Access denied' }, 403, false],
+    [{ errorType: 'InvalidProviderAPIKey', error: { message: 'Key disabled' } }, 401, false],
+    [{ errorType: 'InvalidRequestFormat', error: { message: 'Bad input' } }, 400, false],
+    [
+      { errorType: 'ProviderBizError', error: { message: '400 max_tokens out of range' } },
+      400,
+      false,
+    ],
+    [{ errorType: 'ProviderBizError', error: { message: 'Field required' } }, 400, false],
+    [{ errorType: 'ProviderBizError', error: { status: 403, message: 'Denied' } }, 403, false],
+    [{ errorType: 'RateLimitExceeded', error: 'Slow down' }, 429, true],
+    [{ errorType: 'InsufficientQuota', error: 'Balance exhausted' }, 429, false],
+    [{ errorType: 'ProviderServiceUnavailable', error: 'Overloaded' }, 503, true],
+    [{ errorType: 'ProviderBizError', error: 'Unrecognized upstream failure' }, 502, true],
+    [new Error('socket hang up'), 502, true],
+  ])('preserves status and retry semantics for %j', (error, status, retryable) => {
+    expect(describeRelayFailure(error)).toMatchObject({ retryable, status });
+  });
+
+  it.each([408, 409])('keeps coarse HTTP %s failures retryable', (status) => {
+    for (const error of [
+      { status, message: 'No details' },
+      { message: `${status} status code (no body)` },
+    ]) {
+      expect(describeRelayFailure({ error, errorType: 'ProviderBizError' })).toMatchObject({
+        retryable: true,
+        status,
+      });
+    }
+  });
+
   it('carries the provider’s own words out of a runtime rejection', () => {
     expect(
       describeRelayFailure({
@@ -1089,6 +1121,7 @@ describe('describeRelayFailure', () => {
     ).toEqual({
       message:
         '[volcengine] ProviderBizError: The parameter `type` specified in the request are not valid: invalid value adaptive.',
+      retryable: true,
       status: 502,
     });
   });
@@ -1106,6 +1139,7 @@ describe('describeRelayFailure', () => {
   it('still says something for a plain Error', () => {
     expect(describeRelayFailure(new Error('socket hang up'))).toEqual({
       message: 'socket hang up',
+      retryable: true,
       status: 502,
     });
   });
