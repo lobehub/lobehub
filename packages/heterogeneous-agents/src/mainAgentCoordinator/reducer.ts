@@ -498,6 +498,32 @@ const reduceTurnMetadata = (state: MainAgentRunState, data: any): ReduceResult =
   };
 };
 
+/**
+ * `visible_output_end` — the CLI finished its visible reply, but the run may
+ * stay open (CC SDK mode keeps the transport alive for background tasks, so
+ * the terminal flush can land minutes later). The UI already lets the user
+ * send a follow-up at this point, and that send replaces the store with the
+ * server's rows — so the final step's text must be durable NOW, or the prior
+ * answer renders empty until a refresh (LOBE-14345).
+ *
+ * Accumulators are kept, not reset: the later terminal flush rewrites the same
+ * content idempotently, and a background-task turn opens a new step through
+ * `openTurn` as usual.
+ */
+const reduceVisibleOutputEnd = (state: MainAgentRunState): ReduceResult => {
+  if (!state.accContent && !state.accReasoning) return { intents: [], state };
+
+  const flush: Record<string, any> = {};
+  if (state.accContent) flush.content = state.accContent;
+  if (state.accReasoning) flush.reasoning = state.accReasoning;
+  if (state.turnModel) flush.model = state.turnModel;
+  if (state.turnProvider) flush.provider = state.turnProvider;
+  return {
+    intents: [{ kind: 'persistAssistant', messageId: state.currentAssistantId, ...flush }],
+    state,
+  };
+};
+
 const reduceTerminal = (
   state: MainAgentRunState,
   event: { data?: any; type?: string },
@@ -578,6 +604,9 @@ export const reduce = (
     case 'step_complete': {
       if (data?.phase === 'turn_metadata') return reduceTurnMetadata(state, data);
       return { intents: [], state };
+    }
+    case 'visible_output_end': {
+      return reduceVisibleOutputEnd(state);
     }
     case 'agent_runtime_end':
     case 'error': {

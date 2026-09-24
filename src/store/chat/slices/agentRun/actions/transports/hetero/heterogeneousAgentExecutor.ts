@@ -2224,6 +2224,28 @@ export const executeHeterogeneousAgent = async (
         return;
       }
 
+      // ─── visible_output_end: make the final text durable BEFORE unlocking ───
+      // The handler marks the op `visibleLoadingDone` on this event, which lets
+      // the user send a follow-up while the run is still open (CC SDK mode
+      // keeps the transport alive, so the terminal flush may be minutes away).
+      // That send replaces the store with the server's rows; forwarding only
+      // after the reducer's persist has been flushed guarantees those rows
+      // already carry the final answer (LOBE-14345).
+      //
+      // Skipped when the terminal event already arrived in the same batch: its
+      // flush runs right behind this one, and only it can decide whether the
+      // text is an echoed error that must NOT be persisted (AuthRequired).
+      if (event.type === 'visible_output_end') {
+        persistQueue = persistQueue.then(async () => {
+          if (!deferredTerminalEvent) {
+            await reduceAndApplyMain(event);
+            await messageWriteBatcher.flush('visible-output-end');
+          }
+          eventHandler(event);
+        });
+        return;
+      }
+
       // ─── stream_chunk / stream_start(init): drive the reducer for DB ───
       // text/reasoning accumulation, main tool-batch persistence, subagent
       // delegation (thread create / turn boundary / tool persist / live thread

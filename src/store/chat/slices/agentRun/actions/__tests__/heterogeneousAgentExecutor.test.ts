@@ -1330,6 +1330,59 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   // ────────────────────────────────────────────────────
 
   describe('final content writes (onComplete)', () => {
+    /**
+     * CC SDK mode keeps the transport open after `result`, so the terminal
+     * flush can land minutes later — but `visible_output_end` already lets the
+     * user send a follow-up, whose server response replaces the store. The
+     * final text must hit the DB before the UI is unlocked (LOBE-14345).
+     */
+    it('persists the final text before unlocking follow-ups on visible_output_end', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+
+      let resolveSendPrompt: () => void;
+      mockSendPrompt.mockReturnValue(
+        new Promise<void>((resolve) => {
+          resolveSendPrompt = resolve;
+        }),
+      );
+
+      const executorPromise = executeHeterogeneousAgent(get, defaultParams);
+      await flush();
+
+      ipc.emitStreamEvent('ipc-sess-1', {
+        data: { chunkType: 'text', content: 'final answer' },
+        type: 'stream_chunk',
+      });
+      ipc.emitStreamEvent('ipc-sess-1', { data: {}, type: 'visible_output_end' });
+      // Well inside the batcher's idle window: only an explicit flush lands the write.
+      await flush();
+
+      const contentWriteIndex = mockUpdateMessage.mock.calls.findIndex(
+        ([id, value]: any) => id === 'ast-initial' && value.content === 'final answer',
+      );
+      expect(contentWriteIndex).toBeGreaterThanOrEqual(0);
+
+      // The gateway handler (mocked here) is what flips `visibleLoadingDone`,
+      // so the forward must come after the durable write.
+      const handlerSpy = vi.mocked(createGatewayEventHandler).mock.results.at(-1)!
+        .value as ReturnType<typeof vi.fn>;
+      const unlockIndex = handlerSpy.mock.calls.findIndex(
+        ([event]: any) => event.type === 'visible_output_end',
+      );
+      expect(unlockIndex).toBeGreaterThanOrEqual(0);
+      expect(mockUpdateMessage.mock.invocationCallOrder[contentWriteIndex]).toBeLessThan(
+        handlerSpy.mock.invocationCallOrder[unlockIndex],
+      );
+
+      ipc.emitComplete('ipc-sess-1');
+      await flush();
+      resolveSendPrompt!();
+      await flush();
+      await executorPromise;
+      await flush();
+    });
+
     it('should write accumulated content + model + provider to the final assistant message', async () => {
       await runWithEvents([
         ccInit(),
