@@ -375,6 +375,13 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
       );
     })();
 
+    // An instance is bound and the list that names it has not arrived. The key
+    // carries the topic, so the first send — the moment a conversation goes
+    // from none to one — refetches it, and the fallback below would spend that
+    // window saying the opposite of the truth: the chip read "working
+    // directory", as though nothing had been chosen, seconds after the person
+    // chose it and while the run was already using it.
+    const resolvingInstance = !!boundInstanceId && !current && instancesLoading;
     const chipLabel = current
       ? current.name
       : value.mode === 'ephemeral'
@@ -527,7 +534,11 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
           >
             <div className={cx(workingDirectoryChipStyles.chip, currentBlocked && styles.blocked)}>
               {chipIcon}
-              <span className={workingDirectoryChipStyles.label}>{chipLabel}</span>
+              {resolvingInstance ? (
+                <Skeleton.Text rows={1} style={{ height: 12, width: 56 }} />
+              ) : (
+                <span className={workingDirectoryChipStyles.label}>{chipLabel}</span>
+              )}
               <Icon icon={ChevronDownIcon} size={12} />
             </div>
           </Tooltip>

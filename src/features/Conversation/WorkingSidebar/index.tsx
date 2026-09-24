@@ -400,6 +400,10 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     () => sandboxWorkspaceService.getInstance({ id: sandboxInstanceId! }),
   );
   const sandboxDirectory = sandboxInstances?.workingDirectory ?? '';
+  // The empty string IS the workspace root, so an unresolved instance does not
+  // read as "no directory yet" — it reads as "the whole workspace", and the
+  // tree would list every instance's folder for as long as the lookup took.
+  const sandboxDirectoryKnown = !sandboxInstanceId || sandboxInstances !== undefined;
 
   const filesystemEnvironmentAvailable = isLocalExecution || isDeviceMode;
   const environmentWorkingDirectory = filesystemEnvironmentAvailable ? workingDirectory : undefined;
@@ -419,7 +423,9 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   // resolve through a conversation — so that one still waits for the topic.
   const filesDirectory =
     isSandboxExecution && (sandboxInstanceId || sandboxTopicId)
-      ? sandboxDirectory
+      ? sandboxDirectoryKnown
+        ? sandboxDirectory
+        : undefined
       : filesystemEnvironmentAvailable
         ? workingDirectory
         : undefined;
