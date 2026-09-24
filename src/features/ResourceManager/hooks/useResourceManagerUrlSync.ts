@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useSearchParams } from 'react-router';
 
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
-import { SortType } from '@/types/files';
+import { parseResourceListSorter, SortType } from '@/types/files';
 
 /**
  * Hook to sync ResourceManager store state with URL query parameters
@@ -20,8 +20,7 @@ export const useResourceManagerUrlSync = () => {
 
   // Initialize store from URL on mount (URL → Store)
   useEffect(() => {
-    const sorterParam = (searchParams.get('sorter') || 'createdAt') as
-      'name' | 'createdAt' | 'size';
+    const sorterParam = parseResourceListSorter(searchParams.get('sorter'));
     const sortTypeParam = (searchParams.get('sortType') || SortType.Desc) as SortType;
 
     setSorter(sorterParam);

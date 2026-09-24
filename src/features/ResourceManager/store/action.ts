@@ -4,7 +4,7 @@ import type { ResourceManagerMode } from '@/features/ResourceManager';
 import { useFileStore } from '@/store/file';
 import type { StoreSetter } from '@/store/types';
 import { flattenActions } from '@/store/utils/flattenActions';
-import type { FilesTabs, ResourceSourceFilter, SortType } from '@/types/files';
+import type { FilesTabs, ResourceListSorter, ResourceSourceFilter, SortType } from '@/types/files';
 
 import type { ResourceListVisibilityFilter, SelectAllState, State, ViewMode } from './initialState';
 import { DEFAULT_WORKSPACE_LIST_VISIBILITY, initialState } from './initialState';
@@ -129,7 +129,8 @@ export class ResourceManagerStoreActionImpl {
         await kbStore.removeKnowledgeBase(libraryId);
 
         if (typeof window !== 'undefined') {
-          window.location.href = '/knowledge';
+          // Fixed in-app path, not a caller-supplied URL.
+          window.location.assign('/knowledge');
         }
       }
     }
@@ -298,7 +299,7 @@ export class ResourceManagerStoreActionImpl {
     });
   };
 
-  setSorter = (sorter: 'name' | 'createdAt' | 'size'): void => {
+  setSorter = (sorter: ResourceListSorter): void => {
     this.#set({ sorter });
   };
 

@@ -1,9 +1,13 @@
 import {
   type FilesTabs,
   type FileUploader,
+  type ResourceListSorter,
   type ResourceSourceFilter,
   type SortType,
 } from '@/types/files';
+
+/** JSON object stored on a resource. Values are narrowed at the use site. */
+type ResourceJson = Record<string, unknown>;
 
 /**
  * Unified resource item that represents both files and documents
@@ -30,7 +34,7 @@ export interface ResourceItem {
   // Timestamps
   createdAt: Date;
 
-  editorData?: Record<string, any> | null;
+  editorData?: ResourceJson | null;
   embeddingError?: any | null;
 
   embeddingStatus?: string | null;
@@ -42,7 +46,7 @@ export interface ResourceItem {
   id: string;
   knowledgeBaseId?: string;
   // Metadata
-  metadata?: Record<string, any>;
+  metadata?: ResourceJson;
   // Real ID or temp-resource-{timestamp}-{random}
   // Common fields
   name: string;
@@ -81,7 +85,7 @@ export interface ResourceQueryParams {
   parentId?: string | null;
   q?: string;
   showFilesInKnowledgeBase?: boolean;
-  sorter?: 'name' | 'createdAt' | 'size';
+  sorter?: ResourceListSorter;
   sortType?: SortType;
   /**
    * Origin narrowing driven by the explorer's source filter chips
@@ -102,7 +106,7 @@ export interface ResourceQueryParams {
 export interface CreateFileParams {
   fileType: string;
   knowledgeBaseId?: string;
-  metadata?: Record<string, any>;
+  metadata?: ResourceJson;
   name: string;
   parentId?: string;
   size: number;
@@ -121,10 +125,10 @@ export interface CreateFileParams {
  */
 export interface CreateDocumentParams {
   content: string;
-  editorData?: Record<string, any>;
+  editorData?: ResourceJson;
   fileType: 'custom/document' | 'custom/folder';
   knowledgeBaseId?: string;
-  metadata?: Record<string, any>;
+  metadata?: ResourceJson;
   parentId?: string;
   slug?: string;
   sourceType: 'document';
@@ -141,8 +145,8 @@ export type CreateResourceParams = CreateFileParams | CreateDocumentParams;
  */
 export interface UpdateResourceParams {
   content?: string;
-  editorData?: Record<string, any>;
-  metadata?: Record<string, any>;
+  editorData?: ResourceJson;
+  metadata?: ResourceJson;
   name?: string;
   parentId?: string | null;
   title?: string;

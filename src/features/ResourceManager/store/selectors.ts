@@ -1,6 +1,11 @@
 import { fileManagerSelectors, useFileStore } from '@/store/file';
-import { type FileListItem, FilesTabs, ResourceSourceFilter } from '@/types/files';
-import { SortType } from '@/types/files';
+import {
+  type FileListItem,
+  FilesTabs,
+  type ResourceListSorter,
+  ResourceSourceFilter,
+  SortType,
+} from '@/types/files';
 
 import type { ResourceListVisibilityFilter, SelectAllState, State } from './initialState';
 
@@ -65,7 +70,7 @@ export const getResourceSourceFilter = (s: State): ResourceSourceFilter => {
  */
 export const sortFileList = (
   fileList: FileListItem[] | undefined,
-  sorter: 'name' | 'createdAt' | 'size',
+  sorter: ResourceListSorter,
   sortType: SortType,
 ): FileListItem[] | undefined => {
   if (!fileList || fileList.length === 0) return fileList;
@@ -85,6 +90,11 @@ export const sortFileList = (
       case 'size': {
         aValue = a.size || 0;
         bValue = b.size || 0;
+        break;
+      }
+      case 'updatedAt': {
+        aValue = new Date(a.updatedAt).getTime();
+        bValue = new Date(b.updatedAt).getTime();
         break;
       }
       default: {

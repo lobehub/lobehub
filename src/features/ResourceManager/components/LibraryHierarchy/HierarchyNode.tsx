@@ -88,8 +88,10 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
         !isOfficeFile &&
         (item.sourceType === DERIVED_DOCUMENT_SOURCE_TYPE || item.fileType === PAGE_FILE_TYPE);
 
+      const rawEmoji = item.metadata?.emoji;
+
       return {
-        emoji: pageMatch ? item.metadata?.emoji : null,
+        emoji: pageMatch && typeof rawEmoji === 'string' ? rawEmoji : null,
         isPage: pageMatch,
       };
     }, [item.fileType, item.sourceType, item.name, item.metadata?.emoji]);

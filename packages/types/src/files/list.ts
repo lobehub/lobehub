@@ -27,7 +27,7 @@ export interface FileListItem {
    */
   contentPreview?: string | null;
   createdAt: Date;
-  editorData?: Record<string, any> | null;
+  editorData?: Record<string, unknown> | null;
   embeddingError: any | null;
   embeddingStatus?: AsyncTaskStatus | null;
   fileId?: string | null;
@@ -37,7 +37,7 @@ export interface FileListItem {
   /**
    * Metadata (for notes/documents)
    */
-  metadata?: Record<string, any> | null;
+  metadata?: Record<string, unknown> | null;
   name: string;
   /**
    * Parent folder ID (for folder hierarchy)
@@ -85,6 +85,27 @@ export enum ResourceSourceFilter {
 
 const MAX_RESOURCE_LIST_PAGE_SIZE = 100;
 
+/**
+ * Sort keys a resource list can order by. The explorer, `file.getKnowledgeItems`,
+ * and the knowledge query share this set. A key the UI sends but the schema
+ * rejects fails the whole request (the Images grid then renders empty).
+ */
+export const RESOURCE_LIST_SORTERS = ['createdAt', 'name', 'size', 'updatedAt'] as const;
+
+export type ResourceListSorter = (typeof RESOURCE_LIST_SORTERS)[number];
+
+const RESOURCE_LIST_SORTER_SET: ReadonlySet<string> = new Set(RESOURCE_LIST_SORTERS);
+
+export const isResourceListSorter = (
+  value: string | null | undefined,
+): value is ResourceListSorter => !!value && RESOURCE_LIST_SORTER_SET.has(value);
+
+/** Unknown values fall back instead of being forwarded to an API that would reject them. */
+export const parseResourceListSorter = (
+  value: string | null | undefined,
+  fallback: ResourceListSorter = 'createdAt',
+): ResourceListSorter => (isResourceListSorter(value) ? value : fallback);
+
 export const QueryFileListSchema = z.object({
   category: z.string().optional(),
   /** Return a bounded server-generated plain-text preview for preview surfaces. */
@@ -96,7 +117,7 @@ export const QueryFileListSchema = z.object({
   q: z.string().nullish(),
   showFilesInKnowledgeBase: z.boolean().default(false),
   sortType: z.enum(['desc', 'asc']).optional(),
-  sorter: z.enum(['createdAt', 'size']).optional(),
+  sorter: z.enum(RESOURCE_LIST_SORTERS).optional(),
   /**
    * Origin narrowing driven by the explorer's source filter. Absent / `all`
    * keeps the historical pool (everything except hidden sources).
@@ -122,7 +143,7 @@ export interface QueryFileListParams {
   parentId?: string | null;
   q?: string | null;
   showFilesInKnowledgeBase?: boolean;
-  sorter?: string;
+  sorter?: ResourceListSorter;
   sortType?: string;
   sourceFilter?: ResourceSourceFilter;
   visibility?: 'private' | 'public';
