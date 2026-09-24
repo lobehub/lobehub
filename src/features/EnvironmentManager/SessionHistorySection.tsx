@@ -176,13 +176,38 @@ SessionRow.displayName = 'SessionRow';
  * it opens without waiting on a sandbox — and it stays readable in an
  * environment someone else published, since seeing what ran is not an edit.
  */
+/**
+ * Drop the session row a build rode in on.
+ *
+ * A build is written to the trail twice: once when its sandbox starts, as a
+ * management session, and once when the build itself does. They are the same
+ * machine — same `sessionId` — but the list showed them as two runs side by
+ * side, the first of them labelled "file browser", which is a thing nobody
+ * did. The build row is the better of the two anyway: it carries the outcome
+ * and the log.
+ *
+ * Only a management row is ever dropped, and only when a build in the same
+ * list names its session. A console session opened by the file browser has no
+ * build beside it and stays.
+ */
+export const withoutBuildVehicles = (sessions: SandboxSessionRecord[]): SandboxSessionRecord[] => {
+  const builds = new Set(
+    sessions.filter((session) => session.kind === 'build').map((session) => session.sessionId),
+  );
+  if (builds.size === 0) return sessions;
+
+  return sessions.filter(
+    (session) => session.kind === 'build' || !session.management || !builds.has(session.sessionId),
+  );
+};
+
 const SessionHistorySection = memo<{ environmentId: string }>(({ environmentId }) => {
   const { t } = useTranslation('setting');
   const { data, isLoading } = useInstanceSessions(environmentId);
 
   if (isLoading && !data) return <ListSkeleton />;
 
-  const sessions = data?.sessions ?? [];
+  const sessions = withoutBuildVehicles(data?.sessions ?? []);
   const active = sessions.filter((session) => !session.endedAt);
   const history = sessions.filter((session) => session.endedAt);
 

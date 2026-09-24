@@ -84,7 +84,11 @@ export interface SandboxSessionRecord {
   environment: string | null;
   id: number;
   kind: 'build' | 'session';
-  /** A console session opened by the file browser rather than a conversation. */
+  /**
+   * Not a conversation's session. The file browser opens one, and so does a
+   * build — its sandbox is a management session too, which is why a build
+   * appears in the trail twice, once under each `kind`, with one `sessionId`.
+   */
   management: boolean;
   sessionId: string;
   sessionUserId: string;
