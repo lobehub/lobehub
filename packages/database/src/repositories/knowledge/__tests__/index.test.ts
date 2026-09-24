@@ -1418,7 +1418,9 @@ describe('KnowledgeRepo', () => {
 
     it('should fallback to default sort when invalid sorter is given', async () => {
       const result = await knowledgeRepo.query({
-        sorter: 'invalidField',
+        // The public type no longer includes this key; the repo still has to
+        // ignore a value that bypasses the API schema.
+        sorter: 'invalidField' as 'createdAt',
         sortType: SortType.Asc,
       });
 

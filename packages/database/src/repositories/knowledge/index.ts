@@ -5,11 +5,12 @@ import {
   MARKDOWN_MIME_TYPES,
   RESOURCE_CONTENT_PREVIEW_SOURCE_LENGTH,
 } from '@lobechat/const';
-import type { FileUploader, QueryFileListParams } from '@lobechat/types';
+import type { FileUploader, QueryFileListParams, ResourceListSorter } from '@lobechat/types';
 import {
   AI_GENERATED_FILE_SOURCES,
   FileSource,
   FilesTabs,
+  isResourceListSorter,
   LIBRARY_HIDDEN_FILE_SOURCES,
   ResourceSourceFilter,
   SortType,
@@ -92,7 +93,9 @@ const fileArmColumns = {
   fileType: f.fileType,
   // A file that backs a derived page is addressed by the page id.
   id: sql<string>`COALESCE(${d.id}, ${f.id})`.as('id'),
-  metadata: sql<Record<string, any> | null>`COALESCE(${d.metadata}, ${f.metadata})`.as('metadata'),
+  metadata: sql<Record<string, unknown> | null>`COALESCE(${d.metadata}, ${f.metadata})`.as(
+    'metadata',
+  ),
   name: f.name,
   size: f.size,
   slug: d.slug,
@@ -117,7 +120,7 @@ const fileArmSummaryColumns = (includeContentPreview: boolean) => ({
         'content_preview_source',
       )
     : sql<string | null>`NULL::text`.as('content_preview_source'),
-  editorData: sql<Record<string, any> | null>`NULL::jsonb`.as('editor_data'),
+  editorData: sql<Record<string, unknown> | null>`NULL::jsonb`.as('editor_data'),
 });
 
 const documentArmColumns = {
@@ -156,7 +159,7 @@ const documentArmSummaryColumns = (includeContentPreview: boolean) => ({
         'content_preview_source',
       )
     : sql<string | null>`NULL::text`.as('content_preview_source'),
-  editorData: sql<Record<string, any> | null>`NULL::jsonb`.as('editor_data'),
+  editorData: sql<Record<string, unknown> | null>`NULL::jsonb`.as('editor_data'),
 });
 
 /** One row as the UNION returns it, before it is shaped into a `KnowledgeItem`. */
@@ -166,12 +169,12 @@ interface KnowledgeRow {
   contentPreviewSource: string | null;
   createdAt: Date;
   documentId: string | null;
-  editorData: Record<string, any> | null;
+  editorData: Record<string, unknown> | null;
   embeddingTaskId: string | null;
   fileId: string | null;
   fileType: string;
   id: string;
-  metadata: Record<string, any> | null;
+  metadata: Record<string, unknown> | null;
   name: string;
   size: number;
   slug: string | null;
@@ -187,12 +190,12 @@ interface KnowledgeRow {
 }
 
 /** Sort keys the client may pass, mapped to the UNION's output column names. */
-const SORTABLE_COLUMNS: Record<string, string> = {
+const SORTABLE_COLUMNS = {
   createdAt: 'created_at',
   name: 'name',
   size: 'size',
   updatedAt: 'updated_at',
-};
+} as const satisfies Record<ResourceListSorter, string>;
 
 export interface KnowledgeItem {
   chunkTaskId?: string | null;
@@ -201,12 +204,12 @@ export interface KnowledgeItem {
   contentPreviewSource?: string | null;
   createdAt: Date;
   documentId?: string | null;
-  editorData?: Record<string, any> | null;
+  editorData?: Record<string, unknown> | null;
   embeddingTaskId?: string | null;
   fileId?: string | null;
   fileType: string;
   id: string;
-  metadata?: Record<string, any> | null;
+  metadata?: Record<string, unknown> | null;
   name: string;
   size: number;
   slug?: string | null;
@@ -261,8 +264,8 @@ interface KnowledgeQueryParams extends QueryFileListParams {
  * a string, node-postgres a parsed object. Everything else is a plain column
  * and arrives already decoded.
  */
-const toJson = (value: unknown): Record<string, any> | null => {
-  if (typeof value !== 'string') return (value as Record<string, any> | null) ?? null;
+const toJson = (value: unknown): Record<string, unknown> | null => {
+  if (typeof value !== 'string') return (value as Record<string, unknown> | null) ?? null;
 
   try {
     return JSON.parse(value);
@@ -735,7 +738,7 @@ export class KnowledgeRepo {
    * value is looked up in `SORTABLE_COLUMNS`, never taken from the caller.
    */
   private orderBy = (sortType?: string, sorter?: string): SQL => {
-    if (!sorter || !sortType || !(sorter in SORTABLE_COLUMNS)) return desc(sql.raw('created_at'));
+    if (!sortType || !isResourceListSorter(sorter)) return desc(sql.raw('created_at'));
 
     const direction = sortType.toLowerCase() === SortType.Asc ? asc : desc;
 

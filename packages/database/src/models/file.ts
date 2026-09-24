@@ -1,7 +1,8 @@
-import type { FileAccessScope, QueryFileListParams } from '@lobechat/types';
+import type { FileAccessScope, QueryFileListParams, ResourceListSorter } from '@lobechat/types';
 import {
   FilesTabs,
   getAgentShareFileProvenance,
+  isResourceListSorter,
   ordinaryFileAccessScope,
   SortType,
 } from '@lobechat/types';
@@ -467,12 +468,11 @@ export class FileModel {
       name: files.name,
       size: files.size,
       updatedAt: files.updatedAt,
-    } as const;
-    type SortableField = keyof typeof sortableFields;
+    } as const satisfies Record<ResourceListSorter, unknown>;
 
-    if (sorter && sortType && sorter in sortableFields) {
+    if (sortType && isResourceListSorter(sorter)) {
       const sortFunction = sortType.toLowerCase() === SortType.Asc ? asc : desc;
-      orderByClause = sortFunction(sortableFields[sorter as SortableField]);
+      orderByClause = sortFunction(sortableFields[sorter]);
     }
 
     // 3. Build base query

@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { type MenuProps } from '@/components/Menu';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { type ResourceListSorter } from '@/types/files';
 
 import ActionIconWithChevron from './ActionIconWithChevron';
 
@@ -14,7 +15,7 @@ const SortDropdown = memo(() => {
   const sorter = useResourceManagerStore((s) => s.sorter);
   const setSorter = useResourceManagerStore((s) => s.setSorter);
 
-  const sortOptions: { icon: LucideIcon; key: string; label: string }[] = useMemo(
+  const sortOptions: { icon: LucideIcon; key: ResourceListSorter; label: string }[] = useMemo(
     () => [
       { icon: ArrowDownAZ, key: 'name', label: t('FileManager.sort.name') },
       { icon: CalendarIcon, key: 'createdAt', label: t('FileManager.sort.dateAdded') },
@@ -32,7 +33,7 @@ const SortDropdown = memo(() => {
         icon: <Icon icon={option.icon} />,
         key: option.key,
         label: option.label,
-        onClick: () => setSorter(option.key as 'name' | 'createdAt' | 'size'),
+        onClick: () => setSorter(option.key),
       })),
     [selectedKey, setSorter, sortOptions],
   );

@@ -1,5 +1,10 @@
 import { type ResourceManagerMode } from '@/features/ResourceManager';
-import { FilesTabs, type ResourceSourceFilter, SortType } from '@/types/files';
+import {
+  FilesTabs,
+  type ResourceListSorter,
+  type ResourceSourceFilter,
+  SortType,
+} from '@/types/files';
 
 export type ViewMode = 'list' | 'masonry';
 export type SelectAllState = 'all' | 'loaded' | 'none';
@@ -100,7 +105,7 @@ export interface State {
   /**
    * Field to sort files by
    */
-  sorter: 'name' | 'createdAt' | 'size';
+  sorter: ResourceListSorter;
   /**
    * Sort direction (ascending or descending)
    */
