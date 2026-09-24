@@ -57,6 +57,8 @@ export const Layout = ({ children }: PropsWithChildren) => {
       data-theme={data?.embedConfig.theme}
       dir={data?.dir ?? 'ltr'}
       lang={data?.locale ?? 'en-US'}
+      // Override ThemeProvider's scroll containment so an embedded report yields to its host page.
+      style={data?.embedConfig.embed ? { overscrollBehaviorY: 'auto' } : undefined}
     >
       <head>
         <meta charSet="utf-8" />
