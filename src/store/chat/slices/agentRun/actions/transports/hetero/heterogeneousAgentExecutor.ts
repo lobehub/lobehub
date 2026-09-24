@@ -958,21 +958,6 @@ export const executeHeterogeneousAgent = async (
       throw new Error(`messageService.updateMessage returned success=false for ${messageId}`);
     }
   };
-  /**
-   * Retry each stashed main-assistant write once. Best-effort by design: a
-   * write that fails again stays stashed for the next replay, and never holds
-   * the run or the input lock.
-   */
-  const replayPendingMainFlush = async () => {
-    for (const [messageId, update] of pendingMainFlush) {
-      try {
-        await updateMessageOrThrow(messageId, update);
-        pendingMainFlush.delete(messageId);
-      } catch (err) {
-        console.error('[HeterogeneousAgent] Failed to replay main assistant flush:', err);
-      }
-    }
-  };
   const messageWriteCtx: MessageQueryContext = {
     agentId: context.agentId,
     topicId: context.topicId,
@@ -991,6 +976,26 @@ export const executeHeterogeneousAgent = async (
     createMessage: messageService.createMessage,
     flush: messageWriteBatcher.flush,
   });
+
+  /**
+   * Retry each failed row create, then each stashed main-assistant patch, once.
+   * Order is load-bearing: rows first, in the order they were enqueued (that is
+   * their FK dependency order), then the content patches — an update against a
+   * row that does not exist yet matches zero rows yet still reports success.
+   * Best-effort by design: a write that fails again stays stashed for the next
+   * replay, and never holds the run or the input lock.
+   */
+  const replayPendingMainWrites = async () => {
+    await pendingCreateLedger.drain();
+    for (const [messageId, update] of pendingMainFlush) {
+      try {
+        await updateMessageOrThrow(messageId, update);
+        pendingMainFlush.delete(messageId);
+      } catch (err) {
+        console.error('[HeterogeneousAgent] Failed to replay main assistant flush:', err);
+      }
+    }
+  };
 
   const enqueueMainToolResult = (
     toolCallId: string,
@@ -2251,8 +2256,8 @@ export const executeHeterogeneousAgent = async (
       // flush runs right behind this one, and only it can decide whether the
       // text is an echoed error that must NOT be persisted (AuthRequired).
       //
-      // `flush` resolves even when the write failed (it only stashes it), so
-      // retry once right here instead of leaving it for the terminal replay
+      // `flush` resolves even when a write failed (failures are only stashed),
+      // so retry once right here instead of leaving it for the terminal replay
       // minutes away. Unlock either way, matching the terminal path: a
       // persistent DB failure must not keep the input locked.
       if (event.type === 'visible_output_end') {
@@ -2260,7 +2265,7 @@ export const executeHeterogeneousAgent = async (
           if (!deferredTerminalEvent) {
             await reduceAndApplyMain(event);
             await messageWriteBatcher.flush('visible-output-end');
-            await replayPendingMainFlush();
+            await replayPendingMainWrites();
           }
           eventHandler(event);
         });
@@ -2422,12 +2427,9 @@ export const executeHeterogeneousAgent = async (
           const queueDrained = await waitForPersistQueue(persistQueue, 'terminal');
 
           if (queueDrained) {
-            // Order is load-bearing: rows first, in the order they were enqueued
-            // (that is their FK dependency order), then the content patches —
-            // an update against a row that does not exist yet matches zero rows.
-            await pendingCreateLedger.drain();
-
-            await replayPendingMainFlush();
+            // Rows and main patches first; the tool patches below also need
+            // their rows to exist.
+            await replayPendingMainWrites();
 
             for (const [messageId, update] of pendingToolFlush) {
               try {
