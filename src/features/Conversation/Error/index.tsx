@@ -35,6 +35,7 @@ import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfi
 import { getRuntimeErrorMessage } from '@/utils/locale/runtimeErrorMessage';
 
 import ChatInvalidAPIKey from './ChatInvalidApiKey';
+import { type DedicatedErrorCardType, isDedicatedErrorCardType } from './dedicatedErrorCards';
 import { isHeterogeneousAgentStatusGuideError } from './heterogeneous';
 import { useHeterogeneousAutoRetry } from './useHeterogeneousAutoRetry';
 
@@ -471,57 +472,69 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
     if (enableBusinessFeatures && businessChatErrorMessageExtra)
       return businessChatErrorMessageExtra;
 
-    switch (error?.type) {
-      // Lightweight fallbacks for cloud billing errors, used in builds without a
-      // business override (e.g. desktop). The business hook above takes
-      // precedence when installed.
-      case ChatErrorType.FreePlanLimit:
-      case ChatErrorType.SubscriptionPlanLimit:
-      case ChatErrorType.InsufficientBudgetForModel: {
-        if (enableBusinessFeatures)
+    /**
+     * Typed against `DEDICATED_ERROR_CARD_TYPES`: a missing case fails the `never` check
+     * and a case outside the list fails as "not comparable", so the exported list always
+     * matches what this renderer customizes.
+     */
+    const renderDedicatedCard = (type: DedicatedErrorCardType) => {
+      switch (type) {
+        // Lightweight fallbacks for cloud billing errors, used in builds without a
+        // business override (e.g. desktop). The business hook above takes
+        // precedence when installed.
+        case ChatErrorType.FreePlanLimit:
+        case ChatErrorType.SubscriptionPlanLimit:
+        case ChatErrorType.InsufficientBudgetForModel: {
+          if (!enableBusinessFeatures) return;
           return (
             <PlanLimitCard
               errorBody={error?.body}
-              errorType={error?.type}
+              errorType={type}
               onRetry={handleRetryAgentMessage}
             />
           );
-        break;
-      }
+        }
 
-      case ChatErrorType.LobeHubModelDeprecated: {
-        if (enableBusinessFeatures)
+        case ChatErrorType.LobeHubModelDeprecated: {
+          if (!enableBusinessFeatures) return;
           return <DeprecatedModelError requestedModel={error?.body?.requestedModel} />;
-        break;
-      }
+        }
 
-      case AgentRuntimeErrorType.QuotaLimitReached:
-      case AgentRuntimeErrorType.RateLimitExceeded: {
-        if (enableBusinessFeatures)
+        case AgentRuntimeErrorType.QuotaLimitReached:
+        case AgentRuntimeErrorType.RateLimitExceeded: {
+          if (!enableBusinessFeatures) return;
           return (
             <QuotaLimitError id={data.id} onRetry={canRetry ? handleManualRetry : undefined} />
           );
-        break;
-      }
+        }
 
-      case AgentRuntimeErrorType.OllamaServiceUnavailable: {
-        return <OllamaSetupGuide id={data.id} />;
-      }
+        case AgentRuntimeErrorType.OllamaServiceUnavailable: {
+          return <OllamaSetupGuide id={data.id} />;
+        }
 
-      case AgentRuntimeErrorType.OllamaBizError: {
-        return <OllamaBizError {...data} />;
-      }
+        case AgentRuntimeErrorType.OllamaBizError: {
+          return <OllamaBizError {...data} />;
+        }
 
-      case AgentRuntimeErrorType.ExceededContextWindow: {
-        return <ExceededContextWindowError id={data.id} />;
-      }
+        case AgentRuntimeErrorType.ExceededContextWindow: {
+          return <ExceededContextWindowError id={data.id} />;
+        }
 
-      case AgentRuntimeErrorType.NoOpenAIAPIKey: {
-        {
+        case AgentRuntimeErrorType.NoOpenAIAPIKey: {
           return <ChatInvalidAPIKey id={data.id} provider={data.error?.body?.provider} />;
         }
+
+        default: {
+          const unhandled: never = type;
+          return unhandled;
+        }
       }
-    }
+    };
+
+    const dedicatedCard = isDedicatedErrorCardType(error?.type)
+      ? renderDedicatedCard(error.type)
+      : undefined;
+    if (dedicatedCard) return dedicatedCard;
 
     if (error?.type?.toString().includes('Invalid')) {
       return <ChatInvalidAPIKey id={data.id} provider={data.error?.body?.provider} />;
