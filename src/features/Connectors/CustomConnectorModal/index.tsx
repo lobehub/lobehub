@@ -9,6 +9,7 @@ import { connectorSelectors } from '@/store/tool/slices/connector';
 import { waitForConnectorOAuth } from '@/utils/connectorOAuth';
 
 import { executeLegacyMigrationSave } from './legacyPluginMigration';
+import { executeOAuthCreate } from './oauthCreate';
 
 interface CustomConnectorModalProps {
   connectorId?: string;
@@ -304,18 +305,19 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
 
         const clientId = mcp.auth?.clientId?.trim();
         try {
-          const { id: newConnectorId } = await createConnector({
-            ...base,
-            oidcConfig: {
-              clientId: clientId || undefined,
-              clientSecret: mcp.auth?.clientSecret?.trim() || undefined,
-              // client_id present → pre-registration; absent → dynamic registration.
-              scheme: clientId ? 'pre_registration' : 'dcr',
+          await executeOAuthCreate(
+            {
+              ...base,
+              oidcConfig: {
+                clientId: clientId || undefined,
+                clientSecret: mcp.auth?.clientSecret?.trim() || undefined,
+                // client_id present → pre-registration; absent → dynamic registration.
+                scheme: clientId ? 'pre_registration' : 'dcr',
+              },
             },
-          });
-
-          const authorizationUrl = await startConnectorOAuth(newConnectorId);
-          await waitForConnectorOAuth(popup, newConnectorId, authorizationUrl);
+            popup,
+            { createConnector, deleteConnector, startConnectorOAuth, waitForConnectorOAuth },
+          );
         } finally {
           // Close the blank/in-flight popup we opened so it isn't left dangling.
           popup?.close();

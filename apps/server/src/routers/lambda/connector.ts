@@ -571,11 +571,19 @@ export const connectorRouter = router({
               'This server does not support dynamic registration. Provide an OAuth Client ID in Advanced settings.',
           });
         }
+        // A rejected registration is a server-compatibility problem, not an
+        // internal error — surface the authorization server's reason.
         const reg = await registerDynamicClient({
           authorizationServerUrl,
           metadata,
           redirectUri,
           scopes,
+        }).catch((error: unknown) => {
+          throw new TRPCError({
+            cause: error,
+            code: 'BAD_REQUEST',
+            message: `Dynamic client registration failed: ${(error as Error)?.message ?? String(error)}`,
+          });
         });
         clientId = reg.client_id;
         clientSecret = reg.client_secret ?? undefined;
