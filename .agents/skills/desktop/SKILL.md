@@ -38,7 +38,7 @@ Register in `apps/desktop/src/main/controllers/registry.ts`.
 
 ### 2. Define IPC Types
 
-Location: `packages/electron-client-ipc/src/types.ts`
+Location: `packages/electron-client-ipc/src/types/<feature>.ts`, exported from `src/types/index.ts`
 
 ```typescript
 export interface SomeParams {
