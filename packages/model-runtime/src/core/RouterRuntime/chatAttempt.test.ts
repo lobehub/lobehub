@@ -211,6 +211,31 @@ describe('observeChatAttempt', () => {
     },
   );
 
+  it('reports a reasoning-only refusal as a refusal', async () => {
+    const finished = vi.fn();
+    const attemptRun = observeChatAttempt(
+      async ({ callback }) => {
+        await callback?.onReasoningPart?.({ content: 'reason', partType: 'text' });
+        await callback?.onFinal?.({ finishReason: 'refusal', text: '' });
+        return new Response(null);
+      },
+      undefined,
+      attempt,
+      true,
+      finished,
+    );
+
+    await expect(attemptRun).rejects.toMatchObject({ name: 'ModelRefusalError' });
+    expect(finished).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.objectContaining({
+          diagnostics: expect.objectContaining({ reasoningLength: 6 }),
+        }),
+        outcome: 'empty',
+      }),
+    );
+  });
+
   it('adds attempt identity without replacing provider performance', async () => {
     let now = 1000;
     vi.spyOn(Date, 'now').mockImplementation(() => now);

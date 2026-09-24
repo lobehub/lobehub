@@ -205,12 +205,17 @@ export const observeChatAttempt = async (
     const finalContent = content || latestFinishData.text;
     const finalReasoning = reasoning || getReasoningContent(latestFinishData);
     const finalToolCallCount = Math.max(latestFinishData.toolsCalling?.length ?? 0, toolCallCount);
+    /**
+     * A refusal needs ordinary response output to count as a successful completion.
+     * Provider-internal reasoning alone must not turn a blank refusal into a success.
+     */
+    const isRefusal = isModelRefusalFinishReason(latestFinishData.finishReason);
     const empty = isEmptyModelCompletion({
       content: finalContent,
       hasGrounding: Boolean(latestFinishData.grounding ?? grounding),
       imageCount,
       outputTokens: latestFinishData.usage?.totalOutputTokens ?? observedUsage?.totalOutputTokens,
-      reasoning: finalReasoning,
+      reasoning: isRefusal ? '' : finalReasoning,
       toolCallCount: finalToolCallCount,
     });
 
@@ -236,7 +241,7 @@ export const observeChatAttempt = async (
      */
     return finish(
       'empty',
-      isModelRefusalFinishReason(latestFinishData.finishReason)
+      isRefusal
         ? new ModelRefusalError(undefined, diagnostics)
         : new ModelEmptyError(undefined, diagnostics),
     );
