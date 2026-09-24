@@ -154,7 +154,7 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave, secti
     try {
       await action();
     } catch (error) {
-      toast.error(describeError(error, t, String(error)));
+      toast.error(describeError(error, t, t('environments.saveFailed')));
     } finally {
       setBusy(false);
     }

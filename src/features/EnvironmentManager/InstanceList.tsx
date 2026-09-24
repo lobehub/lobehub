@@ -183,11 +183,17 @@ const InstanceRow = memo<InstanceRowProps>(
     // idle one would be a round trip every two seconds for a row nobody is
     // looking at.
     const building = instance.status === 'pending' && Boolean(instance.buildId);
-    const { log, state } = useInstanceBuild(instance.id, building);
+    const { log, state } = useInstanceBuild(instance.id, building, instance.buildId);
     // Made before instances built themselves, or its build request never
     // arrived: pending with nothing to follow. Without saying so the row looks
     // settled while the folder behind it is empty.
     const unbuilt = instance.status === 'pending' && !instance.buildId && instance.buildable;
+
+    // Bridges the gap between confirming and the refreshed row arriving. The
+    // request is not instant — starting a build cold-starts a sandbox — and
+    // without this the row would look untouched for that whole time, which is
+    // exactly what the dialog used to cover by staying open.
+    const [starting, setStarting] = useState(false);
 
     // Every build started from the row is asked first, the first one included:
     // a build replaces the folder with a fresh checkout, and an instance that
@@ -198,12 +204,20 @@ const InstanceRow = memo<InstanceRowProps>(
         content: t('environments.instances.rebuildConfirmContent'),
         okButtonProps: { danger: true },
         okText: t(unbuilt ? 'environments.instances.build' : 'environments.instances.rebuild'),
-        // Refusals leave the row as it was — "a conversation is using it" is
-        // the usual one — so the toast is the only place the reason can go.
-        onOk: () =>
-          onBuild(instance.id).catch((error: unknown) =>
-            toast.error(describeError(error, t, t('environments.instances.buildStartFailed'))),
-          ),
+        // Deliberately not awaited, so the dialog closes on the click. Holding
+        // it until the sandbox is up made confirming feel like the thing might
+        // fail, which is the same reason creating an instance fires its build
+        // after its dialog is gone. Refusals — "a conversation is using it" is
+        // the usual one — leave the row as it was, so the toast still carries
+        // the reason; it now lands over the list rather than over a dialog.
+        onOk: () => {
+          setStarting(true);
+          void onBuild(instance.id)
+            .catch((error: unknown) =>
+              toast.error(describeError(error, t, t('environments.instances.buildStartFailed'))),
+            )
+            .finally(() => setStarting(false));
+        },
         title: t(
           unbuilt
             ? 'environments.instances.buildConfirmTitle'
@@ -281,7 +295,10 @@ const InstanceRow = memo<InstanceRowProps>(
             rebuild would redo. */}
           {editable && instance.status === 'ready' && instance.buildable && (
             <ActionIcon
-              disabled={instance.inUse}
+              // `starting` too: the row still reads ready until the refreshed
+              // one lands, and a second click in that window starts a second
+              // build of the same instance.
+              disabled={instance.inUse || starting}
               icon={RotateCcwIcon}
               size={'small'}
               title={t(
@@ -336,11 +353,17 @@ const InstanceRow = memo<InstanceRowProps>(
             fits in a column. Also there for an instance never built, whose
             folder is empty however settled the row looks. Absent once an
             instance is ready, which is where it spends its life. */}
-        {(building || unbuilt || instance.status === 'error') && (
+        {(starting || building || unbuilt || instance.status === 'error') && (
           <BuildLine
             error={instance.buildError}
             log={log}
-            state={building && state !== 'failed' ? 'running' : unbuilt ? 'unbuilt' : 'failed'}
+            state={
+              starting || (building && state !== 'failed')
+                ? 'running'
+                : unbuilt
+                  ? 'unbuilt'
+                  : 'failed'
+            }
             // Building a copy is the owner's; everyone else reads the state.
             onBuild={editable ? confirmBuild : undefined}
           />

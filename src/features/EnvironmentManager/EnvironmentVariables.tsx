@@ -101,7 +101,7 @@ const EnvRow = memo<{
       await action();
       setDraft(null);
     } catch (error) {
-      toast.error(describeError(error, t, String(error)));
+      toast.error(describeError(error, t, t('environments.saveFailed')));
     } finally {
       setBusy(false);
     }
@@ -203,7 +203,7 @@ const EnvironmentVariables = memo<EnvironmentVariablesProps>(({ entries, onSave 
     try {
       await action();
     } catch (error) {
-      toast.error(describeError(error, t, String(error)));
+      toast.error(describeError(error, t, t('environments.saveFailed')));
     } finally {
       setBusy(false);
     }

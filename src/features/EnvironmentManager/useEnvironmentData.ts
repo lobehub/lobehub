@@ -123,9 +123,41 @@ export const useWorkspaceUsage = () => {
  * since the offset it was asked for, which is what keeps a minutes-long
  * install from resending megabytes on every tick.
  */
-export const useInstanceBuild = (instanceId: string, active: boolean) => {
-  const [log, setLog] = useState('');
-  const offset = useRef(0);
+/**
+ * The accumulated log of each running build, held outside React.
+ *
+ * The row unmounts whenever the panel is left — another settings tab, another
+ * environment, a collapsed card — and a log kept in component state goes with
+ * it. Coming back then showed a build with no log and no way to open one,
+ * until a poll had refetched the whole thing from the start; the log was there
+ * all along on the server, the UI had simply forgotten it.
+ *
+ * Keyed by BUILD, not by instance: a rebuild must not inherit the previous
+ * build's output. Dropped when the build ends, which is the moment the row's
+ * own stored record takes over — so this never grows past the builds actually
+ * running.
+ */
+const buildLogs = new Map<string, { log: string; offset: number }>();
+
+export const useInstanceBuild = (instanceId: string, active: boolean, buildId?: string | null) => {
+  // An instance being followed always has a build id; the fallback only keeps
+  // the key a string for the inactive case, where nothing is stored anyway.
+  const cacheKey = buildId ?? instanceId;
+  const cached = buildLogs.get(cacheKey);
+  const [log, setLog] = useState(cached?.log ?? '');
+  const offset = useRef(cached?.offset ?? 0);
+
+  // A second build of the same instance while this row stayed mounted. Reset
+  // during render rather than in an effect, so the previous build's log is
+  // never painted under the new build's heading.
+  const followed = useRef(cacheKey);
+  if (followed.current !== cacheKey) {
+    followed.current = cacheKey;
+    const next = buildLogs.get(cacheKey);
+    offset.current = next?.offset ?? 0;
+    setLog(next?.log ?? '');
+  }
+
   const { mutate: refreshInstances } = useInstances();
 
   const swr = useClientDataSWR<
@@ -137,16 +169,27 @@ export const useInstanceBuild = (instanceId: string, active: boolean) => {
     {
       onSuccess: (data) => {
         if (data.chunk) {
-          setLog((previous) => previous + data.chunk);
+          // The map is the source of truth, and the state mirrors it: appending
+          // inside the state updater would double up under StrictMode, which
+          // calls updaters twice.
+          const next = (buildLogs.get(cacheKey)?.log ?? '') + data.chunk;
+          buildLogs.set(cacheKey, { log: next, offset: data.logOffset });
           offset.current = data.logOffset;
+          setLog(next);
         }
         // The row settled on the server during this very call, so the list is
         // now stale in the one way that matters: the instance still reads as
         // building.
-        if (data.state !== 'running') void refreshInstances();
+        if (data.state !== 'running') {
+          buildLogs.delete(cacheKey);
+          void refreshInstances();
+        }
       },
       refreshInterval: (data) => (data?.state === 'running' ? 2000 : 0),
-      revalidateOnFocus: false,
+      // Returning to the tab is exactly when a running build is worth a fresh
+      // look; the poll it would otherwise wait for is up to two seconds away,
+      // and the key is null unless a build is actually running.
+      revalidateOnFocus: active,
     },
   );
 
