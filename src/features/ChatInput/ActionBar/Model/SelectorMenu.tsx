@@ -186,6 +186,9 @@ const SelectorMenu = memo<SelectorMenuProps>(
                     model={model}
                     notice={modelNotice}
                     provider={provider}
+                    activeSecondaryText={
+                      effortValue ? t(`reasoningEffort.levels.${effortValue}`) : undefined
+                    }
                     onModelChange={onModelChange}
                     onOpenChange={handleModelPanelOpenChange}
                   />

@@ -18,6 +18,8 @@ import type { PricingMode } from './ModelDetailPanel';
 import { Toolbar } from './Toolbar';
 
 interface PanelContentProps {
+  /** Muted text shown after the active model's name, e.g. its reasoning effort */
+  activeSecondaryText?: string;
   enabledList?: EnabledProviderWithModels[];
   model?: string;
   ModelItemComponent?: ComponentType<any>;
@@ -30,6 +32,7 @@ interface PanelContentProps {
 
 export const PanelContent: FC<PanelContentProps> = ({
   ModelItemComponent,
+  activeSecondaryText,
   enabledList: enabledListProp,
   model: modelProp,
   notice,
@@ -69,6 +72,7 @@ export const PanelContent: FC<PanelContentProps> = ({
       />
       <List
         ModelItemComponent={ModelItemComponent}
+        activeSecondaryText={activeSecondaryText}
         enabledList={enabledList}
         groupMode={groupMode}
         model={modelProp}
