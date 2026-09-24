@@ -942,13 +942,18 @@ export const invokeServerDefaultModel = async (params: {
     params.agentType,
     params.model,
   );
-  const { deploymentName, supportsAdaptiveThinking } = resolvedModel;
+  const { deploymentName, maxOutput, supportsAdaptiveThinking } = resolvedModel;
   const model = deploymentName ?? resolvedModel.model;
   const runtime = await initModelRuntimeFromServerConfig({
     actorUserId: params.userId,
     workspaceId: params.workspaceId,
   });
   const normalizedPayload = { ...params.payload };
+  // Kimi can use its context window as the output budget for an unknown model.
+  // Bound that budget by the selected deployment model, including for older clients.
+  if (params.agentType === 'kimi-code' && maxOutput !== undefined && maxOutput > 0) {
+    normalizedPayload.max_tokens = Math.min(normalizedPayload.max_tokens ?? maxOutput, maxOutput);
+  }
   if (
     params.agentType === 'claude-code' &&
     normalizedPayload.thinking?.type === 'adaptive' &&

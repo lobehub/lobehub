@@ -61,9 +61,49 @@ describe('heterogeneous direct invocation protocol', () => {
     vi.clearAllMocks();
   });
 
+  it.each([
+    { expected: 131_072, maxOutput: 131_072, requested: 262_144 },
+    { expected: 65_536, maxOutput: 65_536, requested: 262_144 },
+    { expected: 4096, maxOutput: 65_536, requested: 4096 },
+    { expected: 65_536, maxOutput: 65_536, requested: 65_536 },
+    { expected: 65_536, maxOutput: 65_536, requested: undefined },
+    { expected: 262_144, maxOutput: undefined, requested: 262_144 },
+  ])('bounds Kimi output by the selected model: $requested / $maxOutput', async (testCase) => {
+    const chat = vi.fn().mockResolvedValue(new Response('stream'));
+    vi.mocked(resolveServerDefaultHeterogeneousModel).mockResolvedValue({
+      deploymentName: 'deployed-model',
+      maxOutput: testCase.maxOutput,
+      model: 'catalog-model',
+      provider: 'lobehub',
+      supportsAdaptiveThinking: false,
+    });
+    vi.mocked(initModelRuntimeFromServerConfig).mockResolvedValue({
+      chat,
+    } as unknown as Awaited<ReturnType<typeof initModelRuntimeFromServerConfig>>);
+    const payload = normalizeAnthropicRequest(
+      { max_tokens: testCase.requested, messages: [{ content: 'hello', role: 'user' }] },
+      'lobehub-default',
+    );
+
+    await invokeServerDefaultModel({
+      agentType: 'kimi-code',
+      model: 'catalog-model',
+      payload,
+      signal: new AbortController().signal,
+      userId: 'user-1',
+    });
+
+    expect(chat.mock.calls[0][0]).toMatchObject({
+      max_tokens: testCase.expected,
+      model: 'deployed-model',
+    });
+    expect(payload.max_tokens).toBe(testCase.requested);
+  });
+
   it('preserves adaptive thinking through the Anthropic relay for a compatible model', async () => {
     const chat = vi.fn().mockResolvedValue(new Response('stream'));
     vi.mocked(resolveServerDefaultHeterogeneousModel).mockResolvedValue({
+      maxOutput: 8192,
       model: 'claude-sonnet-4-6',
       provider: 'lobehub',
       supportsAdaptiveThinking: true,
@@ -77,6 +117,7 @@ describe('heterogeneous direct invocation protocol', () => {
       model: 'claude-sonnet-4-6',
       payload: normalizeAnthropicRequest(
         {
+          max_tokens: 16_384,
           messages: [],
           model: 'lobehub-default',
           stream: true,
@@ -95,6 +136,7 @@ describe('heterogeneous direct invocation protocol', () => {
     );
     expect(chat).toHaveBeenCalledWith(
       expect.objectContaining({
+        max_tokens: 16_384,
         messages: [],
         model: 'claude-sonnet-4-6',
         stream: true,
