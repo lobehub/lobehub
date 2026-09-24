@@ -618,6 +618,7 @@
   "environments.refresh": "Refresh",
   "environments.remove": "Delete environment",
   "environments.removeFailed": "Could not delete this environment",
+  "environments.saveFailed": "Could not save this change",
   "environments.sessions.activeBuild": "{{instance}} is being built right now",
   "environments.sessions.activeSession": "A sandbox is running in {{instance}} right now",
   "environments.sessions.desc": "Every session that ran in one of these instances and every build of them, newest first, with how each ended and whether what it installed was saved.",

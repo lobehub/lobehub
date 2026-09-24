@@ -43,6 +43,22 @@ describe('describeError', () => {
     );
   });
 
+  it('drops a drizzle query dump rather than showing SQL and row values', () => {
+    // A missing column surfaced in the create dialog as a screenful of SQL with
+    // the instance's own values in it; the caller's line at least says which
+    // action failed.
+    const drizzle = new Error(
+      'Failed query: insert into "environment_instances" ("id", "name") values ' +
+        '(default, $1) returning "id", "name" params: 7e3e4ab0,Lobehub Dev',
+    );
+    expect(describeError(drizzle, t, 'fallback')).toBe('fallback');
+  });
+
+  it('drops a message that dragged a stack trace along', () => {
+    const stack = new Error('something broke\n    at Object.<anonymous> (/app/server.js:1:1)');
+    expect(describeError(stack, t, 'fallback')).toBe('fallback');
+  });
+
   it('keeps an ordinary message and falls back when there is none', () => {
     expect(describeError(new Error('could not delete'), t, 'fallback')).toBe('could not delete');
     expect(describeError({}, t, 'fallback')).toBe('fallback');

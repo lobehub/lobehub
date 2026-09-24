@@ -3839,6 +3839,7 @@ When I am ___, I need ___
   'environments.namePlaceholder': 'Environment name',
   'environments.empty': 'No environments yet',
   'environments.removeFailed': 'Could not delete this environment',
+  'environments.saveFailed': 'Could not save this change',
   'environments.instances.removeFailed': 'Could not delete this instance',
   'environments.instances.removeConfirmTitle': 'Delete instance {{name}}?',
   'environments.instances.removeConfirmContent':

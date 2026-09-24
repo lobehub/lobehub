@@ -618,6 +618,7 @@
   "environments.refresh": "刷新",
   "environments.remove": "删除环境",
   "environments.removeFailed": "删除环境失败",
+  "environments.saveFailed": "无法保存这次修改",
   "environments.sessions.activeBuild": "{{instance}} 正在构建",
   "environments.sessions.activeSession": "沙箱正在 {{instance}} 中运行",
   "environments.sessions.desc": "这些实例中运行过的所有会话和构建，按时间倒序排列，并显示每次的结束方式以及安装内容是否已保存。",
