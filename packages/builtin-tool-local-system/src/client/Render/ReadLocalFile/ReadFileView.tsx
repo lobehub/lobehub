@@ -3,7 +3,7 @@ import type { ReadFileState } from '@lobechat/tool-runtime';
 import { Flexbox, Image, Markdown, PreviewGroup, SyntaxHighlighter } from '@lobehub/ui';
 import { ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { ExternalLink, FolderOpen, PanelRightOpen } from 'lucide-react';
+import { ExternalLink, FolderOpen, SquareArrowOutUpRight } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import React, { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -68,9 +68,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       content: ' ';
     }
   `,
+  // Shrinks to its text so the hover actions sit right after the path.
   path: css`
-    flex: 1;
+    flex: 0 1 auto;
+
+    min-width: 0;
     padding-inline: 4px;
+
     font-size: 12px;
     color: ${cssVar.colorTextSecondary};
   `,
@@ -165,15 +169,20 @@ const ReadFileView = memo<ReadFileViewProps>(
     // The inspector header already names the file, so the card only carries its path.
     return (
       <Flexbox className={styles.container} gap={8}>
-        <Flexbox horizontal align={'center'} gap={8}>
+        <Flexbox horizontal align={'center'} gap={4}>
           <Text ellipsis className={styles.path} title={path} type={'secondary'}>
             {displayPath}
           </Text>
           {(openInPanel || handleOpenFile || handleOpenFolder) && (
-            <Flexbox horizontal className={`${styles.actions} local-file-actions`} gap={2}>
+            <Flexbox
+              horizontal
+              className={`${styles.actions} local-file-actions`}
+              flex={'none'}
+              gap={2}
+            >
               {openInPanel && (
                 <ActionIcon
-                  icon={PanelRightOpen}
+                  icon={SquareArrowOutUpRight}
                   size="small"
                   title={t('localFiles.openInPanel')}
                   onClick={(e) => {
