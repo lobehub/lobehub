@@ -11,10 +11,7 @@ import { type OperationType, type StreamRetryMetadata } from '@/store/chat/slice
 import { elapsedTimeStyles, shinyTextStyles } from '@/styles/loading';
 
 import { resolveOperationActivity } from '../../utils/operationActivity';
-import {
-  isHiddenBackgroundRunLabel,
-  useShowBackgroundRunHint,
-} from '../Contexts/BackgroundRunHintContext';
+import { useShowBackgroundRunHint } from '../Contexts/BackgroundRunHintContext';
 
 const ELAPSED_TIME_THRESHOLD = 2100; // Show elapsed time after 2 seconds
 
@@ -121,7 +118,8 @@ const ContentLoading = memo<ContentLoadingProps>(({ id, startTime: startTimeOver
       return t('operation.execHeterogeneousAgent', { name: getHeterogeneousAgentName() });
     }
 
-    if (isHiddenBackgroundRunLabel(operationType, showBackgroundRunHint)) return undefined;
+    // Surfaces that turned the hint off fall back to the plain dot loader.
+    if (operationType === 'execServerAgentRuntime' && !showBackgroundRunHint) return undefined;
 
     if (DEDICATED_OPERATION_LABELS.has(operationType)) {
       return t(`operation.${operationType}` as any) as string;
