@@ -1,4 +1,4 @@
-import type { AcceptanceCommentItem } from '@lobechat/types';
+import type { AcceptanceCommentItem, AcceptanceCommentSource } from '@lobechat/types';
 
 import { formatAnnotationRegion } from './verifyHelpers';
 
@@ -46,9 +46,27 @@ export const collectCommentFeedback = (
         kind: 'comment' as const,
         parentCommentId: item.parentCommentId ?? undefined,
         roundIndex: item.contextRoundIndex ?? root.contextRoundIndex ?? 0,
+        // A reply answers the page its thread was opened on.
+        source: root.source ?? undefined,
         threadId: root.id,
         title: check?.title,
       },
     ];
   });
+};
+
+/**
+ * The product page a remark was made on, as lines a repair agent can act on:
+ * where to go, what to point at, and the facts needed to reproduce the page.
+ */
+export const formatCommentSource = (source: AcceptanceCommentSource): string[] => {
+  const lines = [`page: ${source.url}${source.title ? ` (${source.title})` : ''}`];
+  if (source.selector) lines.push(`element: ${source.selector}`);
+  if (source.elementText) lines.push(`element text: ${source.elementText}`);
+  const facts = Object.entries(source.extra ?? {}).map(([key, value]) => `${key}=${value}`);
+  if (facts.length) lines.push(`context: ${facts.join(', ')}`);
+  if (source.viewport) lines.push(`viewport: ${source.viewport.width}x${source.viewport.height}`);
+  if (source.commit) lines.push(`build: ${source.commit}`);
+  for (const error of source.consoleErrors ?? []) lines.push(`console error: ${error}`);
+  return lines;
 };

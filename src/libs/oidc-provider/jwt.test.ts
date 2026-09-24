@@ -57,4 +57,36 @@ describe('validateOIDCJWT', () => {
     expect(error).not.toBeInstanceOf(TRPCError);
     expect((error as Error).message).toBe('JWKS_KEY public key retrieval failed: invalid JWK');
   });
+
+  it('refuses an acceptance-review token as a user session', async () => {
+    const { validateOIDCJWT } = await import('./jwt');
+
+    jwtVerifyMock.mockResolvedValueOnce({
+      payload: {
+        aud: 'urn:lobehub:acceptance-review',
+        purpose: 'acceptance-review',
+        sub: 'user-1',
+      },
+    });
+    await expect(validateOIDCJWT('header.payload.signature')).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    });
+
+    // Either marker alone is enough — a token must not slip through by dropping one.
+    jwtVerifyMock.mockResolvedValueOnce({
+      payload: { aud: 'urn:lobehub:acceptance-review', sub: 'user-1' },
+    });
+    await expect(validateOIDCJWT('header.payload.signature')).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    });
+  });
+
+  it('still accepts an ordinary access token', async () => {
+    const { validateOIDCJWT } = await import('./jwt');
+    jwtVerifyMock.mockResolvedValueOnce({ payload: { aud: 'urn:lobehub:chat', sub: 'user-1' } });
+
+    await expect(validateOIDCJWT('header.payload.signature')).resolves.toMatchObject({
+      userId: 'user-1',
+    });
+  });
 });

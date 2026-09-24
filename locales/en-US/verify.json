@@ -105,6 +105,7 @@
   "acceptance.comments.empty": "No discussion yet.",
   "acceptance.comments.evidenceFromRound": "Evidence from round {{round}} — replaced in a later round",
   "acceptance.comments.evidenceThisRound": "Current evidence for this check",
+  "acceptance.comments.fromProduct": "On {{page}}",
   "acceptance.comments.historicalRegions": "{{count}} region note(s) on evidence replaced by a later round",
   "acceptance.comments.linkCopied": "Link copied",
   "acceptance.comments.loadFailed": "Failed to load the discussion. Please refresh.",

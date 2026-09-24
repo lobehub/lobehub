@@ -40,6 +40,30 @@ const rectSchema = z.object({
   y: z.number().min(0).max(1),
 });
 
+/**
+ * The product page a remark was made on (embedded review toolbar). Bounded so
+ * a page cannot park an arbitrary blob on the acceptance: a handful of short
+ * facts is what reproducing the remark needs.
+ */
+export const acceptanceCommentSourceSchema = z.object({
+  commit: z.string().trim().max(64).optional(),
+  consoleErrors: z.array(z.string().max(1000)).max(20).optional(),
+  elementText: z.string().max(500).optional(),
+  extra: z
+    .record(z.string().max(64), z.union([z.string().max(500), z.number(), z.boolean()]))
+    .refine((value) => Object.keys(value).length <= 20, 'At most 20 extra facts')
+    .optional(),
+  kind: z.literal('product-page'),
+  rect: z
+    .object({ height: z.number(), width: z.number(), x: z.number(), y: z.number() })
+    .optional(),
+  selector: z.string().max(1000).optional(),
+  title: z.string().max(300).optional(),
+  url: z.string().url().max(2000),
+  userAgent: z.string().max(500).optional(),
+  viewport: z.object({ height: z.number(), width: z.number() }).optional(),
+});
+
 const createSchema = z
   .object({
     acceptanceId: z.string().min(1),
@@ -62,6 +86,7 @@ const createSchema = z
     editorData: z.unknown().optional(),
     kind: z.enum(['approval', 'comment', 'proposal']).optional(),
     parentCommentId: z.string().trim().min(1).max(64).optional(),
+    source: acceptanceCommentSourceSchema.optional(),
   })
   .refine(
     (value) =>
@@ -72,6 +97,10 @@ const createSchema = z
   .refine((value) => !(value.parentCommentId && value.anchor), {
     message: 'A reply cannot carry its own anchor',
     path: ['anchor'],
+  })
+  .refine((value) => !(value.source && (value.parentCommentId || value.anchor)), {
+    message: 'A product page opens its own thread',
+    path: ['source'],
   })
   .refine((value) => !(value.parentCommentId && value.kind === 'approval'), {
     message: 'An approval is a thread root',
@@ -279,11 +308,14 @@ const enrich = async (
       evidenceId: row.evidenceId,
       id: row.id,
       kind: row.kind,
+      metadata: row.deletedAt ? null : (row.metadata ?? null),
       parentCommentId: row.parentCommentId,
       reactions: [...(reactionsByComment.get(row.id)?.values() ?? [])],
       rect: row.anchorRect,
       resolvedAt: row.resolvedAt,
       resolvedByUserId: row.resolvedByUserId,
+      // A tombstone keeps its place in the thread, not the page it pointed at.
+      source: row.deletedAt ? null : (row.source ?? null),
       updatedAt: row.updatedAt,
     }));
 };
@@ -420,6 +452,7 @@ export const acceptanceCommentRouter = router({
         editorData: input.editorData as never,
         kind: input.kind,
         parentCommentId: input.parentCommentId,
+        source: input.source,
         /*
          * The ceiling travels INTO the write so it is counted and charged in
          * one transaction: checked out here it would be advisory only, and a

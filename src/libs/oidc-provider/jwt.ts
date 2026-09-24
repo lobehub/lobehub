@@ -129,6 +129,21 @@ export const validateOIDCJWT = async (token: string) => {
       });
     }
 
+    // Every JWT signed with JWKS_KEY verifies here, so a narrow token has to be
+    // refused by name. An acceptance-review token is handed to a third-party
+    // page (the embedded review toolbar) for one acceptance; accepting it as a
+    // user session would give that page the reviewer's whole account.
+    // See `signAcceptanceReviewJWT` in @/libs/trpc/utils/internalJwt.
+    if (
+      payload.purpose === 'acceptance-review' ||
+      payload.aud === 'urn:lobehub:acceptance-review'
+    ) {
+      throw new TRPCError({
+        code: 'UNAUTHORIZED',
+        message: 'acceptance-review tokens are not accepted as a user session',
+      });
+    }
+
     return {
       clientId,
       payload,

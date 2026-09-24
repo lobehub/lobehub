@@ -105,6 +105,7 @@
   "acceptance.comments.empty": "还没有讨论。",
   "acceptance.comments.evidenceFromRound": "第 {{round}} 轮的证据，后续轮次已替换",
   "acceptance.comments.evidenceThisRound": "该检查项当前展示的证据",
+  "acceptance.comments.fromProduct": "来自 {{page}}",
   "acceptance.comments.historicalRegions": "{{count}} 条圈选评论指向已被后续轮次替换的证据",
   "acceptance.comments.linkCopied": "链接已复制",
   "acceptance.comments.loadFailed": "讨论加载失败，请刷新重试。",

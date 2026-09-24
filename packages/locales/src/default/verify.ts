@@ -221,6 +221,7 @@ export default {
   'acceptance.comments.empty': 'No discussion yet.',
   'acceptance.comments.readOnly': 'You can read the discussion; sign in to take part.',
   'acceptance.comments.region': 'Region',
+  'acceptance.comments.fromProduct': 'On {{page}}',
   'acceptance.comments.roundContext': 'Round {{round}}',
   'acceptance.comments.commentEvidence': 'Comment on a region',
   'acceptance.comments.regionModalTitle': 'Mark the area you mean',
