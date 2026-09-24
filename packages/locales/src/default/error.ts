@@ -2,6 +2,10 @@ export default {
   'asyncState.desc': 'Something went wrong while loading. Please try again.',
   'asyncState.metricLabel': 'Failed to load',
   'asyncState.title': 'Failed to load',
+  'chatRequestBlocked.contactSupport': 'Contact support',
+  'chatRequestBlocked.description':
+    'This request was blocked by our security checks. If you think this is a mistake, contact support to restore access.',
+  'chatRequestBlocked.title': 'Request blocked',
   'saveState.retry': 'Retry',
   'saveState.saveFailed': 'Failed to save your changes. Please try again.',
   'error.backHome': 'Back to Home',
