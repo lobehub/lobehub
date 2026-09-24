@@ -401,12 +401,12 @@ export default {
     'Files visitors attach are stored on your account. Uploads stop once they reach this total; set 0 to turn attachments off.',
   'share.settings.limits.maxFileStorageWorkspaceHint':
     'Files visitors attach are stored in the Workspace. Uploads stop once they reach this total; set 0 to turn attachments off.',
-  'share.settings.limits.maxTopicsPerVisitor': 'Conversations per visitor',
+  'share.settings.limits.maxTopicsPerVisitor': 'Topics per visitor',
   'share.settings.limits.maxTopicsPerVisitorHint':
-    'How many separate conversations each signed-in visitor can start.',
-  'share.settings.limits.maxTurnsPerTopic': 'Turns per conversation',
+    'How many separate topics each signed-in visitor can start.',
+  'share.settings.limits.maxTurnsPerTopic': 'Turns per topic',
   'share.settings.limits.maxTurnsPerTopicHint':
-    'How many messages a visitor can send inside one conversation.',
+    'How many messages a visitor can send inside one topic.',
   'share.settings.limits.monthlySpendLimit': 'Monthly spend cap (M credits)',
   'share.settings.limits.monthlySpendLimitHint':
     'Visitor runs stop once this month’s spend on this Agent reaches the cap. Resets on the 1st of each month (UTC).',
@@ -441,9 +441,9 @@ export default {
   'share.settings.link.slugError.tooShort': 'Custom links need at least 3 characters.',
   'share.settings.link.slugHint':
     '3–64 characters: lowercase letters, numbers and hyphens. Leave it empty to use the generated link.',
+  'share.settings.link.slugLabel': 'Custom link suffix',
   'share.settings.link.slugSaved': 'Custom link updated',
   'share.settings.link.title': 'Share link',
-  'share.settings.link.viewCount': '{{views}} views',
   'share.settings.link.workspaceDesc':
     'Anyone signed in who has the link can chat with this Agent. Runs execute in the Workspace and are charged to its budget.',
   'share.settings.notice.desc':
@@ -452,9 +452,9 @@ export default {
   'share.settings.notice.workspaceDesc':
     'Visitors don’t just read this Agent — they run it. Every reply is generated in the Workspace and charged to its shared budget, without consuming the creator’s or another member’s quota. The Agent only acts with the visitor access you grant below.',
   'share.settings.notice.workspaceTitle': 'Visitors run this Agent on the Workspace budget',
-  'share.settings.permissions.allowCreatorViewSessions': 'Let me read visitor conversations',
+  'share.settings.permissions.allowCreatorViewSessions': 'Let me read visitor topics',
   'share.settings.permissions.allowCreatorViewSessionsHint':
-    'Off by default: visitor conversations stay private to the visitor.',
+    'Off by default: visitor topics stay private to the visitor.',
   'share.settings.permissions.allowReadMemory': 'Allow reading my memory',
   'share.settings.permissions.allowReadMemoryHint':
     'The Agent may draw on your long-term memory while answering a visitor.',
@@ -471,7 +471,8 @@ export default {
   'share.settings.tabs.profile': 'Public profile',
   'share.settings.tabs.stats': 'Stats',
   'share.settings.title': 'Share Agent',
-  'share.settings.usage.conversations': 'Conversations',
+  'share.settings.usage.conversations': 'Topics',
+  'share.settings.usage.conversationsHint': 'Topics created by visitors through this share.',
   'share.settings.usage.desc': 'What this share has attracted, and what it has cost you.',
   'share.settings.usage.fileStorage': 'File storage',
   'share.settings.usage.fileStorageOfLimit': '{{used}} of {{limit}}',
@@ -481,8 +482,10 @@ export default {
   'share.settings.usage.spendOfLimit': '${{spend}} of ${{limit}}',
   'share.settings.usage.spendOfLimitCredits': '{{spend}} of {{limit}} credits',
   'share.settings.usage.title': 'Usage',
-  'share.settings.usage.views': 'Visits',
-  'share.settings.usage.visitors': 'Visitors',
+  'share.settings.usage.views': 'Page views',
+  'share.settings.usage.viewsHint': 'Repeat views included. Your own previews are excluded.',
+  'share.settings.usage.visitors': 'Users',
+  'share.settings.usage.visitorsHint': 'Distinct signed-in users who created a topic.',
   'share.settings.skills.availableGroup': 'Not granted · {{count}}',
   'share.settings.skills.desc':
     'Only the skills you tick here can be loaded during a visitor run. A skill you grant runs on your account, with whatever its instructions say.',
@@ -521,7 +524,7 @@ export default {
   'share.visitor.access.notFound': 'This share link is no longer available.',
   'share.visitor.access.signInCta': 'Sign in',
   'share.visitor.access.signInDesc':
-    'Sign in to start chatting with this shared agent. Your conversations stay tied to your account.',
+    'Sign in to start chatting with this shared agent. Your topics stay tied to your account.',
   'share.visitor.access.signInTitle': 'Sign in to continue',
   'share.visitor.errors.fileUnavailable':
     'One of the attachments is no longer available. Remove it and try again.',
@@ -539,30 +542,29 @@ export default {
   'share.visitor.errors.spendLimit':
     'This shared agent has reached its monthly usage limit set by its creator. It will be available again next month.',
   'share.visitor.errors.stopFailed': "Couldn't stop the run. Please try again.",
-  'share.visitor.errors.topicLimit':
-    'You have reached the conversation limit on this shared agent.',
+  'share.visitor.errors.topicLimit': 'You have reached the topic limit on this shared agent.',
   'share.visitor.errors.turnLimit':
-    'This conversation has reached its turn limit. Start a new conversation to continue.',
+    'This topic has reached its turn limit. Start a new topic to continue.',
   'share.visitor.errors.unavailable':
-    'This conversation is no longer available. Try switching to another topic or starting a new one.',
+    'This topic is no longer available. Try switching to another topic or starting a new one.',
   'share.visitor.input.placeholder': 'Message this shared agent…',
   'share.visitor.input.send': 'Send',
   'share.visitor.input.stop': 'Stop',
   'share.visitor.privacyNotice':
-    'This conversation runs on the owner’s account and may be visible to them. Avoid sharing sensitive information.',
+    'This topic runs on the owner’s account and may be visible to them. Avoid sharing sensitive information.',
   'share.visitor.privacyNoticeWorkspace':
-    'This conversation is paid for by the Workspace and may be visible to the Agent creator. Avoid sharing sensitive information.',
+    'This topic is paid for by the Workspace and may be visible to the Agent creator. Avoid sharing sensitive information.',
   'share.visitor.profile.about': 'About',
   'share.visitor.profile.createdBy': 'Created by {{creator}}',
-  'share.visitor.profile.cta': 'Start a conversation',
+  'share.visitor.profile.cta': 'Start a topic',
   'share.visitor.profile.ctaSignIn': 'Sign in to start',
   'share.visitor.profile.freeNote': 'Free · paid for by the creator',
   'share.visitor.profile.freeNoteWorkspace': 'Free · paid for by the Workspace',
-  'share.visitor.profile.metrics.conversations': 'Conversations',
+  'share.visitor.profile.metrics.conversations': 'Topics',
   'share.visitor.profile.metrics.conversationsCaption': 'started so far',
   'share.visitor.profile.metrics.tools': 'Open tools',
   'share.visitor.profile.metrics.toolsCaption': 'available to you',
-  'share.visitor.profile.metrics.turns': 'Each conversation',
+  'share.visitor.profile.metrics.turns': 'Each topic',
   'share.visitor.profile.metrics.turnsCaption': 'turns at most',
   'share.visitor.profile.metrics.views': 'Views',
   'share.visitor.profile.metrics.viewsCaption': 'on this page',
@@ -579,19 +581,19 @@ export default {
   'share.visitor.profile.terms.title': 'Before you start',
   'share.visitor.profile.terms.tools_one': '{{count}} tool is open to visitors.',
   'share.visitor.profile.terms.tools_other': '{{count}} tools are open to visitors.',
-  'share.visitor.profile.terms.topics': 'You can open up to {{count}} conversations.',
-  'share.visitor.profile.terms.turns': 'Each conversation allows up to {{count}} turns.',
+  'share.visitor.profile.terms.topics': 'You can open up to {{count}} topics.',
+  'share.visitor.profile.terms.turns': 'Each topic allows up to {{count}} turns.',
   'share.visitor.profile.terms.uploads':
     'You can attach files; this Agent has {{size}} of file storage for visitors.',
   'share.visitor.profile.terms.uploadsOff': 'Attachments are turned off.',
   'share.visitor.profile.terms.visibilityCreator':
-    'The creator has turned on session review, so they can read this conversation.',
-  'share.visitor.profile.terms.visibilityPrivate': 'Only you can see your conversations.',
+    'The creator has enabled topic access, so they can read the messages in this topic.',
+  'share.visitor.profile.terms.visibilityPrivate': 'Only you can see your topics.',
   'share.visitor.topBar.home': 'Go to my LobeHub',
-  'share.visitor.topics.empty': 'No conversations yet',
-  'share.visitor.topics.new': 'New conversation',
-  'share.visitor.topics.title': 'Conversations',
-  'share.visitor.topics.untitled': 'Untitled conversation',
+  'share.visitor.topics.empty': 'No topics yet',
+  'share.visitor.topics.new': 'New topic',
+  'share.visitor.topics.title': 'Topics',
+  'share.visitor.topics.untitled': 'Untitled topic',
   'share.visitor.upload.creatorStorageBlocked':
     "This Agent's upload space is full. Ask its creator to free up room or raise the cap.",
   'share.visitor.upload.fileTooLarge': 'Files must be under {{max}}.',
@@ -704,7 +706,7 @@ export default {
   'share.visitor.profile.works.type.external': 'Linked work',
   'share.settings.profile.title': 'Public profile',
   'share.settings.profile.desc':
-    'Choose what visitors see before starting a conversation. Changes are published when you save.',
+    'Choose what visitors see before starting a topic. Changes are published when you save.',
   'share.settings.profile.save': 'Save profile',
   'share.settings.profile.saved': 'Profile saved',
   'share.settings.profile.saveError': 'Could not save. Your draft is preserved. Try again.',
