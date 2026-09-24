@@ -958,6 +958,21 @@ export const executeHeterogeneousAgent = async (
       throw new Error(`messageService.updateMessage returned success=false for ${messageId}`);
     }
   };
+  /**
+   * Retry each stashed main-assistant write once. Best-effort by design: a
+   * write that fails again stays stashed for the next replay, and never holds
+   * the run or the input lock.
+   */
+  const replayPendingMainFlush = async () => {
+    for (const [messageId, update] of pendingMainFlush) {
+      try {
+        await updateMessageOrThrow(messageId, update);
+        pendingMainFlush.delete(messageId);
+      } catch (err) {
+        console.error('[HeterogeneousAgent] Failed to replay main assistant flush:', err);
+      }
+    }
+  };
   const messageWriteCtx: MessageQueryContext = {
     agentId: context.agentId,
     topicId: context.topicId,
@@ -2235,11 +2250,17 @@ export const executeHeterogeneousAgent = async (
       // Skipped when the terminal event already arrived in the same batch: its
       // flush runs right behind this one, and only it can decide whether the
       // text is an echoed error that must NOT be persisted (AuthRequired).
+      //
+      // `flush` resolves even when the write failed (it only stashes it), so
+      // retry once right here instead of leaving it for the terminal replay
+      // minutes away. Unlock either way, matching the terminal path: a
+      // persistent DB failure must not keep the input locked.
       if (event.type === 'visible_output_end') {
         persistQueue = persistQueue.then(async () => {
           if (!deferredTerminalEvent) {
             await reduceAndApplyMain(event);
             await messageWriteBatcher.flush('visible-output-end');
+            await replayPendingMainFlush();
           }
           eventHandler(event);
         });
@@ -2406,14 +2427,7 @@ export const executeHeterogeneousAgent = async (
             // an update against a row that does not exist yet matches zero rows.
             await pendingCreateLedger.drain();
 
-            for (const [messageId, update] of pendingMainFlush) {
-              try {
-                await updateMessageOrThrow(messageId, update);
-                pendingMainFlush.delete(messageId);
-              } catch (err) {
-                console.error('[HeterogeneousAgent] Failed to replay main assistant flush:', err);
-              }
-            }
+            await replayPendingMainFlush();
 
             for (const [messageId, update] of pendingToolFlush) {
               try {

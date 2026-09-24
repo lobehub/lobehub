@@ -1383,6 +1383,62 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       await flush();
     });
 
+    /**
+     * `flush` resolves even when the write failed, and the terminal replay may
+     * be minutes away in CC SDK mode — retry once before unlocking follow-ups.
+     */
+    it('retries a failed final-text write before unlocking follow-ups on visible_output_end', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+
+      let failedOnce = false;
+      mockUpdateMessage.mockImplementation(async (_id: string, value: any) => {
+        if (value?.content === 'final answer' && !failedOnce) {
+          failedOnce = true;
+          throw new Error('transient write failure');
+        }
+      });
+
+      let resolveSendPrompt: () => void;
+      mockSendPrompt.mockReturnValue(
+        new Promise<void>((resolve) => {
+          resolveSendPrompt = resolve;
+        }),
+      );
+
+      const executorPromise = executeHeterogeneousAgent(get, defaultParams);
+      await flush();
+
+      ipc.emitStreamEvent('ipc-sess-1', {
+        data: { chunkType: 'text', content: 'final answer' },
+        type: 'stream_chunk',
+      });
+      ipc.emitStreamEvent('ipc-sess-1', { data: {}, type: 'visible_output_end' });
+      await flush();
+
+      const contentWrites = mockUpdateMessage.mock.calls
+        .map(([id, value]: any, index: number) => ({ id, index, value }))
+        .filter(({ id, value }) => id === 'ast-initial' && value.content === 'final answer');
+      expect(contentWrites).toHaveLength(2);
+
+      const handlerSpy = vi.mocked(createGatewayEventHandler).mock.results.at(-1)!
+        .value as ReturnType<typeof vi.fn>;
+      const unlockIndex = handlerSpy.mock.calls.findIndex(
+        ([event]: any) => event.type === 'visible_output_end',
+      );
+      expect(unlockIndex).toBeGreaterThanOrEqual(0);
+      expect(mockUpdateMessage.mock.invocationCallOrder[contentWrites[1].index]).toBeLessThan(
+        handlerSpy.mock.invocationCallOrder[unlockIndex],
+      );
+
+      ipc.emitComplete('ipc-sess-1');
+      await flush();
+      resolveSendPrompt!();
+      await flush();
+      await executorPromise;
+      await flush();
+    });
+
     it('should write accumulated content + model + provider to the final assistant message', async () => {
       await runWithEvents([
         ccInit(),
