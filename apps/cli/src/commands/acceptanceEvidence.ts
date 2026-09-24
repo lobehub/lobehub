@@ -16,6 +16,8 @@ import {
 
 export function storageQuotaRecovery() {
   const serverUrl = new URL(resolveServerUrl());
+  serverUrl.username = '';
+  serverUrl.password = '';
   // Cloud's API still uses app.lobehub.com; user-facing pages use lobehub.com.
   if (serverUrl.origin === 'https://app.lobehub.com') serverUrl.hostname = 'lobehub.com';
   const cleanupUrl = new URL('/acceptance', serverUrl).toString();

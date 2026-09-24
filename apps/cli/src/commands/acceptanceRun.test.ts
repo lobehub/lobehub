@@ -203,17 +203,25 @@ describe('acceptance publication with missing evidence', () => {
     expect(process.exitCode).toBe(1);
   });
 
-  it('uses the configured server for recovery links', async () => {
-    vi.mocked(resolveServerUrl).mockReturnValue('https://lobe.example.test');
+  it('uses the configured server without credentials for recovery links', async () => {
+    vi.mocked(resolveServerUrl).mockReturnValue(
+      'https://quota-user:quota%40password@lobe.example.test:8443/base',
+    );
     vi.mocked(uploadLocalFile).mockRejectedValue(new Error('storage_block:upgrade_required'));
     await report(['screenshot'], ["screen's shot.png"]);
 
     await run('ingest', dir, '--json');
 
     expect(result().recovery).toMatchObject({
-      cleanupUrl: 'https://lobe.example.test/acceptance',
-      upgradeUrl: 'https://lobe.example.test/settings/plans',
+      cleanupUrl: 'https://lobe.example.test:8443/acceptance',
+      upgradeUrl: 'https://lobe.example.test:8443/settings/plans',
     });
+    expect(result().recovery.message).toContain('https://lobe.example.test:8443/acceptance');
+    expect(result().recovery.message).toContain('https://lobe.example.test:8443/settings/plans');
+    expect(JSON.stringify(result().recovery)).not.toMatch(
+      /quota-user|quota%40password|quota@password/,
+    );
+    expect(log.warn).toHaveBeenCalledWith(result().recovery.message);
   });
 
   it.each([undefined, 'Upload failed: 503 Service Unavailable'])(
@@ -237,6 +245,9 @@ describe('acceptance publication with missing evidence', () => {
     it.each([false, true])(
       'reports quota recovery (json=%s) without writing a result',
       async (json) => {
+        vi.mocked(resolveServerUrl).mockReturnValue(
+          'https://quota-user:quota%40password@app.lobehub.com',
+        );
         vi.mocked(uploadLocalFile).mockRejectedValue(new Error('storage_block:upgrade_required'));
 
         await run(
@@ -255,8 +266,15 @@ describe('acceptance publication with missing evidence', () => {
         expect(client.verify.ingestResult.mutate).not.toHaveBeenCalled();
         expect(client.verify.createRun.mutate).not.toHaveBeenCalled();
         expect(log.warn).toHaveBeenCalledWith(
+          expect.stringContaining('https://lobehub.com/acceptance'),
+        );
+        expect(log.warn).toHaveBeenCalledWith(
           expect.stringContaining('https://lobehub.com/settings/plans'),
         );
+        expect(JSON.stringify(vi.mocked(log.warn).mock.calls)).not.toMatch(
+          /quota-user|quota%40password|quota@password/,
+        );
+        expect(printed.join('\n')).not.toMatch(/quota-user|quota%40password|quota@password/);
         if (json) {
           expect(result()).toMatchObject({
             error: 'storage_block:upgrade_required',
