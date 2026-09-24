@@ -82,7 +82,7 @@ it.each(['', '   ', '  Please add dark mode evidence  '])(
         ...props,
         feedbackCount: 0,
         needsFixCount: 0,
-        onRejectComment: () => openRejectModal({ onConfirm }),
+        onRejectComment: () => openRejectModal({ dispatchAvailable: true, onConfirm }),
       }),
     );
 
@@ -97,3 +97,26 @@ it.each(['', '   ', '  Please add dark mode evidence  '])(
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   },
 );
+
+it('without an authoring agent, the reject dialog copies the prompt instead of promising a round', async () => {
+  // Regression: the dialog said 打回并发起下一轮 though nothing could start one.
+  const onConfirm = vi.fn().mockResolvedValue(true);
+  render(createElement(ModalHost));
+  render(
+    createElement(DecisionBar, {
+      ...props,
+      feedbackCount: 0,
+      needsFixCount: 0,
+      onRejectComment: () => openRejectModal({ dispatchAvailable: false, onConfirm }),
+    }),
+  );
+
+  fireEvent.click(screen.getByRole('button', { name: 'acceptance.bar.rejectComment' }));
+  fireEvent.change(await screen.findByRole('textbox'), { target: { value: '补一段录屏' } });
+
+  expect(screen.queryByRole('button', { name: 'acceptance.actions.confirmReject' })).toBeNull();
+  expect(screen.getByText('acceptance.reject.descriptionCopy')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'acceptance.actions.confirmRejectCopy' }));
+
+  await waitFor(() => expect(onConfirm).toHaveBeenCalledWith('补一段录屏'));
+});

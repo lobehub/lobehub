@@ -122,6 +122,7 @@ export default {
   'acceptance.actions.confirmAccept': 'Confirm acceptance',
   'acceptance.actions.more': 'More actions',
   'acceptance.actions.refresh': 'Refresh',
+  'acceptance.actions.confirmRejectCopy': 'Reject & copy prompt',
   'acceptance.actions.confirmReject': 'Reject and start the next round',
   'acceptance.actions.reject': 'Reject delivery',
   'acceptance.banner.accepted': 'Accepted by you · {{time}}',
@@ -349,6 +350,8 @@ export default {
   'acceptance.origin.agentFallback': 'Agent',
   'acceptance.origin.backToRuns': 'Back to runs',
   'acceptance.origin.openTopic': 'Open topic',
+  'acceptance.reject.descriptionCopy':
+    'No agent is attached to this delivery. Rejecting copies the repair prompt, including any reason you add — paste it to any agent to start the next round.',
   'acceptance.reject.description':
     'Send this delivery back for another repair round. Optionally add a reason to guide the fix.',
   'acceptance.reject.placeholder': 'Reason (optional), e.g. add screenshot evidence for dark mode…',

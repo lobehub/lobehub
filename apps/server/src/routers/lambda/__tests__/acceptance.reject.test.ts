@@ -155,6 +155,9 @@ describe('acceptanceRouter reject', () => {
           prompt: expect.stringContaining(`lh acceptance feedback ${acceptanceId} --actionable`),
         }),
       );
+      // The round-level reason is not printed by `feedback --actionable`, so
+      // the agent only learns it from the prompt.
+      expect(mockExecAgent.mock.calls[0][0].prompt).toContain('Tab title missing');
       const [run] = await serverDB.select().from(verifyRuns).where(eq(verifyRuns.id, runId));
       expect(run.decisionDetail?.comment).toBe('Tab title missing');
     });

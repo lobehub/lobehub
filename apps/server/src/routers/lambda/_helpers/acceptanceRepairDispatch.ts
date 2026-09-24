@@ -60,6 +60,7 @@ export const dispatchAcceptanceRepair = async (
   ctx: DispatchContext,
   service: AcceptanceService,
   acceptance: AcceptanceItem,
+  rejectComment?: string,
 ): Promise<AcceptanceRepairDispatch> => {
   // A Goal Task's next attempt belongs to its coordinator, which reads the
   // rejected round through the prompt builder and claims the task. A plain
@@ -88,7 +89,7 @@ export const dispatchAcceptanceRepair = async (
   try {
     ({ operationId } = await agentNotifyRouter.createCaller(ctx).notify({
       agentId,
-      content: buildAcceptanceRepairPrompt(acceptance.id),
+      content: buildAcceptanceRepairPrompt(acceptance.id, rejectComment),
       role: 'user',
       topicId: topic.id,
     }));

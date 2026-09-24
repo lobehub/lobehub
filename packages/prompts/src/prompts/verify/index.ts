@@ -89,9 +89,13 @@ Investigate whether the deliverable satisfies this check, judging against the ru
  * The send-back prompt for a rejected delivery. It points the agent at the CLI
  * as the source of truth, so neither the reviewer nor the dispatcher has to
  * hand-summarize evidence and feedback.
+ *
+ * `rejectComment` is the whole-round reason from a reject. It lives on the
+ * round's decision, which `feedback --actionable` does not print, so it has to
+ * travel in the prompt itself.
  */
-export const buildAcceptanceRepairPrompt = (acceptanceId: string) =>
-  `Use the LobeHub CLI to read the latest review feedback for acceptance ${acceptanceId}:
+export const buildAcceptanceRepairPrompt = (acceptanceId: string, rejectComment?: string) =>
+  `${rejectComment ? `The reviewer sent this delivery back with this reason:\n\n${rejectComment}\n\n` : ''}Use the LobeHub CLI to read the latest review feedback for acceptance ${acceptanceId}:
 
 lh acceptance feedback ${acceptanceId} --actionable
 

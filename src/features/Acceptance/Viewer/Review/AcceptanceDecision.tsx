@@ -233,8 +233,22 @@ const AcceptanceDecision = ({ onDraftToComposer }: AcceptanceDecisionProps) => {
         }}
         onRejectComment={() =>
           openRejectModal({
-            onConfirm: (comment) =>
-              runAction(async () => {
+            // `origin` is owner-only, matching the server's dispatch gate.
+            dispatchAvailable: Boolean(data.origin?.topic),
+            onConfirm: async (comment) => {
+              if (!data.origin?.topic) {
+                // No agent to send it back to — hand the prompt to the reviewer.
+                // Copy before any await: the clipboard write needs the click's
+                // user activation, which the reject request would lose.
+                await copyToClipboard(buildAcceptanceRepairPrompt(acceptance.id, comment));
+                const rejected = await runAction(() =>
+                  verifyService.rejectDelivery(acceptance.id, comment),
+                );
+                if (rejected)
+                  toast.success({ placement: 'top', title: t('acceptance.bar.copied') });
+                return rejected;
+              }
+              return runAction(async () => {
                 // The server sends the delivery back to its authoring agent when
                 // the rounds name one — say so, since the reject itself is quiet.
                 const { repairDispatch } = await verifyService.rejectDelivery(
@@ -246,7 +260,8 @@ const AcceptanceDecision = ({ onDraftToComposer }: AcceptanceDecisionProps) => {
                 } else if (repairDispatch.reason === 'failed') {
                   toast.error(repairDispatch.error ?? t('acceptance.actionError'));
                 }
-              }),
+              });
+            },
           })
         }
         onRerun={async () => {

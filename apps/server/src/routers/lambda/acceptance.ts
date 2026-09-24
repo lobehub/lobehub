@@ -1248,7 +1248,12 @@ export const acceptanceRouter = router({
           return { ...rejected, repairDispatch: { dispatched: false, reason: 'skipped' } };
         }
 
-        const repairDispatch = await dispatchAcceptanceRepair(ctx, service, acceptance);
+        const repairDispatch = await dispatchAcceptanceRepair(
+          ctx,
+          service,
+          acceptance,
+          input.comment || undefined,
+        );
         if (!repairDispatch.dispatched) return { ...rejected, repairDispatch };
 
         const current = await service.acceptanceModel.findById(acceptance.id);
