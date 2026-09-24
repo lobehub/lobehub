@@ -3,9 +3,13 @@ import { randomUUID } from 'node:crypto';
 import type { AcceptanceCommentItem, AcceptanceCommentSource } from '@lobechat/types';
 import { FileSource } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import { businessFileUploadCheck } from '@/business/server/lambda-routers/file';
+import { AcceptanceCommentModel } from '@/database/models/acceptanceComment';
+import { OAuthHandoffModel } from '@/database/models/oauthHandoff';
+import { acceptanceComments } from '@/database/schemas/acceptanceComment';
+import { oauthHandoffs } from '@/database/schemas/oidc';
 import { acceptances } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 import { isUuid } from '@/database/utils/uuid';
@@ -92,7 +96,7 @@ export async function describeReviewConnect(
 export async function authorizeReviewConnect(
   db: LobeChatDatabase,
   userId: string,
-  input: { acceptanceId: string; origin: string },
+  input: { acceptanceId: string; handoff?: string; origin: string },
 ) {
   const described = await describeReviewConnect(db, userId, input);
   if (!described.capabilities.length)
@@ -104,11 +108,52 @@ export async function authorizeReviewConnect(
     origin: described.origin,
     userId,
   });
-  return {
+  const session = {
     ...described,
     expiresAt: new Date(Date.now() + ACCEPTANCE_REVIEW_TOKEN_TTL_SECONDS * 1000).toISOString(),
     token,
   };
+  // The popup may have lost its opener on the way (a sign-in through an IdP
+  // that sets Cross-Origin-Opener-Policy cuts it), so the session is also
+  // parked under the toolbar's one-time handoff id for it to claim — once,
+  // within five minutes, and only from the approved origin.
+  if (input.handoff) {
+    await new OAuthHandoffModel(db).create({
+      client: ACCEPTANCE_REVIEW_HANDOFF_CLIENT,
+      id: input.handoff,
+      payload: session,
+    });
+  }
+  return session;
+}
+
+export const ACCEPTANCE_REVIEW_HANDOFF_CLIENT = 'acceptance-review';
+
+/**
+ * The toolbar claims a session parked by `authorizeReviewConnect`. The handoff
+ * id is a secret the toolbar generated and only ever put in the popup URL; the
+ * claim must also come from the origin the reviewer approved.
+ */
+export async function claimReviewHandoff(
+  db: LobeChatDatabase,
+  input: { handoff: string; origin: string | null },
+) {
+  const model = new OAuthHandoffModel(db);
+  if (!(await model.exists(input.handoff, ACCEPTANCE_REVIEW_HANDOFF_CLIENT))) return null;
+  const [peek] = await db
+    .select({ payload: oauthHandoffs.payload })
+    .from(oauthHandoffs)
+    .where(
+      and(
+        eq(oauthHandoffs.id, input.handoff),
+        eq(oauthHandoffs.client, ACCEPTANCE_REVIEW_HANDOFF_CLIENT),
+      ),
+    )
+    .limit(1);
+  // Refuse before consuming, so a probe from another site cannot burn it.
+  if (!peek || (peek.payload as { origin?: string }).origin !== input.origin) return null;
+  const row = await model.fetchAndConsume(input.handoff, ACCEPTANCE_REVIEW_HANDOFF_CLIENT);
+  return (row?.payload as Awaited<ReturnType<typeof authorizeReviewConnect>> | undefined) ?? null;
 }
 
 /** A review toolbar's remark as the toolbar shows it back. */
@@ -198,7 +243,9 @@ export class AcceptanceReviewSession {
           item.source &&
           !item.parentCommentId &&
           !item.resolvedAt &&
-          !item.deletedAt,
+          !item.deletedAt &&
+          // Already sent back with an earlier reject: the repair has them.
+          !item.metadata?.sentBackAt,
       )
       .map(toAnnotation);
   }
@@ -244,17 +291,40 @@ export class AcceptanceReviewSession {
       attachments,
       clientId: input.clientId ?? randomUUID(),
       content: input.content,
-      source: input.source,
     });
-    return toAnnotation(data);
+    // The page context is not part of the public create input — any commenter
+    // could forge one there. Only this path, which captured it, records it.
+    await new AcceptanceCommentModel(this.db).setSource(data.id, input.source);
+    return toAnnotation({ ...data, source: input.source });
   }
 
   async remove(commentId: string) {
     this.can('comment');
-    const { commentCaller } = await this.callers();
-    const mine = (await this.listMine()).some((item) => item.id === commentId);
+    const [row] = await this.db
+      .select({
+        authorUserId: acceptanceComments.authorUserId,
+        deletedAt: acceptanceComments.deletedAt,
+        parentCommentId: acceptanceComments.parentCommentId,
+        source: acceptanceComments.source,
+      })
+      .from(acceptanceComments)
+      .where(
+        and(
+          eq(acceptanceComments.id, commentId),
+          eq(acceptanceComments.acceptanceId, this.claims.acceptance_id),
+        ),
+      )
+      .limit(1);
     // Only the reviewer's own product remarks: the toolbar is not a moderation tool.
-    if (!mine) throw new TRPCError({ code: 'NOT_FOUND', message: 'Remark not found' });
+    if (
+      !row ||
+      row.authorUserId !== this.claims.sub ||
+      !row.source ||
+      row.parentCommentId ||
+      row.deletedAt
+    )
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Remark not found' });
+    const { commentCaller } = await this.callers();
     await commentCaller.delete({ id: commentId });
     return { id: commentId };
   }
@@ -262,11 +332,22 @@ export class AcceptanceReviewSession {
   /** Send the delivery back; the reject procedure dispatches the repair to its source agent. */
   async reject(input: { comment?: string }) {
     this.can('reject');
+    const pending = await this.listMine();
     const { acceptanceCaller } = await this.callers();
     const result = await acceptanceCaller.reject({
       comment: input.comment,
       id: this.claims.acceptance_id,
     });
-    return { repairDispatch: result.repairDispatch, status: result.status };
+    // They stay open for the repair agent (open = actionable); the mark only
+    // keeps the toolbar from offering them as drafts and sending them twice.
+    await new AcceptanceCommentModel(this.db).mergeMetadata(
+      pending.map((item) => item.id),
+      { sentBackAt: new Date().toISOString() },
+    );
+    return {
+      repairDispatch: result.repairDispatch,
+      sentBack: pending.length,
+      status: result.status,
+    };
   }
 }

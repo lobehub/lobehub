@@ -86,7 +86,6 @@ const createSchema = z
     editorData: z.unknown().optional(),
     kind: z.enum(['approval', 'comment', 'proposal']).optional(),
     parentCommentId: z.string().trim().min(1).max(64).optional(),
-    source: acceptanceCommentSourceSchema.optional(),
   })
   .refine(
     (value) =>
@@ -97,10 +96,6 @@ const createSchema = z
   .refine((value) => !(value.parentCommentId && value.anchor), {
     message: 'A reply cannot carry its own anchor',
     path: ['anchor'],
-  })
-  .refine((value) => !(value.source && (value.parentCommentId || value.anchor)), {
-    message: 'A product page opens its own thread',
-    path: ['source'],
   })
   .refine((value) => !(value.parentCommentId && value.kind === 'approval'), {
     message: 'An approval is a thread root',
@@ -281,6 +276,9 @@ const enrich = async (
     reactionsByComment.set(row.parentCommentId, byEmoji);
   }
 
+  const mayReadPrivate = (row: AcceptanceCommentRow) =>
+    Boolean(scope.canModerate) || (Boolean(scope.userId) && row.authorUserId === scope.userId);
+
   return rows
     .filter((row) => row.kind !== 'reaction')
     .map((row) => ({
@@ -308,14 +306,17 @@ const enrich = async (
       evidenceId: row.evidenceId,
       id: row.id,
       kind: row.kind,
-      metadata: row.deletedAt ? null : (row.metadata ?? null),
+      // Page context (user agent, console errors, build) and the server's own
+      // bag are for the delivery's reviewers and the remark's author, not for
+      // every holder of a public link.
+      metadata: row.deletedAt || !mayReadPrivate(row) ? null : (row.metadata ?? null),
       parentCommentId: row.parentCommentId,
       reactions: [...(reactionsByComment.get(row.id)?.values() ?? [])],
       rect: row.anchorRect,
       resolvedAt: row.resolvedAt,
       resolvedByUserId: row.resolvedByUserId,
       // A tombstone keeps its place in the thread, not the page it pointed at.
-      source: row.deletedAt ? null : (row.source ?? null),
+      source: row.deletedAt || !mayReadPrivate(row) ? null : (row.source ?? null),
       updatedAt: row.updatedAt,
     }));
 };
@@ -452,7 +453,6 @@ export const acceptanceCommentRouter = router({
         editorData: input.editorData as never,
         kind: input.kind,
         parentCommentId: input.parentCommentId,
-        source: input.source,
         /*
          * The ceiling travels INTO the write so it is counted and charged in
          * one transaction: checked out here it would be advisory only, and a

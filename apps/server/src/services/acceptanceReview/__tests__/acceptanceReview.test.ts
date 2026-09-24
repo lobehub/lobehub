@@ -44,8 +44,12 @@ vi.mock('@/libs/trpc/utils/internalJwt', async (importOriginal) => {
   };
 });
 
-const { authorizeReviewConnect, AcceptanceReviewSession, normalizeReviewOrigin } =
-  await import('../index');
+const {
+  authorizeReviewConnect,
+  AcceptanceReviewSession,
+  claimReviewHandoff,
+  normalizeReviewOrigin,
+} = await import('../index');
 const { handleAcceptanceReviewPreflight, handleAcceptanceReviewRequest } = await import('../http');
 
 const ORIGIN = 'https://product.example.com';
@@ -155,6 +159,27 @@ describe('acceptance review', () => {
       ).resolves.toMatchObject({ capabilities: ['comment'] });
     });
 
+    it('parks the session for the toolbar to claim once, only from the approved origin', async () => {
+      const handoff = 'h'.repeat(43);
+      const session = await authorizeReviewConnect(serverDB, ownerId, {
+        acceptanceId,
+        handoff,
+        origin: ORIGIN,
+      });
+
+      // Another site probing the id gets nothing and does not burn it.
+      await expect(
+        claimReviewHandoff(serverDB, { handoff, origin: 'https://evil.example.com' }),
+      ).resolves.toBeNull();
+      await expect(
+        claimReviewHandoff(serverDB, { handoff, origin: ORIGIN }),
+      ).resolves.toMatchObject({
+        acceptance: { id: acceptanceId },
+        token: session.token,
+      });
+      await expect(claimReviewHandoff(serverDB, { handoff, origin: ORIGIN })).resolves.toBeNull();
+    });
+
     it('refuses an origin nobody could have meant to approve', async () => {
       await expect(
         authorizeReviewConnect(serverDB, ownerId, {
@@ -198,7 +223,7 @@ describe('acceptance review', () => {
       ]);
     });
 
-    it("lists only the reviewer's own open product remarks, and removes only those", async () => {
+    it("lists only the reviewer's own open product remarks, and removes only its own", async () => {
       const session = new AcceptanceReviewSession(serverDB, claims());
       const first = await session.create({ content: 'a', source });
       const second = await session.create({ content: 'b', source });
@@ -206,23 +231,78 @@ describe('acceptance review', () => {
         .update(acceptanceComments)
         .set({ resolvedAt: new Date() })
         .where(eq(acceptanceComments.id, second.id));
+      const [theirs] = await serverDB
+        .insert(acceptanceComments)
+        .values({
+          acceptanceId,
+          authorUserId: strangerId,
+          clientId: 'theirs',
+          content: 'c',
+          source,
+        })
+        .returning();
 
       await expect(session.listMine()).resolves.toEqual([
         expect.objectContaining({ id: first.id }),
       ]);
       await session.remove(first.id);
       await expect(session.listMine()).resolves.toEqual([]);
-      await expect(session.remove(second.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      // Ownership is checked on the row itself, not by scanning the discussion.
+      await expect(session.remove(theirs.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      await expect(session.remove('no-such-remark')).rejects.toMatchObject({ code: 'NOT_FOUND' });
     });
 
-    it('sends the delivery back through the reject procedure', async () => {
-      const result = await new AcceptanceReviewSession(serverDB, claims()).reject({
-        comment: '见产品内标注',
-      });
+    it('sends the delivery back and stops offering the sent remarks as drafts', async () => {
+      const session = new AcceptanceReviewSession(serverDB, claims());
+      const remark = await session.create({ content: '失败原因看不出来', source });
+
+      const result = await session.reject({ comment: '见产品内标注' });
       expect(result).toMatchObject({
         repairDispatch: { dispatched: false, reason: 'no_origin' },
+        sentBack: 1,
         status: 'rejected',
       });
+      await expect(session.listMine()).resolves.toEqual([]);
+      // Still open, so the repair agent reads it as actionable feedback.
+      const [row] = await serverDB
+        .select()
+        .from(acceptanceComments)
+        .where(eq(acceptanceComments.id, remark.id));
+      expect(row.resolvedAt).toBeNull();
+      expect(row.metadata).toMatchObject({ sentBackAt: expect.any(String) });
+    });
+
+    it('does not let the ordinary comment input forge a product page', async () => {
+      const { acceptanceCommentRouter } = await import('@/server/routers/lambda/acceptanceComment');
+      const caller = acceptanceCommentRouter.createCaller({ userId: ownerId } as any);
+      const { data } = await caller.create({
+        acceptanceId,
+        clientId: 'forged',
+        content: 'looks like it came from the product',
+        source,
+      } as any);
+      const [row] = await serverDB
+        .select()
+        .from(acceptanceComments)
+        .where(eq(acceptanceComments.id, data.id));
+      expect(row.source).toBeNull();
+    });
+
+    it("shows a remark's page context to reviewers and its author, not to a public-link visitor", async () => {
+      await serverDB
+        .update(acceptances)
+        .set({ visibility: 'public' })
+        .where(eq(acceptances.id, acceptanceId));
+      await new AcceptanceReviewSession(serverDB, claims()).create({ content: 'x', source });
+      const { acceptanceCommentRouter } = await import('@/server/routers/lambda/acceptanceComment');
+      const list = (userId: string) =>
+        acceptanceCommentRouter
+          .createCaller({ userId } as any)
+          .list({ acceptanceId })
+          .then(({ items }) => items[0]);
+
+      await expect(list(ownerId)).resolves.toMatchObject({ source });
+      await expect(list(strangerId)).resolves.toMatchObject({ metadata: null, source: null });
     });
 
     it('holds a comment-only session to commenting', async () => {
@@ -303,6 +383,32 @@ describe('acceptance review', () => {
       await expect(listed.json()).resolves.toMatchObject({
         items: [expect.objectContaining({ content: '标题不对' })],
       });
+    });
+
+    it('answers a body that is not JSON with 400, not a server error', async () => {
+      const token = tokenFor(claims());
+      const response = await handleAcceptanceReviewRequest(
+        request('comments', { body: '{"content":', method: 'POST', origin: ORIGIN, token }),
+        ['comments'],
+      );
+      expect(response.status).toBe(400);
+    });
+
+    it('pays a parked session out only to the approved site', async () => {
+      const handoff = 'k'.repeat(43);
+      await authorizeReviewConnect(serverDB, ownerId, { acceptanceId, handoff, origin: ORIGIN });
+
+      const elsewhere = await handleAcceptanceReviewRequest(
+        request(`handoff?id=${handoff}`, { origin: 'https://evil.example.com' }),
+        ['handoff'],
+      );
+      expect(elsewhere.status).toBe(404);
+      const here = await handleAcceptanceReviewRequest(
+        request(`handoff?id=${handoff}`, { origin: ORIGIN }),
+        ['handoff'],
+      );
+      expect(here.status).toBe(200);
+      await expect(here.json()).resolves.toMatchObject({ acceptance: { id: acceptanceId } });
     });
 
     it('validates the body before touching anything', async () => {

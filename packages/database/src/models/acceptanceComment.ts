@@ -392,4 +392,34 @@ export class AcceptanceCommentModel {
       .returning();
     return row;
   };
+
+  /**
+   * Record the product page a thread root was written on. Kept apart from
+   * `create`, whose input any commenter controls: only the embedded review
+   * toolbar's server path, which captured the page itself, calls this.
+   */
+  setSource = async (rootId: string, source: AcceptanceCommentSource) => {
+    const [row] = await this.db
+      .update(acceptanceComments)
+      .set({ source, updatedAt: new Date() })
+      .where(and(eq(acceptanceComments.id, rootId), isNull(acceptanceComments.parentCommentId)))
+      .returning();
+    return row;
+  };
+
+  /**
+   * Merge keys into rows' `metadata` bag (shallow), leaving the rest of the bag
+   * and every other column untouched.
+   */
+  mergeMetadata = async (ids: string[], patch: Record<string, unknown>) => {
+    if (ids.length === 0) return 0;
+    const rows = await this.db
+      .update(acceptanceComments)
+      .set({
+        metadata: sql`coalesce(${acceptanceComments.metadata}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`,
+      })
+      .where(inArray(acceptanceComments.id, ids))
+      .returning({ id: acceptanceComments.id });
+    return rows.length;
+  };
 }

@@ -70,6 +70,20 @@ export interface ReviewClientOptions {
   storage?: StorageLike | null;
 }
 
+const HANDOFF_POLL_MS = 1500;
+const HANDOFF_GRACE_MS = 60_000;
+/** The server keeps a parked session for five minutes. */
+const HANDOFF_TIMEOUT_MS = 5 * 60_000;
+
+/** 32 random bytes, base64url — the one-time id a parked session is claimed with. */
+export const randomHandoffId = () => {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return btoa(String.fromCharCode(...bytes))
+    .replaceAll('+', '-')
+    .replaceAll('/', '_')
+    .replaceAll('=', '');
+};
+
 /** Seconds of slack so a request never leaves with a token about to lapse. */
 const EXPIRY_MARGIN_MS = 30_000;
 
@@ -146,41 +160,76 @@ export class ReviewClient {
     return session;
   }
 
-  connectUrl(pageOrigin: string) {
+  connectUrl(pageOrigin: string, handoff?: string) {
     const url = new URL('/oauth/acceptance-review', this.server);
     url.searchParams.set('acceptance', this.acceptanceId);
     url.searchParams.set('origin', pageOrigin);
+    if (handoff) url.searchParams.set('handoff', handoff);
     return url.toString();
   }
 
-  /** Open the approval popup and wait for the reviewer's answer. */
-  connect(): Promise<ReviewSession> {
+  /** Pick up a session the approval page parked under `handoff`; null until approved. */
+  async claimHandoff(handoff: string): Promise<ReviewSession | null> {
+    const response = await this.fetchImpl(
+      `${this.server}/api/acceptance-review/handoff?id=${encodeURIComponent(handoff)}`,
+    ).catch(() => null);
+    if (!response?.ok) return null;
+    const data = (await response.json().catch(() => null)) as unknown;
+    const session = this.acceptMessage({
+      data: { ...(data as object), type: SESSION_MESSAGE },
+      origin: this.server,
+    });
+    return session && session !== 'denied' ? session : null;
+  }
+
+  /**
+   * Open the approval popup and wait for the reviewer's answer. Two channels:
+   * the popup posts the session back to its opener, and — because a sign-in
+   * through an IdP with Cross-Origin-Opener-Policy cuts that link (and makes
+   * `popup.closed` read true while the reviewer is still signing in) — the
+   * session is also parked server-side under a one-time id this page polls.
+   */
+  connect(options: { signal?: AbortSignal } = {}): Promise<ReviewSession> {
+    const handoff = randomHandoffId();
     const popup = window.open(
-      this.connectUrl(window.location.origin),
+      this.connectUrl(window.location.origin, handoff),
       'lobehub-review-connect',
       'popup,width=460,height=640',
     );
     if (!popup) return Promise.reject(new ReviewError('Popup blocked', 'POPUP_BLOCKED', 0));
     return new Promise((resolve, reject) => {
-      const done = () => {
+      const startedAt = Date.now();
+      let closedAt: number | null = null;
+      let settled = false;
+      const finish = (result: ReviewSession | ReviewError) => {
+        if (settled) return;
+        settled = true;
         window.removeEventListener('message', onMessage);
-        clearInterval(watch);
+        clearInterval(timer);
+        options.signal?.removeEventListener('abort', onAbort);
+        if (result instanceof ReviewError) reject(result);
+        else resolve(result);
       };
       const onMessage = (event: MessageEvent) => {
         if (event.source !== popup) return;
         const result = this.acceptMessage(event);
         if (!result) return;
-        done();
-        if (result === 'denied') reject(new ReviewError('Denied', 'DENIED', 0));
-        else resolve(result);
+        finish(result === 'denied' ? new ReviewError('Denied', 'DENIED', 0) : result);
       };
-      // Closed without an answer: stop waiting.
-      const watch = setInterval(() => {
-        if (!popup.closed) return;
-        done();
-        reject(new ReviewError('Popup closed', 'CLOSED', 0));
-      }, 500);
+      const onAbort = () => finish(new ReviewError('Cancelled', 'CANCELLED', 0));
+      const timer = setInterval(async () => {
+        const session = await this.claimHandoff(handoff);
+        if (session) return finish(session);
+        if (popup.closed) closedAt ??= Date.now();
+        // A closed popup may only look closed (COOP); give the handoff a grace
+        // period before concluding the reviewer walked away.
+        if (closedAt && Date.now() - closedAt > HANDOFF_GRACE_MS)
+          finish(new ReviewError('Popup closed', 'CLOSED', 0));
+        else if (Date.now() - startedAt > HANDOFF_TIMEOUT_MS)
+          finish(new ReviewError('Timed out', 'TIMEOUT', 0));
+      }, HANDOFF_POLL_MS);
       window.addEventListener('message', onMessage);
+      options.signal?.addEventListener('abort', onAbort);
     });
   }
 
@@ -225,9 +274,12 @@ export class ReviewClient {
   }
 
   reject(comment?: string) {
-    return this.request<{ repairDispatch: RepairDispatch; status: string }>('reject', {
-      body: JSON.stringify({ comment: comment || undefined }),
-      method: 'POST',
-    });
+    return this.request<{ repairDispatch: RepairDispatch; sentBack: number; status: string }>(
+      'reject',
+      {
+        body: JSON.stringify({ comment: comment || undefined }),
+        method: 'POST',
+      },
+    );
   }
 }

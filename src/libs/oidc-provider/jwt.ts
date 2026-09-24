@@ -2,6 +2,10 @@ import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
 import { authEnv } from '@/envs/auth';
+import {
+  ACCEPTANCE_REVIEW_JWT_AUDIENCE,
+  ACCEPTANCE_REVIEW_JWT_PURPOSE,
+} from '@/libs/trpc/utils/internalJwt';
 
 const log = debug('oidc-jwt');
 
@@ -133,10 +137,9 @@ export const validateOIDCJWT = async (token: string) => {
     // refused by name. An acceptance-review token is handed to a third-party
     // page (the embedded review toolbar) for one acceptance; accepting it as a
     // user session would give that page the reviewer's whole account.
-    // See `signAcceptanceReviewJWT` in @/libs/trpc/utils/internalJwt.
     if (
-      payload.purpose === 'acceptance-review' ||
-      payload.aud === 'urn:lobehub:acceptance-review'
+      payload.purpose === ACCEPTANCE_REVIEW_JWT_PURPOSE ||
+      payload.aud === ACCEPTANCE_REVIEW_JWT_AUDIENCE
     ) {
       throw new TRPCError({
         code: 'UNAUTHORIZED',

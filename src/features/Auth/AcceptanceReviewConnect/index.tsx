@@ -25,6 +25,9 @@ const AcceptanceReviewConnect = memo(() => {
   const [searchParams] = useSearchParams();
   const acceptanceId = searchParams.get('acceptance') ?? '';
   const requestedOrigin = searchParams.get('origin') ?? '';
+  // The toolbar's one-time claim id: lets it pick the session up even if this
+  // window lost its opener (e.g. a sign-in through a COOP-isolated IdP).
+  const handoff = searchParams.get('handoff') ?? undefined;
   const [state, setState] = useState<'idle' | 'approving' | 'done' | 'no-opener'>('idle');
   const [error, setError] = useState<string>();
 
@@ -46,17 +49,18 @@ const AcceptanceReviewConnect = memo(() => {
 
   const approve = async () => {
     if (!data) return;
-    if (!opener) return setState('no-opener');
+    if (!opener && !handoff) return setState('no-opener');
     setState('approving');
     setError(undefined);
     try {
       const session = await lambdaClient.acceptanceReview.authorize.mutate({
         acceptanceId,
+        handoff,
         origin: data.origin,
       });
       // Addressed to the approved origin only: if the opener has navigated
       // elsewhere since, the browser drops the message instead of leaking it.
-      opener.postMessage(
+      opener?.postMessage(
         {
           acceptance: session.acceptance,
           capabilities: session.capabilities,

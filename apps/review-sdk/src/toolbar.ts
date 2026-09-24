@@ -70,6 +70,8 @@ export class ReviewToolbar {
   private picking = false;
   private panelOpen = false;
   private connectOpen = false;
+  /** Set while waiting for the reviewer in the approval popup; aborting stops waiting. */
+  private connecting: AbortController | null = null;
   private target: { box: Box; element: Element } | null = null;
   private draft = '';
   private overall = '';
@@ -98,6 +100,7 @@ export class ReviewToolbar {
   }
 
   destroy() {
+    this.connecting?.abort();
     this.stopPicking();
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('scroll', this.relayout, true);
@@ -118,14 +121,22 @@ export class ReviewToolbar {
   // ---------- session ----------
 
   private connect = async () => {
+    this.connecting?.abort();
+    const controller = new AbortController();
+    this.connecting = controller;
+    this.render();
     try {
-      await this.client.connect();
+      await this.client.connect({ signal: controller.signal });
       this.connectOpen = false;
       await this.refresh();
       this.startPicking();
     } catch (error) {
       const code = error instanceof ReviewError ? error.code : '';
-      this.toast(code === 'POPUP_BLOCKED' ? 'Popup blocked' : this.t.connectFailed);
+      if (code !== 'CANCELLED')
+        this.toast(code === 'POPUP_BLOCKED' ? this.t.popupBlocked : this.t.connectFailed);
+    } finally {
+      if (this.connecting === controller) this.connecting = null;
+      this.render();
     }
   };
 
@@ -309,6 +320,22 @@ export class ReviewToolbar {
   // ---------- render ----------
 
   private render() {
+    // Rebuilding the tree would drop focus and caret from a textarea the
+    // reviewer is typing in (a scroll or resize re-renders); carry them over.
+    const focused = this.shadow.activeElement as HTMLTextAreaElement | null;
+    const focusKey = focused?.dataset?.key;
+    const caret = focusKey ? [focused!.selectionStart, focused!.selectionEnd] : null;
+    this.paint();
+    if (focusKey && caret) {
+      const next = this.shadow.querySelector<HTMLTextAreaElement>(
+        `textarea[data-key="${focusKey}"]`,
+      );
+      next?.focus();
+      next?.setSelectionRange(caret[0], caret[1]);
+    }
+  }
+
+  private paint() {
     const t = this.t;
     const session = this.client.current();
     const count = this.remarks.length;
@@ -332,15 +359,27 @@ export class ReviewToolbar {
           'div',
           { className: 'connect', role: 'dialog' },
           h('strong', { textContent: t.connectTitle }),
-          h('span', { className: 'muted', textContent: t.connectHint }),
+          h('span', {
+            className: 'muted',
+            textContent: this.connecting ? t.connectWaiting : t.connectHint,
+          }),
           h(
             'div',
             { className: 'row end' },
             h('button', {
-              onclick: () => ((this.connectOpen = false), this.render()),
+              onclick: () => {
+                this.connecting?.abort();
+                this.connectOpen = false;
+                this.render();
+              },
               textContent: t.cancel,
             }),
-            h('button', { className: 'primary', onclick: this.connect, textContent: t.allow }),
+            h('button', {
+              className: 'primary',
+              disabled: Boolean(this.connecting),
+              onclick: this.connect,
+              textContent: this.connecting ? '…' : t.allow,
+            }),
           ),
         ),
       );
@@ -377,6 +416,7 @@ export class ReviewToolbar {
         window.innerWidth - COMPOSER_WIDTH - 8,
       );
       const textarea = h('textarea', { placeholder: t.composerPlaceholder, value: this.draft });
+      textarea.dataset.key = 'composer';
       textarea.addEventListener('input', () => {
         this.draft = textarea.value;
         saveButton.disabled = !this.draft.trim() || this.saving;
@@ -471,6 +511,7 @@ export class ReviewToolbar {
       );
     });
     const overall = h('textarea', { placeholder: t.overallPlaceholder, value: this.overall });
+    overall.dataset.key = 'overall';
     overall.addEventListener('input', () => (this.overall = overall.value));
     return h(
       'div',

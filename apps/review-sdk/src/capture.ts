@@ -44,6 +44,8 @@ export function installErrorCapture() {
 export const recentErrors = (limit = 5) => errors.slice(-limit);
 
 const MAX_WIDTH = 1600;
+/** Stay well under browsers' canvas size limits (~16k px a side). */
+const MAX_SCROLLER_CAPTURE_PX = 12_000;
 const EXCLUDE = [`[${HOST_ATTRIBUTE}]`];
 
 /** The nearest ancestor that is actually scrolled — consoles often scroll a <main>, not the page. */
@@ -97,24 +99,31 @@ export async function captureViewport(target: Element): Promise<string | null> {
     );
 
     const scroller = scrolledAncestor(target);
-    if (scroller) {
-      const box = scroller.getBoundingClientRect();
-      const { clientHeight, clientWidth, scrollTop } = scroller;
-      const full = await snapdom.toCanvas(scroller, { exclude: EXCLUDE, scale });
-      // Only paste when the capture really is the full content; otherwise the
-      // page capture above is the better of two imperfect pictures.
-      if (full.height >= (scrollTop + clientHeight) * scale * 0.98)
-        context.drawImage(
-          full,
-          0,
-          scrollTop * scale,
-          clientWidth * scale,
-          clientHeight * scale,
-          box.left * scale,
-          box.top * scale,
-          clientWidth * scale,
-          clientHeight * scale,
-        );
+    // Pasting back the scrolled slice needs the container at full height; past
+    // browser canvas limits that capture fails or comes back blank, so skip it
+    // and keep the page capture, which is still worth sending.
+    if (scroller && scroller.scrollHeight * scale <= MAX_SCROLLER_CAPTURE_PX) {
+      try {
+        const box = scroller.getBoundingClientRect();
+        const { clientHeight, clientWidth, scrollTop } = scroller;
+        const full = await snapdom.toCanvas(scroller, { exclude: EXCLUDE, scale });
+        // Only paste when the capture really is the full content; otherwise the
+        // page capture above is the better of two imperfect pictures.
+        if (full.height >= (scrollTop + clientHeight) * scale * 0.98)
+          context.drawImage(
+            full,
+            0,
+            scrollTop * scale,
+            clientWidth * scale,
+            clientHeight * scale,
+            box.left * scale,
+            box.top * scale,
+            clientWidth * scale,
+            clientHeight * scale,
+          );
+      } catch (error) {
+        console.warn('[lobehub-review] scrolled container capture failed', error);
+      }
     }
 
     const pad = 4 * scale;

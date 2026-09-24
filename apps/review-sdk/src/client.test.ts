@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { DENIED_MESSAGE, ReviewClient, ReviewError, SESSION_MESSAGE } from './client';
+import {
+  DENIED_MESSAGE,
+  randomHandoffId,
+  ReviewClient,
+  ReviewError,
+  SESSION_MESSAGE,
+} from './client';
 
 const SERVER = 'https://app.lobehub.test';
 const ACCEPTANCE = 'acc-1';
@@ -110,5 +116,39 @@ describe('requests', () => {
       status: 401,
     });
     expect(c.current()).toBeNull();
+  });
+});
+
+describe('handoff fallback', () => {
+  it('uses an unguessable one-time id and carries it in the approval link', () => {
+    const a = randomHandoffId();
+    expect(a).toMatch(/^[\w-]{43}$/);
+    expect(randomHandoffId()).not.toBe(a);
+    const url = new URL(client().connectUrl('https://product.test', a));
+    expect(url.searchParams.get('handoff')).toBe(a);
+  });
+
+  it('claims a parked session for this acceptance and keeps it for the tab', async () => {
+    const { type: _type, ...parked } = session();
+    const fetchImpl = vi.fn(async () => Response.json(parked));
+    const c = client(fetchImpl as unknown as typeof fetch);
+
+    await expect(c.claimHandoff('h'.repeat(43))).resolves.toMatchObject({ token: 'review-token' });
+    expect((fetchImpl.mock.calls[0] as unknown as [string])[0]).toBe(
+      `${SERVER}/api/acceptance-review/handoff?id=${'h'.repeat(43)}`,
+    );
+    expect(c.current()?.token).toBe('review-token');
+  });
+
+  it('keeps waiting while nothing is parked, and ignores a session for another acceptance', async () => {
+    const notYet = client(
+      vi.fn(async () => Response.json({}, { status: 404 })) as unknown as typeof fetch,
+    );
+    await expect(notYet.claimHandoff('x'.repeat(43))).resolves.toBeNull();
+
+    const { type: _type, ...other } = session({ acceptance: { id: 'other' } });
+    const wrong = client(vi.fn(async () => Response.json(other)) as unknown as typeof fetch);
+    await expect(wrong.claimHandoff('x'.repeat(43))).resolves.toBeNull();
+    expect(wrong.current()).toBeNull();
   });
 });

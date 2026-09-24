@@ -6,7 +6,7 @@ import { getServerDB } from '@/database/server';
 import { validateAcceptanceReviewJWT } from '@/libs/trpc/utils/internalJwt';
 import { acceptanceCommentSourceSchema } from '@/server/routers/lambda/acceptanceComment';
 
-import { AcceptanceReviewSession } from './index';
+import { AcceptanceReviewSession, claimReviewHandoff } from './index';
 
 /**
  * The embedded review toolbar's API: `/api/acceptance-review/<action>`.
@@ -44,6 +44,17 @@ export const handleAcceptanceReviewPreflight = (request: Request) =>
 export async function handleAcceptanceReviewRequest(request: Request, path: string[]) {
   const origin = request.headers.get('origin');
   try {
+    // Claiming a parked session carries no token yet: the one-time handoff id
+    // is the credential, and it only pays out to the approved origin.
+    if (path[0] === 'handoff' && request.method.toUpperCase() === 'GET') {
+      const handoff = new URL(request.url).searchParams.get('id') ?? '';
+      if (!/^[\w-]{32,128}$/.test(handoff))
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid handoff id' });
+      const session = await claimReviewHandoff(await getServerDB(), { handoff, origin });
+      if (!session) throw new TRPCError({ code: 'NOT_FOUND', message: 'Not approved yet' });
+      return json(session, 200, origin);
+    }
+
     const token = /^Bearer (\S+)$/i.exec(request.headers.get('authorization') ?? '')?.[1];
     const claims = token ? await validateAcceptanceReviewJWT(token) : null;
     if (!claims)
@@ -64,7 +75,10 @@ export async function handleAcceptanceReviewRequest(request: Request, path: stri
     if (resource === 'comments' && method === 'GET' && !id)
       return json({ items: await session.listMine() }, 200, origin);
     if (resource === 'comments' && method === 'POST' && !id) {
-      const input = createSchema.parse(await request.json());
+      const body = await request.json().catch(() => {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Body must be JSON' });
+      });
+      const input = createSchema.parse(body);
       return json(await session.create(input), 201, origin);
     }
     if (resource === 'comments' && method === 'DELETE' && id)

@@ -8,6 +8,13 @@ const connectInput = z.object({
   acceptanceId: z.string().min(1),
   origin: z.string().min(1).max(2000),
 });
+// A one-time secret the toolbar generated for the handoff fallback.
+const authorizeInput = connectInput.extend({
+  handoff: z
+    .string()
+    .regex(/^[\w-]{32,128}$/)
+    .optional(),
+});
 
 /**
  * The approval page behind the embedded review toolbar's popup: a signed-in
@@ -18,7 +25,7 @@ const connectInput = z.object({
 export const acceptanceReviewRouter = router({
   authorize: authedProcedure
     .use(serverDatabase)
-    .input(connectInput)
+    .input(authorizeInput)
     .mutation(({ ctx, input }) => authorizeReviewConnect(ctx.serverDB, ctx.userId, input)),
   describe: authedProcedure
     .use(serverDatabase)
