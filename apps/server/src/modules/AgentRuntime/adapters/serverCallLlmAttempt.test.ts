@@ -22,7 +22,7 @@ const attachTraceIdLater = async (error: { _responseBody?: unknown }) => {
 vi.mock('@lobechat/model-runtime', async () => {
   const { isEmptyModelCompletion, ModelEmptyError } =
     await import('../../../../../../packages/model-runtime/src/errors/modelEmptyCompletion');
-  const { ModelRefusalError } =
+  const { isModelRefusalFinishReason, ModelRefusalError } =
     await import('../../../../../../packages/model-runtime/src/errors/modelRefusal');
   const { consumeStreamUntilDone } =
     await import('../../../../../../packages/model-runtime/src/utils/consumeStream');
@@ -30,6 +30,7 @@ vi.mock('@lobechat/model-runtime', async () => {
   return {
     consumeStreamUntilDone,
     isEmptyModelCompletion,
+    isModelRefusalFinishReason,
     ModelEmptyError,
     ModelRefusalError,
   };
@@ -614,6 +615,20 @@ describe('ServerCallLlmAttempt', () => {
 
     await expect(attempt.execute()).rejects.toMatchObject({
       diagnostics: expect.objectContaining({ reasoningLength: 25 }),
+      errorType: 'ModelRefusal',
+    });
+    expect(recordModelCompletionFailureMock).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'refusal' }),
+    );
+  });
+
+  it('classifies a blank GLM sensitive-content stop as ModelRefusal', async () => {
+    const { attempt } = createAttempt(async ({ callback }) => {
+      await callback?.onCompletion?.({ finishReason: 'sensitive', text: '' });
+    });
+
+    await expect(attempt.execute()).rejects.toMatchObject({
+      diagnostics: expect.objectContaining({ finishReason: 'sensitive' }),
       errorType: 'ModelRefusal',
     });
     expect(recordModelCompletionFailureMock).toHaveBeenCalledWith(

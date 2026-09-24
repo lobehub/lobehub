@@ -1,8 +1,9 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type { Stream } from '@anthropic-ai/sdk/streaming';
-import type { ChatCitationItem } from '@lobechat/types';
+import type { ChatCitationItem, ChatMessageError } from '@lobechat/types';
 
 import type { ChatStreamCallbacks } from '../../types';
+import { AgentRuntimeErrorType } from '../../types/error';
 import { convertAnthropicUsage } from '../usageConverters';
 import type {
   ChatPayloadForTransformStream,
@@ -14,8 +15,10 @@ import type {
 import {
   convertIterableToStream,
   createCallbacksTransformer,
+  createFirstErrorHandleTransformer,
   createSSEProtocolTransformer,
   createTokenSpeedCalculator,
+  FIRST_CHUNK_ERROR_KEY,
 } from './protocol';
 
 export const transformAnthropicStream = (
@@ -23,6 +26,30 @@ export const transformAnthropicStream = (
   context: StreamContext,
   payload?: ChatPayloadForTransformStream,
 ): StreamProtocolChunk | StreamProtocolChunk[] => {
+  /**
+   * `convertIterableToStream` turns an SDK iterator failure (e.g. `TypeError: terminated` when
+   * the upstream connection drops mid-stream) into an error chunk. Without surfacing it here the
+   * chunk fell through as unknown data, the stream closed normally, and the dropped connection
+   * was misreported as an empty completion instead of an interrupted, fallback-eligible one.
+   */
+  if (FIRST_CHUNK_ERROR_KEY in chunk) {
+    const {
+      [FIRST_CHUNK_ERROR_KEY]: _,
+      name: _name,
+      stack: _stack,
+      ...body
+    } = chunk as Record<string, unknown>;
+    const errorData = {
+      body,
+      message: typeof body.message === 'string' ? body.message : JSON.stringify(body),
+      type:
+        typeof body.errorType === 'string'
+          ? (body.errorType as typeof AgentRuntimeErrorType.ProviderBizError)
+          : AgentRuntimeErrorType.ProviderBizError,
+    } satisfies ChatMessageError;
+    return { data: errorData, id: 'first_chunk_error', type: 'error' };
+  }
+
   // maybe need another structure to add support for multiple choices
   switch (chunk.type) {
     case 'message_start': {
@@ -267,6 +294,7 @@ export const AnthropicStream = (
     transformAnthropicStream(chunk, ctx, payload);
 
   return readableStream
+    .pipeThrough(createFirstErrorHandleTransformer(undefined, payload?.provider))
     .pipeThrough(
       createTokenSpeedCalculator(transformWithPayload, {
         enableStreaming,

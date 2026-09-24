@@ -917,4 +917,45 @@ describe('AnthropicStream', () => {
       ].map((item) => `${item}\n`),
     );
   });
+  it('should report a dropped connection as a stream error instead of ending normally', async () => {
+    // @ts-ignore
+    const mockAnthropicStream: Stream = {
+      [Symbol.asyncIterator]() {
+        let count = 0;
+        return {
+          next: async () => {
+            if (count++ === 0) {
+              return {
+                done: false,
+                value: { type: 'message_start', message: { id: 'message_1', usage: {} } },
+              };
+            }
+            throw new TypeError('terminated');
+          },
+        };
+      },
+    };
+
+    const onErrorMock = vi.fn();
+    const onFinalMock = vi.fn();
+    const protocolStream = AnthropicStream(mockAnthropicStream, {
+      callbacks: { onError: onErrorMock, onFinal: onFinalMock },
+      payload: { apiMode: 'messages', model: 'deepseek-flash', provider: 'deepseek' },
+    });
+
+    const decoder = new TextDecoder();
+    const chunks: string[] = [];
+    // @ts-ignore
+    for await (const chunk of protocolStream) {
+      chunks.push(decoder.decode(chunk, { stream: true }));
+    }
+
+    expect(chunks).toContain('event: error\n');
+    expect(onErrorMock).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'terminated', type: 'ProviderBizError' }),
+    );
+    expect(onFinalMock).toHaveBeenCalledWith(
+      expect.objectContaining({ error: expect.objectContaining({ message: 'terminated' }) }),
+    );
+  });
 });

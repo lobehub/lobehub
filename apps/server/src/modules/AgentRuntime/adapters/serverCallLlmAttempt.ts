@@ -12,6 +12,7 @@ import type {
 import {
   consumeStreamUntilDone,
   isEmptyModelCompletion,
+  isModelRefusalFinishReason,
   ModelEmptyError,
   ModelRefusalError,
 } from '@lobechat/model-runtime';
@@ -398,7 +399,7 @@ export class ServerCallLlmAttempt {
 
   private async assertNonEmptyCompletion() {
     const imageCount = this.getOutputImageCount();
-    const isRefusal = this.finishReason?.toLowerCase() === 'refusal';
+    const isRefusal = isModelRefusalFinishReason(this.finishReason);
     /**
      * A refusal needs ordinary response output to count as a successful
      * completion. Provider-internal reasoning alone must not turn a blank

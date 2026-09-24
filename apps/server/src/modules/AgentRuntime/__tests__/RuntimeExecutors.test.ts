@@ -81,7 +81,7 @@ vi.mock('@lobechat/model-runtime', async () => {
   // retry path and these tests share a single class identity for instanceof.
   const { isEmptyModelCompletion, ModelEmptyError } =
     await import('../../../../../../packages/model-runtime/src/errors/modelEmptyCompletion');
-  const { ModelRefusalError } =
+  const { isModelRefusalFinishReason, ModelRefusalError } =
     await import('../../../../../../packages/model-runtime/src/errors/modelRefusal');
   // Same treatment: the reasoning-config merge is pure, and the replay gate
   // reads its output (e.g. the DeepSeek V4 thinking opt-out), so use the real
@@ -116,6 +116,7 @@ vi.mock('@lobechat/model-runtime', async () => {
     isDeepSeekV4FamilyModel: (model: string) =>
       typeof model === 'string' && model.toLowerCase().includes('deepseek-v4'),
     isEmptyModelCompletion,
+    isModelRefusalFinishReason,
     isKimiAlwaysPreserveThinkingModel: (model: string) =>
       /^kimi-k2\.(?:[7-9]|\d{2,})-code(?:$|-)/.test(model),
     ModelEmptyError,

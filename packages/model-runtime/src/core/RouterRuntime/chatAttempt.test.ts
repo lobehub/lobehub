@@ -180,6 +180,37 @@ describe('observeChatAttempt', () => {
     expect(finished).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'completed' }));
   });
 
+  it.each([
+    ['refusal', 'ModelRefusalError'],
+    ['sensitive', 'ModelRefusalError'],
+    ['end_turn', 'ModelEmptyError'],
+  ] as const)(
+    'reports an empty completion stopped by %s as %s',
+    async (finishReason, errorName) => {
+      const finished = vi.fn();
+      const attemptRun = observeChatAttempt(
+        async ({ callback }) => {
+          await callback?.onFinal?.({ finishReason, text: '' });
+          return new Response(null);
+        },
+        undefined,
+        attempt,
+        true,
+        finished,
+      );
+
+      await expect(attemptRun).rejects.toMatchObject({ name: errorName });
+      expect(finished).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: expect.objectContaining({
+            diagnostics: expect.objectContaining({ finishReason }),
+          }),
+          outcome: 'empty',
+        }),
+      );
+    },
+  );
+
   it('adds attempt identity without replacing provider performance', async () => {
     let now = 1000;
     vi.spyOn(Date, 'now').mockImplementation(() => now);

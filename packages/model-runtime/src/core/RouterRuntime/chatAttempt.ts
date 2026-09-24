@@ -1,7 +1,12 @@
 import type { ModelUsage } from '@lobechat/types';
 import { AgentRuntimeErrorType } from '@lobechat/types';
 
-import { isEmptyModelCompletion, ModelEmptyError } from '../../errors';
+import {
+  isEmptyModelCompletion,
+  isModelRefusalFinishReason,
+  ModelEmptyError,
+  ModelRefusalError,
+} from '../../errors';
 import type { ChatMethodOptions, ChatStreamCallbacks, OnFinishData } from '../../types';
 import type { ModelRuntimeDiagnostics } from '../../types/providerDiagnostics';
 import { AgentRuntimeError } from '../../utils/createError';
@@ -211,19 +216,29 @@ export const observeChatAttempt = async (
 
     if (!empty) return finish('completed');
 
+    const diagnostics = {
+      contentLength: finalContent.length,
+      cost: latestFinishData.usage?.cost,
+      finishReason: latestFinishData.finishReason,
+      imageCount,
+      model: attempt.model,
+      outputTokens: latestFinishData.usage?.totalOutputTokens ?? observedUsage?.totalOutputTokens,
+      provider: attempt.providerId,
+      reasoningLength: finalReasoning.length,
+      toolCallCount: finalToolCallCount,
+    };
+
+    /**
+     * A blank turn stopped by a provider refusal or moderation finish reason (e.g. Anthropic
+     * `refusal`, GLM `sensitive`) is a policy decision, not a provider malfunction. Keep the
+     * `empty` outcome for route metrics, but surface the refusal so callers can show a
+     * policy-specific message instead of the generic empty-completion error.
+     */
     return finish(
       'empty',
-      new ModelEmptyError(undefined, {
-        contentLength: finalContent.length,
-        cost: latestFinishData.usage?.cost,
-        finishReason: latestFinishData.finishReason,
-        imageCount,
-        model: attempt.model,
-        outputTokens: latestFinishData.usage?.totalOutputTokens ?? observedUsage?.totalOutputTokens,
-        provider: attempt.providerId,
-        reasoningLength: finalReasoning.length,
-        toolCallCount: finalToolCallCount,
-      }),
+      isModelRefusalFinishReason(latestFinishData.finishReason)
+        ? new ModelRefusalError(undefined, diagnostics)
+        : new ModelEmptyError(undefined, diagnostics),
     );
   };
 
