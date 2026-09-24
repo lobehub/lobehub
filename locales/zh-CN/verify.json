@@ -383,6 +383,7 @@
   "acceptance.workspace.deleteError": "删除验收失败",
   "acceptance.workspace.deleteSuccess": "验收已删除",
   "acceptance.workspace.emptyDetail.description": "打开交付列表，选择一条验收记录，查看它的检查项、轮次与证据。",
+  "acceptance.workspace.emptyDetail.signInDescription": "登录后查看你的验收记录。",
   "acceptance.workspace.emptyDetail.title": "选择一条验收",
   "acceptance.workspace.filters.active": "进行中",
   "acceptance.workspace.filters.all": "全部验收",

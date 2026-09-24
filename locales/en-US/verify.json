@@ -383,6 +383,7 @@
   "acceptance.workspace.deleteError": "Failed to delete acceptance",
   "acceptance.workspace.deleteSuccess": "Acceptance deleted",
   "acceptance.workspace.emptyDetail.description": "Open the Acceptance menu to pick a record and inspect its checks, rounds and evidence.",
+  "acceptance.workspace.emptyDetail.signInDescription": "Sign in to view your acceptances.",
   "acceptance.workspace.emptyDetail.title": "Select an acceptance",
   "acceptance.workspace.filters.active": "In progress",
   "acceptance.workspace.filters.all": "All acceptances",
