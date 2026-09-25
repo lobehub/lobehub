@@ -57,10 +57,10 @@ process.env.DEBUG = 'lobe-*';
 ## Example
 
 ```typescript
-// apps/server/src/routers/edge/market/index.ts
+// apps/server/src/routers/lambda/agentEval.ts
 import debug from 'debug';
 
-const log = debug('lobe-edge-router:market');
+const log = debug('lobe-lambda-router:agent-eval');
 
 log('getAgent input: %O', input);
 ```

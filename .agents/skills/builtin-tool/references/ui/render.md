@@ -98,4 +98,4 @@ export { default as RunTasksRender } from './RunTasks';
 
 ## Render display control (rare)
 
-If the Render should hide for certain results (e.g. ClaudeCode's TodoWrite hides when the agent is mid-stream), add a `RenderDisplayControl` to `packages/builtin-tools/src/displayControls.ts`. See `ClaudeCodeRenderDisplayControls` for the pattern.
+If the Render should hide for certain results (e.g. ClaudeCode's TodoWrite hides when the agent is mid-stream), add a `RenderDisplayControl` to `packages/builtin-tools/src/displayControls.ts`. See `resolveClaudeCodeRenderDisplayControl` (wired in via `getDynamicRenderDisplayControlResolvers`) for the pattern.

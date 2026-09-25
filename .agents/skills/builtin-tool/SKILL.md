@@ -39,7 +39,7 @@ A builtin tool is a package the agent runtime can call. It ships **five faces**:
 
 ## Top-Level Design Principles
 
-1. **`lobe-<domain>` identifier is permanent.** It's stored in message history. Renames need `@deprecated` aliases (see `packages/builtin-tools/src/inspectors.ts:88-89`). Get it right the first time.
+1. **`lobe-<domain>` identifier is permanent.** It's stored in message history. Renames need legacy aliases kept alongside the new name (see the `// Legacy aliases` entries in `packages/builtin-tool-local-system/src/client/Inspector/index.ts`, kept after `listLocalFiles`/`searchLocalFiles` were renamed to `listFiles`/`searchFiles`). Get it right the first time.
 2. **ApiName is an `as const` object**, not a TS enum. It doubles as the runtime list `BaseExecutor` iterates over.
 3. **Three result fields, three audiences:**
    - `content: string` → the LLM reads it

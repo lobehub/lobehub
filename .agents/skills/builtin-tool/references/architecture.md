@@ -108,7 +108,7 @@ The `client/executor` instantiates it once with the real service:
 
 ```ts
 import { localFileService } from '@/services/electron/localFileService';
-import { LocalSystemExecutionRuntime } from '../../ExecutionRuntime';
+import { LocalSystemExecutionRuntime } from '@lobechat/tool-runtime';
 
 class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
   private runtime = new LocalSystemExecutionRuntime(localFileService);

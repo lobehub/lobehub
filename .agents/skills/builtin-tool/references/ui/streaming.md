@@ -78,6 +78,8 @@ import { WriteFileStreaming } from './WriteFile';
 
 export const LocalSystemStreamings = {
   [LocalSystemApiName.runCommand]: RunCommandStreaming,
-  [LocalSystemApiName.writeLocalFile]: WriteFileStreaming,
+  [LocalSystemApiName.writeFile]: WriteFileStreaming,
+  // Legacy alias — keeps historical messages rendering after the rename.
+  writeLocalFile: WriteFileStreaming,
 };
 ```

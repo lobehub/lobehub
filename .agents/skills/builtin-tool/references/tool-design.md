@@ -275,7 +275,7 @@ Use when the same logic runs in browser and Node (e.g. mathjs, nerdamer). The ru
 
 ### Pattern C: Extend a shared base
 
-When you're implementing a domain that already has a base runtime (file ops via `ComputerRuntime`), extend and only override `callService` + result normalization. See `builtin-tool-local-system/src/ExecutionRuntime/index.ts`.
+When you're implementing a domain that already has a base runtime (file ops via `ComputerRuntime`), extend and only override `callService` + result normalization. See `packages/tool-runtime/src/LocalSystemExecutionRuntime.ts`.
 
 ### Runtime contract
 

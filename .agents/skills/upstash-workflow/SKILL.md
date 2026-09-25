@@ -40,7 +40,7 @@ Layer 3: Single Task Execution (execute-* / generate-*)
   └─ Performs actual business logic for ONE item
 ```
 
-**Real examples in this codebase:** `welcome-placeholder`, `agent-welcome` — see [`references/examples.md`](./references/examples.md).
+**Real examples in this codebase:** `topicAutoSummary`, `agentEvalRun` — see [`references/examples.md`](./references/examples.md).
 
 ---
 
@@ -88,20 +88,23 @@ Defaults: `PAGE_SIZE = 50` (items per page), `CHUNK_SIZE = 20` (items per fan-ou
 Layer 3 always processes exactly one item per invocation. Parallelism comes from Layer 2 fanning out to many Layer 3 invocations, controlled by `flowControl`:
 
 ```typescript
-export const { POST } = serve<ExecutePayload>(
-  async (context) => {
-    const { itemId } = context.requestPayload ?? {};
-    if (!itemId) return { success: false, error: 'Missing itemId' };
+app.post(
+  '/execute-item',
+  serve<ExecutePayload>(
+    async (context) => {
+      const { itemId } = context.requestPayload ?? {};
+      if (!itemId) return { success: false, error: 'Missing itemId' };
 
-    const item = await context.run('workflow:get-item', () => getItem(itemId));
-    const result = await context.run('workflow:execute', () => processItem(item));
-    await context.run('workflow:save', () => saveResult(itemId, result));
+      const item = await context.run('workflow:get-item', () => getItem(itemId));
+      const result = await context.run('workflow:execute', () => processItem(item));
+      await context.run('workflow:save', () => saveResult(itemId, result));
 
-    return { success: true, itemId, result };
-  },
-  {
-    flowControl: { key: 'workflow.execute', parallelism: 10, ratePerSecond: 5 },
-  },
+      return { success: true, itemId, result };
+    },
+    {
+      flowControl: { key: 'workflow.execute', parallelism: 10, ratePerSecond: 5 },
+    },
+  ),
 );
 ```
 
@@ -110,17 +113,22 @@ export const { POST } = serve<ExecutePayload>(
 ## File Structure
 
 ```text
-src/
-├── app/(backend)/api/workflows/
-│   └── {workflow-name}/
-│       ├── process-{entities}/route.ts      # Layer 1
-│       ├── paginate-{entities}/route.ts     # Layer 2
-│       └── execute-{entity}/route.ts        # Layer 3
-│
-└── server/workflows/
-    └── {workflowName}/
-        └── index.ts                          # Workflow class
+src/app/(backend)/api/workflows/
+└── [[...route]]/route.ts             # Single catch-all — forwards every request to the Hono app below
+
+apps/server/src/router-hono/workflows/
+├── index.ts                          # Mounts each workflow's Hono app at /api/workflows/{workflow-name}
+└── {workflow-name}/
+    ├── index.ts                       # Hono app — one `app.post('/{layer}', serve(handler, options))` per layer
+    ├── dispatch.ts / paginate-*.ts    # Layer 1 + 2 handler(s) — entry point, dry-run, pagination, fan-out
+    └── execute.ts / execute-*.ts      # Layer 3 handler — single-task execution
+
+apps/server/src/workflows/
+└── {workflowName}/
+    └── index.ts                       # Workflow class — static trigger*() methods that POST to the routes above
 ```
+
+Routes are no longer one `route.ts` file per layer under `src/app`; every layer is a handler mounted on a per-workflow Hono app under `apps/server/src/router-hono/workflows/`, and the Next.js route only dispatches into it.
 
 ---
 
@@ -185,5 +193,5 @@ QSTASH_URL=https://custom-qstash.com
 
 - [Upstash Workflow Documentation](https://upstash.com/docs/workflow)
 - [QStash Documentation](https://upstash.com/docs/qstash)
-- [Example Workflows in Codebase](<../../src/app/(backend)/api/workflows/>)
-- [Workflow Classes](../../apps/server/src/workflows/)
+- [Example Workflows in Codebase](<../../../src/app/(backend)/api/workflows/>)
+- [Workflow Classes](../../../apps/server/src/workflows/)

@@ -154,13 +154,11 @@ confirmModal({
 
 ## Legacy: `@lobehub/ui` (root)
 
-Older call sites use **`createModal` from `@lobehub/ui`**, which is typed as **antd `Modal` props** (`children`, `allowFullscreen`, `getContainer`, `destroyOnHidden`, `styles.body`, etc.). Prefer migrating new work to **`@lobehub/ui/base-ui`**.
-
-Examples (legacy): `src/features/SkillStore/index.tsx`, `src/features/LibraryModal/CreateNew/index.tsx`.
+`createModal` from the root `@lobehub/ui` entry is typed as **antd `Modal` props** (`children`, `allowFullscreen`, `getContainer`, `destroyOnHidden`, `styles.body`, etc.). App code no longer imports it; do not reintroduce it — use **`@lobehub/ui/base-ui`**.
 
 ---
 
 ## Examples
 
 - Base-ui (preferred): follow sections above; ensure **base-ui `ModalHost`** is mounted.
-- Legacy: `src/features/SkillStore/index.tsx`, `src/features/LibraryModal/CreateNew/index.tsx`
+- Base-ui call sites: `src/features/SkillStore/index.tsx`, `src/features/LibraryModal/CreateNew/index.tsx`

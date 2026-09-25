@@ -80,16 +80,18 @@ viewport if the surface has a mobile story.
 
 See [`assets/entry.mjs`](assets/entry.mjs) — the single source of truth. Currently:
 
+- `@lobehub/icons`: Amp, ClaudeCode, Codex, HermesAgent, OpenClaw, OpenCode
 - `@lobehub/ui`: ActionIcon, Alert, Avatar, Block, Button, Center, Collapse,
-  DraggablePanel, Drawer, DropdownMenu, Empty, Flexbox, Highlighter, Hotkey, Icon,
-  Image, Input, InputNumber, Markdown, Modal, NeuralNetworkLoading, Popover,
+  ConfigProvider, DraggablePanel, Drawer, DropdownMenu, Empty, Flexbox, Highlighter, Hotkey, Icon,
+  Image, Input, InputNumber, Markdown, Modal, MotionProvider, NeuralNetworkLoading, Popover,
   ScrollShadow, SearchBar, Segmented, Select, Skeleton, SortableList, Tabs, Tag,
   Text, TextArea, ThemeProvider, Tooltip
 - `@lobehub/ui/base-ui`: full namespace (Select, Modal, DropdownMenu, Switch, Toast,
   FloatingSheet, …)
 - `antd`: App, Badge, Checkbox, Divider, Dropdown, Progress, Radio, Slider, Space,
   Steps, Table
-- `antd-style`, `lucide-react`, `react`, `react-dom/client`: full namespaces
+- `antd-style`, `lucide-react`, `motion/react`, `motion/react-m`, `react`,
+  `react/jsx-runtime`, `react-dom`, `react-dom/client`: full namespaces
 
 Missing a component → add to `entry.mjs`, rerun the build script (\~2s). Sizes:
 curated ≈ 16MB (fine from disk); a full `export * from '@lobehub/ui'` works too

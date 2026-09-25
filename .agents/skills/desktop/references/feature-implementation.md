@@ -55,7 +55,7 @@ export default class NotificationCtr extends ControllerModule {
 ### 2. Define IPC Types
 
 ```typescript
-// packages/electron-client-ipc/src/types.ts
+// packages/electron-client-ipc/src/types/notification.ts (re-exported from types/index.ts)
 export interface ShowDesktopNotificationParams {
   title: string;
   body: string;
