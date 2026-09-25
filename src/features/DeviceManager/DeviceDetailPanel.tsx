@@ -3,7 +3,16 @@
 import { isDesktop } from '@lobechat/const';
 import type { DeviceListItem, DeviceWorkspaceShare } from '@lobechat/types';
 import { Flexbox, Icon, Input, SortableList } from '@lobehub/ui';
-import { ActionIcon, Avatar, Button, confirmModal, Tag, Text, toast } from '@lobehub/ui/base-ui';
+import {
+  ActionIcon,
+  Avatar,
+  Button,
+  confirmModal,
+  Tabs,
+  Tag,
+  Text,
+  toast,
+} from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { FolderOpenIcon, FolderPlusIcon, LockIcon, XIcon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -77,7 +86,14 @@ const styles = createStaticStyles(({ css }) => ({
     padding-block: 8px;
     padding-inline: 8px;
   `,
+  tabs: css`
+    flex: none;
+    padding-block: 8px 0;
+    padding-inline: 14px;
+  `,
 }));
+
+type DetailTab = 'files' | 'overview';
 
 interface DeviceDetailPanelProps {
   device: DeviceListItem;
@@ -88,6 +104,9 @@ interface DeviceDetailPanelProps {
 const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onClose }) => {
   const { t } = useTranslation(['setting', 'device']);
   const canEdit = useCanEditDevice()(device);
+  // Health monitoring and the directory settings are separate jobs; a tab each
+  // keeps the charts from pushing the directories below the fold.
+  const [tab, setTab] = useState<DetailTab>('overview');
 
   const [name, setName] = useState(device.friendlyName ?? '');
   const [cwd, setCwd] = useState(device.defaultCwd ?? '');
@@ -254,6 +273,18 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
         <ActionIcon icon={XIcon} size={'small'} onClick={onClose} />
       </Flexbox>
 
+      <Tabs
+        activeKey={tab}
+        className={styles.tabs}
+        size={'small'}
+        variant={'square'}
+        items={[
+          { key: 'overview', label: t('devices.detail.tabs.overview') },
+          { key: 'files', label: t('devices.detail.tabs.files') },
+        ]}
+        onChange={(key) => setTab(key as DetailTab)}
+      />
+
       <Flexbox className={styles.body} gap={20}>
         {/* Visible hint when the caller can't mutate the row — explains why the
             fields below are read-only without the user needing to try and hit a
@@ -268,160 +299,172 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
           </Flexbox>
         )}
 
-        {/* ─── Enrolled by (workspace only) ─── */}
-        {device.scope === 'workspace' && device.enroller && (
-          <Flexbox gap={8}>
-            <FieldLabel>{t('workspaceSetting.devices.enrolledByLabel')}</FieldLabel>
-            <Flexbox horizontal align={'center'} gap={8}>
-              <Avatar avatar={device.enroller.avatar ?? undefined} size={24} />
-              <Text>
-                {device.enroller.fullName ||
-                  device.enroller.username ||
-                  t('workspaceSetting.devices.unknownEnroller')}
-              </Text>
-            </Flexbox>
-          </Flexbox>
-        )}
-
-        {/* ─── Shared to workspaces (personal only) ─── */}
-        {device.scope === 'personal' && !!device.sharedWorkspaces?.length && (
-          <Flexbox gap={8}>
-            <FieldLabel>{t('devices.share.detailLabel')}</FieldLabel>
-            {device.sharedWorkspaces.map((share) => (
-              <Flexbox horizontal align={'center'} gap={8} key={share.workspaceId}>
-                <Text ellipsis style={{ flex: 1, minWidth: 0 }}>
-                  {share.workspaceName ?? share.workspaceId}
-                </Text>
-                <Tag size={'small'}>
-                  {share.visibility === 'private'
-                    ? t('devices.share.visibilityTag.private')
-                    : t('devices.share.visibilityTag.public')}
-                </Tag>
-                <ActionIcon
-                  icon={XIcon}
-                  size={'small'}
-                  title={t('devices.share.revoke')}
-                  onClick={() => handleRevokeShare(share)}
-                />
-              </Flexbox>
-            ))}
-          </Flexbox>
-        )}
-
-        {/* ─── Connections, each with its client version; desktop carries the update ─── */}
-        <Connections canEdit={canEdit} device={device} />
-
-        {/* ─── Machine health ─── */}
-        <Flexbox gap={8}>
-          <FieldLabel>{t('devices.health.title')}</FieldLabel>
-          <DeviceHealth deviceId={device.deviceId} />
-        </Flexbox>
-
-        {/* ─── Name ─── */}
-        <Flexbox gap={8}>
-          <FieldLabel>{t('devices.edit.friendlyName')}</FieldLabel>
-          {canEdit ? (
-            <Input
-              placeholder={t('devices.edit.friendlyNamePlaceholder')}
-              value={name}
-              onBlur={commitName}
-              onChange={(e) => setName(e.target.value)}
-              onPressEnter={commitName}
-            />
-          ) : device.friendlyName ? (
-            // Read-only: render the canonical value (not the local draft), so a
-            // value the caller can't actually commit never bleeds through.
-            <Text>{device.friendlyName}</Text>
-          ) : (
-            <Text type={'secondary'}>—</Text>
-          )}
-        </Flexbox>
-
-        {/* ─── Default working directory ─── */}
-        <Flexbox gap={8}>
-          <FieldLabel>{t('devices.edit.defaultCwd')}</FieldLabel>
-          {canEdit ? (
-            <Flexbox horizontal gap={8}>
-              <Input
-                placeholder={t('devices.edit.defaultCwdPlaceholder')}
-                value={cwd}
-                onBlur={handleCwdBlur}
-                onChange={(e) => setCwd(e.target.value)}
-                onPressEnter={handleCwdBlur}
-              />
-              {canBrowse && (
-                <Button icon={<Icon icon={FolderOpenIcon} />} onClick={handleBrowse}>
-                  {t('devices.edit.browse')}
-                </Button>
-              )}
-            </Flexbox>
-          ) : device.defaultCwd ? (
-            // Code font only when there's an actual path to read; empty falls back
-            // to the same dash style as Name so the two fields look consistent.
-            <Text className={styles.path}>{device.defaultCwd}</Text>
-          ) : (
-            <Text type={'secondary'}>—</Text>
-          )}
-        </Flexbox>
-
-        {/* ─── Recent directories ─── */}
-        <Flexbox gap={8}>
-          <FieldLabel
-            extra={
-              canEdit && (
-                <ActionIcon
-                  icon={FolderPlusIcon}
-                  size={'small'}
-                  title={t('devices.detail.addDir')}
-                  onClick={handleAddRecent}
-                />
-              )
-            }
-          >
-            {t('devices.detail.recentDirs')}
-          </FieldLabel>
-          {device.workingDirs.length === 0 ? (
-            <Text fontSize={12} type={'secondary'}>
-              {t('devices.detail.noRecent')}
-            </Text>
-          ) : canEdit ? (
-            <SortableList
-              items={device.workingDirs.map((d) => ({ id: d.path, repoType: d.repoType }))}
-              renderItem={(item: { id: string; repoType?: 'git' | 'github' }) => (
-                <SortableList.Item className={styles.recentItem} id={item.id} variant={'filled'}>
-                  <SortableList.DragHandle />
-                  <DirIcon repoType={item.repoType} />
-                  <Text className={styles.path} title={item.id}>
-                    {item.id}
+        {tab === 'overview' && (
+          <>
+            {/* ─── Enrolled by (workspace only) ─── */}
+            {device.scope === 'workspace' && device.enroller && (
+              <Flexbox gap={8}>
+                <FieldLabel>{t('workspaceSetting.devices.enrolledByLabel')}</FieldLabel>
+                <Flexbox horizontal align={'center'} gap={8}>
+                  <Avatar avatar={device.enroller.avatar ?? undefined} size={24} />
+                  <Text>
+                    {device.enroller.fullName ||
+                      device.enroller.username ||
+                      t('workspaceSetting.devices.unknownEnroller')}
                   </Text>
-                  <ActionIcon
-                    icon={XIcon}
-                    size={'small'}
-                    onClick={() => handleRemoveRecent(item.id)}
-                  />
-                </SortableList.Item>
-              )}
-              onChange={handleReorderRecent}
-            />
-          ) : (
-            // Read-only listing: same row layout minus the drag handle and the
-            // remove button. Keeps the path + repo type icon visible for context.
-            device.workingDirs.map((d) => (
-              <Flexbox
-                horizontal
-                align={'center'}
-                className={styles.recentItem}
-                gap={8}
-                key={d.path}
-              >
-                <DirIcon repoType={d.repoType} />
-                <Text className={styles.path} title={d.path}>
-                  {d.path}
-                </Text>
+                </Flexbox>
               </Flexbox>
-            ))
-          )}
-        </Flexbox>
+            )}
+
+            {/* ─── Shared to workspaces (personal only) ─── */}
+            {device.scope === 'personal' && !!device.sharedWorkspaces?.length && (
+              <Flexbox gap={8}>
+                <FieldLabel>{t('devices.share.detailLabel')}</FieldLabel>
+                {device.sharedWorkspaces.map((share) => (
+                  <Flexbox horizontal align={'center'} gap={8} key={share.workspaceId}>
+                    <Text ellipsis style={{ flex: 1, minWidth: 0 }}>
+                      {share.workspaceName ?? share.workspaceId}
+                    </Text>
+                    <Tag size={'small'}>
+                      {share.visibility === 'private'
+                        ? t('devices.share.visibilityTag.private')
+                        : t('devices.share.visibilityTag.public')}
+                    </Tag>
+                    <ActionIcon
+                      icon={XIcon}
+                      size={'small'}
+                      title={t('devices.share.revoke')}
+                      onClick={() => handleRevokeShare(share)}
+                    />
+                  </Flexbox>
+                ))}
+              </Flexbox>
+            )}
+
+            {/* ─── Connections, each with its client version; desktop carries the update ─── */}
+            <Connections canEdit={canEdit} device={device} />
+
+            {/* ─── Machine health ─── */}
+            <Flexbox gap={8}>
+              <FieldLabel>{t('devices.health.title')}</FieldLabel>
+              <DeviceHealth deviceId={device.deviceId} />
+            </Flexbox>
+
+            {/* ─── Name ─── */}
+            <Flexbox gap={8}>
+              <FieldLabel>{t('devices.edit.friendlyName')}</FieldLabel>
+              {canEdit ? (
+                <Input
+                  placeholder={t('devices.edit.friendlyNamePlaceholder')}
+                  value={name}
+                  onBlur={commitName}
+                  onChange={(e) => setName(e.target.value)}
+                  onPressEnter={commitName}
+                />
+              ) : device.friendlyName ? (
+                // Read-only: render the canonical value (not the local draft), so a
+                // value the caller can't actually commit never bleeds through.
+                <Text>{device.friendlyName}</Text>
+              ) : (
+                <Text type={'secondary'}>—</Text>
+              )}
+            </Flexbox>
+          </>
+        )}
+
+        {tab === 'files' && (
+          <>
+            {/* ─── Default working directory ─── */}
+            <Flexbox gap={8}>
+              <FieldLabel>{t('devices.edit.defaultCwd')}</FieldLabel>
+              {canEdit ? (
+                <Flexbox horizontal gap={8}>
+                  <Input
+                    placeholder={t('devices.edit.defaultCwdPlaceholder')}
+                    value={cwd}
+                    onBlur={handleCwdBlur}
+                    onChange={(e) => setCwd(e.target.value)}
+                    onPressEnter={handleCwdBlur}
+                  />
+                  {canBrowse && (
+                    <Button icon={<Icon icon={FolderOpenIcon} />} onClick={handleBrowse}>
+                      {t('devices.edit.browse')}
+                    </Button>
+                  )}
+                </Flexbox>
+              ) : device.defaultCwd ? (
+                // Code font only when there's an actual path to read; empty falls back
+                // to the same dash style as Name so the two fields look consistent.
+                <Text className={styles.path}>{device.defaultCwd}</Text>
+              ) : (
+                <Text type={'secondary'}>—</Text>
+              )}
+            </Flexbox>
+
+            {/* ─── Recent directories ─── */}
+            <Flexbox gap={8}>
+              <FieldLabel
+                extra={
+                  canEdit && (
+                    <ActionIcon
+                      icon={FolderPlusIcon}
+                      size={'small'}
+                      title={t('devices.detail.addDir')}
+                      onClick={handleAddRecent}
+                    />
+                  )
+                }
+              >
+                {t('devices.detail.recentDirs')}
+              </FieldLabel>
+              {device.workingDirs.length === 0 ? (
+                <Text fontSize={12} type={'secondary'}>
+                  {t('devices.detail.noRecent')}
+                </Text>
+              ) : canEdit ? (
+                <SortableList
+                  items={device.workingDirs.map((d) => ({ id: d.path, repoType: d.repoType }))}
+                  renderItem={(item: { id: string; repoType?: 'git' | 'github' }) => (
+                    <SortableList.Item
+                      className={styles.recentItem}
+                      id={item.id}
+                      variant={'filled'}
+                    >
+                      <SortableList.DragHandle />
+                      <DirIcon repoType={item.repoType} />
+                      <Text className={styles.path} title={item.id}>
+                        {item.id}
+                      </Text>
+                      <ActionIcon
+                        icon={XIcon}
+                        size={'small'}
+                        onClick={() => handleRemoveRecent(item.id)}
+                      />
+                    </SortableList.Item>
+                  )}
+                  onChange={handleReorderRecent}
+                />
+              ) : (
+                // Read-only listing: same row layout minus the drag handle and the
+                // remove button. Keeps the path + repo type icon visible for context.
+                device.workingDirs.map((d) => (
+                  <Flexbox
+                    horizontal
+                    align={'center'}
+                    className={styles.recentItem}
+                    gap={8}
+                    key={d.path}
+                  >
+                    <DirIcon repoType={d.repoType} />
+                    <Text className={styles.path} title={d.path}>
+                      {d.path}
+                    </Text>
+                  </Flexbox>
+                ))
+              )}
+            </Flexbox>
+          </>
+        )}
       </Flexbox>
     </Flexbox>
   );

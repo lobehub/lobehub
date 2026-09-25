@@ -1,37 +1,18 @@
 'use client';
 
-import type { DeviceMetricSeries } from '@lobechat/types';
 import { AreaChart, Tracker } from '@lobehub/charts';
 import { Flexbox } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
-import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 
-import { useClientDataSWR } from '@/libs/swr';
-import { deviceService } from '@/services/device';
 import { formatSize } from '@/utils/format';
 
-import {
-  buildHealthTimeline,
-  groupStripBlocks,
-  type HealthSlotStatus,
-} from './buildHealthTimeline';
+import { buildHealthTimeline, groupStripBlocks } from './buildHealthTimeline';
 import { formatLoad, formatPercent } from './format';
+import { formatClock as time, SLOT_COLOR, useDeviceMetricSeries, useStatusLabels } from './shared';
 
-const DEVICE_METRICS_SWR_KEY = 'device/metricSeries';
-const REFRESH_INTERVAL_MS = 60_000;
 /** Status-strip block width: wide enough to see and hover in the side panel. */
 const STRIP_BLOCK_MS = 15 * 60_000;
-
-const SLOT_COLOR: Record<HealthSlotStatus, string> = {
-  missing: cssVar.colorFillSecondary,
-  offline: cssVar.colorWarning,
-  online: cssVar.colorSuccess,
-  pending: cssVar.colorFillQuaternary,
-};
-
-const time = (ms: number) => dayjs(ms).format('HH:mm');
 
 interface MetricChartProps {
   ceiling: number;
@@ -73,11 +54,8 @@ const MetricChart = ({ ceiling, data, format, label, latest }: MetricChartProps)
  */
 const DeviceHealth = ({ deviceId }: { deviceId: string }) => {
   const { t } = useTranslation('setting');
-  const { data } = useClientDataSWR<DeviceMetricSeries>(
-    [DEVICE_METRICS_SWR_KEY, deviceId],
-    () => deviceService.getMetricSeries(deviceId),
-    { refreshInterval: REFRESH_INTERVAL_MS },
-  );
+  const { data } = useDeviceMetricSeries(deviceId);
+  const statusLabel = useStatusLabels();
 
   if (!data) return null;
 
@@ -92,12 +70,6 @@ const DeviceHealth = ({ deviceId }: { deviceId: string }) => {
   const timeline = buildHealthTimeline(data);
   const rows = (pick: (slot: (typeof timeline.slots)[number]) => number | null) =>
     timeline.slots.map((slot) => ({ time: time(slot.start), value: pick(slot) }));
-  const statusLabel: Record<HealthSlotStatus, string> = {
-    missing: t('devices.health.status.missing'),
-    offline: t('devices.health.status.offline'),
-    online: t('devices.health.status.online'),
-    pending: t('devices.health.status.pending'),
-  };
 
   return (
     <Flexbox gap={16}>
