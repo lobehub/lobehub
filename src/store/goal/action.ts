@@ -1,7 +1,7 @@
 import { type GoalStatus, goalStatuses } from '@lobechat/const/goal';
 import type { GoalMetricCriterion, GoalTickResult } from '@lobechat/types';
 
-import { mutate, useClientDataSWR } from '@/libs/swr';
+import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
 import { goalKeys, taskKeys } from '@/libs/swr/keys';
 import { goalService } from '@/services/goal';
 import { metricService } from '@/services/metric';
@@ -286,10 +286,16 @@ export class GoalActionImpl {
     this.#set({ goalViewMode: mode }, false, 'setGoalViewMode');
   };
 
+  /**
+   * The goal list page's read. The sync wrapper matters here: this list is
+   * persisted in the `task:` IndexedDB tier, and a cache hit never fires
+   * `onSuccess` — without `onData` the store would stay uninitialized on a
+   * revisit and the page would flash its empty state over hydrated data.
+   */
   useFetchGoals = (agentId?: string, projectId?: string) => {
     const scopeId = projectId ? `project:${projectId}` : agentId;
 
-    return useClientDataSWR(
+    return useClientDataSWRWithSync(
       scopeId ? taskKeys.sidebarGroups(`${scopeId}:goals-page`) : null,
       () =>
         goalService.list({
@@ -299,7 +305,7 @@ export class GoalActionImpl {
           statuses: GOAL_STATUSES,
         }),
       {
-        onSuccess: ({ goals }) => {
+        onData: ({ goals }) => {
           this.#set(
             ({ goalListByAgentId, goalListInitializedAgentIds }) => ({
               goalListByAgentId: {
@@ -323,9 +329,12 @@ export class GoalActionImpl {
    * Every agent's goals in one read — the home rail is a cross-agent roll-up,
    * so it cannot go through the per-agent list. Same server query minus the
    * assignee filter; the rail buckets and truncates client-side.
+   *
+   * Sync-wrapper for the same reason as `useFetchGoals`: this roll-up is
+   * persisted under the `task:` tier and must initialize from a cache hit.
    */
   useFetchHomeGoals = (enabled: boolean, scope: string) =>
-    useClientDataSWR(
+    useClientDataSWRWithSync(
       enabled ? taskKeys.homeGoals(scope) : null,
       () =>
         goalService.list({
@@ -333,7 +342,7 @@ export class GoalActionImpl {
           statuses: HOME_GOAL_STATUSES,
         }),
       {
-        onSuccess: ({ goals }) => {
+        onData: ({ goals }) => {
           this.#set(
             ({ homeGoalsByScope, homeGoalsInitializedScopes }) => ({
               homeGoalsByScope: { ...homeGoalsByScope, [scope]: goals },

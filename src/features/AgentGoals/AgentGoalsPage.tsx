@@ -13,7 +13,7 @@ import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { goalSelectors, useGoalStore } from '@/store/goal';
+import { useGoalStore } from '@/store/goal';
 
 import { createGoalModal } from './CreateGoalModal';
 import { GoalCardItem } from './GoalCardItem';
@@ -77,15 +77,18 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
   const scopeId = projectId ? `project:${projectId}` : agentId!;
   const useFetchGoals = useGoalStore((s) => s.useFetchGoals);
   const refreshGoals = useGoalStore((s) => s.refreshGoals);
-  const goals = useGoalStore(goalSelectors.goalList(scopeId));
-  const isInitialized = useGoalStore(goalSelectors.isGoalListInitialized(scopeId));
   const filter = useGoalStore((s) => s.goalListFilter);
   const viewMode = useGoalStore((s) => s.goalViewMode);
   const visibleLimit = useGoalStore((s) => s.goalListVisibleLimit);
   const setFilter = useGoalStore((s) => s.setGoalListFilter);
   const setViewMode = useGoalStore((s) => s.setGoalViewMode);
   const loadMoreGoals = useGoalStore((s) => s.loadMoreGoals);
-  const { error, isLoading } = useFetchGoals(agentId, projectId);
+  // Branch off the SWR response, not the store: the store sync (even via the
+  // sync wrapper) lands an effect after first paint, and a cache hit — which
+  // never fires a network callback — would render one empty-state frame in
+  // between. `data?.goals` keeps the settled-empty and hydrated shapes aligned.
+  const { data, error, isLoading } = useFetchGoals(agentId, projectId);
+  const goals = useMemo(() => data?.goals ?? [], [data]);
   const summary = useMemo(() => {
     const delivered = goals.filter(({ goal }) => goal.status === 'review').length;
 
@@ -138,7 +141,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
         paddingBlock={16}
         wrapperStyle={{ flex: 1, overflowY: 'auto' }}
       >
-        {isLoading && !isInitialized ? (
+        {isLoading && data === undefined ? (
           <GoalSkeleton chrome={'body'} />
         ) : error ? (
           <Block padding={32} variant={'outlined'}>
