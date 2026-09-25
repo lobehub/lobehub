@@ -881,7 +881,9 @@ describe('SearchService', () => {
           originalUrl: 'https://example.com',
         }),
       };
-      vi.mocked(Crawler).mockImplementation(() => crawler as any);
+      vi.mocked(Crawler).mockImplementation(function () {
+        return crawler as any;
+      });
       return crawler;
     };
 
