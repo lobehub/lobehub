@@ -42,8 +42,50 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Decides which suites this change can affect. Pushes to main/canary always run
+  # everything so coverage baselines stay complete; see test-ci-scope.mjs.
+  changes:
+    name: Resolve Test Scope
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      app: ${{ steps.scope.outputs.app }}
+      server: ${{ steps.scope.outputs.server }}
+      packages: ${{ steps.scope.outputs.packages }}
+      desktop: ${{ steps.scope.outputs.desktop }}
+      windows: ${{ steps.scope.outputs.windows }}
+    steps:
+      - name: Checkout scope script
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+
+      - name: Test scope rules
+        run: node --test .github/scripts/test-ci-scope.test.mjs
+
+      - name: Resolve scope
+        id: scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
+        run: |
+          # The PR files API stops at 3000 entries; past that, run everything.
+          if [ "$EVENT_NAME" != "pull_request" ] || [ "${CHANGED_FILES:-0}" -ge 3000 ]; then
+            node .github/scripts/test-ci-scope.mjs --all
+          else
+            gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" --jq '.[].filename' \
+              | node .github/scripts/test-ci-scope.mjs
+          fi
+
   # Package tests - all packages in single job to save runner resources
   test-packages:
+    needs: changes
+    if: needs.changes.outputs.packages == 'true'
     runs-on: ubuntu-latest
     name: Test Packages
     env:
@@ -181,6 +223,8 @@ jobs:
 
   # App tests - run sharded tests
   test-app:
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
     strategy:
       matrix:
         shard: [1, 2, 3]
@@ -224,6 +268,8 @@ jobs:
   # detection cascade against real install paths. The driver script only needs
   # node builtins, so this job skips the monorepo install entirely.
   test-windows-shell:
+    needs: changes
+    if: needs.changes.outputs.windows == 'true'
     name: Test Windows Shell
 
     runs-on: windows-latest
@@ -241,6 +287,8 @@ jobs:
         run: bun run packages/local-file-shell/scripts/verify-windows-shell.ts
 
   test-desktop:
+    needs: changes
+    if: needs.changes.outputs.desktop == 'true'
     name: ALint & Test Desktop App
 
     runs-on: ubuntu-latest
@@ -344,6 +392,8 @@ jobs:
           fi
 
   test-server:
+    needs: changes
+    if: needs.changes.outputs.server == 'true'
     strategy:
       matrix:
         shard: [1, 2]
@@ -387,7 +437,7 @@ jobs:
   upload-sharded-coverage:
     name: Upload Sharded Coverage
     needs: [test-app, test-server]
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && (needs.test-app.result == 'success' || needs.test-server.result == 'success') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
