@@ -21,7 +21,9 @@ const stripRootElement = (litexml: string) => {
     : trimmed;
 };
 
-const LITEXML_TAG_PATTERN = /<(\/?)([a-z][\w-]*)(\s[^>]*)?>/gi;
+// Attributes stop at `<` as well as `>` (LiteXML escapes `<` in values), so an
+// unterminated tag cannot make every later match rescan the rest of the input.
+const LITEXML_TAG_PATTERN = /<(\/?)([a-z][\w-]*)(\s[^<>]*)?>/gi;
 const LITEXML_ID_ATTRIBUTE = /\bid="([^"]+)"/;
 const LIST_TAGS = new Set(['li', 'ol', 'ul']);
 
