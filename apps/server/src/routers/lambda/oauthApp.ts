@@ -36,6 +36,23 @@ const stripSecret = <T extends { clientSecret?: string | null }>(client: T) => {
   return { ...rest, hasSecret: !!clientSecret };
 };
 
+/**
+ * A logo must be a web URL: it becomes the OIDC client's `logo_uri`, and
+ * oidc-provider rejects the whole client as `invalid_client_metadata` when that
+ * is anything else, such as an inline `data:` image.
+ */
+const logoUriSchema = z
+  .string()
+  .max(2048)
+  .refine((value) => {
+    try {
+      const { protocol } = new URL(value);
+      return protocol === 'https:' || protocol === 'http:';
+    } catch {
+      return false;
+    }
+  }, 'logoUri.notWebUrl');
+
 const redirectUrisSchema = z
   .array(z.string().max(2000))
   .max(MAX_OAUTH_REDIRECT_URIS)
@@ -59,7 +76,7 @@ export const oauthAppRouter = router({
       // added, and the provider refuses any unregistered redirect in the meantime.
       z.object({
         description: z.string().max(500).optional(),
-        logoUri: z.string().max(300_000).optional(),
+        logoUri: logoUriSchema.optional(),
         name: z.string().min(1).max(64),
         redirectUris: redirectUrisSchema.optional(),
         type: z.enum(['device', 'web']).default('device'),
@@ -110,7 +127,8 @@ export const oauthAppRouter = router({
         id: z.string(),
         value: z.object({
           description: z.string().max(500).optional(),
-          logoUri: z.string().max(300_000).optional(),
+          // `null` removes the logo.
+          logoUri: logoUriSchema.nullable().optional(),
           name: z.string().min(1).max(64).optional(),
           redirectUris: redirectUrisSchema.optional(),
         }),

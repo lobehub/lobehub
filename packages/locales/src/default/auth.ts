@@ -274,6 +274,8 @@ export default {
   'oauthApp.form.description.label': 'Description',
   'oauthApp.form.description.placeholder': 'What is this app for? (optional)',
   'oauthApp.form.logo.label': 'Logo',
+  'oauthApp.form.logo.tooLarge': 'The logo must be 2 MB or smaller.',
+  'oauthApp.form.logo.uploadFailed': 'The logo could not be uploaded. Please try again.',
   'oauthApp.form.name.label': 'Name',
   'oauthApp.form.name.placeholder': 'Please enter app name',
   'oauthApp.form.redirectUris.extra':

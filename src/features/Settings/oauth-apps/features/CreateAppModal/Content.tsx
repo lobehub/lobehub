@@ -12,6 +12,8 @@ import { useTranslation } from 'react-i18next';
 import AvatarUpload from '@/components/AvatarUpload';
 import { type CreateOAuthAppParams } from '@/types/oauthApp';
 
+import { useLogoUpload } from '../../useLogoUpload';
+
 const styles = createStaticStyles(({ css, cssVar }) => ({
   typeCard: css`
     cursor: pointer;
@@ -141,13 +143,13 @@ const CreateAppModalContent: FC<CreateAppModalContentProps> = ({ onSubmit }) => 
   // silently drop the user's input); the explicit ✕/ESC close still works.
   const markDirty = () => setCanDismissByClickOutside(false);
 
-  const handleUpload = (file: File) => {
-    const reader = new FileReader();
-    reader.addEventListener('load', () => {
-      setLogoUri(reader.result as string);
-      markDirty();
-    });
-    reader.readAsDataURL(file);
+  const { upload: uploadLogo, uploading: logoUploading } = useLogoUpload();
+
+  const handleUpload = async (file: File) => {
+    const url = await uploadLogo(file);
+    if (!url) return;
+    setLogoUri(url);
+    markDirty();
   };
 
   // Only what defines the app is asked for up front. Redirect URIs are
@@ -182,8 +184,11 @@ const CreateAppModalContent: FC<CreateAppModalContentProps> = ({ onSubmit }) => 
       <Flexbox gap={16}>
         <Form.Item label={t('oauthApp.form.logo.label')} style={itemStyle}>
           <AvatarUpload
+            allowDelete={!!logoUri}
+            loading={logoUploading}
             title={t('oauthApp.form.name.label')}
             value={logoUri}
+            onDelete={() => setLogoUri(undefined)}
             onUpload={handleUpload}
           />
         </Form.Item>
@@ -234,7 +239,13 @@ const CreateAppModalContent: FC<CreateAppModalContentProps> = ({ onSubmit }) => 
           <TextArea placeholder={t('oauthApp.form.description.placeholder')} rows={3} />
         </Form.Item>
 
-        <Button block htmlType={'submit'} loading={loading} type={'primary'}>
+        <Button
+          block
+          disabled={logoUploading}
+          htmlType={'submit'}
+          loading={loading}
+          type={'primary'}
+        >
           {t('oauthApp.form.submit')}
         </Button>
       </Flexbox>

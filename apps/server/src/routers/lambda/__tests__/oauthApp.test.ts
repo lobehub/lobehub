@@ -117,6 +117,36 @@ describe('oauthAppRouter', () => {
     });
   });
 
+  describe('logo', () => {
+    it('rejects an inline data-URI logo that oidc-provider would refuse', async () => {
+      await expect(
+        caller().create({ logoUri: 'data:image/png;base64,iVBORw0KGgo=', name: 'Logo App' }),
+      ).rejects.toThrow();
+      await expect(
+        caller().update({
+          id: 'lca_app',
+          value: { logoUri: 'data:image/png;base64,iVBORw0KGgo=' },
+        }),
+      ).rejects.toThrow();
+      expect(mockCreate).not.toHaveBeenCalled();
+      expect(mockUpdate).not.toHaveBeenCalled();
+    });
+
+    it('accepts an uploaded https logo', async () => {
+      await caller().create({ logoUri: 'https://files.lobehub.com/logo.png', name: 'Logo App' });
+
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ logoUri: 'https://files.lobehub.com/logo.png' }),
+      );
+    });
+
+    it('lets an update clear the logo with null', async () => {
+      await caller().update({ id: 'lca_app', value: { logoUri: null } });
+
+      expect(mockUpdate).toHaveBeenCalledWith('lca_app', { logoUri: null });
+    });
+  });
+
   describe('read paths', () => {
     it('never leaks the stored secret', async () => {
       mockList.mockResolvedValue([webApp]);
