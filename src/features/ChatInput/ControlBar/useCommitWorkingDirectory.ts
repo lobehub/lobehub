@@ -171,6 +171,11 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
           priorSessionCwd !== sessionCwd &&
           (!!activeTopic?.metadata?.heteroSessionId || !!scopedHeteroSessionId);
         await updateTopicMetadata(activeTopicId, {
+          // The pin is a bare path that only holds on the machine it was picked
+          // for, and the server skips a topic pin whose `boundDeviceId` names a
+          // different device. Re-stamp it with every write so a conversation
+          // moved to another device keeps the directory just chosen there.
+          boundDeviceId: entry ? writeDeviceId : undefined,
           ...(shouldUpdateHeteroSession ? { heteroSessionId: scopedHeteroSessionId } : {}),
           workingDirectory: sessionCwd,
           workingDirectoryConfig: entry ? toAgentWorkingDirConfig(entry) : undefined,
@@ -221,6 +226,7 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
       agencyConfig,
       activeTopic,
       activeTopicId,
+      currentDeviceId,
       isHetero,
       isPersonalDeviceTarget,
       targetDeviceId,
@@ -239,6 +245,8 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
     // we fall back to the agent default rather than nuking everything.
     if (activeTopicId && activeTopic?.metadata?.workingDirectory) {
       await updateTopicMetadata(activeTopicId, {
+        // No pin left, so no device it belongs to — the next run stamps its own.
+        boundDeviceId: undefined,
         ...(activeTopic.metadata.heteroSessionId ? { heteroSessionId: undefined } : {}),
         workingDirectory: undefined,
         workingDirectoryConfig: undefined,

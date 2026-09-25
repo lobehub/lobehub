@@ -11,7 +11,11 @@ const testState = vi.hoisted(() => ({
     updateAgentConfigById: vi.fn(),
     updateAgentRuntimeEnvConfigById: vi.fn(),
   },
-  chat: { activeTopicId: undefined as string | undefined, updateTopicMetadata: vi.fn() },
+  chat: {
+    activeTopicId: undefined as string | undefined,
+    topic: undefined as { metadata?: Record<string, unknown> } | undefined,
+    updateTopicMetadata: vi.fn(),
+  },
   currentDeviceId: 'this-machine' as string | undefined,
   effective: {
     agencyConfig: undefined as Record<string, unknown> | undefined,
@@ -36,7 +40,7 @@ vi.mock('@/store/chat', () => ({
 }));
 
 vi.mock('@/store/chat/selectors', () => ({
-  topicSelectors: { getTopicById: () => () => undefined },
+  topicSelectors: { getTopicById: () => (s: typeof testState.chat) => s.topic },
 }));
 
 vi.mock('@/store/device', () => ({
@@ -62,6 +66,8 @@ describe('useCommitWorkingDirectory — localTarget', () => {
     testState.agent.updateAgentConfigById = vi.fn();
     testState.agent.updateAgentRuntimeEnvConfigById = vi.fn();
     testState.chat.activeTopicId = undefined;
+    testState.chat.topic = undefined;
+    testState.chat.updateTopicMetadata = vi.fn();
     testState.currentDeviceId = 'this-machine';
     testState.effective = { agencyConfig: undefined, workspaceScoped: false };
   });
@@ -121,5 +127,55 @@ describe('useCommitWorkingDirectory — localTarget', () => {
         workingDirByDevice: { 'other-device': { path: 'C:/work' } },
       },
     });
+  });
+});
+
+describe('useCommitWorkingDirectory — topic device provenance', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    testState.agent.agencyConfig = { boundDeviceId: 'device-b', executionTarget: 'device' };
+    testState.agent.agentMap = {};
+    testState.agent.localAgentWorkingDirectoryMap = {};
+    testState.chat.activeTopicId = 'topic-id';
+    // A conversation first pinned on device A, now running on device B.
+    testState.chat.topic = {
+      metadata: { boundDeviceId: 'device-a', workingDirectory: '/Users/me/repo-a' },
+    };
+    testState.chat.updateTopicMetadata = vi.fn();
+    testState.currentDeviceId = 'this-machine';
+    testState.effective = {
+      agencyConfig: { boundDeviceId: 'device-b', executionTarget: 'device' },
+      workspaceScoped: false,
+    };
+  });
+
+  it('re-stamps the topic device with the directory picked for the new device', async () => {
+    // The server only honours a topic pin on the device named by
+    // `boundDeviceId`; leaving device A there would make device B skip the
+    // directory just chosen for it and fall back to another cwd.
+    const { result } = renderHook(() => useCommitWorkingDirectory('agent-id'));
+    await result.current.commit({ path: '/home/me/repo-b' });
+
+    expect(testState.chat.updateTopicMetadata).toHaveBeenCalledWith('topic-id', {
+      boundDeviceId: 'device-b',
+      workingDirectory: '/home/me/repo-b',
+      workingDirectoryConfig: { path: '/home/me/repo-b' },
+    });
+  });
+
+  it('drops the topic device together with a cleared directory', async () => {
+    const { result } = renderHook(() => useCommitWorkingDirectory('agent-id'));
+    await result.current.clear();
+
+    // Clearing is carried as explicit `undefined` keys (a merge can't drop a
+    // key), so the key itself must be present — not merely unset.
+    const [topicId, patch] = testState.chat.updateTopicMetadata.mock.calls[0];
+    expect(topicId).toBe('topic-id');
+    expect(Object.keys(patch).sort()).toEqual([
+      'boundDeviceId',
+      'workingDirectory',
+      'workingDirectoryConfig',
+    ]);
+    expect(patch.boundDeviceId).toBeUndefined();
   });
 });
