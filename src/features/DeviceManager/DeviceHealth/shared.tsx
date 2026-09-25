@@ -12,15 +12,18 @@ import type { HealthSlotStatus, HealthStripBlock } from './buildHealthTimeline';
 import { formatPercent, peakUsageLevel, type UsageLevel } from './format';
 
 const DEVICE_METRICS_SWR_KEY = 'device/metricSeries';
-const REFRESH_INTERVAL_MS = 60_000;
+/** Devices upload every 5 minutes; polling faster only re-reads the same samples. */
+const REFRESH_INTERVAL_MS = 5 * 60_000;
 
 /**
  * The device's health series. The list-row preview and the detail panel read
- * the same key, so opening a device reuses the preview's data.
+ * the same key, so opening a device reuses the preview's data. `enabled: false`
+ * (an off-screen row) stops fetching; cached data comes back when it is on
+ * screen again.
  */
-export const useDeviceMetricSeries = (deviceId: string) =>
+export const useDeviceMetricSeries = (deviceId: string, enabled = true) =>
   useClientDataSWR<DeviceMetricSeries>(
-    [DEVICE_METRICS_SWR_KEY, deviceId],
+    enabled ? [DEVICE_METRICS_SWR_KEY, deviceId] : null,
     () => deviceService.getMetricSeries(deviceId),
     { refreshInterval: REFRESH_INTERVAL_MS },
   );

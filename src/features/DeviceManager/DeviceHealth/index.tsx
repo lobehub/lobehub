@@ -2,7 +2,7 @@
 
 import { AreaChart, Tracker } from '@lobehub/charts';
 import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Button, Text } from '@lobehub/ui/base-ui';
 import { useTranslation } from 'react-i18next';
 
 import { formatSize } from '@/utils/format';
@@ -16,6 +16,7 @@ import {
   useBlockTooltip,
   useDeviceMetricSeries,
 } from './shared';
+import { healthViewState } from './viewState';
 
 export { HealthLegend } from './shared';
 
@@ -63,12 +64,34 @@ const MetricChart = ({ ceiling, data, label, latest }: MetricChartProps) => (
  */
 const DeviceHealth = ({ deviceId }: { deviceId: string }) => {
   const { t } = useTranslation('setting');
-  const { data } = useDeviceMetricSeries(deviceId);
+  const { data, error, isValidating, mutate } = useDeviceMetricSeries(deviceId);
   const blockTooltip = useBlockTooltip();
 
-  if (!data) return null;
+  const view = healthViewState({ data, error });
 
-  if (data.points.length === 0) {
+  // A failed read (gateway down or not yet upgraded) must not look like loading.
+  if (view === 'error') {
+    return (
+      <Flexbox horizontal align={'center'} gap={8}>
+        <Text fontSize={12} type={'secondary'}>
+          {t('devices.health.error')}
+        </Text>
+        <Button loading={isValidating} size={'small'} onClick={() => mutate()}>
+          {t('devices.health.retry')}
+        </Button>
+      </Flexbox>
+    );
+  }
+
+  if (view === 'loading' || !data) {
+    return (
+      <Text fontSize={12} type={'secondary'}>
+        {t('devices.health.loading')}
+      </Text>
+    );
+  }
+
+  if (view === 'empty') {
     return (
       <Text fontSize={12} type={'secondary'}>
         {t('devices.health.empty')}

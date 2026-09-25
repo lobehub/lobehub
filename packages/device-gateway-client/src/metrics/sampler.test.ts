@@ -21,9 +21,11 @@ const setup = async (
     'backlog.json',
   );
   const upload = vi.fn(overrides.upload ?? (async () => {}));
+  const warn = vi.fn();
   const create = () =>
     new DeviceMetricsSampler({
       isConnected: overrides.connected ?? (() => true),
+      logger: { warn },
       now: () => now,
       readers: {
         // Each reading adds 100 units of CPU time, 25 of them busy.
@@ -34,7 +36,7 @@ const setup = async (
       storagePath,
       upload,
     });
-  return { advance: (ms: number) => (now += ms), create, storagePath, upload };
+  return { advance: (ms: number) => (now += ms), create, storagePath, upload, warn };
 };
 
 describe('DeviceMetricsSampler', () => {
@@ -138,5 +140,23 @@ describe('DeviceMetricsSampler', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('keeps the backlog file intact when writes overlap', async () => {
+    const { create, storagePath, warn } = await setup({
+      upload: async () => {
+        throw new Error('offline');
+      },
+    });
+    const sampler = create();
+    await sampler.start();
+
+    // Sampling and flushing both persist; overlapping writes shared one temp
+    // path, so the second rename failed and the backlog went stale.
+    await Promise.all([sampler.sample(), sampler.flush(), sampler.sample(), sampler.flush()]);
+
+    expect(warn).not.toHaveBeenCalled();
+    expect(JSON.parse(await readFile(storagePath, 'utf8'))).toHaveLength(2);
+    await sampler.stop();
   });
 });

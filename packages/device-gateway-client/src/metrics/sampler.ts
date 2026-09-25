@@ -63,6 +63,8 @@ export class DeviceMetricsSampler {
   private sampleTimer?: ReturnType<typeof setInterval>;
   private flushTimer?: ReturnType<typeof setInterval>;
   private flushing?: Promise<void>;
+  /** Backlog writes run one at a time; see {@link persist}. */
+  private writeQueue: Promise<void> = Promise.resolve();
   private started = false;
 
   constructor(options: DeviceMetricsSamplerOptions) {
@@ -194,7 +196,19 @@ export class DeviceMetricsSampler {
     }
   }
 
-  private async persist(): Promise<void> {
+  /**
+   * Write the backlog file. Sampling and flushing both persist and can overlap
+   * (coinciding timers, a reconnect flush); every write goes through the same
+   * temp path, so they are queued — each run writes the backlog as it stands
+   * when its turn comes.
+   */
+  private persist(): Promise<void> {
+    const run = this.writeQueue.then(() => this.writeBacklog());
+    this.writeQueue = run;
+    return run;
+  }
+
+  private async writeBacklog(): Promise<void> {
     const file = this.options.storagePath;
     if (!file) return;
     try {

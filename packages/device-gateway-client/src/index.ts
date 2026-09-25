@@ -18,6 +18,7 @@ export type {
   GatewayHttpClientOptions,
 } from './http';
 export { GatewayHttpClient } from './http';
+export { pushMetrics } from './metrics/pushMetrics';
 export type { DeviceMetricsSamplerOptions } from './metrics/sampler';
 export { DeviceMetricsSampler } from './metrics/sampler';
 export type { DeviceTunnelHostOptions } from './tunnel';

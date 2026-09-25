@@ -698,6 +698,9 @@ export default {
   'devices.fallbackTooltip':
     "This device couldn't be identified by its machine ID, so reinstalling the app may create a duplicate entry.",
   'devices.health.cpu': 'CPU',
+  'devices.health.error': "Couldn't load health data",
+  'devices.health.loading': 'Loading health data…',
+  'devices.health.retry': 'Retry',
   'devices.health.cpuCores_one': 'CPU · {{count}} core',
   'devices.health.cpuCores_other': 'CPU · {{count}} cores',
   'devices.health.level.critical': 'Critical',

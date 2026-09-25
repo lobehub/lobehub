@@ -19,9 +19,9 @@ const PREVIEW_WIDTH = 168;
  * colored by how loaded it is. Renders nothing for a device that never
  * reported.
  */
-const DeviceHealthPreview = ({ deviceId }: { deviceId: string }) => {
+const DeviceHealthPreview = ({ active, deviceId }: { active: boolean; deviceId: string }) => {
   const { t } = useTranslation('setting');
-  const { data } = useDeviceMetricSeries(deviceId);
+  const { data } = useDeviceMetricSeries(deviceId, active);
   const blockTooltip = useBlockTooltip();
 
   if (!data || data.points.length === 0) return null;

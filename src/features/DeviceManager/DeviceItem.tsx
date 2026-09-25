@@ -3,6 +3,7 @@
 import type { DeviceListItem } from '@lobechat/types';
 import { DropdownMenu, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { Avatar, Button, confirmModal, Tag, Text } from '@lobehub/ui/base-ui';
+import { useInViewport } from 'ahooks';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import {
@@ -14,7 +15,7 @@ import {
   Trash2Icon,
   TriangleAlertIcon,
 } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
@@ -124,6 +125,9 @@ interface DeviceItemProps {
 
 const DeviceItem = memo<DeviceItemProps>(
   ({ device, isCurrent, onSelect, selected, showHealthPreview }) => {
+    // Rows are not virtualized; only rows on screen keep their health preview polling.
+    const rowRef = useRef<HTMLDivElement>(null);
+    const [inViewport] = useInViewport(rowRef);
     const { t } = useTranslation('setting');
     const { t: tCommon } = useTranslation('common');
     const canEdit = useCanEditDevice()(device);
@@ -263,6 +267,7 @@ const DeviceItem = memo<DeviceItemProps>(
         aria-pressed={selected}
         className={cx(styles.row, selected && styles.rowActive)}
         gap={16}
+        ref={rowRef}
         role={'button'}
         tabIndex={0}
         onClick={onSelect}
@@ -323,7 +328,9 @@ const DeviceItem = memo<DeviceItemProps>(
         </Flexbox>
 
         <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
-          {showHealthPreview && <DeviceHealthPreview deviceId={device.deviceId} />}
+          {showHealthPreview && (
+            <DeviceHealthPreview active={!!inViewport} deviceId={device.deviceId} />
+          )}
           {device.scope === 'workspace' && device.enroller && (
             // Enroller avatar — the at-a-glance "who put this here" answer for
             // shared workspace pools. Hidden in personal scope (always the

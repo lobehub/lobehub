@@ -1,3 +1,4 @@
+import type * as GatewayClientModule from '@lobechat/device-gateway-client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
@@ -14,7 +15,8 @@ vi.mock('electron', () => ({
   powerSaveBlocker: { isStarted: vi.fn(() => false), start: vi.fn(() => 1), stop: vi.fn() },
 }));
 
-vi.mock('@lobechat/device-gateway-client', () => ({
+vi.mock('@lobechat/device-gateway-client', async (importOriginal) => ({
+  pushMetrics: (await importOriginal<typeof GatewayClientModule>()).pushMetrics,
   DeviceMetricsSampler: vi.fn().mockImplementation(function (options: any) {
     const sampler = {
       flush: vi.fn().mockResolvedValue(undefined),
@@ -54,9 +56,16 @@ describe('GatewayConnectionService device metrics', () => {
 
     // Reconnects swap the client instance; upload must follow the current one.
     const reportMetrics = vi.fn().mockResolvedValue(undefined);
-    (service as any).client = { disconnect: vi.fn(), reportMetrics };
+    (service as any).client = { connectionStatus: 'connected', disconnect: vi.fn(), reportMetrics };
+    // A workspace-share connection gets the same batch, so the shared row has history too.
+    const shareReport = vi.fn().mockResolvedValue(undefined);
+    (service as any).workspaceClients.set('ws-1', {
+      connectionStatus: 'connected',
+      reportMetrics: shareReport,
+    });
     await sampler.options.upload(samples);
     expect(reportMetrics).toHaveBeenCalledWith(samples);
+    expect(shareReport).toHaveBeenCalledWith(samples);
   });
 
   it('keeps one sampler across reconnects and flushes the backlog when connected', async () => {

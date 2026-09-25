@@ -16,7 +16,7 @@ import type {
   SystemInfoRequestMessage,
   ToolCallRequestMessage,
 } from '@lobechat/device-gateway-client';
-import { DeviceMetricsSampler, GatewayClient } from '@lobechat/device-gateway-client';
+import { DeviceMetricsSampler, GatewayClient, pushMetrics } from '@lobechat/device-gateway-client';
 import { listHeterogeneousAgentModels } from '@lobechat/heterogeneous-agents/models';
 import { getShellInfo } from '@lobechat/local-file-shell';
 import type { Command } from 'commander';
@@ -471,13 +471,20 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   // Machine health (CPU / memory / load) for the device page. Samples go to
   // the device gateway over this socket (the gateway is their only store);
   // they keep accruing while disconnected and upload once the connection is
-  // back, so the stretch around a drop is visible afterwards.
+  // back, so the stretch around a drop is visible afterwards. Each batch is
+  // mirrored to this machine's workspace-share connections so a shared
+  // device's workspace row has the same history.
   const metricsSampler = identity
     ? new DeviceMetricsSampler({
         isConnected: () => client.connectionStatus === 'connected',
         logger: { warn: (msg) => info(msg) },
         storagePath: resolveDeviceMetricsBacklogPath(identity.deviceId),
-        upload: (samples) => client.reportMetrics(samples),
+        upload: (samples) =>
+          pushMetrics(
+            client,
+            [...workspaceConnections.values()].map((entry) => entry.client),
+            samples,
+          ),
       })
     : undefined;
 

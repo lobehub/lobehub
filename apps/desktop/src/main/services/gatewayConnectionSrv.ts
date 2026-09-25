@@ -1004,15 +1004,17 @@ export default class GatewayConnectionService extends ServiceModule {
     await this.stopMetricsSampler();
 
     const userData = safeGetPath('userData');
-    const { DeviceMetricsSampler } = await import('@lobechat/device-gateway-client');
+    const { DeviceMetricsSampler, pushMetrics } = await import('@lobechat/device-gateway-client');
     const sampler = new DeviceMetricsSampler({
       isConnected: () => this.status === 'connected',
       logger: { warn: (msg) => logger.warn(msg) },
       storagePath: userData ? path.join(userData, 'device-metrics', `${deviceId}.json`) : undefined,
-      upload: (samples) =>
-        this.client
-          ? this.client.reportMetrics(samples)
-          : Promise.reject(new Error('Gateway not connected')),
+      // Mirrored to the workspace-share connections so a shared device's
+      // workspace row has the same history (the gateway stores per socket).
+      upload: async (samples) => {
+        if (!this.client) throw new Error('Gateway not connected');
+        await pushMetrics(this.client, this.workspaceClients.values(), samples);
+      },
     });
     this.metricsSampler = { deviceId, sampler };
     await sampler.start();

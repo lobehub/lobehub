@@ -1,3 +1,4 @@
+import type * as GatewayClientModule from '@lobechat/device-gateway-client';
 import { GatewayClient } from '@lobechat/device-gateway-client';
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -95,7 +96,8 @@ const metricsSampler = vi.hoisted(() => ({
   stop: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('@lobechat/device-gateway-client', () => ({
+vi.mock('@lobechat/device-gateway-client', async (importOriginal) => ({
+  pushMetrics: (await importOriginal<typeof GatewayClientModule>()).pushMetrics,
   DeviceMetricsSampler: vi.fn().mockImplementation(function (opts: any) {
     metricsSampler.options = opts;
     return metricsSampler;
