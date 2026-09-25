@@ -278,7 +278,31 @@ describe('AgentDocumentsService', () => {
       expect(mockModel.create).not.toHaveBeenCalled();
     });
 
-    it('should extract H1 from markdown content as the document title', async () => {
+    it('keeps the explicit title and the H1 body line when they differ', async () => {
+      vi.mocked(extractMarkdownH1Title).mockReturnValueOnce({
+        content: 'body',
+        title: 'FASE G-2D — INFORME DE CIERRE',
+      });
+      mockModel.findByParentAndFilename.mockResolvedValue(undefined);
+      mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'G-2D-CIERRE-20260922-1101' });
+
+      const service = new AgentDocumentsService(db, userId);
+      const content = '# FASE G-2D — INFORME DE CIERRE\n\nbody';
+      await service.createDocument('agent-1', 'G-2D-CIERRE-20260922-1101', content);
+
+      expect(vi.mocked(buildDocumentFilename)).toHaveBeenCalledWith('G-2D-CIERRE-20260922-1101');
+      expect(mockModel.create).toHaveBeenCalledWith(
+        'agent-1',
+        'G-2D-CIERRE-20260922-1101',
+        content,
+        {
+          editorData: { root: { children: [] } },
+          title: 'G-2D-CIERRE-20260922-1101',
+        },
+      );
+    });
+
+    it('strips an H1 that duplicates the explicit title', async () => {
       vi.mocked(extractMarkdownH1Title).mockReturnValueOnce({
         content: 'body',
         title: 'My Title',
@@ -287,13 +311,41 @@ describe('AgentDocumentsService', () => {
       mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'My Title' });
 
       const service = new AgentDocumentsService(db, userId);
-      await service.createDocument('agent-1', 'fallback', '# My Title\n\nbody');
+      await service.createDocument('agent-1', 'My Title', '# My Title\n\nbody');
+
+      expect(mockModel.create).toHaveBeenCalledWith('agent-1', 'My Title', 'body', {
+        editorData: { root: { children: [] } },
+        title: 'My Title',
+      });
+    });
+
+    it('falls back to the H1 as the title when no title is given', async () => {
+      vi.mocked(extractMarkdownH1Title).mockReturnValueOnce({
+        content: 'body',
+        title: 'My Title',
+      });
+      mockModel.findByParentAndFilename.mockResolvedValue(undefined);
+      mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'My Title' });
+
+      const service = new AgentDocumentsService(db, userId);
+      await service.createDocument('agent-1', '  ', '# My Title\n\nbody');
 
       expect(vi.mocked(buildDocumentFilename)).toHaveBeenCalledWith('My Title');
       expect(mockModel.create).toHaveBeenCalledWith('agent-1', 'My Title', 'body', {
         editorData: { root: { children: [] } },
         title: 'My Title',
       });
+    });
+
+    it('rejects LiteXML content instead of creating an empty document', async () => {
+      mockModel.findByParentAndFilename.mockResolvedValue(undefined);
+
+      const service = new AgentDocumentsService(db, userId);
+
+      await expect(
+        service.createDocument('agent-1', 'Doc', '<?xml version="1.0"?>\n<root><p>Body</p></root>'),
+      ).rejects.toThrow('looks like LiteXML');
+      expect(mockModel.create).not.toHaveBeenCalled();
     });
 
     it('persists agent signal skill hints in document metadata', async () => {
@@ -864,6 +916,28 @@ lossless tool result
   });
 
   describe('replaceDocumentContentById', () => {
+    it('rejects LiteXML content instead of saving an empty document', async () => {
+      mockModel.findById.mockResolvedValueOnce({
+        agentId: 'agent-1',
+        content: 'old',
+        documentId: 'documents-1',
+        id: 'agent-doc-1',
+        title: 'Doc',
+      });
+
+      const service = new AgentDocumentsService(db, userId);
+
+      await expect(
+        service.replaceDocumentContentById(
+          'agent-doc-1',
+          '<?xml version="1.0" encoding="UTF-8"?>\n<root>\n  <p id="rxam"></p>\n</root>',
+          'agent-1',
+        ),
+      ).rejects.toThrow('looks like LiteXML');
+      expect(mockModel.update).not.toHaveBeenCalled();
+      expect(mockDocumentService.trySaveCurrentDocumentHistory).not.toHaveBeenCalled();
+    });
+
     it('should save history before editing document content', async () => {
       mockModel.findById
         .mockResolvedValueOnce({
@@ -966,13 +1040,11 @@ lossless tool result
         content: 'xml updated',
         editorData: { root: { children: [] } },
       });
-      expect(headlessEditorMocks.applyLiteXML).toHaveBeenCalledWith([
-        {
-          action: 'replace',
-          delay: true,
-          litexml: '<p id="node-1">xml updated</p>',
-        },
-      ]);
+      expect(headlessEditorMocks.applyLiteXML).toHaveBeenCalledWith({
+        action: 'replace',
+        delay: true,
+        litexml: '<p id="node-1">xml updated</p>',
+      });
       expect(headlessEditorMocks.applyLiteXMLBatch).not.toHaveBeenCalled();
       expect(result?.content).toBe('xml updated');
     });

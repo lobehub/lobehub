@@ -226,6 +226,54 @@ describe('AgentDocumentInjector', () => {
       expect(result.messages[0].content).not.toContain('Full content that should NOT appear');
     });
 
+    // The index is rebuilt every step, so a doc the agent created earlier in the
+    // same run showed up as if it already existed and was read as "overwritten".
+    it('marks docs created during the current run in the progressive index', async () => {
+      const runStartedAt = new Date('2026-09-23T22:57:30.000Z').getTime();
+      const provider = new AgentDocumentContextInjector({
+        documents: [
+          {
+            createdAt: new Date('2026-09-23T22:57:58.000Z'),
+            filename: 'fase-g-2c.md',
+            id: 'ce2c4f3a',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            policyLoad: 'progressive',
+            title: 'FASE G-2C',
+            updatedAt: new Date('2026-09-23T22:57:58.000Z'),
+          },
+          {
+            createdAt: new Date('2026-09-21T23:12:00.000Z'),
+            filename: 'fase-g-2b.md',
+            id: '452eea73',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            policyLoad: 'progressive',
+            title: 'FASE G-2B',
+            updatedAt: new Date('2026-09-21T23:12:00.000Z'),
+          },
+        ],
+      });
+
+      const context = createContext([
+        { content: 'earlier', createdAt: runStartedAt - 3_600_000, id: 'user-0', role: 'user' },
+        { content: 'ok', createdAt: runStartedAt - 3_500_000, id: 'a-0', role: 'assistant' },
+        { content: 'Write the G-2C report', createdAt: runStartedAt, id: 'user-1', role: 'user' },
+      ]);
+      const result = await provider.process(context);
+
+      expect(result.messages[0].content).toMatchInlineSnapshot(`
+        "<agent_documents_index>
+        User-created docs, when present, are listed below — use readDocument(id) for full content.
+        Docs marked (created this run) did not exist before this run — you created them, so creating them did not overwrite an existing doc.
+
+        TITLE                         ID        SIZE   UPDATED
+        FASE G-2C (created this run)  ce2c4f3a  empty  2026-09-23
+        FASE G-2B                     452eea73  empty  2026-09-21
+        </agent_documents_index>"
+      `);
+    });
+
     // https://github.com/lobehub/lobehub/issues/15624 — relative times ("15m ago")
     // in the index changed the prompt prefix every minute and broke provider-side
     // prompt caching. The index must stay byte-identical as wall-clock time passes.

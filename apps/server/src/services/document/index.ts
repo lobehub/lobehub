@@ -194,7 +194,7 @@ export class DocumentService {
    */
   async createDocument(params: {
     content?: string;
-    editorData: Record<string, any>;
+    editorData?: Record<string, any>;
     fileType?: string;
     knowledgeBaseId?: string;
     metadata?: Record<string, any>;
@@ -328,7 +328,7 @@ export class DocumentService {
   async createDocuments(
     documents: Array<{
       content?: string;
-      editorData: Record<string, any>;
+      editorData?: Record<string, any>;
       fileType?: string;
       knowledgeBaseId?: string;
       metadata?: Record<string, any>;

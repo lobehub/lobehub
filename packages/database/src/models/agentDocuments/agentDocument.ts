@@ -1152,6 +1152,7 @@ export class AgentDocumentModel {
         },
         settings: {
           agentId: agentDocuments.agentId,
+          createdAt: agentDocuments.createdAt,
           documentId: agentDocuments.documentId,
           id: agentDocuments.id,
           policy: agentDocuments.policy,
@@ -1182,6 +1183,7 @@ export class AgentDocumentModel {
       > = {
         content: doc.content,
         contentCharCount: doc.totalCharCount,
+        createdAt: settings.createdAt,
         description: doc.description ?? null,
         documentId: settings.documentId,
         editorData: doc.editorData ?? null,
