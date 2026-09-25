@@ -1,3 +1,4 @@
+import type * as ChildProcessModule from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
@@ -8,6 +9,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ShellProcess } from '../process-manager';
 import { MAX_OBSERVATION_TIMEOUT_MS, ShellProcessManager } from '../process-manager';
+
+const spawnSpy = vi.hoisted(() => vi.fn());
+
+vi.mock('node:child_process', async (importOriginal) => ({
+  ...(await importOriginal<typeof ChildProcessModule>()),
+  spawn: spawnSpy,
+}));
 
 function createMockProcess(exitCode: number | null = null, pid?: number): ChildProcess {
   const process = new EventEmitter() as ChildProcess;
@@ -31,9 +39,15 @@ function createShellProcess(
   shellId: string,
   process: ChildProcess,
 ): ShellProcess {
+  const outputFiles = manager.createOutputFiles(shellId);
+  // Hand the double out through the default ChildProcessBackend so kill paths
+  // run through the real backend.
+  spawnSpy.mockReturnValueOnce(process);
+  manager.backend.spawn({ args: [], cmd: 'mock' }, { env: {}, outputFiles, shellId });
+
   return {
     exitCode: process.exitCode,
-    outputFiles: manager.createOutputFiles(shellId),
+    outputFiles,
     process,
   };
 }
