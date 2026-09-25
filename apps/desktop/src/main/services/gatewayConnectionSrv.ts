@@ -363,8 +363,10 @@ export default class GatewayConnectionService extends ServiceModule {
 
   async disconnect(): Promise<{ success: boolean }> {
     // A user-initiated disconnect turns the device off, so stop sampling too —
-    // the page then shows no data rather than "running but unreachable".
-    await this.stopMetricsSampler();
+    // the page then shows no data rather than "running but unreachable". The
+    // samples since the last upload are pushed first (bounded), while the
+    // socket is still open.
+    await this.stopMetricsSampler({ flushTimeoutMs: 3000 });
     if (this.client) {
       await this.client.disconnect();
       this.client = null;
@@ -1016,10 +1018,10 @@ export default class GatewayConnectionService extends ServiceModule {
     await sampler.start();
   }
 
-  private async stopMetricsSampler() {
+  private async stopMetricsSampler(options?: { flushTimeoutMs?: number }) {
     const current = this.metricsSampler;
     this.metricsSampler = null;
-    await current?.sampler.stop();
+    await current?.sampler.stop(options);
   }
 
   // ─── Status Broadcasting ───

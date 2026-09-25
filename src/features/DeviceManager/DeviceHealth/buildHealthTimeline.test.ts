@@ -1,7 +1,7 @@
 import type { DeviceMetricPoint } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { buildHealthTimeline } from './buildHealthTimeline';
+import { buildHealthTimeline, groupStripBlocks, type HealthSlot } from './buildHealthTimeline';
 
 const MIN = 60_000;
 const BUCKET = 5 * MIN;
@@ -61,5 +61,39 @@ describe('buildHealthTimeline', () => {
     expect(timeline.latest).toEqual({ cpuPercent: 90, load1: 12.4, memoryPercent: 50 });
     expect(timeline.loadCeiling).toBe(13);
     expect(build([point(3, { load1: 2 })]).loadCeiling).toBe(8);
+  });
+});
+
+describe('groupStripBlocks', () => {
+  const slot = (i: number, status: HealthSlot['status']): HealthSlot => ({
+    cpuPercent: null,
+    load1: null,
+    memoryPercent: null,
+    memoryUsedBytes: null,
+    start: i * BUCKET,
+    status,
+  });
+
+  it('keeps a disconnect visible and reads partial running as running', () => {
+    const blocks = groupStripBlocks(
+      [
+        slot(0, 'missing'),
+        slot(1, 'online'),
+        slot(2, 'online'),
+        slot(3, 'online'),
+        slot(4, 'offline'),
+        slot(5, 'online'),
+        slot(6, 'missing'),
+        slot(7, 'pending'),
+      ],
+      BUCKET,
+      3,
+    );
+
+    expect(blocks).toEqual([
+      { end: 3 * BUCKET, start: 0, status: 'online' },
+      { end: 6 * BUCKET, start: 3 * BUCKET, status: 'offline' },
+      { end: 8 * BUCKET, start: 6 * BUCKET, status: 'pending' },
+    ]);
   });
 });

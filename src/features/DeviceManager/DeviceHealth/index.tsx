@@ -12,10 +12,17 @@ import { useClientDataSWR } from '@/libs/swr';
 import { deviceService } from '@/services/device';
 import { formatSize } from '@/utils/format';
 
-import { buildHealthTimeline, type HealthSlotStatus } from './buildHealthTimeline';
+import {
+  buildHealthTimeline,
+  groupStripBlocks,
+  type HealthSlotStatus,
+} from './buildHealthTimeline';
+import { formatLoad, formatPercent } from './format';
 
 const DEVICE_METRICS_SWR_KEY = 'device/metricSeries';
 const REFRESH_INTERVAL_MS = 60_000;
+/** Status-strip block width: wide enough to see and hover in the side panel. */
+const STRIP_BLOCK_MS = 15 * 60_000;
 
 const SLOT_COLOR: Record<HealthSlotStatus, string> = {
   missing: cssVar.colorFillSecondary,
@@ -25,13 +32,11 @@ const SLOT_COLOR: Record<HealthSlotStatus, string> = {
 };
 
 const time = (ms: number) => dayjs(ms).format('HH:mm');
-const percent = (value: number | null | undefined) =>
-  value === null || value === undefined ? '—' : `${Math.round(value)}%`;
 
 interface MetricChartProps {
   ceiling: number;
   data: { time: string; value: number | null }[];
-  format: (value: number) => string;
+  format: (value: number | null | undefined) => string;
   label: string;
   latest: string;
 }
@@ -97,13 +102,21 @@ const DeviceHealth = ({ deviceId }: { deviceId: string }) => {
   return (
     <Flexbox gap={16}>
       <Flexbox gap={6}>
+        {/* Blocks flex to an equal share of the panel — the default fixed
+            12px overflowed and clipped the newest hours. */}
         <Tracker
-          blockGap={1}
+          blockGap={2}
           blockHeight={16}
-          data={timeline.slots.map((slot) => ({
-            color: SLOT_COLOR[slot.status],
-            key: slot.start,
-            tooltip: `${time(slot.start)} · ${statusLabel[slot.status]}`,
+          blockWidth={'100%'}
+          width={'100%'}
+          data={groupStripBlocks(
+            timeline.slots,
+            data.bucketMs,
+            Math.max(1, Math.round(STRIP_BLOCK_MS / data.bucketMs)),
+          ).map((block) => ({
+            color: SLOT_COLOR[block.status],
+            key: block.start,
+            tooltip: `${time(block.start)}–${time(block.end)} · ${statusLabel[block.status]}`,
           }))}
         />
         <Flexbox horizontal distribution={'space-between'}>
@@ -139,28 +152,28 @@ const DeviceHealth = ({ deviceId }: { deviceId: string }) => {
       <MetricChart
         ceiling={100}
         data={rows((slot) => slot.cpuPercent)}
-        format={(v) => percent(v)}
+        format={formatPercent}
         label={t('devices.health.cpu')}
-        latest={percent(timeline.latest?.cpuPercent)}
+        latest={formatPercent(timeline.latest?.cpuPercent)}
       />
       <MetricChart
         ceiling={100}
         data={rows((slot) => slot.memoryPercent)}
-        format={(v) => percent(v)}
+        format={formatPercent}
         label={t('devices.health.memory')}
         latest={
           data.memoryTotalBytes
-            ? `${percent(timeline.latest?.memoryPercent)} · ${formatSize(data.memoryTotalBytes)}`
-            : percent(timeline.latest?.memoryPercent)
+            ? `${formatPercent(timeline.latest?.memoryPercent)} · ${formatSize(data.memoryTotalBytes)}`
+            : formatPercent(timeline.latest?.memoryPercent)
         }
       />
       {timeline.slots.some((slot) => slot.load1 !== null) && (
         <MetricChart
           ceiling={timeline.loadCeiling}
           data={rows((slot) => slot.load1)}
-          format={(v) => v.toFixed(2)}
+          format={formatLoad}
           label={t('devices.health.load', { count: data.cpuCount ?? 1 })}
-          latest={timeline.latest?.load1?.toFixed(2) ?? '—'}
+          latest={formatLoad(timeline.latest?.load1)}
         />
       )}
     </Flexbox>

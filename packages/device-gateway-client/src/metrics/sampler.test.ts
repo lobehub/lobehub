@@ -107,4 +107,36 @@ describe('DeviceMetricsSampler', () => {
     expect(sampler.pendingCount).toBe(1);
     expect(upload).not.toHaveBeenCalled();
   });
+
+  it('pushes pending samples on a clean stop', async () => {
+    const { create, upload } = await setup();
+    const sampler = create();
+    await sampler.start();
+    await sampler.sample();
+    await sampler.stop({ flushTimeoutMs: 3000 });
+
+    expect(upload).toHaveBeenCalledTimes(1);
+    expect(sampler.pendingCount).toBe(0);
+  });
+
+  it('does not hang a clean stop on an upload that never answers', async () => {
+    vi.useFakeTimers();
+    try {
+      const { create } = await setup({ upload: () => new Promise(() => {}) });
+      const sampler = create();
+      await sampler.start();
+      await sampler.sample();
+
+      let stopped = false;
+      const stopping = sampler.stop({ flushTimeoutMs: 3000 }).then(() => (stopped = true));
+      await vi.advanceTimersByTimeAsync(2999);
+      expect(stopped).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      await stopping;
+      // The unsent sample stays in the backlog for the next start.
+      expect(sampler.pendingCount).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

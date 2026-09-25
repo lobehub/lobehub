@@ -85,12 +85,29 @@ export class DeviceMetricsSampler {
     this.flushTimer.unref?.();
   }
 
-  async stop(): Promise<void> {
+  /**
+   * Stop sampling. With `flushTimeoutMs`, first try to upload what is pending
+   * (bounded, so shutdown never hangs on a dead connection): on a clean exit
+   * the minutes since the last upload would otherwise read as "not running"
+   * until the next start.
+   */
+  async stop(options: { flushTimeoutMs?: number } = {}): Promise<void> {
     if (!this.started) return;
     this.started = false;
     clearInterval(this.sampleTimer);
     clearInterval(this.flushTimer);
-    await this.flushing;
+    if (options.flushTimeoutMs) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      await Promise.race([
+        this.flush(),
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, options.flushTimeoutMs);
+        }),
+      ]);
+      clearTimeout(timer);
+    } else {
+      await this.flushing;
+    }
     await this.persist();
   }
 

@@ -95,3 +95,34 @@ export const buildHealthTimeline = (series: DeviceMetricSeries): HealthTimeline 
     stretches,
   };
 };
+
+export interface HealthStripBlock {
+  end: number;
+  start: number;
+  status: HealthSlotStatus;
+}
+
+/** Most to least telling when slots of different kinds share one block. */
+const STRIP_PRIORITY: HealthSlotStatus[] = ['offline', 'online', 'pending', 'missing'];
+
+/**
+ * Merge consecutive slots into blocks wide enough to see and hover — a 12h
+ * window of 5-minute slots is 144 hair-thin blocks in a side panel. A block
+ * takes its most telling slot status: a disconnect anywhere in it shows, and
+ * a block where the device ran for part of the time reads as running.
+ */
+export const groupStripBlocks = (
+  slots: HealthSlot[],
+  bucketMs: number,
+  slotsPerBlock: number,
+): HealthStripBlock[] => {
+  const blocks: HealthStripBlock[] = [];
+  for (let i = 0; i < slots.length; i += slotsPerBlock) {
+    const group = slots.slice(i, i + slotsPerBlock);
+    const status =
+      STRIP_PRIORITY.find((candidate) => group.some((slot) => slot.status === candidate)) ??
+      'missing';
+    blocks.push({ end: group.at(-1)!.start + bucketMs, start: group[0].start, status });
+  }
+  return blocks;
+};

@@ -385,7 +385,7 @@ describe('connect command', () => {
   });
 
   it('should handle SIGINT', async () => {
-    const sigintHandlers: Array<() => void> = [];
+    const sigintHandlers: Array<() => Promise<void> | void> = [];
     const origOn = process.on;
     vi.spyOn(process, 'on').mockImplementation((event: any, handler: any) => {
       if (event === 'SIGINT') sigintHandlers.push(handler);
@@ -397,9 +397,14 @@ describe('connect command', () => {
 
     // Trigger SIGINT handler
     for (const handler of sigintHandlers) {
-      handler();
+      await handler();
     }
 
+    // Pending health samples get a bounded push before the socket closes.
+    expect(metricsSampler.stop).toHaveBeenCalledWith({ flushTimeoutMs: 3000 });
+    expect(metricsSampler.stop.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(cleanupAllProcesses).mock.invocationCallOrder[0],
+    );
     expect(cleanupAllProcesses).toHaveBeenCalled();
     expect(removeStatus).toHaveBeenCalled();
   });
@@ -418,7 +423,7 @@ describe('connect command', () => {
   });
 
   it('should handle SIGTERM', async () => {
-    const sigtermHandlers: Array<() => void> = [];
+    const sigtermHandlers: Array<() => Promise<void> | void> = [];
     const origOn = process.on;
     vi.spyOn(process, 'on').mockImplementation((event: any, handler: any) => {
       if (event === 'SIGTERM') sigtermHandlers.push(handler);
@@ -429,7 +434,7 @@ describe('connect command', () => {
     await program.parseAsync(['node', 'test', 'connect']);
 
     for (const handler of sigtermHandlers) {
-      handler();
+      await handler();
     }
 
     expect(cleanupAllProcesses).toHaveBeenCalled();

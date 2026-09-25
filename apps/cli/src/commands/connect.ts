@@ -74,6 +74,8 @@ import { cleanupAllProcesses } from '../tools/shell';
 import { log, setVerbose } from '../utils/logger';
 import { sweepLocalTraces } from '../utils/traceMaintenance';
 
+/** Longest a clean stop waits to push pending device health samples. */
+const SHUTDOWN_METRICS_FLUSH_MS = 3000;
 const CONNECT_SERVICE_NAME = CLI_CONNECT_SERVICE_NAME;
 
 interface ConnectOptions {
@@ -780,15 +782,17 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     }
   };
 
-  process.on('SIGINT', () => {
+  // A clean stop pushes the health samples taken since the last upload
+  // (bounded) before the socket closes, so the device page doesn't show the
+  // final minutes as "not running".
+  const shutdown = async () => {
+    await metricsSampler?.stop({ flushTimeoutMs: SHUTDOWN_METRICS_FLUSH_MS });
     cleanup();
     process.exit(0);
-  });
+  };
 
-  process.on('SIGTERM', () => {
-    cleanup();
-    process.exit(0);
-  });
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
 
   // Register this device in the server registry before opening the WS, so the
   // row exists by the time the gateway reports it online. `lh login` already

@@ -74,6 +74,6 @@ describe('GatewayConnectionService device metrics', () => {
     await (service as any).startMetricsSampler('dev-1');
     await service.disconnect();
 
-    expect(samplers[0].stop).toHaveBeenCalled();
+    expect(samplers[0].stop).toHaveBeenCalledWith({ flushTimeoutMs: 3000 });
   });
 });
