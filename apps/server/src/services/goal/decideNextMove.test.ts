@@ -176,6 +176,17 @@ describe('decideNextMove', () => {
         }).branch,
       ).toBe('recover_lease');
 
+      // The gateway watchdog abandoning a silent run loses it the same way an
+      // expired lease does; nothing judged the work, so it must not wait on a person.
+      expect(
+        decide(snapshot, {
+          frontierTask: task({
+            error: 'Operation abandoned: inactivity_watchdog',
+            status: 'paused',
+          }),
+        }).branch,
+      ).toBe('recover_lease');
+
       expect(
         decide(snapshot, {
           frontierTask: task({ error: VERIFICATION_FAILED_ERROR, status: 'paused' }),

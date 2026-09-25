@@ -48,9 +48,11 @@ vi.mock('@/database/models/agentOperation', () => ({
 }));
 
 const dispatchHooksMock = vi.fn().mockResolvedValue(undefined);
+const completeOperationMock = vi.fn().mockResolvedValue(undefined);
 vi.mock('../CompletionLifecycle', () => ({
   CompletionLifecycle: vi.fn().mockImplementation(function () {
     return {
+      completeOperation: completeOperationMock,
       dispatchHooks: dispatchHooksMock,
     };
   }),
@@ -106,6 +108,7 @@ describe('AbandonOperationService', () => {
   beforeEach(() => {
     messageUpdateMock.mockClear();
     dispatchHooksMock.mockClear();
+    completeOperationMock.mockClear();
     findOperationMock.mockReset().mockResolvedValue(null);
     recordCompletionMock.mockClear();
     findThreadMock.mockReset().mockResolvedValue(null);
@@ -182,6 +185,85 @@ describe('AbandonOperationService', () => {
         message: expect.stringContaining('inactivity_watchdog'),
         type: 'AgentRuntimeError',
       }),
+    });
+  });
+
+  describe('no-state lifecycle hooks', () => {
+    const taskHook = {
+      id: 'task-on-complete',
+      type: 'onComplete',
+      webhook: { url: '/api/workflows/task/on-topic-complete' },
+    };
+    const runningRow = (metadata?: Record<string, unknown>) => ({
+      agentId: 'agt_x',
+      id: 'op_x',
+      metadata,
+      startedAt: new Date('2026-09-24T17:30:02.000Z'),
+      status: 'running',
+      topicId: 'tpc_x',
+      userId: 'user_x',
+      workspaceId: 'ws_x',
+    });
+    const abandon = (operationRow: any) =>
+      new AbandonOperationService(buildDb({ operationRow }), {
+        coordinator: buildCoordinator({ loadAgentState: vi.fn().mockResolvedValue(null) }) as any,
+        snapshotStore: buildStore() as any,
+      }).finalizeAbandoned('op_x', 'inactivity_watchdog');
+
+    it('fires the run hooks so a task topic does not stay running forever', async () => {
+      topicSettleRunningOperationMock.mockResolvedValue({
+        assistantMessageId: 'msg_assist_1',
+        hooks: [taskHook],
+        orchestrationRole: undefined,
+        status: 'settled',
+      });
+
+      await abandon(runningRow());
+
+      expect(completeOperationMock).toHaveBeenCalledTimes(1);
+      expect(completeOperationMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentId: 'agt_x',
+          assistantMessageId: 'msg_assist_1',
+          error: expect.objectContaining({
+            message: expect.stringContaining('inactivity_watchdog'),
+          }),
+          operationId: 'op_x',
+          serializedHooks: [taskHook],
+          startedAt: new Date('2026-09-24T17:30:02.000Z'),
+          topicId: 'tpc_x',
+          userId: 'user_x',
+        }),
+        'error',
+        { skipErrorMessageWrite: true },
+      );
+    });
+
+    it('falls back to the hooks serialized on the operation row', async () => {
+      await abandon(runningRow({ _hooks: [taskHook] }));
+
+      expect(completeOperationMock).toHaveBeenCalledWith(
+        expect.objectContaining({ serializedHooks: [taskHook] }),
+        'error',
+        { skipErrorMessageWrite: true },
+      );
+    });
+
+    it('does not fire hooks when a newer operation owns the topic', async () => {
+      topicSettleRunningOperationMock.mockResolvedValue({
+        activeOperationId: 'op_newer',
+        status: 'conflict',
+      });
+
+      await abandon(runningRow({ _hooks: [taskHook] }));
+
+      expect(completeOperationMock).not.toHaveBeenCalled();
+    });
+
+    it('does not run the lifecycle for a run without hooks', async () => {
+      await abandon(runningRow());
+
+      expect(completeOperationMock).not.toHaveBeenCalled();
     });
   });
 

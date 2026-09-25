@@ -32,6 +32,7 @@ import {
 import type { LobeChatDatabase } from '@/database/type';
 import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime/AgentRuntimeCoordinator';
 
+import { deviceGateway } from '../deviceGateway';
 import { TaskService } from '../task';
 import { TaskRunnerService } from '../taskRunner';
 import { VerifyPlanGeneratorService } from '../verify/planGenerator';
@@ -2379,6 +2380,81 @@ describe('GoalService', () => {
     );
   });
 
+  describe('a running topic whose run already ended', () => {
+    const setup = async (title: string, operationId: string, completedAt: Date) => {
+      const runSpy = vi
+        .spyOn(TaskRunnerService.prototype, 'runTask')
+        .mockResolvedValue({ operationId: 'op-next', success: true } as never);
+      vi.spyOn(TaskTopicModel.prototype, 'findRunningByTaskIds').mockResolvedValue([
+        {
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          operationId,
+          topicId: `topic-${operationId}`,
+        } as never,
+      ]);
+      const timeoutSpy = vi
+        .spyOn(TaskTopicModel.prototype, 'updateStatus')
+        .mockResolvedValue(undefined);
+
+      const service = new GoalService(serverDB, userId);
+      const taskModel = new TaskModel(serverDB, userId);
+      const graph = await service.create({
+        config: { recovery: { maxAttemptsPerTask: 3, operationLeaseTimeoutMs: 60_000 } },
+        title,
+        tasks: ['Run a device experiment'],
+      });
+      const created = await service.tick(graph.goal.id);
+      await taskModel.update(created.taskId!, { totalTopics: 1 });
+      await taskModel.updateStatus(created.taskId!, 'running');
+
+      // The gateway watchdog already settled the run as an error, but the task
+      // lifecycle never heard about it, so the topic still reads `running`.
+      const operationModel = new AgentOperationModel(serverDB, userId);
+      await operationModel.recordStart({ operationId, taskId: created.taskId });
+      await operationModel.recordCompletion(operationId, {
+        completedAt,
+        completionReason: 'error',
+        status: 'error',
+      });
+
+      return { created, graph, runSpy, service, timeoutSpy };
+    };
+
+    it('reclaims it once the run has been over for longer than the lease', async () => {
+      const { created, graph, runSpy, service, timeoutSpy } = await setup(
+        'Recover a watchdog-abandoned run',
+        'op-abandoned',
+        new Date('2026-01-01T00:10:00.000Z'),
+      );
+
+      const recovered = await service.tick(graph.goal.id);
+
+      expect(timeoutSpy).toHaveBeenCalledWith(created.taskId, 'topic-op-abandoned', 'timeout');
+      expect(runSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ taskId: created.taskId, trigger: 'goal' }),
+      );
+      expect(recovered).toMatchObject({
+        message: expect.stringContaining('Recovered abandoned task'),
+        outcome: 'waiting_external',
+        taskId: created.taskId,
+      });
+    });
+
+    it('leaves a run that just ended to its own completion hook', async () => {
+      const { created, graph, runSpy, service, timeoutSpy } = await setup(
+        'Wait for the completion hook',
+        'op-just-ended',
+        new Date(),
+      );
+
+      const waiting = await service.tick(graph.goal.id);
+
+      expect(timeoutSpy).not.toHaveBeenCalled();
+      expect(runSpy).not.toHaveBeenCalled();
+      expect(waiting).toMatchObject({ outcome: 'waiting_external', taskId: created.taskId });
+    });
+  });
+
   it('does not reclaim a running Task operation without a persisted topic id', async () => {
     vi.spyOn(TaskTopicModel.prototype, 'findRunningByTaskIds').mockResolvedValue([
       { operationId: 'op-without-topic', topicId: null } as never,
@@ -2552,6 +2628,101 @@ describe('GoalService', () => {
       taskId: created.taskId,
     });
     expect((await service.graph(graph.goal.id)).decisions).toHaveLength(0);
+  });
+
+  describe('a Task that could not reach its device', () => {
+    const DEVICE_NOT_FOUND_HEADLINE =
+      'The device this agent is bound to is no longer registered with the connection service. Reconnect the device, or bind this agent to another online device.';
+
+    const setup = async (title: string) => {
+      const service = new GoalService(serverDB, userId);
+      const taskModel = new TaskModel(serverDB, userId);
+      const graph = await service.create({
+        config: { recovery: { maxAttemptsPerTask: 3 } },
+        title,
+        tasks: ['Reproduce on the bound device'],
+      });
+      const created = await service.tick(graph.goal.id);
+      await taskModel.update(created.taskId!, { totalTopics: 1 });
+      await taskModel.updateStatus(created.taskId!, 'paused', {
+        error: DEVICE_NOT_FOUND_HEADLINE,
+      });
+      return { created, graph, service, taskModel };
+    };
+
+    it('waits for the device instead of asking a person', async () => {
+      vi.spyOn(deviceGateway, 'queryDeviceStatus').mockResolvedValue({
+        deviceCount: 0,
+        online: false,
+      });
+      const runSpy = vi.spyOn(TaskRunnerService.prototype, 'runTask');
+      const { created, graph, service } = await setup('Device went to sleep');
+
+      const waiting = await service.tick(graph.goal.id);
+
+      expect(waiting).toMatchObject({
+        message: expect.stringContaining('waiting for its device to reconnect'),
+        outcome: 'waiting_external',
+        taskId: created.taskId,
+      });
+      expect(runSpy).not.toHaveBeenCalled();
+      expect((await service.graph(graph.goal.id)).decisions).toHaveLength(0);
+    });
+
+    it('retries on its own once a device is back online', async () => {
+      vi.spyOn(deviceGateway, 'queryDeviceStatus').mockResolvedValue({
+        deviceCount: 1,
+        online: true,
+      });
+      const runSpy = vi
+        .spyOn(TaskRunnerService.prototype, 'runTask')
+        .mockResolvedValue({ operationId: 'op-after-reconnect', success: true } as never);
+      const { created, graph, service } = await setup('Device reconnected');
+
+      const retried = await service.tick(graph.goal.id);
+
+      expect(runSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ taskId: created.taskId, trigger: 'goal' }),
+      );
+      expect(retried).toMatchObject({ outcome: 'waiting_external', taskId: created.taskId });
+      expect((await service.graph(graph.goal.id)).decisions).toHaveLength(0);
+    });
+
+    it('keeps waiting when the retry itself cannot reach the device', async () => {
+      vi.spyOn(deviceGateway, 'queryDeviceStatus').mockResolvedValue({
+        deviceCount: 1,
+        online: true,
+      });
+      vi.spyOn(TaskRunnerService.prototype, 'runTask').mockRejectedValue(
+        new Error('DEVICE_OFFLINE (HTTP 503)'),
+      );
+      const { created, graph, service, taskModel } = await setup('Device flapping');
+
+      const waiting = await service.tick(graph.goal.id);
+
+      expect(waiting).toMatchObject({ outcome: 'waiting_external', taskId: created.taskId });
+      expect(await taskModel.findById(created.taskId!)).toMatchObject({
+        error: 'DEVICE_OFFLINE (HTTP 503)',
+        status: 'paused',
+      });
+      expect((await service.graph(graph.goal.id)).decisions).toHaveLength(0);
+    });
+
+    it('asks a person once the device has been gone past the reconnect window', async () => {
+      vi.spyOn(deviceGateway, 'queryDeviceStatus').mockResolvedValue({
+        deviceCount: 0,
+        online: false,
+      });
+      const { created, graph, service } = await setup('Device gone for good');
+      await serverDB
+        .update(tasks)
+        .set({ updatedAt: new Date(Date.now() - 13 * 60 * 60 * 1000) })
+        .where(eq(tasks.id, created.taskId!));
+
+      const gated = await service.tick(graph.goal.id);
+
+      expect(gated).toMatchObject({ outcome: 'waiting_human', taskId: created.taskId });
+    });
   });
 
   it('only selects Tasks whose explicit dependencies are resolved', async () => {

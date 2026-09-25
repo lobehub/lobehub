@@ -141,6 +141,8 @@ export interface OperationCompletionInput {
   provider?: string | null;
   /** Serialized webhook hooks (queue mode); ignored in local in-memory mode. */
   serializedHooks?: SerializedHook[];
+  /** When the run started, so the terminal row keeps its processing time. */
+  startedAt?: Date | string;
   stepCount?: number | null;
   topicId?: string;
   /** Trace / usage aggregates (llm calls, tokens, tool calls). */
@@ -684,6 +686,7 @@ export class CompletionLifecycle {
   private buildStateFromInput(input: OperationCompletionInput) {
     return {
       cost: input.cost ?? { total: null },
+      createdAt: input.startedAt,
       error: input.error ?? undefined,
       messages: [
         { content: input.goal ?? '', role: 'user' },

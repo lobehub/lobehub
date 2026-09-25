@@ -38,6 +38,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { assertAgentUsableBy } from '@/database/utils/agent-access';
 import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime/AgentRuntimeCoordinator';
 
+import { deviceGateway } from '../deviceGateway';
 import { TaskService } from '../task';
 import { TaskRunnerService } from '../taskRunner';
 import { AcceptanceService } from '../verify/acceptanceService';
@@ -58,6 +59,8 @@ import {
 import { experimentResults, exploreGraph } from './exploreGraph';
 import { answeredProblem, GoalManagerService, problemKey } from './manager';
 import {
+  DEVICE_RECONNECT_WAIT_MS,
+  isDeviceUnavailableFailure,
   resolveMaxConcurrentTasks,
   resolveOperationLeaseTimeout,
   resolveTaskMaxSteps,
@@ -1618,6 +1621,8 @@ export class GoalService {
           }
 
           case 'failure_decision': {
+            const waiting = await this.waitForDevice(graph, acting!.id, task, effects);
+            if (waiting) return observe(waiting);
             const supervision = await new GoalSupervisorService(
               this.db,
               this.userId,
@@ -1944,6 +1949,18 @@ export class GoalService {
       };
     }
 
+    // The retry never reached a device. The Task keeps that reason, and the next
+    // advance waits for the device to come back rather than asking a person.
+    if (recovery.outcome === 'spawn-failed' && recovery.deviceUnavailable) {
+      return {
+        goalId: graph.goal.id,
+        message: `Task ${task.identifier} is waiting for its device to reconnect`,
+        nodeId,
+        outcome: 'waiting_external',
+        taskId: task.id,
+      };
+    }
+
     // Nothing failed: somebody settled the Task while this advance was deciding.
     // Opening a gate would ask them to judge their own decision.
     if (recovery.outcome === 'settled') {
@@ -2175,12 +2192,14 @@ export class GoalService {
 
     const latestUsage = await new AgentRuntimeCoordinator().getOperationMetadata(operationId);
     const reclaimed = await this.db.transaction(async (tx) => {
-      const settled = await new AgentOperationModel(
-        tx,
-        this.userId,
-        this.workspaceId,
-      ).settleStaleRunning(operationId, staleBefore, latestUsage?.totalCost);
-      if (!settled) return false;
+      const operationModel = new AgentOperationModel(tx, this.userId, this.workspaceId);
+      const settled = await operationModel.settleStaleRunning(
+        operationId,
+        staleBefore,
+        latestUsage?.totalCost,
+      );
+      if (!settled && !(await isOrphanedRun(operationModel, operationId, staleBefore)))
+        return false;
 
       await new TaskTopicModel(tx, this.userId, this.workspaceId).updateStatus(
         task.id,
@@ -2234,6 +2253,18 @@ export class GoalService {
       };
     }
 
+    // The retry never reached a device. The Task keeps that reason, and the next
+    // advance waits for the device to come back rather than asking a person.
+    if (recovery.outcome === 'spawn-failed' && recovery.deviceUnavailable) {
+      return {
+        goalId: graph.goal.id,
+        message: `Task ${task.identifier} is waiting for its device to reconnect`,
+        nodeId,
+        outcome: 'waiting_external',
+        taskId: task.id,
+      };
+    }
+
     // Nothing failed: somebody settled the Task while this advance was deciding.
     // Opening a gate would ask them to judge their own decision.
     if (recovery.outcome === 'settled') {
@@ -2252,6 +2283,39 @@ export class GoalService {
           ? 'Task attempt budget was exhausted after an operation was abandoned'
           : 'Automatic recovery could not restart an abandoned operation';
     return this.gateOrTakeOver(graph, nodeId, task.id, reason, effects);
+  };
+
+  /**
+   * Hold a Task whose run could not reach its device until a device is back.
+   *
+   * A sleeping laptop or a restarting desktop app is the usual cause, and it
+   * fixes itself: the gate it used to open waited hours for someone to press
+   * Retry once the device had long reconnected. While no device is online the
+   * goal simply waits — the sweep keeps asking — and spends nothing. Once one
+   * is, the Task retries through the ordinary recovery path, so a binding that
+   * stays broken still ends at the attempt budget's gate. Past the reconnect
+   * window a person is asked after all, since the device is not coming back
+   * on its own.
+   */
+  private waitForDevice = async (
+    graph: GoalGraphSnapshot,
+    nodeId: string,
+    task: TaskItem,
+    effects: GoalAdvanceEffect[],
+  ): Promise<GoalTickResult | undefined> => {
+    if (task.status !== 'paused' || !isDeviceUnavailableFailure(task.error)) return;
+    if (new Date(task.updatedAt).getTime() < Date.now() - DEVICE_RECONNECT_WAIT_MS) return;
+
+    const { online } = await deviceGateway.queryDeviceStatus(this.userId, this.workspaceId);
+    if (online) return this.resumeAbandonedTaskRecovery(graph, nodeId, task, effects);
+
+    return {
+      goalId: graph.goal.id,
+      message: `Task ${task.identifier} is waiting for its device to reconnect`,
+      nodeId,
+      outcome: 'waiting_external',
+      taskId: task.id,
+    };
   };
 
   private buildTaskInstruction = (
@@ -2731,3 +2795,35 @@ export class GoalService {
     };
   };
 }
+
+/** Operation states that still own their run; the lease path reclaims them, not this. */
+const IN_FLIGHT_OPERATION_STATUSES = new Set([
+  'idle',
+  'running',
+  'waiting_for_async_tool',
+  'waiting_for_human',
+]);
+
+/**
+ * Whether a Task topic is still `running` although its run has already ended.
+ *
+ * The run's terminal normally moves the topic through the task lifecycle hook,
+ * but that delivery can be lost — a watchdog-abandoned device run had none at
+ * all, and a dropped webhook has no retry. The lease reclaim cannot see these:
+ * it only settles an operation that is itself still `running`, so the Task
+ * stays in flight forever and its goal with it. Once the run has been over for
+ * longer than the lease, nothing is left to report it and the topic is lost.
+ *
+ * A missing operation row proves nothing — a run executed on the client never
+ * writes one — so only a row that says the run ended counts.
+ */
+const isOrphanedRun = async (
+  operationModel: AgentOperationModel,
+  operationId: string,
+  staleBefore: Date,
+): Promise<boolean> => {
+  const operation = await operationModel.findById(operationId);
+  if (!operation || IN_FLIGHT_OPERATION_STATUSES.has(operation.status)) return false;
+  const endedAt = operation.completedAt ?? operation.updatedAt;
+  return new Date(endedAt) < staleBefore;
+};
