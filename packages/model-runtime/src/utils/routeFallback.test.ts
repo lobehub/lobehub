@@ -102,6 +102,22 @@ describe('shouldStopFallbackForError', () => {
     ).toBe(false);
   });
 
+  it('allows fallback for a per-channel image count limit', () => {
+    expect(
+      shouldStopFallbackForError({
+        error: {
+          code: null,
+          message: 'Exceeded maximum number of images (50) allowed in the request.',
+          param: 'input',
+          status: 400,
+          type: 'invalid_request_error',
+        },
+        errorType: AgentRuntimeErrorType.ExceededImageLimit,
+        provider: 'azure',
+      }),
+    ).toBe(false);
+  });
+
   it('does not infer remote media timeout semantics from raw provider text', () => {
     expect(
       shouldStopFallbackForError({

@@ -414,6 +414,29 @@ describe('LobeAzureOpenAI', () => {
         });
       });
 
+      it('should classify a Responses API image count limit error for route fallback', async () => {
+        const message = 'Exceeded maximum number of images (50) allowed in the request.';
+        const apiError = new OpenAI.APIError(
+          400,
+          { code: null, message, param: 'input', type: 'invalid_request_error' },
+          message,
+          new Headers(),
+        );
+
+        (instance['client'].responses.create as Mock).mockRejectedValue(apiError);
+
+        await expect(
+          instance.chat({
+            messages: [{ content: 'Describe these images', role: 'user' }],
+            model: 'gpt-5.4-mini',
+            temperature: 0,
+          }),
+        ).rejects.toMatchObject({
+          errorType: AgentRuntimeErrorType.ExceededImageLimit,
+          provider: 'azure',
+        });
+      });
+
       it('should return AzureBizError with DeploymentNotFound error', async () => {
         // Arrange
         const error = {

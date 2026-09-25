@@ -1630,7 +1630,28 @@ describe('createRouterRuntime', () => {
       expect(attemptedKeys).toEqual(['key-1', 'key-2']);
     });
 
-    it('should fallback after a structured remote media download timeout', async () => {
+    it.each([
+      {
+        case: 'a structured remote media download timeout',
+        error: {
+          code: 'invalid_value',
+          message: 'Unable to download content from the provided URL before the timeout.',
+          param: 'url',
+          type: 'invalid_request_error',
+        },
+        errorType: AgentRuntimeErrorType.RemoteMediaDownloadTimeout,
+      },
+      {
+        case: 'a per-channel image count limit',
+        error: {
+          code: null,
+          message: 'Exceeded maximum number of images (50) allowed in the request.',
+          param: 'input',
+          type: 'invalid_request_error',
+        },
+        errorType: AgentRuntimeErrorType.ExceededImageLimit,
+      },
+    ])('should fallback after $case', async ({ error, errorType }) => {
       const attemptedKeys: string[] = [];
 
       class RemoteMediaRuntime implements LobeRuntimeAI {
@@ -1644,17 +1665,7 @@ describe('createRouterRuntime', () => {
           attemptedKeys.push(this.apiKey);
 
           if (this.apiKey === 'key-1') {
-            throw {
-              error: {
-                code: 'invalid_value',
-                message: 'Unable to download content from the provided URL before the timeout.',
-                param: 'url',
-                type: 'invalid_request_error',
-              },
-              errorType: AgentRuntimeErrorType.RemoteMediaDownloadTimeout,
-              provider: 'azure',
-              status: 400,
-            };
+            throw { error, errorType, provider: 'azure', status: 400 };
           }
 
           return 'success';

@@ -1227,6 +1227,20 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   },
 
   // ─────────────────────────────────────────────────────────────────────────
+  // ExceededImageLimit — per-request image count limit of a channel
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    code: AgentRuntimeErrorType.ExceededImageLimit,
+    match: sub('Exceeded maximum number of images', { caseInsensitive: true }),
+    note: 'Azure OpenAI Responses API: "Exceeded maximum number of images (50) allowed in the request."',
+  },
+  {
+    code: AgentRuntimeErrorType.ExceededImageLimit,
+    match: sub('Too many images in request', { caseInsensitive: true }),
+    note: 'Azure OpenAI Chat Completions: "Too many images in request: 51, maximum allowed: 50."',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
   // InvalidRequestFormat — provider rejected as malformed
   // ─────────────────────────────────────────────────────────────────────────
   {

@@ -214,6 +214,12 @@ export const AgentRuntimeErrorType = {
   /** Upstream rejected the serialized request body as too large (HTTP 413). */
   RequestBodyTooLarge: 'RequestBodyTooLarge',
   /**
+   * Upstream rejected the request for carrying more images than the channel allows
+   * (e.g. Azure OpenAI caps each request at 50). The limit is per channel, so another
+   * route for the same model may still accept the request.
+   */
+  ExceededImageLimit: 'ExceededImageLimit',
+  /**
    * Upstream proxy / gateway layer failed (openresty, litellm, HTML 5xx,
    * Cloudflare 525) — distinct from the provider's own service. Split out of
    * the `ProviderBizError` catch-all.

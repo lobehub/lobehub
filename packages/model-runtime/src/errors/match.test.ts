@@ -351,6 +351,14 @@ describe('matchErrorPattern — second residue convergence round', () => {
       'Unable to download content from the provided URL before the timeout.',
       AgentRuntimeErrorType.RemoteMediaDownloadTimeout,
     ],
+    [
+      'Exceeded maximum number of images (50) allowed in the request.',
+      AgentRuntimeErrorType.ExceededImageLimit,
+    ],
+    [
+      'Too many images in request: 51, maximum allowed: 50.',
+      AgentRuntimeErrorType.ExceededImageLimit,
+    ],
     ['404 page not found', AgentRuntimeErrorType.UserConfigError],
     [
       '{"errors":[{"code":7003,"message":"No route for that URI"}]}',
