@@ -249,12 +249,20 @@ export class GenerationModel {
       }
     }
 
+    const taskMetadata = generation.asyncTask?.metadata as
+      { previousGenerationId?: unknown } | null | undefined;
+    const previousGenerationId =
+      typeof taskMetadata?.previousGenerationId === 'string'
+        ? taskMetadata.previousGenerationId
+        : undefined;
+
     // Build the Generation object following the same structure as in generationBatch.ts
     const result: Generation = {
       asset,
       asyncTaskId: generation.asyncTaskId || null,
       createdAt: generation.createdAt,
       id: generation.id,
+      ...(previousGenerationId ? { previousGenerationId } : {}),
       seed: generation.seed,
       task: {
         error: generation.asyncTask?.error

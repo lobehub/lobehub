@@ -3,7 +3,7 @@
 import { type ActionIconGroupProps } from '@lobehub/ui';
 import { ActionIconGroup } from '@lobehub/ui';
 import { type ActionIconProps } from '@lobehub/ui/base-ui';
-import { Dices, Download, SquarePen, Trash2 } from 'lucide-react';
+import { Dices, Download, Trash2 } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -18,12 +18,9 @@ export const ActionButtons = memo<ActionButtonsProps>(
   ({
     onDelete,
     onDownload,
-    onEdit,
     onCopySeed,
-    editTooltip,
     showDownload = false,
     showCopySeed = false,
-    showEdit = false,
     seedTooltip,
   }) => {
     const { t } = useTranslation('image');
@@ -49,12 +46,6 @@ export const ActionButtons = memo<ActionButtonsProps>(
                 label: seedTooltip,
                 onClick: onCopySeed,
               },
-              Boolean(showEdit && onEdit) && {
-                icon: SquarePen,
-                key: 'edit',
-                label: editTooltip,
-                onClick: onEdit,
-              },
               {
                 danger: true,
                 icon: Trash2,
@@ -63,18 +54,7 @@ export const ActionButtons = memo<ActionButtonsProps>(
                 onClick: onDelete,
               },
             ].filter(Boolean) as ActionIconGroupProps['items'],
-          [
-            showDownload,
-            onDownload,
-            showCopySeed,
-            onCopySeed,
-            seedTooltip,
-            showEdit,
-            onEdit,
-            editTooltip,
-            onDelete,
-            t,
-          ],
+          [showDownload, onDownload, showCopySeed, onCopySeed, seedTooltip, onDelete],
         )}
       />
     );

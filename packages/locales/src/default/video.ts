@@ -26,7 +26,11 @@ export default {
   'generation.actions.edit': 'Edit Video',
   'generation.actions.generate': 'Generate',
   'generation.actions.generateEdit': 'Generate Edit',
-  'generation.editing.description': 'Editing this video',
+  'generation.editing.badge': 'Editing',
+  'generation.editing.cancelHint': 'Cancel editing (Esc)',
+  'generation.editing.hint': 'Describe what to change; everything else stays the same',
+  'generation.editing.modelLocked': "Edits keep the original video's model",
+  'generation.editing.title': 'Editing V{{version}}',
   'generation.freeQuota.exhausted': '🎁 Free quota used up, credits will be consumed',
   'generation.freeQuota.remaining': '🎁 {{remaining}} free videos today',
   'generation.status.editing': 'Generating Edit...',
@@ -34,6 +38,10 @@ export default {
   'generation.status.generating': 'Generating...',
   'generation.validation.endFrameRequiresStartFrame':
     'End frame cannot be used without a start frame. Please set a start frame first.',
+  'generation.version.editedFrom': 'Edited from V{{version}}',
+  'generation.version.label': 'V{{version}}',
+  'generation.version.locateSource': 'Show the source video',
+  'generation.version.sourceDeleted': 'Edited from a deleted video',
   'notice.modelRemoved':
     'The current model is no longer available from {{name}}. Please switch to an available model.',
   'notice.providerDisabled':

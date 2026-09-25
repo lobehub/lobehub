@@ -1,10 +1,10 @@
 'use client';
 
 import { ActionIconGroup, Block, Flexbox, Markdown } from '@lobehub/ui';
-import { Tag, Text, toast } from '@lobehub/ui/base-ui';
+import { Button, Tag, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
-import { CopyIcon, RotateCcwSquareIcon, Trash2 } from 'lucide-react';
+import { CopyIcon, RotateCcwSquareIcon, SquarePenIcon, Trash2, XIcon } from 'lucide-react';
 import { type RuntimeVideoGenParamsKeys, type RuntimeVideoGenParamsValue } from 'model-bank';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,16 +15,17 @@ import { ModelIcon } from '@/components/LobeIcons';
 import { GenerationInvalidAPIKey } from '@/routes/(main)/(create)/features/GenerationInput';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useVideoStore } from '@/store/video';
+import { createVideoSelectors } from '@/store/video/selectors';
 import { AsyncTaskErrorType, AsyncTaskStatus } from '@/types/asyncTask';
-import type { GenerationBatch } from '@/types/generation';
+import type { GenerationBatch, VideoGenerationAsset } from '@/types/generation';
 import { downloadFile } from '@/utils/client/downloadFile';
 
+import EditSourceLink from './EditSourceLink';
 import VideoErrorItem from './VideoErrorItem';
 import VideoLoadingItem from './VideoLoadingItem';
 import VideoReferenceFrames from './VideoReferenceFrames';
 import VideoSuccessItem from './VideoSuccessItem';
-
-const GEMINI_OMNI_VIDEO_MODEL = 'gemini-omni-flash-preview';
+import { GEMINI_OMNI_VIDEO_MODEL, useVideoVersionMap } from './videoVersion';
 
 const styles = createStaticStyles(({ css, cssVar, cx }) => ({
   batchActions: cx(
@@ -55,6 +56,8 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(({ b
   const setModelAndProviderOnSelect = useVideoStore((s) => s.setModelAndProviderOnSelect);
   const setParamOnInput = useVideoStore((s) => s.setParamOnInput);
   const startEditingVideo = useVideoStore((s) => s.startEditingVideo);
+  const cancelEditingVideo = useVideoStore((s) => s.cancelEditingVideo);
+  const editingGenerationId = useVideoStore(createVideoSelectors.editingGenerationId);
   const activeTopicId = useVideoStore((s) => s.activeGenerationTopicId);
   const activeWorkspaceId = useActiveWorkspaceId();
   const { shouldRenderBusinessBatchItem, businessBatchItem } =
@@ -78,6 +81,28 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(({ b
   }, [batch.createdAt]);
 
   const generation = batch.generations[0];
+
+  const versionMap = useVideoVersionMap();
+  const versionNode = generation ? versionMap.get(generation.id) : undefined;
+  const editSource = versionNode?.previousGenerationId
+    ? versionMap.get(versionNode.previousGenerationId)
+    : undefined;
+  // Only label versions once a video is part of an edit chain, so plain generations stay clean.
+  const showVersion = useMemo(() => {
+    if (!generation || !versionNode) return false;
+    if (versionNode.version > 1) return true;
+
+    for (const node of versionMap.values()) {
+      if (node.previousGenerationId === generation.id) return true;
+    }
+    return false;
+  }, [generation, versionMap, versionNode]);
+
+  const isEditingSource = Boolean(generation && editingGenerationId === generation.id);
+  const canEdit =
+    batch.model === GEMINI_OMNI_VIDEO_MODEL &&
+    generation?.task.status === AsyncTaskStatus.Success &&
+    Boolean((generation.asset as VideoGenerationAsset | null | undefined)?.interactionId);
 
   const isFinalized =
     generation?.task.status === AsyncTaskStatus.Success ||
@@ -126,13 +151,26 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(({ b
     if (!generation?.asset || !('interactionId' in generation.asset)) return;
     if (!generation.asset.interactionId) return;
 
+    if (editingGenerationId === generation.id) {
+      cancelEditingVideo();
+      return;
+    }
+
     startEditingVideo({
       generationId: generation.id,
       model: batch.model,
       provider: batch.provider,
       sourceParameters: batch.config,
     });
-  }, [batch.config, batch.model, batch.provider, generation, startEditingVideo]);
+  }, [
+    batch.config,
+    batch.model,
+    batch.provider,
+    cancelEditingVideo,
+    editingGenerationId,
+    generation,
+    startEditingVideo,
+  ]);
 
   const handleDeleteBatch = useCallback(async () => {
     if (!activeTopicId) return;
@@ -218,9 +256,9 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(({ b
       return (
         <VideoSuccessItem
           generation={generation}
+          isEditing={isEditingSource}
           onDelete={handleDelete}
           onDownload={handleDownload}
-          onEdit={batch.model === GEMINI_OMNI_VIDEO_MODEL ? handleEdit : undefined}
         />
       );
     }
@@ -251,7 +289,15 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(({ b
     batch.config?.endImageUrl;
 
   return (
-    <Block className={styles.container} gap={8} variant={'borderless'}>
+    <Block
+      className={styles.container}
+      data-video-generation-id={generation.id}
+      gap={8}
+      variant={'borderless'}
+    >
+      {versionNode?.previousGenerationId && (
+        <EditSourceLink source={editSource} sourceVersion={Math.max(versionNode.version - 1, 1)} />
+      )}
       <Flexbox horizontal align={'flex-start'} gap={16}>
         {hasReferenceFrames && (
           <VideoReferenceFrames
@@ -263,20 +309,33 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(({ b
         <Markdown variant={'chat'}>{batch.prompt}</Markdown>
       </Flexbox>
       {renderContent()}
-      <Flexbox
-        horizontal
-        align={'center'}
-        gap={4}
-        justify={'space-between'}
-        style={{ opacity: 0.66 }}
-      >
+      <Flexbox horizontal align={'center'} gap={4} justify={'space-between'}>
         <Flexbox horizontal align={'center'} gap={4}>
-          <Tag icon={<ModelIcon model={batch.model} />} variant={'borderless'}>
-            {modelDisplayName}
-          </Tag>
-          {batch.config?.resolution && <Tag variant={'borderless'}>{batch.config.resolution}</Tag>}
+          <Flexbox horizontal align={'center'} gap={4} style={{ opacity: 0.66 }}>
+            <Tag icon={<ModelIcon model={batch.model} />} variant={'borderless'}>
+              {modelDisplayName}
+            </Tag>
+            {showVersion && versionNode && (
+              <Tag variant={'borderless'}>
+                {t('generation.version.label', { version: String(versionNode.version) })}
+              </Tag>
+            )}
+            {batch.config?.resolution && (
+              <Tag variant={'borderless'}>{batch.config.resolution}</Tag>
+            )}
+          </Flexbox>
+          {canEdit && (
+            <Button
+              icon={isEditingSource ? XIcon : SquarePenIcon}
+              size={'small'}
+              type={isEditingSource ? 'primary' : 'default'}
+              onClick={handleEdit}
+            >
+              {isEditingSource ? t('generation.actions.cancelEdit') : t('generation.actions.edit')}
+            </Button>
+          )}
         </Flexbox>
-        <Flexbox horizontal align={'center'} gap={6}>
+        <Flexbox horizontal align={'center'} gap={6} style={{ opacity: 0.66 }}>
           {showCreator && (
             <>
               <Text fontSize={12} type={'secondary'}>

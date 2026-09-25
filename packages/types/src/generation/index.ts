@@ -89,6 +89,11 @@ export interface Generation {
   asyncTaskId: string | null;
   createdAt: Date;
   id: string;
+  /**
+   * Source generation this one edits, read from the async task metadata so the
+   * version link is available while the edit is still generating.
+   */
+  previousGenerationId?: string;
   seed?: number | null;
 
   task: GenerationAsyncTask;
