@@ -93,6 +93,59 @@ describe('resolveDeviceWorkingDirectory', () => {
     ).toBe('/default');
   });
 
+  describe('[R3] a topic pin only applies on the device it belongs to', () => {
+    const WELLS_LEGION = '838d6e154b6dbf342b9410cf58857a9d';
+    const ITZC = '1aab3a739730a7db2f070246daa68be4';
+    const UBUNTU = 'b06d4da75107ca3ed74ac3b35663d218';
+
+    it("does not carry a Windows topic pin onto a Linux device over the agent's pick for it", () => {
+      expect(
+        resolveDeviceWorkingDirectory({
+          deviceId: UBUNTU,
+          devicePlatform: 'linux',
+          topicWorkingDirectory: 'E:\\androidproject\\vrplayer',
+          workingDirByDevice: { [UBUNTU]: { path: '/root/workspace/proxy' } },
+        }),
+      ).toBe('/root/workspace/proxy');
+    });
+
+    it('does not carry a pin from the device that bound the topic onto another device', () => {
+      expect(
+        resolveDeviceWorkingDirectory({
+          deviceDefaultCwd: 'C:\\Users\\260622',
+          deviceId: ITZC,
+          devicePlatform: 'win32',
+          topicDeviceId: WELLS_LEGION,
+          topicWorkingDirectory: 'D:\\Sourcecode\\JuLink.W001',
+          workingDirByDevice: { [WELLS_LEGION]: { path: 'D:\\Sourcecode\\JuLink.W001' } },
+        }),
+      ).toBe('C:\\Users\\260622');
+    });
+
+    it('keeps the pin on the device that bound the topic', () => {
+      expect(
+        resolveDeviceWorkingDirectory({
+          deviceId: WELLS_LEGION,
+          devicePlatform: 'win32',
+          topicDeviceId: WELLS_LEGION,
+          topicWorkingDirectory: 'D:\\Sourcecode\\JuLink.W001',
+          workingDirByDevice: { [WELLS_LEGION]: { path: 'D:\\other' } },
+        }),
+      ).toBe('D:\\Sourcecode\\JuLink.W001');
+    });
+
+    it('keeps a pin with no recorded device when its path fits the device platform', () => {
+      expect(
+        resolveDeviceWorkingDirectory({
+          deviceId: UBUNTU,
+          devicePlatform: 'linux',
+          topicWorkingDirectory: '/srv/app',
+          workingDirByDevice: { [UBUNTU]: '/root/workspace/proxy' },
+        }),
+      ).toBe('/srv/app');
+    });
+  });
+
   it('treats null/undefined inputs as absent', () => {
     expect(
       resolveDeviceWorkingDirectory({

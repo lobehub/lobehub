@@ -27,11 +27,14 @@ export const expandTilde = (input: string | undefined): string | undefined => {
  * supplied by the model resolves against the daemon's `process.cwd()` (= `/`
  * for a Finder/Dock-launched app) instead of the user's bound directory.
  */
-export const resolveAgainstCwd = (
-  input: string | undefined,
-  cwd?: string,
-): string | undefined => {
+export const resolveAgainstCwd = (input: string | undefined, cwd?: string): string | undefined => {
   const expanded = expandTilde(input);
   if (!expanded || !cwd) return expanded;
-  return path.isAbsolute(expanded) ? expanded : path.join(cwd, expanded);
+  // A Windows path (`E:\repo\a.txt`, `\\server\share`) is absolute
+  // regardless of the host: on a POSIX device the host `path` calls it relative
+  // and would glue it onto cwd (`/cwd/E:\repo\a.txt`), hiding the real problem —
+  // the path belongs to another machine — behind a nonsensical one.
+  return path.isAbsolute(expanded) || path.win32.isAbsolute(expanded)
+    ? expanded
+    : path.join(cwd, expanded);
 };

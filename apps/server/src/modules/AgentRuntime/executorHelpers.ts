@@ -24,6 +24,7 @@ import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archi
 import { buildWorkVersionCumulativeUsage } from '@/utils/workCumulativeUsage';
 
 import { type RuntimeExecutorContext } from './context';
+import { resolveRunActiveDeviceId } from './executors/resolveRunActiveDeviceId';
 
 export const log = debug('lobe-server:agent-runtime:streaming-executors');
 export const timing = debug('lobe-server:agent-runtime:timing');
@@ -237,6 +238,14 @@ export const buildServerVirtualSubAgentRunner = (
   // keeps the topic-pinned model only in `modelRuntimeConfig` while the
   // world config retains the agent default.
   const parentEffectiveModel = state.modelRuntimeConfig ?? parentAgentConfig;
+  // The device the parent run executes on. The child re-resolves its own
+  // execution plan, and without this it falls back to the agent-level
+  // `boundDeviceId` — whichever machine last picked "this device" — so with two
+  // desktops online the parent and the child land on different machines. An
+  // anonymous `callSubAgent` clone requests this device outright; a named
+  // `callAgent` target only takes it as its `local` device, keeping its own
+  // execution target.
+  const parentDeviceId = resolveRunActiveDeviceId(state);
 
   return {
     run: async ({ agentId: targetAgentId, description, instruction, timeout }) => {
@@ -281,8 +290,10 @@ export const buildServerVirtualSubAgentRunner = (
       const result = (await execVirtualSubAgent({
         agentId: targetAgentId ?? agentId,
         chatConfig: subAgentChatConfig,
+        deviceId: targetAgentId ? undefined : parentDeviceId,
         groupId: state.origin?.groupId ?? undefined,
         instruction,
+        localDeviceId: parentDeviceId,
         model: subAgentModel?.model,
         parentMessageId: placeholder.id,
         parentOperationId: ctx.operationId,

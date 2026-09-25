@@ -52,7 +52,14 @@ export interface ExecAgentThreadRunOptions {
    * Only set by the callSubAgent path.
    */
   chatConfig?: Partial<LobeAgentChatConfig> | null;
+  /**
+   * Device the spawned run inherits from its parent, forwarded to execAgent as
+   * `deviceId` / `localDeviceId`. Only set by the callSubAgent path; see
+   * {@link ExecVirtualSubAgentParams.deviceId}.
+   */
+  deviceId?: string;
   isSubAgent: boolean;
+  localDeviceId?: string;
   logScope: 'execSubAgent' | 'execVirtualSubAgent';
   /**
    * Explicit model/provider override for the spawned run. The callSubAgent
@@ -204,7 +211,9 @@ export const execAgentThreadRun = async (
     appContext,
     autoStart: true,
     chatConfigOverride: options.chatConfig,
+    deviceId: options.deviceId,
     hooks,
+    localDeviceId: options.localDeviceId,
     // Explicit sub-agent model override resolved at the spawn site.
     model: options.model,
     parentOperationId,

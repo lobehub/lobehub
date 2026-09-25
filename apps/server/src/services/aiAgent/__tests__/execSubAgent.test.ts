@@ -298,6 +298,27 @@ describe('AiAgentService.execSubAgent', () => {
       );
     });
 
+    it('[R2] forwards the parent device of a callSubAgent child to execAgent', async () => {
+      const PARENT_DEVICE = '838d6e154b6dbf342b9410cf58857a9d';
+      const execAgentSpy = vi
+        .spyOn(service, 'execAgent')
+        .mockResolvedValue({ operationId: 'op-child', success: true } as any);
+
+      await service.execVirtualSubAgent({
+        agentId: 'agent-1',
+        deviceId: PARENT_DEVICE,
+        instruction: 'run hostname',
+        localDeviceId: PARENT_DEVICE,
+        parentMessageId: 'tool-msg-1',
+        parentOperationId: 'parent-op-1',
+        topicId: 'topic-1',
+      } as any);
+
+      expect(execAgentSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ deviceId: PARENT_DEVICE, localDeviceId: PARENT_DEVICE }),
+      );
+    });
+
     it('should store operationId and startedAt in Thread metadata', async () => {
       vi.spyOn(service, 'execAgent').mockResolvedValue({
         agentId: 'agent-1',

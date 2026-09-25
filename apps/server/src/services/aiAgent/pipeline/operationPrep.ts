@@ -7,7 +7,7 @@ import { buildExpertiseContextSnapshot } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { assembleSkillPool } from '@lobechat/mecha';
 import { buildTaskManagerDefaultsPrompt, resourcesTreePrompt } from '@lobechat/prompts';
-import type { LobeAgentAgencyConfig, WorkingDirConfig, WorkspaceInitResult } from '@lobechat/types';
+import type { LobeAgentAgencyConfig, WorkspaceInitResult } from '@lobechat/types';
 import {
   buildGoalOverviewContext,
   getActivePluginIds,
@@ -32,7 +32,12 @@ import { FileService } from '@/server/services/file';
 import { pruneRegeneratedBranch } from '../pruneRegeneratedBranch';
 import { resolveDeviceWorkingDirectoryConfig } from '../resolveDeviceWorkingDirectory';
 import { applyShareGateToToolSet, filterSkillsByShareGate } from '../shareGate';
-import type { ExecRunContext, InternalExecAgentParams, ResolvedWorkspaceInit } from '../types';
+import type {
+  BindTopicWorkingDirectoryParams,
+  ExecRunContext,
+  InternalExecAgentParams,
+  ResolvedWorkspaceInit,
+} from '../types';
 import { isWorkspaceCacheFresh, upsertWorkspaceScan } from '../workspaceInitCache';
 import type { ToolDiscoveryResult } from './toolDiscovery';
 import type { RunAttachments } from './turnSetup';
@@ -162,11 +167,7 @@ export const createHistoryMessagesLoader = (
 export interface OperationPrepDeps {
   agentDocumentsService: AgentDocumentsService;
   agentModel: AgentModel;
-  bindTopicWorkingDirectory: (params: {
-    config?: WorkingDirConfig;
-    currentWorkingDirectory?: string;
-    topicId: string;
-  }) => Promise<void>;
+  bindTopicWorkingDirectory: (params: BindTopicWorkingDirectoryParams) => Promise<void>;
   db: LobeChatDatabase;
   topicModel: TopicModel;
   userId: string;
@@ -259,13 +260,20 @@ const resolveWorkspaceInit = async (
     const boundCwdConfig = resolveDeviceWorkingDirectoryConfig({
       deviceDefaultCwd: device.defaultCwd,
       deviceId: activeDeviceId,
+      devicePlatform: device.platform,
+      topicDeviceId: topic?.metadata?.boundDeviceId,
       topicWorkingDirectory,
       topicWorkingDirectoryConfig: topic?.metadata?.workingDirectoryConfig,
       workingDirByDevice: agencyConfig?.workingDirByDevice,
     });
     const boundCwd = getWorkingDirEffectivePath(boundCwdConfig);
     if (!boundCwd) return { workspace: empty };
-    const resolved = { boundCwd, boundCwdConfig, topicWorkingDirectory };
+    const resolved = {
+      boundCwd,
+      boundCwdConfig,
+      topicDeviceId: topic?.metadata?.boundDeviceId,
+      topicWorkingDirectory,
+    };
 
     const workingDirs = device.workingDirs ?? [];
     const cached = workingDirs.find(
@@ -695,7 +703,9 @@ export const prepareOperation = async (
   // the tool layer reads the topic's cwd on the same run.
   await deps.bindTopicWorkingDirectory({
     config: workspaceInit.boundCwdConfig,
+    currentDeviceId: workspaceInit.topicDeviceId,
     currentWorkingDirectory: workspaceInit.topicWorkingDirectory,
+    deviceId: activeDeviceId,
     topicId,
   });
 

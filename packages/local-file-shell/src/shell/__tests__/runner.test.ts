@@ -105,7 +105,7 @@ describe('runCommand', () => {
       expect(result.stdout).toContain('/tmp');
     });
 
-    it('should report the real spawn error when cwd does not exist', async () => {
+    it('[R4] reports a missing cwd as a missing working directory, not as a missing shell', async () => {
       const missingCwd = path.join(tmpDir, 'missing-worktree');
       const result = await runCommand(
         { command: 'echo unreachable', cwd: missingCwd },
@@ -114,8 +114,23 @@ describe('runCommand', () => {
 
       expect(result.success).toBe(false);
       expect(result.exit_code).toBeUndefined();
-      expect(result.error).toContain(`working directory: ${missingCwd}`);
-      expect(result.error).toContain('ENOENT');
+      // Node blames the executable (`spawn /bin/sh ENOENT`) when cwd is missing,
+      // which sends the model off debugging a healthy shell.
+      expect(result.error).not.toMatch(/spawn \S+ ENOENT/);
+      expect(result.error).toContain(`Working directory does not exist on ${os.hostname()}`);
+      expect(result.error).toContain(missingCwd);
+    });
+
+    it('reports a cwd that is a file as not a directory', async () => {
+      const fileCwd = path.join(tmpDir, 'a-file');
+      fs.writeFileSync(fileCwd, '');
+      const result = await runCommand(
+        { command: 'echo unreachable', cwd: fileCwd },
+        { processManager },
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain(`Working directory is not a directory on ${os.hostname()}`);
     });
 
     it('should merge env into child process environment', async () => {

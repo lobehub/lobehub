@@ -1,4 +1,6 @@
 import { spawn } from 'node:child_process';
+import { stat } from 'node:fs/promises';
+import os from 'node:os';
 
 import type { SandboxPolicy } from '@lobechat/device-sandbox';
 
@@ -30,6 +32,22 @@ export interface RunCommandOptions {
   sandboxPolicy?: SandboxPolicy;
 }
 
+/**
+ * Node reports a missing spawn cwd as `spawn <shell> ENOENT` — blaming the
+ * shell binary — so the model goes off debugging a healthy shell. Check the
+ * directory first and name the real problem, and the machine it happened on
+ * (a cwd pinned on another device is the usual cause).
+ */
+const checkWorkingDirectory = async (cwd: string): Promise<string | undefined> => {
+  try {
+    if ((await stat(cwd)).isDirectory()) return;
+    return `Working directory is not a directory on ${os.hostname()}: ${cwd}`;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return;
+    return `Working directory does not exist on ${os.hostname()}: ${cwd}. The shell is fine — run the command from a directory that exists on this device.`;
+  }
+};
+
 export async function runCommand(
   {
     command,
@@ -47,6 +65,11 @@ export async function runCommand(
 
   const logPrefix = `[runCommand: ${description || command.slice(0, 50)}]`;
   logger?.debug(`${logPrefix} Starting`, { background: run_in_background, cwd, timeout });
+
+  if (cwd) {
+    const cwdError = await checkWorkingDirectory(cwd);
+    if (cwdError) return { error: cwdError, success: false };
+  }
 
   const requestedEnv = extraEnv ? { ...process.env, ...extraEnv } : process.env;
 

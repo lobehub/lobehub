@@ -14,7 +14,6 @@ import type {
   HeterogeneousTopicPin,
   LobeAgentAgencyConfig,
   RequestTrigger,
-  WorkingDirConfig,
 } from '@lobechat/types';
 import {
   applyTopicModelToHeterogeneousProvider,
@@ -54,17 +53,13 @@ import {
   supportsCloudHeterogeneousSandbox,
 } from '../helpers/heteroErrors';
 import { resolveDeviceWorkingDirectoryConfig } from '../resolveDeviceWorkingDirectory';
-import type { ExecRunContext } from '../types';
+import type { BindTopicWorkingDirectoryParams, ExecRunContext } from '../types';
 import { heteroOperationCapabilities } from './heteroOperationCapabilities';
 
 const log = debug('lobe-server:ai-agent-service');
 
 export interface HeteroDispatchDeps {
-  bindTopicWorkingDirectory: (params: {
-    config?: WorkingDirConfig;
-    currentWorkingDirectory?: string;
-    topicId: string;
-  }) => Promise<void>;
+  bindTopicWorkingDirectory: (params: BindTopicWorkingDirectoryParams) => Promise<void>;
   db: LobeChatDatabase;
   getMarketService: () => Promise<MarketService>;
   messageModel: MessageModel;
@@ -984,8 +979,10 @@ export const dispatchHeteroAgent = async (
       const deviceCwdConfig = resolveDeviceWorkingDirectoryConfig({
         deviceDefaultCwd: boundDevice?.defaultCwd,
         deviceId: dispatchDeviceId,
+        devicePlatform: boundDevice?.platform,
         initialWorkingDirectory: appContext?.initialTopicMetadata?.workingDirectory,
         initialWorkingDirectoryConfig: appContext?.initialTopicMetadata?.workingDirectoryConfig,
+        topicDeviceId: topic?.metadata?.boundDeviceId,
         topicWorkingDirectory: topic?.metadata?.workingDirectory,
         topicWorkingDirectoryConfig: topic?.metadata?.workingDirectoryConfig,
         workingDirByDevice: agentConfig.agencyConfig?.workingDirByDevice,
@@ -998,7 +995,9 @@ export const dispatchHeteroAgent = async (
       // under the right project and the next turn reuses the same directory.
       await deps.bindTopicWorkingDirectory({
         config: deviceCwdConfig,
+        currentDeviceId: topic?.metadata?.boundDeviceId,
         currentWorkingDirectory: topic?.metadata?.workingDirectory,
+        deviceId: dispatchDeviceId,
         topicId,
       });
 

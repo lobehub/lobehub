@@ -487,10 +487,22 @@ export interface ExecVirtualSubAgentParams {
    * Merged over the executing agent's own chatConfig, skipping nulled keys.
    */
   chatConfig?: Partial<LobeAgentChatConfig> | null;
+  /**
+   * Explicit device request for the child: the device the parent run is bound
+   * to. Set for an anonymous `callSubAgent` clone so it runs where its parent
+   * runs instead of re-routing through the agent-level `boundDeviceId`.
+   */
+  deviceId?: string;
   /** The Group ID inherited from the parent operation, when present */
   groupId?: string;
   /** Instruction/prompt for the virtual sub-agent */
   instruction: string;
+  /**
+   * What "this machine" means for the child: the parent run's device. Only
+   * consulted when the child's target is `local`, so a named `callAgent` target
+   * keeps its own execution target.
+   */
+  localDeviceId?: string;
   /**
    * Model the sub-agent should run on, resolved by the spawn site from the
    * parent agent's `agencyConfig.subagent` (explicit override or the parent's

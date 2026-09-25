@@ -256,8 +256,10 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
 
     // `workingDirectory` is the EFFECTIVE path the run executes in; the config
-    // keeps the SOURCE repo, which is what By-Project groups on.
+    // keeps the SOURCE repo, which is what By-Project groups on. The device is
+    // stamped with it so another device does not inherit this path.
     expect(mockUpdateTopicMetadata).toHaveBeenCalledWith('topic-1', {
+      boundDeviceId: DEVICE_ID,
       workingDirectory: WORKTREE_PATH,
       workingDirectoryConfig: {
         git: { activeWorktree: WORKTREE_PATH },
@@ -280,6 +282,7 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
 
     expect(mockUpdateTopicMetadata).toHaveBeenCalledWith('topic-1', {
+      boundDeviceId: DEVICE_ID,
       workingDirectory: '/repo/default',
       workingDirectoryConfig: { path: '/repo/default' },
     });
@@ -294,6 +297,31 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
         workingDirectory: '/repo/other',
         workingDirectoryConfig: { path: '/repo/other' },
       },
+    });
+    mockGetAgentConfig.mockResolvedValue(
+      createAgentConfig({
+        boundDeviceId: DEVICE_ID,
+        executionTarget: 'device',
+        workingDirByDevice: { [DEVICE_ID]: { path: SOURCE_PATH } },
+      }),
+    );
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      prompt: 'Hello',
+    });
+
+    expect(mockUpdateTopicMetadata).not.toHaveBeenCalledWith(
+      'topic-1',
+      expect.objectContaining({ workingDirectory: expect.anything() }),
+    );
+  });
+
+  it("does not give a topic bound to another device this device's directory", async () => {
+    mockTopicFindById.mockResolvedValue({
+      id: 'topic-1',
+      metadata: { boundDeviceId: 'other-device' },
     });
     mockGetAgentConfig.mockResolvedValue(
       createAgentConfig({
