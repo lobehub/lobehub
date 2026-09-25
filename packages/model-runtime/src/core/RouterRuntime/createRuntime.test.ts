@@ -2591,6 +2591,60 @@ describe('createRouterRuntime', () => {
       });
     });
 
+    it('should create a continuation only through the pinned video channel', async () => {
+      const usedKeys: string[] = [];
+
+      class MockRuntime implements LobeRuntimeAI {
+        private apiKey: string;
+
+        constructor(options: { apiKey: string }) {
+          this.apiKey = options.apiKey;
+        }
+
+        createVideo = vi.fn().mockImplementation(async () => {
+          usedKeys.push(this.apiKey);
+          if (this.apiKey === 'key-2') throw new Error('interaction not found');
+          return { inferenceId: 'interaction-2' };
+        });
+
+        getVideoGenerationCapabilities = () => ({ completionModes: ['polling'] as const });
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'lobehub',
+        routers: [
+          {
+            apiType: 'google',
+            id: 'google-router',
+            models: ['gemini-omni-flash-preview'],
+            options: [
+              { apiKey: 'key-1', id: 'google-channel-1' },
+              { apiKey: 'key-2', id: 'google-channel-2' },
+            ],
+            runtime: MockRuntime as any,
+          },
+        ],
+      });
+
+      const runtime = new Runtime({ userId: 'user-1' });
+      const payload = {
+        model: 'gemini-omni-flash-preview',
+        params: { prompt: 'slower' },
+        previousInteractionId: 'interaction-1',
+      } as any;
+      const route = { apiType: 'google', channelId: 'google-channel-2', routerId: 'google-router' };
+
+      await expect(runtime.createVideo(payload, { route })).rejects.toThrow(
+        'interaction not found',
+      );
+      expect(usedKeys).toEqual(['key-2']);
+
+      await expect(
+        runtime.createVideo(payload, { route: { ...route, channelId: 'google-channel-9' } }),
+      ).rejects.toThrow('The video generation channel is no longer available');
+      expect(usedKeys).toEqual(['key-2']);
+    });
+
     it('should resolve the video webhook router from the payload model', async () => {
       class MockRuntime implements LobeRuntimeAI {
         handleCreateVideoWebhook = vi.fn().mockResolvedValue({

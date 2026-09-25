@@ -23,6 +23,11 @@ export interface CreateVideoMethodOptions {
   preferredCompletionMode?: VideoGenerationCompletionMode;
   /** Request-scoped pricing context for model-bank pricing lookups. */
   pricingContext?: ModelPricingContext;
+  /**
+   * Route that created the source video of a continuation. Stateful providers such as
+   * Gemini Omni scope interactions to the creating API key, so the edit must reuse it.
+   */
+  route?: VideoPollingRoute;
 }
 
 export interface CreateVideoResult {

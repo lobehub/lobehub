@@ -395,6 +395,45 @@ describe('videoRouter', () => {
       );
     });
 
+    it('should pin the edit to the route that created the source video', async () => {
+      const { mockUpdate } = setupMocks();
+      const sourceRoute = { apiType: 'google', channelId: 'google-channel-2', routerId: 'r-1' };
+      const mockFindTask = vi.fn().mockResolvedValue({ metadata: { route: sourceRoute } });
+      vi.mocked(AsyncTaskModel).mockImplementation(function () {
+        return { findById: mockFindTask, update: mockUpdate } as any;
+      });
+      mockFindPreviousGeneration.mockResolvedValue({
+        asset: { interactionId: 'interactions/source-1', type: 'video' },
+        asyncTaskId: 'source-task',
+        generationBatchId: 'source-batch',
+        id: 'source-generation',
+      });
+      mockServerDB.query.generationBatches.findFirst.mockResolvedValue({
+        generationTopicId: 'topic-1',
+        id: 'source-batch',
+        model: 'gemini-omni-flash-preview',
+        provider: 'google',
+      });
+      mockCreateVideo.mockResolvedValue({
+        completionMode: 'webhook',
+        inferenceId: 'interactions/edit-1',
+      });
+
+      const caller = videoRouter.createCaller(mockCtx);
+      await caller.createVideo({
+        ...defaultInput,
+        model: 'gemini-omni-flash-preview',
+        previousGenerationId: 'source-generation',
+        provider: 'google',
+      });
+
+      expect(mockFindTask).toHaveBeenCalledWith('source-task');
+      expect(mockCreateVideo).toHaveBeenCalledWith(
+        expect.objectContaining({ previousInteractionId: 'interactions/source-1' }),
+        expect.objectContaining({ route: sourceRoute }),
+      );
+    });
+
     it('should reject editing with a model that has no conversational video support', async () => {
       setupMocks();
 

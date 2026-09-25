@@ -226,6 +226,7 @@ export const videoRouter = router({
       }
 
       let previousInteractionId: string | undefined;
+      let previousRoute: VideoGenerationRoute | undefined;
       if (previousGenerationId) {
         if (!supportsConversationalVideoEdit(resolvedModelId)) {
           throw new TRPCError({
@@ -266,6 +267,12 @@ export const videoRouter = router({
         }
 
         previousInteractionId = previousAsset.interactionId;
+        const previousTask = previousGeneration.asyncTaskId
+          ? await asyncTaskModel.findById(previousGeneration.asyncTaskId)
+          : undefined;
+        previousRoute = getVideoGenerationRoute(
+          (previousTask?.metadata as VideoGenerationTaskMetadata | null)?.route,
+        );
         generationParams = { ...generationParams, task: 'edit' };
       }
 
@@ -380,6 +387,7 @@ export const videoRouter = router({
           {
             metadata: requestMetadata,
             preferredCompletionMode: appEnv.VIDEO_GENERATION_PREFER_WEBHOOK ? 'webhook' : 'polling',
+            route: previousRoute,
           },
         );
 
