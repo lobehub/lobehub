@@ -217,6 +217,81 @@ describe('skillsRuntime', () => {
     30_000,
   );
 
+  it.each(
+    (['runCommand', 'execScript', 'exportFile'] as const).flatMap((api) =>
+      (['returned', 'thrown', 'stderr'] as const)
+        .filter((mode) => api !== 'exportFile' || mode !== 'stderr')
+        .map((mode) => ({ api, mode })),
+    ),
+  )(
+    'does not replay the side-effecting $api after a $mode timeout',
+    async ({ api, mode }) => {
+      const { executeToolWithRetry } = await import('@lobechat/agent-runtime');
+      const { skillsRuntime } = await import('../skills');
+      const { ToolExecutionService } = await import('../../index');
+      // A timeout at the gateway says nothing about whether the command ran:
+      // the sandbox may already have launched it, so replaying it re-runs any
+      // non-idempotent side effect (a background script started three times).
+      const error = { message: 'Gateway Timeout', name: 'MarketAPIError' };
+      const call =
+        mode === 'returned'
+          ? vi
+              .fn()
+              .mockResolvedValue({ error, filename: 'page.html', result: null, success: false })
+          : mode === 'thrown'
+            ? vi
+                .fn()
+                .mockRejectedValue(Object.assign(new Error('Gateway Timeout'), { status: 504 }))
+            : vi.fn().mockResolvedValue({
+                result: {
+                  exitCode: 28,
+                  stderr: 'curl: (28) Connection timed out after 30001 milliseconds',
+                  stdout: '',
+                  success: false,
+                },
+                success: true,
+              });
+      mocks.sandboxService.callTool.mockImplementation(call);
+      mocks.sandboxService.exportAndUploadFile.mockImplementation(call);
+      const runtime = await skillsRuntime.factory({
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+      const execute = () =>
+        api === 'exportFile'
+          ? runtime.exportFile({ path: '/page.html', filename: 'page.html' })
+          : runtime[api]({ command: 'nohup python extract.py &', description: 'Extract' });
+      const service = new ToolExecutionService({
+        builtinToolsExecutor: { execute } as never,
+        mcpService: {} as never,
+      });
+
+      const { attempts, result } = await executeToolWithRetry(
+        () =>
+          service.executeTool(
+            {
+              apiName: api,
+              arguments: '{}',
+              id: 'side-effect',
+              identifier: 'lobe-skills',
+              type: 'builtin',
+            },
+            { toolManifestMap: {} },
+          ),
+        // Same budget as the server tool transport (TOOL_MAX_RETRIES).
+        { maxRetries: 2 },
+      );
+
+      expect(call).toHaveBeenCalledTimes(1);
+      expect(attempts).toBe(1);
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ kind: 'stop' });
+    },
+    60_000,
+  );
+
   beforeEach(() => {
     vi.clearAllMocks();
 
