@@ -3400,6 +3400,22 @@ table sessions {
   }
 }
 
+table skill_installs {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text
+  workspace_id text
+  identifier text [not null]
+  event varchar(16) [not null]
+  version text
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (identifier, created_at) [name: 'skill_installs_identifier_created_at_idx']
+    user_id [name: 'skill_installs_user_id_idx']
+    workspace_id [name: 'skill_installs_workspace_id_idx']
+  }
+}
+
 table system_bot_providers {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   platform varchar(50) [not null]

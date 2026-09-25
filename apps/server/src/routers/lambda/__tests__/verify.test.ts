@@ -21,6 +21,7 @@ const modelMocks = vi.hoisted(() => ({
   generateGoalPlan: vi.fn(),
   getFullFileUrl: vi.fn(),
   getServerDB: vi.fn(async () => ({})),
+  recordSkillInstall: vi.fn(),
   updateRun: vi.fn(),
   upsertByCheckItem: vi.fn(),
 }));
@@ -55,6 +56,14 @@ vi.mock('@/database/models/verifyEvidence', () => ({
   VerifyEvidenceModel: vi.fn(function () {
     return {
       create: modelMocks.createEvidence,
+    };
+  }),
+}));
+
+vi.mock('@/database/models/skillInstall', () => ({
+  SkillInstallModel: vi.fn(function () {
+    return {
+      record: modelMocks.recordSkillInstall,
     };
   }),
 }));
@@ -185,6 +194,65 @@ describe('verifyRouter', () => {
       expect(await createCaller().getSkillBundle({ identifier: 'acceptance' })).toEqual(snapshot);
       expect(modelMocks.getServerDB).not.toHaveBeenCalled();
       modelMocks.getServerDB.mockReset().mockResolvedValue({});
+    });
+  });
+
+  describe('trackSkillInstall', () => {
+    it('records an install event against the authenticated user', async () => {
+      await createCaller().trackSkillInstall({
+        event: 'update',
+        identifier: 'acceptance',
+        version: '0.5.0',
+      });
+
+      expect(modelMocks.recordSkillInstall).toHaveBeenCalledExactlyOnceWith({
+        event: 'update',
+        identifier: 'acceptance',
+        version: '0.5.0',
+      });
+    });
+
+    it("defaults the event to 'install'", async () => {
+      await createCaller().trackSkillInstall({ identifier: 'acceptance' });
+
+      expect(modelMocks.recordSkillInstall).toHaveBeenCalledExactlyOnceWith({
+        event: 'install',
+        identifier: 'acceptance',
+      });
+    });
+
+    it('requires authentication and a known event value', async () => {
+      await expect(
+        createPublicCaller().trackSkillInstall({ identifier: 'acceptance' }),
+      ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+      await expect(
+        // @ts-expect-error exercise runtime validation of an unsupported event
+        createCaller().trackSkillInstall({ event: 'remove', identifier: 'acceptance' }),
+      ).rejects.toThrow();
+      expect(modelMocks.recordSkillInstall).not.toHaveBeenCalled();
+    });
+
+    it('rejects unknown and noncanonical skill identifiers', async () => {
+      for (const identifier of ['other-skill', 'verify', '']) {
+        await expect(
+          // @ts-expect-error exercise runtime validation of an unsupported identifier
+          createCaller().trackSkillInstall({ identifier }),
+        ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      }
+      expect(modelMocks.recordSkillInstall).not.toHaveBeenCalled();
+    });
+
+    it('records source version labels without imposing the tag-selection format', async () => {
+      await createCaller().trackSkillInstall({
+        identifier: 'acceptance',
+        version: '0.6.0-beta.1',
+      });
+
+      expect(modelMocks.recordSkillInstall).toHaveBeenCalledExactlyOnceWith({
+        event: 'install',
+        identifier: 'acceptance',
+        version: '0.6.0-beta.1',
+      });
     });
   });
 

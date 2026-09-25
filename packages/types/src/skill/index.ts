@@ -203,3 +203,15 @@ export interface SkillImportResult {
   skill: SkillItem;
   status: SkillImportStatus;
 }
+
+// ===== Skill Install Events (CLI distribution telemetry) =====
+
+export const skillInstallEvents = ['install', 'update'] as const;
+
+/**
+ * Completed CLI commands: 'install' includes explicit --force reinstalls;
+ * 'update' records `lh acceptance update`, even when the version is unchanged.
+ * Fully skipped ordinary installs emit no event. These are event counts, not
+ * unique installations or users, and best-effort reporting can miss events.
+ */
+export type SkillInstallEvent = (typeof skillInstallEvents)[number];

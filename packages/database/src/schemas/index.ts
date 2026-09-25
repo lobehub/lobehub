@@ -52,6 +52,7 @@ export * from './resourcePermission';
 export * from './resourceTransferRequest';
 export * from './scm';
 export * from './session';
+export * from './skillInstall';
 export * from './systemBotProvider';
 export * from './task';
 export * from './topic';

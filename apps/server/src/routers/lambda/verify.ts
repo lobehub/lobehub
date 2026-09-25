@@ -1,4 +1,7 @@
-import { fetchAcceptanceSkillBundle } from '@lobechat/builtin-skills/acceptance';
+import {
+  AcceptanceIdentifier,
+  fetchAcceptanceSkillBundle,
+} from '@lobechat/builtin-skills/acceptance';
 import {
   normalizeVerifySurface,
   verifyRunScenarios,
@@ -12,7 +15,7 @@ import type {
   VerifyRunContext,
   VerifyRunScenario,
 } from '@lobechat/types';
-import { verifyCheckDefinitionSchema } from '@lobechat/types';
+import { skillInstallEvents, verifyCheckDefinitionSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -24,6 +27,7 @@ import {
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { DocumentModel } from '@/database/models/document';
 import { LlmGenerationTracingModel } from '@/database/models/llmGenerationTracing';
+import { SkillInstallModel } from '@/database/models/skillInstall';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyCriterionModel } from '@/database/models/verifyCriterion';
 import { VerifyEvidenceModel } from '@/database/models/verifyEvidence';
@@ -687,6 +691,32 @@ export const verifyRouter = router({
           message: `No pullable skill with identifier "${input.identifier}"`,
         });
       return fetchAcceptanceSkillBundle(input.version);
+    }),
+
+  /**
+   * Record a completed CLI skill install (`lh acceptance install` / `update`)
+   * for the ops dashboard's adoption counters. Append-only telemetry: the
+   * product never reads these rows, and the CLI swallows failures so tracking
+   * can never break an install that already succeeded.
+   */
+  trackSkillInstall: wsCompatProcedure
+    .use(serverDatabase)
+    .use(async ({ ctx, next }) =>
+      next({
+        ctx: {
+          skillInstallModel: new SkillInstallModel(ctx.serverDB, ctx.userId, ctx.workspaceId),
+        },
+      }),
+    )
+    .input(
+      z.object({
+        event: z.enum(skillInstallEvents).default('install'),
+        identifier: z.literal(AcceptanceIdentifier),
+        version: z.string().min(1).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await ctx.skillInstallModel.record(input);
     }),
 
   getVerifyState: verifyProcedure
