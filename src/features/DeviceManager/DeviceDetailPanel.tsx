@@ -23,6 +23,12 @@ import { getDeviceIcon } from './getDeviceIcon';
 import { useCanEditDevice } from './useCanEditDevice';
 
 const styles = createStaticStyles(({ css }) => ({
+  dot: css`
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  `,
   // Fills whatever host it lands in: inside a page-level rail the height is
   // definite, so the body below the header scrolls on its own; inside the
   // workspace list card the height is auto and the panel simply grows.
@@ -227,17 +233,26 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
       <Flexbox horizontal align={'center'} className={styles.header} gap={12}>
         <span className={styles.iconTile}>{getDeviceIcon(device.platform, 18)}</span>
         <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
-          <Text ellipsis weight={600}>
-            {device.friendlyName || device.hostname || device.deviceId}
-          </Text>
-          <Flexbox horizontal align={'center'} gap={8}>
-            <Tag color={online ? 'success' : 'default'} size={'small'}>
-              {online
-                ? t('devices.status.onlineConnections', { count: channels.length })
-                : t('devices.status.offline')}
-            </Tag>
-            {isCurrent && <Tag size={'small'}>{t('devices.currentBadge')}</Tag>}
+          {/* Presence is a dot after the name; the connections below say which. */}
+          <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
+            <Text ellipsis weight={600}>
+              {device.friendlyName || device.hostname || device.deviceId}
+            </Text>
+            <span
+              className={styles.dot}
+              style={{ background: online ? cssVar.colorSuccess : cssVar.colorTextQuaternary }}
+              title={
+                online
+                  ? t('devices.status.onlineConnections', { count: channels.length })
+                  : t('devices.status.offline')
+              }
+            />
           </Flexbox>
+          {isCurrent && (
+            <Flexbox horizontal>
+              <Tag size={'small'}>{t('devices.currentBadge')}</Tag>
+            </Flexbox>
+          )}
         </Flexbox>
         <ActionIcon icon={XIcon} size={'small'} onClick={onClose} />
       </Flexbox>

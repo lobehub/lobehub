@@ -67,7 +67,7 @@ export const AppUpdateAction = ({ update }: AppUpdateProps) => {
           <Button
             loading={requesting}
             size={'small'}
-            type={'primary'}
+            type={'fill'}
             onClick={() => confirmInstall(view.targetVersion)}
           >
             {t('common:restartToUpdate')}
@@ -88,8 +88,13 @@ export const AppUpdateAction = ({ update }: AppUpdateProps) => {
   }
 };
 
-/** Where the update stands, under the desktop app's connection row. */
-export const AppUpdateHint = ({ update }: AppUpdateProps) => {
+interface AppUpdateHintProps extends AppUpdateProps {
+  /** Shown while the update has nothing to say, e.g. how long it's been connected. */
+  fallback?: ReactNode;
+}
+
+/** Where the update stands, on the desktop app's status line next to its button. */
+export const AppUpdateHint = ({ fallback = null, update }: AppUpdateHintProps) => {
   const { t } = useTranslation(['setting', 'common']);
   const { view } = update;
 
@@ -134,7 +139,7 @@ export const AppUpdateHint = ({ update }: AppUpdateProps) => {
   };
 
   const hint = renderHint(view);
-  if (!hint) return null;
+  if (!hint) return fallback;
 
   const failed =
     view.kind === 'installFailed' ||
@@ -143,8 +148,7 @@ export const AppUpdateHint = ({ update }: AppUpdateProps) => {
     (view.kind === 'idle' && typeof view.outcome === 'object');
 
   return (
-    // Indented past the row's status dot so it reads as that row's status.
-    <Text fontSize={12} style={{ paddingInlineStart: 16 }} type={failed ? 'danger' : 'secondary'}>
+    <Text fontSize={12} type={failed ? 'danger' : 'secondary'}>
       {hint}
     </Text>
   );
