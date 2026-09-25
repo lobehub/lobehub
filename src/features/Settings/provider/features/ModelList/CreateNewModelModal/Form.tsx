@@ -46,8 +46,11 @@ const ModelConfigForm = memo<ModelConfigFormProps>(
             'embedding',
             'tts',
             'asr',
-            'image',
-            'video',
+            // Image/video generation relies on a model-bank `parameters` schema, which this
+            // form cannot edit yet. Custom image/video models end up schema-less and break
+            // model switching on the generation pages, so keep them hidden for now.
+            // 'image',
+            // 'video',
             'text2music',
             'realtime',
           ] as AiModelType[]
