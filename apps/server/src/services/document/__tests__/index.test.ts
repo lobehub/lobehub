@@ -12,7 +12,7 @@ import { EditLockService } from '../../editLock';
 import { FileService } from '../../file';
 import { publishResourceEvent } from '../../resourceEvents';
 import { DocumentHistoryService } from '../history';
-import { DocumentService } from '../index';
+import { capParsedFileDocument, DocumentService, PARSED_FILE_CONTENT_MAX_CHARS } from '../index';
 
 vi.mock('@/server/modules/AgentRuntime/redis', () => ({ getAgentRuntimeRedisClient: () => null }));
 vi.mock('@/database/models/document');
@@ -2126,6 +2126,40 @@ describe('DocumentService', () => {
           content: contentWithPageTags,
         }),
       );
+    });
+  });
+});
+
+describe('capParsedFileDocument', () => {
+  const fileDocument = (content: string) =>
+    ({
+      content,
+      fileType: 'txt',
+      filename: 'big.txt',
+      metadata: { source: 'big.txt' },
+      pages: [{ charCount: content.length, lineCount: 1, metadata: {}, pageContent: content }],
+      totalCharCount: content.length,
+      totalLineCount: 1,
+    }) as unknown as Parameters<typeof capParsedFileDocument>[0];
+
+  it('keeps parsed text within the limit untouched', () => {
+    const input = fileDocument('hello');
+
+    expect(capParsedFileDocument(input)).toBe(input);
+  });
+
+  it('truncates oversized parsed text and drops the duplicated pages', () => {
+    const originalLength = PARSED_FILE_CONTENT_MAX_CHARS + 10;
+    const result = capParsedFileDocument(fileDocument(`${'a\n'.repeat(originalLength / 2)}`));
+
+    expect(result.content).toHaveLength(PARSED_FILE_CONTENT_MAX_CHARS);
+    expect(result.pages).toBeUndefined();
+    expect(result.totalCharCount).toBe(PARSED_FILE_CONTENT_MAX_CHARS);
+    expect(result.totalLineCount).toBe(PARSED_FILE_CONTENT_MAX_CHARS / 2 + 1);
+    expect(result.metadata).toMatchObject({
+      originalCharCount: originalLength,
+      source: 'big.txt',
+      truncated: true,
     });
   });
 });

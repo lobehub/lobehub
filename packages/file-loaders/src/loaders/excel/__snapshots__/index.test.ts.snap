@@ -2,52 +2,52 @@
 
 exports[`ExcelLoader > should aggregate content correctly (joining sheets) > aggregated_content 1`] = `
 "<sheet name="表1" index="0">
-| __EMPTY | 类别 A | 类别 B | __EMPTY_1 | __EMPTY_2 |
-| --- | --- | --- | --- | --- |
-| 项目 1 | 5 | 7 |  |  |
-| 项目 2 | 10 | 8 |  |  |
-| 项目 3 | 9 | 15 |  |  |
-| 项目 4 | 7 | 12 |  |  |
-| 项目 5 | 16 | 21 |  |  |
+| __EMPTY | 类别 A | 类别 B |
+| --- | --- | --- |
+| 项目 1 | 5 | 7 |
+| 项目 2 | 10 | 8 |
+| 项目 3 | 9 | 15 |
+| 项目 4 | 7 | 12 |
+| 项目 5 | 16 | 21 |
 </sheet>
 
 <sheet name="表2 - 表格 2" index="1">
-| __EMPTY | 类别 A | 类别 B | __EMPTY_1 | __EMPTY_2 |
-| --- | --- | --- | --- | --- |
-| 项目 1 | 5 | 7 |  |  |
-| 项目 2 | 10 | 8 |  |  |
-| 项目 3 | 9 | 15 |  |  |
-| 项目 4 | 7 | 12 |  |  |
-| 项目 5 | 16 | 21 |  |  |
+| __EMPTY | 类别 A | 类别 B |
+| --- | --- | --- |
+| 项目 1 | 5 | 7 |
+| 项目 2 | 10 | 8 |
+| 项目 3 | 9 | 15 |
+| 项目 4 | 7 | 12 |
+| 项目 5 | 16 | 21 |
 </sheet>"
 `;
 
 exports[`ExcelLoader > should handle Excel file with only headers > only_header_pages 1`] = `
 [
   {
-    "charCount": 124,
+    "charCount": 82,
     "lineCount": 3,
     "metadata": {
       "sheetName": "表1",
     },
-    "pageContent": "| 表格 1 | __EMPTY | __EMPTY_1 | __EMPTY_2 | __EMPTY_3 |
-| --- | --- | --- | --- | --- |
-| header1 | header2 | header3 |  |  |",
+    "pageContent": "| 表格 1 | __EMPTY | __EMPTY_1 |
+| --- | --- | --- |
+| header1 | header2 | header3 |",
   },
   {
-    "charCount": 231,
+    "charCount": 159,
     "lineCount": 8,
     "metadata": {
       "sheetName": "表2 - 表格 2",
     },
-    "pageContent": "| 表格 2 | __EMPTY | __EMPTY_1 | __EMPTY_2 | __EMPTY_3 |
-| --- | --- | --- | --- | --- |
-|  | 类别 A | 类别 B |  |  |
-| 项目 1 | 5 | 7 |  |  |
-| 项目 2 | 10 | 8 |  |  |
-| 项目 3 | 9 | 15 |  |  |
-| 项目 4 | 7 | 12 |  |  |
-| 项目 5 | 16 | 21 |  |  |",
+    "pageContent": "| 表格 2 | __EMPTY | __EMPTY_1 |
+| --- | --- | --- |
+|  | 类别 A | 类别 B |
+| 项目 1 | 5 | 7 |
+| 项目 2 | 10 | 8 |
+| 项目 3 | 9 | 15 |
+| 项目 4 | 7 | 12 |
+| 项目 5 | 16 | 21 |",
   },
 ]
 `;
@@ -55,32 +55,32 @@ exports[`ExcelLoader > should handle Excel file with only headers > only_header_
 exports[`ExcelLoader > should load pages correctly from an Excel file (one page per sheet) 1`] = `
 [
   {
-    "charCount": 201,
+    "charCount": 135,
     "lineCount": 7,
     "metadata": {
       "sheetName": "表1",
     },
-    "pageContent": "| __EMPTY | 类别 A | 类别 B | __EMPTY_1 | __EMPTY_2 |
-| --- | --- | --- | --- | --- |
-| 项目 1 | 5 | 7 |  |  |
-| 项目 2 | 10 | 8 |  |  |
-| 项目 3 | 9 | 15 |  |  |
-| 项目 4 | 7 | 12 |  |  |
-| 项目 5 | 16 | 21 |  |  |",
+    "pageContent": "| __EMPTY | 类别 A | 类别 B |
+| --- | --- | --- |
+| 项目 1 | 5 | 7 |
+| 项目 2 | 10 | 8 |
+| 项目 3 | 9 | 15 |
+| 项目 4 | 7 | 12 |
+| 项目 5 | 16 | 21 |",
   },
   {
-    "charCount": 201,
+    "charCount": 135,
     "lineCount": 7,
     "metadata": {
       "sheetName": "表2 - 表格 2",
     },
-    "pageContent": "| __EMPTY | 类别 A | 类别 B | __EMPTY_1 | __EMPTY_2 |
-| --- | --- | --- | --- | --- |
-| 项目 1 | 5 | 7 |  |  |
-| 项目 2 | 10 | 8 |  |  |
-| 项目 3 | 9 | 15 |  |  |
-| 项目 4 | 7 | 12 |  |  |
-| 项目 5 | 16 | 21 |  |  |",
+    "pageContent": "| __EMPTY | 类别 A | 类别 B |
+| --- | --- | --- |
+| 项目 1 | 5 | 7 |
+| 项目 2 | 10 | 8 |
+| 项目 3 | 9 | 15 |
+| 项目 4 | 7 | 12 |
+| 项目 5 | 16 | 21 |",
   },
 ]
 `;
