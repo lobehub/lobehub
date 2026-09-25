@@ -34,6 +34,7 @@ const bundle = {
 describe('acceptance skill installation', () => {
   let directory: string;
   const query = vi.fn();
+  const trackAcceptanceInstall = vi.fn();
 
   const run = async (...args: string[]) => {
     const program = new Command().version('0.0.55');
@@ -46,14 +47,19 @@ describe('acceptance skill installation', () => {
     directory = await mkdtemp(path.join(tmpdir(), 'acceptance-distribution-'));
     vi.spyOn(console, 'log').mockImplementation(() => {});
     query.mockReset().mockResolvedValue(bundle);
+    trackAcceptanceInstall.mockReset().mockResolvedValue(undefined);
     vi.mocked(getTrpcClient)
       .mockReset()
       .mockResolvedValue({
-        verify: { getSkillBundle: { query } },
+        verify: {
+          getSkillBundle: { query },
+          trackAcceptanceInstall: { mutate: trackAcceptanceInstall },
+        },
       } as unknown as Awaited<ReturnType<typeof getTrpcClient>>);
   });
 
   afterEach(async () => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     await rm(directory, { force: true, recursive: true });
   });
@@ -119,6 +125,7 @@ describe('acceptance skill installation', () => {
 
     expect(await readFile(path.join(skillDir, 'SKILL.md'), 'utf8')).toBe('existing skill');
     expect(await readFile(path.join(skillDir, 'old.md'), 'utf8')).toBe('existing resource');
+    expect(trackAcceptanceInstall).not.toHaveBeenCalled();
   });
 
   it('preserves existing files during install, then replaces them and removes stale files on update', async () => {
@@ -242,5 +249,92 @@ describe('acceptance skill installation', () => {
       updated,
     );
     expect(query).toHaveBeenLastCalledWith({ identifier: 'acceptance' });
+  });
+
+  it('reports installs and explicit updates even when the bundle version is unchanged', async () => {
+    await run('install');
+    expect(trackAcceptanceInstall).toHaveBeenLastCalledWith(
+      { event: 'install', version: '0.5.0' },
+      { signal: expect.any(AbortSignal) },
+    );
+
+    await run('update');
+    expect(trackAcceptanceInstall).toHaveBeenLastCalledWith(
+      { event: 'update', version: '0.5.0' },
+      { signal: expect.any(AbortSignal) },
+    );
+    expect(trackAcceptanceInstall).toHaveBeenCalledTimes(2);
+  });
+
+  it('counts a forced install as an install, not an update', async () => {
+    await run('install', '--force');
+
+    expect(trackAcceptanceInstall).toHaveBeenCalledExactlyOnceWith(
+      { event: 'install', version: '0.5.0' },
+      { signal: expect.any(AbortSignal) },
+    );
+  });
+
+  it('does not report a no-op install where every file was skipped', async () => {
+    await run('install');
+    trackAcceptanceInstall.mockClear();
+
+    await run('install');
+
+    expect(JSON.parse(vi.mocked(console.log).mock.calls.at(-1)![0] as string).skipped).toContain(
+      'SKILL.md',
+    );
+    expect(trackAcceptanceInstall).not.toHaveBeenCalled();
+  });
+
+  it('still succeeds when the server cannot record the install', async () => {
+    trackAcceptanceInstall.mockRejectedValueOnce(new Error('unknown procedure'));
+
+    await run('install');
+
+    expect(await readFile(path.join(directory, '.agents/skills/acceptance/SKILL.md'), 'utf8')).toBe(
+      content,
+    );
+    expect(JSON.parse(vi.mocked(console.log).mock.calls.at(-1)![0] as string)).toMatchObject({
+      skill: 'acceptance',
+    });
+  });
+
+  it('bounds tracking latency and cancels a stalled request without failing the install', async () => {
+    vi.useFakeTimers();
+    let signal: AbortSignal | undefined;
+    let started!: () => void;
+    const requestStarted = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    trackAcceptanceInstall.mockImplementationOnce((_input, options?: { signal: AbortSignal }) => {
+      signal = options?.signal;
+      started();
+      return new Promise<void>((_resolve, reject) => {
+        if (!signal) return reject(new Error('Missing cancellation signal'));
+        signal.addEventListener('abort', () => reject(signal?.reason), { once: true });
+      });
+    });
+
+    const installing = run('install');
+    await requestStarted;
+    await vi.advanceTimersByTimeAsync(2999);
+    expect(console.log).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    await installing;
+
+    expect(signal?.aborted).toBe(true);
+    expect(JSON.parse(vi.mocked(console.log).mock.calls.at(-1)![0] as string).written).toContain(
+      'SKILL.md',
+    );
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('does not report an install when files could not be written', async () => {
+    await writeFile(path.join(directory, '.agents'), 'not a directory');
+
+    await expect(run('install')).rejects.toThrow();
+
+    expect(trackAcceptanceInstall).not.toHaveBeenCalled();
   });
 });
