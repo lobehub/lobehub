@@ -3,7 +3,14 @@
 import { Icon } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { LoaderCircle } from 'lucide-react';
-import type { KeyboardEvent, PointerEvent, ReactElement, ReactNode } from 'react';
+import type {
+  KeyboardEvent,
+  PointerEvent,
+  ReactElement,
+  ReactNode,
+  TouchEvent,
+  WheelEvent,
+} from 'react';
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { VListHandle } from 'virtua';
 import { VList } from 'virtua';
@@ -25,6 +32,7 @@ import {
   CONVERSATION_SPACER_TRANSITION_MS,
   useConversationScroll,
 } from '../hooks/useConversationScroll';
+import { useEarlierHistoryTrigger } from '../hooks/useEarlierHistoryTrigger';
 import { useSelectionMessageIds } from '../hooks/useSelectionMessageIds';
 import { useTopicScrollPersist } from '../hooks/useTopicScrollPersist';
 import type { ResolvedMessageDeepLink } from '../utils/messageDeepLink';
@@ -38,10 +46,6 @@ const DebugInspector = lazy(() => import('./AutoScroll/DebugInspector'));
 const CONVERSATION_FOOTER_ID = '__conversation_footer__';
 const CONVERSATION_HEADER_ID = '__conversation_header__';
 const USER_SCROLL_INTENT_TTL_MS = 500;
-// User-scrolled distance from the very top (px) under which one round-aligned
-// page of pre-window history is fetched (LOBE-13716). The action self-guards
-// against duplicate loads, so firing per scroll event is safe.
-const EARLIER_HISTORY_TRIGGER_PX = 200;
 const SCROLL_KEYS = new Set(['ArrowDown', 'ArrowUp', 'End', 'Home', 'PageDown', 'PageUp', ' ']);
 
 interface VirtualizedListProps {
@@ -123,6 +127,8 @@ const VirtualizedList = memo<VirtualizedListProps>(
     const setActiveIndex = useConversationStore((s) => s.setActiveIndex);
     const activeIndex = useConversationStore(virtuaListSelectors.activeIndex);
 
+    const earlierHistory = useEarlierHistoryTrigger({ loadEarlierMessages, virtuaRef });
+
     const markUserScrollIntent = useCallback(() => {
       lastUserScrollIntentAtRef.current = Date.now();
     }, []);
@@ -141,8 +147,25 @@ const VirtualizedList = memo<VirtualizedListProps>(
         if (SCROLL_KEYS.has(event.key)) {
           markUserScrollIntent();
         }
+        earlierHistory.onKeyDown(event);
       },
-      [markUserScrollIntent],
+      [earlierHistory, markUserScrollIntent],
+    );
+
+    const handleWheel = useCallback(
+      (event: WheelEvent<HTMLDivElement>) => {
+        markUserScrollIntent();
+        earlierHistory.onWheel(event);
+      },
+      [earlierHistory, markUserScrollIntent],
+    );
+
+    const handleTouchMove = useCallback(
+      (event: TouchEvent<HTMLDivElement>) => {
+        markUserScrollIntent();
+        earlierHistory.onTouchMove(event);
+      },
+      [earlierHistory, markUserScrollIntent],
     );
 
     // Check if at bottom based on scroll position
@@ -182,11 +205,8 @@ const VirtualizedList = memo<VirtualizedListProps>(
           Date.now() - lastUserScrollIntentAtRef.current <= USER_SCROLL_INTENT_TTL_MS;
         onScrollOffset(ref.scrollOffset, hasUserScrollIntent);
 
-        // Near the top under a real user scroll (programmatic mount/restore
-        // scrolls carry no intent): fetch one page of pre-window history.
-        if (hasUserScrollIntent && ref.scrollOffset < EARLIER_HISTORY_TRIGGER_PX) {
-          void loadEarlierMessages();
-        }
+        // Programmatic mount/restore scrolls carry no intent and never fetch.
+        if (hasUserScrollIntent) earlierHistory.onUserScroll();
       }
 
       // Check if at bottom
@@ -209,7 +229,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
     }, [
       activeIndex,
       checkAtBottom,
-      loadEarlierMessages,
+      earlierHistory,
       onScrollOffset,
       recordScroll,
       setActiveIndex,
@@ -351,8 +371,9 @@ const VirtualizedList = memo<VirtualizedListProps>(
         onKeyDownCapture={handleKeyDown}
         onPointerDownCapture={markUserScrollIntent}
         onPointerMoveCapture={handlePointerMove}
-        onTouchMoveCapture={markUserScrollIntent}
-        onWheelCapture={markUserScrollIntent}
+        onTouchMoveCapture={handleTouchMove}
+        onTouchStartCapture={earlierHistory.onTouchStart}
+        onWheelCapture={handleWheel}
       >
         {/* Pinned to the list viewport top; only renders while multi-selecting */}
         <MessageForwardSelectToHere />
