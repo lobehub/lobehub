@@ -67,7 +67,7 @@ describe('useBuilderSuggestions', () => {
     } as RecordTracingFeedbackResult);
   });
 
-  it('tags suggestion requests with the system agent trigger', async () => {
+  it('tags suggestion requests with the builder suggestion trigger', async () => {
     const { result } = renderHook((props) => useBuilderSuggestions(props), {
       initialProps: baseParams,
       wrapper: createSWRWrapper(),
@@ -77,7 +77,7 @@ describe('useBuilderSuggestions', () => {
       expect(result.current.suggestions[0]?.title).toBe('first title');
     });
     expect(vi.mocked(aiChatService.generateJSON).mock.calls[0][0].metadata).toEqual({
-      trigger: RequestTrigger.SystemAgent,
+      trigger: RequestTrigger.BuilderSuggestion,
     });
   });
 

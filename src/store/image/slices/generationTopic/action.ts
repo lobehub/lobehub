@@ -131,7 +131,7 @@ export class GenerationTopicActionImpl {
           }
         }
       },
-      trigger: RequestTrigger.Topic,
+      trigger: RequestTrigger.GenerationTopicTitle,
     });
 
     return output;

@@ -1,6 +1,6 @@
 import { chainSummaryHistory } from '@lobechat/prompts';
 import { type UIChatMessage } from '@lobechat/types';
-import { TraceNameMap } from '@lobechat/types';
+import { RequestTrigger, TraceNameMap } from '@lobechat/types';
 
 import { chatService } from '@/services/chat';
 import { topicService } from '@/services/topic';
@@ -39,6 +39,7 @@ export class ChatMemoryActionImpl {
         topicId: this.#get().activeTopicId,
         traceName: TraceNameMap.SummaryHistoryMessages,
       },
+      trigger: RequestTrigger.HistorySummary,
     });
 
     await topicService.updateTopic(topicId, {

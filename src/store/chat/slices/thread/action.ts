@@ -222,7 +222,7 @@ export class ChatThreadActionImpl {
             messages,
             userGeneralSettingsSelectors.currentResponseLanguage(useUserStore.getState()),
           ),
-          metadata: { trigger: RequestTrigger.Topic },
+          metadata: { trigger: RequestTrigger.ThreadTitle },
           model,
           provider,
           schema: TOPIC_TITLE_JSON_SCHEMA,

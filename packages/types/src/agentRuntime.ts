@@ -13,15 +13,25 @@ export interface RouterRuntimeRequestContext {
 }
 
 export enum RequestTrigger {
+  /** Agent profile autocomplete: title, description, tags and avatar emoji. */
+  AgentMeta = 'agent_meta',
   AgentShare = 'agent_share',
   AgentSignal = 'agent_signal',
   Api = 'api',
   Bot = 'bot',
+  /** Agent builder suggestion chips. */
+  BuilderSuggestion = 'builder_suggestion',
   Chat = 'chat',
   Cli = 'cli',
+  /** Context compression summary that replaces older messages in a conversation. */
+  ContextCompression = 'context_compression',
   Cron = 'cron',
   Eval = 'eval',
   FileEmbedding = 'file_embedding',
+  /** Image / video generation topic title summaries. */
+  GenerationTopicTitle = 'generation_topic_title',
+  /** Rolling history summary stored on a topic. */
+  HistorySummary = 'history_summary',
   Image = 'image',
   /** Chat input inline completion suggestions while the user is typing. */
   InputCompletion = 'input_completion',
@@ -30,20 +40,28 @@ export enum RequestTrigger {
   Notify = 'notify',
   Onboarding = 'onboarding',
   Openapi = 'openapi',
+  /** Rewrite of an image / video generation prompt. */
+  PromptRewrite = 'prompt_rewrite',
+  /** Connectivity check from the provider settings page. */
+  ProviderCheck = 'provider_check',
   /** A run the user deferred to a future time (`topic.metadata.scheduledRun`). */
   Scheduled = 'scheduled',
   /** A provider event on a pull request (CI failure, review) woke the agent that opened it. */
   Scm = 'scm',
   SemanticSearch = 'semantic_search',
   SignupEmailLLMReview = 'signup_email_llm_review',
+  /** Thread (sub-topic) title summaries. */
+  ThreadTitle = 'thread_title',
   /**
-   * Auxiliary system-agent tasks the client runs outside a user chat turn:
-   * translation, agent profile generation, prompt rewrite, history / context
-   * summaries, builder suggestions, etc.
+   * @deprecated Legacy bucket for every title summary. New requests use
+   * {@link RequestTrigger.TopicTitle}, {@link RequestTrigger.ThreadTitle} or
+   * {@link RequestTrigger.GenerationTopicTitle}; kept so historical logs still resolve a label.
    */
-  SystemAgent = 'system_agent',
-  /** Topic / thread / generation-topic title summaries. */
   Topic = 'topic',
+  /** Chat topic title summaries, both client and server generated. */
+  TopicTitle = 'topic_title',
+  /** Translation of a chat message or a generation prompt, including language detection. */
+  Translate = 'translate',
   Video = 'video',
 }
 

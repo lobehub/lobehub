@@ -621,7 +621,7 @@ describe('thread action', () => {
       // written straight to the title, which leaked `{"title":"..."}`.
       expect(chatService.fetchPresetTaskResult).not.toHaveBeenCalled();
       expect((aiChatService.generateJSON as Mock).mock.calls[0][0]).toMatchObject({
-        metadata: { trigger: RequestTrigger.Topic },
+        metadata: { trigger: RequestTrigger.ThreadTitle },
         schema: { name: 'topic_title' },
         tracing: { scenario: 'topic_title' },
       });

@@ -1,4 +1,5 @@
 import { chainRewriteGenerationPrompt, chainTranslate } from '@lobechat/prompts';
+import { RequestTrigger } from '@lobechat/types';
 import { useCallback, useState } from 'react';
 
 import { chatService } from '@/services/chat';
@@ -62,6 +63,7 @@ export const usePromptTransform = ({ mode, prompt, onPromptChange }: UsePromptTr
                 })
               : chainTranslate(prompt, 'English'),
           ),
+          trigger: action === 'rewrite' ? RequestTrigger.PromptRewrite : RequestTrigger.Translate,
         });
       } finally {
         setIsTransforming(false);

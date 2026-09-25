@@ -12,7 +12,7 @@ import { AgentRuntimeError } from '@lobechat/model-runtime/utils/createError';
 import {
   ChatErrorType,
   getDisabledPluginIds,
-  RequestTrigger,
+  type RequestTrigger,
   type RuntimeAdditionalContextFragment,
   type RuntimeInitialContext,
   type RuntimeStepContext,
@@ -99,11 +99,10 @@ interface FetchAITaskResultParams extends FetchSSEOptions {
   params: ChatStreamInputParams;
   trace?: TracePayload;
   /**
-   * Request source recorded on spend / route-attempt logs. Preset tasks are
-   * auxiliary system-agent calls, so this defaults to
-   * {@link RequestTrigger.SystemAgent} to keep them out of `chat` statistics.
+   * Request source recorded on spend / route-attempt logs. Required so every
+   * preset task names its own feature instead of being counted as `chat`.
    */
-  trigger?: RequestTrigger;
+  trigger: RequestTrigger;
 }
 
 interface CreateAssistantMessageStream extends FetchSSEOptions {
@@ -438,7 +437,7 @@ class ChatService {
     onLoadingChange,
     abortController,
     trace,
-    trigger = RequestTrigger.SystemAgent,
+    trigger,
   }: FetchAITaskResultParams) => {
     const errorHandle = (error: Error, errorContent?: any) => {
       onLoadingChange?.(false);

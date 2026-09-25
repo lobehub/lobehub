@@ -1917,7 +1917,7 @@ describe('ChatService', () => {
   });
 
   describe('fetchPresetTaskResult', () => {
-    it('should tag preset tasks as system agent requests by default', async () => {
+    it('should forward the preset task trigger as request metadata', async () => {
       const getChatCompletionSpy = vi
         .spyOn(chatService, 'getChatCompletion')
         .mockResolvedValue(new Response(''));
@@ -1928,29 +1928,11 @@ describe('ChatService', () => {
           model: 'gpt-4',
           provider: 'openai',
         },
+        trigger: RequestTrigger.TopicTitle,
       });
 
       expect(getChatCompletionSpy.mock.calls[0][1]?.metadata).toEqual({
-        trigger: RequestTrigger.SystemAgent,
-      });
-    });
-
-    it('should forward an explicit preset task trigger', async () => {
-      const getChatCompletionSpy = vi
-        .spyOn(chatService, 'getChatCompletion')
-        .mockResolvedValue(new Response(''));
-
-      await chatService.fetchPresetTaskResult({
-        params: {
-          messages: [{ content: 'Hello', role: 'user' as const }],
-          model: 'gpt-4',
-          provider: 'openai',
-        },
-        trigger: RequestTrigger.Topic,
-      });
-
-      expect(getChatCompletionSpy.mock.calls[0][1]?.metadata).toEqual({
-        trigger: RequestTrigger.Topic,
+        trigger: RequestTrigger.TopicTitle,
       });
     });
 
@@ -1965,6 +1947,7 @@ describe('ChatService', () => {
           model: 'gpt-4',
           provider: 'openai',
         },
+        trigger: RequestTrigger.Translate,
       });
 
       expect(agentDocumentService.getContextDocuments).not.toHaveBeenCalled();
@@ -2009,6 +1992,7 @@ describe('ChatService', () => {
         onLoadingChange,
         abortController,
         trace,
+        trigger: RequestTrigger.Translate,
       });
 
       expect(onFinish).toHaveBeenCalledWith('AI response', {
@@ -2049,6 +2033,7 @@ describe('ChatService', () => {
         onLoadingChange,
         abortController,
         trace,
+        trigger: RequestTrigger.Translate,
       });
 
       expect(onError).toHaveBeenCalledWith(expect.any(Error), {

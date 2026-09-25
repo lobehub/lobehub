@@ -263,7 +263,7 @@ export class GenerationTopicActionImpl {
           userGeneralSettingsSelectors.currentResponseLanguage(useUserStore.getState()),
         ),
       ),
-      trigger: RequestTrigger.Topic,
+      trigger: RequestTrigger.GenerationTopicTitle,
     });
 
     return output;

@@ -3346,7 +3346,7 @@ describe('topic action', () => {
       expect(generateSpy).toHaveBeenCalledOnce();
       expect(generateSpy.mock.calls[0][0].metadata).toEqual({
         topicId,
-        trigger: RequestTrigger.Topic,
+        trigger: RequestTrigger.TopicTitle,
       });
     });
 

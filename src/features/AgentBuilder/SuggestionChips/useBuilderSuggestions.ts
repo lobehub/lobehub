@@ -75,7 +75,7 @@ export const useBuilderSuggestions = ({
       const envelope = (await aiChatService.generateJSON(
         {
           messages,
-          metadata: { trigger: RequestTrigger.SystemAgent },
+          metadata: { trigger: RequestTrigger.BuilderSuggestion },
           model,
           provider,
           schema,

@@ -2,7 +2,7 @@
 
 import { CheckCircleFilled } from '@ant-design/icons';
 import { type ChatMessageError } from '@lobechat/types';
-import { TraceNameMap } from '@lobechat/types';
+import { RequestTrigger, TraceNameMap } from '@lobechat/types';
 import { isRecord, pickTrimmedString } from '@lobechat/utils/object';
 import { Flexbox, Highlighter, Icon } from '@lobehub/ui';
 import { Alert, Button, Select } from '@lobehub/ui/base-ui';
@@ -166,6 +166,7 @@ const Checker = memo<ConnectionCheckerProps>(
           topicId: checkModel,
           traceName: TraceNameMap.ConnectivityChecker,
         },
+        trigger: RequestTrigger.ProviderCheck,
       });
     };
 

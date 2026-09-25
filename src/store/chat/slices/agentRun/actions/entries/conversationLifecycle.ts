@@ -20,6 +20,7 @@ import {
   applyTopicModelToHeterogeneousProvider,
   getWorkingDirEffectivePath,
   getWorkingDirSourcePath,
+  RequestTrigger,
   resolveAgentAgencyConfig,
 } from '@lobechat/types';
 import { generateEntityId, nanoid } from '@lobechat/utils';
@@ -2377,6 +2378,7 @@ export class ConversationLifecycleActionImpl {
           }
         },
         params: { ...compressionPayload, model, provider },
+        trigger: RequestTrigger.ContextCompression,
       });
 
       if (abortController.signal.aborted) throw createAbortError();

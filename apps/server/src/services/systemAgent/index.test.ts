@@ -38,7 +38,7 @@ describe('SystemAgentService.generateTopicTitle', () => {
       expect(generateObject).toHaveBeenLastCalledWith(
         expect.objectContaining({ schema: expect.objectContaining({ name: 'topic_title' }) }),
         {
-          metadata: { topicId, trigger: 'topic' },
+          metadata: { topicId, trigger: 'topic_title' },
           tracing: {
             promptVersion: expect.any(String),
             scenario: 'topic_title',

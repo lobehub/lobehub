@@ -1,6 +1,6 @@
 import { chainLangDetect, chainTranslate } from '@lobechat/prompts';
 import { type ChatTranslate, type TracePayload } from '@lobechat/types';
-import { TraceNameMap } from '@lobechat/types';
+import { RequestTrigger, TraceNameMap } from '@lobechat/types';
 import { merge } from '@lobechat/utils';
 
 import { supportLocales } from '@/locales/resources';
@@ -81,6 +81,7 @@ export class ChatTranslateActionImpl {
         },
         params: merge(translationSetting, chainLangDetect(message.content)),
         trace: this.#get().getCurrentTracePayload({ traceName: TraceNameMap.LanguageDetect }),
+        trigger: RequestTrigger.Translate,
       });
 
       // translate to target language
@@ -108,6 +109,7 @@ export class ChatTranslateActionImpl {
         },
         params: merge(translationSetting, chainTranslate(message.content, targetLang)),
         trace: this.#get().getCurrentTracePayload({ traceName: TraceNameMap.Translator }),
+        trigger: RequestTrigger.Translate,
       });
     } catch (error) {
       this.#get().failOperation(operationId, {
