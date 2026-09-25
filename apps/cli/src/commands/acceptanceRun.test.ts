@@ -108,7 +108,7 @@ describe('acceptance publication with missing evidence', () => {
       missingEvidence: [{ checkItemId: 'screen', types: ['screenshot'] }],
       publicationStatus: 'partial',
       recovery: {
-        cleanupUrl: 'https://lobehub.com/acceptance',
+        cleanupUrl: 'https://app.lobehub.com/acceptance',
         reason: 'storage_quota',
         upgradeUrl: 'https://lobehub.com/settings/plans',
       },
@@ -195,7 +195,7 @@ describe('acceptance publication with missing evidence', () => {
     expect(printed.join('\n')).toContain('POSIX shell');
     expect(printed.join('\n')).toContain('retryArgs');
     expect(log.warn).toHaveBeenCalledWith(
-      expect.stringContaining('https://lobehub.com/acceptance'),
+      expect.stringContaining('https://app.lobehub.com/acceptance'),
     );
     expect(log.warn).toHaveBeenCalledWith(
       expect.stringContaining('https://lobehub.com/settings/plans'),
@@ -226,6 +226,25 @@ describe('acceptance publication with missing evidence', () => {
     );
     expect(log.warn).toHaveBeenCalledWith(result().recovery.message);
   });
+
+  it.each(['https://lobehub.com', 'https://quota-user:quota%40password@lobehub.com'])(
+    'links personal cleanup to the App when the Cloud server is %s',
+    async (server) => {
+      vi.mocked(resolveServerUrl).mockReturnValue(server);
+      vi.mocked(uploadLocalFile).mockRejectedValue(new Error('storage_block:upgrade_required'));
+      await report(['screenshot'], ["screen's shot.png"]);
+
+      await run('ingest', dir, '--json');
+
+      expect(result().recovery).toMatchObject({
+        cleanupUrl: 'https://app.lobehub.com/acceptance',
+        scope: 'personal',
+        upgradeUrl: 'https://lobehub.com/settings/plans',
+      });
+      expect(result().recovery.message).toContain('https://app.lobehub.com/acceptance');
+      expect(JSON.stringify(result().recovery)).not.toMatch(/quota-user|quota%40password/);
+    },
+  );
 
   it.each([undefined, 'Upload failed: 503 Service Unavailable'])(
     'does not suggest storage recovery for a non-quota outcome: %s',
@@ -284,7 +303,7 @@ describe('acceptance publication with missing evidence', () => {
         ),
       );
       expect(log.warn).not.toHaveBeenCalledWith(
-        expect.stringContaining('https://lobehub.com/acceptance'),
+        expect.stringContaining('https://app.lobehub.com/acceptance'),
       );
       expect(log.warn).not.toHaveBeenCalledWith(
         expect.stringContaining('https://lobehub.com/settings/plans'),
@@ -372,7 +391,7 @@ describe('acceptance publication with missing evidence', () => {
         expect(client.verify.ingestResult.mutate).not.toHaveBeenCalled();
         expect(client.verify.createRun.mutate).not.toHaveBeenCalled();
         expect(log.warn).toHaveBeenCalledWith(
-          expect.stringContaining('https://lobehub.com/acceptance'),
+          expect.stringContaining('https://app.lobehub.com/acceptance'),
         );
         expect(log.warn).toHaveBeenCalledWith(
           expect.stringContaining('https://lobehub.com/settings/plans'),
@@ -386,7 +405,7 @@ describe('acceptance publication with missing evidence', () => {
             error: 'storage_block:upgrade_required',
             recovery: {
               reason: 'storage_quota',
-              cleanupUrl: 'https://lobehub.com/acceptance',
+              cleanupUrl: 'https://app.lobehub.com/acceptance',
               upgradeUrl: 'https://lobehub.com/settings/plans',
             },
           });

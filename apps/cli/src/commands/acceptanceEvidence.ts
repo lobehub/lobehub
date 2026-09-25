@@ -19,7 +19,7 @@ export async function storageQuotaRecovery(client: TrpcClient) {
   const serverUrl = new URL(resolveServerUrl());
   serverUrl.username = '';
   serverUrl.password = '';
-  // Cloud's API still uses app.lobehub.com; user-facing pages use lobehub.com.
+  // Cloud's workspace resources and billing pages use the apex domain.
   if (serverUrl.origin === 'https://app.lobehub.com') serverUrl.hostname = 'lobehub.com';
   const workspaceId = resolveWorkspaceId();
   let cleanupUrl: string | undefined;
@@ -43,7 +43,10 @@ export async function storageQuotaRecovery(client: TrpcClient) {
       guidance = `Could not verify workspace ${workspaceId}. Run lh workspace current and lh workspace list to check the scope, then ask its owner/admin to clean up workspace files or upgrade the workspace plan. Recovery links are unavailable; do not invent links or substitute personal pages.`;
     }
   } else {
-    cleanupUrl = new URL('/acceptance', serverUrl).toString();
+    // The apex /acceptance route is marketing; cleanup needs the App's manager.
+    const acceptanceOrigin =
+      serverUrl.origin === 'https://lobehub.com' ? 'https://app.lobehub.com' : serverUrl;
+    cleanupUrl = new URL('/acceptance', acceptanceOrigin).toString();
     upgradeUrl = new URL('/settings/plans', serverUrl).toString();
     guidance = `Free space: ${cleanupUrl} — delete unneeded acceptances and select the option to permanently delete all rounds, reports, and evidence files. This cannot be undone; deleting only the acceptance record does not free file storage.\nUpgrade your plan: ${upgradeUrl}`;
   }
