@@ -600,6 +600,46 @@ describe('AbandonOperationService', () => {
     expect(coord.deleteAgentOperation).not.toHaveBeenCalled();
   });
 
+  it("backfills a continued sub-agent's own placeholder, not the thread's first one", async () => {
+    findOperationMock.mockResolvedValue({
+      parentOperationId: 'op_parent',
+      threadId: 'thread_1',
+    });
+    // The reused thread still points at the placeholder of its FIRST run.
+    findThreadMock.mockResolvedValue({ sourceMessageId: 'msg_first_placeholder' });
+
+    const coord = buildCoordinator({
+      loadAgentState: vi.fn().mockResolvedValue(
+        stateWith({
+          metadata: { assistantMessageId: 'msg_assist_2' },
+          origin: {
+            threadId: 'thread_1',
+            userId: 'user_x',
+            workspaceId: 'ws_1',
+            lineage: {
+              isSubAgent: true,
+              progressAnchor: {
+                parentOperationId: 'op_parent',
+                toolMessageId: 'msg_followup_placeholder',
+              },
+            },
+          },
+        }),
+      ),
+    });
+    const store = buildStore();
+    store.loadPartial.mockResolvedValue(null);
+
+    const svc = new AbandonOperationService({} as any, {
+      coordinator: coord as any,
+      snapshotStore: store as any,
+    });
+
+    const result = await svc.finalizeAbandoned('op_child', 'inactivity_watchdog');
+
+    expect(result.subAgentResume?.toolMessageId).toBe('msg_followup_placeholder');
+  });
+
   it('omits subAgentResume for an isolated group member (orchestrationRole=member)', async () => {
     findOperationMock.mockResolvedValue({
       parentOperationId: 'op_supervisor',

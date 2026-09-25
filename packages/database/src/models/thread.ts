@@ -1,6 +1,6 @@
-import type { CreateThreadParams } from '@lobechat/types';
+import type { CreateThreadParams, ThreadMetadata } from '@lobechat/types';
 import { RequestTrigger, ThreadStatus } from '@lobechat/types';
-import { and, desc, eq, notExists, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, notExists, sql } from 'drizzle-orm';
 
 import type { ThreadItem } from '../schemas';
 import { agentOperations, messages, threads } from '../schemas';
@@ -161,6 +161,40 @@ export class ThreadModel {
     return this.db.query.threads.findFirst({
       where: and(eq(threads.id, id), this.ownership()),
     });
+  };
+
+  /**
+   * Compare-and-set an existing thread into `processing` for a new run.
+   *
+   * Succeeds only while the row still carries the `status` and
+   * `metadata.operationId` the caller validated, so two concurrent follow-ups
+   * to the same sub-agent thread cannot both start a run on it.
+   *
+   * @returns whether this caller won the claim
+   */
+  claimForRun = async (
+    id: string,
+    expected: { operationId?: string | null; status?: string | null },
+    metadata: ThreadMetadata,
+  ): Promise<boolean> => {
+    const rows = await this.db
+      .update(threads)
+      .set({ metadata, status: ThreadStatus.Processing, updatedAt: new Date() })
+      .where(
+        and(
+          eq(threads.id, id),
+          this.ownership(),
+          expected.status
+            ? eq(threads.status, expected.status as ThreadStatus)
+            : isNull(threads.status),
+          expected.operationId
+            ? sql`${threads.metadata} ->> 'operationId' = ${expected.operationId}`
+            : sql`${threads.metadata} ->> 'operationId' IS NULL`,
+        ),
+      )
+      .returning({ id: threads.id });
+
+    return rows.length > 0;
   };
 
   update = async (id: string, value: Partial<ThreadItem>) => {

@@ -29,8 +29,8 @@ describe('shouldShowCustomToolRender', () => {
     expect(
       shouldShowCustomToolRender({
         ...subAgent,
-        apiName: LobeAgentApiName.getSubAgentRun,
-        result: { error: 'Inspection failed', state: { threadId: 'thd_saved' } },
+        apiName: LobeAgentApiName.createTodos,
+        result: { error: 'Todo update failed', state: { threadId: 'thd_saved' } },
       }),
     ).toBe(false);
   });

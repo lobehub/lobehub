@@ -44,7 +44,7 @@ export interface AbandonedSubAgentResume {
    */
   streamOwnerUserId?: string;
   threadId: string;
-  /** The parent's placeholder `role: 'tool'` message to backfill (= thread.sourceMessageId). */
+  /** The parent's placeholder `role: 'tool'` message this run reports to. */
   toolMessageId: string;
   userId: string;
   workspaceId?: string;
@@ -207,8 +207,11 @@ export class AbandonOperationService {
     // otherwise wait on this slot forever. We surface the ids the caller needs
     // to backfill the placeholder tool message and CAS-resume the parent.
     // parentOperationId + threadId live on the (persistent) operation row;
-    // toolMessageId is the thread's sourceMessageId (the parent's placeholder),
-    // set when the sub-agent was dispatched. When this is set, the coordinator
+    // toolMessageId is this run's own placeholder (`lineage.progressAnchor`),
+    // falling back to the thread's sourceMessageId. The fallback alone is not
+    // enough: a continued sub-agent (`callSubAgent({ subAgentId })`) reuses its
+    // thread, whose sourceMessageId is the FIRST run's placeholder, while the
+    // parent now waits on a new one. When this is set, the coordinator
     // cleanup below is SKIPPED so the durable resume can still resolve userId.
     //
     // Isolated group members ALSO run with `isSubAgent: true` and an isolation
@@ -231,10 +234,15 @@ export class AbandonOperationService {
         const parentOperationId = opRow?.parentOperationId ?? undefined;
         const threadId = opRow?.threadId ?? origin.threadId ?? undefined;
         if (parentOperationId && threadId) {
-          const thread = await new ThreadModel(this.db, origin.userId, origin.workspaceId).findById(
-            threadId,
-          );
-          const toolMessageId = thread?.sourceMessageId ?? undefined;
+          const anchoredToolMessageId =
+            origin.lineage?.progressAnchor?.parentOperationId === parentOperationId
+              ? origin.lineage.progressAnchor.toolMessageId
+              : undefined;
+          const toolMessageId =
+            anchoredToolMessageId ??
+            (await new ThreadModel(this.db, origin.userId, origin.workspaceId).findById(threadId))
+              ?.sourceMessageId ??
+            undefined;
           if (toolMessageId) {
             result.subAgentResume = {
               parentOperationId,

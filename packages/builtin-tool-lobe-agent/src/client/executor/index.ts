@@ -437,10 +437,21 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
       return nestedSubAgentDisabledResult();
     }
 
-    const { description, instruction, inheritMessages, timeout } = params;
+    const { description, instruction, inheritMessages, subAgentId, timeout } = params;
 
     if (!description || !instruction) {
       return { content: 'Sub-agent description and instruction are required.', success: false };
+    }
+
+    // Continuing an earlier sub-agent is implemented by the server runtime only.
+    // Fail loudly instead of silently starting a fresh sub-agent that has none
+    // of the earlier sub-agent's history.
+    if (subAgentId) {
+      return {
+        content:
+          'Continuing an earlier sub-agent (subAgentId) is not supported in this runtime. Omit subAgentId to start a new sub-agent.',
+        success: false,
+      };
     }
 
     if (!ctx.subAgent) {

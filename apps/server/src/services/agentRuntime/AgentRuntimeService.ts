@@ -17,6 +17,11 @@ import {
   isParkedStatus,
 } from '@lobechat/agent-runtime';
 import type { ISnapshotStore } from '@lobechat/agent-tracing';
+import {
+  appendSubAgentReference,
+  LobeAgentApiName,
+  LobeAgentIdentifier,
+} from '@lobechat/builtin-tool-lobe-agent';
 import { dynamicInterventionAudits } from '@lobechat/builtin-tools/dynamicInterventionAudits';
 import { parse } from '@lobechat/conversation-flow';
 import { getModelPropertyWithFallback } from '@lobechat/model-runtime';
@@ -3468,11 +3473,17 @@ export class AgentRuntimeService {
       }
     }
     const errorReason = failed ? formatSubAgentErrorReason(finalState?.error) : undefined;
-    const content = failed
+    const resultContent = failed
       ? errorReason
         ? `Sub-agent did not complete (${reason}): ${errorReason}`
         : `Sub-agent did not complete (${reason}).`
       : lastAssistantContent || 'Sub-agent completed without a textual answer.';
+    // callSubAgent results carry the sub-agent id so the parent can later send
+    // this same sub-agent a follow-up (`callSubAgent({ subAgentId })`) — e.g.
+    // to hand over what it gathered before failing — instead of redoing it.
+    const content = (await this.isCallSubAgentToolMessage(toolMessageId, threadId))
+      ? appendSubAgentReference(resultContent, threadId)
+      : resultContent;
 
     const backfill = await this.messageModel.updateToolMessage(toolMessageId, {
       content,
@@ -3506,6 +3517,28 @@ export class AgentRuntimeService {
       { parentOperationId },
       { knownFulfilledMessageId: toolMessageId, scheduleVerifyOnHold: true },
     );
+  }
+
+  /**
+   * Whether the bridged placeholder belongs to `lobe-agent.callSubAgent` (the
+   * same bridge also serves `callAgent`, whose children cannot be continued).
+   * Best-effort: a failed lookup only drops the id trailer, never the bridge.
+   */
+  private async isCallSubAgentToolMessage(
+    toolMessageId: string,
+    threadId: string | undefined,
+  ): Promise<boolean> {
+    if (!threadId) return false;
+    try {
+      const plugin = await this.messageModel.findMessagePlugin(toolMessageId);
+      return (
+        plugin?.identifier === LobeAgentIdentifier &&
+        plugin.apiName === LobeAgentApiName.callSubAgent
+      );
+    } catch (error) {
+      log('[%s] sub-agent bridge: failed to read tool plugin: %O', toolMessageId, error);
+      return false;
+    }
   }
 
   /**

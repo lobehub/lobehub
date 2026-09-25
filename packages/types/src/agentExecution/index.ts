@@ -516,6 +516,12 @@ export interface ExecVirtualSubAgentParams {
   parentOperationId: string;
   /** Provider for {@link model}. */
   provider?: string;
+  /**
+   * Existing isolation thread of an earlier `callSubAgent` run to continue.
+   * When set, the instruction becomes a new turn on that thread (the sub-agent
+   * keeps its history) instead of a new thread being created.
+   */
+  threadId?: string;
   /** Timeout in milliseconds (optional) */
   timeout?: number;
   /** Thread title shown in UI */

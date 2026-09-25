@@ -12,10 +12,14 @@ vi.mock('@/libs/trusted-client', () => ({
 
 // Mock ThreadModel
 const mockThreadModel = {
+  claimForRun: vi.fn(),
   create: vi.fn(),
   findById: vi.fn(),
   update: vi.fn(),
 };
+
+const mockOperationFindById = vi.fn();
+const mockFindMessagePlugin = vi.fn();
 
 vi.mock('@/database/models/thread', () => ({
   ThreadModel: vi.fn().mockImplementation(function () {
@@ -26,7 +30,7 @@ vi.mock('@/database/models/thread', () => ({
 vi.mock('@/database/models/agentOperation', () => ({
   AgentOperationModel: vi.fn().mockImplementation(function () {
     return {
-      findById: vi.fn().mockResolvedValue({ trigger: 'cli' }),
+      findById: mockOperationFindById,
     };
   }),
 }));
@@ -45,6 +49,7 @@ vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn().mockImplementation(function () {
     return {
       create: vi.fn().mockResolvedValue({ id: 'msg-1' }),
+      findMessagePlugin: mockFindMessagePlugin,
       getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
       getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
       query: vi.fn().mockResolvedValue([]),
@@ -142,6 +147,7 @@ describe('AiAgentService.execSubAgent', () => {
       sourceMessageId: 'parent-msg-1',
     });
     mockThreadModel.update.mockResolvedValue({});
+    mockOperationFindById.mockResolvedValue({ trigger: 'cli' });
 
     service = new AiAgentService(mockDb, userId);
   });
@@ -563,6 +569,167 @@ describe('AiAgentService.execSubAgent', () => {
 
       expect(onCompleteHook).toBeDefined();
       expect(onCompleteHook!.handler).toBeInstanceOf(Function);
+    });
+  });
+
+  describe('continuing an earlier callSubAgent thread', () => {
+    const execAgentResult = {
+      agentId: 'agent-1',
+      assistantMessageId: 'assistant-msg-2',
+      autoStarted: true,
+      createdAt: new Date().toISOString(),
+      message: 'Agent operation created successfully',
+      messageId: 'queue-msg-2',
+      operationId: 'op-new',
+      status: 'created',
+      success: true,
+      timestamp: new Date().toISOString(),
+      topicId: 'topic-1',
+      userMessageId: 'user-msg-2',
+    };
+
+    const followUp = {
+      agentId: 'agent-1',
+      instruction: 'Hand over what you found so far',
+      parentMessageId: 'tool-msg-2',
+      parentOperationId: 'parent-op-2',
+      threadId: 'thread-old',
+      topicId: 'topic-1',
+    };
+
+    beforeEach(() => {
+      mockThreadModel.findById.mockResolvedValue({
+        agentId: 'agent-1',
+        id: 'thread-old',
+        metadata: { operationId: 'op-old' },
+        sourceMessageId: 'tool-msg-1',
+        status: ThreadStatus.Failed,
+        topicId: 'topic-1',
+        type: ThreadType.Isolation,
+      });
+      mockThreadModel.claimForRun.mockResolvedValue(true);
+      mockFindMessagePlugin.mockResolvedValue({
+        apiName: 'callSubAgent',
+        identifier: 'lobe-agent',
+      });
+      mockOperationFindById.mockImplementation(async (id: string) =>
+        id === 'op-old' ? { status: 'error' } : { trigger: 'cli' },
+      );
+    });
+
+    it('runs the new instruction on the same thread and reports to the new placeholder', async () => {
+      const execAgentSpy = vi.spyOn(service, 'execAgent').mockResolvedValue(execAgentResult);
+
+      const result = await service.execVirtualSubAgent(followUp);
+
+      expect(mockThreadModel.create).not.toHaveBeenCalled();
+      expect(mockThreadModel.claimForRun).toHaveBeenCalledWith(
+        'thread-old',
+        { operationId: 'op-old', status: ThreadStatus.Failed },
+        { startedAt: expect.any(String) },
+      );
+      expect(execAgentSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          appContext: expect.objectContaining({
+            isSubAgent: true,
+            subAgentProgress: { parentOperationId: 'parent-op-2', toolMessageId: 'tool-msg-2' },
+            threadId: 'thread-old',
+          }),
+          hooks: expect.arrayContaining([
+            expect.objectContaining({
+              id: 'sub-agent-bridge',
+              webhook: expect.objectContaining({
+                body: {
+                  parentOperationId: 'parent-op-2',
+                  threadId: 'thread-old',
+                  toolMessageId: 'tool-msg-2',
+                },
+              }),
+            }),
+          ]),
+          parentOperationId: 'parent-op-2',
+          prompt: 'Hand over what you found so far',
+        }),
+      );
+      expect(result).toMatchObject({
+        operationId: 'op-new',
+        success: true,
+        threadId: 'thread-old',
+      });
+    });
+
+    it('allows a stale processing thread whose run was abandoned', async () => {
+      mockThreadModel.findById.mockResolvedValue({
+        agentId: 'agent-1',
+        id: 'thread-old',
+        metadata: { operationId: 'op-old' },
+        sourceMessageId: 'tool-msg-1',
+        status: ThreadStatus.Processing,
+        topicId: 'topic-1',
+        type: ThreadType.Isolation,
+      });
+      mockOperationFindById.mockImplementation(async (id: string) =>
+        id === 'op-old' ? { status: 'abandoned' } : { trigger: 'cli' },
+      );
+      vi.spyOn(service, 'execAgent').mockResolvedValue(execAgentResult);
+
+      await expect(service.execVirtualSubAgent(followUp)).resolves.toMatchObject({
+        success: true,
+      });
+    });
+
+    it.each([
+      [
+        'its previous run is still going',
+        () => mockOperationFindById.mockResolvedValue({ status: 'running' }),
+        'still running',
+      ],
+      [
+        'another follow-up claimed it first',
+        () => mockThreadModel.claimForRun.mockResolvedValue(false),
+        'still running',
+      ],
+      [
+        'it belongs to another topic',
+        () =>
+          mockThreadModel.findById.mockResolvedValue({
+            agentId: 'agent-1',
+            id: 'thread-old',
+            sourceMessageId: 'tool-msg-1',
+            status: ThreadStatus.Failed,
+            topicId: 'topic-other',
+            type: ThreadType.Isolation,
+          }),
+        'not found',
+      ],
+      [
+        'it was not started by callSubAgent',
+        () =>
+          mockFindMessagePlugin.mockResolvedValue({
+            apiName: 'callAgent',
+            identifier: 'lobe-agent-management',
+          }),
+        'not a sub-agent',
+      ],
+    ])('refuses to start when %s', async (_case, arrange, error) => {
+      arrange();
+      const execAgentSpy = vi.spyOn(service, 'execAgent');
+
+      const result = await service.execVirtualSubAgent(followUp);
+
+      expect(execAgentSpy).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect(result.error).toContain(error);
+    });
+
+    it('marks the claimed thread failed when the run cannot be created', async () => {
+      vi.spyOn(service, 'execAgent').mockRejectedValue(new Error('db down'));
+
+      await expect(service.execVirtualSubAgent(followUp)).rejects.toThrow('db down');
+      expect(mockThreadModel.update).toHaveBeenCalledWith(
+        'thread-old',
+        expect.objectContaining({ status: ThreadStatus.Failed }),
+      );
     });
   });
 });

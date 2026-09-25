@@ -930,6 +930,57 @@ describe('lobeAgentRuntime', () => {
       expect(result).toMatchObject({ error: { code: 'SUB_AGENT_START_FAILED' } });
     });
 
+    it('passes subAgentId to the runner to continue an earlier sub-agent', async () => {
+      const runtime = lobeAgentRuntime.factory(baseContext);
+      const run = vi
+        .fn()
+        .mockResolvedValue({ started: true, subOperationId: 'sub-op-2', threadId: 'thread-1' });
+
+      const result = await runtime.callSubAgent(
+        {
+          description: 'Hand over',
+          instruction: 'Summarize your findings',
+          subAgentId: ' thread-1 ',
+        },
+        { ...baseContext, subAgent: { run } } as ToolExecutionContext,
+      );
+
+      expect(run).toHaveBeenCalledWith(expect.objectContaining({ subAgentId: 'thread-1' }));
+      expect(result).toMatchObject({ deferred: true, state: { threadId: 'thread-1' } });
+    });
+
+    it('explains why an earlier sub-agent could not be continued', async () => {
+      const runtime = lobeAgentRuntime.factory(baseContext);
+      const run = vi.fn().mockResolvedValue({
+        error: 'Sub-agent "thread-1" is still running.',
+        started: false,
+        threadId: 'thread-1',
+      });
+
+      const result = await runtime.callSubAgent(
+        { description: 'Hand over', instruction: 'Summarize', subAgentId: 'thread-1' },
+        { ...baseContext, subAgent: { run } } as ToolExecutionContext,
+      );
+
+      expect(result.deferred).toBeUndefined();
+      expect(result.content).toBe(
+        'Sub-agent could not be continued: Sub-agent "thread-1" is still running.',
+      );
+    });
+
+    it('rejects an empty subAgentId instead of silently starting a new sub-agent', async () => {
+      const runtime = lobeAgentRuntime.factory(baseContext);
+      const run = vi.fn();
+
+      const result = await runtime.callSubAgent(
+        { description: 'Hand over', instruction: 'Summarize', subAgentId: '  ' },
+        { ...baseContext, subAgent: { run } } as ToolExecutionContext,
+      );
+
+      expect(result).toMatchObject({ error: { code: 'INVALID_ARGUMENTS' }, success: false });
+      expect(run).not.toHaveBeenCalled();
+    });
+
     it('fails (not deferred) when no sub-agent runner is available', async () => {
       const runtime = lobeAgentRuntime.factory(baseContext);
 

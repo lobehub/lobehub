@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { useChatStore } from '@/store/chat';
 import { portalThreadSelectors, threadSelectors } from '@/store/chat/selectors';
 
+import { stripSubAgentReference } from '../../../subAgentReference';
 import type { CallSubAgentParams, CallSubAgentState } from '../../../types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -60,7 +61,7 @@ export const CallSubAgentRender = memo<
   const { t } = useTranslation('plugin');
   const { t: tChat } = useTranslation('chat');
   const prompt = args?.instruction?.trim();
-  const result = typeof content === 'string' ? content.trim() : '';
+  const result = typeof content === 'string' ? stripSubAgentReference(content).trim() : '';
   const threadId = pluginState?.threadId;
 
   const subagentThread = useChatStore((s) =>

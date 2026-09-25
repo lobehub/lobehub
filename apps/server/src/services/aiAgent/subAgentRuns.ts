@@ -1,9 +1,12 @@
+import { LobeAgentApiName, LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
 import type {
+  AgentOperationStatus,
   ExecAgentResult,
   ExecSubAgentParams,
   ExecSubAgentResult,
   ExecVirtualSubAgentParams,
   LobeAgentChatConfig,
+  ThreadMetadata,
 } from '@lobechat/types';
 import { ThreadStatus, ThreadType } from '@lobechat/types';
 import debug from 'debug';
@@ -82,6 +85,76 @@ export interface ExecAgentThreadRunOptions {
 }
 
 /**
+ * Operation states after which a run can no longer write to its thread. Used
+ * instead of the thread row's own `status`, which is not authoritative: the
+ * inactivity watchdog abandons a stuck operation without touching its thread.
+ */
+const SETTLED_OPERATION_STATUSES = new Set<AgentOperationStatus>([
+  'abandoned',
+  'done',
+  'error',
+  'interrupted',
+]);
+
+type ThreadRow = NonNullable<Awaited<ReturnType<ThreadModel['findById']>>>;
+
+/**
+ * Take over an earlier `callSubAgent` isolation thread for a new turn, so the
+ * same sub-agent continues on its preserved history.
+ *
+ * Refuses threads outside the parent's topic/agent, threads not created by
+ * `callSubAgent` (group members, `callAgent` children, …), and threads whose
+ * previous run is still going. The final compare-and-set claim makes
+ * concurrent follow-ups to one sub-agent race-safe.
+ */
+const claimSubAgentThread = async (
+  deps: SubAgentRunDeps,
+  params: { agentId: string; threadId: string; topicId: string },
+  metadata: ThreadMetadata,
+): Promise<{ error: string } | { thread: ThreadRow }> => {
+  const { agentId, threadId, topicId } = params;
+  const thread = await deps.threadModel.findById(threadId);
+
+  if (
+    !thread ||
+    thread.type !== ThreadType.Isolation ||
+    thread.topicId !== topicId ||
+    thread.agentId !== agentId
+  ) {
+    return { error: `Sub-agent "${threadId}" was not found in this conversation.` };
+  }
+
+  const sourcePlugin = thread.sourceMessageId
+    ? await deps.messageModel.findMessagePlugin(thread.sourceMessageId)
+    : undefined;
+  if (
+    sourcePlugin?.identifier !== LobeAgentIdentifier ||
+    sourcePlugin.apiName !== LobeAgentApiName.callSubAgent
+  ) {
+    return { error: `"${threadId}" is not a sub-agent started by callSubAgent.` };
+  }
+
+  const previousOperationId = (thread.metadata as ThreadMetadata | null)?.operationId;
+  const previousOperation = previousOperationId
+    ? await deps.agentOperationModel.findById(previousOperationId)
+    : null;
+  const stillRunning = previousOperation
+    ? !SETTLED_OPERATION_STATUSES.has(previousOperation.status)
+    : thread.status === ThreadStatus.Processing;
+  const busyError = `Sub-agent "${threadId}" is still running. Wait for its result before sending it another instruction.`;
+
+  if (stillRunning) return { error: busyError };
+
+  const claimed = await deps.threadModel.claimForRun(
+    thread.id,
+    { operationId: previousOperationId ?? null, status: thread.status },
+    metadata,
+  );
+
+  return claimed ? { thread } : { error: busyError };
+};
+
+/**
  * Execute an agent in an isolated Thread context: create the isolation thread,
  * register thread-lifecycle (and optionally completion-bridge) hooks, delegate
  * the turn to `execAgent`, and keep the thread row's status/metadata in sync.
@@ -116,28 +189,69 @@ export const execAgentThreadRun = async (
       .catch(() => {});
   }
 
-  // 1. Create Thread for isolated agent execution
-  const thread = await deps.threadModel.create({
-    agentId,
-    groupId,
-    sourceMessageId: parentMessageId,
-    title,
-    topicId,
-    type: ThreadType.Isolation,
-  });
-
-  if (!thread) {
-    throw new Error('Failed to create thread for agent execution');
-  }
-
-  log('%s: created thread %s', options.logScope, thread.id);
-
-  // 2. Update Thread status to processing with startedAt timestamp
   const startedAt = new Date().toISOString();
-  await deps.threadModel.update(thread.id, {
-    metadata: { startedAt },
-    status: ThreadStatus.Processing,
-  });
+  const continueThreadId = 'threadId' in params ? params.threadId : undefined;
+  let thread: ThreadRow;
+
+  if (continueThreadId) {
+    // 1-2. Continue an earlier callSubAgent thread: claim it (→ processing).
+    // The new instruction lands as the next user turn on that thread, so the
+    // sub-agent keeps its full history. Its original source message stays the
+    // thread anchor; this run reports to the new placeholder (`parentMessageId`).
+    const claim = await claimSubAgentThread(
+      deps,
+      { agentId, threadId: continueThreadId, topicId },
+      { startedAt },
+    );
+
+    if ('error' in claim) {
+      log('%s: cannot continue thread %s: %s', options.logScope, continueThreadId, claim.error);
+      if (parentOperationId) {
+        hookDispatcher
+          .dispatch(parentOperationId, 'onCallAgentError', {
+            agentId,
+            error: claim.error,
+            operationId: parentOperationId,
+            userId: deps.userId,
+          })
+          .catch(() => {});
+      }
+
+      return {
+        assistantMessageId: '',
+        error: claim.error,
+        operationId: '',
+        success: false,
+        threadId: continueThreadId,
+      };
+    }
+
+    thread = claim.thread;
+    log('%s: continuing thread %s', options.logScope, thread.id);
+  } else {
+    // 1. Create Thread for isolated agent execution
+    const created = await deps.threadModel.create({
+      agentId,
+      groupId,
+      sourceMessageId: parentMessageId,
+      title,
+      topicId,
+      type: ThreadType.Isolation,
+    });
+
+    if (!created) {
+      throw new Error('Failed to create thread for agent execution');
+    }
+
+    thread = created;
+    log('%s: created thread %s', options.logScope, thread.id);
+
+    // 2. Update Thread status to processing with startedAt timestamp
+    await deps.threadModel.update(thread.id, {
+      metadata: { startedAt },
+      status: ThreadStatus.Processing,
+    });
+  }
 
   // 3. Create hooks for updating Thread metadata and source message
   const threadHooks = createThreadHooks(
@@ -206,22 +320,35 @@ export const execAgentThreadRun = async (
   // 4. Delegate to execAgent with threadId in appContext and hooks
   // The instruction will be created as user message in the Thread
   // Use headless mode to skip human approval in async agent execution
-  const result = await deps.execAgent({
-    agentId,
-    appContext,
-    autoStart: true,
-    chatConfigOverride: options.chatConfig,
-    deviceId: options.deviceId,
-    hooks,
-    localDeviceId: options.localDeviceId,
-    // Explicit sub-agent model override resolved at the spawn site.
-    model: options.model,
-    parentOperationId,
-    prompt: instruction,
-    provider: options.provider,
-    trigger: inheritedTrigger,
-    userInterventionConfig: { approvalMode: 'headless' },
-  });
+  let result: ExecAgentResult;
+  try {
+    result = await deps.execAgent({
+      agentId,
+      appContext,
+      autoStart: true,
+      chatConfigOverride: options.chatConfig,
+      deviceId: options.deviceId,
+      hooks,
+      localDeviceId: options.localDeviceId,
+      // Explicit sub-agent model override resolved at the spawn site.
+      model: options.model,
+      parentOperationId,
+      prompt: instruction,
+      provider: options.provider,
+      trigger: inheritedTrigger,
+      userInterventionConfig: { approvalMode: 'headless' },
+    });
+  } catch (error) {
+    // Without an operation id a `processing` thread reads as "still running"
+    // forever, which would lock the sub-agent against any later follow-up.
+    await deps.threadModel
+      .update(thread.id, {
+        metadata: { completedAt: new Date().toISOString(), error: String(error), startedAt },
+        status: ThreadStatus.Failed,
+      })
+      .catch(() => {});
+    throw error;
+  }
 
   log(
     '%s: delegated to execAgent, operationId=%s, success=%s',

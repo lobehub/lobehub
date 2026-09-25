@@ -248,7 +248,7 @@ export const buildServerVirtualSubAgentRunner = (
   const parentDeviceId = resolveRunActiveDeviceId(state);
 
   return {
-    run: async ({ agentId: targetAgentId, description, instruction, timeout }) => {
+    run: async ({ agentId: targetAgentId, description, instruction, subAgentId, timeout }) => {
       // This runner serves two tools, and only one of them may swap the model:
       //   - `callSubAgent` names no agent, so the child is an anonymous clone of
       //     the parent — it takes the parent's `agencyConfig.subagent` override,
@@ -277,7 +277,11 @@ export const buildServerVirtualSubAgentRunner = (
         groupId: state.origin?.groupId ?? undefined,
         parentId: parentMessageId,
         plugin: chatToolPayload as any,
-        pluginState: { status: 'pending' },
+        // A continued sub-agent already has its thread, so the card can link to
+        // it while the new turn is still running.
+        pluginState: subAgentId
+          ? { status: 'pending', threadId: subAgentId }
+          : { status: 'pending' },
         role: 'tool',
         threadId: state.origin?.threadId,
         tool_call_id: chatToolPayload.id,
@@ -298,6 +302,7 @@ export const buildServerVirtualSubAgentRunner = (
         parentMessageId: placeholder.id,
         parentOperationId: ctx.operationId,
         provider: subAgentModel?.provider,
+        threadId: subAgentId,
         timeout,
         title: description,
         topicId,

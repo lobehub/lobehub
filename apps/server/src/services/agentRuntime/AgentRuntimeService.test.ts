@@ -3275,6 +3275,47 @@ describe('AgentRuntimeService', () => {
       );
     });
 
+    it('ends a callSubAgent result with the sub-agent id so the parent can continue it', async () => {
+      (service as any).messageModel.findMessagePlugin = vi
+        .fn()
+        .mockResolvedValue({ apiName: 'callSubAgent', identifier: 'lobe-agent' });
+
+      await service.completeSubAgentBridge({ ...bridgeParams, finalState: childState as any });
+      await service.completeSubAgentBridge({
+        ...bridgeParams,
+        finalState: { ...childState, error: { message: 'Budget exceeded' } } as any,
+        reason: 'error',
+      });
+
+      expect(updateToolMessage).toHaveBeenNthCalledWith(
+        1,
+        'tool-msg-1',
+        expect.objectContaining({ content: 'final answer\n\n<sub_agent id="thread-1" />' }),
+      );
+      expect(updateToolMessage).toHaveBeenNthCalledWith(
+        2,
+        'tool-msg-1',
+        expect.objectContaining({
+          content: expect.stringMatching(
+            /^Sub-agent did not complete \(error\): .*\n\n<sub_agent id="thread-1" \/>$/,
+          ),
+        }),
+      );
+    });
+
+    it('leaves callAgent results without a sub-agent id', async () => {
+      (service as any).messageModel.findMessagePlugin = vi
+        .fn()
+        .mockResolvedValue({ apiName: 'callAgent', identifier: 'lobe-agent-management' });
+
+      await service.completeSubAgentBridge({ ...bridgeParams, finalState: childState as any });
+
+      expect(updateToolMessage).toHaveBeenCalledWith(
+        'tool-msg-1',
+        expect.objectContaining({ content: 'final answer' }),
+      );
+    });
+
     it('loads the child state from the coordinator when finalState is not passed (webhook path)', async () => {
       mockCoordinator.loadAgentState.mockResolvedValue(childState);
 
