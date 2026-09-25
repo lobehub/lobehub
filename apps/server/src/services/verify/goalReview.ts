@@ -1,3 +1,4 @@
+import { isDraftVerifyRun } from '@lobechat/const/verify';
 import type { VerifyRunMetadata } from '@lobechat/types';
 
 import { GoalModel } from '@/database/models/goal';
@@ -52,11 +53,18 @@ export const reviewGoalDelivery = async (
     const acceptance = await service.acceptanceModel.findById(run.acceptanceId);
     if (!acceptance) throw new Error(REVIEW_BLOCKERS.acceptanceMissing);
     const { results, runs } = await service.loadRounds(acceptance.id);
+    // An unconfirmed draft was never frozen, so its checks are not part of the
+    // contract being judged. It can sit behind an executed round — an abandoned
+    // draft, or one a CLI-driven verification was appended past — and its
+    // result-less items would otherwise each read as missing evidence and turn a
+    // passing delivery into a rejection.
     const checks = buildAcceptanceCheckUnion(
-      runs.map((round) => ({
-        results: results.filter((result) => result.verifyRunId === round.id),
-        run: round,
-      })),
+      runs
+        .filter((round) => !isDraftVerifyRun(round))
+        .map((round) => ({
+          results: results.filter((result) => result.verifyRunId === round.id),
+          run: round,
+        })),
     ).filter((check) => check.required);
     if (!checks.length) throw new Error(REVIEW_BLOCKERS.noRequiredChecks);
 

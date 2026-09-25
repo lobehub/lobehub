@@ -238,6 +238,32 @@ describe('Goal automatic Acceptance review', () => {
   });
 
   /**
+   * Regression: an unconfirmed draft left in the round chain — abandoned, or one a
+   * CLI-driven verification was appended past — contributed result-less required
+   * checks to the union, each rejected as missing evidence, so a delivery that
+   * passed every confirmed check was sent back anyway.
+   */
+  it('judges only confirmed rounds, not a draft left in the chain', async () => {
+    mocks.rounds.mockResolvedValue({
+      runs: [
+        {
+          id: 'draft',
+          plan: [{ ...check, id: 'draft-only', title: 'Never confirmed' }],
+          planConfirmedAt: null,
+          roundIndex: 1,
+          status: 'planned',
+          userDecision: null,
+        },
+        { id: 'r1', plan: [check], planConfirmedAt: new Date(), roundIndex: 2, status: 'passed' },
+      ],
+      results: [result],
+    });
+
+    expect(await reviewGoalDelivery(db, 'u1', 't1', 'op1')).toMatchObject({ status: 'passed' });
+    expect(mocks.predict).toHaveBeenCalledTimes(1);
+  });
+
+  /**
    * The feedback is persisted on the run and quoted into the escalation, so an
    * unexpected backend failure must not carry SQL, identifiers or provider
    * diagnostics out of the server log.
