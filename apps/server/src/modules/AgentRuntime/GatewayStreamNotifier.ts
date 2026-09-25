@@ -6,6 +6,7 @@ import urlJoin from 'url-join';
 
 import { sanitizeVisitorError } from '@/database/models/message';
 
+import { shouldRecordGatewayError } from './gatewayErrorRecord';
 import {
   buildPublicEndEventData,
   buildPublicInitEventData,
@@ -354,6 +355,14 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     // snapshot, so dropping it here would break the SoT contract.
     const endEventData = {
       errorType,
+      // The gateway files errors on its board only when told to — the
+      // user-side / board-worthy decision lives here, next to the error spec.
+      ...(reason === 'error' && {
+        recordError: shouldRecordGatewayError({
+          errorType: rawErrorType,
+          provider: finalState?.modelRuntimeConfig?.provider,
+        }),
+      }),
       ...(!messagePatchMode && { finalState }),
       ...(messagePatchMode && { messagePatchMode: true, messageRevision }),
       reason,

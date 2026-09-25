@@ -584,6 +584,45 @@ describe('GatewayStreamNotifier', () => {
       expect(body.event.data.reasonDetail).toBe('Custom detail');
     });
 
+    describe('recordError', () => {
+      const endEventData = async (params: Record<string, any>) => {
+        await notifier.publishAgentRuntimeEnd({ operationId: 'op-1', stepIndex: 0, ...params });
+        await new Promise((r) => setTimeout(r, 50));
+        const pushCall = mockFetch.mock.calls.find((c: any[]) => c[0].includes('push-event'));
+        return JSON.parse(pushCall![1].body).event.data;
+      };
+
+      it('keeps a user-side error off the gateway board', async () => {
+        const data = await endEventData({
+          finalState: {
+            error: { message: 'insufficient quota', type: 'InsufficientQuota' },
+            modelRuntimeConfig: { model: 'gpt-5.6-sol', provider: 'openai' },
+          },
+          reason: 'error',
+        });
+
+        expect(data.recordError).toBe(false);
+      });
+
+      it('files a provider rate limit on our own provider', async () => {
+        const data = await endEventData({
+          finalState: {
+            error: { message: '429', type: 'RateLimitExceeded' },
+            modelRuntimeConfig: { model: 'claude-opus-5', provider: 'lobehub' },
+          },
+          reason: 'error',
+        });
+
+        expect(data.recordError).toBe(true);
+      });
+
+      it('omits the flag on a non-error end', async () => {
+        const data = await endEventData({ finalState: {}, reason: 'completed' });
+
+        expect(data).not.toHaveProperty('recordError');
+      });
+    });
+
     it('includes errorType from finalState.error.type', async () => {
       const finalState = {
         error: { message: 'Budget exceeded', type: 'InsufficientBudgetForModel' },
