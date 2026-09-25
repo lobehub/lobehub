@@ -1407,20 +1407,21 @@ export class AcceptanceService {
     const origin = [...runs].reverse().find((run) => run.metadata?.origin)?.metadata?.origin;
     if (!origin?.agentId && !origin?.topicId) return null;
 
-    const [agent, topic] = await Promise.all([
-      origin.agentId
-        ? new AgentModel(this.db, this.userId, this.workspaceId)
-            .getAgentAvatarsByIds([origin.agentId])
-            .then((rows) => rows[0] ?? null)
-            .catch(() => null)
-        : null,
-      origin.topicId
-        ? new TopicModel(this.db, this.userId, this.workspaceId)
-            .findById(origin.topicId)
-            .then((row) => (row ? { id: row.id, title: row.title ?? null } : null))
-            .catch(() => null)
-        : null,
-    ]);
+    const topicRow = origin.topicId
+      ? await new TopicModel(this.db, this.userId, this.workspaceId)
+          .findById(origin.topicId)
+          .catch(() => null)
+      : null;
+    // Dispatched runs (task / goal / device) record only the topic — the
+    // connector strips the ambient agent id — so the topic's own agent stands in.
+    const agentId = origin.agentId || topicRow?.agentId;
+    const agent = agentId
+      ? await new AgentModel(this.db, this.userId, this.workspaceId)
+          .getAgentAvatarsByIds([agentId])
+          .then((rows) => rows[0] ?? null)
+          .catch(() => null)
+      : null;
+    const topic = topicRow ? { id: topicRow.id, title: topicRow.title ?? null } : null;
     if (!agent && !topic) return null;
     return { agent, topic };
   };
