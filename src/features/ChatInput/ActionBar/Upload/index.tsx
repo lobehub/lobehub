@@ -16,6 +16,7 @@ import { preferenceSelectors } from '@/store/user/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useEffectiveModel } from '../../hooks/useEffectiveModel';
+import { useLargeFileLocalPath } from '../../hooks/useLargeFileLocalPath';
 import { useChatInputStore } from '../../store';
 import { type ActionDropdownMenuItems } from '../components/ActionDropdown';
 import { ChatInputAction } from '../components/ChatInputAction';
@@ -42,6 +43,7 @@ const FileUpload = memo(() => {
 
   const agentId = useAgentId();
   const { model, provider } = useEffectiveModel(agentId);
+  const routeLargeFilesToLocalPaths = useLargeFileLocalPath(agentId, editor);
 
   const { canUploadImage, canUploadVideo, canUploadAudio } = useMediaUploadAbility(
     model,
@@ -134,7 +136,8 @@ const FileUpload = memo(() => {
           onFiles={async (files) => {
             setDropdownOpen(false);
             editor?.focus();
-            await upload(files, agentId);
+            const filesToUpload = routeLargeFilesToLocalPaths(files);
+            if (filesToUpload.length > 0) await upload(filesToUpload, agentId);
           }}
         >
           <div className={cx(hotArea)}>{t('upload.action.fileUpload')}</div>

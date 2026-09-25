@@ -200,6 +200,9 @@ vi.mock('@/store/user/selectors', () => ({
 }));
 
 vi.mock('../hooks/useAgentId', () => ({ useAgentId: () => 'agent-id' }));
+vi.mock('../hooks/useLargeFileLocalPath', () => ({
+  useLargeFileLocalPath: () => (files: File[]) => files,
+}));
 vi.mock('../store', () => {
   const editor = {
     dispatchCommand: vi.fn(),
