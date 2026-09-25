@@ -65,3 +65,24 @@ describe('describeError', () => {
     expect(describeError(new Error('[not json'), t, 'fallback')).toBe('[not json');
   });
 });
+
+describe('refusals that arrive from the execution plane', () => {
+  it("translates the market's in-use code instead of the sentence naming a row id", () => {
+    // The market answers `{ error: ENVIRONMENT_IN_USE, error_description: 'Environment
+    // "e299f341-…" is currently in use by an active session' }`; forwarding the
+    // description put that uuid in a toast.
+    expect(describeError({ message: 'ENVIRONMENT_IN_USE' }, t, 'fallback')).toBe(
+      '<environments.instances.inUse>',
+    );
+  });
+
+  it('falls back rather than printing a code it has no sentence for', () => {
+    expect(describeError({ message: 'WORKSPACE_NOT_CONFIGURED' }, t, 'fallback')).toBe('fallback');
+  });
+
+  it('still shows a refusal written as a sentence', () => {
+    expect(describeError({ message: 'The folder is not empty' }, t, 'fallback')).toBe(
+      'The folder is not empty',
+    );
+  });
+});
