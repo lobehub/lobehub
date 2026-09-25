@@ -7,8 +7,12 @@ vi.mock('../../api/workspace', () => ({ resolveWorkspaceId: vi.fn() }));
 const { resolveWorkspaceId } = await import('../../api/workspace');
 
 const members = [
-  { user: { email: 'neko@ayaka.moe', username: 'neko' }, userId: 'user_neko' },
-  { user: { email: 'arvin@lobehub.com', username: 'arvinxx' }, userId: 'user_arvin' },
+  { role: 'member', user: { email: 'neko@ayaka.moe', username: 'neko' }, userId: 'user_neko' },
+  {
+    role: 'owner',
+    user: { email: 'arvin@lobehub.com', username: 'arvinxx' },
+    userId: 'user_arvin',
+  },
 ];
 
 const clientWith = (list = members) => {
@@ -41,7 +45,11 @@ describe('resolveAssigneeUserId', () => {
     vi.mocked(resolveWorkspaceId).mockReturnValue('ws-1');
     const list = [
       ...members,
-      { user: { email: 'ops@lobehub.com', username: 'user_ops' }, userId: 'user_real_ops' },
+      {
+        role: 'member',
+        user: { email: 'ops@lobehub.com', username: 'user_ops' },
+        userId: 'user_real_ops',
+      },
     ];
 
     await expect(resolveAssigneeUserId(clientWith(list).client, 'user_ops')).resolves.toBe(
@@ -72,9 +80,37 @@ describe('resolveAssigneeUserId', () => {
       /No workspace member/,
     );
 
-    const dup = [...members, { user: { email: 'x@y.z', username: 'neko' }, userId: 'user_other' }];
+    const dup = [
+      ...members,
+      { role: 'admin', user: { email: 'x@y.z', username: 'neko' }, userId: 'user_other' },
+    ];
     await expect(resolveAssigneeUserId(clientWith(dup).client, 'neko')).rejects.toThrow(
       /matches 2 members/,
     );
+  });
+
+  it('rejects a viewer, who cannot own tasks, instead of letting the mutation fail', async () => {
+    vi.mocked(resolveWorkspaceId).mockReturnValue('ws-1');
+    const list = [
+      ...members,
+      { role: 'viewer', user: { email: 'v@lobehub.com', username: 'viewer' }, userId: 'user_v' },
+    ];
+
+    await expect(resolveAssigneeUserId(clientWith(list).client, 'viewer')).rejects.toThrow(
+      /is a viewer .* can't be assigned tasks/,
+    );
+    await expect(resolveAssigneeUserId(clientWith(list).client, 'user_v')).rejects.toThrow(
+      /is a viewer/,
+    );
+  });
+
+  it('does not let a viewer sharing a username make an eligible match ambiguous', async () => {
+    vi.mocked(resolveWorkspaceId).mockReturnValue('ws-1');
+    const list = [
+      ...members,
+      { role: 'viewer', user: { email: 'n2@x.io', username: 'neko' }, userId: 'user_v' },
+    ];
+
+    await expect(resolveAssigneeUserId(clientWith(list).client, 'neko')).resolves.toBe('user_neko');
   });
 });
