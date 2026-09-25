@@ -712,7 +712,7 @@ export const verifyRouter = router({
     .input(
       z.object({
         event: z.enum(acceptanceInstallEvents).default('install'),
-        version: z.string().min(1).optional(),
+        version: z.string().min(1).max(128).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {

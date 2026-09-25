@@ -266,6 +266,25 @@ describe('verifyRouter', () => {
         version: '0.6.0-beta.1',
       });
     });
+
+    it('records a version label at the 128-character limit without truncation', async () => {
+      const version = 'v'.repeat(128);
+
+      await createCaller().trackAcceptanceInstall({ version });
+
+      expect(modelMocks.recordAcceptanceInstall).toHaveBeenCalledExactlyOnceWith({
+        event: 'install',
+        version,
+      });
+    });
+
+    it('rejects a 129-character version before writing an event', async () => {
+      await expect(
+        createCaller().trackAcceptanceInstall({ version: 'v'.repeat(129) }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+      expect(modelMocks.recordAcceptanceInstall).not.toHaveBeenCalled();
+    });
   });
 
   describe('generateCriteria', () => {
