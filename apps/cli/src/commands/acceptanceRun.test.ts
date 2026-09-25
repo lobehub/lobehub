@@ -99,7 +99,7 @@ describe('acceptance publication with missing evidence', () => {
 
     expect(process.exitCode).toBe(1);
     expect(result()).toMatchObject({
-      acceptanceUrl: 'https://app.lobehub.com/acceptance/acceptance-1',
+      acceptanceUrl: 'https://lobehub.com/acceptance/acceptance-1',
       evidence: 1,
       failedEvidence: [
         { checkItemId: 'screen', checkResultId: 'result-screen', reason: 'storage_quota' },
@@ -108,11 +108,11 @@ describe('acceptance publication with missing evidence', () => {
       missingEvidence: [{ checkItemId: 'screen', types: ['screenshot'] }],
       publicationStatus: 'partial',
       recovery: {
-        cleanupUrl: 'https://app.lobehub.com/acceptance',
+        cleanupUrl: 'https://lobehub.com/acceptance',
         reason: 'storage_quota',
         upgradeUrl: 'https://lobehub.com/settings/plans',
       },
-      roundUrl: 'https://app.lobehub.com/acceptance/acceptance-1?r=2',
+      roundUrl: 'https://lobehub.com/acceptance/acceptance-1?r=2',
     });
     expect(result().failedEvidence[0].retryCommand).toContain('evidence upload');
     expect(finalCheck()).toMatchObject({
@@ -190,12 +190,12 @@ describe('acceptance publication with missing evidence', () => {
     await run('ingest', dir);
 
     expect(printed.join('\n')).toContain('Partially published');
-    expect(printed.join('\n')).toContain('https://app.lobehub.com/acceptance/acceptance-1?r=2');
+    expect(printed.join('\n')).toContain('https://lobehub.com/acceptance/acceptance-1?r=2');
     expect(printed.join('\n')).toContain('evidence upload');
     expect(printed.join('\n')).toContain('POSIX shell');
     expect(printed.join('\n')).toContain('retryArgs');
     expect(log.warn).toHaveBeenCalledWith(
-      expect.stringContaining('https://app.lobehub.com/acceptance'),
+      expect.stringContaining('https://lobehub.com/acceptance'),
     );
     expect(log.warn).toHaveBeenCalledWith(
       expect.stringContaining('https://lobehub.com/settings/plans'),
@@ -228,7 +228,7 @@ describe('acceptance publication with missing evidence', () => {
   });
 
   it.each(['https://lobehub.com', 'https://quota-user:quota%40password@lobehub.com'])(
-    'links personal cleanup to the App when the Cloud server is %s',
+    'links personal cleanup to the canonical domain when the Cloud server is %s',
     async (server) => {
       vi.mocked(resolveServerUrl).mockReturnValue(server);
       vi.mocked(uploadLocalFile).mockRejectedValue(new Error('storage_block:upgrade_required'));
@@ -237,11 +237,11 @@ describe('acceptance publication with missing evidence', () => {
       await run('ingest', dir, '--json');
 
       expect(result().recovery).toMatchObject({
-        cleanupUrl: 'https://app.lobehub.com/acceptance',
+        cleanupUrl: 'https://lobehub.com/acceptance',
         scope: 'personal',
         upgradeUrl: 'https://lobehub.com/settings/plans',
       });
-      expect(result().recovery.message).toContain('https://app.lobehub.com/acceptance');
+      expect(result().recovery.message).toContain('https://lobehub.com/acceptance');
       expect(JSON.stringify(result().recovery)).not.toMatch(/quota-user|quota%40password/);
     },
   );
@@ -303,7 +303,7 @@ describe('acceptance publication with missing evidence', () => {
         ),
       );
       expect(log.warn).not.toHaveBeenCalledWith(
-        expect.stringContaining('https://app.lobehub.com/acceptance'),
+        expect.stringContaining('https://lobehub.com/acceptance'),
       );
       expect(log.warn).not.toHaveBeenCalledWith(
         expect.stringContaining('https://lobehub.com/settings/plans'),
@@ -391,7 +391,7 @@ describe('acceptance publication with missing evidence', () => {
         expect(client.verify.ingestResult.mutate).not.toHaveBeenCalled();
         expect(client.verify.createRun.mutate).not.toHaveBeenCalled();
         expect(log.warn).toHaveBeenCalledWith(
-          expect.stringContaining('https://app.lobehub.com/acceptance'),
+          expect.stringContaining('https://lobehub.com/acceptance'),
         );
         expect(log.warn).toHaveBeenCalledWith(
           expect.stringContaining('https://lobehub.com/settings/plans'),
@@ -405,7 +405,7 @@ describe('acceptance publication with missing evidence', () => {
             error: 'storage_block:upgrade_required',
             recovery: {
               reason: 'storage_quota',
-              cleanupUrl: 'https://app.lobehub.com/acceptance',
+              cleanupUrl: 'https://lobehub.com/acceptance',
               upgradeUrl: 'https://lobehub.com/settings/plans',
             },
           });

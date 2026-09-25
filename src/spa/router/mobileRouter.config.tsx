@@ -680,6 +680,22 @@ export const mobileRoutes: RouteObject[] = [
   },
 
   {
+    children: [
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/acceptance/empty'),
+          'Mobile > Acceptance Empty',
+        ),
+        index: true,
+      },
+    ],
+    element: dynamicElement(() => import('@/routes/(main)/acceptance'), 'Mobile > Acceptance'),
+    errorElement: <ErrorBoundary />,
+    handle: { meta: acceptanceRouteMeta },
+    path: '/acceptance',
+  },
+
+  {
     element: dynamicElement(
       () => import('@/routes/acceptance/[acceptanceId]'),
       'Mobile > AcceptanceReport',

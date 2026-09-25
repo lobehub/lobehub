@@ -6,10 +6,13 @@ import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTrpcClient } from '../api/client';
+import { resolveServerUrl } from '../settings';
 import { registerAcceptanceCommands } from './verifyAcceptance';
 
 vi.mock('../api/client', () => ({ getTrpcClient: vi.fn() }));
-vi.mock('../settings', () => ({ resolveServerUrl: () => 'https://self-hosted.example/base/' }));
+vi.mock('../settings', () => ({
+  resolveServerUrl: vi.fn(() => 'https://self-hosted.example/base/'),
+}));
 
 const acceptanceId = 'd8391b91-60bb-49be-a5b7-f14f0c52876a';
 const acceptanceUrl = `https://self-hosted.example/acceptance/${acceptanceId}`;
@@ -29,6 +32,7 @@ const jsonOutput = () => JSON.parse(String(output.mock.calls.at(-1)?.[0]));
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(resolveServerUrl).mockReturnValue('https://self-hosted.example/base/');
   output = vi.spyOn(console, 'log').mockImplementation(() => {});
   vi.mocked(getTrpcClient).mockResolvedValue({
     acceptance: {
@@ -47,6 +51,15 @@ afterEach(() => {
 });
 
 describe('acceptance create', () => {
+  it.each(['https://app.lobehub.com', 'https://lobehub.com'])(
+    'prints canonical Cloud report links when the server is %s',
+    async (server) => {
+      vi.mocked(resolveServerUrl).mockReturnValue(server);
+      await run(['create', '--requirement', requirement, '--json']);
+      expect(jsonOutput().acceptanceUrl).toBe(`https://lobehub.com/acceptance/${acceptanceId}`);
+    },
+  );
+
   it('creates a standalone acceptance without a report, ambient subject, or verification round', async () => {
     vi.stubEnv('LOBEHUB_TOPIC_ID', 'unrelated-topic');
     await run(['create', '--title', 'Checkout recovery', '--requirement', requirement, '--json']);

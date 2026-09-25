@@ -233,3 +233,9 @@ export function isLocalOrPrivateUrl(url: string) {
     return false;
   }
 }
+
+/** Canonical browser origin; API endpoints may continue to use the legacy Cloud host. */
+export const getCanonicalAppOrigin = (serverUrl: string): string => {
+  const url = new URL(serverUrl);
+  return url.origin === 'https://app.lobehub.com' ? 'https://lobehub.com' : url.origin;
+};

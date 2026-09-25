@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  getCanonicalAppOrigin,
   inferContentTypeFromImageUrl,
   inferFileExtensionFromImageUrl,
   isDesktopLocalStaticServerUrl,
@@ -289,5 +290,18 @@ describe('isLocalOrPrivateUrl', () => {
       expect(isLocalOrPrivateUrl('http://256.256.256.256')).toBe(false);
       expect(isLocalOrPrivateUrl('http://192.168.1.256')).toBe(false);
     });
+  });
+});
+
+describe('getCanonicalAppOrigin', () => {
+  it.each([
+    ['https://app.lobehub.com', 'https://lobehub.com'],
+    ['https://lobehub.com/base', 'https://lobehub.com'],
+    ['https://user:password@app.lobehub.com', 'https://lobehub.com'],
+    ['https://user:password@lobe.example.test:8443/base', 'https://lobe.example.test:8443'],
+    ['http://localhost:3010', 'http://localhost:3010'],
+    ['https://app.lobehub.com.example.test', 'https://app.lobehub.com.example.test'],
+  ])('uses the public origin for %s', (input, expected) => {
+    expect(getCanonicalAppOrigin(input)).toBe(expected);
   });
 });

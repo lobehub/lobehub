@@ -4,6 +4,7 @@ import path from 'node:path';
 
 import { acceptanceSubjectTypes } from '@lobechat/const/verify';
 import type { VerifyAgentPlanConfig, VerifyCheckItem } from '@lobechat/types';
+import { getCanonicalAppOrigin } from '@lobechat/utils/url';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
@@ -400,7 +401,10 @@ async function submitAction(options: SubmitOptions): Promise<void> {
     log.error('Submitted result did not resolve to a verification run');
     process.exit(1);
   }
-  const url = new URL(`/verify/${verifyRunId}`, resolveServerUrl()).toString();
+  const url = new URL(
+    `/verify/${verifyRunId}`,
+    getCanonicalAppOrigin(resolveServerUrl()),
+  ).toString();
   if (options.json !== undefined) {
     outputJson({ ...res, url }, typeof options.json === 'string' ? options.json : undefined);
     return;
@@ -819,7 +823,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   const roundIndex = attached?.roundIndex ?? null;
   const acceptanceUrl = new URL(
     `/acceptance/${encodeURIComponent(acceptanceId)}`,
-    resolveServerUrl(),
+    getCanonicalAppOrigin(resolveServerUrl()),
   ).toString();
   const roundUrl =
     roundIndex === null ? null : `${acceptanceUrl}?r=${encodeURIComponent(String(roundIndex))}`;
