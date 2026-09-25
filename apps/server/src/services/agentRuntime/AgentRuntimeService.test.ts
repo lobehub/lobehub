@@ -927,9 +927,13 @@ describe('AgentRuntimeService', () => {
       };
 
       it('runs the init, saves what it produced, and steps on the initialized state', async () => {
+        const initContext = { phase: 'user_input', payload: { assembled: true } };
         const runDeferredInit = vi.fn().mockResolvedValue({
-          operationToolSet: { enabledToolIds: ['lobe-web-browsing'] },
-          world: { agent: { systemRole: 'ready' } },
+          context: initContext,
+          state: {
+            operationToolSet: { enabledToolIds: ['lobe-web-browsing'] },
+            world: { agent: { systemRole: 'ready' } },
+          },
         });
         const svc = buildService(runDeferredInit);
         const { coordinator, step } = wireStep(svc);
@@ -950,17 +954,46 @@ describe('AgentRuntimeService', () => {
         expect(step.mock.calls[0][0].operationToolSet).toEqual({
           enabledToolIds: ['lobe-web-browsing'],
         });
+        // ...and the context the init assembled, not the placeholder queued
+        // before the init existed.
+        expect(step.mock.calls[0][1]).toEqual(initContext);
       });
 
-      it('skips the init when the run was already stopped', async () => {
+      it('skips the init when the run was already stopped, and still settles it', async () => {
         const runDeferredInit = vi.fn();
         const svc = buildService(runDeferredInit);
         const { coordinator, step } = wireStep(svc);
         coordinator.isInterrupted.mockResolvedValue(true);
+        const lifecycle = (svc as any).completionLifecycle;
+        const emit = vi.spyOn(lifecycle, 'emitSignalEvents').mockResolvedValue([]);
+        const dispatch = vi.spyOn(lifecycle, 'dispatchHooks').mockResolvedValue(undefined);
 
         const result = await svc.executeStep({ ...mockParams, stepIndex: 0 });
 
         expect(result.success).toBe(true);
+        expect(runDeferredInit).not.toHaveBeenCalled();
+        expect(step).not.toHaveBeenCalled();
+        // The completion consumers (and the durable row) hear about the stop.
+        expect(emit).toHaveBeenCalledWith('test-operation-1', expect.anything(), 'interrupted');
+        expect(dispatch).toHaveBeenCalledWith('test-operation-1', expect.anything(), 'interrupted');
+      });
+
+      it('does not initialize a shared run whose share was revoked after enqueue', async () => {
+        const runDeferredInit = vi.fn();
+        const verifyShareRunStillAuthorized = vi.fn().mockResolvedValue(false);
+        const svc = new AgentRuntimeService(mockDb, mockUserId, {
+          delegate: { runDeferredInit, verifyShareRunStillAuthorized },
+        });
+        const { coordinator, step } = wireStep(svc);
+        coordinator.loadAgentState.mockResolvedValue({
+          ...pendingState(),
+          principal: { actor: { shareVisitor: { agentId: 'agent-1', shareId: 'share-1' } } },
+        });
+        vi.spyOn(svc as any, 'buildShareAbortResult').mockResolvedValue({ success: true });
+
+        await svc.executeStep({ ...mockParams, stepIndex: 0 });
+
+        expect(verifyShareRunStillAuthorized).toHaveBeenCalled();
         expect(runDeferredInit).not.toHaveBeenCalled();
         expect(step).not.toHaveBeenCalled();
       });

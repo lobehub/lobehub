@@ -464,7 +464,7 @@ export interface AgentState {
    *
    * A run can be created before tool discovery and the context assembly have
    * happened; the step-0 worker does them and clears this in the same write that
-   * saves what they produced (LOBE-13745). Its presence is therefore the signal:
+   * saves what they produced. Its presence is therefore the signal:
    * a state carrying a request has not been initialized yet.
    *
    * Everything else the init needs is already on the other slots (`world.agent`,

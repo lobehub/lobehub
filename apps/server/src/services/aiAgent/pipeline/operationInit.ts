@@ -42,6 +42,12 @@ export interface OperationInitDeps {
   loadHistoryMessages: () => Promise<any[]>;
   messageModel: MessageModel;
   pluginModel: PluginModel;
+  /**
+   * The parsed body of an attachment, read back from the documents table. Only
+   * called for the ids a persisted request detached — see
+   * `toPersistedInitRequest`.
+   */
+  readFileContent: (fileId: string) => Promise<string | undefined>;
   throwIfExecutionAborted: (stage: string) => Promise<void>;
   topicModel: TopicModel;
   userId: string;
@@ -82,6 +88,46 @@ export const buildOperationInitRequest = (
 };
 
 /**
+ * The request as it may be written to the operation state: parsed attachment
+ * bodies stay in the documents table and only their ids travel. The state is a
+ * single Redis write with a hard size ceiling, and a supported attachment can
+ * parse to tens of MB on its own.
+ */
+export const toPersistedInitRequest = (request: OperationInitRequest): OperationInitRequest => {
+  const fileList = request.runAttachments.fileList;
+  const detached = (fileList ?? []).filter((file) => file.content !== undefined).map((f) => f.id);
+  if (detached.length === 0) return request;
+  return {
+    ...request,
+    detachedFileContentIds: detached,
+    runAttachments: {
+      ...request.runAttachments,
+      fileList: fileList?.map(({ content: _content, ...file }) => file),
+    },
+  };
+};
+
+/**
+ * Put back the bodies `toPersistedInitRequest` detached. Only those ids are
+ * read: a file whose parse failed at turn setup has no body on purpose, and must
+ * not be re-parsed here.
+ */
+export const rehydrateDetachedFileContent = async (
+  request: OperationInitRequest,
+  readFileContent: OperationInitDeps['readFileContent'],
+): Promise<OperationInitRequest> => {
+  const detached = new Set(request.detachedFileContentIds ?? []);
+  if (detached.size === 0 || !request.runAttachments.fileList) return request;
+  const fileList = await Promise.all(
+    request.runAttachments.fileList.map(async (file) =>
+      detached.has(file.id) ? { ...file, content: await readFileContent(file.id) } : file,
+    ),
+  );
+  const { detachedFileContentIds: _ids, ...rest } = request;
+  return { ...rest, runAttachments: { ...request.runAttachments, fileList } };
+};
+
+/**
  * Resolve everything an operation needs before it can take a step: the tool
  * surface, the message/context assembly, and the human decision that a resumed
  * approval turns into the first context.
@@ -96,6 +142,8 @@ export const runOperationInit = async (
   request: OperationInitRequest,
   operationId: string,
 ): Promise<OperationInitResult> => {
+  request = await rehydrateDetachedFileContent(request, deps.readFileContent);
+
   // Stage 5 (5a–5f) — tool discovery (see `pipeline/toolDiscovery`).
   const discovery = await discoverTools(
     {

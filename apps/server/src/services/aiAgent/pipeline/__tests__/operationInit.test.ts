@@ -1,6 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { buildOperationInitRequest, type OperationInitRequest } from '../operationInit';
+import {
+  buildOperationInitRequest,
+  type OperationInitRequest,
+  rehydrateDetachedFileContent,
+  toPersistedInitRequest,
+} from '../operationInit';
 
 const fullInput = (): Parameters<typeof buildOperationInitRequest>[0] => ({
   additionalPluginIds: ['lobe-task'],
@@ -92,5 +97,53 @@ describe('buildOperationInitRequest', () => {
     const roundTripped = JSON.parse(JSON.stringify(request)) as OperationInitRequest;
 
     expect(roundTripped).toEqual(request);
+  });
+});
+
+describe('persisted init request', () => {
+  const withDocuments = (): OperationInitRequest =>
+    buildOperationInitRequest({
+      ...fullInput(),
+      runAttachments: {
+        fileList: [
+          {
+            content: 'x'.repeat(1024),
+            fileType: 'application/pdf',
+            id: 'file-parsed',
+            name: 'a.pdf',
+            size: 1,
+            url: 'u',
+          },
+          { fileType: 'application/pdf', id: 'file-unparsed', name: 'b.pdf', size: 1, url: 'u' },
+        ] as any,
+        warnings: [],
+      },
+    });
+
+  // A parsed attachment can run to tens of MB; the state is one Redis write.
+  it('leaves parsed bodies in the documents table and records which ones', () => {
+    const persisted = toPersistedInitRequest(withDocuments());
+
+    expect(persisted.runAttachments.fileList?.every((file) => file.content === undefined)).toBe(
+      true,
+    );
+    expect(persisted.detachedFileContentIds).toEqual(['file-parsed']);
+  });
+
+  it('reads back only the bodies it detached', async () => {
+    const readFileContent = vi.fn(async (fileId: string) => `body of ${fileId}`);
+
+    const restored = await rehydrateDetachedFileContent(
+      toPersistedInitRequest(withDocuments()),
+      readFileContent,
+    );
+
+    expect(restored.runAttachments.fileList?.map((file) => file.content)).toEqual([
+      'body of file-parsed',
+      undefined,
+    ]);
+    // The file whose parse failed at turn setup must not be re-parsed here.
+    expect(readFileContent).toHaveBeenCalledTimes(1);
+    expect('detachedFileContentIds' in restored).toBe(false);
   });
 });

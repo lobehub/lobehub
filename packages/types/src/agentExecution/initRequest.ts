@@ -33,7 +33,7 @@ export interface AgentRunApprovalDecision {
  *
  * It lives on the state only while that work is still pending, which is what
  * lets it happen in the step-0 worker instead of on the send path
- * (LOBE-13745). Plain JSON, because the state round-trips through Redis.
+ *. Plain JSON, because the state round-trips through Redis.
  */
 export interface AgentRunInitRequest {
   /** Internal additions (e.g. the task tool during task execution). */
@@ -44,6 +44,13 @@ export interface AgentRunInitRequest {
   /** Approved decisions paired with the tool row each one fills. */
   approvedToolEntries: { plugin: MessagePluginItem; toolMessageId: string }[];
   attachedFileIds?: string[];
+  /**
+   * Files whose parsed body was left out of this request because it lives in
+   * the documents table already. A parsed attachment can run to tens of MB — far
+   * past what one state write can carry — so a persisted request keeps only the
+   * id and the init reads the body back.
+   */
+  detachedFileContentIds?: string[];
   disableLocalSystem?: boolean;
   disableSelfFeedbackIntentTool?: boolean;
   disableTools?: boolean;

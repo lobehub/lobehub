@@ -124,6 +124,9 @@ if (process.env.VERCEL) {
 
 const log = debug('lobe-server:agent-runtime-service');
 
+const isTerminalAgentStatus = (status: AgentState['status'] | undefined) =>
+  status === 'done' || status === 'error' || status === 'interrupted';
+
 /**
  * Base delay before the first `verifyAsyncToolBarrier` re-check fires after a
  * sub-agent completion found the parent not yet resumable. Long enough for
@@ -375,7 +378,15 @@ export interface AgentRuntimeDelegate {
     operationId: string;
     request: AgentRunInitRequest;
     state: AgentState;
-  }) => Promise<Partial<AgentState>>;
+  }) => Promise<{
+    /**
+     * The context step 0 must run with. The step was queued before the init
+     * existed, so the context it carries is a placeholder — the assembled base
+     * context (and an approval resume's phase) only exists after init.
+     */
+    context: AgentRuntimeContext;
+    state: Partial<AgentState>;
+  }>;
   /**
    * Re-check that an Agent Share visitor run is STILL authorized to continue,
    * called on EVERY step. Without it, a revocation that lands mid-run (link →
@@ -1729,37 +1740,50 @@ export class AgentRuntimeService {
         // falls into the step error handler below: the operation ends with the
         // error on its assistant message, which is the only honest outcome once
         // the user has already been told the message was sent.
-        if (agentState.request) {
-          // Stop pressed during the init window: the sentinel is the same one
-          // the step boundary reads, and honouring it here saves the whole
-          // discovery rather than doing it for a run nobody is waiting for.
+        let deferredInitContext: AgentRuntimeContext | undefined;
+        if (agentState.request && !isTerminalAgentStatus(agentState.status)) {
           if (await this.coordinator.isInterrupted(operationId)) {
+            // Stop pressed during the init window. Skip the discovery nobody is
+            // waiting for, but do NOT return here: the terminal branch below
+            // emits the completion signals and dispatches the hooks, which is
+            // what settles the durable row and every completion consumer. The
+            // state may still read `running` if the interrupt landed only its
+            // sentinel before a crash, so make the stop visible to that branch.
             log('[%s][%d] Interrupted before deferred init; skipping it', operationId, stepIndex);
-            return { nextStepScheduled: false, state: agentState, stepResult: null, success: true };
-          }
+            agentState.status = 'interrupted';
+          } else {
+            // A shared-agent run revoked between enqueue and step 0 must not
+            // get creator-scoped discovery and history/persona assembly first:
+            // the per-step authorization re-check below comes too late for that.
+            if (await this.isShareRunRevoked(operationId, stepIndex, agentState)) {
+              return this.buildShareAbortResult(operationId, agentState);
+            }
 
-          if (!this.delegate?.runDeferredInit) {
-            throw new Error(
-              `Operation ${operationId} needs a deferred init but no runner is wired`,
+            if (!this.delegate?.runDeferredInit) {
+              throw new Error(
+                `Operation ${operationId} needs a deferred init but no runner is wired`,
+              );
+            }
+
+            const initStartedAt = Date.now();
+            const initialized = await this.delegate.runDeferredInit({
+              operationId,
+              request: agentState.request,
+              state: agentState,
+            });
+            // Clearing the request in the same write is what makes a redelivery
+            // of this step read an initialized run instead of paying for
+            // discovery again.
+            Object.assign(agentState, initialized.state, { request: undefined });
+            await this.coordinator.saveAgentState(operationId, agentState);
+            deferredInitContext = initialized.context;
+            log(
+              '[%s][%d] Deferred init finished in %dms',
+              operationId,
+              stepIndex,
+              Date.now() - initStartedAt,
             );
           }
-
-          const initStartedAt = Date.now();
-          const initialized = await this.delegate.runDeferredInit({
-            operationId,
-            request: agentState.request,
-            state: agentState,
-          });
-          // Clearing the request in the same write is what makes a redelivery of
-          // this step read an initialized run instead of paying for discovery again.
-          Object.assign(agentState, initialized, { request: undefined });
-          await this.coordinator.saveAgentState(operationId, agentState);
-          log(
-            '[%s][%d] Deferred init finished in %dms',
-            operationId,
-            stepIndex,
-            Date.now() - initStartedAt,
-          );
         }
 
         // A parked approval step is already durable before its generic Review
@@ -1891,31 +1915,8 @@ export class AgentRuntimeService {
         // step boundary. See `AgentShareModel.isRunStillAuthorized`'s JSDoc for
         // why one query covers every revocation path (visibility flip — which
         // is what turning sharing off does — share delete, agent delete).
-        if (this.delegate.verifyShareRunStillAuthorized) {
-          const shareMarker = agentState.principal?.actor?.shareVisitor as
-            { agentId?: string; shareId?: string } | undefined;
-          if (shareMarker?.agentId && shareMarker.shareId) {
-            let stillAuthorized = false;
-            try {
-              stillAuthorized = await this.delegate.verifyShareRunStillAuthorized({
-                agentId: shareMarker.agentId,
-                shareId: shareMarker.shareId,
-              });
-            } catch (error) {
-              // Fail closed: a read failure must not be read as "still
-              // authorized". Falls through to the abort below with
-              // `stillAuthorized` left `false`.
-              log(
-                '[%s][%d] Share run authorization re-check failed: %O',
-                operationId,
-                stepIndex,
-                error,
-              );
-            }
-            if (!stillAuthorized) {
-              return this.buildShareAbortResult(operationId, agentState);
-            }
-          }
+        if (await this.isShareRunRevoked(operationId, stepIndex, agentState)) {
+          return this.buildShareAbortResult(operationId, agentState);
         }
 
         let beforeStepSignalEvents: Array<{ [key: string]: unknown; type: string }> = [];
@@ -2044,7 +2045,9 @@ export class AgentRuntimeService {
         });
 
         // Handle human intervention
-        let currentContext = context;
+        // A deferred init assembled the real step-0 context; the queued one is a
+        // placeholder from before the init existed.
+        let currentContext = deferredInitContext ?? context;
         let currentState = agentState;
 
         if (humanInput || approvedToolCall || rejectionReason) {
@@ -4295,6 +4298,30 @@ export class AgentRuntimeService {
     }
 
     return undefined;
+  }
+
+  /**
+   * Whether an Agent Share visitor run has lost its authorization. Fails closed:
+   * a read failure is treated as revoked. Non-share runs are never revoked.
+   */
+  private async isShareRunRevoked(
+    operationId: string,
+    stepIndex: number,
+    agentState: AgentState,
+  ): Promise<boolean> {
+    if (!this.delegate.verifyShareRunStillAuthorized) return false;
+    const shareMarker = agentState.principal?.actor?.shareVisitor as
+      { agentId?: string; shareId?: string } | undefined;
+    if (!shareMarker?.agentId || !shareMarker.shareId) return false;
+    try {
+      return !(await this.delegate.verifyShareRunStillAuthorized({
+        agentId: shareMarker.agentId,
+        shareId: shareMarker.shareId,
+      }));
+    } catch (error) {
+      log('[%s][%d] Share run authorization re-check failed: %O', operationId, stepIndex, error);
+      return true;
+    }
   }
 
   /**
