@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type App } from '@/core/App';
 
-import RemoteFileUploadService from '../remoteFileUploadSrv';
+import RemoteFileUploadService, { describeUploadFailure } from '../remoteFileUploadSrv';
 
 const { execFileMock } = vi.hoisted(() => ({
   execFileMock: vi.fn(),
@@ -16,6 +16,21 @@ vi.mock('node:child_process', () => ({
 // is to make the mock already promisified.
 vi.mock('node:util', () => ({
   promisify: (fn: any) => fn,
+}));
+
+const { bridgeCloseMock, startSocksHttpBridgeMock } = vi.hoisted(() => {
+  const bridgeCloseMock = vi.fn(async () => undefined);
+  return {
+    bridgeCloseMock,
+    startSocksHttpBridgeMock: vi.fn(async () => ({
+      close: bridgeCloseMock,
+      url: 'http://lobehub:bridge-token@127.0.0.1:54321',
+    })),
+  };
+});
+
+vi.mock('@/modules/networkProxy/socksHttpBridge', () => ({
+  startSocksHttpBridge: startSocksHttpBridgeMock,
 }));
 
 vi.mock('@/modules/cliEmbedding', () => ({
@@ -35,6 +50,74 @@ const mockApp = {
   getController: vi.fn(() => mockRemoteServerConfigCtr),
   storeManager: mockStoreManager,
 } as unknown as App;
+
+/** The shape `execFile` rejects with when the child exits non-zero. */
+const execFileError = (filePath: string, stderr: string) =>
+  Object.assign(
+    new Error(
+      `Command failed: /Applications/LobeHub.app/Contents/MacOS/LobeHub /app/resources/bin/lobe-cli.js file upload ${filePath} --json id,url\n${stderr}`,
+    ),
+    { code: 1, killed: false, signal: null, stderr, stdout: '' },
+  );
+
+describe('describeUploadFailure', () => {
+  it('ignores the command line when classifying — a path is not an error', () => {
+    const failure = describeUploadFailure(
+      execFileError('/tmp/network-diagram.png', '[ERROR] Unsupported file type: image/x-foo\n'),
+    );
+
+    expect(failure).toEqual({ kind: 'unknown', reason: 'Unsupported file type: image/x-foo' });
+  });
+
+  it('does not read auth keywords out of the uploaded path', () => {
+    const failure = describeUploadFailure(
+      execFileError('/Users/me/login/401.png', '[ERROR] Unsupported file type: image/x-foo\n'),
+    );
+
+    expect(failure.kind).toBe('unknown');
+  });
+
+  it('does not read network keywords out of a path the CLI echoes back', () => {
+    const failure = describeUploadFailure(
+      execFileError(
+        '/tmp/network-timeout.png',
+        '[ERROR] File not found: /tmp/network-timeout.png\n',
+      ),
+    );
+
+    expect(failure).toEqual({
+      kind: 'unknown',
+      reason: 'File not found: /tmp/network-timeout.png',
+    });
+  });
+
+  it('still classifies the real CLI network error line', () => {
+    const failure = describeUploadFailure(
+      execFileError(
+        '/tmp/cat.png',
+        '[ERROR] Upload to storage failed: fetch failed (ECONNRESET)\n',
+      ),
+    );
+
+    expect(failure).toEqual({
+      kind: 'network',
+      reason: 'Upload to storage failed: fetch failed (ECONNRESET)',
+    });
+  });
+
+  it('still classifies storage quota and auth failures', () => {
+    expect(
+      describeUploadFailure(
+        execFileError('/tmp/cat.png', '[ERROR] storage_block:upgrade_required\n'),
+      ),
+    ).toEqual({ kind: 'storage_quota', reason: 'storage_block:upgrade_required' });
+    expect(
+      describeUploadFailure(
+        execFileError('/tmp/cat.png', '[ERROR] No authentication found. Run `lh login`.\n'),
+      ).kind,
+    ).toBe('auth');
+  });
+});
 
 describe('RemoteFileUploadService.uploadLocalFile', () => {
   let service: RemoteFileUploadService;
@@ -109,6 +192,58 @@ describe('RemoteFileUploadService.uploadLocalFile', () => {
     expect(opts.env.HTTP_PROXY).toBe('http://127.0.0.1:7890');
     // Node's fetch only honours HTTP(S)_PROXY when env-proxy mode is on.
     expect(opts.env.NODE_USE_ENV_PROXY).toBe('1');
+  });
+
+  it('bridges a SOCKS5 proxy to the child, which only honours HTTP(S)_PROXY', async () => {
+    const socksConfig = {
+      enableProxy: true,
+      proxyBypass: 'localhost',
+      proxyPort: '1080',
+      proxyRequireAuth: false,
+      proxyServer: '127.0.0.1',
+      proxyType: 'socks5',
+    };
+    mockStoreManager.get.mockImplementation((key: string) =>
+      key === 'networkProxy' ? socksConfig : undefined,
+    );
+    execFileMock.mockResolvedValue({
+      stdout: JSON.stringify({ id: 'file-5', url: 'https://files.example.com/e.png' }),
+    });
+
+    await service.uploadLocalFile('/tmp/e.png');
+
+    expect(startSocksHttpBridgeMock).toHaveBeenCalledWith(socksConfig);
+    const [, , opts] = execFileMock.mock.calls[0];
+    expect(opts.env.HTTPS_PROXY).toBe('http://lobehub:bridge-token@127.0.0.1:54321');
+    expect(opts.env.HTTP_PROXY).toBe('http://lobehub:bridge-token@127.0.0.1:54321');
+    expect(opts.env.NO_PROXY).toBe('localhost');
+    expect(opts.env.NODE_USE_ENV_PROXY).toBe('1');
+    expect(bridgeCloseMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes the SOCKS5 bridge when the upload fails', async () => {
+    mockStoreManager.get.mockImplementation((key: string) =>
+      key === 'networkProxy'
+        ? { enableProxy: true, proxyPort: '1080', proxyServer: '127.0.0.1', proxyType: 'socks5' }
+        : undefined,
+    );
+    execFileMock.mockRejectedValue(
+      execFileError('/tmp/f.png', '[ERROR] storage_block:upgrade_required\n'),
+    );
+
+    await expect(service.uploadLocalFile('/tmp/f.png')).rejects.toThrow();
+    expect(bridgeCloseMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not retry a non-network failure whose path mentions "network"', async () => {
+    execFileMock.mockRejectedValue(
+      execFileError('/tmp/network-diagram.png', '[ERROR] Unsupported file type: image/x-foo\n'),
+    );
+
+    await expect(service.uploadLocalFile('/tmp/network-diagram.png')).rejects.toThrow(
+      'Unsupported file type',
+    );
+    expect(execFileMock).toHaveBeenCalledTimes(1);
   });
 
   it('retries a transient network failure', async () => {
