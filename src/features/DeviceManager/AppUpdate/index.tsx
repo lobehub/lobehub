@@ -33,28 +33,28 @@ export const AppUpdateAction = ({ update }: AppUpdateProps) => {
   switch (getAppUpdateAction(view)) {
     case 'check': {
       return (
-        <Button loading={requesting} size={'small'} onClick={check}>
+        <Button loading={requesting} size={'small'} type={'text'} onClick={check}>
           {t('common:checkForUpdates')}
         </Button>
       );
     }
     case 'retry': {
       return (
-        <Button loading={refreshing} size={'small'} onClick={retry}>
+        <Button loading={refreshing} size={'small'} type={'text'} onClick={retry}>
           {t('common:retry')}
         </Button>
       );
     }
     case 'checking': {
       return (
-        <Button loading size={'small'}>
+        <Button loading size={'small'} type={'text'}>
           {t('common:checkForUpdates')}
         </Button>
       );
     }
     case 'downloading': {
       return (
-        <Button loading size={'small'}>
+        <Button loading size={'small'} type={'text'}>
           {t('common:downloadingUpdate', {
             percent: view.kind === 'downloading' ? (view.progress ?? 0) : 0,
           })}
@@ -77,7 +77,7 @@ export const AppUpdateAction = ({ update }: AppUpdateProps) => {
     }
     case 'restarting': {
       return (
-        <Button loading size={'small'}>
+        <Button loading size={'small'} type={'text'}>
           {t('devices.appUpdate.restarting')}
         </Button>
       );
