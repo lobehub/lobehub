@@ -27,7 +27,6 @@ export function registerDocCommands(task: Command) {
         const content = options.body || '';
         const result = await client.document.createDocument.mutate({
           content,
-          editorData: options.folder ? undefined : JSON.stringify({ content, type: 'doc' }),
           fileType,
           parentId: options.parent,
           title: options.title,

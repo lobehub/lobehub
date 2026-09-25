@@ -29,6 +29,7 @@ export type AgentDocumentSourceType = 'agent' | 'agent-signal' | 'api' | 'file' 
 export interface AgentContextDocument {
   content?: string;
   contentCharCount?: number;
+  createdAt?: Date | string;
   description?: string;
   filename: string;
   /**
@@ -58,7 +59,35 @@ export interface AgentContextDocument {
 export interface AgentDocumentFilterContext {
   currentTime?: Date;
   currentUserMessage?: string;
+  /**
+   * When the current run started. Documents created at or after it are marked in
+   * the progressive index; the index is rebuilt every step, so without a marker a
+   * document the agent just created looks like one that already existed.
+   */
+  runStartedAt?: Date | number | string;
   truncateContent?: (content: string, maxTokens: number) => string;
+}
+
+const toTime = (value: Date | number | string | undefined): number | undefined => {
+  if (value === undefined) return undefined;
+  const time = value instanceof Date ? value.getTime() : new Date(value).getTime();
+  return Number.isNaN(time) ? undefined : time;
+};
+
+/**
+ * Anchor the run to the latest user message: everything the agent did after it
+ * belongs to the current run. An explicit `runStartedAt` wins.
+ */
+export function withRunStartedAt<T extends AgentDocumentFilterContext>(
+  context: T,
+  messages: { createdAt?: Date | number | string; role: string }[],
+): T {
+  if (context.runStartedAt !== undefined) return context;
+
+  const lastUserMessage = messages.findLast((message) => message.role === 'user');
+  return lastUserMessage?.createdAt === undefined
+    ? context
+    : { ...context, runStartedAt: lastUserMessage.createdAt };
 }
 
 /**
@@ -166,19 +195,33 @@ function truncate(s: string, max: number): string {
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;
 }
 
+const CREATED_THIS_RUN_MARK = '(created this run)';
+
+function isCreatedThisRun(doc: AgentContextDocument, context: AgentDocumentFilterContext) {
+  const runStartedAt = toTime(context.runStartedAt);
+  const createdAt = toTime(doc.createdAt);
+  return runStartedAt !== undefined && createdAt !== undefined && createdAt >= runStartedAt;
+}
+
 /**
  * Render a list of progressive docs as a fixed-width table:
  *
  *   TITLE                ID                                    SIZE    UPDATED
  *   daily-brief.txt      2af6eb88-8bdb-468f-887f-620baa394efa  1.4k    2026-04-27
  */
-function buildIndexTable(docs: AgentContextDocument[]): string {
-  const rows = docs.map((d) => ({
-    id: d.id ?? '',
-    size: formatSize(d),
-    title: truncate(pickRowTitle(d), TITLE_MAX_WIDTH),
-    updated: formatUpdatedDate(d.updatedAt),
-  }));
+function buildIndexTable(
+  docs: AgentContextDocument[],
+  context: AgentDocumentFilterContext,
+): string {
+  const rows = docs.map((d) => {
+    const title = truncate(pickRowTitle(d), TITLE_MAX_WIDTH);
+    return {
+      id: d.id ?? '',
+      size: formatSize(d),
+      title: isCreatedThisRun(d, context) ? `${title} ${CREATED_THIS_RUN_MARK}` : title,
+      updated: formatUpdatedDate(d.updatedAt),
+    };
+  });
 
   const titleWidth = Math.max('TITLE'.length, ...rows.map((r) => r.title.length));
   const idWidth = Math.max('ID'.length, ...rows.map((r) => r.id.length));
@@ -360,6 +403,11 @@ export function combineDocuments(
         `Web-crawled docs are available but omitted here — call listDocuments(sourceType='web') to discover them.`,
       );
     }
+    if (flat.some((doc) => isCreatedThisRun(doc, context))) {
+      headerLines.push(
+        `Docs marked ${CREATED_THIS_RUN_MARK} did not exist before this run — you created them, so creating them did not overwrite an existing doc.`,
+      );
+    }
     if (folders.length > 0) {
       headerLines.push(
         `${folders.length} folder${folders.length === 1 ? '' : 's'} collapsed (${FOLDER_ICON}) — call listDocuments(parentId=<id>) to list a folder's docs.`,
@@ -367,7 +415,7 @@ export function combineDocuments(
     }
 
     const bodyBlocks: string[] = [];
-    if (flat.length > 0) bodyBlocks.push(buildIndexTable(sortByRecency(flat)));
+    if (flat.length > 0) bodyBlocks.push(buildIndexTable(sortByRecency(flat), context));
     if (folders.length > 0) bodyBlocks.push(buildFolderTable(folders));
     const tableBlock = bodyBlocks.length > 0 ? `\n\n${bodyBlocks.join('\n\n')}` : '';
 

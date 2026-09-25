@@ -525,6 +525,9 @@ export class AgentDocumentsExecutionRuntime {
     });
     if (!updated) return { content: `Failed to modify document ${args.id}.`, success: false };
 
+    // The service applies the batch atomically: an unknown id or an operation the
+    // editor rejects throws with that operation's position, and nothing is saved.
+    // Reaching this point therefore means every operation was applied.
     const results = operations.map((operation) => ({
       action: operation.action,
       success: true,

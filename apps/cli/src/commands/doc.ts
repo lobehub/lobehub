@@ -140,8 +140,8 @@ export function registerDocCommand(program: Command) {
         const buildUrl = await resolveAppUrlBuilder(client);
 
         const result = await client.document.createDocument.mutate({
+          // The server builds the editor state from `content`; the CLI has no editor.
           content,
-          editorData: JSON.stringify({ content: content || '', type: 'doc' }),
           fileType: options.fileType,
           knowledgeBaseId: options.kb,
           // Inside an agent run, credit the document to that run so it shows up
@@ -196,7 +196,6 @@ export function registerDocCommand(program: Command) {
 
       const items = documents.map((d) => ({
         content: d.content,
-        editorData: JSON.stringify({ content: d.content || '', type: 'doc' }),
         fileType: d.fileType,
         knowledgeBaseId: d.knowledgeBaseId,
         parentId: d.parentId,
@@ -255,10 +254,8 @@ export function registerDocCommand(program: Command) {
 
         const params: Record<string, any> = { id };
         if (options.title) params.title = options.title;
-        if (content !== undefined) {
-          params.content = content;
-          params.editorData = JSON.stringify({ content, type: 'doc' });
-        }
+        // The server rebuilds the editor state from the new content.
+        if (content !== undefined) params.content = content;
         if (options.parent !== undefined) {
           params.parentId = options.parent || null;
         }

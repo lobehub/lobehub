@@ -103,6 +103,7 @@ export interface AgentDocumentListItem extends AgentDocumentDerivedFields {
 export interface AgentDocumentContextRow extends AgentDocumentDerivedFields {
   content: string;
   contentCharCount?: number;
+  createdAt?: Date;
   description: string | null;
   documentId: string;
   editorData: Record<string, any> | null;
@@ -125,6 +126,7 @@ export interface AgentDocumentContextRow extends AgentDocumentDerivedFields {
 export interface AgentDocumentContextPayload {
   content: string;
   contentCharCount?: number;
+  createdAt?: Date;
   description: string | null;
   documentId: string;
   filename: string;

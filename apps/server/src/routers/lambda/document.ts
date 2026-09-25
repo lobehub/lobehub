@@ -18,6 +18,7 @@ import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DocumentService } from '@/server/services/document';
+import { resolveDocumentEditorData } from '@/server/services/document/editorData';
 import { canViewDocumentContent } from '@/server/services/documentAccess';
 import { FileService } from '@/server/services/file';
 import {
@@ -225,10 +226,11 @@ export const documentRouter = router({
 
       await assertCanCreateUnderParent(ctx, resolvedParentId);
 
-      // Parse editorData from JSON string to object
-      const editorData = documentInput.editorData
-        ? JSON.parse(documentInput.editorData)
-        : undefined;
+      const editorData = await resolveDocumentEditorData({
+        content: documentInput.content,
+        editorData: documentInput.editorData ? JSON.parse(documentInput.editorData) : undefined,
+        fileType: documentInput.fileType,
+      });
       const document = await ctx.documentService.createDocument({
         ...documentInput,
         editorData,
@@ -258,7 +260,7 @@ export const documentRouter = router({
         documents: z.array(
           z.object({
             content: z.string().optional(),
-            editorData: z.string(),
+            editorData: z.string().optional(),
             fileType: z.string().optional(),
             knowledgeBaseId: z.string().optional(),
             metadata: z.record(z.string(), z.any()).optional(),
@@ -283,8 +285,11 @@ export const documentRouter = router({
             }
           }
 
-          // Parse editorData from JSON string to object
-          const editorData = JSON.parse(doc.editorData);
+          const editorData = await resolveDocumentEditorData({
+            content: doc.content,
+            editorData: doc.editorData ? JSON.parse(doc.editorData) : undefined,
+            fileType: doc.fileType,
+          });
 
           return {
             ...doc,
@@ -566,8 +571,11 @@ export const documentRouter = router({
       }
 
       const { id, editorData: editorDataString, operationId, ...params } = input;
-      // Parse editorData from JSON string to object if present
-      const editorData = editorDataString ? JSON.parse(editorDataString) : undefined;
+      const editorData = await resolveDocumentEditorData({
+        content: params.content,
+        editorData: editorDataString ? JSON.parse(editorDataString) : undefined,
+        fileType: params.fileType,
+      });
       const result = await ctx.documentService.updateDocument(id, {
         ...params,
         editorData,
