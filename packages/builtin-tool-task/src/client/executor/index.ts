@@ -20,6 +20,11 @@ import type {
   ToolAfterCallContext,
 } from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
+import {
+  formatInvalidScheduleMessage,
+  isValidTimezone,
+  previewSchedule,
+} from '@lobechat/utils/cronEval';
 import debug from 'debug';
 
 import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
@@ -503,6 +508,32 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
     }
   };
 
+  /**
+   * Next-run preview of the schedule the task ended up with, matching what the
+   * server runtime returns. A field the call left out keeps its stored value,
+   * so the stored detail fills it in. Best effort: the write already succeeded.
+   */
+  private previewStoredSchedule = async (
+    identifier: string,
+    params: { schedulePattern?: string | null; scheduleTimezone?: string | null },
+  ): Promise<string | undefined> => {
+    let pattern = params.schedulePattern;
+    let timezone = params.scheduleTimezone;
+    if (pattern === undefined || timezone === undefined) {
+      try {
+        const schedule = (await taskService.getDetail(identifier))?.data?.schedule;
+        if (pattern === undefined) pattern = schedule?.pattern;
+        if (timezone === undefined) timezone = schedule?.timezone;
+      } catch (error) {
+        log('[TaskExecutor] setTaskSchedule - preview detail fetch failed:', error);
+        return;
+      }
+    }
+    if (!pattern) return;
+    const preview = previewSchedule(pattern, timezone ?? null);
+    return preview.valid ? preview.preview : undefined;
+  };
+
   setTaskSchedule = async (
     params: {
       automationMode?: TaskAutomationMode | null;
@@ -521,6 +552,25 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       const store = getTaskStoreState();
       const changes: string[] = [];
       const ops: Promise<unknown>[] = [];
+
+      // Refuse an unusable schedule before writing anything, like the server
+      // runtime does, so a half-applied update never leaves a bad cron behind.
+      const scheduleInvalid = params.schedulePattern
+        ? previewSchedule(params.schedulePattern, params.scheduleTimezone ?? null)
+        : params.scheduleTimezone && !isValidTimezone(params.scheduleTimezone)
+          ? { error: `unknown timezone "${params.scheduleTimezone}"`, valid: false as const }
+          : undefined;
+      if (scheduleInvalid && !scheduleInvalid.valid) {
+        return {
+          content: formatInvalidScheduleMessage(identifier, scheduleInvalid.error),
+          error: { message: scheduleInvalid.error, type: 'InvalidSchedule' },
+          success: false,
+        };
+      }
+      const scheduleTouched =
+        params.schedulePattern !== undefined ||
+        params.scheduleTimezone !== undefined ||
+        params.automationMode === 'schedule';
 
       // Top-level schedule columns — direct service.update bypasses the
       // store.updateTask optimistic path, which would otherwise need to map
@@ -598,6 +648,11 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
 
       await Promise.all(ops);
       await store.internal_refreshTaskDetail(identifier);
+
+      if (scheduleTouched) {
+        const preview = await this.previewStoredSchedule(identifier, params);
+        if (preview) changes.push(preview);
+      }
 
       return {
         content: formatTaskEdited(identifier, changes),

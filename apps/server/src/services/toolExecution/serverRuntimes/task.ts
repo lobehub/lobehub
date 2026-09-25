@@ -20,7 +20,7 @@ import {
   priorityLabel,
 } from '@lobechat/prompts';
 import type { TaskAutomationMode, TaskStatus } from '@lobechat/types';
-import { validateCronPattern } from '@lobechat/utils/cronEval';
+import { formatInvalidScheduleMessage, previewSchedule } from '@lobechat/utils/cronEval';
 import { eq } from 'drizzle-orm';
 
 import { notifyTaskAssigned } from '@/business/server/task/notifyTaskAssigned';
@@ -37,25 +37,6 @@ import { TaskService } from '@/server/services/task';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
 import { type ServerRuntimeRegistration } from './types';
-
-/** "next runs (Asia/Shanghai) → Mon 2026-09-28 09:00; …" so the agent can check the schedule it set. */
-const formatScheduleNextRuns = (runs: Date[], timezone: string): string => {
-  const format = new Intl.DateTimeFormat('en-CA', {
-    day: '2-digit',
-    hour: '2-digit',
-    hourCycle: 'h23',
-    minute: '2-digit',
-    month: '2-digit',
-    timeZone: timezone,
-    weekday: 'short',
-    year: 'numeric',
-  });
-  const label = (date: Date) => {
-    const parts = Object.fromEntries(format.formatToParts(date).map((p) => [p.type, p.value]));
-    return `${parts.weekday} ${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
-  };
-  return `next runs (${timezone}) → ${runs.map(label).join('; ')}`;
-};
 
 // Row-level workspace resolution: the agent runtime hasn't threaded
 // `workspaceId` into `ToolExecutionContext` yet. When the tool fires inside a
@@ -644,14 +625,14 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
         args.automationMode === 'schedule';
       let schedulePreview: string | undefined;
       if (nextPattern && scheduleTouched) {
-        const validation = validateCronPattern(nextPattern, nextTimezone ?? null);
+        const validation = previewSchedule(nextPattern, nextTimezone ?? null);
         if (!validation.valid) {
           return {
-            content: `Invalid schedule for task ${task.identifier}: ${validation.error}. Use a standard 5-field cron expression "minute hour day-of-month month day-of-week" (e.g. "0 9 * * 1-5") with an IANA timezone. Nothing was updated.`,
+            content: formatInvalidScheduleMessage(task.identifier, validation.error),
             success: false,
           };
         }
-        schedulePreview = formatScheduleNextRuns(validation.nextRuns, nextTimezone || 'UTC');
+        schedulePreview = validation.preview;
       }
 
       const changes: string[] = [];

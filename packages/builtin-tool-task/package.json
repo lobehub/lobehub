@@ -10,7 +10,8 @@
   "main": "./src/index.ts",
   "dependencies": {
     "@lobechat/const": "workspace:*",
-    "@lobechat/prompts": "workspace:*"
+    "@lobechat/prompts": "workspace:*",
+    "@lobechat/utils": "workspace:*"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"
