@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { type LobeChatDatabase } from '@lobechat/database';
-import { agents, messagePlugins, messages, topics } from '@lobechat/database/schemas';
+import { agents, messagePlugins, messages, topics, userSettings } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import { eq } from 'drizzle-orm';
@@ -960,6 +960,57 @@ describe('aiAgentRouter — remote Human-in-the-loop', () => {
       expect(aiAgentService.execAgent).toHaveBeenCalledWith(
         expect.objectContaining({
           userInterventionConfig: { allowList: ['lobe-web-browsing'], approvalMode: 'manual' },
+        }),
+      );
+    });
+
+    it('carries a just-remembered tool approval into the continuation allow list', async () => {
+      const sourceOperationId = 'operation-remember-source';
+      stateFor(sourceOperationId, {
+        operationId: sourceOperationId,
+        principal: {
+          policy: {
+            userIntervention: { allowList: ['lobe-web-browsing'], approvalMode: 'allow-list' },
+          },
+        },
+        status: 'waiting_for_human',
+      });
+      // "Approve, and don't ask again" persisted this key before dispatch; the
+      // parked run's snapshot does not have it yet.
+      await serverDB
+        .insert(userSettings)
+        .values({
+          id: userId,
+          tool: {
+            humanIntervention: {
+              allowList: ['lobe-web-browsing', 'lobe-local-system____runCommand'],
+              approvalMode: 'allow-list',
+            },
+          },
+        })
+        .onConflictDoUpdate({
+          set: {
+            tool: {
+              humanIntervention: {
+                allowList: ['lobe-web-browsing', 'lobe-local-system____runCommand'],
+                approvalMode: 'allow-list',
+              },
+            },
+          },
+          target: userSettings.id,
+        });
+
+      await resolveToolResult({
+        resolutionRequestId: '018fbd8e-7baf-7c6d-8000-000000000044',
+        sourceOperationId,
+      });
+
+      expect(aiAgentService.execAgent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userInterventionConfig: {
+            allowList: ['lobe-web-browsing', 'lobe-local-system____runCommand'],
+            approvalMode: 'allow-list',
+          },
         }),
       );
     });
