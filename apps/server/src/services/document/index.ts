@@ -45,6 +45,39 @@ import type {
 
 const log = debug('lobe-chat:service:document');
 
+/**
+ * Upper bound, in characters, of parsed file text stored in `documents.content`.
+ *
+ * Parsing raw CSV exports, logs, or sparse spreadsheets can yield 100+ MiB of text. Rows that large
+ * slow every read of the document, overflow the model context when attached, and cannot be synced
+ * to full-text search. The original file stays in storage for tools that process it directly.
+ */
+export const PARSED_FILE_CONTENT_MAX_CHARS = 5_000_000;
+
+type ParsedFileDocument = Awaited<ReturnType<typeof loadFile>>;
+
+/**
+ * Truncates oversized parsed text before it is stored. `pages` repeats the full text, so it is
+ * dropped for truncated documents; `metadata` records the original length.
+ */
+export const capParsedFileDocument = (fileDocument: ParsedFileDocument): ParsedFileDocument => {
+  if (fileDocument.content.length <= PARSED_FILE_CONTENT_MAX_CHARS) return fileDocument;
+
+  const content = fileDocument.content.slice(0, PARSED_FILE_CONTENT_MAX_CHARS);
+  return {
+    ...fileDocument,
+    content,
+    metadata: {
+      ...fileDocument.metadata,
+      originalCharCount: fileDocument.content.length,
+      truncated: true,
+    },
+    pages: undefined,
+    totalCharCount: content.length,
+    totalLineCount: content.split('\n').length,
+  };
+};
+
 const normalizeParseFileError = (error: unknown) => {
   if (error instanceof UnsupportedFileTypeError) {
     return new TRPCError({
@@ -814,7 +847,7 @@ export class DocumentService {
 
     try {
       // Use loadFile to load file content
-      const fileDocument = await loadFile(filePath);
+      const fileDocument = capParsedFileDocument(await loadFile(filePath));
 
       log(`${logPrefix} File parsed successfully %O`, {
         fileType: fileDocument.fileType,
