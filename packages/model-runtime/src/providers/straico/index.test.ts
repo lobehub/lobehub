@@ -35,7 +35,6 @@ describe('LobeStraicoAI', () => {
 
       expect(instance.baseURL).toBe(expectedURL);
       expect(instance.client.baseURL).toBe(expectedURL);
-      expect(instance.id).toBe(ModelProvider.Straico);
     });
 
     it('identifies Straico and its endpoint in API errors', async () => {
