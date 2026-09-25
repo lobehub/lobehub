@@ -8,6 +8,7 @@ import { pipeline } from 'node:stream/promises';
 import { promisify } from 'node:util';
 
 import { type LobeChatDatabase } from '@lobechat/database';
+import { parseDataUri } from '@lobechat/model-runtime';
 import debug from 'debug';
 import { nanoid } from 'nanoid';
 import sharp from 'sharp';
@@ -178,10 +179,10 @@ export class VideoGenerationService {
     log('Downloading video to: %s', tempVideoPath);
 
     if (url.startsWith('data:')) {
-      const match = url.match(/^data:(video\/[\w.+-]+);base64,([\s\S]+)$/);
-      if (!match) throw new Error('Invalid video data URI');
+      const { base64, mimeType } = parseDataUri(url);
+      if (!base64 || !mimeType?.startsWith('video/')) throw new Error('Invalid video data URI');
 
-      const videoBuffer = Buffer.from(match[2], 'base64');
+      const videoBuffer = Buffer.from(base64, 'base64');
       if (videoBuffer.length > VideoGenerationService.MAX_VIDEO_SIZE) {
         throw new Error(
           `Video file too large: ${videoBuffer.length} bytes (max ${VideoGenerationService.MAX_VIDEO_SIZE} bytes)`,
@@ -237,7 +238,7 @@ export class VideoGenerationService {
 
   private resolveVideoFormat(url: string): { ext: string; mimeType: string } {
     if (url.startsWith('data:')) {
-      const mimeType = url.slice(5, url.indexOf(';')).toLowerCase();
+      const mimeType = parseDataUri(url).mimeType?.toLowerCase();
       return {
         ext: mimeType === 'video/webm' ? '.webm' : '.mp4',
         mimeType: mimeType || 'video/mp4',

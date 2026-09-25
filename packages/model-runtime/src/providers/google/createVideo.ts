@@ -2,6 +2,7 @@ import type { GenerateVideosConfig, GoogleGenAI, Image } from '@google/genai';
 import { GenerateVideosOperation } from '@google/genai';
 import { imageUrlToBase64 } from '@lobechat/utils';
 import debug from 'debug';
+import { GEMINI_OMNI_VIDEO_MODEL_ID } from 'model-bank/standardParameters';
 
 import type { CreateVideoPayload, CreateVideoResult } from '../../types/video';
 import { AgentRuntimeError } from '../../utils/createError';
@@ -9,7 +10,6 @@ import { parseGoogleErrorMessage } from '../../utils/googleErrorParser';
 import { parseDataUri } from '../../utils/uriParser';
 
 const log = debug('lobe-video:google');
-const GEMINI_OMNI_VIDEO_MODEL = 'gemini-omni-flash-preview';
 const GOOGLE_FILE_DOWNLOAD_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 
 interface OmniVideoContent {
@@ -34,7 +34,7 @@ interface OmniInteraction {
   };
 }
 
-export const isGeminiOmniVideoModel = (model: string) => model === GEMINI_OMNI_VIDEO_MODEL;
+export const isGeminiOmniVideoModel = (model: string) => model === GEMINI_OMNI_VIDEO_MODEL_ID;
 
 /**
  * Convert image URL to Google Image format

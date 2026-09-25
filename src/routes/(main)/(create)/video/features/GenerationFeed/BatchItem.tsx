@@ -6,6 +6,7 @@ import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
 import { CopyIcon, RotateCcwSquareIcon, SquarePenIcon, Trash2, XIcon } from 'lucide-react';
 import { type RuntimeVideoGenParamsKeys, type RuntimeVideoGenParamsValue } from 'model-bank';
+import { supportsConversationalVideoEdit } from 'model-bank/standardParameters';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -25,7 +26,7 @@ import VideoErrorItem from './VideoErrorItem';
 import VideoLoadingItem from './VideoLoadingItem';
 import VideoReferenceFrames from './VideoReferenceFrames';
 import VideoSuccessItem from './VideoSuccessItem';
-import { GEMINI_OMNI_VIDEO_MODEL, useVideoVersionMap } from './videoVersion';
+import { type VideoVersionNode } from './videoVersion';
 
 const styles = createStaticStyles(({ css, cssVar, cx }) => ({
   batchActions: cx(
@@ -46,338 +47,342 @@ const styles = createStaticStyles(({ css, cssVar, cx }) => ({
 
 interface VideoGenerationBatchItemProps {
   batch: GenerationBatch;
+  /** Topic-wide version index, built once by the feed rather than per row. */
+  versionMap: Map<string, VideoVersionNode>;
 }
 
-export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(({ batch }) => {
-  const { t } = useTranslation(['video', 'image']);
-  const useCheckGenerationStatus = useVideoStore((s) => s.useCheckGenerationStatus);
-  const removeGeneration = useVideoStore((s) => s.removeGeneration);
-  const removeGenerationBatch = useVideoStore((s) => s.removeGenerationBatch);
-  const setModelAndProviderOnSelect = useVideoStore((s) => s.setModelAndProviderOnSelect);
-  const setParamOnInput = useVideoStore((s) => s.setParamOnInput);
-  const startEditingVideo = useVideoStore((s) => s.startEditingVideo);
-  const cancelEditingVideo = useVideoStore((s) => s.cancelEditingVideo);
-  const editingGenerationId = useVideoStore(createVideoSelectors.editingGenerationId);
-  const activeTopicId = useVideoStore((s) => s.activeGenerationTopicId);
-  const activeWorkspaceId = useActiveWorkspaceId();
-  const { shouldRenderBusinessBatchItem, businessBatchItem } =
-    useRenderBusinessVideoBatchItem(batch);
+export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(
+  ({ batch, versionMap }) => {
+    const { t } = useTranslation(['video', 'image']);
+    const useCheckGenerationStatus = useVideoStore((s) => s.useCheckGenerationStatus);
+    const removeGeneration = useVideoStore((s) => s.removeGeneration);
+    const removeGenerationBatch = useVideoStore((s) => s.removeGenerationBatch);
+    const setModelAndProviderOnSelect = useVideoStore((s) => s.setModelAndProviderOnSelect);
+    const setParamOnInput = useVideoStore((s) => s.setParamOnInput);
+    const startEditingVideo = useVideoStore((s) => s.startEditingVideo);
+    const cancelEditingVideo = useVideoStore((s) => s.cancelEditingVideo);
+    const editingGenerationId = useVideoStore(createVideoSelectors.editingGenerationId);
+    const activeTopicId = useVideoStore((s) => s.activeGenerationTopicId);
+    const activeWorkspaceId = useActiveWorkspaceId();
+    const { shouldRenderBusinessBatchItem, businessBatchItem } =
+      useRenderBusinessVideoBatchItem(batch);
 
-  const enabledVideoModelList = useAiInfraStore(aiProviderSelectors.enabledVideoModelList);
-  // Resolve the model's display name from the enabled model catalog, falling back
-  // to the raw model id when the model is not found (e.g. removed/renamed models).
-  const modelDisplayName = useMemo(() => {
-    const provider = enabledVideoModelList.find((p) => p.id === batch.provider);
-    const model = provider?.children.find((m) => m.id === batch.model);
-    return model?.displayName || batch.model;
-  }, [enabledVideoModelList, batch.provider, batch.model]);
+    const enabledVideoModelList = useAiInfraStore(aiProviderSelectors.enabledVideoModelList);
+    // Resolve the model's display name from the enabled model catalog, falling back
+    // to the raw model id when the model is not found (e.g. removed/renamed models).
+    const modelDisplayName = useMemo(() => {
+      const provider = enabledVideoModelList.find((p) => p.id === batch.provider);
+      const model = provider?.children.find((m) => m.id === batch.model);
+      return model?.displayName || batch.model;
+    }, [enabledVideoModelList, batch.provider, batch.model]);
 
-  const creator = batch.creator;
-  const showCreator = Boolean(activeWorkspaceId && creator?.id);
-  const creatorName = creator?.fullName || creator?.username || '';
+    const creator = batch.creator;
+    const showCreator = Boolean(activeWorkspaceId && creator?.id);
+    const creatorName = creator?.fullName || creator?.username || '';
 
-  const time = useMemo(() => {
-    return dayjs(batch.createdAt).format('YYYY-MM-DD HH:mm:ss');
-  }, [batch.createdAt]);
+    const time = useMemo(() => {
+      return dayjs(batch.createdAt).format('YYYY-MM-DD HH:mm:ss');
+    }, [batch.createdAt]);
 
-  const generation = batch.generations[0];
+    const generation = batch.generations[0];
 
-  const versionMap = useVideoVersionMap();
-  const versionNode = generation ? versionMap.get(generation.id) : undefined;
-  const editSource = versionNode?.previousGenerationId
-    ? versionMap.get(versionNode.previousGenerationId)
-    : undefined;
-  // Only label versions once a video is part of an edit chain, so plain generations stay clean.
-  const showVersion = useMemo(() => {
-    if (!generation || !versionNode) return false;
-    if (versionNode.version > 1) return true;
+    const versionNode = generation ? versionMap.get(generation.id) : undefined;
+    const editSource = versionNode?.previousGenerationId
+      ? versionMap.get(versionNode.previousGenerationId)
+      : undefined;
+    // Only label versions once a video is part of an edit chain, so plain generations stay clean.
+    const showVersion = Boolean(versionNode && (versionNode.version > 1 || versionNode.hasEdits));
 
-    for (const node of versionMap.values()) {
-      if (node.previousGenerationId === generation.id) return true;
-    }
-    return false;
-  }, [generation, versionMap, versionNode]);
+    const isEditingSource = Boolean(generation && editingGenerationId === generation.id);
+    const canEdit =
+      supportsConversationalVideoEdit(batch.model) &&
+      generation?.task.status === AsyncTaskStatus.Success &&
+      Boolean((generation.asset as VideoGenerationAsset | null | undefined)?.interactionId);
 
-  const isEditingSource = Boolean(generation && editingGenerationId === generation.id);
-  const canEdit =
-    batch.model === GEMINI_OMNI_VIDEO_MODEL &&
-    generation?.task.status === AsyncTaskStatus.Success &&
-    Boolean((generation.asset as VideoGenerationAsset | null | undefined)?.interactionId);
+    const isFinalized =
+      generation?.task.status === AsyncTaskStatus.Success ||
+      generation?.task.status === AsyncTaskStatus.Error;
 
-  const isFinalized =
-    generation?.task.status === AsyncTaskStatus.Success ||
-    generation?.task.status === AsyncTaskStatus.Error;
-
-  useCheckGenerationStatus(
-    generation?.id ?? '',
-    generation?.task.id ?? '',
-    activeTopicId!,
-    !isFinalized,
-  );
-
-  const handleDelete = useCallback(async () => {
-    if (!generation?.id) return;
-
-    try {
-      await removeGeneration(generation.id);
-    } catch (error) {
-      console.error('Failed to delete generation:', error);
-    }
-  }, [removeGeneration, generation?.id]);
-
-  const handleCopyPrompt = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(batch.prompt);
-      toast.success(t('generation.actions.promptCopied', { ns: 'image' }));
-    } catch (error) {
-      console.error('Failed to copy prompt:', error);
-      toast.error(t('generation.actions.promptCopyFailed', { ns: 'image' }));
-    }
-  }, [batch.prompt, t]);
-
-  const handleReuseSettings = useCallback(() => {
-    setModelAndProviderOnSelect(batch.model, batch.provider);
-
-    if (!batch.config) return;
-
-    for (const [paramName, value] of Object.entries(batch.config)) {
-      if (value === undefined) continue;
-
-      setParamOnInput(paramName as RuntimeVideoGenParamsKeys, value as RuntimeVideoGenParamsValue);
-    }
-  }, [batch.config, batch.model, batch.provider, setModelAndProviderOnSelect, setParamOnInput]);
-
-  const handleEdit = useCallback(() => {
-    if (!generation?.asset || !('interactionId' in generation.asset)) return;
-    if (!generation.asset.interactionId) return;
-
-    if (editingGenerationId === generation.id) {
-      cancelEditingVideo();
-      return;
-    }
-
-    startEditingVideo({
-      generationId: generation.id,
-      model: batch.model,
-      provider: batch.provider,
-      sourceParameters: batch.config,
-    });
-  }, [
-    batch.config,
-    batch.model,
-    batch.provider,
-    cancelEditingVideo,
-    editingGenerationId,
-    generation,
-    startEditingVideo,
-  ]);
-
-  const handleDeleteBatch = useCallback(async () => {
-    if (!activeTopicId) return;
-
-    try {
-      await removeGenerationBatch(batch.id, activeTopicId);
-    } catch (error) {
-      console.error('Failed to delete batch:', error);
-    }
-  }, [activeTopicId, batch.id, removeGenerationBatch]);
-
-  const handleDownload = useCallback(async () => {
-    if (!generation?.asset?.url) return;
-
-    const timestamp = dayjs(generation.createdAt).format('YYYY-MM-DD_HH-mm-ss');
-    const baseName = batch.prompt.slice(0, 30).trim();
-    const sanitizedBaseName = baseName.replaceAll(/["%*/:<>?\\|]/g, '').replaceAll(/\s+/g, '_');
-    const safePrompt = sanitizedBaseName || 'Untitled';
-    const fileName = `${safePrompt}_${timestamp}.mp4`;
-
-    try {
-      await downloadFile(generation.asset.url, fileName, false);
-    } catch (error) {
-      console.error('Failed to download video:', error);
-    }
-  }, [generation?.asset?.url, generation?.createdAt, batch.prompt]);
-
-  const handleCopyError = useCallback(async () => {
-    if (!generation?.task.error) return;
-
-    const errorMessage =
-      typeof generation.task.error.body === 'string'
-        ? generation.task.error.body
-        : generation.task.error.body?.detail || generation.task.error.name || 'Unknown error';
-
-    try {
-      await navigator.clipboard.writeText(errorMessage);
-      toast.success(t('generation.actions.errorCopied'));
-    } catch (error) {
-      console.error('Failed to copy error message:', error);
-      toast.error(t('generation.actions.errorCopyFailed'));
-    }
-  }, [generation?.task.error, t]);
-
-  const displayAspectRatio = useMemo(() => {
-    const ratio = batch.config?.aspectRatio;
-    if (ratio && ratio !== 'adaptive') return ratio;
-
-    // Compute from video asset dimensions
-    const asset = generation?.asset;
-    if (asset && asset.width && asset.height && asset.width > 0 && asset.height > 0) {
-      const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
-      const d = gcd(asset.width, asset.height);
-      return `${asset.width / d}:${asset.height / d}`;
-    }
-    return undefined;
-  }, [batch.config?.aspectRatio, generation?.asset]);
-
-  if (!generation) {
-    return null;
-  }
-
-  if (shouldRenderBusinessBatchItem) {
-    return businessBatchItem;
-  }
-
-  const isInvalidApiKey = generation.task.error?.name === AsyncTaskErrorType.InvalidProviderAPIKey;
-
-  if (isInvalidApiKey) {
-    return (
-      <GenerationInvalidAPIKey
-        provider={batch.provider}
-        onNavigate={() => {
-          if (!activeTopicId) return;
-          removeGenerationBatch(batch.id, activeTopicId);
-        }}
-      />
+    useCheckGenerationStatus(
+      generation?.id ?? '',
+      generation?.task.id ?? '',
+      activeTopicId!,
+      !isFinalized,
     );
-  }
 
-  const renderContent = () => {
-    if (generation.task.status === AsyncTaskStatus.Success && generation.asset?.url) {
+    const handleDelete = useCallback(async () => {
+      if (!generation?.id) return;
+
+      try {
+        await removeGeneration(generation.id);
+      } catch (error) {
+        console.error('Failed to delete generation:', error);
+      }
+    }, [removeGeneration, generation?.id]);
+
+    const handleCopyPrompt = useCallback(async () => {
+      try {
+        await navigator.clipboard.writeText(batch.prompt);
+        toast.success(t('generation.actions.promptCopied', { ns: 'image' }));
+      } catch (error) {
+        console.error('Failed to copy prompt:', error);
+        toast.error(t('generation.actions.promptCopyFailed', { ns: 'image' }));
+      }
+    }, [batch.prompt, t]);
+
+    const handleReuseSettings = useCallback(() => {
+      setModelAndProviderOnSelect(batch.model, batch.provider);
+
+      if (!batch.config) return;
+
+      for (const [paramName, value] of Object.entries(batch.config)) {
+        if (value === undefined) continue;
+
+        setParamOnInput(
+          paramName as RuntimeVideoGenParamsKeys,
+          value as RuntimeVideoGenParamsValue,
+        );
+      }
+    }, [batch.config, batch.model, batch.provider, setModelAndProviderOnSelect, setParamOnInput]);
+
+    const handleEdit = useCallback(() => {
+      if (!generation?.asset || !('interactionId' in generation.asset)) return;
+      if (!generation.asset.interactionId) return;
+
+      if (editingGenerationId === generation.id) {
+        cancelEditingVideo();
+        return;
+      }
+
+      startEditingVideo({
+        generationId: generation.id,
+        model: batch.model,
+        provider: batch.provider,
+        sourceParameters: batch.config,
+      });
+    }, [
+      batch.config,
+      batch.model,
+      batch.provider,
+      cancelEditingVideo,
+      editingGenerationId,
+      generation,
+      startEditingVideo,
+    ]);
+
+    const handleDeleteBatch = useCallback(async () => {
+      if (!activeTopicId) return;
+
+      try {
+        await removeGenerationBatch(batch.id, activeTopicId);
+      } catch (error) {
+        console.error('Failed to delete batch:', error);
+      }
+    }, [activeTopicId, batch.id, removeGenerationBatch]);
+
+    const handleDownload = useCallback(async () => {
+      if (!generation?.asset?.url) return;
+
+      const timestamp = dayjs(generation.createdAt).format('YYYY-MM-DD_HH-mm-ss');
+      const baseName = batch.prompt.slice(0, 30).trim();
+      const sanitizedBaseName = baseName.replaceAll(/["%*/:<>?\\|]/g, '').replaceAll(/\s+/g, '_');
+      const safePrompt = sanitizedBaseName || 'Untitled';
+      const fileName = `${safePrompt}_${timestamp}.mp4`;
+
+      try {
+        await downloadFile(generation.asset.url, fileName, false);
+      } catch (error) {
+        console.error('Failed to download video:', error);
+      }
+    }, [generation?.asset?.url, generation?.createdAt, batch.prompt]);
+
+    const handleCopyError = useCallback(async () => {
+      if (!generation?.task.error) return;
+
+      const errorMessage =
+        typeof generation.task.error.body === 'string'
+          ? generation.task.error.body
+          : generation.task.error.body?.detail || generation.task.error.name || 'Unknown error';
+
+      try {
+        await navigator.clipboard.writeText(errorMessage);
+        toast.success(t('generation.actions.errorCopied'));
+      } catch (error) {
+        console.error('Failed to copy error message:', error);
+        toast.error(t('generation.actions.errorCopyFailed'));
+      }
+    }, [generation?.task.error, t]);
+
+    const displayAspectRatio = useMemo(() => {
+      const ratio = batch.config?.aspectRatio;
+      if (ratio && ratio !== 'adaptive') return ratio;
+
+      // Compute from video asset dimensions
+      const asset = generation?.asset;
+      if (asset && asset.width && asset.height && asset.width > 0 && asset.height > 0) {
+        const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
+        const d = gcd(asset.width, asset.height);
+        return `${asset.width / d}:${asset.height / d}`;
+      }
+      return undefined;
+    }, [batch.config?.aspectRatio, generation?.asset]);
+
+    if (!generation) {
+      return null;
+    }
+
+    if (shouldRenderBusinessBatchItem) {
+      return businessBatchItem;
+    }
+
+    const isInvalidApiKey =
+      generation.task.error?.name === AsyncTaskErrorType.InvalidProviderAPIKey;
+
+    if (isInvalidApiKey) {
       return (
-        <VideoSuccessItem
-          generation={generation}
-          isEditing={isEditingSource}
-          onDelete={handleDelete}
-          onDownload={handleDownload}
+        <GenerationInvalidAPIKey
+          provider={batch.provider}
+          onNavigate={() => {
+            if (!activeTopicId) return;
+            removeGenerationBatch(batch.id, activeTopicId);
+          }}
         />
       );
     }
 
-    if (generation.task.status === AsyncTaskStatus.Error) {
+    const renderContent = () => {
+      if (generation.task.status === AsyncTaskStatus.Success && generation.asset?.url) {
+        return (
+          <VideoSuccessItem
+            generation={generation}
+            isEditing={isEditingSource}
+            onDelete={handleDelete}
+            onDownload={handleDownload}
+          />
+        );
+      }
+
+      if (generation.task.status === AsyncTaskStatus.Error) {
+        return (
+          <VideoErrorItem
+            aspectRatio={displayAspectRatio}
+            generation={generation}
+            onCopyError={handleCopyError}
+            onDelete={handleDelete}
+          />
+        );
+      }
+
       return (
-        <VideoErrorItem
+        <VideoLoadingItem
           aspectRatio={displayAspectRatio}
+          avgLatencyMs={batch.avgLatencyMs}
           generation={generation}
-          onCopyError={handleCopyError}
-          onDelete={handleDelete}
         />
       );
-    }
+    };
+
+    const hasReferenceFrames =
+      batch.config?.imageUrl ||
+      (batch.config?.imageUrls && batch.config.imageUrls.length > 0) ||
+      batch.config?.endImageUrl;
 
     return (
-      <VideoLoadingItem
-        aspectRatio={displayAspectRatio}
-        avgLatencyMs={batch.avgLatencyMs}
-        generation={generation}
-      />
-    );
-  };
-
-  const hasReferenceFrames =
-    batch.config?.imageUrl ||
-    (batch.config?.imageUrls && batch.config.imageUrls.length > 0) ||
-    batch.config?.endImageUrl;
-
-  return (
-    <Block
-      className={styles.container}
-      data-video-generation-id={generation.id}
-      gap={8}
-      variant={'borderless'}
-    >
-      {versionNode?.previousGenerationId && (
-        <EditSourceLink source={editSource} sourceVersion={Math.max(versionNode.version - 1, 1)} />
-      )}
-      <Flexbox horizontal align={'flex-start'} gap={16}>
-        {hasReferenceFrames && (
-          <VideoReferenceFrames
-            endImageUrl={batch.config?.endImageUrl}
-            imageUrl={batch.config?.imageUrl}
-            imageUrls={batch.config?.imageUrls}
+      <Block
+        className={styles.container}
+        data-video-generation-id={generation.id}
+        gap={8}
+        variant={'borderless'}
+      >
+        {versionNode?.previousGenerationId && (
+          <EditSourceLink
+            source={editSource}
+            sourceVersion={Math.max(versionNode.version - 1, 1)}
           />
         )}
-        <Markdown variant={'chat'}>{batch.prompt}</Markdown>
-      </Flexbox>
-      {renderContent()}
-      <Flexbox horizontal align={'center'} gap={4} justify={'space-between'}>
-        <Flexbox horizontal align={'center'} gap={4}>
-          <Flexbox horizontal align={'center'} gap={4} style={{ opacity: 0.66 }}>
-            <Tag icon={<ModelIcon model={batch.model} />} variant={'borderless'}>
-              {modelDisplayName}
-            </Tag>
-            {showVersion && versionNode && (
-              <Tag variant={'borderless'}>
-                {t('generation.version.label', { version: String(versionNode.version) })}
+        <Flexbox horizontal align={'flex-start'} gap={16}>
+          {hasReferenceFrames && (
+            <VideoReferenceFrames
+              endImageUrl={batch.config?.endImageUrl}
+              imageUrl={batch.config?.imageUrl}
+              imageUrls={batch.config?.imageUrls}
+            />
+          )}
+          <Markdown variant={'chat'}>{batch.prompt}</Markdown>
+        </Flexbox>
+        {renderContent()}
+        <Flexbox horizontal align={'center'} gap={4} justify={'space-between'}>
+          <Flexbox horizontal align={'center'} gap={4}>
+            <Flexbox horizontal align={'center'} gap={4} style={{ opacity: 0.66 }}>
+              <Tag icon={<ModelIcon model={batch.model} />} variant={'borderless'}>
+                {modelDisplayName}
               </Tag>
-            )}
-            {batch.config?.resolution && (
-              <Tag variant={'borderless'}>{batch.config.resolution}</Tag>
+              {showVersion && versionNode && (
+                <Tag variant={'borderless'}>
+                  {t('generation.version.label', { version: String(versionNode.version) })}
+                </Tag>
+              )}
+              {batch.config?.resolution && (
+                <Tag variant={'borderless'}>{batch.config.resolution}</Tag>
+              )}
+            </Flexbox>
+            {canEdit && (
+              <Button
+                icon={isEditingSource ? XIcon : SquarePenIcon}
+                size={'small'}
+                type={isEditingSource ? 'primary' : 'default'}
+                onClick={handleEdit}
+              >
+                {isEditingSource
+                  ? t('generation.actions.cancelEdit')
+                  : t('generation.actions.edit')}
+              </Button>
             )}
           </Flexbox>
-          {canEdit && (
-            <Button
-              icon={isEditingSource ? XIcon : SquarePenIcon}
-              size={'small'}
-              type={isEditingSource ? 'primary' : 'default'}
-              onClick={handleEdit}
-            >
-              {isEditingSource ? t('generation.actions.cancelEdit') : t('generation.actions.edit')}
-            </Button>
-          )}
+          <Flexbox horizontal align={'center'} gap={6} style={{ opacity: 0.66 }}>
+            {showCreator && (
+              <>
+                <Text fontSize={12} type={'secondary'}>
+                  {t('generation.metadata.by', { name: creatorName, ns: 'image' })}
+                </Text>
+                <Text fontSize={12} type={'secondary'}>
+                  ·
+                </Text>
+              </>
+            )}
+            <Text as={'time'} fontSize={12} type={'secondary'}>
+              {t('generation.metadata.createdAt', { ns: 'image', time })}
+            </Text>
+          </Flexbox>
         </Flexbox>
-        <Flexbox horizontal align={'center'} gap={6} style={{ opacity: 0.66 }}>
-          {showCreator && (
-            <>
-              <Text fontSize={12} type={'secondary'}>
-                {t('generation.metadata.by', { name: creatorName, ns: 'image' })}
-              </Text>
-              <Text fontSize={12} type={'secondary'}>
-                ·
-              </Text>
-            </>
-          )}
-          <Text as={'time'} fontSize={12} type={'secondary'}>
-            {t('generation.metadata.createdAt', { ns: 'image', time })}
-          </Text>
+        <Flexbox horizontal align={'center'} className={styles.batchActions}>
+          <ActionIconGroup
+            items={[
+              {
+                icon: RotateCcwSquareIcon,
+                key: 'reuseSettings',
+                label: t('generation.actions.reuseSettings', { ns: 'image' }),
+                onClick: handleReuseSettings,
+              },
+              {
+                icon: CopyIcon,
+                key: 'copyPrompt',
+                label: t('generation.actions.copyPrompt', { ns: 'image' }),
+                onClick: handleCopyPrompt,
+              },
+              {
+                danger: true,
+                icon: Trash2,
+                key: 'deleteBatch',
+                label: t('generation.actions.deleteBatch', { ns: 'image' }),
+                onClick: handleDeleteBatch,
+              },
+            ]}
+          />
         </Flexbox>
-      </Flexbox>
-      <Flexbox horizontal align={'center'} className={styles.batchActions}>
-        <ActionIconGroup
-          items={[
-            {
-              icon: RotateCcwSquareIcon,
-              key: 'reuseSettings',
-              label: t('generation.actions.reuseSettings', { ns: 'image' }),
-              onClick: handleReuseSettings,
-            },
-            {
-              icon: CopyIcon,
-              key: 'copyPrompt',
-              label: t('generation.actions.copyPrompt', { ns: 'image' }),
-              onClick: handleCopyPrompt,
-            },
-            {
-              danger: true,
-              icon: Trash2,
-              key: 'deleteBatch',
-              label: t('generation.actions.deleteBatch', { ns: 'image' }),
-              onClick: handleDeleteBatch,
-            },
-          ]}
-        />
-      </Flexbox>
-    </Block>
-  );
-});
+      </Block>
+    );
+  },
+);
 
 VideoGenerationBatchItem.displayName = 'VideoGenerationBatchItem';

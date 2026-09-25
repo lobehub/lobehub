@@ -311,15 +311,14 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const createVideo = useVideoStore((s) => s.createVideo);
   const cancelEditingVideo = useVideoStore((s) => s.cancelEditingVideo);
   const editingGenerationId = useVideoStore(createVideoSelectors.editingGenerationId);
-  const editingBatch = useVideoStore((s) => {
-    if (!s.editingGenerationId) return undefined;
+  const currentGenerationBatches = useVideoStore(generationBatchSelectors.currentGenerationBatches);
+  const editingBatch = useMemo(() => {
+    if (!editingGenerationId) return undefined;
 
-    return generationBatchSelectors
-      .currentGenerationBatches(s)
-      .find((batch) =>
-        batch.generations.some((generation) => generation.id === s.editingGenerationId),
-      );
-  });
+    return currentGenerationBatches.find((batch) =>
+      batch.generations.some((generation) => generation.id === editingGenerationId),
+    );
+  }, [currentGenerationBatches, editingGenerationId]);
   const setModelAndProviderOnSelect = useVideoStore((s) => s.setModelAndProviderOnSelect);
   const activeGenerationTopicId = useVideoStore(
     videoGenerationTopicSelectors.activeGenerationTopicId,

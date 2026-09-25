@@ -1,3 +1,4 @@
+import { resolveBusinessModelMapping } from '@lobechat/business-model-runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { chargeAfterGenerate } from '@/business/server/video-generation/chargeAfterGenerate';
@@ -187,6 +188,25 @@ describe('videoBackgroundPolling', () => {
           prechargeResult: { credits: 10 },
           usage: { completionTokens: 28_960, totalTokens: 29_120 },
         }),
+      );
+    });
+
+    it('should poll the pinned route with the mapped model id instead of the alias', async () => {
+      vi.mocked(resolveBusinessModelMapping).mockResolvedValueOnce({
+        resolvedModelId: 'mapped-model',
+      } as any);
+      mockModelRuntime.handlePollVideoStatus.mockResolvedValue({
+        status: 'failed',
+        error: 'Model API error',
+      });
+      const route = { apiType: 'google', channelId: 'channel-1', routerId: 'router-1' };
+
+      await processBackgroundVideoPolling(mockDb, { ...mockParams, route });
+
+      expect(mockModelRuntime.handlePollVideoStatus).toHaveBeenCalledWith(
+        'inference-abc',
+        'mapped-model',
+        route,
       );
     });
 

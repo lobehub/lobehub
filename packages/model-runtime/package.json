@@ -42,7 +42,6 @@
     "dayjs": "^1.11.21",
     "debug": "^4.4.3",
     "immer": "^10.2.0",
-    "jose": "^6.2.3",
     "langfuse": "^3.38.20",
     "langfuse-core": "^3.38.20",
     "model-bank": "workspace:*",

@@ -185,4 +185,75 @@ describe('CreateVideoAction', () => {
       prompt: 'An unrelated draft',
     });
   });
+
+  it('should keep the typed instruction when switching to another edit source', () => {
+    const { result } = renderHook(() => useVideoStore());
+
+    act(() => {
+      result.current.startEditingVideo({
+        generationId: 'generation-a',
+        model: 'gemini-omni-flash-preview',
+        provider: 'google',
+      });
+      result.current.setParamOnInput('prompt', 'Make the camera move more slowly');
+      result.current.startEditingVideo({
+        generationId: 'generation-b',
+        model: 'gemini-omni-flash-preview',
+        provider: 'google',
+      });
+    });
+
+    expect(result.current.editingGenerationId).toBe('generation-b');
+    expect(result.current.parameters.prompt).toBe('Make the camera move more slowly');
+    expect(result.current.editingDraftSnapshot?.parameters.prompt).toBe('An unrelated draft');
+  });
+
+  it('should leave edit mode and restore the draft when the edit source is deleted', async () => {
+    useVideoStore.setState({
+      generationBatchesMap: {},
+      internal_deleteGeneration: vi.fn().mockResolvedValue(undefined),
+    });
+    const { result } = renderHook(() => useVideoStore());
+
+    act(() => {
+      result.current.startEditingVideo({
+        generationId: 'generation-source',
+        model: 'gemini-omni-flash-preview',
+        provider: 'google',
+      });
+    });
+
+    await act(async () => {
+      await result.current.removeGeneration('generation-source');
+    });
+
+    expect(result.current.editingGenerationId).toBeUndefined();
+    expect(result.current.model).toBe('draft-model');
+    expect(result.current.parameters.prompt).toBe('An unrelated draft');
+  });
+
+  it('should leave edit mode when the batch holding the edit source is deleted', async () => {
+    useVideoStore.setState({
+      generationBatchesMap: {
+        'topic-1': [{ generations: [{ id: 'generation-source' }], id: 'batch-source' } as any],
+      },
+      internal_deleteGenerationBatch: vi.fn().mockResolvedValue(undefined),
+    });
+    const { result } = renderHook(() => useVideoStore());
+
+    act(() => {
+      result.current.startEditingVideo({
+        generationId: 'generation-source',
+        model: 'gemini-omni-flash-preview',
+        provider: 'google',
+      });
+    });
+
+    await act(async () => {
+      await result.current.removeGenerationBatch('batch-source', 'topic-1');
+    });
+
+    expect(result.current.editingGenerationId).toBeUndefined();
+    expect(result.current.model).toBe('draft-model');
+  });
 });

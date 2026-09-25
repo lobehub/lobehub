@@ -74,7 +74,10 @@ export async function processBackgroundVideoPolling(
     const generationModel = new GenerationModel(db, userId, workspaceId);
 
     const modelRuntime = await initModelRuntimeFromDB(db, userId, provider, workspaceId);
-    const pollResult = await pollUntilCompletion(modelRuntime, inferenceId, model, route);
+    // `route` was pinned for the mapped model id at creation, so poll with that id too;
+    // the user-facing alias may resolve to a router list that no longer holds the route.
+    const { resolvedModelId: pollModelId } = await resolveBusinessModelMapping(provider, model);
+    const pollResult = await pollUntilCompletion(modelRuntime, inferenceId, pollModelId, route);
 
     if (!pollResult) {
       throw new Error('Polling completed but no video URL returned');

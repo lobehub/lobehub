@@ -1,10 +1,13 @@
 import { toast } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
+import { type RuntimeVideoGenParams, type RuntimeVideoGenParamsKeys } from 'model-bank';
 
 import { handleGenerationPromptModerationError } from '@/business/client/handleGenerationPromptModerationError';
 import { handleLobeHubModelDeprecatedError } from '@/business/client/handleLobeHubModelDeprecatedError';
 import { videoService } from '@/services/video';
 import { type StoreSetter } from '@/store/types';
+import { preserveSupportedParams } from '@/store/utils/preserveSupportedParams';
+import { type GenerationConfig } from '@/types/generation';
 
 import { type VideoStore } from '../../store';
 import { generationBatchSelectors } from '../generationBatch/selectors';
@@ -19,7 +22,7 @@ interface StartEditingVideoParams {
   generationId: string;
   model: string;
   provider: string;
-  sourceParameters?: object;
+  sourceParameters?: GenerationConfig;
 }
 
 const EDIT_INPUT_PARAMETER_KEYS = new Set([
@@ -223,22 +226,30 @@ export class CreateVideoActionImpl {
   }: StartEditingVideoParams): void => {
     const store = this.#get();
     const { defaultValues, parametersSchema } = getVideoModelAndDefaults(model, provider);
-    const parameters = { ...defaultValues };
-
-    for (const [key, value] of Object.entries(sourceParameters ?? {})) {
-      if (!(key in parametersSchema) || EDIT_INPUT_PARAMETER_KEYS.has(key) || value === undefined) {
-        continue;
-      }
-
-      Object.assign(parameters, { [key]: value });
-    }
+    // Carry the source video's settings over, but not its prompt or input media.
+    const carriedKeys = Object.keys(parametersSchema).filter(
+      (key) => !EDIT_INPUT_PARAMETER_KEYS.has(key),
+    ) as RuntimeVideoGenParamsKeys[];
+    const parameters = preserveSupportedParams(
+      (sourceParameters ?? {}) as RuntimeVideoGenParams,
+      defaultValues,
+      parametersSchema,
+      carriedKeys,
+    );
 
     this.#set(
       {
         editingDraftSnapshot: store.editingDraftSnapshot ?? cloneEditingDraft(store),
         editingGenerationId: generationId,
         model,
-        parameters: { ...parameters, prompt: '' },
+        /**
+         * Switching from one edit source to another keeps the typed instruction: it is
+         * usually still what the user wants, and clearing it would silently lose input.
+         */
+        parameters: {
+          ...parameters,
+          prompt: store.editingGenerationId ? store.parameters.prompt : '',
+        },
         parametersSchema,
         provider,
         uploadingImagePreviews: [],

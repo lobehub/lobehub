@@ -1,6 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
+import { Flexbox, Image } from '@lobehub/ui';
 import { ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { LocateFixedIcon, SquarePenIcon, VideoIcon, XIcon } from 'lucide-react';
@@ -47,12 +47,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorFillSecondary};
     box-shadow: 0 0 0 2px ${cssVar.colorPrimary};
 
-    img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
     &:hover > span {
       opacity: 1;
     }
@@ -82,7 +76,16 @@ const EditingVideoHeader = memo<EditingVideoHeaderProps>(
           title={t('generation.version.locateSource')}
           onClick={onLocate}
         >
-          {coverUrl ? <img alt="" src={coverUrl} /> : <VideoIcon size={18} />}
+          {coverUrl ? (
+            <Image
+              alt=""
+              preview={false}
+              src={coverUrl}
+              style={{ height: '100%', objectFit: 'cover', width: '100%' }}
+            />
+          ) : (
+            <VideoIcon size={18} />
+          )}
           <span className={styles.locate}>
             <LocateFixedIcon size={16} />
           </span>

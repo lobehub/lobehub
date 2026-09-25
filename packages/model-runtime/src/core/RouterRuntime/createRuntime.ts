@@ -1251,29 +1251,39 @@ export const createRouterRuntime = ({
 
     async handlePollVideoStatus(inferenceId: string, model?: string, route?: VideoPollingRoute) {
       const resolvedRouters = await this.resolveRouters({ model });
-      const routedRouter = route?.routerId
-        ? resolvedRouters.find((router) => router.id === route.routerId)
-        : route?.channelId
-          ? resolvedRouters.find((router) =>
-              this.normalizeRouterOptions(router).some(
-                (optionItem) => optionItem.id === route.channelId,
-              ),
-            )
-          : undefined;
+      /**
+       * Poll through the exact router/channel that created the video instead of
+       * re-running normal routing: stateful providers such as Gemini Omni scope the
+       * interaction to the creating API key, so another channel's key cannot read it.
+       * Fail loudly when that route disappears rather than silently switching keys.
+       */
+      let matchedRouter: RouterInstance | undefined;
 
-      if ((route?.routerId || route?.channelId) && !routedRouter) {
+      if (route?.routerId) {
+        matchedRouter = resolvedRouters.find((router) => router.id === route.routerId);
+      } else if (route?.channelId) {
+        matchedRouter = resolvedRouters.find((router) =>
+          this.normalizeRouterOptions(router).some(
+            (optionItem) => optionItem.id === route.channelId,
+          ),
+        );
+      }
+
+      if ((route?.routerId || route?.channelId) && !matchedRouter) {
         throw new Error('The video generation route is no longer available');
       }
 
-      const matchedRouter =
-        routedRouter ??
-        (model
-          ? await this.resolveMatchedRouter(model)
-          : this._options.baseURL
-            ? (resolvedRouters.find((router) =>
-                router.baseURLPattern?.test(this._options.baseURL!),
-              ) ?? resolvedRouters.at(-1)!)
-            : resolvedRouters.at(-1)!);
+      if (!matchedRouter && model) {
+        matchedRouter = await this.resolveMatchedRouter(model);
+      }
+
+      if (!matchedRouter && this._options.baseURL) {
+        matchedRouter = resolvedRouters.find((router) =>
+          router.baseURLPattern?.test(this._options.baseURL!),
+        );
+      }
+
+      matchedRouter ??= resolvedRouters.at(-1)!;
       const routerOptions = this.normalizeRouterOptions(matchedRouter);
       const selectedOption = route?.channelId
         ? routerOptions.find((optionItem) => optionItem.id === route.channelId)

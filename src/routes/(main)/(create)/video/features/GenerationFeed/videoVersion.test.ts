@@ -37,6 +37,9 @@ describe('buildVideoVersionMap', () => {
     expect(map.get('g1')).toMatchObject({ previousGenerationId: undefined, version: 1 });
     expect(map.get('g2')).toMatchObject({ previousGenerationId: 'g1', version: 2 });
     expect(map.get('g3')).toMatchObject({ previousGenerationId: 'g2', version: 3 });
+    expect(map.get('g1')?.hasEdits).toBe(true);
+    expect(map.get('g2')?.hasEdits).toBe(true);
+    expect(map.get('g3')?.hasEdits).toBe(false);
   });
 
   it('keeps counting when the source generation is no longer loaded', () => {

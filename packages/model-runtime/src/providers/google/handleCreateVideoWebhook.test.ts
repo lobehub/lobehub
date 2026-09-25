@@ -140,4 +140,64 @@ describe('handleGoogleVideoWebhook', () => {
       }),
     ).rejects.toThrow('Invalid Google webhook signature');
   });
+
+  describe('key refresh', () => {
+    const jwksResponse = (jwk: JsonWebKey) =>
+      new Response(JSON.stringify({ keys: [{ ...jwk, alg: 'EdDSA', use: 'sig' }] }));
+
+    /** Loads a fresh module instance so the module-level JWKS cache starts empty. */
+    const loadHandler = async () => {
+      vi.resetModules();
+      return (await import('./handleCreateVideoWebhook')).handleGoogleVideoWebhook;
+    };
+
+    const completedBody = { data: { id: 'interactions/omni-123' }, type: 'interaction.completed' };
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      return () => vi.useRealTimers();
+    });
+
+    it('should not refetch keys for every forged signature', async () => {
+      const handle = await loadHandler();
+      const forgedKeys = await crypto.subtle.generateKey({ name: 'Ed25519' }, true, [
+        'sign',
+        'verify',
+      ]);
+
+      await handle(await createPayload(completedBody));
+      for (let i = 0; i < 3; i++) {
+        await expect(
+          handle(await createPayload(completedBody, { signingKey: forgedKeys.privateKey })),
+        ).rejects.toThrow('Invalid Google webhook signature');
+      }
+
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(fetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
+    });
+
+    it('should refresh keys once the cooldown has passed to pick up rotated keys', async () => {
+      const handle = await loadHandler();
+      const oldKeys = await crypto.subtle.generateKey({ name: 'Ed25519' }, true, [
+        'sign',
+        'verify',
+      ]);
+      vi.mocked(fetch)
+        .mockResolvedValueOnce(
+          jwksResponse(await crypto.subtle.exportKey('jwk', oldKeys.publicKey)),
+        )
+        .mockResolvedValueOnce(jwksResponse(publicJwk));
+
+      await handle(await createPayload(completedBody, { signingKey: oldKeys.privateKey }));
+      vi.setSystemTime(Date.now() + 61 * 1000);
+
+      await expect(handle(await createPayload(completedBody))).resolves.toMatchObject({
+        status: 'completed',
+      });
+      expect(fetch).toHaveBeenCalledTimes(2);
+    });
+  });
 });

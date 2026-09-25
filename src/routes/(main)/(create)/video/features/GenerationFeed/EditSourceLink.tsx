@@ -1,6 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
+import { Flexbox, Image } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { CornerDownRightIcon } from 'lucide-react';
@@ -33,13 +33,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   thumb: css`
+    overflow: hidden;
     flex: none;
 
     width: 32px;
     height: 20px;
     border-radius: 4px;
 
-    object-fit: cover;
     background: ${cssVar.colorFillSecondary};
   `,
 }));
@@ -81,7 +81,16 @@ const EditSourceLink = memo<EditSourceLinkProps>(({ source, sourceVersion }) => 
       onClick={() => revealVideoGeneration(source.generation.id)}
     >
       <CornerDownRightIcon size={14} style={{ flex: 'none' }} />
-      {cover && <img alt="" className={styles.thumb} src={cover} />}
+      {cover && (
+        <div className={styles.thumb}>
+          <Image
+            alt=""
+            preview={false}
+            src={cover}
+            style={{ height: '100%', objectFit: 'cover', width: '100%' }}
+          />
+        </div>
+      )}
       <Text ellipsis fontSize={12} style={{ color: 'inherit' }}>
         {t('generation.version.editedFrom', { version: String(sourceVersion) })}
         {source.batch.prompt ? ` · ${source.batch.prompt}` : ''}

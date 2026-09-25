@@ -17,6 +17,7 @@ import { isRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
+import { supportsConversationalVideoEdit } from 'model-bank/standardParameters';
 import { z } from 'zod';
 
 import { getProviderContentPolicyErrorMessage } from '@/business/server/getProviderContentPolicyErrorMessage';
@@ -50,7 +51,6 @@ import { AsyncTaskStatus, AsyncTaskType } from '@/types/asyncTask';
 import { createVideoTaskSubmitError } from './error';
 
 const log = debug('lobe-video:lambda');
-const GEMINI_OMNI_VIDEO_MODEL = 'gemini-omni-flash-preview';
 
 const getVideoGenerationRoute = (value: unknown): VideoGenerationRoute | undefined => {
   if (!isRecord(value) || typeof value.apiType !== 'string') return;
@@ -227,7 +227,7 @@ export const videoRouter = router({
 
       let previousInteractionId: string | undefined;
       if (previousGenerationId) {
-        if (resolvedModelId !== GEMINI_OMNI_VIDEO_MODEL) {
+        if (!supportsConversationalVideoEdit(resolvedModelId)) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
             message: 'The selected model does not support conversational video editing',

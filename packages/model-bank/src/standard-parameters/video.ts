@@ -28,6 +28,17 @@ export const VIDEO_GENERATION_TASKS = [
   'edit',
 ] as const;
 
+export const GEMINI_OMNI_VIDEO_MODEL_ID = 'gemini-omni-flash-preview';
+
+/**
+ * Video models that can edit a finished generation by continuing its provider interaction.
+ * Every stored video carries an interaction id, so model support is the capability signal.
+ */
+export const CONVERSATIONAL_VIDEO_EDIT_MODELS: readonly string[] = [GEMINI_OMNI_VIDEO_MODEL_ID];
+
+export const supportsConversationalVideoEdit = (modelId: string) =>
+  CONVERSATIONAL_VIDEO_EDIT_MODELS.includes(modelId);
+
 export const VideoModelParamsMetaSchema = z.object({
   prompt: z.object({
     default: z.string().optional().default(''),

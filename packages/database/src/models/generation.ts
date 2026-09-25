@@ -5,6 +5,7 @@ import type {
   GenerationAsset,
   ImageGenerationAsset,
   VideoGenerationAsset,
+  VideoGenerationTaskMetadata,
 } from '@lobechat/types';
 import { FileSource } from '@lobechat/types';
 import debug from 'debug';
@@ -249,12 +250,9 @@ export class GenerationModel {
       }
     }
 
-    const taskMetadata = generation.asyncTask?.metadata as
-      { previousGenerationId?: unknown } | null | undefined;
-    const previousGenerationId =
-      typeof taskMetadata?.previousGenerationId === 'string'
-        ? taskMetadata.previousGenerationId
-        : undefined;
+    const previousGenerationId = (
+      generation.asyncTask?.metadata as VideoGenerationTaskMetadata | null | undefined
+    )?.previousGenerationId;
 
     // Build the Generation object following the same structure as in generationBatch.ts
     const result: Generation = {

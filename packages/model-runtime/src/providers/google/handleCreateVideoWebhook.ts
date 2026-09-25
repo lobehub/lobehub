@@ -6,13 +6,19 @@ import type {
 const GOOGLE_WEBHOOK_JWKS_URL = 'https://generativelanguage.googleapis.com/.well-known/jwks.json';
 const MAX_WEBHOOK_AGE_MS = 5 * 60 * 1000;
 const JWKS_CACHE_TTL_MS = 10 * 60 * 1000;
+const JWKS_FETCH_TIMEOUT_MS = 10 * 1000;
+/**
+ * The webhook route is public, so a forged signature must not be able to force a JWKS refetch on
+ * every request. Rotation-triggered refreshes are limited to one per window.
+ */
+const JWKS_FORCE_REFRESH_COOLDOWN_MS = 60 * 1000;
 
 interface GoogleWebhookJwk extends JsonWebKey {
   alg?: string;
   crv?: string;
 }
 
-let jwksCache: { expiresAt: number; keys: CryptoKey[] } | undefined;
+let jwksCache: { expiresAt: number; fetchedAt: number; keys: CryptoKey[] } | undefined;
 
 const importEd25519Keys = async (keys: GoogleWebhookJwk[]) => {
   const imported: CryptoKey[] = [];
@@ -29,14 +35,22 @@ const importEd25519Keys = async (keys: GoogleWebhookJwk[]) => {
 };
 
 const getGoogleWebhookKeys = async (forceRefresh = false) => {
-  if (!forceRefresh && jwksCache && jwksCache.expiresAt > Date.now()) return jwksCache.keys;
+  const now = Date.now();
+  if (jwksCache) {
+    const fresh = jwksCache.expiresAt > now;
+    const inCooldown = now - jwksCache.fetchedAt < JWKS_FORCE_REFRESH_COOLDOWN_MS;
+    if (forceRefresh ? inCooldown : fresh) return jwksCache.keys;
+  }
 
-  const res = await fetch(GOOGLE_WEBHOOK_JWKS_URL);
+  const res = await fetch(GOOGLE_WEBHOOK_JWKS_URL, {
+    signal: AbortSignal.timeout(JWKS_FETCH_TIMEOUT_MS),
+  });
   if (!res.ok) throw new Error(`Failed to fetch Google webhook keys: ${res.status}`);
 
   const { keys = [] } = (await res.json()) as { keys?: GoogleWebhookJwk[] };
   const imported = await importEd25519Keys(keys);
-  jwksCache = { expiresAt: Date.now() + JWKS_CACHE_TTL_MS, keys: imported };
+  const fetchedAt = Date.now();
+  jwksCache = { expiresAt: fetchedAt + JWKS_CACHE_TTL_MS, fetchedAt, keys: imported };
 
   return imported;
 };
@@ -110,9 +124,12 @@ async function verifyDynamicWebhook(payload: HandleCreateVideoWebhookPayload) {
 
   const content = new TextEncoder().encode(`${webhookId}.${timestamp}.${payload.rawBody}`);
 
-  if (await verifyWithKeys(await getGoogleWebhookKeys(), signatures, content)) return;
+  const cachedKeys = await getGoogleWebhookKeys();
+  if (await verifyWithKeys(cachedKeys, signatures, content)) return;
   // Retry once with fresh keys in case Google rotated them after we cached the set.
-  if (await verifyWithKeys(await getGoogleWebhookKeys(true), signatures, content)) return;
+  const refreshedKeys = await getGoogleWebhookKeys(true);
+  if (refreshedKeys !== cachedKeys && (await verifyWithKeys(refreshedKeys, signatures, content)))
+    return;
 
   throw new Error('Invalid Google webhook signature');
 }

@@ -5,14 +5,14 @@ import { useVideoStore } from '@/store/video';
 import { generationBatchSelectors } from '@/store/video/selectors';
 import type { Generation, GenerationBatch, VideoGenerationAsset } from '@/types/generation';
 
-export const GEMINI_OMNI_VIDEO_MODEL = 'gemini-omni-flash-preview';
-
 /** Guards against malformed cycles when walking the edit chain. */
 const MAX_VERSION_DEPTH = 50;
 
 export interface VideoVersionNode {
   batch: GenerationBatch;
   generation: Generation;
+  /** Whether another generation in the topic was edited from this one. */
+  hasEdits: boolean;
   /** Source generation id; set only when this generation is an edit. */
   previousGenerationId?: string;
   /** 1 for an original generation, +1 for every edit on top of it. */
@@ -48,9 +48,15 @@ export const buildVideoVersionMap = (batches: GenerationBatch[]) => {
 
     versions.set(id, {
       ...entry,
+      hasEdits: false,
       previousGenerationId: getPreviousGenerationId(entry.generation),
       version,
     });
+  }
+
+  for (const node of versions.values()) {
+    const source = node.previousGenerationId ? versions.get(node.previousGenerationId) : undefined;
+    if (source) source.hasEdits = true;
   }
 
   return versions;

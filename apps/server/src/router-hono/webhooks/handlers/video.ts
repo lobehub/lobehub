@@ -13,7 +13,6 @@ import {
   type VideoGenerationAsset,
   type VideoGenerationTaskMetadata,
 } from '@lobechat/types';
-import { isRecord } from '@lobechat/utils/object';
 import debug from 'debug';
 import { eq } from 'drizzle-orm';
 import type { Context } from 'hono';
@@ -189,7 +188,8 @@ export const videoWebhook = async (c: Context<BlankEnv, '/video/:provider'>) => 
       );
       const pollResult = await userRuntime.handlePollVideoStatus(
         webhookResult.inferenceId,
-        requestedModel,
+        // Match the model id the route was pinned for at creation, not the user-facing alias.
+        resolvedModelId,
         metadata?.route,
       );
 
@@ -205,14 +205,7 @@ export const videoWebhook = async (c: Context<BlankEnv, '/video/:provider'>) => 
         return c.json({ error: 'Generated video file is still processing' }, 503);
       }
 
-      const pollHeaders =
-        'headers' in pollResult && isRecord(pollResult.headers)
-          ? Object.fromEntries(
-              Object.entries(pollResult.headers).filter(
-                (entry): entry is [string, string] => typeof entry[1] === 'string',
-              ),
-            )
-          : undefined;
+      const pollHeaders = 'headers' in pollResult ? pollResult.headers : undefined;
 
       result =
         pollResult.status === 'failed'
