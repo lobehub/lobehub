@@ -47,8 +47,6 @@ const mockOpenAcceptance = vi.fn();
 const mockOpenAgentDetail = vi.fn();
 const mockOpenDocument = vi.fn();
 const mockOpenGoal = vi.fn();
-// Goal graphs the goal store already holds, keyed by goal id.
-let mockGoalGraphs: Record<string, { goal: { status: string; title: string } }> = {};
 const mockOpenTaskDetail = vi.fn();
 const mockOpenVerifyReport = vi.fn();
 
@@ -101,15 +99,6 @@ vi.mock('@/store/chat', () => ({
     }),
 }));
 
-vi.mock('@/store/goal', () => ({
-  goalSelectors: {
-    goalGraph: (goalId?: string) => (state: any) =>
-      goalId ? state.goalGraphById[goalId] : undefined,
-  },
-  useGoalStore: (selector: (state: unknown) => unknown) =>
-    selector({ goalGraphById: mockGoalGraphs, useFetchGoalGraph: () => undefined }),
-}));
-
 vi.mock('@/store/user', () => ({
   useUserStore: (selector: (s: unknown) => unknown) => selector(undefined),
 }));
@@ -136,7 +125,6 @@ afterEach(() => {
   mockShowIcon = true;
   mockConst.isDesktop = false;
   mockEntityPreview = null;
-  mockGoalGraphs = {};
   vi.restoreAllMocks();
 });
 
@@ -367,10 +355,10 @@ describe('Link Render — internal entities', () => {
     expect(mockOpenAgentDetail).toHaveBeenCalledWith('agt_1');
   });
 
-  it('shows a goal the CLI printed by its title and live status, and opens it beside the chat', () => {
+  it('shows a goal the CLI printed by its title and goal icon, and opens it beside the chat', () => {
     // `lh goal create` prints the goal URL; agents paste it bare or label it with
     // the id. Either way the link should read as the goal, not its id.
-    mockGoalGraphs = { goal_abc: { goal: { status: 'paused', title: 'Vent 真信号修复' } } };
+    mockEntityPreview = { title: 'Vent 真信号修复' };
 
     const { container, getByRole } = renderLink({
       linkHref: '/goal/goal_abc',
@@ -380,7 +368,8 @@ describe('Link Render — internal entities', () => {
 
     const anchor = container.querySelector('a')!;
     expect(anchor.textContent).toBe('Vent 真信号修复');
-    expect(anchor.querySelector('svg')).not.toBeNull();
+    // The goal's own icon, not a status or progress glyph.
+    expect(anchor.querySelector('svg.lucide-target')).not.toBeNull();
 
     fireEvent.click(getByRole('link', { name: 'Vent 真信号修复' }));
     expect(mockOpenGoal).toHaveBeenCalledWith('goal_abc');
@@ -388,7 +377,7 @@ describe('Link Render — internal entities', () => {
   });
 
   it('keeps authored text on a goal link', () => {
-    mockGoalGraphs = { goal_abc: { goal: { status: 'running', title: 'Resolved goal title' } } };
+    mockEntityPreview = { title: 'Resolved goal title' };
 
     const { container } = renderLink({
       linkHref: '/agent/agt_1/goal/goal_abc',

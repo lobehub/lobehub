@@ -16,14 +16,12 @@ import type { MouseEvent } from 'react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import GoalStatusGlyph from '@/features/AgentGoals/GoalStatusGlyph';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { shouldHardNavigateToWorkbench } from '@/libs/next/workbenchNavigation';
 import { useClientDataSWR } from '@/libs/swr';
 import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocument';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
-import { goalSelectors, useGoalStore } from '@/store/goal';
 
 import { type InternalLinkReference, isBareLinkLabel, isEntityIdLabel } from '../internalLink';
 import {
@@ -115,20 +113,12 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
     reference.type !== 'route' &&
     !reference.workspaceSlug &&
     (isBareLinkLabel(label, href) || isEntityIdLabel(label, reference));
-
-  // A goal is live: the link shows where it stands now, from the same polled
-  // graph the goal cards read, rather than a one-off preview fetch.
-  const linkedGoalId =
-    reference.type === 'goal' && !reference.workspaceSlug ? reference.goalId : undefined;
-  useGoalStore((s) => s.useFetchGoalGraph)(linkedGoalId);
-  const linkedGoal = useGoalStore(goalSelectors.goalGraph(linkedGoalId))?.goal;
-
   const { data: entity } = useClientDataSWR(
-    shouldResolveTitle && !linkedGoalId ? internalEntityPreviewKey(reference) : null,
+    shouldResolveTitle ? internalEntityPreviewKey(reference) : null,
     () => getPreviewData(reference, t),
     { revalidateOnFocus: false },
   );
-  const displayLabel = (shouldResolveTitle && (linkedGoal?.title || entity?.title)) || label;
+  const displayLabel = (shouldResolveTitle && entity?.title) || label;
 
   const linkedAgentId = reference.type === 'document' ? reference.agentId : undefined;
   const shouldResolveAgentDocument = !!linkedAgentId && linkedAgentId === activeAgentId;
@@ -248,13 +238,7 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
       target="_blank"
       onClick={handleClick}
     >
-      {linkedGoal ? (
-        <span className={styles.icon}>
-          <GoalStatusGlyph size={14} status={linkedGoal.status} />
-        </span>
-      ) : (
-        icon && <Icon className={styles.icon} icon={icon} size={14} />
-      )}
+      {icon && <Icon className={styles.icon} icon={icon} size={14} />}
       {displayLabel}
     </a>
   );
