@@ -273,6 +273,23 @@ describe('videoRouter', () => {
       );
     });
 
+    it('should keep a path prefix from the configured callback base URL', async () => {
+      setupMocks();
+      mockAppEnv.WEBHOOK_PROXY_URL = 'https://proxy.example.com/lobehub/';
+
+      const caller = videoRouter.createCaller(mockCtx);
+      await caller.createVideo(defaultInput);
+
+      expect(mockCreateVideo).toHaveBeenCalledWith(
+        expect.objectContaining({
+          callbackUrl: expect.stringMatching(
+            /^https:\/\/proxy\.example\.com\/lobehub\/api\/webhooks\/video\/[^?]+\?/,
+          ),
+        }),
+        expect.any(Object),
+      );
+    });
+
     it('should preserve route metadata without polling for a webhook-based interaction', async () => {
       const { mockUpdate } = setupMocks();
       mockCreateVideo.mockImplementation(async (_payload, options) => {

@@ -360,7 +360,11 @@ export const videoRouter = router({
         const modelRuntime = await initModelRuntimeFromDB(serverDB, userId, provider, wsId);
 
         const callbackBaseUrl = appEnv.WEBHOOK_PROXY_URL || appEnv.APP_URL;
-        const callbackUrl = new URL(`/api/webhooks/video/${provider}`, callbackBaseUrl);
+        // Append to the base instead of resolving a root-relative path, which would drop a
+        // reverse-proxy prefix such as `https://host/lobehub`.
+        const callbackUrl = new URL(
+          `${callbackBaseUrl.replace(/\/+$/, '')}/api/webhooks/video/${provider}`,
+        );
         callbackUrl.searchParams.set('model', resolvedModelId);
         callbackUrl.searchParams.set('token', webhookToken);
         log('Using callback URL: %s', callbackUrl);
