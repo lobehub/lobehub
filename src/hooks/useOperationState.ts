@@ -78,7 +78,14 @@ export const useOperationState = (context: ConversationContext): OperationState 
         const messageOps = operationIds.map((id) => operations[id]).filter(Boolean);
         const runningOps = messageOps.filter((op) => op.status === 'running');
 
-        const visibleRunningOps = runningOps.filter((op) => !op.metadata.visibleLoadingDone);
+        // `isAborting` ops are user-cancelled runs whose transport shutdown is
+        // still unconfirmed (e.g. a gateway interrupt the local device never
+        // acknowledged, see cancelOperation's rollback). Every loading selector
+        // already excludes them; the per-message generating state must too, or
+        // the bubble keeps spinning forever after a Stop (LOBE-13794).
+        const visibleRunningOps = runningOps.filter(
+          (op) => !op.metadata.isAborting && !op.metadata.visibleLoadingDone,
+        );
 
         const isGenerating = visibleRunningOps.some((op) =>
           AI_RUNTIME_OPERATION_TYPES.includes(op.type),
