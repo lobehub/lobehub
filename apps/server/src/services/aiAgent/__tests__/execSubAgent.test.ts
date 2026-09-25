@@ -760,7 +760,7 @@ describe('AiAgentService.execSubAgent', () => {
           cost: { total: 0.25 },
           messages: [{ content: 'part 4', role: 'assistant' }],
           operationId: 'op-new',
-          usage: { llm: { tokens: { total: 400 } } },
+          usage: { llm: { tokens: { total: 400 } }, tools: { totalCalls: 2 } },
         },
         operationId: 'op-new',
         reason: 'done',
@@ -770,7 +770,7 @@ describe('AiAgentService.execSubAgent', () => {
         metadata: expect.objectContaining({
           totalCost: 0.75,
           totalTokens: 1400,
-          totalToolCalls: 3,
+          totalToolCalls: 5,
         }),
         status: ThreadStatus.Completed,
       });

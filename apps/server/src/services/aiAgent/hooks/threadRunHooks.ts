@@ -186,19 +186,11 @@ export function createThreadHooks(
   logScope: 'execSubAgent' | 'execVirtualSubAgent',
   usageBaseline: ThreadUsageBaseline = {},
 ): AgentHook[] {
-  let accumulatedToolCalls = 0;
-
   return [
     {
       handler: async (event: AgentHookEvent) => {
         const state = event.finalState;
         if (!state) return;
-
-        // Count tool calls from step result
-        const stepToolCalls = state.session?.toolCalls || 0;
-        if (stepToolCalls > accumulatedToolCalls) {
-          accumulatedToolCalls = stepToolCalls;
-        }
 
         try {
           await threadModel.update(threadId, {
@@ -208,7 +200,10 @@ export function createThreadHooks(
               totalCost: usageBaseline.totalCost,
               totalMessages: state.messages?.length ?? 0,
               totalTokens: addUsage(usageBaseline.totalTokens, calculateTotalTokens(state.usage)),
-              totalToolCalls: addUsage(usageBaseline.totalToolCalls, accumulatedToolCalls),
+              totalToolCalls: addUsage(
+                usageBaseline.totalToolCalls,
+                state.usage?.tools?.totalCalls,
+              ),
             },
           });
         } catch (error) {
@@ -287,7 +282,10 @@ export function createThreadHooks(
                 usageBaseline.totalTokens,
                 calculateTotalTokens(finalState.usage),
               ),
-              totalToolCalls: addUsage(usageBaseline.totalToolCalls, accumulatedToolCalls),
+              totalToolCalls: addUsage(
+                usageBaseline.totalToolCalls,
+                finalState.usage?.tools?.totalCalls,
+              ),
             },
             status,
           });
