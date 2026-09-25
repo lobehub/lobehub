@@ -468,6 +468,30 @@ describe('MarketService', () => {
       });
     });
 
+    it('should keep error_description when Market rejects the request with a flat auth error', async () => {
+      const service = new MarketService();
+      const authError = Object.assign(new Error('invalid_trust_token'), {
+        errorBody: { error: 'invalid_trust_token', error_description: 'Token expired' },
+        status: 401,
+      });
+      (service as any).market.skills.callTool = vi.fn().mockRejectedValue(authError);
+
+      const result = await service.executeLobehubSkill({
+        args: {},
+        provider: 'notion',
+        toolName: 'notion-fetch',
+      });
+
+      expect(result).toEqual({
+        content: JSON.stringify({
+          error: 'invalid_trust_token',
+          error_description: 'Token expired',
+        }),
+        error: { code: 'invalid_trust_token', message: 'invalid_trust_token: Token expired' },
+        success: false,
+      });
+    });
+
     it('should use a generic failure message when an unsuccessful response has no detail', async () => {
       const service = new MarketService();
       const mockCallTool = vi.fn().mockResolvedValue({

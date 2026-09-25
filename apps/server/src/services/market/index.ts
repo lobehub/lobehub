@@ -747,6 +747,24 @@ export class MarketService {
       const denial = getToolAccessDeniedError(error, err.message);
       if (denial)
         return { content: JSON.stringify({ error: denial }), error: denial, success: false };
+
+      // Market's auth middleware answers with a flat OAuth-style body, e.g.
+      // `{ error: 'invalid_trust_token', error_description: 'Token expired' }`.
+      // Keep the description so the model can tell an expired token from a
+      // revoked authorization, and the code so callers can react to it.
+      if (typeof skillError === 'string') {
+        const description =
+          typeof errorBody.error_description === 'string' ? errorBody.error_description : undefined;
+        return {
+          content: JSON.stringify({ error: skillError, error_description: description }),
+          error: {
+            code: skillError,
+            message: description ? `${skillError}: ${description}` : skillError,
+          },
+          success: false,
+        };
+      }
+
       const content = skillError ? JSON.stringify(skillError) : err.message;
 
       return {
