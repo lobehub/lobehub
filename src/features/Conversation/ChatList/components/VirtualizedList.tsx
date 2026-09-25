@@ -1,8 +1,6 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
-import { LoaderCircle } from 'lucide-react';
 import type {
   KeyboardEvent,
   PointerEvent,
@@ -40,11 +38,21 @@ import AutoScroll from './AutoScroll';
 import { AT_BOTTOM_THRESHOLD } from './AutoScroll/const';
 import { useAutoScrollEnabled } from './AutoScroll/useAutoScrollEnabled';
 import BackBottom from './BackBottom';
+import EarlierHistorySkeleton from './EarlierHistorySkeleton';
 
 const DebugInspector = lazy(() => import('./AutoScroll/DebugInspector'));
 
 const CONVERSATION_FOOTER_ID = '__conversation_footer__';
 const CONVERSATION_HEADER_ID = '__conversation_header__';
+// One synthetic leading row always precedes the messages: it holds the
+// header slot and, while a page of pre-window history is in flight, the
+// conversation skeleton. Keeping it permanent matters because virtua keys
+// rows by index — inserting a row on load start would shift every index
+// and remount each message, dropping local UI state such as an expanded
+// workflow fold. All index-based APIs exposed to the store (and the hooks
+// that talk to virtua directly) work in MESSAGE index space; this offset
+// translates at the virtua boundary.
+const LEADING_ROWS = 1;
 const USER_SCROLL_INTENT_TTL_MS = 500;
 const SCROLL_KEYS = new Set(['ArrowDown', 'ArrowUp', 'End', 'Home', 'PageDown', 'PageUp', ' ']);
 
@@ -68,14 +76,6 @@ const VirtualizedList = memo<VirtualizedListProps>(
     const scrollEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastUserScrollIntentAtRef = useRef(0);
 
-    // A header slot prepends one synthetic row to the VList, shifting every
-    // virtua row index off the message index. All index-based APIs exposed to
-    // the store (and the hooks that talk to virtua directly) work in MESSAGE
-    // index space; this offset translates at the virtua boundary.
-    const headerOffset = headerSlot ? 1 : 0;
-    const headerOffsetRef = useRef(headerOffset);
-    headerOffsetRef.current = headerOffset;
-
     // Per-topic scroll restoration. Provider does not remount on topic switch,
     // so we key the scroll snapshot by the message-map key derived from
     // ConversationStore's `context`.
@@ -84,7 +84,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
       contextKey,
       containerRef,
       dataSourceLength: dataSource.length,
-      headerOffset,
+      headerOffset: LEADING_ROWS,
       messageDeepLink,
       virtuaRef,
     });
@@ -105,7 +105,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
     } = useConversationScroll({
       contextKey,
       dataSource,
-      headerOffset,
+      headerOffset: LEADING_ROWS,
       isSecondLastMessageFromUser,
       virtuaRef,
     });
@@ -120,7 +120,6 @@ const VirtualizedList = memo<VirtualizedListProps>(
 
     // Store actions
     const loadEarlierMessages = useConversationStore((s) => s.loadEarlierMessages);
-    const isLoadingEarlierMessages = useConversationStore((s) => s.isLoadingEarlierMessages);
     const registerVirtuaScrollMethods = useConversationStore((s) => s.registerVirtuaScrollMethods);
     const setScrollState = useConversationStore((s) => s.setScrollState);
     const resetVisibleItems = useConversationStore((s) => s.resetVisibleItems);
@@ -191,7 +190,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
       // (the header row clamps to the first message).
       const activeFromFind =
         typeof activeFromFindRaw === 'number' && activeFromFindRaw >= 0
-          ? Math.max(0, activeFromFindRaw - headerOffsetRef.current)
+          ? Math.max(0, activeFromFindRaw - LEADING_ROWS)
           : null;
 
       if (activeFromFind !== activeIndex) setActiveIndex(activeFromFind);
@@ -247,22 +246,21 @@ const VirtualizedList = memo<VirtualizedListProps>(
         // Index-based methods accept MESSAGE indices; the header slot row is a
         // private implementation detail translated away right here.
         registerVirtuaScrollMethods({
-          getItemOffset: (index) => ref.getItemOffset(index + headerOffsetRef.current),
-          getItemSize: (index) => ref.getItemSize(index + headerOffsetRef.current),
+          getItemOffset: (index) => ref.getItemOffset(index + LEADING_ROWS),
+          getItemSize: (index) => ref.getItemSize(index + LEADING_ROWS),
           getScrollOffset: () => ref.scrollOffset,
           getScrollSize: () => ref.scrollSize,
           getTotalCount: () => totalCountRef.current,
           getViewportSize: () => ref.viewportSize,
           scrollTo: (offset) => ref.scrollTo(offset),
-          scrollToIndex: (index, options) =>
-            ref.scrollToIndex(index + headerOffsetRef.current, options),
+          scrollToIndex: (index, options) => ref.scrollToIndex(index + LEADING_ROWS, options),
         });
 
         // Seed active index once on mount (avoid requiring user scroll)
         const initialActiveRaw = ref.findItemIndex(ref.scrollOffset + ref.viewportSize * 0.25);
         const initialActive =
           typeof initialActiveRaw === 'number' && initialActiveRaw >= 0
-            ? Math.max(0, initialActiveRaw - headerOffsetRef.current)
+            ? Math.max(0, initialActiveRaw - LEADING_ROWS)
             : null;
         setActiveIndex(initialActive);
       }
@@ -327,12 +325,8 @@ const VirtualizedList = memo<VirtualizedListProps>(
     const paddingBottom = Math.max(24, overlayHeight + 12);
 
     const dataWithSlots = useMemo(
-      () => [
-        ...(headerSlot ? [CONVERSATION_HEADER_ID] : []),
-        ...listData,
-        ...(footerSlot ? [CONVERSATION_FOOTER_ID] : []),
-      ],
-      [footerSlot, headerSlot, listData],
+      () => [CONVERSATION_HEADER_ID, ...listData, ...(footerSlot ? [CONVERSATION_FOOTER_ID] : [])],
+      [footerSlot, listData],
     );
 
     // Prepend detection for virtua: when pre-window history loads, the former
@@ -351,9 +345,12 @@ const VirtualizedList = memo<VirtualizedListProps>(
       prevFirstMessageIdRef.current = firstMessageId;
     });
 
+    // The leading row is pinned: it is zero-height while idle, and virtua
+    // excludes a zero-height row at the top from its render range, so it
+    // would never mount to show the skeleton it hosts.
     const keepMountedIndicesWithSlots = useMemo(
-      () => (headerSlot ? keepMountedIndices.map((index) => index + 1) : keepMountedIndices),
-      [headerSlot, keepMountedIndices],
+      () => [0, ...keepMountedIndices.map((index) => index + LEADING_ROWS)],
+      [keepMountedIndices],
     );
 
     // Mirror the latest data length into a ref so the scroll-methods registered
@@ -361,8 +358,8 @@ const VirtualizedList = memo<VirtualizedListProps>(
     // but excluding the leading header row — the count stays in the same
     // message-index space as the registered scrollToIndex) without
     // re-registering on every render.
-    const totalCountRef = useRef(dataWithSlots.length - headerOffset);
-    totalCountRef.current = dataWithSlots.length - headerOffset;
+    const totalCountRef = useRef(dataWithSlots.length - LEADING_ROWS);
+    totalCountRef.current = dataWithSlots.length - LEADING_ROWS;
 
     return (
       <div
@@ -377,23 +374,6 @@ const VirtualizedList = memo<VirtualizedListProps>(
       >
         {/* Pinned to the list viewport top; only renders while multi-selecting */}
         <MessageForwardSelectToHere />
-        {/* Pre-window history page in flight (LOBE-13716) */}
-        {isLoadingEarlierMessages && (
-          <div
-            style={{
-              display: 'flex',
-              insetInlineStart: 0,
-              justifyContent: 'center',
-              pointerEvents: 'none',
-              position: 'absolute',
-              top: 8,
-              width: '100%',
-              zIndex: 10,
-            }}
-          >
-            <Icon spin icon={LoaderCircle} />
-          </div>
-        )}
         {/* Debug Inspector - placed outside VList so it won't be recycled by the virtual list */}
         {devDockMounted && (
           <Suspense fallback={null}>
@@ -415,6 +395,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
               return (
                 <WideScreenContainer key={messageId} style={{ position: 'relative' }}>
                   {headerSlot}
+                  <EarlierHistorySkeleton />
                 </WideScreenContainer>
               );
             }
@@ -451,7 +432,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
             }
 
             const isAgentCouncil = messageId.includes('agentCouncil');
-            const messageIndex = headerSlot ? index - 1 : index;
+            const messageIndex = index - LEADING_ROWS;
             const isLastItem = messageIndex === dataSource.length - 1;
             const content = itemContent(messageIndex, messageId);
 
