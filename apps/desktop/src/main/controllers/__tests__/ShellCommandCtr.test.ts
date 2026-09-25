@@ -25,6 +25,13 @@ vi.mock('node:child_process', () => ({
   spawn: vi.fn(),
 }));
 
+// The shared runner checks cwd exists before spawning; `spawn` is mocked, so
+// treat the fixture cwd (`/repo`) as a real directory.
+vi.mock('node:fs/promises', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('node:fs/promises')>()),
+  stat: vi.fn().mockResolvedValue({ isDirectory: () => true }),
+}));
+
 vi.mock('../CliCtr', () => ({
   default: class CliCtr {},
 }));
