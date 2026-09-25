@@ -6,6 +6,7 @@ import {
   REVIEW_PREDICTION_JSON_SCHEMA,
 } from '@lobechat/prompts';
 import type { AcceptanceReviewAnnotation } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import { pickTrimmedString, toRecord } from '@lobechat/utils/object';
 import debug from 'debug';
 
@@ -242,6 +243,7 @@ export class VerifyReviewPredictorService {
           schema: REVIEW_PREDICTION_JSON_SCHEMA,
         },
         {
+          metadata: { trigger: RequestTrigger.Verify },
           tracing: {
             promptVersion: REVIEW_PREDICT_PROMPT_VERSION,
             scenario: TRACING_SCENARIOS.ReviewPredict,

@@ -27,9 +27,15 @@ export enum RequestTrigger {
   ContextCompression = 'context_compression',
   Cron = 'cron',
   Eval = 'eval',
+  /** Agent self-evolution: expertise ingestion, domain drafts and consolidation. */
+  Expertise = 'expertise',
   FileEmbedding = 'file_embedding',
+  /** Follow-up suggestions generated after an assistant reply. */
+  FollowUp = 'follow_up',
   /** Image / video generation topic title summaries. */
   GenerationTopicTitle = 'generation_topic_title',
+  /** Goal planning: exploration, acceptance criteria drafts and decomposition. */
+  Goal = 'goal',
   /** Rolling history summary stored on a topic. */
   HistorySummary = 'history_summary',
   Image = 'image',
@@ -50,6 +56,8 @@ export enum RequestTrigger {
   Scm = 'scm',
   SemanticSearch = 'semantic_search',
   SignupEmailLLMReview = 'signup_email_llm_review',
+  /** Task runs and their auxiliary calls (briefs, handoff, intent, instructions). */
+  Task = 'task',
   /** Thread (sub-topic) title summaries. */
   ThreadTitle = 'thread_title',
   /**
@@ -58,10 +66,14 @@ export enum RequestTrigger {
    * {@link RequestTrigger.GenerationTopicTitle}; kept so historical logs still resolve a label.
    */
   Topic = 'topic',
+  /** Server-side topic auto summary (description + rolling summary). */
+  TopicSummary = 'topic_summary',
   /** Chat topic title summaries, both client and server generated. */
   TopicTitle = 'topic_title',
   /** Translation of a chat message or a generation prompt, including language detection. */
   Translate = 'translate',
+  /** Acceptance verification: plan generation, judging, review prediction and reports. */
+  Verify = 'verify',
   Video = 'video',
 }
 

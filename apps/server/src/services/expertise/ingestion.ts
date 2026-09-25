@@ -22,6 +22,7 @@ import {
   EXPERTISE_TOPIC_INGESTION_PROMPT_VERSION,
 } from '@lobechat/prompts';
 import type { VerifyCheckDecisionDetail } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 import { and, asc, count, desc, eq, gt, isNotNull, isNull, max, or, sql } from 'drizzle-orm';
 import pMap from 'p-map';
@@ -425,7 +426,7 @@ export class ExpertiseIngestionService {
         schema: EXPERTISE_TOPIC_INGESTION_JSON_SCHEMA,
       },
       {
-        metadata: { trigger: 'expertise_topic_ingestion' },
+        metadata: { trigger: RequestTrigger.Expertise },
         tracing: {
           agentId: input.agentId,
           promptVersion: EXPERTISE_TOPIC_INGESTION_PROMPT_VERSION,
@@ -571,7 +572,7 @@ export class ExpertiseIngestionService {
         schema: EXPERTISE_REJECTION_INGESTION_JSON_SCHEMA,
       },
       {
-        metadata: { trigger: 'expertise_rejection_ingestion' },
+        metadata: { trigger: RequestTrigger.Expertise },
         tracing: {
           promptVersion: EXPERTISE_REJECTION_INGESTION_PROMPT_VERSION,
           scenario: TRACING_SCENARIOS.ExpertiseRejectionIngestion,

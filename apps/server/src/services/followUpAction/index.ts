@@ -6,6 +6,7 @@ import {
   FOLLOW_UP_PROMPT_VERSION,
 } from '@lobechat/prompts';
 import type { FollowUpChip, FollowUpExtractInput, FollowUpExtractResult } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
 import type { LobeChatDatabase } from '@/database/type';
@@ -79,7 +80,7 @@ export class FollowUpActionService {
           schema: FOLLOW_UP_JSON_SCHEMA,
         },
         {
-          metadata: { topicId },
+          metadata: { topicId, trigger: RequestTrigger.FollowUp },
           tracing: {
             promptVersion: FOLLOW_UP_PROMPT_VERSION,
             scenario: TRACING_SCENARIOS.FollowUp,

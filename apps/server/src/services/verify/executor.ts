@@ -16,6 +16,7 @@ import type {
   VerifyCheckResultStatus,
   VerifyVerdict,
 } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
 import { AiModelModel } from '@/database/models/aiModel';
@@ -450,6 +451,7 @@ export class VerifyExecutorService {
         schema: BATCH_VERDICT_JSON_SCHEMA,
       },
       {
+        metadata: { trigger: RequestTrigger.Verify },
         tracing: {
           ...({
             promptVersion: VERIFY_JUDGE_PROMPT_VERSION,
@@ -527,6 +529,7 @@ export class VerifyExecutorService {
         schema: SINGLE_VERDICT_JSON_SCHEMA,
       },
       {
+        metadata: { trigger: RequestTrigger.Verify },
         tracing: {
           ...({
             promptVersion: VERIFY_JUDGE_PROMPT_VERSION,

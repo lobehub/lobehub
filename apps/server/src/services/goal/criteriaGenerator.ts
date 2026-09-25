@@ -15,6 +15,7 @@ import {
   VERIFY_VERIFIER_TYPES,
 } from '@lobechat/prompts';
 import type { RequiredEvidenceSpec, VerifyCheckItem } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 import { z } from 'zod';
 
@@ -123,7 +124,7 @@ export class GoalCriteriaGeneratorService {
         thinking: { type: 'disabled' },
       },
       {
-        metadata: { trigger: 'goal_criteria_draft' },
+        metadata: { trigger: RequestTrigger.Goal },
         tracing: {
           promptVersion: GOAL_CRITERIA_DRAFT_PROMPT_VERSION,
           scenario: TRACING_SCENARIOS.GoalCriteriaGen,
@@ -162,7 +163,7 @@ export class GoalCriteriaGeneratorService {
         thinking: { type: 'disabled' },
       },
       {
-        metadata: { trigger: 'goal_decompose' },
+        metadata: { trigger: RequestTrigger.Goal },
         tracing: {
           promptVersion: GOAL_DECOMPOSE_PROMPT_VERSION,
           scenario: TRACING_SCENARIOS.GoalDecompose,

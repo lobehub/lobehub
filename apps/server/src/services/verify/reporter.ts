@@ -6,6 +6,7 @@ import {
   REPORT_NARRATIVE_JSON_SCHEMA,
   VERIFY_REPORT_PROMPT_VERSION,
 } from '@lobechat/prompts';
+import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
 import { DocumentModel } from '@/database/models/document';
@@ -133,6 +134,7 @@ export class VerifyReporterService {
           schema: REPORT_NARRATIVE_JSON_SCHEMA,
         },
         {
+          metadata: { trigger: RequestTrigger.Verify },
           tracing: {
             promptVersion: VERIFY_REPORT_PROMPT_VERSION,
             scenario: TRACING_SCENARIOS.VerifyReport,

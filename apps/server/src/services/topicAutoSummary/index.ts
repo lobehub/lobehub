@@ -6,6 +6,7 @@ import {
   TOPIC_AUTO_SUMMARY_PROMPT_VERSION,
 } from '@lobechat/prompts';
 import type { SystemAgentItem, UserSystemAgentConfig } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 import { and, desc, eq } from 'drizzle-orm';
 
@@ -109,6 +110,7 @@ export class TopicAutoSummaryService {
         schema: TOPIC_AUTO_SUMMARY_JSON_SCHEMA,
       },
       {
+        metadata: { trigger: RequestTrigger.TopicSummary },
         tracing: {
           promptVersion: TOPIC_AUTO_SUMMARY_PROMPT_VERSION,
           scenario: TRACING_SCENARIOS.TopicAutoSummary,

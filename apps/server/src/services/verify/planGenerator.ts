@@ -9,6 +9,7 @@ import {
   VERIFY_PLAN_PROMPT_VERSION,
 } from '@lobechat/prompts';
 import type { RequiredEvidenceSpec, VerifyCheckItem } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
 import { DocumentModel } from '@/database/models/document';
@@ -186,6 +187,7 @@ export class VerifyPlanGeneratorService {
         thinking: { type: 'disabled' },
       },
       {
+        metadata: { trigger: RequestTrigger.Verify },
         tracing: {
           promptVersion: VERIFY_PLAN_PROMPT_VERSION,
           scenario: TRACING_SCENARIOS.VerifyPlanGen,
@@ -342,6 +344,7 @@ export class VerifyPlanGeneratorService {
         thinking: { type: 'disabled' },
       },
       {
+        metadata: { trigger: RequestTrigger.Verify },
         tracing: {
           promptVersion: VERIFY_PLAN_PROMPT_VERSION,
           scenario: TRACING_SCENARIOS.VerifyPlanGen,
