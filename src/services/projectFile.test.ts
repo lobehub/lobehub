@@ -8,6 +8,11 @@ const mockDeviceClient = vi.hoisted(() => ({
   searchProjectFiles: { query: vi.fn() },
 }));
 
+const mockSandboxWorkspaceService = vi.hoisted(() => ({
+  getWorkspace: vi.fn(),
+  listFiles: vi.fn(),
+}));
+
 const mockLocalFileService = vi.hoisted(() => ({
   copyAssetForPublish: vi.fn(),
   getLocalFilePreview: vi.fn(),
@@ -29,6 +34,10 @@ vi.mock('@/libs/trpc/client', () => ({
 
 vi.mock('@/services/electron/localFileService', () => ({
   localFileService: mockLocalFileService,
+}));
+
+vi.mock('@/services/sandboxWorkspace', () => ({
+  sandboxWorkspaceService: mockSandboxWorkspaceService,
 }));
 
 describe('projectFileService', () => {
@@ -262,5 +271,47 @@ describe('projectFileService', () => {
       scope: '/repo',
     });
     expect(mockDeviceClient.searchProjectFiles.query).not.toHaveBeenCalled();
+  });
+
+  it('marks sandbox directories with a trailing slash so the tree can nest them', async () => {
+    const { projectFileService } = await import('./projectFile');
+
+    mockSandboxWorkspaceService.getWorkspace.mockResolvedValue({ dir: '/mnt/workspace/ws-1' });
+    // One flat recursive listing, the way the workspace API answers: every
+    // path relative to the workspace root, directories with no trailing slash.
+    mockSandboxWorkspaceService.listFiles.mockResolvedValue({
+      entries: [
+        { isDirectory: true, name: 'Spoon-Knife', path: 'hello-dev/Spoon-Knife' },
+        { isDirectory: false, name: 'README.md', path: 'hello-dev/Spoon-Knife/README.md' },
+        { isDirectory: false, name: 'README', path: 'hello-dev/README' },
+      ],
+      truncated: false,
+    });
+
+    const index = await projectFileService.getProjectFileIndex({
+      sandboxInstanceId: 'inst-1',
+      scope: 'hello-dev',
+    });
+
+    expect(index?.entries).toEqual([
+      {
+        isDirectory: true,
+        name: 'Spoon-Knife',
+        path: '/mnt/workspace/ws-1/hello-dev/Spoon-Knife',
+        relativePath: 'Spoon-Knife/',
+      },
+      {
+        isDirectory: false,
+        name: 'README.md',
+        path: '/mnt/workspace/ws-1/hello-dev/Spoon-Knife/README.md',
+        relativePath: 'Spoon-Knife/README.md',
+      },
+      {
+        isDirectory: false,
+        name: 'README',
+        path: '/mnt/workspace/ws-1/hello-dev/README',
+        relativePath: 'README',
+      },
+    ]);
   });
 });

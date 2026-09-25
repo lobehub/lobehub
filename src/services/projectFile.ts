@@ -135,14 +135,25 @@ class ProjectFileService {
     const root = scope ? `${workspace.dir}/${scope}` : workspace.dir;
 
     return {
-      entries: listing.entries.map((entry) => ({
-        isDirectory: entry.isDirectory,
-        name: entry.name,
+      entries: listing.entries.map((entry) => {
         // The workspace speaks in paths relative to ITS root; the tree resolves
         // everything against the project root it was given.
-        path: `${workspace.dir}/${entry.path}`,
-        relativePath: entry.path.startsWith(prefix) ? entry.path.slice(prefix.length) : entry.path,
-      })),
+        const relative = entry.path.startsWith(prefix)
+          ? entry.path.slice(prefix.length)
+          : entry.path;
+
+        return {
+          isDirectory: entry.isDirectory,
+          name: entry.name,
+          path: `${workspace.dir}/${entry.path}`,
+          // A directory's path carries a trailing slash, which is how every
+          // consumer of this index tells a directory row from a file row by
+          // its id alone: the tree derives each row's parent by trimming the
+          // last segment and looking the result up. Without it nothing finds
+          // its parent, and a whole checkout lands flat at the project root.
+          relativePath: entry.isDirectory ? `${relative}/` : relative,
+        };
+      }),
       indexedAt: new Date().toISOString(),
       root,
       source: 'sandbox',
