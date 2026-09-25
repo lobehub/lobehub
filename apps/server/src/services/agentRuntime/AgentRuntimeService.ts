@@ -1774,7 +1774,12 @@ export class AgentRuntimeService {
             // Clearing the request in the same write is what makes a redelivery
             // of this step read an initialized run instead of paying for
             // discovery again.
-            Object.assign(agentState, initialized.state, { request: undefined });
+            // The assembled context rides in the same write: a redelivery after
+            // this save finds the request gone and must still start from it.
+            Object.assign(agentState, initialized.state, {
+              initialContext: initialized.context,
+              request: undefined,
+            });
             await this.coordinator.saveAgentState(operationId, agentState);
             deferredInitContext = initialized.context;
             log(
@@ -2045,9 +2050,15 @@ export class AgentRuntimeService {
         });
 
         // Handle human intervention
-        // A deferred init assembled the real step-0 context; the queued one is a
-        // placeholder from before the init existed.
-        let currentContext = deferredInitContext ?? context;
+        // Step 0 starts from the operation's saved initial context — the same rule
+        // `executeSync` follows. For an ordinary run it is the context that was
+        // queued; for a deferred init it is the one the init assembled, which the
+        // queued placeholder predates, including on a redelivery after the save.
+        const savedInitialContext = (agentState as AgentState & {
+          initialContext?: AgentRuntimeContext;
+        }).initialContext;
+        let currentContext =
+          deferredInitContext ?? (stepIndex === 0 ? (savedInitialContext ?? context) : context);
         let currentState = agentState;
 
         if (humanInput || approvedToolCall || rejectionReason) {

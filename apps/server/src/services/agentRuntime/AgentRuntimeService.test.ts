@@ -950,6 +950,7 @@ describe('AgentRuntimeService', () => {
         const saved = coordinator.saveAgentState.mock.calls[0][1];
         expect(saved.operationToolSet).toEqual({ enabledToolIds: ['lobe-web-browsing'] });
         expect(saved.request).toBeUndefined();
+        expect(saved.initialContext).toEqual(initContext);
         // The exit: the step sees the initialized state, not the thin one.
         expect(step.mock.calls[0][0].operationToolSet).toEqual({
           enabledToolIds: ['lobe-web-browsing'],
@@ -957,6 +958,23 @@ describe('AgentRuntimeService', () => {
         // ...and the context the init assembled, not the placeholder queued
         // before the init existed.
         expect(step.mock.calls[0][1]).toEqual(initContext);
+      });
+
+      // The worker can die after saving the init but before the step runs. The
+      // redelivery finds the request gone — and must still start from the
+      // context the init assembled, not the placeholder it was queued with.
+      it('starts a redelivered step 0 from the context the init saved', async () => {
+        const runDeferredInit = vi.fn();
+        const svc = buildService(runDeferredInit);
+        const { coordinator, step } = wireStep(svc);
+        const assembled = { phase: 'user_input', payload: { assembled: true } };
+        const { request: _request, ...initialized } = pendingState();
+        coordinator.loadAgentState.mockResolvedValue({ ...initialized, initialContext: assembled });
+
+        await svc.executeStep({ ...mockParams, stepIndex: 0 });
+
+        expect(runDeferredInit).not.toHaveBeenCalled();
+        expect(step.mock.calls[0][1]).toEqual(assembled);
       });
 
       it('skips the init when the run was already stopped, and still settles it', async () => {
