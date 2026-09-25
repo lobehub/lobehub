@@ -694,7 +694,14 @@ export class AcceptanceService {
     // Only the newest round counts — `listByAcceptance` is ascending, and an
     // older draft the chain has moved past is an abandoned ledger position.
     const latest = (await this.runModel.listByAcceptance(acceptanceId)).at(-1);
-    const draft = latest && isDraftVerifyRun(latest) ? latest : undefined;
+    // A run that already executed cannot fold (`foldIntoRound` refuses any source
+    // with results): its verdicts belong to its own round. It is appended after
+    // the draft instead — the path a verification driven by the CLI takes, since
+    // it writes its results before the Task drive binds the round.
+    const draft =
+      latest && isDraftVerifyRun(latest) && (await this.resultModel.listByRun(runId)).length === 0
+        ? latest
+        : undefined;
     if (draft) {
       const folded = await this.runModel.foldIntoRound(runId, draft.id);
       await this.recomputeStatus(acceptanceId);
