@@ -115,6 +115,13 @@ export const deriveSandboxWorkspaceKey = ({
 /** Workspace subtree the platform reserves for its own state. */
 const RESERVED_WORKSPACE_DIR = '.sandbox';
 
+/**
+ * Where a built instance's checkout lives in the sandbox: on the machine's own
+ * disk, not the volume, because installs cannot run on the volume. The
+ * instance's directory on the volume is this tree's saved copy.
+ */
+export const SANDBOX_LOCAL_WORK_ROOT = '/root/work';
+
 /** Longest `sandboxCwd` worth sending; far past any real directory nesting. */
 const MAX_SANDBOX_CWD_LENGTH = 1024;
 
@@ -194,11 +201,21 @@ export interface SandboxWorkspacePromptInput {
   /** Chosen subdirectory of the workspace, relative to its root. */
   cwd?: string;
   mode?: SandboxMode;
+  /**
+   * Where commands actually start when that is not {@link cwd}: the checkout
+   * on the machine's own disk, for an instance built from a repository. The
+   * model is told this one absolutely because it can read it back from `pwd`;
+   * describing that session as sitting in `cwd` makes the prompt disagree with
+   * the shell, and a model that catches the prompt being wrong goes looking
+   * for the "real" directory instead of working where it is.
+   */
+  workingDir?: string;
 }
 
 export const formatSandboxWorkspacePromptVariables = ({
   cwd,
   mode = DEFAULT_SANDBOX_MODE,
+  workingDir,
 }: SandboxWorkspacePromptInput = {}): SandboxWorkspacePromptVariables => {
   if (mode !== 'persistent') {
     return {
@@ -218,21 +235,37 @@ export const formatSandboxWorkspacePromptVariables = ({
   // the fence keeps the session inside the workspace, not inside the chosen
   // subdirectory, and a model that discovers this by accident is likelier to
   // wander into another topic's files than one that knows the shape.
-  const placement = cwd
+  // A built instance runs in its checkout on local disk, which the session
+  // saves into the instance's directory on the volume — so persistence is real
+  // here too, but through a copy rather than by being the volume. Saying so is
+  // what keeps a model from "fixing" the discrepancy it can see between `pwd`
+  // and the workspace path it can also see.
+  const placement = workingDir
     ? [
-        `- Your working directory is \`${cwd}\`, a subdirectory of a **persistent workspace**: files written there survive session expiry and are still there in your next session.`,
-        `- The workspace root is above you. Its other subdirectories belong to this user's other topics — reachable with relative paths, but do not write into them unless the user asks.`,
+        `- You start in \`${workingDir}\`, this environment's checkout on the machine's own disk. The session saves it continuously into ${cwd ? `\`${cwd}\`, ` : ''}your instance's directory in a **persistent workspace**, so what you leave here is what you find in your next session, and it is what the user sees in their file browser.`,
+        `- The workspace is also mounted, and you may read from it, but that mounted path is the saved copy — not where this session works. Do not move the task there.`,
       ]
-    : [
-        '- Your working directory is a **persistent workspace**: files written there survive session expiry and are shared with the other conversation topics that use this workspace.',
-        '- Keep task-specific work in its own subdirectory so unrelated topics do not overwrite each other, and reuse what is already there when the user refers to earlier work.',
-      ];
+    : cwd
+      ? [
+          `- Your working directory is \`${cwd}\`, a subdirectory of a **persistent workspace**: files written there survive session expiry and are still there in your next session.`,
+          `- The workspace root is above you. Its other subdirectories belong to this user's other topics — reachable with relative paths, but do not write into them unless the user asks.`,
+        ]
+      : [
+          '- Your working directory is a **persistent workspace**: files written there survive session expiry and are shared with the other conversation topics that use this workspace.',
+          '- Keep task-specific work in its own subdirectory so unrelated topics do not overwrite each other, and reuse what is already there when the user refers to earlier work.',
+        ];
 
   return {
     sandbox_session_files:
       '- Files in your working directory persist across sessions; anything written outside it may not',
     sandbox_workspace: [
       ...placement,
+      // A model left to choose freely will sometimes clone or generate into a
+      // scratch directory of its own — reasonable in a disposable sandbox,
+      // wrong here: the result is thrown away with the session and the user
+      // never sees it in the file browser, which reads this directory. Said
+      // once, positively, rather than as a list of directories to avoid.
+      '- Every call starts you in that directory, and it is where the work belongs: checkouts, generated files and notes written anywhere else — `/root`, `/tmp`, a scratch directory of your own — are lost with the session and never appear in the user’s file browser. Stay where you start; if a step genuinely needs scratch space, say where you put it.',
       // Deliberately does NOT send installs to `/tmp`. The workspace is network
       // storage — an order of magnitude slower for the thousands of small files
       // a package install writes — but the answer is to let them land where the
