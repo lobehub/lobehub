@@ -26,8 +26,9 @@ interface DueTask {
 }
 
 /**
- * Cron-style central dispatcher. Registered as a QStash Schedule (e.g.
- * `*\/30 * * * *`) pointing at this endpoint. On each tick:
+ * Cron-style central dispatcher. Registered as a QStash Schedule
+ * (`*\/10 * * * *`, see `scripts/serverLauncher/startServer.js`) pointing at
+ * this endpoint. On each tick:
  *
  *   1. Loads all schedule-mode tasks in dispatchable status (`scheduled`/`backlog`).
  *   2. Filters by cron pattern + timezone + last-run dedup (`isExecutionTime`).
@@ -48,7 +49,13 @@ export async function scheduleDispatch(c: Context) {
     const due: DueTask[] = [];
     for (const task of tasks) {
       if (!task.schedulePattern) continue;
+      // Stamped when the user (re)starts the schedule; an occurrence before it
+      // must not fire, or arming just after a slot would replay that slot.
+      const scheduleStartedAt = (
+        task.context as { scheduler?: { scheduleStartedAt?: string } } | null
+      )?.scheduler?.scheduleStartedAt;
       const matches = isExecutionTime({
+        armedAt: scheduleStartedAt ? new Date(scheduleStartedAt) : null,
         cronPattern: task.schedulePattern,
         currentTime: now,
         lastExecutedAt: task.lastHeartbeatAt ?? null,

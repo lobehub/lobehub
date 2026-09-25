@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isExecutionTime } from './cronEval';
+import { isExecutionTime, SCHEDULE_DISPATCH_INTERVAL_MINUTES } from './cronEval';
 
 const at = (iso: string) => new Date(iso);
 
@@ -73,8 +73,8 @@ describe('isExecutionTime — scheduled task misfire regressions', () => {
     ).toBe(true);
   });
 
-  describe('dispatcher replay (5-minute ticks from the arm time)', () => {
-    const TICK_MS = 5 * 60 * 1000;
+  describe('dispatcher replay (10-minute ticks from the arm time)', () => {
+    const TICK_MS = SCHEDULE_DISPATCH_INTERVAL_MINUTES * 60 * 1000;
 
     /** Replays the central dispatcher and returns every tick that fired. */
     const replay = (cronPattern: string, timezone: string, armedAt: string, until: string) => {
@@ -83,7 +83,15 @@ describe('isExecutionTime — scheduled task misfire regressions', () => {
       const start = Math.ceil(at(armedAt).getTime() / TICK_MS) * TICK_MS;
       for (let t = start; t <= at(until).getTime(); t += TICK_MS) {
         const currentTime = new Date(t);
-        if (isExecutionTime({ cronPattern, currentTime, lastExecutedAt, timezone })) {
+        if (
+          isExecutionTime({
+            armedAt: at(armedAt),
+            cronPattern,
+            currentTime,
+            lastExecutedAt,
+            timezone,
+          })
+        ) {
           fires.push(currentTime.toISOString());
           lastExecutedAt = currentTime;
         }
@@ -97,13 +105,13 @@ describe('isExecutionTime — scheduled task misfire regressions', () => {
       ).toEqual(['2026-09-27T02:00:00.000Z']);
     });
 
-    it('B1: Sydney "5 0 * * *" fires once per night at 00:05', () => {
+    it('B1: Sydney "5 0 * * *" fires once per night, on the first tick after 00:05', () => {
       expect(
         replay('5 0 * * *', 'Australia/Sydney', '2026-09-17T15:50:17Z', '2026-09-20T23:00:00Z'),
       ).toEqual([
-        '2026-09-18T14:05:00.000Z',
-        '2026-09-19T14:05:00.000Z',
-        '2026-09-20T14:05:00.000Z',
+        '2026-09-18T14:10:00.000Z',
+        '2026-09-19T14:10:00.000Z',
+        '2026-09-20T14:10:00.000Z',
       ]);
     });
 
@@ -126,15 +134,21 @@ describe('isExecutionTime — scheduled task misfire regressions', () => {
       ]);
     });
 
-    it('D1: T-13 "45 11 * * 1-5" fires every weekday, not only Monday', () => {
+    it('D1: T-13 "45 11 * * 1-5" fires every weekday (11:50 tick), not only Monday', () => {
       expect(
         replay('45 11 * * 1-5', 'Asia/Ho_Chi_Minh', '2026-09-21T13:01:40Z', '2026-09-28T23:00:00Z'),
       ).toEqual([
-        '2026-09-22T04:45:00.000Z',
-        '2026-09-23T04:45:00.000Z',
-        '2026-09-24T04:45:00.000Z',
-        '2026-09-25T04:45:00.000Z',
-        '2026-09-28T04:45:00.000Z',
+        '2026-09-22T04:50:00.000Z',
+        '2026-09-23T04:50:00.000Z',
+        '2026-09-24T04:50:00.000Z',
+        '2026-09-25T04:50:00.000Z',
+        '2026-09-28T04:50:00.000Z',
+      ]);
+    });
+
+    it('E1: daily "0 9 * * *" armed at 09:05 skips that 09:00 and fires the next day', () => {
+      expect(replay('0 9 * * *', 'UTC', '2026-09-21T09:05:00Z', '2026-09-22T12:00:00Z')).toEqual([
+        '2026-09-22T09:00:00.000Z',
       ]);
     });
   });

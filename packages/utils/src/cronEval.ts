@@ -1,6 +1,12 @@
 import { CronExpressionParser } from 'cron-parser';
 
 export interface IsExecutionTimeInput {
+  /**
+   * When the schedule was (re)armed. An occurrence before it is never fired:
+   * arming after a slot has passed waits for the next one, even when the task
+   * has never run or its last run is older than the arming.
+   */
+  armedAt?: Date | null;
   /** Cron pattern in standard 5-field form: `minute hour day month weekday`. */
   cronPattern: string;
   /** Defaults to `Date.now()` when omitted — exposed for tests. */
@@ -17,8 +23,18 @@ export interface IsExecutionTimeInput {
   timezone: string | null;
 }
 
-/** The central dispatcher ticks every 5 minutes; tolerate two missed ticks plus jitter. */
-export const DEFAULT_SCHEDULE_GRACE_MINUTES = 15;
+/**
+ * Cadence of the central schedule dispatcher (`lobe-task-schedule-dispatch`,
+ * `*\/10 * * * *` in `scripts/serverLauncher/startServer.js`).
+ */
+export const SCHEDULE_DISPATCH_INTERVAL_MINUTES = 10;
+
+/**
+ * An occurrence can be up to one interval old on the tick that should fire it;
+ * tolerate one more missed tick plus delivery jitter. Anything older is skipped
+ * rather than replayed, so a stale slot never fires long after the fact.
+ */
+export const DEFAULT_SCHEDULE_GRACE_MINUTES = SCHEDULE_DISPATCH_INTERVAL_MINUTES * 2 + 5;
 
 const CRON_FIELD_COUNT = 5;
 const MINUTE_MS = 60 * 1000;
@@ -51,7 +67,7 @@ const parseCron = (cronPattern: string, timezone: string | null, currentDate: Da
 /**
  * Decide whether a cron pattern is due on this dispatcher tick.
  *
- * The central dispatcher polls on a fixed cadence (every 5 minutes), so the
+ * The central dispatcher polls on a fixed cadence (every 10 minutes), so the
  * question is not "does `now` match the pattern" but "is there a scheduled
  * occurrence that has passed and has not run yet". The matcher:
  *
@@ -59,8 +75,10 @@ const parseCron = (cronPattern: string, timezone: string | null, currentDate: Da
  *   window, in the pattern's timezone with full cron semantics (day-of-month,
  *   month, ranges, steps, lists, names).
  * - Fires only when such an occurrence exists, so a task never fires
- *   ahead of its occurrence, and arming a task after today's slot has passed
- *   waits for the next slot instead of replaying the missed one.
+ *   ahead of its occurrence.
+ * - Fires only when `prev` is at or after `armedAt`, so arming a task after
+ *   today's slot has passed waits for the next slot instead of replaying the
+ *   missed one.
  * - Fires only when `lastExecutedAt < prev`, so each occurrence runs at most
  *   once no matter how many ticks fall inside the grace window. A manual run
  *   before the occurrence does not consume it.
@@ -70,6 +88,7 @@ const parseCron = (cronPattern: string, timezone: string | null, currentDate: Da
  */
 export const isExecutionTime = (input: IsExecutionTimeInput): boolean => {
   const {
+    armedAt,
     cronPattern,
     timezone,
     lastExecutedAt,
@@ -98,6 +117,7 @@ export const isExecutionTime = (input: IsExecutionTimeInput): boolean => {
   }
 
   if (prev === undefined) return false;
+  if (armedAt && new Date(armedAt).getTime() > prev) return false;
   if (lastExecutedAt && new Date(lastExecutedAt).getTime() >= prev) return false;
 
   return true;
@@ -129,3 +149,45 @@ export const validateCronPattern = (
     return { error: error instanceof Error ? error.message : String(error), valid: false };
   }
 };
+
+/** "next runs (Asia/Shanghai) → Mon 2026-09-28 09:00; …" so the agent can check the schedule it set. */
+export const formatScheduleNextRuns = (runs: Date[], timezone: string | null): string => {
+  const tz = timezone || 'UTC';
+  const format = new Intl.DateTimeFormat('en-CA', {
+    day: '2-digit',
+    hour: '2-digit',
+    hourCycle: 'h23',
+    minute: '2-digit',
+    month: '2-digit',
+    timeZone: tz,
+    weekday: 'short',
+    year: 'numeric',
+  });
+  const label = (date: Date) => {
+    const parts = Object.fromEntries(format.formatToParts(date).map((p) => [p.type, p.value]));
+    return `${parts.weekday} ${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
+  };
+  return `next runs (${tz}) → ${runs.map(label).join('; ')}`;
+};
+
+export type SchedulePreviewResult =
+  { error: string; valid: false } | { preview: string; valid: true };
+
+/**
+ * Validate the schedule a task will end up with and describe its next runs,
+ * shared by every runtime of the `setTaskSchedule` tool so they all return the
+ * same confirmation (or refusal) to the agent.
+ */
+export const previewSchedule = (
+  cronPattern: string,
+  timezone: string | null,
+  options: { count?: number; from?: Date } = {},
+): SchedulePreviewResult => {
+  const result = validateCronPattern(cronPattern, timezone, options);
+  if (!result.valid) return result;
+  return { preview: formatScheduleNextRuns(result.nextRuns, timezone), valid: true };
+};
+
+/** The refusal both runtimes return when `setTaskSchedule` is given an unusable schedule. */
+export const formatInvalidScheduleMessage = (identifier: string, error: string): string =>
+  `Invalid schedule for task ${identifier}: ${error}. Use a standard 5-field cron expression "minute hour day-of-month month day-of-week" (e.g. "0 9 * * 1-5") with an IANA timezone. Nothing was updated.`;

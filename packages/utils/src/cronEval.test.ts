@@ -321,3 +321,88 @@ describe('isExecutionTime', () => {
     });
   });
 });
+
+describe('isExecutionTime — arming lower bound', () => {
+  it('does NOT fire an occurrence that predates arming (09:00 slot, armed 09:05, 09:10 tick)', () => {
+    expect(
+      isExecutionTime({
+        armedAt: utc('2026-04-29T09:05:00'),
+        cronPattern: '0 9 * * *',
+        currentTime: utc('2026-04-29T09:10:00'),
+        lastExecutedAt: null,
+        timezone: 'UTC',
+      }),
+    ).toBe(false);
+  });
+
+  it('does NOT replay the slot just before a re-arm when the last run is older', () => {
+    expect(
+      isExecutionTime({
+        armedAt: utc('2026-04-29T09:05:00'),
+        cronPattern: '0 9 * * *',
+        currentTime: utc('2026-04-29T09:10:00'),
+        lastExecutedAt: utc('2026-04-27T09:00:00'),
+        timezone: 'UTC',
+      }),
+    ).toBe(false);
+  });
+
+  it('fires the first occurrence after arming', () => {
+    expect(
+      isExecutionTime({
+        armedAt: utc('2026-04-29T08:55:00'),
+        cronPattern: '0 9 * * *',
+        currentTime: utc('2026-04-29T09:00:00'),
+        lastExecutedAt: null,
+        timezone: 'UTC',
+      }),
+    ).toBe(true);
+  });
+
+  it('fires the next day once the armed slot has passed', () => {
+    expect(
+      isExecutionTime({
+        armedAt: utc('2026-04-29T09:05:00'),
+        cronPattern: '0 9 * * *',
+        currentTime: utc('2026-04-30T09:00:00'),
+        lastExecutedAt: null,
+        timezone: 'UTC',
+      }),
+    ).toBe(true);
+  });
+});
+
+describe('isExecutionTime — grace window vs the 10-minute dispatcher', () => {
+  it('still fires a 09:01 occurrence on the 09:20 tick when the 09:10 tick was missed', () => {
+    expect(
+      isExecutionTime({
+        cronPattern: '1 9 * * *',
+        currentTime: utc('2026-04-29T09:20:00'),
+        lastExecutedAt: utc('2026-04-28T09:10:00'),
+        timezone: 'UTC',
+      }),
+    ).toBe(true);
+  });
+
+  it('covers one missed tick plus jitter: a 09:01 occurrence on a late 09:20 tick (09:25)', () => {
+    expect(
+      isExecutionTime({
+        cronPattern: '1 9 * * *',
+        currentTime: utc('2026-04-29T09:25:00'),
+        lastExecutedAt: utc('2026-04-28T09:10:00'),
+        timezone: 'UTC',
+      }),
+    ).toBe(true);
+  });
+
+  it('does NOT replay an occurrence older than the grace window', () => {
+    expect(
+      isExecutionTime({
+        cronPattern: '1 9 * * *',
+        currentTime: utc('2026-04-29T09:40:00'),
+        lastExecutedAt: utc('2026-04-28T09:10:00'),
+        timezone: 'UTC',
+      }),
+    ).toBe(false);
+  });
+});
