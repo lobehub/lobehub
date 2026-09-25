@@ -60,6 +60,21 @@ describe('AcceptanceService.resolveOrigin', () => {
     expect(origin?.agent?.id).toBe('agt_recorded');
   });
 
+  it('looks up a recorded agent without waiting on the topic read', async () => {
+    let resolveTopic!: (row: unknown) => void;
+    findTopicById.mockReturnValue(new Promise((resolve) => (resolveTopic = resolve)));
+    getAgentAvatarsByIds.mockResolvedValue([agentRow('agt_recorded')]);
+
+    const pending = service.resolveOrigin([
+      runWithOrigin({ agentId: 'agt_recorded', topicId: 'tpc_1' }),
+    ]);
+    await Promise.resolve();
+
+    expect(getAgentAvatarsByIds).toHaveBeenCalledWith(['agt_recorded']);
+    resolveTopic({ agentId: 'agt_topic', id: 'tpc_1', title: 'Harbor' });
+    expect((await pending)?.agent?.id).toBe('agt_recorded');
+  });
+
   it('leaves the agent empty when neither the round nor the topic names one', async () => {
     findTopicById.mockResolvedValue({ agentId: null, id: 'tpc_1', title: 'Harbor' });
 
