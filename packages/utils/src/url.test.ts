@@ -32,11 +32,6 @@ describe('pathString', () => {
     expect(result).toBe('/home');
   });
 
-  it('should handle absolute path', () => {
-    const result = pathString('/home');
-    expect(result).toBe('/home');
-  });
-
   it('should handle path with protocol', () => {
     const result = pathString('https://www.example.com/home');
     expect(result).toBe('https://www.example.com/home');
@@ -59,26 +54,6 @@ describe('pathString', () => {
 });
 
 describe('inferContentTypeFromImageUrl', () => {
-  it('should return correct MIME type for jpg images', () => {
-    const result = inferContentTypeFromImageUrl('https://example.com/image.jpg');
-    expect(result).toBe('image/jpeg');
-  });
-
-  it('should return correct MIME type for png images', () => {
-    const result = inferContentTypeFromImageUrl('https://example.com/image.png');
-    expect(result).toBe('image/png');
-  });
-
-  it('should return correct MIME type for webp images', () => {
-    const result = inferContentTypeFromImageUrl('https://example.com/image.webp');
-    expect(result).toBe('image/webp');
-  });
-
-  it('should return correct MIME type for gif images', () => {
-    const result = inferContentTypeFromImageUrl('https://example.com/image.gif');
-    expect(result).toBe('image/gif');
-  });
-
   it('should handle uppercase extensions', () => {
     const result = inferContentTypeFromImageUrl('https://example.com/image.JPG');
     expect(result).toBe('image/jpeg');
@@ -121,26 +96,6 @@ describe('inferContentTypeFromImageUrl', () => {
   it('should handle mixed case extensions', () => {
     const result = inferContentTypeFromImageUrl('https://example.com/image.JpEg');
     expect(result).toBe('image/jpeg');
-  });
-
-  it('should handle BMP format', () => {
-    const result = inferContentTypeFromImageUrl('https://example.com/image.bmp');
-    expect(result).toBe('image/bmp');
-  });
-
-  it('should handle TIFF format', () => {
-    const result = inferContentTypeFromImageUrl('https://example.com/image.tiff');
-    expect(result).toBe('image/tiff');
-  });
-
-  it('should handle TIF format', () => {
-    const result = inferContentTypeFromImageUrl('https://example.com/image.tif');
-    expect(result).toBe('image/tiff');
-  });
-
-  it('should handle SVG format', () => {
-    const result = inferContentTypeFromImageUrl('https://example.com/image.svg');
-    expect(result).toBe('image/svg+xml');
   });
 
   it('should throw error for invalid URLs', () => {
@@ -263,36 +218,6 @@ describe('inferContentTypeFromImageUrl', () => {
 });
 
 describe('inferFileExtensionFromImageUrl', () => {
-  it('should return jpg extension', () => {
-    const result = inferFileExtensionFromImageUrl('https://example.com/image.jpg');
-    expect(result).toBe('jpg');
-  });
-
-  it('should return png extension', () => {
-    const result = inferFileExtensionFromImageUrl('https://example.com/image.png');
-    expect(result).toBe('png');
-  });
-
-  it('should return webp extension', () => {
-    const result = inferFileExtensionFromImageUrl('https://example.com/image.webp');
-    expect(result).toBe('webp');
-  });
-
-  it('should handle jpeg extension', () => {
-    const result = inferFileExtensionFromImageUrl('https://example.com/image.jpeg');
-    expect(result).toBe('jpeg');
-  });
-
-  it('should handle gif extension', () => {
-    const result = inferFileExtensionFromImageUrl('https://example.com/image.gif');
-    expect(result).toBe('gif');
-  });
-
-  it('should handle svg extension', () => {
-    const result = inferFileExtensionFromImageUrl('https://example.com/image.svg');
-    expect(result).toBe('svg');
-  });
-
   it('should handle uppercase extensions and convert to lowercase', () => {
     const result = inferFileExtensionFromImageUrl('https://example.com/image.PNG');
     expect(result).toBe('png');

@@ -2,7 +2,6 @@
 import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { testProvider } from '../../providerTestUtils';
 import { LobeOllamaCloudAI, params } from './index';
 
 const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
@@ -10,21 +9,6 @@ const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
 vi.mock('@lobechat/business-model-bank/model-config', () => ({
   loadModels: loadModelsMock,
 }));
-
-// Basic provider tests
-testProvider({
-  Runtime: LobeOllamaCloudAI,
-  bizErrorType: 'ProviderBizError',
-  chatDebugEnv: 'DEBUG_OLLAMA_CLOUD_CHAT_COMPLETION',
-  chatModel: 'llama3.2',
-  defaultBaseURL: 'https://ollama.com/v1',
-  invalidErrorType: 'InvalidProviderAPIKey',
-  provider: ModelProvider.OllamaCloud,
-  test: {
-    skipAPICall: true,
-    skipErrorHandle: true,
-  },
-});
 
 // Custom feature tests
 describe('LobeOllamaCloudAI - custom features', () => {

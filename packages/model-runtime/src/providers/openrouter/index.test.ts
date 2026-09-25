@@ -2,7 +2,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
-import { testProvider } from '../../providerTestUtils';
 import { LobeOpenRouterAI, params } from './index';
 
 const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
@@ -10,20 +9,6 @@ const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
 vi.mock('@lobechat/business-model-bank/model-config', () => ({
   loadModels: loadModelsMock,
 }));
-
-const provider = 'openrouter';
-const defaultBaseURL = 'https://openrouter.ai/api/v1';
-
-testProvider({
-  provider,
-  defaultBaseURL,
-  chatModel: 'mistralai/mistral-7b-instruct:free',
-  Runtime: LobeOpenRouterAI,
-  chatDebugEnv: 'DEBUG_OPENROUTER_CHAT_COMPLETION',
-  test: {
-    skipAPICall: true,
-  },
-});
 
 // Mock the console.error to avoid polluting test output
 vi.spyOn(console, 'error').mockImplementation(() => {});

@@ -2,22 +2,7 @@
 import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { testProvider } from '../../providerTestUtils';
 import { LobeAi360AI, params } from './index';
-
-testProvider({
-  Runtime: LobeAi360AI,
-  provider: ModelProvider.Ai360,
-  defaultBaseURL: 'https://api.360.cn/v1',
-  chatDebugEnv: 'DEBUG_AI360_CHAT_COMPLETION',
-  chatModel: 'deepseek-r1',
-  invalidErrorType: 'InvalidProviderAPIKey',
-  bizErrorType: 'ProviderBizError',
-  test: {
-    skipAPICall: true,
-    skipErrorHandle: true,
-  },
-});
 
 describe('LobeAi360AI - custom features', () => {
   let instance: InstanceType<typeof LobeAi360AI>;

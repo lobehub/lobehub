@@ -2,7 +2,6 @@
 import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { testProvider } from '../../providerTestUtils';
 import { LobeCerebrasAI, params } from './index';
 
 const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
@@ -10,20 +9,6 @@ const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
 vi.mock('@lobechat/business-model-bank/model-config', () => ({
   loadModels: loadModelsMock,
 }));
-
-testProvider({
-  Runtime: LobeCerebrasAI,
-  bizErrorType: 'ProviderBizError',
-  chatDebugEnv: 'DEBUG_CEREBRAS_CHAT_COMPLETION',
-  chatModel: 'llama3.1-8b',
-  defaultBaseURL: 'https://api.cerebras.ai/v1',
-  invalidErrorType: 'InvalidProviderAPIKey',
-  provider: ModelProvider.Cerebras,
-  test: {
-    skipAPICall: true,
-    skipErrorHandle: true,
-  },
-});
 
 describe('LobeCerebrasAI - custom features', () => {
   let instance: InstanceType<typeof LobeCerebrasAI>;

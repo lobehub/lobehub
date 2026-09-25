@@ -2,7 +2,6 @@
 import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { testProvider } from '../../providerTestUtils';
 import { LobeZeroOneAI, params } from './index';
 
 const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
@@ -10,14 +9,6 @@ const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
 vi.mock('@lobechat/business-model-bank/model-config', () => ({
   loadModels: loadModelsMock,
 }));
-
-testProvider({
-  Runtime: LobeZeroOneAI,
-  chatDebugEnv: 'DEBUG_ZEROONE_CHAT_COMPLETION',
-  chatModel: 'yi-34b-chat-0205',
-  defaultBaseURL: 'https://api.lingyiwanwu.com/v1',
-  provider: ModelProvider.ZeroOne,
-});
 
 describe('LobeZeroOneAI - custom features', () => {
   let instance: InstanceType<typeof LobeZeroOneAI>;

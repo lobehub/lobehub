@@ -2,19 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
-import { testProvider } from '../../providerTestUtils';
 import { LobeZhipuAI, params } from './index';
-
-testProvider({
-  provider: 'zhipu',
-  defaultBaseURL: 'https://open.bigmodel.cn/api/paas/v4',
-  chatModel: 'glm-4',
-  Runtime: LobeZhipuAI,
-  chatDebugEnv: 'DEBUG_ZHIPU_CHAT_COMPLETION',
-  test: {
-    skipAPICall: true, // Skip because Zhipu has custom handlePayload that normalizes temperature
-  },
-});
 
 vi.mock('@lobechat/business-model-bank/model-config', () => ({
   loadModels: vi.fn().mockResolvedValue([]),

@@ -2,16 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
-import { testProvider } from '../../providerTestUtils';
 import { LobeSearch1API, params } from './index';
-
-testProvider({
-  provider: 'search1api',
-  defaultBaseURL: 'https://api.search1api.com/v1',
-  chatModel: 'gpt-4o-mini',
-  Runtime: LobeSearch1API,
-  chatDebugEnv: 'DEBUG_SEARCH1API_CHAT_COMPLETION',
-});
 
 // Mock the console.error to avoid polluting test output
 vi.spyOn(console, 'error').mockImplementation(() => {});

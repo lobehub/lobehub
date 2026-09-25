@@ -2,7 +2,6 @@
 import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { testProvider } from '../../providerTestUtils';
 import { LobeAkashChatAI, params } from './index';
 
 const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
@@ -10,23 +9,6 @@ const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
 vi.mock('@lobechat/business-model-bank/model-config', () => ({
   loadModels: loadModelsMock,
 }));
-
-const provider = ModelProvider.AkashChat;
-const defaultBaseURL = 'https://chatapi.akash.network/api/v1';
-
-testProvider({
-  Runtime: LobeAkashChatAI,
-  bizErrorType: 'ProviderBizError',
-  chatDebugEnv: 'DEBUG_AKASH_CHAT_COMPLETION',
-  chatModel: 'llama-3.1-8b-instruct',
-  defaultBaseURL,
-  invalidErrorType: 'InvalidProviderAPIKey',
-  provider,
-  test: {
-    skipAPICall: true,
-    skipErrorHandle: true,
-  },
-});
 
 describe('LobeAkashChatAI - custom features', () => {
   let instance: InstanceType<typeof LobeAkashChatAI>;

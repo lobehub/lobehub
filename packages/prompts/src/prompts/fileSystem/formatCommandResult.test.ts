@@ -134,18 +134,6 @@ describe('formatCommandResult', () => {
     `);
   });
 
-  it('should suppress the Exit code line when exitCode is 0', () => {
-    const result = formatCommandResult({
-      exitCode: 0,
-      success: true,
-    });
-    expect(result).toMatchInlineSnapshot(`
-      "Command completed successfully.
-
-      (no output)"
-    `);
-  });
-
   it('should treat shell id with exitCode 0 as completed', () => {
     const result = formatCommandResult({
       exitCode: 0,

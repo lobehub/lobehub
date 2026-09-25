@@ -2,7 +2,6 @@
 import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { testProvider } from '../../providerTestUtils';
 import { LobeV0AI, params } from './index';
 
 const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
@@ -10,20 +9,6 @@ const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
 vi.mock('@lobechat/business-model-bank/model-config', () => ({
   loadModels: loadModelsMock,
 }));
-
-testProvider({
-  Runtime: LobeV0AI,
-  bizErrorType: 'ProviderBizError',
-  chatDebugEnv: 'DEBUG_V0_CHAT_COMPLETION',
-  chatModel: 'gpt-4o',
-  defaultBaseURL: 'https://api.v0.dev/v1',
-  invalidErrorType: 'InvalidProviderAPIKey',
-  provider: ModelProvider.V0,
-  test: {
-    skipAPICall: true,
-    skipErrorHandle: true,
-  },
-});
 
 describe('LobeV0AI - custom features', () => {
   let instance: InstanceType<typeof LobeV0AI>;

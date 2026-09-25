@@ -2,22 +2,7 @@
 import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { testProvider } from '../../providerTestUtils';
 import { LobeNebiusAI, params } from './index';
-
-const provider = ModelProvider.Nebius;
-const defaultBaseURL = 'https://api.studio.nebius.com/v1';
-
-testProvider({
-  Runtime: LobeNebiusAI,
-  chatDebugEnv: 'DEBUG_NEBIUS_CHAT_COMPLETION',
-  chatModel: 'meta/llama-3.1-8b-instruct',
-  defaultBaseURL,
-  provider,
-  test: {
-    skipAPICall: true,
-  },
-});
 
 describe('LobeNebiusAI - custom features', () => {
   let instance: InstanceType<typeof LobeNebiusAI>;

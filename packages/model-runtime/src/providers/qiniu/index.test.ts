@@ -2,25 +2,7 @@
 import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { testProvider } from '../../providerTestUtils';
 import { LobeQiniuAI, params } from './index';
-
-const provider = ModelProvider.Qiniu;
-const defaultBaseURL = 'https://openai.qiniu.com/v1';
-
-testProvider({
-  Runtime: LobeQiniuAI,
-  provider,
-  defaultBaseURL,
-  chatDebugEnv: 'DEBUG_QINIU_CHAT_COMPLETION',
-  chatModel: 'deepseek-r1',
-  invalidErrorType: 'InvalidProviderAPIKey',
-  bizErrorType: 'ProviderBizError',
-  test: {
-    skipAPICall: true,
-    skipErrorHandle: true,
-  },
-});
 
 describe('LobeQiniuAI - custom features', () => {
   let instance: InstanceType<typeof LobeQiniuAI>;

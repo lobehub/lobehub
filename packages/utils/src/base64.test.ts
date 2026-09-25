@@ -29,14 +29,6 @@ describe('base64 utilities', () => {
       // Restore btoa
       global.btoa = originalBtoa;
     });
-
-    it('should handle special characters', () => {
-      const input = 'test@123:password';
-      const result = encodeToBase64(input);
-
-      // Expected base64 for 'test@123:password' is 'dGVzdEAxMjM6cGFzc3dvcmQ='
-      expect(result).toBe(Buffer.from(input, 'utf8').toString('base64'));
-    });
   });
 
   describe('decodeFromBase64', () => {

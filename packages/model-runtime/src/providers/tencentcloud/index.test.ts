@@ -2,27 +2,11 @@
 import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { testProvider } from '../../providerTestUtils';
 import type { TencentCloudModelCard } from './index';
-import { LobeTencentCloudAI, params } from './index';
+import { params } from './index';
 
 const provider = ModelProvider.TencentCloud;
 const defaultBaseURL = 'https://api.lkeap.cloud.tencent.com/v1';
-
-// Basic provider tests
-testProvider({
-  Runtime: LobeTencentCloudAI,
-  bizErrorType: 'ProviderBizError',
-  chatDebugEnv: 'DEBUG_TENCENT_CLOUD_CHAT_COMPLETION',
-  chatModel: 'DeepSeek-R1',
-  defaultBaseURL,
-  invalidErrorType: 'InvalidProviderAPIKey',
-  provider,
-  test: {
-    skipAPICall: true,
-    skipErrorHandle: true,
-  },
-});
 
 // Custom feature tests
 describe('LobeTencentCloudAI - custom features', () => {

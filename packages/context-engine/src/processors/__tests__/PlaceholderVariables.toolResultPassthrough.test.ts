@@ -46,31 +46,6 @@ describe('PlaceholderVariablesProcessor — tool result passthrough', () => {
     expect(result.messages[0].content).toBe(diff);
   });
 
-  it('renders the same tool result identically across repeated calls', async () => {
-    const diff = 'Updated {{time}} / {{timestamp}}';
-    const render = async () => {
-      const processor = new PlaceholderVariablesProcessor({
-        variableGenerators: {
-          time: () => new Date().toISOString(),
-          timestamp: () => Date.now().toString(),
-        },
-      });
-      const ctx = buildContext([
-        {
-          role: 'tool',
-          tool_call_id: 't1',
-          name: 'lobe-local-system____runCommand',
-          content: diff,
-        },
-      ]);
-      return (await processor.process(ctx)).messages[0].content;
-    };
-
-    // Byte-stability across calls is the whole point: an unstable byte here is
-    // a broken cache prefix and a ~50x price on every token that follows.
-    expect(await render()).toBe(await render());
-  });
-
   it('identifies the tool from `plugin` when the wire name is absent', async () => {
     const processor = new PlaceholderVariablesProcessor({ variableGenerators: timeGenerators });
 

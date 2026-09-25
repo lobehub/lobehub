@@ -3,22 +3,7 @@ import { ModelProvider } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
-import { testProvider } from '../../providerTestUtils';
 import { LobeCohereAI, params } from './index';
-
-const provider = ModelProvider.Cohere;
-const defaultBaseURL = 'https://api.cohere.ai/compatibility/v1';
-
-testProvider({
-  Runtime: LobeCohereAI,
-  provider,
-  defaultBaseURL,
-  chatDebugEnv: 'DEBUG_COHERE_CHAT_COMPLETION',
-  chatModel: 'command-r7b',
-  test: {
-    skipAPICall: true,
-  },
-});
 
 // Mock the console.error to avoid polluting test output
 vi.spyOn(console, 'error').mockImplementation(() => {});

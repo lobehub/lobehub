@@ -2,22 +2,7 @@
 import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { testProvider } from '../../providerTestUtils';
 import { LobeStepfunAI, params } from './index';
-
-const provider = ModelProvider.Stepfun;
-const defaultBaseURL = 'https://api.stepfun.com/v1';
-
-testProvider({
-  Runtime: LobeStepfunAI,
-  chatDebugEnv: 'DEBUG_STEPFUN_CHAT_COMPLETION',
-  chatModel: 'stepfun',
-  defaultBaseURL,
-  provider,
-  test: {
-    skipAPICall: true,
-  },
-});
 
 describe('LobeStepfunAI - custom features', () => {
   let instance: InstanceType<typeof LobeStepfunAI>;

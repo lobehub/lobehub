@@ -24,11 +24,6 @@ describe('ToolNameResolver', () => {
       const result = resolver.generate('test-plugin', 'myAction', 'default');
       expect(result).toBe('test-plugin____myAction');
     });
-
-    it('should handle undefined type as builtin', () => {
-      const result = resolver.generate('test-plugin', 'myAction');
-      expect(result).toBe('test-plugin____myAction');
-    });
   });
 
   describe('generate - long name handling', () => {

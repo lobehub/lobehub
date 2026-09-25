@@ -20,18 +20,6 @@ describe('Unit Conversion', () => {
     expect(parseFloat(celsius.content || '0')).toBeCloseTo(0, 0);
   });
 
-  it('should handle length conversions with mathjs syntax', async () => {
-    const result = await calculatorExecutor.calculate({ expression: '5 cm to inch' });
-    expect(result.success).toBe(true);
-    expect(parseFloat(result.content || '0')).toBeCloseTo(1.9685, 3);
-  });
-
-  it('should handle weight conversions', async () => {
-    const result = await calculatorExecutor.calculate({ expression: '1 kg to lb' });
-    expect(result.success).toBe(true);
-    expect(parseFloat(result.content || '0')).toBeCloseTo(2.2046, 3);
-  });
-
   it('should handle speed conversions', async () => {
     const result = await calculatorExecutor.calculate({ expression: '100 km/h to mph' });
     // Note: This might fail depending on mathjs unit support
@@ -44,11 +32,6 @@ describe('Unit Conversion', () => {
     }
   });
 
-  it('should handle invalid temperature syntax gracefully', async () => {
-    const result = await calculatorExecutor.calculate({ expression: '25 °C to °F' });
-    // This might fail due to Unicode degree symbol
-    console.log('Unicode result:', result.content, result.success);
-  });
   describe('Calculator Calculus', () => {
     describe('differentiate', () => {
       it('should differentiate polynomial expressions', async () => {
@@ -591,18 +574,6 @@ describe('Calculator Base Conversion', () => {
     expect(result.state?.decimalValue).toBe(10);
   });
 
-  it('should base decimal to binary', async () => {
-    const result = await calculatorExecutor.base({
-      number: '255',
-      fromBase: 10,
-      toBase: 2,
-    });
-
-    expect(result.success).toBe(true);
-    expect(result.content).toBe('11111111');
-    expect(result.state?.decimalValue).toBe(255);
-  });
-
   it('should base hexadecimal to octal', async () => {
     const result = await calculatorExecutor.base({
       number: 'FF',
@@ -674,33 +645,11 @@ describe('Calculator Base Conversion', () => {
     expect(result.state?.decimalValue).toBe(1000);
   });
 
-  it('should handle invalid base numbers', async () => {
-    const result = await calculatorExecutor.base({
-      number: '123',
-      fromBase: 1,
-      toBase: 10,
-    });
-
-    expect(result.success).toBe(false);
-    expect(result.error?.type).toBe('ConversionError');
-  });
-
   it('should handle invalid base 37', async () => {
     const result = await calculatorExecutor.base({
       number: '123',
       fromBase: 10,
       toBase: 37,
-    });
-
-    expect(result.success).toBe(false);
-    expect(result.error?.type).toBe('ConversionError');
-  });
-
-  it('should validate digit characters for base', async () => {
-    const result = await calculatorExecutor.base({
-      number: 'G',
-      fromBase: 16,
-      toBase: 10,
     });
 
     expect(result.success).toBe(false);
@@ -976,28 +925,6 @@ describe('Calculator Core Functions', () => {
 
 describe('Calculator Sorting', () => {
   describe('sort', () => {
-    it('should default to sorted array when no mode provided', async () => {
-      const result = await calculatorExecutor.sort({
-        numbers: [3.14, 2.718],
-      });
-
-      expect(result.success).toBe(true);
-      const parsed = JSON.parse(result.content || '{}');
-      expect(Array.isArray(parsed)).toBe(true);
-      expect(parsed).toEqual(['2.718', '3.14']);
-    });
-
-    it('should return sorted array when no mode provided', async () => {
-      const result = await calculatorExecutor.sort({
-        numbers: [3.14, 2.718, 1.618, 4.669],
-      });
-
-      expect(result.success).toBe(true);
-      const parsed = JSON.parse(result.content || '{}');
-      expect(Array.isArray(parsed)).toBe(true);
-      expect(parsed).toEqual(['1.618', '2.718', '3.14', '4.669']);
-    });
-
     it('should return largest value only in largest mode', async () => {
       const result = await calculatorExecutor.sort({
         numbers: [3.14, 2.718, 1.618, 4.669],

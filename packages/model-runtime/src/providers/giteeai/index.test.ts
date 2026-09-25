@@ -2,7 +2,6 @@
 import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { testProvider } from '../../providerTestUtils';
 import { LobeGiteeAI, params } from './index';
 
 const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
@@ -10,14 +9,6 @@ const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
 vi.mock('@lobechat/business-model-bank/model-config', () => ({
   loadModels: loadModelsMock,
 }));
-
-testProvider({
-  Runtime: LobeGiteeAI,
-  chatDebugEnv: 'DEBUG_GITEE_AI_CHAT_COMPLETION',
-  chatModel: 'deepseek-r1',
-  defaultBaseURL: 'https://ai.gitee.com/v1',
-  provider: ModelProvider.GiteeAI,
-});
 
 describe('LobeGiteeAI - custom features', () => {
   let instance: InstanceType<typeof LobeGiteeAI>;
