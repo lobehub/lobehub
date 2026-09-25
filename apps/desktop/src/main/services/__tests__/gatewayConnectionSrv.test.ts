@@ -5,7 +5,12 @@ import type { App } from '@/core/App';
 
 import GatewayConnectionService from '../gatewayConnectionSrv';
 
-const { getShellInfoMock } = vi.hoisted(() => ({ getShellInfoMock: vi.fn() }));
+const { getDesktopEnvMock, getShellInfoMock } = vi.hoisted(() => ({
+  getDesktopEnvMock: vi.fn(() => ({})),
+  getShellInfoMock: vi.fn(),
+}));
+
+vi.mock('@/env', () => ({ getDesktopEnv: getDesktopEnvMock }));
 
 vi.mock('electron', () => ({
   app: {
@@ -89,5 +94,21 @@ describe('GatewayConnectionService system_info_request', () => {
       requestId: 'req-2',
       result: { success: false },
     });
+  });
+});
+
+describe('GatewayConnectionService gateway override', () => {
+  it('keeps the explicit environment override for cloud development', () => {
+    getDesktopEnvMock.mockReturnValueOnce({ DEVICE_GATEWAY_URL: 'http://localhost:8787' });
+    const service = new GatewayConnectionService({
+      storeManager: {
+        get: vi.fn((key: string) => {
+          if (key === 'dataSyncConfig') return { storageMode: 'cloud' };
+          if (key === 'gatewayUrl') return 'https://self-hosted.example.com/device-gateway';
+        }),
+      },
+    } as unknown as App);
+
+    expect((service as any).getGatewayUrl()).toBe('http://localhost:8787');
   });
 });

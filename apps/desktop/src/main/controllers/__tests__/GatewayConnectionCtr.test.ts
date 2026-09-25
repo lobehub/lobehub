@@ -392,9 +392,10 @@ describe('GatewayConnectionCtr', () => {
       expect(options.userAgent).toBe('LobeHub Desktop/1.2.3');
     });
 
-    it('should use custom gateway URL from store when set', async () => {
+    it('should use custom gateway URL for a self-hosted server', async () => {
       mockStoreGet.mockImplementation((key: string) => {
         if (key === 'gatewayEnabled') return true;
+        if (key === 'dataSyncConfig') return { storageMode: 'selfHost' };
         if (key === 'gatewayUrl') return 'http://localhost:8787';
         return undefined;
       });
@@ -404,6 +405,36 @@ describe('GatewayConnectionCtr', () => {
       await vi.advanceTimersByTimeAsync(0);
 
       expect(MockGatewayClient.lastOptions.gatewayUrl).toBe('http://localhost:8787');
+    });
+
+    it('should ignore a stale self-hosted gateway after switching to cloud', async () => {
+      let storageMode = 'selfHost';
+      mockStoreGet.mockImplementation((key: string) => {
+        if (key === 'gatewayEnabled') return true;
+        if (key === 'dataSyncConfig') return { storageMode };
+        if (key === 'gatewayUrl') return 'https://self-hosted.example.com/device-gateway';
+        return undefined;
+      });
+
+      ctr.afterFirstFrame();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(MockGatewayClient.lastOptions.gatewayUrl).toBe(
+        'https://self-hosted.example.com/device-gateway',
+      );
+
+      await ctr.disconnect();
+      storageMode = 'cloud';
+      await ctr.connect();
+      expect(MockGatewayClient.lastOptions.gatewayUrl).toBe('https://device-gateway.lobehub.com');
+
+      // Returning to self-hosting must retain its configured gateway.
+      await ctr.disconnect();
+      storageMode = 'selfHost';
+      await ctr.connect();
+      expect(MockGatewayClient.lastOptions.gatewayUrl).toBe(
+        'https://self-hosted.example.com/device-gateway',
+      );
+      expect(mockStoreSet).not.toHaveBeenCalledWith('gatewayUrl', expect.anything());
     });
 
     it('should return success:false when no access token', async () => {
