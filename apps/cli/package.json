@@ -3,9 +3,9 @@
   "version": "0.0.59",
   "type": "module",
   "bin": {
-    "lh": "./dist/index.js",
-    "lobe": "./dist/index.js",
-    "lobehub": "./dist/index.js"
+    "lh": "dist/index.js",
+    "lobe": "dist/index.js",
+    "lobehub": "dist/index.js"
   },
   "man": [
     "./man/man1/lh.1",
