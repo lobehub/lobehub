@@ -1,4 +1,8 @@
 export default {
+  'devices.keepAwake.desc':
+    'Prevent automatic sleep while this computer is connected as a device, so it stays reachable. The display can still turn off; closing a laptop lid without an external display still puts it to sleep.',
+  'devices.keepAwake.title': 'Keep Awake While Connected',
+  'devices.thisComputer': 'This Computer',
   'marketSubmission.entry': 'Publish',
   'marketSubmission.title': 'Publish to Market',
   'marketSubmission.submit': 'Publish',

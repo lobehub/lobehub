@@ -921,10 +921,37 @@ export default class GatewayConnectionService extends ServiceModule {
 
   // ─── Power Save Blocker ───
 
+  getKeepAwake(): boolean {
+    return this.app.storeManager.get('gatewayKeepAwake', true);
+  }
+
+  setKeepAwake(enabled: boolean) {
+    this.app.storeManager.set('gatewayKeepAwake', enabled);
+    logger.info(`Keep awake while connected: ${enabled}`);
+    this.syncPowerSaveBlocker();
+  }
+
   /**
-   * Start power save blocker to prevent macOS App Nap from suspending the process
-   * while the gateway connection is active. Uses 'prevent-app-suspension' so the
-   * display can still sleep — only the app process is kept alive.
+   * Hold the blocker for as long as the device is meant to be online — not
+   * just while the socket is `connected`. Releasing it on every transient drop
+   * (the socket blips every few tens of minutes) hands macOS a window to idle
+   * sleep: with the default "sleep 1 minute after the display turns off" the
+   * idle timer has long expired, so the machine sleeps before the ~2s reconnect
+   * lands and stays offline until the user comes back. Only an explicit
+   * disconnect (status settles on `disconnected`) or the user opting out lets
+   * the system sleep again.
+   */
+  private syncPowerSaveBlocker() {
+    if (this.status !== 'disconnected' && this.getKeepAwake()) {
+      this.startPowerSaveBlocker();
+    } else {
+      this.stopPowerSaveBlocker();
+    }
+  }
+
+  /**
+   * 'prevent-app-suspension' keeps the system from idle-sleeping (and App Nap
+   * from suspending the process) while still letting the display sleep.
    */
   private startPowerSaveBlocker() {
     if (this.powerSaveBlockerId !== null) return;
@@ -947,13 +974,7 @@ export default class GatewayConnectionService extends ServiceModule {
     logger.info(`Connection status: ${this.status} → ${status}`);
     this.status = status;
 
-    // Keep the app process alive while gateway is connected so macOS App Nap
-    // does not suspend it during display sleep, which would drop the WebSocket.
-    if (status === 'connected') {
-      this.startPowerSaveBlocker();
-    } else {
-      this.stopPowerSaveBlocker();
-    }
+    this.syncPowerSaveBlocker();
 
     this.app.browserManager.broadcastToAllWindows('gatewayConnectionStatusChanged', { status });
   }

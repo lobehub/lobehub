@@ -91,3 +91,81 @@ describe('GatewayConnectionService system_info_request', () => {
     });
   });
 });
+
+describe('GatewayConnectionService power save blocker', () => {
+  let service: GatewayConnectionService;
+  let store: Record<string, unknown>;
+
+  beforeEach(async () => {
+    const { powerSaveBlocker } = await import('electron');
+    vi.mocked(powerSaveBlocker.start).mockReset().mockReturnValue(7);
+    vi.mocked(powerSaveBlocker.stop).mockReset();
+
+    store = {};
+    const app = {
+      browserManager: { broadcastToAllWindows: vi.fn() },
+      storeManager: {
+        get: vi.fn((key: string, fallback?: unknown) => (key in store ? store[key] : fallback)),
+        set: vi.fn((key: string, value: unknown) => {
+          store[key] = value;
+        }),
+      },
+    } as unknown as App;
+    service = new GatewayConnectionService(app);
+  });
+
+  const setStatus = (status: string) => (service as any).setStatus(status);
+
+  it('keeps the blocker through a transient reconnect', async () => {
+    const { powerSaveBlocker } = await import('electron');
+
+    setStatus('connected');
+    setStatus('reconnecting');
+    setStatus('connecting');
+    setStatus('authenticating');
+    setStatus('connected');
+
+    expect(powerSaveBlocker.start).toHaveBeenCalledTimes(1);
+    expect(powerSaveBlocker.start).toHaveBeenCalledWith('prevent-app-suspension');
+    expect(powerSaveBlocker.stop).not.toHaveBeenCalled();
+  });
+
+  it('releases the blocker once the connection settles on disconnected', async () => {
+    const { powerSaveBlocker } = await import('electron');
+
+    setStatus('connected');
+    setStatus('disconnected');
+
+    expect(powerSaveBlocker.stop).toHaveBeenCalledWith(7);
+  });
+
+  it('never holds the blocker when keep-awake is turned off', async () => {
+    const { powerSaveBlocker } = await import('electron');
+    store.gatewayKeepAwake = false;
+
+    setStatus('connecting');
+    setStatus('connected');
+
+    expect(powerSaveBlocker.start).not.toHaveBeenCalled();
+  });
+
+  it('applies a keep-awake toggle to the live connection immediately', async () => {
+    const { powerSaveBlocker } = await import('electron');
+    setStatus('connected');
+
+    service.setKeepAwake(false);
+    expect(powerSaveBlocker.stop).toHaveBeenCalledWith(7);
+    expect(service.getKeepAwake()).toBe(false);
+
+    service.setKeepAwake(true);
+    expect(powerSaveBlocker.start).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not start the blocker from a toggle while disconnected', async () => {
+    const { powerSaveBlocker } = await import('electron');
+
+    service.setKeepAwake(true);
+
+    expect(powerSaveBlocker.start).not.toHaveBeenCalled();
+  });
+});
