@@ -2,6 +2,7 @@ import { createMediaFileRef } from '@lobechat/const/mediaRef';
 import type { ChatAudioItem, ChatFileItem, ChatImageItem, ChatVideoItem } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
+import { FILE_INLINE_MAX_CHARS, FILE_PREVIEW_CHARS } from './file';
 import { filesPrompts } from './index';
 
 describe('filesPrompts', () => {
@@ -381,6 +382,26 @@ describe('filesPrompts', () => {
       const result = filesPrompts({});
 
       expect(result).toEqual('');
+    });
+  });
+
+  describe('large attachments', () => {
+    it('inlines content up to the limit unchanged', () => {
+      const content = 'a'.repeat(FILE_INLINE_MAX_CHARS);
+      const result = filesPrompts({ addUrl: false, fileList: [{ ...mockFile, content }] });
+
+      expect(result).toContain(`size="1024">${content}</file>`);
+      expect(result).not.toContain('truncated="true"');
+    });
+
+    it('replaces oversized content with a marked preview', () => {
+      const content = `${'a'.repeat(FILE_PREVIEW_CHARS)}${'b'.repeat(FILE_INLINE_MAX_CHARS)}`;
+      const result = filesPrompts({ addUrl: true, fileList: [{ ...mockFile, content }] });
+
+      expect(result).toContain(
+        `url="https://example.com/test.pdf" truncated="true" total_chars="${content.length}">${'a'.repeat(FILE_PREVIEW_CHARS)}\n[Only the first ${FILE_PREVIEW_CHARS} of ${content.length} characters are shown.`,
+      );
+      expect(result).not.toContain('bbbb');
     });
   });
 });
