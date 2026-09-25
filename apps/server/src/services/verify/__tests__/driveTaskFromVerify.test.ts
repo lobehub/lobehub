@@ -218,6 +218,23 @@ describe('driveTaskFromVerify', () => {
     expect(serviceUpdateStatus).toHaveBeenCalledWith({ id: 'task-1', status: 'completed' });
   });
 
+  /**
+   * Regression: a failed Acceptance resolution was swallowed after the drive claim
+   * was stamped. The unattached round was reviewed into the non-retryable
+   * "review could not run" gate, and every later finalizer call stopped at the
+   * stamped claim — a transient error became a permanent human escalation.
+   */
+  it('leaves the drive unclaimed when the acceptance cannot be resolved', async () => {
+    runFindByOperation.mockResolvedValue({ acceptanceId: null, id: 'run-1', status: 'passed' });
+    vi.mocked(resolveTaskAcceptance).mockRejectedValue(new Error('connection terminated'));
+
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+
+    expect(runClaimTaskDrive).not.toHaveBeenCalled();
+    expect(reviewGoalDelivery).not.toHaveBeenCalled();
+    expect(taskUpdateStatus).not.toHaveBeenCalled();
+  });
+
   it('leaves an already attached round alone', async () => {
     runFindByOperation.mockResolvedValue({
       acceptanceId: 'acceptance-1',

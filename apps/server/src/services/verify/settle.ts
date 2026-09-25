@@ -92,32 +92,21 @@ export const driveTaskFromVerify = async (
     // Only act on a terminally settled run (skip pending / verifying / repairing).
     if (run?.status !== 'passed' && run?.status !== 'failed' && run?.status !== 'errored') return;
     if ((run.metadata as { taskDrivenAt?: string } | null)?.taskDrivenAt) return; // already drove
-    // Cheap read above, authoritative claim here: concurrent verifier
-    // callbacks would otherwise both pass the read and both act — spawning two
-    // rounds, or one spawning while the other pauses the task it just started.
-    if (!(await runModel.claimTaskDrive(run.id))) return;
-
     const operationModel = new AgentOperationModel(db, userId, workspaceId);
     const op = await operationModel.findById(operationId);
     const taskOperation = await resolveTaskOperation(operationModel, operationId);
-    if (!op || !taskOperation?.taskId) return; // not a task-bound run — nothing to drive
-
-    const taskModel = new TaskModel(db, userId, workspaceId);
-    const task = await taskModel.findById(taskOperation.taskId);
-    if (!task || TERMINAL_TASK_STATUS.has(task.status)) return; // task already settled
 
     // Last defence before the review: a round the builder planned itself can still
     // arrive here unattached, because the CLI-driven verify path never passes
     // through the completion lifecycle. The review reaches a delivery only through
     // its Acceptance, and a missing link reads as "no Acceptance" — an error with
     // no recovery branch, which parks a passing delivery on a person.
-    if (run.status === 'passed' && !run.acceptanceId) {
-      const resolved = await resolveTaskAcceptance(
-        db,
-        userId,
-        taskOperation.taskId,
-        workspaceId,
-      ).catch(() => undefined);
+    //
+    // Bound BEFORE the drive claim, and a failed resolution is not swallowed: it
+    // leaves through the outer catch with the claim unstamped, so a later finalizer
+    // retries instead of reviewing an unattached round into that same human gate.
+    if (op && taskOperation?.taskId && run.status === 'passed' && !run.acceptanceId) {
+      const resolved = await resolveTaskAcceptance(db, userId, taskOperation.taskId, workspaceId);
       if (resolved)
         await attachTaskRunToAcceptance(
           db,
@@ -126,6 +115,17 @@ export const driveTaskFromVerify = async (
           workspaceId,
         );
     }
+
+    // Cheap read above, authoritative claim here: concurrent verifier
+    // callbacks would otherwise both pass the read and both act — spawning two
+    // rounds, or one spawning while the other pauses the task it just started.
+    if (!(await runModel.claimTaskDrive(run.id))) return;
+
+    if (!op || !taskOperation?.taskId) return; // not a task-bound run — nothing to drive
+
+    const taskModel = new TaskModel(db, userId, workspaceId);
+    const task = await taskModel.findById(taskOperation.taskId);
+    if (!task || TERMINAL_TASK_STATUS.has(task.status)) return; // task already settled
 
     // The review already retries a check whose review could not run. An
     // `errored` result here is the reviewer's problem, and another builder
