@@ -157,6 +157,41 @@ describe('SettingsAction', () => {
       expect(payload.market).toEqual(expect.objectContaining({ accessToken: 'tok-1' }));
     });
 
+    it('should resend a failed change when the same change is retried', async () => {
+      const { result } = renderHook(() => useUserStore());
+      const change = {
+        tool: { searchProviders: ['searxng', 'tavily'] },
+      } as PartialDeep<UserSettings>;
+
+      vi.mocked(userService.updateUserSettings).mockRejectedValueOnce(new Error('network error'));
+
+      await act(async () => {
+        await expect(result.current.setSettings(change)).rejects.toThrow('network error');
+      });
+
+      // The optimistic value is still in local state, so the retry diffs as
+      // "no change" — it must still reach the server instead of resolving silently.
+      vi.mocked(userService.updateUserSettings).mockClear();
+      await act(async () => {
+        await result.current.setSettings(change);
+      });
+
+      expect(userService.updateUserSettings).toHaveBeenCalledTimes(1);
+      expect(userService.updateUserSettings).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          tool: expect.objectContaining({ searchProviders: ['searxng', 'tavily'] }),
+        }),
+        expect.any(AbortSignal),
+      );
+
+      // Once persisted, an identical call is a no-op again.
+      vi.mocked(userService.updateUserSettings).mockClear();
+      await act(async () => {
+        await result.current.setSettings(change);
+      });
+      expect(userService.updateUserSettings).not.toHaveBeenCalled();
+    });
+
     it('should keep legacy scalar system agent fields unchanged', async () => {
       const { result } = renderHook(() => useUserStore());
       const settingsWithLegacySystemAgent = {

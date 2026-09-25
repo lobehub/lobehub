@@ -107,7 +107,11 @@ export class UserSettingsActionImpl {
 
     const nextSettings = merge(prevSetting, settings);
 
-    if (isEqual(prevSetting, nextSettings)) return;
+    // A failed write leaves its optimistic value in local state and its columns
+    // in `#pendingSettingKeys`. Retrying the same change then diffs as "no
+    // change", so only skip when nothing is still waiting to be persisted —
+    // otherwise a retry would resolve without a request and look saved.
+    if (isEqual(prevSetting, nextSettings) && this.#pendingSettingKeys.size === 0) return;
 
     const diffs = difference(nextSettings, defaultSettings);
     const isEmptyObjectDiff = (value: unknown): boolean =>
