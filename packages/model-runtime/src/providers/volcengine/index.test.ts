@@ -1,7 +1,23 @@
 // @vitest-environment node
+import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { testProvider } from '../../providerTestUtils';
 import { LobeVolcengineAI } from './index';
+
+testProvider({
+  Runtime: LobeVolcengineAI,
+  provider: ModelProvider.Volcengine,
+  defaultBaseURL: 'https://ark.cn-beijing.volces.com/api/v3',
+  chatDebugEnv: 'DEBUG_VOLCENGINE_CHAT_COMPLETION',
+  chatModel: 'doubao-pro-32k',
+  invalidErrorType: 'InvalidProviderAPIKey',
+  bizErrorType: 'ProviderBizError',
+  test: {
+    skipAPICall: true,
+    skipErrorHandle: true,
+  },
+});
 
 describe('LobeVolcengineAI - custom features', () => {
   let instance: InstanceType<typeof LobeVolcengineAI>;

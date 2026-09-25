@@ -1,8 +1,18 @@
 // @vitest-environment node
+import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
+import { testProvider } from '../../providerTestUtils';
 import { LobePerplexityAI } from './index';
+
+testProvider({
+  Runtime: LobePerplexityAI,
+  provider: ModelProvider.Perplexity,
+  defaultBaseURL: 'https://api.perplexity.ai',
+  chatDebugEnv: 'DEBUG_PERPLEXITY_CHAT_COMPLETION',
+  chatModel: 'sonar',
+});
 
 // Mock the console.error to avoid polluting test output
 vi.spyOn(console, 'error').mockImplementation(() => {});

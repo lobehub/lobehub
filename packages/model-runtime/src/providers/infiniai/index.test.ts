@@ -1,7 +1,23 @@
 // @vitest-environment node
+import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { testProvider } from '../../providerTestUtils';
 import { LobeInfiniAI } from './index';
+
+testProvider({
+  Runtime: LobeInfiniAI,
+  provider: ModelProvider.InfiniAI,
+  defaultBaseURL: 'https://cloud.infini-ai.com/maas/v1',
+  chatDebugEnv: 'DEBUG_INFINIAI_CHAT_COMPLETION',
+  chatModel: 'gpt-3.5-turbo',
+  invalidErrorType: 'InvalidProviderAPIKey',
+  bizErrorType: 'ProviderBizError',
+  test: {
+    skipAPICall: true,
+    skipErrorHandle: true,
+  },
+});
 
 describe('LobeInfiniAI - custom features', () => {
   let instance: InstanceType<typeof LobeInfiniAI>;
