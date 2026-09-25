@@ -1,3 +1,4 @@
+import { projectToolViewModels } from '@lobechat/tool-view-model';
 import {
   CreateNewMessageParamsSchema,
   UpdateMessageParamsSchema,
@@ -440,6 +441,12 @@ export const messageRouter = router({
         // a `file` summary that would crash their works UI. New clients set it.
         includeFileWorks: z.boolean().optional(),
         pageSize: z.number().optional(),
+        /**
+         * Hand back render-facing tool view models instead of the stored
+         * payloads (`@lobechat/tool-view-model`). Opt-in per read: see the
+         * note where it is applied.
+         */
+        projectToolPayloads: z.boolean().optional(),
         sessionId: z.string().nullish(),
         // Mid-stream refetches skip the Work-summary assembly — see
         // `QueryMessageParams.skipWorks`.
@@ -512,10 +519,12 @@ export const messageRouter = router({
         postProcessUrl: (path, file) => fileService.getFileAccessUrl({ id: file.id, url: path }),
       });
 
-      // This branch reads through its own `MessageModel` (different query
-      // options than `MessageService.queryMessages`), so it applies the tool
-      // view-model step explicitly rather than inheriting it.
-      return new MessageService(ctx.serverDB, ctx.userId, wsId).projectToolPayloads(messages);
+      // Only the caller knows whether this list is going to be rendered or fed
+      // to a model: a run that executes in the browser assembles its context
+      // from the very list this read returns, and a projected tool result would
+      // silently disappear from it. Absent ⇒ whole payloads, which is never the
+      // answer that loses data.
+      return input.projectToolPayloads ? projectToolViewModels(messages) : messages;
     }),
 
   rankModels: messageProcedure.query(async ({ ctx }) => {

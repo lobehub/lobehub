@@ -52,7 +52,6 @@ import {
 } from '@/business/server/agent-run/agentInterventionIdentity';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
-import { UserModel } from '@/database/models/user';
 import { type LobeChatDatabase } from '@/database/type';
 import { appEnv } from '@/envs/app';
 import { type AgentRuntimeCoordinatorOptions } from '@/server/modules/AgentRuntime';
@@ -91,7 +90,7 @@ import { stepChangedCredentials } from './credentialFacts';
 import { logToolCallPc } from './formalObservation';
 import { type AgentHook, hookDispatcher } from './hooks';
 import { HumanInterventionHandler } from './HumanInterventionHandler';
-import { buildMessagePatch } from './messagePatch';
+import { buildProjectedMessagePatch } from './messagePatch';
 import { OperationTraceRecorder } from './OperationTraceRecorder';
 import { createDefaultSnapshotStore } from './snapshotStore';
 import { buildStepPresentation, formatTokenCount } from './stepPresentation';
@@ -402,8 +401,6 @@ export interface AgentRuntimeServiceOptions {
    * circular import.
    */
   delegate?: AgentRuntimeDelegate;
-  /** Lightweight protocol capability seam; primarily injectable in tests. */
-  gatewayMuxEnabledResolver?: () => Promise<boolean>;
   /**
    * Opt IN to agent-share visitor rows for the models this service owns.
    * Reserved for share-runtime entry points that drive a visitor turn under
@@ -458,8 +455,6 @@ export class AgentRuntimeService {
   private coordinator: AgentRuntimeCoordinator;
   private delegate: AgentRuntimeDelegate;
   private humanIntervention: HumanInterventionHandler;
-  private gatewayMuxEnabled?: Promise<boolean>;
-  private gatewayMuxEnabledResolver: () => Promise<boolean>;
   private streamManager: IStreamEventManager;
   private queueService: QueueService | null;
   private traceRecorder: OperationTraceRecorder;
@@ -490,12 +485,6 @@ export class AgentRuntimeService {
   }
 
   constructor(db: LobeChatDatabase, userId: string, options?: AgentRuntimeServiceOptions) {
-    this.gatewayMuxEnabledResolver =
-      options?.gatewayMuxEnabledResolver ??
-      (() =>
-        new UserModel(db, userId)
-          .getUserPreference()
-          .then((preference) => preference?.lab?.enableGatewayMux === true));
     // Use factory function to auto-select Redis or InMemory implementation
     this.streamManager =
       options?.streamEventManager ??
@@ -509,7 +498,7 @@ export class AgentRuntimeService {
       // the client can use the pushed payload directly instead of refetching
       // from DB. Falls back gracefully when topicId isn't set.
       uiMessagesResolver: async (state) =>
-        (await this.usesGatewayMessagePatch(state)) ? undefined : this.queryUiMessages(state),
+        this.usesGatewayMessagePatch(state) ? undefined : this.queryUiMessages(state),
     });
     this.queueService =
       options?.queueService === null ? null : (options?.queueService ?? new QueueService());
@@ -1081,6 +1070,7 @@ export class AgentRuntimeService {
         // What the host needs to deliver and retry the run. Hooks are stamped
         // right after creation once the dispatcher has serialized them.
         host: {
+          ...(params.clientProtocol === 2 && { clientProtocol: 2 as const }),
           ...(params.includeFinalState === true && { includeFinalState: true }),
           queue: { retries: queueRetries, retryDelay: queueRetryDelay },
         },
@@ -1377,15 +1367,7 @@ export class AgentRuntimeService {
         // terminal Source of Truth — wiping the conversation the run just
         // produced. Visitor-facing redaction of the pushed snapshot happens in
         // `GatewayStreamNotifier`.
-        //
-        // A visitor snapshot additionally keeps its tool payloads whole: this
-        // query runs as the CREATOR, but the recovery RPC runs as the VISITOR
-        // against ownership-scoped reads that cannot see a creator-owned row,
-        // so a projected snapshot could never be filled back in.
-        {
-          allowShareVisitor: true,
-          skipToolProjection: !!agentState?.principal?.actor?.shareVisitor?.visitorUserId,
-        },
+        { allowShareVisitor: true },
       );
     } catch (error) {
       // Stream events must never fail the step. If the DB hiccups, fall back
@@ -1396,13 +1378,21 @@ export class AgentRuntimeService {
   }
 
   /** Native harness + Gateway mux is the only producer of message patches. */
-  private async usesGatewayMessagePatch(agentState: AgentState): Promise<boolean> {
+  /**
+   * Whether this run reconciles the client's message list through
+   * `message_patch` revisions instead of pushing whole `uiMessages` snapshots.
+   *
+   * Decided by the capability the starting client declared when the operation
+   * was created (`host.clientProtocol`), NOT by a user preference: the run is
+   * delivered to whatever bundle that client is, and a desktop build older than
+   * `message_patch` would drop every mid-run reconciliation it was sent.
+   *
+   * A share visitor is always excluded — the visitor surface has no
+   * owner-scoped read to reconcile against.
+   */
+  private usesGatewayMessagePatch(agentState: AgentState): boolean {
     if (agentState.principal?.actor?.shareVisitor) return false;
-    this.gatewayMuxEnabled ??= this.gatewayMuxEnabledResolver().catch((error) => {
-      console.error('[AgentRuntimeService] failed to read gateway mux preference: %O', error);
-      return false;
-    });
-    return this.gatewayMuxEnabled;
+    return agentState.host?.clientProtocol === 2;
   }
 
   /**
@@ -1739,7 +1729,7 @@ export class AgentRuntimeService {
           };
         }
 
-        const gatewayMessagePatchEnabled = await this.usesGatewayMessagePatch(agentState);
+        const gatewayMessagePatchEnabled = this.usesGatewayMessagePatch(agentState);
         const { uiMessages: stepStartUiMessages, messages: stepEntryMessages } =
           await this.queryStepEntryMessages(agentState);
         await this.streamManager.publishStreamEvent(operationId, {
@@ -2226,8 +2216,16 @@ export class AgentRuntimeService {
             skipWorks: shouldContinue,
           });
           if (settledUiMessages) {
+            // Projected: this branch runs only for a client that asked for
+            // protocol 2, which renders tool view models and can fetch a stored
+            // payload back. The model-facing lists are read elsewhere, straight
+            // off `MessageModel`, and stay whole.
             await this.streamManager.publishStreamEvent(operationId, {
-              data: buildMessagePatch(stepStartUiMessages, settledUiMessages, stepIndex + 1),
+              data: buildProjectedMessagePatch(
+                stepStartUiMessages,
+                settledUiMessages,
+                stepIndex + 1,
+              ),
               stepIndex,
               type: 'message_patch',
             });
@@ -3958,10 +3956,7 @@ export class AgentRuntimeService {
     const [uiResult] = await Promise.all([
       (async () => {
         try {
-          return await this.messageService.prepareUiMessages(
-            messages,
-            !!state.principal?.actor?.shareVisitor?.visitorUserId,
-          );
+          return await this.messageService.prepareUiMessages(messages);
         } catch (error) {
           console.error('[queryStepEntryMessages] Failed to prepare UI messages: %O', error);
           return undefined;

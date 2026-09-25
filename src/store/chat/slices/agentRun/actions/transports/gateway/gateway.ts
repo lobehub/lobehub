@@ -28,6 +28,7 @@ import {
   getRuntimeCanManageAgent,
 } from '@/helpers/agentManagementAccess';
 import { resolveExecutionTarget, resolveWorkspaceScoped } from '@/helpers/executionTarget';
+import { canUseGatewayProtocolV2 } from '@/helpers/gatewayProtocol';
 import { trackProductUsageEvent } from '@/libs/analytics/productUsageEvent';
 import {
   aiAgentService,
@@ -75,25 +76,6 @@ const getGatewayServerConfig = () =>
   (typeof window !== 'undefined'
     ? window.global_serverConfigStore?.getState()?.serverConfig
     : undefined) ?? getServerConfigStoreState()?.serverConfig;
-
-const getGatewayFeatureFlags = () =>
-  (typeof window !== 'undefined'
-    ? window.global_serverConfigStore?.getState()?.featureFlags
-    : undefined) ?? getServerConfigStoreState()?.featureFlags;
-
-/**
- * Whether this client may open the multiplexed (protocol v2) gateway socket.
- *
- * Both halves are required and mean different things: the deployment has to
- * actually expose `/v2/ws` (`agentGatewayProtocol` — a capability, since there
- * is no negotiation on the socket itself), and this user has to be inside the
- * rollout (`enableGatewayMux`, a server-published feature flag). Read
- * non-reactively like the other gateway prefs: a connection keeps the transport
- * it was opened with even if either side changes mid-run.
- */
-const canUseGatewayMux = (): boolean =>
-  getGatewayServerConfig()?.agentGatewayProtocol === 2 &&
-  !!getGatewayFeatureFlags()?.enableGatewayMux;
 
 /**
  * Interrupts a gateway operation and rejects when its physical shutdown is unconfirmed.
@@ -472,8 +454,9 @@ export class GatewayActionImpl {
     // the rollout to reach them.
     const muxIdentity: GatewayMuxIdentity = { agentShareId, gatewayUrl };
     const useGatewayMux =
-      (agentShareId ? getGatewayServerConfig()?.agentGatewayProtocol === 2 : canUseGatewayMux()) &&
-      !isGatewayMuxUnavailable(muxIdentity);
+      (agentShareId
+        ? getGatewayServerConfig()?.agentGatewayProtocol === 2
+        : canUseGatewayProtocolV2()) && !isGatewayMuxUnavailable(muxIdentity);
     let muxClient: OperationClient | undefined;
     if (useGatewayMux) {
       const mux = this.resolveGatewayMux(muxIdentity);
@@ -699,11 +682,11 @@ export class GatewayActionImpl {
    * first run never pays the WebSocket handshake on its critical path —
    * `connectToGateway` then only sends a `subscribe` frame on the already-open
    * socket. No-op when gateway mode is off or this client may not use the
-   * multiplexed transport (see `canUseGatewayMux`); safe to call repeatedly
+   * multiplexed transport (see `canUseGatewayProtocolV2`); safe to call repeatedly
    * (`connect` is idempotent).
    */
   warmupGatewayMux = (): void => {
-    if (!canUseGatewayMux()) return;
+    if (!canUseGatewayProtocolV2()) return;
     const serverConfig = getGatewayServerConfig();
     if (!serverConfig?.agentGatewayUrl || !serverConfig.enableGatewayMode) return;
 

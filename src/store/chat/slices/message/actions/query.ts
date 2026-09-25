@@ -4,9 +4,9 @@ import debug from 'debug';
 import isEqual from 'fast-deep-equal';
 import { type SWRResponse } from 'swr';
 
+import { readConversationMessages } from '@/helpers/conversationMessageRead';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { isMessageListKey } from '@/libs/swr/keys';
-import { messageService } from '@/services/message';
 import {
   getMessageListCacheIdentity,
   getMessageListFetchPolicy,
@@ -97,7 +97,7 @@ export class MessageQueryActionImpl {
 
     prefetchingMessageKeys.add(messagesKey);
 
-    const request = runMessageListQuery(context, messageService.getMessages).then((messages) => {
+    const request = runMessageListQuery(context, readConversationMessages).then((messages) => {
       // Re-check at DELIVERY time, not just at start: the user can open this
       // topic and submit a follow-up while the request is in flight. Applying
       // the pre-run snapshot then would drop the freshly created user/assistant
@@ -354,7 +354,7 @@ export class MessageQueryActionImpl {
 
     return useClientDataSWRWithSync<UIChatMessage[]>(
       shouldFetch ? messageListKey(context) : null,
-      () => runMessageListQuery(context, messageService.getMessages),
+      () => runMessageListQuery(context, readConversationMessages),
       {
         ...getMessageListFetchPolicy(context),
         onData: (data) => {

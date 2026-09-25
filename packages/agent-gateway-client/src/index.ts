@@ -38,6 +38,7 @@ export type {
   ResumeCompleteInfo,
   ToolResultPayload,
 } from './mux/types';
+export { CLIENT_PROTOCOL_VERSION } from './protocol';
 export type {
   AgentInterventionInteractionKind,
   AgentInterventionProvider,
