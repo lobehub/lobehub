@@ -1037,7 +1037,10 @@ export class AiAgentService {
 
     const runContext: ExecRunContext = {
       agentConfig,
-      appContext,
+      appContext:
+        turn.editingAgentId && turn.editingAgentId !== appContext?.editingAgentId
+          ? { ...appContext, editingAgentId: turn.editingAgentId }
+          : appContext,
       assistantMessageId: turn.assistantMessageId,
       canUseDevice,
       deviceAccessReason,

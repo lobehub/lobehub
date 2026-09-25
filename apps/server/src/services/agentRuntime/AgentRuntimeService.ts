@@ -977,6 +977,7 @@ export class AgentRuntimeService {
       appContext: {
         defaultTaskAssigneeAgentId: appContext?.defaultTaskAssigneeAgentId,
         documentId: appContext?.documentId,
+        editingAgentId: appContext?.editingAgentId,
         groupId: appContext?.groupId,
         scope: appContext?.scope,
         sessionId: appContext?.sessionId,

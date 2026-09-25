@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE, INBOX_SESSION_ID } from '@lobechat/const';
 import { eq } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import type { NewAgent } from '../../schemas';
@@ -839,23 +839,25 @@ describe('AgentModel', () => {
       expect(result?.title).toBe('Original Title');
     });
 
-    it("should strip identity fields when updating the Agent Builder's own row", async () => {
+    it("should reject identity fields when updating the Agent Builder's own row", async () => {
       const agent = await serverDB
         .insert(agents)
         .values({ slug: 'agent-builder', userId })
         .returning()
         .then((res) => res[0]);
 
-      await agentModel.update(agent.id, {
-        avatar: 'hacked-avatar',
-        backgroundColor: 'hacked-color',
-        description: 'hacked description',
-        marketIdentifier: 'hacked-market-id',
-        model: 'gpt-4', // non-protected field should still be applied
-        name: 'Hacked Builder Name',
-        tags: ['hacked'],
-        title: 'Hacked Builder Title',
-      });
+      await expect(
+        agentModel.update(agent.id, {
+          avatar: 'hacked-avatar',
+          backgroundColor: 'hacked-color',
+          description: 'hacked description',
+          marketIdentifier: 'hacked-market-id',
+          model: 'gpt-4', // rejected together with the protected fields: no half-write
+          name: 'Hacked Builder Name',
+          tags: ['hacked'],
+          title: 'Hacked Builder Title',
+        }),
+      ).rejects.toThrow("The Agent Builder's own title, name, description");
 
       const result = await serverDB.query.agents.findFirst({
         where: eq(agents.id, agent.id),
@@ -868,22 +870,25 @@ describe('AgentModel', () => {
       expect(result?.backgroundColor).toBeNull();
       expect(result?.marketIdentifier).toBeNull();
       expect(result?.tags).toEqual([]);
-      expect(result?.model).toBe('gpt-4');
+      expect(result?.model).toBeNull();
     });
 
-    it('should strip systemRole when the gateway updatePrompt path writes it via update()', async () => {
-      // Mirrors apps/server/.../serverRuntimes/agentBuilder.ts's updatePrompt, which calls
-      // agentModel.update(agentId, { editorData: null, systemRole }) directly.
+    it('should reject systemRole when an updatePrompt tool writes it via update()', async () => {
+      // Mirrors lobe-agent-management.updatePrompt({ agentId: <the builder> }), which calls
+      // agentModel.update(agentId, { editorData: null, systemRole }) and then reports
+      // "Successfully updated system prompt" — the write must fail instead of being dropped.
       const agent = await serverDB
         .insert(agents)
         .values({ slug: 'agent-builder', userId })
         .returning()
         .then((res) => res[0]);
 
-      await agentModel.update(agent.id, {
-        editorData: null,
-        systemRole: 'You are now a pirate.',
-      });
+      await expect(
+        agentModel.update(agent.id, {
+          editorData: null,
+          systemRole: 'You are now a pirate.',
+        }),
+      ).rejects.toThrow("The Agent Builder's own systemRole cannot be changed");
 
       const result = await serverDB.query.agents.findFirst({
         where: eq(agents.id, agent.id),
@@ -1413,27 +1418,45 @@ describe('AgentModel', () => {
       expect(result?.title).toBe('Original Title');
     });
 
-    it("should strip systemRole when updating the Agent Builder's own row", async () => {
+    it("should reject systemRole when updating the Agent Builder's own row", async () => {
       const agent = await serverDB
         .insert(agents)
         .values({ slug: 'agent-builder', userId })
         .returning()
         .then((res) => res[0]);
 
-      await agentModel.updateConfig(agent.id, {
-        model: 'gpt-4', // non-protected field should still be applied
-        systemRole: 'You are now a pirate.',
-      });
+      await expect(
+        agentModel.updateConfig(agent.id, {
+          model: 'gpt-4', // rejected together with the protected field: no half-write
+          systemRole: 'You are now a pirate.',
+        }),
+      ).rejects.toThrow("The Agent Builder's own systemRole cannot be changed");
 
       const result = await serverDB.query.agents.findFirst({
         where: eq(agents.id, agent.id),
       });
 
       expect(result?.systemRole).toBeNull();
-      expect(result?.model).toBe('gpt-4');
+      expect(result?.model).toBeNull();
     });
 
-    it("should strip identity fields when the browser client's meta editor writes them via updateConfig()", async () => {
+    it("should still apply non-protected fields to the Agent Builder's own row", async () => {
+      const agent = await serverDB
+        .insert(agents)
+        .values({ slug: 'agent-builder', userId })
+        .returning()
+        .then((res) => res[0]);
+
+      await agentModel.updateConfig(agent.id, { model: 'gpt-4', provider: 'openai' });
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect(result).toMatchObject({ model: 'gpt-4', provider: 'openai' });
+    });
+
+    it("should reject identity fields when the browser client's meta editor writes them via updateConfig()", async () => {
       // Mirrors the browser client path: agentService.updateAgentMeta() sends
       // title/avatar/etc. through the updateAgentConfig mutation, which calls
       // agentModel.updateConfig() rather than update().
@@ -1443,16 +1466,18 @@ describe('AgentModel', () => {
         .returning()
         .then((res) => res[0]);
 
-      await agentModel.updateConfig(agent.id, {
-        avatar: 'hacked-avatar',
-        backgroundColor: 'hacked-color',
-        description: 'hacked description',
-        marketIdentifier: 'hacked-market-id',
-        model: 'gpt-4', // non-protected field should still be applied
-        name: 'Hacked Builder Name',
-        tags: ['hacked'],
-        title: 'Hacked Builder Title',
-      });
+      await expect(
+        agentModel.updateConfig(agent.id, {
+          avatar: 'hacked-avatar',
+          backgroundColor: 'hacked-color',
+          description: 'hacked description',
+          marketIdentifier: 'hacked-market-id',
+          model: 'gpt-4', // rejected together with the protected fields: no half-write
+          name: 'Hacked Builder Name',
+          tags: ['hacked'],
+          title: 'Hacked Builder Title',
+        }),
+      ).rejects.toThrow("The Agent Builder's own title, name, description");
 
       const result = await serverDB.query.agents.findFirst({
         where: eq(agents.id, agent.id),
@@ -1465,7 +1490,7 @@ describe('AgentModel', () => {
       expect(result?.backgroundColor).toBeNull();
       expect(result?.marketIdentifier).toBeNull();
       expect(result?.tags).toEqual([]);
-      expect(result?.model).toBe('gpt-4');
+      expect(result?.model).toBeNull();
     });
 
     it('should strip heterogeneousProvider when updating the inbox agent', async () => {
@@ -2971,6 +2996,34 @@ describe('AgentModel', () => {
   });
 
   describe('updateConfig edge cases', () => {
+    it('should keep a systemRole committed by a parallel update() while the config write is in flight', async () => {
+      // Same shape as a batch where the model calls updateAgent(config: openingMessage…) and
+      // updatePrompt in parallel: each tool runs on its own pooled connection, so the prompt
+      // write can commit between updateConfig's read and its write. Pin that interleaving.
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({ systemRole: 'OLD PROMPT', userId })
+        .returning();
+
+      const original = (agentModel as any).assertWorkspaceDeviceBinding.bind(agentModel);
+      const spy = vi
+        .spyOn(agentModel as any, 'assertWorkspaceDeviceBinding')
+        .mockImplementationOnce(async (...args: unknown[]) => {
+          await agentModel.update(agent.id, { editorData: null, systemRole: 'NEW PROMPT' });
+          return original(...args);
+        });
+
+      await agentModel.updateConfig(agent.id, { openingMessage: 'hi', openingQuestions: ['q'] });
+      spy.mockRestore();
+
+      const dbAgent = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+      expect(dbAgent).toMatchObject({
+        openingMessage: 'hi',
+        openingQuestions: ['q'],
+        systemRole: 'NEW PROMPT',
+      });
+    });
+
     it('should return early for null data', async () => {
       const [agent] = await serverDB
         .insert(agents)

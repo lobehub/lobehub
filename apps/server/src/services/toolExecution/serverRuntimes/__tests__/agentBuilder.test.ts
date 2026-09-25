@@ -351,3 +351,51 @@ describe('agentBuilderRuntime', () => {
     });
   });
 });
+
+// A builder run whose tool context lost `editingAgentId` used to fall back to
+// `ctx.agentId` — the builder builtin itself — and report success while the
+// agent the user was editing stayed untouched.
+describe('agentBuilderRuntime without an editing target', () => {
+  const builderRunCtx = {
+    agentId: 'agt_builder_virtual',
+    serverDB: {} as never,
+    toolManifestMap: {},
+    userId: 'user-1',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetAgentConfigById.mockResolvedValue({ plugins: [] });
+  });
+
+  it('updatePrompt refuses instead of writing to the builder itself', async () => {
+    const runtime = agentBuilderRuntime.factory(builderRunCtx);
+    const result = await runtime.updatePrompt({ prompt: 'NEW PROMPT' }, builderRunCtx);
+
+    expect(mockUpdateAgent).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ error: { type: 'NoEditingTarget' }, success: false });
+  });
+
+  it('updateConfig refuses instead of writing to the builder itself', async () => {
+    const runtime = agentBuilderRuntime.factory(builderRunCtx);
+    const result = await runtime.updateConfig(
+      { config: { params: { temperature: 0.8 } } } as any,
+      builderRunCtx,
+    );
+
+    expect(mockServiceUpdateConfig).not.toHaveBeenCalled();
+    expect(mockUpdateAgent).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ error: { type: 'NoEditingTarget' }, success: false });
+  });
+
+  it('installPlugin refuses instead of writing to the builder itself', async () => {
+    const runtime = agentBuilderRuntime.factory(builderRunCtx);
+    const result = await runtime.installPlugin(
+      { identifier: 'lobe-web-browsing', source: 'official' },
+      builderRunCtx,
+    );
+
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ error: { type: 'NoEditingTarget' }, success: false });
+  });
+});

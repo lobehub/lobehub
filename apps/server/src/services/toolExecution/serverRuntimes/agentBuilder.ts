@@ -30,6 +30,19 @@ const handleError = (error: unknown, message: string): ToolExecutionResult => {
   return { content: `${message}: ${err.message}`, success: false };
 };
 
+/**
+ * The builder run is owned by the builtin builder agent, so `ctx.agentId` is the
+ * builder itself — never the agent the user is editing. Without an explicit
+ * editing target the write must fail loudly: falling back to `ctx.agentId`
+ * silently rewrote the builder's own row while reporting success.
+ */
+const noEditingTargetResult: ToolExecutionResult = {
+  content:
+    'No agent is being edited in this conversation, so nothing was changed. Ask the user to open the target agent and use the Agent Builder panel there.',
+  error: { message: 'Missing editing target agent', type: 'NoEditingTarget' },
+  success: false,
+};
+
 export const agentBuilderRuntime: ServerRuntimeRegistration = {
   factory: (context: ToolExecutionContext) => {
     if (!context.userId || !context.serverDB) {
@@ -182,15 +195,8 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
         params: UpdateAgentConfigParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
-        const agentId = ctx.editingAgentId ?? ctx.agentId;
-
-        if (!agentId) {
-          return {
-            content: 'No active agent found',
-            error: { message: 'No active agent found', type: 'NoAgentContext' },
-            success: false,
-          };
-        }
+        const agentId = ctx.editingAgentId;
+        if (!agentId) return noEditingTargetResult;
 
         try {
           const agent = await agentModel.getAgentConfigById(agentId);
@@ -260,15 +266,8 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
         params: UpdatePromptParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
-        const agentId = ctx.editingAgentId ?? ctx.agentId;
-
-        if (!agentId) {
-          return {
-            content: 'No active agent found',
-            error: { message: 'No active agent found', type: 'NoAgentContext' },
-            success: false,
-          };
-        }
+        const agentId = ctx.editingAgentId;
+        if (!agentId) return noEditingTargetResult;
 
         try {
           await agentModel.update(agentId, {
@@ -292,15 +291,8 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
         params: InstallPluginParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
-        const agentId = ctx.editingAgentId ?? ctx.agentId;
-
-        if (!agentId) {
-          return {
-            content: 'No active agent found',
-            error: { message: 'No active agent found', type: 'NoAgentContext' },
-            success: false,
-          };
-        }
+        const agentId = ctx.editingAgentId;
+        if (!agentId) return noEditingTargetResult;
 
         const { identifier, source } = params;
 

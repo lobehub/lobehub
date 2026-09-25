@@ -356,6 +356,8 @@ export interface TurnSetupResult {
   assistantMessageId: string;
   canUseDevice: boolean;
   deviceAccessReason: DeviceAccessReason;
+  /** The agent a builder run edits — from the request, else recovered from the builder topic. */
+  editingAgentId?: string;
   effectiveRequestedDeviceId?: string;
   heterogeneousProvider?: NonNullable<AgentConfigWithId['agencyConfig']>['heterogeneousProvider'];
   heteroType: HeterogeneousAgentType;
@@ -427,6 +429,7 @@ export const setupTurn = async (
   } = input;
 
   let topicId = appContext?.topicId;
+  let editingAgentId = appContext?.editingAgentId;
 
   const isFixedExecutionTargetSelection =
     !!deps.workspaceId && agentConfig.agencyConfig?.executionTargetSelectionPolicy === 'fixed';
@@ -479,7 +482,7 @@ export const setupTurn = async (
     // association exists only at run time: a topic written without it can
     // never be attributed afterwards, which is why it is stamped even though
     // nothing filters on it yet.
-    const { editingAgentId, editingGroupId } = appContext ?? {};
+    const { editingGroupId } = appContext ?? {};
     const metadata =
       cronJobId ||
       operationTaskId ||
@@ -618,6 +621,16 @@ export const setupTurn = async (
         code: 'FORBIDDEN',
         message: ChatErrorType.ShareHeterogeneousAgentUnsupported,
       });
+    }
+
+    // A builder conversation edits exactly one agent, stamped on the topic when
+    // it was created. Continuations rebuilt from the durable operation (approval
+    // or askUserQuestion resumes) arrive without `editingAgentId`; recover it
+    // here so the run origin still carries the target instead of leaving the
+    // builder tools with nothing to write to.
+    if (appContext?.scope === 'agent_builder' && !editingAgentId) {
+      editingAgentId = existingTopic?.metadata?.editingAgentId ?? undefined;
+      log('execAgent: recovered editingAgentId=%s from topic %s', editingAgentId, topicId);
     }
   }
 
@@ -875,6 +888,7 @@ export const setupTurn = async (
     assistantMessageId: assistantMessageRecord.id,
     canUseDevice,
     deviceAccessReason,
+    editingAgentId,
     effectiveRequestedDeviceId,
     heteroType,
     heterogeneousProvider,
