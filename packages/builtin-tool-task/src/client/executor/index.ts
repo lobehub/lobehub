@@ -211,15 +211,18 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
   ): Promise<BuiltinToolResult> => {
     try {
       log('[TaskExecutor] createTask - params:', params);
+      // Models fill optional ids with "" — treat blanks as omitted so they fall
+      // back to the defaults instead of hitting the foreign keys as ''.
       const parentIdentifier = params.parentIdentifier?.trim() || undefined;
+      const assigneeAgentId = params.assigneeAgentId?.trim() || undefined;
+      const assigneeUserId = params.assigneeUserId?.trim() || undefined;
 
       // Executing agent and human owner are independent, coexisting sides (the
       // member owns the outcome, the agent executes) — a member owner does not
       // suppress the usual current-agent default.
       const task = await getTaskStoreState().createTask({
-        assigneeAgentId:
-          params.assigneeAgentId ?? (ctx?.scope === 'task' ? undefined : ctx?.agentId),
-        assigneeUserId: params.assigneeUserId,
+        assigneeAgentId: assigneeAgentId ?? (ctx?.scope === 'task' ? undefined : ctx?.agentId),
+        assigneeUserId,
         createdByAgentId: ctx?.agentId,
         instruction: params.instruction,
         name: params.name,

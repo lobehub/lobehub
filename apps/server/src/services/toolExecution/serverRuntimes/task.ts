@@ -31,6 +31,7 @@ import { WorkspaceModel } from '@/database/models/workspace';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import { tasks } from '@/database/schemas';
 import { appEnv } from '@/envs/app';
+import { formatPgError, unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
 import { taskRouter } from '@/server/routers/lambda/task';
 import { TaskService } from '@/server/services/task';
 import { after } from '@/server/utils/scheduleAfterResponse';
@@ -189,8 +190,16 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
   };
 
   const createTaskImpl = async (
-    args: CreateTaskArgs,
+    rawArgs: CreateTaskArgs,
   ): Promise<{ content: string; identifier?: string; success: boolean; taskId?: string }> => {
+    // Models fill optional ids with "" — treat blanks as omitted so they fall
+    // back to the defaults instead of hitting the foreign keys as ''.
+    const args: CreateTaskArgs = {
+      ...rawArgs,
+      assigneeAgentId: rawArgs.assigneeAgentId?.trim() || undefined,
+      assigneeUserId: rawArgs.assigneeUserId?.trim() || undefined,
+      parentIdentifier: rawArgs.parentIdentifier?.trim() || undefined,
+    };
     let parentLabel: string | undefined;
 
     // Pre-resolve parent identifier so we can surface a tool-friendly error
@@ -226,17 +235,29 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
     // Executing agent and human owner are independent, coexisting sides (the
     // member owns the outcome, the agent executes) — a member owner does not
     // suppress the usual current-agent default.
-    const task = await taskService().createTask({
-      assigneeAgentId: args.assigneeAgentId ?? (scope === 'task' ? undefined : agentId),
-      assigneeUserId: args.assigneeUserId,
-      context: origin ? { origin } : undefined,
-      createdByAgentId: agentId,
-      instruction: args.instruction,
-      name: args.name,
-      parentTaskId,
-      priority: args.priority,
-      sortOrder: args.sortOrder,
-    });
+    let task: Awaited<ReturnType<TaskService['createTask']>>;
+    try {
+      task = await taskService().createTask({
+        assigneeAgentId: args.assigneeAgentId ?? (scope === 'task' ? undefined : agentId),
+        assigneeUserId: args.assigneeUserId,
+        context: origin ? { origin } : undefined,
+        createdByAgentId: agentId,
+        instruction: args.instruction,
+        name: args.name,
+        parentTaskId,
+        priority: args.priority,
+        sortOrder: args.sortOrder,
+      });
+    } catch (error) {
+      // Drizzle's message is only `Failed query: insert … params: …`, where
+      // null and '' both print as empty, so agents misread it (e.g. as a null
+      // workspace or a duplicate identifier). Surface the PG cause (SQLSTATE +
+      // constraint + detail) instead. Non-DB errors (TRPCError etc.) already
+      // carry an actionable message and keep propagating as before.
+      const pgError = unwrapPgError(error);
+      if (!pgError) throw error;
+      return { content: `Failed to create task: ${formatPgError(pgError)}`, success: false };
+    }
 
     notifyMemberAssigned(task);
 

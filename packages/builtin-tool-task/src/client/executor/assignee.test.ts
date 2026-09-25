@@ -98,6 +98,17 @@ describe('TaskExecutor — human assignee (assigneeUserId)', () => {
       );
     });
 
+    it('treats empty-string assignees as omitted instead of sending them to the server', async () => {
+      await taskExecutor.createTask(
+        { assigneeAgentId: '', assigneeUserId: '', instruction: 'x', name: 'x' },
+        { agentId: 'agt-current' } as any,
+      );
+
+      expect(mocks.createTask).toHaveBeenCalledWith(
+        expect.objectContaining({ assigneeAgentId: 'agt-current', assigneeUserId: undefined }),
+      );
+    });
+
     it('accepts an explicit agent and a member in the same call (coexisting assignees)', async () => {
       const result = await taskExecutor.createTask({
         assigneeAgentId: 'agt-1',

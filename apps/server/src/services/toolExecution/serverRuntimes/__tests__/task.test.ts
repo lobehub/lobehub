@@ -301,6 +301,79 @@ describe('createTaskRuntime', () => {
       });
     });
 
+    it('treats empty-string assignees as omitted so they never reach the FK columns', async () => {
+      const deps = makeDeps();
+
+      const runtime = createTaskRuntime({
+        agentModel: deps.agentModel as any,
+        agentId: 'agt-xyz',
+        taskCaller: deps.taskCaller,
+        taskModel: deps.taskModel as any,
+        taskService: deps.taskService as any,
+      });
+
+      const result = await runtime.createTask({
+        assigneeAgentId: '',
+        assigneeUserId: ' ',
+        instruction: 'Do something',
+        name: 'Test',
+        parentIdentifier: '',
+      });
+
+      expect(result.success).toBe(true);
+      expect(deps.agentModel.existsById).not.toHaveBeenCalled();
+      expect(deps.taskModel.resolve).not.toHaveBeenCalled();
+      expect(deps.taskService.createTask).toHaveBeenCalledWith(
+        expect.objectContaining({ assigneeAgentId: 'agt-xyz', assigneeUserId: undefined }),
+      );
+    });
+
+    it('surfaces the PG error code and constraint instead of only the drizzle query text', async () => {
+      const deps = makeDeps();
+      const pgCause = Object.assign(
+        new Error(
+          'insert or update on table "tasks" violates foreign key constraint "tasks_assignee_user_id_users_id_fk"',
+        ),
+        {
+          code: '23503',
+          constraint: 'tasks_assignee_user_id_users_id_fk',
+          detail: 'Key (assignee_user_id)=(usr_missing) is not present in table "users".',
+          severity: 'ERROR',
+          table: 'tasks',
+        },
+      );
+      deps.taskService.createTask.mockRejectedValue(
+        new Error('Failed query: insert into "tasks" (...) values (...) params: ...', {
+          cause: pgCause,
+        }),
+      );
+
+      const runtime = createTaskRuntime({
+        agentModel: deps.agentModel as any,
+        agentId: 'agt-xyz',
+        taskCaller: deps.taskCaller,
+        taskModel: deps.taskModel as any,
+        taskService: deps.taskService as any,
+      });
+
+      const result = await runtime.createTask({
+        assigneeUserId: 'usr_missing',
+        instruction: 'Do something',
+        name: 'Test',
+      });
+      const batch = await runtime.createTasks({
+        tasks: [{ assigneeUserId: 'usr_missing', instruction: 'Do something', name: 'Test' }],
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('Failed to create task');
+      expect(result.content).toContain('PG 23503');
+      expect(result.content).toContain('constraint=tasks_assignee_user_id_users_id_fk');
+      expect(result.content).not.toContain('Failed query');
+      expect(batch.success).toBe(false);
+      expect(batch.content).toContain('constraint=tasks_assignee_user_id_users_id_fk');
+    });
+
     it('leaves createdByAgentId undefined when no agentId in context', async () => {
       const deps = makeDeps();
 

@@ -53,6 +53,31 @@ describe('TaskModel', () => {
   });
 
   describe('create', () => {
+    // LLMs (notably gpt-family models) fill optional tool fields with "". An
+    // empty id must mean "unassigned", never reach the FK columns as ''.
+    it('should store empty-string assigneeUserId as null instead of violating the FK', async () => {
+      const agentId = await createAgent('task-empty-assignee-agent');
+      const model = new TaskModel(serverDB, userId);
+
+      const task = await model.create({
+        assigneeAgentId: agentId,
+        assigneeUserId: '',
+        instruction: 'y',
+        name: 'x',
+      });
+
+      expect(task.assigneeUserId).toBeNull();
+      expect(task.assigneeAgentId).toBe(agentId);
+    });
+
+    it('should store blank assigneeAgentId as null instead of violating the FK', async () => {
+      const model = new TaskModel(serverDB, userId);
+
+      const task = await model.create({ assigneeAgentId: '  ', instruction: 'y', name: 'x' });
+
+      expect(task.assigneeAgentId).toBeNull();
+    });
+
     it('should create a task with auto-generated identifier', async () => {
       const model = new TaskModel(serverDB, userId);
       const result = await model.create({
@@ -220,6 +245,21 @@ describe('TaskModel', () => {
 
       expect(updated!.instruction).toBe('Updated instruction');
       expect(updated!.name).toBe('Updated name');
+    });
+
+    it('should clear assignees when updated with empty strings instead of violating the FK', async () => {
+      const agentId = await createAgent('task-update-empty-assignee-agent');
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({
+        assigneeAgentId: agentId,
+        assigneeUserId: userId,
+        instruction: 'Original',
+      });
+
+      const updated = await model.update(task.id, { assigneeAgentId: '', assigneeUserId: '' });
+
+      expect(updated!.assigneeAgentId).toBeNull();
+      expect(updated!.assigneeUserId).toBeNull();
     });
 
     it('should not update task owned by another user', async () => {
