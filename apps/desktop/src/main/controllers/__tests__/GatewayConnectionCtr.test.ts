@@ -625,7 +625,7 @@ describe('GatewayConnectionCtr', () => {
   // ─── Reconnection ───
 
   describe('reconnection', () => {
-    it('should broadcast reconnecting status when client emits reconnecting', async () => {
+    it('should broadcast reconnecting status once the reconnect outlasts the grace period', async () => {
       ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
@@ -633,7 +633,11 @@ describe('GatewayConnectionCtr', () => {
       mockBroadcast.mockClear();
 
       client.simulateReconnecting(1000);
+      expect(mockBroadcast).not.toHaveBeenCalledWith('gatewayConnectionStatusChanged', {
+        status: 'reconnecting',
+      });
 
+      vi.advanceTimersByTime(5000);
       expect(mockBroadcast).toHaveBeenCalledWith('gatewayConnectionStatusChanged', {
         status: 'reconnecting',
       });

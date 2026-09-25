@@ -1,5 +1,5 @@
 import type { GatewayClient } from '@lobechat/device-gateway-client';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
 
@@ -167,5 +167,70 @@ describe('GatewayConnectionService power save blocker', () => {
     service.setKeepAwake(true);
 
     expect(powerSaveBlocker.start).not.toHaveBeenCalled();
+  });
+});
+
+describe('GatewayConnectionService status broadcast', () => {
+  let service: GatewayConnectionService;
+  let broadcast: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    broadcast = vi.fn();
+    const app = {
+      browserManager: { broadcastToAllWindows: broadcast },
+      storeManager: { get: vi.fn((_key: string, fallback?: unknown) => fallback), set: vi.fn() },
+    } as unknown as App;
+    service = new GatewayConnectionService(app);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const setStatus = (status: string) => (service as any).setStatus(status);
+  const broadcastStatuses = () => broadcast.mock.calls.map(([, payload]) => payload.status);
+
+  it('hides a reconnect that recovers within the grace period', () => {
+    setStatus('connecting');
+    setStatus('authenticating');
+    setStatus('connected');
+    broadcast.mockClear();
+
+    setStatus('reconnecting');
+    setStatus('connecting');
+    setStatus('authenticating');
+    vi.advanceTimersByTime(3000);
+    setStatus('connected');
+    vi.advanceTimersByTime(10_000);
+
+    expect(broadcast).not.toHaveBeenCalled();
+    expect(service.getDisplayedStatus()).toBe('connected');
+    expect(service.getStatus()).toBe('connected');
+  });
+
+  it('surfaces a reconnect that outlasts the grace period', () => {
+    setStatus('connected');
+    broadcast.mockClear();
+
+    setStatus('reconnecting');
+    setStatus('connecting');
+    expect(service.getDisplayedStatus()).toBe('connected');
+
+    vi.advanceTimersByTime(5000);
+    expect(broadcastStatuses()).toEqual(['connecting']);
+
+    setStatus('authenticating');
+    setStatus('connected');
+    expect(broadcastStatuses()).toEqual(['connecting', 'authenticating', 'connected']);
+  });
+
+  it('shows an explicit disconnect immediately', () => {
+    setStatus('connected');
+    broadcast.mockClear();
+
+    setStatus('disconnected');
+
+    expect(broadcastStatuses()).toEqual(['disconnected']);
   });
 });

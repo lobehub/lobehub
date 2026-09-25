@@ -35,6 +35,13 @@ const logger = createLogger('services:GatewayConnectionSrv');
 const DEFAULT_GATEWAY_URL = OFFICIAL_DEVICE_GATEWAY_URL;
 
 /**
+ * The socket drops about once an hour (Cloudflare moving the Durable Object,
+ * edge link resets) and is back within ~2s. A drop that recovers inside this
+ * window is not surfaced to the UI, so the device indicator doesn't flicker.
+ */
+const RECONNECT_UI_GRACE_MS = 5000;
+
+/**
  * Result envelope a tool-call handler must return. Mirrors
  * `BuiltinServerRuntimeOutput` so the renderer-side and remote-device paths
  * stay symmetric: `content` is the LLM-facing prompt text; `state` carries the
@@ -145,6 +152,9 @@ export default class GatewayConnectionService extends ServiceModule {
   private status: GatewayConnectionStatus = 'disconnected';
   private deviceId: string | null = null;
   private powerSaveBlockerId: number | null = null;
+  /** Status last pushed to renderers; lags `status` during a transient drop. */
+  private displayedStatus: GatewayConnectionStatus = 'disconnected';
+  private statusBroadcastTimer: ReturnType<typeof setTimeout> | null = null;
 
   private identitySource: IdentitySource | null = null;
 
@@ -298,6 +308,11 @@ export default class GatewayConnectionService extends ServiceModule {
 
   getStatus(): GatewayConnectionStatus {
     return this.status;
+  }
+
+  /** Status as shown in the UI — hides reconnects that recover quickly. */
+  getDisplayedStatus(): GatewayConnectionStatus {
+    return this.displayedStatus;
   }
 
   getDeviceInfo() {
@@ -975,7 +990,33 @@ export default class GatewayConnectionService extends ServiceModule {
     this.status = status;
 
     this.syncPowerSaveBlocker();
+    this.scheduleStatusBroadcast(status);
+  }
 
+  private scheduleStatusBroadcast(status: GatewayConnectionStatus) {
+    if (this.statusBroadcastTimer) {
+      clearTimeout(this.statusBroadcastTimer);
+      this.statusBroadcastTimer = null;
+    }
+
+    // Leaving `connected` for a reconnect: hold the UI on `connected` for a
+    // grace period. An explicit `disconnected` is always shown immediately.
+    const isTransientDrop =
+      this.displayedStatus === 'connected' && status !== 'connected' && status !== 'disconnected';
+    if (isTransientDrop) {
+      this.statusBroadcastTimer = setTimeout(() => {
+        this.statusBroadcastTimer = null;
+        this.broadcastStatus(this.status);
+      }, RECONNECT_UI_GRACE_MS);
+      return;
+    }
+
+    this.broadcastStatus(status);
+  }
+
+  private broadcastStatus(status: GatewayConnectionStatus) {
+    if (this.displayedStatus === status) return;
+    this.displayedStatus = status;
     this.app.browserManager.broadcastToAllWindows('gatewayConnectionStatusChanged', { status });
   }
 
