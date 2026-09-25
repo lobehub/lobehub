@@ -387,6 +387,25 @@ describe('GatewayStreamNotifier', () => {
       expect(bodies[1]).not.toHaveProperty('meta');
     });
 
+    it('tells the gateway a run is heterogeneous so its watchdog allows long silence', async () => {
+      await notifier.publishAgentRuntimeInit('op-cc', {
+        agentId: 'agt_1',
+        assistantMessageId: 'msg_1',
+        heteroType: 'claude-code',
+        topicId: 'tpc_1',
+        userId: 'user-1',
+      });
+
+      const initCall = mockFetch.mock.calls.find(
+        (call: any[]) => call[0] === `${gatewayUrl}/api/operations/init`,
+      )!;
+      expect(JSON.parse(initCall[1].body)).toEqual({
+        meta: { agentId: 'agt_1', heteroType: 'claude-code', topicId: 'tpc_1' },
+        operationId: 'op-cc',
+        userId: 'user-1',
+      });
+    });
+
     it('registers the visitor as gateway owner while still sending meta', async () => {
       await notifier.publishAgentRuntimeInit('op-share', {
         streamOwnerUserId: 'visitor-1',

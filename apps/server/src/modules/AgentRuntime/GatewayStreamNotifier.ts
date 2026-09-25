@@ -93,6 +93,9 @@ const GATEWAY_INIT_META_KEYS = [
   'parentOperationId',
   'mirrorToOperationId',
   'rootOperationId',
+  // A heterogeneous CLI run can go silent through a long shell command; the
+  // gateway's inactivity watchdog gives it a longer window.
+  'heteroType',
 ] as const;
 
 export type GatewayInitMeta = Partial<Record<(typeof GATEWAY_INIT_META_KEYS)[number], string>>;
