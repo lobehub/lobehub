@@ -7,10 +7,19 @@
  *
  * The chat UI strips the trailer before rendering the result.
  */
-const SUB_AGENT_REFERENCE_PATTERN = /\s*<sub_agent id="[^"]*" \/>\s*$/;
+/**
+ * Starts at the literal tag instead of a leading `\s*`: an unanchored leading
+ * `\s*` backtracks quadratically on long whitespace runs (CodeQL
+ * js/polynomial-redos). Whitespace before the tag is trimmed in code instead.
+ */
+const SUB_AGENT_REFERENCE_PATTERN = /<sub_agent id="[^"]*" \/>\s*$/;
 
-export const stripSubAgentReference = (content: string): string =>
-  content.replace(SUB_AGENT_REFERENCE_PATTERN, '');
+export const stripSubAgentReference = (content: string): string => {
+  const match = SUB_AGENT_REFERENCE_PATTERN.exec(content);
+  if (!match) return content;
+
+  return content.slice(0, match.index).trimEnd();
+};
 
 export const appendSubAgentReference = (content: string, subAgentId: string): string => {
   const body = stripSubAgentReference(content);

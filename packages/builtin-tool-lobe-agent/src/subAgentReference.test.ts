@@ -25,4 +25,12 @@ describe('subAgentReference', () => {
     expect(stripSubAgentReference(content)).toBe('See <sub_agent id="thd_0" /> inline');
     expect(stripSubAgentReference('Plain result')).toBe('Plain result');
   });
+
+  it('stays linear on long whitespace runs', () => {
+    const content = `a${' '.repeat(50_000)}b`;
+    const start = performance.now();
+
+    expect(stripSubAgentReference(content)).toBe(content);
+    expect(performance.now() - start).toBeLessThan(100);
+  });
 });
