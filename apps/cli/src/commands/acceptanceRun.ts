@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import path from 'node:path';
 
 import { acceptanceSubjectTypes } from '@lobechat/const/verify';
-import type { VerifyAgentPlanConfig, VerifyCheckItem } from '@lobechat/types';
+import type { SkillInstallEvent, VerifyAgentPlanConfig, VerifyCheckItem } from '@lobechat/types';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
@@ -57,6 +57,7 @@ import {
 
 interface InstallOptions {
   dir?: string;
+  event?: SkillInstallEvent;
   force?: boolean;
   json?: boolean | string;
   skill: string;
@@ -142,6 +143,30 @@ async function installAction(options: InstallOptions): Promise<void> {
   // self-ignoring file now, so the first run's screenshots never land as
   // untracked noise in a repo that has never heard of us.
   const ignored = ensureAcceptanceDirIgnored(baseDir);
+
+  // Adoption counting for the ops dashboard. Reported only when this run
+  // actually wrote files — a fully-skipped re-run installed nothing — and
+  // best-effort: a legacy server without this procedure, or a network blip,
+  // must never fail an install that already succeeded.
+  if (written.length > 0) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    try {
+      await client.verify.trackSkillInstall.mutate(
+        {
+          event: options.event ?? 'install',
+          identifier: bundle.identifier,
+          version: bundle.version,
+        },
+        { signal: controller.signal },
+      );
+    } catch (error) {
+      // Keep normal install output unchanged; diagnostics are opt-in with --verbose.
+      log.debug('Could not record skill install', error);
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
 
   const result = {
     dir: skillDir,
@@ -1187,7 +1212,9 @@ export function attachAcceptanceRunCommands(acceptance: Command): void {
     acceptance
       .command('update')
       .description('Download the latest skill source, replacing its files and re-wiring harnesses'),
-  ).action((options: InstallOptions) => installAction({ ...options, force: true }));
+  ).action((options: InstallOptions) =>
+    installAction({ ...options, event: 'update', force: true }),
+  );
 
   const run = acceptance
     .command('run')
