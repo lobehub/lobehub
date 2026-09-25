@@ -1128,6 +1128,7 @@
   "internalLink.preview.acceptanceRounds_other": "{{count}} 轮验证",
   "internalLink.preview.agent": "Agent",
   "internalLink.preview.document": "页面",
+  "internalLink.preview.goal": "目标",
   "internalLink.preview.task": "任务",
   "internalLink.preview.verify": "验证报告",
   "internalLink.preview.verifyCounts": "已通过 {{passed}} · 未通过 {{failed}} · 不确定 {{uncertain}}",

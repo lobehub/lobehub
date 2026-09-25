@@ -718,6 +718,77 @@ describe('GoalService', () => {
     expect(raised?.status).not.toBe('paused');
   });
 
+  describe('limits a goal was created with', () => {
+    // A goal its main Agent paused for running out of turns: resuming it alone
+    // pauses it again, which is what pushed agents into creating a copy of it.
+    const turnSpentGoal = async (service: GoalService) => {
+      const graph = await service.create({
+        tasks: ['Keep working'],
+        title: 'Out of main Agent turns',
+      });
+      const current = (await service.graph(graph.goal.id)).goal;
+      await serverDB
+        .update(goals)
+        .set({
+          config: {
+            ...current.config,
+            manager: { maxTurns: 2 },
+            managerState: { turns: 2 } as never,
+          },
+          status: 'paused',
+        })
+        .where(eq(goals.id, graph.goal.id));
+      return graph.goal.id;
+    };
+
+    it('resumes a goal its main Agent paused once the turn cap is raised', async () => {
+      const service = new GoalService(serverDB, userId);
+      const goalId = await turnSpentGoal(service);
+
+      const raised = await service.setBudget(goalId, { maxManagerTurns: 20 });
+
+      expect(raised.config?.manager?.maxTurns).toBe(20);
+      expect(raised.status).not.toBe('paused');
+    });
+
+    it('keeps a goal paused when the raised cap is still spent', async () => {
+      const service = new GoalService(serverDB, userId);
+      const goalId = await turnSpentGoal(service);
+
+      expect((await service.setBudget(goalId, { maxManagerTurns: 2 })).status).toBe('paused');
+    });
+
+    it('edits the execution limits without dropping the rest of the config', async () => {
+      const service = new GoalService(serverDB, userId);
+      const graph = await service.create({
+        config: { recovery: { maxAttemptsPerTask: 3, maxStepsPerRun: 200 } },
+        tasks: ['Run'],
+        title: 'Editable limits',
+      });
+
+      const updated = await service.setBudget(graph.goal.id, {
+        maxAttemptsPerTask: 5,
+        maxConcurrentTasks: 1,
+        maxStepsPerRun: null,
+      });
+
+      expect(updated.config?.maxConcurrentTasks).toBe(1);
+      expect(updated.config?.recovery).toMatchObject({
+        maxAttemptsPerTask: 5,
+        maxStepsPerRun: null,
+      });
+    });
+
+    it('rejects a turn cap for a goal without a main Agent', async () => {
+      const service = new GoalService(serverDB, userId);
+      const graph = await service.create({ tasks: ['Run'], title: 'No main Agent' });
+
+      await expect(service.setBudget(graph.goal.id, { maxManagerTurns: 20 })).rejects.toThrow(
+        'Only a Goal with a main Agent has a turn budget',
+      );
+    });
+  });
+
   it('ships the spend the budget is enforced against with the graph', async () => {
     // The header renders `spent / cap` as one fraction, so the number it shows
     // has to be the number the coordinator will stop on — not the goal list's

@@ -3146,6 +3146,7 @@ export default {
   'internalLink.preview.acceptanceRounds_other': '{{count}} verification rounds',
   'internalLink.preview.agent': 'Agent',
   'internalLink.preview.document': 'Page',
+  'internalLink.preview.goal': 'Goal',
   'internalLink.preview.task': 'Task',
   'internalLink.preview.verify': 'Verification report',
   'internalLink.preview.verifyCounts':

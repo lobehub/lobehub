@@ -10,19 +10,22 @@ import {
   CheckCircleIcon,
   CheckSquareIcon,
   FileTextIcon,
+  TargetIcon,
 } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import GoalStatusGlyph from '@/features/AgentGoals/GoalStatusGlyph';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { shouldHardNavigateToWorkbench } from '@/libs/next/workbenchNavigation';
 import { useClientDataSWR } from '@/libs/swr';
 import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocument';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
+import { goalSelectors, useGoalStore } from '@/store/goal';
 
-import { type InternalLinkReference, isBareLinkLabel } from '../internalLink';
+import { type InternalLinkReference, isBareLinkLabel, isEntityIdLabel } from '../internalLink';
 import {
   getPreviewData,
   InternalEntityPreview,
@@ -70,6 +73,7 @@ const ENTITY_ICONS = {
   acceptance: BadgeCheckIcon,
   agent: BotIcon,
   document: FileTextIcon,
+  goal: TargetIcon,
   task: CheckSquareIcon,
   verify: CheckCircleIcon,
 } as const;
@@ -84,14 +88,21 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
   const { t } = useTranslation('chat');
   const navigate = useWorkspaceAwareNavigate();
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
-  const [openAcceptance, openAgentDetail, openDocument, openTaskDetail, openVerifyReport] =
-    useChatStore((s) => [
-      s.openAcceptance,
-      s.openAgentDetail,
-      s.openDocument,
-      s.openTaskDetail,
-      s.openVerifyReport,
-    ]);
+  const [
+    openAcceptance,
+    openAgentDetail,
+    openDocument,
+    openGoal,
+    openTaskDetail,
+    openVerifyReport,
+  ] = useChatStore((s) => [
+    s.openAcceptance,
+    s.openAgentDetail,
+    s.openDocument,
+    s.openGoal,
+    s.openTaskDetail,
+    s.openVerifyReport,
+  ]);
   // A pasted URL says nothing about what it points to, so resolve the entity's
   // own title and show that instead — the same read the hover preview makes,
   // under the same key, so the eager fetch also makes the hover card instant.
@@ -101,13 +112,23 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
   // workspace-unique id like T-198 can name a different entity entirely.
   // Authored link text is never replaced; a failed read just leaves the URL.
   const shouldResolveTitle =
-    reference.type !== 'route' && !reference.workspaceSlug && isBareLinkLabel(label, href);
+    reference.type !== 'route' &&
+    !reference.workspaceSlug &&
+    (isBareLinkLabel(label, href) || isEntityIdLabel(label, reference));
+
+  // A goal is live: the link shows where it stands now, from the same polled
+  // graph the goal cards read, rather than a one-off preview fetch.
+  const linkedGoalId =
+    reference.type === 'goal' && !reference.workspaceSlug ? reference.goalId : undefined;
+  useGoalStore((s) => s.useFetchGoalGraph)(linkedGoalId);
+  const linkedGoal = useGoalStore(goalSelectors.goalGraph(linkedGoalId))?.goal;
+
   const { data: entity } = useClientDataSWR(
-    shouldResolveTitle ? internalEntityPreviewKey(reference) : null,
+    shouldResolveTitle && !linkedGoalId ? internalEntityPreviewKey(reference) : null,
     () => getPreviewData(reference, t),
     { revalidateOnFocus: false },
   );
-  const displayLabel = (shouldResolveTitle && entity?.title) || label;
+  const displayLabel = (shouldResolveTitle && (linkedGoal?.title || entity?.title)) || label;
 
   const linkedAgentId = reference.type === 'document' ? reference.agentId : undefined;
   const shouldResolveAgentDocument = !!linkedAgentId && linkedAgentId === activeAgentId;
@@ -171,6 +192,10 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
           openAgentDetail(reference.agentId);
           break;
         }
+        case 'goal': {
+          openGoal(reference.goalId);
+          break;
+        }
         case 'document': {
           const documents = shouldResolveAgentDocument
             ? (agentDocuments ?? (await resolveAgentDocuments().catch(() => undefined)))
@@ -203,6 +228,7 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
       openAcceptance,
       openAgentDetail,
       openDocument,
+      openGoal,
       openTaskDetail,
       openVerifyReport,
       reference,
@@ -222,7 +248,13 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
       target="_blank"
       onClick={handleClick}
     >
-      {icon && <Icon className={styles.icon} icon={icon} size={14} />}
+      {linkedGoal ? (
+        <span className={styles.icon}>
+          <GoalStatusGlyph size={14} status={linkedGoal.status} />
+        </span>
+      ) : (
+        icon && <Icon className={styles.icon} icon={icon} size={14} />
+      )}
       {displayLabel}
     </a>
   );

@@ -60,8 +60,10 @@ import {
 import { experimentResults, exploreGraph } from './exploreGraph';
 import { answeredProblem, GoalManagerService, problemKey } from './manager';
 import {
+  DEFAULT_MANAGER_MAX_TURNS,
   DEVICE_RECONNECT_WAIT_MS,
   isDeviceUnavailableFailure,
+  managerTurnsSpent,
   resolveMaxConcurrentTasks,
   resolveOperationLeaseTimeout,
   resolveTaskMaxSteps,
@@ -317,7 +319,7 @@ export class GoalService {
           message: 'A main Agent requires the goal agent',
         });
       }
-      const turns = managerOptions?.maxTurns ?? 12;
+      const turns = managerOptions?.maxTurns ?? DEFAULT_MANAGER_MAX_TURNS;
       if (!Number.isInteger(turns) || turns < 1 || turns > 100)
         throw new TRPCError({
           code: 'BAD_REQUEST',
@@ -1277,13 +1279,18 @@ export class GoalService {
     goalId: string,
     budget: {
       deadline?: string | null;
+      maxAttemptsPerTask?: number;
+      maxConcurrentTasks?: number | null;
       maxExperiments?: number;
+      maxManagerTurns?: number;
       maxRounds?: number | null;
+      maxStepsPerRun?: number | null;
       maxTotalCost?: number | null;
     },
   ) => {
     const before = await this.requireGraph(goalId);
     const wasBinding = await this.evaluateBudget(before.goal, before);
+    const managerTurnsWereSpent = managerTurnsSpent(before.goal.config);
 
     // Deadline joins the two execution budgets on the goal row's config; null
     // clears it, and omitting it leaves it alone — the cost/round editor sends
@@ -1307,6 +1314,29 @@ export class GoalService {
     if (budget.deadline !== undefined) {
       config.schedule = { ...config.schedule, deadline: budget.deadline };
     }
+    // The limits a goal is created with stay editable: a goal that ran into one
+    // must be continued with a higher one, not replaced by a copy of itself.
+    if (budget.maxManagerTurns !== undefined) {
+      if (!config.manager) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Only a Goal with a main Agent has a turn budget',
+        });
+      }
+      config.manager = { ...config.manager, maxTurns: budget.maxManagerTurns };
+    }
+    if (budget.maxConcurrentTasks !== undefined) {
+      config.maxConcurrentTasks = budget.maxConcurrentTasks;
+    }
+    if (budget.maxAttemptsPerTask !== undefined || budget.maxStepsPerRun !== undefined) {
+      config.recovery = {
+        ...config.recovery,
+        ...(budget.maxAttemptsPerTask !== undefined && {
+          maxAttemptsPerTask: budget.maxAttemptsPerTask,
+        }),
+        ...(budget.maxStepsPerRun !== undefined && { maxStepsPerRun: budget.maxStepsPerRun }),
+      };
+    }
 
     const goal = await this.goalModel.update(goalId, {
       config,
@@ -1324,10 +1354,13 @@ export class GoalService {
     const stoppedByBudget =
       wasBinding.costLimitReached || wasBinding.roundLimitReached || wasBinding.deadlinePassed;
     const stoppedByExploration = before.goal.config?.pausedBy === 'exploration_limit';
+    // The main Agent pauses its goal when its turns run out, and resuming alone
+    // pauses it again on the next tick. Raising the cap is what lets it continue.
+    const stoppedByManagerTurns = managerTurnsWereSpent && !managerTurnsSpent(goal.config);
     if (
       goal.status !== 'paused' ||
       goal.config?.pausedBy === 'user' ||
-      (!stoppedByBudget && !stoppedByExploration)
+      (!stoppedByBudget && !stoppedByExploration && !stoppedByManagerTurns)
     )
       return goal;
     if (

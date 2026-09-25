@@ -20,6 +20,8 @@ const DEFAULT_MAX_ATTEMPTS_PER_TASK = 8;
  * anyone sees a result.
  */
 const DEFAULT_MAX_CONCURRENT_TASKS = 3;
+/** Turns a goal's main Agent gets when its manager policy does not set its own. */
+export const DEFAULT_MANAGER_MAX_TURNS = 12;
 const MAX_CONCURRENT_TASKS_CEILING = 10;
 const DEFAULT_OPERATION_LEASE_TIMEOUT_MS = 5 * 60 * 1000;
 // Agent runtime refreshes the durable operation lease every third 30-second
@@ -90,3 +92,8 @@ export const isDeviceUnavailableFailure = (error?: string | null): boolean =>
   DEVICE_UNAVAILABLE_CODES.some(
     (code) => error.includes(code) || error.includes(HETERO_DISPATCH_ERROR_HEADLINES[code]),
   );
+
+/** Whether a goal's main Agent has used every turn its policy allows. */
+export const managerTurnsSpent = (config: GoalItem['config']): boolean =>
+  !!config?.manager &&
+  (config.managerState?.turns ?? 0) >= (config.manager.maxTurns ?? DEFAULT_MANAGER_MAX_TURNS);
