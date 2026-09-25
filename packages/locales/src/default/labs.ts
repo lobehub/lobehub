@@ -30,9 +30,6 @@ export default {
   'features.deviceTunnel.desc':
     'Give a port on the working device a link, so a dev server running there can be opened from here. The link only works for people who can reach that device.',
   'features.deviceTunnel.title': 'Remote Port Links',
-  'features.gatewayMux.desc':
-    'Route every agent run in this tab over one shared gateway WebSocket instead of opening a socket per run. Reconnects and event replay are handled per run on the shared connection.',
-  'features.gatewayMux.title': 'Single-connection Gateway (experimental)',
   'features.heteroSessionImport.title': 'Local Agent Session Import',
   'features.imessage.desc':
     'Connect agents to iMessage through the local LobeHub Desktop BlueBubbles bridge.',
