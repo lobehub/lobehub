@@ -18,7 +18,10 @@ export type {
   GatewayHttpClientOptions,
 } from './http';
 export { GatewayHttpClient } from './http';
+export type { DeviceMetricsSamplerOptions } from './metrics/sampler';
+export { DeviceMetricsSampler } from './metrics/sampler';
 export type { DeviceTunnelHostOptions } from './tunnel';
 export { DeviceTunnelHost } from './tunnel';
 export * from './types';
 export type { TunnelUpstreamFactory, TunnelUpstreamSocket } from './wsTunnel';
+export type { DeviceMetricSample } from '@lobechat/types';

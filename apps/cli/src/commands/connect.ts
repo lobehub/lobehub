@@ -16,7 +16,7 @@ import type {
   SystemInfoRequestMessage,
   ToolCallRequestMessage,
 } from '@lobechat/device-gateway-client';
-import { GatewayClient } from '@lobechat/device-gateway-client';
+import { DeviceMetricsSampler, GatewayClient } from '@lobechat/device-gateway-client';
 import { listHeterogeneousAgentModels } from '@lobechat/heterogeneous-agents/models';
 import { getShellInfo } from '@lobechat/local-file-shell';
 import type { Command } from 'commander';
@@ -66,6 +66,7 @@ import {
   loadWorkspaceEnrollments,
   normalizeUrl,
   removeWorkspaceEnrollment,
+  resolveDeviceMetricsBacklogPath,
   saveSettings,
 } from '../settings';
 import { executeToolCall } from '../tools';
@@ -465,8 +466,22 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   // shared with the workspace-share connections opened via `enrollWorkspace`.
   bindGatewayClientHandlers(client, handlerContext, workspaceId);
 
+  // Machine health (CPU / memory / load) for the device page. Samples go to
+  // the device gateway over this socket (the gateway is their only store);
+  // they keep accruing while disconnected and upload once the connection is
+  // back, so the stretch around a drop is visible afterwards.
+  const metricsSampler = identity
+    ? new DeviceMetricsSampler({
+        isConnected: () => client.connectionStatus === 'connected',
+        logger: { warn: (msg) => info(msg) },
+        storagePath: resolveDeviceMetricsBacklogPath(identity.deviceId),
+        upload: (samples) => client.reportMetrics(samples),
+      })
+    : undefined;
+
   client.on('connected', () => {
     updateStatus('connected');
+    void metricsSampler?.flush();
   });
 
   client.on('disconnected', () => {
@@ -757,6 +772,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     // Close share connections but keep the persisted enrollments — the next
     // startup restores them (or clears them if revoked meanwhile).
     for (const wsId of workspaceConnections.keys()) closeWorkspaceConnection(wsId);
+    void metricsSampler?.stop();
     client.disconnect();
     removeStatus();
     if (isDaemonChild) {
@@ -809,6 +825,8 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   }
 
   await reportDaemonStartupReady();
+
+  await metricsSampler?.start();
 
   // Connect
   await client.connect();

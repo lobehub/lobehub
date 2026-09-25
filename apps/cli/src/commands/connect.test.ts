@@ -42,6 +42,7 @@ vi.mock('../settings', () => ({
   loadWorkspaceEnrollments: vi.fn().mockReturnValue([]),
   normalizeUrl: vi.fn((url?: string) => (url ? url.replace(/\/$/, '') : undefined)),
   removeWorkspaceEnrollment: vi.fn(),
+  resolveDeviceMetricsBacklogPath: vi.fn((id: string) => `/tmp/device-metrics/${id}.json`),
   saveSettings: vi.fn(),
 }));
 
@@ -86,7 +87,19 @@ let clientOptions: any = {};
 let connectCalled = false;
 let lastSentToolResponse: any = null;
 let lastSentSystemInfoResponse: any = null;
+const clientReportMetrics = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const metricsSampler = vi.hoisted(() => ({
+  flush: vi.fn().mockResolvedValue(undefined),
+  options: undefined as any,
+  start: vi.fn().mockResolvedValue(undefined),
+  stop: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('@lobechat/device-gateway-client', () => ({
+  DeviceMetricsSampler: vi.fn().mockImplementation(function (opts: any) {
+    metricsSampler.options = opts;
+    return metricsSampler;
+  }),
   GatewayClient: vi.fn().mockImplementation(function (opts: any) {
     clientOptions = opts;
     clientEventHandlers = {};
@@ -103,6 +116,7 @@ vi.mock('@lobechat/device-gateway-client', () => ({
         clientEventHandlers[event] = handler;
       }),
       reconnect: vi.fn().mockResolvedValue(undefined),
+      reportMetrics: clientReportMetrics,
       sendSystemInfoResponse: vi.fn().mockImplementation((data: any) => {
         lastSentSystemInfoResponse = data;
       }),
@@ -176,6 +190,22 @@ describe('connect command', () => {
     expect(writeStatus).toHaveBeenLastCalledWith(
       expect.objectContaining({ connectionStatus: 'connected', deviceId: 'mock-device-id' }),
     );
+  });
+
+  it('samples machine health and pushes the backlog to the gateway on connect', async () => {
+    const program = createProgram();
+    await program.parseAsync(['node', 'test', 'connect']);
+
+    expect(metricsSampler.start).toHaveBeenCalled();
+    const deviceId = clientOptions.deviceId;
+    expect(metricsSampler.options.storagePath).toBe(`/tmp/device-metrics/${deviceId}.json`);
+
+    clientEventHandlers.connected?.();
+    expect(metricsSampler.flush).toHaveBeenCalled();
+
+    const samples = [{ observedAt: 1 }] as any;
+    await metricsSampler.options.upload(samples);
+    expect(clientReportMetrics).toHaveBeenCalledWith(samples);
   });
 
   it('should connect to gateway', async () => {

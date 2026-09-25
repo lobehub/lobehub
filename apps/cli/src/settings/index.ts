@@ -77,6 +77,15 @@ export function saveSettings(settings: StoredSettings): void {
  * same machine keeps its connection. Persisted under the CLI home dir, so a
  * separate `LOBEHUB_CLI_HOME` (e.g. a dev build) naturally gets its own id.
  */
+/**
+ * Machine health samples not yet uploaded, one file per device identity so a
+ * personal and a workspace connection on the same machine keep separate
+ * backlogs.
+ */
+export function resolveDeviceMetricsBacklogPath(deviceId: string): string {
+  return path.join(SETTINGS_DIR, 'device-metrics', `${deviceId.replaceAll(/[^\w-]/g, '_')}.json`);
+}
+
 export function loadOrCreateConnectionId(): string {
   try {
     const existing = fs.readFileSync(CONNECTION_ID_FILE, 'utf8').trim();

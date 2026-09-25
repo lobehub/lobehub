@@ -687,6 +687,18 @@ export default {
   'devices.fallbackBadge': 'Unstable identity',
   'devices.fallbackTooltip':
     "This device couldn't be identified by its machine ID, so reinstalling the app may create a duplicate entry.",
+  'devices.health.cpu': 'CPU',
+  'devices.health.empty':
+    'No health data yet. It starts recording once this device runs the latest LobeHub desktop app or CLI.',
+  'devices.health.load_one': 'Load average (1 min · {{count}} core)',
+  'devices.health.load_other': 'Load average (1 min · {{count}} cores)',
+  'devices.health.memory': 'Memory',
+  'devices.health.now': 'Now',
+  'devices.health.status.missing': 'No data — asleep, off, or LobeHub not running',
+  'devices.health.status.offline': 'Running but disconnected',
+  'devices.health.status.online': 'Online',
+  'devices.health.status.pending': 'Not uploaded yet',
+  'devices.health.title': 'Health · last 12 hours',
   'devices.lastSeen': 'Last connected {{time}}',
   'devices.remove.confirm': 'Remove this device?',
   'devices.remove.confirmDesc':

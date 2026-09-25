@@ -18,6 +18,7 @@ import { nextWorkingDirs } from '@/store/device';
 
 import Connections from './Connections';
 import { refreshDeviceList } from './const';
+import DeviceHealth from './DeviceHealth';
 import FieldLabel from './FieldLabel';
 import { getDeviceIcon } from './getDeviceIcon';
 import PresenceDot from './PresenceDot';
@@ -309,6 +310,12 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
 
         {/* ─── Connections, each with its client version; desktop carries the update ─── */}
         <Connections canEdit={canEdit} device={device} />
+
+        {/* ─── Machine health ─── */}
+        <Flexbox gap={8}>
+          <FieldLabel>{t('devices.health.title')}</FieldLabel>
+          <DeviceHealth deviceId={device.deviceId} />
+        </Flexbox>
 
         {/* ─── Name ─── */}
         <Flexbox gap={8}>

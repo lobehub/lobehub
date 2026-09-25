@@ -1,3 +1,5 @@
+import type { DeviceMetricSample } from '@lobechat/types';
+
 // ─── Device Info ───
 
 /** A single live gateway WebSocket connection belonging to a device. */
@@ -91,7 +93,20 @@ export interface MessageApiResponseMessage {
   type: 'message_api_response';
 }
 
+/** A batch of machine health samples; the gateway stores them for two days. */
+export interface DeviceMetricsMessage {
+  batchId: string;
+  samples: DeviceMetricSample[];
+  type: 'device_metrics';
+}
+
 // Server → Client
+export interface DeviceMetricsAckMessage {
+  accepted: number;
+  batchId: string;
+  type: 'device_metrics_ack';
+}
+
 export interface HeartbeatAckMessage {
   type: 'heartbeat_ack';
 }
@@ -464,6 +479,7 @@ export interface AgentRunAckMessage {
 export type ClientMessage =
   | AgentRunAckMessage
   | AuthMessage
+  | DeviceMetricsMessage
   | HeartbeatMessage
   | MessageApiResponseMessage
   | RpcResponseMessage
@@ -475,6 +491,7 @@ export type ServerMessage =
   | AuthExpiredMessage
   | AuthFailedMessage
   | AuthSuccessMessage
+  | DeviceMetricsAckMessage
   | HeartbeatAckMessage
   | MessageApiRequestMessage
   | RpcRequestMessage
