@@ -76,17 +76,19 @@ export const usePortalDocumentTitle = () => {
     [savedTitle],
   );
 
-  const startEdit = useCallback(() => {
-    if (metaLocked) return;
-    setDraft(savedTitle);
-    setEditing(true);
-  }, [metaLocked, savedTitle]);
-
   // Marks the in-progress edit as cancelled. Escape calls this BEFORE blurring
   // the input: the blur that follows still fires `commitEdit`, but the flag
   // makes that commit a no-op restore instead of persisting the edited draft
   // the user just threw away.
   const cancelEditRef = useRef(false);
+
+  const startEdit = useCallback(() => {
+    if (metaLocked) return;
+    // A fresh edit session never inherits a cancel whose blur commit never fired.
+    cancelEditRef.current = false;
+    setDraft(savedTitle);
+    setEditing(true);
+  }, [metaLocked, savedTitle]);
 
   const cancelEdit = useCallback(() => {
     cancelEditRef.current = true;

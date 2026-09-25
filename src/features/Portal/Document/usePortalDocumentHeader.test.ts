@@ -278,6 +278,25 @@ describe('usePortalDocumentTitle', () => {
     });
   });
 
+  it('clears a dangling cancel when a new edit session starts', async () => {
+    const { result } = renderHook(() => usePortalDocumentTitle());
+
+    // Cancel without the follow-up blur commit (e.g. input unmounted first).
+    act(() => result.current.startEdit());
+    act(() => result.current.cancelEdit());
+
+    act(() => result.current.startEdit());
+    act(() => result.current.setDraft('开营筹备清单 V2'));
+    await act(async () => {
+      await result.current.commitEdit();
+    });
+
+    expect(mockUpdateDocument).toHaveBeenCalledWith({
+      id: 'document-1',
+      title: '开营筹备清单 V2',
+    });
+  });
+
   it('locks meta for a managed skill index (rename must not rewrite SKILL.md)', () => {
     mockDocumentMeta.current = {
       content: '---\nname: my-skill\n---\nbody',
