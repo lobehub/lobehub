@@ -27,16 +27,19 @@ const buildSearchParams = ({
 }: SearchParams): SearchParams | undefined => {
   const params: SearchParams = {};
 
-  if (searchCategories?.length) {
-    params.searchCategories = searchCategories;
+  const validCategories = searchCategories?.map((c) => c?.trim()).filter(Boolean);
+  if (validCategories && validCategories.length > 0) {
+    params.searchCategories = validCategories;
   }
 
-  if (searchEngines?.length) {
-    params.searchEngines = searchEngines;
+  const validEngines = searchEngines?.map((e) => e?.trim()).filter(Boolean);
+  if (validEngines && validEngines.length > 0) {
+    params.searchEngines = validEngines;
   }
 
-  if (searchTimeRange && searchTimeRange !== 'anytime') {
-    params.searchTimeRange = searchTimeRange;
+  const trimmedTimeRange = searchTimeRange?.trim();
+  if (trimmedTimeRange && trimmedTimeRange !== 'anytime') {
+    params.searchTimeRange = trimmedTimeRange;
   }
 
   return Object.keys(params).length > 0 ? params : undefined;
@@ -236,16 +239,13 @@ export class SearchService {
 
         lastSuccessfulEmpty = data;
 
+        // If specific engines were selected and returned no results, retry without engine restriction
+        // while preserving user's category and time range constraints.
         if (currentParams?.searchEngines?.length) {
           currentParams = buildSearchParams({
             searchCategories,
             searchTimeRange,
           });
-          continue;
-        }
-
-        if (currentParams) {
-          currentParams = undefined;
           continue;
         }
 

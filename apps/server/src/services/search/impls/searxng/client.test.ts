@@ -114,4 +114,38 @@ describe('SearXNGClient', () => {
       'Failed to search: 500 Internal Server Error',
     );
   });
+
+  it('should format and forward non-empty search parameters correctly', async () => {
+    mockFetch.mockResolvedValue({
+      json: () => Promise.resolve({ results: [] }),
+      ok: true,
+    });
+
+    await client.search('news', {
+      categories: ['news', 'science'],
+      engines: ['google'],
+      time_range: 'day',
+    });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      'https://searxng.example.com/search?categories=news%2Cscience&engines=google&format=json&q=news&time_range=day',
+    );
+  });
+
+  it('should omit anytime, empty time_range, and empty parameter arrays', async () => {
+    mockFetch.mockResolvedValue({
+      json: () => Promise.resolve({ results: [] }),
+      ok: true,
+    });
+
+    await client.search('query', {
+      categories: [],
+      engines: undefined,
+      time_range: 'anytime',
+    });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      'https://searxng.example.com/search?format=json&q=query',
+    );
+  });
 });
