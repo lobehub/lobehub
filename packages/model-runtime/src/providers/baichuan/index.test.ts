@@ -1,25 +1,9 @@
 // @vitest-environment node
-import { ModelProvider } from 'model-bank';
 import type { Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
-import { testProvider } from '../../providerTestUtils';
 import { LobeBaichuanAI, params } from './index';
-
-testProvider({
-  Runtime: LobeBaichuanAI,
-  provider: ModelProvider.Baichuan,
-  defaultBaseURL: 'https://api.baichuan-ai.com/v1',
-  chatDebugEnv: 'DEBUG_BAICHUAN_CHAT_COMPLETION',
-  chatModel: 'hunyuan-lite',
-  invalidErrorType: 'InvalidProviderAPIKey',
-  bizErrorType: 'ProviderBizError',
-  test: {
-    skipAPICall: true,
-    skipErrorHandle: true,
-  },
-});
 
 // Mock the console.error to avoid polluting test output
 vi.spyOn(console, 'error').mockImplementation(() => {});

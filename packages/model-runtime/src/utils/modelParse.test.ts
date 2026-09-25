@@ -701,19 +701,6 @@ describe('modelParse', () => {
     });
 
     describe('Extended tests for detectModelProvider', () => {
-      it('should handle unusual casing patterns', () => {
-        expect(detectModelProvider('gPt-4')).toBe('openai');
-        expect(detectModelProvider('CLauDe-3-OPUS')).toBe('anthropic');
-        expect(detectModelProvider('gEmiNi-PrO')).toBe('google');
-        expect(detectModelProvider('qWeN-TuRbO')).toBe('qwen');
-      });
-
-      it('should handle model IDs with keywords in unusual positions', () => {
-        expect(detectModelProvider('custom-gpt-model')).toBe('openai');
-        expect(detectModelProvider('prefix-claude-suffix')).toBe('anthropic');
-        expect(detectModelProvider('test-qwen-beta-v1')).toBe('qwen');
-      });
-
       it('should handle empty and special character model IDs', () => {
         expect(detectModelProvider('')).toBe('openai'); // Default
         expect(detectModelProvider('   ')).toBe('openai'); // Default

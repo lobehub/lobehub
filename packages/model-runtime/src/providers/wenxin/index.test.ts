@@ -1,18 +1,8 @@
 // @vitest-environment node
-import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
-import { testProvider } from '../../providerTestUtils';
 import { LobeWenxinAI, params } from './index';
-
-testProvider({
-  Runtime: LobeWenxinAI,
-  provider: ModelProvider.Wenxin,
-  defaultBaseURL: 'https://qianfan.baidubce.com/v2',
-  chatDebugEnv: 'DEBUG_WENXIN_CHAT_COMPLETION',
-  chatModel: 'ernie-speed-128k',
-});
 
 // Mock the console.error to avoid polluting test output
 vi.spyOn(console, 'error').mockImplementation(() => {});

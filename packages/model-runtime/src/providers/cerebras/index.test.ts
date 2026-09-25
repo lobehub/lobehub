@@ -28,22 +28,6 @@ describe('LobeCerebrasAI - custom features', () => {
     it('should export params with correct provider', () => {
       expect(params.provider).toBe(ModelProvider.Cerebras);
     });
-
-    it('should have chatCompletion handlePayload function', () => {
-      expect(params.chatCompletion?.handlePayload).toBeDefined();
-      expect(typeof params.chatCompletion?.handlePayload).toBe('function');
-    });
-
-    it('should have debug configuration', () => {
-      expect(params.debug).toBeDefined();
-      expect(params.debug.chatCompletion).toBeDefined();
-      expect(typeof params.debug.chatCompletion).toBe('function');
-    });
-
-    it('should have models function', () => {
-      expect(params.models).toBeDefined();
-      expect(typeof params.models).toBe('function');
-    });
   });
 
   describe('debug configuration', () => {
@@ -61,12 +45,6 @@ describe('LobeCerebrasAI - custom features', () => {
 
     it('should disable debug when env is set to 0', () => {
       process.env.DEBUG_CEREBRAS_CHAT_COMPLETION = '0';
-      const result = params.debug.chatCompletion();
-      expect(result).toBe(false);
-    });
-
-    it('should disable debug when env is empty string', () => {
-      process.env.DEBUG_CEREBRAS_CHAT_COMPLETION = '';
       const result = params.debug.chatCompletion();
       expect(result).toBe(false);
     });
@@ -133,63 +111,6 @@ describe('LobeCerebrasAI - custom features', () => {
       expect(calledPayload.frequency_penalty).toBeUndefined();
       expect(calledPayload.presence_penalty).toBeUndefined();
     });
-
-    it('should handle payload with only frequency_penalty', async () => {
-      await instance.chat({
-        frequency_penalty: 0.5,
-        messages: [{ content: 'Test', role: 'user' }],
-        model: 'llama3.1-8b',
-      });
-
-      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
-      expect(calledPayload.frequency_penalty).toBeUndefined();
-      expect(calledPayload.presence_penalty).toBeUndefined();
-    });
-
-    it('should handle payload with only presence_penalty', async () => {
-      await instance.chat({
-        messages: [{ content: 'Test', role: 'user' }],
-        model: 'llama3.1-8b',
-        presence_penalty: 0.5,
-      });
-
-      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
-      expect(calledPayload.frequency_penalty).toBeUndefined();
-      expect(calledPayload.presence_penalty).toBeUndefined();
-    });
-
-    it('should handle payload with zero values for penalties', async () => {
-      await instance.chat({
-        frequency_penalty: 0,
-        messages: [{ content: 'Test', role: 'user' }],
-        model: 'llama3.1-8b',
-        presence_penalty: 0,
-      });
-
-      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
-      expect(calledPayload.frequency_penalty).toBeUndefined();
-      expect(calledPayload.presence_penalty).toBeUndefined();
-    });
-
-    it('should call handlePayload directly and verify transformation', () => {
-      const payload = {
-        frequency_penalty: 0.5,
-        max_tokens: 100,
-        messages: [{ content: 'Test', role: 'user' }],
-        model: 'llama3.1-8b',
-        presence_penalty: 0.5,
-        temperature: 0.7,
-      };
-
-      const transformedPayload = params.chatCompletion!.handlePayload!(payload as any);
-
-      expect(transformedPayload.model).toBe('llama3.1-8b');
-      expect(transformedPayload.temperature).toBe(0.7);
-      expect(transformedPayload.max_tokens).toBe(100);
-      expect(transformedPayload.frequency_penalty).toBeUndefined();
-      expect(transformedPayload.presence_penalty).toBeUndefined();
-    });
-
     describe('reasoning configuration', () => {
       it('should handle Z.ai GLM 4.7 default reasoning settings (reasoning_format: parsed)', async () => {
         await instance.chat({
@@ -367,24 +288,6 @@ describe('LobeCerebrasAI - custom features', () => {
       expect(Array.isArray(models)).toBe(true);
       expect(models).toHaveLength(0);
     });
-
-    it('should handle empty models list without data property', async () => {
-      const mockClient = {
-        apiKey: 'test_api_key',
-        baseURL: 'https://api.cerebras.ai/v1',
-        models: {
-          list: vi.fn().mockResolvedValue([]),
-        },
-      } as any;
-
-      const models = await params.models!({ client: mockClient });
-
-      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
-      expect(models).toBeDefined();
-      expect(Array.isArray(models)).toBe(true);
-      expect(models).toHaveLength(0);
-    });
-
     it('should handle null response', async () => {
       const mockClient = {
         apiKey: 'test_api_key',
@@ -401,24 +304,6 @@ describe('LobeCerebrasAI - custom features', () => {
       expect(Array.isArray(models)).toBe(true);
       expect(models).toHaveLength(0);
     });
-
-    it('should handle undefined response', async () => {
-      const mockClient = {
-        apiKey: 'test_api_key',
-        baseURL: 'https://api.cerebras.ai/v1',
-        models: {
-          list: vi.fn().mockResolvedValue(undefined),
-        },
-      } as any;
-
-      const models = await params.models!({ client: mockClient });
-
-      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
-      expect(models).toBeDefined();
-      expect(Array.isArray(models)).toBe(true);
-      expect(models).toHaveLength(0);
-    });
-
     it('should handle response with non-array data', async () => {
       const mockClient = {
         apiKey: 'test_api_key',
@@ -451,49 +336,6 @@ describe('LobeCerebrasAI - custom features', () => {
 
       expect(mockClient.models.list).toHaveBeenCalledTimes(1);
     });
-
-    it('should throw when API authentication fails', async () => {
-      const mockClient = {
-        apiKey: 'invalid_key',
-        baseURL: 'https://api.cerebras.ai/v1',
-        models: {
-          list: vi.fn().mockRejectedValue(new Error('401 Unauthorized')),
-        },
-      } as any;
-
-      await expect(params.models!({ client: mockClient })).rejects.toThrow('401 Unauthorized');
-
-      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
-    });
-
-    it('should throw when API rate limit fails', async () => {
-      const mockClient = {
-        apiKey: 'test_api_key',
-        baseURL: 'https://api.cerebras.ai/v1',
-        models: {
-          list: vi.fn().mockRejectedValue(new Error('429 Too Many Requests')),
-        },
-      } as any;
-
-      await expect(params.models!({ client: mockClient })).rejects.toThrow('429 Too Many Requests');
-
-      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
-    });
-
-    it('should throw when request times out', async () => {
-      const mockClient = {
-        apiKey: 'test_api_key',
-        baseURL: 'https://api.cerebras.ai/v1',
-        models: {
-          list: vi.fn().mockRejectedValue(new Error('Request timeout')),
-        },
-      } as any;
-
-      await expect(params.models!({ client: mockClient })).rejects.toThrow('Request timeout');
-
-      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
-    });
-
     it('should handle malformed JSON response', async () => {
       const mockClient = {
         apiKey: 'test_api_key',

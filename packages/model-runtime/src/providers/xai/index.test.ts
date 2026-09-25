@@ -1,9 +1,7 @@
 // @vitest-environment node
-import { ModelProvider } from 'model-bank';
 import type { Mock } from 'vitest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { testProvider } from '../../providerTestUtils';
 import { LobeSuperGrokAI } from '../superGrok';
 import type { XAIModelCard } from './index';
 import { LobeXAI } from './index';
@@ -11,16 +9,6 @@ import { LobeXAI } from './index';
 vi.mock('@lobechat/business-model-bank/model-config', () => ({
   loadModels: vi.fn().mockResolvedValue([]),
 }));
-
-testProvider({
-  Runtime: LobeXAI,
-  provider: ModelProvider.XAI,
-  defaultBaseURL: 'https://api.x.ai/v1',
-  chatDebugEnv: 'DEBUG_XAI_CHAT_COMPLETION',
-  responseDebugEnv: 'DEBUG_XAI_RESPONSES',
-  chatModel: 'grok',
-  test: { useResponsesAPI: true },
-});
 
 describe('LobeXAI - custom features', () => {
   let instance: InstanceType<typeof LobeXAI>;

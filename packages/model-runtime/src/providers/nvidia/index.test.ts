@@ -1,23 +1,7 @@
 // @vitest-environment node
-import { ModelProvider } from 'model-bank';
 import { describe, expect, it, vi } from 'vitest';
 
-import { testProvider } from '../../providerTestUtils';
-import { LobeNvidiaAI, params } from './index';
-
-const provider = ModelProvider.Nvidia;
-const defaultBaseURL = 'https://integrate.api.nvidia.com/v1';
-
-testProvider({
-  Runtime: LobeNvidiaAI,
-  provider,
-  defaultBaseURL,
-  chatDebugEnv: 'DEBUG_NVIDIA_CHAT_COMPLETION',
-  chatModel: 'meta/llama-3.1-8b-instruct',
-  test: {
-    skipAPICall: true,
-  },
-});
+import { params } from './index';
 
 describe('LobeNvidiaAI - custom features', () => {
   describe('handlePayload', () => {

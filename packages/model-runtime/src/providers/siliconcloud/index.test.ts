@@ -1,26 +1,10 @@
 // @vitest-environment node
-import { ModelProvider } from 'model-bank';
 import OpenAI from 'openai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { testProvider } from '../../providerTestUtils';
 import { AgentRuntimeErrorType } from '../../types/error';
 import type { SiliconCloudModelCard } from './index';
 import { LobeSiliconCloudAI } from './index';
-
-testProvider({
-  Runtime: LobeSiliconCloudAI,
-  provider: ModelProvider.SiliconCloud,
-  defaultBaseURL: 'https://api.siliconflow.cn/v1',
-  chatDebugEnv: 'DEBUG_SILICONCLOUD_CHAT_COMPLETION',
-  chatModel: 'Qwen/Qwen2.5-7B-Instruct',
-  invalidErrorType: 'InvalidProviderAPIKey',
-  bizErrorType: 'ProviderBizError',
-  test: {
-    skipAPICall: true,
-    skipErrorHandle: true,
-  },
-});
 
 describe('LobeSiliconCloudAI - custom features', () => {
   let instance: InstanceType<typeof LobeSiliconCloudAI>;

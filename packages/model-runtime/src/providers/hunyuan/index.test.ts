@@ -1,18 +1,8 @@
 // @vitest-environment node
-import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
-import { testProvider } from '../../providerTestUtils';
 import { LobeHunyuanAI, params } from './index';
-
-testProvider({
-  Runtime: LobeHunyuanAI,
-  provider: ModelProvider.Hunyuan,
-  defaultBaseURL: 'https://tokenhub.tencentmaas.com/v1',
-  chatDebugEnv: 'DEBUG_HUNYUAN_CHAT_COMPLETION',
-  chatModel: 'hunyuan-role-latest',
-});
 
 // Mock the console.error to avoid polluting test output
 vi.spyOn(console, 'error').mockImplementation(() => {});

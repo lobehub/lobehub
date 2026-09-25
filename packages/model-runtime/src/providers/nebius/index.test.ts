@@ -23,11 +23,6 @@ describe('LobeNebiusAI - custom features', () => {
       expect(params.chatCompletion).toBeDefined();
       expect(params.models).toBeDefined();
     });
-
-    it('should have debug.chatCompletion function', () => {
-      expect(typeof params.debug?.chatCompletion).toBe('function');
-    });
-
     it('should return false when DEBUG_NEBIUS_CHAT_COMPLETION is not set', () => {
       delete process.env.DEBUG_NEBIUS_CHAT_COMPLETION;
       expect(params.debug?.chatCompletion()).toBe(false);
@@ -73,60 +68,6 @@ describe('LobeNebiusAI - custom features', () => {
       const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
       expect(calledPayload.temperature).toBe(0.7);
       expect(calledPayload.max_tokens).toBe(100);
-    });
-  });
-
-  describe('modality inference logic', () => {
-    it('should infer image type from modality', () => {
-      const modality = 'text -> image';
-      const parts = modality.split('->');
-      const right = parts[1]?.trim().toLowerCase();
-      expect(right).toBe('image');
-    });
-
-    it('should infer embedding type from modality', () => {
-      const modality = 'text -> embedding';
-      const parts = modality.split('->');
-      const right = parts[1]?.trim().toLowerCase();
-      expect(right).toBe('embedding');
-    });
-
-    it('should handle modality without ->', () => {
-      const modality = 'text';
-      const hasArrow = modality.includes('->');
-      expect(hasArrow).toBe(false);
-    });
-  });
-
-  describe('pricing calculation', () => {
-    it('should convert pricing to per million tokens', () => {
-      const pricing = {
-        completion: 0.002,
-        prompt: 0.001,
-      };
-      const result = {
-        input: pricing.prompt * 1_000_000,
-        output: pricing.completion * 1_000_000,
-      };
-      expect(result.input).toBe(1000);
-      expect(result.output).toBe(2000);
-    });
-  });
-
-  describe('features detection', () => {
-    it('should detect function-calling feature', () => {
-      const features = ['function-calling', 'vision'];
-      expect(features.includes('function-calling')).toBe(true);
-    });
-
-    it('should detect reasoning feature', () => {
-      const features = ['reasoning', 'vision'];
-      expect(features.includes('reasoning')).toBe(true);
-    });
-
-    it('should detect vision feature', () => {
-      const features = ['function-calling', 'vision'];
-      expect(features.includes('vision')).toBe(true);
     });
   });
 

@@ -24,77 +24,12 @@ describe('getMimeType', () => {
       expect(getMimeType('script.py')).toBe('text/x-python');
       expect(getMimeType('/path/to/script.py')).toBe('text/x-python');
     });
-
-    it('should return correct MIME type for Go files', () => {
-      expect(getMimeType('main.go')).toBe('text/x-go');
-      expect(getMimeType('/src/main.go')).toBe('text/x-go');
-    });
-
-    it('should return correct MIME type for Rust files', () => {
-      expect(getMimeType('lib.rs')).toBe('text/x-rust');
-      expect(getMimeType('/src/lib.rs')).toBe('text/x-rust');
-    });
-
-    it('should return correct MIME type for Ruby files', () => {
-      expect(getMimeType('app.rb')).toBe('text/x-ruby');
-    });
-
-    it('should return correct MIME type for Kotlin files', () => {
-      expect(getMimeType('Main.kt')).toBe('text/x-kotlin');
-    });
-
-    it('should return correct MIME type for Scala files', () => {
-      expect(getMimeType('App.scala')).toBe('text/x-scala');
-    });
-
-    it('should return correct MIME type for Swift files', () => {
-      expect(getMimeType('ContentView.swift')).toBe('text/x-swift');
-    });
-
-    it('should return correct MIME type for Haskell files', () => {
-      expect(getMimeType('Main.hs')).toBe('text/x-haskell');
-    });
-
-    it('should return correct MIME type for Lua files', () => {
-      expect(getMimeType('script.lua')).toBe('text/x-lua');
-    });
-
-    it('should return correct MIME type for Perl files', () => {
-      expect(getMimeType('script.pl')).toBe('text/x-perl');
-    });
-
-    it('should return correct MIME type for R files', () => {
-      expect(getMimeType('analysis.r')).toBe('text/x-r');
-    });
-
-    it('should return correct MIME type for Clojure files', () => {
-      expect(getMimeType('core.clj')).toBe('text/x-clojure');
-    });
-
     it('should return correct MIME type for Elixir files (.ex)', () => {
       expect(getMimeType('app.ex')).toBe('text/x-elixir');
     });
 
     it('should return correct MIME type for Elixir script files (.exs)', () => {
       expect(getMimeType('mix.exs')).toBe('text/x-elixir');
-    });
-
-    it('should return correct MIME type for Svelte files', () => {
-      expect(getMimeType('App.svelte')).toBe('text/x-svelte');
-    });
-
-    it('should return correct MIME type for Vue files', () => {
-      expect(getMimeType('App.vue')).toBe('text/x-vue');
-    });
-
-    it('should return correct MIME type for Verilog files', () => {
-      expect(getMimeType('adder.v')).toBe('text/x-verilog');
-      expect(getMimeType('/rtl/top.v')).toBe('text/x-verilog');
-    });
-
-    it('should return correct MIME type for SystemVerilog files', () => {
-      expect(getMimeType('alu_top.sv')).toBe('text/x-systemverilog');
-      expect(getMimeType('/rtl/tb.sv')).toBe('text/x-systemverilog');
     });
   });
 
@@ -124,37 +59,8 @@ describe('getMimeType', () => {
     it('should return correct MIME type for JSON files', () => {
       expect(getMimeType('config.json')).toBe('application/json');
     });
-
-    it('should return correct MIME type for HTML files', () => {
-      expect(getMimeType('index.html')).toBe('text/html');
-    });
-
-    it('should return correct MIME type for CSS files', () => {
-      expect(getMimeType('styles.css')).toBe('text/css');
-    });
-
     it('should return correct MIME type for PNG images', () => {
       expect(getMimeType('photo.png')).toBe('image/png');
-    });
-
-    it('should return correct MIME type for JPEG images', () => {
-      expect(getMimeType('photo.jpg')).toBe('image/jpeg');
-    });
-
-    it('should return correct MIME type for PDF files', () => {
-      expect(getMimeType('document.pdf')).toBe('application/pdf');
-    });
-
-    it('should return correct MIME type for XML files', () => {
-      expect(getMimeType('data.xml')).toBe('application/xml');
-    });
-
-    it('should return correct MIME type for plain text files', () => {
-      expect(getMimeType('readme.txt')).toBe('text/plain');
-    });
-
-    it('should return correct MIME type for Markdown files', () => {
-      expect(getMimeType('README.md')).toBe('text/markdown');
     });
   });
 

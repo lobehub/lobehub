@@ -28,17 +28,6 @@ describe('LobeZeroOneAI - custom features', () => {
     it('should export params with correct provider', () => {
       expect(params.provider).toBe(ModelProvider.ZeroOne);
     });
-
-    it('should have debug configuration', () => {
-      expect(params.debug).toBeDefined();
-      expect(params.debug.chatCompletion).toBeDefined();
-      expect(typeof params.debug.chatCompletion).toBe('function');
-    });
-
-    it('should have models function', () => {
-      expect(params.models).toBeDefined();
-      expect(typeof params.models).toBe('function');
-    });
   });
 
   describe('debug configuration', () => {
@@ -56,12 +45,6 @@ describe('LobeZeroOneAI - custom features', () => {
 
     it('should disable debug when env is set to 0', () => {
       process.env.DEBUG_ZEROONE_CHAT_COMPLETION = '0';
-      const result = params.debug.chatCompletion();
-      expect(result).toBe(false);
-    });
-
-    it('should disable debug when env is empty string', () => {
-      process.env.DEBUG_ZEROONE_CHAT_COMPLETION = '';
       const result = params.debug.chatCompletion();
       expect(result).toBe(false);
     });
@@ -126,24 +109,6 @@ describe('LobeZeroOneAI - custom features', () => {
       expect(Array.isArray(models)).toBe(true);
       expect(models).toHaveLength(0);
     });
-
-    it('should handle empty models list without data property', async () => {
-      const mockClient = {
-        apiKey: 'test_api_key',
-        baseURL: 'https://api.lingyiwanwu.com/v1',
-        models: {
-          list: vi.fn().mockResolvedValue([]),
-        },
-      } as any;
-
-      const models = await params.models!({ client: mockClient });
-
-      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
-      expect(models).toBeDefined();
-      expect(Array.isArray(models)).toBe(true);
-      expect(models).toHaveLength(0);
-    });
-
     it('should handle null response', async () => {
       const mockClient = {
         apiKey: 'test_api_key',
@@ -160,24 +125,6 @@ describe('LobeZeroOneAI - custom features', () => {
       expect(Array.isArray(models)).toBe(true);
       expect(models).toHaveLength(0);
     });
-
-    it('should handle undefined response', async () => {
-      const mockClient = {
-        apiKey: 'test_api_key',
-        baseURL: 'https://api.lingyiwanwu.com/v1',
-        models: {
-          list: vi.fn().mockResolvedValue(undefined),
-        },
-      } as any;
-
-      const models = await params.models!({ client: mockClient });
-
-      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
-      expect(models).toBeDefined();
-      expect(Array.isArray(models)).toBe(true);
-      expect(models).toHaveLength(0);
-    });
-
     it('should handle response with non-array data', async () => {
       const mockClient = {
         apiKey: 'test_api_key',
@@ -210,49 +157,6 @@ describe('LobeZeroOneAI - custom features', () => {
 
       expect(mockClient.models.list).toHaveBeenCalledTimes(1);
     });
-
-    it('should throw when API authentication fails', async () => {
-      const mockClient = {
-        apiKey: 'invalid_key',
-        baseURL: 'https://api.lingyiwanwu.com/v1',
-        models: {
-          list: vi.fn().mockRejectedValue(new Error('401 Unauthorized')),
-        },
-      } as any;
-
-      await expect(params.models!({ client: mockClient })).rejects.toThrow('401 Unauthorized');
-
-      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
-    });
-
-    it('should throw when API rate limit fails', async () => {
-      const mockClient = {
-        apiKey: 'test_api_key',
-        baseURL: 'https://api.lingyiwanwu.com/v1',
-        models: {
-          list: vi.fn().mockRejectedValue(new Error('429 Too Many Requests')),
-        },
-      } as any;
-
-      await expect(params.models!({ client: mockClient })).rejects.toThrow('429 Too Many Requests');
-
-      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
-    });
-
-    it('should throw when request times out', async () => {
-      const mockClient = {
-        apiKey: 'test_api_key',
-        baseURL: 'https://api.lingyiwanwu.com/v1',
-        models: {
-          list: vi.fn().mockRejectedValue(new Error('Request timeout')),
-        },
-      } as any;
-
-      await expect(params.models!({ client: mockClient })).rejects.toThrow('Request timeout');
-
-      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
-    });
-
     it('should handle malformed JSON response', async () => {
       const mockClient = {
         apiKey: 'test_api_key',

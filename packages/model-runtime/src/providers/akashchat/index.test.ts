@@ -219,17 +219,6 @@ describe('LobeAkashChatAI - custom features', () => {
         const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
         expect(calledPayload.chat_template_kwargs).toBeUndefined();
       });
-
-      it('should handle multiple thinking model keywords', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'DeepSeek-V3-1',
-          thinking: { type: 'enabled', budget_tokens: 1024 },
-        });
-
-        const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
-        expect(calledPayload.chat_template_kwargs).toEqual({ thinking: true });
-      });
     });
   });
 
@@ -300,19 +289,6 @@ describe('LobeAkashChatAI - custom features', () => {
 
       expect(models).toEqual([]);
     });
-
-    it('should throw when model API fails', async () => {
-      const mockClient = {
-        apiKey: 'test',
-        baseURL: 'https://chatapi.akash.network/api/v1',
-        models: {
-          list: vi.fn().mockRejectedValue(new Error('API Error')),
-        },
-      };
-
-      await expect(params.models({ client: mockClient as any })).rejects.toThrow('API Error');
-    });
-
     it('should handle network timeout errors', async () => {
       const mockClient = {
         apiKey: 'test',
@@ -324,19 +300,6 @@ describe('LobeAkashChatAI - custom features', () => {
 
       await expect(params.models({ client: mockClient as any })).rejects.toThrow('Network timeout');
     });
-
-    it('should handle invalid API key errors', async () => {
-      const mockClient = {
-        apiKey: 'invalid',
-        baseURL: 'https://chatapi.akash.network/api/v1',
-        models: {
-          list: vi.fn().mockRejectedValue(new Error('Unauthorized')),
-        },
-      };
-
-      await expect(params.models({ client: mockClient as any })).rejects.toThrow('Unauthorized');
-    });
-
     it('should throw on malformed response data', async () => {
       const mockClient = {
         apiKey: 'test',

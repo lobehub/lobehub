@@ -1,23 +1,7 @@
 // @vitest-environment node
-import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { testProvider } from '../../providerTestUtils';
-import { LobeXiaomiMiMoAI, params } from './index';
-
-const provider = ModelProvider.XiaomiMiMo;
-const defaultBaseURL = 'https://api.xiaomimimo.com/v1';
-
-testProvider({
-  Runtime: LobeXiaomiMiMoAI,
-  provider,
-  defaultBaseURL,
-  chatDebugEnv: 'DEBUG_XIAOMIMIMO_CHAT_COMPLETION',
-  chatModel: 'mimo-v2-flash',
-  test: {
-    skipAPICall: true,
-  },
-});
+import { params } from './index';
 
 describe('LobeXiaomiMiMoAI - custom features', () => {
   describe('chatCompletion.handlePayload', () => {

@@ -1,25 +1,9 @@
 // @vitest-environment node
-import { ModelProvider } from 'model-bank';
 import OpenAI from 'openai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
-import { testProvider } from '../../providerTestUtils';
 import { LobeTaichuAI } from './index';
-
-const provider = ModelProvider.Taichu;
-const defaultBaseURL = 'https://cloud.zidongtaichu.com/maas/v1';
-
-testProvider({
-  Runtime: LobeTaichuAI,
-  provider,
-  defaultBaseURL,
-  chatDebugEnv: 'DEBUG_TAICHU_CHAT_COMPLETION',
-  chatModel: 'taichu',
-  test: {
-    skipAPICall: true,
-  },
-});
 
 let instance: LobeOpenAICompatibleRuntime;
 

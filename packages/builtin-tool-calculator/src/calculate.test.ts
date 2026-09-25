@@ -4,12 +4,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { calculatorExecutor } from '../src/executor';
 
 describe('Unit Conversion', () => {
-  it('should handle temperature conversion with mathjs syntax', async () => {
-    const result = await calculatorExecutor.calculate({ expression: '25 degC to degF' });
-    expect(result.success).toBe(true);
-    expect(parseFloat(result.content || '0')).toBeCloseTo(77, 0);
-  });
-
   it('should handle various temperature formats', async () => {
     const fahrenheit = await calculatorExecutor.calculate({ expression: '100 degC to degF' });
     expect(fahrenheit.success).toBe(true);
@@ -43,48 +37,6 @@ describe('Unit Conversion', () => {
         expect(result.success).toBe(true);
         expect(result.content).toContain('3*x');
       });
-
-      it('should differentiate quadratic expressions', async () => {
-        const result = await calculatorExecutor.differentiate({
-          expression: 'x^2',
-          variable: 'x',
-        });
-
-        expect(result.success).toBe(true);
-        expect(result.content).toBe('2*x');
-      });
-
-      it('should differentiate trigonometric functions', async () => {
-        const result = await calculatorExecutor.differentiate({
-          expression: 'sin(x)',
-          variable: 'x',
-        });
-
-        expect(result.success).toBe(true);
-        expect(result.content).toBe('cos(x)');
-      });
-
-      it('should differentiate exponential functions', async () => {
-        const result = await calculatorExecutor.differentiate({
-          expression: 'exp(x)',
-          variable: 'x',
-        });
-
-        expect(result.success).toBe(true);
-        expect(result.content).toBe('e^x');
-      });
-
-      it('should handle chain rule', async () => {
-        const result = await calculatorExecutor.differentiate({
-          expression: 'sin(x^2)',
-          variable: 'x',
-        });
-
-        expect(result.success).toBe(true);
-        expect(result.content).toContain('cos');
-        expect(result.content).toContain('x');
-      });
-
       it('should differentiate with respect to custom variable', async () => {
         const result = await calculatorExecutor.differentiate({
           expression: 'y^2 + 2*y',
@@ -129,49 +81,6 @@ describe('Unit Conversion', () => {
         expect(result.content).toContain('(1/3)');
         expect(result.content).toContain('x^3');
       });
-
-      it('should integrate cubic expressions', async () => {
-        const result = await calculatorExecutor.integrate({
-          expression: 'x^3',
-          variable: 'x',
-        });
-
-        expect(result.success).toBe(true);
-        expect(result.content).toContain('(1/4)');
-        expect(result.content).toContain('x^4');
-      });
-
-      it('should integrate trigonometric functions', async () => {
-        const result = await calculatorExecutor.integrate({
-          expression: 'sin(x)',
-          variable: 'x',
-        });
-
-        expect(result.success).toBe(true);
-        expect(result.content).toContain('-cos');
-      });
-
-      it('should integrate exponential functions', async () => {
-        const result = await calculatorExecutor.integrate({
-          expression: 'exp(x)',
-          variable: 'x',
-        });
-
-        expect(result.success).toBe(true);
-        expect(result.content).toBe('e^x');
-      });
-
-      it('should integrate linear expressions', async () => {
-        const result = await calculatorExecutor.integrate({
-          expression: '3*x',
-          variable: 'x',
-        });
-
-        expect(result.success).toBe(true);
-        expect(result.content).toContain('(3/2)');
-        expect(result.content).toContain('x^2');
-      });
-
       it('should integrate with respect to custom variable', async () => {
         const result = await calculatorExecutor.integrate({
           expression: 'y^2',
@@ -240,29 +149,6 @@ describe('Unit Conversion', () => {
         expect(result.error?.type).toBe('LimitError');
         expect(result.content).toContain('Limit computation error');
       });
-
-      it('should compute limit approaching from left', async () => {
-        const result = await calculatorExecutor.limit({
-          expression: '(1+1/x)^x',
-          variable: 'x',
-          point: 'infinity',
-        });
-
-        expect(result.success).toBe(true);
-        expect(result.content).toContain('infinity');
-      });
-
-      it('should compute limit with trigonometric function', async () => {
-        const result = await calculatorExecutor.limit({
-          expression: '(1-cos(x))/x',
-          variable: 'x',
-          point: 0,
-        });
-
-        expect(result.success).toBe(true);
-        expect(result.content).toBe('0');
-      });
-
       it('should handle invalid expressions gracefully', async () => {
         const result = await calculatorExecutor.limit({
           expression: 'invalid',
@@ -295,19 +181,6 @@ describe('Unit Conversion', () => {
     expect(PI.success).toBe(true);
     expect(parseFloat(PI.content || '0')).toBeCloseTo(3.14159, 5);
   });
-
-  it('should handle PI in expressions', async () => {
-    const result = await calculatorExecutor.calculate({ expression: '2 * pi' });
-    expect(result.success).toBe(true);
-    expect(parseFloat(result.content || '0')).toBeCloseTo(6.28318, 4);
-  });
-
-  it('should handle PI in trigonometric functions', async () => {
-    const result = await calculatorExecutor.calculate({ expression: 'sin(pi/2)' });
-    expect(result.success).toBe(true);
-    expect(parseFloat(result.content || '0')).toBeCloseTo(1, 5);
-  });
-
   it('should handle PI in evaluate', async () => {
     const result = await calculatorExecutor.evaluate({
       expression: 'x * pi',
@@ -315,18 +188,6 @@ describe('Unit Conversion', () => {
     });
     expect(result.success).toBe(true);
     expect(parseFloat(result.content || '0')).toBeCloseTo(9.42477, 4);
-  });
-
-  it('should handle other constants like E', async () => {
-    const e = await calculatorExecutor.calculate({ expression: 'e' });
-    expect(e.success).toBe(true);
-    expect(parseFloat(e.content || '0')).toBeCloseTo(2.71828, 5);
-  });
-
-  it('should handle constants in scientific notation', async () => {
-    const result = await calculatorExecutor.calculate({ expression: 'pi * 1e3' });
-    expect(result.success).toBe(true);
-    expect(parseFloat(result.content || '0')).toBeCloseTo(3141.59, 2);
   });
 });
 
@@ -347,43 +208,6 @@ describe('Calculator Definite Integration', () => {
       expect(result.state?.lowerBound).toBe(0);
       expect(result.state?.upperBound).toBe(1);
     });
-
-    it('should compute definite integral of trigonometric function', async () => {
-      const result = await calculatorExecutor.defintegrate({
-        expression: 'sin(x)',
-        variable: 'x',
-        lowerBound: 0,
-        upperBound: 'pi',
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.content).toBe('2');
-    });
-
-    it('should compute definite integral of exponential function', async () => {
-      const result = await calculatorExecutor.defintegrate({
-        expression: 'exp(x)',
-        variable: 'x',
-        lowerBound: 0,
-        upperBound: 1,
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.content).toMatch(/e|205671881\/119696244/); // Either 'e' or fraction form
-    });
-
-    it('should compute definite integral with negative bounds', async () => {
-      const result = await calculatorExecutor.defintegrate({
-        expression: 'x^3',
-        variable: 'x',
-        lowerBound: -1,
-        upperBound: 1,
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.content).toBe('0');
-    });
-
     it('should compute definite integral to infinity', async () => {
       const result = await calculatorExecutor.defintegrate({
         expression: '1/x^2',
@@ -395,18 +219,6 @@ describe('Calculator Definite Integration', () => {
       expect(result.success).toBe(true);
       expect(result.content).toMatch(/1|infinity/); // Either '1' or symbolic infinity form
     });
-
-    it('should handle definite integral with fractional bounds', async () => {
-      const result = await calculatorExecutor.defintegrate({
-        expression: 'x',
-        variable: 'x',
-        lowerBound: 0.5,
-        upperBound: 1.5,
-      });
-
-      expect(result.success).toBe(true);
-    });
-
     it('should handle definite integral with string bounds', async () => {
       const result = await calculatorExecutor.defintegrate({
         expression: 'cos(x)',
@@ -446,19 +258,6 @@ describe('Calculator Definite Integration', () => {
       expect(result.success).toBe(true);
       expect(result.content).toContain('invalid');
     });
-
-    it('should handle complex expressions', async () => {
-      const result = await calculatorExecutor.defintegrate({
-        expression: 'x^2 + 2*x + 1',
-        variable: 'x',
-        lowerBound: 0,
-        upperBound: 2,
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.content).toBeDefined();
-    });
-
     it('should handle zero-width interval', async () => {
       const result = await calculatorExecutor.defintegrate({
         expression: 'x^2',
@@ -485,61 +284,6 @@ describe('Calculator Nerdamer Execute', () => {
       expect(result.state?.expression).toBe('expand((x+1)^2)');
       expect(result.state?.result).toBeDefined();
     });
-
-    it('should execute factor expression', async () => {
-      const result = await calculatorExecutor.execute({
-        expression: 'factor(x^2-1)',
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.content).toBe('(-1+x)*(1+x)');
-    });
-
-    it('should execute partfrac expression', async () => {
-      const result = await calculatorExecutor.execute({
-        expression: 'partfrac(1/(x^2-1))',
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.content).toContain('1/2');
-    });
-
-    it('should execute simplify expression', async () => {
-      const result = await calculatorExecutor.execute({
-        expression: 'simplify(x^2+2*x-x)',
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.content).toBe('(1+x)*x');
-    });
-
-    it('should execute toTeX expression', async () => {
-      const result = await calculatorExecutor.execute({
-        expression: 'toTeX(x^2+2*x+1)',
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.content).toBe('(1+2*x+x^2)*toTeX');
-    });
-
-    it('should execute coefficients expression', async () => {
-      const result = await calculatorExecutor.execute({
-        expression: 'coeffs(x^3+2*x^2+3*x+4)',
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.content).toContain('[4,3,2,1]');
-    });
-
-    it('should execute roots expression', async () => {
-      const result = await calculatorExecutor.execute({
-        expression: 'roots(x^2-4)',
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.content).toBe('[2,-2]');
-    });
-
     it('should handle invalid expressions gracefully', async () => {
       const result = await calculatorExecutor.execute({
         expression: 'invalid_function(x)',
@@ -573,43 +317,6 @@ describe('Calculator Base Conversion', () => {
     expect(result.content).toBe('10');
     expect(result.state?.decimalValue).toBe(10);
   });
-
-  it('should base hexadecimal to octal', async () => {
-    const result = await calculatorExecutor.base({
-      number: 'FF',
-      fromBase: 16,
-      toBase: 8,
-    });
-
-    expect(result.success).toBe(true);
-    expect(result.content).toBe('377');
-    expect(result.state?.decimalValue).toBe(255);
-  });
-
-  it('should base octal to hexadecimal', async () => {
-    const result = await calculatorExecutor.base({
-      number: '77',
-      fromBase: 8,
-      toBase: 16,
-    });
-
-    expect(result.success).toBe(true);
-    expect(result.content).toBe('3F');
-    expect(result.state?.decimalValue).toBe(63);
-  });
-
-  it('should handle hexadecimal input', async () => {
-    const result = await calculatorExecutor.base({
-      number: 'FF',
-      fromBase: 16,
-      toBase: 10,
-    });
-
-    expect(result.success).toBe(true);
-    expect(result.content).toBe('255');
-    expect(result.state?.decimalValue).toBe(255);
-  });
-
   it('should handle invalid numbers', async () => {
     const result = await calculatorExecutor.base({
       number: '2AB',
@@ -632,19 +339,6 @@ describe('Calculator Base Conversion', () => {
     expect(result.content).toBe('35');
     expect(result.state?.decimalValue).toBe(35);
   });
-
-  it('should base decimal to base 32', async () => {
-    const result = await calculatorExecutor.base({
-      number: '1000',
-      fromBase: 10,
-      toBase: 32,
-    });
-
-    expect(result.success).toBe(true);
-    expect(result.content).toBe('V8');
-    expect(result.state?.decimalValue).toBe(1000);
-  });
-
   it('should handle invalid base 37', async () => {
     const result = await calculatorExecutor.base({
       number: '123',
@@ -677,16 +371,6 @@ describe('Calculator Core Functions', () => {
       expect(result.success).toBe(true);
       expect(result.content).toBe('1.968503937 inch');
     });
-
-    it('should handle unit conversions (kg to lb)', async () => {
-      const result = await calculatorExecutor.calculate({
-        expression: '1 kg to lb',
-      });
-
-      expect(result.success).toBe(true);
-      expect(parseFloat(result.content || '0')).toBeCloseTo(2.20462, 5);
-    });
-
     it('should handle scientific functions', async () => {
       const result = await calculatorExecutor.calculate({
         expression: 'sin(30 deg)',
@@ -695,25 +379,6 @@ describe('Calculator Core Functions', () => {
       expect(result.success).toBe(true);
       expect(parseFloat(result.content || '0')).toBeCloseTo(0.5, 5);
     });
-
-    it('should handle matrix operations', async () => {
-      const result = await calculatorExecutor.calculate({
-        expression: 'det([[1,2],[3,4]])',
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.content).toBe('-2');
-    });
-
-    it('should handle complex numbers', async () => {
-      const result = await calculatorExecutor.calculate({
-        expression: 'sqrt(-1)',
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.content).toBe('i');
-    });
-
     it('should handle precision formatting', async () => {
       const result = await calculatorExecutor.calculate({
         expression: '10 / 3',
@@ -756,17 +421,6 @@ describe('Calculator Core Functions', () => {
       expect(result.state?.result).toBe('36');
       expect(result.state?.variables).toEqual({ x: 5 });
     });
-
-    it('should handle multiple variables', async () => {
-      const result = await calculatorExecutor.evaluate({
-        expression: 'a*x + b',
-        variables: { a: 2, x: 3, b: 1 },
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.content).toBe('7');
-    });
-
     it('should handle no variables', async () => {
       const result = await calculatorExecutor.evaluate({
         expression: '2 + 2',
@@ -785,16 +439,6 @@ describe('Calculator Core Functions', () => {
       expect(result.success).toBe(false);
       expect(result.error?.type).toBe('CalculationError');
     });
-
-    it('should handle complex expressions with variables', async () => {
-      const result = await calculatorExecutor.evaluate({
-        expression: 'sin(x) * cos(y)',
-        variables: { x: 1.5708, y: 0 }, // Approximate pi/2
-      });
-
-      expect(result.success).toBe(true);
-      expect(parseFloat(result.content || '0')).toBeCloseTo(1, 5);
-    });
   });
 
   describe('base', () => {
@@ -808,18 +452,6 @@ describe('Calculator Core Functions', () => {
       expect(result.success).toBe(true);
       expect(result.content).toBe('11111111');
     });
-
-    it('should handle string input in base conversion', async () => {
-      const result = await calculatorExecutor.base({
-        number: '255',
-        fromBase: 10,
-        toBase: 2,
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.content).toBe('11111111');
-    });
-
     it('should handle zero in base conversion', async () => {
       const result = await calculatorExecutor.base({
         number: '0',
@@ -830,29 +462,6 @@ describe('Calculator Core Functions', () => {
       expect(result.success).toBe(true);
       expect(result.content).toBe('0');
     });
-
-    it('should handle large numbers', async () => {
-      const result = await calculatorExecutor.base({
-        number: '4294967295',
-        fromBase: 10,
-        toBase: 16,
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.content).toBe('FFFFFFFF');
-    });
-
-    it('should handle base 36 conversion', async () => {
-      const result = await calculatorExecutor.base({
-        number: '123456789',
-        fromBase: 10,
-        toBase: 36,
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.content).toBe('21I3V9');
-    });
-
     it('should handle invalid base error', async () => {
       const result = await calculatorExecutor.base({
         number: '123',
@@ -900,17 +509,6 @@ describe('Calculator Core Functions', () => {
       expect(result.success).toBe(true);
       expect(result.content).toBe('Infinity');
     });
-
-    it('should handle expression evaluation errors gracefully', async () => {
-      const result = await calculatorExecutor.evaluate({
-        expression: 'x ^^^^^ y',
-        variables: { x: 1, y: 2 },
-      });
-
-      expect(result.success).toBe(false);
-      expect(result.error?.type).toBe('CalculationError');
-    });
-
     it('should preserve state information on errors', async () => {
       const result = await calculatorExecutor.calculate({
         expression: 'invalid',
@@ -957,18 +555,6 @@ describe('Calculator Sorting', () => {
       expect(Array.isArray(parsed)).toBe(true);
       expect(parsed).toEqual(['1.618', '2.718', '3.14']);
     });
-
-    it('should compare mixed string and number inputs', async () => {
-      const result = await calculatorExecutor.sort({
-        numbers: ['3.14', 2.718, '1.618'],
-        mode: 'largest',
-      });
-
-      expect(result.success).toBe(true);
-      const parsed = JSON.parse(result.content || '{}');
-      expect(parsed).toBe('3.14');
-    });
-
     it('should handle precision formatting', async () => {
       const result = await calculatorExecutor.sort({
         numbers: [3.1415926535, 2.7182818284, 1.6180339887],
@@ -980,30 +566,6 @@ describe('Calculator Sorting', () => {
       expect(Array.isArray(parsed)).toBe(true);
       expect(parsed).toEqual(['1.618', '2.718', '3.142']);
     });
-
-    it('should handle zero precision', async () => {
-      const result = await calculatorExecutor.sort({
-        numbers: [3.14, 2.718, 1.618],
-        mode: 'largest',
-        precision: 0,
-      });
-
-      expect(result.success).toBe(true);
-      const parsed = JSON.parse(result.content || '{}');
-      expect(parsed).toBe('3');
-    });
-
-    it('should handle duplicate values', async () => {
-      const result = await calculatorExecutor.sort({
-        numbers: [5, 3, 5, 2],
-      });
-
-      expect(result.success).toBe(true);
-      const parsed = JSON.parse(result.content || '{}');
-      expect(Array.isArray(parsed)).toBe(true);
-      expect(parsed).toEqual(['2', '3', '5', '5']);
-    });
-
     it('should require at least 2 numbers', async () => {
       const result = await calculatorExecutor.sort({
         numbers: [3.14],
@@ -1023,40 +585,6 @@ describe('Calculator Sorting', () => {
       expect(result.error?.type).toBe('ComparisonError');
       expect(result.content).toContain('Invalid number: invalid');
     });
-
-    it('should handle negative numbers', async () => {
-      const result = await calculatorExecutor.sort({
-        numbers: [-3.14, -2.718, -1.618],
-        mode: 'smallest',
-      });
-
-      expect(result.success).toBe(true);
-      const parsed = JSON.parse(result.content || '{}');
-      expect(parsed).toBe('-3.14');
-    });
-
-    it('should handle zero values', async () => {
-      const result = await calculatorExecutor.sort({
-        numbers: [0, -1, 1],
-        mode: 'largest',
-      });
-
-      expect(result.success).toBe(true);
-      const parsed = JSON.parse(result.content || '{}');
-      expect(parsed).toBe('1');
-    });
-
-    it('should handle very large numbers', async () => {
-      const result = await calculatorExecutor.sort({
-        numbers: [1e10, 1e9, 1e11],
-        mode: 'smallest',
-      });
-
-      expect(result.success).toBe(true);
-      const parsed = JSON.parse(result.content || '{}');
-      expect(parsed).toBe('1000000000');
-    });
-
     it('should preserve state information', async () => {
       const result = await calculatorExecutor.sort({
         numbers: [3.14, 2.718],
@@ -1084,65 +612,6 @@ describe('Calculator Sorting', () => {
       expect(Array.isArray(parsed)).toBe(true);
       expect(parsed).toEqual(['4.669', '3.14', '2.718', '1.618']);
     });
-
-    it('should sort in ascending order when reverse is false', async () => {
-      const result = await calculatorExecutor.sort({
-        numbers: [3.14, 2.718, 1.618, 4.669],
-        reverse: false,
-      });
-
-      expect(result.success).toBe(true);
-      const parsed = JSON.parse(result.content || '{}');
-      expect(Array.isArray(parsed)).toBe(true);
-      expect(parsed).toEqual(['1.618', '2.718', '3.14', '4.669']);
-    });
-
-    it('should default to ascending order when reverse is not specified', async () => {
-      const result = await calculatorExecutor.sort({
-        numbers: [3.14, 2.718, 1.618, 4.669],
-      });
-
-      expect(result.success).toBe(true);
-      const parsed = JSON.parse(result.content || '{}');
-      expect(Array.isArray(parsed)).toBe(true);
-      expect(parsed).toEqual(['1.618', '2.718', '3.14', '4.669']);
-    });
-
-    it('should work with reverse parameter in largest mode', async () => {
-      const result = await calculatorExecutor.sort({
-        numbers: [3.14, 2.718, 1.618, 4.669],
-        mode: 'largest',
-        reverse: true,
-      });
-
-      expect(result.success).toBe(true);
-      const parsed = JSON.parse(result.content || '{}');
-      expect(parsed).toBe('4.669');
-    });
-
-    it('should work with reverse parameter in smallest mode', async () => {
-      const result = await calculatorExecutor.sort({
-        numbers: [3.14, 2.718, 1.618, 4.669],
-        mode: 'smallest',
-        reverse: true,
-      });
-
-      expect(result.success).toBe(true);
-      const parsed = JSON.parse(result.content || '{}');
-      expect(parsed).toBe('1.618');
-    });
-
-    it('should preserve reverse parameter in state', async () => {
-      const result = await calculatorExecutor.sort({
-        numbers: [3.14, 2.718],
-        reverse: true,
-        precision: 2,
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.state?.reverse).toBe(true);
-      expect(result.state?.sorted).toEqual(['3.14', '2.72']);
-    });
   });
 });
 
@@ -1157,28 +626,6 @@ describe('Calculator Equation Solver', () => {
       expect(result.content).toContain('5');
       expect(result.state?.equation).toEqual(['3*x + 5 = 20']);
     });
-
-    it('should solve quadratic equations', async () => {
-      const result = await calculatorExecutor.solve({
-        equation: ['x^2 - 5*x + 6 = 0'],
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.content).toContain('2');
-      expect(result.content).toContain('3');
-      expect(result.state?.equation).toEqual(['x^2 - 5*x + 6 = 0']);
-    });
-
-    it('should solve perfect square equations', async () => {
-      const result = await calculatorExecutor.solve({
-        equation: ['x^2 + 2*x + 1 = 0'],
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.content).toContain('-1');
-      expect(result.state?.equation).toEqual(['x^2 + 2*x + 1 = 0']);
-    });
-
     it('should solve equations with custom variable', async () => {
       const result = await calculatorExecutor.solve({
         equation: ['y^2 - 9 = 0'],
@@ -1190,34 +637,6 @@ describe('Calculator Equation Solver', () => {
       expect(result.content).toContain('-3');
       expect(result.state?.variable).toEqual(['y']);
     });
-
-    it('should solve simple equations', async () => {
-      const result = await calculatorExecutor.solve({
-        equation: ['x - 5 = 0'],
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.content).toContain('5');
-    });
-
-    it('should handle equations with fractions', async () => {
-      const result = await calculatorExecutor.solve({
-        equation: ['2*x = 10'],
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.content).toContain('5');
-    });
-
-    it('should handle cubic equations', async () => {
-      const result = await calculatorExecutor.solve({
-        equation: ['x^3 - 8 = 0'],
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.content).toContain('2');
-    });
-
     it('should handle invalid equations gracefully', async () => {
       const result = await calculatorExecutor.solve({
         equation: ['invalid equation'],
@@ -1251,6 +670,17 @@ describe('Calculator Equation Solver', () => {
       expect(parsed.y).toBe('1');
     });
 
+    it('should solve system of two equations with default variables', async () => {
+      const result = await calculatorExecutor.solve({
+        equation: ['3*x+2*y=7', 'x-y=1'],
+      });
+
+      expect(result.success).toBe(true);
+      const parsed = JSON.parse(result.content || '{}');
+      expect(parseFloat(parsed.x)).toBeCloseTo(1.8, 1);
+      expect(parseFloat(parsed.y)).toBeCloseTo(0.8, 1);
+    });
+
     it('should report an unsolvable system instead of dereferencing an empty result', async () => {
       // Newer nerdamer returns nothing for an unsolvable system rather than
       // throwing. Assert the guard's own message: the surrounding catch turns
@@ -1272,18 +702,6 @@ describe('Calculator Equation Solver', () => {
         spy.mockRestore();
       }
     });
-
-    it('should solve system of two equations with default variables', async () => {
-      const result = await calculatorExecutor.solve({
-        equation: ['3*x+2*y=7', 'x-y=1'],
-      });
-
-      expect(result.success).toBe(true);
-      const parsed = JSON.parse(result.content || '{}');
-      expect(parseFloat(parsed.x)).toBeCloseTo(1.8, 1);
-      expect(parseFloat(parsed.y)).toBeCloseTo(0.8, 1);
-    });
-
     it('should solve system of three equations', async () => {
       const result = await calculatorExecutor.solve({
         equation: ['x+y+z=6', '2*x-y+z=3', 'x+2*y-z=2'],

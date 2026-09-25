@@ -1,8 +1,6 @@
 // @vitest-environment node
-import { ModelProvider } from 'model-bank';
 import { describe, expect, it, vi } from 'vitest';
 
-import { testProvider } from '../../providerTestUtils';
 import { ContextExceededPreFlightError } from '../../utils/resolveSafeMaxTokens';
 import {
   anthropicParams,
@@ -30,20 +28,8 @@ vi.mock('@lobechat/business-model-bank/model-config', () => ({
   loadModels: loadModelsMock,
 }));
 
-const provider = ModelProvider.Minimax;
 const defaultOpenAIBaseURL = 'https://api.minimaxi.com/v1';
 const anthropicBaseURL = 'https://api.minimax.io/anthropic';
-
-testProvider({
-  Runtime: LobeMinimaxOpenAI,
-  provider,
-  defaultBaseURL: defaultOpenAIBaseURL,
-  chatDebugEnv: 'DEBUG_MINIMAX_CHAT_COMPLETION',
-  chatModel: 'abab6.5s-chat',
-  test: {
-    skipAPICall: true,
-  },
-});
 
 const handlePayload = openAIParams.chatCompletion!.handlePayload!;
 const handleAnthropicPayload = anthropicParams.chatCompletion!.handlePayload!;

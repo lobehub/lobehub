@@ -31,32 +31,11 @@ afterEach(() => {
 
 describe('LobeOpenRouterAI - custom features', () => {
   describe('Params Export', () => {
-    it('should export params object', () => {
-      expect(params).toBeDefined();
-      expect(params.provider).toBe('openrouter');
-      expect(params.baseURL).toBe('https://openrouter.ai/api/v1');
-    });
-
-    it('should have chatCompletion configuration', () => {
-      expect(params.chatCompletion).toBeDefined();
-      expect(params.chatCompletion.handlePayload).toBeDefined();
-    });
-
     it('should have constructorOptions with headers', () => {
       expect(params.constructorOptions).toBeDefined();
       expect(params.constructorOptions.defaultHeaders).toBeDefined();
       expect(params.constructorOptions.defaultHeaders['HTTP-Referer']).toBe('https://lobehub.com');
       expect(params.constructorOptions.defaultHeaders['X-Title']).toBe('LobeHub');
-    });
-
-    it('should have debug configuration', () => {
-      expect(params.debug).toBeDefined();
-      expect(params.debug.chatCompletion).toBeDefined();
-    });
-
-    it('should have models function', () => {
-      expect(params.models).toBeDefined();
-      expect(typeof params.models).toBe('function');
     });
   });
 

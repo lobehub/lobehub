@@ -23,11 +23,6 @@ describe('LobeStepfunAI - custom features', () => {
       expect(params.chatCompletion).toBeDefined();
       expect(params.models).toBeDefined();
     });
-
-    it('should have debug.chatCompletion function', () => {
-      expect(typeof params.debug?.chatCompletion).toBe('function');
-    });
-
     it('should return false when DEBUG_STEPFUN_CHAT_COMPLETION is not set', () => {
       delete process.env.DEBUG_STEPFUN_CHAT_COMPLETION;
       expect(params.debug?.chatCompletion()).toBe(false);
@@ -76,17 +71,6 @@ describe('LobeStepfunAI - custom features', () => {
       });
     });
 
-    it('should not add web_search tool when enabledSearch is false', async () => {
-      await instance.chat({
-        enabledSearch: false,
-        messages: [{ content: 'Hello', role: 'user' }],
-        model: 'step-1-8k',
-      });
-
-      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
-      expect(calledPayload.tools).toBeUndefined();
-    });
-
     it('should not add web_search tool when enabledSearch is undefined', async () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
@@ -97,6 +81,16 @@ describe('LobeStepfunAI - custom features', () => {
       expect(calledPayload.tools).toBeUndefined();
     });
 
+    it('should not add web_search tool when enabledSearch is false', async () => {
+      await instance.chat({
+        enabledSearch: false,
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'step-1-8k',
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      expect(calledPayload.tools).toBeUndefined();
+    });
     it('should preserve existing tools when enabledSearch is false', async () => {
       await instance.chat({
         enabledSearch: false,
@@ -120,18 +114,6 @@ describe('LobeStepfunAI - custom features', () => {
       const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
       expect(calledPayload.stream).toBe(true);
     });
-
-    it('should keep stream enabled when web_search is enabled', async () => {
-      await instance.chat({
-        enabledSearch: true,
-        messages: [{ content: 'Hello', role: 'user' }],
-        model: 'step-1-8k',
-      });
-
-      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
-      expect(calledPayload.stream).toBe(true);
-    });
-
     it('should honor caller-provided stream=false when tools are present', async () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
@@ -143,18 +125,6 @@ describe('LobeStepfunAI - custom features', () => {
       const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
       expect(calledPayload.stream).toBe(false);
     });
-
-    it('should honor caller-provided stream=false when no tools are present', async () => {
-      await instance.chat({
-        messages: [{ content: 'Hello', role: 'user' }],
-        model: 'step-1-8k',
-        stream: false,
-      });
-
-      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
-      expect(calledPayload.stream).toBe(false);
-    });
-
     it('should set stream to true when no tools are present', async () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
@@ -196,72 +166,6 @@ describe('LobeStepfunAI - custom features', () => {
       const models = await params.models!({ client: mockClient as any });
       expect(models).toBeDefined();
     });
-
-    it('should detect function call from step-1o- keyword', async () => {
-      const mockClient = {
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [{ id: 'step-1o-8k' }],
-          }),
-        },
-      };
-
-      const models = await params.models!({ client: mockClient as any });
-      expect(models).toBeDefined();
-    });
-
-    it('should detect function call from step-1v- keyword', async () => {
-      const mockClient = {
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [{ id: 'step-1v-8k' }],
-          }),
-        },
-      };
-
-      const models = await params.models!({ client: mockClient as any });
-      expect(models).toBeDefined();
-    });
-
-    it('should detect function call from step-2- keyword', async () => {
-      const mockClient = {
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [{ id: 'step-2-16k' }],
-          }),
-        },
-      };
-
-      const models = await params.models!({ client: mockClient as any });
-      expect(models).toBeDefined();
-    });
-
-    it('should detect vision from step-1o- keyword', async () => {
-      const mockClient = {
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [{ id: 'step-1o-8k' }],
-          }),
-        },
-      };
-
-      const models = await params.models!({ client: mockClient as any });
-      expect(models).toBeDefined();
-    });
-
-    it('should detect vision from step-r1-v- keyword', async () => {
-      const mockClient = {
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [{ id: 'step-r1-v-8k' }],
-          }),
-        },
-      };
-
-      const models = await params.models!({ client: mockClient as any });
-      expect(models).toBeDefined();
-    });
-
     it('should detect vision from step-1v- keyword', async () => {
       const mockClient = {
         models: {

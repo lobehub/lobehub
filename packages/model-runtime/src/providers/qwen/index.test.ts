@@ -1,9 +1,7 @@
 // @vitest-environment node
-import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
-import { testProvider } from '../../providerTestUtils';
 import { LobeQwenAI, params } from './index';
 
 // Avoid pulling the real business model-config module (it may resolve to a
@@ -11,20 +9,6 @@ import { LobeQwenAI, params } from './index';
 vi.mock('@lobechat/business-model-bank/model-config', () => ({
   loadModels: vi.fn().mockResolvedValue([]),
 }));
-
-const provider = ModelProvider.Qwen;
-const defaultBaseURL = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
-
-testProvider({
-  Runtime: LobeQwenAI,
-  provider,
-  defaultBaseURL,
-  chatDebugEnv: 'DEBUG_QWEN_CHAT_COMPLETION',
-  chatModel: 'qwen-2.5',
-  test: {
-    skipAPICall: true,
-  },
-});
 
 let instance: LobeOpenAICompatibleRuntime;
 

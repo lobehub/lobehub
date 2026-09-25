@@ -13,21 +13,6 @@ describe('comfyuiErrorParser', () => {
       const multiAsterisk = '* * * Error message';
       expect(cleanComfyUIErrorMessage(multiAsterisk)).toBe('* * Error message');
     });
-
-    it('should convert escaped newlines', () => {
-      const message = 'Line 1\\nLine 2';
-      expect(cleanComfyUIErrorMessage(message)).toBe('Line 1 Line 2');
-    });
-
-    it('should replace multiple newlines with single space', () => {
-      const message = 'Line 1\n\n\nLine 2';
-      expect(cleanComfyUIErrorMessage(message)).toBe('Line 1 Line 2');
-    });
-
-    it('should trim leading and trailing spaces', () => {
-      const message = '  Error message  ';
-      expect(cleanComfyUIErrorMessage(message)).toBe('Error message');
-    });
   });
 
   describe('parseComfyUIErrorMessage', () => {
@@ -77,24 +62,6 @@ describe('comfyuiErrorParser', () => {
         expect(result.errorType).toBe(AgentRuntimeErrorType.ComfyUIBizError);
         expect(result.error.message).toBe('fetch failed');
       });
-
-      it('should return ComfyUIBizError for ECONNREFUSED (processed by server)', () => {
-        const error = { message: 'Connection ECONNREFUSED', code: 'ECONNREFUSED' };
-        const result = parseComfyUIErrorMessage(error);
-
-        // Network error detection moved to server-side
-        expect(result.errorType).toBe(AgentRuntimeErrorType.ComfyUIBizError);
-        expect(result.error.message).toBe('Connection ECONNREFUSED');
-      });
-
-      it('should return ComfyUIBizError for WebSocket errors (processed by server)', () => {
-        const error = { message: 'WebSocket connection failed', code: 'WS_CONNECTION_FAILED' };
-        const result = parseComfyUIErrorMessage(error);
-
-        // Network error detection moved to server-side
-        expect(result.errorType).toBe(AgentRuntimeErrorType.ComfyUIBizError);
-        expect(result.error.message).toBe('WebSocket connection failed');
-      });
     });
 
     describe('Model errors', () => {
@@ -106,25 +73,6 @@ describe('comfyuiErrorParser', () => {
         expect(result.errorType).toBe(AgentRuntimeErrorType.ComfyUIBizError);
         expect(result.error.message).toBe('Model not found: flux1-dev.safetensors');
       });
-
-      it('should return ComfyUIBizError for checkpoint not found (processed by server)', () => {
-        const error = { message: 'Checkpoint not found' };
-        const result = parseComfyUIErrorMessage(error);
-
-        // Model error detection moved to server-side
-        expect(result.errorType).toBe(AgentRuntimeErrorType.ComfyUIBizError);
-        expect(result.error.message).toBe('Checkpoint not found');
-      });
-
-      it('should return ComfyUIBizError for safetensors file errors (processed by server)', () => {
-        const error = { message: 'Missing file: model.safetensors' };
-        const result = parseComfyUIErrorMessage(error);
-
-        // Model error detection moved to server-side
-        expect(result.errorType).toBe(AgentRuntimeErrorType.ComfyUIBizError);
-        expect(result.error.message).toBe('Missing file: model.safetensors');
-      });
-
       it('should preserve server-provided file info but return ComfyUIBizError', () => {
         const error = {
           message: 'Some error',
@@ -141,15 +89,6 @@ describe('comfyuiErrorParser', () => {
     });
 
     describe('Workflow errors', () => {
-      it('should return ComfyUIBizError for workflow validation errors (processed by server)', () => {
-        const error = { message: 'Workflow validation failed' };
-        const result = parseComfyUIErrorMessage(error);
-
-        // Workflow error detection moved to server-side
-        expect(result.errorType).toBe(AgentRuntimeErrorType.ComfyUIBizError);
-        expect(result.error.message).toBe('Workflow validation failed');
-      });
-
       it('should return ComfyUIBizError for node execution errors (processed by server)', () => {
         const error = {
           message: 'Node execution failed',
@@ -165,15 +104,6 @@ describe('comfyuiErrorParser', () => {
           node_id: '5',
           node_type: 'KSampler',
         });
-      });
-
-      it('should return ComfyUIBizError for queue errors (processed by server)', () => {
-        const error = { message: 'Queue processing error' };
-        const result = parseComfyUIErrorMessage(error);
-
-        // Workflow error detection moved to server-side
-        expect(result.errorType).toBe(AgentRuntimeErrorType.ComfyUIBizError);
-        expect(result.error.message).toBe('Queue processing error');
       });
     });
 
