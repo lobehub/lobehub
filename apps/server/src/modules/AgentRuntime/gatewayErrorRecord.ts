@@ -25,7 +25,12 @@ const HARNESS_SIGNAL_ERROR_TYPES = new Set<string>([
  * - `user`-attributed codes (quota, bad key, content policy, …) stay off it.
  * - `provider`-attributed codes (rate limits, upstream outages) stay off it for a
  *   user's own provider, but go on it for ours: there they mean our upstream
- *   accounts are limited or down.
+ *   accounts are limited or down. When the provider is unknown they go on it too,
+ *   so a lost provider can never hide an outage of ours.
+ *
+ * `provider` is the operation's configured provider — the one the board shows.
+ * The normalized error's `body.provider` is not a substitute: for our provider it
+ * names the upstream the router reached (`azure`, `google`, …), never ours.
  */
 export const shouldRecordGatewayError = ({
   errorType,
@@ -44,7 +49,7 @@ export const shouldRecordGatewayError = ({
       return false;
     }
     case 'provider': {
-      return provider === BRANDING_PROVIDER;
+      return !provider || provider === BRANDING_PROVIDER;
     }
     default: {
       return true;

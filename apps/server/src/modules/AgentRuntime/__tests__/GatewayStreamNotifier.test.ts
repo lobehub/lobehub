@@ -616,6 +616,20 @@ describe('GatewayStreamNotifier', () => {
         expect(data.recordError).toBe(true);
       });
 
+      it('classifies by the configured provider, not the upstream named in the error body', async () => {
+        // On our provider the normalized error names the upstream the router
+        // reached, never `lobehub` — trusting it would hide our own rate limit.
+        const data = await endEventData({
+          finalState: {
+            error: { body: { provider: 'azure' }, message: '429', type: 'RateLimitExceeded' },
+            modelRuntimeConfig: { model: 'gpt-5.6-sol', provider: 'lobehub' },
+          },
+          reason: 'error',
+        });
+
+        expect(data.recordError).toBe(true);
+      });
+
       it('omits the flag on a non-error end', async () => {
         const data = await endEventData({ finalState: {}, reason: 'completed' });
 

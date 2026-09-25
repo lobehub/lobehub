@@ -23,6 +23,7 @@ describe('shouldRecordGatewayError', () => {
     ['BYOK outage', AgentRuntimeErrorType.ProviderServiceUnavailable, 'newapi', false],
     ['our rate limit', AgentRuntimeErrorType.RateLimitExceeded, BRANDING_PROVIDER, true],
     ['our outage', AgentRuntimeErrorType.ProviderServiceUnavailable, BRANDING_PROVIDER, true],
+    ['rate limit with unknown provider', AgentRuntimeErrorType.RateLimitExceeded, undefined, true],
     ['aliased quota limit on BYOK', AgentRuntimeErrorType.QuotaLimitReached, 'openai', false],
     ['system network error', AgentRuntimeErrorType.ProviderNetworkError, 'openai', true],
     ['context window', AgentRuntimeErrorType.ExceededContextWindow, 'openai', true],
