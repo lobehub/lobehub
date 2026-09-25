@@ -194,7 +194,7 @@ export class BotCallbackService {
       // call vs. LLM reasoning). Runs regardless of `displayToolCalls` because
       // the progress-message edit and the reaction are separate UX channels —
       // but only under the `full` reaction mode: every swap is a platform
-      // notification for users with message alerts on (LOBE-14110).
+      // notification for users with message alerts on.
       if (shouldApplyReaction(reactionMode, 'step')) {
         await this.swapStepReaction(body, client, platform);
       }

@@ -2250,7 +2250,7 @@ export const executeHeterogeneousAgent = async (
       // keeps the transport alive, so the terminal flush may be minutes away).
       // That send replaces the store with the server's rows; forwarding only
       // after the reducer's persist has been flushed guarantees those rows
-      // already carry the final answer (LOBE-14345).
+      // already carry the final answer.
       //
       // Skipped when the terminal event already arrived in the same batch: its
       // flush runs right behind this one, and only it can decide whether the

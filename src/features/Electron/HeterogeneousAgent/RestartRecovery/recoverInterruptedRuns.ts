@@ -93,7 +93,7 @@ const toTime = (value: UIChatMessage['createdAt']): number => {
  * (queued messages are sent as a new turn once it ends), so every user row
  * below the root is a later turn. This happens with the Claude Code SDK, whose
  * turn can stay open waiting on background tasks while the user sends the next
- * one, leaving the earlier run on the ledger (LOBE-14379).
+ * one, leaving the earlier run on the ledger.
  */
 const collectBranch = (messages: UIChatMessage[], rootId: string): string[] => {
   const childrenByParent = new Map<string, UIChatMessage[]>();
@@ -196,7 +196,7 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
     // the next turn (Claude Code SDK waiting on a background task) can write a
     // late row into its own branch AFTER that turn finished. A user turn
     // chained onto our branch means the conversation continued past this run —
-    // replaying would delete rows that turn is parented to (LOBE-14379).
+    // replaying would delete rows that turn is parented to.
     const hasFollowUpTurn = mainChain.some(
       (message) => message.role === 'user' && !!message.parentId && ownBranch.has(message.parentId),
     );

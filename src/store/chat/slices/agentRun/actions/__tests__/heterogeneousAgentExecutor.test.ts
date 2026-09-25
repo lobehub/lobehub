@@ -1334,7 +1334,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
      * CC SDK mode keeps the transport open after `result`, so the terminal
      * flush can land minutes later — but `visible_output_end` already lets the
      * user send a follow-up, whose server response replaces the store. The
-     * final text must hit the DB before the UI is unlocked (LOBE-14345).
+     * final text must hit the DB before the UI is unlocked.
      */
     it('persists the final text before unlocking follow-ups on visible_output_end', async () => {
       const store = createMockStore();

@@ -504,7 +504,7 @@ const reduceTurnMetadata = (state: MainAgentRunState, data: any): ReduceResult =
  * the terminal flush can land minutes later). The UI already lets the user
  * send a follow-up at this point, and that send replaces the store with the
  * server's rows — so the final step's text must be durable NOW, or the prior
- * answer renders empty until a refresh (LOBE-14345).
+ * answer renders empty until a refresh.
  *
  * Accumulators are kept, not reset: the later terminal flush rewrites the same
  * content idempotently, and a background-task turn opens a new step through

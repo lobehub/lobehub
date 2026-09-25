@@ -1059,7 +1059,7 @@ describe('BotCallbackService', () => {
     });
   });
 
-  // ==================== Reaction mode (LOBE-14110) ====================
+  // ==================== Reaction mode ====================
 
   describe('reactionMode', () => {
     const stepBody = () =>

@@ -236,7 +236,7 @@ describe('AgentBridgeService', () => {
     expect(mockExecAgent.mock.calls[0][0].toolModeOverride).toBeUndefined();
   });
 
-  describe('reactionMode (LOBE-14110)', () => {
+  describe('reactionMode', () => {
     function createReactionClient() {
       const replaceReaction = vi.fn().mockResolvedValue(undefined);
       const client = createClient();
