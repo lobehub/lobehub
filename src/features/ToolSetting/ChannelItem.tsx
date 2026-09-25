@@ -1,5 +1,5 @@
-import { Flexbox, SortableList, Text } from '@lobehub/ui';
-import { Switch } from '@lobehub/ui/base-ui';
+import { Flexbox, SortableList } from '@lobehub/ui';
+import { Switch, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

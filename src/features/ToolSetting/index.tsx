@@ -6,9 +6,9 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
+import SettingHeader from '@/features/Settings/features/SettingHeader';
 import { useSaveState } from '@/hooks/useSaveState';
 import { useClientDataSWR } from '@/libs/swr';
-import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 import { searchService } from '@/services/search';
 import { useUserStore } from '@/store/user';
 
