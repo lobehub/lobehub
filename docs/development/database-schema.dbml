@@ -1592,6 +1592,8 @@ table expertise_lessons {
   rejected_reason text
   salvaged_from_id uuid
   retired_at "timestamp with time zone"
+  sort_order integer
+  enforcement text
   compilability text [not null, default: 'compilable']
   backtest jsonb
   compiled_criterion_id uuid

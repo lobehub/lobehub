@@ -1197,6 +1197,13 @@
       "when": 1790215059199,
       "tag": "0170_acceptance_comment_source",
       "breakpoints": true
+    },
+    {
+      "idx": 171,
+      "version": "7",
+      "when": 1790354510012,
+      "tag": "0171_expertise_lessons_order_enforcement",
+      "breakpoints": true
     }
   ],
   "version": "6"
