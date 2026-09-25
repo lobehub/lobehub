@@ -601,7 +601,7 @@ describe('serverMessagesEngine', () => {
         .join('\n');
 
     it('trims stale tool results by default', async () => {
-      const result = await serverMessagesEngine({
+      const { messages: result } = await serverMessagesEngine({
         messages: supersededReadMessages(),
         model: 'gpt-4',
         provider: 'openai',
@@ -613,7 +613,7 @@ describe('serverMessagesEngine', () => {
     });
 
     it('forwards enableStaleToolResultTrim: false to the engine', async () => {
-      const result = await serverMessagesEngine({
+      const { messages: result } = await serverMessagesEngine({
         enableStaleToolResultTrim: false,
         messages: supersededReadMessages(),
         model: 'gpt-4',
