@@ -16,6 +16,59 @@ const log = debug('lobe-image:fal');
 
 type FluxDevOutput = Awaited<ReturnType<typeof fal.subscribe<'fal-ai/flux/dev'>>>['data'];
 
+/**
+ * fal hosts models under several namespaces (e.g. `alibaba/qwen-image-3`); only bare
+ * model ids without a known namespace get the default `fal-ai/` prefix.
+ */
+const FAL_NAMESPACES = ['fal-ai/', 'alibaba/'];
+
+/**
+ * Model families exposed as one card but served by separate fal endpoints: requests
+ * with reference images go to `/edit`, others to `/text-to-image`.
+ */
+const EDIT_OR_TEXT_TO_IMAGE_ENDPOINT_PREFIXES = [
+  'fal-ai/bytedance/seedream/v',
+  'fal-ai/hunyuan-image/v',
+  'alibaba/qwen-image-3',
+];
+
+/**
+ * Long edge of a square image for each `resolution` preset. fal bills some models
+ * (e.g. Qwen Image 3) by output resolution tier, so the requested pixel count must
+ * stay within the tier the user picked.
+ */
+const RESOLUTION_BASE_EDGE: Record<string, number> = { '1K': 1024, '2K': 2048 };
+
+/**
+ * fal clamps each side to this length (a 2720x1536 request came back as 2048x1536),
+ * so wide 2K sizes must be scaled down to keep the requested aspect ratio.
+ */
+const MAX_IMAGE_SIDE = 2048;
+
+/**
+ * Convert `aspectRatio` + `resolution` presets into a fal `image_size` whose pixel
+ * count does not exceed the square of the preset edge and whose sides stay within
+ * `MAX_IMAGE_SIDE`, with both sides multiples of 16.
+ */
+export const resolveFalImageSize = (
+  aspectRatio: string | undefined,
+  resolution: string,
+): { height: number; width: number } | undefined => {
+  const baseEdge = RESOLUTION_BASE_EDGE[resolution];
+  if (!baseEdge) return;
+
+  const [ratioWidth, ratioHeight] = (aspectRatio ?? '1:1').split(':').map(Number);
+  if (!ratioWidth || !ratioHeight) return;
+
+  const scale = Math.min(
+    Math.sqrt((baseEdge * baseEdge) / (ratioWidth * ratioHeight)),
+    MAX_IMAGE_SIDE / Math.max(ratioWidth, ratioHeight),
+  );
+  const roundDown = (value: number) => Math.floor(value / 16) * 16;
+
+  return { height: roundDown(ratioHeight * scale), width: roundDown(ratioWidth * scale) };
+};
+
 export class LobeFalAI implements LobeRuntimeAI {
   private readonly modelIdMappingOptions: ModelIdMappingOptions;
 
@@ -60,6 +113,16 @@ export class LobeFalAI implements LobeRuntimeAI {
         .map(([key, value]) => [paramsMap.get(key) ?? key, value]),
     );
 
+    if (typeof userInput.resolution === 'string' && RESOLUTION_BASE_EDGE[userInput.resolution]) {
+      const imageSize = resolveFalImageSize(
+        userInput.aspectRatio as string | undefined,
+        userInput.resolution,
+      );
+      if (imageSize) userInput.image_size = imageSize;
+      delete userInput.aspectRatio;
+      delete userInput.resolution;
+    }
+
     if ('width' in userInput && 'height' in userInput) {
       if (userInput.size) {
         throw new Error('width/height and size are not supported at the same time');
@@ -78,12 +141,11 @@ export class LobeFalAI implements LobeRuntimeAI {
       defaultInput['acceleration'] = 'high';
     }
 
-    // Ensure model has fal-ai/ prefix
-    let endpoint = requestModel.startsWith('fal-ai/') ? requestModel : `fal-ai/${requestModel}`;
+    let endpoint = FAL_NAMESPACES.some((namespace) => requestModel.startsWith(namespace))
+      ? requestModel
+      : `fal-ai/${requestModel}`;
     const hasImageUrls = (params.imageUrls?.length ?? 0) > 0;
-    if (
-      ['fal-ai/bytedance/seedream/v', 'fal-ai/hunyuan-image/v'].some((m) => endpoint.startsWith(m))
-    ) {
+    if (EDIT_OR_TEXT_TO_IMAGE_ENDPOINT_PREFIXES.some((m) => endpoint.startsWith(m))) {
       endpoint += hasImageUrls ? '/edit' : '/text-to-image';
     } else if (endpoint === 'fal-ai/nano-banana' && hasImageUrls) {
       endpoint += '/edit';

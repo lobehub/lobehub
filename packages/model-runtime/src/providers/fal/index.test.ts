@@ -3,7 +3,7 @@ import { fal } from '@fal-ai/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CreateImagePayload } from '../../types';
-import { LobeFalAI } from './index';
+import { LobeFalAI, resolveFalImageSize } from './index';
 
 // Mock the fal client
 vi.mock('@fal-ai/client', () => ({
@@ -898,6 +898,71 @@ describe('LobeFalAI', () => {
             },
           },
         });
+      });
+    });
+
+    describe('Qwen Image 3 (alibaba namespace)', () => {
+      beforeEach(() => {
+        mockFal.subscribe.mockResolvedValue({
+          requestId: 'test-request-id',
+          data: { images: [{ url: 'https://example.com/generated.jpg' }] },
+        } as any);
+      });
+
+      it('should keep the alibaba namespace and use text-to-image without imageUrls', async () => {
+        await instance.createImage({
+          model: 'alibaba/qwen-image-3',
+          params: { aspectRatio: '16:9', prompt: 'A poster', resolution: '1K' },
+        });
+
+        expect(mockFal.subscribe).toHaveBeenCalledWith('alibaba/qwen-image-3/text-to-image', {
+          input: {
+            enable_safety_checker: false,
+            image_size: { height: 768, width: 1360 },
+            num_images: 1,
+            prompt: 'A poster',
+          },
+        });
+      });
+
+      it('should use the edit endpoint with imageUrls and a 2K image size', async () => {
+        await instance.createImage({
+          model: 'alibaba/qwen-image-3',
+          params: {
+            aspectRatio: '1:1',
+            imageUrls: ['https://example.com/input.png'],
+            prompt: 'Make it snow',
+            resolution: '2K',
+          },
+        });
+
+        expect(mockFal.subscribe).toHaveBeenCalledWith('alibaba/qwen-image-3/edit', {
+          input: {
+            enable_safety_checker: false,
+            image_size: { height: 2048, width: 2048 },
+            image_urls: ['https://example.com/input.png'],
+            num_images: 1,
+            prompt: 'Make it snow',
+          },
+        });
+      });
+
+      it('should keep image sizes within the resolution pixel budget', () => {
+        for (const aspectRatio of ['1:1', '4:3', '3:4', '16:9', '9:16', '3:2', '2:3', '21:9']) {
+          for (const [resolution, edge] of [
+            ['1K', 1024],
+            ['2K', 2048],
+          ] as const) {
+            const size = resolveFalImageSize(aspectRatio, resolution)!;
+            expect(size.width % 16).toBe(0);
+            expect(size.height % 16).toBe(0);
+            expect(size.width * size.height).toBeLessThanOrEqual(edge * edge);
+            expect(Math.max(size.width, size.height)).toBeLessThanOrEqual(2048);
+          }
+        }
+        expect(resolveFalImageSize('16:9', '1K')).toEqual({ height: 768, width: 1360 });
+        expect(resolveFalImageSize('16:9', '2K')).toEqual({ height: 1152, width: 2048 });
+        expect(resolveFalImageSize('1:1', '4K')).toBeUndefined();
       });
     });
 
