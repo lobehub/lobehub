@@ -9,7 +9,7 @@ import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AttachmentUploadButton } from '@/features/AttachmentInput';
-import { mentionFilledClassName } from '@/features/ChatInput/InputEditor/mentionStyle';
+import { mentionPlainClassName } from '@/features/ChatInput/InputEditor/mentionStyle';
 import { richTextImageRenderers } from '@/features/Conversation/Messages/User/components/richTextImageRenderers';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import { seedAttachments } from '@/features/EditorCanvas/attachmentRegistry';
@@ -160,7 +160,7 @@ const CommentCard = memo<CommentCardProps>(({ activity }) => {
 
       {isEditing && (
         <>
-          <div className={mentionFilledClassName}>
+          <div className={mentionPlainClassName}>
             <EditorCanvas
               editor={editor}
               editorData={editorData}
@@ -185,7 +185,7 @@ const CommentCard = memo<CommentCardProps>(({ activity }) => {
       )}
       {!isEditing && Boolean(activity.editorData) && (
         <LexicalRenderer
-          className={mentionFilledClassName}
+          className={mentionPlainClassName}
           overrides={rendererOverrides}
           value={activity.editorData as Parameters<typeof LexicalRenderer>[0]['value']}
           variant={'chat'}

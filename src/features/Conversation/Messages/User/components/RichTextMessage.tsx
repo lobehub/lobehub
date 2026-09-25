@@ -6,7 +6,7 @@ import { memo, useMemo } from 'react';
 
 import { ActionTagNode } from '@/features/ChatInput/InputEditor/ActionTag/ActionTagNode';
 import { LocalFileTagNode } from '@/features/ChatInput/InputEditor/LocalFileTag';
-import { mentionFilledClassName } from '@/features/ChatInput/InputEditor/mentionStyle';
+import { mentionPlainClassName } from '@/features/ChatInput/InputEditor/mentionStyle';
 import { ReferTopicNode } from '@/features/ChatInput/InputEditor/ReferTopic/ReferTopicNode';
 
 import { downloadPreviewImage } from '../../components/downloadPreviewImage';
@@ -34,7 +34,7 @@ const RichTextMessage = memo<RichTextMessageProps>(({ editorState, variant = 'ch
   return (
     <PreviewGroup preview={PREVIEW_OPTIONS}>
       <LexicalRenderer
-        className={mentionFilledClassName}
+        className={mentionPlainClassName}
         extraNodes={EXTRA_NODES}
         overrides={richTextImageRenderers}
         style={style}
