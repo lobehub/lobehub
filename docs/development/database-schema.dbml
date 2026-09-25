@@ -81,6 +81,21 @@ table acceptance_flows {
   }
 }
 
+table acceptance_installs {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text
+  workspace_id text
+  event varchar(16) [not null]
+  version text
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    created_at [name: 'acceptance_installs_created_at_idx']
+    user_id [name: 'acceptance_installs_user_id_idx']
+    workspace_id [name: 'acceptance_installs_workspace_id_idx']
+  }
+}
+
 table agents {
   id text [pk, not null]
   slug varchar(100)

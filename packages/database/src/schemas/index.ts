@@ -1,5 +1,6 @@
 export * from './acceptanceComment';
 export * from './acceptanceFlow';
+export * from './acceptanceInstall';
 export * from './agent';
 export * from './agentBotProvider';
 export * from './agentCronJob';

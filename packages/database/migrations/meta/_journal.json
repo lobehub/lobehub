@@ -1197,6 +1197,13 @@
       "when": 1790215059199,
       "tag": "0170_acceptance_comment_source",
       "breakpoints": true
+    },
+    {
+      "idx": 171,
+      "version": "7",
+      "when": 1790311191160,
+      "tag": "0171_add_acceptance_installs",
+      "breakpoints": true
     }
   ],
   "version": "6"

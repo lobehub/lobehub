@@ -12,7 +12,7 @@ import type {
   VerifyRunContext,
   VerifyRunScenario,
 } from '@lobechat/types';
-import { verifyCheckDefinitionSchema } from '@lobechat/types';
+import { acceptanceInstallEvents, verifyCheckDefinitionSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -21,6 +21,7 @@ import {
   requireWorkspaceRoleWhenScoped,
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { AcceptanceInstallModel } from '@/database/models/acceptanceInstall';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { DocumentModel } from '@/database/models/document';
 import { LlmGenerationTracingModel } from '@/database/models/llmGenerationTracing';
@@ -687,6 +688,35 @@ export const verifyRouter = router({
           message: `No pullable skill with identifier "${input.identifier}"`,
         });
       return fetchAcceptanceSkillBundle(input.version);
+    }),
+
+  /**
+   * Record a completed CLI skill install (`lh acceptance install` / `update`)
+   * for the ops dashboard's adoption counters. Append-only telemetry: the
+   * product never reads these rows, and the CLI swallows failures so tracking
+   * can never break an install that already succeeded.
+   */
+  trackAcceptanceInstall: wsCompatProcedure
+    .use(serverDatabase)
+    .use(async ({ ctx, next }) =>
+      next({
+        ctx: {
+          acceptanceInstallModel: new AcceptanceInstallModel(
+            ctx.serverDB,
+            ctx.userId,
+            ctx.workspaceId,
+          ),
+        },
+      }),
+    )
+    .input(
+      z.object({
+        event: z.enum(acceptanceInstallEvents).default('install'),
+        version: z.string().min(1).max(128).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await ctx.acceptanceInstallModel.record(input);
     }),
 
   getVerifyState: verifyProcedure
