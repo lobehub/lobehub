@@ -1,7 +1,8 @@
-import { existsSync, rmSync, writeSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join, relative } from 'node:path';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, writeSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
+import { delimiter, dirname, join, relative } from 'node:path';
 
+import { resetShellDetectionCache } from '@lobechat/local-file-shell/shell';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
@@ -55,6 +56,12 @@ vi.mock('@lobechat/device-sandbox', () => ({
 }));
 
 const mockCliCtr = {
+  buildCliEnv: vi.fn(async (env: Record<string, string> = {}) => ({
+    ...env,
+    LOBEHUB_JWT: 'jwt-token',
+    LOBEHUB_SERVER: 'https://app.example.com',
+    PATH: `/cli/bin${delimiter}${process.env.PATH ?? ''}`,
+  })),
   runCliCommand: vi.fn().mockResolvedValue({ exitCode: 0, stderr: '', stdout: 'cli output\n' }),
 };
 
@@ -176,26 +183,115 @@ describe('ShellCommandCtr (thin wrapper)', () => {
     expect(mockChildProcess.kill).toHaveBeenCalled();
   });
 
-  it('should route lh commands to CliCtr.runCliCommand', async () => {
-    const result = await ctr.handleRunCommand({
-      command: 'lh status --json',
-      description: 'lh status',
+  describe('lh commands', () => {
+    // Exit only once the child has been spawned: shell detection runs first
+    // and can outlast a fixed delay on a busy machine.
+    const exitWith = (code: number) => {
+      const spawnChild = mockSpawn.getMockImplementation();
+      mockSpawn.mockImplementationOnce((...args: unknown[]) => {
+        const child = spawnChild(...args);
+        setTimeout(() => {
+          mockChildProcess.exitCode = code;
+          emitChildProcess('exit', code);
+          emitChildProcess('close', code);
+        }, 10);
+        return child;
+      });
+    };
+
+    it('runs through the shared runner with the caller env, cwd and the injected CLI env', async () => {
+      mockProcessOutput = 'ok\n';
+      exitWith(0);
+
+      const command = 'lh provider config deepseek --api-key "$DS_KEY"';
+      const result = await ctr.handleRunCommand({
+        command,
+        cwd: '/work/project',
+        env: { DS_KEY: 'sk-real-secret' },
+      });
+
+      expect(mockCliCtr.buildCliEnv).toHaveBeenCalledWith({ DS_KEY: 'sk-real-secret' });
+      expect(mockCliCtr.runCliCommand).not.toHaveBeenCalled();
+      expect(mockSpawn).toHaveBeenCalledTimes(1);
+      const [cmd, args, options] = mockSpawn.mock.calls[0];
+      // The same shell as every other command — the command string is handed
+      // over untouched so the shell expands the caller's variables.
+      expect(cmd).toBe('/bin/sh');
+      expect(args).toEqual(['-c', command]);
+      expect(options.cwd).toBe('/work/project');
+      expect(options.env).toMatchObject({
+        DS_KEY: 'sk-real-secret',
+        LOBEHUB_JWT: 'jwt-token',
+        LOBEHUB_SERVER: 'https://app.example.com',
+      });
+      expect(options.env.PATH.split(delimiter)[0]).toBe('/cli/bin');
+      expect(result.success).toBe(true);
+      expect(result.output).toContain('ok');
     });
 
-    expect(mockCliCtr.runCliCommand).toHaveBeenCalledWith('status --json');
-    expect(result.success).toBe(true);
-    expect(result.output).toContain('cli output');
-    expect(mockSpawn).not.toHaveBeenCalled();
-  });
+    it('runs in PowerShell on Windows, not cmd.exe', async () => {
+      const programFiles = mkdtempSync(join(tmpdir(), 'lh-pwsh-'));
+      const pwshPath = join(programFiles, 'PowerShell', '7', 'pwsh.exe');
+      mkdirSync(dirname(pwshPath), { recursive: true });
+      writeFileSync(pwshPath, '');
+      vi.stubEnv('ProgramFiles', programFiles);
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+      Object.defineProperty(process, 'platform', { value: 'win32' });
+      resetShellDetectionCache();
 
-  it('should route lobehub commands to CliCtr.runCliCommand', async () => {
-    const result = await ctr.handleRunCommand({
-      command: 'lobehub search test',
-      description: 'lobehub search',
+      try {
+        exitWith(0);
+        await ctr.handleRunCommand({
+          command: 'lh bot add qq --app-secret $env:QQ_BOT_SECRET',
+          env: { QQ_BOT_SECRET: 'real-secret' },
+        });
+
+        expect(mockSpawn).toHaveBeenCalledTimes(1);
+        const [cmd, , options] = mockSpawn.mock.calls[0];
+        expect(cmd).toBe(pwshPath);
+        expect(cmd).not.toMatch(/cmd\.exe$/i);
+        expect(options.env).toMatchObject({ QQ_BOT_SECRET: 'real-secret' });
+      } finally {
+        Object.defineProperty(process, 'platform', platform);
+        vi.unstubAllEnvs();
+        resetShellDetectionCache();
+        rmSync(programFiles, { force: true, recursive: true });
+      }
     });
 
-    expect(mockCliCtr.runCliCommand).toHaveBeenCalledWith('search test');
-    expect(result.success).toBe(true);
+    it('returns the output of a non-zero exit as a normal command result', async () => {
+      mockProcessOutput = '✗ Provider deepseek check failed\nError: InvalidProviderAPIKey\n';
+      exitWith(1);
+
+      const result = await ctr.handleRunCommand({ command: 'lh provider test deepseek' });
+
+      expect(result.success).toBe(true);
+      expect(result.exit_code).toBe(1);
+      expect(result.stdout).toContain('Error: InvalidProviderAPIKey');
+    });
+
+    it('reports a command that outlives the timeout as still running instead of killing it', async () => {
+      const result = await ctr.handleRunCommand({
+        command: 'lobehub bot add qq',
+        timeout: 100,
+      });
+
+      expect(result.success).toBe(true);
+      expect((result as { running?: boolean }).running).toBe(true);
+      expect(result.exit_code).toBeUndefined();
+      expect(result.shell_id).toBeTruthy();
+      expect(mockChildProcess.kill).not.toHaveBeenCalled();
+    });
+
+    it('keeps lh out of the sandbox so the injected credentials still reach it', async () => {
+      exitWith(0);
+
+      await ctr.handleRunCommand({ command: 'lh status', cwd: '/repo', sandbox: true });
+
+      expect(mockProbeSandboxCapability).not.toHaveBeenCalled();
+      expect(mockCreateSandboxLaunchPlan).not.toHaveBeenCalled();
+      expect(mockSpawn.mock.calls[0][2].env).toMatchObject({ LOBEHUB_JWT: 'jwt-token' });
+    });
   });
 
   describe('local sandbox', () => {

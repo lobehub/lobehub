@@ -642,12 +642,14 @@ export abstract class ComputerRuntime {
     //   2. JSON.stringify(result.error) (non-Error error objects)
     //   3. state.stderr (e.g. git commit failure — exit ≠ 0, error in stderr)
     //   4. state.error (runtime-level error message)
-    //   5. [UNKNOWN_EXEC_ERROR] Tool execution failed (last-resort fallback)
+    //   5. state.stdout (CLIs that print their failure on stdout and exit ≠ 0)
+    //   6. [UNKNOWN_EXEC_ERROR] Tool execution failed (last-resort fallback)
     const errorText =
       result.error?.message ||
       (result.error !== undefined ? JSON.stringify(result.error) : undefined) ||
       (typeof state?.stderr === 'string' ? state.stderr : undefined) ||
       (typeof state?.error === 'string' ? state.error : undefined) ||
+      (typeof state?.stdout === 'string' ? state.stdout : undefined) ||
       '[UNKNOWN_EXEC_ERROR] Tool execution failed';
 
     return {

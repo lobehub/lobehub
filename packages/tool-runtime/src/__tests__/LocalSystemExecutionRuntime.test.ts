@@ -752,6 +752,28 @@ describe('LocalSystemExecutionRuntime.runCommand', () => {
     expect(output.content).not.toContain('UNKNOWN_EXEC_ERROR');
   });
 
+  it('keeps stdout when a failed command reports neither an error nor stderr', async () => {
+    // A CLI that prints its failure on stdout and exits non-zero, reported
+    // with `success: false` and nothing else to explain it. The generic
+    // fallback used to replace the only diagnostic the model could act on.
+    const service = createService({
+      runCommand: vi.fn().mockResolvedValue({
+        exit_code: 1,
+        stderr: '',
+        stdout: '✗ Provider deepseek check failed\nError: InvalidProviderAPIKey\n',
+        success: false,
+      }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    const output = await runtime.executeToolCall('runCommand', {
+      command: 'lh provider test deepseek',
+    });
+
+    expect(output?.content).toContain('Error: InvalidProviderAPIKey');
+    expect(output?.content).not.toContain('UNKNOWN_EXEC_ERROR');
+  });
+
   it('reports whether the command was actually sandboxed', async () => {
     const service = createService({
       runCommand: vi.fn().mockResolvedValue({
