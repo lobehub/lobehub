@@ -3,7 +3,7 @@ import { OFFICIAL_SITE, OFFICIAL_URL } from '@lobechat/const';
 
 import { getIdFromIdentifier } from '@/utils/identifier';
 
-const ROUTE_ROOTS = new Set(['acceptance', 'agent', 'page', 'task', 'tasks', 'verify']);
+const ROUTE_ROOTS = new Set(['acceptance', 'agent', 'goal', 'page', 'task', 'tasks', 'verify']);
 const BUILTIN_AGENT_SLUG_SET = new Set<string>(Object.values(BUILTIN_AGENT_SLUGS));
 const NON_SPA_ROUTE_ROOTS = new Set(['_next', 'api', 'f', 'oidc', 'trpc', 'webapi']);
 const SPA_ROUTE_ROOTS = new Set([
@@ -12,6 +12,7 @@ const SPA_ROUTE_ROOTS = new Set([
   'community',
   'apps',
   'eval',
+  'goal',
   'group',
   'image',
   'memory',
@@ -34,6 +35,7 @@ export type InternalLinkReference =
       type: 'document';
       workspaceSlug?: string;
     }
+  | { agentId?: string; goalId: string; pathname: string; type: 'goal'; workspaceSlug?: string }
   | { pathname: string; type: 'route'; workspaceSlug?: string }
   | { pathname: string; runId: string; type: 'verify'; workspaceSlug?: string }
   | {
@@ -86,6 +88,14 @@ const isInternalHost = (url: URL, currentOrigin?: string) => {
  */
 export const isBareLinkLabel = (label: string, href: string) => label === href;
 
+/**
+ * Whether a link's visible text only repeats the entity's own id. Agents link
+ * the goal an `lh goal create` printed as `[goal_xxx](…/goal/goal_xxx)`; the id
+ * says no more than the URL does, so it is resolved to the title like one.
+ */
+export const isEntityIdLabel = (label: string, reference: InternalLinkReference) =>
+  reference.type === 'goal' && label === reference.goalId;
+
 /** Parse a LobeHub route into a semantic entity reference. */
 export const parseInternalLink = (
   href: string | undefined,
@@ -135,6 +145,15 @@ export const parseInternalLink = (
     };
   }
 
+  if (segments[0] === 'goal' && segments[1]) {
+    return {
+      goalId: segments[1],
+      pathname,
+      type: 'goal',
+      ...(workspaceSlug ? { workspaceSlug } : {}),
+    };
+  }
+
   if (segments[0] === 'page' && segments[1]) {
     return {
       documentId: getIdFromIdentifier(segments[1], 'docs'),
@@ -173,6 +192,16 @@ export const parseInternalLink = (
         documentId: getIdFromIdentifier(segments[3], 'docs'),
         pathname,
         type: 'document',
+        ...(workspaceSlug ? { workspaceSlug } : {}),
+      };
+    }
+
+    if (segments[2] === 'goal' && segments[3]) {
+      return {
+        agentId,
+        goalId: segments[3],
+        pathname,
+        type: 'goal',
         ...(workspaceSlug ? { workspaceSlug } : {}),
       };
     }

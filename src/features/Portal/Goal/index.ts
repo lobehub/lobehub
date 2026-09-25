@@ -1,5 +1,6 @@
 import { type PortalImpl } from '../type';
 import Body from './Body';
+import Header from './Header';
 import Title from './Title';
 
-export const Goal: PortalImpl = { Body, Title };
+export const Goal: PortalImpl = { Body, Header, Title };

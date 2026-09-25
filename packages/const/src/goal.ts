@@ -59,6 +59,13 @@ export const GOAL_ACCEPTANCE_TASK_TITLE = 'Complete full Goal acceptance';
  * stops a long-horizon goal until a person clicks retry.
  */
 export const LEASE_EXPIRED_ERROR = 'Goal Task operation lease expired.';
+/**
+ * Prefix of the error the runtime writes when the gateway's inactivity watchdog
+ * abandons a run whose worker went silent (a device that slept or restarted, a
+ * CLI that died). The run is lost exactly the way an expired lease is, so the
+ * coordinator recovers it the same way instead of asking a person.
+ */
+export const ABANDONED_OPERATION_ERROR_PREFIX = 'Operation abandoned:';
 /** The verifier ran and judged the delivery short of the criteria. */
 export const VERIFICATION_FAILED_ERROR = 'Delivery did not pass verification.';
 /** The verifier itself could not run, so the delivery was never evaluated. */

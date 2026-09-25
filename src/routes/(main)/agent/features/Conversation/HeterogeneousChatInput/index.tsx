@@ -16,7 +16,6 @@ import HeteroModel from '@/features/ChatInput/ControlBar/HeteroModel';
 import { ChatInput } from '@/features/Conversation';
 import { contextSelectors, useConversationStore } from '@/features/Conversation/store';
 import { useProviderBindingValidation } from '@/features/HeterogeneousAgent/hooks/useProviderBinding';
-import WideScreenContainer from '@/features/WideScreenContainer';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import {
   isHeterogeneousSandboxExecutionAvailable,
@@ -47,24 +46,25 @@ const leftActions: ActionKeys[] = [];
  * fold the headline and the hint onto one line (no separate `description`
  * block, no oversized 24px icon) so the guard stays a compact strip instead of
  * eating a chunk of the conversation area.
+ *
+ * Rendered through `ChatInput`'s `notices` slot, which places it at the top of
+ * the composer's floating stack: above the run-status tray, and with no inline
+ * padding or width cap of its own so its edges land on the input's edges.
  */
 const GuardBanner = memo<{ action?: ReactNode; hint?: string; title: string }>(
   ({ title, hint, action }) => (
-    <WideScreenContainer>
-      <Flexbox align={'center'} paddingBlock={'0 8px'} paddingInline={12}>
-        <Alert
-          action={action}
-          style={{ maxWidth: 880, width: '100%' }}
-          type={'warning'}
-          title={
-            <Flexbox horizontal align={'baseline'} gap={6} style={{ flexWrap: 'wrap' }}>
-              <span>{title}</span>
-              {hint && <span style={{ fontWeight: 400, opacity: 0.75 }}>{hint}</span>}
-            </Flexbox>
-          }
-        />
-      </Flexbox>
-    </WideScreenContainer>
+    <Flexbox paddingBlock={'0 8px'}>
+      <Alert
+        action={action}
+        type={'warning'}
+        title={
+          <Flexbox horizontal align={'baseline'} gap={6} style={{ flexWrap: 'wrap' }}>
+            <span>{title}</span>
+            {hint && <span style={{ fontWeight: 400, opacity: 0.75 }}>{hint}</span>}
+          </Flexbox>
+        }
+      />
+    </Flexbox>
   ),
 );
 
@@ -311,21 +311,30 @@ const HeterogeneousChatInput = memo(() => {
     deviceBlocked ||
     (!isConfigured && !isDeviceExecution);
 
-  return (
-    <Flexbox>
+  // The guards go through `notices` rather than as siblings above `ChatInput`:
+  // the running-status / queue trays float above this column, so a sibling
+  // guard would sit underneath them. The slot puts it on top of that stack.
+  const notices = hasGuard ? (
+    <>
       {renderApiModeTargetGuard()}
       {renderApiModeBindingGuard()}
       {renderDeviceSelectionGuard()}
       {renderCloudConfigGuard()}
       {renderDeviceGuard()}
+    </>
+  ) : undefined;
+
+  return (
+    <Flexbox>
       <ChatInput
+        skipScrollMarginWithList
         allowExpand={false}
         controlBarSlot={<HeteroControlBar />}
         extraActionItems={extraActionItems}
         leftActions={leftActions}
+        notices={notices}
         sendAreaPrefix={sendAreaPrefix}
         sendButtonProps={{ disabled: inputDisabled, shape: 'round' }}
-        skipScrollMarginWithList={!hasGuard}
         onEditorReady={(instance) => {
           // Sync to global ChatStore for compatibility with other features
           useChatStore.setState({ mainInputEditor: instance });

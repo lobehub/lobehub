@@ -1,12 +1,14 @@
-import type { CrawlResult } from '@lobechat/types';
+import type { CrawlPluginState, CrawlResult } from '@lobechat/types';
 import type { CrawlSuccessResult } from '@lobechat/web-crawler';
 import { CopyButton, Flexbox, Highlighter, Icon, Markdown, stopPropagation } from '@lobehub/ui';
-import { Alert, Segmented, Text } from '@lobehub/ui/base-ui';
+import { Alert, Segmented, Skeleton, Text } from '@lobehub/ui/base-ui';
 import { Descriptions } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { ExternalLink } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { useToolResultPayload } from '@/hooks/useToolResultPayload';
 
 import { CRAWL_CONTENT_LIMITED_COUNT } from '../../../const';
 
@@ -90,9 +92,22 @@ interface PageContentProps {
   result?: CrawlResult;
 }
 
-const PageContent = memo<PageContentProps>(({ result }) => {
+const PageContent = memo<PageContentProps>(({ messageId, result }) => {
   const { t } = useTranslation('plugin');
   const [display, setDisplay] = useState<DisplayType>(DisplayType.Render);
+
+  // The conversation read path hands the inline card a PREVIEW of the page and
+  // leaves the body on the server. `length` stays pinned to the real body, so a
+  // shorter `content` is the signal that this surface — the one that actually
+  // shows the page — has to go fetch it. Legacy rows carry the whole body and
+  // never trigger a request.
+  const previewed = result?.data as CrawlSuccessResult | undefined;
+  const isPreview =
+    typeof previewed?.length === 'number' && (previewed.content?.length ?? 0) < previewed.length;
+  const { isLoading, payload } = useToolResultPayload(messageId, isPreview);
+  const storedContent = (payload?.pluginState as CrawlPluginState | undefined)?.results?.find(
+    (stored) => stored.originalUrl === result?.originalUrl,
+  )?.data?.content;
 
   if (!result || !result.data) return undefined;
 
@@ -131,7 +146,15 @@ const PageContent = memo<PageContentProps>(({ result }) => {
     );
   }
 
-  const { url, title, description, content, siteName } = result.data as CrawlSuccessResult;
+  const {
+    url,
+    title,
+    description,
+    content: previewContent,
+    length,
+    siteName,
+  } = result.data as CrawlSuccessResult;
+  const content = storedContent ?? previewContent;
   return (
     <Flexbox gap={24}>
       <Flexbox gap={8}>
@@ -175,7 +198,7 @@ const PageContent = memo<PageContentProps>(({ result }) => {
             }}
             items={[
               {
-                children: result.data.content?.length,
+                children: length ?? content?.length,
                 label: t('search.crawPages.meta.words'),
               },
               {
@@ -186,6 +209,7 @@ const PageContent = memo<PageContentProps>(({ result }) => {
           />
         </div>
       </Flexbox>
+      {isLoading && !storedContent && <Skeleton height={160} width={'100%'} />}
       {content && (
         <Flexbox gap={12} paddingBlock={'0 12px'}>
           <Flexbox horizontal justify={'space-between'}>

@@ -27,6 +27,9 @@ export default {
   'features.evalCapture.desc':
     'Adds a message action that captures a conversation turn — its prior context, input and the answer it produced — as an evaluation test case.',
   'features.evalCapture.title': 'Save a turn as an eval case',
+  'features.deviceTunnel.desc':
+    'Give a port on the working device a link, so a dev server running there can be opened from here. The link only works for people who can reach that device.',
+  'features.deviceTunnel.title': 'Remote Port Links',
   'features.gatewayMux.desc':
     'Route every agent run in this tab over one shared gateway WebSocket instead of opening a socket per run. Reconnects and event replay are handled per run on the shared connection.',
   'features.gatewayMux.title': 'Single-connection Gateway (experimental)',
@@ -41,6 +44,9 @@ export default {
   'features.groupChat.title': 'Group Chat (Multi-Agent)',
   'features.inputMarkdown.desc':
     'Render Markdown in the input area in real time (bold text, code blocks, tables, etc.).',
+  'features.integrations.desc':
+    'Show the Integrations settings page: connect the GitHub App so merged pull requests accept deliveries and failing checks or reviews reach the agent that opened them. Hidden by default.',
+  'features.integrations.title': 'Integrations',
   'features.inputMarkdown.title': 'Input Markdown Rendering',
   'features.messageTextSelectionActions.desc':
     'Show a quick action when selecting text in chat messages so the selected text can be added to the next conversation context.',

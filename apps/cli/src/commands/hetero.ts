@@ -1121,15 +1121,19 @@ const exec = async (options: ExecOptions): Promise<void> => {
 
   const { code, signal, sessionId } = result;
 
+  // Why the run failed to upload, when it did. `sawTerminalError`/stderr stay
+  // ahead of it: those explain a failing agent, while this explains an agent
+  // that worked and lost its output — the least obvious of the three, and the
+  // only one with no other trace in the conversation.
+  let ingestErrorMessage: string | undefined;
+
   if (serverIngester && sink) {
     operationHeartbeat?.stop();
     try {
       await serverIngester.drain();
     } catch (err) {
-      log.error(
-        'Failed to flush events to server:',
-        err instanceof Error ? err.message : String(err),
-      );
+      ingestErrorMessage = err instanceof Error ? err.message : String(err);
+      log.error('Failed to flush events to server:', ingestErrorMessage);
       result = { ...result, ingestError: true };
     }
   }
@@ -1146,11 +1150,12 @@ const exec = async (options: ExecOptions): Promise<void> => {
   // When the run failed, pass an error detail so the server surfaces a useful
   // message instead of the generic "Agent execution failed" fallback. Prefer
   // the in-stream terminal error (CC relays API/rate-limit errors here while
-  // exiting 0, so stderr is empty); otherwise fall back to the stderr tail.
+  // exiting 0, so stderr is empty), then the upload failure (a clean agent whose
+  // output never landed leaves nothing on stderr either), then the stderr tail.
   // Trim to the last 1 KB — the tail is most informative and keeps the tRPC
   // payload small.
   const stderrTail = result.stderrContent.trim();
-  const errorDetail = result.terminalErrorMessage || stderrTail;
+  const errorDetail = result.terminalErrorMessage || ingestErrorMessage || stderrTail;
   // The adapter's in-stream classification (overloaded / rate_limit) already
   // carries the structured status-guide body — forward it verbatim instead of
   // re-deriving from the flattened message via the process-only classifier,

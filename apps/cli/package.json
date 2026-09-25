@@ -1,11 +1,11 @@
 {
   "name": "@lobehub/cli",
-  "version": "0.0.55",
+  "version": "0.0.59",
   "type": "module",
   "bin": {
-    "lh": "./dist/index.js",
-    "lobe": "./dist/index.js",
-    "lobehub": "./dist/index.js"
+    "lh": "dist/index.js",
+    "lobe": "dist/index.js",
+    "lobehub": "dist/index.js"
   },
   "man": [
     "./man/man1/lh.1",
@@ -25,6 +25,7 @@
     "prepublishOnly": "npm run build && npm run man:generate",
     "test": "bunx vitest run --config vitest.config.mts --silent='passed-only'",
     "test:coverage": "bunx vitest run --config vitest.config.mts --coverage",
+    "test:e2e": "bunx vitest run --config vitest.e2e.config.mts --silent='passed-only'",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {

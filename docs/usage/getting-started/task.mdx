@@ -25,7 +25,7 @@ If you've used Linear or GitHub Issues, the mental model is the same — only th
 Use a Task when you want an agent to:
 
 - Do work that takes more than a few minutes to finish.
-- Run on a schedule (every morning, every Monday, every month).
+- Run on a schedule (for example, every morning or every Monday).
 - Report back asynchronously while you focus on something else.
 - Be re-assigned, commented on, or revisited later with full history preserved.
 
@@ -33,24 +33,26 @@ For quick, one-shot questions, stay in the regular chat. For anything you'd othe
 
 ## Task Lifecycle
 
-Every task moves through a small set of statuses:
+Task status shows progress, while automation settings control when work runs. The task list uses these statuses:
 
-| Status             | Meaning                                                         |
-| ------------------ | --------------------------------------------------------------- |
-| **Backlog**        | Created but not yet picked up by the agent.                     |
-| **In Progress**    | The agent is actively working on the task.                      |
-| **Pending Review** | The agent finished and is waiting for you to verify the result. |
-| **Done**           | You confirmed the result; the task is closed.                   |
-| **Canceled**       | You closed the task before completion.                          |
+| Status | Meaning |
+| --- | --- |
+| **Backlog** | Waiting to be worked on. |
+| **Running** | Execution is in progress. |
+| **Scheduled** | Waiting for an automation trigger. |
+| **Pending review** | Paused for review or further action. |
+| **Completed** | Marked complete. |
+| **Failed** | Execution failed; inspect the error and output. |
+| **Canceled** | Canceled. |
 
-The agent moves a task from `Backlog` to `In Progress`, then to `Pending Review` when it thinks the work is done. The transition to `Done` is yours to make — see [Reviewing Results](#reviewing-results) below.
+After a run, review the result and any configured acceptance checks. See [Reviewing Results](#reviewing-results).
 
 ## Creating a Task
 
 <Steps>
   ### Open the Tasks Panel
 
-  Click **Tasks** in the left sidebar to open the task list for your workspace.
+  Open **Tasks** in the main interface to see tasks for all Agents. On an Agent page, **Tasks** shows only tasks for the current Agent, not other Agents.
 
   ### Create a New Task
 
@@ -62,34 +64,33 @@ The agent moves a task from `Backlog` to `In Progress`, then to `Pending Review`
 
   ### Assign an Agent
 
-  Pick an agent from the **Assignee** dropdown. Choose an agent whose capabilities match the task — for example, the **Research Agent** for reading and summarizing, or a custom agent you've built. You can reassign later if the first agent isn't the right fit.
+  If you create the task from the main interface, select an Agent in **Assignee**. Tasks created on an Agent page belong to the current Agent. No separate Agent selection is necessary.
 
   ### Choose a Schedule
 
-  Pick **Run once** for a one-off task, or **Repeat** to put it on a schedule. See [One-off vs. Recurring](#one-off-vs-recurring) below.
+  Run ordinary tasks on demand. For recurring work, configure **Scheduled** or a fixed interval in the task detail’s **Automation** section. You do not need a separate scheduled-task system. See [Agent Tasks](/docs/usage/agent/scheduled-task).
 
   ### Submit
 
-  Click **Create**. The task lands in **Backlog**, and the agent picks it up shortly after.
+  Click **Create** to save the task. Then start execution or enable scheduling, and check the task status.
 </Steps>
 
 <Callout type="info">
-  You can create a Task directly from any chat message — open the message menu and choose **Turn
-  into Task**. The conversation context is carried over automatically.
+  With Task Tools enabled, you can also ask an agent to create a task in chat.
+  Open the created task and check that its instructions include the necessary background.
 </Callout>
 
 ## Working With the Agent
 
-While the task is `In Progress`, the agent posts updates inside the task — every step it takes, every tool call, and every intermediate result. You don't have to watch in real time; open the task whenever you want to see where things stand.
+While the task is **Running**, open its detail to inspect progress, tool calls, and available results.
 
 ### Reviewing Results
 
-When the agent thinks it's finished, the task moves to `Pending Review`. Open the task detail page to verify the result. You have two options:
+Open the task detail and inspect the artifacts, run history, and Acceptance report. If work is missing, describe the gap and ask the agent to continue. Confirm completion through the available UI action once the result meets your requirements.
 
-- **Confirm Complete** — if the result is good, click the **Confirm Complete** button. The task moves to `Done` and closes out.
-- **Follow up** — if something needs adjustment, leave a comment instead. The agent picks the task back up and continues from where it left off.
+When you configure Acceptance, the agent evaluates the criteria before delivery. A failed check can hold back the result and trigger repair. The report includes a verdict, score, and evidence for each check. Use it to support your own review.
 
-A `Pending Review` task never auto-completes; you stay in control of when work is done.
+See [Acceptance](/docs/usage/agent/connectors#acceptance) for configuration guidance and examples.
 
 ### Comments and Follow-ups
 
@@ -97,47 +98,35 @@ Every task has a comment thread. Use comments to:
 
 - **Clarify** when the agent asks a question mid-run.
 - **Course-correct** if the agent is heading in the wrong direction.
-- **Iterate** at review time — leave a comment like *"Same thing but exclude weekends"* and the agent reopens the task and tries again.
+- **Iterate** at review time — describe the change, such as "Same thing but exclude weekends," then check whether execution has resumed.
 
-The agent reads new comments automatically and follows up. There's no separate "send" — your comment is the instruction.
-
-<Callout type="info">
-  If the agent is in the middle of a run, your comment is queued until the next checkpoint so it
-  doesn't interrupt mid-step.
-</Callout>
+After submitting a comment, check the agent reply and task status to see whether work has resumed.
 
 ### Artifacts
 
-Pages the agent creates during execution — research notes, summaries, drafts, anything written to your workspace — are listed in the **Artifacts** section of the task detail page. Open, share, or keep editing them directly from there without leaving the task.
+Open the artifacts linked from task detail to review research notes, summaries, or drafts. If an expected deliverable is missing, ask the agent for its location.
 
 ## One-off vs. Recurring
 
 Tasks support two schedule modes.
 
-### Run Once
+### One-off Execution
 
-The default. The agent runs the task immediately, posts a result, and moves it to `Pending Review` for you to confirm. Use this for everything that doesn't need to repeat.
+Start work on demand when it does not need to repeat. After execution, inspect the result and task status, then follow up or review as needed.
 
-### Repeat
+### Recurring Execution
 
-Put the task on a schedule and the agent re-runs it automatically. Each run is appended to the same task as a new entry, so you build up a history you can compare across runs.
+Open the task from **Tasks** on the Agent page or in the main interface. Then open **task detail → Automation**. The same task holds its automation configuration and run records; scheduling is not a separate task system. After saving, use the available control to start scheduling and check the status and next run time.
+
+Choose **Daily, Weekly, or Hourly**, with hourly values from 1 to 24. For a duration-based schedule, choose **Fixed interval** instead. The Scheduled form does not offer Monthly or Custom cron. See [Agent Tasks](/docs/usage/agent/scheduled-task).
 
 ![](/blog/assets17983f73d00c4d39dceb9dac0f6fa0ed.webp)
 
-Supported intervals:
-
-- **Hourly** — every *N* hours.
-- **Daily** — at a specific time each day.
-- **Weekly** — on chosen days of the week.
-- **Monthly** — on a specific day of the month.
-- **Custom** — any cron expression.
-
 <Callout type="warning">
-  Recurring tasks consume credits on every run. Check the estimated credit cost shown in the
-  scheduler before saving, and pause the task if you no longer need it.
+  Repeated runs incur model or tool usage costs. Check the frequency, execution limits, and account usage.
 </Callout>
 
-You can pause, resume, or change the schedule at any time from the task detail page. Pausing keeps history intact; deleting removes the task and its run history.
+To stop future automated runs and keep the task settings, turn off automation. Before deleting a task, save needed results and check which records the deletion includes. See [Deleting a Task vs. Disabling Automation](/docs/usage/agent/scheduled-task#deleting-a-task-vs-disabling-automation).
 
 ## Examples
 

@@ -3,7 +3,7 @@ import { Undo2 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { cleanSpeakerTag } from '@/store/chat/utils/cleanSpeakerTag';
+import { cleanBotPromptTags } from '@/store/chat/utils/parseReferencedMessage';
 import { unescapeMarkdown } from '@/store/chat/utils/unescapeMarkdown';
 import { useFileStore } from '@/store/file';
 import { type UploadFileItem } from '@/types/files/upload';
@@ -39,7 +39,7 @@ export const restoreToInputAction = defineAction({
 
           // 1. Restore text. Prefer the persisted editor JSON (round-trips rich
           //    formatting) and fall back to the markdown content otherwise.
-          const markdown = unescapeMarkdown(cleanSpeakerTag(content ?? ''));
+          const markdown = unescapeMarkdown(cleanBotPromptTags(content ?? ''));
           const hasEditorData =
             editorData && typeof editorData === 'object' && Object.keys(editorData).length > 0;
 

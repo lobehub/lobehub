@@ -4,7 +4,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import {
+  agentHistoryJobs,
   agents,
+  agentShares,
   agentsKnowledgeBases,
   chatGroups,
   chatGroupsAgents,
@@ -14,6 +16,7 @@ import {
   workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { AGENT_SHARED_TRANSFER_BLOCKED } from '../agent';
 import { AGENT_TRANSFER_IN_PROGRESS, AgentTransferJobModel } from '../agentTransferJob';
 import {
   CHAT_GROUP_OWNERSHIP_STALE,
@@ -78,10 +81,46 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  /** Transfer jobs intentionally survive user deletion and need explicit fixture cleanup. */
+  await serverDB.delete(agentHistoryJobs).where(eq(agentHistoryJobs.sourceUserId, ownerId));
   await serverDB.delete(users);
 });
 
 describe('ChatGroupModel.transferGroupOwnership', () => {
+  it.each(['link', 'private'] as const)(
+    'rejects handover when an owned member has a %s share without changing the group',
+    async (visibility) => {
+      const { group, supervisor } = await seedGroupWithRoster();
+      const [share] = await serverDB
+        .insert(agentShares)
+        .values({ agentId: supervisor.id, visibility })
+        .returning();
+
+      const [groupBefore] = await serverDB
+        .select()
+        .from(chatGroups)
+        .where(eq(chatGroups.id, group.id));
+      const [agentBefore] = await serverDB
+        .select()
+        .from(agents)
+        .where(eq(agents.id, supervisor.id));
+
+      await expect(
+        handover({ fromUserId: ownerId, groupId: group.id, toUserId: recipientId }),
+      ).rejects.toThrow(AGENT_SHARED_TRANSFER_BLOCKED);
+
+      expect(await serverDB.select().from(chatGroups).where(eq(chatGroups.id, group.id))).toEqual([
+        groupBefore,
+      ]);
+      expect(await serverDB.select().from(agents).where(eq(agents.id, supervisor.id))).toEqual([
+        agentBefore,
+      ]);
+      expect(await serverDB.select().from(agentShares).where(eq(agentShares.id, share.id))).toEqual(
+        [share],
+      );
+    },
+  );
+
   it('flips the group, junction rows and owned members; scope and visibility stay put', async () => {
     const { group, supervisor } = await seedGroupWithRoster();
 
@@ -106,11 +145,18 @@ describe('ChatGroupModel.transferGroupOwnership', () => {
 
   it('leaves referenced standalone members with their own owners', async () => {
     const { group, referenced } = await seedGroupWithRoster();
+    const [share] = await serverDB
+      .insert(agentShares)
+      .values({ agentId: referenced.id, visibility: 'link' })
+      .returning();
 
     await handover({ fromUserId: ownerId, groupId: group.id, toUserId: recipientId });
 
     const [standalone] = await serverDB.select().from(agents).where(eq(agents.id, referenced.id));
     expect(standalone.userId).toBe(teammateId);
+    expect(await serverDB.select().from(agentShares).where(eq(agentShares.id, share.id))).toEqual([
+      share,
+    ]);
   });
 
   it('keeps everyone’s group conversations untouched', async () => {

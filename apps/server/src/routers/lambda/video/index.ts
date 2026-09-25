@@ -6,10 +6,18 @@ import {
   buildMappedBusinessModelFields,
   resolveBusinessModelMapping,
 } from '@lobechat/business-model-runtime';
-import { ChatErrorType, RequestTrigger } from '@lobechat/types';
+import {
+  ChatErrorType,
+  RequestTrigger,
+  type VideoGenerationAsset,
+  type VideoGenerationRoute,
+  type VideoGenerationTaskMetadata,
+} from '@lobechat/types';
+import { isRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
+import { supportsConversationalVideoEdit } from 'model-bank/standardParameters';
 import { z } from 'zod';
 
 import { getProviderContentPolicyErrorMessage } from '@/business/server/getProviderContentPolicyErrorMessage';
@@ -19,6 +27,7 @@ import { chargeAfterGenerate } from '@/business/server/video-generation/chargeAf
 import { chargeBeforeGenerate } from '@/business/server/video-generation/chargeBeforeGenerate';
 import { getVideoFreeQuota } from '@/business/server/video-generation/getVideoFreeQuota';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
+import { GenerationModel } from '@/database/models/generation';
 import { GenerationTopicModel } from '@/database/models/generationTopic';
 import { UserModel } from '@/database/models/user';
 import {
@@ -34,6 +43,7 @@ import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { FileService } from '@/server/services/file';
+import { getVideoAvgLatencies, getVideoLatencyKey } from '@/server/services/generation/latency';
 import { processBackgroundVideoPolling } from '@/server/services/generation/videoBackgroundPolling';
 import { after } from '@/server/utils/scheduleAfterResponse';
 import { AsyncTaskStatus, AsyncTaskType } from '@/types/asyncTask';
@@ -41,6 +51,16 @@ import { AsyncTaskStatus, AsyncTaskType } from '@/types/asyncTask';
 import { createVideoTaskSubmitError } from './error';
 
 const log = debug('lobe-video:lambda');
+
+const getVideoGenerationRoute = (value: unknown): VideoGenerationRoute | undefined => {
+  if (!isRecord(value) || typeof value.apiType !== 'string') return;
+
+  return {
+    apiType: value.apiType,
+    ...(typeof value.channelId === 'string' ? { channelId: value.channelId } : {}),
+    ...(typeof value.routerId === 'string' ? { routerId: value.routerId } : {}),
+  };
+};
 
 const videoProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -73,6 +93,7 @@ const createVideoInputSchema = z.object({
       seed: z.number().nullish(),
     })
     .passthrough(),
+  previousGenerationId: z.string().optional(),
   provider: z.string(),
 });
 export type CreateVideoServicePayload = z.infer<typeof createVideoInputSchema>;
@@ -83,7 +104,7 @@ export const videoRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { userId, serverDB, asyncTaskModel, fileService, generationTopicModel } = ctx;
       const wsId = ctx.workspaceId ?? undefined;
-      const { generationTopicId, provider, model, params } = input;
+      const { generationTopicId, previousGenerationId, provider, model, params } = input;
 
       const { resolvedModelId } = await resolveBusinessModelMapping(provider, model);
 
@@ -107,6 +128,28 @@ export const videoRouter = router({
 
       // Normalize image URLs to S3 keys for database storage
       let configForDatabase = { ...params };
+      const referenceImageUrls = Array.isArray(params.imageUrls)
+        ? params.imageUrls.filter((url): url is string => typeof url === 'string')
+        : [];
+
+      // Process multiple reference images
+      if (referenceImageUrls.length > 0) {
+        try {
+          const imageKeys = (
+            await Promise.all(
+              referenceImageUrls.map(async (url) => {
+                const key = await fileService.getKeyFromFullUrl(url);
+                if (key) log('Converted image URL to key: %s -> %s', url, key);
+                return key ?? url;
+              }),
+            )
+          ).filter(Boolean);
+
+          configForDatabase = { ...configForDatabase, imageUrls: imageKeys };
+        } catch (error) {
+          console.error('Error converting imageUrls to keys: %O', error);
+        }
+      }
 
       // Process first-frame imageUrl
       if (typeof params.imageUrl === 'string' && params.imageUrl) {
@@ -159,6 +202,18 @@ export const videoRouter = router({
           }
         }
 
+        if (referenceImageUrls.length > 0) {
+          const s3Urls = await Promise.all(
+            ((configForDatabase.imageUrls as string[] | undefined) ?? []).map(
+              async (value, index) =>
+                value === referenceImageUrls[index]
+                  ? value
+                  : (await fileService.getFullFileUrl(value)) || referenceImageUrls[index],
+            ),
+          );
+          updates.imageUrls = s3Urls;
+        }
+
         if (Object.keys(updates).length > 0) {
           generationParams = { ...params, ...updates };
         }
@@ -170,11 +225,63 @@ export const videoRouter = router({
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Invalid generation topic' });
       }
 
+      let previousInteractionId: string | undefined;
+      let previousRoute: VideoGenerationRoute | undefined;
+      if (previousGenerationId) {
+        if (!supportsConversationalVideoEdit(resolvedModelId)) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'The selected model does not support conversational video editing',
+          });
+        }
+
+        const previousGeneration = await new GenerationModel(serverDB, userId, wsId).findById(
+          previousGenerationId,
+        );
+        if (!previousGeneration) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Previous video generation not found',
+          });
+        }
+
+        const previousBatch = await serverDB.query.generationBatches.findFirst({
+          where: and(
+            eq(generationBatches.id, previousGeneration.generationBatchId),
+            eq(generationBatches.userId, userId),
+          ),
+        });
+        const previousAsset = previousGeneration.asset as VideoGenerationAsset | null;
+
+        if (
+          !previousBatch ||
+          previousBatch.generationTopicId !== generationTopicId ||
+          previousBatch.provider !== provider ||
+          previousBatch.model !== model ||
+          !previousAsset?.interactionId
+        ) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Previous video generation cannot be edited with the selected model',
+          });
+        }
+
+        previousInteractionId = previousAsset.interactionId;
+        const previousTask = previousGeneration.asyncTaskId
+          ? await asyncTaskModel.findById(previousGeneration.asyncTaskId)
+          : undefined;
+        previousRoute = getVideoGenerationRoute(
+          (previousTask?.metadata as VideoGenerationTaskMetadata | null)?.route,
+        );
+        generationParams = { ...generationParams, task: 'edit' };
+      }
+
       const { errorBatch, prechargeResult } = await chargeBeforeGenerate({
         generationTopicId,
         model,
         params,
         provider,
+        spendOrigin: ctx.spendOrigin,
         userId,
         workspaceId: wsId,
       });
@@ -194,7 +301,9 @@ export const videoRouter = router({
 
         // 1. Create generationBatch
         const newBatch: NewGenerationBatch = {
-          config: configForDatabase,
+          config: {
+            ...configForDatabase,
+          },
           generationTopicId,
           model,
           prompt: params.prompt,
@@ -222,6 +331,7 @@ export const videoRouter = router({
           .values({
             metadata: {
               ...(prechargeResult ? { precharge: prechargeResult } : {}),
+              ...(previousGenerationId ? { previousGenerationId } : {}),
               // The completion charge runs in a webhook/polling context that no
               // longer sees this request; carry the origin so the spend stays
               // attributed to it.
@@ -256,43 +366,48 @@ export const videoRouter = router({
       try {
         const modelRuntime = await initModelRuntimeFromDB(serverDB, userId, provider, wsId);
 
-        const callbackBaseUrl = process.env.WEBHOOK_PROXY_URL || appEnv.APP_URL;
-        const callbackUrl = `${callbackBaseUrl}/api/webhooks/video/${provider}?token=${webhookToken}`;
+        const callbackBaseUrl = appEnv.WEBHOOK_PROXY_URL || appEnv.APP_URL;
+        // Append to the base instead of resolving a root-relative path, which would drop a
+        // reverse-proxy prefix such as `https://host/lobehub`.
+        const callbackUrl = new URL(
+          `${callbackBaseUrl.replace(/\/+$/, '')}/api/webhooks/video/${provider}`,
+        );
+        callbackUrl.searchParams.set('model', resolvedModelId);
+        callbackUrl.searchParams.set('token', webhookToken);
         log('Using callback URL: %s', callbackUrl);
 
+        const requestMetadata: Record<string, unknown> = { trigger: RequestTrigger.Video };
         const response = await modelRuntime.createVideo(
           {
-            callbackUrl,
+            callbackUrl: callbackUrl.toString(),
             model: resolvedModelId,
             params: generationParams,
+            previousInteractionId,
           },
-          { metadata: { trigger: RequestTrigger.Video } },
+          {
+            metadata: requestMetadata,
+            preferredCompletionMode: appEnv.VIDEO_GENERATION_PREFER_WEBHOOK ? 'webhook' : 'polling',
+            route: previousRoute,
+          },
         );
 
-        log('Video task submitted successfully, inferenceId: %s', response?.inferenceId);
+        if (!response) throw new Error('Video generation is not supported by this runtime');
 
-        // Determine async strategy based on response:
-        // - useWebhook: provider registered a callback URL, wait for webhook
-        // - otherwise: use background polling to check status
-        const useWebhook = response && 'useWebhook' in response && response.useWebhook;
+        log('Video task submitted successfully, inferenceId: %s', response.inferenceId);
 
-        if (useWebhook) {
-          // Webhook-based provider (e.g. Volcengine): wait for callback
-          log('Webhook-based provider detected, waiting for callback');
+        const route = getVideoGenerationRoute(requestMetadata.routeAttempt);
+        const taskMetadata: VideoGenerationTaskMetadata = {
+          completionMode: response.completionMode,
+          ...(prechargeResult ? { precharge: prechargeResult } : {}),
+          ...(previousGenerationId ? { previousGenerationId } : {}),
+          ...(route ? { route } : {}),
+          // This object replaces the metadata written at insert time, so keep the
+          // spend origin the completion charge relies on.
+          ...(ctx.spendOrigin ? { spendOrigin: ctx.spendOrigin } : {}),
+          webhookToken,
+        };
 
-          await asyncTaskModel.update(asyncTaskId, {
-            inferenceId: response?.inferenceId,
-            status: AsyncTaskStatus.Processing,
-          });
-        } else if (response) {
-          // Polling-based provider (e.g. OpenAI Sora): use background polling
-          log('Polling-based provider detected (inferenceId only), scheduling background polling');
-
-          await asyncTaskModel.update(asyncTaskId, {
-            inferenceId: response.inferenceId,
-            status: AsyncTaskStatus.Processing,
-          });
-
+        const schedulePolling = (inferenceId: string) => {
           after(async () => {
             log('Background video polling scheduled for task: %s', asyncTaskId);
 
@@ -305,10 +420,13 @@ export const videoRouter = router({
                 generationBatchId: createdBatch.id,
                 generationId: createdGeneration.id,
                 generationTopicId,
-                inferenceId: response.inferenceId,
+                inferenceId,
                 model,
                 prechargeResult,
+                previousGenerationId,
                 provider,
+                route,
+                spendOrigin: ctx.spendOrigin,
                 userId,
                 workspaceId: wsId,
               });
@@ -318,6 +436,28 @@ export const videoRouter = router({
               console.error('[video] Background polling failed:', error);
             }
           });
+        };
+
+        if (response.completionMode === 'webhook') {
+          // Webhook-based provider (e.g. Volcengine): wait for callback
+          log('Webhook-based provider detected, waiting for callback');
+
+          await asyncTaskModel.update(asyncTaskId, {
+            inferenceId: response.inferenceId,
+            metadata: taskMetadata,
+            status: AsyncTaskStatus.Processing,
+          });
+        } else {
+          // Polling-based provider (e.g. OpenAI Sora): use background polling
+          log('Polling-based provider detected (inferenceId only), scheduling background polling');
+
+          await asyncTaskModel.update(asyncTaskId, {
+            inferenceId: response.inferenceId,
+            metadata: taskMetadata,
+            status: AsyncTaskStatus.Processing,
+          });
+
+          schedulePolling(response.inferenceId);
 
           log('After() hook registered for background video polling: %s', asyncTaskId);
         }
@@ -373,6 +513,27 @@ export const videoRouter = router({
         },
         success: true,
       };
+    }),
+
+  getModelLatencies: authedProcedure
+    .input(
+      z.object({
+        models: z
+          .array(z.object({ model: z.string().min(1), provider: z.string().min(1) }))
+          .max(200),
+      }),
+    )
+    .query(async ({ input }) => {
+      const latencies = await getVideoAvgLatencies(input.models);
+      const uniqueModels = [
+        ...new Map(input.models.map((item) => [getVideoLatencyKey(item), item])).values(),
+      ];
+
+      return uniqueModels.map(({ model, provider }) => ({
+        avgLatencyMs: latencies.get(getVideoLatencyKey({ model, provider })) ?? null,
+        model,
+        provider,
+      }));
     }),
 
   getVideoFreeQuota: authedProcedure

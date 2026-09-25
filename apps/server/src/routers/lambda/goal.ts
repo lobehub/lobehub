@@ -11,6 +11,10 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { GoalService } from '@/server/services/goal';
 import { advanceGoal } from '@/server/services/goal/advanceGoal';
 import { GoalManagerService, goalPlanSchema } from '@/server/services/goal/manager';
+import {
+  DEFAULT_MANAGER_MAX_TURNS,
+  managerTurnsSpent,
+} from '@/server/services/goal/recoveryPolicy';
 import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
 import {
   HeteroOperationPrincipalError,
@@ -560,7 +564,13 @@ export const goalRouter = router({
         userId: ctx.userId,
         workspaceId: ctx.workspaceId ?? undefined,
       });
-      return { data, message: 'Goal resumed', success: true };
+      // Resuming does not give the main Agent more turns, so a goal it paused
+      // for running out would stop again on the next tick. Say how to continue
+      // it instead of leaving the caller to replace it with a new goal.
+      const message = managerTurnsSpent(data.config)
+        ? `Goal resumed, but its main Agent has used all ${data.config?.manager?.maxTurns ?? DEFAULT_MANAGER_MAX_TURNS} turns and it will pause again. Raise the cap with: lh goal set-budget ${input.id} --max-manager-turns <n>`
+        : 'Goal resumed';
+      return { data, message, success: true };
     } catch (error) {
       mapGoalError(error, 'resume');
     }
@@ -673,8 +683,15 @@ export const goalRouter = router({
       idInput.extend({
         /** ISO-8601 calendar-time budget; null clears the deadline. */
         deadline: z.string().datetime().nullable().optional(),
+        maxAttemptsPerTask: z.number().int().positive().optional(),
+        /** null restores the default concurrency. */
+        maxConcurrentTasks: z.number().int().min(1).max(10).nullable().optional(),
         maxExperiments: z.number().int().min(1).max(200).optional(),
+        /** Main Agent turn cap; only for a goal that has a main Agent. */
+        maxManagerTurns: z.number().int().min(1).max(100).optional(),
         maxRounds: z.number().int().positive().nullable().optional(),
+        /** null removes the per-run step cap. */
+        maxStepsPerRun: z.number().int().positive().nullable().optional(),
         maxTotalCost: z.number().positive().nullable().optional(),
       }),
     )

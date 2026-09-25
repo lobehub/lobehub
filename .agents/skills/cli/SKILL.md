@@ -20,7 +20,8 @@ LobeHub CLI (`@lobehub/cli`) is a command-line tool for managing and interacting
 
 ```
 apps/cli/src/
-├── index.ts                  # Entry point, registers all commands
+├── index.ts                  # Entry point — parses argv, invokes program.ts
+├── program.ts                # Builds the Commander program, registers every command
 ├── api/
 │   ├── client.ts             # tRPC client (type-safe backend API)
 │   └── http.ts               # Raw HTTP utilities
@@ -31,23 +32,45 @@ apps/cli/src/
 │   └── resolveToken.ts       # Token resolution (flag > stored)
 ├── commands/                 # All CLI commands (one file per command group)
 │   ├── agent.ts              # Agent CRUD + run
+│   ├── agent-group.ts        # Agent group CRUD
+│   ├── agent-signal/         # Inspect and trigger Agent Signal source events
+│   ├── artifact.ts           # Publish local HTML pages as artifacts
+│   ├── bot.ts                # Bot integrations (channels, access policies, messengers)
+│   ├── completion.ts         # Shell completion script output
 │   ├── config.ts             # whoami, usage
 │   ├── connect.ts            # Device gateway connection + daemon
+│   ├── device.ts             # Manage connected devices
 │   ├── doc.ts                # Document management
+│   ├── doctor.ts             # Machine diagnostics (runtime, endpoints, credentials, readiness)
+│   ├── eval.ts               # Evaluation workflows & benchmarks
 │   ├── file.ts               # File management
 │   ├── generate/             # Content generation (text/image/video/tts/asr)
+│   ├── goal.ts               # Long-horizon Goal Graphs
+│   ├── hetero.ts             # Run heterogeneous agent CLIs, stream their output
 │   ├── kb.ts                 # Knowledge base management
-│   ├── login.ts              # OIDC Device Code Flow auth
+│   ├── login.ts              # OIDC Device Code Flow / API key auth
 │   ├── logout.ts             # Clear credentials
+│   ├── man.ts                # CLI manual pages
 │   ├── memory.ts             # User memory management
 │   ├── message.ts            # Message management
+│   ├── migrate/              # Import data from external tools (OpenClaw, ChatGPT, Claude, etc.)
 │   ├── model.ts              # AI model management
+│   ├── notify.ts             # Send a callback message to a topic to trigger the agent
 │   ├── plugin.ts             # Plugin management
+│   ├── project.ts            # Goal-oriented project management
 │   ├── provider.ts           # AI provider management
 │   ├── search.ts             # Global search
+│   ├── session-group.ts      # Agent session group management
 │   ├── skill.ts              # Agent skill management
 │   ├── status.ts             # Gateway connectivity check
+│   ├── task/                 # Agent task management (assignees, checkpoints, deps, review)
+│   ├── thread.ts             # Message thread management
 │   ├── topic.ts              # Conversation topic management
+│   ├── trace/                # Inspect and replay recorded agent execution traces
+│   ├── update.ts             # Self-update to the latest published version
+│   ├── user.ts               # User account & settings
+│   ├── verify.ts             # Agent Run verification machinery (criteria, rubrics, check plans)
+│   ├── verifyAcceptance.ts   # `lh acceptance`: cross-round delivery review loop
 │   └── workspace.ts          # Workspace list/scope/members/usage/audit
 ├── daemon/
 │   └── manager.ts            # Background daemon process management
@@ -66,28 +89,50 @@ apps/cli/src/
 
 ## Command Groups
 
-| Command        | Alias | Description                                                 |
-| -------------- | ----- | ----------------------------------------------------------- |
-| `lh login`     | -     | Authenticate via OIDC Device Code Flow                      |
-| `lh logout`    | -     | Clear stored credentials                                    |
-| `lh connect`   | -     | Device gateway connection & daemon management               |
-| `lh status`    | -     | Quick gateway connectivity check                            |
-| `lh agent`     | -     | Agent CRUD, run, status                                     |
-| `lh generate`  | `gen` | Content generation (text, image, video, tts, asr, download) |
-| `lh doc`       | -     | Document CRUD, batch-create, parse, topic linking           |
-| `lh file`      | -     | File list, view, delete, recent                             |
-| `lh kb`        | -     | Knowledge base CRUD, folders, docs, upload, tree view       |
-| `lh memory`    | -     | User memory CRUD + extraction                               |
-| `lh message`   | -     | Message list, search, delete, count, heatmap                |
-| `lh topic`     | -     | Topic CRUD + search + recent                                |
-| `lh skill`     | -     | Skill CRUD + import (GitHub/URL/market)                     |
-| `lh model`     | -     | Model CRUD, toggle, batch-toggle, clear                     |
-| `lh provider`  | -     | Provider CRUD, config, test, toggle                         |
-| `lh plugin`    | -     | Plugin install, uninstall, update                           |
-| `lh search`    | -     | Global search across all types                              |
-| `lh workspace` | `ws`  | Workspace list, scope switch, members, invites, usage       |
-| `lh whoami`    | -     | Current user info (including the resolved workspace scope)  |
-| `lh usage`     | -     | Monthly/daily usage statistics                              |
+| Command            | Alias | Description                                                                        |
+| ------------------ | ----- | ---------------------------------------------------------------------------------- |
+| `lh login`         | -     | Authenticate via OIDC Device Code Flow or API key                                  |
+| `lh logout`        | -     | Clear stored credentials                                                           |
+| `lh connect`       | -     | Device gateway connection & daemon management                                      |
+| `lh device`        | -     | Manage connected devices                                                           |
+| `lh status`        | -     | Quick gateway connectivity check                                                   |
+| `lh doctor`        | -     | Diagnose machine readiness (runtime, endpoints, credentials, scope, device, agent) |
+| `lh agent`         | -     | Agent CRUD, run, status                                                            |
+| `lh agent-group`   | -     | Agent group CRUD                                                                   |
+| `lh agent-signal`  | -     | Inspect and trigger Agent Signal source events                                     |
+| `lh hetero`        | -     | Run heterogeneous agent CLIs (Claude Code, Codex, etc.), stream their output       |
+| `lh goal`          | -     | Run long-horizon Goal Graphs                                                       |
+| `lh project`       | -     | Manage goal-oriented projects                                                      |
+| `lh task`          | -     | Manage agent tasks (assignees, checkpoints, deps, review)                          |
+| `lh thread`        | -     | Manage message threads                                                             |
+| `lh trace`         | -     | Inspect and replay recorded agent execution traces                                 |
+| `lh verify`        | -     | Agent Run verification machinery — criteria, rubrics, per-run check plans          |
+| `lh acceptance`    | -     | Delivery acceptances — the cross-round review loop (checks, feedback, decision)    |
+| `lh eval`          | -     | Manage evaluation workflows and benchmarks                                         |
+| `lh generate`      | `gen` | Content generation (text, image, video, tts, asr, download)                        |
+| `lh doc`           | -     | Document CRUD, batch-create, parse, topic linking                                  |
+| `lh file`          | -     | File list, view, delete, recent                                                    |
+| `lh artifact`      | -     | Publish local HTML pages as artifacts                                              |
+| `lh kb`            | -     | Knowledge base CRUD, folders, docs, upload, tree view                              |
+| `lh memory`        | -     | User memory CRUD + extraction                                                      |
+| `lh message`       | -     | Message list, search, delete, count, heatmap                                       |
+| `lh topic`         | -     | Topic CRUD + search + recent                                                       |
+| `lh notify`        | -     | Send a callback message to a topic and trigger the agent to process it             |
+| `lh migrate`       | -     | Import data from external tools (OpenClaw, ChatGPT, Claude, etc.)                  |
+| `lh bot`           | -     | Manage bot integrations (channels, access policies, messengers)                    |
+| `lh skill`         | -     | Skill CRUD + import (GitHub/URL/market)                                            |
+| `lh model`         | -     | Model CRUD, toggle, batch-toggle, clear                                            |
+| `lh provider`      | -     | Provider CRUD, config, test, toggle                                                |
+| `lh plugin`        | -     | Plugin install, uninstall, update                                                  |
+| `lh search`        | -     | Global search across all types                                                     |
+| `lh session-group` | -     | Manage agent session groups                                                        |
+| `lh workspace`     | `ws`  | Workspace list, scope switch, members, invites, usage                              |
+| `lh user`          | -     | Manage user account and settings                                                   |
+| `lh whoami`        | -     | Current user info (including the resolved workspace scope)                         |
+| `lh usage`         | -     | Monthly/daily usage statistics                                                     |
+| `lh man`           | -     | Show a manual page for the CLI or a subcommand                                     |
+| `lh completion`    | -     | Output shell completion script                                                     |
+| `lh update`        | -     | Update the CLI to the latest published version                                     |
 
 ### Workspace Scope
 
@@ -198,14 +243,14 @@ if (!options.yes) {
 
 ## Storage Locations
 
-| File          | Path                          | Purpose                                          |
-| ------------- | ----------------------------- | ------------------------------------------------ |
-| Credentials   | `~/.lobehub/credentials.json` | Encrypted tokens (AES-256-GCM)                   |
-| Settings      | `~/.lobehub/settings.json`    | Custom server/gateway URLs                       |
-| Workspace     | `~/.lobehub/active-workspace` | Active scope + the account/server it is bound to |
-| Daemon PID    | `~/.lobehub/daemon.pid`       | Background process PID                           |
-| Daemon Status | `~/.lobehub/daemon.status`    | Connection status JSON                           |
-| Daemon Log    | `~/.lobehub/daemon.log`       | Daemon output log                                |
+| File          | Path                            | Purpose                                          |
+| ------------- | ------------------------------- | ------------------------------------------------ |
+| Credentials   | `~/.lobehub/credentials.json`   | Encrypted tokens (AES-256-GCM)                   |
+| Settings      | `~/.lobehub/settings.json`      | Custom server/gateway URLs                       |
+| Workspace     | `~/.lobehub/active-workspace`   | Active scope + the account/server it is bound to |
+| Daemon PID    | `~/.lobehub/daemon.pid`         | Background process PID                           |
+| Daemon Status | `~/.lobehub/daemon.status.json` | Connection status JSON                           |
+| Daemon Log    | `~/.lobehub/daemon.log`         | Daemon output log                                |
 
 The base directory (`~/.lobehub/`) can be overridden with the `LOBEHUB_CLI_HOME` env var (e.g. `LOBEHUB_CLI_HOME=.lobehub-dev` for dev mode isolation).
 

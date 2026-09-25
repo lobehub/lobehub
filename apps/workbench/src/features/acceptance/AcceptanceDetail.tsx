@@ -13,6 +13,7 @@ import {
 import AcceptanceCheckInventory from '@/features/Acceptance/Viewer/Checks/AcceptanceCheckInventory';
 import AcceptanceGoal from '@/features/Acceptance/Viewer/Header/AcceptanceGoal';
 import AcceptanceIdentity from '@/features/Acceptance/Viewer/Header/AcceptanceIdentity';
+import AcceptanceShare from '@/features/Acceptance/Viewer/Header/AcceptanceShare';
 import { useAcceptanceBundle } from '@/features/Acceptance/Viewer/useAcceptanceBundle';
 
 import { WorkbenchHeader } from '../../shell/WorkbenchHeader';
@@ -78,7 +79,12 @@ const WorkbenchAcceptanceDetail = () => {
         <div className={styles.body}>
           <AcceptanceBundleGate height={'100%'}>
             <Flexbox className={styles.report} gap={16}>
-              <AcceptanceIdentity />
+              <Flexbox horizontal align={'flex-start'} gap={16} justify={'space-between'}>
+                <Flexbox flex={1} style={{ minWidth: 0 }}>
+                  <AcceptanceIdentity />
+                </Flexbox>
+                <AcceptanceShare />
+              </Flexbox>
               <AcceptanceGoal />
               <AcceptanceCheckInventory />
             </Flexbox>

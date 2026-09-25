@@ -9,7 +9,6 @@ import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   CheckIcon,
   ChevronDownIcon,
-  FolderIcon,
   FolderOpenIcon,
   FolderPlusIcon,
   SearchIcon,
@@ -40,6 +39,7 @@ import { useElectronStore } from '@/store/electron';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
+import DashedFolderIcon from './DashedFolderIcon';
 import DirIcon from './DirIcon';
 import { useCommitWorkingDirectory } from './useCommitWorkingDirectory';
 import { useMigrateDeviceRecents } from './useMigrateDeviceRecents';
@@ -534,7 +534,9 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
         <ChooseLocalFolderRow defaultPath={selectedDir} onPick={pick} />
       ) : (
         <AddRemoteFolderRow
-          defaultCwd={deviceDefaultCwd}
+          // Start the browser at the directory this conversation actually runs in
+          // (topic / agent override first), not the bare home folder.
+          defaultCwd={selectedDir || deviceDefaultCwd}
           deviceId={targetDeviceId}
           onBeforeOpen={() => setOpen(false)}
           onPick={pick}
@@ -545,14 +547,14 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
 
   const displayName = selectedDir
     ? (getWorkingDirectoryName(selectedDir) ?? selectedDir)
-    : t('workingDirectory.title');
+    : t('workingDirectory.unselected');
 
   const trigger = (
     <div className={styles.button}>
       {selectedDir ? (
         <DirIcon repoType={recents.find((r) => r.path === selectedDir)?.repoType} />
       ) : (
-        <Icon icon={FolderIcon} size={14} />
+        <DashedFolderIcon size={14} />
       )}
       <span className={styles.buttonLabel}>{displayName}</span>
       <Icon icon={ChevronDownIcon} size={12} />

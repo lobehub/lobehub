@@ -2,6 +2,7 @@ import type { AgentEvent, BlobStore, LLMAttemptOutput } from '@lobechat/agent-ru
 import { ToolNameResolver } from '@lobechat/context-engine';
 import type {
   Base64ImageData,
+  ChatMethodOptions,
   ChatStreamPayload,
   ContentPartData,
   ModelRuntime,
@@ -11,6 +12,7 @@ import type {
 import {
   consumeStreamUntilDone,
   isEmptyModelCompletion,
+  isModelRefusalFinishReason,
   ModelEmptyError,
   ModelRefusalError,
 } from '@lobechat/model-runtime';
@@ -56,7 +58,7 @@ interface CreateServerCallLlmAttemptInput {
   maxAttempts: number;
   messageCount: number;
   model: string;
-  modelRuntime: Pick<ModelRuntime, 'chat'>;
+  modelRuntime: Pick<ModelRuntime, 'chat' | 'handleChatStreamError'>;
   onFirstChunk: () => void;
   operationLogId: string;
   provider: string;
@@ -141,7 +143,7 @@ export class ServerCallLlmAttempt {
   private readonly maxAttempts: number;
   private readonly messageCount: number;
   private readonly model: string;
-  private readonly modelRuntime: Pick<ModelRuntime, 'chat'>;
+  private readonly modelRuntime: Pick<ModelRuntime, 'chat' | 'handleChatStreamError'>;
   private readonly onFirstChunk: () => void;
   private readonly operationLogId: string;
   private readonly provider: string;
@@ -240,7 +242,7 @@ export class ServerCallLlmAttempt {
       this.chatPayload.tools?.length ?? 0,
     );
 
-    const response = await this.modelRuntime.chat(this.chatPayload, {
+    const chatOptions: ChatMethodOptions = {
       callback: {
         onBase64Image: async ({ image }) => {
           this.onFirstChunk();
@@ -331,11 +333,17 @@ export class ServerCallLlmAttempt {
       diagnostics: this.runtimeDiagnostics,
       metadata: this.runtimeMetadata,
       user: this.ctx.userId,
-    });
+    };
+    const response = await this.modelRuntime.chat(this.chatPayload, chatOptions);
 
-    await consumeStreamUntilDone(response);
+    try {
+      await consumeStreamUntilDone(response);
 
-    if (this.streamError) throw createStreamExecutionError(this.streamError);
+      if (this.streamError) throw createStreamExecutionError(this.streamError);
+    } catch (error) {
+      await this.reportStreamFailure(error, chatOptions);
+      throw error;
+    }
 
     await this.streamSink.flushTextBuffer();
     await this.streamSink.flushReasoningBuffer();
@@ -375,9 +383,23 @@ export class ServerCallLlmAttempt {
     };
   }
 
+  /**
+   * `chat()` has already returned here, so its `onChatError` hook never sees these failures —
+   * including routed fallbacks that all fail mid-stream. Report them so they get the same
+   * sanitizing and error logging, and a trace id for the error card.
+   */
+  private async reportStreamFailure(error: unknown, options: ChatMethodOptions) {
+    // Empty completions and refusals carry their own classification and UI.
+    if (error instanceof ModelEmptyError || error instanceof ModelRefusalError) return;
+    if (this.runtimeDiagnostics.providerResponse?.aborted) return;
+    if (await isOperationInterrupted(this.ctx)) return;
+
+    await this.modelRuntime.handleChatStreamError(error, { options, payload: this.chatPayload });
+  }
+
   private async assertNonEmptyCompletion() {
     const imageCount = this.getOutputImageCount();
-    const isRefusal = this.finishReason?.toLowerCase() === 'refusal';
+    const isRefusal = isModelRefusalFinishReason(this.finishReason);
     /**
      * A refusal needs ordinary response output to count as a successful
      * completion. Provider-internal reasoning alone must not turn a blank

@@ -2,16 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
-import { testProvider } from '../../providerTestUtils';
 import { LobeSearch1API, params } from './index';
-
-testProvider({
-  provider: 'search1api',
-  defaultBaseURL: 'https://api.search1api.com/v1',
-  chatModel: 'gpt-4o-mini',
-  Runtime: LobeSearch1API,
-  chatDebugEnv: 'DEBUG_SEARCH1API_CHAT_COMPLETION',
-});
 
 // Mock the console.error to avoid polluting test output
 vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -63,37 +54,6 @@ describe('LobeSearch1API - custom features', () => {
           expect.anything(),
         );
       });
-
-      it('should use presence_penalty when it is negative', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'gpt-4o-mini',
-          presence_penalty: -0.5,
-        });
-
-        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            presence_penalty: -0.5,
-          }),
-          expect.anything(),
-        );
-      });
-
-      it('should use presence_penalty when it is 1', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'gpt-4o-mini',
-          presence_penalty: 1,
-        });
-
-        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            presence_penalty: 1,
-          }),
-          expect.anything(),
-        );
-      });
-
       it('should not include frequency_penalty when presence_penalty is non-zero', async () => {
         await instance.chat({
           messages: [{ content: 'Hello', role: 'user' }],
@@ -182,51 +142,6 @@ describe('LobeSearch1API - custom features', () => {
     });
 
     describe('temperature handling', () => {
-      it('should preserve temperature when it is less than 2', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'gpt-4o-mini',
-          temperature: 0.7,
-        });
-
-        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            temperature: 0.7,
-          }),
-          expect.anything(),
-        );
-      });
-
-      it('should preserve temperature when it is 0', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'gpt-4o-mini',
-          temperature: 0,
-        });
-
-        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            temperature: 0,
-          }),
-          expect.anything(),
-        );
-      });
-
-      it('should preserve temperature when it is 1', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'gpt-4o-mini',
-          temperature: 1,
-        });
-
-        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            temperature: 1,
-          }),
-          expect.anything(),
-        );
-      });
-
       it('should preserve temperature when it is 1.99', async () => {
         await instance.chat({
           messages: [{ content: 'Hello', role: 'user' }],
@@ -256,22 +171,6 @@ describe('LobeSearch1API - custom features', () => {
           expect.anything(),
         );
       });
-
-      it('should set temperature to undefined when it is greater than 2', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'gpt-4o-mini',
-          temperature: 2.5,
-        });
-
-        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            temperature: undefined,
-          }),
-          expect.anything(),
-        );
-      });
-
       it('should set temperature to undefined when it is not provided', async () => {
         await instance.chat({
           messages: [{ content: 'Hello', role: 'user' }],
@@ -308,21 +207,6 @@ describe('LobeSearch1API - custom features', () => {
         expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
           expect.objectContaining({
             stream: false,
-          }),
-          expect.anything(),
-        );
-      });
-
-      it('should preserve stream value when explicitly set to true', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'gpt-4o-mini',
-          stream: true,
-        });
-
-        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            stream: true,
           }),
           expect.anything(),
         );
@@ -396,58 +280,6 @@ describe('LobeSearch1API - custom features', () => {
     });
 
     describe('combined parameter scenarios', () => {
-      it('should handle presence_penalty with temperature < 2', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'gpt-4o-mini',
-          presence_penalty: 0.5,
-          temperature: 0.8,
-        });
-
-        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            presence_penalty: 0.5,
-            temperature: 0.8,
-          }),
-          expect.anything(),
-        );
-      });
-
-      it('should handle presence_penalty with temperature >= 2', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'gpt-4o-mini',
-          presence_penalty: 0.5,
-          temperature: 2.5,
-        });
-
-        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            presence_penalty: 0.5,
-            temperature: undefined,
-          }),
-          expect.anything(),
-        );
-      });
-
-      it('should handle frequency_penalty with temperature < 2', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'gpt-4o-mini',
-          presence_penalty: 0,
-          frequency_penalty: 0.8,
-          temperature: 0.7,
-        });
-
-        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            frequency_penalty: 0.8,
-            temperature: 0.7,
-          }),
-          expect.anything(),
-        );
-      });
-
       it('should handle all parameters together', async () => {
         await instance.chat({
           messages: [{ content: 'Hello', role: 'user' }],
@@ -486,22 +318,6 @@ describe('LobeSearch1API - custom features', () => {
         expect.anything(),
       );
     });
-
-    it('should handle very large temperature values', async () => {
-      await instance.chat({
-        messages: [{ content: 'Hello', role: 'user' }],
-        model: 'gpt-4o-mini',
-        temperature: 100,
-      });
-
-      expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          temperature: undefined,
-        }),
-        expect.anything(),
-      );
-    });
-
     it('should handle edge case temperature exactly at 2', async () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],

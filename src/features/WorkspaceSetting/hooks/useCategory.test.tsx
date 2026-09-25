@@ -218,4 +218,23 @@ describe('workspace settings useCategory', () => {
     expect(itemKeys).toContain(WorkspaceSettingsTabs.Plans);
     expect(itemKeys).toContain(WorkspaceSettingsTabs.Usage);
   });
+
+  it('hides Integrations until the Labs flag is on, then lists it with the account tabs', () => {
+    expect(getItemKeys()).not.toContain(WorkspaceSettingsTabs.Integrations);
+
+    useUserStore.setState({
+      preference: {
+        ...initialUserStoreState.preference,
+        lab: { ...initialUserStoreState.preference.lab, enableIntegrations: true },
+      },
+    });
+    const { result } = renderHook(() => useWorkspaceSettingCategory(), { wrapper });
+    const accountGroup = result.current.find(
+      (group) => group.key === WorkspaceSettingsGroupKey.Account,
+    );
+
+    expect(accountGroup?.items.map((item) => item.key)).toContain(
+      WorkspaceSettingsTabs.Integrations,
+    );
+  });
 });

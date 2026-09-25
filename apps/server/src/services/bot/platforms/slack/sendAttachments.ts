@@ -1,6 +1,7 @@
 import debug from 'debug';
 
-import { loadAttachmentBuffer } from '../loadAttachmentBuffer';
+import type { AttachmentFailure, AttachmentSendResult } from '../attachmentDelivery';
+import { loadAttachmentBufferWithDetail } from '../loadAttachmentBuffer';
 import type { BotMessageAttachment } from '../types';
 import type { SlackApi } from './api';
 
@@ -28,9 +29,10 @@ const fallbackFilename = (att: BotMessageAttachment, index: number): string => {
  *    (and optional thread), posting the file message. `initialComment`
  *    doubles as the text leg of the reply.
  *
- * Single-attachment failures are logged and skipped so the rest still ship.
- * Returns the number of files successfully uploaded — callers use 0 to
- * decide whether to fall back to `postMessage` for the text leg.
+ * Single-attachment failures are skipped so the rest still ship, and reported
+ * back so the caller can tell the user which ones never landed. Callers use
+ * `delivered === 0` to decide whether to fall back to `postMessage` for the
+ * text leg.
  */
 export const sendSlackAttachments = async (
   api: SlackApi,
@@ -40,14 +42,22 @@ export const sendSlackAttachments = async (
     initialComment?: string;
     threadTs?: string;
   },
-): Promise<number> => {
-  const uploaded: Array<{ id: string; title?: string }> = [];
+): Promise<AttachmentSendResult> => {
+  const uploaded: Array<{ att: BotMessageAttachment; id: string; title?: string }> = [];
+  const failures: AttachmentFailure[] = [];
 
   for (const [index, att] of params.attachments.entries()) {
     try {
-      const buffer = await loadAttachmentBuffer(att);
+      const loaded = await loadAttachmentBufferWithDetail(att);
+      const buffer = loaded.buffer;
       if (!buffer) {
-        log('sendSlackAttachments: skipping attachment with no resolvable bytes');
+        log('sendSlackAttachments: no resolvable bytes for "%s": %s', att.name, loaded.error);
+        failures.push({
+          detail: loaded.error,
+          name: att.name,
+          reason: 'source-unavailable',
+          type: att.type,
+        });
         continue;
       }
       const filename = fallbackFilename(att, index);
@@ -56,24 +66,36 @@ export const sendSlackAttachments = async (
         length: buffer.length,
       });
       await api.putFileBytes(upload_url, buffer);
-      uploaded.push({ id: file_id, title: att.name });
+      uploaded.push({ att, id: file_id, title: att.name });
     } catch (error) {
       log('sendSlackAttachments: failed on attachment "%s": %O', att.name ?? '(unnamed)', error);
+      failures.push({
+        detail: error instanceof Error ? error.message : String(error),
+        name: att.name,
+        reason: 'upload-failed',
+        type: att.type,
+      });
     }
   }
 
-  if (uploaded.length === 0) return 0;
+  if (uploaded.length === 0) return { delivered: 0, failures };
 
   try {
     await api.completeFileUpload({
       channelId: params.channelId,
-      files: uploaded,
+      files: uploaded.map(({ id, title }) => ({ id, title })),
       initialComment: params.initialComment,
       threadTs: params.threadTs,
     });
   } catch (error) {
     log('sendSlackAttachments: completeFileUpload failed: %O', error);
-    return 0;
+    // The bytes are on Slack's servers but were never posted to the channel,
+    // so from the user's point of view every one of them failed.
+    const detail = `completeUploadExternal failed: ${error instanceof Error ? error.message : String(error)}`;
+    for (const { att } of uploaded) {
+      failures.push({ detail, name: att.name, reason: 'upload-failed', type: att.type });
+    }
+    return { delivered: 0, failures };
   }
-  return uploaded.length;
+  return { delivered: uploaded.length, failures };
 };

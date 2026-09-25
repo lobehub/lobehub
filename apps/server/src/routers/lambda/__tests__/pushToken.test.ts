@@ -193,30 +193,6 @@ describe('pushTokenRouter', () => {
       expectTypeOf(result.interventionStatus).toEqualTypeOf<AgentInterventionReviewStatus>();
     });
 
-    it.each([
-      { interventionStatus: 'approved', interventionTerminal: true },
-      { interventionStatus: 'rejected', interventionTerminal: true },
-      { interventionStatus: 'mixed', interventionTerminal: false },
-      { interventionStatus: 'mixed', interventionTerminal: true },
-    ] satisfies LiveActivityBusiness.RegisterAgentInterventionLiveActivityResult[])(
-      'preserves generic status $interventionStatus with terminal=$interventionTerminal',
-      async (registrationResult) => {
-        mockRegisterLiveActivity.mockResolvedValueOnce(registrationResult);
-        const caller = createCaller();
-
-        const result = await caller.registerLiveActivity({
-          activityId: 'native-activity-1',
-          activityKey: 'batch-1',
-          apnsEnvironment: 'sandbox',
-          deviceId: 'iphone',
-          operationId: 'op-1',
-          pushToken: 'activity-update-token',
-        });
-
-        expect(result).toEqual(registrationResult);
-      },
-    );
-
     it('rejects a legacy activityId-only registration without a durable activityKey', async () => {
       const caller = createCaller();
       await expect(

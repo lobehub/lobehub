@@ -58,10 +58,13 @@ vi.mock('@/server/modules/Mecha', () => ({
       }),
     };
   }),
-  serverMessagesEngine: vi.fn().mockResolvedValue([
-    { role: 'system', content: 'You are a helpful assistant.' },
-    { role: 'user', content: 'Hello' },
-  ]),
+  serverMessagesEngine: vi.fn().mockResolvedValue({
+    messages: [
+      { role: 'system', content: 'You are a helpful assistant.' },
+      { role: 'user', content: 'Hello' },
+    ],
+    metadata: {},
+  }),
 }));
 
 // Mock AiChatService to avoid S3 dependency
@@ -360,11 +363,13 @@ describe('AI Agent Router Integration Tests', () => {
             agentId: testAgentId,
           }),
           autoStart: false,
-          modelRuntimeConfig: {
+          modelRuntimeConfig: expect.objectContaining({
             mediaCapabilities: expect.objectContaining({ vision: true }),
+            // The run's model facts, read once during discovery.
+            modelFacts: expect.objectContaining({ model: 'gpt-4o-mini', provider: 'openai' }),
             model: 'gpt-4o-mini',
             provider: 'openai',
-          },
+          }),
           userId,
         }),
       );

@@ -21,6 +21,7 @@ export { PlaceholderMessageFilterProcessor } from './PlaceholderMessageFilter';
 export {
   buildPlaceholderGenerators,
   formatPlaceholderValues,
+  HYDRATED_TOOL_RESULTS,
   PlaceholderVariablesProcessor,
   renderPlaceholderTemplate,
 } from './PlaceholderVariables';

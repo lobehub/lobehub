@@ -3,6 +3,20 @@ export default {
   'authResult.failed.title': 'Authorization Failed',
 
   'back': 'Back',
+  'keepAwake.description':
+    "LobeHub connects this computer as a device, so agents running in the cloud, on the web or on your phone can use its files and tools. When the computer goes to sleep, the device drops offline and those tasks can't reach it.",
+  'keepAwake.footerNote':
+    'You can change this anytime in Settings → Devices. Closing a laptop lid without an external display still puts it to sleep.',
+  'keepAwake.off.description':
+    'Follow the system energy settings. The device goes offline whenever the computer sleeps.',
+  'keepAwake.off.title': 'Allow Sleep',
+  'keepAwake.on.badge': 'Recommended',
+  'keepAwake.on.description':
+    'Prevent automatic sleep while the device is connected. The display can still turn off.',
+  'keepAwake.on.title': 'Stay Available',
+  'keepAwake.title': 'Keep This Computer Available',
+  'keepAwake.title2': 'So your agents can reach it anytime',
+  'keepAwake.title3': 'Even when you step away',
   'navigation.next': 'Continue',
   'next': 'Next',
 

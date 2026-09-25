@@ -13,7 +13,26 @@ tags:
 
 # Technical Development Getting Started Guide
 
-Welcome to the LobeHub Technical Development Getting Started Guide. LobeHub is an AI conversation application built on the Next.js framework, incorporating a range of technology stacks to achieve diverse functionalities and features. This guide will detail the main technical components of LobeHub and how to configure and use these technologies in your development environment.
+Choose a path based on your goal: changing LobeHub source code, operating an existing instance from a terminal, or integrating an application through an API. The rest of this page covers **source development and contributions**.
+
+## Choose a Development Path
+
+| Goal | Start here | Boundary |
+| --- | --- | --- |
+| Change the UI, server, or runtimes | [Development environment setup](/docs/development/basic/setup-development), then the stack and directory structure below | Requires a source development environment. Using the CLI or API alone does not require the full application development setup. |
+| Operate an existing instance from a terminal | [CLI README](https://github.com/lobehub/lobehub/blob/659db0780b263f023019337a48f23e17e77e260d/apps/cli/README.md); task examples in [Task Tools](/docs/usage/agent/connectors#using-the-cli) | The README covers source builds, shell linking, and server configuration. Check the installed version, target server, and account permissions. |
+| Integrate through HTTP | [OpenAPI specification](https://github.com/lobehub/lobehub/blob/659db0780b263f023019337a48f23e17e77e260d/packages/openapi/openapi.yml) | Use the public REST API, authentication, and parameters supported by the target deployment. Internal application routes are not the public API contract. |
+| Integrate through TypeScript | [Official SDK README](https://github.com/lobehub/lobehub/blob/659db0780b263f023019337a48f23e17e77e260d/packages/sdk/README.md) | `@lobehub/sdk` is generated from OpenAPI. Follow the matching README and specification for methods, authentication, and streaming. Do not assume every UI or CLI feature has an SDK method. |
+| Understand internal chat calls | [Chat API internals](/docs/development/basic/chat-api) | For source reading and debugging, not an external application integration tutorial. |
+
+### CLI and Execution Environments
+
+If the CLI is installed, run `lh --help` to inspect commands. Local build commands in the CLI README are for development in `apps/cli`, not a universal installation procedure.
+
+The [May 4, 2026 release](/changelog/2026-05-04-task-scheduler) described Claude Code / Codex delegation as desktop-only at that time; despite its filename, it is not evidence for the scheduled-task form. The [May 11 release](/changelog/2026-05-11-agent-tasks-ga) subsequently introduced cloud heterogeneous agents and `lh hetero exec`; the [June 22 release](/changelog/2026-06-22-delivery-checks) documented `lh update`. These entries do not imply identical tools, commands, or execution environments in every deployment.
+
+These entry points were checked against the repository snapshot on September 14, 2026. Verify your installed version before integration. Do not treat `/webapi/chat/[provider]` or internal tRPC routes as stable public interfaces.
+
 
 ## Basic Technology Stack
 

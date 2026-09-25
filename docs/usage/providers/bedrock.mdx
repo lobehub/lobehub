@@ -5,9 +5,8 @@ description: >-
   model API service, in LobeHub to start chatting.
 tags:
   - Amazon Bedrock
-  - Claude 3.5 Sonnet
-  - API keys
-  - Claude 3 Opus
+  - Bedrock API key
+  - AWS credentials
   - Web UI
 ---
 
@@ -71,13 +70,13 @@ This guide will walk you through how to use Amazon Bedrock in LobeHub:
 
   ### Step 3: Configure Amazon Bedrock in LobeHub
 
-  - Open the `Settings` panel in LobeHub
-  - Under `AI Providers`, find and enable the `Amazon Bedrock` option
+  - Open **App Settings → AI Providers**, select **Amazon Bedrock**, and enable the provider
 
   <Image alt={'Entering Amazon Bedrock keys in LobeHub'} inStep src={'/blog/assets34400653/7468594b-3355-4cb9-85bc-c9dace137653.webp'} />
 
-  - Enter your Access Key ID and Secret Access Key
-  - Choose an Amazon Bedrock model for your assistant to start chatting
+  - Choose an authentication method. You can enter a Bedrock API key, or enter an Access Key ID and Secret Access Key with an optional session token
+  - Select the AWS region, then select **Check** to test the connection
+  - Enable the Amazon Bedrock models you need, then select one in the Agent settings
 
   <Image alt={'Selecting and using an Amazon Bedrock model'} inStep src={'/blog/assets34400653/164b34b5-671e-418d-b34a-3b70f1156d06.webp'} />
 

@@ -2,6 +2,7 @@ import type { DocumentCommentItem } from '@lobechat/types';
 import { ChatInput, ChatInputActionBar, useEditor } from '@lobehub/editor/react';
 import { Flexbox, Markdown } from '@lobehub/ui';
 import { ActionIcon, Avatar, Button, confirmModal, Text, toast } from '@lobehub/ui/base-ui';
+import { cx } from 'antd-style';
 import { ChevronRight, MessageCircle, Pencil, Trash } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -31,6 +32,8 @@ import { COMMENT_INPUT_MAX_HEIGHT, styles } from './styles';
 
 interface CommentCardProps {
   comment: DocumentCommentItem;
+  /** Narrow-column layout for a card in the gutter: no avatar gutter, tighter spacing. */
+  compact?: boolean;
   /** Whether a focus also scrolls the card into view. Defaults to true; a pick in the body passes false. */
   focusScroll?: boolean;
   /** Set when a deep link targets this comment; each new token highlights (and by default scrolls) again. */
@@ -39,6 +42,12 @@ interface CommentCardProps {
   onReply?: () => void;
   onUpdate: DocumentCommentUpdateHandler;
   replying?: boolean;
+  /**
+   * Who a reply answers when it carries no explicit target — the thread's
+   * root author. A flat (compact) list has no indentation to imply it, so
+   * the card names the target itself.
+   */
+  threadAuthor?: DocumentCommentItem['author'];
   variant?: 'reply' | 'root';
 }
 
@@ -50,31 +59,33 @@ const hasDocumentCommentEditorData = (editorData: DocumentCommentItem['editorDat
     Object.keys(editorData).length > 0,
   );
 
-const CommentContent = memo<Pick<DocumentCommentItem, 'content' | 'editorData'>>(
-  ({ content, editorData }) => (
-    <div className={styles.commentContent}>
-      {hasDocumentCommentEditorData(editorData) ? (
-        <RichTextMessage editorState={editorData} variant={'default'} />
-      ) : (
-        <Markdown fontSize={16} variant={'chat'}>
-          {content}
-        </Markdown>
-      )}
-    </div>
-  ),
-);
+const CommentContent = memo<
+  Pick<DocumentCommentItem, 'content' | 'editorData'> & { compact?: boolean }
+>(({ compact, content, editorData }) => (
+  <div className={styles.commentContent}>
+    {hasDocumentCommentEditorData(editorData) ? (
+      <RichTextMessage editorState={editorData} variant={'default'} />
+    ) : (
+      <Markdown fontSize={compact ? 14 : 16} variant={'chat'}>
+        {content}
+      </Markdown>
+    )}
+  </div>
+));
 
 CommentContent.displayName = 'DocumentCommentContent';
 
 const CommentCard = memo<CommentCardProps>(
   ({
     comment,
+    compact = false,
     focusScroll = true,
     focusToken,
     onMutated,
     onReply,
     onUpdate,
     replying,
+    threadAuthor,
     variant = 'root',
   }) => {
     const { t } = useTranslation('file');
@@ -101,10 +112,12 @@ const CommentCard = memo<CommentCardProps>(
       comment.author.fullName ||
       comment.author.username ||
       t('pageEditor.comments.author.deactivated');
+    const replyTarget =
+      comment.replyTo?.author ?? (compact && variant === 'reply' ? threadAuthor : undefined);
     const replyToName =
-      comment.replyTo?.author.fullName ||
-      comment.replyTo?.author.username ||
-      (comment.replyTo ? t('pageEditor.comments.author.deactivated') : null);
+      replyTarget?.fullName ||
+      replyTarget?.username ||
+      (replyTarget ? t('pageEditor.comments.author.deactivated') : null);
     const edited = new Date(comment.updatedAt).getTime() > new Date(comment.createdAt).getTime();
 
     useEffect(() => {
@@ -115,13 +128,15 @@ const CommentCard = memo<CommentCardProps>(
         const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         node.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' });
       }
+      // Panel cards are placed level with their run instead of being tinted.
+      if (compact) return;
       node.classList.add(styles.highlighted);
       const timer = setTimeout(() => node.classList.remove(styles.highlighted), 2400);
       return () => {
         clearTimeout(timer);
         node.classList.remove(styles.highlighted);
       };
-    }, [focusScroll, focusToken]);
+    }, [compact, focusScroll, focusToken]);
 
     const handleUpdate = useCallback(async () => {
       const editorValue: DocumentCommentEditorValue = editorRef.current?.getValue() ?? {
@@ -187,9 +202,13 @@ const CommentCard = memo<CommentCardProps>(
 
     return (
       <Flexbox
-        className={`${styles.card} ${variant === 'reply' ? styles.replyCard : ''}`}
         data-document-comment-id={comment.id}
         ref={cardRef}
+        className={cx(
+          styles.card,
+          variant === 'reply' && styles.replyCard,
+          compact && styles.cardCompact,
+        )}
         onMouseEnter={anchor && !anchorOrphaned ? () => setHoveredRootId(comment.id) : undefined}
         onMouseLeave={
           anchor && !anchorOrphaned
@@ -197,15 +216,57 @@ const CommentCard = memo<CommentCardProps>(
             : undefined
         }
       >
-        <Flexbox horizontal align={'center'} className={styles.header} gap={8}>
+        {/* In the gutter the quote heads the card: it is what the card is about. */}
+        {anchor && compact && (
+          <AnchorQuote
+            anchor={anchor}
+            className={styles.cardAnchorCompact}
+            orphaned={anchorOrphaned}
+            onLocate={() => locateInBody(comment.id)}
+          />
+        )}
+        <Flexbox
+          horizontal
+          align={compact ? 'flex-start' : 'center'}
+          className={cx(styles.header, compact && styles.headerCompact)}
+          gap={compact ? 8 : 8}
+        >
           <Avatar
             avatar={comment.author.avatar || authorName}
-            size={variant === 'reply' ? 28 : 32}
+            size={compact ? 28 : variant === 'reply' ? 28 : 32}
           />
-          <Text fontSize={14} weight={600}>
-            {authorName}
-          </Text>
-          {replyToName && (
+          {compact ? (
+            // Name over time, the way a card in a narrow column reads best.
+            <Flexbox gap={2} style={{ minWidth: 0 }}>
+              <Flexbox horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
+                <Text ellipsis fontSize={13} weight={600}>
+                  {authorName}
+                </Text>
+                {replyToName && (
+                  <>
+                    <ChevronRight aria-hidden className={styles.replyTargetIcon} size={12} />
+                    <Text ellipsis fontSize={13} weight={600}>
+                      {replyToName}
+                    </Text>
+                  </>
+                )}
+              </Flexbox>
+              {time && (
+                <Text className={styles.meta} fontSize={12} title={timeTitle}>
+                  {time}
+                  {edited && !deleted ? ` · ${t('pageEditor.comments.edited')}` : ''}
+                  {comment.author.status === 'former'
+                    ? ` · ${t('pageEditor.comments.author.former')}`
+                    : ''}
+                </Text>
+              )}
+            </Flexbox>
+          ) : (
+            <Text fontSize={14} weight={600}>
+              {authorName}
+            </Text>
+          )}
+          {!compact && replyToName && (
             <>
               <ChevronRight aria-hidden className={styles.replyTargetIcon} size={14} />
               <Text fontSize={14} weight={600}>
@@ -213,24 +274,24 @@ const CommentCard = memo<CommentCardProps>(
               </Text>
             </>
           )}
-          {comment.author.status === 'former' && (
+          {!compact && comment.author.status === 'former' && (
             <Text className={styles.meta} fontSize={12}>
               {t('pageEditor.comments.author.former')}
             </Text>
           )}
-          {time && (
+          {!compact && time && (
             <Text className={styles.meta} fontSize={14} title={timeTitle}>
               {time}
             </Text>
           )}
-          {edited && !deleted && (
+          {!compact && edited && !deleted && (
             <Text className={styles.meta} fontSize={12}>
               {t('pageEditor.comments.edited')}
             </Text>
           )}
         </Flexbox>
 
-        {anchor && (
+        {anchor && !compact && (
           <AnchorQuote
             anchor={anchor}
             className={styles.cardAnchor}
@@ -239,7 +300,13 @@ const CommentCard = memo<CommentCardProps>(
           />
         )}
 
-        <div className={`${styles.body} ${variant === 'reply' ? styles.replyBody : ''}`}>
+        <div
+          className={cx(
+            styles.body,
+            variant === 'reply' && styles.replyBody,
+            compact && styles.bodyCompact,
+          )}
+        >
           {deleted ? (
             <Text className={styles.deleted}>{t('pageEditor.comments.deleted')}</Text>
           ) : editing ? (
@@ -312,15 +379,23 @@ const CommentCard = memo<CommentCardProps>(
               />
             </ChatInput>
           ) : (
-            <CommentContent content={comment.content} editorData={comment.editorData} />
+            <CommentContent
+              compact={compact}
+              content={comment.content}
+              editorData={comment.editorData}
+            />
           )}
         </div>
 
         {!optimistic && !editing && (onReply || comment.canEdit || comment.canDelete) && (
           <Flexbox
             horizontal
-            className={`${styles.actions} ${variant === 'reply' ? styles.replyCardActions : ''}`}
             gap={4}
+            className={cx(
+              styles.actions,
+              variant === 'reply' && styles.replyCardActions,
+              compact && styles.actionsCompact,
+            )}
           >
             {onReply && (
               <ActionIcon

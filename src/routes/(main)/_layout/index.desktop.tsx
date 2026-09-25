@@ -15,6 +15,7 @@ import DesktopLayoutContainer from '@/features/DesktopLayoutContainer';
 import DesktopNavigationBridge from '@/features/DesktopNavigationBridge';
 import ActiveConversationBridge from '@/features/Electron/ActiveConversationBridge';
 import AuthRequiredModal from '@/features/Electron/AuthRequiredModal';
+import HeteroRestartRecovery from '@/features/Electron/HeterogeneousAgent/RestartRecovery';
 import OverlayCaptureUploader from '@/features/Electron/ScreenCapture/OverlayCaptureUploader';
 import OverlayMessageDispatcher from '@/features/Electron/ScreenCapture/OverlayMessageDispatcher';
 import OverlaySnapshotPublisher from '@/features/Electron/ScreenCapture/OverlaySnapshotPublisher';
@@ -93,6 +94,7 @@ const Layout: FC = () => {
         <Suspense fallback={null}>
           <HotkeyHelperPanel />
           <GatewayMuxWarmup />
+          <HeteroRestartRecovery />
           <RegisterHotkeys />
           <CmdkLazy />
           <GlobalApprovalNotification />

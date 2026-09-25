@@ -147,6 +147,8 @@ export const lobeHubOnlineModelDescriptions = {
     'Grok 4.5 delivers performance close to Claude Opus 4.8 with exceptionally fast responses.',
   'lobehub.grok-4.6.description':
     'Grok 4.6 builds on Grok 4.5 with a particular focus on long-running agents and more ambitious interactive and visual work.',
+  'lobehub.grok-4.7.description':
+    'Grok 4.7 is more reliable on long coding and knowledge work than Grok 4.6, at the same price and speed.',
   'lobehub.imagen-4.0-fast-generate-001.description':
     'Imagen 4th generation text-to-image model series',
   'lobehub.imagen-4.0-generate-001.description': 'Imagen 4th generation text-to-image model series',
@@ -168,6 +170,12 @@ export const lobeHubOnlineModelDescriptions = {
     'Xiaomi MiMo-V2.5-Pro is the flagship of the MiMo-V2.5 series, delivering major gains in general agentic capabilities, complex software engineering, and long-horizon tasks. Its performance on demanding agentic benchmarks is comparable to Claude Opus 4.6.',
   'lobehub.mimo-v2.5.description':
     'Xiaomi MiMo-V2.5 is a multimodal agent model that understands images, video, audio, and text. It delivers Pro-level agentic performance at roughly half the inference cost, with faster responses and stronger multimodal perception than MiMo-V2-Omni.',
+  'lobehub.mimo-v2.6-flash.description':
+    'A low-cost multimodal agent model that exceeds MiMo-V2.5-Pro on agent benchmarks at the previous MiMo-V2.5 price.',
+  'lobehub.mimo-v2.6-pro-ultraspeed.description':
+    'MiMo-V2.6-Pro quality at up to 20 times the output speed for latency-sensitive agents.',
+  'lobehub.mimo-v2.6-pro.description':
+    'An open-source multimodal flagship for long-horizon coding and computer use, with 1M context at the previous Pro price.',
   'lobehub.MiniMax-M2.5-highspeed.description':
     'Same performance as M2.5 with significantly faster inference.',
   'lobehub.MiniMax-M2.5.description':

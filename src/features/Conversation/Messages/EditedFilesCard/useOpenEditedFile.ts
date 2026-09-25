@@ -171,7 +171,9 @@ export const useOpenEditedFile = () => {
   const filesystemAvailable = (effectiveTarget === 'local' && isDesktop) || isDeviceMode;
 
   return useCallback(
-    (entry: OperationEditedFile): (() => void) | undefined => {
+    (
+      entry: Pick<OperationEditedFile, 'kind' | 'path' | 'sandboxBacked'>,
+    ): (() => void) | undefined => {
       if (!canPreviewEditedFile(entry)) return undefined;
       if (entry.sandboxBacked) {
         if (!activeTopicId) return undefined;

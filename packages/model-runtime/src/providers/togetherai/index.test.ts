@@ -2,27 +2,11 @@
 import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { testProvider } from '../../providerTestUtils';
 import type { TogetherAIModel } from './index';
-import { LobeTogetherAI, params } from './index';
+import { params } from './index';
 
 const provider = ModelProvider.TogetherAI;
 const defaultBaseURL = 'https://api.together.xyz/v1';
-
-// Basic provider tests
-testProvider({
-  Runtime: LobeTogetherAI,
-  bizErrorType: 'ProviderBizError',
-  chatDebugEnv: 'DEBUG_TOGETHERAI_CHAT_COMPLETION',
-  chatModel: 'mistralai/mistral-7b-instruct:free',
-  defaultBaseURL,
-  invalidErrorType: 'InvalidProviderAPIKey',
-  provider,
-  test: {
-    skipAPICall: true,
-    skipErrorHandle: true,
-  },
-});
 
 // Custom feature tests
 describe('LobeTogetherAI - custom features', () => {

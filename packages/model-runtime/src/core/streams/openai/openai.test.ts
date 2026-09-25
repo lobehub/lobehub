@@ -629,7 +629,7 @@ describe('OpenAIStream', () => {
           `data: "stop"\n`,
           'id: chatcmpl-B7CcnaeK3jqWBMOhxg7SSKFwlk7dC',
           'event: usage',
-          `data: {"inputAudioTokens":0,"inputCacheMissTokens":1646,"inputTextTokens":1646,"outputTextTokens":11,"totalInputTokens":1646,"totalOutputTokens":11,"totalTokens":1657}\n`,
+          `data: {"inputAudioTokens":0,"inputCacheMissTokens":1646,"inputCachedTokens":0,"inputTextTokens":1646,"outputTextTokens":11,"totalInputTokens":1646,"totalOutputTokens":11,"totalTokens":1657}\n`,
         ].map((i) => `${i}\n`),
       );
     });
@@ -731,7 +731,7 @@ describe('OpenAIStream', () => {
           `data: {"delta":{},"id":"chatcmpl-c1f6a6a6-fcf8-463a-96bf-cf634d3e98a5","index":0}\n`,
           'id: chatcmpl-c1f6a6a6-fcf8-463a-96bf-cf634d3e98a5',
           'event: usage',
-          `data: {"inputAudioTokens":0,"inputCacheMissTokens":1797,"inputTextTokens":1797,"outputTextTokens":1720,"totalInputTokens":1797,"totalOutputTokens":1720,"totalTokens":3517}\n`,
+          `data: {"inputAudioTokens":0,"inputCacheMissTokens":1797,"inputCachedTokens":0,"inputTextTokens":1797,"outputTextTokens":1720,"totalInputTokens":1797,"totalOutputTokens":1720,"totalTokens":3517}\n`,
         ].map((i) => `${i}\n`),
       );
     });
@@ -1715,7 +1715,7 @@ describe('OpenAIStream', () => {
           `data: "这是最终答案。"\n`,
           'id: 1',
           'event: usage',
-          `data: {"inputCacheMissTokens":10,"inputTextTokens":10,"outputReasoningTokens":20,"outputTextTokens":30,"totalInputTokens":10,"totalOutputTokens":50,"totalTokens":60}\n`,
+          `data: {"inputCacheMissTokens":10,"inputCachedTokens":0,"inputTextTokens":10,"outputReasoningTokens":20,"outputTextTokens":30,"totalInputTokens":10,"totalOutputTokens":50,"totalTokens":60}\n`,
         ].map((i) => `${i}\n`),
       );
     });
@@ -1996,7 +1996,7 @@ describe('OpenAIStream', () => {
           `data: "帮助。"\n`,
           'id: 1',
           'event: usage',
-          `data: {"inputCacheMissTokens":6,"inputTextTokens":6,"outputReasoningTokens":70,"outputTextTokens":34,"totalInputTokens":6,"totalOutputTokens":104,"totalTokens":110}\n`,
+          `data: {"inputCacheMissTokens":6,"inputCachedTokens":0,"inputTextTokens":6,"outputReasoningTokens":70,"outputTextTokens":34,"totalInputTokens":6,"totalOutputTokens":104,"totalTokens":110}\n`,
         ].map((i) => `${i}\n`),
       );
     });
@@ -2215,7 +2215,7 @@ describe('OpenAIStream', () => {
           `data: "帮助。"\n`,
           'id: 1',
           'event: usage',
-          `data: {"inputCacheMissTokens":6,"inputTextTokens":6,"outputReasoningTokens":70,"outputTextTokens":34,"totalInputTokens":6,"totalOutputTokens":104,"totalTokens":110}\n`,
+          `data: {"inputCacheMissTokens":6,"inputCachedTokens":0,"inputTextTokens":6,"outputReasoningTokens":70,"outputTextTokens":34,"totalInputTokens":6,"totalOutputTokens":104,"totalTokens":110}\n`,
         ].map((i) => `${i}\n`),
       );
     });
@@ -2484,7 +2484,7 @@ describe('OpenAIStream', () => {
           `data: "帮助。"\n`,
           'id: 1',
           'event: usage',
-          `data: {"inputCacheMissTokens":6,"inputTextTokens":6,"outputReasoningTokens":70,"outputTextTokens":34,"totalInputTokens":6,"totalOutputTokens":104,"totalTokens":110}\n`,
+          `data: {"inputCacheMissTokens":6,"inputCachedTokens":0,"inputTextTokens":6,"outputReasoningTokens":70,"outputTextTokens":34,"totalInputTokens":6,"totalOutputTokens":104,"totalTokens":110}\n`,
         ].map((i) => `${i}\n`),
       );
     });
@@ -2685,7 +2685,7 @@ describe('OpenAIStream', () => {
           `data: "帮助。"\n`,
           'id: 1',
           'event: usage',
-          `data: {"inputCacheMissTokens":6,"inputTextTokens":6,"outputReasoningTokens":70,"outputTextTokens":34,"totalInputTokens":6,"totalOutputTokens":104,"totalTokens":110}\n`,
+          `data: {"inputCacheMissTokens":6,"inputCachedTokens":0,"inputTextTokens":6,"outputReasoningTokens":70,"outputTextTokens":34,"totalInputTokens":6,"totalOutputTokens":104,"totalTokens":110}\n`,
         ].map((i) => `${i}\n`),
       );
     });
@@ -2886,7 +2886,7 @@ describe('OpenAIStream', () => {
           `data: "帮助。"\n`,
           'id: 1',
           'event: usage',
-          `data: {"inputCacheMissTokens":6,"inputTextTokens":6,"outputReasoningTokens":70,"outputTextTokens":34,"totalInputTokens":6,"totalOutputTokens":104,"totalTokens":110}\n`,
+          `data: {"inputCacheMissTokens":6,"inputCachedTokens":0,"inputTextTokens":6,"outputReasoningTokens":70,"outputTextTokens":34,"totalInputTokens":6,"totalOutputTokens":104,"totalTokens":110}\n`,
         ].map((i) => `${i}\n`),
       );
     });

@@ -12,6 +12,7 @@ const {
   mockGetAiProviderModelList,
   mockGetHiddenBuiltinModelsForUser,
   mockUpdateAgent,
+  mockServiceUpdateConfig,
   mockUpdateConfig,
 } = vi.hoisted(() => ({
   mockCreatePlugin: vi.fn(),
@@ -21,12 +22,19 @@ const {
   mockGetAiProviderModelList: vi.fn(),
   mockGetHiddenBuiltinModelsForUser: vi.fn(),
   mockUpdateAgent: vi.fn(),
+  mockServiceUpdateConfig: vi.fn(),
   mockUpdateConfig: vi.fn(),
 }));
 
 vi.mock('@/business/server/aiProvider', () => ({
   getHiddenBuiltinModelsForUser: mockGetHiddenBuiltinModelsForUser,
   getModelRedirects: vi.fn(async () => ({})),
+}));
+
+vi.mock('@/server/services/agent', () => ({
+  AgentService: vi.fn(function () {
+    return { updateAgentConfig: mockServiceUpdateConfig };
+  }),
 }));
 
 vi.mock('@/database/models/agent', () => ({
@@ -83,7 +91,20 @@ const createWorkspaceRuntime = () =>
 describe('agentBuilderRuntime', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockServiceUpdateConfig.mockImplementation((...args) => mockUpdateConfig(...args));
     mockGetHiddenBuiltinModelsForUser.mockResolvedValue(undefined);
+  });
+
+  it('does not persist a model change rejected by the shared-agent policy', async () => {
+    mockGetAgentConfigById.mockResolvedValue({ id: 'agent-1', provider: 'lobehub' });
+    mockServiceUpdateConfig.mockRejectedValueOnce(new Error('Shared agent provider is restricted'));
+    const result = await createRuntime().updateConfig(
+      { config: { model: 'gpt-4o', provider: 'openai' } },
+      { editingAgentId: 'agent-1', toolManifestMap: {} },
+    );
+    expect(result.success).toBe(false);
+    expect(result.content).toContain('Shared agent provider is restricted');
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
   });
 
   describe('getAvailableModels', () => {

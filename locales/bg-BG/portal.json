@@ -1,4 +1,5 @@
 {
+  "FilePreview.actions.download": "Изтегляне на изходния файл",
   "FilePreview.tabs.chunk": "Фрагмент",
   "FilePreview.tabs.file": "Файл",
   "Plugins": "Умения",
@@ -29,6 +30,7 @@
   "artifacts.svg.copySuccess": "Изображението е копирано успешно",
   "artifacts.svg.download.png": "Изтегли като PNG",
   "artifacts.svg.download.svg": "Изтегли като SVG",
+  "document.saveConflict": "Този документ беше актуализиран другаде. Опресняване до най-новата версия.",
   "document.todos.allCompleted": "Всички задачи са изпълнени",
   "document.todos.title": "Задачи",
   "emptyArtifactList": "Все още няма артефакти. Използвайте умения в разговора и се върнете тук.",

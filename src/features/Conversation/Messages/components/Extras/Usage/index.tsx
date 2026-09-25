@@ -27,6 +27,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     font-size: 12px;
     color: ${cssVar.colorTextQuaternary};
+    white-space: nowrap;
   `,
 }));
 

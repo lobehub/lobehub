@@ -1,4 +1,9 @@
-import type { ChatTopicBotContext, TaskContext, TaskTopicHandoff } from '@lobechat/types';
+import type {
+  ChatTopicBotContext,
+  TaskContext,
+  TaskTopicHandoff,
+  UserToolConfig,
+} from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 import { sql } from 'drizzle-orm';
@@ -7,6 +12,7 @@ import { MessageModel } from '@/database/models/message';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
+import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
 import type { AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import type { BotCallbackBody } from '@/server/services/bot/BotCallbackService';
@@ -29,7 +35,8 @@ const FALLBACK_MAX_LENGTH = 2000;
 const normalizeReason = (reason: string): CallbackReason => {
   if (reason === 'interrupted') return 'interrupted';
   if (reason === 'error') return 'error';
-  // 'done' | 'max_steps' | 'cost_limit' | … → treat as a normal completion.
+  // 'done' | 'max_steps' | 'cost_limit' | 'tool_call_repeat_limit' | … →
+  // treat as a normal completion.
   return 'done';
 };
 
@@ -234,6 +241,18 @@ export class TaskResultBridgeService {
         this.workspaceId,
       ).getLastMainThreadSpineMessageId(originTopicId);
 
+      // A creator wakeup continues a user-facing conversation. Preserve the
+      // same approval preferences as a foreground send, including its allow
+      // list. Bot channels still lack this UI/resume contract and stay headless.
+      const settings = botContext
+        ? undefined
+        : await new UserModel(this.db, this.userId).getUserSettings();
+      const intervention = (settings?.tool as UserToolConfig | undefined)?.humanIntervention;
+      const approvalMode =
+        intervention?.approvalMode === 'headless'
+          ? 'auto-run'
+          : (intervention?.approvalMode ?? 'manual');
+
       const result = await new AiAgentService(this.db, this.userId, {
         workspaceId: this.workspaceId,
       }).execAgent({
@@ -247,7 +266,9 @@ export class TaskResultBridgeService {
         suppressUserMessage: true,
         topicStartReservationId: reservationId,
         trigger: RequestTrigger.AgentSignal,
-        userInterventionConfig: { approvalMode: 'headless' },
+        userInterventionConfig: botContext
+          ? { approvalMode: 'headless' }
+          : { allowList: intervention?.allowList ?? [], approvalMode },
       });
       await callbackStore.attachCreatorOperation(receiptIds, result.operationId);
     } catch (error) {

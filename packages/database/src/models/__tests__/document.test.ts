@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { agentShareFileAccessScope } from '@lobechat/types';
+import { agentShareDocumentAccessScope, agentShareFileAccessScope } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -377,6 +377,63 @@ describe('DocumentModel', () => {
   });
 
   describe('findById', () => {
+    it('hides a generated Agent Share document from ordinary document reads', async () => {
+      const shareDocumentModel = new DocumentModel(
+        serverDB,
+        userId,
+        undefined,
+        undefined,
+        agentShareDocumentAccessScope({
+          shareId: 'share-a',
+          topicId: 'topic-a',
+          visitorUserId: 'visitor-a',
+        }),
+      );
+      const { id: documentId, slug } = await shareDocumentModel.create({
+        content: 'private generated visitor content',
+        fileType: 'custom/document',
+        filename: 'visitor-note.md',
+        source: 'agent-document://agent-a/visitor-note.md',
+        sourceType: 'agent',
+        title: 'Visitor note',
+        totalCharCount: 33,
+        totalLineCount: 1,
+      });
+
+      await expect(documentModel.query({ sourceTypes: ['agent'] })).resolves.toMatchObject({
+        items: [],
+        total: 0,
+      });
+      await expect(documentModel.findById(documentId)).resolves.toBeUndefined();
+      await expect(documentModel.findByIds([documentId])).resolves.toEqual([]);
+      await expect(documentModel.findBySlug(slug!)).resolves.toBeUndefined();
+      await expect(shareDocumentModel.findById(documentId)).resolves.toBeDefined();
+    });
+
+    it('strips caller-supplied Agent Share provenance from ordinary document creates', async () => {
+      const created = await documentModel.create({
+        content: 'ordinary content',
+        fileType: 'custom/document',
+        filename: 'ordinary.md',
+        metadata: {
+          agentShare: {
+            shareId: 'forged-share',
+            topicId: 'forged-topic',
+            visitorUserId: 'forged-visitor',
+          },
+          purpose: 'ordinary',
+        },
+        source: 'document',
+        sourceType: 'api',
+        title: 'Ordinary note',
+        totalCharCount: 16,
+        totalLineCount: 1,
+      });
+
+      expect(created.metadata).toEqual({ purpose: 'ordinary' });
+      await expect(documentModel.findById(created.id)).resolves.toBeDefined();
+    });
+
     it('hides a document derived from an agent-share file from ordinary document reads', async () => {
       const { id: fileId } = await fileModel.create({
         fileType: 'application/pdf',
@@ -473,6 +530,70 @@ describe('DocumentModel', () => {
       const unchanged = await documentModel.findById(documentId);
 
       expect(unchanged?.content).toBe('Original content');
+    });
+
+    it('should return the committed updatedAt', async () => {
+      const { documentId } = await createTestDocument(documentModel, fileModel, 'Original content');
+
+      const updatedAt = await documentModel.update(documentId, { content: 'Updated content' });
+
+      const found = await documentModel.findById(documentId);
+      expect(updatedAt).toEqual(found?.updatedAt);
+    });
+
+    it('advances the version for concurrent writes even when callers send the same old timestamp', async () => {
+      const { documentId } = await createTestDocument(documentModel, fileModel, 'Original content');
+      const original = (await documentModel.findById(documentId))!;
+      const versions = await Promise.all(
+        Array.from({ length: 4 }, (_, index) =>
+          documentModel.update(documentId, {
+            content: `Write ${index}`,
+            updatedAt: original.updatedAt,
+          }),
+        ),
+      );
+      const timestamps = versions.map((version) => version!.getTime()).sort((a, b) => a - b);
+      expect(new Set(timestamps).size).toBe(4);
+      expect(timestamps[0]).toBeGreaterThan(original.updatedAt.getTime());
+      expect((await documentModel.findById(documentId))?.updatedAt.getTime()).toBe(timestamps[3]);
+    });
+
+    it('advances updatedAt from the database clock when the update omits it', async () => {
+      const { documentId } = await createTestDocument(documentModel, fileModel, 'Original content');
+      const original = (await documentModel.findById(documentId))!;
+
+      await serverDB
+        .update(documents)
+        .set({ title: 'Renamed' })
+        .where(eq(documents.id, documentId));
+
+      const next = await documentModel.findById(documentId);
+      expect(next?.title).toBe('Renamed');
+      expect(next!.updatedAt.getTime()).toBeGreaterThan(original.updatedAt.getTime());
+    });
+
+    it('ignores a caller-supplied updatedAt and stores a newer database version', async () => {
+      const { documentId } = await createTestDocument(documentModel, fileModel, 'Original content');
+      const original = (await documentModel.findById(documentId))!;
+      const supplied = new Date('2020-01-01T00:00:00.000Z');
+
+      const updatedAt = await documentModel.update(documentId, {
+        content: 'Updated content',
+        updatedAt: supplied,
+      });
+
+      expect(updatedAt).toBeInstanceOf(Date);
+      expect(updatedAt!.getTime()).toBeGreaterThan(original.updatedAt.getTime());
+      expect(updatedAt!.getTime()).not.toBe(supplied.getTime());
+      expect((await documentModel.findById(documentId))?.updatedAt).toEqual(updatedAt);
+    });
+
+    it('should return undefined when the row does not belong to the caller', async () => {
+      const { documentId } = await createTestDocument(documentModel, fileModel, 'Original content');
+
+      const updatedAt = await documentModel2.update(documentId, { content: 'Hacked content' });
+
+      expect(updatedAt).toBeUndefined();
     });
   });
 
@@ -615,6 +736,7 @@ describe('DocumentModel', () => {
 
       const { id: firstId } = await documentModel.create({
         content: 'First document',
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
         fileId: file.id,
         fileType: 'text/plain',
         source: file.url,
@@ -625,6 +747,7 @@ describe('DocumentModel', () => {
 
       await documentModel.create({
         content: 'Second document',
+        createdAt: new Date('2026-01-01T00:00:01.000Z'),
         fileId: file.id,
         fileType: 'text/plain',
         source: file.url,

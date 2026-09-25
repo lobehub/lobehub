@@ -46,6 +46,7 @@ import type { CheckProposal } from '../Review/proposal';
 import { classifyProposalEdit } from '../Review/proposal';
 import ProposalCard from '../Review/ProposalCard';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
+import { canCommentOnAcceptanceEvidence } from '../visibility';
 import {
   AcceptedNote,
   collectEvidenceById,
@@ -55,6 +56,7 @@ import {
 } from './CheckHistory';
 import { shouldCollapseAfterReview, userReviewState } from './checkState';
 import { STATE_META } from './checkStatus';
+import { hasCheckHistory, splitCheckReviews } from './readPresentation';
 import { checkRowDisclosure } from './rowDisclosure';
 import { styles } from './styles';
 import type { AcceptanceCheck, CheckReviewInput, ProposalDismissInput } from './types';
@@ -125,11 +127,8 @@ export const AcceptanceCheckRow = memo<{
     // The decision is stamped on the check's result row — a never-executed
     // check has no evidence to judge, so it exposes no review actions.
     const reviewable = canReview && Boolean(check.result);
-    const activeReview =
-      check.userReview && !check.userReview.stale
-        ? check.reviews.at(-1) // the standing verdict is always the newest entry
-        : undefined;
-    const historyReviews = check.reviews.filter((entry) => entry !== activeReview);
+    // The standing verdict is always the newest entry; consumed verdicts belong to history.
+    const { activeReview, historyReviews } = splitCheckReviews(check);
     const evidenceById = collectEvidenceById(check);
 
     // Regions the proposal wants drawn on the evidence images already in this
@@ -146,7 +145,7 @@ export const AcceptanceCheckRow = memo<{
       });
       return map.size > 0 ? map : undefined;
     }, [proposalOpen, check.prediction]);
-    const hasHistory = check.revisions > 1 || historyReviews.length > 0;
+    const hasHistory = hasCheckHistory(check, historyReviews);
 
     // Collaboration: threads circled on this check's evidence. Only inside the
     // viewer — the row also renders in hosts with no acceptance scope.
@@ -226,7 +225,9 @@ export const AcceptanceCheckRow = memo<{
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [proposalOverlays, checkThreads, comments.canComment, canResolveThread, authorColor]);
     const canCommentEvidence =
-      comments.canComment && Boolean(check.result) && hasAnnotatableEvidence(check);
+      canCommentOnAcceptanceEvidence(bundle, comments.canComment) &&
+      Boolean(check.result) &&
+      hasAnnotatableEvidence(check);
     const openEvidenceComment = () =>
       openEvidenceCommentModal({
         evidence: check.evidence,

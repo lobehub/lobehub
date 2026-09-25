@@ -1,0 +1,67 @@
+---
+title: Built-in Browser
+description: Let an agent read and interact with web pages in a visible browser, and take over when necessary.
+tags:
+  - LobeHub
+  - Browser
+  - Tools
+---
+
+# Built-in Browser
+
+The built-in browser lets an agent open a web page in the sidebar and interact with it. You can watch the actions and take over.
+
+## Three Different Features
+
+| Feature | Purpose |
+| --- | --- |
+| Web Search | Find online information and read retrieved pages |
+| Built-in Browser | Open a page and interact with its controls |
+| Browser pairing | Connect the current browser tab as an execution device |
+
+Browser pairing does not, by itself, enable the built-in browser. See [Execution Devices](/docs/usage/agent/execution-devices) for pairing instructions.
+
+## What the Agent Can Do
+
+Where the built-in browser tool is available, the agent can:
+
+- Open a URL and read page content
+- Click links and buttons
+- Fill text fields and forms
+- Capture a screenshot
+- Leave the visible page available for you to take over.
+
+Examples include a request to read a product page, compare visible information, or prepare a form for your review. After submission, check the website for confirmation.
+
+## Start a Browser Task
+
+1. Check that the built-in browser tool is available for the current agent and environment.
+2. Review its LobeHub tool permissions.
+3. Give the agent a URL and a specific task.
+4. Watch the page in the sidebar.
+5. Take over to complete steps that require your input.
+6. Check the resulting page before you accept the task as completed.
+
+Example: “Open this page, read the plan details, and summarize them. Do not submit forms or make purchases.”
+
+For forms, specify whether the agent can fill fields only or also submit them. Require review before purchases, publication, deletion, or other consequential actions.
+
+## Login and Manual Takeover
+
+If a site requires sign-in, take over and enter your credentials yourself. Do not put passwords or verification codes in the chat.
+
+Before another task, check the visible page and account. To sign out, use the website's sign-out control rather than switch or close the topic.
+
+## Availability and Limits
+
+Availability depends on the current agent and execution environment. Check that the built-in browser tool is available before you start. Some websites require manual sign-in or verification.
+
+{/* Implementation reference: LobeHub Docs · 逐页改动清单, reviewed September 10, 2026, attributes the built-in browser and Claude Code integration to v2.2.11. One unsupported execution mode is not identified. The June 15 browser-pairing release note describes a separate feature: /changelog/2026-06-15-browser-pairing. Login persistence and topic-lifecycle behavior remain unspecified. */}
+
+<Cards>
+  <Card href={'/docs/usage/agent/web-search'} title={'Web Search'} />
+
+  <Card href={'/docs/usage/agent/execution-devices'} title={'Execution Devices'} />
+
+  <Card href={'/docs/usage/agent/connect-external-agents'} title={'Connect External Agents'} />
+</Cards>

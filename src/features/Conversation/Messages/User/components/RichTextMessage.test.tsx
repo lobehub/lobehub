@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  */
 import { moment } from '@lobehub/editor';
-import { act, cleanup, render } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import RichTextMessage from './RichTextMessage';
@@ -62,6 +62,27 @@ const localFileEditorState = {
   },
 };
 
+const blockImageEditorState = {
+  root: {
+    children: [
+      {
+        altText: 'usage chart',
+        height: 'inherit',
+        maxWidth: 904,
+        src: 'https://example.com/chart.png',
+        type: 'block-image',
+        version: 1,
+        width: 'inherit',
+      },
+    ],
+    direction: null,
+    format: '',
+    indent: 0,
+    type: 'root',
+    version: 1,
+  },
+};
+
 afterEach(() => {
   cleanup();
 });
@@ -102,6 +123,29 @@ describe('RichTextMessage', () => {
     });
 
     expect(container.textContent).toContain('report.md');
+  });
+
+  // Regression (LOBE-14115): the renderer's stock image node is a bare <img>,
+  // so an image inside a published comment could not be enlarged.
+  it('should open the image viewer when a rendered image is clicked', async () => {
+    const { container } = render(
+      <RichTextMessage editorState={blockImageEditorState} variant={'default'} />,
+    );
+
+    await act(async () => {
+      await moment();
+    });
+
+    const image = container.querySelector('img');
+    expect(image).toHaveAttribute('src', 'https://example.com/chart.png');
+    expect(container.querySelector('figure')).not.toBeNull();
+
+    await act(async () => {
+      fireEvent.pointerDown(image!);
+      fireEvent.click(image!);
+    });
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
   });
 
   it('should render nothing for empty editor state', () => {

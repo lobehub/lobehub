@@ -4,19 +4,18 @@ import {
   type TaskCurrentActivity,
 } from '@lobechat/types';
 import { ThreadStatus } from '@lobechat/types';
+import { formatDuration as formatDurationMs, formatElapsedClockTime } from '@lobechat/utils';
 
 /**
  * Format duration in milliseconds to human-readable string
  * @param duration Duration in milliseconds
- * @returns Formatted string like "500ms", "1.5s", "2m 30s"
+ * @returns Formatted string like "500ms", "1.5s", "2m 30s", "1h 5m", "1d 2h 5m"
  */
 export const formatDuration = (duration: number | undefined | null): string | null => {
   if (!duration) return null;
   if (duration < 1000) return `${duration}ms`;
   if (duration < 60_000) return `${(duration / 1000).toFixed(1)}s`;
-  const minutes = Math.floor(duration / 60_000);
-  const seconds = ((duration % 60_000) / 1000).toFixed(0);
-  return `${minutes}m ${seconds}s`;
+  return formatDurationMs(Math.round(duration / 1000) * 1000);
 };
 
 /**
@@ -31,20 +30,11 @@ export const formatCost = (cost: number | undefined | null): string | null => {
 };
 
 /**
- * Format elapsed time in milliseconds to mm:ss or hh:mm:ss format
+ * Format elapsed time in milliseconds as a running clock
  * @param ms Milliseconds
- * @returns Formatted string like "2:30" or "1:02:30"
+ * @returns Formatted string like "02:30", "1:02:30" or "1d 01:02:30"
  */
-export const formatElapsedTime = (ms: number): string => {
-  const seconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-
-  if (hours > 0) {
-    return `${hours}:${String(minutes % 60).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
-  }
-  return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
-};
+export const formatElapsedTime = (ms: number): string => formatElapsedClockTime(ms);
 
 /**
  * Format tool name from activity identifier and apiName

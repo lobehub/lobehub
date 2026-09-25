@@ -125,6 +125,9 @@ const gatewayHandshake: DoctorCheck = {
         autoReconnect: false,
         gatewayUrl,
         serverUrl: credential.serverUrl,
+        // A probe connection proves reachability and exits; it must never
+        // advertise itself as able to serve tunnels.
+        tunnel: false,
         token: credential.token!,
         tokenType: credential.tokenType,
         userId: credential.userId!,

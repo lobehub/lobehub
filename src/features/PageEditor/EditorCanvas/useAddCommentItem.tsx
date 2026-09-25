@@ -10,8 +10,6 @@ import { MessageSquarePlus } from 'lucide-react';
 import { useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { prefersReducedMotion } from '@/features/PageEditor/DocumentComments/anchor/commentLocator';
-import { DOCUMENT_COMMENT_COMPOSER_ID } from '@/features/PageEditor/DocumentComments/anchor/constants';
 import { captureSelectionAnchor } from '@/features/PageEditor/DocumentComments/anchor/textAnchor';
 import { usePermission } from '@/hooks/usePermission';
 
@@ -75,23 +73,12 @@ export const useAddCommentItem = (
               capturedAnchorRef.current = null;
               if (!anchor) return;
 
+              // The composer answers the selection itself: beside the run in
+              // the gutter, or scrolled into view below the body on a narrow
+              // pane (see `Composer`'s anchor modes).
               setPendingCommentAnchor({ anchor, documentId });
               editor.dispatchCommand(HIDE_TOOLBAR_COMMAND, undefined);
               editor.blur();
-
-              // The composer lives below the body, so it has to be brought into
-              // view before it can be typed into. One frame of delay lets the
-              // quote row render first, so the scroll lands on its real height.
-              requestAnimationFrame(() => {
-                const composer = document.getElementById(DOCUMENT_COMMENT_COMPOSER_ID);
-                composer?.scrollIntoView({
-                  behavior: prefersReducedMotion() ? 'auto' : 'smooth',
-                  block: 'center',
-                });
-                composer
-                  ?.querySelector<HTMLElement>('[contenteditable="true"]')
-                  ?.focus({ preventScroll: true });
-              });
             }}
             onMouseDown={(event) => {
               event.preventDefault();

@@ -63,6 +63,92 @@ describe('heterogeneous relay route failures', () => {
     invokeServerDefaultModel.mockRejectedValue(runtimeFailure);
   });
 
+  it.each(['/anthropic/v1/messages', '/openai/v1/responses'])(
+    'preserves terminal and retryable errors at %s',
+    async (path) => {
+      for (const [errorType, status, retryable] of [
+        [403, 403, false],
+        ['InvalidRequestFormat', 400, false],
+        ['RateLimitExceeded', 429, true],
+        ['InsufficientQuota', 429, false],
+        ['DatabasePersistError', 500, false],
+        ['ProviderBizError', 502, true],
+      ] as const) {
+        invokeServerDefaultModel.mockRejectedValue({ error: 'fixture failure', errorType });
+        const response = await app.request(path, {
+          body: JSON.stringify({
+            input: 'hello',
+            messages: [],
+            model: 'lobehub/deepseek-v4-pro',
+            stream: true,
+          }),
+          headers: { 'content-type': 'application/json' },
+          method: 'POST',
+        });
+
+        expect(response.status).toBe(status);
+        expect(response.headers.get('x-should-retry')).toBe(String(retryable));
+        const body = await response.json();
+        expect(body.error.message).toContain('fixture failure');
+        expect(body.error.type).toBe('api_error');
+        if (path.startsWith('/anthropic')) expect(body.type).toBe('error');
+      }
+    },
+  );
+
+  it.each(['/anthropic/v1/messages', '/openai/v1/responses'])(
+    'preserves transient statuses despite coarse or conflicting messages at %s',
+    async (path) => {
+      for (const status of [408, 409, 429, 503]) {
+        for (const error of [
+          { status, message: 'No details' },
+          { message: `${status} status code (no body)` },
+          { status, message: 'text content blocks must be non-empty' },
+          { message: `${status} text content blocks must be non-empty` },
+        ]) {
+          invokeServerDefaultModel.mockRejectedValue({ error, errorType: 'ProviderBizError' });
+          const response = await app.request(path, {
+            body: JSON.stringify({
+              input: 'hello',
+              messages: [],
+              model: 'lobehub/deepseek-v4-pro',
+              stream: true,
+            }),
+            headers: { 'content-type': 'application/json' },
+            method: 'POST',
+          });
+          expect(response.status).toBe(status);
+          expect(response.headers.get('x-should-retry')).toBe('true');
+        }
+      }
+    },
+  );
+
+  it.each(['/anthropic/v1/messages', '/openai/v1/responses'])(
+    'keeps quota and explicitly typed request failures terminal at %s',
+    async (path) => {
+      for (const [errorType, message] of [
+        ['ProviderBizError', 'Insufficient quota'],
+        ['InvalidRequestFormat', 'text content blocks must be non-empty'],
+      ]) {
+        invokeServerDefaultModel.mockRejectedValue({ error: { message, status: 429 }, errorType });
+        const response = await app.request(path, {
+          body: JSON.stringify({
+            input: 'hello',
+            messages: [],
+            model: 'lobehub/deepseek-v4-pro',
+            stream: true,
+          }),
+          headers: { 'content-type': 'application/json' },
+          method: 'POST',
+        });
+        expect(response.status).toBe(429);
+        expect(response.headers.get('x-should-retry')).toBe('false');
+        expect((await response.json()).error.message).toContain(message);
+      }
+    },
+  );
+
   it('returns an Anthropic error envelope when model invocation rejects', async () => {
     const response = await app.request('/anthropic/v1/messages', {
       body: JSON.stringify({

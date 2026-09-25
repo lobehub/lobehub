@@ -1,7 +1,7 @@
 import createDebug from 'debug';
 
 import type { CreateVideoOptions } from '../../core/openaiCompatibleFactory';
-import type { CreateVideoPayload, CreateVideoResponse } from '../../types/video';
+import type { CreateVideoPayload, CreateVideoResult } from '../../types/video';
 
 const log = createDebug('lobe-video:siliconcloud');
 
@@ -95,7 +95,7 @@ export async function pollSiliconCloudVideoStatus(
 export async function createSiliconCloudVideo(
   payload: CreateVideoPayload,
   options: CreateVideoOptions,
-): Promise<CreateVideoResponse> {
+): Promise<CreateVideoResult> {
   const { model, params } = payload;
   const { prompt, imageUrl, size, seed } = params;
 

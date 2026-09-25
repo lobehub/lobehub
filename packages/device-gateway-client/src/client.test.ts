@@ -553,6 +553,66 @@ describe('GatewayClient', () => {
     });
   });
 
+  describe('tunnel serving', () => {
+    it('forwards tunnel frames to the tunnel host', async () => {
+      client.connect();
+      await vi.advanceTimersByTimeAsync(1);
+      (client as any).handleMessage(JSON.stringify({ type: 'auth_success' }));
+
+      const handleFrame = vi.spyOn((client as any).tunnelHost, 'handleFrame');
+      const frame = { bytes: 64, connId: 'c1', type: 'tunnel_ack' };
+      (client as any).handleMessage(JSON.stringify(frame));
+
+      expect(handleFrame).toHaveBeenCalledWith(frame);
+    });
+
+    it('releases tunnels on a forced reconnect, not just on a clean close', async () => {
+      client.connect();
+      await vi.advanceTimersByTimeAsync(1);
+      (client as any).handleMessage(JSON.stringify({ type: 'auth_success' }));
+
+      const closeAll = vi.spyOn((client as any).tunnelHost, 'closeAll');
+      // Miss enough heartbeat acks to trip forceReconnect, which detaches
+      // handleClose and so never reaches the normal close cleanup.
+      await vi.advanceTimersByTimeAsync(30_000 * 5);
+
+      expect(closeAll).toHaveBeenCalledWith('DEVICE_DISCONNECTED');
+    });
+
+    it('answers tunnel_open with TUNNEL_DISABLED when serving is off', async () => {
+      const offClient = new GatewayClient({
+        autoReconnect: false,
+        gatewayUrl: 'https://gateway.test.com',
+        token: 'tok',
+        tunnel: false,
+      });
+      offClient.connect();
+      await vi.advanceTimersByTimeAsync(1);
+      (offClient as any).handleMessage(JSON.stringify({ type: 'auth_success' }));
+      const ws = (offClient as any).ws;
+      ws.send.mockClear();
+
+      (offClient as any).handleMessage(
+        JSON.stringify({
+          connId: 'c1',
+          head: { headers: [], method: 'GET', path: '/' },
+          target: { host: '127.0.0.1', port: 3000 },
+          type: 'tunnel_open',
+        }),
+      );
+
+      expect(ws.send).toHaveBeenCalledWith(
+        JSON.stringify({
+          connId: 'c1',
+          error: 'TUNNEL_DISABLED',
+          ok: false,
+          type: 'tunnel_open_ack',
+        }),
+      );
+      offClient.disconnect();
+    });
+  });
+
   describe('reconnection', () => {
     it('should reconnect on close when autoReconnect is true', async () => {
       const reconnectClient = new GatewayClient({

@@ -264,7 +264,7 @@ Slack workspace（team）ID。当你让 bot 做 "列出频道"、"发送到 #ann
 | **Bot Token**  | 是             | Bot User OAuth Token（`xoxb-...`）                           |
 | **签名密钥**       | 是             | 用于验证来自 Slack 的请求                                           |
 | **应用级别 Token** | 仅 Socket Mode | 应用级别 Token（`xapp-...`），用于 WebSocket 连接                     |
-| **连接模式**       | 否             | `websocket` 或 `webhook`（默认：`webhook`）                      |
+| **连接模式**       | 否             | `websocket`（默认）或 `webhook`                      |
 | **允许的用户 ID**   | 否             | 逗号或空格分隔的 Slack 成员 ID。全局闸门 — 私信和频道 @ 都受其约束                  |
 | **私信策略**       | 否             | `open`（默认）、`allowlist`、`pairing` 或 `disabled` — 控制谁可以私信机器人 |
 | **群组策略**       | 否             | `open`（默认）、`allowlist` 或 `disabled` — 控制机器人在哪些频道中响应        |

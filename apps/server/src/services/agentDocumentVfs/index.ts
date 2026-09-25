@@ -1,4 +1,5 @@
 import type { LobeChatDatabase } from '@lobechat/database';
+import { FileSource } from '@lobechat/types';
 
 import type { AgentDocument } from '@/database/models/agentDocuments';
 import {
@@ -13,6 +14,7 @@ import {
   RAW_TEXT_DOCUMENT_FILE_TYPE,
 } from '../agentDocuments/contentFormat';
 import { createMarkdownEditorSnapshot } from '../agentDocuments/headlessEditor';
+import { FileService } from '../file';
 import { AgentDocumentVfsError } from './errors';
 import { createSkillMount } from './mounts/skills/createSkillMount';
 import {
@@ -104,10 +106,20 @@ interface AgentDocumentCopyOptions {
 export class AgentDocumentVfsService {
   private agentDocumentModel: AgentDocumentModel;
   private skillMount: SkillMount;
+  private fileServiceInstance?: FileService;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    private readonly db: LobeChatDatabase,
+    private readonly userId: string,
+    private readonly workspaceId?: string,
+  ) {
     this.agentDocumentModel = new AgentDocumentModel(db, userId, workspaceId);
     this.skillMount = createSkillMount(db, userId, workspaceId);
+  }
+
+  /** Defers storage configuration until a permanent deletion actually has uploads to reclaim. */
+  private get fileService(): FileService {
+    return (this.fileServiceInstance ??= new FileService(this.db, this.userId, this.workspaceId));
   }
 
   /**
@@ -619,7 +631,10 @@ export class AgentDocumentVfsService {
     const subtree = await this.collectOrdinarySubtree(root, ctx.agentId, true);
 
     for (const item of subtree.reverse()) {
-      await this.agentDocumentModel.permanentlyDelete(item.id);
+      const fileIds = await this.agentDocumentModel.permanentlyDelete(item.id);
+      for (const fileId of fileIds) {
+        await this.fileService.removeUnreferencedFile(fileId, FileSource.AgentDocument);
+      }
     }
   }
 

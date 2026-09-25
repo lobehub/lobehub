@@ -1,4 +1,5 @@
 {
+  "FilePreview.actions.download": "ソースファイルをダウンロード",
   "FilePreview.tabs.chunk": "チャンク",
   "FilePreview.tabs.file": "ファイル",
   "Plugins": "プラグイン",
@@ -29,6 +30,7 @@
   "artifacts.svg.copySuccess": "画像のコピーに成功しました",
   "artifacts.svg.download.png": "PNGとしてダウンロード",
   "artifacts.svg.download.svg": "SVGとしてダウンロード",
+  "document.saveConflict": "このドキュメントは他の場所で更新されました。最新バージョンにリフレッシュしています。",
   "document.todos.allCompleted": "すべてのタスクが完了しました",
   "document.todos.title": "タスク",
   "emptyArtifactList": "現在、アーティファクトリストは空です。プラグインを使用してセッション中に追加してください。",

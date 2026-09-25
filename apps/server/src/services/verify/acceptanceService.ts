@@ -36,6 +36,7 @@ import type {
 } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 import { TaskService } from '@/server/services/task';
+import { ExpertiseRejectionWorkflow } from '@/server/workflows/expertiseRejection';
 
 import { type AcceptanceMergeSummary, mergeAcceptanceRounds } from './acceptanceMerge';
 import { computeFalseFlags } from './feedbackService';
@@ -711,6 +712,12 @@ export class AcceptanceService {
     const run = await this.runModel.attachToAcceptance(runId, acceptanceId, acceptance.visibility);
     await this.recomputeStatus(acceptanceId);
     log('run %s attached to acceptance %s as round %d', runId, acceptanceId, run.roundIndex);
+
+    // A new round landing is the first server-side proof that the reviewer is done with the
+    // previous one: rejecting a check ends at a clipboard copy, so nothing else marks "I finished
+    // reviewing".
+    if (latest) this.distilSettledRound(acceptanceId, latest.id);
+
     return run;
   };
 
@@ -832,6 +839,23 @@ export class AcceptanceService {
   };
 
   /**
+   * Hands one settled round to distillation, fire-and-forget.
+   *
+   * Never awaited and never allowed to throw: this rides on the reviewer's own paths, and losing a
+   * distillation is a missed lesson, while failing the caller loses their decision. Triggering the
+   * same round twice is harmless — a round is distilled under a reflection key, and the second pass
+   * finds the run already recorded and returns.
+   */
+  private distilSettledRound = (acceptanceId: string, verifyRunId: string) => {
+    void ExpertiseRejectionWorkflow.trigger({
+      acceptanceId,
+      userId: this.userId,
+      verifyRunId,
+      workspaceId: this.workspaceId,
+    });
+  };
+
+  /**
    * The user accepts the delivery — the terminal business event (P-12). Stamps
    * the decision on the current round, closes the aggregate, and best-effort
    * completes a task subject that verification alone didn't settle.
@@ -839,8 +863,15 @@ export class AcceptanceService {
   accept = async (acceptanceId: string, comment?: string): Promise<AcceptanceItem> => {
     const acceptance = await this.requireDecidableAcceptance(acceptanceId);
 
-    await this.stampDecision(acceptanceId, 'accept', comment);
+    const settled = await this.stampDecision(acceptanceId, 'accept', comment);
     await this.acceptanceModel.updateStatus(acceptanceId, 'accepted');
+
+    // A terminal decision settles the current round as surely as a new round landing does — and it
+    // is the ONLY thing that settles the last one, which no later round will ever follow. Without
+    // this, every acceptance silently loses whatever its final round taught. Accepting the delivery
+    // still settles it: a reviewer can accept overall while individual checks were rejected along
+    // the way, and those rejections are exactly the material.
+    this.distilSettledRound(acceptanceId, settled);
 
     if (acceptance.subjectType === 'task') await this.completeTaskSubject(acceptance.subjectId);
 
@@ -848,21 +879,68 @@ export class AcceptanceService {
   };
 
   /**
-   * The user rejects the delivery. The comment is the re-tasking input: it is
+   * A merged pull request accepts the delivery it was linked to. Merging is
+   * the strongest signal a user can give, so unlike {@link accept} this does
+   * not wait for the round to settle: any non-accepted status becomes
+   * `accepted`, a round still in flight is stamped as decided by the merge,
+   * and an acceptance that never had a round is simply closed as accepted.
+   * The decision detail records the merge so the acceptance board and the
+   * verifier-training pipeline can tell it apart from a human verdict.
+   *
+   * Idempotent: an already-accepted acceptance is returned unchanged.
+   */
+  acceptFromScmMerge = async (
+    acceptanceId: string,
+    changeRequest: NonNullable<VerifyRunDecisionDetail['changeRequest']>,
+  ): Promise<AcceptanceItem | null> => {
+    const acceptance = await this.acceptanceModel.findById(acceptanceId);
+    if (!acceptance) return null;
+    if (acceptance.status === 'accepted') return acceptance;
+
+    const runs = await this.runModel.listByAcceptance(acceptanceId);
+    const current = runs.at(-1);
+    if (current) {
+      const detail: VerifyRunDecisionDetail = {
+        changeRequest,
+        decidedAt: new Date().toISOString(),
+        decidedBy: this.actorUserId,
+        source: 'scm_merge',
+      };
+      await this.runModel.setDecision(current.id, 'accept', detail);
+    }
+
+    await this.acceptanceModel.updateStatus(acceptanceId, 'accepted');
+    if (current) this.distilSettledRound(acceptanceId, current.id);
+    if (acceptance.subjectType === 'task') await this.completeTaskSubject(acceptance.subjectId);
+
+    log(
+      'acceptance %s accepted by merge of %s#%d (was %s)',
+      acceptanceId,
+      changeRequest.repoFullName,
+      changeRequest.number,
+      acceptance.status,
+    );
+    return (await this.acceptanceModel.findById(acceptanceId))!;
+  };
+
+  /**
+   * The user rejects the delivery. An optional comment is a re-tasking input: it is
    * recorded on the round's decision detail, where the next repair/verify round
-   * picks it up. (Spawning the repair run itself is the runtime's job — for
-   * agent-bound rounds via the repair pipeline, for ingested rounds via the
-   * next `lh verify ingest-report`.)
+   * picks it up. (Spawning the repair run is the caller's job — the
+   * `acceptance.reject` procedure sends it back to the origin agent when the
+   * rounds name one; see `dispatchAcceptanceRepair`.)
    *
    * A Goal Task is no exception: its next attempt is started by the Goal
    * coordinator on the following tick, which reads the rejected round's
    * decision detail through the prompt builder.
    */
-  reject = async (acceptanceId: string, comment: string): Promise<AcceptanceItem> => {
+  reject = async (acceptanceId: string, comment?: string): Promise<AcceptanceItem> => {
     await this.requireDecidableAcceptance(acceptanceId);
 
-    await this.stampDecision(acceptanceId, 'reject', comment);
+    const settled = await this.stampDecision(acceptanceId, 'reject', comment);
     await this.acceptanceModel.updateStatus(acceptanceId, 'rejected');
+
+    this.distilSettledRound(acceptanceId, settled);
 
     return (await this.acceptanceModel.findById(acceptanceId))!;
   };
@@ -1020,11 +1098,12 @@ export class AcceptanceService {
     return acceptance;
   };
 
+  /** Stamps the decision on the current round and returns it — the round that decision settles. */
   private stampDecision = async (
     acceptanceId: string,
     decision: 'accept' | 'reject',
     comment?: string,
-  ): Promise<void> => {
+  ): Promise<string> => {
     const runs = await this.runModel.listByAcceptance(acceptanceId);
     const current = runs.at(-1);
     if (!current) throw new Error('This acceptance has no verification round to decide on');
@@ -1035,6 +1114,8 @@ export class AcceptanceService {
       ...(comment ? { comment } : {}),
     };
     await this.runModel.setDecision(current.id, decision, detail);
+
+    return current.id;
   };
 
   /**
@@ -1326,22 +1407,43 @@ export class AcceptanceService {
     const origin = [...runs].reverse().find((run) => run.metadata?.origin)?.metadata?.origin;
     if (!origin?.agentId && !origin?.topicId) return null;
 
-    const [agent, topic] = await Promise.all([
-      origin.agentId
+    const topicRowPromise = origin.topicId
+      ? new TopicModel(this.db, this.userId, this.workspaceId)
+          .findById(origin.topicId)
+          .catch(() => null)
+      : Promise.resolve(null);
+    // Dispatched runs (task / goal / device) record only the topic — the
+    // connector strips the ambient agent id — so the topic's own agent stands in.
+    // A recorded agent does not wait on the topic read.
+    const agentPromise = (
+      origin.agentId ? Promise.resolve(origin.agentId) : topicRowPromise.then((row) => row?.agentId)
+    ).then((agentId) =>
+      agentId
         ? new AgentModel(this.db, this.userId, this.workspaceId)
-            .getAgentAvatarsByIds([origin.agentId])
+            .getAgentAvatarsByIds([agentId])
             .then((rows) => rows[0] ?? null)
             .catch(() => null)
         : null,
-      origin.topicId
-        ? new TopicModel(this.db, this.userId, this.workspaceId)
-            .findById(origin.topicId)
-            .then((row) => (row ? { id: row.id, title: row.title ?? null } : null))
-            .catch(() => null)
-        : null,
-    ]);
+    );
+    const [topicRow, agent] = await Promise.all([topicRowPromise, agentPromise]);
+    const topic = topicRow ? { id: topicRow.id, title: topicRow.title ?? null } : null;
     if (!agent && !topic) return null;
     return { agent, topic };
+  };
+
+  /**
+   * The raw authoring conversation behind the latest round that recorded one —
+   * the ids a rejected delivery is sent back to. Unlike {@link resolveOrigin}
+   * nothing is hydrated: the dispatcher re-reads the topic under the caller's
+   * own scope.
+   */
+  findRepairOrigin = async (
+    acceptanceId: string,
+  ): Promise<{ agentId?: string; topicId?: string } | null> => {
+    const runs = await this.runModel.listByAcceptance(acceptanceId);
+    const origin = [...runs].reverse().find((run) => run.metadata?.origin)?.metadata?.origin;
+    if (!origin?.topicId) return null;
+    return { agentId: origin.agentId || undefined, topicId: origin.topicId };
   };
 
   /** The rounds + their per-round data the bundle and the union both read. */

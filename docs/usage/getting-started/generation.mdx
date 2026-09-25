@@ -1,19 +1,19 @@
 ---
 title: Image & Video Generation
 description: >-
-  Create high-quality images and videos from text descriptions using AI models
-  like DALL-E 3, Flux, Sora, Veo, Kling, and more. Learn how to write effective
-  prompts, choose the right model, and configure parameters for each medium.
+  Create images and videos from text in the Generation page with GPT Image,
+  Nano Banana, Seedream, and Seedance models. Learn how to switch modes, write
+  prompts, choose a model, and configure generation parameters.
 tags:
   - LobeHub
   - Image Generation
   - Video Generation
   - AI Drawing
   - AI Video
-  - DALL-E
-  - Sora
-  - Veo
-  - Kling
+  - GPT Image
+  - Nano Banana
+  - Seedream
+  - Seedance
   - Text to Image
   - Text to Video
   - Prompt Writing
@@ -21,18 +21,16 @@ tags:
 
 # Image & Video Generation
 
-Describe what you want — LobeHub turns text into images and videos. Product prototypes, design inspiration, illustrations, motion concepts, short clips, or creative exploration: choose a model, set your parameters, and generate in seconds. All output lands in your generation feed and can be downloaded or saved to your Resource Library.
+You can generate images and videos for prototypes, illustrations, motion concepts, or short clips. Describe what you want, choose a model, and set the generation parameters. Generation time depends on the model and parameters. Results appear in your generation feed, where you can download them or save them to your Resource Library.
 
-LobeHub ships two parallel workspaces — **Image** and **Video** — built on the same generation pipeline but tuned for each medium.
+Image and video generation share one **Generation** page. Each mode has its own generation parameters.
 
 ## Get Started
 
-From the LobeHub sidebar:
+1. Click **Generation** in the LobeHub sidebar.
+2. Click the mode label on the page to switch between image and video generation.
 
-- Click **Image** (the picture icon) to open the image generation workspace at `/image`.
-- Click **Video** (the video icon) to open the video generation workspace at `/video`.
-
-Each workspace has the same three-pane layout: prompt input, configuration panel, and a generation feed for past results.
+Both modes include a prompt input, a configuration panel, and a feed of past results.
 
 ## Image Generation
 
@@ -66,20 +64,21 @@ Examples:
 
 ### Choose an AI Model
 
-LobeHub offers multiple AI image generation models. Different models have different strengths:
+Click the current model name to open the model selector. The **LobeHub** provider lists the following image models as of September 16, 2026:
 
-![Choose a Model](/blog/assetsdd913561927c64d32bd390cee6846f9a.webp)
+| Model | Overview |
+| --- | --- |
+| **GPT Image 2.5 Flare** | Prioritizes speed for image generation and editing, with improved subject preservation. Useful for quick iterations.[^gpt-image] |
+| **GPT Image 2.5 Sunburst** | Prioritizes image quality and precise edits for work with demanding visual requirements.[^gpt-image] |
+| **Nano Banana 2 Lite** | Focuses on low latency and cost efficiency for 1K image generation and edits.[^nano-lite] |
+| **Nano Banana 2** | Balances speed and image quality, with support for image edits, text in images, and consistent reference subjects.[^nano-2] |
+| **Nano Banana Pro** | Focuses on complex instructions, text in images, and layout control for design tasks such as infographics and product visuals.[^nano-pro] |
+| **GPT Image 2** | Supports text-to-image generation and edits with reference images for general visual tasks.[^gpt-2] |
+| **Seedream 5 Pro** | An image generation option. Refer to its configuration panel for available parameters. |
 
-| Model                | Best For                                                      |
-| -------------------- | ------------------------------------------------------------- |
-| **DALL-E 3**         | Realistic photos, illustrations, following prompts accurately |
-| **GPT Image**        | High-fidelity edits, text rendering inside images             |
-| **Flux**             | Artistic styles, creative images, fast generation             |
-| **Stable Diffusion** | Highly customizable, community styles and fine-tuned models   |
-| **Gemini Imagen**    | Photoreal scenes, strong global composition                   |
-| **fal.ai models**    | Various specialized styles and fast generation                |
+These descriptions summarize model providers’ features. To see which are available in LobeHub, check the current model selector and configuration panel.
 
-Try different models with the same prompt to see which gives the best results for your use case.
+Try the same prompt with different models to compare results.
 
 ### Reference Images (Optional)
 
@@ -91,7 +90,7 @@ Reference images help the model understand your desired style, composition, or c
 
 ### Configure Generation Parameters
 
-The right-hand config panel exposes everything the selected model supports. Common controls:
+The configuration panel shows the parameters available for the selected model in LobeHub. Controls vary by model and can include:
 
 - **Aspect Ratio** — `1:1`, `16:9`, `9:16`, `4:3`, `3:2`. Lock or unlock to free-form size.
 - **Size / Resolution** — pick a preset (`512px`, `1K`, `2K`, `4K`) or set width × height directly.
@@ -122,11 +121,11 @@ Once generated, images appear in the generation feed. You can:
 
 ## Video Generation
 
-The Video workspace mirrors Image — same prompt-first flow, same config panel, same feed — but with controls tuned for motion.
+Switch to video generation on the Generation page. This mode includes a prompt input, a configuration panel, and a feed for generated videos.
 
 ### Enter a Prompt
 
-Describe the **scene, motion, and camera**, not just the subject. Models reward verbs and shot language.
+Describe the **scene, motion, and camera** as well as the subject. Action words and camera directions help specify the shot.
 
 ```
 "A red fox trotting through fresh snow at golden hour, breath visible in the cold air, slow tracking shot, cinematic"
@@ -145,25 +144,22 @@ Describe the **scene, motion, and camera**, not just the subject. Models reward 
 
 ### Choose an AI Model
 
-LobeHub integrates the major text-to-video and image-to-video providers:
+In video mode, click the current model name to open the model selector. The **LobeHub** provider lists these models as of September 16, 2026:
 
-| Model                          | Best For                                                  |
-| ------------------------------ | --------------------------------------------------------- |
-| **OpenAI Sora 2 / Sora 2 Pro** | Coherent multi-second clips, strong scene understanding   |
-| **Google Veo 3 / 3.1**         | Photoreal motion, native audio generation, cinematic look |
-| **Kling V3**                   | High-motion fidelity, image-to-video and omni-video       |
-| **MiniMax Hailuo 2.3**         | Fast text-to-video, expressive characters                 |
-| **Qwen / Wan**                 | Text-to-video with strong Chinese prompt understanding    |
-| **fal.ai models**              | Specialised models, fast turnaround                       |
+| Model | Overview |
+| --- | --- |
+| **Seedance 2.0** | Generates video and audio together, with an emphasis on complex motion, camera control, and multimodal references.[^seedance] |
+| **Seedance 2.0 Fast** | The Fast variant of Seedance 2.0 supports video and audio generation. Output specifications differ from the standard version.[^seedance] |
+| **Seedance 1.5 Pro** | Generates synchronized video and audio from text or images, with an emphasis on expressions, camera instructions, and narrative audio.[^seedance] |
 
-Different models support different parameter sets — switching models updates the config panel automatically.
+These descriptions summarize capabilities from the model provider. Available reference inputs, duration, resolution, and audio controls depend on the LobeHub configuration panel for each model.
 
 ### Start & End Frames (Optional)
 
-Many video models support image conditioning:
+With a model that supports reference frames, you can use images to guide the clip:
 
-- **Start Frame** — upload an image to use as the first frame of the clip. Great for animating a still you generated in the Image workspace.
-- **End Frame** — upload an image to land on as the final frame. Requires a start frame.
+- **Start Frame** — upload an image to use as the first frame of the clip. Great for animating a still you generated in the Image interface.
+- **End Frame** — after setting a start frame, upload an image to use as the final frame.
 
 When a start frame is set, the prompt placeholder shifts to "Describe the scene you want to generate with the image".
 
@@ -175,7 +171,7 @@ Controls vary by model, but typically include:
 - **Aspect Ratio** — `16:9`, `9:16`, `1:1`, `4:3`, `3:4`, `21:9`.
 - **Resolution** — `480p`, `720p`, `1080p`.
 - **Fixed Camera** — lock the camera in place instead of letting the model animate it.
-- **Generate Audio** — produce a synced soundtrack alongside the video (model-dependent, e.g. Veo).
+- **Generate Audio** — generate synchronized audio with the video, where the selected model provides this control.
 - **Seed** — random or fixed for reproducibility.
 - **Watermark** — toggle on/off where supported.
 - **Web Search** / **Prompt Extend** — same LLM-assisted prompt enrichment as the image flow.
@@ -189,8 +185,6 @@ Generated clips appear in the feed and play inline. You can:
 - Copy the error message to clipboard if a generation fails
 - Delete a single clip or the whole batch
 
-A "🎁 N free videos today" badge shows your remaining free quota; once it's used up, credits are consumed per generation.
-
 ## Tips for Better Results
 
 **Iterate on prompts** — If the first result isn't quite right, adjust one element at a time rather than rewriting the whole prompt. Add more detail, change the style descriptor, or specify what you don't want.
@@ -199,9 +193,20 @@ A "🎁 N free videos today" badge shows your remaining free quota; once it's us
 
 **Try multiple variations** — Generate several images per run, or re-generate videos with the same seed and a tweaked prompt. AI generation has inherent randomness — some variations will be significantly better than others.
 
-**Match model to task** — Photorealistic models (DALL-E 3, Flux, Imagen) for product photos and realistic scenes; style-focused models for artistic illustrations; Veo or Sora for cinematic motion; Kling or Hailuo for character-heavy clips.
+**Match model to task** — Compare speed, visual quality, and available parameters. For images, try Flare for quick iterations or Sunburst for demanding visual requirements. For video, compare the Seedance models with the same scene description.
 
-**Bridge image → video** — Generate a strong still in the Image workspace, then feed it into the Video workspace as a start frame to animate it.
+**Bridge image → video** — Generate a still in image mode. Then switch to video mode and upload the still as a start frame, where supported.
+
+## Model References
+
+Model documentation consulted on September 16, 2026.
+
+[^gpt-image]: OpenAI, [GPT Image 2.5 prompting guide](https://developers.openai.com/api/docs/guides/image-prompting).
+[^nano-lite]: Google, [Gemini 3.1 Flash Lite Image](https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-lite-image).
+[^nano-2]: Google, [Nano Banana 2](https://blog.google/innovation-and-ai/technology/ai/nano-banana-2), 2026-02-26.
+[^nano-pro]: Google, [Gemini 3 Pro Image](https://ai.google.dev/gemini-api/docs/models/gemini-3-pro-image).
+[^gpt-2]: OpenAI, [GPT Image 2](https://developers.openai.com/api/docs/models/gpt-image-2.md).
+[^seedance]: Volcengine, [Seedance video generation guide](https://docs.volcengine.com/docs/82379/2298881).
 
 <Cards>
   <Card href={'/docs/usage/getting-started/resource'} title={'Resource Library'} />

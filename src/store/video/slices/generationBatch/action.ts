@@ -110,6 +110,8 @@ export class GenerationBatchActionImpl {
 
     await internal_deleteGeneration(generationId);
 
+    if (this.#get().editingGenerationId === generationId) this.#get().cancelEditingVideo();
+
     // Video batch has only 1 generation, so delete the batch directly
     if (activeGenerationTopicId) {
       const updatedBatches = this.#get().generationBatchesMap[activeGenerationTopicId] || [];
@@ -122,8 +124,17 @@ export class GenerationBatchActionImpl {
   };
 
   removeGenerationBatch = async (batchId: string, topicId: string): Promise<void> => {
-    const { internal_deleteGenerationBatch } = this.#get();
+    const { editingGenerationId, generationBatchesMap, internal_deleteGenerationBatch } =
+      this.#get();
+    const containsEditingSource =
+      !!editingGenerationId &&
+      !!generationBatchesMap[topicId]
+        ?.find((batch) => batch.id === batchId)
+        ?.generations.some((generation) => generation.id === editingGenerationId);
+
     await internal_deleteGenerationBatch(batchId, topicId);
+
+    if (containsEditingSource) this.#get().cancelEditingVideo();
   };
 
   setTopicBatchLoaded = (topicId: string): void => {

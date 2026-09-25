@@ -241,6 +241,7 @@
   "providerModels.item.modelConfig.extendParams.options.grok4_3ReasoningEffort.hint": "Grok 4.3シリーズ用；推論の強度を制御します。",
   "providerModels.item.modelConfig.extendParams.options.grok4_5ReasoningEffort.hint": "Grok 4.5シリーズ用；推論の強度を制御します（低/中/高、デフォルトは高）。",
   "providerModels.item.modelConfig.extendParams.options.grok4_6ReasoningEffort.hint": "Grok 4.6シリーズ用; 推論の強度を制御します（低/中/高/非常に高、デフォルトは高）。推論を無効にすることはできません。",
+  "providerModels.item.modelConfig.extendParams.options.grok4_7ReasoningEffort.hint": "Grok 4.7用; 推論の強度を制御します（低/中/高/非常に高い、デフォルトは高い）。推論を無効にすることはできません。",
   "providerModels.item.modelConfig.extendParams.options.hy3ReasoningEffort.hint": "Hy3 モデル用。推論強度を制御します。no_think（超高速応答）、low（迅速な推論）、high（高度な推論）で、超高頻度の対話から複雑なエンジニアリングタスクまで、要求されるレイテンシーや深さに対応します。",
   "providerModels.item.modelConfig.extendParams.options.imageAspectRatio.hint": "Gemini画像生成モデル向け；生成される画像のアスペクト比を制御します。",
   "providerModels.item.modelConfig.extendParams.options.imageAspectRatio2.hint": "Nano Banana 2用; 生成される画像のアスペクト比を制御します（超ワイド1:4、4:1、1:8、8:1をサポート）。",

@@ -13,7 +13,9 @@ tags:
 
 # Connect LobeHub to iMessage
 
-LobeHub connects to iMessage through [BlueBubbles](https://bluebubbles.app/) running on a Mac signed into Messages. The LobeHub Desktop app runs a local bridge on that same Mac: it receives BlueBubbles webhooks on `127.0.0.1`, forwards them to LobeHub Cloud, and relays the agent's replies back to the local BlueBubbles REST API. BlueBubbles never needs to be exposed to the public internet.
+> **Current status: Coming Soon.** The Channels page currently shows iMessage as a preview entry. It is not generally available as a standard channel. The Labs / BlueBubbles material below documents the preview design for advance reference; use the product UI as the source of truth for availability.
+
+LobeHub plans to connect to iMessage through [BlueBubbles](https://bluebubbles.app/) running on a Mac signed into Messages. In the preview design, the LobeHub Desktop app runs a local bridge on that same Mac: it receives BlueBubbles webhooks on `127.0.0.1`, forwards them to LobeHub Cloud, and relays the agent's replies back to the local BlueBubbles REST API. BlueBubbles never needs to be exposed to the public internet.
 
 ```text
 iMessage user -> macOS Messages -> BlueBubbles -> LobeHub Desktop bridge -> LobeHub Cloud

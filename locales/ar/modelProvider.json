@@ -241,6 +241,7 @@
   "providerModels.item.modelConfig.extendParams.options.grok4_3ReasoningEffort.hint": "لسلسلة Grok 4.3؛ يتحكم في شدة التفكير.",
   "providerModels.item.modelConfig.extendParams.options.grok4_5ReasoningEffort.hint": "لسلسلة Grok 4.5؛ يتحكم في شدة التفكير (منخفض/متوسط/عالي، الافتراضي عالي).",
   "providerModels.item.modelConfig.extendParams.options.grok4_6ReasoningEffort.hint": "لسلسلة Grok 4.6؛ يتحكم في شدة التفكير (منخفض/متوسط/عالي/عالي جدًا، الافتراضي عالي). لا يمكن تعطيل التفكير.",
+  "providerModels.item.modelConfig.extendParams.options.grok4_7ReasoningEffort.hint": "بالنسبة إلى Grok 4.7؛ يتحكم في شدة التفكير (منخفض/متوسط/عالي/عالي جدًا، الافتراضي عالي). لا يمكن تعطيل التفكير.",
   "providerModels.item.modelConfig.extendParams.options.hy3ReasoningEffort.hint": "لنماذج Hy3؛ يتحكم في شدة التفكير. no_think (استجابة فائقة السرعة)، low (تفكير سريع)، و high (تفكير عميق) — لتلبية احتياجات زمن الاستجابة والعمق المختلفة، بدءًا من التفاعلات عالية التردد وحتى المهام الهندسية المعقدة.",
   "providerModels.item.modelConfig.extendParams.options.imageAspectRatio.hint": "لنماذج توليد الصور من Gemini؛ يتحكم في نسبة العرض إلى الارتفاع للصور المُولدة.",
   "providerModels.item.modelConfig.extendParams.options.imageAspectRatio2.hint": "لـ Nano Banana 2؛ يتحكم في نسبة العرض إلى الارتفاع للصور المُنشأة (يدعم النسب العريضة جدًا 1:4، 4:1، 1:8، 8:1).",

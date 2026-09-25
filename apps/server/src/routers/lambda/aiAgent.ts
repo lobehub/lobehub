@@ -513,6 +513,14 @@ const dispatchClaimedAgentIntervention = async (
     }
 
     if (dispatchProbe.state !== 'dispatched' && shouldDispatchRuntimeAction) {
+      /**
+       * A continuation is a fresh operation started by the user resolving an
+       * intervention, and the durable app context does not carry the parked
+       * run's trigger. Without an explicit trigger every LLM call in the
+       * continuation lands in route attempt logs with an unknown source.
+       */
+      const continuationTrigger = RequestTrigger.Chat;
+
       switch (runtimeAction.type) {
         case 'execute_custom_interaction': {
           const customAction = runtimeAction.input.action;
@@ -555,6 +563,7 @@ const dispatchClaimedAgentIntervention = async (
                 toolCallId: runtimeAction.toolCallId,
               },
               topicStartReservationId: deterministicContinuationOperationId,
+              trigger: continuationTrigger,
             });
           }
           break;
@@ -583,6 +592,7 @@ const dispatchClaimedAgentIntervention = async (
               ? { resumeApproval: singleDecision }
               : { resumeApprovals: runtimeAction.decisions }),
             topicStartReservationId: deterministicContinuationOperationId,
+            trigger: continuationTrigger,
           });
           break;
         }
@@ -606,6 +616,7 @@ const dispatchClaimedAgentIntervention = async (
               toolCallId: runtimeAction.toolCallId,
             },
             topicStartReservationId: deterministicContinuationOperationId,
+            trigger: continuationTrigger,
           });
           break;
         }
@@ -936,6 +947,7 @@ const StartExecutionSchema = z.object({
  */
 const ExecAgentSchema = z
   .object({
+    includeFinalState: z.boolean().optional(),
     /** The agent ID to run (either agentId or slug is required) */
     agentId: z.string().optional(),
     /** Application context for message storage */
@@ -1617,11 +1629,13 @@ const authorizeOperationCallback = async (
   },
   operationId: string,
   capability: 'hetero:finish' | 'hetero:ingest' | 'hetero:intervention:read',
+  options: { allowTerminalOperation?: boolean } = {},
 ) => {
   if (ctx.heteroAuthKind !== 'operation') return;
   if (!ctx.heteroOperation) throw new TRPCError({ code: 'UNAUTHORIZED' });
   try {
     await resolveActiveHeteroOperationPrincipal({
+      allowTerminalOperation: options.allowTerminalOperation,
       capability,
       claims: ctx.heteroOperation,
       db: ctx.serverDB,
@@ -2322,6 +2336,7 @@ export const aiAgentRouter = router({
         appContext,
         autoStart,
         clientIds: input.clientIds,
+        includeFinalState: input.includeFinalState,
         // This procedure serves the composer (`aiAgentService.execAgentTask`).
         // The client already queues follow-ups behind a live run and shows the
         // user a tray; refusing here would only make the message disappear.
@@ -2476,6 +2491,7 @@ export const aiAgentRouter = router({
           workspaceId: ctx.workspaceId,
         });
         const result = await ctx.aiAgentService.execAgent({
+          includeFinalState: task.includeFinalState,
           agentId,
           appContext,
           autoStart,
@@ -3105,7 +3121,14 @@ export const aiAgentRouter = router({
   heteroIngest: heteroAgentProcedure.input(HeteroIngestSchema).mutation(async ({ input, ctx }) => {
     const { agentType, assistantMessageId, events, operationId, topicId } = input;
 
-    await authorizeOperationCallback(ctx, operationId, 'hetero:ingest');
+    // "The operation already ended" is one of the two refusals this procedure
+    // exists to report, so it has to survive the door check — rejecting it here
+    // would make the producer retry a permanent refusal through its whole
+    // budget and leave no record that its output was dropped. The batch still
+    // cannot be persisted: the service refuses it on the very same status.
+    await authorizeOperationCallback(ctx, operationId, 'hetero:ingest', {
+      allowTerminalOperation: true,
+    });
 
     log(
       'heteroIngest: topic=%s op=%s type=%s count=%d',
@@ -3129,14 +3152,20 @@ export const aiAgentRouter = router({
       // Zod's z.any() infers `data?: any`, but the wire shape always includes
       // a `data` field (may be null). Cast at the boundary instead of widening
       // the shared `AgentStreamEvent` type or the service signature.
-      await heteroService.heteroIngest({
+      const outcome = await heteroService.heteroIngest({
         agentType,
         assistantMessageId,
         events: events as AgentStreamEvent[],
         operationId,
         topicId,
       });
-      return { ack: true as const };
+
+      // A refused batch is reported in the ack, not as a transport error: it is
+      // permanent (every later batch is refused too), so a producer must stop
+      // and fail the run rather than burn its retry budget on it. Returned
+      // alongside the original `ack` so producers that predate this field keep
+      // working — the row marker `heteroIngest` stamps is what covers them.
+      return { ack: true as const, ...outcome };
     } catch (error: any) {
       // Preserve deliberate auth errors (e.g. the ownership FORBIDDEN) instead
       // of masking them as a generic 500.
@@ -3195,7 +3224,13 @@ export const aiAgentRouter = router({
   heteroFinish: heteroAgentProcedure.input(HeteroFinishSchema).mutation(async ({ input, ctx }) => {
     const { agentType, assistantMessageId, error, operationId, result, sessionId, topicId } = input;
 
-    await authorizeOperationCallback(ctx, operationId, 'hetero:finish');
+    // A terminal row is the normal state for a finish that lost a race (gateway
+    // completion, a settle from another tab). The service already has the stale
+    // branches for it; turning it away here would drop the run's outcome instead
+    // — no error bubble, no lifecycle hooks, no bot callback.
+    await authorizeOperationCallback(ctx, operationId, 'hetero:finish', {
+      allowTerminalOperation: true,
+    });
 
     log('heteroFinish: topic=%s op=%s type=%s result=%s', topicId, operationId, agentType, result);
 

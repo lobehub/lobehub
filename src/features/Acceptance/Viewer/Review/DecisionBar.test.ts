@@ -1,11 +1,18 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { ModalHost } from '@lobehub/ui/base-ui';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type * as I18next from 'i18next';
 import { createElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import verify from '../../../../../packages/locales/src/default/verify';
 import DecisionBar from './DecisionBar';
+import { openRejectModal } from './modals';
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+vi.mock('i18next', async (importOriginal) => ({
+  ...(await importOriginal<typeof I18next>()),
+  t: (key: string) => key,
+}));
 afterEach(cleanup);
 
 describe('DecisionBar copy', () => {
@@ -15,10 +22,10 @@ describe('DecisionBar copy', () => {
     expect(verify['acceptance.bar.copyReview']).toBe('Copy repair prompt');
     expect(verify['acceptance.bar.rerun']).toBe('Fix');
     expect(verify['acceptance.bar.rerunDrafted']).toBe(
-      'Drafted into your composer — review and send it.',
+      'Added to your composer — review and send it.',
     );
     expect(verify['acceptance.bar.rerunSent']).toBe(
-      'Sent to the origin conversation — the repair round is starting.',
+      'Sent to the source conversation — the repair round is starting.',
     );
   });
 });
@@ -64,3 +71,29 @@ it('keeps the repair prompt available after an aggregate rejection', () => {
   expect(screen.getByRole('button', { name: 'acceptance.bar.copyReview' })).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'acceptance.bar.rerun' })).toBeNull();
 });
+
+it.each(['', '   ', '  Please add dark mode evidence  '])(
+  'allows returning a delivery with an optional reason (%j)',
+  async (reason) => {
+    const onConfirm = vi.fn().mockResolvedValue(true);
+    render(createElement(ModalHost));
+    render(
+      createElement(DecisionBar, {
+        ...props,
+        feedbackCount: 0,
+        needsFixCount: 0,
+        onRejectComment: () => openRejectModal({ onConfirm }),
+      }),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'acceptance.bar.rejectComment' }));
+    const input = await screen.findByRole('textbox');
+    fireEvent.change(input, { target: { value: reason } });
+    const submit = screen.getByRole('button', { name: 'acceptance.actions.confirmReject' });
+    expect(submit).not.toBeDisabled();
+    fireEvent.click(submit);
+
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledWith(reason.trim()));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  },
+);

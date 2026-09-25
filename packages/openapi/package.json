@@ -5,6 +5,8 @@
   "main": "./src/index.ts",
   "scripts": {
     "generate:openapi": "bun scripts/generate-openapi.ts",
+    "test": "vitest",
+    "test:coverage": "vitest --coverage --silent='passed-only'",
     "test:response-compliance": "./scripts/compliance-test.sh"
   },
   "dependencies": {

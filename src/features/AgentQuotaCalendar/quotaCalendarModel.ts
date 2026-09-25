@@ -12,12 +12,18 @@ import dayjs from 'dayjs';
  * fetching — kept apart so the shapes are unit-testable.
  *
  * Two limit windows matter to a coding agent and both are first-class here: the
- * 5-hour session window it actually works in, and the 7-day weekly window that
- * caps the week.
+ * session window it actually works in, and the 7-day weekly window that caps
+ * the week. Kimi Code adds monthly buckets (`month_total` / `month_code`),
+ * which get their own series so they are never folded into the session view.
+ * Codex reports one primary bucket per rate-limit scope with its own duration,
+ * so session series are keyed by bucket scopeKey and sized from each reading's
+ * `windowMinutes` rather than a fixed span.
  */
 
 export const WEEKLY_WINDOW_MS = CLAUDE_WEEKLY_WINDOW_SECONDS * 1000;
 export const SESSION_WINDOW_MS = CLAUDE_SESSION_WINDOW_SECONDS * 1000;
+/** Kimi reports its month buckets as a 43200-minute (30-day) window. */
+export const MONTHLY_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** Two provider-reported reset instants for the same window may jitter a bit. */
 const RESET_MATCH_TOLERANCE_MS = 5 * 60 * 1000;
@@ -26,17 +32,47 @@ export const dayKeyOf = (time: number) => dayjs(time).format('YYYY-MM-DD');
 
 /** Which limit series a calendar view is reading. */
 export interface QuotaSeriesKey {
-  /** `''` for the account-wide weekly; a model name for a scoped weekly. */
+  /**
+   * `''` for the account-wide bucket; the provider's scope id otherwise. For a
+   * weekly series that is a model name; for a session series it is the
+   * rate-limit bucket id (Codex reports one primary bucket per scope). For a
+   * monthly series it carries the limitType itself (`month_total` /
+   * `month_code` are distinct quotas with an empty provider scopeKey).
+   */
   scopeKey: string;
-  type: 'session' | 'weekly';
+  type: 'monthly' | 'session' | 'weekly';
 }
 
 export const SESSION_SERIES: QuotaSeriesKey = { scopeKey: '', type: 'session' };
 
 export const seriesId = (series: QuotaSeriesKey) => `${series.type}:${series.scopeKey}`;
 
+/**
+ * Series bucket for a persisted or projected window row, mirroring
+ * `matchesSeries` for readings: weekly rows keep their model scope, monthly
+ * rows keep their limitType, session rows keep their bucket scope.
+ */
+export const windowSeriesIdOf = (limitType: string, scopeKey: string): string =>
+  limitType.startsWith('weekly')
+    ? `weekly:${scopeKey || ''}`
+    : limitType.startsWith('month')
+      ? `monthly:${limitType}`
+      : `session:${scopeKey || ''}`;
+
 export const windowMsOf = (series: QuotaSeriesKey) =>
-  series.type === 'session' ? SESSION_WINDOW_MS : WEEKLY_WINDOW_MS;
+  series.type === 'session'
+    ? SESSION_WINDOW_MS
+    : series.type === 'weekly'
+      ? WEEKLY_WINDOW_MS
+      : MONTHLY_WINDOW_MS;
+
+/**
+ * A reading's own window span when the provider reported it, else the series
+ * default. Codex primary buckets are not all 5 hours (a 60-minute primary is
+ * in the wild), so the fixed default is only a fallback.
+ */
+const readingWindowMs = (reading: QuotaLimitReading, fallback: number) =>
+  reading.windowMinutes && reading.windowMinutes > 0 ? reading.windowMinutes * 60_000 : fallback;
 
 export interface BurnPoint {
   time: number;
@@ -87,6 +123,21 @@ export const selectQuotaAccount = <T extends QuotaAccountCandidate>(
   return accounts.length === 1 ? accounts[0] : undefined;
 };
 
+/**
+ * The account a calendar view reads: only the pool of the provider it was
+ * opened for, narrowed by the requested external account. Never falls back to
+ * another provider's account.
+ */
+export const selectProviderQuotaAccount = <T extends QuotaAccountCandidate & { provider: string }>(
+  accounts: T[],
+  provider: string,
+  externalAccountId?: string,
+): T | undefined =>
+  selectQuotaAccount(
+    accounts.filter((account) => account.provider === provider),
+    externalAccountId,
+  );
+
 /** The 90-day query guarantees complete data for the current and previous month. */
 export const isCalendarMonthAvailable = (month: dayjs.Dayjs, now: number) => {
   const current = dayjs(now).startOf('month');
@@ -97,13 +148,43 @@ const isSessionReading = (reading: QuotaLimitReading) =>
   reading.limitType === 'session' || reading.limitType === 'five_hour';
 
 /** Does this reading belong to the series a view is showing? */
-export const matchesSeries = (reading: QuotaLimitReading, series: QuotaSeriesKey) =>
-  series.type === 'session'
-    ? isSessionReading(reading)
-    : reading.limitType.startsWith('weekly') && (reading.scopeKey || '') === series.scopeKey;
+export const matchesSeries = (reading: QuotaLimitReading, series: QuotaSeriesKey) => {
+  switch (series.type) {
+    case 'session': {
+      return isSessionReading(reading) && (reading.scopeKey || '') === series.scopeKey;
+    }
+    case 'weekly': {
+      return reading.limitType.startsWith('weekly') && (reading.scopeKey || '') === series.scopeKey;
+    }
+    case 'monthly': {
+      return reading.limitType.startsWith('month') && reading.limitType === series.scopeKey;
+    }
+  }
+};
 
 const sortByCapturedAt = (readings: QuotaLimitReading[]) =>
   [...readings].sort((a, b) => a.capturedAt - b.capturedAt);
+
+/**
+ * Distinct session buckets seen in the readings, base bucket (`''`) first.
+ * Codex persists one primary bucket per rate-limit scope, so each scopeKey
+ * becomes its own series instead of interleaving into the base one.
+ */
+export const discoverSessionBuckets = (
+  readings: QuotaLimitReading[],
+): { limitName: string | null; scopeKey: string }[] => {
+  const buckets = new Map<string, string | null>();
+  for (const reading of readings) {
+    if (!isSessionReading(reading)) continue;
+    const scopeKey = reading.scopeKey || '';
+    if (!buckets.get(scopeKey) && reading.limitName) buckets.set(scopeKey, reading.limitName);
+    else if (!buckets.has(scopeKey)) buckets.set(scopeKey, null);
+  }
+
+  return [...buckets.entries()]
+    .sort(([a], [b]) => (a === '' ? -1 : b === '' ? 1 : a.localeCompare(b)))
+    .map(([scopeKey, limitName]) => ({ limitName, scopeKey }));
+};
 
 const sameWindow = (a: QuotaLimitReading, b: QuotaLimitReading) =>
   a.resetsAt != null && b.resetsAt != null
@@ -146,7 +227,7 @@ export const buildDailyBurn = (
   series: QuotaSeriesKey,
 ): Map<string, number> => {
   const list = sortByCapturedAt(readings.filter((r) => matchesSeries(r, series)));
-  const windowMs = windowMsOf(series);
+  const fallbackWindowMs = windowMsOf(series);
   const burnByDay = new Map<string, number>();
 
   for (const [index, current] of list.entries()) {
@@ -154,7 +235,8 @@ export const buildDailyBurn = (
     const previous = list[index - 1];
     // A gap longer than one full window can hide entire windows — attributing
     // its delta to one day would paint a false spike.
-    if (current.capturedAt - previous.capturedAt > windowMs) continue;
+    if (current.capturedAt - previous.capturedAt > readingWindowMs(current, fallbackWindowMs))
+      continue;
 
     const burn = sameWindow(previous, current)
       ? Math.max(0, current.utilization - previous.utilization)
@@ -227,7 +309,7 @@ export const currentWindow = (
     peakUtilization: newest.utilization,
     rateLimitedAt: null,
     resetsAt: newest.resetsAt!,
-    windowStartAt: newest.resetsAt! - windowMsOf(series),
+    windowStartAt: newest.resetsAt! - readingWindowMs(newest, windowMsOf(series)),
   };
 };
 

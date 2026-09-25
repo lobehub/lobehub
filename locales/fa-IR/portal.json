@@ -1,4 +1,5 @@
 {
+  "FilePreview.actions.download": "دانلود فایل منبع",
   "FilePreview.tabs.chunk": "بخش",
   "FilePreview.tabs.file": "فایل",
   "Plugins": "مهارت‌ها",
@@ -29,6 +30,7 @@
   "artifacts.svg.copySuccess": "تصویر با موفقیت کپی شد",
   "artifacts.svg.download.png": "دانلود به‌صورت PNG",
   "artifacts.svg.download.svg": "دانلود به‌صورت SVG",
+  "document.saveConflict": "این سند در جای دیگری به‌روزرسانی شده است. در حال تازه‌سازی به آخرین نسخه.",
   "document.todos.allCompleted": "همه وظایف انجام شده‌اند",
   "document.todos.title": "وظایف",
   "emptyArtifactList": "هنوز آرتیفکتی وجود ندارد. در گفتگو از مهارت‌ها استفاده کنید و سپس به اینجا بازگردید.",

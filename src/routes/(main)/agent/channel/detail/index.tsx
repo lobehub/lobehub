@@ -19,6 +19,7 @@ import {
   BOT_RUNTIME_STATUSES,
   type BotRuntimeStatusSnapshot,
 } from '../../../../../types/botRuntimeStatus';
+import { keepPendingConnectResult, toTestResult } from './actionResults';
 import Body from './Body';
 import Footer from './Footer';
 import { getChannelFormValues, mergeSettingsWithDefaults } from './formState';
@@ -66,7 +67,10 @@ export interface ChannelFormValues {
 }
 
 export interface TestResult {
+  /** Raw platform / server message, shown under the hint for diagnosis. */
   errorDetail?: string;
+  /** Readable, localized explanation of what went wrong and what to check. */
+  hint?: string;
   title?: string;
   type: 'error' | 'info' | 'success';
 }
@@ -270,6 +274,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
         setSaving(true);
         setSaveResult(undefined);
         setConnectResult(undefined);
+        setTestResult(undefined);
 
         const {
           applicationId: formAppId,
@@ -345,6 +350,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
         setSaving(true);
         setSaveResult(undefined);
         setConnectResult(undefined);
+        setTestResult(undefined);
 
         try {
           const { applicationId, credentials } = params;
@@ -422,13 +428,19 @@ const PlatformDetail = memo<PlatformDetailProps>(
       }
 
       setTesting(true);
+      setSaveResult(undefined);
       setTestResult(undefined);
+      setConnectResult(keepPendingConnectResult);
       try {
-        await testConnection({
+        const result = await testConnection({
           applicationId: currentConfig.applicationId,
           platform: platformDef.id,
         });
-        setTestResult({ type: 'success' });
+        setTestResult(
+          toTestResult(result, (code) =>
+            t(`channel.connectionError.${code}`, { defaultValue: '' }),
+          ),
+        );
       } catch (e: any) {
         setTestResult({
           errorDetail: e?.message || String(e),

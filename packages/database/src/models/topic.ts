@@ -7,6 +7,7 @@ import type {
   TopicRankItem,
   TopicScheduledRun,
 } from '@lobechat/types';
+import { parseTopicScheduledRun } from '@lobechat/types';
 import type { TimingSink } from '@lobechat/utils';
 import {
   getDurationMs,
@@ -132,6 +133,8 @@ export interface VisitorRunningOperation {
   heteroType?: string | null;
   operationId: string;
   scope?: string;
+  /** Liveness/elapsed-time stamp — see `useGatewayReconnect`'s `startedAt`. */
+  startedAt?: string;
   threadId?: string | null;
 }
 
@@ -178,8 +181,9 @@ const pickVisitorRunningOperation = (
   const runningOperation = metadata?.runningOperation;
   if (!runningOperation) return null;
 
-  const { assistantMessageId, operationId, scope, threadId, heteroType } = runningOperation;
-  return { assistantMessageId, heteroType, operationId, scope, threadId };
+  const { assistantMessageId, heteroType, operationId, scope, startedAt, threadId } =
+    runningOperation;
+  return { assistantMessageId, heteroType, operationId, scope, startedAt, threadId };
 };
 
 export interface CreateTopicParams {
@@ -190,6 +194,10 @@ export interface CreateTopicParams {
   metadata?: ChatTopicMetadata;
   /** Pinned model snapshot, persisted to the top-level `topics.model` column. */
   model?: string | null;
+  /** Owning business project, independent of the execution directory. */
+  projectId?: string | null;
+  /** Project directory this conversation is pinned to as its execution context. */
+  projectWorkingDirectoryId?: string | null;
   provider?: string | null;
   /**
    * Agent-share visitor topics carry the CREATOR's `userId` (billing/data
@@ -423,7 +431,7 @@ export class TopicModel {
    * Raw workspace/user scope, WITHOUT the visitor exclusion. Backing store for
    * both {@link ownership} and {@link mine}, and the escape hatch for methods
    * that must see visitor rows independent of the instance flag
-   * ({@link queryBySender} / {@link countBySender} / {@link countVisitors}).
+   * ({@link queryBySender} / {@link countBySender} / {@link countShareVisitors}).
    */
   private workspaceScope = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, topics);
@@ -438,7 +446,7 @@ export class TopicModel {
    *
    * `mine()` deliberately does NOT AND {@link notShareVisitor} — it is the
    * per-user variant of {@link workspaceScope} and the share-scoped methods
-   * ({@link queryBySender} / {@link countBySender} / {@link countVisitors})
+   * ({@link queryBySender} / {@link countBySender} / {@link countShareVisitors})
    * layer their own `senderId` predicate on top of it. Creator-facing
    * destructive sweeps that reach for `mine()` still get the visitor
    * exclusion by AND-ing {@link notShareVisitor} themselves.
@@ -526,6 +534,36 @@ export class TopicModel {
       sql<Date>`COALESCE((${latestMessageAtSubquery}), ${topics.updatedAt})`.mapWith(
         topics.updatedAt,
       );
+
+    // When the topic's current run started, so a sidebar can show live elapsed
+    // time instead of `updatedAt` (which moves on every message write). The
+    // latest *top-level* running operation is the current run: sub-operations
+    // (callAgent) would restart the clock at their own spawn time, and an
+    // abandoned `running` row from a crashed earlier run sorts below the live
+    // one. Not scoped by `ownership()` — in a workspace the run may have been
+    // started by another member, and the topic join is already ownership-gated.
+    // Same shape as the `queryTopics` feed's column of the same name.
+    const runStartedAtSubquery = this.db
+      .select({ value: agentOperations.startedAt })
+      .from(agentOperations)
+      .where(
+        and(
+          eq(agentOperations.topicId, topics.id),
+          eq(agentOperations.status, 'running'),
+          isNull(agentOperations.parentOperationId),
+          isNotNull(agentOperations.startedAt),
+        ),
+      )
+      .orderBy(desc(agentOperations.startedAt))
+      .limit(1);
+
+    // CASE-gated so only rows that are actually running pay for the lookup —
+    // and a stale running op under a finished topic can't resurrect a timer.
+    const runStartedAtColumn =
+      sql<Date | null>`CASE WHEN ${topics.status} = 'running' THEN (${runStartedAtSubquery}) ELSE NULL END`
+        .mapWith(agentOperations.startedAt)
+        .as('run_started_at');
+
     const orderBy = buildTopicOrderBy(topicActivityAt, sortBy);
 
     const detailColumns = withDetails
@@ -595,8 +633,11 @@ export class TopicModel {
                 historySummary: topics.historySummary,
                 id: topics.id,
                 metadata: topics.metadata,
+                projectId: topics.projectId,
+                projectWorkingDirectoryId: topics.projectWorkingDirectoryId,
                 model: topics.model,
                 provider: topics.provider,
+                runStartedAt: runStartedAtColumn,
                 status: topics.status,
                 title: topics.title,
                 updatedAt: topics.updatedAt,
@@ -673,8 +714,11 @@ export class TopicModel {
                 historySummary: topics.historySummary,
                 id: topics.id,
                 metadata: topics.metadata,
+                projectId: topics.projectId,
+                projectWorkingDirectoryId: topics.projectWorkingDirectoryId,
                 model: topics.model,
                 provider: topics.provider,
+                runStartedAt: runStartedAtColumn,
                 status: topics.status,
                 title: topics.title,
                 updatedAt: topics.updatedAt,
@@ -745,8 +789,11 @@ export class TopicModel {
               historySummary: topics.historySummary,
               id: topics.id,
               metadata: topics.metadata,
+              projectId: topics.projectId,
+              projectWorkingDirectoryId: topics.projectWorkingDirectoryId,
               model: topics.model,
               provider: topics.provider,
+              runStartedAt: runStartedAtColumn,
               sessionId: topics.sessionId,
               status: topics.status,
               title: topics.title,
@@ -967,10 +1014,19 @@ export class TopicModel {
       .orderBy(desc(agentOperations.startedAt))
       .limit(1);
 
+    // Client-executed runs (desktop heterogeneous CLI, in-browser runtime) never
+    // reach `agent_operations` — nothing server-side creates the operation — so
+    // their start is stamped onto the topic by the status write that claims it
+    // (see {@link TopicModel.update}). The operation row still wins when both
+    // exist: it is the server's own record of the run, while the stamp is a
+    // client-reported time.
+    const localRunStartedAt = sql`(${topics.metadata} ->> 'runStartedAt')::timestamptz`;
+
     // CASE-gated so only rows that are actually running pay for the lookup —
-    // and a stale running op under a finished topic can't resurrect a timer.
+    // and a stale running op (or stamp) under a finished topic can't resurrect
+    // a timer.
     const runStartedAtColumn =
-      sql<Date | null>`CASE WHEN ${topics.status} = 'running' THEN (${runStartedAtSubquery}) ELSE NULL END`
+      sql<Date | null>`CASE WHEN ${topics.status} = 'running' THEN COALESCE((${runStartedAtSubquery}), ${localRunStartedAt}) ELSE NULL END`
         .mapWith(agentOperations.startedAt)
         .as('run_started_at');
 
@@ -1727,10 +1783,32 @@ export class TopicModel {
         ? sql`${topics.provider} is distinct from ${data.provider}`
         : undefined,
     );
+    const persistedMetadata = modelChanged
+      ? sql`case when ${modelChanged} then coalesce(${topics.metadata}, '{}'::jsonb) - 'reasoningConfig' else coalesce(${topics.metadata}, '{}'::jsonb) end`
+      : sql`coalesce(${topics.metadata}, '{}'::jsonb)`;
+
+    /**
+     * A locally executed run — desktop heterogeneous CLI, in-browser runtime —
+     * has no `agent_operations` row: its runtime lives in the client, and the
+     * only thing it tells the server is this status write. Stamp when the run
+     * claimed the topic in the same statement, so a list can show a live
+     * elapsed clock for those runs the same way it does for server-side ones
+     * (see `runStartedAtColumn` in {@link TopicModel.queryTopics}).
+     *
+     * Compared against the PERSISTED status so a resume out of
+     * `waitingForHuman` — the same run, continuing after an approval — keeps
+     * its original start instead of restarting the clock. The stamp is left
+     * behind on terminal statuses: every reader gates on `status = 'running'`,
+     * and the next run overwrites it.
+     */
     const metadata =
-      data.metadata === undefined && modelChanged
-        ? sql`case when ${modelChanged} then coalesce(${topics.metadata}, '{}'::jsonb) - 'reasoningConfig' else ${topics.metadata} end`
-        : data.metadata;
+      data.metadata !== undefined
+        ? data.metadata
+        : data.status === 'running'
+          ? sql`case when ${topics.status} in ('running', 'waitingForHuman') then ${persistedMetadata} else jsonb_set(${persistedMetadata}, '{runStartedAt}', to_jsonb(now())) end`
+          : modelChanged
+            ? persistedMetadata
+            : undefined;
 
     return this.db
       .update(topics)
@@ -1778,7 +1856,12 @@ export class TopicModel {
   ) => {
     return this.db.transaction(async (tx) => {
       const [existing] = await tx
-        .select({ metadata: topics.metadata, status: topics.status })
+        .select({
+          metadata: topics.metadata,
+          projectId: topics.projectId,
+          projectWorkingDirectoryId: topics.projectWorkingDirectoryId,
+          status: topics.status,
+        })
         .from(topics)
         .where(and(eq(topics.id, id), this.ownership()))
         .for('update');
@@ -2469,6 +2552,31 @@ export class TopicModel {
       return 'released';
     });
 
+  /** Atomically cancel an unclaimed rate-limit run, serialized with the dispatcher. */
+  cancelRateLimitContinuation = async (id: string) =>
+    this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .select({ metadata: topics.metadata, status: topics.status })
+        .from(topics)
+        .where(and(eq(topics.id, id), this.ownership()))
+        .for('update');
+      if (!row) return { status: 'unchanged' as const };
+      if (row.status === 'running') return { status: 'busy' as const };
+      const scheduledRun = parseTopicScheduledRun(row.metadata?.scheduledRun);
+      if (row.status !== 'scheduled' || scheduledRun?.kind !== 'resume_after_rate_limit')
+        return { status: 'unchanged' as const };
+      // A lease expiring does not stop its dispatcher. Once claimed, a handoff
+      // must not race that worker, even if its five-minute lease has elapsed.
+      if (scheduledRun.claim) return { status: 'busy' as const };
+
+      const metadata = { ...row.metadata, scheduledRun: null };
+      await tx
+        .update(topics)
+        .set({ metadata, status: 'failed' })
+        .where(and(eq(topics.id, id), this.ownership()));
+      return { metadata, status: 'cancelled' as const };
+    });
+
   /**
    * Arm a scheduled run on an owned topic: writes `metadata.scheduledRun` and
    * flips the status to `scheduled` in a single update.
@@ -2740,7 +2848,12 @@ export class TopicModel {
   ): Promise<boolean> {
     return db.transaction(async (tx) => {
       const [row] = await tx
-        .select({ metadata: topics.metadata, status: topics.status })
+        .select({
+          metadata: topics.metadata,
+          projectId: topics.projectId,
+          projectWorkingDirectoryId: topics.projectWorkingDirectoryId,
+          status: topics.status,
+        })
         .from(topics)
         .where(eq(topics.id, id))
         .for('update');
@@ -2780,7 +2893,12 @@ export class TopicModel {
   ): Promise<void> {
     await db.transaction(async (tx) => {
       const [row] = await tx
-        .select({ metadata: topics.metadata, status: topics.status })
+        .select({
+          metadata: topics.metadata,
+          projectId: topics.projectId,
+          projectWorkingDirectoryId: topics.projectWorkingDirectoryId,
+          status: topics.status,
+        })
         .from(topics)
         .where(eq(topics.id, id))
         .for('update');
@@ -2818,7 +2936,12 @@ export class TopicModel {
   ): Promise<void> {
     await db.transaction(async (tx) => {
       const [row] = await tx
-        .select({ metadata: topics.metadata, status: topics.status })
+        .select({
+          metadata: topics.metadata,
+          projectId: topics.projectId,
+          projectWorkingDirectoryId: topics.projectWorkingDirectoryId,
+          status: topics.status,
+        })
         .from(topics)
         .where(eq(topics.id, id))
         .for('update');

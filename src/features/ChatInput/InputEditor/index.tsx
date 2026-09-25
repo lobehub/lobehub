@@ -50,7 +50,7 @@ import {
 import { createInputCompletionError, isInputCompletionAbortError } from './inputCompletionError';
 import InputHistoryPopup, { getHistoryPreviewText } from './InputHistoryPopup';
 import { INSERT_LOCAL_FILE_TAG_COMMAND } from './LocalFileTag';
-import { mentionFilledClassName } from './mentionStyle';
+import { mentionPlainClassName } from './mentionStyle';
 import Placeholder, { type PlaceholderVariant } from './Placeholder';
 import { CHAT_INPUT_EMBED_PLUGINS, createChatInputRichPlugins } from './plugins';
 import { INSERT_REFER_TOPIC_COMMAND } from './ReferTopic';
@@ -63,7 +63,7 @@ const className = cx(
       margin-block-end: 0;
     }
   `,
-  mentionFilledClassName,
+  mentionPlainClassName,
 );
 
 // Single-line dimmed preview of the highlighted history entry, shown through the

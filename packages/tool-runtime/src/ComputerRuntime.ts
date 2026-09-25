@@ -55,6 +55,14 @@ const MAX_AGENT_GLOB_RESULTS = 1000;
  */
 export abstract class ComputerRuntime {
   /**
+   * Whether this backend's `getCommandOutput` manifest exposes a `timeout`, so
+   * a still-running observation may tell the reader to wait longer in one call
+   * rather than poll. Opt-in: the advice is only useful where the schema the
+   * model is holding actually carries the parameter.
+   */
+  protected readonly supportsObservationTimeout: boolean = false;
+
+  /**
    * Call the underlying service to execute a tool.
    * Each subclass maps this to its own transport (IPC, HTTP, tRPC, etc.).
    */
@@ -152,17 +160,43 @@ export abstract class ComputerRuntime {
         startLine: args.startLine,
         totalCharCount: r.totalCharCount,
         totalLines: r.totalLineCount ?? r.totalLines,
+        truncated: r.truncated === true ? true : undefined,
       };
 
-      const lineRange: [number, number] | undefined =
-        args.startLine !== undefined && args.endLine !== undefined
-          ? [args.startLine, args.endLine]
+      // Number every returned line (1-based gutter) and, when the window
+      // stops before EOF, prefix a `(lines 1-1000 of 2545)` marker. Rendering
+      // only the caller-supplied args here meant a default-window read looked
+      // identical to a full read, and the model had to burn extra turns
+      // discovering the file was truncated.
+      const hasLoc = Array.isArray(r.loc) && r.loc.length === 2;
+      // The loc-less fallback is the cloud sandbox path (local reads always
+      // return `loc`): its `startLine`/`endLine` args are 1-based inclusive
+      // and independently optional, so normalize to the 0-based
+      // end-exclusive window the formatter computes with — passing [1, 200]
+      // through raw would label a full 200-line read as "(lines 1-199 of
+      // ...)". An endLine-only read stops mid-file and needs the marker; a
+      // startLine-only read runs to EOF (window end = totalLines).
+      const fallbackEnd = args.endLine ?? r.totalLineCount ?? r.totalLines;
+      const lineRange: [number, number] | undefined = hasLoc
+        ? [r.loc[0], r.loc[1]]
+        : (args.startLine !== undefined || args.endLine !== undefined) && fallbackEnd !== undefined
+          ? [Math.max((args.startLine ?? 1) - 1, 0), fallbackEnd]
           : undefined;
+
+      // `loc` is 0-based end-exclusive while the cloud sandbox's
+      // `startLine`/`endLine` args are 1-based inclusive; either way the first
+      // returned line's 1-based number is loc[0] + 1 or startLine.
+      const firstLineNumber = hasLoc ? r.loc[0] + 1 : (args.startLine ?? 1);
 
       const content = formatFileContent({
         content: fileContent,
+        firstLineNumber,
         lineRange,
-        path: args.path,
+        totalLines: r.totalLineCount ?? r.totalLines,
+        // When the service cut the content at its char cap, the window's tail
+        // was never delivered — a "(lines 1-1000 of N)" marker would claim
+        // coverage the payload doesn't have, so it is suppressed.
+        truncated: r.truncated === true,
       });
 
       return { content, state, success: true };
@@ -369,7 +403,9 @@ export abstract class ComputerRuntime {
         error: r.error,
         exitCode: r.exitCode ?? r.exit_code,
         outputFiles,
+        running: r.running,
         shellId: r.commandId || r.shell_id,
+        signal: r.signal,
         stderr: r.stderr,
         stdout: r.stdout || r.output,
         success: commandSuccess,
@@ -411,25 +447,39 @@ export abstract class ComputerRuntime {
       const r = result.result || {};
       const outputSuccess = typeof r.success === 'boolean' ? r.success : result.success;
       const outputFiles = r.outputFiles ?? r.output_files;
+      const exitCode = r.exitCode ?? r.exit_code;
+      // Liveness comes from the backend. The fallback is for backends that do
+      // not report it and is knowingly lossy — a missing `exitCode` also
+      // describes a signalled or never-spawned command — so it stays a last
+      // resort. `r.running ?? false` was worse: it hard-coded "not running" for
+      // every such backend, so no consumer could tell a live session from a
+      // finished one.
+      const running = typeof r.running === 'boolean' ? r.running : exitCode === undefined;
 
       const state: GetCommandOutputState = {
         ...sessionState,
         durationMs: r.durationMs ?? r.duration_ms,
         error: r.error,
-        exitCode: r.exitCode ?? r.exit_code,
+        exitCode,
         outputFiles,
-        running: r.running ?? false,
+        running,
+        signal: r.signal,
         stderr: r.stderr,
         stdout: r.stdout,
         success: outputSuccess,
       };
 
       const content = formatCommandOutput({
+        canWaitLonger: this.supportsObservationTimeout,
         durationMs: r.durationMs ?? r.duration_ms,
         error: r.error,
-        exitCode: r.exitCode ?? r.exit_code,
+        exitCode,
+        filter: args.filter,
         output: r.newOutput || r.output,
         outputFiles,
+        running,
+        shellId: args.commandId,
+        signal: r.signal,
         stderr: r.stderr,
         stdout: r.stdout,
         success: outputSuccess,

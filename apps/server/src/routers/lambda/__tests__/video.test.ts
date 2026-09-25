@@ -8,34 +8,54 @@ import { AsyncTaskStatus } from '@/types/asyncTask';
 
 const {
   mockCreateVideo,
+  mockFindPreviousGeneration,
   mockFindUserById,
   mockGenerationTopicFindById,
+  mockGetVideoAvgLatencies,
   mockIsLobeHubModelAvailable,
   mockProcessBackgroundVideoPolling,
   mockResolveBusinessModelMapping,
   mockAfter,
+  mockAppEnv,
   mockServerDB,
   mockTransaction,
 } = vi.hoisted(() => {
   const mockTransaction = vi.fn();
-  const mockServerDB = { transaction: mockTransaction };
+  const mockServerDB = {
+    query: {
+      generationBatches: {
+        findFirst: vi.fn(),
+      },
+    },
+    transaction: mockTransaction,
+  };
   const mockCreateVideo = vi.fn();
   const mockAfter = vi.fn(function (cb: () => void) {
     return cb();
   });
+  const mockAppEnv = {
+    APP_URL: 'https://app.example.com',
+    VIDEO_GENERATION_PREFER_WEBHOOK: false,
+    WEBHOOK_PROXY_URL: undefined as string | undefined,
+  };
+  const mockFindPreviousGeneration = vi.fn();
   const mockFindUserById = vi.fn();
   const mockGenerationTopicFindById = vi.fn();
+  const mockGetVideoAvgLatencies = vi.fn();
   const mockIsLobeHubModelAvailable = vi.fn();
   const mockProcessBackgroundVideoPolling = vi.fn().mockResolvedValue(undefined);
   const mockResolveBusinessModelMapping = vi.fn();
   return {
     mockCreateVideo,
+    mockFindPreviousGeneration,
     mockFindUserById,
     mockGenerationTopicFindById,
+    mockGetVideoAvgLatencies,
     mockIsLobeHubModelAvailable,
     mockProcessBackgroundVideoPolling,
     mockResolveBusinessModelMapping,
     mockAfter,
+    mockAppEnv,
     mockServerDB,
     mockTransaction,
   };
@@ -44,6 +64,11 @@ const {
 // ---- module-level mocks ----
 
 vi.mock('@/database/models/asyncTask');
+vi.mock('@/database/models/generation', () => ({
+  GenerationModel: vi.fn(function () {
+    return { findById: mockFindPreviousGeneration };
+  }),
+}));
 vi.mock('@/database/models/generationTopic', () => ({
   GenerationTopicModel: vi.fn(function () {
     return {
@@ -96,8 +121,13 @@ vi.mock('@/server/utils/scheduleAfterResponse', () => ({
 vi.mock('@/server/services/generation/videoBackgroundPolling', () => ({
   processBackgroundVideoPolling: mockProcessBackgroundVideoPolling,
 }));
+vi.mock('@/server/services/generation/latency', () => ({
+  getVideoAvgLatencies: mockGetVideoAvgLatencies,
+  getVideoLatencyKey: ({ model, provider }: { model: string; provider: string }) =>
+    `${provider}\0${model}`,
+}));
 vi.mock('@/envs/app', () => ({
-  appEnv: { APP_URL: 'https://app.example.com' },
+  appEnv: mockAppEnv,
 }));
 vi.mock('debug', () => ({
   default: vi.fn(function () {
@@ -144,14 +174,16 @@ const mockDbUpdate = vi.fn().mockReturnValue({
 
 function setupMocks() {
   const mockUpdate = vi.fn().mockResolvedValue(undefined);
+  const mockGetFullFileUrl = vi.fn().mockResolvedValue(null);
+  const mockGetKeyFromFullUrl = vi.fn().mockResolvedValue(null);
 
   vi.mocked(AsyncTaskModel).mockImplementation(function () {
     return { update: mockUpdate } as any;
   });
   vi.mocked(FileService).mockImplementation(function () {
     return {
-      getFullFileUrl: vi.fn().mockResolvedValue(null),
-      getKeyFromFullUrl: vi.fn().mockResolvedValue(null),
+      getFullFileUrl: mockGetFullFileUrl,
+      getKeyFromFullUrl: mockGetKeyFromFullUrl,
     } as any;
   });
 
@@ -160,7 +192,7 @@ function setupMocks() {
     cb({ insert: mockInsert, update: mockDbUpdate }),
   );
 
-  return { mockUpdate };
+  return { mockGetFullFileUrl, mockGetKeyFromFullUrl, mockInsert, mockUpdate };
 }
 
 // ---- import router AFTER mocks are set up ----
@@ -180,25 +212,275 @@ describe('videoRouter', () => {
       }),
     );
     mockFindUserById.mockResolvedValue({ email: 'user@example.com' });
+    mockFindPreviousGeneration.mockResolvedValue(undefined);
     mockGenerationTopicFindById.mockResolvedValue({ id: 'topic-1' });
+    mockGetVideoAvgLatencies.mockResolvedValue(new Map());
     mockIsLobeHubModelAvailable.mockResolvedValue(true);
+    mockServerDB.query.generationBatches.findFirst.mockResolvedValue(undefined);
+    mockAppEnv.VIDEO_GENERATION_PREFER_WEBHOOK = false;
+    mockAppEnv.WEBHOOK_PROXY_URL = undefined;
   });
 
   describe('createVideo - async strategy routing', () => {
-    it('should use webhook path when response contains useWebhook: true', async () => {
+    it('should use the webhook path when selected by the runtime', async () => {
       const { mockUpdate } = setupMocks();
-      mockCreateVideo.mockResolvedValue({ inferenceId: 'inf-1', useWebhook: true });
+      mockCreateVideo.mockResolvedValue({
+        completionMode: 'webhook',
+        inferenceId: 'inf-1',
+      });
 
       const caller = videoRouter.createCaller(mockCtx);
       const result = await caller.createVideo(defaultInput);
 
       expect(result.success).toBe(true);
+      expect(mockCreateVideo).toHaveBeenCalledWith(
+        expect.objectContaining({
+          callbackUrl: expect.stringMatching(/^https:\/\/app\.example\.com\/api\/webhooks\/video/),
+        }),
+        expect.objectContaining({ preferredCompletionMode: 'polling' }),
+      );
       expect(mockUpdate).toHaveBeenCalledWith('async-1', {
         inferenceId: 'inf-1',
+        metadata: {
+          completionMode: 'webhook',
+          webhookToken: expect.any(String),
+        },
         status: AsyncTaskStatus.Processing,
       });
       // Webhook: should NOT trigger background polling
       expect(mockAfter).not.toHaveBeenCalled();
+    });
+
+    it('should pass the webhook preference and typed proxy callback URL to the runtime', async () => {
+      setupMocks();
+      mockAppEnv.VIDEO_GENERATION_PREFER_WEBHOOK = true;
+      mockAppEnv.WEBHOOK_PROXY_URL = 'https://local-tunnel.example.com';
+      mockCreateVideo.mockResolvedValue({
+        completionMode: 'webhook',
+        inferenceId: 'inf-proxy',
+      });
+
+      const caller = videoRouter.createCaller(mockCtx);
+      await caller.createVideo(defaultInput);
+
+      expect(mockCreateVideo).toHaveBeenCalledWith(
+        expect.objectContaining({
+          callbackUrl: expect.stringMatching(
+            /^https:\/\/local-tunnel\.example\.com\/api\/webhooks\/video/,
+          ),
+        }),
+        expect.objectContaining({ preferredCompletionMode: 'webhook' }),
+      );
+    });
+
+    it('should keep a path prefix from the configured callback base URL', async () => {
+      setupMocks();
+      mockAppEnv.WEBHOOK_PROXY_URL = 'https://proxy.example.com/lobehub/';
+
+      const caller = videoRouter.createCaller(mockCtx);
+      await caller.createVideo(defaultInput);
+
+      expect(mockCreateVideo).toHaveBeenCalledWith(
+        expect.objectContaining({
+          callbackUrl: expect.stringMatching(
+            /^https:\/\/proxy\.example\.com\/lobehub\/api\/webhooks\/video\/[^?]+\?/,
+          ),
+        }),
+        expect.any(Object),
+      );
+    });
+
+    it('should preserve route metadata without polling for a webhook-based interaction', async () => {
+      const { mockUpdate } = setupMocks();
+      mockCreateVideo.mockImplementation(async (_payload, options) => {
+        options.metadata.routeAttempt = {
+          apiType: 'google',
+          channelId: 'google-channel-2',
+          routerId: 'google-router',
+        };
+
+        return {
+          completionMode: 'webhook',
+          inferenceId: 'interactions/omni-1',
+        };
+      });
+
+      const caller = videoRouter.createCaller(mockCtx);
+      await caller.createVideo(defaultInput);
+
+      expect(mockAfter).not.toHaveBeenCalled();
+      expect(mockProcessBackgroundVideoPolling).not.toHaveBeenCalled();
+      expect(mockUpdate).toHaveBeenCalledWith(
+        'async-1',
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            route: {
+              apiType: 'google',
+              channelId: 'google-channel-2',
+              routerId: 'google-router',
+            },
+          }),
+        }),
+      );
+    });
+
+    it('should preserve reference image URLs that are not storage files', async () => {
+      const { mockGetKeyFromFullUrl, mockInsert } = setupMocks();
+      const imageUrls = [
+        'https://images.example.com/reference.png',
+        'data:image/png;base64,reference',
+      ];
+      mockGetKeyFromFullUrl.mockResolvedValue(null);
+      mockCreateVideo.mockResolvedValue({
+        completionMode: 'webhook',
+        inferenceId: 'inf-reference',
+      });
+
+      const caller = videoRouter.createCaller(mockCtx);
+      await caller.createVideo({
+        ...defaultInput,
+        params: { ...defaultInput.params, imageUrls },
+      });
+
+      const values = mockInsert.mock.results[0].value.values;
+      expect(values).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          config: expect.objectContaining({ imageUrls }),
+        }),
+      );
+    });
+
+    it('should pass the previous interaction when editing a compatible video', async () => {
+      const { mockInsert } = setupMocks();
+      mockFindPreviousGeneration.mockResolvedValue({
+        asset: { interactionId: 'interactions/source-1', type: 'video' },
+        generationBatchId: 'source-batch',
+        id: 'source-generation',
+      });
+      mockServerDB.query.generationBatches.findFirst.mockResolvedValue({
+        generationTopicId: 'topic-1',
+        id: 'source-batch',
+        model: 'gemini-omni-1.1-flash',
+        provider: 'google',
+      });
+      mockCreateVideo.mockResolvedValue({
+        completionMode: 'webhook',
+        inferenceId: 'interactions/edit-1',
+      });
+
+      const caller = videoRouter.createCaller(mockCtx);
+      await caller.createVideo({
+        ...defaultInput,
+        model: 'gemini-omni-1.1-flash',
+        previousGenerationId: 'source-generation',
+        provider: 'google',
+      });
+
+      expect(mockCreateVideo).toHaveBeenCalledWith(
+        expect.objectContaining({
+          params: expect.objectContaining({ task: 'edit' }),
+          previousInteractionId: 'interactions/source-1',
+        }),
+        expect.any(Object),
+      );
+
+      const values = mockInsert.mock.results[0].value.values;
+      expect(values.mock.calls[0][0].config).not.toHaveProperty('previousGenerationId');
+      expect(values).toHaveBeenNthCalledWith(
+        3,
+        expect.objectContaining({
+          metadata: expect.objectContaining({ previousGenerationId: 'source-generation' }),
+        }),
+      );
+    });
+
+    it('should pin the edit to the route that created the source video', async () => {
+      const { mockUpdate } = setupMocks();
+      const sourceRoute = { apiType: 'google', channelId: 'google-channel-2', routerId: 'r-1' };
+      const mockFindTask = vi.fn().mockResolvedValue({ metadata: { route: sourceRoute } });
+      vi.mocked(AsyncTaskModel).mockImplementation(function () {
+        return { findById: mockFindTask, update: mockUpdate } as any;
+      });
+      mockFindPreviousGeneration.mockResolvedValue({
+        asset: { interactionId: 'interactions/source-1', type: 'video' },
+        asyncTaskId: 'source-task',
+        generationBatchId: 'source-batch',
+        id: 'source-generation',
+      });
+      mockServerDB.query.generationBatches.findFirst.mockResolvedValue({
+        generationTopicId: 'topic-1',
+        id: 'source-batch',
+        model: 'gemini-omni-1.1-flash',
+        provider: 'google',
+      });
+      mockCreateVideo.mockResolvedValue({
+        completionMode: 'webhook',
+        inferenceId: 'interactions/edit-1',
+      });
+
+      const caller = videoRouter.createCaller(mockCtx);
+      await caller.createVideo({
+        ...defaultInput,
+        model: 'gemini-omni-1.1-flash',
+        previousGenerationId: 'source-generation',
+        provider: 'google',
+      });
+
+      expect(mockFindTask).toHaveBeenCalledWith('source-task');
+      expect(mockCreateVideo).toHaveBeenCalledWith(
+        expect.objectContaining({ previousInteractionId: 'interactions/source-1' }),
+        expect.objectContaining({ route: sourceRoute }),
+      );
+    });
+
+    it('should reject editing with a model that has no conversational video support', async () => {
+      setupMocks();
+
+      const caller = videoRouter.createCaller(mockCtx);
+
+      await expect(
+        caller.createVideo({
+          ...defaultInput,
+          previousGenerationId: 'source-generation',
+        }),
+      ).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message: 'The selected model does not support conversational video editing',
+      });
+      expect(mockFindPreviousGeneration).not.toHaveBeenCalled();
+      expect(mockTransaction).not.toHaveBeenCalled();
+    });
+
+    it('should reject editing across models', async () => {
+      setupMocks();
+      mockFindPreviousGeneration.mockResolvedValue({
+        asset: { interactionId: 'interactions/source-1', type: 'video' },
+        generationBatchId: 'source-batch',
+        id: 'source-generation',
+      });
+      mockServerDB.query.generationBatches.findFirst.mockResolvedValue({
+        generationTopicId: 'topic-1',
+        id: 'source-batch',
+        model: 'different-model',
+        provider: 'volcengine',
+      });
+
+      const caller = videoRouter.createCaller(mockCtx);
+
+      await expect(
+        caller.createVideo({
+          ...defaultInput,
+          model: 'gemini-omni-1.1-flash',
+          previousGenerationId: 'source-generation',
+          provider: 'google',
+        }),
+      ).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message: 'Previous video generation cannot be edited with the selected model',
+      });
+      expect(mockTransaction).not.toHaveBeenCalled();
+      expect(mockCreateVideo).not.toHaveBeenCalled();
     });
 
     it('should validate mapped model id before rejecting deprecated lobehub video models', async () => {
@@ -207,7 +489,10 @@ describe('videoRouter', () => {
         requestedModelId: 'onboarding-video',
         resolvedModelId: 'dreamina-seedance-2-0-260128',
       });
-      mockCreateVideo.mockResolvedValue({ inferenceId: 'inf-mapped', useWebhook: true });
+      mockCreateVideo.mockResolvedValue({
+        completionMode: 'webhook',
+        inferenceId: 'inf-mapped',
+      });
 
       const caller = videoRouter.createCaller(mockCtx);
       const result = await caller.createVideo({
@@ -228,7 +513,10 @@ describe('videoRouter', () => {
       await expect(availabilityOptions!.getUserEmail!()).resolves.toBe('user@example.com');
       expect(mockFindUserById).toHaveBeenCalledWith(mockServerDB, mockCtx.userId);
       expect(mockCreateVideo).toHaveBeenCalledWith(
-        expect.objectContaining({ model: 'dreamina-seedance-2-0-260128' }),
+        expect.objectContaining({
+          callbackUrl: expect.stringContaining('model=dreamina-seedance-2-0-260128'),
+          model: 'dreamina-seedance-2-0-260128',
+        }),
         expect.any(Object),
       );
     });
@@ -269,9 +557,12 @@ describe('videoRouter', () => {
       expect(mockCreateVideo).not.toHaveBeenCalled();
     });
 
-    it('should use polling path when response contains only inferenceId', async () => {
+    it('should use the polling path when selected by the runtime', async () => {
       const { mockUpdate } = setupMocks();
-      mockCreateVideo.mockResolvedValue({ inferenceId: 'inf-2' });
+      mockCreateVideo.mockResolvedValue({
+        completionMode: 'polling',
+        inferenceId: 'inf-2',
+      });
 
       const caller = videoRouter.createCaller(mockCtx);
       const result = await caller.createVideo(defaultInput);
@@ -279,6 +570,10 @@ describe('videoRouter', () => {
       expect(result.success).toBe(true);
       expect(mockUpdate).toHaveBeenCalledWith('async-1', {
         inferenceId: 'inf-2',
+        metadata: {
+          completionMode: 'polling',
+          webhookToken: expect.any(String),
+        },
         status: AsyncTaskStatus.Processing,
       });
       // Polling: should trigger background polling after the response.
@@ -289,6 +584,7 @@ describe('videoRouter', () => {
     it('should use polling path when response contains videoUrl (no special handling)', async () => {
       const { mockUpdate } = setupMocks();
       mockCreateVideo.mockResolvedValue({
+        completionMode: 'polling',
         inferenceId: 'inf-3',
         videoUrl: 'https://cdn.example.com/video.mp4',
       });
@@ -299,6 +595,10 @@ describe('videoRouter', () => {
       expect(result.success).toBe(true);
       expect(mockUpdate).toHaveBeenCalledWith('async-1', {
         inferenceId: 'inf-3',
+        metadata: {
+          completionMode: 'polling',
+          webhookToken: expect.any(String),
+        },
         status: AsyncTaskStatus.Processing,
       });
       // No special videoUrl branch — falls through to polling
@@ -306,16 +606,18 @@ describe('videoRouter', () => {
       expect(mockProcessBackgroundVideoPolling).toHaveBeenCalled();
     });
 
-    it('should fall through to polling when useWebhook is false', async () => {
+    it('should not start polling for a webhook task', async () => {
       setupMocks();
-      mockCreateVideo.mockResolvedValue({ inferenceId: 'inf-4', useWebhook: false });
+      mockCreateVideo.mockResolvedValue({
+        completionMode: 'webhook',
+        inferenceId: 'inf-4',
+      });
 
       const caller = videoRouter.createCaller(mockCtx);
       await caller.createVideo(defaultInput);
 
-      // useWebhook=false means not webhook, should fall to polling
-      expect(mockAfter).toHaveBeenCalled();
-      expect(mockProcessBackgroundVideoPolling).toHaveBeenCalled();
+      expect(mockAfter).not.toHaveBeenCalled();
+      expect(mockProcessBackgroundVideoPolling).not.toHaveBeenCalled();
     });
   });
 
@@ -337,6 +639,25 @@ describe('videoRouter', () => {
   });
 
   describe('createVideo - pre-charge', () => {
+    it('forwards the request spend origin to pre-charge', async () => {
+      setupMocks();
+      const { chargeBeforeGenerate } =
+        await import('@/business/server/video-generation/chargeBeforeGenerate');
+      const spendOrigin = {
+        agentShare: {
+          agentId: 'agent-share',
+          shareId: 'share-1',
+          visitorUserId: 'visitor-1',
+        },
+        trigger: 'agent_share',
+      };
+
+      const caller = videoRouter.createCaller({ ...mockCtx, spendOrigin });
+      await caller.createVideo(defaultInput);
+
+      expect(chargeBeforeGenerate).toHaveBeenCalledWith(expect.objectContaining({ spendOrigin }));
+    });
+
     it('should return error batch when pre-charge fails', async () => {
       setupMocks();
       const { chargeBeforeGenerate } =
@@ -358,7 +679,10 @@ describe('videoRouter', () => {
   describe('createVideo - return value', () => {
     it('should return batch and generation data', async () => {
       setupMocks();
-      mockCreateVideo.mockResolvedValue({ inferenceId: 'inf-5', useWebhook: true });
+      mockCreateVideo.mockResolvedValue({
+        completionMode: 'webhook',
+        inferenceId: 'inf-5',
+      });
 
       const caller = videoRouter.createCaller(mockCtx);
       const result = await caller.createVideo(defaultInput);
@@ -370,6 +694,32 @@ describe('videoRouter', () => {
         },
         success: true,
       });
+    });
+  });
+
+  describe('getModelLatencies', () => {
+    it('returns provider-scoped latency once per model pair from a single batched lookup', async () => {
+      mockGetVideoAvgLatencies.mockResolvedValue(
+        new Map([
+          ['provider-1\0model-1', 76_000],
+          ['provider-2\0model-1', null],
+        ]),
+      );
+      const models = [
+        { model: 'model-1', provider: 'provider-1' },
+        { model: 'model-1', provider: 'provider-1' },
+        { model: 'model-1', provider: 'provider-2' },
+      ];
+
+      const caller = videoRouter.createCaller(mockCtx);
+      const result = await caller.getModelLatencies({ models });
+
+      expect(result).toEqual([
+        { avgLatencyMs: 76_000, model: 'model-1', provider: 'provider-1' },
+        { avgLatencyMs: null, model: 'model-1', provider: 'provider-2' },
+      ]);
+      expect(mockGetVideoAvgLatencies).toHaveBeenCalledOnce();
+      expect(mockGetVideoAvgLatencies).toHaveBeenCalledWith(models);
     });
   });
 });

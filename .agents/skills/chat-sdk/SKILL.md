@@ -116,31 +116,22 @@ await thread.post(
 
 ## Packages
 
-| Package                       | Purpose                       |
-| ----------------------------- | ----------------------------- |
-| `chat`                        | Core SDK                      |
-| `@chat-adapter/slack`         | Slack                         |
-| `@chat-adapter/teams`         | Microsoft Teams               |
-| `@chat-adapter/gchat`         | Google Chat                   |
-| `@chat-adapter/discord`       | Discord                       |
-| `@chat-adapter/github`        | GitHub Issues                 |
-| `@chat-adapter/linear`        | Linear Issues                 |
-| `@chat-adapter/state-redis`   | Redis state (production)      |
-| `@chat-adapter/state-ioredis` | ioredis state (alternative)   |
-| `@chat-adapter/state-memory`  | In-memory state (development) |
+`chat` and the `@chat-adapter/*` packages are an external SDK this repo
+consumes (pinned via semver range in `package.json`), not something built or
+versioned here — there's no Changesets/release flow to document for them.
 
-## Changesets (Release Flow)
-
-This monorepo uses [Changesets](https://github.com/changesets/changesets) for versioning and changelogs. Every PR that changes a package's behavior must include a changeset.
-
-```bash
-pnpm changeset
-# → select affected package(s) (e.g. @chat-adapter/slack, chat)
-# → choose bump type: patch (fixes), minor (features), major (breaking)
-# → write a short summary for the CHANGELOG
-```
-
-This creates a file in `.changeset/` — commit it with the PR. When merged to `main`, the Changesets GitHub Action opens a "Version Packages" PR to bump versions and update CHANGELOGs. Merging that PR publishes to npm.
+| Package                           | Purpose                                                                                 |
+| --------------------------------- | --------------------------------------------------------------------------------------- |
+| `chat`                            | Core SDK                                                                                |
+| `@chat-adapter/discord`           | Discord                                                                                 |
+| `@chat-adapter/slack`             | Slack                                                                                   |
+| `@chat-adapter/telegram`          | Telegram                                                                                |
+| `@chat-adapter/state-ioredis`     | ioredis state                                                                           |
+| `@lobechat/chat-adapter-feishu`   | Lark/Feishu — built in-repo (`packages/chat-adapter-feishu`), not from `@chat-adapter/` |
+| `@lobechat/chat-adapter-imessage` | iMessage via BlueBubbles — built in-repo                                                |
+| `@lobechat/chat-adapter-line`     | LINE Messaging API — built in-repo                                                      |
+| `@lobechat/chat-adapter-qq`       | QQ Bot — built in-repo                                                                  |
+| `@lobechat/chat-adapter-wechat`   | WeChat (iLink) — built in-repo                                                          |
 
 ## Webhook setup
 

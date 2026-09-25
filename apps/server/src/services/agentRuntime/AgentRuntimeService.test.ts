@@ -2,6 +2,7 @@
  * @vitest-environment node
  */
 import { getModelPropertyWithFallback } from '@lobechat/model-runtime';
+import type { UIChatMessage } from '@lobechat/types';
 import type * as ModelBankModule from 'model-bank';
 import type { MockInstance } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -42,6 +43,15 @@ vi.mock('@/libs/trusted-client', () => ({
 }));
 
 // Mock database and models
+vi.mock('@/server/services/file', () => ({
+  FileService: vi.fn().mockImplementation(function () {
+    return {
+      getFullFileUrl: vi.fn(async (path: string) => `model:${path}`),
+      getFileAccessUrl: vi.fn(async (file: { id: string }) => `ui:${file.id}`),
+    };
+  }),
+}));
+
 vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn().mockImplementation(function () {
     return {
@@ -181,7 +191,7 @@ describe('AgentRuntimeService', () => {
   const buildPersistedToolChain = (
     finalContent: string,
     finalMetadata?: Record<string, unknown>,
-  ) => [
+  ): UIChatMessage[] => [
     {
       content: 'question',
       createdAt: 1,
@@ -410,6 +420,63 @@ describe('AgentRuntimeService', () => {
     });
   });
 
+  describe('determineCompletionReason', () => {
+    const reasonFor = (state: Record<string, any>) =>
+      (service as any).determineCompletionReason(state);
+
+    it('should report a plain completion as done', () => {
+      expect(reasonFor({ status: 'done', stepCount: 3 })).toBe('done');
+    });
+
+    // The guard finalizes the turn without tool calls, which is indistinguishable
+    // from a real answer by status alone — so these runs were all filed as 'done'
+    // and could not be counted.
+    it('should name a run the tool-call repeat guard cut short', () => {
+      expect(
+        reasonFor({
+          status: 'done',
+          stepCount: 250,
+          toolCallRepeatGuard: { counts: {}, stoppedByRepeatLimit: true },
+        }),
+      ).toBe('tool_call_repeat_limit');
+    });
+
+    it('should let a real failure outrank the repeat-guard marker', () => {
+      expect(
+        reasonFor({
+          status: 'error',
+          stepCount: 250,
+          toolCallRepeatGuard: { counts: {}, stoppedByRepeatLimit: true },
+        }),
+      ).toBe('error');
+      expect(
+        reasonFor({
+          status: 'interrupted',
+          stepCount: 250,
+          toolCallRepeatGuard: { counts: {}, stoppedByRepeatLimit: true },
+        }),
+      ).toBe('interrupted');
+    });
+
+    it('should ignore a guard that counted repeats without ever stopping', () => {
+      expect(
+        reasonFor({ status: 'done', stepCount: 3, toolCallRepeatGuard: { counts: { sig: 4 } } }),
+      ).toBe('done');
+    });
+
+    it('should still report the step and cost caps', () => {
+      expect(reasonFor({ status: 'running', maxSteps: 10, stepCount: 10 })).toBe('max_steps');
+      expect(
+        reasonFor({
+          status: 'running',
+          stepCount: 3,
+          cost: { total: 5 },
+          costLimit: { maxTotalCost: 5 },
+        }),
+      ).toBe('cost_limit');
+    });
+  });
+
   describe('createOperation', () => {
     const mockParams: OperationCreationParams = {
       operationId: 'test-operation-1',
@@ -431,6 +498,15 @@ describe('AgentRuntimeService', () => {
       initialMessages: [],
     };
 
+    it.each([undefined, false, true])(
+      'persists the snapshot opt-in for resumed steps (%s)',
+      async (includeFinalState) => {
+        await service.createOperation({ ...mockParams, autoStart: false, includeFinalState });
+        const savedState = mockCoordinator.saveAgentState.mock.calls[0][1];
+        expect(savedState.host.includeFinalState === true).toBe(includeFinalState === true);
+      },
+    );
+
     it('should create operation successfully with autoStart=true', async () => {
       mockQueueService.scheduleMessage.mockResolvedValueOnce('message-123');
 
@@ -451,8 +527,8 @@ describe('AgentRuntimeService', () => {
           stepCount: 0,
           messages: [],
           modelRuntimeConfig: mockParams.modelRuntimeConfig,
+          operationToolSet: expect.objectContaining({ manifestMap: {} }),
           origin: expect.objectContaining({ userId: mockParams.userId }),
-          toolManifestMap: {},
           world: expect.objectContaining({ agent: mockParams.agentConfig }),
         }),
       );
@@ -471,6 +547,90 @@ describe('AgentRuntimeService', () => {
         priority: 'high',
         delay: 50,
       });
+    });
+
+    it('freezes the builder editing target on the run origin', async () => {
+      await service.createOperation({
+        ...mockParams,
+        appContext: {
+          editingAgentId: 'agt_target',
+          editingGroupId: 'grp_target',
+          scope: 'agent_builder',
+        },
+      });
+
+      const [, state] = mockCoordinator.saveAgentState.mock.calls[0];
+      expect(state.origin).toMatchObject({
+        editingAgentId: 'agt_target',
+        editingGroupId: 'grp_target',
+      });
+    });
+
+    it('records the approval mode as a run policy', async () => {
+      await service.createOperation({
+        ...mockParams,
+        userInterventionConfig: { approvalMode: 'headless' },
+      });
+
+      const [, state] = mockCoordinator.saveAgentState.mock.calls[0];
+      expect(state.principal.policy.userIntervention).toEqual({ approvalMode: 'headless' });
+      // Mirrored at the top level for the rolling-deploy window: a worker on the
+      // pre-slot build reads only that, and would park this headless run.
+      expect(state.userInterventionConfig).toEqual({ approvalMode: 'headless' });
+    });
+
+    it('stores the run tool set once, on the operation slot', async () => {
+      const manifestMap = { 'lobe-web-browsing': { identifier: 'lobe-web-browsing' } };
+
+      await service.createOperation({
+        ...mockParams,
+        toolSet: {
+          enabledToolIds: ['lobe-web-browsing'],
+          executorMap: {},
+          manifestMap,
+          sourceMap: { 'lobe-web-browsing': 'builtin' },
+          tools: [{ function: { name: 'search' }, type: 'function' }],
+        } as unknown as OperationCreationParams['toolSet'],
+      });
+
+      const [, state] = mockCoordinator.saveAgentState.mock.calls[0];
+      expect(state.operationToolSet.manifestMap).toEqual(manifestMap);
+      // Manifests are the heaviest thing on the state and it is re-serialized at
+      // every step, so the legacy top-level mirrors are not written any more.
+      for (const mirror of ['toolExecutorMap', 'toolManifestMap', 'toolSourceMap', 'tools']) {
+        expect(mirror in state).toBe(false);
+      }
+    });
+
+    it('keeps the frozen model facts on the run state but out of durable storage', async () => {
+      const recordStart = vi
+        .spyOn(AgentOperationModel.prototype, 'recordStart')
+        .mockResolvedValue(undefined);
+      const modelFacts = {
+        cards: [{ abilities: { vision: true }, id: 'gpt-4', providerId: 'openai' }],
+        model: 'gpt-4',
+        provider: 'openai',
+      };
+
+      await service.createOperation({
+        ...mockParams,
+        modelRuntimeConfig: { ...mockParams.modelRuntimeConfig, modelFacts },
+      });
+
+      // The steps read the snapshot back off the state.
+      expect(mockCoordinator.saveAgentState).toHaveBeenCalledWith(
+        'test-operation-1',
+        expect.objectContaining({
+          modelRuntimeConfig: expect.objectContaining({ modelFacts }),
+        }),
+      );
+      // The row that outlives the run, and the metadata copy, stay as small as
+      // they were: both only ever surface model / provider.
+      expect(recordStart.mock.calls[0][0].modelRuntimeConfig).toEqual({ model: 'gpt-4' });
+      expect(mockCoordinator.createAgentOperation).toHaveBeenCalledWith(
+        'test-operation-1',
+        expect.objectContaining({ modelRuntimeConfig: { model: 'gpt-4' } }),
+      );
     });
 
     it('should create operation successfully with autoStart=false', async () => {
@@ -558,11 +718,14 @@ describe('AgentRuntimeService', () => {
         expertise,
       });
 
+      // What the model is told about the run lives on the world slot, with the
+      // top-level mirror kept for pre-slot workers during a rolling deploy.
       expect(mockCoordinator.saveAgentState).toHaveBeenCalledWith(
         'test-operation-1',
         expect.objectContaining({
           enableExpertise: true,
           expertise,
+          world: expect.objectContaining({ enableExpertise: true, expertise }),
         }),
       );
     });
@@ -806,6 +969,153 @@ describe('AgentRuntimeService', () => {
       );
     });
 
+    it.each([false, true])(
+      'reuses the entry read for device discovery (device=%s)',
+      async (withDevice) => {
+        const state = {
+          ...mockState,
+          messages: [],
+          origin: { agentId: 'agent-1', topicId: 'topic-1' },
+        };
+        mockCoordinator.loadAgentState.mockResolvedValue(state);
+        const dbMessages = buildPersistedToolChain('full model answer');
+        dbMessages[0].imageList = [{ id: 'file-1', url: 'raw/image', alt: 'image' }];
+        if (withDevice) {
+          dbMessages[0] = {
+            ...dbMessages[0],
+            role: 'tool',
+            pluginState: { metadata: { activeDeviceId: 'device-1', devicePlatform: 'darwin' } },
+          };
+        }
+        const query = (service as any).messageModel.query.mockResolvedValue(dbMessages);
+        vi.spyOn((service as any).messageService, 'prepareUiMessages').mockResolvedValue([]);
+        const step = vi.fn().mockImplementation(async (input) => ({
+          events: [],
+          newState: { ...input, stepCount: 2 },
+          nextContext: mockParams.context,
+        }));
+        vi.spyOn(service as any, 'createAgentRuntime').mockResolvedValue({ runtime: { step } });
+
+        const result = await service.executeStep(mockParams);
+
+        expect(result.success).toBe(true);
+        expect(query).toHaveBeenCalledTimes(1);
+        expect(JSON.stringify(step.mock.calls[0][0].messages)).toContain('full model answer');
+        expect(JSON.stringify(step.mock.calls[0][0].messages)).toContain('model:raw/image');
+        expect(dbMessages[0].imageList?.[0].url).toBe('raw/image');
+        expect(step.mock.calls[0][0].binding?.device?.id).toBe(withDevice ? 'device-1' : undefined);
+      },
+    );
+
+    // The executors read the device id through the same gate, so binding one for
+    // a run that may not touch a device buys nothing — and its working directory
+    // and system info would ride into the prompt variables.
+    it.each([
+      { policy: { deviceAccess: { canUseDevice: false, reason: 'external-bot' } }, why: 'policy' },
+      { plan: { execution: { kind: 'sandbox', target: 'sandbox' } }, why: 'plan' },
+    ])('does not adopt a device the run may not use ($why)', async ({ plan, policy }) => {
+      const state = {
+        ...mockState,
+        messages: [],
+        origin: { agentId: 'agent-1', topicId: 'topic-1' },
+        ...(plan && { plan }),
+        ...(policy && { principal: { policy } }),
+      };
+      mockCoordinator.loadAgentState.mockResolvedValue(state);
+      const dbMessages = buildPersistedToolChain('answer');
+      dbMessages[0] = {
+        ...dbMessages[0],
+        pluginState: {
+          metadata: {
+            activeDeviceId: 'device-1',
+            devicePlatform: 'darwin',
+            deviceSystemInfo: { workingDirectory: '/Users/someone/secret' },
+          },
+        },
+        role: 'tool',
+      };
+      (service as any).messageModel.query.mockResolvedValue(dbMessages);
+      vi.spyOn((service as any).messageService, 'prepareUiMessages').mockResolvedValue([]);
+      const step = vi.fn().mockImplementation(async (input) => ({
+        events: [],
+        newState: { ...input, stepCount: 2 },
+        nextContext: mockParams.context,
+      }));
+      vi.spyOn(service as any, 'createAgentRuntime').mockResolvedValue({ runtime: { step } });
+
+      const result = await service.executeStep(mockParams);
+
+      expect(result.success).toBe(true);
+      expect(step.mock.calls[0][0].binding?.device).toBeUndefined();
+    });
+
+    it('shares one DB read while UI preparation is still pending', async () => {
+      const state = {
+        ...mockState,
+        messages: [],
+        origin: { agentId: 'agent-1', topicId: 'topic-1' },
+      };
+      mockCoordinator.loadAgentState.mockResolvedValue(state);
+      const query = (service as any).messageModel.query.mockResolvedValue([]);
+      let resolveUi!: (messages: []) => void;
+      const uiRead = vi.spyOn((service as any).messageService, 'prepareUiMessages').mockReturnValue(
+        new Promise((resolve) => {
+          resolveUi = resolve;
+        }),
+      );
+      const step = vi.fn().mockResolvedValue({
+        events: [],
+        newState: { ...state, stepCount: 2 },
+        nextContext: mockParams.context,
+      });
+      vi.spyOn(service as any, 'createAgentRuntime').mockResolvedValue({ runtime: { step } });
+      const running = service.executeStep(mockParams);
+      let startedBeforeUiResolved: boolean;
+      try {
+        await vi.waitFor(() => expect(uiRead).toHaveBeenCalled());
+        startedBeforeUiResolved = query.mock.calls.length > 0;
+        expect(step).not.toHaveBeenCalled();
+      } finally {
+        resolveUi([]);
+        await running;
+      }
+      expect(startedBeforeUiResolved).toBe(true);
+      expect(query).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps ephemeral input while preparing the persisted UI snapshot', async () => {
+      const messages = [{ role: 'user', content: 'transient prompt' }];
+      const state = { ...mockState, messages, origin: { agentId: 'agent', topicId: 'topic' } };
+      (service as any).messageModel.query.mockResolvedValue(
+        buildPersistedToolChain('stored answer'),
+      );
+      const ui = [{ id: 'ui', role: 'assistant', content: 'UI answer' }];
+      vi.spyOn((service as any).messageService, 'prepareUiMessages').mockResolvedValue(ui);
+
+      const result = await (service as any).queryStepEntryMessages(state);
+
+      expect(state.messages).toBe(messages);
+      expect(result.uiMessages).toEqual(ui);
+      expect(result.messages).toHaveLength(4);
+    });
+
+    it('hydrates the model even when UI preparation fails', async () => {
+      const state = { ...mockState, messages: [], origin: { agentId: 'agent', topicId: 'topic' } };
+      (service as any).messageModel.query.mockResolvedValue(
+        buildPersistedToolChain('stored answer'),
+      );
+      vi.spyOn((service as any).messageService, 'prepareUiMessages').mockRejectedValue(
+        new Error('UI failed'),
+      );
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const result = await (service as any).queryStepEntryMessages(state);
+
+      expect(JSON.stringify(state.messages)).toContain('stored answer');
+      expect(result.uiMessages).toBeUndefined();
+      expect(result.messages).toHaveLength(4);
+    });
+
     it('should execute step successfully', async () => {
       const mockStepResult = {
         newState: { ...mockState, stepCount: 2, status: 'running' },
@@ -837,13 +1147,65 @@ describe('AgentRuntimeService', () => {
         stepIndex: 1,
         data: {
           stepIndex: 1,
-          finalState: mockStepResult.newState,
           nextStepScheduled: false, // Published before nextStepScheduled is updated
         },
       });
 
       expect(mockCoordinator.saveStepResult).toHaveBeenCalled();
       expect(mockQueueService.scheduleMessage).toHaveBeenCalled();
+    });
+
+    describe('frozen credential snapshot', () => {
+      const frozen = {
+        credentials: [{ key: 'OPENAI', name: 'OpenAI', type: 'apiKey' }],
+        workspaceId: undefined,
+      };
+
+      /**
+       * Snapshot the state AT the save, not the object afterwards: the runtime
+       * keeps mutating `newState`, so a later clear would otherwise read back as
+       * if it had been persisted.
+       */
+      const runStepWithToolCall = async (apiName: string) => {
+        const stateWithSnapshot = { ...mockState, operationCredentials: frozen };
+        mockCoordinator.loadAgentState.mockResolvedValue(stateWithSnapshot);
+
+        let persisted: string | undefined;
+        mockCoordinator.saveStepResult.mockImplementationOnce(async (_id: string, result: any) => {
+          persisted = JSON.stringify(result.newState);
+        });
+
+        const mockRuntime = {
+          step: vi.fn().mockResolvedValue({
+            events: [],
+            newState: { ...stateWithSnapshot, status: 'running', stepCount: 2 },
+            nextContext: {
+              payload: { toolCall: { apiName, identifier: 'lobe-creds' } },
+              phase: 'tool_result',
+            },
+          }),
+        };
+        vi.spyOn(service as any, 'createAgentRuntime').mockReturnValue({ runtime: mockRuntime });
+
+        await service.executeStep(mockParams);
+
+        expect(persisted).toBeDefined();
+        return JSON.parse(persisted!);
+      };
+
+      it('drops the snapshot in the state it persists after the run saves a credential', async () => {
+        const persistedState = await runStepWithToolCall('saveCreds');
+
+        expect(persistedState.operationCredentials).toBeUndefined();
+      });
+
+      it('keeps the snapshot when the creds call only read', async () => {
+        const persistedState = await runStepWithToolCall('injectCredsToSandbox');
+
+        expect(persistedState.operationCredentials).toEqual({
+          credentials: frozen.credentials,
+        });
+      });
     });
 
     it('should resume async tools with the last pending tool result as parentMessageId', async () => {
@@ -2008,6 +2370,21 @@ describe('AgentRuntimeService', () => {
   });
 
   describe('interruptOperation', () => {
+    let findOperation: MockInstance<AgentOperationModel['findById']>;
+
+    beforeEach(() => {
+      findOperation = vi.spyOn(AgentOperationModel.prototype, 'findById');
+      mockDb.select.mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue([]) }),
+        }),
+      });
+    });
+
+    afterEach(() => {
+      findOperation.mockRestore();
+    });
+
     it('should interrupt a running operation', async () => {
       mockCoordinator.loadAgentState.mockResolvedValue({
         operationId: 'op-1',
@@ -2051,7 +2428,7 @@ describe('AgentRuntimeService', () => {
       );
     });
 
-    it('should return false when state not found', async () => {
+    it('should return false when state and owned operation are not found', async () => {
       mockCoordinator.loadAgentState.mockResolvedValue(null);
 
       const result = await service.interruptOperation('non-existent');
@@ -2061,7 +2438,7 @@ describe('AgentRuntimeService', () => {
       expect(mockCoordinator.markInterrupted).not.toHaveBeenCalled();
     });
 
-    it('should return false when operation already done', async () => {
+    it('should acknowledge cancellation when operation already done', async () => {
       mockCoordinator.loadAgentState.mockResolvedValue({
         operationId: 'op-done',
         status: 'done',
@@ -2070,11 +2447,11 @@ describe('AgentRuntimeService', () => {
 
       const result = await service.interruptOperation('op-done');
 
-      expect(result).toBe(false);
+      expect(result).toBe(true);
       expect(mockCoordinator.saveAgentState).not.toHaveBeenCalled();
     });
 
-    it('should return false when operation already in error state', async () => {
+    it('should acknowledge cancellation when operation already in error state', async () => {
       mockCoordinator.loadAgentState.mockResolvedValue({
         operationId: 'op-err',
         status: 'error',
@@ -2083,11 +2460,11 @@ describe('AgentRuntimeService', () => {
 
       const result = await service.interruptOperation('op-err');
 
-      expect(result).toBe(false);
+      expect(result).toBe(true);
       expect(mockCoordinator.saveAgentState).not.toHaveBeenCalled();
     });
 
-    it('should return false when operation already interrupted', async () => {
+    it('should acknowledge cancellation when operation already interrupted', async () => {
       mockCoordinator.loadAgentState.mockResolvedValue({
         operationId: 'op-int',
         status: 'interrupted',
@@ -2096,9 +2473,37 @@ describe('AgentRuntimeService', () => {
 
       const result = await service.interruptOperation('op-int');
 
-      expect(result).toBe(false);
+      expect(result).toBe(true);
       expect(mockCoordinator.saveAgentState).not.toHaveBeenCalled();
     });
+
+    it.each(['done', 'error', 'interrupted', 'abandoned'] as const)(
+      'acknowledges an expired runtime state when the owned operation is %s',
+      async (status) => {
+        mockCoordinator.loadAgentState.mockResolvedValue(null);
+        findOperation.mockResolvedValue({
+          id: 'op-expired',
+          status,
+        } as Awaited<ReturnType<AgentOperationModel['findById']>>);
+        expect(await service.interruptOperation('op-expired')).toBe(true);
+        expect(mockCoordinator.saveAgentState).not.toHaveBeenCalled();
+        expect(mockCoordinator.markInterrupted).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each(['idle', 'running', 'waiting_for_human', 'waiting_for_async_tool'] as const)(
+      'does not treat missing runtime state as stopped when the owned operation is %s',
+      async (status) => {
+        mockCoordinator.loadAgentState.mockResolvedValue(null);
+        findOperation.mockResolvedValue({
+          id: 'op-active',
+          status,
+        } as Awaited<ReturnType<AgentOperationModel['findById']>>);
+        expect(await service.interruptOperation('op-active')).toBe(false);
+        expect(mockCoordinator.saveAgentState).not.toHaveBeenCalled();
+        expect(mockCoordinator.markInterrupted).not.toHaveBeenCalled();
+      },
+    );
   });
 
   // Stream events at step / operation boundaries should carry the canonical
@@ -2125,21 +2530,31 @@ describe('AgentRuntimeService', () => {
       expect(result).toEqual(stubMessages);
     });
 
-    it('opts the snapshot into agent-share visitor rows', async () => {
-      // Regression: `MessageModel.query()` hides share-visitor messages by
-      // default. A visitor run executes under the creator's identity, so
-      // without the opt-in the terminal snapshot for the visitor's topic is
-      // `[]` and the client replaces the conversation it just streamed with
-      // nothing.
-      const queryMessages = vi.fn().mockResolvedValue([]);
-      stubMessageService(service, queryMessages);
+    it.each([
+      { skipToolProjection: false, visitorUserId: undefined },
+      { skipToolProjection: true, visitorUserId: 'visitor_1' },
+    ])(
+      'includes visitor rows with skipToolProjection=$skipToolProjection',
+      async ({ skipToolProjection, visitorUserId }) => {
+        // Regression: `MessageModel.query()` hides share-visitor messages by
+        // default. A visitor run executes under the creator's identity, so
+        // without the opt-in the terminal snapshot for the visitor's topic is
+        // `[]` and the client replaces the conversation it just streamed with
+        // nothing.
+        const queryMessages = vi.fn().mockResolvedValue([]);
+        stubMessageService(service, queryMessages);
 
-      await service.queryUiMessages({
-        origin: { agentId: 'agt_1', topicId: 'tpc_1' },
-      } as any);
+        await service.queryUiMessages({
+          origin: { agentId: 'agt_1', topicId: 'tpc_1' },
+          principal: visitorUserId ? { actor: { shareVisitor: { visitorUserId } } } : undefined,
+        } as any);
 
-      expect(queryMessages).toHaveBeenCalledWith(expect.anything(), { allowShareVisitor: true });
-    });
+        expect(queryMessages).toHaveBeenCalledWith(expect.anything(), {
+          allowShareVisitor: true,
+          skipToolProjection,
+        });
+      },
+    );
 
     it('scopes the snapshot to the run thread when the operation is a subtopic run', async () => {
       // Regression: without `threadId` the snapshot is the topic's MAIN

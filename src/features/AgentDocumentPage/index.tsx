@@ -1,5 +1,6 @@
 'use client';
 
+import { EditorProvider } from '@lobehub/editor/react';
 import { Flexbox } from '@lobehub/ui';
 import { memo, useCallback, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router';
@@ -7,12 +8,14 @@ import { useParams } from 'react-router';
 import AsyncError from '@/components/AsyncError';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { type ComposerTarget, createComposerTarget } from '@/features/Conversation/types';
+import { FileDocumentPreview } from '@/features/FileViewer/FileDocumentPreview';
 import FloatingChatPanel from '@/features/FloatingChatPanel';
 import { useDocumentChatTopic } from '@/features/FloatingChatPanel/useDocumentChatTopic';
 import { PageEditor } from '@/features/PageEditor';
 import RightPanel from '@/features/RightPanel';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { getDocumentRenderMode } from '@/utils/documentRenderMode';
 
 import Header from './Header';
 import { buildAgentDocumentsPath } from './navigation';
@@ -99,12 +102,15 @@ const AgentDocumentPage = memo<AgentDocumentPageProps>(({ documentId }) => {
     ? skillBundle.title || skillBundle.filename || item?.title || item?.filename
     : item?.title || item?.filename;
 
+  const isFile = !!item && getDocumentRenderMode(item).mode === 'file';
+
   const header = useMemo(
     () => (
       <Header
         agentDocumentId={item?.id}
         agentId={agentId}
         documentId={documentId}
+        fileBacked={isFile}
         itemError={itemError}
         title={title}
         updatedAt={item?.updatedAt}
@@ -112,7 +118,17 @@ const AgentDocumentPage = memo<AgentDocumentPageProps>(({ documentId }) => {
         onDeleted={backToDocs}
       />
     ),
-    [agentId, backToChat, backToDocs, documentId, item?.id, item?.updatedAt, itemError, title],
+    [
+      agentId,
+      backToChat,
+      backToDocs,
+      documentId,
+      item?.id,
+      item?.updatedAt,
+      itemError,
+      isFile,
+      title,
+    ],
   );
 
   // Genuinely-absent doc (deleted or bad deep link): render nothing while the
@@ -133,24 +149,31 @@ const AgentDocumentPage = memo<AgentDocumentPageProps>(({ documentId }) => {
       width={'100%'}
     >
       <Flexbox flex={1} style={{ minHeight: 0 }} width={'100%'}>
-        <PageEditor
-          fullWidthHeader
-          askCopilotTarget={askCopilotTarget}
-          header={header}
-          key={documentId}
-          // A skill index's visible name is the bundle title; renaming must go
-          // through the skill APIs, so lock the page title/emoji here. A plain
-          // title save would overwrite the `SKILL.md` filename and desync the
-          // bundle (and the bundle rename API rejects managed skill docs anyway).
-          metaReadOnly={isSkillIndex}
-          pageId={documentId}
-          rightPanel={false}
-          syncPageAgentActiveState={false}
-          title={title}
-          // Refresh the list so the breadcrumb and working-sidebar entry pick up
-          // the new title after the shared page save persists it.
-          onTitleChange={() => mutate()}
-        />
+        {isFile ? (
+          <EditorProvider>
+            {header}
+            <FileDocumentPreview fileId={item?.fileId} />
+          </EditorProvider>
+        ) : (
+          <PageEditor
+            fullWidthHeader
+            askCopilotTarget={askCopilotTarget}
+            header={header}
+            key={documentId}
+            // A skill index's visible name is the bundle title; renaming must go
+            // through the skill APIs, so lock the page title/emoji here. A plain
+            // title save would overwrite the `SKILL.md` filename and desync the
+            // bundle (and the bundle rename API rejects managed skill docs anyway).
+            metaReadOnly={isSkillIndex}
+            pageId={documentId}
+            rightPanel={false}
+            syncPageAgentActiveState={false}
+            title={title}
+            // Refresh the list so the breadcrumb and working-sidebar entry pick up
+            // the new title after the shared page save persists it.
+            onTitleChange={() => mutate()}
+          />
+        )}
       </Flexbox>
       {chatAgentId && docChatTopicId && (
         <RightPanel expand defaultWidth={400} maxWidth={720} minWidth={320}>

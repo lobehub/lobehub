@@ -12,6 +12,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   title: css`
     min-width: 0;
     color: ${cssVar.colorTextTertiary};
+    white-space: nowrap;
     transition: color 150ms ${cssVar.motionEaseOut};
 
     &:hover {

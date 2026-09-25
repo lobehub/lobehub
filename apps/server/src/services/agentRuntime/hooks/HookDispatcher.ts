@@ -279,6 +279,22 @@ export class HookDispatcher {
   }
 
   /**
+   * Whether dispatching `type` right now would actually reach a consumer, under
+   * the rules {@link dispatch} applies for the current runtime mode: local mode
+   * needs an in-memory handler, queue mode needs a webhook to deliver.
+   *
+   * Callers that ALSO surface the same failure themselves (the IM bot bridge
+   * reports a startup failure inline) ask this before deciding whether their own
+   * report would be a duplicate — a failure the hooks will announce must not be
+   * announced twice, and one they cannot announce must not vanish.
+   */
+  canDeliver(operationId: string, type: AgentHookType): boolean {
+    const hooks = this.hooks.get(operationId)?.filter((hook) => hook.type === type) ?? [];
+
+    return isQueueAgentRuntimeEnabled() ? hooks.some((hook) => hook.webhook) : hooks.length > 0;
+  }
+
+  /**
    * Register hooks for an operation
    *
    * In local mode: stores hooks in memory (including handler functions)

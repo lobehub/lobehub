@@ -11,7 +11,10 @@ import { agents, messages, topics, users } from '@/database/schemas';
 import { CompletionLifecycle } from '../CompletionLifecycle';
 
 // No terminal files are discovered: the Work was already registered by a tool.
-vi.mock('@/server/services/workRegistration', () => ({
+// Keep the module's other exports (e.g. resolveRunWorkAccessScope) real so the
+// lifecycle can still resolve the Work access scope for the anchor lookup.
+vi.mock('@/server/services/workRegistration', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   registerWorksForOperation: vi.fn(async () => ({ attempted: 0, failed: 0 })),
 }));
 

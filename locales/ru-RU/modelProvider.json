@@ -241,6 +241,7 @@
   "providerModels.item.modelConfig.extendParams.options.grok4_3ReasoningEffort.hint": "Для серии Grok 4.3; регулирует интенсивность рассуждений.",
   "providerModels.item.modelConfig.extendParams.options.grok4_5ReasoningEffort.hint": "Для серии Grok 4.5; регулирует интенсивность рассуждений (низкая/средняя/высокая, по умолчанию высокая).",
   "providerModels.item.modelConfig.extendParams.options.grok4_6ReasoningEffort.hint": "Для серии Grok 4.6; регулирует интенсивность рассуждений (низкая/средняя/высокая/очень высокая, по умолчанию высокая). Рассуждения нельзя отключить.",
+  "providerModels.item.modelConfig.extendParams.options.grok4_7ReasoningEffort.hint": "Для Grok 4.7; управляет интенсивностью рассуждений (низкая/средняя/высокая/очень высокая, по умолчанию высокая). Рассуждения нельзя отключить.",
   "providerModels.item.modelConfig.extendParams.options.hy3ReasoningEffort.hint": "Для моделей Hy3; регулирует интенсивность рассуждения. no_think (ультрабыстрый ответ), low (быстрое рассуждение) и high (глубокое рассуждение) — параметры для разных требований по задержке и глубине, от высокочастотных взаимодействий до сложных инженерных задач.",
   "providerModels.item.modelConfig.extendParams.options.imageAspectRatio.hint": "Для моделей генерации изображений Gemini; управляет соотношением сторон создаваемых изображений.",
   "providerModels.item.modelConfig.extendParams.options.imageAspectRatio2.hint": "Для Nano Banana 2; управляет соотношением сторон создаваемых изображений (поддерживает сверхширокие 1:4, 4:1, 1:8, 8:1).",

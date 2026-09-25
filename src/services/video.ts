@@ -1,3 +1,4 @@
+import type { VideoGenerationModelRef } from '@lobechat/builtin-tool-video-generation';
 import debug from 'debug';
 
 import { lambdaClient } from '@/libs/trpc/client';
@@ -26,6 +27,10 @@ export class AiVideoService {
 
       throw error;
     }
+  }
+
+  async getModelLatencies(models: VideoGenerationModelRef[]) {
+    return lambdaClient.video.getModelLatencies.query({ models });
   }
 }
 

@@ -18,6 +18,37 @@ describe('PageEditorStore - rightPanelMode', () => {
   });
 });
 
+describe('PageEditorStore - commentsPanelOpen', () => {
+  it('starts closed and toggles on demand', () => {
+    const store = createStore();
+
+    expect(store.getState().commentsPanelOpen).toBe(false);
+    store.getState().setCommentsPanelOpen(true);
+    expect(store.getState().commentsPanelOpen).toBe(true);
+    store.getState().setCommentsPanelOpen(false);
+    expect(store.getState().commentsPanelOpen).toBe(false);
+  });
+});
+
+describe('PageEditorStore - setDocumentId', () => {
+  it('closes the comments panel when the document actually changes', () => {
+    const store = createStore({ commentsPanelOpen: true, documentId: 'docs_1' });
+
+    store.getState().setDocumentId('docs_2');
+
+    expect(store.getState().documentId).toBe('docs_2');
+    expect(store.getState().commentsPanelOpen).toBe(false);
+  });
+
+  it('leaves the panel alone when the document id is unchanged', () => {
+    const store = createStore({ commentsPanelOpen: true, documentId: 'docs_1' });
+
+    store.getState().setDocumentId('docs_1');
+
+    expect(store.getState().commentsPanelOpen).toBe(true);
+  });
+});
+
 describe('PageEditorStore - metaReadOnly', () => {
   it('ignores setTitle when meta is read-only (manual UI, AI, or extraction)', () => {
     const store = createStore({ metaReadOnly: true, title: 'Skill name' });

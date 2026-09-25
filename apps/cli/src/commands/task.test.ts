@@ -60,7 +60,7 @@ describe('task create', () => {
           id: 'task_1',
           identifier: 'T-1',
           name: 'Personal task',
-          url: 'https://app.example.com/task/T-1',
+          url: 'https://app.example.com/task/T-1/personal-task',
         },
         null,
         2,
@@ -81,7 +81,7 @@ describe('task create', () => {
 
     expect(mockLogInfo).toHaveBeenCalledWith(expect.stringContaining('LOBE-321'));
     expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining('https://app.example.com/lobehub/task/LOBE-321'),
+      expect.stringContaining('https://app.example.com/lobehub/task/LOBE-321/workspace-task'),
     );
   });
 });

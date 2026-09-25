@@ -27,6 +27,7 @@ import type {
   UISignalCallbacksBlock,
   UpdateMessageParams,
   UpdateMessageRAGParams,
+  WorkAccessScope,
   WorkSummaryItem,
 } from '@lobechat/types';
 import {
@@ -219,6 +220,13 @@ export interface QueryMessagesOptions {
    * Custom where condition for message filtering
    */
   where?: SQL;
+  /**
+   * Agent Share boundary for the Work-summary assembly. Omitted = ordinary
+   * scope, which never resolves a share visitor's Works; the share read path
+   * passes `agentShareWorkAccessScope(...)` so a visitor gets exactly the
+   * Works registered from their own share topic.
+   */
+  workAccessScope?: WorkAccessScope;
 }
 
 export interface TopicTranscriptMessage {
@@ -798,6 +806,32 @@ const sanitizeVisitorMetadata = (
 };
 
 /**
+ * Project Work summaries for a share visitor. A visitor run executes as the
+ * creator, so `userId` / `workspaceId` on every Work are the CREATOR's account
+ * and workspace — dropped unconditionally, like the message-level `sender`.
+ * The version spend snapshot is the creator's billing figure and follows the
+ * `showModelInfo` gate (`stripSpend`).
+ *
+ * The identity keys are omitted rather than nulled (`userId` is non-nullable on
+ * `WorkItem`); no visitor-facing Work surface reads them.
+ */
+const sanitizeVisitorWorks = (
+  works: WorkSummaryItem[] | undefined,
+  { stripSpend }: { stripSpend: boolean },
+): WorkSummaryItem[] | undefined =>
+  works?.map((work) => {
+    const { userId: _userId, workspaceId: _workspaceId, ...rest } = work;
+    const visible = stripSpend
+      ? {
+          ...rest,
+          event: { ...rest.event, cumulativeCost: null, cumulativeUsage: null },
+          totalCost: null,
+        }
+      : rest;
+    return visible as WorkSummaryItem;
+  });
+
+/**
  * Strip creator-only fields from a message row before it reaches an
  * agent-share visitor. Creator account identity never crosses the share
  * boundary; the creator's model/provider/spend choices cross it only when the
@@ -849,9 +883,11 @@ export const toVisitorMessage = (
           taskDetail: message.taskDetail,
           usage: message.usage,
         }),
-    // Work summaries join live task/version state under the CREATOR's account
-    // — never served to a visitor surface regardless of share config.
-    works: undefined,
+    // Work summaries reach a visitor only when the query ran under their share
+    // scope (see `queryForVisitor`), so every item here was registered from
+    // this visitor's own topic. Creator identity is always dropped; spend
+    // follows the `showModelInfo` gate — see `sanitizeVisitorWorks`.
+    works: sanitizeVisitorWorks(message.works, { stripSpend: stripModelInfo }),
     // A compacted topic nests raw rows under the group node, and group chat
     // nests member messages, so anything less than a full recursive sanitize
     // would leave the creator's identity on everything inside it.
@@ -1068,6 +1104,8 @@ export class MessageModel {
         file: { fileType: string; id?: string | null },
       ) => Promise<string>;
       timing?: ModelTimingContext;
+      /** See {@link QueryMessagesOptions.workAccessScope}. */
+      workAccessScope?: WorkAccessScope;
     } = {},
   ) => {
     const queryStartedAt = Date.now();
@@ -1149,6 +1187,7 @@ export class MessageModel {
         skipWorks,
         timing,
         topicId: topicId ?? undefined,
+        workAccessScope: options.workAccessScope,
         where: and(threadScopeCondition, threadCondition),
       });
       logTiming(timing, 'db.message.query:done', {
@@ -1177,6 +1216,7 @@ export class MessageModel {
         skipWorks,
         timing,
         topicId: topicId ?? undefined,
+        workAccessScope: options.workAccessScope,
         where: whereCondition,
       });
       logTiming(timing, 'db.message.query:done', {
@@ -1210,6 +1250,7 @@ export class MessageModel {
       timing,
       topicId: topicId ?? undefined,
       where: whereCondition,
+      workAccessScope: options.workAccessScope,
     });
     logTiming(timing, 'db.message.query:done', {
       messageCount: messageItems.length,
@@ -1238,11 +1279,20 @@ export class MessageModel {
       ) => Promise<string>;
       redaction?: VisitorRedactionOptions;
       timing?: ModelTimingContext;
+      /**
+       * The visitor's share scope for Work summaries. Omitting it skips Work
+       * assembly entirely (fail closed): the ordinary scope would join the
+       * CREATOR's Works, which must never reach a visitor surface.
+       */
+      workAccessScope?: WorkAccessScope;
     } = {},
   ): Promise<UIChatMessage[]> => {
     // The only caller allowed past `query()`'s visitor guard: the topic was
     // already resolved and authorized as this visitor's own share topic.
-    const messageItems = await this.query(params, { ...options, allowShareVisitor: true });
+    const messageItems = await this.query(
+      { ...params, skipWorks: params.skipWorks || !options.workAccessScope },
+      { ...options, allowShareVisitor: true },
+    );
     return messageItems.map((message) => toVisitorMessage(message, options.redaction));
   };
 
@@ -1378,6 +1428,7 @@ export class MessageModel {
       topicId,
       timing,
       allowShareVisitor,
+      workAccessScope,
     } = options;
     const totalStartedAt = Date.now();
     const offset = current * pageSize;
@@ -1540,7 +1591,7 @@ export class MessageModel {
       this.queryMessageThreadRelations(taskMessageIds, timing),
       skipWorks
         ? ({} as Record<string, WorkSummaryItem[]>)
-        : this.queryMessageWorkSummaries(result, includeFileWorks, timing),
+        : this.queryMessageWorkSummaries(result, includeFileWorks, timing, workAccessScope),
     ]);
 
     if (messageIds.length === 0 && messageGroupNodes.length === 0) {
@@ -1917,6 +1968,7 @@ export class MessageModel {
     rows: { id: unknown; metadata: unknown }[],
     includeFileWorks?: boolean,
     timing?: ModelTimingContext,
+    workAccessScope?: WorkAccessScope,
   ): Promise<Record<string, WorkSummaryItem[]>> => {
     const anchorByRootId = new Map<string, string>();
     for (const row of rows) {
@@ -1929,7 +1981,12 @@ export class MessageModel {
       timing,
       'db.message.queryWithWhere.workSummaries',
       () =>
-        new WorkModel(this.db, this.userId, this.workspaceId).listSummariesByRootOperations({
+        new WorkModel(
+          this.db,
+          this.userId,
+          this.workspaceId,
+          workAccessScope,
+        ).listSummariesByRootOperations({
           includeFileWorks,
           rootOperationIds: Array.from(anchorByRootId.keys()),
         }),

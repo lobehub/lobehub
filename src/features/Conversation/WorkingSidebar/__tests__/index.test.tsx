@@ -1,3 +1,4 @@
+import type { DeviceGitPullRequestDetail } from '@lobechat/types';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { CSSProperties, MouseEvent, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -7,6 +8,7 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import type { ComposerTarget } from '../../types';
 import AgentWorkingSidebar from '../index';
+import PullRequestSections from '../PullRequest/Sections';
 
 // ─── captured RightPanel props ────────────────────────────────────────────────
 // The real RightPanel is a controlled DraggablePanel; here we stub it so the test
@@ -40,6 +42,40 @@ const effectiveConfig = vi.hoisted(() => ({
 }));
 
 const platform = vi.hoisted(() => ({ isDesktop: true }));
+const linkedPR = vi.hoisted(() => ({
+  number: undefined as number | undefined,
+  branch: 'feature' as string | undefined,
+  status: undefined as string | undefined,
+}));
+
+vi.mock('@/store/device', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  useFetchGitBranch: () => ({ data: linkedPR.branch ? { branch: linkedPR.branch } : undefined }),
+  useFetchGitLinkedPR: () => ({
+    data: {
+      pullRequestStatus: linkedPR.status,
+      pullRequest: linkedPR.number
+        ? { number: linkedPR.number, state: 'open', url: 'https://github.com/test/repo/pull/1' }
+        : undefined,
+    },
+  }),
+}));
+
+vi.mock('../PullRequest', async () => {
+  const { useState } = await import('react');
+  return {
+    default: function PullRequestDraft() {
+      const [draft, setDraft] = useState('');
+      return (
+        <input
+          aria-label="PR draft"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+        />
+      );
+    },
+  };
+});
 
 const filesProps = vi.hoisted(() => ({
   current: undefined as { deviceId?: string; workingDirectory: string } | undefined,
@@ -96,6 +132,7 @@ const chatStore = vi.hoisted(() => ({
   threadMaps: {} as Record<string, any[]>,
   // read by the real topicSelectors.currentTopicMetadata (sourcePath resolution)
   topicDataMap: {} as Record<string, unknown>,
+  topicDetailMap: {} as Record<string, unknown>,
 }));
 
 const globalStore = vi.hoisted(() => ({
@@ -170,16 +207,23 @@ vi.mock('../Overview', () => ({
   default: ({
     environmentAvailable,
     onOpenTab,
+    pullRequest,
     workingDirectory,
   }: {
     environmentAvailable: boolean;
     onOpenTab: (tab: string) => void;
+    pullRequest?: { number: number };
     workingDirectory?: string;
   }) => (
     <>
       <button type="button" onClick={() => onOpenTab('review')}>
         Open Review from Overview
       </button>
+      {pullRequest && (
+        <button type="button" onClick={() => onOpenTab('pr')}>
+          Open Pull Request from Overview
+        </button>
+      )}
       {environmentAvailable && <span>Workspace environment</span>}
       {workingDirectory && <span>{workingDirectory}</span>}
     </>
@@ -384,6 +428,11 @@ beforeEach(() => {
   effectiveConfig.agencyConfig = undefined;
   effectiveConfig.workspaceScoped = false;
   platform.isDesktop = true;
+  linkedPR.number = undefined;
+  linkedPR.branch = 'feature';
+  linkedPR.status = undefined;
+  chatStore.topicDataMap = {};
+  chatStore.topicDetailMap = {};
   filesProps.current = undefined;
   renderedReview.current = undefined;
   reviewState.repoType = undefined;
@@ -411,6 +460,105 @@ afterEach(() => {
 });
 
 describe('AgentWorkingSidebar — controlled panel width', () => {
+  it('opens a scoped saved PR before branch lookup and discards it after authoritative empty lookup', () => {
+    linkedPR.branch = undefined;
+    reviewState.workingDirectory = '/repo';
+    chatStore.activeTopicId = 'topic-pr';
+    chatStore.topicDetailMap = {
+      'topic-pr': {
+        id: 'topic-pr',
+        metadata: {
+          workingDirectoryConfig: {
+            path: '/repo',
+            git: {
+              branch: 'feature',
+              github: {
+                pullRequest: {
+                  number: 42,
+                  title: 'Saved PR',
+                  state: 'open',
+                  url: 'https://github.com/test/repo/pull/42',
+                },
+              },
+            },
+          },
+        },
+      },
+    };
+    globalStore.status.workingSidebarTab = 'pr';
+    localStorageState.openTabsByContext = { 'topic:topic-pr': ['pr'] };
+    const { rerender } = render(<AgentWorkingSidebar />);
+    expect(screen.getByRole('textbox', { name: 'PR draft' })).toBeInTheDocument();
+    linkedPR.status = 'ok';
+    rerender(<AgentWorkingSidebar availableWidth={1200} />);
+    expect(screen.queryByRole('textbox', { name: 'PR draft' })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    { path: '/other', boundDeviceId: undefined },
+    { path: '/repo', boundDeviceId: 'other-device' },
+  ])('does not bootstrap a snapshot from another scope: %o', ({ path, boundDeviceId }) => {
+    linkedPR.branch = undefined;
+    reviewState.workingDirectory = '/repo';
+    chatStore.activeTopicId = 'topic-pr';
+    chatStore.topicDetailMap = {
+      'topic-pr': {
+        id: 'topic-pr',
+        metadata: {
+          boundDeviceId,
+          workingDirectoryConfig: {
+            path,
+            git: {
+              github: {
+                pullRequest: {
+                  number: 42,
+                  state: 'open',
+                  title: 'Other PR',
+                  url: 'https://github.com/test/repo/pull/42',
+                },
+              },
+            },
+          },
+        },
+      },
+    };
+    globalStore.status.workingSidebarTab = 'pr';
+    localStorageState.openTabsByContext = { 'topic:topic-pr': ['pr'] };
+    render(<AgentWorkingSidebar />);
+    expect(screen.queryByRole('textbox', { name: 'PR draft' })).not.toBeInTheDocument();
+  });
+
+  it('resets PR state when the PR number or directory changes', () => {
+    reviewState.repoType = 'github';
+    reviewState.workingDirectory = '/repo';
+    linkedPR.number = 1;
+    globalStore.status.workingSidebarTab = 'pr';
+    localStorageState.openTabsByContext = { 'draft:default:none': ['pr'] };
+    const { rerender } = render(<AgentWorkingSidebar />);
+    fireEvent.change(screen.getByLabelText('PR draft'), { target: { value: 'old draft' } });
+    linkedPR.number = 2;
+    rerender(<AgentWorkingSidebar availableWidth={1600} />);
+    expect(screen.getByLabelText('PR draft')).toHaveValue('');
+    fireEvent.change(screen.getByLabelText('PR draft'), { target: { value: 'another draft' } });
+    reviewState.workingDirectory = '/other';
+    rerender(<AgentWorkingSidebar availableWidth={1601} />);
+    expect(screen.getByLabelText('PR draft')).toHaveValue('');
+  });
+
+  it('opens a linked pull request from Overview in the Working Sidebar tab', () => {
+    reviewState.repoType = 'github';
+    reviewState.workingDirectory = '/repo';
+    linkedPR.number = 42;
+    linkedPR.status = 'ok';
+
+    render(<AgentWorkingSidebar />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Pull Request from Overview' }));
+
+    expect(globalStore.openWorkingSidebar).toHaveBeenCalledWith('pr');
+    expect(screen.getByRole('button', { name: '#42' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('seeds the RightPanel with the default width', () => {
     render(<AgentWorkingSidebar />);
 
@@ -609,6 +757,65 @@ describe('AgentWorkingSidebar — controlled panel width', () => {
     expect(screen.queryByText('Workspace environment')).not.toBeInTheDocument();
     expect(screen.queryByText('/Users/me/project')).not.toBeInTheDocument();
     expect(filesProps.current).toBeUndefined();
+  });
+});
+
+describe('Pull request Markdown', () => {
+  it('renders standard Markdown without creating raw HTML elements', () => {
+    const rawHtml = '<aside data-raw-html="true">raw HTML</aside>';
+    const detail: DeviceGitPullRequestDetail = {
+      additions: 1,
+      author: 'lobehub',
+      autoMerge: null,
+      baseBehindBy: 0,
+      baseRefName: 'canary',
+      body: `**description-safe**\n\n${rawHtml}`,
+      changedFiles: 1,
+      checks: [],
+      comments: [
+        {
+          author: 'contributor',
+          body: `**comment-safe**\n\n${rawHtml}`,
+          createdAt: '2026-09-24T00:00:00Z',
+          id: 'comment-1',
+        },
+      ],
+      commits: [],
+      deletions: 0,
+      headRefName: 'fix/markdown',
+      headRefOid: 'a'.repeat(40),
+      isCrossRepository: false,
+      isDraft: false,
+      mergeable: 'MERGEABLE',
+      mergeStateStatus: 'CLEAN',
+      number: 1,
+      repo: { name: 'lobehub', owner: 'lobehub' },
+      reviewDecision: null,
+      reviews: [],
+      state: 'open',
+      title: 'Markdown rendering',
+      url: 'https://github.com/lobehub/lobehub/pull/1',
+      viewerCanBypass: false,
+      viewerCanWrite: true,
+    };
+
+    const { container } = render(
+      <PullRequestSections
+        detail={detail}
+        activity={{
+          data: { comments: detail.comments, commits: [], reviews: [] },
+          error: undefined,
+          isValidating: false,
+          mutate: vi.fn(),
+        }}
+        onAction={vi.fn().mockResolvedValue(true)}
+        onOpenTab={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('description-safe', { selector: 'strong' })).toBeInTheDocument();
+    expect(screen.getByText('comment-safe', { selector: 'strong' })).toBeInTheDocument();
+    expect(container.querySelector('[data-raw-html]')).not.toBeInTheDocument();
   });
 });
 

@@ -1,4 +1,5 @@
 {
+  "FilePreview.actions.download": "تنزيل ملف المصدر",
   "FilePreview.tabs.chunk": "جزء",
   "FilePreview.tabs.file": "ملف",
   "Plugins": "المهارات",
@@ -29,6 +30,7 @@
   "artifacts.svg.copySuccess": "تم نسخ الصورة بنجاح",
   "artifacts.svg.download.png": "تنزيل كـ PNG",
   "artifacts.svg.download.svg": "تنزيل كـ SVG",
+  "document.saveConflict": "تم تحديث هذا المستند في مكان آخر. يتم التحديث إلى أحدث إصدار.",
   "document.todos.allCompleted": "تم إنجاز جميع المهام",
   "document.todos.title": "المهام",
   "emptyArtifactList": "لا توجد قطع أثرية بعد. استخدم المهارات في المحادثة، ثم عد إلى هنا.",

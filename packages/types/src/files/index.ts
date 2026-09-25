@@ -21,6 +21,8 @@ export enum FileSource {
    * the user's library.
    */
   Acceptance = 'acceptance',
+  /** Original upload owned by an agent's document tree rather than the resource library. */
+  AgentDocument = 'agent-document',
   ImageGeneration = 'image_generation',
   PageEditor = 'page-editor',
   VideoGeneration = 'video_generation',
@@ -29,14 +31,19 @@ export enum FileSource {
 /**
  * Sources whose files are attachments of some other surface rather than library
  * resources. They stay fully readable through the surface that owns them (an
- * acceptance report renders its evidence via `verify_evidence.file_id`), but
+ * acceptance report renders its evidence via `verify_evidence.file_id`, and an
+ * agent document previews its original upload via `documents.file_id`), but
  * never show up in the resource library listings — a single verification run
  * uploads hundreds of artifacts and would otherwise bury real content.
  *
  * The one way back in is an explicit `ResourceSourceFilter.Acceptance` request:
  * the user asked for evidence, so burying it no longer applies.
+ * That exception only reveals acceptance evidence; agent uploads stay hidden.
  */
-export const LIBRARY_HIDDEN_FILE_SOURCES: FileSource[] = [FileSource.Acceptance];
+export const LIBRARY_HIDDEN_FILE_SOURCES: FileSource[] = [
+  FileSource.Acceptance,
+  FileSource.AgentDocument,
+];
 
 /** Sources a generation model wrote, as opposed to anything a human put there. */
 export const AI_GENERATED_FILE_SOURCES: FileSource[] = [

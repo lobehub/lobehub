@@ -31,6 +31,7 @@ export const STORE_DEFAULTS: ElectronMainStore = {
   encryptedTokens: {},
   gatewayDeviceId: '',
   gatewayEnabled: true,
+  gatewayKeepAwake: true,
   gatewayUrl: 'https://device-gateway.lobehub.com',
   gatewayWorkspaceEnrollments: [],
   heteroSessionDirPrefs: {},

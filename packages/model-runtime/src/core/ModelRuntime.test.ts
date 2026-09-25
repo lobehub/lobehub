@@ -309,17 +309,39 @@ describe('ModelRuntime', () => {
         model: 'sora-1',
         params: { prompt: 'a cat' } as any,
       };
-      const mockResponse = { inferenceId: 'job-1' };
-      const createVideo = vi.fn().mockResolvedValue(mockResponse);
+      const createVideo = vi.fn().mockResolvedValue({ inferenceId: 'job-1' });
 
       // @ts-ignore - injecting a minimal runtime for this case
-      mockModelRuntime['_runtime'] = { createVideo };
+      mockModelRuntime['_runtime'] = {
+        createVideo,
+        getVideoGenerationCapabilities: () => ({ completionModes: ['polling'] }),
+      };
 
-      const options = { metadata: { trigger: 'video' } };
+      const options = {
+        metadata: { trigger: 'video' },
+        preferredCompletionMode: 'webhook' as const,
+      };
       const result = await mockModelRuntime.createVideo(payload, options);
 
       expect(createVideo).toHaveBeenCalledWith(payload, options);
-      expect(result).toBe(mockResponse);
+      expect(result).toEqual({ completionMode: 'polling', inferenceId: 'job-1' });
+    });
+
+    it('should preserve completion mode from an orchestrating runtime', async () => {
+      const payload: CreateVideoPayload = {
+        model: 'sora-1',
+        params: { prompt: 'a cat' } as any,
+      };
+      const response = { completionMode: 'webhook' as const, inferenceId: 'job-2' };
+      const createVideo = vi.fn().mockResolvedValue(response);
+
+      // @ts-ignore - injecting a minimal composite runtime for this case
+      mockModelRuntime['_runtime'] = {
+        createVideo,
+        orchestratesVideoGenerationCompletion: true,
+      };
+
+      await expect(mockModelRuntime.createVideo(payload)).resolves.toBe(response);
     });
 
     it('should handle undefined createVideo method gracefully', async () => {
@@ -656,6 +678,32 @@ describe('ModelRuntime', () => {
         mockRuntimeAI.chat.mockResolvedValue(new Response(''));
 
         await expect(runtime.chat(chatPayload)).resolves.toBeInstanceOf(Response);
+      });
+
+      it('handleChatStreamError forwards a stream failure to onChatStreamError', async () => {
+        const streamError = { errorType: 'ProviderBizError', error: { message: 'fail' } };
+        const options = { metadata: { trigger: 'chat' } };
+        const onChatStreamError = vi.fn();
+        const { runtime } = createMockRuntime({ onChatStreamError });
+
+        await runtime.handleChatStreamError(streamError, { options, payload: chatPayload });
+
+        expect(onChatStreamError).toHaveBeenCalledWith(streamError, {
+          options,
+          payload: chatPayload,
+        });
+      });
+
+      it('handleChatStreamError keeps a failing hook from replacing the stream error', async () => {
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const onChatStreamError = vi.fn().mockRejectedValue(new Error('hook failed'));
+        const { runtime } = createMockRuntime({ onChatStreamError });
+
+        await expect(
+          runtime.handleChatStreamError(new Error('stream failed'), { payload: chatPayload }),
+        ).resolves.toBeUndefined();
+        expect(consoleError).toHaveBeenCalled();
+        consoleError.mockRestore();
       });
     });
 

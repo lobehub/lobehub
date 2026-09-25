@@ -1,0 +1,114 @@
+# alint: model-backed rules that eslint cannot express.
+# Rules live in packages/alint/rules; each has calibration fixtures under
+# packages/alint/fixtures. Set up a provider with `bun run alint:setup`, then
+# `bun run check --alint` or `bun run alint --dirty`. See packages/alint/README.md.
+#
+# Scope rules with group `files`; never with `includeFiles` inside a rule
+# (it only filters reports, doubles the jobs, and disables the cache).
+
+[[config.group]]
+ignores = [
+  "**/node_modules/**",
+  "**/dist/**",
+  "**/.next/**",
+  "**/*.d.ts",
+  "packages/sdk/src/generated/**",
+  "packages/heterogeneous-agents/src/codex/protocol/generated.ts",
+]
+
+[config.group.ignore]
+gitignore = true
+
+# Backend business logic.
+[[config.group]]
+files = [ "apps/server/src/**/*.ts", "packages/database/src/**/*.ts" ]
+ignores = [ "**/*.test.ts", "**/__tests__/**", "**/migrations/**" ]
+
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+
+[config.group.rules]
+"lobehub/pmap-over-promise-all" = "warn"
+"lobehub/no-dynamic-import-in-server" = "warn"
+
+# Database models layer: cross-table write transactions belong in repositories.
+[[config.group]]
+files = [ "packages/database/src/models/**/*.ts" ]
+ignores = [ "**/*.test.ts", "**/__tests__/**" ]
+
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+
+[config.group.rules]
+"lobehub/no-transactions-in-models" = "warn"
+
+# Web client components.
+[[config.group]]
+files = [ "src/**/*.tsx" ]
+ignores = [ "**/*.test.tsx" ]
+
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+
+[config.group.rules]
+"lobehub/no-effect-fetching" = "warn"
+"lobehub/no-mode-flags" = "warn"
+
+# Vitest files, wherever they live: the SPA, every app, and every package.
+# Naming only `apps/server` here silently skipped the ~230 tests under
+# `apps/cli` and `apps/desktop`, which is where this rule earns its keep.
+[[config.group]]
+files = [
+  "src/**/*.test.{ts,tsx}",
+  "apps/*/src/**/*.test.{ts,tsx}",
+  "packages/*/src/**/*.test.{ts,tsx}",
+]
+
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+
+[config.group.rules]
+"lobehub/test-the-exit-not-the-entry" = "warn"
+
+# Calibration fixtures: one group per rule so a fixture only meets its own rule.
+[[config.group]]
+files = [ "packages/alint/fixtures/pmap-over-promise-all/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/pmap-over-promise-all" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-dynamic-import-in-server/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-dynamic-import-in-server" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-effect-fetching/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-effect-fetching" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-mode-flags/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-mode-flags" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-transactions-in-models/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-transactions-in-models" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/test-the-exit-not-the-entry/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/test-the-exit-not-the-entry" = "warn"

@@ -1,6 +1,6 @@
 ---
-title: Chat API 前后端交互逻辑
-description: 深入了解 LobeHub Chat API 的前后端交互实现逻辑和核心组件。
+title: Chat API 内部实现与前后端交互
+description: 面向源码开发者，说明 LobeHub 内部聊天链路、运行时及前后端交互；不是公开 API 接入指南。
 tags:
   - Chat API
   - 前后端交互
@@ -9,10 +9,23 @@ tags:
   - MCP
 ---
 
-# Chat API 前后端交互逻辑
+# Chat API 内部实现与前后端交互
 
-本文档说明了 LobeHub Chat API 在前后端交互中的实现逻辑，
-包括事件序列和涉及的核心组件。
+本文面向修改或调试 LobeHub 源码的开发者，说明应用内部聊天链路、事件序列及核心组件。
+
+<Callout type="warning">
+  本文不是公开 REST API 或 SDK 接入指南。`/webapi/chat/[provider]`、内部 tRPC 路由、
+  Store actions 和 ChatService 是应用实现细节，不构成外部集成的稳定契约。
+  不要从以下时序图推断公开接口的认证、请求格式或兼容性保证。
+</Callout>
+
+需要 CLI、公开 API 或 TypeScript SDK 时，先阅读[开发路径选择](/zh/docs/development/start#选择开发路径)。以下代码片段用于解释内部控制流，不是可独立运行的客户端示例；阅读时应对照所用版本的源码。
+
+## 本页范围
+
+下方时序图主要展开客户端 Agent 循环。服务端执行另见[客户端 vs 服务端执行](#客户端-vs-服务端执行)。不同 transport 和执行场景不应被当作完全相同的链路。
+
+本文中的「预设任务」指应用内部直接调用模型的辅助功能，不是用户在任务面板创建的 Task 或 Scheduled 自动化任务。用户任务说明见[任务](/zh/docs/usage/getting-started/task)。
 
 ## 交互时序图
 
@@ -72,9 +85,7 @@ sequenceDiagram
 
 ### 2. Agent Runtime 驱动循环
 
-Agent Runtime 是整个 chat 流程的**核心执行引擎**。
-每次聊天交互（从简单问答到复杂多步工具调用）都通过
-`AgentRuntime.step()` 循环驱动。
+本节描述的客户端 Agent 聊天链路通过 `AgentRuntime.step()` 循环驱动。下文的预设任务直接调用模型，不经过该循环。
 
 **初始化**
 （`src/store/chat/slices/agentRun/actions/transports/client/streamingExecutor.ts`）：

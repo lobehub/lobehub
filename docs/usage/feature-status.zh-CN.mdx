@@ -1,0 +1,73 @@
+---
+title: 功能状态与可用性
+description: 了解 Alpha、Labs、Cloud 与 Desktop 的含义，以及找不到某项功能时可以检查什么。
+tags:
+  - LobeHub
+  - 功能状态
+  - Alpha
+  - Labs
+  - Cloud
+  - Desktop
+---
+
+# 功能状态与可用性
+
+功能标签帮助你了解功能的成熟度、开启方式和使用环境。
+
+## 标签分别表示什么
+
+| 标签 | 含义 | 使用提示 |
+| --- | --- | --- |
+| **Alpha** | 早期功能 | 开放范围可能有限，界面和行为仍可能变化 |
+| **Labs** | 设置中的可选实验功能区域 | 按功能指南的说明，在 Labs 中开启相应功能 |
+| **Cloud** | LobeHub 托管服务及其云端能力 | 检查套餐要求与所选执行设备 |
+| **Desktop** | 安装在 macOS、Windows 或 Linux 上的桌面应用 | 本地工具取决于系统支持与权限，部分任务仍需云端服务 |
+
+**Cloud 与 Desktop 并不互斥。** 桌面应用可以使用 Cloud 服务和云端模型；网页端对话也可以控制已连接的执行设备。
+
+聊天界面、模型端点和工具执行设备可能位于不同位置。详见[执行设备](/zh/docs/usage/agent/execution-devices)。
+
+## Projects：Alpha
+
+Projects 目前处于 **Alpha** 阶段，用于组织项目工作。开放范围可能有限，界面和功能仍会调整。
+
+你也可以使用以下功能组织日常工作：[话题](/zh/docs/usage/agent/topic)、[任务](/zh/docs/usage/getting-started/task)、[文稿](/zh/docs/usage/getting-started/page)和[资源库](/zh/docs/usage/getting-started/resource)。
+
+## Labs 与发布历史
+
+[2026 年 5 月 31 日更新日志](/zh/changelog/2026-05-31-drag-and-drop-skills)将平台智能体（Platform Agents）标记为 Beta，并给出了**设置 → 高级 → Labs** 的开启路径。
+
+[2026 年 6 月 8 日更新日志](/zh/changelog/2026-06-08-connectors)将其更名为**接入助理（Connect Agents）**，同时扩展了执行设备选择。
+
+菜单名称和可用开关可能随版本变化。找不到功能时，可按下方「找不到某项功能时」的步骤检查。
+
+## Cloud、Desktop 与工具访问
+
+| 能力 | 提供什么 | 使用提示 |
+| --- | --- | --- |
+| **桌面工作布局** | 对话旁工作面板，以及可保留工作状态的桌面多标签 | 在对话旁查看工作面板，通过标签切换任务 |
+| **本地 MCP 连接器** | 桌面端可安装和运行本机或本地网络上的连接器 | 仍受依赖、设备连接状态与权限限制 |
+| **浏览器配对** | 浏览器标签页可配对为执行设备，无需安装桌面端 | 可用工具与桌面设备有所不同 |
+| **本地模型推理** | 本地运行时可以处理模型请求 | 工作流中的其他步骤仍可能使用云端服务 |
+
+具体要求见[获取 LobeHub](/zh/docs/usage/getting-started/get-lobehub)、[执行设备](/zh/docs/usage/agent/execution-devices)和[模型服务商](/zh/docs/usage/providers)。
+
+## 找不到某项功能时
+
+1. 检查应用版本及对应更新日志。
+2. 检查当前个人账号和适用的套餐要求。
+3. 如果功能指南明确给出 Labs 开关，检查对应设置。
+4. 检查所需模型、连接器、权限和执行设备。
+5. 自托管用户应检查对应[部署指南](/zh/docs/self-hosting/start)。
+
+## 相关更新
+
+{/* 核对日期：2026-09-14；可用本地更新日志截止到 2026-08-03。来源未提供完整的套餐／平台功能矩阵或 Projects 入口。 */}
+
+- [2026 年 4 月 20 日：对话旁工作面板](/zh/changelog/2026-04-20-daily-brief)
+- [2026 年 5 月 31 日：Beta、Labs 与执行设备选择](/zh/changelog/2026-05-31-drag-and-drop-skills)
+- [2026 年 6 月 8 日：连接器与接入助理](/zh/changelog/2026-06-08-connectors)
+- [2026 年 6 月 15 日：浏览器配对](/zh/changelog/2026-06-15-browser-pairing)
+- [2026 年 8 月 3 日：桌面标签与本地 MCP 连接器](/zh/changelog/2026-08-03-home-dashboard)
+- [官网下载页](https://lobehub.com/downloads)：各平台下载渠道
+

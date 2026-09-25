@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useEffect } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { createStoreUpdater } from 'zustand-utils';
 
 import { hasMeaningfulEditorContent } from '@/libs/editor/hasMeaningfulEditorContent';
@@ -47,6 +47,8 @@ const StoreUpdater = memo<StoreUpdaterProps>(
 
     const editor = usePageEditorStore((s) => s.editor);
     const initMeta = usePageEditorStore((s) => s.initMeta);
+    const setDocumentId = usePageEditorStore((s) => s.setDocumentId);
+    const syncMeta = usePageEditorStore((s) => s.syncMeta);
     const pageAgentEditor = editor as unknown as PageAgentEditor | undefined;
     // Workspace pages are view-first; resolve once here so the lock + gating read
     // a single source of truth. Private-visibility pages are creator-only —
@@ -75,7 +77,12 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     usePageDraft();
 
     // Update store with props
-    useStoreUpdater('documentId', pageId);
+    // `useStoreUpdater` writes the raw field; `documentId` goes through its own
+    // action instead, so a panel left open on the previous document doesn't
+    // carry over to this one (see setDocumentId).
+    useEffect(() => {
+      if (typeof pageId !== 'undefined') setDocumentId(pageId);
+    }, [pageId, setDocumentId]);
     useStoreUpdater('isWorkspacePage', isWorkspacePage);
     useStoreUpdater('isWorkspaceScopedPage', isWorkspaceScopedPage);
     useStoreUpdater('knowledgeBaseId', knowledgeBaseId);
@@ -88,10 +95,20 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     useStoreUpdater('onBack', onBack);
     useStoreUpdater('parentId', parentId);
 
-    // Initialize meta (title/emoji) with dirty tracking
+    // Initialize meta (title/emoji) with dirty tracking once per page. Later
+    // prop changes (list refresh after our own save, sidebar rename, realtime
+    // sync) go through `syncMeta`, which yields to unsaved local typing — a
+    // blind `initMeta` here used to roll the title back mid-keystroke.
+    const initializedPageIdRef = useRef<string | undefined>(undefined);
     useEffect(() => {
-      initMeta(title, emoji);
-    }, [pageId, title, emoji, initMeta]);
+      if (initializedPageIdRef.current !== pageId) {
+        initializedPageIdRef.current = pageId;
+        initMeta(title, emoji);
+        return;
+      }
+
+      syncMeta(title, emoji);
+    }, [pageId, title, emoji, initMeta, syncMeta]);
 
     // Connect editor to page agent runtime
     useEffect(() => {

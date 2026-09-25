@@ -107,12 +107,14 @@ const TaskGroupHeader = memo<{
       <AccordionRoot
         indicatorPlacement={'end'}
         value={item.collapsed ? [] : [item.key]}
-        variant={sub ? 'borderless' : 'outlined'}
+        variant={sub ? 'borderless' : 'filled'}
         onValueChange={() => onToggle(item.key)}
       >
         <AccordionItem value={item.key}>
-          <AccordionHeader style={{ paddingBlock: sub ? 6 : 8, paddingInline: 14 }}>
-            <AccordionTrigger>{renderGroupTitle(item.meta, item.count, sub)}</AccordionTrigger>
+          <AccordionHeader>
+            <AccordionTrigger style={{ paddingBlock: sub ? 6 : 8, paddingInline: 14 }}>
+              {renderGroupTitle(item.meta, item.count, sub)}
+            </AccordionTrigger>
           </AccordionHeader>
         </AccordionItem>
       </AccordionRoot>

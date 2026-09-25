@@ -1,4 +1,5 @@
 {
+  "FilePreview.actions.download": "Tải xuống tệp nguồn",
   "FilePreview.tabs.chunk": "Phân đoạn",
   "FilePreview.tabs.file": "Tệp",
   "Plugins": "Kỹ năng",
@@ -29,6 +30,7 @@
   "artifacts.svg.copySuccess": "Đã sao chép hình ảnh thành công",
   "artifacts.svg.download.png": "Tải xuống dưới dạng PNG",
   "artifacts.svg.download.svg": "Tải xuống dưới dạng SVG",
+  "document.saveConflict": "Tài liệu này đã được cập nhật ở nơi khác. Đang làm mới để lấy phiên bản mới nhất.",
   "document.todos.allCompleted": "Tất cả nhiệm vụ đã hoàn thành",
   "document.todos.title": "Nhiệm vụ",
   "emptyArtifactList": "Chưa có tạo phẩm nào. Hãy sử dụng Kỹ năng trong cuộc trò chuyện, sau đó quay lại đây.",

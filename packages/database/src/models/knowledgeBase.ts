@@ -112,7 +112,7 @@ export class KnowledgeBaseModel {
 
       await this.db
         .update(documents)
-        .set({ updatedAt: now, visibility: kb.visibility })
+        .set({ visibility: kb.visibility })
         .where(
           and(
             documentLink,
@@ -359,7 +359,7 @@ export class KnowledgeBaseModel {
 
       await trx
         .update(documents)
-        .set({ updatedAt: now, visibility })
+        .set({ visibility })
         .where(
           and(
             documentLink,
@@ -499,7 +499,7 @@ export class KnowledgeBaseModel {
 
       await trx
         .update(documents)
-        .set({ ...ownershipUpdate, ...visibilityUpdate, updatedAt: now })
+        .set({ ...ownershipUpdate, ...visibilityUpdate })
         .where(documentWhere);
 
       return { id };

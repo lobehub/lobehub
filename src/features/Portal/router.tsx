@@ -89,7 +89,7 @@ export const PortalContent = memo<PortalContentProps>(
     const Title = ViewImpl?.Title || HomeTitle;
 
     const headerContent = CustomHeader ? (
-      <CustomHeader />
+      <CustomHeader onClose={onClose} />
     ) : (
       <Header title={<Title />} onClose={onClose} />
     );

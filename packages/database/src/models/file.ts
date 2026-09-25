@@ -1,4 +1,4 @@
-import type { FileAccessScope, QueryFileListParams } from '@lobechat/types';
+import type { FileAccessScope, FileSource, QueryFileListParams } from '@lobechat/types';
 import {
   FilesTabs,
   getAgentShareFileProvenance,
@@ -25,6 +25,7 @@ import type { PgTransaction } from 'drizzle-orm/pg-core';
 
 import type { FileItem, NewFile, NewGlobalFile } from '../schemas';
 import {
+  agentsFiles,
   asyncTasks,
   chunks,
   documentChunks,
@@ -33,12 +34,15 @@ import {
   fileChunks,
   files,
   filesToSessions,
+  generations,
   globalFiles,
   knowledgeBaseFiles,
   messages,
   messagesFiles,
+  messageTTS,
   topics,
   users,
+  verifyEvidence,
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { buildFileCategoryFilter } from '../utils/fileTypeCategory';
@@ -258,7 +262,8 @@ export class FileModel {
   };
 
   /**
-   * Delete a transient upload only while no persisted message or session references it.
+   * Delete a transient upload only while no persisted content references it.
+   * This also covers documents, knowledge bases, agents, generated media, TTS and evidence.
    * Locking the file row serializes this cleanup with foreign-key inserts, so a late send either
    * wins ownership and preserves the file or observes the deletion and fails atomically.
    *
@@ -267,7 +272,12 @@ export class FileModel {
    */
   deleteUnreferenced = async (
     id: string,
-    options: { accessScope?: FileAccessScope; removeGlobalFile?: boolean } = {},
+    options: {
+      accessScope?: FileAccessScope;
+      removeGlobalFile?: boolean;
+      /** Only reclaim this upload source; omitted preserves the general cleanup behavior. */
+      source?: FileSource;
+    } = {},
   ) => {
     const { accessScope = ordinaryFileAccessScope, removeGlobalFile = true } = options;
     return this.db.transaction(async (trx) => {
@@ -278,6 +288,7 @@ export class FileModel {
           and(
             eq(files.id, id),
             this.ownership(),
+            options.source ? eq(files.source, options.source) : undefined,
             fileMatchesAccessScope(files.metadata, accessScope),
           ),
         )
@@ -298,6 +309,43 @@ export class FileModel {
         .where(eq(filesToSessions.fileId, id))
         .limit(1);
       if (sessionReference) return;
+
+      // Content references keep hidden uploads alive, including soft-deleted documents.
+      // The file lock conflicts with FK inserts, so concurrent attachments cannot be lost.
+      // Upload sessions and derived chunks are bookkeeping, not surviving content owners.
+      const [contentReference] = await trx
+        .select({ id: documents.fileId })
+        .from(documents)
+        .where(eq(documents.fileId, id))
+        .unionAll(
+          trx
+            .select({ id: knowledgeBaseFiles.fileId })
+            .from(knowledgeBaseFiles)
+            .where(eq(knowledgeBaseFiles.fileId, id)),
+        )
+        .unionAll(
+          trx
+            .select({ id: agentsFiles.fileId })
+            .from(agentsFiles)
+            .where(eq(agentsFiles.fileId, id)),
+        )
+        .unionAll(
+          trx
+            .select({ id: generations.fileId })
+            .from(generations)
+            .where(eq(generations.fileId, id)),
+        )
+        .unionAll(
+          trx.select({ id: messageTTS.fileId }).from(messageTTS).where(eq(messageTTS.fileId, id)),
+        )
+        .unionAll(
+          trx
+            .select({ id: verifyEvidence.fileId })
+            .from(verifyEvidence)
+            .where(eq(verifyEvidence.fileId, id)),
+        )
+        .limit(1);
+      if (contentReference) return;
 
       return this.deleteInTransaction(id, removeGlobalFile, trx, accessScope);
     });

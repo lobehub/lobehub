@@ -221,6 +221,24 @@ describe('doc command', () => {
   // ── create ────────────────────────────────────────────
 
   describe('create', () => {
+    /**
+     * Regression: inside an agent run the created document was never tied to the
+     * run, so a Goal could not show it as the Task's deliverable.
+     */
+    it.each([
+      { env: 'op-run-1', expected: { operationId: 'op-run-1' } },
+      { env: '', expected: undefined },
+    ])('passes the current run operation when set: %j', async ({ env, expected }) => {
+      vi.stubEnv('LOBEHUB_OPERATION_ID', env);
+      mockTrpcClient.document.createDocument.mutate.mockResolvedValue({ id: 'new-doc' });
+
+      await createProgram().parseAsync(['node', 'test', 'doc', 'create', '--title', 'Report']);
+
+      const [params] = mockTrpcClient.document.createDocument.mutate.mock.calls[0];
+      if (expected) expect(params).toMatchObject(expected);
+      else expect(params).not.toHaveProperty('operationId');
+    });
+
     it('should create a document with title and body', async () => {
       mockTrpcClient.document.createDocument.mutate.mockResolvedValue({ id: 'new-doc' });
 
@@ -403,6 +421,20 @@ describe('doc command', () => {
   // ── edit ──────────────────────────────────────────────
 
   describe('edit', () => {
+    it.each([
+      { env: 'op-run-1', expected: { operationId: 'op-run-1' } },
+      { env: '', expected: undefined },
+    ])('passes the current run operation when set: %j', async ({ env, expected }) => {
+      vi.stubEnv('LOBEHUB_OPERATION_ID', env);
+      mockTrpcClient.document.updateDocument.mutate.mockResolvedValue({});
+
+      await createProgram().parseAsync(['node', 'test', 'doc', 'edit', 'doc1', '--body', 'v2']);
+
+      const [params] = mockTrpcClient.document.updateDocument.mutate.mock.calls[0];
+      if (expected) expect(params).toMatchObject(expected);
+      else expect(params).not.toHaveProperty('operationId');
+    });
+
     it('should update document title', async () => {
       mockTrpcClient.document.updateDocument.mutate.mockResolvedValue({});
 

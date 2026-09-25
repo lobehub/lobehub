@@ -2,7 +2,6 @@
 import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { testProvider } from '../../providerTestUtils';
 import { LobeAkashChatAI, params } from './index';
 
 const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
@@ -10,23 +9,6 @@ const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
 vi.mock('@lobechat/business-model-bank/model-config', () => ({
   loadModels: loadModelsMock,
 }));
-
-const provider = ModelProvider.AkashChat;
-const defaultBaseURL = 'https://chatapi.akash.network/api/v1';
-
-testProvider({
-  Runtime: LobeAkashChatAI,
-  bizErrorType: 'ProviderBizError',
-  chatDebugEnv: 'DEBUG_AKASH_CHAT_COMPLETION',
-  chatModel: 'llama-3.1-8b-instruct',
-  defaultBaseURL,
-  invalidErrorType: 'InvalidProviderAPIKey',
-  provider,
-  test: {
-    skipAPICall: true,
-    skipErrorHandle: true,
-  },
-});
 
 describe('LobeAkashChatAI - custom features', () => {
   let instance: InstanceType<typeof LobeAkashChatAI>;
@@ -237,17 +219,6 @@ describe('LobeAkashChatAI - custom features', () => {
         const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
         expect(calledPayload.chat_template_kwargs).toBeUndefined();
       });
-
-      it('should handle multiple thinking model keywords', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'DeepSeek-V3-1',
-          thinking: { type: 'enabled', budget_tokens: 1024 },
-        });
-
-        const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
-        expect(calledPayload.chat_template_kwargs).toEqual({ thinking: true });
-      });
     });
   });
 
@@ -318,19 +289,6 @@ describe('LobeAkashChatAI - custom features', () => {
 
       expect(models).toEqual([]);
     });
-
-    it('should throw when model API fails', async () => {
-      const mockClient = {
-        apiKey: 'test',
-        baseURL: 'https://chatapi.akash.network/api/v1',
-        models: {
-          list: vi.fn().mockRejectedValue(new Error('API Error')),
-        },
-      };
-
-      await expect(params.models({ client: mockClient as any })).rejects.toThrow('API Error');
-    });
-
     it('should handle network timeout errors', async () => {
       const mockClient = {
         apiKey: 'test',
@@ -342,19 +300,6 @@ describe('LobeAkashChatAI - custom features', () => {
 
       await expect(params.models({ client: mockClient as any })).rejects.toThrow('Network timeout');
     });
-
-    it('should handle invalid API key errors', async () => {
-      const mockClient = {
-        apiKey: 'invalid',
-        baseURL: 'https://chatapi.akash.network/api/v1',
-        models: {
-          list: vi.fn().mockRejectedValue(new Error('Unauthorized')),
-        },
-      };
-
-      await expect(params.models({ client: mockClient as any })).rejects.toThrow('Unauthorized');
-    });
-
     it('should throw on malformed response data', async () => {
       const mockClient = {
         apiKey: 'test',

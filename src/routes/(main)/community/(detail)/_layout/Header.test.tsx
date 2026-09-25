@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
+import MarkdownRender from '../features/MakedownRender';
 import Header from './Header';
 
 const mocks = vi.hoisted(() => ({
@@ -59,5 +60,18 @@ describe('Community detail Header', () => {
       'data-avatar',
       'sad-avatar',
     );
+  });
+});
+
+describe('Community detail Markdown', () => {
+  it('renders standard Markdown without creating raw HTML elements', () => {
+    const { container } = render(
+      <MarkdownRender>
+        {'**community-safe**\n\n<aside data-raw-html="true">raw HTML</aside>'}
+      </MarkdownRender>,
+    );
+
+    expect(screen.getByText('community-safe', { selector: 'strong' })).toBeInTheDocument();
+    expect(container.querySelector('[data-raw-html]')).not.toBeInTheDocument();
   });
 });

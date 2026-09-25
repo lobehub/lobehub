@@ -11,7 +11,7 @@ Run the official OpenResponses compliance test suite against the local (or remot
 
 ```bash
 # From the openapi package directory
-cd lobehub/packages/openapi
+cd packages/openapi
 
 # Run all tests (dev mode, localhost:3010)
 APP_URL=http://localhost:3010 bun run test:response-compliance -- \
@@ -66,7 +66,7 @@ Available `--filter` values:
 
 ## How It Works
 
-The script (`lobehub/packages/openapi/scripts/compliance-test.sh`) clones the official [openresponses/openresponses](https://github.com/openresponses/openresponses) repo into `scripts/openresponses-compliance/` (gitignored) and runs its CLI test runner. First run clones; subsequent runs update from upstream.
+The script (`packages/openapi/scripts/compliance-test.sh`) clones the official [openresponses/openresponses](https://github.com/openresponses/openresponses) repo into `scripts/openresponses-compliance/` (gitignored) and runs its CLI test runner. First run clones; subsequent runs update from upstream.
 
 ## Debugging Failures
 
@@ -79,9 +79,9 @@ The script (`lobehub/packages/openapi/scripts/compliance-test.sh`) clones the of
 
 ## Key Files
 
-- **Types**: `lobehub/packages/openapi/src/types/responses.type.ts`
-- **Service**: `lobehub/packages/openapi/src/services/responses.service.ts`
-- **Controller**: `lobehub/packages/openapi/src/controllers/responses.controller.ts`
-- **Route**: `lobehub/packages/openapi/src/routes/responses.route.ts`
-- **Test script**: `lobehub/packages/openapi/scripts/compliance-test.sh`
+- **Types**: `packages/openapi/src/types/responses.type.ts`
+- **Service**: `packages/openapi/src/services/responses.service.ts`
+- **Controller**: `packages/openapi/src/controllers/responses.controller.ts`
+- **Route**: `packages/openapi/src/routes/responses.route.ts`
+- **Test script**: `packages/openapi/scripts/compliance-test.sh`
 - **Cloud route**: `src/app/(backend)/api/v1/[[...route]]/route.ts`

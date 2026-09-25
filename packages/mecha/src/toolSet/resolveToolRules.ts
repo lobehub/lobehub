@@ -7,6 +7,7 @@ import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { MessageManifest } from '@lobechat/builtin-tool-message';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
+import { VideoGenerationManifest } from '@lobechat/builtin-tool-video-generation';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import {
   alwaysOnToolIds,
@@ -63,6 +64,9 @@ export const resolveToolRules = (request: ToolRuleRequest): ResolvedToolRules =>
     model.canUseFC &&
     !model.hasImageOutput &&
     pinnedPluginIds.includes(ImageGenerationManifest.identifier);
+  // Video generation follows the same opt-in contract as image generation.
+  const videoGenerationEnabled =
+    model.canUseFC && pinnedPluginIds.includes(VideoGenerationManifest.identifier);
   // Local tools need a `local` target that can actually reach a machine.
   const localToolsEnabled =
     !request.disableLocalSystem && runtimeMode === 'local' && request.localExecutionReady;
@@ -71,6 +75,7 @@ export const resolveToolRules = (request: ToolRuleRequest): ResolvedToolRules =>
   // injection, no activator — each entry still passes its own gate.
   const chatModeRules = {
     [ImageGenerationManifest.identifier]: imageGenerationEnabled,
+    [VideoGenerationManifest.identifier]: videoGenerationEnabled,
     [KnowledgeBaseManifest.identifier]: kbEnabled,
     [MemoryManifest.identifier]: memoryEnabled,
     [WebBrowsingManifest.identifier]: isSearchEnabled,

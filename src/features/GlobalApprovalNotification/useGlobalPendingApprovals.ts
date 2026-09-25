@@ -2,6 +2,7 @@ import { type UIChatMessage } from '@lobechat/types';
 import { useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
+import { isUnexpiredAt, useDeadlineClock } from '@/features/Conversation/hooks/useDeadlineClock';
 import {
   getPendingInterventions,
   type PendingIntervention,
@@ -122,8 +123,25 @@ export const useGlobalPendingApprovals = (): GlobalApprovalGroup[] => {
     [activeAgentId, portalTopicId],
   );
 
-  return useMemo(
+  const groups = useMemo(
     () => collectGlobalApprovals(dbMessagesMap, operations, activeKey, portalKey),
     [dbMessagesMap, operations, activeKey, portalKey],
+  );
+
+  // The island reads the same pending list, recomputed only on store changes.
+  // Drop each card the moment its producer stops waiting — and a group with it
+  // once nothing answerable is left.
+  const now = useDeadlineClock(
+    groups.flatMap((group) => group.interventions.map((item) => item.deadline)),
+  );
+  return useMemo(
+    () =>
+      groups
+        .map((group) => ({
+          ...group,
+          interventions: group.interventions.filter(isUnexpiredAt(now)),
+        }))
+        .filter((group) => group.interventions.length > 0),
+    [groups, now],
   );
 };

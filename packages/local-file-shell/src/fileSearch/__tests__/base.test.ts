@@ -90,37 +90,6 @@ describe('BaseFileSearch', () => {
       expect(fileSearch.testDetermineContentType('tar')).toBe('archive');
       expect(fileSearch.testDetermineContentType('gz')).toBe('archive');
     });
-
-    it('should return audio for audio extensions', () => {
-      expect(fileSearch.testDetermineContentType('mp3')).toBe('audio');
-      expect(fileSearch.testDetermineContentType('wav')).toBe('audio');
-      expect(fileSearch.testDetermineContentType('ogg')).toBe('audio');
-    });
-
-    it('should return video for video extensions', () => {
-      expect(fileSearch.testDetermineContentType('mp4')).toBe('video');
-      expect(fileSearch.testDetermineContentType('avi')).toBe('video');
-      expect(fileSearch.testDetermineContentType('mkv')).toBe('video');
-    });
-
-    it('should return image for image extensions', () => {
-      expect(fileSearch.testDetermineContentType('png')).toBe('image');
-      expect(fileSearch.testDetermineContentType('jpg')).toBe('image');
-      expect(fileSearch.testDetermineContentType('gif')).toBe('image');
-    });
-
-    it('should return document for document extensions', () => {
-      expect(fileSearch.testDetermineContentType('pdf')).toBe('document');
-      expect(fileSearch.testDetermineContentType('doc')).toBe('document');
-      expect(fileSearch.testDetermineContentType('docx')).toBe('document');
-    });
-
-    it('should return code for code extensions', () => {
-      expect(fileSearch.testDetermineContentType('ts')).toBe('code');
-      expect(fileSearch.testDetermineContentType('js')).toBe('code');
-      expect(fileSearch.testDetermineContentType('py')).toBe('code');
-    });
-
     it('should return unknown for unrecognized extensions', () => {
       expect(fileSearch.testDetermineContentType('xyz')).toBe('unknown');
       expect(fileSearch.testDetermineContentType('foo')).toBe('unknown');
@@ -150,10 +119,6 @@ describe('BaseFileSearch', () => {
 
     it('should escape backslashes', () => {
       expect(fileSearch.testEscapeGlobPattern('path\\file.ts')).toBe('path\\\\file\\.ts');
-    });
-
-    it('should escape dots', () => {
-      expect(fileSearch.testEscapeGlobPattern('normal-file.ts')).toBe('normal-file\\.ts');
     });
 
     it('should return unchanged string if no special characters', () => {

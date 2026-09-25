@@ -1,8 +1,9 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type { Stream } from '@anthropic-ai/sdk/streaming';
-import type { ChatCitationItem } from '@lobechat/types';
+import type { ChatCitationItem, ChatMessageError } from '@lobechat/types';
 
 import type { ChatStreamCallbacks } from '../../types';
+import { AgentRuntimeErrorType } from '../../types/error';
 import { convertAnthropicUsage } from '../usageConverters';
 import type {
   ChatPayloadForTransformStream,
@@ -14,8 +15,10 @@ import type {
 import {
   convertIterableToStream,
   createCallbacksTransformer,
+  createFirstErrorHandleTransformer,
   createSSEProtocolTransformer,
   createTokenSpeedCalculator,
+  FIRST_CHUNK_ERROR_KEY,
 } from './protocol';
 
 export const transformAnthropicStream = (
@@ -23,6 +26,63 @@ export const transformAnthropicStream = (
   context: StreamContext,
   payload?: ChatPayloadForTransformStream,
 ): StreamProtocolChunk | StreamProtocolChunk[] => {
+  /**
+   * `convertIterableToStream` turns an SDK iterator failure (e.g. `TypeError: terminated` when
+   * the upstream connection drops mid-stream) into an error chunk. Without surfacing it here the
+   * chunk fell through as unknown data, the stream closed normally, and the dropped connection
+   * was misreported as an empty completion instead of an interrupted, fallback-eligible one.
+   */
+  if (FIRST_CHUNK_ERROR_KEY in chunk) {
+    const {
+      [FIRST_CHUNK_ERROR_KEY]: _,
+      name: _name,
+      stack: _stack,
+      ...body
+    } = chunk as Record<string, unknown>;
+    const errorData = {
+      body,
+      message: typeof body.message === 'string' ? body.message : JSON.stringify(body),
+      type:
+        typeof body.errorType === 'string'
+          ? (body.errorType as typeof AgentRuntimeErrorType.ProviderBizError)
+          : AgentRuntimeErrorType.ProviderBizError,
+    } satisfies ChatMessageError;
+    return { data: errorData, id: 'first_chunk_error', type: 'error' };
+  }
+
+  const raw = chunk as unknown as Record<string, unknown>;
+
+  /**
+   * Anthropic reports a mid-stream failure (e.g. `overloaded_error`) as an `error` event. The
+   * official SDK throws on the `event: error` line, but relays often forward the payload as a plain
+   * data frame, which reached the switch below as an unknown event and closed as an empty
+   * completion.
+   */
+  if (raw.type === 'error') {
+    const error = (raw.error ?? {}) as { message?: string; type?: string };
+    const errorData = {
+      body: raw,
+      message: error.message || error.type || 'The provider reported an error mid-stream.',
+      type: AgentRuntimeErrorType.ProviderBizError,
+    } satisfies ChatMessageError;
+    return { data: errorData, id: context.id, type: 'error' };
+  }
+
+  /**
+   * A relay that answers an Anthropic request in OpenAI chat-completions format produces no event
+   * this adapter understands, so the whole answer was dropped and reported as an empty completion.
+   * Name the protocol mismatch instead, so the user knows to fix the provider's API format.
+   */
+  if (Array.isArray(raw.choices) || raw.object === 'chat.completion.chunk') {
+    const errorData = {
+      body: raw,
+      message:
+        'The provider answered an Anthropic-format request with OpenAI chat-completions chunks. Check that this provider is configured with the API format its endpoint actually serves.',
+      type: AgentRuntimeErrorType.UpstreamMalformedResponse,
+    } satisfies ChatMessageError;
+    return { data: errorData, id: context.id, type: 'error' };
+  }
+
   // maybe need another structure to add support for multiple choices
   switch (chunk.type) {
     case 'message_start': {
@@ -267,6 +327,7 @@ export const AnthropicStream = (
     transformAnthropicStream(chunk, ctx, payload);
 
   return readableStream
+    .pipeThrough(createFirstErrorHandleTransformer(undefined, payload?.provider))
     .pipeThrough(
       createTokenSpeedCalculator(transformWithPayload, {
         enableStreaming,

@@ -38,6 +38,21 @@ describe('formatBotPlatformContext', () => {
     expect(result).toMatchSnapshot();
   });
 
+  it('routes file delivery into the current conversation through its own connection', () => {
+    const result = formatBotPlatformContext({
+      canReadHistory: false,
+      currentChannel: { id: 'wx-user@im.wechat', platformId: 'wechat' },
+      platformName: 'WeChat',
+      supportsMarkdown: false,
+    });
+
+    // Files can't ride the text reply, so `sendMessage` is allowed for them —
+    // but without bot discovery, which could pick a different (failed) bot.
+    expect(result).toContain('pass NEITHER `botId` NOR `messengerInstallationId`');
+    expect(result).toContain('Do not run `listBots` / `listMessengers` for this.');
+    expect(result).toContain('omit `botId` / `messengerInstallationId`');
+  });
+
   it('keeps the channel block on platforms without history-read, minus the readMessages line', () => {
     const result = formatBotPlatformContext({
       canReadHistory: false,

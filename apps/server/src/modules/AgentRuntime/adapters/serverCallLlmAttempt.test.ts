@@ -4,15 +4,25 @@ import type { ChatMethodOptions, ModelRuntime } from '@lobechat/model-runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { RuntimeExecutorContext } from '../context';
+import { formatErrorForState } from '../formatErrorForState';
 import { createServerCallLlmAttempt } from './serverCallLlmAttempt';
 import type { ServerCallLlmTooling } from './serverCallLlmTooling';
 
 const recordModelCompletionFailureMock = vi.hoisted(() => vi.fn());
 
+/**
+ * Behaves like a real runtime error hook: the trace id is attached only after an async side
+ * effect (writing the error log), so the attempt must await the hook before rethrowing.
+ */
+const attachTraceIdLater = async (error: { _responseBody?: unknown }) => {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  error._responseBody = { traceId: 'trace-1' };
+};
+
 vi.mock('@lobechat/model-runtime', async () => {
   const { isEmptyModelCompletion, ModelEmptyError } =
     await import('../../../../../../packages/model-runtime/src/errors/modelEmptyCompletion');
-  const { ModelRefusalError } =
+  const { isModelRefusalFinishReason, ModelRefusalError } =
     await import('../../../../../../packages/model-runtime/src/errors/modelRefusal');
   const { consumeStreamUntilDone } =
     await import('../../../../../../packages/model-runtime/src/utils/consumeStream');
@@ -20,6 +30,7 @@ vi.mock('@lobechat/model-runtime', async () => {
   return {
     consumeStreamUntilDone,
     isEmptyModelCompletion,
+    isModelRefusalFinishReason,
     ModelEmptyError,
     ModelRefusalError,
   };
@@ -79,6 +90,7 @@ const createAttempt = (
     await runCallbacks(options!);
     return new Response('done');
   });
+  const handleChatStreamError = vi.fn();
   const events: AgentEvent[] = [];
   const onFirstChunk = vi.fn();
   const attempt = createServerCallLlmAttempt({
@@ -95,7 +107,10 @@ const createAttempt = (
     maxAttempts: 3,
     messageCount: 1,
     model: 'test-model',
-    modelRuntime: { chat } as unknown as Pick<ModelRuntime, 'chat'>,
+    modelRuntime: { chat, handleChatStreamError } as unknown as Pick<
+      ModelRuntime,
+      'chat' | 'handleChatStreamError'
+    >,
     onFirstChunk,
     operationLogId: 'operation-1:2',
     provider: 'test-provider',
@@ -105,7 +120,7 @@ const createAttempt = (
     ...attemptOverrides,
   });
 
-  return { attempt, chat, events, onFirstChunk, publishStreamChunk };
+  return { attempt, chat, events, handleChatStreamError, onFirstChunk, publishStreamChunk };
 };
 
 describe('ServerCallLlmAttempt', () => {
@@ -321,6 +336,96 @@ describe('ServerCallLlmAttempt', () => {
     expect(recordModelCompletionFailureMock).not.toHaveBeenCalled();
   });
 
+  it('stores an in-band stream error with the trace id attached by the error hook', async () => {
+    const { attempt, handleChatStreamError } = createAttempt(async ({ callback }) => {
+      await callback?.onError?.({ errorType: 'ProviderBizError', message: 'Provider timed out' });
+    });
+    handleChatStreamError.mockImplementation(attachTraceIdLater);
+
+    const error = await attempt.execute().catch((error: unknown) => error);
+
+    expect(error).toMatchObject({ message: 'LLM stream error: Provider timed out' });
+    expect(handleChatStreamError).toHaveBeenCalledWith(error, {
+      options: expect.objectContaining({
+        metadata: expect.objectContaining({ operationId: 'operation-1' }),
+      }),
+      payload: expect.objectContaining({ model: 'test-model' }),
+    });
+    expect(formatErrorForState(error).body).toMatchObject({ traceId: 'trace-1' });
+  });
+
+  it('stores a fallback failure raised mid-stream with the error hook trace id', async () => {
+    const fallbackError = {
+      error: { message: 'Access to Anthropic models is not allowed for this account.' },
+      errorType: 'ProviderBizError',
+      provider: 'lobehub',
+    };
+    const { attempt, chat, handleChatStreamError } = createAttempt(async () => {});
+    chat.mockImplementationOnce(
+      async () =>
+        new Response(
+          new ReadableStream({
+            pull(controller) {
+              controller.error(fallbackError);
+            },
+          }),
+        ),
+    );
+
+    handleChatStreamError.mockImplementation(attachTraceIdLater);
+
+    await expect(attempt.execute()).rejects.toBe(fallbackError);
+    expect(handleChatStreamError).toHaveBeenCalledWith(fallbackError, expect.anything());
+    expect(formatErrorForState(fallbackError).body).toMatchObject({ traceId: 'trace-1' });
+  });
+
+  it('stores a plain stream read failure with the error hook trace id', async () => {
+    const readError = new TypeError('terminated');
+    const { attempt, chat, handleChatStreamError } = createAttempt(async () => {});
+    chat.mockImplementationOnce(
+      async () =>
+        new Response(
+          new ReadableStream({
+            pull(controller) {
+              controller.error(readError);
+            },
+          }),
+        ),
+    );
+    handleChatStreamError.mockImplementation(attachTraceIdLater);
+
+    await expect(attempt.execute()).rejects.toBe(readError);
+    expect(formatErrorForState(readError).body).toMatchObject({ traceId: 'trace-1' });
+  });
+
+  it('leaves errors thrown by chat() and empty completions to their own handlers', async () => {
+    const { attempt: rejected, handleChatStreamError: rejectedHook } = createAttempt(async () => {
+      throw new Error('upstream request failed');
+    });
+    await expect(rejected.execute()).rejects.toThrow('upstream request failed');
+    expect(rejectedHook).not.toHaveBeenCalled();
+
+    const { ModelEmptyError } = await import('@lobechat/model-runtime');
+    const emptyError = new ModelEmptyError();
+    const {
+      attempt: empty,
+      chat,
+      handleChatStreamError: emptyHook,
+    } = createAttempt(async () => {});
+    chat.mockImplementationOnce(
+      async () =>
+        new Response(
+          new ReadableStream({
+            pull(controller) {
+              controller.error(emptyError);
+            },
+          }),
+        ),
+    );
+    await expect(empty.execute()).rejects.toBe(emptyError);
+    expect(emptyHook).not.toHaveBeenCalled();
+  });
+
   it('salvages a natural-stop answer emitted only in reasoning', async () => {
     const { attempt } = createAttempt(async ({ callback }) => {
       await callback?.onThinking?.('Final answer from reasoning');
@@ -510,6 +615,20 @@ describe('ServerCallLlmAttempt', () => {
 
     await expect(attempt.execute()).rejects.toMatchObject({
       diagnostics: expect.objectContaining({ reasoningLength: 25 }),
+      errorType: 'ModelRefusal',
+    });
+    expect(recordModelCompletionFailureMock).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'refusal' }),
+    );
+  });
+
+  it('classifies a blank GLM sensitive-content stop as ModelRefusal', async () => {
+    const { attempt } = createAttempt(async ({ callback }) => {
+      await callback?.onCompletion?.({ finishReason: 'sensitive', text: '' });
+    });
+
+    await expect(attempt.execute()).rejects.toMatchObject({
+      diagnostics: expect.objectContaining({ finishReason: 'sensitive' }),
       errorType: 'ModelRefusal',
     });
     expect(recordModelCompletionFailureMock).toHaveBeenCalledWith(

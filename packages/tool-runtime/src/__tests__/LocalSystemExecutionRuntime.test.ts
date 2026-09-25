@@ -275,6 +275,158 @@ describe('LocalSystemExecutionRuntime.readFile', () => {
     expect(output.state?.images).toBeUndefined();
     expect(output.content).toContain('hello');
   });
+
+  // Regression: a default-window read used to render a bare `File: <path>`
+  // header with no hint that only the first 200 lines were returned, so the
+  // model re-read the file over and over to discover it was truncated. The
+  // service always reports the actual window (`loc`) and `totalLineCount`;
+  // a window that stops before EOF must open with a marker carrying both.
+  it('marks the returned window and total line count on truncated reads', async () => {
+    const service = createService({
+      readLocalFile: vi.fn().mockResolvedValue({
+        content: 'first 200 lines…',
+        fileType: 'txt',
+        filename: 'big.txt',
+        loc: [0, 200],
+        totalCharCount: 148_370,
+        totalLineCount: 2545,
+      }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    const output = await runtime.readFile({ path: '/tmp/big.txt' });
+
+    expect(output.content).toBe('(lines 1-200 of 2545)\n1 first 200 lines…');
+  });
+
+  it('omits the window marker when the window reaches the end of the file', async () => {
+    const service = createService({
+      readLocalFile: vi.fn().mockResolvedValue({
+        content: 'tail',
+        fileType: 'txt',
+        filename: 'big.txt',
+        loc: [2500, 2545],
+        totalCharCount: 148_370,
+        totalLineCount: 2545,
+      }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    const output = await runtime.readFile({ endLine: 2545, path: '/tmp/big.txt', startLine: 2500 });
+
+    expect(output.content).toBe('2501 tail');
+    expect(output.content).not.toContain('(lines');
+  });
+
+  it('prefixes each content line with its 1-based line number', async () => {
+    const service = createService({
+      readLocalFile: vi.fn().mockResolvedValue({
+        content: 'alpha\nbeta\ngamma',
+        fileType: 'txt',
+        filename: 'a.txt',
+        loc: [10, 13],
+        totalCharCount: 15,
+        totalLineCount: 13,
+      }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    const output = await runtime.readFile({ loc: [10, 13], path: '/tmp/a.txt' });
+
+    expect(output.content).toContain('11 alpha');
+    expect(output.content).toContain('12 beta');
+    expect(output.content).toContain('13 gamma');
+    // State keeps the raw content for UI rendering; only the agent-facing
+    // text carries the gutter.
+    expect(output.state?.content).toBe('alpha\nbeta\ngamma');
+  });
+
+  // Regression: when the service cut the content at its char cap, the window
+  // marker would claim coverage that was never delivered, silently skipping
+  // the window's tail. The embedded truncation warning already tells the
+  // model to narrow the range.
+  it('suppresses the window marker when the service truncated the content', async () => {
+    const service = createService({
+      readLocalFile: vi.fn().mockResolvedValue({
+        content:
+          'partial\n[content truncated: response was 600000 chars, kept first 500000. Use a smaller line range or grep to narrow down.]',
+        fileType: 'txt',
+        filename: 'big.txt',
+        loc: [0, 1000],
+        totalCharCount: 3_000_000,
+        totalLineCount: 2545,
+        truncated: true,
+      }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    const output = await runtime.readFile({ path: '/tmp/big.txt' });
+
+    expect(output.content).not.toContain('(lines');
+    expect(output.content).toContain('content truncated');
+    expect(output.state?.truncated).toBe(true);
+  });
+
+  // The cloud sandbox reader returns no `loc` and its startLine/endLine args
+  // are 1-based inclusive; the fallback window must be normalized before the
+  // formatter's end-exclusive math, or a full 200-line read is labeled
+  // "(lines 1-199 of ...)" and the gutter contradicts the marker.
+  it('normalizes a loc-less 1-based inclusive window (cloud sandbox shape)', async () => {
+    const service = createService({
+      readLocalFile: vi.fn().mockResolvedValue({
+        content: 'some lines',
+        fileType: 'txt',
+        filename: 'big.txt',
+        totalCharCount: 148_370,
+        totalLineCount: 2545,
+      }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    const output = await runtime.readFile({ endLine: 200, path: '/tmp/big.txt', startLine: 1 });
+
+    expect(output.content).toContain('(lines 1-200 of 2545)');
+    expect(output.content).toContain('1 some lines');
+  });
+
+  // The cloud manifest makes startLine/endLine independently optional: an
+  // endLine-only read stops mid-file and must still get the window marker,
+  // a startLine-only read runs to EOF and must not.
+  it('marks an endLine-only loc-less read (cloud sandbox shape)', async () => {
+    const service = createService({
+      readLocalFile: vi.fn().mockResolvedValue({
+        content: 'some lines',
+        fileType: 'txt',
+        filename: 'big.txt',
+        totalCharCount: 148_370,
+        totalLineCount: 2545,
+      }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    const output = await runtime.readFile({ endLine: 200, path: '/tmp/big.txt' });
+
+    expect(output.content).toContain('(lines 1-200 of 2545)');
+    expect(output.content).toContain('1 some lines');
+  });
+
+  it('does not mark a startLine-only loc-less read that runs to EOF', async () => {
+    const service = createService({
+      readLocalFile: vi.fn().mockResolvedValue({
+        content: 'tail',
+        fileType: 'txt',
+        filename: 'big.txt',
+        totalCharCount: 148_370,
+        totalLineCount: 2545,
+      }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    const output = await runtime.readFile({ path: '/tmp/big.txt', startLine: 2001 });
+
+    expect(output.content).not.toContain('(lines');
+    expect(output.content).toContain('2001 tail');
+  });
 });
 
 describe('LocalSystemExecutionRuntime.executeToolCall — working directory anchoring', () => {

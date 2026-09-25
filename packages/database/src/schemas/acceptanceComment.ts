@@ -2,6 +2,7 @@ import type {
   AcceptanceCommentAnchorType,
   AcceptanceCommentAttachmentRef,
   AcceptanceCommentKind,
+  AcceptanceCommentSource,
   AcceptanceReviewAnnotation,
   DocumentCommentJson,
 } from '@lobechat/types';
@@ -97,6 +98,20 @@ export const acceptanceComments = pgTable(
      * an attachment an exhibit rather than prose.
      */
     attachments: jsonb('attachments').$type<AcceptanceCommentAttachmentRef[]>(),
+    /**
+     * The product page a remark was made on, when it came through the embedded
+     * review toolbar rather than the viewer: URL, element, what the page
+     * reported, product-specific facts. Null for everything written in the
+     * viewer. Kept as its own column rather than folded into `content` so the
+     * viewer can link the page and the repair agent reads it as data.
+     */
+    source: jsonb('source').$type<AcceptanceCommentSource>(),
+    /**
+     * Open bag for per-remark facts that do not warrant a column of their own
+     * yet, so a new kind of annotation does not need a migration. Server-written
+     * only; nothing reads it as a contract until a field earns a real column.
+     */
+    metadata: jsonb('metadata').$type<Record<string, unknown>>(),
     /** Client-generated idempotency key for retried creates. */
     clientId: text('client_id').notNull(),
 

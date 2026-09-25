@@ -1,5 +1,6 @@
 import type { AgentInterventionRequestData } from '@lobechat/agent-gateway-client';
 
+import { isEchoedErrorText } from '../errors/echo';
 import type { SubagentIntent, SubagentReduceCtx } from '../subagentCoordinator';
 import { getEventScope, reduceSubagentRuns } from '../subagentCoordinator';
 import type { ToolCallPayload } from '../types';
@@ -57,8 +58,6 @@ const copyState = (s: MainAgentRunState): MainAgentRunState => ({
 
 // ─── Echo suppression (pure; mirrors both engines' shouldSuppressTerminalErrorEcho) ───
 
-const normalizeErrorText = (value?: string) => value?.replaceAll(/\s+/g, ' ').trim();
-
 /**
  * CC sometimes streams the error string into `content` BEFORE emitting the
  * structured error event (e.g. AuthRequired echoes the stderr line). Only
@@ -72,9 +71,7 @@ const shouldSuppressTerminalErrorEcho = (content: string, errorData: unknown): b
     { clearEchoedContent?: boolean; code?: string; message?: string; stderr?: string } | undefined;
   // Keep in sync with the interpreters' ECHO_TRIGGER_CODES.
   if (!body?.clearEchoedContent && body?.code !== 'AuthRequired') return false;
-  const normalizedContent = normalizeErrorText(content);
-  const normalizedError = normalizeErrorText(body?.stderr || body?.message);
-  return !!normalizedContent && !!normalizedError && normalizedContent === normalizedError;
+  return isEchoedErrorText(content, body?.stderr || body?.message);
 };
 
 // ─── Subagent delegation ───
@@ -501,6 +498,32 @@ const reduceTurnMetadata = (state: MainAgentRunState, data: any): ReduceResult =
   };
 };
 
+/**
+ * `visible_output_end` — the CLI finished its visible reply, but the run may
+ * stay open (CC SDK mode keeps the transport alive for background tasks, so
+ * the terminal flush can land minutes later). The UI already lets the user
+ * send a follow-up at this point, and that send replaces the store with the
+ * server's rows — so the final step's text must be durable NOW, or the prior
+ * answer renders empty until a refresh.
+ *
+ * Accumulators are kept, not reset: the later terminal flush rewrites the same
+ * content idempotently, and a background-task turn opens a new step through
+ * `openTurn` as usual.
+ */
+const reduceVisibleOutputEnd = (state: MainAgentRunState): ReduceResult => {
+  if (!state.accContent && !state.accReasoning) return { intents: [], state };
+
+  const flush: Record<string, any> = {};
+  if (state.accContent) flush.content = state.accContent;
+  if (state.accReasoning) flush.reasoning = state.accReasoning;
+  if (state.turnModel) flush.model = state.turnModel;
+  if (state.turnProvider) flush.provider = state.turnProvider;
+  return {
+    intents: [{ kind: 'persistAssistant', messageId: state.currentAssistantId, ...flush }],
+    state,
+  };
+};
+
 const reduceTerminal = (
   state: MainAgentRunState,
   event: { data?: any; type?: string },
@@ -581,6 +604,9 @@ export const reduce = (
     case 'step_complete': {
       if (data?.phase === 'turn_metadata') return reduceTurnMetadata(state, data);
       return { intents: [], state };
+    }
+    case 'visible_output_end': {
+      return reduceVisibleOutputEnd(state);
     }
     case 'agent_runtime_end':
     case 'error': {

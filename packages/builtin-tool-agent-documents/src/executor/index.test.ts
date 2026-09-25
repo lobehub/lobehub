@@ -5,7 +5,7 @@ import { AgentDocumentsExecutionRuntime } from '../ExecutionRuntime';
 import { AgentDocumentsApiName } from '../types';
 import { AgentDocumentsExecutor } from './index';
 
-const makeExecutor = (onDocumentsMutated: () => void) => {
+const makeExecutor = (onDocumentsMutated: (params: { documentId?: string }) => void) => {
   // onAfterCall only reaches runtime.notifyMutated → options.onDocumentsMutated,
   // so the service methods are never touched here.
   const runtime = new AgentDocumentsExecutionRuntime({} as never, { onDocumentsMutated });
@@ -28,7 +28,7 @@ describe('AgentDocumentsExecutor.onAfterCall', () => {
 
     await executor.onAfterCall(ctx(AgentDocumentsApiName.createDocument, true));
 
-    expect(onDocumentsMutated).toHaveBeenCalledTimes(1);
+    expect(onDocumentsMutated).toHaveBeenCalledWith({ documentId: undefined });
   });
 
   it.each([
@@ -44,6 +44,42 @@ describe('AgentDocumentsExecutor.onAfterCall', () => {
     expect(onDocumentsMutated).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    AgentDocumentsApiName.replaceDocumentContent,
+    AgentDocumentsApiName.modifyNodes,
+    AgentDocumentsApiName.renameDocument,
+  ])('passes the written documentId for %s so the open editor revalidates', async (apiName) => {
+    const onDocumentsMutated = vi.fn();
+    const executor = makeExecutor(onDocumentsMutated);
+
+    await executor.onAfterCall({
+      ...ctx(apiName, true),
+      result: { state: { documentId: 'doc-1' }, success: true },
+    });
+
+    expect(onDocumentsMutated).toHaveBeenCalledTimes(1);
+    expect(onDocumentsMutated).toHaveBeenCalledWith({ documentId: 'doc-1' });
+  });
+
+  it.each([
+    AgentDocumentsApiName.removeDocument,
+    AgentDocumentsApiName.copyDocument,
+    AgentDocumentsApiName.createDocument,
+  ])(
+    'drops the documentId for %s so a deleted or unopened row is never revalidated',
+    async (apiName) => {
+      const onDocumentsMutated = vi.fn();
+      const executor = makeExecutor(onDocumentsMutated);
+
+      await executor.onAfterCall({
+        ...ctx(apiName, true),
+        result: { state: { documentId: 'doc-1' }, success: true },
+      });
+
+      expect(onDocumentsMutated).toHaveBeenCalledWith({ documentId: undefined });
+    },
+  );
+
   it('skips notification when the call failed', async () => {
     const onDocumentsMutated = vi.fn();
     const executor = makeExecutor(onDocumentsMutated);
@@ -53,10 +89,14 @@ describe('AgentDocumentsExecutor.onAfterCall', () => {
     expect(onDocumentsMutated).not.toHaveBeenCalled();
   });
 
-  it('skips notification for read-only / content-only calls that leave the list unchanged', async () => {
+  it('skips notification for read-only calls and content writes without a documentId', async () => {
     const onDocumentsMutated = vi.fn();
     const executor = makeExecutor(onDocumentsMutated);
 
+    await executor.onAfterCall({
+      ...ctx(AgentDocumentsApiName.readDocument, true),
+      result: { state: { documentId: 'doc-1' }, success: true },
+    });
     await executor.onAfterCall(ctx(AgentDocumentsApiName.listDocuments, true));
     await executor.onAfterCall(ctx(AgentDocumentsApiName.replaceDocumentContent, true));
 

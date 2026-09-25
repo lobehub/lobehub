@@ -1,10 +1,9 @@
 /**
  * Optional business hook for deployments that meter shared-agent usage.
  *
- * A shared agent runs under its CREATOR's identity, so every visitor turn is
- * billed to the creator. `AgentShareConfig.monthlySpendLimit` lets the creator
- * bound that exposure; this slot is where a deployment that actually tracks
- * spend decides whether the next visitor run may start.
+ * A shared agent runs under its owning billing scope. Personal shares charge
+ * the creator; Workspace shares charge the Workspace without consuming a
+ * member quota. `AgentShareConfig.monthlySpendLimit` bounds that exposure.
  *
  * The slot is a pure admission check called BEFORE any topic/message row is
  * created — the caller is responsible for turning a denial into a
@@ -25,6 +24,8 @@ export interface AgentShareSpendGateParams {
   shareId: string;
   /** The signed-in visitor asking to run the agent. */
   visitorUserId: string;
+  /** Owning Workspace for a Workspace share; absent for a personal share. */
+  workspaceId?: string;
 }
 
 export interface AgentShareSpendGateResult {
@@ -56,6 +57,8 @@ export async function checkAgentShareSpendAllowance(
 export async function getAgentShareMonthlySpend(_params: {
   agentId: string;
   ownerUserId: string;
+  shareId: string;
+  workspaceId?: string;
 }): Promise<number | null> {
   return null;
 }

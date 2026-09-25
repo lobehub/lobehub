@@ -113,29 +113,66 @@ const readCappedBody = async (
 };
 
 /**
- * Download a URL into memory, refusing anything past `limit` bytes. Returns
- * `undefined` on any failure so callers can skip one item without aborting the
- * whole batch.
+ * Outcome of materializing an attachment: the bytes, or WHY there are none.
+ *
+ * The senders used to get a bare `undefined` here and log it on `debug()`, so
+ * a broken download was indistinguishable from a missing source and invisible
+ * in production. The reason now rides back to the delivery boundary, where it
+ * reaches the logs and the agent's tool result.
  */
-export const fetchCappedBuffer = async (
+export type LoadAttachmentResult =
+  { buffer: Buffer; error?: undefined } | { buffer?: undefined; error: string };
+
+/**
+ * `fetch failed` on its own says nothing — undici puts the diagnosis on
+ * `cause`. Its `code` (`ECONNREFUSED`, `ENOTFOUND`, `ERR_INVALID_IP_ADDRESS`)
+ * is preferred over its message: this text ends up in the agent's tool result
+ * and in a production log line, and a system error message carries the
+ * resolved `host:port` — for a trusted origin that is our own storage address.
+ */
+const describeError = (error: unknown): string => {
+  if (!(error instanceof Error)) return String(error);
+  const cause = (error as Error & { cause?: unknown }).cause;
+  let causeText: string | undefined;
+  if (cause instanceof Error) {
+    const code = (cause as Error & { code?: unknown }).code;
+    causeText = typeof code === 'string' && code ? code : cause.message;
+  } else if (cause !== undefined) {
+    causeText = String(cause);
+  }
+  return causeText ? `${error.message} (${causeText})` : error.message;
+};
+
+/**
+ * Download a URL into memory, refusing anything past `limit` bytes, and say
+ * why when it cannot. Never throws, so callers can skip one item without
+ * aborting the whole batch.
+ */
+export const fetchCappedBufferWithDetail = async (
   url: string,
   {
     allowConfiguredOrigins = false,
     limit = MAX_IN_MEMORY_ATTACHMENT_BYTES,
     timeoutMs = DEFAULT_DOWNLOAD_TIMEOUT_MS,
   }: LoadAttachmentOptions = {},
-): Promise<Buffer | undefined> => {
+): Promise<LoadAttachmentResult> => {
   try {
     // Caller-supplied URLs reach here (see `botMessage`'s `fetchUrl` input), so
     // the fetch must refuse anything pointing inside the network.
     const fetched = await fetchPublicUrl(url, timeoutMs, { allowConfiguredOrigins });
-    if (!fetched) return undefined;
+    if (!fetched) {
+      log('fetchCappedBuffer: URL refused for %s', redactUrlForLog(url));
+      return {
+        error:
+          'URL refused: not a fetchable public HTTP(S) URL (unparseable, carries credentials, resolves to a private address, or redirects too often)',
+      };
+    }
 
     const { response } = fetched;
     try {
       if (!response.ok) {
         log('fetchCappedBuffer: HTTP %d for %s', response.status, redactUrlForLog(url));
-        return undefined;
+        return { error: `HTTP ${response.status}` };
       }
 
       // Reject on the advertised size before a single byte is buffered. The
@@ -149,7 +186,7 @@ export const fetchCappedBuffer = async (
           limit,
           redactUrlForLog(url),
         );
-        return undefined;
+        return { error: `content-length ${declared} exceeds the ${limit} byte cap` };
       }
 
       // A trustworthy length lets the read allocate exactly once; a missing or
@@ -159,9 +196,11 @@ export const fetchCappedBuffer = async (
         limit,
         Number.isFinite(declared) ? declared : undefined,
       );
-      if (!buffer)
+      if (!buffer) {
         log('fetchCappedBuffer: %s exceeded the %d byte cap', redactUrlForLog(url), limit);
-      return buffer;
+        return { error: `body exceeded the ${limit} byte cap or the stream failed` };
+      }
+      return { buffer };
     } finally {
       // Only safe once the body has been read: disposing earlier would abort
       // the stream we are still consuming.
@@ -169,35 +208,45 @@ export const fetchCappedBuffer = async (
     }
   } catch (error) {
     log('fetchCappedBuffer: fetch failed for %s: %O', redactUrlForLog(url), error);
-    return undefined;
+    return { error: `fetch failed: ${describeError(error)}` };
   }
 };
+
+/**
+ * Download a URL into memory, refusing anything past `limit` bytes. Returns
+ * `undefined` on any failure so callers can skip one item without aborting the
+ * whole batch. Prefer `fetchCappedBufferWithDetail` where the reason matters.
+ */
+export const fetchCappedBuffer = async (
+  url: string,
+  options: LoadAttachmentOptions = {},
+): Promise<Buffer | undefined> => (await fetchCappedBufferWithDetail(url, options)).buffer;
 
 /**
  * Materialize an attachment's bytes: inline base64 first (no round-trip), then
  * `fetchUrl`. Both sources honour the same cap — refusing a 60MB download while
  * happily decoding 60MB of inline base64 would defeat the point.
  *
- * Returns `undefined` when no source is usable so the caller can skip the item
- * without aborting the whole batch.
+ * Reports WHY when no source is usable, so the sender can carry the reason to
+ * the delivery boundary instead of silently skipping the item.
  */
-export const loadAttachmentBuffer = async (
+export const loadAttachmentBufferWithDetail = async (
   attachment: LoadableAttachment,
   options: LoadAttachmentOptions = {},
-): Promise<Buffer | undefined> => {
+): Promise<LoadAttachmentResult> => {
   const limit = options.limit ?? MAX_IN_MEMORY_ATTACHMENT_BYTES;
 
   if (attachment.data) {
     const buffer = Buffer.from(attachment.data, 'base64');
-    if (buffer.length <= limit) return buffer;
+    if (buffer.length <= limit) return { buffer };
     // The inline copy IS the attachment, so a URL for it would be just as
     // large — skip the pointless download.
     log('loadAttachmentBuffer: %d inline bytes exceeds the %d byte cap', buffer.length, limit);
-    return undefined;
+    return { error: `${buffer.length} inline bytes exceed the ${limit} byte cap` };
   }
 
   if (attachment.fetchUrl)
-    return fetchCappedBuffer(attachment.fetchUrl, {
+    return fetchCappedBufferWithDetail(attachment.fetchUrl, {
       ...options,
       // Provenance rides on the attachment, never on the call site: only a URL
       // the server built from an owned record may relax the guard.
@@ -205,5 +254,15 @@ export const loadAttachmentBuffer = async (
       limit,
     });
 
-  return undefined;
+  return { error: 'attachment carries neither data nor fetchUrl' };
 };
+
+/**
+ * `loadAttachmentBufferWithDetail` without the reason: `undefined` when no
+ * source is usable, so the caller can skip the item without aborting the batch.
+ */
+export const loadAttachmentBuffer = async (
+  attachment: LoadableAttachment,
+  options: LoadAttachmentOptions = {},
+): Promise<Buffer | undefined> =>
+  (await loadAttachmentBufferWithDetail(attachment, options)).buffer;

@@ -2,9 +2,10 @@ import type { AgentRuntimeContext } from '@lobechat/agent-runtime';
 import { extractActivatedToolIdsFromMessages } from '@lobechat/agent-runtime';
 import { builtinSkills } from '@lobechat/builtin-skills';
 import { getShellSyntaxGuidance } from '@lobechat/builtin-tool-local-system';
-import type { ProjectInstructionFile } from '@lobechat/context-engine';
-import { buildExpertiseContextSnapshot, SkillEngine } from '@lobechat/context-engine';
+import type { OperationSkillSet, ProjectInstructionFile } from '@lobechat/context-engine';
+import { buildExpertiseContextSnapshot } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
+import { assembleSkillPool } from '@lobechat/mecha';
 import { buildTaskManagerDefaultsPrompt, resourcesTreePrompt } from '@lobechat/prompts';
 import type { LobeAgentAgencyConfig, WorkingDirConfig, WorkspaceInitResult } from '@lobechat/types';
 import {
@@ -23,7 +24,6 @@ import type { MessageModel } from '@/database/models/message';
 import type { TopicModel } from '@/database/models/topic';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import { isDeviceCapablePlan } from '@/helpers/executionTarget';
-import { shouldEnableBuiltinSkill } from '@/helpers/skillFilters';
 import type { ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
 import type { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { deviceGateway } from '@/server/services/deviceGateway';
@@ -31,7 +31,7 @@ import { FileService } from '@/server/services/file';
 
 import { pruneRegeneratedBranch } from '../pruneRegeneratedBranch';
 import { resolveDeviceWorkingDirectoryConfig } from '../resolveDeviceWorkingDirectory';
-import { applyShareGateToToolSet, filterPluginsByShareGate } from '../shareGate';
+import { applyShareGateToToolSet, filterSkillsByShareGate } from '../shareGate';
 import type { ExecRunContext, InternalExecAgentParams, ResolvedWorkspaceInit } from '../types';
 import { isWorkspaceCacheFresh, upsertWorkspaceScan } from '../workspaceInitCache';
 import type { ToolDiscoveryResult } from './toolDiscovery';
@@ -196,7 +196,7 @@ export interface OperationPrepResult {
   deviceSystemInfo: Record<string, string>;
   expertise?: Awaited<ReturnType<typeof buildExpertiseContextSnapshot>>;
   initialContext: AgentRuntimeContext;
-  operationSkillSet?: ReturnType<SkillEngine['generate']>;
+  operationSkillSet?: OperationSkillSet;
   /**
    * A project's root instruction files. Run context, not agent config — it
    * travels on the operation like `expertise` does, and the context engine
@@ -395,14 +395,10 @@ export const prepareOperation = async (
   ): Promise<Record<string, string>> => {
     if (!deviceId) return {};
     try {
-      // Scope the gateway lookup to the principal that owns the connection:
-      // workspace devices need workspaceId; personal devices (including a
-      // workspace run routed to the caller's own machine) must not.
-      const systemInfo = await deviceGateway.queryDeviceSystemInfo(
-        deps.userId,
-        deviceId,
-        activeDeviceScope === 'workspace' ? deps.workspaceId : undefined,
-      );
+      // Tool discovery already asked this device for the same answer earlier
+      // in the send window, so the run's fact reader serves it from there
+      // (it also owns the personal / workspace scoping of the lookup).
+      const systemInfo = await ctx.runFacts.deviceSystemInfo(deviceId, activeDeviceScope);
       if (!systemInfo) return {};
       const device = onlineDevices.find((d) => d.deviceId === deviceId);
       log('execAgent: fetched device system info for %s', deviceId);
@@ -801,62 +797,58 @@ export const prepareOperation = async (
       );
     }
 
-    // Precedence on name collision: project > db > agent-skills > builtin.
-    // Agent-skills carry the `agent-skills:` prefix in their `name`, so they
-    // can only collide with each other — but we still dedupe by name to keep
-    // a single shape for the SkillEngine input.
+    // Precedence, name dedupe, the disabled drop, the share allowlist and the
+    // device-only builtin gate are the shared rules in `@lobechat/mecha`; this
+    // pipeline supplies the four sources and the run's facts.
     //
-    // Disabled skills are dropped here, not just rule-gated later: this
-    // `skills` array is the sole candidate pool SkillEngine/SkillResolver
-    // build `<available_skills>` from AND the pool `activateSkill` resolves
-    // against, so a disabled identifier absent here is neither listed nor
-    // activatable — mirrors the tool-manifest treatment above (installedPlugins/
-    // additionalManifests), which this array had never received.
-    //
-    // Shared runs only see skills allowed by the share configuration. The
-    // candidate pool must be trimmed here rather than left to
-    // `SkillEngine.generate`, which annotates activation state on its input
-    // rather than shrinking it. Reuse `filterPluginsByShareGate` (id-list
-    // intersection, not tool-specific) to keep this pool the single
-    // enforcement point — an empty/missing allowlist collapses it to nothing.
+    // A shared run only sees skills its share configuration allows —
+    // `shareConfig.skillGrants`, the creator's explicit per-skill list, NOT the
+    // tool picker (`filterSkillsByShareGate`). The pool is the FIRST
+    // enforcement point, not the only one: `activateSkill` takes a
+    // model-supplied name, so the skill runtime re-checks the same grant at
+    // load time.
     const shareAllowedSkillIds = shareGate
-      ? new Set(
-          filterPluginsByShareGate(
-            [...projectMetas, ...dbMetas, ...agentSkillMetas, ...builtinMetas].map(
-              (skill) => skill.identifier,
-            ),
-            shareGate,
+      ? filterSkillsByShareGate(
+          [...projectMetas, ...dbMetas, ...agentSkillMetas, ...builtinMetas].map(
+            (skill) => skill.identifier,
           ),
+          shareGate,
         )
       : undefined;
-    const seenNames = new Set<string>();
-    const skills = [...projectMetas, ...dbMetas, ...agentSkillMetas, ...builtinMetas].filter(
-      (skill) => {
-        if (disabledPluginIds.includes(skill.identifier)) return false;
-        if (shareAllowedSkillIds && !shareAllowedSkillIds.has(skill.identifier)) return false;
-        if (seenNames.has(skill.name)) return false;
-        seenNames.add(skill.name);
-        return true;
+
+    // Whether a skill is PINNED is the agent's own configuration; the share
+    // only decides whether the visitor may reach it. `agentPlugins` has already
+    // been narrowed by the TOOL grants (`filterPluginsByShareGate` in
+    // `toolDiscovery`), which drops a skill the creator granted as a skill
+    // rather than as a tool — leaving it un-pinned for the visitor (no content
+    // injection) and, under `manual` mode, dropped from the pool entirely. Add
+    // back exactly the ids that are both genuinely pinned on the agent AND
+    // allowed by this share's skill grants; nothing else widens.
+    const shareEnabledSkillIds = shareAllowedSkillIds?.filter((id) => pinnedSkillIds.has(id)) ?? [];
+
+    // Device-only builtin skills are gated on the run's execution plan, not
+    // the compile-time `isDesktop` constant (always false on the server). Use
+    // the device-CAPABLE plan rather than `activeDeviceId`: a
+    // `device-unrouted` run lets the model pick a device mid-run, and this
+    // skill set is built once per operation, so gating on the routed device
+    // would hide the skill forever in those runs. Activation and loading
+    // apply the same plan gate via `ToolExecutionContext.deviceCapable`; only
+    // command execution is gated at the device tool layer.
+    operationSkillSet = assembleSkillPool(
+      {
+        agentSkills: agentSkillMetas,
+        builtin: builtinMetas,
+        db: dbMetas,
+        project: projectMetas,
+      },
+      {
+        canExecuteOnDevice: executionPlan ? isDeviceCapablePlan(executionPlan) : false,
+        disabledIds: disabledPluginIds,
+        enabledPluginIds: [...new Set([...(agentPlugins ?? []), ...shareEnabledSkillIds])],
+        shareAllowedIds: shareAllowedSkillIds,
+        skillActivateMode: agentConfig.chatConfig?.skillActivateMode,
       },
     );
-
-    // Device-only builtin skills (agent-browser) are gated on the run's
-    // execution plan, not the compile-time `isDesktop` constant (always false
-    // on the server). Gate the static `<available_skills>` listing on the
-    // device-CAPABLE plan rather than `activeDeviceId`: `device-unrouted`
-    // runs let the model pick a device mid-run, and this skill set is built
-    // once per operation — gating on `activeDeviceId` would hide the skill
-    // forever in those runs. Activation/loading apply the same plan gate via
-    // `ToolExecutionContext.deviceCapable`; only actual command execution is
-    // gated at the device tool layer.
-    const skillEngine = new SkillEngine({
-      enableChecker: (skill) =>
-        shouldEnableBuiltinSkill(skill.identifier, {
-          canExecuteOnDevice: executionPlan ? isDeviceCapablePlan(executionPlan) : false,
-        }),
-      skills,
-    });
-    operationSkillSet = skillEngine.generate(agentPlugins ?? []);
   } catch (error) {
     log('execAgent: failed to build operationSkillSet: %O', error);
   }

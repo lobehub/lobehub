@@ -1,7 +1,8 @@
 import type { LarkApiClient } from '@lobechat/chat-adapter-feishu';
 import debug from 'debug';
 
-import { loadAttachmentBuffer } from '../loadAttachmentBuffer';
+import type { AttachmentFailure, AttachmentSendResult } from '../attachmentDelivery';
+import { loadAttachmentBufferWithDetail } from '../loadAttachmentBuffer';
 import type { BotMessageAttachment } from '../types';
 
 const log = debug('bot-platform:feishu:send-attachments');
@@ -52,20 +53,28 @@ const fallbackFilename = (att: BotMessageAttachment, index: number): string => {
  *
  * Lark/Feishu has no single "text + media" composite message, so the caller
  * sends the text leg through a separate `sendMessage` (or `replyMessage`)
- * first. Single-attachment failures are logged and skipped so the rest
- * still ship.
+ * first. Single-attachment failures are skipped so the rest still ship, and
+ * reported back so the caller can tell the user which ones never landed.
  */
 export const sendFeishuAttachments = async (
   api: LarkApiClient,
   chatId: string,
   attachments: BotMessageAttachment[],
-): Promise<number> => {
+): Promise<AttachmentSendResult> => {
   let delivered = 0;
+  const failures: AttachmentFailure[] = [];
   for (const [index, att] of attachments.entries()) {
     try {
-      const buffer = await loadAttachmentBuffer(att);
+      const loaded = await loadAttachmentBufferWithDetail(att);
+      const buffer = loaded.buffer;
       if (!buffer) {
-        log('sendFeishuAttachments: skipping attachment with no resolvable bytes');
+        log('sendFeishuAttachments: no resolvable bytes for "%s": %s', att.name, loaded.error);
+        failures.push({
+          detail: loaded.error,
+          name: att.name,
+          reason: 'source-unavailable',
+          type: att.type,
+        });
         continue;
       }
       const filename = fallbackFilename(att, index);
@@ -87,7 +96,13 @@ export const sendFeishuAttachments = async (
         att.name ?? '(unnamed)',
         error,
       );
+      failures.push({
+        detail: error instanceof Error ? error.message : String(error),
+        name: att.name,
+        reason: 'upload-failed',
+        type: att.type,
+      });
     }
   }
-  return delivered;
+  return { delivered, failures };
 };

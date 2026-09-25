@@ -10,6 +10,10 @@ import {
   getGitWorkingTreePatches,
   getGitWorkingTreeStatus,
   getLinkedPullRequest,
+  getPullRequestActivity,
+  getPullRequestDetail,
+  getPullRequestMergeContext,
+  type GitPullRequestAction,
   listGitBranches,
   listGitRemoteBranches,
   listGitWorktrees,
@@ -18,10 +22,14 @@ import {
   removeGitWorktree,
   renameGitBranch,
   revertGitFile,
+  runPullRequestAction,
 } from '@lobechat/local-file-shell/git';
 
 import { getClaudeCodeQuota, type GetClaudeCodeQuotaParams } from './claudeCodeQuota';
+import { getCodexQuota, type GetCodexQuotaParams } from './codexQuota';
 import { defaultCopyAssetForPublish, defaultReadExternalAssetForPublish } from './filePreview';
+import { getKimiCodeQuota, type GetKimiCodeQuotaParams } from './kimiCodeQuota';
+import { listListeningPorts, type ListListeningPortsParams } from './listeningPorts';
 import { defaultListProjectDirectory } from './projectFileIndex';
 import { prepareSkillDirectory } from './skillDirectory';
 import type {
@@ -54,6 +62,8 @@ export const DEVICE_RPC_METHODS = [
   'initWorkspace',
   'listHeterogeneousAgentModels',
   'getClaudeCodeQuota',
+  'getCodexQuota',
+  'getKimiCodeQuota',
   'listProjectSkills',
   'prepareSkillDirectory',
   'browseDirectory',
@@ -69,6 +79,10 @@ export const DEVICE_RPC_METHODS = [
   'writeLocalFile',
   'getGitBranch',
   'getLinkedPullRequest',
+  'getPullRequestDetail',
+  'getPullRequestActivity',
+  'getPullRequestMergeContext',
+  'runPullRequestAction',
   'getGitWorkingTreeStatus',
   'getGitWorkingTreeFiles',
   'getGitWorkingTreePatches',
@@ -85,6 +99,7 @@ export const DEVICE_RPC_METHODS = [
   'pullGitBranch',
   'pushGitBranch',
   'revertGitFile',
+  'listListeningPorts',
 ] as const;
 
 export type DeviceRpcMethod = (typeof DEVICE_RPC_METHODS)[number];
@@ -136,12 +151,24 @@ export const executeDeviceRpc = async (
       return getClaudeCodeQuota(params as GetClaudeCodeQuotaParams);
     }
 
+    case 'getCodexQuota': {
+      return getCodexQuota(params as GetCodexQuotaParams);
+    }
+
+    case 'getKimiCodeQuota': {
+      return getKimiCodeQuota(params as GetKimiCodeQuotaParams);
+    }
+
     case 'listProjectSkills': {
       return listProjectSkills(params as ListProjectSkillsParams, deps);
     }
 
     case 'prepareSkillDirectory': {
       return prepareSkillDirectory(params as PrepareSkillDirectoryParams, deps);
+    }
+
+    case 'listListeningPorts': {
+      return listListeningPorts(params as ListListeningPortsParams);
     }
 
     case 'browseDirectory': {
@@ -199,6 +226,31 @@ export const executeDeviceRpc = async (
     case 'getLinkedPullRequest': {
       return getLinkedPullRequest(
         params as { branch: string; path: string; pullRequestNumber?: number },
+      );
+    }
+
+    case 'getPullRequestDetail': {
+      return getPullRequestDetail(params as { coreOnly?: boolean; number: number; path: string });
+    }
+    case 'getPullRequestActivity': {
+      return getPullRequestActivity(params as { number: number; path: string });
+    }
+
+    case 'getPullRequestMergeContext': {
+      return getPullRequestMergeContext(
+        params as {
+          baseRefName: string;
+          headRefOid: string;
+          number: number;
+          path: string;
+          repo: { name: string; owner: string };
+        },
+      );
+    }
+
+    case 'runPullRequestAction': {
+      return runPullRequestAction(
+        params as { action: GitPullRequestAction; number: number; path: string },
       );
     }
 

@@ -14,6 +14,7 @@ import {
   type SkillRuntimeService,
   SkillsExecutionRuntime,
 } from '@lobechat/builtin-tool-skills/executionRuntime';
+import { resolveShareAllowedSkillIds } from '@lobechat/const';
 import {
   type BuiltinSkill,
   getDisabledPluginIds,
@@ -114,6 +115,8 @@ class SkillServerRuntimeService implements SkillRuntimeService {
   private workspaceId?: string;
   private device?: SkillDeviceExecution;
   private disabledSkillIds: Set<string>;
+  private isSkillGranted?: (identifier: string) => boolean;
+  private shareVisitorBlocked: boolean;
 
   constructor(options: {
     agentId?: string;
@@ -127,9 +130,17 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     disabledSkillIds?: Set<string>;
     fileModel: FileModel;
     fileService: FileService;
+    /**
+     * Agent Share only: answers "may this visitor reach the skill with this
+     * identifier". Absent on a creator's own run, where the creator reaches
+     * their whole catalog by definition.
+     */
+    isSkillGranted?: (identifier: string) => boolean;
     marketService: MarketService;
     resourceService: SkillResourceService;
     serverDB: LobeChatDatabase;
+    /** Agent Share only: `lh` must not mint a creator-scoped token for a visitor. */
+    shareVisitorBlocked?: boolean;
     skillModel: AgentSkillModel;
     topicId?: string;
     userId: string;
@@ -147,20 +158,46 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     this.workspaceId = options.workspaceId;
     this.device = options.device;
     this.disabledSkillIds = options.disabledSkillIds ?? new Set();
+    this.isSkillGranted = options.isSkillGranted;
+    this.shareVisitorBlocked = options.shareVisitorBlocked ?? false;
   }
 
-  findAll = (): Promise<{ data: SkillListItem[]; total: number }> => {
-    return this.skillModel.findAll();
+  /**
+   * The one place that decides whether a resolved DB skill may be opened at
+   * all. Both rules are opt-outs from the creator's own catalog, applied
+   * together so no lookup path can honor one and miss the other:
+   *
+   * - `disabledSkillIds` — the agent's own tri-state (`agents.plugins`);
+   * - `isSkillGranted` — an Agent Share visitor's per-skill allowlist
+   *   (`shareConfig.skillGrants`). Absent for a creator's own run.
+   *
+   * This runs on RESOLVED rows, not on the caller's argument, because
+   * `activateSkill` / `readReference` take a model-supplied NAME: only the row
+   * carries the identifier the grant is written against.
+   */
+  private isSkillReachable = (identifier: string): boolean =>
+    !this.disabledSkillIds.has(identifier) && (this.isSkillGranted?.(identifier) ?? true);
+
+  findAll = async (): Promise<{ data: SkillListItem[]; total: number }> => {
+    const result = await this.skillModel.findAll();
+    if (!this.isSkillGranted) return result;
+
+    // A share visitor must not learn the creator's catalog. This list is not
+    // just an internal lookup: `activateSkill` echoes it back in its
+    // not-found message ("Available skills: ..."), so an unfiltered read here
+    // hands every skill name and description to anyone with the link.
+    const data = result.data.filter((skill) => this.isSkillReachable(skill.identifier));
+    return { data, total: data.length };
   };
 
   findById = async (id: string): Promise<SkillItem | undefined> => {
     const skill = await this.skillModel.findById(id);
-    return skill && this.disabledSkillIds.has(skill.identifier) ? undefined : skill;
+    return skill && this.isSkillReachable(skill.identifier) ? skill : undefined;
   };
 
   findByName = async (name: string): Promise<SkillItem | undefined> => {
     const skill = await this.skillModel.findByName(name);
-    return skill && this.disabledSkillIds.has(skill.identifier) ? undefined : skill;
+    return skill && this.isSkillReachable(skill.identifier) ? skill : undefined;
   };
 
   private resolveWorkspaceId = async (): Promise<string | undefined> => {
@@ -184,16 +221,30 @@ class SkillServerRuntimeService implements SkillRuntimeService {
   ): Promise<{ command: string; error?: string }> => {
     const workspaceId =
       this.workspaceId ?? (isLhCommand(command) ? await this.resolveWorkspaceId() : undefined);
-    // No `shareVisitorBlocked` guard needed here: `lobe-skills` is absent from
-    // `AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS`, so this runtime is never
-    // constructed for an Agent Share visitor's run in the first place.
-    const result = await preprocessLhCommand(command, this.userId, workspaceId);
+    // `lobe-skills` IS reachable in an Agent Share visitor's run now (only its
+    // two load APIs are), so this runtime does get constructed for one and the
+    // guard is no longer redundant: `this.userId` is the CREATOR, and minting
+    // an `lh` token from it inside a shell a visitor influenced would hand over
+    // the creator's whole CLI surface. Nothing routes here today — the gate
+    // strips `runCommand` / `execScript` before dispatch — so this is the
+    // backstop for the day Agent Share grows an approval step and they open.
+    const result = await preprocessLhCommand(
+      command,
+      this.userId,
+      workspaceId,
+      this.shareVisitorBlocked,
+    );
 
     return { command: result.command, error: result.error };
   };
 
   readResource = async (id: string, path: string): Promise<SkillResourceContent> => {
-    const skill = await this.skillModel.findById(id);
+    // Goes through `findById`, not `skillModel.findById`: this is a second
+    // entry into skill CONTENT, reached with an id the caller already holds, so
+    // resolving it raw would let an out-of-scope skill's resources be read even
+    // though its activation was refused. Same not-found error either way — a
+    // distinct "not allowed" message would confirm the skill exists.
+    const skill = await this.findById(id);
     if (!skill) throw new Error(`Skill not found: ${id}`);
     if (!skill.resources) throw new Error(`Skill has no resources: ${id}`);
     return this.resourceService.readResource(skill.resources, path);
@@ -285,7 +336,13 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     for (const activatedSkill of activatedSkills) {
       if (!activatedSkill.name) continue;
 
-      const skill = await this.skillModel.findByName(activatedSkill.name);
+      // `findByName`, not `skillModel.findByName`: `activatedSkills` is
+      // model-suppliable (see `ExecutionRuntime`'s `args.activatedSkills ??
+      // this.activatedSkills`), so this resolves an arbitrary name into a skill
+      // ARCHIVE — a third door into skill content, next to `activateSkill` and
+      // `readReference`. Resolving it raw skipped both the agent's disabled set
+      // and an Agent Share visitor's grant.
+      const skill = await this.findByName(activatedSkill.name);
 
       if (!skill) {
         log('No persisted skill bundle found for activated skill: %s', activatedSkill.name);
@@ -692,6 +749,36 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       disabledSkillIds = new Set(getDisabledPluginIds(agentConfig?.plugins ?? undefined));
     }
 
+    // The share's own opt-out, for the same reason: the creator named the
+    // skills a visitor may load (`shareConfig.skillGrants`), and the
+    // operation's skill pool was already intersected with that grant at
+    // assembly (`filterSkillsByShareGate`) — but `activateSkill` /
+    // `readReference` / `execScript` all resolve a MODEL-SUPPLIED name, so a
+    // name the pool never offered still arrives here. This predicate is that
+    // second, authoritative check.
+    //
+    // `resolveShareAllowedSkillIds` intersects candidates with the grant, so
+    // passing the single id under test makes each call exactly the membership
+    // question this predicate asks.
+    const shareVisitor = context.agentShareVisitor;
+    const isSkillGranted = shareVisitor
+      ? (identifier: string) => resolveShareAllowedSkillIds([identifier], shareVisitor).length > 0
+      : undefined;
+
+    /**
+     * The same two opt-outs `SkillServerRuntimeService.isSkillReachable`
+     * applies to DB lookups, for the sources that reach the runtime as plain
+     * LISTS instead of being resolved through the service.
+     *
+     * Filtering here — not inside a per-call check — is what closes the
+     * fall-through: `activateSkill` tries the DB first and, on a miss, walks on
+     * to the builtin / agent-document / filesystem branches, which do no lookup
+     * at all. A skill refused by the service would otherwise simply be found
+     * one branch later.
+     */
+    const isSkillReachable = (identifier: string) =>
+      !disabledSkillIds.has(identifier) && (isSkillGranted?.(identifier) ?? true);
+
     const skillModel = new AgentSkillModel(context.serverDB, context.userId, context.workspaceId);
     const resourceService = new SkillResourceService(
       context.serverDB,
@@ -739,9 +826,11 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       disabledSkillIds,
       fileModel,
       fileService,
+      isSkillGranted,
       marketService,
       resourceService,
       serverDB: context.serverDB,
+      shareVisitorBlocked: !!shareVisitor,
       skillModel,
       topicId: context.topicId,
       userId: context.userId,
@@ -763,7 +852,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
           .getAgentSkills(context.agentId)
           .then((skills) =>
             skills
-              .filter((skill) => !disabledSkillIds.has(skill.identifier))
+              .filter((skill) => isSkillReachable(skill.identifier))
               .map((skill) => ({
                 content: skill.content,
                 description: skill.description,
@@ -862,11 +951,17 @@ export const skillsRuntime: ServerRuntimeRegistration = {
         // execution plan.
         ...filterBuiltinSkills(builtinSkills, {
           canExecuteOnDevice: context.deviceCapable ?? !!activeDeviceId,
-        }).filter((skill) => !disabledSkillIds.has(skill.identifier)),
+        }).filter((skill) => isSkillReachable(skill.identifier)),
         ...agentSkillBuiltins,
       ],
       deviceFileAccess,
-      projectSkills,
+      // Filesystem skills carry no identifier of their own; the skill pool
+      // derives one as `<source>:<name>` (see `operationPrep`'s `projectMetas`)
+      // and that is what a `skillGrants` entry names, so rebuild it the same
+      // way rather than matching on the bare name.
+      projectSkills: projectSkills?.filter((skill) =>
+        isSkillReachable(`${skill.source ?? 'project'}:${skill.name}`),
+      ),
       service,
     });
   },

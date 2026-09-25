@@ -97,6 +97,10 @@ export interface ModelTokensUsage {
 
   // Output tokens breakdown
   outputTextTokens?: number;
+  /**
+   * Generated video tokens, billed through the `videoGeneration` pricing unit.
+   */
+  outputVideoTokens?: number;
   rejectedPredictionTokens?: number;
 
   // Total tokens
@@ -127,6 +131,7 @@ export const ModelUsageSchema = z.object({
   outputImageTokens: z.number().optional(),
   outputAudioTokens: z.number().optional(),
   outputReasoningTokens: z.number().optional(),
+  outputVideoTokens: z.number().optional(),
 
   // Prediction tokens
   acceptedPredictionTokens: z.number().optional(),
@@ -195,6 +200,32 @@ export interface AgentDispatchMetadata {
   visibility: 'internal';
 }
 
+/**
+ * Where a server-injected user turn came from when no human typed it: a
+ * provider event (GitHub CI failure, review feedback, …) that woke the
+ * agent. Rendered as a badge on the bubble and usable as a filter key.
+ */
+export interface ExternalOriginMetadata {
+  /** What happened, in the provider's event vocabulary (`ci_failed`, `review_changes_requested`, …). */
+  kind: string;
+  /** Human label of the resource, e.g. `lobehub/lobehub#19728`. */
+  label: string;
+  /** Provider id, e.g. `github`. */
+  provider: string;
+  /** LobeHub-side id of the tracked resource (`scm_change_requests.id`), for lookups. */
+  resourceId?: string;
+  /** Link to the provider resource. */
+  url?: string;
+}
+
+export const ExternalOriginMetadataSchema = z.object({
+  kind: z.string(),
+  label: z.string(),
+  provider: z.string(),
+  resourceId: z.string().optional(),
+  url: z.string().optional(),
+});
+
 export const BotSenderMetadataSchema = z.object({
   avatar: z.string().optional(),
   fullName: z.string().optional(),
@@ -224,6 +255,7 @@ export interface BotSenderMetadata {
 
 export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSchema).extend({
   botSender: BotSenderMetadataSchema.optional(),
+  externalOrigin: ExternalOriginMetadataSchema.optional(),
   agentDispatch: AgentDispatchMetadataSchema.optional(),
   collapsed: z.boolean().optional(),
   contextSelections: z.array(ContextSelectionSchema).optional(),
@@ -346,6 +378,11 @@ export interface MessageMetadata {
   cost?: number;
   /** @deprecated use `metadata.performance` instead */
   duration?: number;
+  /**
+   * The provider event that produced this server-injected user turn
+   * (GitHub CI failure, review feedback, …). See {@link ExternalOriginMetadata}.
+   */
+  externalOrigin?: ExternalOriginMetadata;
   finishType?: string;
   /** Operation owning the durable heterogeneous tool-state watermark. */
   heterogeneousToolStateOperationId?: string;
@@ -417,11 +454,11 @@ export interface MessageMetadata {
   isSupervisor?: boolean;
   /** @deprecated use `metadata.performance` instead */
   latency?: number;
+
   /**
    * Local-system tool snapshots materialized when the user sent @file mentions.
    */
   localSystemToolSnapshots?: LocalSystemToolSnapshot[];
-
   /**
    * Orchestration role of the message author within a group conversation.
    * `'supervisor'` = the group's coordinating agent, `'member'` = a delegated

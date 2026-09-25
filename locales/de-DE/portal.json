@@ -1,4 +1,5 @@
 {
+  "FilePreview.actions.download": "Quelldatei herunterladen",
   "FilePreview.tabs.chunk": "Abschnitt",
   "FilePreview.tabs.file": "Datei",
   "Plugins": "Fähigkeiten",
@@ -29,6 +30,7 @@
   "artifacts.svg.copySuccess": "Bild erfolgreich kopiert",
   "artifacts.svg.download.png": "Als PNG herunterladen",
   "artifacts.svg.download.svg": "Als SVG herunterladen",
+  "document.saveConflict": "Dieses Dokument wurde an anderer Stelle aktualisiert. Wird auf die neueste Version aktualisiert.",
   "document.todos.allCompleted": "Alle Aufgaben erledigt",
   "document.todos.title": "Aufgaben",
   "emptyArtifactList": "Noch keine Artefakte. Verwende Fähigkeiten im Gespräch und kehre dann hierher zurück.",

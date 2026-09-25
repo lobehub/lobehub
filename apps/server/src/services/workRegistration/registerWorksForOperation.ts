@@ -22,6 +22,7 @@ import { MarketService } from '@/server/services/market';
 import { createSandboxService } from '@/server/services/sandbox';
 
 import { UNEXECUTED_INTERVENTION_STATUSES } from './constants';
+import { resolveRunWorkAccessScope, type ShareVisitorWorkIdentity } from './shareWorkScope';
 import { registerShellWorks } from './shellWorkRegistration';
 
 const log = debug('lobe-server:file-work-registration');
@@ -37,6 +38,15 @@ interface FileProvenance {
 }
 
 export interface RegisterWorksForOperationParams {
+  /**
+   * Set for an Agent Share visitor's run (`principal.actor.shareVisitor`).
+   * Every Work registered by this scan is then stamped with the share scope of
+   * the completing operation's topic, and the exported entity files carry the
+   * matching file provenance — both fenced off from the creator's ordinary
+   * surfaces. Runs execute under the CREATOR's `userId`, so this marker is
+   * the only thing distinguishing a visitor's output from the creator's own.
+   */
+  agentShareVisitor?: ShareVisitorWorkIdentity | null;
   /**
    * The round's final assistant message. When the shell Work scan registers a
    * Work, the anchor stamp (`metadata.work.rootOperationId`) is merged onto this
@@ -343,7 +353,22 @@ export const registerWorksForOperation = async (
 
   const topicId = completingOp.topicId;
 
-  const messageModel = new MessageModel(serverDB, userId, workspaceId);
+  // `topicId` is guaranteed above, so a share run always resolves to a real scope.
+  const accessScope = resolveRunWorkAccessScope({
+    shareVisitor: params.agentShareVisitor,
+    topicId,
+  });
+  if (accessScope === null) {
+    log('[%s] Skipping file Work registration: share visitor run has no topic', operationId);
+    return { attempted: 0, failed: 0 };
+  }
+
+  // A share visitor's tool rows live under a topic with a non-null `senderId`,
+  // which `MessageModel.ownership()` excludes by default — without the opt-in
+  // the scan (and the anchor stamp below) silently sees nothing for that run.
+  const messageModel = new MessageModel(serverDB, userId, workspaceId, undefined, {
+    includeShareVisitor: Boolean(params.agentShareVisitor),
+  });
   const records = await collectOperationRecords(messageModel, scanTree);
   if (records.length === 0) {
     log(
@@ -376,7 +401,7 @@ export const registerWorksForOperation = async (
     return undefined;
   };
 
-  const workModel = new WorkModel(serverDB, userId, workspaceId);
+  const workModel = new WorkModel(serverDB, userId, workspaceId, accessScope);
 
   // The whole operation's spend/usage is attached to each version registered
   // this round (an operation-level, not per-file, figure — the scanner can't
@@ -597,6 +622,19 @@ export const registerWorksForOperation = async (
         // Display name = basename (clean download filename); storage key uses the
         // unique `storageName` so the object is never clobbered.
         const exported = await sandboxService.exportAndUploadFile(entry.path, basename, {
+          // A visitor's exported file gets the same share provenance the
+          // upload path stamps (see `shareChat.createFile`), so it never
+          // surfaces in the creator's library while `/f/:id` stays openable.
+          ...(params.agentShareVisitor
+            ? {
+                metadata: {
+                  agentShare: {
+                    shareId: params.agentShareVisitor.shareId,
+                    visitorUserId: params.agentShareVisitor.visitorUserId,
+                  },
+                },
+              }
+            : {}),
           storageName,
         });
         if (!exported.success) {

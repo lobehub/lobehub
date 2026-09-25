@@ -150,17 +150,20 @@ export type ExpertiseReasonSource = 'inferred' | 'reviewer';
 export type ExpertiseBacktestVerdict = 'ready' | 'too-broad' | 'insufficient-evidence';
 
 /**
- * How a distilled standard scored against the reviewer's own past decisions, before anything
- * compiles it into a criterion that can block a delivery.
+ * How a distilled standard scored against the reviewer's own past decisions.
  *
- * The metric is precision on the units it fired on, deliberately not recall. Every standard covers
- * a narrow slice, so recall over the whole corpus is near zero for all of them and answers
- * nothing. What decides whether compiling is safe is the opposite question: when it fires, was the
- * reviewer actually going to reject? A standard that fires on deliveries they approved blocks work
- * they would have shipped — the failure that makes someone switch the feature off.
+ * Read the numbers, not the name: measuring this on 898 of one reviewer's circled rejections showed
+ * the score cannot be used as a gate, because the labels it scores against are incomplete. A
+ * reviewer circles the one or two worst things in a delivery, so a standard that correctly spots a
+ * real defect they did not circle that time is counted a false alarm. Concretely: standards fired on
+ * 25 of 44 rejections from the same category, but matched what the reviewer had actually written on
+ * 4 — while firing on 39% of deliveries they accepted. Neither number separates a good standard
+ * from a bad one.
  *
- * Read `precision` against the corpus base rate, not against 1.0: roughly 45% of this owner's
- * judged units are rejections, so a standard firing at random already scores ~0.45.
+ * So nothing writes this column yet, and nothing should gate on `verdict` until a measurement with
+ * unbiased labels exists — the candidate being forward measurement, where a standard is injected
+ * without blocking and what is counted is how often the reviewer overrides it once it has fired.
+ * Kept as a column because that measurement still belongs on the lesson.
  */
 export interface ExpertiseBacktestResult {
   /** ISO 8601. */

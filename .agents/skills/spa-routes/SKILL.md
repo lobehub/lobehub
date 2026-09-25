@@ -85,7 +85,7 @@ Each feature should:
    - Every lazy route inside the main area renders `RouteSegmentSkeleton` (`src/components/Skeleton/RouteSegment.tsx`) while its chunk loads. It resolves via `handle.meta.Skeleton` only (deepest match wins, walking up through parent routes). Omitting `Skeleton` renders a blank pane — use `NoRouteSkeleton` when that is intentional.
    - Pick the skeleton when adding or restructuring a route:
      - A close-enough generic shape exists → `Skeleton: createSurfaceSkeleton('list' | 'form' | 'grid' | 'editor' | 'detail')` from `@/components/Skeleton/Surface`.
-     - The page has a distinctive layout (dashboard, multi-panel, conversation) → author a bespoke component under `src/components/Skeleton/` and register it (see `Home.tsx`, `Generation.tsx`, `Conversation/`).
+     - The page has a distinctive layout (dashboard, multi-panel, conversation) → author a bespoke component under `src/components/Skeleton/` and register it (see `ResourceHome.tsx`, `Generation.tsx`, `Conversation/`).
    - Where to put it: on the route's `routeMeta` (feature `routeMeta.ts` or inline in `desktopRouter.shared.tsx`). A whole subtree sharing one shape can register once on the parent/layout route's `handle` — children with their own `Skeleton` still override.
    - When changing a page's layout, update its registered skeleton in the same PR — a stale skeleton that no longer matches the page is a regression.
    - Skeleton-only parent handles are safe for titles: title/icon resolution also walks deepest-first, and leaf metas keep winning.
@@ -110,11 +110,11 @@ The thin router adapters are not duplicated trees. Other route modules may still
 
 Known variants today:
 
-| Base file (web)                                       | Desktop file (Electron)                                       | Purpose                                                                                                                                    |
-| ----------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/routes/(main)/settings/features/componentMap.ts` | `src/routes/(main)/settings/features/componentMap.desktop.ts` | Settings tab → component map. Web uses dynamic `import()`; desktop uses sync imports. `componentMap.sync.test.ts` enforces identical keys. |
-| `src/routes/(main)/agent/index.tsx`                   | `src/routes/(main)/agent/index.desktop.tsx`                   | Page entry. Desktop variant overrides the web page wholesale (e.g. extra popup guards).                                                    |
-| `src/routes/(main)/group/index.tsx`                   | `src/routes/(main)/group/index.desktop.tsx`                   | Same pattern as agent.                                                                                                                     |
+| Base file (web)                                  | Desktop file (Electron)                                  | Purpose                                                                                                                                    |
+| ------------------------------------------------ | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/features/Settings/features/componentMap.ts` | `src/features/Settings/features/componentMap.desktop.ts` | Settings tab → component map. Web uses dynamic `import()`; desktop uses sync imports. `componentMap.sync.test.ts` enforces identical keys. |
+| `src/routes/(main)/agent/index.tsx`              | `src/routes/(main)/agent/index.desktop.tsx`              | Page entry. Desktop variant overrides the web page wholesale (e.g. extra popup guards).                                                    |
+| `src/routes/(main)/group/index.tsx`              | `src/routes/(main)/group/index.desktop.tsx`              | Same pattern as agent.                                                                                                                     |
 
 **Rules:**
 

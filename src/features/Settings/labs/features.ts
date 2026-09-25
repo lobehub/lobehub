@@ -17,11 +17,13 @@ type LabFeatureI18nKey =
   | 'claudeCodeSdk'
   | 'codexAppServer'
   | 'desktopSplitView'
+  | 'deviceTunnel'
   | 'evalCapture'
   | 'gatewayMux'
   | 'heteroSessionImport'
   | 'imessage'
   | 'inputMarkdown'
+  | 'integrations'
   | 'messageTextSelectionActions'
   | 'oauthApps'
   | 'projects'
@@ -90,6 +92,12 @@ export const LAB_FEATURES: LabFeatureItem[] = [
     stage: 'alpha',
   },
   {
+    flag: 'enableDeviceTunnel',
+    i18nKey: 'deviceTunnel',
+    searchKeywords: ['tunnel', 'port forwarding', 'dev server', 'localhost'],
+    stage: 'alpha',
+  },
+  {
     flag: 'enableProjects',
     i18nKey: 'projects',
     searchKeywords: ['project', 'workspace'],
@@ -100,6 +108,12 @@ export const LAB_FEATURES: LabFeatureItem[] = [
     i18nKey: 'oauthApps',
     searchKeywords: ['oauth', 'oauth apps'],
     stage: 'beta',
+  },
+  {
+    flag: 'enableIntegrations',
+    i18nKey: 'integrations',
+    searchKeywords: ['integrations', 'github', 'github app', 'pull request'],
+    stage: 'alpha',
   },
   {
     flag: 'enableArtifactDeployment',

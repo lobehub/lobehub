@@ -61,6 +61,8 @@ export interface ModelSwitchPanelProps {
    * Optional row component for generation UIs (e.g. ImageModelItem). Requires `enabledList` + `pricingMode`.
    */
   ModelItemComponent?: ComponentType<any>;
+  /** Explanation of any restrictions applied by the host. */
+  notice?: React.ReactNode;
   /**
    * Callback when model changes. If not provided, uses updateAgentConfig from store.
    */

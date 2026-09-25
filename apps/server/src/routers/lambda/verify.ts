@@ -1,4 +1,4 @@
-import { AcceptanceSkill } from '@lobechat/builtin-skills';
+import { fetchAcceptanceSkillBundle } from '@lobechat/builtin-skills/acceptance';
 import {
   normalizeVerifySurface,
   verifyRunScenarios,
@@ -55,21 +55,6 @@ import {
 } from '@/server/services/verify';
 
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
-
-/**
- * Skills that `verify.getSkillBundle` will materialize to a builder's disk via
- * `lh acceptance init`. Keyed by identifier; add future pullable skills here. The
- * portable acceptance skill lives in @lobechat/builtin-skills but is intentionally
- * NOT in its `builtinSkills` runtime array (kept out of the homogeneous agent
- * runtime / tool picker), so it is referenced directly here.
- *
- * The legacy `verify` identifier is kept as an alias so cached callers passing
- * `--skill verify` still resolve during the deprecation window.
- */
-const PULLABLE_SKILLS: Record<string, typeof AcceptanceSkill> = {
-  [AcceptanceSkill.identifier]: AcceptanceSkill,
-  verify: AcceptanceSkill,
-};
 
 const verifierTypeSchema = z.enum(['program', 'agent', 'llm']);
 const onFailSchema = z.enum(['manual', 'auto_repair']);
@@ -682,31 +667,27 @@ export const verifyRouter = router({
 
   /**
    * Serve a pullable skill bundle (`SKILL.md` + inline resource files) by
-   * identifier so `lh verify init` can materialize it into a builder's working
-   * directory. Dynamic-by-design: the source is the server's deployed
-   * `@lobechat/builtin-skills`, so updating the skill + redeploying reaches every
-   * builder on the next pull — no CLI re-release. Auth-gated (verifyProcedure);
-   * returns NOT_FOUND for any identifier not in the pullable registry.
+   * identifier. Keep the authenticated contract and legacy alias while sourcing
+   * all installers from the upstream default branch (or an explicitly selected tag).
    */
-  getSkillBundle: verifyProcedure.input(z.object({ identifier: z.string() })).query(({ input }) => {
-    const skill = PULLABLE_SKILLS[input.identifier];
-    if (!skill)
-      throw new TRPCError({
-        code: 'NOT_FOUND',
-        message: `No pullable skill with identifier "${input.identifier}"`,
-      });
-    return {
-      content: skill.content,
-      files: Object.fromEntries(
-        Object.entries(skill.resources ?? {}).map(([path, meta]) => [path, meta.content ?? '']),
-      ),
-      identifier: skill.identifier,
-      name: skill.name,
-      // The skill's own declared version, so an installer can compare a copy
-      // already on disk against the latest bundle.
-      version: skill.version,
-    };
-  }),
+  getSkillBundle: wsCompatProcedure
+    .input(
+      z.object({
+        identifier: z.string(),
+        version: z
+          .string()
+          .regex(/^v?\d+\.\d+\.\d+$/)
+          .optional(),
+      }),
+    )
+    .query(async ({ input }) => {
+      if (input.identifier !== 'acceptance' && input.identifier !== 'verify')
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: `No pullable skill with identifier "${input.identifier}"`,
+        });
+      return fetchAcceptanceSkillBundle(input.version);
+    }),
 
   getVerifyState: verifyProcedure
     .input(z.object({ operationId: z.string() }))

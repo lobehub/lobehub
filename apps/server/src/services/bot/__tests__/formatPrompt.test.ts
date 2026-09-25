@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { buildBotSender, formatPrompt, formatReferencedMessage } from '../formatPrompt';
+import { SOURCE_MESSAGES_FIELD } from '../mergeMessages';
 
 describe('formatReferencedMessage', () => {
   it('should return undefined when raw is undefined', () => {
@@ -79,6 +80,33 @@ describe('formatPrompt', () => {
 
   const discordSanitize = (text: string) => text.replaceAll(/<@!?bot123>\s*/g, '').trim();
 
+  it('includes a quote carried by an earlier source of a merged turn', () => {
+    const quotedEarlier = {
+      ...baseMessage,
+      raw: { referenced_message: { author: { username: 'Alice' }, content: 'q.pdf' } },
+      text: 'see this',
+    };
+    const last = { ...baseMessage, raw: {}, text: '@bot file it' };
+    const merged = {
+      ...last,
+      [SOURCE_MESSAGES_FIELD]: [quotedEarlier, last],
+      text: 'see this\n@bot file it',
+    };
+
+    expect(formatPrompt(merged)).toContain(
+      '<referenced_message sender="Alice">q.pdf</referenced_message>',
+    );
+  });
+
+  it('lists a quote shared by several merged sources only once', () => {
+    const raw = { referenced_message: { author: { username: 'Alice' }, content: 'same' } };
+    const first = { ...baseMessage, raw, text: 'a' };
+    const second = { ...baseMessage, raw, text: 'b' };
+    const merged = { ...second, [SOURCE_MESSAGES_FIELD]: [first, second], text: 'a\nb' };
+
+    expect(formatPrompt(merged).match(/<referenced_message/g)).toHaveLength(1);
+  });
+
   it('should format basic message with speaker tag', () => {
     const result = formatPrompt(baseMessage);
 
@@ -102,6 +130,39 @@ describe('formatPrompt', () => {
 
     expect(result).toContain('hello world');
     expect(result).not.toContain('<@!bot123>');
+  });
+
+  it('should pass the message to sanitizeUserInput so platforms can resolve mentions', () => {
+    const msg = { ...baseMessage, raw: { mentions: [] }, text: '<@bot123> hi <@other>' };
+    const sanitize = vi.fn((text: string) => text.replace('<@other>', '@Other'));
+    const result = formatPrompt(msg, { sanitizeUserInput: sanitize });
+
+    expect(sanitize).toHaveBeenCalledWith('<@bot123> hi <@other>', msg);
+    expect(result).toContain('hi @Other');
+  });
+
+  it('should resolve mentions inside the referenced message without stripping them', () => {
+    const msg = {
+      ...baseMessage,
+      raw: {
+        referenced_message: {
+          author: { global_name: 'Bob', username: 'bob' },
+          content: '<@bot123> can <@other> do this?',
+        },
+      },
+      text: '<@bot123> yes',
+    };
+    const resolveMentions = vi.fn((text: string) =>
+      text.replace('<@bot123>', '@Bot').replace('<@other>', '@Other'),
+    );
+    const result = formatPrompt(msg, { resolveMentions, sanitizeUserInput: discordSanitize });
+
+    expect(resolveMentions).toHaveBeenCalledWith('<@bot123> can <@other> do this?', msg);
+    expect(result).toContain(
+      '<referenced_message sender="Bob">@Bot can @Other do this?</referenced_message>',
+    );
+    expect(result).toContain('yes');
+    expect(result).not.toContain('<@bot123> yes');
   });
 
   it('should not strip mentions when no sanitizeUserInput provided', () => {

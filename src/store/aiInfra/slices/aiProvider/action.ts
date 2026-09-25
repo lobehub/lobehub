@@ -34,6 +34,8 @@ import {
 import { AiProviderSourceEnum } from '@/types/aiProvider';
 import { filterEnabledProvidersByModelType, filterHiddenBuiltinModels } from '@/utils/aiProvider';
 
+import { seedModelReasoningConfigMap } from '../aiModel/initialState';
+
 export { filterEnabledProvidersByModelType, filterHiddenBuiltinModels } from '@/utils/aiProvider';
 
 interface UserScopedBuiltinModelState {
@@ -707,6 +709,8 @@ export class AiProviderActionImpl {
         onSuccess: (data) => {
           if (!data) return;
 
+          const state = this.#get();
+
           this.#set(
             {
               aiProviderRuntimeConfig: data.runtimeConfig,
@@ -721,6 +725,14 @@ export class AiProviderActionImpl {
               hiddenBuiltinModels: data.hiddenBuiltinModels,
               isInitAiProviderRuntimeState: true,
               modelRedirects: data.modelRedirects,
+              ...(data.modelReasoningConfigs && {
+                modelReasoningConfigMap: seedModelReasoningConfigMap(
+                  state.modelReasoningConfigMap,
+                  data.modelReasoningConfigs,
+                  data.enabledAiModels,
+                  state.modelReasoningConfigUpdatingKeys,
+                ),
+              }),
               providerBindingAgentTypes: data.providerBindingAgentTypes ?? {},
             },
             false,

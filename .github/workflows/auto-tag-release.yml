@@ -13,15 +13,20 @@ jobs:
   auto-tag:
     name: Auto Tag Release
     runs-on: ubuntu-latest
-    # Only trigger when PR is merged
     if: github.event.pull_request.merged == true
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - uses: actions/create-github-app-token@v2
+        id: app-token
         with:
-          token: ${{ secrets.GH_TOKEN }}
-          # Fetch full history for proper tagging
+          app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
+          private-key: ${{ secrets.LOBEHUB_BOT_APP_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
           fetch-depth: 0
 
       - name: Detect release PR (version from title)
@@ -68,31 +73,24 @@ jobs:
             echo "⏭️ Not a patch PR (neither hotfix/release branch nor style/feat/fix/refactor/hotfix/build title prefix)"
           fi
 
-      - name: Prepare main branch
-        if: steps.release.outputs.should_tag == 'true' || steps.patch.outputs.should_tag == 'true'
-        run: |
-          git checkout main
-          git pull --rebase origin main
-
-      - name: Setup environment
-        if: steps.release.outputs.should_tag == 'true' || steps.patch.outputs.should_tag == 'true'
-        uses: ./.github/actions/setup-env
-
-      - name: Install deps
-        if: steps.release.outputs.should_tag == 'true' || steps.patch.outputs.should_tag == 'true'
-        run: pnpm install
-
       - name: Resolve patch version (patch bump)
         id: patch-version
         if: steps.patch.outputs.should_tag == 'true'
         run: |
-          CURRENT_VERSION="$(node -p "require('./package.json').version")"
-          echo "Current version: ${CURRENT_VERSION}"
+          git fetch --tags origin
+          LATEST_TAG="$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)"
+          if [ -z "$LATEST_TAG" ]; then
+            CURRENT_VERSION="$(node -p "require('./package.json').version")"
+            echo "No stable tag, falling back to package.json: ${CURRENT_VERSION}"
+          else
+            CURRENT_VERSION="${LATEST_TAG#v}"
+            echo "Latest stable tag: ${LATEST_TAG}"
+          fi
 
           # Coerce to stable base (e.g. 2.0.0-beta.1 -> 2.0.0), then bump patch (-> 2.0.1)
           BASE_VERSION="$(npx -y semver@7 "${CURRENT_VERSION}" -c)"
           if [ -z "${BASE_VERSION}" ]; then
-            echo "❌ Invalid version in package.json: ${CURRENT_VERSION}"
+            echo "❌ Invalid version: ${CURRENT_VERSION}"
             exit 1
           fi
 
@@ -127,82 +125,12 @@ jobs:
             echo "✅ Tag v$VERSION does not exist, can create"
           fi
 
-      - name: Bump package.json version
-        if: env.SHOULD_TAG == 'true' && steps.check-tag.outputs.exists == 'false'
-        run: |
-          VERSION="${{ env.VERSION }}"
-          echo "📝 Bumping package.json version to: $VERSION"
-
-          # Validate VERSION is strict semver before writing
-          if ! npx -y semver@7 "$VERSION" >/dev/null 2>&1; then
-            echo "❌ Invalid semver version: $VERSION"
-            exit 1
-          fi
-
-          # Update package.json using Node.js
-          node -e "
-            const fs = require('fs');
-            const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
-            const target = '$VERSION';
-            if (pkg.version === target) {
-              console.log('✅ package.json already at version', target);
-              process.exit(0);
-            }
-            pkg.version = target;
-            fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2) + '\n');
-            console.log('✅ package.json updated to', target);
-          "
-
-      - name: Generate changelog
-        if: env.SHOULD_TAG == 'true' && steps.check-tag.outputs.exists == 'false'
-        run: bun run workflow:changelog:gen
-
-      - name: Build static changelog
-        if: env.SHOULD_TAG == 'true' && steps.check-tag.outputs.exists == 'false'
-        run: bun run workflow:changelog
-
-      - name: Commit release changes and push
-        if: env.SHOULD_TAG == 'true' && steps.check-tag.outputs.exists == 'false'
-        id: bump-version
-        run: |
-          VERSION="${{ env.VERSION }}"
-
-          # Configure git
-          git config --global user.name "lobehubbot"
-          git config --global user.email "i@lobehub.com"
-
-          # Commit changes (if any) and push
-          git add package.json CHANGELOG.md changelog/
-          COMMIT_MSG="🔖 chore(release): release version v$VERSION [skip ci]"
-          git commit -m "$COMMIT_MSG" || echo "Nothing to commit"
-          git push origin HEAD:main
-
-          # Output the SHA we will tag
-          echo "tag_sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
-
-      - name: Create Tag
-        if: env.SHOULD_TAG == 'true' && steps.check-tag.outputs.exists == 'false'
-        run: |
-          VERSION="${{ env.VERSION }}"
-          KIND="${{ env.KIND }}"
-          echo "🏷️ Creating tag: v$VERSION"
-
-          # Tag the bumped version commit SHA (not the PR merge commit SHA)
-          TAG_SHA="${{ steps.bump-version.outputs.tag_sha }}"
-
-          # Create annotated tag with single line message
-          git tag -a "v$VERSION" "$TAG_SHA" -m "🚀 release: v$VERSION | PR #${{ github.event.pull_request.number }} | Author: ${{ github.event.pull_request.user.login }}"
-
-          # Push tag
-          git push origin "v$VERSION"
-
-          echo "✅ Tag v$VERSION created successfully!"
-
       - name: Create GitHub Release
         if: env.SHOULD_TAG == 'true' && steps.check-tag.outputs.exists == 'false'
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ env.VERSION }}
+          target_commitish: ${{ github.event.pull_request.merge_commit_sha }}
           name: 🚀 Release v${{ env.VERSION }}
           body: |
             ## 📦 Release v${{ env.VERSION }}
@@ -216,15 +144,7 @@ jobs:
             ${{ github.event.pull_request.body }}
           draft: false
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-
-      - name: Sync main to canary
-        if: env.SHOULD_TAG == 'true' && steps.check-tag.outputs.exists == 'false'
-        run: |
-          gh workflow run sync-main-to-canary.yaml --ref main
-          echo "✅ Dispatched sync-main-to-canary workflow"
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
       - name: Output result
         run: |

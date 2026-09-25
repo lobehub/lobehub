@@ -21,7 +21,7 @@ user-invocable: true
 - `git log --oneline origin/canary..HEAD` — unpushed commits
 - `gh pr list --head "$(git branch --show-current)" --json number,title,state,url` — existing PR
 - `git diff --stat --stat-count=20 origin/canary..HEAD` — change summary
-- `env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME lh acceptance run list --json` — the published acceptance round for this branch (match on `branch`)
+- Reuse an existing acceptance link from the task when it covers the delivered behavior. If a lookup is needed, first follow [Publish auth preflight](../../acceptance/PROCESS.md#publish-auth-preflight), then run `publish_lh acceptance run list --json` and match on `branch`. Do not blindly unset API keys: the production credential may exist only in the environment. A lookup never requires creating a new round.
 
 ### 2. Handle uncommitted changes on default branch
 
@@ -54,11 +54,13 @@ A feature or fix needs a published acceptance round before the PR is opened (AGE
 ### 6. Create PR with `gh pr create --base canary`
 
 - Title: `<gitmoji> <type>(<scope>): <description>`
-- Body: based on PR template (`.github/PULL_REQUEST_TEMPLATE.md`), fill checkboxes
+- Body: based on PR template (`.github/PULL_REQUEST_TEMPLATE.md`)
+- Obey the `AGENT-INSTRUCTIONS` HTML comments in that template. Keep them commented out, and do not copy them into the visible description.
 - Link related GitHub issues using magic keywords (`Fixes #123`, `Closes #123`)
 - Link Linear issues if applicable (`Fixes LOBE-xxx`)
-- Put the acceptance link (or the explicit skip reason) under **Test**
-- Use HEREDOC for body to preserve formatting
+- Put the acceptance link (or the explicit skip reason) under **Test** in the Summary section.
+- Follow the source-label, privacy, and AI assistance rules in **PR Template** below when creating or updating a PR. Do not request prompt disclosure or block the normal PR workflow waiting for consent to publish a conversation.
+- Write the body to a temporary file and use `--body-file` to preserve formatting.
 
 ### 7. Open in browser
 
@@ -66,13 +68,12 @@ A feature or fix needs a published acceptance round before the PR is opened (AGE
 
 ## PR Template
 
-Use `.github/PULL_REQUEST_TEMPLATE.md` as the body structure. Key sections:
+Use [`.github/PULL_REQUEST_TEMPLATE.md`](../../../.github/PULL_REQUEST_TEMPLATE.md) as the source of truth for body structure, contribution classification, disclosure eligibility, and required fields. Follow its `AGENT-INSTRUCTIONS` when filling these sections:
 
-- **Change Type**: Check the appropriate gitmoji type
-- **Related Issue**: Link GitHub/Linear issues with magic keywords
-- **Description of Change**: Summarize what and why
-- **How to Test**: Describe test approach, check relevant boxes
-- **Acceptance**: the published `https://app.lobehub.com/acceptance/<id>` link, or why the change has no user-visible outcome
+- **Summary**: fill for every PR, including the required Contribution source label. AI-assisted work remains labeled `AI-assisted` even when organization membership exempts the author from disclosing details; human review does not make it human-only. Use `Unknown` when the source cannot be established.
+- **AI assistance**: apply the template's organization-member exemption to details only, never to the source label. When required, fill its six fields using the final diff and verification evidence, not private conversation summaries. Use one section per PR, combining tools/models across sessions; report unknown metadata and unperformed review/checks honestly.
+
+Prompts and transcripts are private by default and are not required fields. Only if the author explicitly requests sharing them, review the exact proposed text for sensitive information and obtain confirmation before publishing that text. Authorization to create or update a PR is not consent to publish a conversation. Check attached logs and screenshots for sensitive information too.
 
 ## Notes
 

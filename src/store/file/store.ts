@@ -18,8 +18,6 @@ import type { FileManageAction } from './slices/fileManager';
 import { createFileManageSlice } from './slices/fileManager';
 import type { ResourceAction } from './slices/resource/action';
 import { ResourceActionImpl } from './slices/resource/action';
-import type { TTSFileAction } from './slices/tts';
-import { createTTSFileSlice } from './slices/tts';
 import type { FileUploadAction } from './slices/upload/action';
 import { createFileUploadSlice } from './slices/upload/action';
 
@@ -29,7 +27,6 @@ export interface FileStore
   extends
     FileAction,
     DocumentAction,
-    TTSFileAction,
     FileManageAction,
     FileChunkAction,
     FileUploadAction,
@@ -39,7 +36,6 @@ export interface FileStore
 
 type FileStoreAction = FileAction &
   DocumentAction &
-  TTSFileAction &
   FileManageAction &
   FileChunkAction &
   FileUploadAction &
@@ -58,7 +54,6 @@ const createStore: StateCreator<FileStore, [['zustand/devtools', never]]> = (
     createFileSlice(...params),
     createDocumentSlice(...params),
     createFileManageSlice(...params),
-    createTTSFileSlice(...params),
     createFileChunkSlice(...params),
     createFileUploadSlice(...params),
     new ResourceActionImpl(...params),

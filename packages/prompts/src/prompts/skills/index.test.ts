@@ -49,7 +49,7 @@ describe('skillsPrompts', () => {
   <skill name="Data Analysis" location="/path/to/skills/data-analysis/SKILL.md">Analyzes datasets and generates charts</skill>
 </available_skills>
 
-Use the runSkill tool to activate a skill when needed.`;
+Use the activateSkill tool to activate a skill when needed.`;
 
     expect(skillsPrompts(skills)).toBe(expected);
   });
@@ -74,7 +74,7 @@ Use the runSkill tool to activate a skill when needed.`;
   <skill name="My Skill">Custom skill description</skill>
 </available_skills>
 
-Use the runSkill tool to activate a skill when needed.`;
+Use the activateSkill tool to activate a skill when needed.`;
 
     expect(skillsPrompts(skills)).toBe(expected);
   });

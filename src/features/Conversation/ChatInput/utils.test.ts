@@ -5,6 +5,7 @@ import {
   createQueueSendNowGate,
   getContextWindowMessages,
   getConversationChatInputUiState,
+  getConversationSendButtonProps,
   toChatInputMessages,
 } from './utils';
 
@@ -122,8 +123,48 @@ describe('getContextWindowMessages', () => {
   });
 });
 
+describe('getConversationSendButtonProps', () => {
+  it.each([false, true])(
+    'keeps uploads disabled with generating=%s despite a host override',
+    (generating) => {
+      const defaults = {
+        disabled: true,
+        generating,
+        onStop: vi.fn(),
+        showSendWhileGenerating: generating,
+      };
+      const overrides = { disabled: false, shape: 'round' as const };
+
+      expect(getConversationSendButtonProps(defaults, overrides, true)).toEqual({
+        ...defaults,
+        disabled: true,
+        shape: 'round',
+      });
+      expect(getConversationSendButtonProps(defaults, overrides, false).disabled).toBe(false);
+    },
+  );
+
+  it.each([
+    { customDisabled: undefined, disabled: true, expected: true },
+    { customDisabled: undefined, disabled: false, expected: false },
+    { customDisabled: true, disabled: false, expected: true },
+    { customDisabled: false, disabled: true, expected: false },
+  ])(
+    'preserves non-upload disabled overrides: $customDisabled / $disabled',
+    ({ customDisabled, disabled, expected }) => {
+      expect(
+        getConversationSendButtonProps(
+          { disabled, generating: false, onStop: vi.fn() },
+          customDisabled === undefined ? undefined : { disabled: customDisabled },
+          false,
+        ).disabled,
+      ).toBe(expected);
+    },
+  );
+});
+
 describe('getConversationChatInputUiState', () => {
-  it('shows follow-up placeholder and stop button while loading with an empty composer', () => {
+  it('shows follow-up placeholder and only the stop button while loading with an empty composer', () => {
     expect(
       getConversationChatInputUiState({
         isInputEmpty: true,
@@ -132,15 +173,16 @@ describe('getConversationChatInputUiState', () => {
     ).toEqual({
       placeholderVariant: 'followUp',
       showSendMenu: false,
+      showSendWhileGenerating: false,
       showStopButton: true,
     });
   });
 
-  it('keeps the stop button visible while the user types a follow-up during loading', () => {
-    // Regression: flipping to Send the moment the composer had any text read
-    // as "agent finished" and made queued sends look like fresh sends. Stop
-    // must stay up for the whole loading window — Enter still enqueues, and
-    // the QueueTray exposes Send-now per item.
+  it('shows Send beside Stop while the user types a follow-up during loading', () => {
+    // Regression: flipping Stop to Send the moment the composer had any text
+    // read as "agent finished". Stop must stay up for the whole loading window;
+    // Send appears next to it so the follow-up can be queued by click as well
+    // as by Enter.
     expect(
       getConversationChatInputUiState({
         isInputEmpty: false,
@@ -149,6 +191,20 @@ describe('getConversationChatInputUiState', () => {
     ).toEqual({
       placeholderVariant: 'default',
       showSendMenu: false,
+      showSendWhileGenerating: true,
+      showStopButton: true,
+    });
+  });
+
+  it('keeps only Stop while loading when the host disables queueing', () => {
+    expect(
+      getConversationChatInputUiState({
+        disableQueue: true,
+        isInputEmpty: false,
+        isInputLoading: true,
+      }),
+    ).toMatchObject({
+      showSendWhileGenerating: false,
       showStopButton: true,
     });
   });
@@ -156,12 +212,13 @@ describe('getConversationChatInputUiState', () => {
   it('keeps the default composer state when not loading', () => {
     expect(
       getConversationChatInputUiState({
-        isInputEmpty: true,
+        isInputEmpty: false,
         isInputLoading: false,
       }),
     ).toEqual({
       placeholderVariant: 'default',
       showSendMenu: true,
+      showSendWhileGenerating: false,
       showStopButton: false,
     });
   });
@@ -176,6 +233,7 @@ describe('getConversationChatInputUiState', () => {
     ).toEqual({
       placeholderVariant: 'default',
       showSendMenu: false,
+      showSendWhileGenerating: false,
       showStopButton: true,
     });
   });

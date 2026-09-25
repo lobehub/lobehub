@@ -2,8 +2,9 @@ import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { stripVTControlCharacters } from 'node:util';
 
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 
 /**
  * E2E tests for `lh doc` document management commands.
@@ -21,7 +22,7 @@ const TIMEOUT = 30_000;
 
 function run(args: string): string {
   return execSync(`${CLI} ${args}`, {
-    encoding: 'utf-8',
+    encoding: 'utf8',
     env: { ...process.env, PATH: `${process.env.HOME}/.bun/bin:${process.env.PATH}` },
     timeout: TIMEOUT,
   }).trim();
@@ -220,6 +221,11 @@ describe('lh doc - E2E', () => {
   describe('batch-create', () => {
     let batchDocIds: string[] = [];
 
+    afterAll(() => {
+      if (batchDocIds.length === 0) return;
+      run(`doc delete ${batchDocIds.join(' ')} --yes`);
+    });
+
     it('should batch create documents from JSON file', () => {
       const tmpFile = path.join(os.tmpdir(), `e2e-batch-${Date.now()}.json`);
       const docs = [
@@ -230,12 +236,24 @@ describe('lh doc - E2E', () => {
 
       try {
         const output = run(`doc batch-create "${tmpFile}"`);
-        expect(output).toContain('Created 2 document(s)');
 
-        // Extract IDs from output
-        const matches = output.matchAll(/(docs_\w+)/g);
-        batchDocIds = [...matches].map((m) => m[1]);
-        expect(batchDocIds.length).toBe(2);
+        // Each bullet also contains the ID in its URL, so only parse the first ID on each line.
+        batchDocIds = stripVTControlCharacters(output)
+          .split('\n')
+          .flatMap((line) => {
+            const match = line.match(/^\s*•\s+(docs_\w+)\b/);
+            return match ? [match[1]] : [];
+          });
+        expect(output).toContain('Created 2 document(s)');
+        expect(batchDocIds).toHaveLength(2);
+        expect(new Set(batchDocIds).size).toBe(2);
+
+        for (const [index, id] of batchDocIds.entries()) {
+          const document = runJson<{ content: string; id: string; title: string }>(
+            `doc view ${id} --json id,title,content`,
+          );
+          expect(document).toEqual({ id, ...docs[index] });
+        }
       } finally {
         fs.unlinkSync(tmpFile);
       }
@@ -245,6 +263,7 @@ describe('lh doc - E2E', () => {
       if (batchDocIds.length > 0) {
         const output = run(`doc delete ${batchDocIds.join(' ')} --yes`);
         expect(output).toContain('Deleted');
+        batchDocIds = [];
       }
     });
   });

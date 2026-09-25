@@ -94,6 +94,12 @@ export interface UpdateDocumentCommentResult {
 }
 
 export interface ListDocumentCommentThreadsParams {
+  /**
+   * Restrict to roots with (`true`) or without (`false`) a selection anchor.
+   * Anchored threads render beside the text, document-level ones below it, so
+   * each surface pages its own subset instead of filtering a mixed list.
+   */
+  anchored?: boolean;
   cursor?: string;
   documentId: string;
   limit?: number;
@@ -435,12 +441,14 @@ export class DocumentCommentModel {
 
   async listThreads(params: ListDocumentCommentThreadsParams) {
     const workspaceId = this.requireWorkspaceId();
-    const { cursor, documentId, limit = 20 } = params;
+    const { anchored, cursor, documentId, limit = 20 } = params;
     const conditions = [
       eq(documentComments.documentId, documentId),
       eq(documentComments.workspaceId, workspaceId),
       isNull(documentComments.parentCommentId),
     ];
+    if (anchored === true) conditions.push(isNotNull(documentComments.selectionAnchor));
+    if (anchored === false) conditions.push(isNull(documentComments.selectionAnchor));
     const decodedCursor = decodeCursor(cursor);
     if (decodedCursor) {
       const createdAt = sql`${decodedCursor.createdAt}::timestamptz`;

@@ -1,4 +1,5 @@
 {
+  "FilePreview.actions.download": "Télécharger le fichier source",
   "FilePreview.tabs.chunk": "Fragment",
   "FilePreview.tabs.file": "Fichier",
   "Plugins": "Compétences",
@@ -29,6 +30,7 @@
   "artifacts.svg.copySuccess": "Image copiée avec succès",
   "artifacts.svg.download.png": "Télécharger en PNG",
   "artifacts.svg.download.svg": "Télécharger en SVG",
+  "document.saveConflict": "Ce document a été mis à jour ailleurs. Actualisation vers la dernière version.",
   "document.todos.allCompleted": "Toutes les tâches sont terminées",
   "document.todos.title": "Tâches",
   "emptyArtifactList": "Aucun artefact pour le moment. Utilisez des compétences dans la conversation, puis revenez ici.",

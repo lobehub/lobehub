@@ -68,6 +68,7 @@ import {
   ImageGenerationInspectors,
   ImageGenerationManifest,
   ImageGenerationRenders,
+  ImageGenerationStreamings,
 } from '@lobechat/builtin-tool-image-generation/client';
 import {
   KnowledgeBaseInspectors,
@@ -143,6 +144,12 @@ import {
   UserInteractionInterventions,
   UserInteractionRenders,
 } from '@lobechat/builtin-tool-user-interaction/client';
+import {
+  VideoGenerationInspectors,
+  VideoGenerationManifest,
+  VideoGenerationPlaceholders,
+  VideoGenerationRenders,
+} from '@lobechat/builtin-tool-video-generation/client';
 import {
   WebBrowsingInspectors,
   WebBrowsingManifest,
@@ -241,6 +248,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     [GroupManagementManifest.identifier]: GroupManagementRenders as Record<string, BuiltinRender>,
     [GoalManifest.identifier]: GoalRenders as Record<string, BuiltinRender>,
     [ImageGenerationManifest.identifier]: ImageGenerationRenders as Record<string, BuiltinRender>,
+    [VideoGenerationManifest.identifier]: VideoGenerationRenders as Record<string, BuiltinRender>,
     [KnowledgeBaseManifest.identifier]: KnowledgeBaseRenders as Record<string, BuiltinRender>,
     [LobeAgentManifest.identifier]: LobeAgentRenders as Record<string, BuiltinRender>,
     [BrowserManifest.identifier]: BrowserRenders as Record<string, BuiltinRender>,
@@ -305,6 +313,10 @@ export const registerBuiltinToolSurfaces = (): void => {
       string,
       BuiltinInspector
     >,
+    [VideoGenerationManifest.identifier]: VideoGenerationInspectors as Record<
+      string,
+      BuiltinInspector
+    >,
     [KnowledgeBaseManifest.identifier]: KnowledgeBaseInspectors as Record<string, BuiltinInspector>,
     [LobeAgentManifest.identifier]: LobeAgentInspectors as Record<string, BuiltinInspector>,
     [BrowserManifest.identifier]: BrowserInspectors as Record<string, BuiltinInspector>,
@@ -346,6 +358,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     [ClaudeCodeIdentifier]: ClaudeCodeStreamings as Record<string, BuiltinStreaming>,
     [QODER_IDENTIFIER]: ClaudeCodeStreamings as Record<string, BuiltinStreaming>,
     [CloudSandboxManifest.identifier]: CloudSandboxStreamings as Record<string, BuiltinStreaming>,
+    [ImageGenerationManifest.identifier]: ImageGenerationStreamings,
     [GroupAgentBuilderManifest.identifier]: GroupAgentBuilderStreamings as Record<
       string,
       BuiltinStreaming
@@ -410,6 +423,10 @@ export const registerBuiltinToolSurfaces = (): void => {
       listLocalFiles: LocalSystemListFilesPlaceholder as BuiltinPlaceholder,
       searchLocalFiles: LocalSystemSearchFilesPlaceholder as BuiltinPlaceholder,
     },
+    [VideoGenerationManifest.identifier]: VideoGenerationPlaceholders as Record<
+      string,
+      BuiltinPlaceholder
+    >,
     [WebBrowsingManifest.identifier]: WebBrowsingPlaceholders as Record<string, BuiltinPlaceholder>,
   });
 

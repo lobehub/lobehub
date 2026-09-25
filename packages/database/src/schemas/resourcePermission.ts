@@ -163,6 +163,8 @@ export const resourcePermissions = pgTable(
       .where(isNotNull(t.userId)),
     index('resource_permissions_resource_idx').on(t.resourceType, t.resourceId),
     index('resource_permissions_workspace_idx').on(t.workspaceId),
+    index('resource_permissions_user_id_idx').on(t.userId),
+    index('resource_permissions_created_by_idx').on(t.createdBy),
     index('resource_permissions_workspace_user_idx').on(t.workspaceId, t.userId),
   ],
 );

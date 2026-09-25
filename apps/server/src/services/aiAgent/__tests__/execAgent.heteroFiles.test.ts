@@ -598,6 +598,35 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     );
   });
 
+  it('records the device a failed dispatch was routed to on the operation error', async () => {
+    heteroAgentConfig.model = 'amp';
+    heteroAgentConfig.provider = 'amp';
+    heteroAgentConfig.agencyConfig = {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: { type: 'amp' },
+    } as any;
+    mockDispatchAgentRun.mockResolvedValueOnce({ error: 'DEVICE_OFFLINE', success: false });
+    const completeOperationSpy = vi
+      .spyOn(CompletionLifecycle.prototype, 'completeOperation')
+      .mockResolvedValue(undefined);
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Use Amp on my device' });
+
+    // A Goal waiting for this device to come back reads the route from here
+    // instead of re-deriving which device and pool the dispatch picked.
+    expect(completeOperationSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.objectContaining({
+          deviceRoute: { deviceId: 'device-1', userId },
+        }),
+      }),
+      'error',
+      { skipErrorMessageWrite: true },
+    );
+    completeOperationSpy.mockRestore();
+  });
+
   it('resumes Amp natively without loading or injecting fallback history', async () => {
     mockGetHeterogeneousResumeSessionId.mockResolvedValue('amp-thread-existing');
     heteroAgentConfig.model = 'amp';

@@ -6,7 +6,7 @@ import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AttachmentUploadButton } from '@/features/AttachmentInput';
-import { mentionFilledClassName } from '@/features/ChatInput/InputEditor/mentionStyle';
+import { mentionPlainClassName } from '@/features/ChatInput/InputEditor/mentionStyle';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import {
   getAttachmentFileIdsFromEditor,
@@ -76,7 +76,7 @@ const CommentInput = memo<{ taskId: string }>(({ taskId }) => {
       <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0, width: '100%' }}>
         <Avatar avatar={userAvatar} size={24} style={{ flexShrink: 0 }} />
         <div
-          className={mentionFilledClassName}
+          className={mentionPlainClassName}
           style={{ flex: '1 1 0', minWidth: 0, overflow: 'hidden' }}
         >
           <EditorCanvas

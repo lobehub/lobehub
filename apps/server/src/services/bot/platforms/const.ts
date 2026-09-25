@@ -912,3 +912,74 @@ export function getStepReactionEmoji(stepType: string | undefined, toolsCalling:
     stepType === 'call_llm' && Array.isArray(toolsCalling) && toolsCalling.length > 0;
   return toolsAboutToRun ? WORKING_REACTION_EMOJI : THINKING_REACTION_EMOJI;
 }
+
+// ---------- Reaction mode ----------
+
+/**
+ * How much status-reaction churn the bot produces on the user's message while
+ * an execution is running. Every reaction swap is one or two platform API
+ * calls (`removeReaction` + `addReaction`), and on Feishu/Slack each of them
+ * pings users who have message notifications turned on — so a multi-tool run
+ * under the `full` mode can ring a phone a dozen times.
+ *
+ * - `none`    — never touch reactions.
+ * - `minimal` — ACK (👀) on receipt, 🤔 when the agent starts, removed on
+ *               completion. No per-step swaps.
+ * - `full`    — the legacy behaviour: also swap between 🤔 / ⚡ after every
+ *               step to mirror what the runtime is doing.
+ */
+export type BotReactionMode = 'full' | 'minimal' | 'none';
+
+export const BOT_REACTION_MODES: readonly BotReactionMode[] = ['minimal', 'full', 'none'];
+
+export const DEFAULT_BOT_REACTION_MODE: BotReactionMode = 'minimal';
+
+export const reactionModeField: FieldSchema = {
+  key: 'reactionMode',
+  default: DEFAULT_BOT_REACTION_MODE,
+  description: 'channel.reactionModeHint',
+  enum: [...BOT_REACTION_MODES],
+  enumDescriptions: [
+    'channel.reactionModeMinimalHint',
+    'channel.reactionModeFullHint',
+    'channel.reactionModeNoneHint',
+  ],
+  enumLabels: [
+    'channel.reactionModeMinimal',
+    'channel.reactionModeFull',
+    'channel.reactionModeNone',
+  ],
+  label: 'channel.reactionMode',
+  type: 'string',
+};
+
+/**
+ * Coerce a raw settings value into a known mode. Rows saved before the field
+ * existed carry `undefined`, and a hand-edited value could be anything — both
+ * fall back to the schema default rather than silently disabling reactions.
+ */
+export function normalizeBotReactionMode(value: unknown): BotReactionMode {
+  return BOT_REACTION_MODES.includes(value as BotReactionMode)
+    ? (value as BotReactionMode)
+    : DEFAULT_BOT_REACTION_MODE;
+}
+
+/**
+ * The moments at which the bridge / callback service may touch the reaction:
+ * - `received` — webhook arrival ACK.
+ * - `thinking` — hand-off to the agent runtime.
+ * - `step`     — after each runtime step (🤔 / ⚡ swap).
+ * - `clear`    — completion / failure cleanup.
+ */
+export type BotReactionPhase = 'clear' | 'received' | 'step' | 'thinking';
+
+/**
+ * Whether a reaction API call is allowed for `phase` under `mode`. For `clear`
+ * this only gates the untracked legacy fallback: a reaction the run actually
+ * applied is always removed, even after a mid-run switch to `none`.
+ */
+export function shouldApplyReaction(mode: BotReactionMode, phase: BotReactionPhase): boolean {
+  if (mode === 'none') return false;
+  if (phase === 'step') return mode === 'full';
+  return true;
+}

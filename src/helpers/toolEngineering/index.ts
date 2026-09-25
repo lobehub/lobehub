@@ -2,21 +2,22 @@
  * Tools Engineering - Unified tools processing using ToolsEngine
  */
 import { AuvManifest } from '@lobechat/builtin-tool-auv';
-import { createEnableChecker, type PluginEnableChecker } from '@lobechat/context-engine';
-import { ToolsEngine } from '@lobechat/context-engine';
-import { resolveToolRules } from '@lobechat/mecha';
 import {
-  type BuiltinToolManifest,
+  createEnableChecker,
+  type LobeToolManifest,
+  type PluginEnableChecker,
+} from '@lobechat/context-engine';
+import { ToolsEngine } from '@lobechat/context-engine';
+import { assembleManifestPool, resolveToolRules } from '@lobechat/mecha';
+import {
   type BuiltinToolResolveContext,
   type ChatCompletionTool,
   type ToolManifest,
   type WorkingModel,
 } from '@lobechat/types';
 
-import type { ConnectorToolPermission } from '@/database/schemas';
 import { applyToolNameMaxLength } from '@/helpers/applyToolNameMaxLength';
 import { isToolAvailableInCurrentEnv } from '@/helpers/toolAvailability';
-import { patchManifestWithPermissions } from '@/libs/mcp/patchManifestPermissions';
 import { getAgentStoreState } from '@/store/agent';
 import {
   agentChatConfigSelectors,
@@ -66,43 +67,6 @@ export interface ToolsEngineConfig {
 }
 
 /**
- * A manifest is usable by ToolsEngine only if it has a non-empty `api` array.
- * ToolsEngine.convertManifestsToTools calls `manifest.api.map(...)` unconditionally,
- * so any entry with `api` missing / non-array will crash the whole tools build.
- * Sources that populate manifests (installed plugins, Composio, LobeHub skills, MCP)
- * have no shared schema validation, so we guard defensively at the merge point.
- */
-const isValidToolManifest = (m: ToolManifest | undefined): m is ToolManifest =>
-  !!m && typeof m === 'object' && Array.isArray((m as ToolManifest).api);
-
-const dropInvalidManifests = (manifests: (ToolManifest | undefined)[], source: string) => {
-  const valid: ToolManifest[] = [];
-  const dropped: Array<{ identifier?: string; reason: string }> = [];
-
-  for (const m of manifests) {
-    if (isValidToolManifest(m)) {
-      valid.push(m);
-    } else if (m) {
-      dropped.push({
-        identifier: (m as { identifier?: string }).identifier,
-        reason: Array.isArray((m as { api?: unknown }).api)
-          ? 'unknown'
-          : 'missing `api` field (expected array)',
-      });
-    }
-  }
-
-  if (dropped.length > 0) {
-    console.warn(
-      `[toolEngineering] Dropped ${dropped.length} invalid manifest(s) from ${source}:`,
-      dropped,
-    );
-  }
-
-  return valid;
-};
-
-/**
  * Initialize ToolsEngine with current manifest schemas and configurable options
  */
 export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine => {
@@ -121,91 +85,55 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
 
   const toolStoreState = getToolStoreState();
 
-  // Get custom connector manifests (user-added MCP servers). Connectors take
-  // priority over plugins: any plugin sharing a connector identifier is dropped
-  // so the connector (server-side execution with its stored token) wins.
-  const connectorManifests = buildClientConnectorManifests(
-    connectorSelectors.customConnectors(toolStoreState),
-  );
-  const connectorIdentifiers = new Set(connectorManifests.map((m) => m.identifier));
-
-  // Per-connector tool permissions, keyed by connector identifier. Used to patch
-  // community-MCP plugin manifests below so the user's needs_approval / disabled
-  // settings surface as humanIntervention (custom connectors are handled by their
-  // own manifests above; disabled is also hard-blocked at the mcp router).
-  const connectorPermsByIdentifier = new Map(
+  // Per-connector tool permissions, keyed by connector identifier: community-
+  // MCP plugins execute outside the connector path, so the user's
+  // needs_approval / disabled settings are patched onto their manifests.
+  const connectorPermissions = new Map(
     connectorSelectors
       .connectorList(toolStoreState)
       .map((c) => [c.identifier, new Map(c.tools.map((t) => [t.toolName, t.permission]))] as const),
   );
 
-  // Get all available plugin manifests (excluding ones now covered by a connector),
-  // patched with their connector tool permissions when a connector row exists.
-  const pluginManifests = pluginSelectors
-    .installedPluginManifestList(toolStoreState)
-    .filter((m) => !connectorIdentifiers.has(m.identifier))
-    .map((m) => {
-      const perms = connectorPermsByIdentifier.get(m.identifier);
-      return perms && perms.size > 0
-        ? (patchManifestWithPermissions(
-            m as any,
-            perms as Map<string, ConnectorToolPermission>,
-          ) as ToolManifest)
-        : m;
-    });
+  // The pool rules (connector precedence, permission patching, context-aware
+  // builtins, invalid manifest guard, disabled-id exclusion) are shared with
+  // the server; the browser only reads its stores.
+  const { manifests } = assembleManifestPool(
+    {
+      additional: additionalManifests as LobeToolManifest[],
+      builtinTools: toolStoreState.builtinTools,
+      composio: composioStoreSelectors
+        .composioAsLobeTools(toolStoreState)
+        .map((tool) => tool.manifest as LobeToolManifest),
+      connectors: buildClientConnectorManifests(
+        connectorSelectors.customConnectors(toolStoreState),
+      ) as LobeToolManifest[],
+      installedPlugins: pluginSelectors.installedPluginManifestList(
+        toolStoreState,
+      ) as LobeToolManifest[],
+      lobehubSkills: lobehubSkillStoreSelectors
+        .lobehubSkillAsLobeTools(toolStoreState)
+        .map((tool) => tool.manifest as LobeToolManifest),
+    },
+    {
+      connectorPermissions,
+      // Disabled identifiers leave the pool outright: explicit activation
+      // bypasses the enable rules, so a rule-only gate would not hold.
+      excludedIdentifiers: disabledPluginIds,
+      manifestContext,
+    },
+  );
 
-  // Get all builtin tool manifests. When a manifest context is supplied (agent
-  // runtime path), context-aware tools resolve their manifest for it — trimming
-  // APIs (e.g. lobe-agent hides callSubAgent in groups) or opting out via `null`.
-  // Context-free callers fall back to the full static manifest.
-  const builtinManifests = toolStoreState.builtinTools
-    .map((tool) =>
-      manifestContext && tool.resolveManifest
-        ? tool.resolveManifest(manifestContext)
-        : tool.manifest,
-    )
-    .filter((m): m is BuiltinToolManifest => !!m) as ToolManifest[];
-
-  // Get Composio tool manifests
-  const composioTools = composioStoreSelectors.composioAsLobeTools(toolStoreState);
-  const composioManifests = composioTools
-    .map((tool) => tool.manifest as ToolManifest)
-    .filter(Boolean);
-
-  // Get LobeHub Skill tool manifests
-  const lobehubSkillTools = lobehubSkillStoreSelectors.lobehubSkillAsLobeTools(toolStoreState);
-  const lobehubSkillManifests = lobehubSkillTools
-    .map((tool) => tool.manifest as ToolManifest)
-    .filter(Boolean);
-
-  // Combine all manifests, dropping entries that would crash ToolsEngine.
-  // Each source is filtered separately so the warning pinpoints the origin.
-  const combinedManifests = [
-    ...dropInvalidManifests(pluginManifests, 'installedPlugins'),
-    ...dropInvalidManifests(builtinManifests, 'builtinTools'),
-    ...dropInvalidManifests(composioManifests, 'composio'),
-    ...dropInvalidManifests(lobehubSkillManifests, 'lobehubSkills'),
-    ...dropInvalidManifests(connectorManifests, 'connectors'),
-    ...dropInvalidManifests(additionalManifests, 'additionalManifests'),
-  ];
-
-  // Disabled identifiers are dropped from the pool outright (not left for the
-  // enableChecker rules) — a plugin, skill, connector, or user-toggleable
-  // builtin tool the agent has explicitly disabled must not be discoverable/
-  // activatable at all, matching the server-side (aiAgent gateway) treatment.
-  // Explicit activation bypasses enable rules; a plain Web client must not
-  // acquire the Electron IPC executor. Gateway execution uses the server engine.
-  const allManifests = combinedManifests.filter(
-    (m) =>
-      !disabledPluginIds.includes(m.identifier) &&
-      (m.identifier !== AuvManifest.identifier || isToolAvailableInCurrentEnv(m.identifier)),
+  // A plain Web client must not acquire the Electron IPC executor: Computer
+  // Use only exists where the platform can run it.
+  const allManifests = manifests.filter(
+    (m) => m.identifier !== AuvManifest.identifier || isToolAvailableInCurrentEnv(m.identifier),
   );
 
   return new ToolsEngine({
     defaultToolIds,
     enableChecker,
     functionCallChecker: isCanUseFC,
-    manifestSchemas: allManifests,
+    manifestSchemas: allManifests as ToolManifest[],
   });
 };
 

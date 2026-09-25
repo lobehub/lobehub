@@ -91,7 +91,6 @@ describe('LobeBedrockAI', () => {
         token: 'test-bedrock-api-key',
       });
     });
-
     it('should throw InvalidBedrockCredentials if accessKeyId is missing', () => {
       expect(() => {
         new LobeBedrockAI({

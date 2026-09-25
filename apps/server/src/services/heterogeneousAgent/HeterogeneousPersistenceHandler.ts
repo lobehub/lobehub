@@ -22,6 +22,7 @@ import {
   reduceMainAgent,
   rehydrateSubagentRunsState,
 } from '@lobechat/heterogeneous-agents';
+import { isEchoedErrorText } from '@lobechat/heterogeneous-agents/errors';
 import { type ChatToolPayload, ThreadStatus, ThreadType } from '@lobechat/types';
 import { createNanoId } from '@lobechat/utils';
 import debug from 'debug';
@@ -297,6 +298,16 @@ const INTERVENTION_KINDS = new Set<AgentInterventionInteractionKind>([
   'plan',
   'question',
 ]);
+
+/** The raw text a CLI would have echoed into the answer for this failure. */
+const errorEchoText = (error: { body?: Record<string, unknown>; message?: string }): string => {
+  const body = error.body ?? {};
+  const candidate = [body.stderr, body.message, error.message].find(
+    (value): value is string => typeof value === 'string' && value.trim().length > 0,
+  );
+
+  return candidate ?? '';
+};
 
 const INTERVENTION_PROVIDERS = new Set<AgentInterventionProvider>([
   'claude-code',
@@ -1484,7 +1495,20 @@ export class HeterogeneousPersistenceHandler {
     error: { body?: Record<string, unknown>; message: string; type: string },
   ) {
     const updateValue: Record<string, any> = {};
-    if (error.body?.clearEchoedContent === true) updateValue.content = '';
+    const clearsEcho = error.body?.clearEchoedContent === true;
+    // One read serves both decisions below.
+    const persisted =
+      clearsEcho || !isHeteroStatusGuideErrorData(error.body)
+        ? await this.deps.messageModel.findById(state.main.currentAssistantId)
+        : undefined;
+    // `clearEchoedContent` marks an error the CLI may ALSO have printed into
+    // the answer — it does not mean the answer is disposable. Quota rejections
+    // carry the flag too, and a run that worked for ten minutes before its
+    // weekly window closed must keep what it wrote, so only an exact echo is
+    // dropped (same rule as the client and the coordinator reducer).
+    if (clearsEcho && isEchoedErrorText(persisted?.content, errorEchoText(error))) {
+      updateValue.content = '';
+    }
     // Same canonical normalization as the in-stream `setError` path — the CLI's
     // free-form `{ message, type }` runs through formatErrorForState so the
     // finish-only write and the in-stream write produce one classified error shape.
@@ -1498,9 +1522,7 @@ export class HeterogeneousPersistenceHandler {
     // the generic error alert — keep the richer persisted error instead.
     const overwritesGuideError =
       !isHeteroStatusGuideErrorData(error.body) &&
-      isHeteroStatusGuideErrorData(
-        (await this.deps.messageModel.findById(state.main.currentAssistantId))?.error?.body,
-      );
+      isHeteroStatusGuideErrorData(persisted?.error?.body);
     if (!overwritesGuideError) updateValue.error = formatErrorForState(error);
 
     if (Object.keys(updateValue).length > 0) {

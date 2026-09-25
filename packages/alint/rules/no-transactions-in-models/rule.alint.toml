@@ -1,0 +1,17 @@
+name = "no-transactions-in-models"
+builtInAgent = "basic-structured"
+instruction = """
+You are reviewing one file from the LobeHub database package's models layer (packages/database/src/models).
+
+Team rule: the models layer holds one Model class per aggregate (table). When a write path needs a transaction spanning MORE THAN ONE table — a cross-aggregate unit of work such as upserting an environment, its instance, a project link and a directory row inside one `db.transaction` — that flow belongs in a Repository under packages/database/src/repositories, not in a Model. Models stay limited to single-aggregate access; repositories own composite, transactional persistence and compose the models.
+
+Report a Model method whose `this.db.transaction(...)` (or a `tx` / `trx` handle it receives) writes — insert, update, delete — to two or more different tables. Anchor the finding on the line where the transaction starts (the `.transaction(` call). In the message, name the method and the tables it writes. In the suggestion, name the Repository to extract the flow into, and which single-aggregate pieces can remain Model methods that the repository composes.
+
+Do not report:
+- read-only queries, including joins across many tables — reading widely is what models do;
+- a transaction that writes only one table, such as a `.for('update')` lock followed by an update of that same table, or a batch update / reorder of one table;
+- single-table upserts (`onConflictDoNothing`, `onConflictDoUpdate`) without an explicit transaction;
+- files outside the models layer (repositories, services, routers) — transactions are expected there.
+
+If uncertain whether a write hits a second table, use low confidence rather than forcing a finding.
+"""

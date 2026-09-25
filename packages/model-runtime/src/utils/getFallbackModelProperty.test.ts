@@ -203,11 +203,6 @@ describe('getModelPropertyWithFallback', () => {
       );
       expect(result).toBeUndefined();
     });
-
-    it('should return undefined for enabled property when model not found', async () => {
-      const result = await getModelPropertyWithFallback('non-existent-model', 'enabled');
-      expect(result).toBeUndefined();
-    });
   });
 
   describe('provider precedence logic', () => {

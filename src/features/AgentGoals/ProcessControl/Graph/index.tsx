@@ -44,6 +44,7 @@ import { type MeasuredSizes, mergeMeasuredSizes } from './measuredSizes';
 import { revealCenter } from './revealNode';
 import { useExplorationNavigation } from './useExplorationNavigation';
 import { useFitViewOnResize } from './useFitViewOnResize';
+import { type GraphViewMode, isStageWholeMap, stageNodeIds } from './viewMode';
 
 /**
  * The exploration map. Two views: 当前阶段 (what got the goal here plus what the
@@ -180,8 +181,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-type GraphViewMode = 'stage' | 'all';
-
 interface GraphProps {
   /** Header actions after the legend — e.g. a host without fullscreen links out to the goal page. */
   extra?: ReactNode;
@@ -199,19 +198,6 @@ interface GraphProps {
   planning?: boolean;
   selectedId?: string;
 }
-
-/** The nodes worth showing before the user asks for the whole map. */
-const stageNodeIds = (graph: GoalGraphView): Set<string> => {
-  const active = new Set<string>();
-  for (const view of graph.nodes)
-    if (view.node.status !== 'proposed' || ['experiment', 'problem'].includes(view.node.kind))
-      active.add(view.node.id);
-  for (const item of graph.frontier) active.add(item.view.node.id);
-  const visible = new Set(active);
-  for (const view of graph.blocked)
-    if (view.blockers.every((blocker) => active.has(blocker.id))) visible.add(view.node.id);
-  return visible;
-};
 
 const useSubtitle = () => {
   const { t } = useTranslation('chat');
@@ -533,7 +519,6 @@ const Canvas = memo<
               hot && 'goal-hot',
             ),
             id: edge.id,
-            zIndex: 2,
             label:
               'projected' in edge && edge.projected === true
                 ? t('goalExperiment.projectedRelation', {
@@ -712,7 +697,9 @@ const Graph = memo<GraphProps>(({ extra, fullscreen = false, onFullscreenChange,
       }
     : props.graph;
   const openNode = useChatStore((s) => s.openGoalNode);
-  const [view, setView] = useState<GraphViewMode>('stage');
+  const [preferredView, setView] = useState<GraphViewMode>('stage');
+  const stageIsWholeMap = isStageWholeMap(props.graph);
+  const view: GraphViewMode = stageIsWholeMap ? 'all' : preferredView;
   const experiments = props.graph.nodes.filter((item) => item.node.kind === 'experiment');
   const [hiddenKinds, setHiddenKinds] = useState<ReadonlySet<GoalGraphNodeKind>>(() => new Set());
   const showPortal = useChatStore(chatPortalSelectors.showPortal);
@@ -780,12 +767,23 @@ const Graph = memo<GraphProps>(({ extra, fullscreen = false, onFullscreenChange,
       ))}
     </Flexbox>
   );
+  const toggle = onFullscreenChange && (
+    <ActionIcon
+      icon={fullscreen ? X : Maximize2}
+      size={'small'}
+      title={fullscreen ? t('goalProcess.graph.exitFullscreen') : t('goalProcess.graph.fullscreen')}
+      aria-label={
+        fullscreen ? t('goalProcess.graph.exitFullscreen') : t('goalProcess.graph.fullscreen')
+      }
+      onClick={() => onFullscreenChange(!fullscreen)}
+    />
+  );
   const titleAndViews = (
     <>
       <Text fontSize={16} weight={600}>
         {t('goalProcess.graph.title')}
       </Text>
-      {experiments.length === 0 && (
+      {experiments.length === 0 && !stageIsWholeMap && (
         <Segmented
           size={'small'}
           value={view}
@@ -796,6 +794,9 @@ const Graph = memo<GraphProps>(({ extra, fullscreen = false, onFullscreenChange,
           onChange={(value) => setView(value as GraphViewMode)}
         />
       )}
+      {/* Inline, the expand button sits with the view switch; fullscreen keeps
+          its exit in the top-right corner card. */}
+      {!fullscreen && toggle}
     </>
   );
   const legend = (
@@ -838,18 +839,6 @@ const Graph = memo<GraphProps>(({ extra, fullscreen = false, onFullscreenChange,
       })}
     </Flexbox>
   );
-  const toggle = onFullscreenChange && (
-    <ActionIcon
-      icon={fullscreen ? X : Maximize2}
-      size={'small'}
-      title={fullscreen ? t('goalProcess.graph.exitFullscreen') : t('goalProcess.graph.fullscreen')}
-      aria-label={
-        fullscreen ? t('goalProcess.graph.exitFullscreen') : t('goalProcess.graph.fullscreen')
-      }
-      onClick={() => onFullscreenChange(!fullscreen)}
-    />
-  );
-
   if (fullscreen)
     return (
       <div className={styles.overlay}>
@@ -916,7 +905,6 @@ const Graph = memo<GraphProps>(({ extra, fullscreen = false, onFullscreenChange,
         <Flexbox horizontal align={'center'} gap={12}>
           {legend}
           {extra}
-          {toggle}
         </Flexbox>
       </Flexbox>
       <ReactFlowProvider>

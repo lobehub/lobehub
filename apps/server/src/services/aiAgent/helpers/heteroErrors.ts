@@ -39,11 +39,51 @@ export const HETERO_DISPATCH_ERROR_HEADLINES: Record<string, string> = {
  * The gateway may answer with a bare code (`DEVICE_OFFLINE`) or with a code the
  * device-gateway client annotated with the status it came from
  * (`DEVICE_CHANNEL_UNAVAILABLE (HTTP 503)`). Look the headline up by the code
- * itself so the annotation doesn't cost the user a readable message; `detail`
- * keeps the full raw string for diagnostics either way.
+ * itself so the annotation doesn't cost the user a readable message. Non-2xx
+ * responses can also carry a JSON envelope whose `error` field holds the code.
+ * `detail` keeps the full raw string for diagnostics in either format.
  */
-const toDispatchErrorCode = (raw?: string): string | undefined =>
-  raw?.trim().match(/^([A-Z][\dA-Z_]*)/)?.[1];
+const toDispatchErrorCode = (raw?: string): string | undefined => {
+  let text = raw?.trim();
+
+  if (text?.startsWith('{')) {
+    try {
+      const body: unknown = JSON.parse(text);
+      if (body && typeof body === 'object' && 'error' in body && typeof body.error === 'string') {
+        text = body.error.trim();
+      }
+    } catch {
+      // Preserve malformed gateway responses as diagnostic text.
+    }
+  }
+
+  return text?.match(/^([A-Z][\dA-Z_]*)/)?.[1];
+};
+
+/**
+ * The device a failed dispatch was aimed at, recorded on the operation's error so
+ * a later reader can ask whether *that* device is back — the routing that picked
+ * it (topic override, member binding, personal vs workspace pool) is not
+ * something a consumer should re-derive.
+ */
+export interface DeviceDispatchRoute {
+  deviceId: string;
+  /** The principal whose device pool the gateway was asked to route through. */
+  userId: string;
+  /** Set when the device belongs to a workspace pool rather than the personal one. */
+  workspaceId?: string;
+}
+
+export const readDeviceDispatchRoute = (error: unknown): DeviceDispatchRoute | undefined => {
+  const route = (error as { deviceRoute?: Partial<DeviceDispatchRoute> } | null | undefined)
+    ?.deviceRoute;
+  if (typeof route?.deviceId !== 'string' || typeof route.userId !== 'string') return undefined;
+  return {
+    deviceId: route.deviceId,
+    userId: route.userId,
+    ...(typeof route.workspaceId === 'string' ? { workspaceId: route.workspaceId } : {}),
+  };
+};
 
 export const humanizeHeteroDispatchError = (raw?: string): string => {
   const code = toDispatchErrorCode(raw);

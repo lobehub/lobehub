@@ -100,7 +100,6 @@ export default {
   'purge.title': 'Purge All Memories',
   'tab.activities': 'Activities',
   'tab.contexts': 'Contexts',
-  'tab.experiences': 'Experiences',
   'tab.home': 'Home',
   'tab.identities': 'Identities',
   'tab.preferences': 'Preferences',

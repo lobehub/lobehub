@@ -412,6 +412,16 @@ export interface PlatformClient {
   ) => Promise<void>;
 
   /**
+   * Turn platform-native mention tokens (e.g. Discord `<@123>`) into readable
+   * `@Display Name` text using the payload on `message`, without removing
+   * anything. Used for quoted / referenced text where "who was tagged" is
+   * part of the meaning. `message` is the inbound Chat SDK message (or the
+   * merged message built from several), passed as `unknown` because each
+   * platform digs into its own `raw` shape.
+   */
+  resolveMentions?: (text: string, message?: unknown) => string;
+
+  /**
    * Resolve the correct thread ID for reaction API calls.
    *
    * Some platforms (e.g. Discord) need to route reactions to a different channel
@@ -422,8 +432,12 @@ export interface PlatformClient {
    */
   resolveReactionThreadId?: (threadId: string, messageId: string) => string;
 
-  /** Strip platform-specific bot mention artifacts from user input. */
-  sanitizeUserInput?: (text: string) => string;
+  /**
+   * Strip platform-specific bot mention artifacts from user input, e.g. the
+   * leading `<@bot>` that addressed the bot, and resolve any other mention
+   * tokens to readable names when `message` is supplied.
+   */
+  sanitizeUserInput?: (text: string, message?: unknown) => string;
 
   /**
    * Whether the bot should subscribe to a thread. Default: true.
@@ -468,8 +482,28 @@ export interface BotPlatformRuntimeContext {
 
 // --------------- Validation ---------------
 
+/**
+ * Machine-readable reason for a credential check failure. Each value has a
+ * user-facing explanation under `channel.connectionError.<code>` in the
+ * `agent` locale namespace, shared with the runtime-status error codes.
+ */
+export type BotCredentialErrorCode =
+  | 'application_not_found'
+  | 'invalid_credentials'
+  | 'missing_credentials'
+  | 'permission_denied'
+  | 'rate_limited'
+  | 'upstream_unavailable';
+
+export interface ValidationError {
+  /** Recognized failure reason; omitted when the platform error is unclassified. */
+  code?: BotCredentialErrorCode;
+  field: string;
+  message: string;
+}
+
 export interface ValidationResult {
-  errors?: Array<{ field: string; message: string }>;
+  errors?: ValidationError[];
   valid: boolean;
 }
 

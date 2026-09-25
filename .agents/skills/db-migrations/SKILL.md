@@ -170,7 +170,6 @@ This generates:
 And updates:
 
 - `packages/database/migrations/meta/_journal.json`
-- `packages/database/src/core/migrations.json`
 - `docs/development/database-schema.dbml`
 
 ## Custom Migrations (e.g. CREATE EXTENSION)

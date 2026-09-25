@@ -40,6 +40,16 @@ const testState = vi.hoisted(() => ({
     selectModel: vi.fn(async () => {}),
     selectionPolicy: 'fixed' as 'fixed' | 'member',
   },
+  /** What the host composer published about its own conversation. */
+  chatInput: {
+    topicId: undefined as string | null | undefined,
+  },
+  /** Chat store slice the notice reads for the topic-scoped model pin. */
+  chat: {
+    activeTopicId: undefined as string | undefined,
+    topics: {} as Record<string, { model?: string; provider?: string }>,
+    updateTopicModel: vi.fn(async () => {}),
+  },
   aiInfra: {
     builtinAiModelList: [] as TestBuiltinModel[],
     enabledChatModelList: [] as TestProviderWithModels[],
@@ -94,6 +104,11 @@ vi.mock('@/features/ChatInput/hooks/useAgentModelSelection', () => ({
   }),
 }));
 
+vi.mock('@/features/ChatInput/store', () => ({
+  useChatInputStore: <T,>(selector: StoreSelector<T, typeof testState.chatInput>) =>
+    selector(testState.chatInput),
+}));
+
 vi.mock('@/features/ChatInput/hooks/useChatInputResourceAccess', () => ({
   useChatInputResourceAccess: () => testState.resourceAccess,
 }));
@@ -119,6 +134,22 @@ vi.mock('@/store/agent/selectors', () => ({
     isAgentConfigLoadingById: () => (s: typeof testState.agent) => s.isConfigLoading,
     isAgentHeterogeneousById: () => (s: typeof testState.agent) =>
       Boolean(s.agencyConfig?.heterogeneousProvider),
+  },
+}));
+
+vi.mock('@/store/chat', () => ({
+  useChatStore: <T,>(selector: StoreSelector<T, typeof testState.chat>) => selector(testState.chat),
+}));
+
+vi.mock('@/store/chat/slices/topic/selectors', () => ({
+  topicSelectors: {
+    getTopicById: (id: string) => (s: typeof testState.chat) => s.topics[id],
+    getTopicModelById: (id: string) => (s: typeof testState.chat) => {
+      const topic = s.topics[id];
+      if (!topic?.model) return undefined;
+
+      return { model: topic.model, provider: topic.provider || '' };
+    },
   },
 }));
 
@@ -148,6 +179,12 @@ describe('useChatInputNotice', () => {
     };
     testState.agent.model = 'gpt-4o';
     testState.agent.provider = 'openai';
+    testState.chatInput = { topicId: undefined };
+    testState.chat = {
+      activeTopicId: undefined,
+      topics: {},
+      updateTopicModel: vi.fn(async () => {}),
+    };
     testState.aiInfra.builtinAiModelList = [];
     testState.aiInfra.enabledChatModelList = [];
     testState.aiInfra.enabledAiProviders = [];
@@ -486,6 +523,147 @@ describe('useChatInputNotice', () => {
     const { result } = renderHook(() => useChatInputNotice());
 
     expect(result.current).toBeUndefined();
+  });
+
+  it('judges the topic-pinned model rather than the disabled agent default', () => {
+    // A topic pins its own model (`topics.model`), and that pin is what runs —
+    // a retired agent default behind it must not raise a notice.
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+    testState.agent.model = 'gpt-4-32k';
+    testState.chat.activeTopicId = 'topic-1';
+    testState.chat.topics = { 'topic-1': { model: 'gpt-4o', provider: 'openai' } };
+    testState.aiInfra.builtinAiModelList = [
+      { id: 'gpt-4-32k', providerId: 'openai', type: 'chat' },
+    ];
+    testState.aiInfra.enabledAiProviders = [{ id: 'openai' }];
+    testState.aiInfra.enabledChatModelList = [
+      { children: [{ abilities: { functionCall: true }, id: 'gpt-4o' }], id: 'openai' },
+    ];
+
+    const { result } = renderHook(() => useChatInputNotice());
+
+    expect(result.current).toBeUndefined();
+  });
+
+  it('offers to enable the disabled model a topic pinned over a live agent default', () => {
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+    testState.chat.activeTopicId = 'topic-1';
+    testState.chat.topics = { 'topic-1': { model: 'gpt-4-32k', provider: 'openai' } };
+    testState.aiInfra.builtinAiModelList = [
+      { id: 'gpt-4-32k', providerId: 'openai', type: 'chat' },
+    ];
+    testState.aiInfra.enabledAiProviders = [{ id: 'openai' }];
+    // The agent default is perfectly fine — only the topic pin is disabled.
+    testState.aiInfra.enabledChatModelList = [
+      { children: [{ abilities: { functionCall: true }, id: 'gpt-4o' }], id: 'openai' },
+    ];
+
+    const { result } = renderHook(() => useChatInputNotice());
+
+    expect(result.current).toMatchObject({ action: 'enableModel', key: 'input.modelDisabled' });
+  });
+
+  it('repairs the active topic instead of the agent when the fallback provider differs', async () => {
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+    testState.chat.activeTopicId = 'topic-1';
+    testState.chat.topics = { 'topic-1': { model: 'gpt-4o', provider: 'removed-provider' } };
+    testState.aiInfra.builtinAiModelList = [{ id: 'gpt-4o', providerId: 'openai', type: 'chat' }];
+
+    const { result } = renderHook(() => useChatInputNotice());
+
+    await act(async () => result.current?.onAction?.());
+
+    expect(testState.aiInfra.toggleProviderModelEnabled).toHaveBeenCalledWith({
+      enabled: true,
+      id: 'gpt-4o',
+      providerId: 'openai',
+      type: 'chat',
+    });
+    expect(testState.chat.updateTopicModel).toHaveBeenCalledWith('topic-1', {
+      model: 'gpt-4o',
+      provider: 'openai',
+    });
+    expect(testState.agentModelSelection.selectModel).not.toHaveBeenCalled();
+  });
+
+  it('does not warn while the active topic row has not loaded yet', () => {
+    // Cold load with a topic in the URL: the pin is unknown, so the agent
+    // default must not be judged in its place.
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+    testState.agent.model = 'gpt-4-32k';
+    testState.chat.activeTopicId = 'topic-1';
+    testState.chat.topics = {};
+
+    const { result } = renderHook(() => useChatInputNotice());
+
+    expect(result.current).toBeUndefined();
+  });
+
+  it('ignores the global active topic when its own conversation has none', () => {
+    // A page copilot embedded next to another chat runs with `topicId: null`
+    // while the outer chat's topic is still the global one — judging that topic
+    // would warn about a model this composer never runs.
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+    testState.chatInput.topicId = null;
+    testState.chat.activeTopicId = 'outer-topic';
+    testState.chat.topics = { 'outer-topic': { model: 'gpt-4-32k', provider: 'openai' } };
+    testState.aiInfra.builtinAiModelList = [
+      { id: 'gpt-4-32k', providerId: 'openai', type: 'chat' },
+    ];
+    testState.aiInfra.enabledAiProviders = [{ id: 'openai' }];
+    testState.aiInfra.enabledChatModelList = [
+      { children: [{ abilities: { functionCall: true }, id: 'gpt-4o' }], id: 'openai' },
+    ];
+
+    const { result } = renderHook(() => useChatInputNotice());
+
+    expect(result.current).toBeUndefined();
+  });
+
+  it('repairs its own conversation topic rather than the global active one', async () => {
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+    testState.chatInput.topicId = 'own-topic';
+    testState.chat.activeTopicId = 'outer-topic';
+    testState.chat.topics = {
+      'outer-topic': { model: 'gpt-4o', provider: 'openai' },
+      'own-topic': { model: 'gpt-4o', provider: 'removed-provider' },
+    };
+    testState.aiInfra.builtinAiModelList = [{ id: 'gpt-4o', providerId: 'openai', type: 'chat' }];
+
+    const { result } = renderHook(() => useChatInputNotice());
+
+    await act(async () => result.current?.onAction?.());
+
+    expect(testState.chat.updateTopicModel).toHaveBeenCalledWith('own-topic', {
+      model: 'gpt-4o',
+      provider: 'openai',
+    });
+  });
+
+  it('judges an unlisted conversation topic by its agent default instead of waiting on it', async () => {
+    // A document's chat panel runs on a system topic the sidebar never lists,
+    // so its row never lands in the store — waiting on it would hide the notice
+    // forever, even with the agent default genuinely disabled.
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+    testState.chatInput.topicId = 'doc-topic';
+    testState.chat.activeTopicId = 'outer-topic';
+    testState.chat.topics = { 'outer-topic': { model: 'gpt-4o', provider: 'openai' } };
+    testState.agent.provider = 'removed-provider';
+    testState.aiInfra.builtinAiModelList = [{ id: 'gpt-4o', providerId: 'openai', type: 'chat' }];
+
+    const { result } = renderHook(() => useChatInputNotice());
+
+    expect(result.current).toMatchObject({ action: 'enableModel', key: 'input.modelDisabled' });
+
+    await act(async () => result.current?.onAction?.());
+
+    // It judged the agent default, so the repair lands on the agent, not on a
+    // topic pin it never saw.
+    expect(testState.agentModelSelection.selectModel).toHaveBeenCalledWith({
+      model: 'gpt-4o',
+      provider: 'openai',
+    });
+    expect(testState.chat.updateTopicModel).not.toHaveBeenCalled();
   });
 
   it('does not return a model notice for heterogeneous agents', () => {

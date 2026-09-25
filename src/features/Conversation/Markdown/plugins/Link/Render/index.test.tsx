@@ -46,6 +46,7 @@ const mockNavigate = vi.fn();
 const mockOpenAcceptance = vi.fn();
 const mockOpenAgentDetail = vi.fn();
 const mockOpenDocument = vi.fn();
+const mockOpenGoal = vi.fn();
 const mockOpenTaskDetail = vi.fn();
 const mockOpenVerifyReport = vi.fn();
 
@@ -92,6 +93,7 @@ vi.mock('@/store/chat', () => ({
       openAcceptance: mockOpenAcceptance,
       openAgentDetail: mockOpenAgentDetail,
       openDocument: mockOpenDocument,
+      openGoal: mockOpenGoal,
       openTaskDetail: mockOpenTaskDetail,
       openVerifyReport: mockOpenVerifyReport,
     }),
@@ -351,6 +353,39 @@ describe('Link Render — internal entities', () => {
     });
     fireEvent.click(agent.getByRole('link', { name: 'Research agent' }));
     expect(mockOpenAgentDetail).toHaveBeenCalledWith('agt_1');
+  });
+
+  it('shows a goal the CLI printed by its title and goal icon, and opens it beside the chat', () => {
+    // `lh goal create` prints the goal URL; agents paste it bare or label it with
+    // the id. Either way the link should read as the goal, not its id.
+    mockEntityPreview = { title: 'Vent 真信号修复' };
+
+    const { container, getByRole } = renderLink({
+      linkHref: '/goal/goal_abc',
+      linkKind: 'generic',
+      linkLabel: 'goal_abc',
+    });
+
+    const anchor = container.querySelector('a')!;
+    expect(anchor.textContent).toBe('Vent 真信号修复');
+    // The goal's own icon, not a status or progress glyph.
+    expect(anchor.querySelector('svg.lucide-target')).not.toBeNull();
+
+    fireEvent.click(getByRole('link', { name: 'Vent 真信号修复' }));
+    expect(mockOpenGoal).toHaveBeenCalledWith('goal_abc');
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('keeps authored text on a goal link', () => {
+    mockEntityPreview = { title: 'Resolved goal title' };
+
+    const { container } = renderLink({
+      linkHref: '/agent/agt_1/goal/goal_abc',
+      linkKind: 'generic',
+      linkLabel: '接续 goal',
+    });
+
+    expect(container.querySelector('a')!.textContent).toBe('接续 goal');
   });
 
   it('hard-navigates personal verify pages into the Workbench runtime', () => {

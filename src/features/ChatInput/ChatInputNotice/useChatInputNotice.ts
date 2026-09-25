@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
 import { useAgentModelSelection } from '@/features/ChatInput/hooks/useAgentModelSelection';
 import { useChatInputResourceAccess } from '@/features/ChatInput/hooks/useChatInputResourceAccess';
+import { useTopicId } from '@/features/ChatInput/hooks/useTopicId';
 import {
   resolveEnableTargetProviderId,
   resolveStaleModelState,
@@ -14,11 +15,13 @@ import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
+import { useChatStore } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
 interface ResolveChatInputNoticeParams {
   currentChatModel?: unknown;
-  isAgentModelPending: boolean;
+  isEffectiveModelPending: boolean;
   isGroupContext?: boolean;
   isHeterogeneousAgent: boolean;
   isModelConfigReady: boolean;
@@ -38,7 +41,7 @@ const findEnabledChatModel = (
 
 export const resolveChatInputNotice = ({
   currentChatModel,
-  isAgentModelPending,
+  isEffectiveModelPending,
   isGroupContext,
   isHeterogeneousAgent,
   isModelDisabled,
@@ -55,17 +58,18 @@ export const resolveChatInputNotice = ({
     } as const;
 
   // Model-config notices don't apply to heterogeneous agents (own toolchain),
-  // before the model runtime config is ready, or before the agent's effective
-  // model is settled. The last one matters on a cold page load: until
-  // `agentMap` has the agent (and, for a member-selection workspace agent,
-  // until the member override is fetched), the model resolves to the
-  // DEFAULT_MODEL/DEFAULT_PROVIDER fallback, which is often absent from the
-  // user's enabled list — that used to flash the "model offline" warning for a
-  // frame before the real config resolved.
+  // before the model runtime config is ready, or before the effective model is
+  // settled. The last one matters on a cold page load: until `agentMap` has the
+  // agent (and, for a member-selection workspace agent, until the member
+  // override is fetched, and for a topic-pinned model until the topic row is
+  // loaded), the model resolves to the DEFAULT_MODEL/DEFAULT_PROVIDER fallback
+  // or the agent default, which is often absent from the user's enabled list —
+  // that used to flash the "model offline" warning for a frame before the real
+  // config resolved.
   if (
     !isHeterogeneousAgent &&
     isModelConfigReady &&
-    !isAgentModelPending && // Example: an agent still references `gpt-4-32k`, or a model reclassified to
+    !isEffectiveModelPending && // Example: an agent still references `gpt-4-32k`, or a model reclassified to
     // image/video; once absent from the chat selector, it should read as unavailable.
     !currentChatModel
   ) {
@@ -108,8 +112,39 @@ export const useChatInputNotice = (): ChatInputNotice | undefined => {
 
   // Same source as the model trigger renders, so the notice can never judge a
   // different model than the one the user sees (member overrides included).
-  const { canSelectModel, isPreferenceLoading, model, provider, selectModel, selectionPolicy } =
-    useAgentModelSelection(agentId);
+  const {
+    canSelectModel,
+    isPreferenceLoading,
+    model: agentModel,
+    provider: agentProvider,
+    selectModel,
+    selectionPolicy,
+  } = useAgentModelSelection(agentId);
+
+  // …and the trigger resolves topic-first: a topic pins its own model
+  // (`topics.model`), which outranks the agent default for everything that
+  // actually runs (see `useEffectiveModel`). Judging the agent model here
+  // warned "the current model is disabled" over a perfectly usable topic model,
+  // and its Enable action then repaired the agent row nobody was using.
+  // The topic comes from this composer's own conversation, never the global
+  // active topic — see `useTopicId`.
+  const topicId = useTopicId();
+  const topicModel = useChatStore((s) =>
+    topicId ? topicSelectors.getTopicModelById(topicId)(s) : undefined,
+  );
+  const hasTopicRow = useChatStore((s) => !!topicId && !!topicSelectors.getTopicById(topicId)(s));
+  const updateTopicModel = useChatStore((s) => s.updateTopicModel);
+  // The main chat's topic row arrives with the sidebar list (or its detail
+  // fetch) a beat after the route makes it active; until then it reads as "no
+  // pin" and would fall back to the agent default — the same cold-load flash as
+  // above. Only that topic is worth waiting on: a host-owned topic that is never
+  // listed (a document's chat panel is a system topic) would otherwise suppress
+  // the notice for good, so it is judged by its agent default instead.
+  const isActiveTopicPending = useChatStore(
+    (s) => !!topicId && topicId === s.activeTopicId && !topicSelectors.getTopicById(topicId)(s),
+  );
+  const model = topicModel?.model ?? agentModel;
+  const provider = topicModel?.model ? topicModel.provider : agentProvider;
 
   // `isPreferenceLoading` is true for every workspace agent while the shared
   // preferences request is in flight, but the override only feeds the
@@ -164,7 +199,8 @@ export const useChatInputNotice = (): ChatInputNotice | undefined => {
 
   const notice = resolveChatInputNotice({
     currentChatModel,
-    isAgentModelPending: isAgentConfigLoading || isMemberOverridePending,
+    isEffectiveModelPending:
+      isAgentConfigLoading || isMemberOverridePending || isActiveTopicPending,
     isGroupContext,
     isHeterogeneousAgent,
     isModelDisabled,
@@ -189,7 +225,13 @@ export const useChatInputNotice = (): ChatInputNotice | undefined => {
       });
       if (providerId !== provider) {
         try {
-          await selectModel({ model, provider: providerId });
+          // Re-point the row the judged model came from, the way the model
+          // trigger's own switch routes: this conversation's topic when its row
+          // is known, the agent (or member override) otherwise — an unlisted
+          // topic was judged by its agent default, so that is what gets fixed.
+          if (topicId && hasTopicRow)
+            await updateTopicModel(topicId, { model, provider: providerId });
+          else await selectModel({ model, provider: providerId });
         } catch (error) {
           console.error('Failed to select the enabled chat model provider:', error);
           toast.error(t('input.modelDisabled.selectionFailed'));
@@ -204,12 +246,15 @@ export const useChatInputNotice = (): ChatInputNotice | undefined => {
   }, [
     enableTargetProviderId,
     enabledChatModelList,
+    hasTopicRow,
     model,
     provider,
     selectModel,
     t,
     toggleProviderEnabled,
     toggleProviderModelEnabled,
+    topicId,
+    updateTopicModel,
   ]);
 
   if (notice?.action !== 'enableModel') return notice;

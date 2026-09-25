@@ -3,8 +3,10 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { type PropsWithChildren, useEffect } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getConversationSendButtonProps } from '@/features/Conversation/ChatInput/utils';
 import { useSingleton } from '@/hooks/useSingleton';
 
+import SendButton from './SendArea/SendButton';
 import { createStore, Provider, useChatInputStore } from './store';
 import StoreUpdater from './StoreUpdater';
 import VoiceMessage from './VoiceMessage';
@@ -86,6 +88,43 @@ beforeEach(() => {
 });
 
 describe('ChatInput StoreUpdater', () => {
+  it('keeps follow-up Send disabled during uploads and restores it without disabling Stop', () => {
+    const onStop = vi.fn();
+    const send = vi.fn();
+    const store = createStore();
+    store.setState({ handleSendButton: send, handleStop: onStop });
+    const composer = (isUploading: boolean) => (
+      <Provider createStore={() => store}>
+        <StoreUpdater
+          leftActions={[]}
+          rightActions={[]}
+          sendButtonProps={getConversationSendButtonProps(
+            { disabled: isUploading, generating: true, onStop, showSendWhileGenerating: true },
+            { disabled: false, shape: 'round' },
+            isUploading,
+          )}
+        />
+        <SendButton />
+      </Provider>
+    );
+    const { rerender } = render(composer(true));
+    const [stopButton, sendButton] = screen.getAllByRole('button');
+
+    expect(stopButton).not.toBeDisabled();
+    expect(sendButton).toBeDisabled();
+    fireEvent.click(sendButton);
+    expect(send).not.toHaveBeenCalled();
+    fireEvent.click(stopButton);
+    expect(onStop).toHaveBeenCalledOnce();
+
+    rerender(composer(false));
+    const [restoredStop, restoredSend] = screen.getAllByRole('button');
+    expect(restoredStop).not.toBeDisabled();
+    expect(restoredSend).not.toBeDisabled();
+    fireEvent.click(restoredSend);
+    expect(send).toHaveBeenCalledOnce();
+  });
+
   it('clears sendMenu when the prop becomes undefined', () => {
     const initialSendMenu = { items: [{ key: 'test', label: 'Test' }] } satisfies MenuProps;
     const onSendMenuChange = vi.fn();

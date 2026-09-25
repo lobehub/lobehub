@@ -1,68 +1,93 @@
 ---
 title: MCP 市场
-description: '为助理接入 10,000+ 工具——数据库、API、文件系统等。一个协议，无限集成。'
+description: 在 LobeHub 社区发现并安装 MCP Server，让助理连接外部工具、数据和服务。
 tags:
   - LobeHub
   - MCP
   - 模型上下文协议
-  - 技能
+  - MCP Server
   - 连接器
 ---
 
 # MCP 市场
 
-**模型上下文协议（Model Context Protocol，MCP）** 是一种开放标准，让助理与外部工具、数据源和服务建立无缝、安全的连接。你可以将其理解为一个通用适配器 —— 助理能够与数据库、API、文件系统、开发工具、业务应用等几乎任何外部服务交互。
+MCP（Model Context Protocol）可以让助理连接数据库、API、文件系统、开发工具和业务应用。MCP 市场汇集了社区发布的 MCP Server，你可以从市场中查找并安装需要的服务。
 
-LobeHub 的 MCP 市场汇聚了来自全球创作者的优质 MCP，提供超过 10,000 个现成工具，随时为你的助理注入能力。
+## MCP 和 Skill 有什么不同
 
-## 什么是 MCP？
+| 类型 | 作用 | 示例 |
+| --- | --- | --- |
+| **MCP Server** | 连接外部工具和数据 | 数据库、GitHub、浏览器和业务应用 |
+| **Skill** | 告诉助理怎样完成任务 | 写作规范、审查清单和工作流程 |
 
-传统助理功能有限 —— 只能聊天，无法与外部工具交互或获取实时数据。MCP 打破了这一壁垒：
+MCP 连接和授权在**设置 → 连接器**中管理。Skill 的浏览和安装见[Skills 市场](/zh/docs/usage/community/skills-market)。
 
-| 没有 MCP      | 有了 MCP      |
-| ----------- | ----------- |
-| 孤立的聊天机器人    | 互联的协作伙伴     |
-| 仅限静态知识      | 实时获取外部数据    |
-| 需要手动复制粘贴    | 直接操作外部系统    |
-| 每个工具都需要单独集成 | 一个协议连接数千个服务 |
+## 进入 MCP 市场
 
-MCP 将 Agent 从孤立的聊天机器人转变为真正能完成工作的互联队友。
+在 LobeHub 左侧边栏打开**社区**，然后点击 **MCP**。
 
-## 浏览 MCP 市场
+市场有以下浏览方式：
 
-点击左侧边栏的「社区」→「MCP」，进入 MCP 市场主页。
+- **搜索**：按名称、简介或关键词查找 MCP
+- **分类**：按开发、效率、信息检索、媒体、商业服务等场景浏览
+- **排序**：按推荐、安装量或更新时间等方式排列
+- **市场卡片**：查看名称、作者、简介、等级、安装量和 GitHub Stars
 
-![MCP 市场](/blog/assetsb811f2aae8e8346aef16793d6bd10f88.webp)
+市场中的数量和排序会持续更新，以页面显示为准。
 
-MCP 市场按类别分类，方便你快速找到所需类型：
+## 查看 MCP 卡片
 
-- **开发工具** — GitHub、GitLab、Linear、Jira、VS Code
-- **生产力** — Google Drive、Notion、Slack、Trello、Asana
-- **数据分析** — PostgreSQL、MongoDB、Redis、Elasticsearch
-- **云服务** — AWS、Google Cloud、Azure、Cloudflare
-- **文件系统** — 本地文件、Dropbox、OneDrive、S3
-- **通讯** — 邮件、短信、Discord、Telegram
-- **搜索与知识** — 网络搜索、Wikipedia、文档站点
+市场卡片可能显示：
 
-## 安装 MCP
+| 信息 | 含义 |
+| --- | --- |
+| **名称、作者和简介** | MCP Server 的基本用途 |
+| **等级** | 根据验证、安装方式、功能和仓库信息生成的综合等级 |
+| **推荐、官方认证或已验证** | MCP 在市场中的状态标记 |
+| **Tools、Prompts 和 Resources** | MCP Server 包含的工具、提示词和资源数量 |
+| **本地、云端或混合服务** | MCP Server 的运行方式 |
+| **安装量和 GitHub Stars** | 市场安装情况和源码仓库关注度 |
 
-<Callout type={'info'}>请谨慎使用来路不明的 MCP，LobeHub 无法确保所有 MCP 的安全性。</Callout>
+不同 MCP 展示的信息可能有所不同。
 
-### 一键安装（桌面端）
+## 查看 MCP 详情
 
-LobeHub 桌面应用提供最便捷的 MCP 插件安装方式：
+点击卡片即可进入详情页。你可以查看：
 
-1. 点击侧边栏打开 **MCP 市场**
-2. 浏览或搜索你需要的插件
-3. 点击 **安装**
-4. 配置所需设置（API Key、权限等）
-5. 插件立即对所有 Agent 可用
+- **概览**：用途摘要、README、标签和相关 MCP
+- **安装方式**：连接方式、系统依赖、命令、参数和环境变量
+- **技能功能**：Tools、Prompts 和 Resources
+- **评分**：综合等级和评分明细
+- **版本历史**：版本号、发布日期和最新版本
+- **源码信息**：官网、许可证和 GitHub 仓库
 
-### 手动安装（自托管）
+## 从市场安装 MCP
 
-对于自托管部署，可通过配置连接设置来安装 MCP 服务器。
+1. 在**社区 → MCP**中打开目标 MCP。
+2. 你可以先浏览简介、安装方式和功能列表。
+3. 点击**安装 MCP Server**。
+4. 根据页面提示填写连接地址、API Key 或环境变量。
+5. 完成安装后，在助理设置中启用该连接器。
 
-**示例：STDIO 服务器（本地进程）**
+如果服务需要账号授权，页面会引导你登录。需要运行本地命令的 STDIO MCP 可在桌面端使用；HTTP MCP 可以连接远程服务，也可以在桌面端连接本机或局域网服务。
+
+## 手动添加 MCP
+
+如果目标 MCP 不在市场中，可以前往**设置 → 连接器**手动添加。
+
+### HTTP Server
+
+填写 MCP Server 的 URL，并根据服务要求添加认证信息或请求头。桌面端也可以连接本机或局域网地址，例如：
+
+```text
+http://127.0.0.1:3000/mcp
+```
+
+### STDIO Server
+
+填写启动命令、参数和环境变量。STDIO Server 会作为本地进程运行，目前可在桌面端使用。
+
+你也可以导入 `mcpServers` JSON：
 
 ```json
 {
@@ -76,151 +101,59 @@ LobeHub 桌面应用提供最便捷的 MCP 插件安装方式：
 }
 ```
 
-**示例：HTTP 服务器（远程服务）**
+## 在助理中使用 MCP
 
-```json
-{
-  "mcpServers": {
-    "github": {
-      "url": "https://mcp-server-github.example.com",
-      "type": "http",
-      "headers": {
-        "Authorization": "Bearer YOUR_GITHUB_TOKEN"
-      }
-    }
-  }
-}
-```
+安装完成后，可以为需要使用它的助理开启连接：
 
-## 连接类型
+1. 打开**助理设置**。
+2. 进入**连接器**。
+3. 选择 MCP Server。
+4. 设置各个工具的权限并保存。
 
-MCP 支持两种连接方式：
+工具权限有三种：
 
-**STDIO（标准输入 / 输出）** — MCP 服务器作为本地进程运行，通过 stdin/stdout 通信。适合本地工具、脚本、文件系统访问和桌面应用。
+| 权限 | 运行方式 |
+| --- | --- |
+| **Allow** | 工具可以直接运行 |
+| **Ask** | 每次运行前询问你 |
+| **Deny** | 工具不会运行 |
 
-**HTTP/HTTPS** — MCP 服务器以 Web 服务方式运行，通过 HTTP 通信。适合云服务、远程 API、多用户工具和 Web 应用。
+完成连接后，助理会在合适的任务中调用 MCP 工具。你可以在对话中的工具调用记录里查看运行过程和结果。
 
-## 热门 MCP 插件
+## 使用小贴士
 
-### 文件系统访问
-
-在指定目录中读写、搜索和管理文件。
-
-```bash
-npm install -g @modelcontextprotocol/server-filesystem
-```
-
-使用场景：代码审查、文档搜索、日志分析、项目文件管理。
-
-### GitHub 集成
-
-与仓库、Issue、Pull Request 和 GitHub 工作流交互。需要 GitHub 个人访问令牌。
-
-使用场景：项目管理、代码审查自动化、Issue 分类、发版管理。
-
-### 数据库访问
-
-查询 PostgreSQL、MySQL 等数据库，分析 schema、生成报告、解释查询计划。
-
-使用场景：数据分析、schema 探索、报告生成。
-
-### 网络搜索
-
-通过 Brave Search、Google Search 等实现实时网络搜索和事实核查。
-
-使用场景：获取最新信息、研究、新闻监控、竞品分析。
-
-### Slack 集成
-
-发送消息、读取对话历史、搜索消息并管理通知。
-
-使用场景：团队通知、自动化报告、事件管理。
-
-## 在 Agent 中使用 MCP
-
-安装后，MCP 插件会自动将工具暴露给你的 Agent。Agent 在对话中按需选择并调用工具：
-
-```
-你：在我的项目文件中搜索认证相关代码
-
-Agent：我来帮你搜索。
-       [使用 filesystem MCP — 执行搜索工具]
-
-Agent：我在 src/auth/login.ts 和 src/middleware/auth.ts
-       中找到了认证相关代码，以下是详细内容...
-```
-
-你可以开启**思维链（Chain of Thought）**，查看具体调用了哪些 MCP 工具以及使用的参数。
-
-### 为助理启用 MCP
-
-1. 打开**助理设置**
-2. 进入**技能**
-3. 选择该助理可以访问的 MCP 服务器
-4. 保存配置
-
-## 安全与权限
-
-MCP 插件在受控权限下运行：
-
-- **显式授权** — 用户按 Agent 粒度审批工具访问权限
-- **作用域访问** — 插件只能访问指定资源（如特定目录）
-- **审计日志** — 追踪所有工具调用记录
-- **随时撤销** — 可随时禁用插件
-
-安全最佳实践：
-
-- 只从可信来源安装 MCP 插件
-- 在批准前仔细审查每个 MCP 服务器的访问权限请求
-- 从只读访问开始，必要时再升级权限
-- 定期轮换 API Key 和令牌
-- 先用非生产数据测试新 MCP 服务器
+- 第一次使用 MCP 时，可以先从只读权限开始
+- API Key 和令牌可以保存在连接器的认证设置中
+- 本地或局域网地址可以在桌面端连接
+- 如果 MCP 包含启动命令，可以先查看命令和所需依赖
+- 新连接可以先使用测试数据体验运行效果
 
 ## 故障排查
 
-**安装后插件未显示**
+**安装后没有显示 MCP**
 
-- 确认 MCP 服务器正在运行（对于 STDIO 类型，检查命令是否可用：`which npx` 或 `which python`）
-- 检查配置文件语法是否正确
-- 查看服务器日志中的启动错误
-- 确保所有依赖已安装，然后重启 LobeHub
+- 查看安装是否已经完成
+- 对于 STDIO Server，查看启动命令是否可用
+- 查看服务器日志中的启动信息
+- 重新打开 LobeHub
 
-**工具在对话中未出现**
+**工具没有出现在对话中**
 
-- 在「设置」中重新连接 MCP 服务器
-- 确认该 Agent 在「工具与插件」设置中已启用该插件
-- 验证服务器是否正确实现了 MCP 协议
+- 在**设置 → 连接器**中查看连接状态
+- 查看当前助理是否已经启用该连接器
+- 查看工具权限是否为 **Allow** 或 **Ask**
 
-**认证 / 连接错误**
+**连接或认证失败**
 
-- 检查 API Key 或令牌是否正确且未过期
-- 确认认证类型与服务器要求匹配
-- 对于 HTTP 服务器，确认 URL 可访问且 CORS 已正确配置
-- 在自托管部署中启用调试日志：`DEBUG_MCP=1`，查看详细 MCP 通信信息
-
-## 环境变量配置
-
-自托管部署可通过环境变量配置 MCP 行为：
-
-```bash
-# 插件超时时间（毫秒）
-MCP_TOOL_TIMEOUT=30000
-
-# 启用 MCP 调试日志
-DEBUG_MCP=1
-
-# MCP 配置文件路径
-MCP_CONFIG=/path/to/mcp-config.json
-```
-
-## 开发自定义 MCP 插件
-
-你可以将任何 MCP 兼容的服务器直接添加到 LobeHub，无需经过市场。详细操作步骤请参见[自定义 MCP](/zh/docs/usage/community/custom-mcp) 指南，或查看[技能管理](/zh/docs/usage/community/skill-management) 指南了解所有技能类型及管理方式。
+- 查看 API Key 或令牌是否仍然有效
+- 查看认证方式是否与服务要求一致
+- 对于 HTTP Server，查看当前设备是否能访问连接地址
+- 在服务器日志中查看认证和网络信息
 
 <Cards>
-  <Card href={'/zh/docs/usage/agent/web-search'} title={'网络搜索'} />
+  <Card href={'/zh/docs/usage/community/overview'} title={'市场总览'} />
 
-  <Card href={'/zh/docs/usage/agent/chain-of-thought'} title={'思维链'} />
+  <Card href={'/zh/docs/usage/community/skills-market'} title={'Skills 市场'} />
 
-  <Card href={'/zh/docs/usage/getting-started/agent'} title={'助理'} />
+  <Card href={'/zh/docs/usage/agent/connectors'} title={'连接器'} />
 </Cards>

@@ -1,27 +1,16 @@
 import type { ModelExtendParams } from '@lobechat/model-runtime/utils/modelExtendParams';
-import type { LobeAgentChatConfig } from '@lobechat/types';
-import type { AiModelReasoningConfig, ModelAbilities } from 'model-bank';
+import type {
+  FrozenModelFacts,
+  LobeAgentChatConfig,
+  ModelCardFacts,
+  ModelMediaCapabilities,
+  UserModelRowFacts,
+} from '@lobechat/types';
+import type { AiModelReasoningConfig } from 'model-bank';
 
-/** The subset of a model card the rules read (bundled bank or user-enabled list). */
-export interface ModelCardFacts {
-  abilities?: ModelAbilities | null;
-  /** Deployment alias some providers address the model by. */
-  deploymentName?: string | null;
-  displayName?: string | null;
-  extendParams?: string[] | null;
-  id: string;
-  knowledgeCutoff?: string | null;
-  providerId: string;
-}
-
-/** The user's own row for the model, when they edited or created one. */
-export interface UserModelRowFacts {
-  /** Stored as untyped JSON; a non-empty object replaces the card's abilities. */
-  abilities?: unknown;
-  displayName?: string | null;
-  /** `[]` is an explicit opt-out from the card's params; absent falls back to the cards. */
-  extendParams?: string[] | null;
-}
+// The facts a host reads for the rules are also what an operation freezes onto
+// its state, so they are declared once in `@lobechat/types`.
+export type { FrozenModelFacts, ModelCardFacts, UserModelRowFacts };
 
 /** The reasoning config a topic pinned at creation, with the model it was pinned for. */
 export interface TopicReasoningPinFacts {
@@ -32,7 +21,7 @@ export interface TopicReasoningPinFacts {
   reasoningConfig?: AiModelReasoningConfig | null;
 }
 
-export type MediaCapabilities = Pick<ModelAbilities, 'audio' | 'video' | 'vision'>;
+export type MediaCapabilities = ModelMediaCapabilities;
 
 /** Everything the model-parameter rules read about the run. */
 export interface ModelParamsRequest {
