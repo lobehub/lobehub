@@ -2633,8 +2633,12 @@ describe('GoalService', () => {
   describe('a Task that could not reach its device', () => {
     const DEVICE_NOT_FOUND_HEADLINE =
       'The device this agent is bound to is no longer registered with the connection service. Reconnect the device, or bind this agent to another online device.';
+    // A workspace goal whose agent runs on its owner's personal device: the
+    // route the dispatch recorded names the personal pool, not the goal's.
+    const route = { deviceId: 'device-laptop', userId: 'device-owner' };
 
     const setup = async (title: string) => {
+      vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(true);
       const service = new GoalService(serverDB, userId);
       const taskModel = new TaskModel(serverDB, userId);
       const graph = await service.create({
@@ -2644,6 +2648,19 @@ describe('GoalService', () => {
       });
       const created = await service.tick(graph.goal.id);
       await taskModel.update(created.taskId!, { totalTopics: 1 });
+
+      const operationModel = new AgentOperationModel(serverDB, userId);
+      await operationModel.recordStart({ operationId: 'op-dispatch', taskId: created.taskId });
+      await operationModel.recordCompletion('op-dispatch', {
+        completedAt: new Date(),
+        completionReason: 'error',
+        error: { deviceRoute: route, message: DEVICE_NOT_FOUND_HEADLINE },
+        status: 'error',
+      });
+      vi.spyOn(TaskTopicModel.prototype, 'findWithHandoff').mockResolvedValue([
+        { operationId: 'op-dispatch' } as never,
+      ]);
+
       await taskModel.updateStatus(created.taskId!, 'paused', {
         error: DEVICE_NOT_FOUND_HEADLINE,
       });
@@ -2651,15 +2668,13 @@ describe('GoalService', () => {
     };
 
     it('waits for the device instead of asking a person', async () => {
-      vi.spyOn(deviceGateway, 'queryDeviceStatus').mockResolvedValue({
-        deviceCount: 0,
-        online: false,
-      });
+      const listSpy = vi.spyOn(deviceGateway, 'queryDeviceList').mockResolvedValue([]);
       const runSpy = vi.spyOn(TaskRunnerService.prototype, 'runTask');
       const { created, graph, service } = await setup('Device went to sleep');
 
       const waiting = await service.tick(graph.goal.id);
 
+      expect(listSpy).toHaveBeenCalledWith('device-owner', undefined);
       expect(waiting).toMatchObject({
         message: expect.stringContaining('waiting for its device to reconnect'),
         outcome: 'waiting_external',
@@ -2669,11 +2684,23 @@ describe('GoalService', () => {
       expect((await service.graph(graph.goal.id)).decisions).toHaveLength(0);
     });
 
-    it('retries on its own once a device is back online', async () => {
-      vi.spyOn(deviceGateway, 'queryDeviceStatus').mockResolvedValue({
-        deviceCount: 1,
-        online: true,
-      });
+    it('keeps waiting while only some other device is online', async () => {
+      vi.spyOn(deviceGateway, 'queryDeviceList').mockResolvedValue([
+        { deviceId: 'device-desktop' } as never,
+      ]);
+      const runSpy = vi.spyOn(TaskRunnerService.prototype, 'runTask');
+      const { graph, service } = await setup('Another device is online');
+
+      const waiting = await service.tick(graph.goal.id);
+
+      expect(waiting).toMatchObject({ outcome: 'waiting_external' });
+      expect(runSpy).not.toHaveBeenCalled();
+    });
+
+    it('retries on its own once its device is back online', async () => {
+      vi.spyOn(deviceGateway, 'queryDeviceList').mockResolvedValue([
+        { deviceId: 'device-laptop' } as never,
+      ]);
       const runSpy = vi
         .spyOn(TaskRunnerService.prototype, 'runTask')
         .mockResolvedValue({ operationId: 'op-after-reconnect', success: true } as never);
@@ -2689,10 +2716,9 @@ describe('GoalService', () => {
     });
 
     it('keeps waiting when the retry itself cannot reach the device', async () => {
-      vi.spyOn(deviceGateway, 'queryDeviceStatus').mockResolvedValue({
-        deviceCount: 1,
-        online: true,
-      });
+      vi.spyOn(deviceGateway, 'queryDeviceList').mockResolvedValue([
+        { deviceId: 'device-laptop' } as never,
+      ]);
       vi.spyOn(TaskRunnerService.prototype, 'runTask').mockRejectedValue(
         new Error('DEVICE_OFFLINE (HTTP 503)'),
       );
@@ -2709,10 +2735,7 @@ describe('GoalService', () => {
     });
 
     it('asks a person once the device has been gone past the reconnect window', async () => {
-      vi.spyOn(deviceGateway, 'queryDeviceStatus').mockResolvedValue({
-        deviceCount: 0,
-        online: false,
-      });
+      vi.spyOn(deviceGateway, 'queryDeviceList').mockResolvedValue([]);
       const { created, graph, service } = await setup('Device gone for good');
       await serverDB
         .update(tasks)
@@ -2721,6 +2744,17 @@ describe('GoalService', () => {
 
       const gated = await service.tick(graph.goal.id);
 
+      expect(gated).toMatchObject({ outcome: 'waiting_human', taskId: created.taskId });
+    });
+
+    it('does not wait on a deployment without a device gateway', async () => {
+      const listSpy = vi.spyOn(deviceGateway, 'queryDeviceList');
+      const { created, graph, service } = await setup('Self-hosted without devices');
+      vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(false);
+
+      const gated = await service.tick(graph.goal.id);
+
+      expect(listSpy).not.toHaveBeenCalled();
       expect(gated).toMatchObject({ outcome: 'waiting_human', taskId: created.taskId });
     });
   });

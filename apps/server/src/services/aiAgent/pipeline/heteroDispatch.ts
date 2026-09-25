@@ -47,6 +47,7 @@ import { buildRemoteDeviceHeteroContext } from '@/server/services/heterogeneousA
 import type { MarketService } from '@/server/services/market';
 
 import {
+  type DeviceDispatchRoute,
   getHeterogeneousAgentTitle,
   humanizeHeteroDispatchError,
   resolveHeteroDispatchErrorType,
@@ -104,6 +105,8 @@ const finalizeHeteroDispatchError = async (
     agentId?: string;
     assistantMessageId: string;
     detail: string;
+    /** The device this dispatch was routed to, when it was a device dispatch. */
+    deviceRoute?: DeviceDispatchRoute;
     errorData?: DeviceUnavailableErrorData;
     /**
      * Client error type. Defaults to the generic `ServerAgentRuntimeError`; pass a
@@ -120,6 +123,7 @@ const finalizeHeteroDispatchError = async (
     agentId,
     assistantMessageId,
     detail,
+    deviceRoute,
     errorData,
     errorType = ChatErrorType.ServerAgentRuntimeError,
     message,
@@ -150,7 +154,7 @@ const finalizeHeteroDispatchError = async (
     {
       agentId,
       assistantMessageId,
-      error: { message, type: errorType },
+      error: { message, type: errorType, ...(deviceRoute && { deviceRoute }) },
       operationId,
       serializedHooks: hookDispatcher.getSerializedHooks(operationId),
       topicId,
@@ -855,6 +859,13 @@ export const dispatchHeteroAgent = async (
         agentId: resolvedAgentId,
         assistantMessageId,
         detail: result.error ?? 'Device dispatch failed',
+        deviceRoute: remoteDeviceId
+          ? {
+              deviceId: remoteDeviceId,
+              userId: remoteDeviceUserId,
+              ...(remoteDeviceWorkspaceId ? { workspaceId: remoteDeviceWorkspaceId } : {}),
+            }
+          : undefined,
         errorData: result.errorData,
         errorType: resolveHeteroDispatchErrorType(result.error),
         message: humanizeHeteroDispatchError(result.error),
@@ -1035,6 +1046,11 @@ export const dispatchHeteroAgent = async (
           agentId: resolvedAgentId,
           assistantMessageId,
           detail: result.error ?? 'Device dispatch failed',
+          deviceRoute: {
+            deviceId: dispatchDeviceId,
+            userId: deps.userId,
+            ...(dispatchWorkspaceId ? { workspaceId: dispatchWorkspaceId } : {}),
+          },
           errorData: result.errorData,
           errorType: resolveHeteroDispatchErrorType(result.error),
           message: humanizeHeteroDispatchError(result.error),

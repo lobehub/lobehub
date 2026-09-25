@@ -347,7 +347,7 @@ export class AbandonOperationService {
     // Task keeps a `running` topic forever and a Goal waits on it indefinitely.
     // A newer operation owning the topic means this callback cannot prove which
     // run the hooks belong to, the same rule `heteroFinish` applies.
-    if (settled.conflict) return;
+    if (settled.ownershipUnproven) return;
     const serializedHooks = settled.hooks ?? readDurableHooks(op.metadata);
     if (!serializedHooks?.length) return;
 
@@ -401,7 +401,7 @@ export class AbandonOperationService {
           includeShareVisitor: true,
         });
         const settled = await topicModel.settleRunningOperation(op.topicId, operationId);
-        if (settled.status === 'conflict') return { conflict: true };
+        if (settled.status === 'conflict') return { ownershipUnproven: true };
         if (settled.status !== 'settled') return {};
         const topicHooks = {
           hooks: settled.hooks as SerializedHook[] | undefined,
@@ -413,6 +413,9 @@ export class AbandonOperationService {
         return { ...topicHooks, ...(await this.findPlaceholderMessage(op, operationId)) };
       } catch (e) {
         log('[%s] no-state abandon: topic lookup failed (non-fatal): %O', operationId, e);
+        // A failed settle cannot rule out a newer operation on the topic, and
+        // firing this run's task hook would then pause the replacement's Task.
+        return { ...(await this.findPlaceholderMessage(op, operationId)), ownershipUnproven: true };
       }
     }
 
@@ -451,10 +454,13 @@ export class AbandonOperationService {
 
 interface SettledOperationTopic {
   assistantMessageId?: string;
-  /** A newer operation owns the topic, so this run's hooks must not fire. */
-  conflict?: boolean;
   hooks?: SerializedHook[];
   orchestrationRole?: 'member' | 'supervisor';
+  /**
+   * The topic could not prove this run still owns it — a newer operation holds
+   * it, or the settle itself failed — so this run's hooks must not fire.
+   */
+  ownershipUnproven?: boolean;
 }
 
 /** Queue-mode dispatch serializes the run's hooks onto the operation row. */

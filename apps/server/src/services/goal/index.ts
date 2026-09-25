@@ -38,6 +38,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { assertAgentUsableBy } from '@/database/utils/agent-access';
 import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime/AgentRuntimeCoordinator';
 
+import { readDeviceDispatchRoute } from '../aiAgent/helpers/heteroErrors';
 import { deviceGateway } from '../deviceGateway';
 import { TaskService } from '../task';
 import { TaskRunnerService } from '../taskRunner';
@@ -2290,12 +2291,18 @@ export class GoalService {
    *
    * A sleeping laptop or a restarting desktop app is the usual cause, and it
    * fixes itself: the gate it used to open waited hours for someone to press
-   * Retry once the device had long reconnected. While no device is online the
-   * goal simply waits — the sweep keeps asking — and spends nothing. Once one
-   * is, the Task retries through the ordinary recovery path, so a binding that
-   * stays broken still ends at the attempt budget's gate. Past the reconnect
-   * window a person is asked after all, since the device is not coming back
-   * on its own.
+   * Retry once the device had long reconnected. While that device is offline
+   * the goal simply waits — the sweep keeps asking — and spends nothing. Once
+   * it is back, the Task retries through the ordinary recovery path, so a
+   * binding that stays broken still ends at the attempt budget's gate. Past the
+   * reconnect window a person is asked after all, since the device is not
+   * coming back on its own.
+   *
+   * Presence is read for the exact device the failed dispatch was routed to,
+   * in the pool it was routed through: a workspace goal may run on a personal
+   * device, and another device coming online proves nothing about this one.
+   * Without a recorded route, or without a device gateway at all, there is
+   * nothing to wait for and the existing failure path decides.
    */
   private waitForDevice = async (
     graph: GoalGraphSnapshot,
@@ -2304,10 +2311,21 @@ export class GoalService {
     effects: GoalAdvanceEffect[],
   ): Promise<GoalTickResult | undefined> => {
     if (task.status !== 'paused' || !isDeviceUnavailableFailure(task.error)) return;
+    if (!deviceGateway.isConfigured) return;
     if (new Date(task.updatedAt).getTime() < Date.now() - DEVICE_RECONNECT_WAIT_MS) return;
 
-    const { online } = await deviceGateway.queryDeviceStatus(this.userId, this.workspaceId);
-    if (online) return this.resumeAbandonedTaskRecovery(graph, nodeId, task, effects);
+    const [latestRun] = await this.taskTopicModel.findWithHandoff(task.id, 1);
+    const operation = latestRun?.operationId
+      ? await new AgentOperationModel(this.db, this.userId, this.workspaceId).findById(
+          latestRun.operationId,
+        )
+      : undefined;
+    const route = readDeviceDispatchRoute(operation?.error);
+    if (!route) return;
+
+    const devices = await deviceGateway.queryDeviceList(route.userId, route.workspaceId);
+    if (devices.some((device) => device.deviceId === route.deviceId))
+      return this.resumeAbandonedTaskRecovery(graph, nodeId, task, effects);
 
     return {
       goalId: graph.goal.id,

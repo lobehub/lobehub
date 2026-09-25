@@ -60,6 +60,31 @@ const toDispatchErrorCode = (raw?: string): string | undefined => {
   return text?.match(/^([A-Z][\dA-Z_]*)/)?.[1];
 };
 
+/**
+ * The device a failed dispatch was aimed at, recorded on the operation's error so
+ * a later reader can ask whether *that* device is back — the routing that picked
+ * it (topic override, member binding, personal vs workspace pool) is not
+ * something a consumer should re-derive.
+ */
+export interface DeviceDispatchRoute {
+  deviceId: string;
+  /** The principal whose device pool the gateway was asked to route through. */
+  userId: string;
+  /** Set when the device belongs to a workspace pool rather than the personal one. */
+  workspaceId?: string;
+}
+
+export const readDeviceDispatchRoute = (error: unknown): DeviceDispatchRoute | undefined => {
+  const route = (error as { deviceRoute?: Partial<DeviceDispatchRoute> } | null | undefined)
+    ?.deviceRoute;
+  if (typeof route?.deviceId !== 'string' || typeof route.userId !== 'string') return undefined;
+  return {
+    deviceId: route.deviceId,
+    userId: route.userId,
+    ...(typeof route.workspaceId === 'string' ? { workspaceId: route.workspaceId } : {}),
+  };
+};
+
 export const humanizeHeteroDispatchError = (raw?: string): string => {
   const code = toDispatchErrorCode(raw);
 

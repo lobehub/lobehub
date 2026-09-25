@@ -260,6 +260,15 @@ describe('AbandonOperationService', () => {
       expect(completeOperationMock).not.toHaveBeenCalled();
     });
 
+    it('does not fire hooks when settling the topic fails', async () => {
+      // A failed settle cannot rule out a newer operation on the topic.
+      topicSettleRunningOperationMock.mockRejectedValue(new Error('db unavailable'));
+
+      await abandon(runningRow({ _hooks: [taskHook] }));
+
+      expect(completeOperationMock).not.toHaveBeenCalled();
+    });
+
     it('does not run the lifecycle for a run without hooks', async () => {
       await abandon(runningRow());
 
