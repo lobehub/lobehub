@@ -404,8 +404,10 @@ describe('FtsSearchDocumentBuilder', () => {
 
     const [document] = await builder.buildByIds('documents', ['document-oversized']);
 
-    expect(document.source.content).toBe('文'.repeat(FTS_SEARCH_DOCUMENT_CONTENT_MAX_CHARS));
-    expect(document.source.total_char_count).toBe(content.length);
+    expect(document.source).toMatchObject({
+      content: '文'.repeat(FTS_SEARCH_DOCUMENT_CONTENT_MAX_CHARS),
+      total_char_count: content.length,
+    });
   });
 
   it('rejects invalid batch limits before querying PostgreSQL', async () => {
