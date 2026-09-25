@@ -182,9 +182,9 @@ supersedes? }`.
    Topic, or Document owns the work. To publish a repair into that same history, add
    `--acceptance <acceptanceId>` using the ID printed by the first ingest. The
    command uploads cases + evidence + report body and returns `acceptanceUrl`
-   for the stable acceptance page, plus `roundUrl` for this round's snapshot
-   (`null` when no round index is available). Copy `acceptanceUrl` verbatim in
-   the final reply, and add `roundUrl` verbatim when it is non-null.
+   for the stable acceptance page, which opens on the latest round. Copy
+   `acceptanceUrl` verbatim in the final reply; do not add the `roundUrl` the
+   command also returns.
    Never reconstruct the host, path, or round query: the CLI resolves the
    configured server, including self-hosted installations. See
    [Final handoff](../SKILL.md#final-handoff-mandatory).

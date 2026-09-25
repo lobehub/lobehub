@@ -194,8 +194,12 @@ agent-browser session list
 ```
 
 A named `--session` reuses the same running browser and its cookies + localStorage
-across commands. To save and restore that state across browser restarts, also
-enable `--restore` with a stable session ID:
+across commands. Each session is a separate daemon plus browser that outlives
+the calling process: close it with `agent-browser --session <name> close` when
+the run ends, and export `AGENT_BROWSER_IDLE_TIMEOUT_MS` (disabled by default)
+so an abandoned session shuts itself down. See
+[../surfaces/web.md](../surfaces/web.md#web-teardown). To save and restore that
+state across browser restarts, also enable `--restore` with a stable session ID:
 
 ```bash
 agent-browser --session site1 --restore open https://site-a.com
@@ -224,8 +228,12 @@ Providers: `agentcore`, `browserbase`, `browserless`, `browseruse`, `kernel`.
 
 ## Gotchas
 
-- **Daemon can get stuck** — if commands hang, `agent-browser close --all` or
-  `pkill -f agent-browser` to reset.
+- **Daemon can get stuck** — if your session hangs, close it with
+  `agent-browser --session <name> close` and reopen it. `close --all` / `pkill -f agent-browser` also kill other
+  runs' sessions; use them only when no other agent is driving a browser.
+- **Sessions leak when not closed** — daemons never exit on their own unless
+  `AGENT_BROWSER_IDLE_TIMEOUT_MS` is set. `agent-browser session list` shows what
+  is still running.
 - **HMR invalidates everything** — after code changes during dev, refs break;
   re-snapshot or restart.
 - **`snapshot -i` doesn't find contenteditable** — use `snapshot -i -C` for rich

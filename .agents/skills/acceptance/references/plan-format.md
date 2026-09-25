@@ -103,8 +103,7 @@ again; then hand off per SKILL.md (acceptance URL + `coverage: n/n`).
 
 ## Resolve the plan round's handoff links
 
-`result submit --json` returns an internal `url`, not `acceptanceUrl` or
-`roundUrl`. Some plans need no evidence submissions at all. In both cases, resolve
+`result submit --json` returns an internal `url`, not `acceptanceUrl`. Some plans need no evidence submissions at all. In both cases, resolve
 the supplied operation ID with `lh verify plan state <operationId> --json`, then
 read its `verifyRunId` using `lh acceptance run get <runId> --json`. The run's
 `acceptanceId` and `roundIndex` identify the existing handoff; do not substitute a
@@ -138,18 +137,16 @@ if (run?.id !== runId || run.operationId !== operationId || !run.acceptanceId ||
   throw new Error('Handoff blocked: the operation run must already be attached to an acceptance and round.');
 }
 const acceptanceUrl = new URL(`/acceptance/${encodeURIComponent(run.acceptanceId)}`, origin);
-const roundUrl = new URL(acceptanceUrl);
-roundUrl.searchParams.set('r', String(run.roundIndex));
 console.log(JSON.stringify({
   acceptanceId: run.acceptanceId, verifyRunId: runId, roundIndex: run.roundIndex,
-  acceptanceUrl: acceptanceUrl.href, roundUrl: roundUrl.href,
+  acceptanceUrl: acceptanceUrl.href,
 }, null, 2));
 NODE
 ```
 
 Using the IDs printed by the lookup, read back
 `lh acceptance view <acceptanceId> --json` and confirm its round ledger contains
-this `verifyRunId` and `roundIndex`, then copy the lookup's links into the final
+this `verifyRunId` and `roundIndex`, then copy the lookup's `acceptanceUrl` into the final
 handoff with the observed evidence coverage. The lookup neither settles the
 round nor supplies a verifier verdict or user acceptance.
 

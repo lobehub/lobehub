@@ -2,7 +2,7 @@
 name: acceptance
 license: Apache-2.0
 metadata:
-  version: "0.5.0"
+  version: "0.5.2"
 description: >
   End-to-end verification and self-evidence for a delivery in any repository,
   with or without a preconfigured verify plan. Discover an existing plan when
@@ -367,6 +367,11 @@ process. Keep required evidence complete; shorten its presentation, not the work
 
 ## Final handoff (mandatory)
 
+Close every browser session this run opened
+(`agent-browser --session <name> close`, [web teardown](surfaces/web.md#web-teardown))
+before handing off; a session left open keeps a full browser running
+indefinitely.
+
 Before declaring the task done, prove coverage: for each check with
 `requiredEvidence`, every declared `type` is present at least once. Report it
 explicitly; a missing type holds the delivery at `uncertain` no matter how good
@@ -381,18 +386,38 @@ or a `storage_block:` error. Do not stop at "upload failed" or "noted in the PR"
   locally observed results from uploaded evidence, and report the actual coverage.
   Include the saved acceptance/round links when available; do not invent them for
   an atomic submission that failed before saving a result.
-- Give **both clickable options**, in the user's language, using the CLI's
-  `recovery.cleanupUrl` and `recovery.upgradeUrl` verbatim:
-  **clean up unneeded acceptances** or **upgrade the plan**. Explain that cleanup
-  requires selecting "permanently delete all rounds, reports, and evidence files"
-  and cannot be undone. Deleting only the acceptance record or an evidence
-  association does not free file storage. Never delete user data automatically.
-- For an older CLI without recovery URLs, resolve its configured server using
-  `lh doctor --offline --json`, then use `/acceptance` and `/settings/plans` on
-  that server. For LobeHub Cloud, including its `app.lobehub.com` API endpoint,
-  the user-facing links are https://lobehub.com/acceptance and
-  https://lobehub.com/settings/plans . Do not send self-hosted users to Cloud
-  as a remedy for their server's storage limit.
+- Give **both recovery options**, in the user's language, using available
+  `recovery.cleanupUrl` and `recovery.upgradeUrl` verbatim and following
+  `recovery.message`, with one compatibility exception: if a personal cleanup
+  link points to `https://lobehub.com/acceptance` (with or without a trailing
+  slash), change its origin to `https://app.lobehub.com`, preserving its path,
+  query, and fragment. The apex `/acceptance` route is the product introduction,
+  not the acceptance manager. Never delete user data automatically. Deletion is
+  permanent.
+  - Personal scope: **clean up unneeded acceptances** or **upgrade the personal
+    plan**. Acceptance cleanup requires selecting "permanently delete all rounds,
+    reports, and evidence files"; deleting only a record or evidence association
+    does not free storage.
+  - Workspace scope (`recovery.scope: "workspace"`): **clean up that workspace's
+    files** or **upgrade that workspace's plan**. The cleanup link opens its
+    resource library, not an acceptance list; do not invent an acceptance-purge
+    checkbox there. Ask its owner/admin for cleanup or billing access. Personal
+    cleanup or a personal upgrade does not resolve a workspace limit.
+  - If the CLI reports unresolved workspace scope and omits recovery URLs, report
+    that limitation and its scope-check instructions. Do not invent links or
+    substitute personal pages.
+- For an older CLI without recovery metadata, resolve server and scope using
+  `lh doctor --offline --json` and `lh workspace current --json`. Personal scope
+  uses `/acceptance` and `/settings/plans`. For workspace scope, resolve its slug
+  with `lh workspace view --json`, verify the returned ID matches the active
+  workspace, and use `/:workspaceSlug/resource` and
+  `/:workspaceSlug/settings/plans`; there is no `/:workspaceSlug/acceptance`
+  route. If lookup fails, give scope-specific guidance without guessed links.
+  Strip URL username/password when constructing display links. For LobeHub Cloud
+  (CLI server `https://app.lobehub.com` or `https://lobehub.com`), personal cleanup
+  uses `https://app.lobehub.com/acceptance`; personal plan upgrades use
+  `https://lobehub.com/settings/plans`. Workspace resource and plan paths use
+  `https://lobehub.com`. Keep self-hosted users on their configured server.
 - Preserve local reports, artifacts, and the returned retry instructions. Stop
   blind retries until the user has addressed storage. For a partially ingested
   report, retry only failed artifacts using `failedEvidence[].retryArgs` or
@@ -406,13 +431,12 @@ URL together with the coverage result — never only a check-result id or a pros
 claim. Obtain the links from the path you actually executed:
 
 - **Authored round:** copy `acceptanceUrl` returned by
-  `lh acceptance run ingest --json` verbatim. Add its `roundUrl` verbatim when
-  non-null; otherwise the acceptance URL alone is the handoff.
+  `lh acceptance run ingest --json` verbatim.
 - **Operation-plan round:** follow the read-only
   [plan handoff lookup](references/plan-format.md#resolve-the-plan-rounds-handoff-links).
   It resolves the supplied operation ID to its existing run, acceptance, and
   round using the CLI's actual server configuration. Copy its
-  `acceptanceUrl` and `roundUrl` output. Do not run authored ingest, create another
+  `acceptanceUrl` output. Do not run authored ingest, create another
   acceptance, or resubmit evidence merely to obtain a link.
 
 Never guess a host, acceptance ID, or round index. The documented plan lookup is
@@ -425,11 +449,11 @@ chat reply.
 
 Write the link as a plain-text line, never inside a fenced or inline code block — the
 chat client only linkifies plain text, and a code block makes it unclickable.
-Replace each placeholder below with the URL from the selected path; omit the
-`Round` line when `roundUrl` is null:
+Hand off only the acceptance URL: the acceptance page opens on its latest round,
+so a separate per-round link adds nothing for the reader. Replace the placeholder
+below with the URL from the selected path:
 
 Acceptance: <acceptanceUrl, verbatim>
-Round: <roundUrl, verbatim>
 Coverage: 2/2 criteria, all required evidence uploaded
 
 ## Portability rules

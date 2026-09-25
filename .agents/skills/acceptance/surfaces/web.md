@@ -20,7 +20,8 @@ on the desktop shell or is fully provable through backend/CLI output.
    when authentication must survive browser restarts.
 
 ```bash
-SESSION=app
+SESSION=app-<run-id>                         # unique per run; parallel runs must not share one
+export AGENT_BROWSER_IDLE_TIMEOUT_MS=1800000 # backstop: daemon exits after 30 idle minutes
 agent-browser --session $SESSION open "http://localhost:3000/"
 agent-browser --session $SESSION snapshot -i
 # interact via refs, then capture
@@ -63,6 +64,23 @@ proves frontend behavior, not backend changes.
 - **A native step the page can't script** (file picker, OS permission prompt, Save
   dialog) — drop to Computer Use for that step, then return:
   [../references/computer-use.md](../references/computer-use.md).
+
+## Teardown — close the session you opened {#web-teardown}
+
+Every named `--session` starts a background daemon with its own browser that
+keeps running after your process exits. Nothing reaps it: a run that ends
+without closing leaks a full headless browser (hundreds of MB to over 1 GB per
+session), and unique per-run session names make the leak grow by one browser
+every run.
+
+```bash
+agent-browser --session $SESSION close
+```
+
+Close only the sessions this run opened. Never `close --all` or
+`pkill -f agent-browser` as routine cleanup — that kills sibling runs'
+browsers mid-capture. Keep `AGENT_BROWSER_IDLE_TIMEOUT_MS` set so a run that
+crashes before teardown still releases its browser.
 
 ## Boundaries
 
