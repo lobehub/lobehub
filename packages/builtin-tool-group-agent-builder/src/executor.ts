@@ -59,8 +59,8 @@ const GROUP_WRITE_APIS = new Set<string>([
  * whatever the profile page has active — the same source `resolveGroupTarget`
  * already uses for the group-level APIs.
  */
-const resolveActiveGroupId = (ctx: BuiltinToolContext): string | undefined =>
-  ctx.groupId ?? getChatGroupStoreState().activeGroupId ?? undefined;
+const resolveActiveGroupId = (ctx: BuiltinToolContext, override?: string): string | undefined =>
+  override ?? ctx.groupId ?? getChatGroupStoreState().activeGroupId ?? undefined;
 
 const NO_GROUP_CONTEXT: BuiltinToolResult = {
   content: 'No active group found',
@@ -78,7 +78,7 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
     params: GetAgentInfoParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
-    return groupAgentBuilderRuntime.getAgentInfo(ctx.groupId, params);
+    return groupAgentBuilderRuntime.getAgentInfo(params.groupId ?? ctx.groupId, params);
   };
 
   // ==================== Group Member Management ====================
@@ -95,7 +95,7 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
     params: CreateAgentParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
-    const groupId = resolveActiveGroupId(ctx);
+    const groupId = resolveActiveGroupId(ctx, params.groupId);
 
     if (!groupId) return NO_GROUP_CONTEXT;
 
@@ -106,7 +106,7 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
     params: BatchCreateAgentsParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
-    const groupId = resolveActiveGroupId(ctx);
+    const groupId = resolveActiveGroupId(ctx, params.groupId);
 
     if (!groupId) return NO_GROUP_CONTEXT;
 
@@ -117,7 +117,7 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
     params: InviteAgentParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
-    const groupId = resolveActiveGroupId(ctx);
+    const groupId = resolveActiveGroupId(ctx, params.groupId);
 
     if (!groupId) return NO_GROUP_CONTEXT;
 
@@ -128,7 +128,7 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
     params: RemoveAgentParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
-    const groupId = resolveActiveGroupId(ctx);
+    const groupId = resolveActiveGroupId(ctx, params.groupId);
 
     if (!groupId) return NO_GROUP_CONTEXT;
 
@@ -141,7 +141,7 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
     params: UpdateAgentPromptParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
-    const groupId = resolveActiveGroupId(ctx);
+    const groupId = resolveActiveGroupId(ctx, params.groupId);
 
     if (!groupId) return NO_GROUP_CONTEXT;
 

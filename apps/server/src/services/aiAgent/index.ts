@@ -1080,6 +1080,7 @@ export class AiAgentService {
       resolvedAgentId,
       runFacts,
       shareGate,
+      topicEditingGroupId: turn.topicEditingGroupId,
       topicId,
       trigger,
       userMessageId: turn.userMessageId,

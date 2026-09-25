@@ -59,6 +59,8 @@ export interface ExecRunContext {
    * ordinary (non-share) run.
    */
   shareGate?: AgentShareGate;
+  /** The group a reused Group Agent Builder topic was opened on — see `TurnSetupResult`. */
+  topicEditingGroupId?: string;
   /** Topic id — guaranteed to exist by the time pipeline stages run. */
   topicId: string;
   trigger?: string;
