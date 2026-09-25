@@ -42,7 +42,7 @@ export const useDeviceAppUpdate = ({
   const [install, setInstall] = useState<AppUpdateInstall | null>(null);
   const [requesting, setRequesting] = useState(false);
 
-  const { data, mutate } = useClientDataSWR<DeviceAppUpdateStateResult>(
+  const { data, isValidating, mutate } = useClientDataSWR<DeviceAppUpdateStateResult>(
     // A restart in flight keeps polling even while the device drops offline.
     enabled || install ? deviceKeys.appUpdateState(workspaceId, deviceId) : null,
     () => deviceService.getAppUpdateState({ deviceId }),
@@ -66,11 +66,12 @@ export const useDeviceAppUpdate = ({
     return () => clearTimeout(timer);
   }, [install]);
 
-  // The device re-registered on connect, so the list now carries its new version.
-  const updated = view.kind === 'updated';
+  // The device reconnected — on the new version or not — so the list now
+  // carries its fresh connection and registered version.
+  const reconnected = view.kind === 'updated' || view.kind === 'installFailed';
   useEffect(() => {
-    if (updated) refreshDeviceList();
-  }, [updated]);
+    if (reconnected) refreshDeviceList();
+  }, [reconnected]);
 
   const request = async (run: () => Promise<void>) => {
     setRequesting(true);
@@ -106,7 +107,13 @@ export const useDeviceAppUpdate = ({
     /** What the device itself says it runs, when it answered. */
     currentVersion: data?.status === 'ok' ? data.state.currentVersion : undefined,
     install: installUpdate,
+    /** A read of the device's state is in flight. */
+    refreshing: isValidating,
     requesting,
+    /** Ask the device again — an `unavailable` answer is not polled on its own. */
+    retry: () => mutate(),
     view,
   };
 };
+
+export type DeviceAppUpdate = ReturnType<typeof useDeviceAppUpdate>;

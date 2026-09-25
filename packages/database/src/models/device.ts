@@ -36,6 +36,15 @@ export interface RegisterDeviceParams {
   platform?: string | null;
 }
 
+/**
+ * Re-registration merges the reported bag instead of replacing it: the desktop
+ * app (`appVersion`) and `lh connect` (`cliVersion`) share one row on the same
+ * machine, and whichever connects last must not erase the other's version.
+ * Keys a client reports again are overwritten; `undefined` leaves the bag alone.
+ */
+const mergeReportedMetadata = (metadata: RegisterDeviceParams['metadata']) =>
+  metadata ? sql`coalesce(${devices.metadata}, '{}'::jsonb) || excluded.metadata` : undefined;
+
 /** Columns the user owns — never overwritten by an auto-register upsert. */
 export interface UpdateDeviceParams {
   defaultCwd?: string | null;
@@ -121,7 +130,7 @@ export class DeviceModel {
           hostname: params.hostname,
           identitySource: params.identitySource,
           lastSeenAt: now,
-          metadata: params.metadata,
+          metadata: mergeReportedMetadata(params.metadata),
           platform: params.platform,
         },
         target: [devices.userId, devices.deviceId],
@@ -217,7 +226,7 @@ export class DeviceModel {
           hostname: params.hostname,
           identitySource: params.identitySource,
           lastSeenAt: now,
-          metadata: params.metadata,
+          metadata: mergeReportedMetadata(params.metadata),
           platform: params.platform,
           visibility: params.visibility === 'public' ? 'public' : sql`${devices.visibility}`,
         },

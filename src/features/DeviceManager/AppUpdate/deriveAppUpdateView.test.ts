@@ -1,7 +1,7 @@
 import type { DeviceAppUpdateState, DeviceAppUpdateStateResult } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { deriveAppUpdateView, isAppUpdatePolling } from './deriveAppUpdateView';
+import { deriveAppUpdateView, getAppUpdateAction, isAppUpdatePolling } from './deriveAppUpdateView';
 
 const ok = (state: Partial<DeviceAppUpdateState>): DeviceAppUpdateStateResult => ({
   state: { currentVersion: '2.1.0', stage: 'idle', ...state },
@@ -102,5 +102,23 @@ describe('isAppUpdatePolling', () => {
     expect(isAppUpdatePolling({ kind: 'restarting', targetVersion: '2.2.0' })).toBe(true);
     expect(isAppUpdatePolling({ kind: 'ready', targetVersion: '2.2.0' })).toBe(false);
     expect(isAppUpdatePolling({ kind: 'idle', outcome: 'latest' })).toBe(false);
+  });
+});
+
+describe('getAppUpdateAction', () => {
+  it('offers a retry when the device state could not be read', () => {
+    expect(getAppUpdateAction({ kind: 'unavailable' })).toBe('retry');
+  });
+
+  it('offers a fresh check after an idle, failed or timed-out update', () => {
+    expect(getAppUpdateAction({ kind: 'idle' })).toBe('check');
+    expect(getAppUpdateAction({ currentVersion: '2.1.0', kind: 'installFailed' })).toBe('check');
+    expect(getAppUpdateAction({ kind: 'timedOut', targetVersion: '2.2.0' })).toBe('check');
+  });
+
+  it('offers nothing once the outcome is settled or unsupported', () => {
+    expect(getAppUpdateAction({ kind: 'updated', version: '2.2.0' })).toBeUndefined();
+    expect(getAppUpdateAction({ kind: 'unsupported', reason: 'cli' })).toBeUndefined();
+    expect(getAppUpdateAction({ kind: 'loading' })).toBeUndefined();
   });
 });

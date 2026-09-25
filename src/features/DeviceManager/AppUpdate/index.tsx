@@ -1,44 +1,25 @@
 'use client';
 
-import type { DeviceListItem } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
 import { Button, confirmModal, Text } from '@lobehub/ui/base-ui';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import FieldLabel from '../FieldLabel';
-import type { AppUpdateView } from './deriveAppUpdateView';
-import { useDeviceAppUpdate } from './useDeviceAppUpdate';
+import { type AppUpdateView, getAppUpdateAction } from './deriveAppUpdateView';
+import type { DeviceAppUpdate } from './useDeviceAppUpdate';
 
-const isChannel = (channel: string | null, prefix: 'cli' | 'desktop') =>
-  !!channel && (channel === prefix || channel.startsWith(`${prefix}-`));
+export { useDeviceAppUpdate } from './useDeviceAppUpdate';
 
-interface AppUpdateSectionProps {
-  canEdit: boolean;
-  device: DeviceListItem;
+interface AppUpdateProps {
+  update: DeviceAppUpdate;
 }
 
 /**
- * The device's desktop app version, with a remote update when the caller may
- * operate the machine: check → download (with progress) → restart into the
- * new version, confirmed only once the device reconnects on it.
+ * The remote-update button on the desktop app's connection row: check →
+ * download (with progress) → restart into the new version.
  */
-const AppUpdateSection = ({ canEdit, device }: AppUpdateSectionProps) => {
+export const AppUpdateAction = ({ update }: AppUpdateProps) => {
   const { t } = useTranslation(['setting', 'common']);
-
-  const channels = device.channels ?? [];
-  const hasDesktopChannel = channels.some((c) => isChannel(c.channel, 'desktop'));
-  const hasCliChannel = channels.some((c) => isChannel(c.channel, 'cli'));
-
-  const { check, currentVersion, install, requesting, view } = useDeviceAppUpdate({
-    deviceId: device.deviceId,
-    enabled: canEdit && hasDesktopChannel,
-    hasCliChannel,
-  });
-
-  const reportedVersion = device.metadata?.appVersion;
-  const tracking = view.kind !== 'loading' && view.kind !== 'unavailable';
-  if (!hasDesktopChannel && !reportedVersion && !tracking) return null;
+  const { check, install, refreshing, requesting, retry, view } = update;
 
   const confirmInstall = (targetVersion: string) =>
     confirmModal({
@@ -49,61 +30,68 @@ const AppUpdateSection = ({ canEdit, device }: AppUpdateSectionProps) => {
       title: t('devices.appUpdate.confirmTitle', { version: targetVersion }),
     });
 
-  const renderAction = (current: AppUpdateView) => {
-    switch (current.kind) {
-      case 'idle': {
-        return (
-          <Button loading={requesting} size={'small'} onClick={check}>
-            {t('common:checkForUpdates')}
-          </Button>
-        );
-      }
-      case 'checking': {
-        return (
-          <Button loading size={'small'}>
-            {t('common:checkForUpdates')}
-          </Button>
-        );
-      }
-      case 'downloading': {
-        return (
-          <Button loading size={'small'}>
-            {t('common:downloadingUpdate', { percent: current.progress ?? 0 })}
-          </Button>
-        );
-      }
-      case 'ready': {
-        return (
+  switch (getAppUpdateAction(view)) {
+    case 'check': {
+      return (
+        <Button loading={requesting} size={'small'} onClick={check}>
+          {t('common:checkForUpdates')}
+        </Button>
+      );
+    }
+    case 'retry': {
+      return (
+        <Button loading={refreshing} size={'small'} onClick={retry}>
+          {t('common:retry')}
+        </Button>
+      );
+    }
+    case 'checking': {
+      return (
+        <Button loading size={'small'}>
+          {t('common:checkForUpdates')}
+        </Button>
+      );
+    }
+    case 'downloading': {
+      return (
+        <Button loading size={'small'}>
+          {t('common:downloadingUpdate', {
+            percent: view.kind === 'downloading' ? (view.progress ?? 0) : 0,
+          })}
+        </Button>
+      );
+    }
+    case 'install': {
+      return (
+        view.kind === 'ready' && (
           <Button
             loading={requesting}
             size={'small'}
             type={'primary'}
-            onClick={() => confirmInstall(current.targetVersion)}
+            onClick={() => confirmInstall(view.targetVersion)}
           >
             {t('common:restartToUpdate')}
           </Button>
-        );
-      }
-      case 'restarting': {
-        return (
-          <Button loading size={'small'}>
-            {t('devices.appUpdate.restarting')}
-          </Button>
-        );
-      }
-      case 'installFailed':
-      case 'timedOut': {
-        return (
-          <Button loading={requesting} size={'small'} onClick={check}>
-            {t('common:checkForUpdates')}
-          </Button>
-        );
-      }
-      default: {
-        return null;
-      }
+        )
+      );
     }
-  };
+    case 'restarting': {
+      return (
+        <Button loading size={'small'}>
+          {t('devices.appUpdate.restarting')}
+        </Button>
+      );
+    }
+    default: {
+      return null;
+    }
+  }
+};
+
+/** Where the update stands, under the desktop app's connection row. */
+export const AppUpdateHint = ({ update }: AppUpdateProps) => {
+  const { t } = useTranslation(['setting', 'common']);
+  const { view } = update;
 
   const renderHint = (current: AppUpdateView): ReactNode => {
     switch (current.kind) {
@@ -112,6 +100,9 @@ const AppUpdateSection = ({ canEdit, device }: AppUpdateSectionProps) => {
         if (current.outcome)
           return t('devices.appUpdate.checkFailed', { message: current.outcome.error });
         return null;
+      }
+      case 'unavailable': {
+        return t('devices.appUpdate.unavailable');
       }
       case 'downloading': {
         return current.targetVersion
@@ -142,29 +133,19 @@ const AppUpdateSection = ({ canEdit, device }: AppUpdateSectionProps) => {
     }
   };
 
-  // The live answer beats the registry: the row's metadata is whatever client
-  // registered last, which may be `lh connect` on the same machine.
-  const version = currentVersion ?? reportedVersion;
   const hint = renderHint(view);
+  if (!hint) return null;
+
   const failed =
     view.kind === 'installFailed' ||
     view.kind === 'timedOut' ||
+    view.kind === 'unavailable' ||
     (view.kind === 'idle' && typeof view.outcome === 'object');
 
   return (
-    <Flexbox gap={8}>
-      <FieldLabel>{t('devices.appUpdate.title')}</FieldLabel>
-      <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
-        <Text>{version ? `v${version}` : '—'}</Text>
-        {canEdit && hasDesktopChannel && renderAction(view)}
-      </Flexbox>
-      {hint && (
-        <Text fontSize={12} type={failed ? 'danger' : 'secondary'}>
-          {hint}
-        </Text>
-      )}
-    </Flexbox>
+    // Indented past the row's status dot so it reads as that row's status.
+    <Text fontSize={12} style={{ paddingInlineStart: 16 }} type={failed ? 'danger' : 'secondary'}>
+      {hint}
+    </Text>
   );
 };
-
-export default AppUpdateSection;

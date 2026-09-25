@@ -622,7 +622,8 @@ export default {
   'devices.appUpdate.restartingHint': 'Waiting for the device to come back on v{{version}}',
   'devices.appUpdate.timedOut':
     "The device hasn't come back online. Check the app on that machine.",
-  'devices.appUpdate.title': 'App version',
+  'devices.appUpdate.unavailable':
+    "Couldn't reach the desktop app on this device. Retry, or check that it's still running.",
   'devices.appUpdate.unsupported.cli':
     'lh connect answered instead of the desktop app. Stop lh connect on this device, then try again.',
   'devices.appUpdate.unsupported.devBuild': "Development builds can't update themselves.",

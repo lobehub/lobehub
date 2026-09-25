@@ -5,7 +5,6 @@ import type { DeviceListItem, DeviceWorkspaceShare } from '@lobechat/types';
 import { Flexbox, Icon, Input, SortableList } from '@lobehub/ui';
 import { ActionIcon, Avatar, Button, confirmModal, Tag, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import dayjs from 'dayjs';
 import { FolderOpenIcon, FolderPlusIcon, LockIcon, XIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,7 +16,7 @@ import { deviceService } from '@/services/device';
 import { electronSystemService } from '@/services/electron/system';
 import { nextWorkingDirs } from '@/store/device';
 
-import AppUpdateSection from './AppUpdate';
+import Connections from './Connections';
 import { refreshDeviceList } from './const';
 import FieldLabel from './FieldLabel';
 import { getDeviceIcon } from './getDeviceIcon';
@@ -39,12 +38,6 @@ const styles = createStaticStyles(({ css }) => ({
     overflow: hidden;
     height: 100%;
     min-height: 0;
-  `,
-  dot: css`
-    flex: none;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
   `,
   header: css`
     flex: none;
@@ -112,8 +105,7 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
   // Only the machine you're on can browse its own filesystem natively.
   const canBrowse = !!isCurrent && isDesktop;
 
-  // Render the device's live connections straight from `device.channels` — one
-  // row per connection; an empty array means offline.
+  // An empty `device.channels` means offline.
   const channels = device.channels ?? [];
   const online = channels.length > 0;
 
@@ -304,32 +296,8 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
           </Flexbox>
         )}
 
-        {/* ─── Connections ─── */}
-        <Flexbox gap={8}>
-          <FieldLabel>{t('devices.detail.connections')}</FieldLabel>
-          {channels.length > 0 ? (
-            channels.map((channel, index) => (
-              <Flexbox horizontal align={'center'} gap={8} key={`${channel.connectedAt}-${index}`}>
-                <span className={styles.dot} style={{ background: cssVar.colorSuccess }} />
-                {channel.channel && <Tag size={'small'}>{channel.channel}</Tag>}
-                <Text fontSize={12} type={'secondary'}>
-                  {t('devices.channel.connected', { time: dayjs(channel.connectedAt).fromNow() })}
-                </Text>
-              </Flexbox>
-            ))
-          ) : (
-            <Flexbox horizontal align={'center'} gap={8}>
-              <span className={styles.dot} style={{ background: cssVar.colorTextQuaternary }} />
-              <Text fontSize={12} type={'secondary'}>
-                {t('devices.status.offline')} ·{' '}
-                {t('devices.lastSeen', { time: dayjs(device.lastSeen).fromNow() })}
-              </Text>
-            </Flexbox>
-          )}
-        </Flexbox>
-
-        {/* ─── App version + remote update ─── */}
-        <AppUpdateSection canEdit={canEdit} device={device} />
+        {/* ─── Connections, each with its client version; desktop carries the update ─── */}
+        <Connections canEdit={canEdit} device={device} />
 
         {/* ─── Name ─── */}
         <Flexbox gap={8}>

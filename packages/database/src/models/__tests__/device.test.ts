@@ -113,6 +113,47 @@ describe('DeviceModel', () => {
       });
     });
 
+    it('keeps the desktop and CLI versions when both clients register the same device', async () => {
+      await deviceModel.register({
+        deviceId: 'dev-shared',
+        identitySource: 'machine-id',
+        metadata: { appVersion: '2.0.0', node: '22.0.0' },
+      });
+      await deviceModel.register({
+        deviceId: 'dev-shared',
+        identitySource: 'machine-id',
+        metadata: { cliVersion: '1.2.3', node: '24.0.0' },
+      });
+      await deviceModel.register({ deviceId: 'dev-shared', identitySource: 'machine-id' });
+
+      expect((await deviceModel.findByDeviceId('dev-shared'))?.metadata).toEqual({
+        appVersion: '2.0.0',
+        cliVersion: '1.2.3',
+        node: '24.0.0',
+      });
+    });
+
+    it('keeps both client versions on a workspace enrollment', async () => {
+      const mergeWsId = 'device-model-ws-metadata-merge';
+      await serverDB
+        .insert(workspaces)
+        .values({ id: mergeWsId, name: 'WS', primaryOwnerId: userId, slug: mergeWsId });
+      const model = new DeviceModel(serverDB, userId, mergeWsId);
+      const base = {
+        deviceId: 'ws-dev-shared',
+        identitySource: 'machine-id',
+        workspaceId: mergeWsId,
+      };
+
+      await model.registerWorkspaceDevice({ ...base, metadata: { appVersion: '2.0.0' } });
+      const result = await model.registerWorkspaceDevice({
+        ...base,
+        metadata: { cliVersion: '1.2.3' },
+      });
+
+      expect(result.metadata).toEqual({ appVersion: '2.0.0', cliVersion: '1.2.3' });
+    });
+
     it('should upsert on (userId, deviceId) and refresh machine fields', async () => {
       await deviceModel.register({
         architecture: 'x64',

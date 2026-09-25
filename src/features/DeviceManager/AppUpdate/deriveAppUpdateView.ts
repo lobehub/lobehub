@@ -85,3 +85,39 @@ export const deriveAppUpdateView = (
 /** Views whose next state only the device can tell us, so the section polls. */
 export const isAppUpdatePolling = (view: AppUpdateView): boolean =>
   view.kind === 'checking' || view.kind === 'downloading' || view.kind === 'restarting';
+
+/**
+ * Which button the desktop app's row offers. Every state the user can act on
+ * keeps one — `unavailable` isn't polled, so without a retry the section would
+ * stay stuck until the panel is reopened.
+ */
+export type AppUpdateAction =
+  'check' | 'retry' | 'checking' | 'downloading' | 'install' | 'restarting';
+
+export const getAppUpdateAction = (view: AppUpdateView): AppUpdateAction | undefined => {
+  switch (view.kind) {
+    case 'idle':
+    case 'installFailed':
+    case 'timedOut': {
+      return 'check';
+    }
+    case 'unavailable': {
+      return 'retry';
+    }
+    case 'checking': {
+      return 'checking';
+    }
+    case 'downloading': {
+      return 'downloading';
+    }
+    case 'ready': {
+      return 'install';
+    }
+    case 'restarting': {
+      return 'restarting';
+    }
+    default: {
+      return undefined;
+    }
+  }
+};
