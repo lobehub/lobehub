@@ -3,45 +3,53 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { handleGoogleVideoWebhook } from './handleCreateVideoWebhook';
 
-const { mockCreateRemoteJWKSet, mockJwtVerify } = vi.hoisted(() => ({
-  mockCreateRemoteJWKSet: vi.fn(() => 'jwks'),
-  mockJwtVerify: vi.fn(),
-}));
+const signingKeys = await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify']);
+const publicJwk = await crypto.subtle.exportKey('jwk', signingKeys.publicKey);
 
-vi.mock('jose', () => ({
-  createRemoteJWKSet: mockCreateRemoteJWKSet,
-  jwtVerify: mockJwtVerify,
-}));
+const toBase64 = (bytes: ArrayBuffer) => btoa(String.fromCharCode(...new Uint8Array(bytes)));
 
-const createPayload = (body: unknown, timestamp = Math.floor(Date.now() / 1000).toString()) => ({
-  body,
-  headers: {
-    'webhook-signature': 'signed-jwt',
-    'webhook-timestamp': timestamp,
-  },
-  url: 'https://app.example.com/api/webhooks/video/google?token=secret',
-});
+const sign = async (content: string, key: CryptoKey = signingKeys.privateKey) =>
+  toBase64(await crypto.subtle.sign({ name: 'Ed25519' }, key, new TextEncoder().encode(content)));
+
+/** Builds a delivery signed the way Gemini signs dynamic webhooks (Standard Webhooks `v1a`). */
+const createPayload = async (
+  body: unknown,
+  {
+    signingKey,
+    timestamp = Math.floor(Date.now() / 1000).toString(),
+  }: { signingKey?: CryptoKey; timestamp?: string } = {},
+) => {
+  const rawBody = JSON.stringify(body);
+  const webhookId = 'msg_test';
+
+  return {
+    body,
+    headers: {
+      'webhook-id': webhookId,
+      'webhook-signature': `v1a,${await sign(`${webhookId}.${timestamp}.${rawBody}`, signingKey)}`,
+      'webhook-timestamp': timestamp,
+    },
+    rawBody,
+    url: 'https://app.example.com/api/webhooks/video/google?token=secret',
+  };
+};
 
 describe('handleGoogleVideoWebhook', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    mockJwtVerify.mockResolvedValue({});
+    vi.restoreAllMocks();
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ keys: [{ ...publicJwk, alg: 'EdDSA', use: 'sig' }] })),
+    );
   });
 
   it('should verify and normalize an interaction completion event', async () => {
     const result = await handleGoogleVideoWebhook(
-      createPayload({
+      await createPayload({
         data: { id: 'interactions/omni-123' },
         type: 'interaction.completed',
       }),
     );
 
-    expect(mockCreateRemoteJWKSet).toHaveBeenCalledWith(
-      new URL('https://generativelanguage.googleapis.com/.well-known/jwks.json'),
-    );
-    expect(mockJwtVerify).toHaveBeenCalledWith('signed-jwt', 'jwks', {
-      algorithms: ['RS256'],
-    });
     expect(result).toEqual({
       inferenceId: 'interactions/omni-123',
       status: 'completed',
@@ -50,7 +58,7 @@ describe('handleGoogleVideoWebhook', () => {
 
   it('should normalize a video generated event as completed', async () => {
     const result = await handleGoogleVideoWebhook(
-      createPayload({
+      await createPayload({
         data: {
           id: 'interactions/omni-video-123',
           output_file_uri: 'https://example.com/video.mp4',
@@ -67,7 +75,7 @@ describe('handleGoogleVideoWebhook', () => {
 
   it('should normalize an interaction failure event', async () => {
     const result = await handleGoogleVideoWebhook(
-      createPayload({
+      await createPayload({
         data: {
           error_code: 'SAFETY',
           error_message: 'Video generation was blocked',
@@ -87,9 +95,9 @@ describe('handleGoogleVideoWebhook', () => {
   it('should reject stale webhook deliveries', async () => {
     await expect(
       handleGoogleVideoWebhook(
-        createPayload(
+        await createPayload(
           { data: { id: 'interactions/omni-123' }, type: 'interaction.completed' },
-          '1',
+          { timestamp: '1' },
         ),
       ),
     ).rejects.toThrow('outside the allowed replay window');
@@ -102,5 +110,34 @@ describe('handleGoogleVideoWebhook', () => {
         headers: { 'webhook-timestamp': Math.floor(Date.now() / 1000).toString() },
       }),
     ).rejects.toThrow('Missing Google webhook signature');
+  });
+  it('should reject a delivery signed with an unknown key', async () => {
+    const otherKeys = await crypto.subtle.generateKey({ name: 'Ed25519' }, true, [
+      'sign',
+      'verify',
+    ]);
+
+    await expect(
+      handleGoogleVideoWebhook(
+        await createPayload(
+          { data: { id: 'interactions/omni-123' }, type: 'interaction.completed' },
+          { signingKey: otherKeys.privateKey },
+        ),
+      ),
+    ).rejects.toThrow('Invalid Google webhook signature');
+  });
+
+  it('should reject a delivery whose body was changed after signing', async () => {
+    const payload = await createPayload({
+      data: { id: 'interactions/omni-123' },
+      type: 'interaction.completed',
+    });
+
+    await expect(
+      handleGoogleVideoWebhook({
+        ...payload,
+        rawBody: payload.rawBody.replace('omni-123', 'omni-456'),
+      }),
+    ).rejects.toThrow('Invalid Google webhook signature');
   });
 });
