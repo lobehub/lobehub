@@ -90,7 +90,12 @@ const mapWorkspaceError = (error: unknown): never => {
   if (error instanceof SandboxWorkspaceFilesError) {
     throw new TRPCError({
       code: WORKSPACE_ERROR_CODES[error.status] ?? 'BAD_GATEWAY',
-      message: error.message,
+      // The machine code when the market sent one, the way this router's own
+      // refusals travel (`ENVIRONMENT_HAS_INSTANCES`): the client turns a code
+      // into a sentence in the reader's language. The description beside it
+      // names the row by its id, so forwarding it verbatim put a UUID in a
+      // toast — accurate, and useless to the person reading it.
+      message: error.code || error.message,
     });
   }
 
@@ -402,6 +407,11 @@ const instanceProcedure = environmentProcedure.use(async (opts) => {
  *
  * A personal account's root belongs to its owner alone, which is the one case
  * where no instance is needed.
+ *
+ * An instance's directory is never written through here (LOBE-14364): it is
+ * the saved copy of the sandbox's work tree, written by the sandbox alone. A
+ * write from outside would be overwritten by the next save, or leave the
+ * directory disagreeing with the record the next restore reads it by.
  */
 const resolveFileRoot = async (
   ctx: {
@@ -414,10 +424,12 @@ const resolveFileRoot = async (
   access: 'read' | 'write',
 ): Promise<string> => {
   if (instanceId) {
-    const instance =
-      access === 'write'
-        ? await ctx.instanceModel.findOwnedById(instanceId)
-        : await ctx.instanceModel.findById(instanceId);
+    // Refused before the lookup: the answer is the same whether or not the
+    // instance exists, so there is nothing to find out by asking.
+    if (access === 'write') {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'INSTANCE_READ_ONLY' });
+    }
+    const instance = await ctx.instanceModel.findById(instanceId);
     if (!instance) throw new TRPCError({ code: 'NOT_FOUND', message: 'Instance not found' });
 
     return instance.workingDirectory;
@@ -507,10 +519,18 @@ export const sandboxWorkspaceRouter = router({
 
       if (!created) throw new TRPCError({ code: 'NOT_FOUND', message: 'Environment not found' });
 
-      await ctx.client.copyEnvironment({ from: source.id, to: created.id }).catch(async (error) => {
-        await ctx.instanceModel.delete(created.id);
-        return mapWorkspaceError(error);
-      });
+      await ctx.client
+        .copyEnvironment({
+          from: source.id,
+          // The copy's own folder. Sharing the source's would let either
+          // instance's next save delete files the other still lists.
+          instanceDir: created.workingDirectory,
+          to: created.id,
+        })
+        .catch(async (error) => {
+          await ctx.instanceModel.delete(created.id);
+          return mapWorkspaceError(error);
+        });
 
       // A copy starts life with everything the source had built, so it is
       // ready by arrival — there is nothing to clone and nothing to install.
@@ -678,6 +698,9 @@ export const sandboxWorkspaceRouter = router({
       try {
         const { buildId } = await ctx.client.buildEnvironment({
           credentials: credential ? [credential] : undefined,
+          // Where the checkout lands on the volume: the instance's own folder,
+          // which is what its file browser opens.
+          instanceDir: instance.workingDirectory,
           name: input.id,
           specification,
           topicId: input.topicId,

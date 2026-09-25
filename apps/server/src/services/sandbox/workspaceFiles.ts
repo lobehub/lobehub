@@ -162,11 +162,19 @@ interface RequestContext {
 const CURRENT_WORKSPACE = 'current';
 
 export class SandboxWorkspaceFilesError extends Error {
+  /**
+   * The market's machine code for the refusal (`error` in its OAuth-shaped
+   * body), when it sent one. The description beside it names the row by its
+   * id — fine in a log, not a sentence to put in front of a person — so the
+   * code is what the UI translates and the description is only the fallback.
+   */
+  readonly code?: string;
   readonly status: number;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, code?: string) {
     super(message);
     this.name = 'SandboxWorkspaceFilesError';
+    this.code = code;
     this.status = status;
   }
 }
@@ -184,7 +192,7 @@ export const createSandboxWorkspaceClient = ({
     if (!response.ok) {
       const body = await response
         .json()
-        .catch(() => ({}) as { error_description?: string; message?: string });
+        .catch(() => ({}) as { error?: string; error_description?: string; message?: string });
       log('workspace file request failed: %s %d %O', path, response.status, body);
       // The market answers in the OAuth shape — `error` for the code and
       // `error_description` for the reason — so reading `message` alone
@@ -195,6 +203,7 @@ export const createSandboxWorkspaceClient = ({
           body.message ||
           `Workspace request failed with status ${response.status}`,
         response.status,
+        body.error,
       );
     }
 
@@ -221,10 +230,19 @@ export const createSandboxWorkspaceClient = ({
       }),
 
     copyEnvironment: async (
-      params: RequestContext & { from: string; to: string },
+      params: RequestContext & {
+        from: string;
+        /** The copy's own directory; the runtime writes its work tree there. */
+        instanceDir?: string;
+        to: string;
+      },
     ): Promise<{ name: string }> =>
       request(`${CURRENT_WORKSPACE}/environments/${encodeURIComponent(params.from)}/copy`, {
-        body: JSON.stringify({ to: params.to, topicId: params.topicId }),
+        body: JSON.stringify({
+          instanceDir: params.instanceDir,
+          to: params.to,
+          topicId: params.topicId,
+        }),
         headers: { 'Content-Type': 'application/json' },
         method: 'POST',
       }),
@@ -340,6 +358,12 @@ export const createSandboxWorkspaceClient = ({
      */
     buildEnvironment: async (params: {
       credentials?: { header: string; urlPrefix: string }[];
+      /**
+       * The instance's directory, relative to the workspace. The runtime writes
+       * the checkout there, so it is what the file browser shows, and keeps
+       * using it for every later save of this environment.
+       */
+      instanceDir?: string;
       name: string;
       specification: EnvironmentConfiguration;
       topicId?: string;
@@ -347,6 +371,7 @@ export const createSandboxWorkspaceClient = ({
       request(`${CURRENT_WORKSPACE}/environments/${encodeURIComponent(params.name)}/build`, {
         body: JSON.stringify({
           credentials: params.credentials,
+          instanceDir: params.instanceDir,
           specification: params.specification,
           topicId: params.topicId,
         }),

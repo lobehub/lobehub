@@ -4023,8 +4023,10 @@ When I am ___, I need ___
   'environments.instances.build': 'Build',
   'environments.instances.buildConfirmTitle': 'Build instance {{name}}?',
   'environments.instances.buildStartFailed': 'Could not start the build',
+  // Context-free on purpose: the same code refuses a rebuild and a delete, so
+  // a sentence that only mentions rebuilding was wrong half the time.
   'environments.instances.inUse':
-    'A conversation is using this instance — rebuild it once that run ends',
+    'A conversation is using this instance — try again once that run ends',
   'environments.instances.notBuilt': 'Not built yet — nothing has been cloned or installed',
   'environments.instances.rebuildConfirmContent':
     "This clears the instance's folder, then clones the code again and runs the setup script. Everything in it now — changes made in conversations, installed packages, reports, data — will be lost. This cannot be undone.",

@@ -11,9 +11,20 @@
  */
 const CODE_KEYS: Record<string, string> = {
   ENVIRONMENT_HAS_INSTANCES: 'environments.hasInstances',
+  // The execution plane calls an instance's stored state an "environment", so
+  // its refusal arrives under that name for the row this UI calls an instance.
+  ENVIRONMENT_IN_USE: 'environments.instances.inUse',
   INSTANCE_IN_USE: 'environments.instances.inUse',
   PATH_OUTSIDE_INSTANCE: 'environments.files.invalidPath',
 };
+
+/**
+ * A refusal that arrived as a bare machine code this build has no sentence for
+ * — a newer server, or a code only another surface handles. Printing it puts
+ * `WORKSPACE_NOT_CONFIGURED` in front of someone; the caller's own line at
+ * least names the action that failed.
+ */
+const isUntranslatedCode = (message: string): boolean => /^[A-Z][\dA-Z_]{2,}$/.test(message);
 
 /**
  * A message the server never wrote for anyone to read.
@@ -60,7 +71,7 @@ export const describeError = (
   const key = CODE_KEYS[message];
   if (key) return t(key);
 
-  if (isMachineMessage(message)) return fallback;
+  if (isMachineMessage(message) || isUntranslatedCode(message)) return fallback;
 
   const issues = readIssues(message);
   if (issues) {

@@ -577,7 +577,7 @@
   "environments.instances.emptyHint": "Create one, then pick it under \"Working Directory\" in the chat input.",
   "environments.instances.emptyReadonly": "Nobody has created an instance of this environment yet. Only its owner can add one.",
   "environments.instances.hideLog": "Hide log",
-  "environments.instances.inUse": "A conversation is using this instance — rebuild it once that run ends",
+  "environments.instances.inUse": "A conversation is using this instance — try again once that run ends",
   "environments.instances.namePlaceholder": "Instance name",
   "environments.instances.notBuilt": "Not built yet — nothing has been cloned or installed",
   "environments.instances.overlappingDirectory": "This folder is inside another instance's folder, or contains one",

@@ -577,7 +577,7 @@
   "environments.instances.emptyHint": "新建后，在对话输入框的「工作目录」里选中即可使用。",
   "environments.instances.emptyReadonly": "这个环境还没有人建过实例，只有它的创建者可以新建。",
   "environments.instances.hideLog": "收起日志",
-  "environments.instances.inUse": "有对话正在使用这个实例，等它结束后再重新构建",
+  "environments.instances.inUse": "有对话正在使用这个实例，等它结束后再试",
   "environments.instances.namePlaceholder": "实例名称",
   "environments.instances.notBuilt": "尚未构建——还没有拉取代码、安装依赖",
   "environments.instances.overlappingDirectory": "该目录与其他实例的目录存在嵌套，请换一个目录",

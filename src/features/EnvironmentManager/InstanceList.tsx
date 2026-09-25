@@ -358,9 +358,12 @@ const InstanceRow = memo<InstanceRowProps>(
                     setRemoving(true);
                     void onRemove(instance.id)
                       .catch((error: unknown) => {
+                        // Through the same translator the other refusals use:
+                        // raw, the execution plane's answer names the row by
+                        // its id ("Environment \"e299f341-…\" is currently in
+                        // use"), which is not a sentence to hand a person.
                         toast.error(
-                          (error as { message?: string })?.message ||
-                            t('environments.instances.removeFailed'),
+                          describeError(error, t, t('environments.instances.removeFailed')),
                         );
                         // Only on failure: a row that really went away unmounts
                         // with this state, and clearing it on success would
