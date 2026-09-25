@@ -78,6 +78,17 @@ describe('Windows grepContent without rg', () => {
     expect(result.total_matches).toBe(1);
     expect(result.matches[0]).toContain('mvx_image');
   });
+
+  it('reports an invalid pattern instead of rejecting', async () => {
+    const result = await new WindowsContentSearchImpl().grep({
+      output_mode: 'content',
+      pattern: '(',
+      scope: dir,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Invalid regular expression');
+  });
 });
 
 describe('Windows grepContent with rg', () => {

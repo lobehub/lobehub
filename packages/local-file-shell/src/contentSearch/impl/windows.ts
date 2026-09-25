@@ -74,7 +74,7 @@ export class WindowsContentSearchImpl extends BaseContentSearch {
       if (preferredTool === 'rg') {
         if (await this.checkToolAvailable('rg')) {
           logger.debug(`${logPrefix} Using preferred tool: rg`);
-          return this.grepWithRipgrep(params);
+          return await this.grepWithRipgrep(params);
         }
         logger.warn(`${logPrefix} ripgrep (rg) not available, falling back to other tools`);
       }
@@ -84,7 +84,10 @@ export class WindowsContentSearchImpl extends BaseContentSearch {
         logger.info(`Using content search tool: ${this.currentTool}`);
       }
 
-      return this.grepWithTool(this.currentTool, params);
+      // `await` so a rejected search (e.g. the Node engine's `new RegExp` on an
+      // invalid pattern) lands in the catch below instead of escaping as a
+      // thrown IPC error.
+      return await this.grepWithTool(this.currentTool, params);
     } catch (error) {
       logger.error(`${logPrefix} Grep failed:`, error);
       return {
