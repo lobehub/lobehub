@@ -50,6 +50,39 @@ export const transformAnthropicStream = (
     return { data: errorData, id: 'first_chunk_error', type: 'error' };
   }
 
+  const raw = chunk as unknown as Record<string, unknown>;
+
+  /**
+   * Anthropic reports a mid-stream failure (e.g. `overloaded_error`) as an `error` event. The
+   * official SDK throws on the `event: error` line, but relays often forward the payload as a plain
+   * data frame, which reached the switch below as an unknown event and closed as an empty
+   * completion.
+   */
+  if (raw.type === 'error') {
+    const error = (raw.error ?? {}) as { message?: string; type?: string };
+    const errorData = {
+      body: raw,
+      message: error.message || error.type || 'The provider reported an error mid-stream.',
+      type: AgentRuntimeErrorType.ProviderBizError,
+    } satisfies ChatMessageError;
+    return { data: errorData, id: context.id, type: 'error' };
+  }
+
+  /**
+   * A relay that answers an Anthropic request in OpenAI chat-completions format produces no event
+   * this adapter understands, so the whole answer was dropped and reported as an empty completion.
+   * Name the protocol mismatch instead, so the user knows to fix the provider's API format.
+   */
+  if (Array.isArray(raw.choices) || raw.object === 'chat.completion.chunk') {
+    const errorData = {
+      body: raw,
+      message:
+        'The provider answered an Anthropic-format request with OpenAI chat-completions chunks. Check that this provider is configured with the API format its endpoint actually serves.',
+      type: AgentRuntimeErrorType.UpstreamMalformedResponse,
+    } satisfies ChatMessageError;
+    return { data: errorData, id: context.id, type: 'error' };
+  }
+
   // maybe need another structure to add support for multiple choices
   switch (chunk.type) {
     case 'message_start': {
