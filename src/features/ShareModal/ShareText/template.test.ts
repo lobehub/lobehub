@@ -212,3 +212,128 @@ describe('generateMarkdown', () => {
     expect(result).toContain('Intro<think>Reasoning</think>Outro');
   });
 });
+
+describe('generateMarkdown with virtual assistant messages', () => {
+  // `parse()` empties `content` on virtual rows and moves the authored text into
+  // `children` / `taskCompletions` / `tasks`, which is why the Text and PDF exports
+  // used to render those turns as blank lines. See #19970.
+  const virtualParams = {
+    title: 'Chat Title',
+    includeTool: false,
+    includeUser: true,
+    withSystemRole: false,
+    withRole: true,
+    systemRole: '',
+  };
+
+  const toolCall = { id: 'tool_1', identifier: 'search' };
+
+  const toolCallingGroup = [
+    {
+      children: [
+        { content: 'Searching for that now', id: 'child-1', tools: [toolCall] },
+        { content: 'It is 22C and sunny.', id: 'child-2' },
+      ],
+      content: '',
+      createdAt: 2,
+      id: 'group-1',
+      role: 'assistantGroup',
+    },
+  ] as UIChatMessage[];
+
+  it('should export the authored answer of a tool-calling assistant group', () => {
+    const messages = [
+      { content: 'What is the weather?', createdAt: 1, id: 'user-1', role: 'user' },
+      ...toolCallingGroup,
+    ] as UIChatMessage[];
+
+    const result = generateMarkdown({ ...virtualParams, messages });
+
+    expect(result).toContain('##### User:');
+    expect(result).toContain('##### Assistant:');
+    expect(result).toContain('It is 22C and sunny.');
+  });
+
+  it('should export the authored answer of a supervisor group', () => {
+    const messages = [
+      {
+        children: [{ content: 'The supervisor conclusion.', id: 'child-1' }],
+        content: '',
+        createdAt: 1,
+        id: 'sup-1',
+        role: 'supervisor',
+      },
+    ] as UIChatMessage[];
+
+    const result = generateMarkdown({ ...virtualParams, messages });
+
+    expect(result).toContain('##### Assistant:');
+    expect(result).toContain('The supervisor conclusion.');
+  });
+
+  it('should join the payload of a virtual tasks message', () => {
+    const messages = [
+      {
+        content: '',
+        createdAt: 1,
+        id: 'tasks-1',
+        role: 'tasks',
+        tasks: [
+          { content: 'Step one finished.', createdAt: 1, id: 't1', role: 'task' },
+          { content: 'Step two finished.', createdAt: 2, id: 't2', role: 'task' },
+        ],
+      },
+    ] as UIChatMessage[];
+
+    const result = generateMarkdown({ ...virtualParams, messages });
+
+    expect(result).toContain('##### Assistant:');
+    expect(result).toContain('Step one finished.');
+    expect(result).toContain('Step two finished.');
+  });
+
+  it('should not leak tool call JSON by default but still export the prose', () => {
+    const result = generateMarkdown({ ...virtualParams, messages: toolCallingGroup });
+
+    expect(result).toContain('It is 22C and sunny.');
+    expect(result).not.toContain('"identifier"');
+  });
+
+  it('should still export the prose when tool calls are included', () => {
+    const result = generateMarkdown({
+      ...virtualParams,
+      includeTool: true,
+      messages: toolCallingGroup,
+    });
+
+    expect(result).toContain('It is 22C and sunny.');
+  });
+
+  it('should skip a virtual assistant row that has no authored content', () => {
+    const messages = [
+      { content: 'What is the weather?', createdAt: 1, id: 'user-1', role: 'user' },
+      {
+        children: [{ content: '', id: 'child-1', tools: [toolCall] }],
+        content: '',
+        createdAt: 2,
+        id: 'group-1',
+        role: 'assistantGroup',
+      },
+    ] as UIChatMessage[];
+
+    const result = generateMarkdown({ ...virtualParams, messages });
+
+    expect(result).toBe('# Chat Title\n\n\n##### User:\n\nWhat is the weather?');
+  });
+
+  it('should keep plain assistant messages unchanged', () => {
+    const messages = [
+      { content: 'Hi there', createdAt: 1, id: 'a-1', role: 'assistant' },
+    ] as UIChatMessage[];
+
+    const result = generateMarkdown({ ...virtualParams, messages });
+
+    expect(result).toContain('##### Assistant:');
+    expect(result).toContain('Hi there');
+  });
+});
