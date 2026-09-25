@@ -342,4 +342,70 @@ describe('computeImageCost', () => {
       expect(result?.totalCredits).toBe(0);
     });
   });
+
+  describe('per-image input fee', () => {
+    const pricing: Pricing = {
+      units: [
+        {
+          name: 'imageGeneration',
+          strategy: 'lookup',
+          unit: 'image',
+          lookup: {
+            pricingParams: ['quality', 'resolution'],
+            prices: { low_1k: 0.04, medium_2k: 0.08 },
+          },
+        },
+        { name: 'imageInput', rate: 0.01, strategy: 'fixed', unit: 'image' },
+      ],
+    };
+
+    it('adds the input fee for every reference image on each generated image', () => {
+      const result = computeImageCost(
+        pricing,
+        { imageUrls: ['a', 'b'], quality: 'low', resolution: '1k' },
+        2,
+      );
+
+      // (0.04 + 2 × 0.01) × 2 images
+      expect(result?.totalCost).toBeCloseTo(0.12);
+      expect(result?.breakdown).toMatchObject({ inputImageCount: 2, pricePerImage: 0.04 });
+      expect(result?.breakdown?.inputImageCost).toBeCloseTo(0.02);
+    });
+
+    it('counts a single imageUrl as one input image', () => {
+      const result = computeImageCost(
+        pricing,
+        { imageUrl: 'a', quality: 'medium', resolution: '2k' },
+        1,
+      );
+
+      expect(result?.totalCost).toBeCloseTo(0.09);
+    });
+
+    it('charges no input fee for text-to-image', () => {
+      const result = computeImageCost(
+        pricing,
+        { imageUrls: [], quality: 'low', resolution: '1k' },
+        1,
+      );
+
+      expect(result?.totalCost).toBe(0.04);
+      expect(result?.breakdown?.inputImageCount).toBeUndefined();
+    });
+
+    it('ignores token-based imageInput units', () => {
+      const result = computeImageCost(
+        {
+          units: [
+            { name: 'imageGeneration', rate: 0.04, strategy: 'fixed', unit: 'image' },
+            { name: 'imageInput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
+          ],
+        },
+        { imageUrls: ['a'] },
+        1,
+      );
+
+      expect(result?.totalCost).toBe(0.04);
+    });
+  });
 });
