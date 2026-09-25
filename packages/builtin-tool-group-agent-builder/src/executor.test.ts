@@ -22,6 +22,27 @@ vi.mock('@/store/agentGroup', () => ({
   }),
 }));
 
+let dbMessagesMap: Record<string, unknown[]> = {};
+
+vi.mock('@/store/chat', () => ({
+  useChatStore: { getState: () => ({ dbMessagesMap }) },
+}));
+
+/** A builder conversation whose earlier `createGroup` produced `cg_new`. */
+const conversationWithCreatedGroup = () => ({
+  'builder-topic': [
+    { id: 'msg_user', role: 'user' },
+    {
+      id: 'msg_create_group',
+      plugin: { apiName: 'createGroup', identifier: GroupAgentBuilderIdentifier },
+      pluginState: { groupId: 'cg_new', success: true },
+      role: 'tool',
+      tool_call_id: 'call_create_group',
+    },
+    { id: 'msg_create_agent', role: 'tool', tool_call_id: 'call_create_agent' },
+  ],
+});
+
 vi.mock('@/store/groupProfile', () => ({
   useGroupProfileStore: {
     getState: () => ({ setAgentBuilderContent: mockSetAgentBuilderContent }),
@@ -55,6 +76,7 @@ describe('GroupAgentBuilderExecutor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     activeGroupId = 'cg_1';
+    dbMessagesMap = {};
   });
 
   describe('group context resolution', () => {
@@ -73,6 +95,37 @@ describe('GroupAgentBuilderExecutor', () => {
         'cg_1',
         expect.objectContaining({ title: 'PM' }),
       );
+    });
+
+    // Client-runtime counterpart of the server fix: createGroup does not make
+    // the new group active, so without reading it back from the conversation a
+    // member tool without groupId lands in the old (shell) group.
+    it('follows the group createGroup made earlier in this conversation', async () => {
+      dbMessagesMap = conversationWithCreatedGroup();
+      mockCreateAgent.mockResolvedValue({ content: 'ok', success: true });
+
+      await groupAgentBuilderExecutor.createAgent({ systemRole: 'x', title: 'PM' }, {
+        messageId: 'msg_create_agent',
+      } as BuiltinToolContext);
+
+      expect(mockCreateAgent).toHaveBeenCalledWith(
+        'cg_new',
+        expect.objectContaining({ title: 'PM' }),
+      );
+    });
+
+    it('an explicit groupId wins over the created group', async () => {
+      dbMessagesMap = conversationWithCreatedGroup();
+      mockCreateAgent.mockResolvedValue({ content: 'ok', success: true });
+
+      await groupAgentBuilderExecutor.createAgent(
+        { groupId: 'cg_named', systemRole: 'x', title: 'PM' },
+        {
+          messageId: 'msg_create_agent',
+        } as BuiltinToolContext,
+      );
+
+      expect(mockCreateAgent).toHaveBeenCalledWith('cg_named', expect.anything());
     });
 
     it('reports a structured error when there is no group at all', async () => {
@@ -95,6 +148,20 @@ describe('GroupAgentBuilderExecutor', () => {
       await afterCall(GroupAgentBuilderApiName.batchCreateAgents, { agents: [] }, true);
 
       expect(mockRefreshGroupDetail).toHaveBeenCalledWith('cg_1');
+    });
+
+    it('refreshes the group createGroup made in this conversation', async () => {
+      dbMessagesMap = conversationWithCreatedGroup();
+
+      await groupAgentBuilderExecutor.onAfterCall({
+        apiName: GroupAgentBuilderApiName.createAgent,
+        identifier: GroupAgentBuilderIdentifier,
+        params: { title: 'PM' },
+        result: { content: '', success: true },
+        toolCallId: 'call_create_agent',
+      });
+
+      expect(mockRefreshGroupDetail).toHaveBeenCalledWith('cg_new');
     });
 
     it('does not refresh when the tool call failed', async () => {
