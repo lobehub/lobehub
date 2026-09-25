@@ -240,8 +240,8 @@ export class VerifyService {
   acceptDelivery = (id: string, comment?: string) =>
     lambdaClient.acceptance.accept.mutate({ comment, id });
 
-  rejectDelivery = (id: string, comment?: string) =>
-    lambdaClient.acceptance.reject.mutate({ comment, id });
+  rejectDelivery = (id: string, comment?: string, options?: { dispatch?: boolean }) =>
+    lambdaClient.acceptance.reject.mutate({ comment, dispatch: options?.dispatch, id });
 
   /**
    * The user's verdict on individual union checks — accept settles a check for

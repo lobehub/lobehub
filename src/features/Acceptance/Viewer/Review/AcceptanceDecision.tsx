@@ -25,6 +25,7 @@ import { canReviewAcceptance } from '../visibility';
 import DecisionBar from './DecisionBar';
 import FeedbackDrawer, { type FeedbackListEntry } from './FeedbackDrawer';
 import { openAcceptModal, openGroupFeedbackModal, openRejectModal } from './modals';
+import { rejectCopyOnly } from './rejectCopyOnly';
 
 interface AcceptanceDecisionProps {
   onDraftToComposer?: (text: string) => boolean;
@@ -233,16 +234,20 @@ const AcceptanceDecision = ({ onDraftToComposer }: AcceptanceDecisionProps) => {
         }}
         onRejectComment={() =>
           openRejectModal({
-            // `origin` is owner-only, matching the server's dispatch gate.
+            // `origin` is only visible to the record owner, so this is the
+            // viewer's promise, not the server's gate — the copy path below
+            // opts out of dispatch explicitly.
             dispatchAvailable: Boolean(data.origin?.topic),
             onConfirm: async (comment) => {
               if (!data.origin?.topic) {
-                // No agent to send it back to — hand the prompt to the reviewer.
-                // Copy before any await: the clipboard write needs the click's
-                // user activation, which the reject request would lose.
-                await copyToClipboard(buildAcceptanceRepairPrompt(acceptance.id, comment));
                 const rejected = await runAction(() =>
-                  verifyService.rejectDelivery(acceptance.id, comment),
+                  rejectCopyOnly({
+                    acceptanceId: acceptance.id,
+                    comment,
+                    copy: copyToClipboard,
+                    reject: (options) =>
+                      verifyService.rejectDelivery(acceptance.id, options.comment, options),
+                  }),
                 );
                 if (rejected)
                   toast.success({ placement: 'top', title: t('acceptance.bar.copied') });
