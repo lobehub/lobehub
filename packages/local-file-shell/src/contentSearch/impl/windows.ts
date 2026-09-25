@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import { execa } from 'execa';
 
 import { createLogger } from '../../logger';
@@ -10,13 +12,21 @@ const logger = createLogger('contentSearch:windows');
 
 /**
  * Windows content search tool type
- * Priority: rg > findstr/powershell > nodejs
+ * Priority: rg > nodejs
+ *
+ * There is deliberately no findstr tier. It was run as
+ * `cmd /c findstr /R "<pattern>" *.*`: libuv escapes the embedded quotes to `\"`,
+ * cmd.exe strips only the outer pair, and findstr then searched for the literal
+ * `"<pattern>"` — so nearly every search on a machine without `rg` answered
+ * "0 matches". Even correctly quoted, findstr has no `|` alternation, no
+ * `\d`/`\s`/`+`/`{n}`, reads files in the OEM code page (no UTF-8 CJK) and
+ * cannot take a glob, so the Node engine is the only faithful fallback.
  */
-type WindowsContentSearchTool = 'findstr' | 'nodejs' | 'rg';
+type WindowsContentSearchTool = 'nodejs' | 'rg';
 
 /**
  * Windows content search implementation
- * Uses rg > findstr > nodejs fallback strategy
+ * Uses rg > nodejs fallback strategy
  */
 export class WindowsContentSearchImpl extends BaseContentSearch {
   private currentTool: WindowsContentSearchTool | null = null;
@@ -45,26 +55,6 @@ export class WindowsContentSearchImpl extends BaseContentSearch {
 
     if (await this.checkToolAvailable('rg')) {
       return 'rg';
-    }
-
-    // findstr is always available on Windows
-    return 'findstr';
-  }
-
-  private async fallbackToNextTool(
-    currentTool: WindowsContentSearchTool,
-  ): Promise<WindowsContentSearchTool> {
-    const priority: WindowsContentSearchTool[] = ['rg', 'findstr', 'nodejs'];
-    const currentIndex = priority.indexOf(currentTool);
-
-    for (let i = currentIndex + 1; i < priority.length; i++) {
-      const nextTool = priority[i];
-      if (nextTool === 'nodejs' || nextTool === 'findstr') {
-        return nextTool;
-      }
-      if (await this.checkToolAvailable(nextTool)) {
-        return nextTool;
-      }
     }
 
     return 'nodejs';
@@ -115,9 +105,6 @@ export class WindowsContentSearchImpl extends BaseContentSearch {
       case 'rg': {
         return this.grepWithRipgrep(params);
       }
-      case 'findstr': {
-        return this.grepWithFindstr(params);
-      }
       default: {
         return this.grepWithNodejs(params);
       }
@@ -129,28 +116,49 @@ export class WindowsContentSearchImpl extends BaseContentSearch {
     const searchPath = this.resolveSearchPath(params);
     const logPrefix = `[grepContent:rg]`;
 
+    // `scope` may name a single file, but a process `cwd` must be a directory:
+    // search the file from its parent, the same way the unix impl does.
+    const searchRoot = (await this.isFile(searchPath)) ? path.dirname(searchPath) : searchPath;
+    const target = this.searchTarget(searchPath, searchRoot);
+
     try {
-      const args = this.buildGrepArgs('rg', params);
+      const args = this.buildGrepArgs('rg', params, target);
       logger.debug(`${logPrefix} Executing: rg ${args.join(' ')}`);
 
-      const { stdout, stderr, exitCode } = await execa('rg', args, {
-        cwd: searchPath,
+      const { stdout, stderr, exitCode, shortMessage } = await execa('rg', args, {
+        cwd: searchRoot,
         reject: false,
         stdin: 'ignore',
       });
+
+      // With `reject: false`, a process that never started (ENOENT, EACCES, a
+      // bad cwd) still resolves — only without an exit code. Treating that as
+      // empty output is how a missing engine used to read as "0 matches".
+      if (exitCode === undefined) {
+        throw new Error(shortMessage || 'rg failed to start');
+      }
+
+      // rg exits 2 on errors. With matches in hand those are partial (an
+      // unreadable file), but with none there is no answer to give — report the
+      // error rather than a "no matches" the search never established.
+      if (exitCode > 1 && !stdout.trim()) {
+        const error = `rg exited with code ${exitCode}: ${stderr.trim().split('\n').slice(0, 5).join('\n')}`;
+        logger.warn(`${logPrefix} ${error}`);
+        return { engine: 'rg', error, matches: [], success: false, total_matches: 0 };
+      }
 
       if (exitCode !== 0 && exitCode !== 1 && stderr) {
         logger.warn(`${logPrefix} rg exited with code ${exitCode}: ${stderr}`);
       }
 
-      // Same normalisation as the unix impl: rg runs with `cwd = searchPath`
-      // and searches `.`, so its output is relative — make it absolute so the
-      // engine no longer decides the path shape callers receive.
+      // Same normalisation as the unix impl: rg runs with `cwd = searchRoot`
+      // and searches a relative target, so its output is relative — make it
+      // absolute so the engine no longer decides the path shape callers receive.
       const lines = stdout
         .trim()
         .split('\n')
         .filter(Boolean)
-        .map((line) => toAbsoluteMatchLine(searchPath, line));
+        .map((line) => toAbsoluteMatchLine(searchRoot, line));
       let matches: string[] = [];
       let totalMatches = 0;
 
@@ -164,7 +172,7 @@ export class WindowsContentSearchImpl extends BaseContentSearch {
           matches = lines;
           const hasContext = params['-A'] || params['-B'] || params['-C'];
           if (hasContext) {
-            totalMatches = await this.getActualMatchCount(params);
+            totalMatches = await this.getActualMatchCount(params, searchRoot, target);
           } else {
             totalMatches = lines.length;
           }
@@ -198,22 +206,32 @@ export class WindowsContentSearchImpl extends BaseContentSearch {
         total_matches: totalMatches,
       };
     } catch (error) {
-      logger.warn(`${logPrefix} rg failed, falling back to findstr:`, error);
-      this.currentTool = await this.fallbackToNextTool('rg');
-      return this.grepWithTool(this.currentTool, params);
+      logger.warn(`${logPrefix} rg failed, falling back to Node.js:`, error);
+      // Only pin later searches to Node when rg is really gone; one failing
+      // call should not downgrade the shared instance for the whole session.
+      if (!(await this.checkToolAvailable('rg'))) this.currentTool = 'nodejs';
+      return this.grepWithNodejs(params);
     }
   }
 
-  private async getActualMatchCount(params: GrepContentParams): Promise<number> {
+  private async getActualMatchCount(
+    params: GrepContentParams,
+    searchRoot: string,
+    target: string,
+  ): Promise<number> {
     const countParams = { ...params, '-A': undefined, '-B': undefined, '-C': undefined };
-    const args = this.buildGrepArgs('rg', {
-      ...countParams,
-      output_mode: 'count',
-    } as GrepContentParams);
+    const args = this.buildGrepArgs(
+      'rg',
+      {
+        ...countParams,
+        output_mode: 'count',
+      } as GrepContentParams,
+      target,
+    );
 
     try {
       const { stdout } = await execa('rg', args, {
-        cwd: this.resolveSearchPath(params),
+        cwd: searchRoot,
         reject: false,
         stdin: 'ignore',
       });
@@ -228,98 +246,6 @@ export class WindowsContentSearchImpl extends BaseContentSearch {
       return total;
     } catch {
       return 0;
-    }
-  }
-
-  private async grepWithFindstr(params: GrepContentParams): Promise<GrepContentResult> {
-    const { pattern, output_mode = 'files_with_matches' } = params;
-    const searchPath = this.resolveSearchPath(params);
-    const logPrefix = `[grepContent:findstr]`;
-
-    try {
-      const args: string[] = ['/S'];
-
-      if (params['-i']) {
-        args.push('/I');
-      }
-
-      if (params['-n']) {
-        args.push('/N');
-      }
-
-      args.push('/R');
-      args.push(`"${pattern}"`);
-
-      const filePattern = params.glob || params.type ? `*.${params.type || '*'}` : '*.*';
-      args.push(filePattern);
-
-      logger.debug(`${logPrefix} Executing: findstr ${args.join(' ')}`);
-
-      const { stdout, exitCode } = await execa('cmd', ['/c', `findstr ${args.join(' ')}`], {
-        cwd: searchPath,
-        reject: false,
-        stdin: 'ignore',
-      });
-
-      if (exitCode !== 0 && exitCode !== 1) {
-        logger.warn(`${logPrefix} findstr exited with code ${exitCode}`);
-      }
-
-      const lines = stdout.trim().split('\r\n').filter(Boolean);
-      let matches: string[] = [];
-      let totalMatches = 0;
-
-      switch (output_mode) {
-        case 'files_with_matches': {
-          const files = new Set<string>();
-          for (const line of lines) {
-            const match = line.match(/^([^:]+):/);
-            if (match) {
-              files.add(match[1]);
-            }
-          }
-          matches = [...files];
-          totalMatches = matches.length;
-          break;
-        }
-        case 'content': {
-          matches = lines;
-          totalMatches = lines.length;
-          break;
-        }
-        case 'count': {
-          const fileCounts = new Map<string, number>();
-          for (const line of lines) {
-            const match = line.match(/^([^:]+):/);
-            if (match) {
-              fileCounts.set(match[1], (fileCounts.get(match[1]) || 0) + 1);
-            }
-          }
-          matches = [...fileCounts.entries()].map(([file, count]) => `${file}:${count}`);
-          totalMatches = lines.length;
-          break;
-        }
-      }
-
-      if (params.head_limit && matches.length > params.head_limit) {
-        matches = matches.slice(0, params.head_limit);
-      }
-
-      logger.info(`${logPrefix} Search completed`, {
-        matchCount: matches.length,
-        totalMatches,
-      });
-
-      return {
-        engine: 'findstr',
-        matches,
-        success: true,
-        total_matches: totalMatches,
-      };
-    } catch (error) {
-      logger.warn(`${logPrefix} findstr failed, falling back to Node.js:`, error);
-      this.currentTool = 'nodejs';
-      return this.grepWithNodejs(params);
     }
   }
 

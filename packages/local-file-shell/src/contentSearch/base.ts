@@ -1,4 +1,5 @@
 import { readFile, stat } from 'node:fs/promises';
+import path from 'node:path';
 
 import fg from 'fast-glob';
 
@@ -96,6 +97,19 @@ export abstract class BaseContentSearch {
       success: false,
       total_matches: 0,
     };
+  }
+
+  protected async isFile(target: string): Promise<boolean> {
+    try {
+      return (await stat(target)).isFile();
+    } catch {
+      return false;
+    }
+  }
+
+  /** `.` for a directory search; the file's own name when `scope` names a file. */
+  protected searchTarget(searchPath: string, searchRoot: string): string {
+    return searchPath === searchRoot ? '.' : `./${path.basename(searchPath)}`;
   }
 
   /**
