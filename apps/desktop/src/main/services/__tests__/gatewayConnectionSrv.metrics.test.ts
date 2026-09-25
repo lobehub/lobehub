@@ -38,6 +38,7 @@ describe('GatewayConnectionService device metrics', () => {
     samplers.length = 0;
     service = new GatewayConnectionService({
       browserManager: { broadcastToAllWindows: vi.fn() },
+      storeManager: { get: (_key: string, fallback?: unknown) => fallback, set: vi.fn() },
     } as unknown as App);
   });
 
