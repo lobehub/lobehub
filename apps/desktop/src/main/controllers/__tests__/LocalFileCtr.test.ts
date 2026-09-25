@@ -1,7 +1,7 @@
 import path from 'node:path';
 
 import { zipSync } from 'fflate';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type App } from '@/core/App';
 
@@ -42,6 +42,7 @@ vi.mock('electron', () => ({
 // Mock node:fs/promises and node:fs
 vi.mock('node:fs/promises', () => ({
   access: vi.fn(),
+  chmod: vi.fn(),
   mkdir: vi.fn(),
   readFile: vi.fn(),
   readdir: vi.fn(),
@@ -120,6 +121,37 @@ describe('LocalFileCtr', () => {
     mockFsPromises = await import('node:fs/promises');
 
     localFileCtr = new LocalFileCtr(mockApp);
+  });
+
+  /**
+   * Back the fs mock with an in-memory disk. editLocalFile / writeLocalFile
+   * write a sibling temp file, rename it over the target and read the target
+   * back before reporting success, so a write has to be visible to later reads.
+   * Returns the disk so a test can assert what actually landed at a path.
+   */
+  const useDisk = (files: Record<string, string> = {}) => {
+    const disk = new Map(Object.entries(files));
+    vi.mocked(mockFsPromises.readFile).mockImplementation(async (filePath: string) => {
+      if (!disk.has(filePath)) throw new Error(`ENOENT: ${filePath}`);
+      return disk.get(filePath);
+    });
+    vi.mocked(mockFsPromises.writeFile).mockImplementation(
+      async (filePath: string, content: string) => {
+        disk.set(filePath, content);
+      },
+    );
+    vi.mocked(mockFsPromises.rename).mockImplementation(async (from: string, to: string) => {
+      disk.set(to, disk.get(from)!);
+      disk.delete(from);
+    });
+    return disk;
+  };
+
+  afterEach(() => {
+    // clearAllMocks keeps implementations; drop the disk so it cannot leak.
+    for (const fn of ['readFile', 'writeFile', 'rename'] as const) {
+      vi.mocked(mockFsPromises[fn]).mockReset();
+    }
   });
 
   describe('handleOpenLocalFile', () => {
@@ -575,7 +607,7 @@ describe('LocalFileCtr', () => {
   describe('handleWriteFile', () => {
     it('should write file successfully', async () => {
       vi.mocked(mockFsPromises.mkdir).mockResolvedValue(undefined);
-      vi.mocked(mockFsPromises.writeFile).mockResolvedValue(undefined);
+      const disk = useDisk();
 
       const result = await localFileCtr.handleWriteFile({
         path: '/test/file.txt',
@@ -583,6 +615,7 @@ describe('LocalFileCtr', () => {
       });
 
       expect(result).toEqual({ success: true });
+      expect(disk.get('/test/file.txt')).toBe('test content');
     });
 
     it('should return error when path is empty', async () => {
@@ -972,9 +1005,7 @@ describe('LocalFileCtr', () => {
 
   describe('handleEditFile', () => {
     it('should replace a unique occurrence successfully', async () => {
-      const originalContent = 'Hello world\nGreetings again\nGoodbye world';
-      vi.mocked(mockFsPromises.readFile).mockResolvedValue(originalContent);
-      vi.mocked(mockFsPromises.writeFile).mockResolvedValue(undefined);
+      const disk = useDisk({ '/test/file.txt': 'Hello world\nGreetings again\nGoodbye world' });
 
       const result = await localFileCtr.handleEditFile({
         file_path: '/test/file.txt',
@@ -988,11 +1019,7 @@ describe('LocalFileCtr', () => {
       expect(result.linesAdded).toBe(1);
       expect(result.linesDeleted).toBe(1);
       expect(result.diffText).toContain('diff --git a/test/file.txt b/test/file.txt');
-      expect(mockFsPromises.writeFile).toHaveBeenCalledWith(
-        '/test/file.txt',
-        'Hi world\nGreetings again\nGoodbye world',
-        'utf8',
-      );
+      expect(disk.get('/test/file.txt')).toBe('Hi world\nGreetings again\nGoodbye world');
     });
 
     // Editing an arbitrary one of several matches is worse than not editing:
@@ -1017,9 +1044,7 @@ describe('LocalFileCtr', () => {
     });
 
     it('should replace all occurrences when replace_all is true', async () => {
-      const originalContent = 'Hello world\nHello again\nHello there';
-      vi.mocked(mockFsPromises.readFile).mockResolvedValue(originalContent);
-      vi.mocked(mockFsPromises.writeFile).mockResolvedValue(undefined);
+      const disk = useDisk({ '/test/file.txt': 'Hello world\nHello again\nHello there' });
 
       const result = await localFileCtr.handleEditFile({
         file_path: '/test/file.txt',
@@ -1032,17 +1057,11 @@ describe('LocalFileCtr', () => {
       expect(result.replacements).toBe(3);
       expect(result.linesAdded).toBe(3);
       expect(result.linesDeleted).toBe(3);
-      expect(mockFsPromises.writeFile).toHaveBeenCalledWith(
-        '/test/file.txt',
-        'Hi world\nHi again\nHi there',
-        'utf8',
-      );
+      expect(disk.get('/test/file.txt')).toBe('Hi world\nHi again\nHi there');
     });
 
     it('should handle multiline replacement correctly', async () => {
-      const originalContent = 'function test() {\n  console.log("old");\n}';
-      vi.mocked(mockFsPromises.readFile).mockResolvedValue(originalContent);
-      vi.mocked(mockFsPromises.writeFile).mockResolvedValue(undefined);
+      useDisk({ '/test/file.js': 'function test() {\n  console.log("old");\n}' });
 
       const result = await localFileCtr.handleEditFile({
         file_path: '/test/file.js',
@@ -1108,9 +1127,7 @@ describe('LocalFileCtr', () => {
     });
 
     it('should generate correct diff format', async () => {
-      const originalContent = 'line 1\nline 2\nline 3';
-      vi.mocked(mockFsPromises.readFile).mockResolvedValue(originalContent);
-      vi.mocked(mockFsPromises.writeFile).mockResolvedValue(undefined);
+      useDisk({ '/test/file.txt': 'line 1\nline 2\nline 3' });
 
       const result = await localFileCtr.handleEditFile({
         file_path: '/test/file.txt',

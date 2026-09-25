@@ -62,8 +62,12 @@ export const writeFileAtomic = async (filePath: string, content: string): Promis
   let target = filePath;
   let mode: number | undefined;
   try {
-    target = await realpath(filePath);
-    mode = (await stat(target)).mode;
+    // Adopt the resolved path only once both lookups succeed, so a failure
+    // part-way never leaves `target` pointing somewhere other than the file.
+    const resolved = await realpath(filePath);
+    const { mode: resolvedMode } = await stat(resolved);
+    target = resolved;
+    mode = resolvedMode;
   } catch {
     // New file: nothing to follow or preserve.
   }
