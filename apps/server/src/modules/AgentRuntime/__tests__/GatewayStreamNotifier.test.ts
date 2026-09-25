@@ -219,7 +219,44 @@ describe('GatewayStreamNotifier', () => {
       });
     });
 
-    it('does not wait for the stream_end gateway push, but drainPushes does', async () => {
+    it('waits for the stream_end gateway push unless the caller defers pushes', async () => {
+      // Request-scoped callers (hetero ingest, routers) never drain, so the
+      // push must land before publishStreamEvent resolves.
+      let resolveFetch!: () => void;
+      mockFetch.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFetch = () => resolve({ ok: true, text: () => Promise.resolve('') });
+          }),
+      );
+
+      let published = false;
+      const publish = notifier
+        .publishStreamEvent('op-1', {
+          data: { finalContent: 'final answer' },
+          stepIndex: 0,
+          type: 'stream_end' as const,
+        })
+        .then(() => {
+          published = true;
+        });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(published).toBe(false);
+
+      resolveFetch();
+      await publish;
+      expect(published).toBe(true);
+    });
+
+    it('does not wait for the stream_end gateway push when deferred, but drainPushes does', async () => {
+      const notifier = new GatewayStreamNotifier(
+        inner,
+        gatewayUrl,
+        serviceToken,
+        undefined,
+        undefined,
+        { deferPushes: true },
+      );
       let resolveFetch!: () => void;
       mockFetch.mockImplementationOnce(
         () =>
@@ -250,6 +287,14 @@ describe('GatewayStreamNotifier', () => {
     });
 
     it('keeps a barrier behind the pushes issued before it, and ahead of later ones', async () => {
+      const notifier = new GatewayStreamNotifier(
+        inner,
+        gatewayUrl,
+        serviceToken,
+        undefined,
+        undefined,
+        { deferPushes: true },
+      );
       const order: string[] = [];
       let releaseChunk!: () => void;
       mockFetch.mockImplementation((_url: string, init: { body: string }) => {

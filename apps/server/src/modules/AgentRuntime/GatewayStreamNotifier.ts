@@ -130,6 +130,16 @@ export const pickGatewayInitMeta = (initialState: unknown): GatewayInitMeta | un
  * Redis SSE remains the primary event storage / subscription mechanism.
  * The Gateway is an additional push channel for WebSocket delivery.
  */
+export interface GatewayStreamNotifierOptions {
+  /**
+   * Let `publishStreamEvent` return before its ordering-barrier pushes
+   * (`stream_end`, `message_patch`) reach the gateway. Only for a caller that
+   * calls `drainPushes` at every point its invocation can be frozen or handed
+   * over — otherwise an unawaited push can be lost with the invocation.
+   */
+  deferPushes?: boolean;
+}
+
 export class GatewayStreamNotifier implements IStreamEventManager {
   private inflight = 0;
 
@@ -220,6 +230,7 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     private resolvePersistedShareVisitor?: (
       operationId: string,
     ) => Promise<GatewayVisitorRedaction>,
+    private options: GatewayStreamNotifierOptions = {},
   ) {
     log('Gateway notifier initialized: %s', gatewayUrl);
   }
@@ -236,9 +247,11 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     // These two are ordering barriers so the client applies
     // stream_end.finalContent before visible_output_end, and the canonical
     // message patch before the following step_start / agent_runtime_end
-    // revision check. The step does not wait for either — see `issuePush`.
+    // revision check. Ordering comes from `issuePush`; waiting is only
+    // skipped for a caller that drains before its invocation ends.
     const barrier = event.type === 'stream_end' || event.type === 'message_patch';
-    void this.issuePush(operationId, gatewayEvent, { barrier });
+    const push = this.issuePush(operationId, gatewayEvent, { barrier });
+    if (barrier && !this.options.deferPushes) await push;
     return result;
   }
 

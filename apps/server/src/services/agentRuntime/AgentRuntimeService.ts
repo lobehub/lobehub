@@ -496,11 +496,13 @@ export class AgentRuntimeService {
         new UserModel(db, userId)
           .getUserPreference()
           .then((preference) => preference?.lab?.enableGatewayMux === true));
-    // Use factory function to auto-select Redis or InMemory implementation
+    // Use factory function to auto-select Redis or InMemory implementation.
+    // Gateway pushes are deferred off the step path: every point where this
+    // invocation can stop or hand the run over calls `drainPushes` first.
     this.streamManager =
       options?.streamEventManager ??
       options?.coordinatorOptions?.streamEventManager ??
-      createStreamEventManager();
+      createStreamEventManager({ deferPushes: true });
     this.coordinator = new AgentRuntimeCoordinator({
       ...options?.coordinatorOptions,
       messagePatchModeResolver: (state) => this.usesGatewayMessagePatch(state),
