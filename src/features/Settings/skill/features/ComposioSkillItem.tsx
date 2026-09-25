@@ -25,7 +25,7 @@ import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
 import { styles } from './style';
 
 const POLL_INTERVAL_MS = 1000;
-const POLL_TIMEOUT_MS = 15_000;
+const POLL_TIMEOUT_MS = 60_000;
 
 interface ComposioSkillItemProps {
   isSelected?: boolean;
