@@ -351,8 +351,8 @@ describe('computeImageCost', () => {
           strategy: 'lookup',
           unit: 'image',
           lookup: {
-            pricingParams: ['quality', 'resolution'],
-            prices: { low_1k: 0.04, medium_2k: 0.08 },
+            pricingParams: ['resolution'],
+            prices: { '1k': 0.04, '2k': 0.08 },
           },
         },
         { name: 'imageInput', rate: 0.01, strategy: 'fixed', unit: 'image' },
@@ -360,11 +360,7 @@ describe('computeImageCost', () => {
     };
 
     it('adds the input fee for every reference image on each generated image', () => {
-      const result = computeImageCost(
-        pricing,
-        { imageUrls: ['a', 'b'], quality: 'low', resolution: '1k' },
-        2,
-      );
+      const result = computeImageCost(pricing, { imageUrls: ['a', 'b'], resolution: '1k' }, 2);
 
       // (0.04 + 2 × 0.01) × 2 images
       expect(result?.totalCost).toBeCloseTo(0.12);
@@ -373,21 +369,13 @@ describe('computeImageCost', () => {
     });
 
     it('counts a single imageUrl as one input image', () => {
-      const result = computeImageCost(
-        pricing,
-        { imageUrl: 'a', quality: 'medium', resolution: '2k' },
-        1,
-      );
+      const result = computeImageCost(pricing, { imageUrl: 'a', resolution: '2k' }, 1);
 
       expect(result?.totalCost).toBeCloseTo(0.09);
     });
 
     it('charges no input fee for text-to-image', () => {
-      const result = computeImageCost(
-        pricing,
-        { imageUrls: [], quality: 'low', resolution: '1k' },
-        1,
-      );
+      const result = computeImageCost(pricing, { imageUrls: [], resolution: '1k' }, 1);
 
       expect(result?.totalCost).toBe(0.04);
       expect(result?.breakdown?.inputImageCount).toBeUndefined();
