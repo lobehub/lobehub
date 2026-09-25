@@ -54,13 +54,24 @@ describe('TaskConfigSliceAction', () => {
       expect(taskService.updateCheckpoint).toHaveBeenCalledWith('T-1', checkpoint);
     });
 
-    it('should refresh on error', async () => {
+    it('rolls back and marks the save failed when the PUT rejects', async () => {
       const { mutate } = await import('@/libs/swr');
+      const { toast } = await import('@lobehub/ui/base-ui');
       vi.mocked(taskService.updateCheckpoint).mockRejectedValue(new Error('fail'));
 
       await useTaskStore.getState().updateCheckpoint('T-1', { onAgentRequest: true });
 
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
+      // The optimistic patch is replayed back; a failure must never leave the
+      // toggle looking saved, and it must not depend on a refetch to say so.
+      expect(useTaskStore.getState().taskDetailMap['T-1'].checkpoint).toEqual({
+        onAgentRequest: false,
+      });
+      expect(useTaskStore.getState().taskSaveStatusMap['T-1']).toBe('failed');
+      expect(toast.error).toHaveBeenCalled();
+      const refreshes = vi
+        .mocked(mutate)
+        .mock.calls.filter((call) => Array.isArray(call[0]) && call[0][0] === 'task:detail');
+      expect(refreshes).toHaveLength(0);
     });
   });
 
@@ -103,7 +114,7 @@ describe('TaskConfigSliceAction', () => {
   });
 
   describe('updateTaskModelConfig', () => {
-    it('should call updateConfig with model/provider and refresh detail', async () => {
+    it('should call updateConfig with model/provider and never refetch', async () => {
       const { mutate } = await import('@/libs/swr');
       vi.mocked(taskService.updateConfig).mockResolvedValue({ success: true } as any);
 
@@ -115,7 +126,62 @@ describe('TaskConfigSliceAction', () => {
         model: 'claude-sonnet-4-6',
         provider: 'anthropic',
       });
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
+      expect(useTaskStore.getState().taskDetailMap['T-1'].config).toMatchObject({
+        model: 'claude-sonnet-4-6',
+        provider: 'anthropic',
+      });
+      expect(useTaskStore.getState().taskSaveStatusMap['T-1']).toBe('saved');
+      // A refresh here is an async write that could land after the user's next
+      // run-location pick and replace it.
+      const refreshes = vi
+        .mocked(mutate)
+        .mock.calls.filter((call) => Array.isArray(call[0]) && call[0][0] === 'task:detail');
+      expect(refreshes).toHaveLength(0);
+    });
+
+    it('serializes with the run-location writes they share a config column with', async () => {
+      const flush = () => new Promise((r) => setTimeout(r, 0));
+      const settlers: Array<() => void> = [];
+      vi.mocked(taskService.updateConfig).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            settlers.push(() => resolve({ success: true } as any));
+          }),
+      );
+
+      // Both writes merge into `tasks.config` server-side with a
+      // read-modify-write, so two in flight let the later one erase the other.
+      const store = useTaskStore.getState();
+      const p1 = store.updateTaskModelConfig('T-1', { model: 'claude-sonnet-4-6' });
+      const p2 = store.updateTaskExecution('T-1', { boundDeviceId: 'device-a' });
+
+      // Both are already visible, and only the first PUT is on the wire.
+      expect(useTaskStore.getState().taskDetailMap['T-1'].config).toMatchObject({
+        execution: { boundDeviceId: 'device-a' },
+        model: 'claude-sonnet-4-6',
+      });
+
+      await flush();
+      expect(taskService.updateConfig).toHaveBeenCalledTimes(1);
+
+      settlers[0]();
+      await flush();
+      expect(taskService.updateConfig).toHaveBeenCalledTimes(2);
+
+      settlers[1]();
+      await Promise.all([p1, p2]);
+
+      expect(vi.mocked(taskService.updateConfig).mock.calls.map((call) => call[1])).toEqual([
+        { model: 'claude-sonnet-4-6' },
+        {
+          execution: {
+            boundDeviceId: 'device-a',
+            repos: null,
+            workingDirectory: null,
+            workingDirectoryConfig: null,
+          },
+        },
+      ]);
     });
   });
 
