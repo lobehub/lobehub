@@ -1917,6 +1917,43 @@ describe('ChatService', () => {
   });
 
   describe('fetchPresetTaskResult', () => {
+    it('should tag preset tasks as system agent requests by default', async () => {
+      const getChatCompletionSpy = vi
+        .spyOn(chatService, 'getChatCompletion')
+        .mockResolvedValue(new Response(''));
+
+      await chatService.fetchPresetTaskResult({
+        params: {
+          messages: [{ content: 'Hello', role: 'user' as const }],
+          model: 'gpt-4',
+          provider: 'openai',
+        },
+      });
+
+      expect(getChatCompletionSpy.mock.calls[0][1]?.metadata).toEqual({
+        trigger: RequestTrigger.SystemAgent,
+      });
+    });
+
+    it('should forward an explicit preset task trigger', async () => {
+      const getChatCompletionSpy = vi
+        .spyOn(chatService, 'getChatCompletion')
+        .mockResolvedValue(new Response(''));
+
+      await chatService.fetchPresetTaskResult({
+        params: {
+          messages: [{ content: 'Hello', role: 'user' as const }],
+          model: 'gpt-4',
+          provider: 'openai',
+        },
+        trigger: RequestTrigger.Topic,
+      });
+
+      expect(getChatCompletionSpy.mock.calls[0][1]?.metadata).toEqual({
+        trigger: RequestTrigger.Topic,
+      });
+    });
+
     it('should not wait for agent documents on preset task chains', async () => {
       vi.spyOn(chatService, 'getChatCompletion').mockResolvedValue(new Response(''));
       vi.spyOn(agentDocumentService, 'getContextDocuments').mockResolvedValue([]);

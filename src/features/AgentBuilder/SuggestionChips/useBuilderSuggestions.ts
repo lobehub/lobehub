@@ -6,6 +6,7 @@ import {
   type BuilderSuggestionMode,
   chainBuilderSuggestion,
 } from '@lobechat/prompts';
+import { RequestTrigger } from '@lobechat/types';
 import { useCallback } from 'react';
 import useSWR from 'swr';
 
@@ -74,6 +75,7 @@ export const useBuilderSuggestions = ({
       const envelope = (await aiChatService.generateJSON(
         {
           messages,
+          metadata: { trigger: RequestTrigger.SystemAgent },
           model,
           provider,
           schema,

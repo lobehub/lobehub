@@ -23,6 +23,8 @@ export enum RequestTrigger {
   Eval = 'eval',
   FileEmbedding = 'file_embedding',
   Image = 'image',
+  /** Chat input inline completion suggestions while the user is typing. */
+  InputCompletion = 'input_completion',
   Memory = 'memory',
   MultimodalAnalysis = 'multimodal_analysis',
   Notify = 'notify',
@@ -34,6 +36,13 @@ export enum RequestTrigger {
   Scm = 'scm',
   SemanticSearch = 'semantic_search',
   SignupEmailLLMReview = 'signup_email_llm_review',
+  /**
+   * Auxiliary system-agent tasks the client runs outside a user chat turn:
+   * translation, agent profile generation, prompt rewrite, history / context
+   * summaries, builder suggestions, etc.
+   */
+  SystemAgent = 'system_agent',
+  /** Topic / thread / generation-topic title summaries. */
   Topic = 'topic',
   Video = 'video',
 }

@@ -1,6 +1,7 @@
 import { DEFAULT_MODEL, DEFAULT_PROVIDER } from '@lobechat/business-const';
 import { TOPIC_TITLE_JSON_SCHEMA } from '@lobechat/prompts';
 import type { LobeUser, UIChatMessage } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import { toast } from '@lobehub/ui/base-ui';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { type Mock } from 'vitest';
@@ -3343,7 +3344,10 @@ describe('topic action', () => {
 
       expect(updateTitleSpy).toHaveBeenCalledWith(topicId, LOADING_FLAT);
       expect(generateSpy).toHaveBeenCalledOnce();
-      expect(generateSpy.mock.calls[0][0].metadata).toEqual({ topicId });
+      expect(generateSpy.mock.calls[0][0].metadata).toEqual({
+        topicId,
+        trigger: RequestTrigger.Topic,
+      });
     });
 
     it('should summarize the final answer inside an assistant group for an audio-only conversation', async () => {

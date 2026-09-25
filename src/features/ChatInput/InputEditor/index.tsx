@@ -6,6 +6,7 @@ import {
   INPUT_COMPLETION_PROMPT_VERSION,
   INPUT_COMPLETION_SCHEMA_NAME,
 } from '@lobechat/prompts';
+import { RequestTrigger } from '@lobechat/types';
 import { isCommandPressed } from '@lobechat/utils';
 import type { IEditor, ISlashMenuOption, ISlashSectionOption } from '@lobehub/editor';
 import { INSERT_MENTION_COMMAND, ReactAutoCompletePlugin } from '@lobehub/editor';
@@ -326,6 +327,7 @@ const InputEditor = memo<{
         envelope = (await aiChatService.generateJSON(
           {
             messages,
+            metadata: { trigger: RequestTrigger.InputCompletion },
             model: config.model,
             provider: config.provider,
             schema,

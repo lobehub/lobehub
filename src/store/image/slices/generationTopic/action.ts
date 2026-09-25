@@ -1,4 +1,5 @@
 import { chainSummaryGenerationTitle } from '@lobechat/prompts';
+import { RequestTrigger } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import { type SWRResponse } from 'swr';
 
@@ -130,6 +131,7 @@ export class GenerationTopicActionImpl {
           }
         }
       },
+      trigger: RequestTrigger.Topic,
     });
 
     return output;

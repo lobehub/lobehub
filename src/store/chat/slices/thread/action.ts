@@ -8,6 +8,7 @@ import {
 import {
   type CreateMessageParams,
   type IThreadType,
+  RequestTrigger,
   type ThreadItem,
   type UIChatMessage,
 } from '@lobechat/types';
@@ -221,6 +222,7 @@ export class ChatThreadActionImpl {
             messages,
             userGeneralSettingsSelectors.currentResponseLanguage(useUserStore.getState()),
           ),
+          metadata: { trigger: RequestTrigger.Topic },
           model,
           provider,
           schema: TOPIC_TITLE_JSON_SCHEMA,

@@ -10,6 +10,7 @@ import {
   type ChatTopicMetadata,
   type HeterogeneousReasoningEffort,
   type MessageMapScope,
+  RequestTrigger,
   type UIChatMessage,
 } from '@lobechat/types';
 import { toast } from '@lobehub/ui/base-ui';
@@ -385,7 +386,7 @@ export class ChatTopicActionImpl {
             messagesForTitle,
             userGeneralSettingsSelectors.currentResponseLanguage(useUserStore.getState()),
           ),
-          metadata: { topicId },
+          metadata: { topicId, trigger: RequestTrigger.Topic },
           model,
           provider,
           schema: TOPIC_TITLE_JSON_SCHEMA,
