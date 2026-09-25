@@ -1,12 +1,18 @@
 /**
  * @vitest-environment happy-dom
  */
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, renderHook, screen } from '@testing-library/react';
+import ReactMarkdown from 'react-markdown';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useChatStore } from '@/store/chat';
 
+import { useMarkdown } from '../../../Messages/User/useMarkdown';
 import Render from './Render';
+
+vi.mock('../../../Messages/User/components/ContentPreview', () => ({
+  default: () => null,
+}));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -16,7 +22,7 @@ describe('ReferTopicRender', () => {
   beforeEach(() => {
     useChatStore.setState({
       switchTopic: vi.fn(),
-      topics: [],
+      topicDataMap: {},
     });
   });
 
@@ -50,5 +56,20 @@ describe('ReferTopicRender', () => {
     );
 
     expect(screen.getByText('Referenced topic')).toBeInTheDocument();
+  });
+
+  it('renders serialized refer_topic markup through the user message pipeline', () => {
+    const { result } = renderHook(() => useMarkdown('message-id'));
+    const { components, remarkPlugins } = result.current;
+
+    render(
+      <ReactMarkdown components={components} remarkPlugins={remarkPlugins}>
+        {'See <refer_topic name="Referenced topic" id="topic-id" /> for context'}
+      </ReactMarkdown>,
+    );
+
+    fireEvent.click(screen.getByText('Referenced topic'));
+
+    expect(useChatStore.getState().switchTopic).toHaveBeenCalledWith('topic-id');
   });
 });
