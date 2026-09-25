@@ -151,6 +151,12 @@ export interface ContextFactProviders {
   ) => Promise<{ description?: string | null; id: string; title?: string | null }[] | undefined>;
   /** Files synced into the topic's sandbox upload dir. */
   listSandboxFiles?: (topicId: string) => Promise<{ name: string; size?: number }[] | undefined>;
+  /** Messages of a referenced topic, oldest first. */
+  listTopicMessages?: (
+    topic: TopicFacts,
+  ) => Promise<{ content: string; role: string }[] | undefined>;
+  /** Builtin tool identifiers the user uninstalled in the current scope. */
+  listUninstalledBuiltinIds?: () => Promise<Iterable<string> | undefined>;
   /**
    * Whether this run's cloud sandbox keeps its working directory, and which
    * subdirectory it works in. Resolved by the host because it depends on a
@@ -158,14 +164,8 @@ export interface ContextFactProviders {
    * ephemeral, which is what every run without one gets.
    */
   resolveSandboxPersistence?: () => Promise<
-    { cwd?: string; mode: 'ephemeral' | 'persistent' } | undefined
+    { cwd?: string; mode: 'ephemeral' | 'persistent'; workingDir?: string } | undefined
   >;
-  /** Messages of a referenced topic, oldest first. */
-  listTopicMessages?: (
-    topic: TopicFacts,
-  ) => Promise<{ content: string; role: string }[] | undefined>;
-  /** Builtin tool identifiers the user uninstalled in the current scope. */
-  listUninstalledBuiltinIds?: () => Promise<Iterable<string> | undefined>;
 }
 
 export interface GatheredContextFacts {
