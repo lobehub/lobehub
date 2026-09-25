@@ -49,6 +49,11 @@ export interface GetAgentInfoParams {
    * The ID of the agent to get information about
    */
   agentId: string;
+  /**
+   * The group to act on. Defaults to the group this conversation is editing —
+   * pass the id `createGroup` returned to target a group created in this run.
+   */
+  groupId?: string;
 }
 
 export interface SearchAgentParams {
@@ -71,6 +76,11 @@ export interface CreateAgentParams {
    * A brief description of what this agent does
    */
   description?: string;
+  /**
+   * The group to act on. Defaults to the group this conversation is editing —
+   * pass the id `createGroup` returned to target a group created in this run.
+   */
+  groupId?: string;
   /**
    * The system prompt that defines the agent's behavior
    */
@@ -182,6 +192,11 @@ export interface InviteAgentParams {
    * Agent identifier to invite to the group
    */
   agentId: string;
+  /**
+   * The group to act on. Defaults to the group this conversation is editing —
+   * pass the id `createGroup` returned to target a group created in this run.
+   */
+  groupId?: string;
 }
 
 export interface RemoveAgentParams {
@@ -189,6 +204,11 @@ export interface RemoveAgentParams {
    * Agent identifier to remove from the group
    */
   agentId: string;
+  /**
+   * The group to act on. Defaults to the group this conversation is editing —
+   * pass the id `createGroup` returned to target a group created in this run.
+   */
+  groupId?: string;
 }
 
 export interface UpdateAgentPromptParams {
@@ -196,6 +216,11 @@ export interface UpdateAgentPromptParams {
    * The agent ID to update
    */
   agentId: string;
+  /**
+   * The group to act on. Defaults to the group this conversation is editing —
+   * pass the id `createGroup` returned to target a group created in this run.
+   */
+  groupId?: string;
   /**
    * The new system prompt content (markdown format)
    */
@@ -313,6 +338,11 @@ export interface BatchCreateAgentsParams {
    * Array of agents to create
    */
   agents: CreateAgentParams[];
+  /**
+   * The group to act on. Defaults to the group this conversation is editing —
+   * pass the id `createGroup` returned to target a group created in this run.
+   */
+  groupId?: string;
 }
 
 export interface BatchCreateAgentsState {

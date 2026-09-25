@@ -375,6 +375,11 @@ export interface TurnSetupResult {
   /** Rows THIS turn persisted — the history loader must exclude them. */
   selfMessageIds: Set<string>;
   topicBoundDeviceId?: string | null;
+  /**
+   * The group a reused Group Agent Builder topic was opened on
+   * (`metadata.editingGroupId`), for runs whose request does not name it.
+   */
+  topicEditingGroupId?: string;
   topicId: string;
   userMessageId?: string;
 }
@@ -451,6 +456,7 @@ export const setupTurn = async (
   let provider = agentConfig.provider!;
   const heterogeneousProvider = agentConfig.agencyConfig?.heterogeneousProvider;
   let pinnedHeterogeneousTopicModel: HeterogeneousTopicPin | undefined;
+  let topicEditingGroupId: string | undefined;
 
   // Share-visitor fail-closed gate — reject a heterogeneous (Claude Code /
   // Codex / …) agent BEFORE any topic/message row is written. Heterogeneous
@@ -573,6 +579,7 @@ export const setupTurn = async (
     // The pinned model lives in the top-level `topics.model`/`provider` columns
     // (config source of truth), NOT in metadata.
     const existingTopic = await deps.topicModel.findById(topicId);
+    topicEditingGroupId = existingTopic?.metadata?.editingGroupId ?? undefined;
 
     // Fail-closed guard: a non-share run must never operate on a share-visitor
     // topic. `findById` is ownership-scoped but deliberately does NOT exclude
@@ -887,6 +894,7 @@ export const setupTurn = async (
     runAttachments,
     selfMessageIds,
     topicBoundDeviceId,
+    topicEditingGroupId,
     topicId,
     userMessageId: userMessageRecord?.id,
   };

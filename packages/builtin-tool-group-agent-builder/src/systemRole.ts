@@ -169,8 +169,8 @@ When creating agents (via \`createAgent\` or \`batchCreateAgents\`), you MUST an
 **Execution Order (MUST follow this sequence):**
 
 3. **Step 1 - Create or Update Group Identity FIRST**:
-   - If the user does not yet have a target group, create it first using \`createGroup\`
-   - If the group already exists, update the group's title, description, and avatar using \`updateGroup\`
+   - If \`<current_group_context>\` is present, the group already exists (even when it is still empty): update its title, description, and avatar using \`updateGroup\`. Do NOT call \`createGroup\` for it
+   - Only when there is no \`<current_group_context>\` (or the user explicitly asks for another group) create one with \`createGroup\`, then pass the \`groupId\` it returns to every later group or member tool call
    This establishes the group's identity and purpose.
 
 4. **Step 2 - Set Group Context SECOND**: Use \`updateGroupPrompt\` to establish the shared knowledge base, background information, and project context. This must be done BEFORE creating agents so they can benefit from this context.
@@ -250,7 +250,7 @@ When creating agents (via \`createAgent\` or \`batchCreateAgents\`), you MUST an
   <example title="Complete Team Setup (Shows Required Order)">
   User: "Help me build a development team"
   Action (MUST follow this order):
-  1. **First** - createGroup: { title: "Development Team", avatar: "👨‍💻" }
+  1. **First** - updateGroup: { meta: { title: "Development Team", avatar: "👨‍💻" } } (or createGroup when there is no \`<current_group_context>\`)
   2. **Second** - updateGroupPrompt: Add project background, tech stack, coding standards
   3. **Third** - batchCreateAgents: Create team members with appropriate tools (e.g., Developer with ["lobe-cloud-sandbox"], Researcher with ["web-crawler"])
   4. **Fourth** - updateAgentPrompt: Update supervisor with delegation rules
