@@ -414,6 +414,7 @@ export const videoRouter = router({
                 previousGenerationId,
                 provider,
                 route,
+                spendOrigin: ctx.spendOrigin,
                 userId,
                 workspaceId: wsId,
               });

@@ -210,6 +210,49 @@ describe('videoBackgroundPolling', () => {
       );
     });
 
+    it('should keep spend origin and workspace context on completion', async () => {
+      mockModelRuntime.handlePollVideoStatus.mockResolvedValue({
+        status: 'success',
+        videoUrl: 'https://example.com/video.mp4',
+      });
+      const spendOrigin = { trigger: 'agent-share' };
+
+      await processBackgroundVideoPolling(mockDb, {
+        ...mockParams,
+        spendOrigin,
+        workspaceId: 'ws-1',
+      });
+
+      expect(notifyVideoCompleted).toHaveBeenCalledWith(
+        expect.objectContaining({ workspaceId: 'ws-1' }),
+      );
+      expect(chargeAfterGenerate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({ asyncTaskId: 'task-123', trigger: 'agent-share' }),
+          workspaceId: 'ws-1',
+        }),
+      );
+    });
+
+    it('should keep spend origin on the failure refund', async () => {
+      mockModelRuntime.handlePollVideoStatus.mockResolvedValue({
+        status: 'failed',
+        error: 'Model API error',
+      });
+
+      await processBackgroundVideoPolling(mockDb, {
+        ...mockParams,
+        spendOrigin: { trigger: 'agent-share' },
+      });
+
+      expect(chargeAfterGenerate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          isError: true,
+          metadata: expect.objectContaining({ trigger: 'agent-share' }),
+        }),
+      );
+    });
+
     it('should skip a polling result already claimed by a webhook', async () => {
       mockModelRuntime.handlePollVideoStatus.mockResolvedValue({
         status: 'success',

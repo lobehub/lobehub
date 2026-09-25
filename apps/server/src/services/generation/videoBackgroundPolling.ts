@@ -3,7 +3,7 @@ import {
   buildMappedBusinessModelFields,
   resolveBusinessModelMapping,
 } from '@lobechat/business-model-runtime';
-import { RequestTrigger, type VideoGenerationRoute } from '@lobechat/types';
+import { RequestTrigger, type SpendOrigin, type VideoGenerationRoute } from '@lobechat/types';
 import debug from 'debug';
 import type { RuntimeVideoGenParams } from 'model-bank';
 
@@ -35,6 +35,8 @@ interface BackgroundPollingParams {
   previousGenerationId?: string;
   provider: string;
   route?: VideoGenerationRoute;
+  /** Keeps the completion charge attributed like the webhook path, which reads it from the task row. */
+  spendOrigin?: SpendOrigin;
   userId: string;
   workspaceId?: string;
 }
@@ -55,6 +57,7 @@ export async function processBackgroundVideoPolling(
     previousGenerationId,
     provider,
     route,
+    spendOrigin,
     userId,
     workspaceId,
   } = params;
@@ -137,6 +140,7 @@ export async function processBackgroundVideoPolling(
         prompt: batch?.prompt ?? '',
         topicId: generationTopicId,
         userId,
+        workspaceId,
       });
     } catch (error) {
       console.error('[video-background-polling] Video completion notification failed:', error);
@@ -151,6 +155,7 @@ export async function processBackgroundVideoPolling(
         },
         latency: duration,
         metadata: {
+          ...spendOrigin,
           asyncTaskId,
           generationBatchId,
           topicId: generationTopicId,
@@ -220,6 +225,7 @@ export async function processBackgroundVideoPolling(
       await chargeAfterGenerate({
         isError: true,
         metadata: {
+          ...spendOrigin,
           asyncTaskId,
           generationBatchId,
           topicId: generationTopicId,
