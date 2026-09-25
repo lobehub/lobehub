@@ -919,7 +919,19 @@ export class GatewayActionImpl {
           interruptGatewayTaskOrThrow({
             operationId: result.operationId,
             topicId: result.topicId,
-          }).catch((err) => console.error('[Gateway] interruptTask after cancel failed:', err));
+          })
+            .then(() => {
+              // This path never opens a socket, so no terminal frame will ever
+              // retire a `running` row that `refreshTopic` already pulled in.
+              if (!result.topicId) return;
+              this.#settleLocalTopicAfterConfirmedStop({
+                agentId: messageContext.agentId,
+                groupId: messageContext.groupId,
+                operationId: result.operationId,
+                topicId: result.topicId,
+              });
+            })
+            .catch((err) => console.error('[Gateway] interruptTask after cancel failed:', err));
       }
 
       return true;

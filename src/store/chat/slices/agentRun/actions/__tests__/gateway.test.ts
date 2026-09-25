@@ -1368,7 +1368,29 @@ describe('GatewayActionImpl', () => {
       const controller = new AbortController();
 
       const mockClient = createMockClient();
-      const state: Record<string, any> = { gatewayConnections: {} };
+      const internalDispatchTopic = vi.fn();
+      const internalPinTopicStatus = vi.fn();
+      // `refreshTopic` has already pulled in the server's running row: this
+      // path opens no socket, so no terminal frame would ever retire it.
+      const state: Record<string, any> = {
+        gatewayConnections: {},
+        topicDataMap: {
+          'agent_agent-1': {
+            items: [
+              {
+                id: 'topic-1',
+                metadata: {
+                  runningOperation: {
+                    assistantMessageId: 'ast-1',
+                    operationId: 'server-op-cancel',
+                  },
+                },
+                status: 'running',
+              },
+            ],
+          },
+        },
+      };
       const set = vi.fn((updater: any) => {
         if (typeof updater === 'function') Object.assign(state, updater(state));
         else Object.assign(state, updater);
@@ -1379,6 +1401,8 @@ describe('GatewayActionImpl', () => {
         completeOperation,
         connectToGateway,
         getOperationAbortSignal: vi.fn(() => controller.signal),
+        internal_dispatchTopic: internalDispatchTopic,
+        internal_pinTopicStatus: internalPinTopicStatus,
         moveQueuedMessages,
         moveVoiceMessages: vi.fn(),
         onOperationCancel,
@@ -1451,6 +1475,18 @@ describe('GatewayActionImpl', () => {
       expect(associateMessageWithOperation).not.toHaveBeenCalled();
       expect(connectToGateway).not.toHaveBeenCalled();
       expect(completeOperation).toHaveBeenCalledWith('parent-send-msg-op');
+      // The confirmed late interrupt retires the row itself.
+      await vi.waitFor(() =>
+        expect(internalPinTopicStatus).toHaveBeenCalledWith(
+          expect.objectContaining({ status: 'active', topicId: 'topic-1' }),
+        ),
+      );
+      expect(internalDispatchTopic).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'topic-1',
+          value: { metadata: { runningOperation: null } },
+        }),
+      );
     });
 
     /**
