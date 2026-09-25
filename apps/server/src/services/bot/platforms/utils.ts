@@ -1,5 +1,5 @@
 import { DEFAULT_BOT_DEBOUNCE_MS } from '@lobechat/const';
-import { merge } from '@lobechat/utils';
+import { formatDuration as formatDurationMs, merge } from '@lobechat/utils';
 
 import type {
   BotProviderConfig,
@@ -259,12 +259,7 @@ export function formatTokens(tokens: number): string {
 }
 
 export function formatDuration(ms: number): string {
-  const totalSeconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-
-  if (minutes > 0) return `${minutes}m${seconds}s`;
-  return `${seconds}s`;
+  return formatDurationMs(ms);
 }
 
 /**

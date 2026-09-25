@@ -3,14 +3,13 @@ import {
   formatLinearMcpShortLabel,
 } from '@lobechat/builtin-tool-claude-code/client/labels';
 import type { ChatToolPayloadWithResult } from '@lobechat/types';
+import { formatDuration } from '@lobechat/utils';
 import { t } from 'i18next';
 
 import { LOADING_FLAT } from '@/const/message';
 import type { AssistantContentBlock } from '@/types/index';
 
 import {
-  DURATION_MINUTES_PER_HOUR,
-  DURATION_SECONDS_PER_MINUTE,
   TIME_MS_PER_SECOND,
   TOOL_API_DISPLAY_NAMES,
   TOOL_HEADLINE_DETAIL_MAX_CHARS,
@@ -329,20 +328,8 @@ export const getWorkflowStreamingHeadlineState = (
  * Hour-scale turns roll up to "4h 11m": seconds are noise next to hours, and a
  * bare "251m 49s" makes the reader do the division themselves.
  */
-export const formatReasoningDuration = (ms: number): string => {
-  const totalSeconds = Math.round(ms / TIME_MS_PER_SECOND);
-  if (totalSeconds < DURATION_SECONDS_PER_MINUTE) return `${totalSeconds}s`;
-
-  const totalMinutes = Math.floor(totalSeconds / DURATION_SECONDS_PER_MINUTE);
-  const seconds = totalSeconds % DURATION_SECONDS_PER_MINUTE;
-
-  if (totalMinutes < DURATION_MINUTES_PER_HOUR)
-    return seconds > 0 ? `${totalMinutes}m ${seconds}s` : `${totalMinutes}m`;
-
-  const hours = Math.floor(totalMinutes / DURATION_MINUTES_PER_HOUR);
-  const minutes = totalMinutes % DURATION_MINUTES_PER_HOUR;
-  return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
-};
+export const formatReasoningDuration = (ms: number): string =>
+  formatDuration(Math.round(ms / TIME_MS_PER_SECOND) * TIME_MS_PER_SECOND, { trimZero: true });
 
 /**
  * Collapsed-workflow summary: the total number of tool calls, nothing more.

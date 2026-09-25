@@ -1,4 +1,5 @@
 import type { DeviceGitLinkedPullRequest, DeviceGitPullRequestCheck } from '@lobechat/types';
+import { formatDuration } from '@lobechat/utils';
 import { cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -91,8 +92,7 @@ export const formatCheckDuration = (check: DeviceGitPullRequestCheck) => {
     0,
     dayjs(check.completedAt ?? undefined).diff(check.startedAt, 'second'),
   );
-  const minutes = Math.floor(seconds / 60);
-  return minutes > 0 ? `${minutes}m ${String(seconds % 60).padStart(2, '0')}s` : `${seconds}s`;
+  return formatDuration(seconds * 1000, { pad: true });
 };
 
 export const timeAgo = (iso: string) => dayjs(iso).fromNow(true);

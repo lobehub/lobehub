@@ -29,13 +29,63 @@ export const getDurationMs = (startedAt: number) => Date.now() - startedAt;
 export const formatElapsedClockTime = (ms: number) => {
   const normalizedMs = Math.max(0, ms);
   const totalSeconds = Math.floor(normalizedMs / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
+  const days = Math.floor(totalSeconds / 86_400);
+  const hours = Math.floor((totalSeconds % 86_400) / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
   const mm = String(minutes).padStart(2, '0');
   const ss = String(seconds).padStart(2, '0');
 
+  if (days > 0) return `${days}d ${String(hours).padStart(2, '0')}:${mm}:${ss}`;
   return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
+};
+
+const DURATION_UNITS = [
+  { ms: 86_400_000, suffix: 'd' },
+  { ms: 3_600_000, suffix: 'h' },
+  { ms: 60_000, suffix: 'm' },
+  { ms: 1000, suffix: 's' },
+] as const;
+
+export interface FormatDurationOptions {
+  /**
+   * Smallest unit to print. By default seconds are shown below one hour and
+   * dropped above it, where they only add noise.
+   */
+  minUnit?: 'm' | 's';
+  /** Zero-pad every unit after the first (`1h 04m`), keeping live timers from jittering. */
+  pad?: boolean;
+  /** Drop zero-valued trailing units (`1h` instead of `1h 0m`). */
+  trimZero?: boolean;
+}
+
+/**
+ * Compact unit duration: `42s` · `3m 7s` · `1h 23m` · `1d 21h 23m`. Hours roll over
+ * into days, so a long-running span never reads as `221h 29m`. The input is floored
+ * to the smallest printed unit; round it first when the caller wants rounding.
+ */
+export const formatDuration = (ms: number, options: FormatDurationOptions = {}): string => {
+  const { minUnit, pad, trimZero } = options;
+  const total = Math.max(0, ms);
+  const lastSuffix = minUnit ?? (total < 3_600_000 ? 's' : 'm');
+  const lastIndex = DURATION_UNITS.findIndex((unit) => unit.suffix === lastSuffix);
+  const largestIndex = DURATION_UNITS.findIndex((unit) => total >= unit.ms);
+  const firstIndex = largestIndex === -1 ? lastIndex : Math.min(largestIndex, lastIndex);
+
+  let remaining = total;
+  const parts = DURATION_UNITS.slice(firstIndex, lastIndex + 1).map((unit, index) => {
+    const value = Math.floor(remaining / unit.ms);
+    remaining -= value * unit.ms;
+    return {
+      suffix: unit.suffix,
+      text: pad && index > 0 ? String(value).padStart(2, '0') : String(value),
+      value,
+    };
+  });
+
+  while (trimZero && parts.length > 1 && parts.at(-1)!.value === 0) parts.pop();
+
+  return parts.map((part) => `${part.text}${part.suffix}`).join(' ');
 };
 
 export const createTimingRequestId = () =>
