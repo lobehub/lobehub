@@ -1,3 +1,4 @@
+import { RequestTrigger } from '@lobechat/types';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { PropsWithChildren } from 'react';
 import { createElement } from 'react';
@@ -64,6 +65,20 @@ describe('useBuilderSuggestions', () => {
     vi.spyOn(aiChatService, 'recordTracingFeedback').mockResolvedValue({
       ok: true,
     } as RecordTracingFeedbackResult);
+  });
+
+  it('tags suggestion requests with the system agent trigger', async () => {
+    const { result } = renderHook((props) => useBuilderSuggestions(props), {
+      initialProps: baseParams,
+      wrapper: createSWRWrapper(),
+    });
+
+    await waitFor(() => {
+      expect(result.current.suggestions[0]?.title).toBe('first title');
+    });
+    expect(vi.mocked(aiChatService.generateJSON).mock.calls[0][0].metadata).toEqual({
+      trigger: RequestTrigger.SystemAgent,
+    });
   });
 
   it('does not regenerate when autosave updates context for the same target', async () => {

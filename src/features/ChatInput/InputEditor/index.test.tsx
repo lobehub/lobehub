@@ -1,3 +1,4 @@
+import { RequestTrigger } from '@lobechat/types';
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -295,6 +296,28 @@ describe('ChatInput InputEditor', () => {
     render(<InputEditor />);
 
     expect((await getEditorStyle())?.fontSize).toBeUndefined();
+  });
+
+  it('tags autocomplete requests with the input completion trigger', async () => {
+    permission.allowed = true;
+    mocks.inputCompletionConfig.enabled = true;
+    mocks.generateJSON.mockResolvedValueOnce({ data: { completion: ' world' } });
+
+    render(<InputEditor />);
+
+    const autoCompleteProps = await getAutoCompleteProps();
+
+    await autoCompleteProps.onAutoComplete({
+      abortSignal: new AbortController().signal,
+      afterText: '',
+      input: 'hello',
+      suggestionId: 'suggestion-1',
+    });
+
+    expect(mocks.generateJSON).toHaveBeenCalledTimes(1);
+    expect(mocks.generateJSON.mock.calls[0][0].metadata).toEqual({
+      trigger: RequestTrigger.InputCompletion,
+    });
   });
 
   it('pauses autocomplete after a non-abort generation error', async () => {
