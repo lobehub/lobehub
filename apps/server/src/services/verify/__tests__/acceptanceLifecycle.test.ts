@@ -162,7 +162,7 @@ describe('Verify acceptance lifecycle', () => {
       requirement: 'Cut an isolated worktree',
     });
     mocks.taskFindById.mockResolvedValue({ name: 'Worktree' });
-    const authored = { acceptanceId: null, id: 'run-1', plan };
+    const authored = { acceptanceId: null, id: 'run-1', plan, planConfirmedAt: new Date() };
     mocks.runFindByOperation.mockResolvedValue(authored);
 
     await instantiateVerifyPlanOnStart(db, 'user-1', {
@@ -179,6 +179,34 @@ describe('Verify acceptance lifecycle', () => {
       { acceptanceId: 'acceptance-1', run: authored },
       undefined,
     );
+  });
+
+  /**
+   * Regression: an unconfirmed builder plan was bound too. It stayed the
+   * Acceptance's newest round as a draft, and the next attempt folded into it — so
+   * the round a later attempt ran in carried an operation that was not running.
+   */
+  it('leaves an unconfirmed builder plan unbound', async () => {
+    mocks.taskAcceptanceResolve.mockResolvedValue({
+      acceptance: { id: 'acceptance-1' },
+      config: { enabled: true },
+      requirement: 'Cut an isolated worktree',
+    });
+    mocks.taskFindById.mockResolvedValue({ name: 'Worktree' });
+    mocks.runFindByOperation.mockResolvedValue({
+      acceptanceId: null,
+      id: 'run-1',
+      plan,
+      planConfirmedAt: null,
+    });
+
+    await instantiateVerifyPlanOnStart(db, 'user-1', {
+      operationId: 'operation-1',
+      taskId: 'task-1',
+    });
+
+    expect(mocks.taskAcceptanceAttachRun).not.toHaveBeenCalled();
+    expect(mocks.generateDraftPlan).not.toHaveBeenCalled();
   });
 
   it('skips instantiation for a recurring task, even when an Acceptance policy exists', async () => {

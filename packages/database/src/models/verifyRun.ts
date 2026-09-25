@@ -364,7 +364,10 @@ export class VerifyRunModel {
           context: target.context ?? source.context,
           goal: target.goal ?? source.goal,
           metadata: { ...target.metadata, ...source.metadata },
-          operationId: target.operationId ?? source.operationId,
+          // The incoming run is the live work, and its operation is what the
+          // lifecycle keys on (`findByOperation`). Keeping a stale draft's
+          // operation instead would orphan the attempt that is actually running.
+          operationId: source.operationId ?? target.operationId,
           plan,
           planConfirmedAt: new Date(),
           scenario: target.scenario ?? source.scenario,

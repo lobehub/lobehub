@@ -310,6 +310,32 @@ describe('VerifyRunModel.foldIntoRound', () => {
     expect(await model().claimEvidenceCollection(folded.id)).toBe(true);
   });
 
+  /**
+   * Regression: the survivor kept the draft's operation. A draft left behind by an
+   * earlier attempt therefore swallowed the next attempt's row, and that attempt
+   * was no longer discoverable by its own operation — its verification stopped.
+   */
+  it("hands the survivor to the incoming run's operation", async () => {
+    const { draft } = await draftRound();
+    await new AgentOperationModel(serverDB, userId).recordStart({ operationId: 'fold-stale-op' });
+    await new AgentOperationModel(serverDB, userId).recordStart({ operationId: 'fold-live-op' });
+    await serverDB
+      .update(verifyRuns)
+      .set({ operationId: 'fold-stale-op' })
+      .where(eq(verifyRuns.id, draft.id));
+    const incoming = await model().create({
+      operationId: 'fold-live-op',
+      plan: [item('case-1')],
+      status: 'planned',
+      title: 'next attempt',
+    });
+
+    const folded = await model().foldIntoRound(incoming.id, draft.id);
+
+    expect(folded.operationId).toBe('fold-live-op');
+    expect((await model().findByOperation('fold-live-op'))?.id).toBe(draft.id);
+  });
+
   it('refuses to fold into a round that already executed or a run already chained', async () => {
     const { acceptance, draft } = await draftRound();
     await model().confirmPlan(draft.id);

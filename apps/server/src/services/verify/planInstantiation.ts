@@ -74,12 +74,18 @@ export const instantiateVerifyPlanOnStart = async (
       // An agent/UI-built plan never passed through the attach at the end of this
       // function, so the round would stay orphaned from the Task's Acceptance —
       // invisible to the task surface and unreadable by the Goal review.
-      await attachTaskRunToAcceptance(
-        db,
-        userId,
-        { acceptanceId: acceptance.id, run: existing },
-        workspaceId,
-      );
+      //
+      // Only once it is confirmed, though. An unconfirmed plan is not a round yet,
+      // and binding it would leave a draft the next attempt folds into. The
+      // completion lifecycle binds the round anyway once the plan is confirmed.
+      if (existing.planConfirmedAt) {
+        await attachTaskRunToAcceptance(
+          db,
+          userId,
+          { acceptanceId: acceptance.id, run: existing },
+          workspaceId,
+        );
+      }
       return;
     }
 
