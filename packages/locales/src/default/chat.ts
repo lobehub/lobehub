@@ -864,6 +864,9 @@ export default {
   'messages.modelCard.pricing.writeCacheInputTokens':
     'Cache write {{amount}} credits · ${{amount}}/M',
   'messages.tokenDetails.average': 'Average unit price',
+  'messages.tokenDetails.cliCredits.title': '{{value}} Credits',
+  'messages.tokenDetails.cliCredits.tooltip':
+    'Subscription credits reported by the agent CLI for this turn. The CLI bills in credits instead of reporting tokens; these are not LobeHub credits.',
   'messages.tokenDetails.cacheRate': 'Cache rate',
   'messages.tokenDetails.input': 'Input',
   'messages.tokenDetails.inputAudio': 'Audio Input',

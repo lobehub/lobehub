@@ -310,6 +310,128 @@ describe('QoderAdapter', () => {
     expect(events[2].data.message).toContain('Qoder');
   });
 
+  it('reports credits usage although Qoder zeroes every token field', () => {
+    const adapter = new QoderAdapter();
+    adapter.adapt({ model: 'Auto', session_id: 'q-session', subtype: 'init', type: 'system' });
+    adapter.adapt({
+      event: { message: { id: 'msg-1', model: 'Auto' }, type: 'message_start' },
+      type: 'stream_event',
+    });
+
+    // Qoder's message_delta: token fields always 0, consumption in credits only
+    const turn = adapter.adapt({
+      event: {
+        delta: { stop_reason: 'end_turn' },
+        type: 'message_delta',
+        usage: {
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 0,
+          credits: 0.6151926628571428,
+          input_tokens: 0,
+          output_tokens: 0,
+        },
+      },
+      type: 'stream_event',
+    });
+
+    const turnUsage = turn.find(
+      (event) => event.type === 'step_complete' && event.data.phase === 'turn_metadata',
+    );
+    expect(turnUsage?.data).toMatchObject({
+      model: 'Auto',
+      provider: 'qoder',
+      usage: {
+        credits: 0.6151926628571428,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalTokens: 0,
+      },
+    });
+
+    // The result event carries the session grand total in total_credits
+    const result = adapter.adapt({
+      subtype: 'success',
+      total_cost_usd: 0,
+      total_credits: 1.0052312114285713,
+      type: 'result',
+      usage: {
+        cache_creation_input_tokens: 0,
+        cache_read_input_tokens: 0,
+        input_tokens: 0,
+        output_tokens: 0,
+      },
+    });
+    const resultUsage = result.find(
+      (event) => event.type === 'step_complete' && event.data.phase === 'result_usage',
+    );
+    expect(resultUsage?.data).toMatchObject({
+      costUsd: 0,
+      usage: { credits: 1.0052312114285713, totalTokens: 0 },
+    });
+  });
+
+  it('merges token counts with credits when Qoder reports both', () => {
+    const adapter = new QoderAdapter();
+    adapter.adapt({ subtype: 'init', type: 'system' });
+    adapter.adapt({
+      event: { message: { id: 'msg-1', model: 'Qwen3.8-Flash' }, type: 'message_start' },
+      type: 'stream_event',
+    });
+
+    const turn = adapter.adapt({
+      event: {
+        delta: { stop_reason: 'end_turn' },
+        type: 'message_delta',
+        usage: { cache_read_input_tokens: 4, credits: 0.5, input_tokens: 10, output_tokens: 5 },
+      },
+      type: 'stream_event',
+    });
+
+    expect(
+      turn.find((event) => event.type === 'step_complete' && event.data.phase === 'turn_metadata')
+        ?.data.usage,
+    ).toEqual({
+      credits: 0.5,
+      inputCacheMissTokens: 10,
+      inputCachedTokens: 4,
+      totalInputTokens: 14,
+      totalOutputTokens: 5,
+      totalTokens: 19,
+    });
+  });
+
+  it('still drops usage events when Qoder reports neither tokens nor credits', () => {
+    const adapter = new QoderAdapter();
+    adapter.adapt({ subtype: 'init', type: 'system' });
+    adapter.adapt({
+      event: { message: { id: 'msg-1', model: 'Auto' }, type: 'message_start' },
+      type: 'stream_event',
+    });
+
+    const turn = adapter.adapt({
+      event: {
+        type: 'message_delta',
+        usage: {
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 0,
+          input_tokens: 0,
+          output_tokens: 0,
+        },
+      },
+      type: 'stream_event',
+    });
+    expect(turn.filter((event) => event.type === 'step_complete')).toEqual([]);
+
+    const result = adapter.adapt({
+      subtype: 'success',
+      total_cost_usd: 0,
+      total_credits: 0,
+      type: 'result',
+      usage: { input_tokens: 0, output_tokens: 0 },
+    });
+    expect(result.filter((event) => event.type === 'step_complete')).toEqual([]);
+  });
+
   it('normalizes pending tool identity when flushing', () => {
     const adapter = new QoderAdapter();
     adapter.adapt({ subtype: 'init', type: 'system' });

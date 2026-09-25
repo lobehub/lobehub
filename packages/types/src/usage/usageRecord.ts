@@ -3,6 +3,11 @@ import type { MessageMetadata } from '../message';
 export interface UsageRecordItem {
   createdAt: Date;
   /**
+   * Provider-native subscription credits consumed (e.g. Qoder), when the run
+   * bills in credits instead of tokens. Not USD.
+   */
+  credits?: number | null;
+  /**
    * ID
    **/
   id: string;

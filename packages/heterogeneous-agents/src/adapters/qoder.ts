@@ -9,7 +9,7 @@
  */
 
 import { getHeterogeneousAgentConfigOrThrow } from '../config';
-import type { HeterogeneousAgentEvent } from '../types';
+import type { HeterogeneousAgentEvent, UsageData } from '../types';
 import { ClaudeCodeAdapter } from './claudeCode';
 
 export const QODER_IDENTIFIER = 'qoder';
@@ -72,7 +72,39 @@ const normalizeQoderEvents = (events: HeterogeneousAgentEvent[]): HeterogeneousA
   return events;
 };
 
+/**
+ * Qoder zeroes every Anthropic token field in stream-json and reports
+ * consumption as subscription credits instead: per turn on
+ * `message_delta.usage.credits`, session-total on `result.total_credits`.
+ * Without this override the token-only base mapping returns undefined for
+ * every turn, so no usage event is emitted and the whole reporting chain
+ * (turn_metadata → recordUsage → message usage column) stays empty.
+ */
+const withQoderCredits = (
+  usage: UsageData | undefined,
+  credits: unknown,
+): UsageData | undefined => {
+  const value = typeof credits === 'number' && credits > 0 ? credits : undefined;
+  if (usage === undefined && value === undefined) return undefined;
+  return {
+    inputCacheMissTokens: 0,
+    totalInputTokens: 0,
+    totalOutputTokens: 0,
+    totalTokens: 0,
+    ...usage,
+    ...(value !== undefined ? { credits: value } : {}),
+  };
+};
+
 export class QoderAdapter extends ClaudeCodeAdapter {
+  protected extractUsage(raw: any): UsageData | undefined {
+    return withQoderCredits(super.extractUsage(raw), raw?.credits);
+  }
+
+  protected extractResultUsage(raw: any): UsageData | undefined {
+    return withQoderCredits(super.extractResultUsage(raw), raw?.total_credits);
+  }
+
   adapt(raw: unknown): HeterogeneousAgentEvent[] {
     // Qoder reports a missing login as both an assistant text block and a
     // terminal `result { subtype: "success", is_error: true }`. Suppress the

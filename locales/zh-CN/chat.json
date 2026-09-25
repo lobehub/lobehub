@@ -1264,6 +1264,8 @@
   "messages.modelCard.pricing.writeCacheInputTokens": "缓存写入 {{amount}} 积分 · ${{amount}}/M",
   "messages.tokenDetails.average": "平均单价",
   "messages.tokenDetails.cacheRate": "缓存率",
+  "messages.tokenDetails.cliCredits.title": "{{value}} Credits",
+  "messages.tokenDetails.cliCredits.tooltip": "该智能体 CLI 上报的本轮订阅 Credits 消耗。它按 Credits 计量、不提供 token 数，与 LobeHub 积分无关。",
   "messages.tokenDetails.input": "输入",
   "messages.tokenDetails.inputAudio": "音频输入",
   "messages.tokenDetails.inputCached": "输入缓存",

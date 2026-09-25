@@ -302,6 +302,10 @@ export interface ToolCallPayload {
 export interface UsageData {
   /** Estimated session or turn cost in USD, if the CLI reports it. */
   cost?: number;
+  /** Provider-native subscription credits consumed (e.g. Qoder), when the CLI
+   * bills in credits instead of reporting token counts. Not USD — keep it
+   * separate from `cost` so spend math never mixes units. */
+  credits?: number;
   /** Input tokens served from the prompt cache (cache reads). */
   inputCachedTokens?: number;
   /** Input tokens that missed the prompt cache (fresh prompt bytes). */

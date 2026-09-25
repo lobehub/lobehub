@@ -131,17 +131,20 @@ describe('HeteroTraceRecorder', () => {
       }),
       ev('step_complete', 0, 150, {
         phase: 'turn_metadata',
-        usage: { totalInputTokens: 10, totalOutputTokens: 5, totalTokens: 15 },
+        usage: { credits: 0.6, totalInputTokens: 10, totalOutputTokens: 5, totalTokens: 15 },
       }),
       ev('stream_chunk', 1, 200, { chunkType: 'text', content: 'done' }),
-      ev('step_complete', 1, 205, { phase: 'turn_metadata', usage: { totalTokens: 8 } }),
+      ev('step_complete', 1, 205, {
+        phase: 'turn_metadata',
+        usage: { credits: 0.4, totalTokens: 8 },
+      }),
       // Final result_usage carries the authoritative SESSION total (25) — which
       // is deliberately NOT the sum of the per-turn steps (15 + 8 = 23), proving
       // finalize prefers it and does not double-count.
       ev('step_complete', 1, 210, {
         costUsd: 0.002,
         phase: 'result_usage',
-        usage: { totalInputTokens: 12, totalOutputTokens: 13, totalTokens: 25 },
+        usage: { credits: 1, totalInputTokens: 12, totalOutputTokens: 13, totalTokens: 25 },
       }),
     ]);
 
@@ -181,6 +184,8 @@ describe('HeteroTraceRecorder', () => {
       userId: 'user-1',
     });
     expect(snap.totalCost).toBeCloseTo(0.002);
+    // credits fold like tokens: session total wins over the per-step sum (1.0)
+    expect(snap.totalCredits).toBeCloseTo(1);
 
     const [step0, step1] = snap.steps;
     expect(step0.stepIndex).toBe(0);
@@ -201,6 +206,7 @@ describe('HeteroTraceRecorder', () => {
     expect(step1.content).toBe('done');
     expect(step1.totalTokens).toBe(8); // its own turn_metadata, NOT the session total
     expect(step1.totalCost).toBe(0); // result_usage cost is a session total, not folded per-step
+    expect(step1.credits).toBeCloseTo(0.4); // per-turn credits, NOT the session total
 
     // context-engine is never populated for hetero steps
     expect(step0.contextEngine).toBeUndefined();

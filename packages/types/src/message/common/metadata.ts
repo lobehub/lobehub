@@ -144,6 +144,9 @@ export const ModelUsageSchema = z.object({
 
   // Cost
   cost: z.number().optional(),
+
+  // Provider-native subscription credits (e.g. Qoder), separate from USD cost
+  credits: z.number().optional(),
 });
 
 export const ModelPerformanceSchema = z.object({
@@ -307,6 +310,12 @@ export interface ModelUsage extends ModelTokensUsage {
    * dollar
    */
   cost?: number;
+  /**
+   * Provider-native subscription credits consumed (e.g. Qoder), for runs whose
+   * CLI reports credits instead of token counts. Not USD — separate from
+   * `cost` so spend math never mixes units.
+   */
+  credits?: number;
 }
 
 export interface ModelPerformance {
