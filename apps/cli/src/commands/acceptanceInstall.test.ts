@@ -34,7 +34,7 @@ const bundle = {
 describe('acceptance skill installation', () => {
   let directory: string;
   const query = vi.fn();
-  const trackSkillInstall = vi.fn();
+  const trackAcceptanceInstall = vi.fn();
 
   const run = async (...args: string[]) => {
     const program = new Command().version('0.0.55');
@@ -47,11 +47,14 @@ describe('acceptance skill installation', () => {
     directory = await mkdtemp(path.join(tmpdir(), 'acceptance-distribution-'));
     vi.spyOn(console, 'log').mockImplementation(() => {});
     query.mockReset().mockResolvedValue(bundle);
-    trackSkillInstall.mockReset().mockResolvedValue(undefined);
+    trackAcceptanceInstall.mockReset().mockResolvedValue(undefined);
     vi.mocked(getTrpcClient)
       .mockReset()
       .mockResolvedValue({
-        verify: { getSkillBundle: { query }, trackSkillInstall: { mutate: trackSkillInstall } },
+        verify: {
+          getSkillBundle: { query },
+          trackAcceptanceInstall: { mutate: trackAcceptanceInstall },
+        },
       } as unknown as Awaited<ReturnType<typeof getTrpcClient>>);
   });
 
@@ -122,7 +125,7 @@ describe('acceptance skill installation', () => {
 
     expect(await readFile(path.join(skillDir, 'SKILL.md'), 'utf8')).toBe('existing skill');
     expect(await readFile(path.join(skillDir, 'old.md'), 'utf8')).toBe('existing resource');
-    expect(trackSkillInstall).not.toHaveBeenCalled();
+    expect(trackAcceptanceInstall).not.toHaveBeenCalled();
   });
 
   it('preserves existing files during install, then replaces them and removes stale files on update', async () => {
@@ -250,42 +253,42 @@ describe('acceptance skill installation', () => {
 
   it('reports installs and explicit updates even when the bundle version is unchanged', async () => {
     await run('install');
-    expect(trackSkillInstall).toHaveBeenLastCalledWith(
-      { event: 'install', identifier: 'acceptance', version: '0.5.0' },
+    expect(trackAcceptanceInstall).toHaveBeenLastCalledWith(
+      { event: 'install', version: '0.5.0' },
       { signal: expect.any(AbortSignal) },
     );
 
     await run('update');
-    expect(trackSkillInstall).toHaveBeenLastCalledWith(
-      { event: 'update', identifier: 'acceptance', version: '0.5.0' },
+    expect(trackAcceptanceInstall).toHaveBeenLastCalledWith(
+      { event: 'update', version: '0.5.0' },
       { signal: expect.any(AbortSignal) },
     );
-    expect(trackSkillInstall).toHaveBeenCalledTimes(2);
+    expect(trackAcceptanceInstall).toHaveBeenCalledTimes(2);
   });
 
   it('counts a forced install as an install, not an update', async () => {
     await run('install', '--force');
 
-    expect(trackSkillInstall).toHaveBeenCalledExactlyOnceWith(
-      { event: 'install', identifier: 'acceptance', version: '0.5.0' },
+    expect(trackAcceptanceInstall).toHaveBeenCalledExactlyOnceWith(
+      { event: 'install', version: '0.5.0' },
       { signal: expect.any(AbortSignal) },
     );
   });
 
   it('does not report a no-op install where every file was skipped', async () => {
     await run('install');
-    trackSkillInstall.mockClear();
+    trackAcceptanceInstall.mockClear();
 
     await run('install');
 
     expect(JSON.parse(vi.mocked(console.log).mock.calls.at(-1)![0] as string).skipped).toContain(
       'SKILL.md',
     );
-    expect(trackSkillInstall).not.toHaveBeenCalled();
+    expect(trackAcceptanceInstall).not.toHaveBeenCalled();
   });
 
   it('still succeeds when the server cannot record the install', async () => {
-    trackSkillInstall.mockRejectedValueOnce(new Error('unknown procedure'));
+    trackAcceptanceInstall.mockRejectedValueOnce(new Error('unknown procedure'));
 
     await run('install');
 
@@ -304,7 +307,7 @@ describe('acceptance skill installation', () => {
     const requestStarted = new Promise<void>((resolve) => {
       started = resolve;
     });
-    trackSkillInstall.mockImplementationOnce((_input, options?: { signal: AbortSignal }) => {
+    trackAcceptanceInstall.mockImplementationOnce((_input, options?: { signal: AbortSignal }) => {
       signal = options?.signal;
       started();
       return new Promise<void>((_resolve, reject) => {
@@ -332,6 +335,6 @@ describe('acceptance skill installation', () => {
 
     await expect(run('install')).rejects.toThrow();
 
-    expect(trackSkillInstall).not.toHaveBeenCalled();
+    expect(trackAcceptanceInstall).not.toHaveBeenCalled();
   });
 });

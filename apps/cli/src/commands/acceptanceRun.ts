@@ -3,7 +3,11 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import path from 'node:path';
 
 import { acceptanceSubjectTypes } from '@lobechat/const/verify';
-import type { SkillInstallEvent, VerifyAgentPlanConfig, VerifyCheckItem } from '@lobechat/types';
+import type {
+  AcceptanceInstallEvent,
+  VerifyAgentPlanConfig,
+  VerifyCheckItem,
+} from '@lobechat/types';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
@@ -57,7 +61,7 @@ import {
 
 interface InstallOptions {
   dir?: string;
-  event?: SkillInstallEvent;
+  event?: AcceptanceInstallEvent;
   force?: boolean;
   json?: boolean | string;
   skill: string;
@@ -152,17 +156,16 @@ async function installAction(options: InstallOptions): Promise<void> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3000);
     try {
-      await client.verify.trackSkillInstall.mutate(
+      await client.verify.trackAcceptanceInstall.mutate(
         {
           event: options.event ?? 'install',
-          identifier: bundle.identifier,
           version: bundle.version,
         },
         { signal: controller.signal },
       );
     } catch (error) {
       // Keep normal install output unchanged; diagnostics are opt-in with --verbose.
-      log.debug('Could not record skill install', error);
+      log.debug('Could not record acceptance install', error);
     } finally {
       clearTimeout(timeout);
     }
