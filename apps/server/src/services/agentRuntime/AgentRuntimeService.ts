@@ -1750,7 +1750,7 @@ export class AgentRuntimeService {
             // state may still read `running` if the interrupt landed only its
             // sentinel before a crash, so make the stop visible to that branch.
             log('[%s][%d] Interrupted before deferred init; skipping it', operationId, stepIndex);
-            agentState.status = 'interrupted';
+            await this.persistStopBeforeInit(operationId, agentState);
           } else {
             // A shared-agent run revoked between enqueue and step 0 must not
             // get creator-scoped discovery and history/persona assembly first:
@@ -1771,23 +1771,41 @@ export class AgentRuntimeService {
               request: agentState.request,
               state: agentState,
             });
-            // Clearing the request in the same write is what makes a redelivery
-            // of this step read an initialized run instead of paying for
-            // discovery again.
-            // The assembled context rides in the same write: a redelivery after
-            // this save finds the request gone and must still start from it.
-            Object.assign(agentState, initialized.state, {
-              initialContext: initialized.context,
-              request: undefined,
-            });
-            await this.coordinator.saveAgentState(operationId, agentState);
-            deferredInitContext = initialized.context;
-            log(
-              '[%s][%d] Deferred init finished in %dms',
-              operationId,
-              stepIndex,
-              Date.now() - initStartedAt,
-            );
+
+            // Stop can land while the init is awaited, and the abort poll is not
+            // armed yet. Saving this worker's pre-init `running` state now would
+            // overwrite the interrupted one and walk straight into LLM work, so
+            // re-read before writing anything.
+            const latest = await this.coordinator.loadAgentState(operationId);
+            if (
+              (await this.coordinator.isInterrupted(operationId)) ||
+              latest?.status === 'interrupted'
+            ) {
+              log(
+                '[%s][%d] Interrupted during deferred init; discarding its result',
+                operationId,
+                stepIndex,
+              );
+              await this.persistStopBeforeInit(operationId, latest ?? agentState);
+              Object.assign(agentState, latest ?? {}, { status: 'interrupted' });
+            } else {
+              // One write: the initialized slots, the assembled context (a
+              // redelivery after this save finds the request gone and must still
+              // start from it), and the cleared request (so that redelivery does
+              // not pay for discovery again).
+              Object.assign(agentState, initialized.state, {
+                initialContext: initialized.context,
+                request: undefined,
+              });
+              await this.coordinator.saveAgentState(operationId, agentState);
+              deferredInitContext = initialized.context;
+              log(
+                '[%s][%d] Deferred init finished in %dms',
+                operationId,
+                stepIndex,
+                Date.now() - initStartedAt,
+              );
+            }
           }
         }
 
@@ -4309,6 +4327,25 @@ export class AgentRuntimeService {
     }
 
     return undefined;
+  }
+
+  /**
+   * Make a stop that landed before (or during) a deferred init durable. The
+   * interrupt may have written only its sentinel before crashing, and the
+   * completion lifecycle does not own the runtime-state transition: the
+   * coordinator save does, and it is also what publishes `agent_runtime_end`
+   * exactly once. Idempotent for a state that is already interrupted.
+   */
+  private async persistStopBeforeInit(operationId: string, state: AgentState): Promise<void> {
+    const alreadyPersisted =
+      (await this.coordinator.loadAgentState(operationId))?.status === 'interrupted';
+    state.status = 'interrupted';
+    if (alreadyPersisted) return;
+    await this.coordinator.saveAgentState(operationId, {
+      ...state,
+      lastModified: new Date().toISOString(),
+      status: 'interrupted',
+    });
   }
 
   /**

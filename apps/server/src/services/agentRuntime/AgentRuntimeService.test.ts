@@ -994,6 +994,35 @@ describe('AgentRuntimeService', () => {
         // The completion consumers (and the durable row) hear about the stop.
         expect(emit).toHaveBeenCalledWith('test-operation-1', expect.anything(), 'interrupted');
         expect(dispatch).toHaveBeenCalledWith('test-operation-1', expect.anything(), 'interrupted');
+        // The interrupt may have landed only its sentinel: the runtime state has
+        // to be written too, or Redis keeps reading `running` forever.
+        expect(coordinator.saveAgentState).toHaveBeenCalledWith(
+          'test-operation-1',
+          expect.objectContaining({ status: 'interrupted' }),
+        );
+      });
+
+      it('discards the init result when Stop lands while the init runs', async () => {
+        const runDeferredInit = vi.fn().mockResolvedValue({
+          context: { phase: 'user_input', payload: {} },
+          state: { operationToolSet: { enabledToolIds: ['lobe-web-browsing'] } },
+        });
+        const svc = buildService(runDeferredInit);
+        const { coordinator, step } = wireStep(svc);
+        coordinator.isInterrupted.mockResolvedValueOnce(false).mockResolvedValue(true);
+        const lifecycle = (svc as any).completionLifecycle;
+        vi.spyOn(lifecycle, 'emitSignalEvents').mockResolvedValue([]);
+        vi.spyOn(lifecycle, 'dispatchHooks').mockResolvedValue(undefined);
+
+        await svc.executeStep({ ...mockParams, stepIndex: 0 });
+
+        expect(runDeferredInit).toHaveBeenCalledTimes(1);
+        expect(step).not.toHaveBeenCalled();
+        // Nothing wrote the pre-init `running` state back over the stop.
+        for (const [, saved] of coordinator.saveAgentState.mock.calls) {
+          expect(saved.status).toBe('interrupted');
+          expect(saved.operationToolSet).toBeUndefined();
+        }
       });
 
       it('does not initialize a shared run whose share was revoked after enqueue', async () => {
