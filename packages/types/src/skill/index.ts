@@ -204,9 +204,9 @@ export interface SkillImportResult {
   status: SkillImportStatus;
 }
 
-// ===== Skill Install Events (CLI distribution telemetry) =====
+// ===== Acceptance Install Events (CLI distribution telemetry) =====
 
-export const skillInstallEvents = ['install', 'update'] as const;
+export const acceptanceInstallEvents = ['install', 'update'] as const;
 
 /**
  * Completed CLI commands: 'install' includes explicit --force reinstalls;
@@ -214,4 +214,4 @@ export const skillInstallEvents = ['install', 'update'] as const;
  * Fully skipped ordinary installs emit no event. These are event counts, not
  * unique installations or users, and best-effort reporting can miss events.
  */
-export type SkillInstallEvent = (typeof skillInstallEvents)[number];
+export type AcceptanceInstallEvent = (typeof acceptanceInstallEvents)[number];

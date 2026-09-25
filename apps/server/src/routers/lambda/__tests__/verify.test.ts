@@ -2,6 +2,7 @@ import { getHTTPStatusCodeFromError } from '@trpc/server/http';
 import { strToU8, zipSync } from 'fflate';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AcceptanceInstallModel } from '@/database/models/acceptanceInstall';
 import { createTRPCErrorLogger } from '@/libs/trpc/utils/errorLogger';
 import { verifyRouter } from '@/server/routers/lambda/verify';
 import { FileService } from '@/server/services/file';
@@ -21,7 +22,7 @@ const modelMocks = vi.hoisted(() => ({
   generateGoalPlan: vi.fn(),
   getFullFileUrl: vi.fn(),
   getServerDB: vi.fn(async () => ({})),
-  recordSkillInstall: vi.fn(),
+  recordAcceptanceInstall: vi.fn(),
   updateRun: vi.fn(),
   upsertByCheckItem: vi.fn(),
 }));
@@ -60,10 +61,10 @@ vi.mock('@/database/models/verifyEvidence', () => ({
   }),
 }));
 
-vi.mock('@/database/models/skillInstall', () => ({
-  SkillInstallModel: vi.fn(function () {
+vi.mock('@/database/models/acceptanceInstall', () => ({
+  AcceptanceInstallModel: vi.fn(function () {
     return {
-      record: modelMocks.recordSkillInstall,
+      record: modelMocks.recordAcceptanceInstall,
     };
   }),
 }));
@@ -197,60 +198,71 @@ describe('verifyRouter', () => {
     });
   });
 
-  describe('trackSkillInstall', () => {
+  describe('trackAcceptanceInstall', () => {
     it('records an install event against the authenticated user', async () => {
-      await createCaller().trackSkillInstall({
+      await createCaller().trackAcceptanceInstall({
         event: 'update',
-        identifier: 'acceptance',
         version: '0.5.0',
       });
 
-      expect(modelMocks.recordSkillInstall).toHaveBeenCalledExactlyOnceWith({
+      expect(AcceptanceInstallModel).toHaveBeenCalledExactlyOnceWith(
+        {},
+        'verify-router-test-user',
+        undefined,
+      );
+      expect(modelMocks.recordAcceptanceInstall).toHaveBeenCalledExactlyOnceWith({
         event: 'update',
-        identifier: 'acceptance',
         version: '0.5.0',
       });
     });
 
     it("defaults the event to 'install'", async () => {
-      await createCaller().trackSkillInstall({ identifier: 'acceptance' });
+      await createCaller().trackAcceptanceInstall({});
 
-      expect(modelMocks.recordSkillInstall).toHaveBeenCalledExactlyOnceWith({
+      expect(modelMocks.recordAcceptanceInstall).toHaveBeenCalledExactlyOnceWith({
         event: 'install',
-        identifier: 'acceptance',
       });
     });
 
     it('requires authentication and a known event value', async () => {
-      await expect(
-        createPublicCaller().trackSkillInstall({ identifier: 'acceptance' }),
-      ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+      await expect(createPublicCaller().trackAcceptanceInstall({})).rejects.toMatchObject({
+        code: 'UNAUTHORIZED',
+      });
       await expect(
         // @ts-expect-error exercise runtime validation of an unsupported event
-        createCaller().trackSkillInstall({ event: 'remove', identifier: 'acceptance' }),
+        createCaller().trackAcceptanceInstall({ event: 'remove' }),
       ).rejects.toThrow();
-      expect(modelMocks.recordSkillInstall).not.toHaveBeenCalled();
+      expect(modelMocks.recordAcceptanceInstall).not.toHaveBeenCalled();
     });
 
-    it('rejects unknown and noncanonical skill identifiers', async () => {
-      for (const identifier of ['other-skill', 'verify', '']) {
-        await expect(
-          // @ts-expect-error exercise runtime validation of an unsupported identifier
-          createCaller().trackSkillInstall({ identifier }),
-        ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
-      }
-      expect(modelMocks.recordSkillInstall).not.toHaveBeenCalled();
+    it('does not pass caller-supplied attribution or skill identifiers to storage', async () => {
+      const input = {
+        identifier: 'other-skill',
+        userId: 'other-user',
+        version: '0.5.0',
+        workspaceId: 'other-workspace',
+      };
+
+      await createCaller().trackAcceptanceInstall(input);
+
+      expect(AcceptanceInstallModel).toHaveBeenCalledExactlyOnceWith(
+        {},
+        'verify-router-test-user',
+        undefined,
+      );
+      expect(modelMocks.recordAcceptanceInstall).toHaveBeenCalledExactlyOnceWith({
+        event: 'install',
+        version: '0.5.0',
+      });
     });
 
     it('records source version labels without imposing the tag-selection format', async () => {
-      await createCaller().trackSkillInstall({
-        identifier: 'acceptance',
+      await createCaller().trackAcceptanceInstall({
         version: '0.6.0-beta.1',
       });
 
-      expect(modelMocks.recordSkillInstall).toHaveBeenCalledExactlyOnceWith({
+      expect(modelMocks.recordAcceptanceInstall).toHaveBeenCalledExactlyOnceWith({
         event: 'install',
-        identifier: 'acceptance',
         version: '0.6.0-beta.1',
       });
     });

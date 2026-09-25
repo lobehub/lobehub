@@ -1,21 +1,20 @@
-import type { SkillInstallEvent } from '@lobechat/types';
+import type { AcceptanceInstallEvent } from '@lobechat/types';
 
-import type { NewSkillInstall } from '../schemas/skillInstall';
-import { skillInstalls } from '../schemas/skillInstall';
+import type { NewAcceptanceInstall } from '../schemas/acceptanceInstall';
+import { acceptanceInstalls } from '../schemas/acceptanceInstall';
 import type { LobeChatDatabase } from '../type';
 
-export interface RecordSkillInstallParams {
-  event: SkillInstallEvent;
-  identifier: string;
+export interface RecordAcceptanceInstallParams {
+  event: AcceptanceInstallEvent;
   version?: string;
 }
 
 /**
- * Append-only adoption telemetry for CLI-distributed skills
+ * Append-only adoption telemetry for the CLI-distributed Acceptance skill
  * (`lh acceptance install` / `update`). Written by the verify router after a
  * successful install; read only by the ops dashboard, never by the product.
  */
-export class SkillInstallModel {
+export class AcceptanceInstallModel {
   private readonly db: LobeChatDatabase;
   private readonly userId: string;
   private readonly workspaceId?: string | null;
@@ -26,13 +25,13 @@ export class SkillInstallModel {
     this.workspaceId = workspaceId;
   }
 
-  record = async (params: RecordSkillInstallParams) => {
-    const values: NewSkillInstall = {
+  record = async (params: RecordAcceptanceInstallParams) => {
+    const values: NewAcceptanceInstall = {
       ...params,
       userId: this.userId,
       workspaceId: this.workspaceId ?? null,
     };
-    const [row] = await this.db.insert(skillInstalls).values(values).returning();
+    const [row] = await this.db.insert(acceptanceInstalls).values(values).returning();
 
     return row;
   };
