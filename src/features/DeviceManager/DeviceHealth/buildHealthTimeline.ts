@@ -12,29 +12,25 @@ import type { DeviceMetricPoint, DeviceMetricSeries } from '@lobechat/types';
  */
 export type HealthSlotStatus = 'online' | 'offline' | 'missing' | 'pending';
 
-export interface HealthSlot {
+/** CPU / memory / load, each as a percentage (load relative to the core count). */
+export interface HealthUsage {
   cpuPercent: number | null;
-  load1: number | null;
+  loadPercent: number | null;
   memoryPercent: number | null;
+}
+
+export interface HealthSlot extends HealthUsage {
   memoryUsedBytes: number | null;
   start: number;
   status: HealthSlotStatus;
 }
 
-export interface HealthStretch {
-  end: number;
-  start: number;
-  status: 'offline' | 'missing';
-}
-
 export interface HealthTimeline {
-  /** Newest reading of each metric, for the section headers. */
-  latest: Pick<DeviceMetricPoint, 'cpuPercent' | 'load1' | 'memoryPercent'> | null;
-  /** Upper bound for the load chart — at least the core count, so a busy-but-fine machine sits below it. */
+  /** Newest reading of each metric, for the chart headers and the row preview. */
+  latest: HealthUsage | null;
+  /** Upper bound for the load chart — at least 100%, so an overloaded machine still fits. */
   loadCeiling: number;
   slots: HealthSlot[];
-  /** Contiguous offline / missing periods, oldest first. */
-  stretches: HealthStretch[];
 }
 
 /**
@@ -43,8 +39,12 @@ export interface HealthTimeline {
  */
 export const UPLOAD_GRACE_MS = 10 * 60_000;
 
+/** Load average as a share of the machine's cores; null without both. */
+export const loadPercentOf = (load1: number | null | undefined, cpuCount: number | null) =>
+  load1 === null || load1 === undefined || !cpuCount ? null : (load1 / cpuCount) * 100;
+
 export const buildHealthTimeline = (series: DeviceMetricSeries): HealthTimeline => {
-  const { bucketMs, from, points, to } = series;
+  const { bucketMs, cpuCount, from, points, to } = series;
   const byStart = new Map(points.map((p) => [p.observedAt, p]));
   const firstStart = Math.floor(from / bucketMs) * bucketMs;
 
@@ -60,7 +60,7 @@ export const buildHealthTimeline = (series: DeviceMetricSeries): HealthTimeline 
         : 'missing';
     slots.push({
       cpuPercent: point?.cpuPercent ?? null,
-      load1: point?.load1 ?? null,
+      loadPercent: loadPercentOf(point?.load1, cpuCount),
       memoryPercent: point?.memoryPercent ?? null,
       memoryUsedBytes: point?.memoryUsedBytes ?? null,
       start,
@@ -68,36 +68,26 @@ export const buildHealthTimeline = (series: DeviceMetricSeries): HealthTimeline 
     });
   }
 
-  const stretches: HealthStretch[] = [];
-  for (const slot of slots) {
-    if (slot.status !== 'offline' && slot.status !== 'missing') continue;
-    const last = stretches.at(-1);
-    if (last && last.status === slot.status && last.end === slot.start) {
-      last.end = slot.start + bucketMs;
-    } else {
-      stretches.push({ end: slot.start + bucketMs, start: slot.start, status: slot.status });
-    }
-  }
-
-  const newest = points.at(-1);
-  const maxLoad = Math.max(0, ...points.map((p) => p.load1 ?? 0));
+  const newest: DeviceMetricPoint | undefined = points.at(-1);
+  const maxLoad = Math.max(0, ...slots.map((s) => s.loadPercent ?? 0));
 
   return {
     latest: newest
       ? {
           cpuPercent: newest.cpuPercent,
-          load1: newest.load1,
+          loadPercent: loadPercentOf(newest.load1, cpuCount),
           memoryPercent: newest.memoryPercent,
         }
       : null,
-    loadCeiling: Math.max(series.cpuCount ?? 1, Math.ceil(maxLoad)),
+    loadCeiling: Math.max(100, Math.ceil(maxLoad)),
     slots,
-    stretches,
   };
 };
 
 export interface HealthStripBlock {
   end: number;
+  /** Highest CPU / memory / load inside the block — what its color reflects. */
+  peak: HealthUsage;
   start: number;
   status: HealthSlotStatus;
 }
@@ -105,24 +95,45 @@ export interface HealthStripBlock {
 /** Most to least telling when slots of different kinds share one block. */
 const STRIP_PRIORITY: HealthSlotStatus[] = ['offline', 'online', 'pending', 'missing'];
 
+const maxOf = (values: (number | null)[]) => {
+  const present = values.filter((v): v is number => v !== null);
+  return present.length === 0 ? null : Math.max(...present);
+};
+
 /**
  * Merge consecutive slots into blocks wide enough to see and hover — a 12h
- * window of 5-minute slots is 144 hair-thin blocks in a side panel. A block
- * takes its most telling slot status: a disconnect anywhere in it shows, and
- * a block where the device ran for part of the time reads as running.
+ * window of 5-minute slots is 144 hair-thin blocks in a side panel. Blocks
+ * sit on wall-clock boundaries (e.g. :00 / :30) so their hover times read
+ * naturally. A block takes its most telling slot status: a disconnect
+ * anywhere in it shows, and a block where the device ran for part of the time
+ * reads as running.
  */
 export const groupStripBlocks = (
   slots: HealthSlot[],
   bucketMs: number,
-  slotsPerBlock: number,
+  blockMs: number,
 ): HealthStripBlock[] => {
-  const blocks: HealthStripBlock[] = [];
-  for (let i = 0; i < slots.length; i += slotsPerBlock) {
-    const group = slots.slice(i, i + slotsPerBlock);
+  const groups = new Map<number, HealthSlot[]>();
+  for (const slot of slots) {
+    const key = Math.floor(slot.start / blockMs) * blockMs;
+    const group = groups.get(key) ?? [];
+    group.push(slot);
+    groups.set(key, group);
+  }
+
+  return [...groups.values()].map((group) => {
     const status =
       STRIP_PRIORITY.find((candidate) => group.some((slot) => slot.status === candidate)) ??
       'missing';
-    blocks.push({ end: group.at(-1)!.start + bucketMs, start: group[0].start, status });
-  }
-  return blocks;
+    return {
+      end: group.at(-1)!.start + bucketMs,
+      peak: {
+        cpuPercent: maxOf(group.map((s) => s.cpuPercent)),
+        loadPercent: maxOf(group.map((s) => s.loadPercent)),
+        memoryPercent: maxOf(group.map((s) => s.memoryPercent)),
+      },
+      start: group[0].start,
+      status,
+    };
+  });
 };

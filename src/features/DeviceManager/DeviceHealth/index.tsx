@@ -7,9 +7,17 @@ import { useTranslation } from 'react-i18next';
 
 import { formatSize } from '@/utils/format';
 
-import { buildHealthTimeline, groupStripBlocks } from './buildHealthTimeline';
-import { formatLoad, formatPercent } from './format';
-import { formatClock as time, SLOT_COLOR, useDeviceMetricSeries, useStatusLabels } from './shared';
+import { buildHealthTimeline, groupStripBlocks, type HealthSlot } from './buildHealthTimeline';
+import { formatPercent, usageLevel } from './format';
+import {
+  blockColor,
+  formatClock as time,
+  usageTextColor,
+  useBlockTooltip,
+  useDeviceMetricSeries,
+} from './shared';
+
+export { HealthLegend } from './shared';
 
 /** Status-strip block width: wide enough to see and hover in the side panel. */
 const STRIP_BLOCK_MS = 15 * 60_000;
@@ -17,19 +25,19 @@ const STRIP_BLOCK_MS = 15 * 60_000;
 interface MetricChartProps {
   ceiling: number;
   data: { time: string; value: number | null }[];
-  format: (value: number | null | undefined) => string;
   label: string;
-  latest: string;
+  latest: number | null | undefined;
 }
 
-const MetricChart = ({ ceiling, data, format, label, latest }: MetricChartProps) => (
+/** Left: what is measured (with its size); right: the latest share, colored by level. */
+const MetricChart = ({ ceiling, data, label, latest }: MetricChartProps) => (
   <Flexbox gap={4}>
     <Flexbox horizontal align={'baseline'} distribution={'space-between'}>
       <Text fontSize={12} type={'secondary'}>
         {label}
       </Text>
-      <Text fontSize={12} weight={500}>
-        {latest}
+      <Text fontSize={12} style={{ color: usageTextColor(usageLevel(latest)) }} weight={500}>
+        {formatPercent(latest)}
       </Text>
     </Flexbox>
     <AreaChart
@@ -41,7 +49,7 @@ const MetricChart = ({ ceiling, data, format, label, latest }: MetricChartProps)
       index={'time'}
       showLegend={false}
       showYAxis={false}
-      valueFormatter={format}
+      valueFormatter={formatPercent}
       yAxisDomain={[0, ceiling]}
     />
   </Flexbox>
@@ -49,13 +57,14 @@ const MetricChart = ({ ceiling, data, format, label, latest }: MetricChartProps)
 
 /**
  * The machine's CPU / memory / load over the recent window, with a status
- * strip telling apart "running but disconnected" from "not running at all" —
- * what a user needs to explain why a device dropped.
+ * strip colored by how loaded the machine was and telling apart "running but
+ * disconnected" from "not running at all" — what a user needs to explain why
+ * a device dropped.
  */
 const DeviceHealth = ({ deviceId }: { deviceId: string }) => {
   const { t } = useTranslation('setting');
   const { data } = useDeviceMetricSeries(deviceId);
-  const statusLabel = useStatusLabels();
+  const blockTooltip = useBlockTooltip();
 
   if (!data) return null;
 
@@ -68,8 +77,9 @@ const DeviceHealth = ({ deviceId }: { deviceId: string }) => {
   }
 
   const timeline = buildHealthTimeline(data);
-  const rows = (pick: (slot: (typeof timeline.slots)[number]) => number | null) =>
+  const rows = (pick: (slot: HealthSlot) => number | null) =>
     timeline.slots.map((slot) => ({ time: time(slot.start), value: pick(slot) }));
+  const cores = data.cpuCount ?? 1;
 
   return (
     <Flexbox gap={16}>
@@ -84,11 +94,11 @@ const DeviceHealth = ({ deviceId }: { deviceId: string }) => {
           data={groupStripBlocks(
             timeline.slots,
             data.bucketMs,
-            Math.max(1, Math.round(STRIP_BLOCK_MS / data.bucketMs)),
+            Math.max(data.bucketMs, STRIP_BLOCK_MS),
           ).map((block) => ({
-            color: SLOT_COLOR[block.status],
+            color: blockColor(block),
             key: block.start,
-            tooltip: `${time(block.start)}–${time(block.end)} · ${statusLabel[block.status]}`,
+            tooltip: blockTooltip(block),
           }))}
         />
         <Flexbox horizontal distribution={'space-between'}>
@@ -99,53 +109,30 @@ const DeviceHealth = ({ deviceId }: { deviceId: string }) => {
             {t('devices.health.now')}
           </Text>
         </Flexbox>
-        {timeline.stretches.length > 0 && (
-          <Flexbox gap={2}>
-            {timeline.stretches.map((stretch) => (
-              <Flexbox horizontal align={'center'} gap={6} key={stretch.start}>
-                <span
-                  style={{
-                    background: SLOT_COLOR[stretch.status],
-                    borderRadius: 2,
-                    flex: 'none',
-                    height: 8,
-                    width: 8,
-                  }}
-                />
-                <Text fontSize={12} type={'secondary'}>
-                  {time(stretch.start)}–{time(stretch.end)} {statusLabel[stretch.status]}
-                </Text>
-              </Flexbox>
-            ))}
-          </Flexbox>
-        )}
       </Flexbox>
 
       <MetricChart
         ceiling={100}
         data={rows((slot) => slot.cpuPercent)}
-        format={formatPercent}
-        label={t('devices.health.cpu')}
-        latest={formatPercent(timeline.latest?.cpuPercent)}
+        label={t('devices.health.cpuCores', { count: cores })}
+        latest={timeline.latest?.cpuPercent}
       />
       <MetricChart
         ceiling={100}
         data={rows((slot) => slot.memoryPercent)}
-        format={formatPercent}
-        label={t('devices.health.memory')}
-        latest={
+        latest={timeline.latest?.memoryPercent}
+        label={
           data.memoryTotalBytes
-            ? `${formatPercent(timeline.latest?.memoryPercent)} · ${formatSize(data.memoryTotalBytes)}`
-            : formatPercent(timeline.latest?.memoryPercent)
+            ? `${t('devices.health.memory')} · ${formatSize(data.memoryTotalBytes)}`
+            : t('devices.health.memory')
         }
       />
-      {timeline.slots.some((slot) => slot.load1 !== null) && (
+      {timeline.slots.some((slot) => slot.loadPercent !== null) && (
         <MetricChart
           ceiling={timeline.loadCeiling}
-          data={rows((slot) => slot.load1)}
-          format={formatLoad}
-          label={t('devices.health.load', { count: data.cpuCount ?? 1 })}
-          latest={formatLoad(timeline.latest?.load1)}
+          data={rows((slot) => slot.loadPercent)}
+          label={t('devices.health.load', { count: cores })}
+          latest={timeline.latest?.loadPercent}
         />
       )}
     </Flexbox>

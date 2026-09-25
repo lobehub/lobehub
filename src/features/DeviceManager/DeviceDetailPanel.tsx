@@ -25,9 +25,10 @@ import { deviceService } from '@/services/device';
 import { electronSystemService } from '@/services/electron/system';
 import { nextWorkingDirs } from '@/store/device';
 
+import AgentRuntimes from './AgentRuntimes';
 import Connections from './Connections';
 import { refreshDeviceList } from './const';
-import DeviceHealth from './DeviceHealth';
+import DeviceHealth, { HealthLegend } from './DeviceHealth';
 import FieldLabel from './FieldLabel';
 import { getDeviceIcon } from './getDeviceIcon';
 import PresenceDot from './PresenceDot';
@@ -93,7 +94,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-type DetailTab = 'files' | 'overview';
+type DetailTab = 'agents' | 'files' | 'overview';
 
 interface DeviceDetailPanelProps {
   device: DeviceListItem;
@@ -281,6 +282,7 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
         items={[
           { key: 'overview', label: t('devices.detail.tabs.overview') },
           { key: 'files', label: t('devices.detail.tabs.files') },
+          { key: 'agents', label: t('devices.detail.tabs.agents') },
         ]}
         onChange={(key) => setTab(key as DetailTab)}
       />
@@ -346,7 +348,7 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
 
             {/* ─── Machine health ─── */}
             <Flexbox gap={8}>
-              <FieldLabel>{t('devices.health.title')}</FieldLabel>
+              <FieldLabel extra={<HealthLegend />}>{t('devices.health.title')}</FieldLabel>
               <DeviceHealth deviceId={device.deviceId} />
             </Flexbox>
 
@@ -371,6 +373,8 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
             </Flexbox>
           </>
         )}
+
+        {tab === 'agents' && <AgentRuntimes device={device} />}
 
         {tab === 'files' && (
           <>
