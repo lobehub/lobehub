@@ -359,6 +359,10 @@ describe('matchErrorPattern — second residue convergence round', () => {
       'Too many images in request: 51, maximum allowed: 50.',
       AgentRuntimeErrorType.ExceededImageLimit,
     ],
+    [
+      'Exceeded maximum number of images (100) allowed in the request.',
+      AgentRuntimeErrorType.ExceededImageLimit,
+    ],
     ['404 page not found', AgentRuntimeErrorType.UserConfigError],
     [
       '{"errors":[{"code":7003,"message":"No route for that URI"}]}',
