@@ -165,9 +165,11 @@ async function createGoogleOmniVideo(
    * Infer the task from the actual request media. Persisted generation parameters and older
    * clients can retain a stale `text_to_video` value after images are added, which Gemini rejects.
    * First/last frame interpolation has no task value: Gemini infers it from the ordered frames, and
-   * forcing `reference_to_video` would treat them as subject references instead.
+   * forcing `reference_to_video` would treat them as subject references instead. The start frame
+   * may arrive as `imageUrl` or, following the Seedance convention used by the video page, as the
+   * single `imageUrls` entry.
    */
-  const isFrameInterpolation = Boolean(endImageUrl) && !imageUrls?.length;
+  const isFrameInterpolation = Boolean(endImageUrl) && images.length <= 2;
   const resolvedTask = previousInteractionId
     ? 'edit'
     : isFrameInterpolation

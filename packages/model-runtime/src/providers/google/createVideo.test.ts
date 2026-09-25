@@ -173,6 +173,40 @@ describe('createGoogleVideo', () => {
       expect(request.input).toHaveLength(3);
     });
 
+    it('should treat a single reference image plus an end image as frame interpolation', async () => {
+      mockClient.interactions.create.mockResolvedValueOnce({ id: 'interactions/frames-456' });
+
+      await createGoogleVideo(mockClient as any, 'google', {
+        model: 'gemini-omni-1.1-flash',
+        params: {
+          endImageUrl: 'https://example.com/end.jpg',
+          imageUrls: ['https://example.com/start.jpg'],
+          prompt: 'Transition from sunrise to night',
+        },
+      });
+
+      const request = mockClient.interactions.create.mock.calls[0][0];
+      expect(request).not.toHaveProperty('generation_config');
+      expect(request.input).toHaveLength(3);
+    });
+
+    it('should keep reference mode when several references accompany an end image', async () => {
+      mockClient.interactions.create.mockResolvedValueOnce({ id: 'interactions/refs-789' });
+
+      await createGoogleVideo(mockClient as any, 'google', {
+        model: 'gemini-omni-1.1-flash',
+        params: {
+          endImageUrl: 'https://example.com/end.jpg',
+          imageUrls: ['https://example.com/a.jpg', 'https://example.com/b.jpg'],
+          prompt: 'Combine these subjects',
+        },
+      });
+
+      expect(mockClient.interactions.create.mock.calls[0][0].generation_config).toEqual({
+        video_config: { task: 'reference_to_video' },
+      });
+    });
+
     it('should send the requested Gemini Omni output resolution', async () => {
       mockClient.interactions.create.mockResolvedValueOnce({ id: 'interactions/res-123' });
 
