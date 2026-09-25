@@ -247,6 +247,140 @@ describe('getModelPropertyWithFallback', () => {
     });
   });
 
+  describe('routing-namespace prefixed ids', () => {
+    // Gateways and OpenAI-compatible proxies publish their catalogue under a
+    // prefix the model bank has never heard of. Without trimming it, every
+    // property resolves to undefined and callers fall back to their defaults.
+    beforeEach(() => {
+      loadModelsMock.mockResolvedValue([
+        {
+          contextWindowTokens: 1_048_576,
+          displayName: 'DeepSeek V4 Pro',
+          id: 'deepseek-v4-pro',
+          providerId: 'deepseek',
+          type: 'chat',
+        },
+        {
+          contextWindowTokens: 200_000,
+          displayName: 'Claude Haiku 4.5',
+          id: 'claude-haiku-4-5',
+          providerId: 'opencodezen',
+          type: 'chat',
+        },
+      ]);
+    });
+
+    it('should resolve a two-segment gateway id by trimming the namespace', async () => {
+      const result = await getModelPropertyWithFallback(
+        'openrouter/deepseek-v4-pro',
+        'contextWindowTokens',
+        'vllm',
+      );
+
+      expect(result).toBe(1_048_576);
+    });
+
+    it('should resolve a three-segment gateway id by trimming to the bare model', async () => {
+      const result = await getModelPropertyWithFallback(
+        'tensorx/deepseek/deepseek-v4-pro',
+        'contextWindowTokens',
+        'vllm',
+      );
+
+      expect(result).toBe(1_048_576);
+    });
+
+    it('should resolve a single provider prefix', async () => {
+      const result = await getModelPropertyWithFallback(
+        'anthropic/claude-haiku-4-5',
+        'contextWindowTokens',
+        'vllm',
+      );
+
+      expect(result).toBe(200_000);
+    });
+
+    it('should resolve non-context properties through the trimmed id too', async () => {
+      const result = await getModelPropertyWithFallback(
+        'openrouter/deepseek-v4-pro',
+        'displayName',
+        'vllm',
+      );
+
+      expect(result).toBe('DeepSeek V4 Pro');
+    });
+
+    it('should prefer a card for the literal id over a trimmed reading of it', async () => {
+      loadModelsMock.mockResolvedValue([
+        {
+          contextWindowTokens: 111_111,
+          displayName: 'Literal',
+          id: 'openrouter/deepseek-v4-pro',
+          providerId: 'vllm',
+          type: 'chat',
+        },
+        {
+          contextWindowTokens: 1_048_576,
+          displayName: 'Trimmed',
+          id: 'deepseek-v4-pro',
+          providerId: 'deepseek',
+          type: 'chat',
+        },
+      ]);
+
+      const result = await getModelPropertyWithFallback(
+        'openrouter/deepseek-v4-pro',
+        'contextWindowTokens',
+        'vllm',
+      );
+
+      expect(result).toBe(111_111);
+    });
+
+    it('should try the longest trimmed candidate before the shortest', async () => {
+      loadModelsMock.mockResolvedValue([
+        {
+          contextWindowTokens: 222_222,
+          displayName: 'Two segment',
+          id: 'deepseek-v4-pro',
+          providerId: 'deepseek',
+          type: 'chat',
+        },
+        {
+          contextWindowTokens: 333_333,
+          displayName: 'One segment',
+          id: 'v4-pro',
+          providerId: 'deepseek',
+          type: 'chat',
+        },
+      ]);
+
+      const result = await getModelPropertyWithFallback(
+        'tensorx/deepseek-v4-pro',
+        'contextWindowTokens',
+        'vllm',
+      );
+
+      expect(result).toBe(222_222);
+    });
+
+    it('should keep returning undefined when no trimmed candidate matches', async () => {
+      const result = await getModelPropertyWithFallback(
+        'openrouter/some-unlisted-model',
+        'contextWindowTokens',
+        'vllm',
+      );
+
+      expect(result).toBeUndefined();
+    });
+
+    it('should still infer type from keywords when no trimmed candidate matches', async () => {
+      const result = await getModelPropertyWithFallback('openrouter/bge-m3', 'type', 'vllm');
+
+      expect(result).toBe('embedding');
+    });
+  });
+
   describe('edge cases', () => {
     it('should handle empty string modelId', async () => {
       const result = await getModelPropertyWithFallback('', 'type');
