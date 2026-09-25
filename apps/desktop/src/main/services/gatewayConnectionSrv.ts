@@ -961,13 +961,17 @@ export default class GatewayConnectionService extends ServiceModule {
   // ─── Gateway URL ───
 
   private getGatewayUrl(): string {
-    // Env override wins (dev: point at a local `wrangler dev` gateway), then the
-    // user-configured store value, then the production default.
-    return (
-      getDesktopEnv().DEVICE_GATEWAY_URL ||
-      this.app.storeManager.get('gatewayUrl') ||
-      DEFAULT_GATEWAY_URL
-    );
+    const envOverride = getDesktopEnv().DEVICE_GATEWAY_URL;
+    if (envOverride) return envOverride;
+
+    // Cloud tokens must go to the official gateway. A custom gateway can remain
+    // in the store after switching away from a self-hosted server (or on restart).
+    // Keep that value intact so switching back to self-hosting still works.
+    if (this.app.storeManager.get('dataSyncConfig')?.storageMode === 'cloud') {
+      return DEFAULT_GATEWAY_URL;
+    }
+
+    return this.app.storeManager.get('gatewayUrl') || DEFAULT_GATEWAY_URL;
   }
 
   // ─── Token Helpers ───
