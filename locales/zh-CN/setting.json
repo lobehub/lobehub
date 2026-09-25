@@ -386,7 +386,6 @@
   "devices.agents.empty": "这台设备上没有检测到 Agent",
   "devices.agents.error": "检测失败：{{error}}",
   "devices.agents.installed": "已安装",
-  "devices.agents.notInstalled": "未检测到",
   "devices.agents.offline": "设备离线，重新连接后可检测已安装的 Agent。",
   "devices.agents.rescan": "重新检测",
   "devices.agents.scanning": "正在检测已安装的 Agent…",

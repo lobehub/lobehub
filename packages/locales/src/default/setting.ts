@@ -635,7 +635,6 @@ export default {
   'devices.agents.empty': 'No agents found on this device',
   'devices.agents.error': 'Could not check this device: {{error}}',
   'devices.agents.installed': 'Installed',
-  'devices.agents.notInstalled': 'Not found',
   'devices.agents.offline':
     'This device is offline. Installed agents are detected once it reconnects.',
   'devices.agents.rescan': 'Check again',

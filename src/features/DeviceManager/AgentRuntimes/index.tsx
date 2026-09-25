@@ -71,46 +71,26 @@ const AgentRuntimes = ({ device }: { device: DeviceListItem }) => {
     );
   }
 
-  const { installed, missing } = partitionScan(data.agents, CONNECTABLE_PROVIDERS);
+  // Only what is installed for now; the not-found list read as noise.
+  const { installed } = partitionScan(data.agents, CONNECTABLE_PROVIDERS);
 
   return (
-    <Flexbox gap={20}>
-      <Flexbox gap={8}>
-        <FieldLabel extra={rescan}>{t('devices.agents.installed')}</FieldLabel>
-        {installed.length === 0 ? (
-          <Text fontSize={12} type={'secondary'}>
-            {t('devices.agents.empty')}
-          </Text>
-        ) : (
-          installed.map(({ provider, version }) => (
-            <Flexbox
-              horizontal
-              align={'center'}
-              className={styles.row}
-              gap={10}
-              key={provider.type}
-            >
-              <provider.brand.Avatar size={24} />
-              <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={500}>
-                {provider.title}
-              </Text>
-              {version && <Tag size={'small'}>{version}</Tag>}
-            </Flexbox>
-          ))
-        )}
-      </Flexbox>
-
-      {missing.length > 0 && (
-        <Flexbox gap={8}>
-          <FieldLabel>{t('devices.agents.notInstalled')}</FieldLabel>
-          <Flexbox horizontal gap={6} wrap={'wrap'}>
-            {missing.map((provider) => (
-              <Tag key={provider.type} size={'small'}>
-                {provider.title}
-              </Tag>
-            ))}
+    <Flexbox gap={8}>
+      <FieldLabel extra={rescan}>{t('devices.agents.installed')}</FieldLabel>
+      {installed.length === 0 ? (
+        <Text fontSize={12} type={'secondary'}>
+          {t('devices.agents.empty')}
+        </Text>
+      ) : (
+        installed.map(({ provider, version }) => (
+          <Flexbox horizontal align={'center'} className={styles.row} gap={10} key={provider.type}>
+            <provider.brand.Avatar size={24} />
+            <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={500}>
+              {provider.title}
+            </Text>
+            {version && <Tag size={'small'}>{version}</Tag>}
           </Flexbox>
-        </Flexbox>
+        ))
       )}
     </Flexbox>
   );

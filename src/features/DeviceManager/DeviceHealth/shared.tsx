@@ -32,12 +32,13 @@ export const USAGE_COLOR: Record<UsageLevel, string> = {
 };
 
 /**
- * Non-running states keep neutral colors so green / yellow / red stay free for
- * how loaded a running machine is; a disconnect gets the one cool accent.
+ * Non-running states stay grey so green / yellow / red keep meaning how loaded
+ * a running machine is: a disconnect is a bright grey (the machine was still
+ * running), no data a faint one.
  */
 const STATUS_COLOR: Record<Exclude<HealthSlotStatus, 'online'>, string> = {
-  missing: cssVar.colorFillSecondary,
-  offline: cssVar.colorInfo,
+  missing: cssVar.colorFillTertiary,
+  offline: cssVar.colorTextQuaternary,
   pending: cssVar.colorFillQuaternary,
 };
 
@@ -49,9 +50,9 @@ export const blockColor = (block: HealthStripBlock) =>
       ]
     : STATUS_COLOR[block.status];
 
-/** Text color for a reading, by the same thresholds as the strip; undefined keeps the default. */
+/** Text color for a reading — the same green / yellow / red as the strip; no reading keeps the default. */
 export const usageTextColor = (level: UsageLevel | undefined) =>
-  level === 'high' || level === 'critical' ? USAGE_COLOR[level] : undefined;
+  level ? USAGE_COLOR[level] : undefined;
 
 export const formatClock = (ms: number) => dayjs(ms).format('HH:mm');
 
