@@ -73,8 +73,16 @@ const EditingVideoHeader = memo<EditingVideoHeaderProps>(
         <div
           className={styles.preview}
           role={'button'}
+          // `role="button"` alone leaves it unreachable: it has to take focus and
+          // answer Enter / Space the way a real button does.
+          tabIndex={0}
           title={t('generation.version.locateSource')}
           onClick={onLocate}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            onLocate();
+          }}
         >
           {coverUrl ? (
             <Image

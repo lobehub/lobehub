@@ -77,8 +77,16 @@ const EditSourceLink = memo<EditSourceLinkProps>(({ source, sourceVersion }) => 
       className={styles.link}
       gap={6}
       role={'button'}
+      // `role="button"` alone leaves it unreachable: it has to take focus and
+      // answer Enter / Space the way a real button does.
+      tabIndex={0}
       title={t('generation.version.locateSource')}
       onClick={() => revealVideoGeneration(source.generation.id)}
+      onKeyDown={(event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        revealVideoGeneration(source.generation.id);
+      }}
     >
       <CornerDownRightIcon size={14} style={{ flex: 'none' }} />
       {cover && (
