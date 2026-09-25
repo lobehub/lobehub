@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { indexLiteXMLDocument, touchesList } from '../liteXMLEditPlan';
+import { indexLiteXMLDocument, planLiteXMLEditSteps, touchesList } from '../liteXMLEditPlan';
 
 describe('liteXMLEditPlan', () => {
   it('indexes ids and marks nodes nested in lists', () => {
@@ -18,5 +18,21 @@ describe('liteXMLEditPlan', () => {
     const start = performance.now();
     indexLiteXMLDocument(`<p id="a">${'<a '.repeat(50_000)}`);
     expect(performance.now() - start).toBeLessThan(500);
+  });
+
+  it('splits a same-anchor insert run where list content starts, applying pieces last-first', () => {
+    const empty = indexLiteXMLDocument('<root><p id="x"></p></root>');
+    const steps = planLiteXMLEditSteps([
+      { action: 'insert', afterId: 'x', litexml: '<h3>Title</h3>' },
+      { action: 'insert', afterId: 'x', litexml: '<p>Intro</p>' },
+      { action: 'insert', afterId: 'x', litexml: '<ul><li>a</li></ul>' },
+      { action: 'remove', id: 'x' },
+    ]);
+
+    expect(steps.map((step) => step.indexes)).toEqual([[2], [0, 1], [3]]);
+    expect(steps[1].operation).toMatchObject({
+      litexml: '<root><h3>Title</h3><p>Intro</p></root>',
+    });
+    expect(steps.map((step) => touchesList(step.operation, empty))).toEqual([true, false, false]);
   });
 });

@@ -197,6 +197,10 @@ function truncate(s: string, max: number): string {
 
 const CREATED_THIS_RUN_MARK = '(created this run)';
 
+/** Collapsed folders hide their rows, so the folder summary carries the count instead. */
+const withCreatedThisRunCount = (summary: string, count: number) =>
+  count > 0 ? `${summary} (${count} created this run)` : summary;
+
 function isCreatedThisRun(doc: AgentContextDocument, context: AgentDocumentFilterContext) {
   const runStartedAt = toTime(context.runStartedAt);
   const createdAt = toTime(doc.createdAt);
@@ -318,11 +322,14 @@ function formatFolderSummary(docs: AgentContextDocument[]): string {
  * The ID column is the folder's `documentId` — the value the model passes to
  * `listDocuments(parentId=…)` to expand the folder on demand.
  */
-function buildFolderTable(folders: FolderGroup[]): string {
+function buildFolderTable(folders: FolderGroup[], context: AgentDocumentFilterContext): string {
   const rows = folders
     .map((f) => ({
       id: f.parentId,
-      summary: formatFolderSummary(f.docs),
+      summary: withCreatedThisRunCount(
+        formatFolderSummary(f.docs),
+        f.docs.filter((doc) => isCreatedThisRun(doc, context)).length,
+      ),
       time: newestTime(f.docs),
       title: `${FOLDER_ICON} ${truncate(f.title, TITLE_MAX_WIDTH)}`,
     }))
@@ -403,9 +410,9 @@ export function combineDocuments(
         `Web-crawled docs are available but omitted here — call listDocuments(sourceType='web') to discover them.`,
       );
     }
-    if (flat.some((doc) => isCreatedThisRun(doc, context))) {
+    if (userDocs.some((doc) => isCreatedThisRun(doc, context))) {
       headerLines.push(
-        `Docs marked ${CREATED_THIS_RUN_MARK} did not exist before this run — you created them, so creating them did not overwrite an existing doc.`,
+        `Docs marked ${CREATED_THIS_RUN_MARK} (or counted that way in a folder row) did not exist before this run — you created them, so creating them did not overwrite an existing doc.`,
       );
     }
     if (folders.length > 0) {
@@ -416,7 +423,7 @@ export function combineDocuments(
 
     const bodyBlocks: string[] = [];
     if (flat.length > 0) bodyBlocks.push(buildIndexTable(sortByRecency(flat), context));
-    if (folders.length > 0) bodyBlocks.push(buildFolderTable(folders));
+    if (folders.length > 0) bodyBlocks.push(buildFolderTable(folders, context));
     const tableBlock = bodyBlocks.length > 0 ? `\n\n${bodyBlocks.join('\n\n')}` : '';
 
     parts.push(

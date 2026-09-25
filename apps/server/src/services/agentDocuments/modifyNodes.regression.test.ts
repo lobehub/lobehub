@@ -100,6 +100,23 @@ describe('agent document modifyNodes regressions', () => {
     expect(back.content).toContain('intro\n\nP1\n\nP2\n\nP3\n\n- a');
   });
 
+  it('R4c a paragraph and a list inserted after the same anchor keep order and review mode', async () => {
+    const base = await load(LIST);
+    const anchor = blockId(base.litexml!, 'p', 'intro');
+    const result = await applyLiteXMLOperations({
+      editorData: base.editorData,
+      fallbackContent: base.content,
+      operations: [
+        { action: 'insert', afterId: anchor, litexml: '<p><span>Lead</span></p>' },
+        { action: 'insert', afterId: anchor, litexml: '<ul><li><span>u1</span></li></ul>' },
+      ],
+    });
+
+    expect(result.content).toContain('intro\n\nLead\n\n- u1');
+    // Only the list is applied directly; the paragraph stays a pending review diff.
+    expect(JSON.stringify(result.editorData)).toContain('"diffType":"add"');
+  });
+
   it('R5 a stale/unknown id inside a batch is reported, not silently skipped', async () => {
     const base = await load(LIST);
     await expect(

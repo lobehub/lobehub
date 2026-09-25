@@ -119,34 +119,53 @@ export interface LiteXMLEditStep {
   operation: ModifyOperation;
 }
 
+type AfterInsertOperation = Extract<ModifyOperation, { afterId: string }>;
+
+const isAfterInsert = (operation: ModifyOperation): operation is AfterInsertOperation =>
+  operation.action === 'insert' && 'afterId' in operation;
+
+const hasListMarkup = (operation: ModifyOperation) =>
+  operation.action !== 'remove' &&
+  toFragments(operation.litexml).some((litexml) => LIST_MARKUP_PATTERN.test(litexml));
+
 /**
- * Keep the caller's order. Consecutive inserts after the same anchor are merged
- * into one insert: applied one by one, each would land directly after the
- * anchor and the batch would come out reversed.
+ * Keep the caller's order. Consecutive inserts after the same anchor are merged:
+ * applied one by one, each would land directly after the anchor and the batch
+ * would come out reversed. A run mixing list and non-list content is split where
+ * that changes, so only the list part skips the review diff; the pieces are then
+ * applied last-first, each landing after the anchor ahead of the previous piece.
  */
 export const planLiteXMLEditSteps = (operations: ModifyOperation[]): LiteXMLEditStep[] => {
   const steps: LiteXMLEditStep[] = [];
+  let index = 0;
 
-  for (const [index, operation] of operations.entries()) {
-    const step = steps.at(-1);
-    const previous = step?.operation;
-    if (
-      step &&
-      operation.action === 'insert' &&
-      'afterId' in operation &&
-      previous?.action === 'insert' &&
-      'afterId' in previous &&
-      previous.afterId === operation.afterId
-    ) {
-      step.indexes.push(index);
-      step.operation = {
-        ...previous,
-        litexml: `<root>${stripRootElement(previous.litexml)}${stripRootElement(operation.litexml)}</root>`,
-      };
+  while (index < operations.length) {
+    const operation = operations[index];
+    if (!isAfterInsert(operation)) {
+      steps.push({ indexes: [index], operation });
+      index += 1;
       continue;
     }
 
-    steps.push({ indexes: [index], operation });
+    const pieces: (LiteXMLEditStep & { operation: AfterInsertOperation })[] = [];
+    while (index < operations.length) {
+      const next = operations[index];
+      if (!isAfterInsert(next) || next.afterId !== operation.afterId) break;
+
+      const piece = pieces.at(-1);
+      if (piece && hasListMarkup(piece.operation) === hasListMarkup(next)) {
+        piece.indexes.push(index);
+        piece.operation = {
+          ...next,
+          litexml: `<root>${stripRootElement(piece.operation.litexml)}${stripRootElement(next.litexml)}</root>`,
+        };
+      } else {
+        pieces.push({ indexes: [index], operation: next });
+      }
+      index += 1;
+    }
+
+    steps.push(...pieces.reverse());
   }
 
   return steps;
