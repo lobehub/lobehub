@@ -21,7 +21,8 @@ vi.mock('@/business/server/video-generation/chargeAfterGenerate', () => ({
 vi.mock('@/business/server/video-generation/notifyVideoCompleted', () => ({
   notifyVideoCompleted: vi.fn(),
 }));
-vi.mock('@lobechat/business-model-runtime', () => ({
+vi.mock('@lobechat/business-model-runtime', async (importOriginal) => ({
+  ...((await importOriginal()) as any),
   buildMappedBusinessModelFields: vi.fn(() => ({})),
   resolveBusinessModelMapping: vi.fn(async (_provider: string, model: string) => ({
     resolvedModelId: model,

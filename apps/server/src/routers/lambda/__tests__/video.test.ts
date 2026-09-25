@@ -65,9 +65,9 @@ const {
 
 vi.mock('@/database/models/asyncTask');
 vi.mock('@/database/models/generation', () => ({
-  GenerationModel: vi.fn(() => ({
-    findById: mockFindPreviousGeneration,
-  })),
+  GenerationModel: vi.fn(function () {
+    return { findById: mockFindPreviousGeneration };
+  }),
 }));
 vi.mock('@/database/models/generationTopic', () => ({
   GenerationTopicModel: vi.fn(function () {
