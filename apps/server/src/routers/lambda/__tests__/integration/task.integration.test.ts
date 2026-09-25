@@ -414,6 +414,40 @@ describe('Task Router Integration', () => {
     });
   });
 
+  describe('schedule pattern validation', () => {
+    it('accepts standard cron with day-of-month, month and weekday ranges', async () => {
+      const created = await caller.create({
+        automationMode: 'schedule',
+        instruction: 'One-shot reminder',
+        schedulePattern: '0 10 27 9 *',
+        scheduleTimezone: 'Asia/Shanghai',
+      });
+      const updated = await caller.update({
+        id: created.data.id,
+        schedulePattern: '45 11 * * 1-5',
+      });
+      expect(updated.data.schedulePattern).toBe('45 11 * * 1-5');
+    });
+
+    it('rejects cron the dispatcher cannot evaluate on create and update', async () => {
+      await expect(
+        caller.create({
+          automationMode: 'schedule',
+          instruction: 'Bad cron',
+          schedulePattern: '0 0 9 * * *',
+        }),
+      ).rejects.toThrow(/Invalid schedulePattern .*0 0 9 \* \* \*.*expected 5 fields/);
+
+      const created = await caller.create({ instruction: 'Later scheduled' });
+      await expect(
+        caller.update({ id: created.data.id, schedulePattern: '0 0 30 2 *' }),
+      ).rejects.toThrow(/Invalid schedulePattern .*0 0 30 2 \*.*day of month/);
+      await expect(
+        caller.update({ id: created.data.id, scheduleTimezone: 'Mars/Base' }),
+      ).rejects.toThrow(/IANA timezone/);
+    });
+  });
+
   describe('status transitions', () => {
     it('should transition backlog → running → paused → completed', async () => {
       const task = await caller.create({ instruction: 'Test' });
