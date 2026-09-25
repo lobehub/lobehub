@@ -1,13 +1,14 @@
-import { spawn } from 'node:child_process';
-
 import type { SandboxPolicy } from '@lobechat/device-sandbox';
 
 import type { RunCommandParams, RunCommandResult } from '../types';
-import type { ShellOutputFiles, ShellProcess, ShellProcessManager } from './process-manager';
+import type { ShellBackend, ShellOutputFiles } from './backend';
+import type { ShellProcess, ShellProcessManager } from './process-manager';
 import { DEFAULT_OBSERVATION_TIMEOUT_MS } from './process-manager';
 import { detectWindowsShell, getShellConfig, normalizeEnvVarRefs } from './utils';
 
 export interface RunCommandOptions {
+  /** Backend to spawn with; defaults to the process manager's own. */
+  backend?: ShellBackend;
   logger?: {
     debug: (...args: any[]) => void;
     error: (...args: any[]) => void;
@@ -39,12 +40,19 @@ export async function runCommand(
     run_in_background,
     timeout = DEFAULT_OBSERVATION_TIMEOUT_MS,
   }: RunCommandParams,
-  { processManager, logger, onSandboxUnavailable, sandboxPolicy }: RunCommandOptions,
+  {
+    backend: backendOverride,
+    processManager,
+    logger,
+    onSandboxUnavailable,
+    sandboxPolicy,
+  }: RunCommandOptions,
 ): Promise<RunCommandResult> {
   if (!command) {
     return { error: 'command is required', success: false };
   }
 
+  const backend = backendOverride ?? processManager.backend;
   const logPrefix = `[runCommand: ${description || command.slice(0, 50)}]`;
   logger?.debug(`${logPrefix} Starting`, { background: run_in_background, cwd, timeout });
 
@@ -98,31 +106,24 @@ export async function runCommand(
     const shellId = processManager.createShellId();
     const shellOutputFiles = processManager.createOutputFiles(shellId);
     outputFiles = shellOutputFiles;
-    const childProcess = spawn(launchCommand.cmd, launchCommand.args, {
-      cwd,
-      detached: process.platform !== 'win32',
-      env: launchEnv,
-      shell: false,
-      stdio: ['pipe', shellOutputFiles.stdout.fd, shellOutputFiles.stderr.fd],
-      // The Electron main process is a GUI process without a console, so on
-      // Windows spawning a console program (powershell.exe / cmd.exe) allocates
-      // a new console window that flashes up for every command. windowsHide
-      // defaults to false in Node, so it must be set explicitly.
-      windowsHide: true,
-    });
+    const handle = backend.spawn(
+      { args: launchCommand.args, cmd: launchCommand.cmd },
+      { cwd, env: launchEnv, outputFiles: shellOutputFiles, shellId },
+    );
 
     const shellProcess: ShellProcess = {
+      backend,
       exitCode: null,
       outputFiles: shellOutputFiles,
-      process: childProcess,
+      process: handle,
     };
 
-    childProcess.on('exit', (code) => {
+    handle.on('exit', (code: number | null) => {
       logger?.debug(`${logPrefix} Process exited`, { code, shellId });
       shellProcess.exitCode = code ?? 0;
     });
 
-    childProcess.on('error', (error) => {
+    handle.on('error', (error: Error) => {
       logger?.error(`${logPrefix} Command failed:`, error);
       const cwdContext = cwd ? ` (working directory: ${cwd})` : '';
       shellProcess.spawnError = new Error(
@@ -133,7 +134,7 @@ export async function runCommand(
       );
       shellProcess.exitCode = 1;
     });
-    childProcess.once('close', () => releaseSandbox?.());
+    handle.once('close', () => releaseSandbox?.());
 
     processManager.register(shellId, shellProcess);
     // Close our fd copy only after error/close listeners are registered; spawn errors are asynchronous.
