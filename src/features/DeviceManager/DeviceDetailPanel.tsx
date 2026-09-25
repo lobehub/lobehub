@@ -20,15 +20,10 @@ import Connections from './Connections';
 import { refreshDeviceList } from './const';
 import FieldLabel from './FieldLabel';
 import { getDeviceIcon } from './getDeviceIcon';
+import PresenceDot from './PresenceDot';
 import { useCanEditDevice } from './useCanEditDevice';
 
 const styles = createStaticStyles(({ css }) => ({
-  dot: css`
-    flex: none;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-  `,
   // Fills whatever host it lands in: inside a page-level rail the height is
   // definite, so the body below the header scrolls on its own; inside the
   // workspace list card the height is auto and the panel simply grows.
@@ -234,19 +229,20 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
         <span className={styles.iconTile}>{getDeviceIcon(device.platform, 18)}</span>
         <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
           {/* Presence is a dot after the name; the connections below say which. */}
-          <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
+          <Flexbox horizontal align={'baseline'} gap={8} style={{ minWidth: 0 }}>
             <Text ellipsis weight={600}>
               {device.friendlyName || device.hostname || device.deviceId}
             </Text>
-            <span
-              className={styles.dot}
-              style={{ background: online ? cssVar.colorSuccess : cssVar.colorTextQuaternary }}
-              title={
-                online
-                  ? t('devices.status.onlineConnections', { count: channels.length })
-                  : t('devices.status.offline')
-              }
-            />
+            <Text style={{ flex: 'none' }}>
+              <PresenceDot
+                live={online}
+                title={
+                  online
+                    ? t('devices.status.onlineConnections', { count: channels.length })
+                    : t('devices.status.offline')
+                }
+              />
+            </Text>
           </Flexbox>
           {isCurrent && (
             <Flexbox horizontal>

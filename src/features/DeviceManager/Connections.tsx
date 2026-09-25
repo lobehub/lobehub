@@ -3,7 +3,6 @@
 import type { DeviceListItem } from '@lobechat/types';
 import { Block, Flexbox } from '@lobehub/ui';
 import { Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,47 +10,39 @@ import { useTranslation } from 'react-i18next';
 import { AppUpdateAction, AppUpdateHint, useDeviceAppUpdate } from './AppUpdate';
 import { getChannelKind, getChannelVersion } from './channelKind';
 import FieldLabel from './FieldLabel';
-
-const styles = createStaticStyles(({ css }) => ({
-  dot: css`
-    flex: none;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-  `,
-}));
+import PresenceDot from './PresenceDot';
 
 interface ConnectionCardProps {
   channel: string;
+  /** Second line for anything beyond the connection itself, e.g. update progress. */
+  detail?: ReactNode;
   /** Right-aligned action, e.g. the desktop app's update button. */
   extra?: ReactNode;
   /** False while the client is away, e.g. restarting into an update. */
   live: boolean;
-  /** Where the connection or its update stands. */
+  /** How long it's been connected (or that it's away). */
   status: ReactNode;
   version?: string;
 }
 
-/** One client connection on a single line: state dot, client, version, status, action. */
-const ConnectionCard = ({ channel, extra, live, status, version }: ConnectionCardProps) => (
-  <Block
-    horizontal
-    align={'center'}
-    gap={8}
-    paddingBlock={8}
-    paddingInline={12}
-    variant={'outlined'}
-  >
-    <span
-      className={styles.dot}
-      style={{ background: live ? cssVar.colorSuccess : cssVar.colorTextQuaternary }}
-    />
-    <Text weight={500}>{channel}</Text>
-    {version && <Tag size={'small'}>v{version}</Tag>}
-    <Flexbox flex={1} style={{ minWidth: 0 }}>
-      {status}
+/**
+ * One client connection: state dot, client, version, connection status and
+ * action on one baseline-aligned line; anything more goes on a second line.
+ */
+const ConnectionCard = ({ channel, detail, extra, live, status, version }: ConnectionCardProps) => (
+  <Block gap={4} paddingBlock={8} paddingInline={12} variant={'outlined'}>
+    <Flexbox horizontal align={'baseline'} gap={8}>
+      <Text style={{ flex: 'none' }}>
+        <PresenceDot live={live} />
+      </Text>
+      <Text weight={500}>{channel}</Text>
+      {version && <Tag size={'small'}>v{version}</Tag>}
+      <Flexbox flex={1} style={{ minWidth: 0 }}>
+        {status}
+      </Flexbox>
+      {extra}
     </Flexbox>
-    {extra}
+    {detail}
   </Block>
 );
 
@@ -61,7 +52,7 @@ interface ConnectionsProps {
 }
 
 /**
- * The device's live connections, one single-line card per client with the version it runs.
+ * The device's live connections, one card per client with the version it runs.
  * The desktop app's card also carries its remote update — confirmed only once
  * the device reconnects on the new version.
  */
@@ -93,10 +84,11 @@ const Connections = ({ canEdit, device }: ConnectionsProps) => {
   const desktopCard = (channel: string, connectedText: string, live: boolean, key?: string) => (
     <ConnectionCard
       channel={channel}
+      detail={<AppUpdateHint style={{ paddingInlineStart: 16 }} update={update} />}
       extra={canEdit ? <AppUpdateAction update={update} /> : undefined}
       key={key}
       live={live}
-      status={<AppUpdateHint fallback={plainStatus(connectedText)} update={update} />}
+      status={plainStatus(connectedText)}
       version={getChannelVersion('desktop', device.metadata, update.currentVersion)}
     />
   );

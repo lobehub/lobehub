@@ -395,7 +395,8 @@ const DeviceManager = memo<DeviceManagerProps>((props) => {
           <Flexbox
             className={styles.listScroll}
             gap={2}
-            paddingBlock={4}
+            // The personal page's card already insets the rows evenly.
+            paddingBlock={isWorkspace ? 4 : 0}
             paddingInline={isWorkspace ? 4 : 0}
           >
             {devices.map((device) => (

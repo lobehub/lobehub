@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, confirmModal, Text } from '@lobehub/ui/base-ui';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type AppUpdateView, getAppUpdateAction } from './deriveAppUpdateView';
@@ -89,12 +89,11 @@ export const AppUpdateAction = ({ update }: AppUpdateProps) => {
 };
 
 interface AppUpdateHintProps extends AppUpdateProps {
-  /** Shown while the update has nothing to say, e.g. how long it's been connected. */
-  fallback?: ReactNode;
+  style?: CSSProperties;
 }
 
-/** Where the update stands, on the desktop app's status line next to its button. */
-export const AppUpdateHint = ({ fallback = null, update }: AppUpdateHintProps) => {
+/** Where the update stands, on its own line under the desktop app's connection. */
+export const AppUpdateHint = ({ style, update }: AppUpdateHintProps) => {
   const { t } = useTranslation(['setting', 'common']);
   const { view } = update;
 
@@ -139,7 +138,7 @@ export const AppUpdateHint = ({ fallback = null, update }: AppUpdateHintProps) =
   };
 
   const hint = renderHint(view);
-  if (!hint) return fallback;
+  if (!hint) return null;
 
   const failed =
     view.kind === 'installFailed' ||
@@ -148,7 +147,7 @@ export const AppUpdateHint = ({ fallback = null, update }: AppUpdateHintProps) =
     (view.kind === 'idle' && typeof view.outcome === 'object');
 
   return (
-    <Text fontSize={12} type={failed ? 'danger' : 'secondary'}>
+    <Text fontSize={12} style={style} type={failed ? 'danger' : 'secondary'}>
       {hint}
     </Text>
   );

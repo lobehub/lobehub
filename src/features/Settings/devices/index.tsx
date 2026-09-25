@@ -3,6 +3,7 @@
 import { isDesktop } from '@lobechat/const';
 import { Flexbox, Form, Icon } from '@lobehub/ui';
 import { ActionIcon, Button, Text } from '@lobehub/ui/base-ui';
+import { createStaticStyles } from 'antd-style';
 import { MonitorUpIcon, RefreshCwIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,6 +21,17 @@ import SettingContainer from '@/features/Setting/SettingContainer';
 import { useElectronStore } from '@/store/electron';
 
 import KeepAwake from './KeepAwake';
+
+const styles = createStaticStyles(({ css }) => ({
+  // The device rows carry their own padding and hover fill; a thin, even inset
+  // keeps that fill the same distance from every edge of the card. The Form
+  // zeroes the group body's block padding with !important, hence the override.
+  listGroup: css`
+    .ant-collapse-body {
+      padding: 4px !important;
+    }
+  `,
+}));
 
 interface PageProps {
   mobile?: boolean;
@@ -54,6 +66,7 @@ const Page = memo<PageProps>(({ mobile }) => {
   const list = (
     <Flexbox gap={24}>
       <Form
+        classNames={{ group: styles.listGroup }}
         collapsible={false}
         itemsType={'group'}
         variant={'filled'}
