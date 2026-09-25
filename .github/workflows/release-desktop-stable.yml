@@ -44,8 +44,13 @@ on:
         required: false
         type: boolean
         default: true
-      build_linux:
-        description: 'Build Linux'
+      build_linux_x64:
+        description: 'Build Linux (x64)'
+        required: false
+        type: boolean
+        default: true
+      build_linux_arm64:
+        description: 'Build Linux (arm64)'
         required: false
         type: boolean
         default: true
@@ -168,9 +173,14 @@ jobs:
             static_matrix=$(echo "$static_matrix" | jq -c '. + [{"os": "windows-2025", "name": "windows-2025"}]')
           fi
 
-          # Linux
-          if [[ "${{ github.event_name }}" != "workflow_dispatch" ]] || [[ "${{ inputs.build_linux }}" == "true" ]]; then
+          # Linux (x64)
+          if [[ "${{ github.event_name }}" != "workflow_dispatch" ]] || [[ "${{ inputs.build_linux_x64 }}" == "true" ]]; then
             static_matrix=$(echo "$static_matrix" | jq -c '. + [{"os": "ubuntu-latest", "name": "ubuntu-latest"}]')
+          fi
+
+          # Linux (arm64)
+          if [[ "${{ github.event_name }}" != "workflow_dispatch" ]] || [[ "${{ inputs.build_linux_arm64 }}" == "true" ]]; then
+            static_matrix=$(echo "$static_matrix" | jq -c '. + [{"os": "ubuntu-24.04-arm", "name": "ubuntu-24.04-arm"}]')
           fi
 
           # macOS (ARM64)
