@@ -244,6 +244,13 @@ jobs:
     name: ALint & Test Desktop App
 
     runs-on: ubuntu-latest
+    # checks + pull-requests: the alint steps publish an "ALint" check run and
+    # keep one summary comment on the PR up to date.
+    permissions:
+      actions: read
+      checks: write
+      contents: read
+      pull-requests: write
     env:
       ALINT_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
 
@@ -291,9 +298,11 @@ jobs:
           flags: desktop
 
       # ---- alint: model-backed lint rules (packages/alint) on this push's diff ----
-      # Advisory: findings land as inline warning annotations and a job summary,
-      # never as a failure. Skipped when the provider secret is unavailable (forks).
-      # Runs here to reuse the root install instead of paying for another job.
+      # Findings are published as a separate "ALint" check (red when a rule at
+      # `error` level fires) plus one summary comment on the PR, rewritten on
+      # every push. This job itself never fails because of alint. Skipped when
+      # the provider secret is unavailable (forks). Runs here to reuse the root
+      # install instead of paying for another job.
       - name: alint · expose the diff against the base as dirty changes
         if: ${{ !cancelled() && env.ALINT_API_KEY != '' }}
         continue-on-error: true
@@ -324,14 +333,20 @@ jobs:
       - name: alint · lint changed files
         if: ${{ !cancelled() && env.ALINT_API_KEY != '' }}
         continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          HEAD_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           bun run alint:setup
           node_modules/.bin/alint plugin install
           node_modules/.bin/alint --dirty --format json > alint-output.json || status=$?
-          # 1 = findings at error level (none of ours yet), 2 = alint could not run
+          # 1 = findings at error level (reported by the ALint check), 2 = alint could not run
           if [ "${status:-0}" = "2" ]; then cat alint-output.json; exit 2; fi
-          if [ ! -s alint-output.json ]; then echo "nothing to lint"; exit 0; fi
-          bun packages/alint/annotate.ts alint-output.json
+          if [ ! -s alint-output.json ]; then echo '{"diagnostics":[]}' > alint-output.json; fi
+          bun packages/alint/report.ts alint-output.json
 
       - name: alint · calibrate rule fixtures (when rules or fixtures changed)
         if: ${{ !cancelled() && env.ALINT_API_KEY != '' }}
