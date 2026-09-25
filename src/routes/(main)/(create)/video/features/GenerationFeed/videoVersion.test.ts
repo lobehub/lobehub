@@ -18,7 +18,7 @@ const makeBatch = (
     },
   ],
   id,
-  model: 'gemini-omni-flash-preview',
+  model: 'gemini-omni-1.1-flash',
   prompt: id,
   provider: 'google',
 });

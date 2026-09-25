@@ -84,7 +84,7 @@ describe('LobeGoogleAI', () => {
 
       await expect(
         vertexInstance.createVideo({
-          model: 'gemini-omni-flash-preview',
+          model: 'gemini-omni-1.1-flash',
           params: { prompt: 'A cinematic sunrise' },
         }),
       ).rejects.toMatchObject({
@@ -101,7 +101,7 @@ describe('LobeGoogleAI', () => {
       await expect(
         createVideoWithCompletionMode(instance, {
           callbackUrl: 'https://example.com/webhook',
-          model: 'gemini-omni-flash-preview',
+          model: 'gemini-omni-1.1-flash',
           params: { prompt: 'A cinematic sunrise' },
         }),
       ).resolves.toEqual({
@@ -123,7 +123,7 @@ describe('LobeGoogleAI', () => {
           instance,
           {
             callbackUrl: 'https://example.com/webhook',
-            model: 'gemini-omni-flash-preview',
+            model: 'gemini-omni-1.1-flash',
             params: { prompt: 'A cinematic sunrise' },
           },
           { preferredCompletionMode: 'webhook' },

@@ -361,7 +361,7 @@ describe('videoRouter', () => {
       mockServerDB.query.generationBatches.findFirst.mockResolvedValue({
         generationTopicId: 'topic-1',
         id: 'source-batch',
-        model: 'gemini-omni-flash-preview',
+        model: 'gemini-omni-1.1-flash',
         provider: 'google',
       });
       mockCreateVideo.mockResolvedValue({
@@ -372,7 +372,7 @@ describe('videoRouter', () => {
       const caller = videoRouter.createCaller(mockCtx);
       await caller.createVideo({
         ...defaultInput,
-        model: 'gemini-omni-flash-preview',
+        model: 'gemini-omni-1.1-flash',
         previousGenerationId: 'source-generation',
         provider: 'google',
       });
@@ -411,7 +411,7 @@ describe('videoRouter', () => {
       mockServerDB.query.generationBatches.findFirst.mockResolvedValue({
         generationTopicId: 'topic-1',
         id: 'source-batch',
-        model: 'gemini-omni-flash-preview',
+        model: 'gemini-omni-1.1-flash',
         provider: 'google',
       });
       mockCreateVideo.mockResolvedValue({
@@ -422,7 +422,7 @@ describe('videoRouter', () => {
       const caller = videoRouter.createCaller(mockCtx);
       await caller.createVideo({
         ...defaultInput,
-        model: 'gemini-omni-flash-preview',
+        model: 'gemini-omni-1.1-flash',
         previousGenerationId: 'source-generation',
         provider: 'google',
       });
@@ -471,7 +471,7 @@ describe('videoRouter', () => {
       await expect(
         caller.createVideo({
           ...defaultInput,
-          model: 'gemini-omni-flash-preview',
+          model: 'gemini-omni-1.1-flash',
           previousGenerationId: 'source-generation',
           provider: 'google',
         }),

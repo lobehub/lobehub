@@ -2512,7 +2512,7 @@ describe('createRouterRuntime', () => {
       const Runtime = createRouterRuntime({
         id: 'test-runtime',
         routers: async (_, { model }) => {
-          if (model !== 'gemini-omni-flash-preview') {
+          if (model !== 'gemini-omni-1.1-flash') {
             throw new Error('unexpected model');
           }
 
@@ -2530,7 +2530,7 @@ describe('createRouterRuntime', () => {
       const runtime = new Runtime();
 
       await expect(
-        runtime.handlePollVideoStatus('interaction-1', 'gemini-omni-flash-preview'),
+        runtime.handlePollVideoStatus('interaction-1', 'gemini-omni-1.1-flash'),
       ).resolves.toMatchObject({ status: 'success' });
     });
 
@@ -2561,7 +2561,7 @@ describe('createRouterRuntime', () => {
           {
             apiType: 'google',
             id: 'google-router',
-            models: ['gemini-omni-flash-preview'],
+            models: ['gemini-omni-1.1-flash'],
             options: [
               { apiKey: 'key-1', id: 'google-channel-1' },
               { apiKey: 'key-2', id: 'google-channel-2' },
@@ -2575,14 +2575,14 @@ describe('createRouterRuntime', () => {
       const metadata: Record<string, unknown> = { trigger: RequestTrigger.Video };
 
       await runtime.createVideo(
-        { model: 'gemini-omni-flash-preview', params: { prompt: 'a cat' } } as any,
+        { model: 'gemini-omni-1.1-flash', params: { prompt: 'a cat' } } as any,
         { metadata },
       );
 
       await expect(
         runtime.handlePollVideoStatus(
           'interaction-1',
-          'gemini-omni-flash-preview',
+          'gemini-omni-1.1-flash',
           metadata.routeAttempt as any,
         ),
       ).resolves.toEqual({
@@ -2616,7 +2616,7 @@ describe('createRouterRuntime', () => {
           {
             apiType: 'google',
             id: 'google-router',
-            models: ['gemini-omni-flash-preview'],
+            models: ['gemini-omni-1.1-flash'],
             options: [
               { apiKey: 'key-1', id: 'google-channel-1' },
               { apiKey: 'key-2', id: 'google-channel-2' },
@@ -2628,7 +2628,7 @@ describe('createRouterRuntime', () => {
 
       const runtime = new Runtime({ userId: 'user-1' });
       const payload = {
-        model: 'gemini-omni-flash-preview',
+        model: 'gemini-omni-1.1-flash',
         params: { prompt: 'slower' },
         previousInteractionId: 'interaction-1',
       } as any;
@@ -2656,7 +2656,7 @@ describe('createRouterRuntime', () => {
       const Runtime = createRouterRuntime({
         id: 'test-runtime',
         routers: async (_, { model }) => {
-          if (model !== 'gemini-omni-flash-preview') {
+          if (model !== 'gemini-omni-1.1-flash') {
             throw new Error('unexpected model');
           }
 
@@ -2676,7 +2676,7 @@ describe('createRouterRuntime', () => {
       await expect(
         runtime.handleCreateVideoWebhook({
           body: { type: 'interaction.completed' },
-          model: 'gemini-omni-flash-preview',
+          model: 'gemini-omni-1.1-flash',
         }),
       ).resolves.toMatchObject({ status: 'completed' });
     });

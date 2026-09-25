@@ -4,7 +4,7 @@ import {
   buildMappedBusinessModelFields,
   resolveBusinessModelMapping,
 } from '@lobechat/business-model-runtime';
-import { ModelRuntime } from '@lobechat/model-runtime';
+import { ModelRuntime, type VideoGenerationUsage } from '@lobechat/model-runtime';
 import {
   AsyncTaskError,
   AsyncTaskErrorType,
@@ -175,7 +175,7 @@ export const videoWebhook = async (c: Context<BlankEnv, '/video/:provider'>) => 
           headers?: Record<string, string>;
           inferenceId: string;
           status: 'success';
-          usage?: { completionTokens: number; totalTokens: number };
+          usage?: VideoGenerationUsage;
           videoUrl: string;
         };
 

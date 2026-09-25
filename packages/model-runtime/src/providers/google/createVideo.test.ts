@@ -61,7 +61,7 @@ describe('createGoogleVideo', () => {
 
       const payload: CreateVideoPayload = {
         callbackUrl: 'https://app.example.com/api/webhooks/video/google?token=secret',
-        model: 'gemini-omni-flash-preview',
+        model: 'gemini-omni-1.1-flash',
         params: {
           aspectRatio: '9:16',
           prompt: 'A cat playing guitar',
@@ -75,7 +75,7 @@ describe('createGoogleVideo', () => {
         background: true,
         generation_config: { video_config: { task: 'text_to_video' } },
         input: 'A cat playing guitar',
-        model: 'gemini-omni-flash-preview',
+        model: 'gemini-omni-1.1-flash',
         response_format: {
           aspect_ratio: '9:16',
           delivery: 'uri',
@@ -93,7 +93,7 @@ describe('createGoogleVideo', () => {
       mockClient.interactions.create.mockResolvedValueOnce({ id: 'interactions/edit-456' });
 
       await createGoogleVideo(mockClient as any, 'google', {
-        model: 'gemini-omni-flash-preview',
+        model: 'gemini-omni-1.1-flash',
         params: {
           imageUrl: 'https://example.com/stale-start-frame.jpg',
           imageUrls: ['https://example.com/stale-reference.jpg'],
@@ -114,7 +114,7 @@ describe('createGoogleVideo', () => {
       mockClient.interactions.create.mockResolvedValueOnce({ id: 'interactions/image-456' });
 
       await createGoogleVideo(mockClient as any, 'google', {
-        model: 'gemini-omni-flash-preview',
+        model: 'gemini-omni-1.1-flash',
         params: {
           imageUrls: ['https://example.com/reference.jpg'],
           prompt: 'Animate this image',
@@ -133,7 +133,7 @@ describe('createGoogleVideo', () => {
       mockClient.interactions.create.mockResolvedValueOnce({ id: 'interactions/reference-789' });
 
       await createGoogleVideo(mockClient as any, 'google', {
-        model: 'gemini-omni-flash-preview',
+        model: 'gemini-omni-1.1-flash',
         params: {
           endImageUrl: 'https://example.com/end.jpg',
           imageUrl: 'https://example.com/start.jpg',
@@ -152,6 +152,38 @@ describe('createGoogleVideo', () => {
             { data: 'mock-base64-data', mime_type: 'image/jpeg', type: 'image' },
             { text: 'Put both characters in the same scene', type: 'text' },
           ],
+        }),
+      );
+    });
+
+    it('should let Gemini infer first and last frame interpolation', async () => {
+      mockClient.interactions.create.mockResolvedValueOnce({ id: 'interactions/frames-123' });
+
+      await createGoogleVideo(mockClient as any, 'google', {
+        model: 'gemini-omni-1.1-flash',
+        params: {
+          endImageUrl: 'https://example.com/end.jpg',
+          imageUrl: 'https://example.com/start.jpg',
+          prompt: 'Transition from sunrise to night',
+        },
+      });
+
+      const request = mockClient.interactions.create.mock.calls[0][0];
+      expect(request).not.toHaveProperty('generation_config');
+      expect(request.input).toHaveLength(3);
+    });
+
+    it('should send the requested Gemini Omni output resolution', async () => {
+      mockClient.interactions.create.mockResolvedValueOnce({ id: 'interactions/res-123' });
+
+      await createGoogleVideo(mockClient as any, 'google', {
+        model: 'gemini-omni-1.1-flash',
+        params: { prompt: 'A drone shot of mountains', resolution: '1080p' },
+      });
+
+      expect(mockClient.interactions.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          response_format: { delivery: 'uri', resolution: '1080p', type: 'video' },
         }),
       );
     });
@@ -606,8 +638,15 @@ describe('pollGoogleVideoOperation', () => {
         },
         status: 'completed',
         usage: {
-          total_output_tokens: 28_960,
-          total_tokens: 29_120,
+          input_tokens_by_modality: [
+            { modality: 'video', tokens: 58_511 },
+            { modality: 'text', tokens: 43 },
+          ],
+          output_tokens_by_modality: [{ modality: 'video', tokens: 57_920 }],
+          total_input_tokens: 58_554,
+          total_output_tokens: 58_945,
+          total_thought_tokens: 383,
+          total_tokens: 117_882,
         },
       });
 
@@ -625,8 +664,19 @@ describe('pollGoogleVideoOperation', () => {
       expect(result).toEqual({
         status: 'success',
         usage: {
-          completionTokens: 28_960,
-          totalTokens: 29_120,
+          completionTokens: 58_945,
+          modelUsage: {
+            inputImageTokens: undefined,
+            inputTextTokens: 43,
+            inputVideoTokens: 58_511,
+            outputReasoningTokens: 383,
+            outputTextTokens: 1025,
+            outputVideoTokens: 57_920,
+            totalInputTokens: 58_554,
+            totalOutputTokens: 59_328,
+            totalTokens: 117_882,
+          },
+          totalTokens: 117_882,
         },
         videoUrl: 'data:video/mp4;base64,base64-video',
       });

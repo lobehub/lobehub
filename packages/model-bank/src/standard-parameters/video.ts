@@ -28,7 +28,7 @@ export const VIDEO_GENERATION_TASKS = [
   'edit',
 ] as const;
 
-export const GEMINI_OMNI_VIDEO_MODEL_ID = 'gemini-omni-flash-preview';
+export const GEMINI_OMNI_VIDEO_MODEL_ID = 'gemini-omni-1.1-flash';
 
 /**
  * Video models that can edit a finished generation by continuing its provider interaction.

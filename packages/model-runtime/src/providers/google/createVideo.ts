@@ -1,10 +1,15 @@
 import type { GenerateVideosConfig, GoogleGenAI, Image } from '@google/genai';
 import { GenerateVideosOperation } from '@google/genai';
+import type { ModelTokensUsage } from '@lobechat/types';
 import { imageUrlToBase64 } from '@lobechat/utils';
 import debug from 'debug';
 import { GEMINI_OMNI_VIDEO_MODEL_ID } from 'model-bank/standardParameters';
 
-import type { CreateVideoPayload, CreateVideoResult } from '../../types/video';
+import type {
+  CreateVideoPayload,
+  CreateVideoResult,
+  VideoGenerationUsage,
+} from '../../types/video';
 import { AgentRuntimeError } from '../../utils/createError';
 import { parseGoogleErrorMessage } from '../../utils/googleErrorParser';
 import { parseDataUri } from '../../utils/uriParser';
@@ -28,10 +33,21 @@ interface OmniInteraction {
     error?: { message?: string };
     type?: string;
   }>;
-  usage?: {
-    total_output_tokens?: number;
-    total_tokens?: number;
-  };
+  usage?: OmniUsage;
+}
+
+interface OmniModalityTokens {
+  modality?: string;
+  tokens?: number;
+}
+
+interface OmniUsage {
+  input_tokens_by_modality?: OmniModalityTokens[];
+  output_tokens_by_modality?: OmniModalityTokens[];
+  total_input_tokens?: number;
+  total_output_tokens?: number;
+  total_thought_tokens?: number;
+  total_tokens?: number;
 }
 
 export const isGeminiOmniVideoModel = (model: string) => model === GEMINI_OMNI_VIDEO_MODEL_ID;
@@ -96,12 +112,51 @@ function extractOmniError(interaction: OmniInteraction): string {
   return `Gemini interaction ${interaction.status}`;
 }
 
+const sumModalityTokens = (items: OmniModalityTokens[] | undefined, modality: string) => {
+  const matched = items?.filter((item) => item.modality === modality);
+  if (!matched?.length) return undefined;
+
+  return matched.reduce((sum, item) => sum + (item.tokens ?? 0), 0);
+};
+
+/**
+ * Gemini Omni bills input, text/thinking output and video output at different rates, so keep the
+ * per-modality breakdown for token pricing. `total_output_tokens` holds the generated text and
+ * video tokens; thinking tokens are reported separately in `total_thought_tokens`.
+ * @see https://ai.google.dev/gemini-api/docs/pricing#gemini-omni-flash
+ */
+const convertOmniUsage = (usage: OmniUsage | undefined): VideoGenerationUsage | undefined => {
+  const totalOutputTokens = usage?.total_output_tokens;
+  if (!usage || !totalOutputTokens || totalOutputTokens <= 0) return undefined;
+
+  const outputVideoTokens = sumModalityTokens(usage.output_tokens_by_modality, 'video') ?? 0;
+  const outputReasoningTokens = usage.total_thought_tokens ?? 0;
+  const modelUsage: ModelTokensUsage = {
+    inputImageTokens: sumModalityTokens(usage.input_tokens_by_modality, 'image'),
+    // Default to 0 so pricing never falls back to billing all input tokens at the text rate.
+    inputTextTokens: sumModalityTokens(usage.input_tokens_by_modality, 'text') ?? 0,
+    inputVideoTokens: sumModalityTokens(usage.input_tokens_by_modality, 'video'),
+    outputReasoningTokens,
+    outputTextTokens: Math.max(0, totalOutputTokens - outputVideoTokens),
+    outputVideoTokens,
+    totalInputTokens: usage.total_input_tokens ?? 0,
+    totalOutputTokens: totalOutputTokens + outputReasoningTokens,
+    totalTokens: usage.total_tokens,
+  };
+
+  return {
+    completionTokens: totalOutputTokens,
+    modelUsage,
+    totalTokens: usage.total_tokens ?? totalOutputTokens,
+  };
+};
+
 async function createGoogleOmniVideo(
   client: GoogleGenAI,
   payload: CreateVideoPayload,
 ): Promise<CreateVideoResult> {
   const { callbackUrl, model, params, previousInteractionId } = payload;
-  const { aspectRatio, endImageUrl, imageUrl, imageUrls, prompt } = params;
+  const { aspectRatio, endImageUrl, imageUrl, imageUrls, prompt, resolution } = params;
   const images = [imageUrl, ...(imageUrls ?? []), endImageUrl].filter((url): url is string =>
     Boolean(url),
   );
@@ -109,14 +164,19 @@ async function createGoogleOmniVideo(
   /**
    * Infer the task from the actual request media. Persisted generation parameters and older
    * clients can retain a stale `text_to_video` value after images are added, which Gemini rejects.
+   * First/last frame interpolation has no task value: Gemini infers it from the ordered frames, and
+   * forcing `reference_to_video` would treat them as subject references instead.
    */
+  const isFrameInterpolation = Boolean(endImageUrl) && !imageUrls?.length;
   const resolvedTask = previousInteractionId
     ? 'edit'
-    : images.length > 1
-      ? 'reference_to_video'
-      : images.length === 1
-        ? 'image_to_video'
-        : 'text_to_video';
+    : isFrameInterpolation
+      ? undefined
+      : images.length > 1
+        ? 'reference_to_video'
+        : images.length === 1
+          ? 'image_to_video'
+          : 'text_to_video';
   /**
    * Stateful continuation already restores the source media from `previous_interaction_id`.
    * Re-sending persisted frame inputs can make Gemini reject the edit as conflicting media.
@@ -133,7 +193,7 @@ async function createGoogleOmniVideo(
   const interaction = (await client.interactions.create({
     api_version: 'v1beta',
     background: true,
-    ...(previousInteractionId
+    ...(previousInteractionId || !resolvedTask
       ? {}
       : { generation_config: { video_config: { task: resolvedTask } } }),
     input,
@@ -142,6 +202,7 @@ async function createGoogleOmniVideo(
     response_format: {
       ...(aspectRatio ? { aspect_ratio: aspectRatio as '16:9' | '9:16' } : {}),
       delivery: 'uri',
+      ...(resolution ? { resolution } : {}),
       type: 'video',
     },
     store: true,
@@ -242,14 +303,7 @@ async function pollGoogleOmniInteraction(client: GoogleGenAI, inferenceId: strin
   const interaction = (await client.interactions.get(inferenceId, {
     api_version: 'v1beta',
   })) as OmniInteraction;
-  const completionTokens = interaction.usage?.total_output_tokens;
-  const usage =
-    completionTokens && completionTokens > 0
-      ? {
-          completionTokens,
-          totalTokens: interaction.usage?.total_tokens ?? completionTokens,
-        }
-      : undefined;
+  const usage = convertOmniUsage(interaction.usage);
 
   if (interaction.status === 'queued' || interaction.status === 'in_progress') {
     return { status: 'pending' as const };
@@ -325,7 +379,7 @@ export async function pollGoogleVideoOperation(
   | {
       headers?: Record<string, string>;
       status: 'success';
-      usage?: { completionTokens: number; totalTokens: number };
+      usage?: VideoGenerationUsage;
       videoUrl: string;
     }
   | { status: 'failed'; error: string }

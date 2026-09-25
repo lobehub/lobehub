@@ -13,7 +13,7 @@ const omniSchema: VideoModelParamsSchema = {
 
 const omniModel: AIVideoModelCard = {
   displayName: 'Gemini Omni Flash',
-  id: 'gemini-omni-flash-preview',
+  id: 'gemini-omni-1.1-flash',
   parameters: omniSchema,
   releasedAt: '2026-06-01',
   type: 'video',
@@ -72,7 +72,7 @@ describe('CreateVideoAction', () => {
     act(() => {
       result.current.startEditingVideo({
         generationId: 'generation-source',
-        model: 'gemini-omni-flash-preview',
+        model: 'gemini-omni-1.1-flash',
         provider: 'google',
         sourceParameters: {
           aspectRatio: '9:16',
@@ -83,7 +83,7 @@ describe('CreateVideoAction', () => {
     });
 
     expect(result.current.editingGenerationId).toBe('generation-source');
-    expect(result.current.model).toBe('gemini-omni-flash-preview');
+    expect(result.current.model).toBe('gemini-omni-1.1-flash');
     expect(result.current.provider).toBe('google');
     expect(result.current.parameters).toEqual({
       aspectRatio: '9:16',
@@ -108,7 +108,7 @@ describe('CreateVideoAction', () => {
     act(() => {
       result.current.startEditingVideo({
         generationId: 'generation-source',
-        model: 'gemini-omni-flash-preview',
+        model: 'gemini-omni-1.1-flash',
         provider: 'google',
         sourceParameters: { aspectRatio: '9:16', prompt: 'Original generation prompt' },
       });
@@ -121,7 +121,7 @@ describe('CreateVideoAction', () => {
 
     expect(videoService.createVideo).toHaveBeenCalledWith({
       generationTopicId: 'topic-1',
-      model: 'gemini-omni-flash-preview',
+      model: 'gemini-omni-1.1-flash',
       params: {
         aspectRatio: '9:16',
         duration: 10,
@@ -147,7 +147,7 @@ describe('CreateVideoAction', () => {
     act(() => {
       result.current.startEditingVideo({
         generationId: 'generation-source',
-        model: 'gemini-omni-flash-preview',
+        model: 'gemini-omni-1.1-flash',
         provider: 'google',
       });
       result.current.setParamOnInput('prompt', 'Keep the subject still');
@@ -169,7 +169,7 @@ describe('CreateVideoAction', () => {
     act(() => {
       result.current.startEditingVideo({
         generationId: 'generation-source',
-        model: 'gemini-omni-flash-preview',
+        model: 'gemini-omni-1.1-flash',
         provider: 'google',
       });
       result.current.setParamOnInput('prompt', 'Temporary edit instruction');
@@ -192,13 +192,13 @@ describe('CreateVideoAction', () => {
     act(() => {
       result.current.startEditingVideo({
         generationId: 'generation-a',
-        model: 'gemini-omni-flash-preview',
+        model: 'gemini-omni-1.1-flash',
         provider: 'google',
       });
       result.current.setParamOnInput('prompt', 'Make the camera move more slowly');
       result.current.startEditingVideo({
         generationId: 'generation-b',
-        model: 'gemini-omni-flash-preview',
+        model: 'gemini-omni-1.1-flash',
         provider: 'google',
       });
     });
@@ -218,7 +218,7 @@ describe('CreateVideoAction', () => {
     act(() => {
       result.current.startEditingVideo({
         generationId: 'generation-source',
-        model: 'gemini-omni-flash-preview',
+        model: 'gemini-omni-1.1-flash',
         provider: 'google',
       });
     });
@@ -244,7 +244,7 @@ describe('CreateVideoAction', () => {
     act(() => {
       result.current.startEditingVideo({
         generationId: 'generation-source',
-        model: 'gemini-omni-flash-preview',
+        model: 'gemini-omni-1.1-flash',
         provider: 'google',
       });
     });

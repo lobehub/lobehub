@@ -7,7 +7,7 @@ export const modelDescriptionOverrides = {
     'Seedance 2.0 Fast by ByteDance offers the same capabilities as Seedance 2.0 with faster generation speeds at a more competitive price.',
   'fal-ai/bytedance/seedream/v4.5.description':
     'Seedream 4.5, built by ByteDance Seed team, supports multi-image editing and composition. Features enhanced subject consistency, precise instruction following, spatial logic understanding, aesthetic expression, poster layout and logo design with high-precision text-image rendering.',
-  'gemini-omni-flash-preview.description':
+  'gemini-omni-1.1-flash.description':
     'Gemini Omni Flash is a natively multimodal model for text-to-video, image-to-video, reference-to-video, and conversational video editing.',
   'grok-4.20-beta-0309-non-reasoning.description': 'A non-reasoning variant for simple use cases',
   'grok-4.20-beta-0309-reasoning.description':

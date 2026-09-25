@@ -3,6 +3,7 @@ import {
   buildMappedBusinessModelFields,
   resolveBusinessModelMapping,
 } from '@lobechat/business-model-runtime';
+import type { VideoGenerationUsage } from '@lobechat/model-runtime';
 import { RequestTrigger, type SpendOrigin, type VideoGenerationRoute } from '@lobechat/types';
 import debug from 'debug';
 import type { RuntimeVideoGenParams } from 'model-bank';
@@ -254,7 +255,7 @@ async function pollUntilCompletion(
   route?: VideoGenerationRoute,
 ): Promise<{
   headers?: Record<string, string>;
-  usage?: { completionTokens: number; totalTokens: number };
+  usage?: VideoGenerationUsage;
   videoUrl: string;
 } | null> {
   const pollingInterval = 5000;

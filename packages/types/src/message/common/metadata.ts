@@ -97,6 +97,10 @@ export interface ModelTokensUsage {
 
   // Output tokens breakdown
   outputTextTokens?: number;
+  /**
+   * Generated video tokens, billed through the `videoGeneration` pricing unit.
+   */
+  outputVideoTokens?: number;
   rejectedPredictionTokens?: number;
 
   // Total tokens
@@ -127,6 +131,7 @@ export const ModelUsageSchema = z.object({
   outputImageTokens: z.number().optional(),
   outputAudioTokens: z.number().optional(),
   outputReasoningTokens: z.number().optional(),
+  outputVideoTokens: z.number().optional(),
 
   // Prediction tokens
   acceptedPredictionTokens: z.number().optional(),

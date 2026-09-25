@@ -1,4 +1,8 @@
-import type { VideoGenerationCompletionMode, VideoGenerationRoute } from '@lobechat/types';
+import type {
+  ModelTokensUsage,
+  VideoGenerationCompletionMode,
+  VideoGenerationRoute,
+} from '@lobechat/types';
 import type { RuntimeVideoGenParams } from 'model-bank';
 
 import type { ModelPricingContext } from './pricing';
@@ -43,11 +47,22 @@ export interface VideoGenerationCapabilities {
   completionModes: readonly VideoGenerationCompletionMode[];
 }
 
+export interface VideoGenerationUsage {
+  completionTokens: number;
+  /**
+   * Per-modality token breakdown for models billed by input and output modality (e.g. Gemini
+   * Omni). When present, billing prices it with the model's token units instead of pricing
+   * `completionTokens` at a single video rate.
+   */
+  modelUsage?: ModelTokensUsage;
+  totalTokens: number;
+}
+
 export type PollVideoStatusResult =
   | {
       headers?: Record<string, string>;
       status: 'success';
-      usage?: { completionTokens: number; totalTokens: number };
+      usage?: VideoGenerationUsage;
       videoUrl: string;
     }
   | {
@@ -77,7 +92,7 @@ export type HandleCreateVideoWebhookResult =
       inferenceId: string;
       model?: string;
       status: 'success';
-      usage?: { completionTokens: number; totalTokens: number };
+      usage?: VideoGenerationUsage;
       videoUrl: string;
     }
   | { error: string; inferenceId: string; status: 'error' };

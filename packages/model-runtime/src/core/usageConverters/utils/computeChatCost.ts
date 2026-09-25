@@ -233,6 +233,7 @@ const UNIT_QUANTITY_RESOLVERS: Partial<Record<PricingUnitName, UnitQuantityResol
   imageOutput: (usage) => usage.outputImageTokens,
 
   videoInput: resolveInputVideoTokens,
+  videoGeneration: (usage) => usage.outputVideoTokens,
 
   imageGeneration: () => undefined,
 
