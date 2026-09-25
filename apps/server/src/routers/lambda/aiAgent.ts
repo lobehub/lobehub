@@ -1,11 +1,18 @@
 import { randomUUID } from 'node:crypto';
 
 import { type AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import { selectUserInterventionConfig } from '@lobechat/agent-runtime';
 import { LOADING_FLAT } from '@lobechat/const';
 import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { parse } from '@lobechat/conversation-flow';
 import { getServerDefaultHeterogeneousAgentConfig } from '@lobechat/heterogeneous-agents';
-import type { ExecAgentResult, TaskCurrentActivity, TaskStatusResult } from '@lobechat/types';
+import type {
+  ExecAgentResult,
+  TaskCurrentActivity,
+  TaskStatusResult,
+  UserInterventionConfig,
+  UserToolConfig,
+} from '@lobechat/types';
 import {
   CreateThreadWithMessageSchema,
   entityIdPattern,
@@ -461,6 +468,45 @@ const repairRuntimeActionContinuationAnchor = async (
 };
 
 /**
+ * The approval mode a continuation runs under. A continuation carries on the
+ * run the user just answered, so it inherits that run's intervention policy —
+ * otherwise `execAgent` falls back to `headless` and the next question or
+ * approval in the continuation is blocked instead of waiting for the user.
+ *
+ * When the parked run's state has already expired, fall back to the owner's
+ * foreground approval preference: only a run that could wait for a human can
+ * park on an intervention, so the answered run was never headless.
+ */
+const resolveContinuationUserInterventionConfig = async (
+  resolution: ClaimedAgentInterventionResolution,
+  sourceOperationId: string,
+  ctx: AgentInterventionDispatchContext,
+): Promise<UserInterventionConfig> => {
+  const sourceState = await ctx.aiAgentService
+    .loadInterventionContinuationState(sourceOperationId)
+    .catch((error) => {
+      log('failed to load source state for %s: %O', sourceOperationId, error);
+      return null;
+    });
+  const inherited = sourceState ? selectUserInterventionConfig(sourceState) : undefined;
+  if (inherited) return inherited;
+
+  const settings = await new UserModel(ctx.serverDB, resolution.ownerUserId)
+    .getUserSettings()
+    .catch((error) => {
+      log('failed to load intervention settings for %s: %O', resolution.ownerUserId, error);
+      return undefined;
+    });
+  const intervention = (settings?.tool as UserToolConfig | undefined)?.humanIntervention;
+  const approvalMode =
+    intervention?.approvalMode === 'headless'
+      ? 'auto-run'
+      : (intervention?.approvalMode ?? 'manual');
+
+  return { allowList: intervention?.allowList ?? [], approvalMode };
+};
+
+/**
  * One dispatch boundary shared by token Review and the active Web source
  * bridge. Both paths arrive here only after Cloud has won the same durable
  * first-winner claim.
@@ -520,6 +566,10 @@ const dispatchClaimedAgentIntervention = async (
        * continuation lands in route attempt logs with an unknown source.
        */
       const continuationTrigger = RequestTrigger.Chat;
+      const continuation = continuationRuntimeAction(runtimeAction);
+      const userInterventionConfig = continuation
+        ? await resolveContinuationUserInterventionConfig(resolution, continuation.operationId, ctx)
+        : undefined;
 
       switch (runtimeAction.type) {
         case 'execute_custom_interaction': {
@@ -564,6 +614,7 @@ const dispatchClaimedAgentIntervention = async (
               },
               topicStartReservationId: deterministicContinuationOperationId,
               trigger: continuationTrigger,
+              userInterventionConfig,
             });
           }
           break;
@@ -593,6 +644,7 @@ const dispatchClaimedAgentIntervention = async (
               : { resumeApprovals: runtimeAction.decisions }),
             topicStartReservationId: deterministicContinuationOperationId,
             trigger: continuationTrigger,
+            userInterventionConfig,
           });
           break;
         }
@@ -617,6 +669,7 @@ const dispatchClaimedAgentIntervention = async (
             },
             topicStartReservationId: deterministicContinuationOperationId,
             trigger: continuationTrigger,
+            userInterventionConfig,
           });
           break;
         }
