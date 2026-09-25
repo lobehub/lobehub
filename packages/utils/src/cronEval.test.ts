@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isExecutionTime } from './cronEval';
+import { isExecutionTime, validateCronPattern } from './cronEval';
 
 const SHANGHAI = 'Asia/Shanghai';
 
@@ -90,8 +90,19 @@ describe('isExecutionTime', () => {
   });
 
   describe('daily pattern — catch-up after missed scheduled time', () => {
-    it('catches up at 23:00 if 21:00 was missed and the task never ran today', () => {
-      // Last run was yesterday at 21:00; dispatcher comes online at 23:00 today.
+    it('catches up a missed 21:00 tick within the grace window', () => {
+      // Last run was yesterday at 21:00; the 21:00 and 21:05 ticks were lost.
+      expect(
+        isExecutionTime({
+          cronPattern: '0 21 * * *',
+          currentTime: utc('2026-04-29T21:10:00'),
+          lastExecutedAt: utc('2026-04-28T21:00:00'),
+          timezone: 'UTC',
+        }),
+      ).toBe(true);
+    });
+
+    it('does NOT replay a 21:00 occurrence two hours late — waits for the next one', () => {
       expect(
         isExecutionTime({
           cronPattern: '0 21 * * *',
@@ -99,7 +110,7 @@ describe('isExecutionTime', () => {
           lastExecutedAt: utc('2026-04-28T21:00:00'),
           timezone: 'UTC',
         }),
-      ).toBe(true);
+      ).toBe(false);
     });
 
     it('does NOT catch-up after manual run already covered today (manual at 22:00, dispatcher at 23:00)', () => {
@@ -114,9 +125,20 @@ describe('isExecutionTime', () => {
     });
   });
 
-  describe('hourly / interval patterns are unaffected by the fix', () => {
-    it('every-hour-at-:00 still dedups within the 60-minute window', () => {
-      // Last run 30 minutes ago — same hour window, do not refire.
+  describe('hourly / interval patterns', () => {
+    it('every-hour-at-:00 does not refire on the next tick of the same hour', () => {
+      // The 15:00 occurrence already ran at 15:00:03; the 15:05 tick must skip.
+      expect(
+        isExecutionTime({
+          cronPattern: '0 * * * *',
+          currentTime: utc('2026-04-29T15:05:00'),
+          lastExecutedAt: utc('2026-04-29T15:00:03'),
+          timezone: 'UTC',
+        }),
+      ).toBe(false);
+    });
+
+    it('every-hour-at-:00 still fires 15:00 after a manual run at 14:30', () => {
       expect(
         isExecutionTime({
           cronPattern: '0 * * * *',
@@ -124,7 +146,7 @@ describe('isExecutionTime', () => {
           lastExecutedAt: utc('2026-04-29T14:30:00'),
           timezone: 'UTC',
         }),
-      ).toBe(false);
+      ).toBe(true);
     });
 
     it('every-hour-at-:00 fires after 60 minutes since last run', () => {
@@ -173,6 +195,116 @@ describe('isExecutionTime', () => {
           timezone: 'UTC',
         }),
       ).toBe(false);
+    });
+  });
+
+  describe('full cron semantics', () => {
+    it('honours day-of-month and month fields', () => {
+      expect(
+        isExecutionTime({
+          cronPattern: '0 9 1 5 *',
+          currentTime: utc('2026-05-01T09:00:00'),
+          lastExecutedAt: null,
+          timezone: 'UTC',
+        }),
+      ).toBe(true);
+      expect(
+        isExecutionTime({
+          cronPattern: '0 9 1 5 *',
+          currentTime: utc('2026-05-02T09:00:00'),
+          lastExecutedAt: null,
+          timezone: 'UTC',
+        }),
+      ).toBe(false);
+    });
+
+    it('treats a weekday range as every day in the range', () => {
+      // 2026-04-30 is a Thursday.
+      expect(
+        isExecutionTime({
+          cronPattern: '0 9 * * 1-5',
+          currentTime: utc('2026-04-30T09:00:00'),
+          lastExecutedAt: utc('2026-04-29T09:00:00'),
+          timezone: 'UTC',
+        }),
+      ).toBe(true);
+      // 2026-05-02 is a Saturday.
+      expect(
+        isExecutionTime({
+          cronPattern: '0 9 * * 1-5',
+          currentTime: utc('2026-05-02T09:00:00'),
+          lastExecutedAt: utc('2026-05-01T09:00:00'),
+          timezone: 'UTC',
+        }),
+      ).toBe(false);
+    });
+
+    it('fires each occurrence of a minute-offset pattern once, at or after the target', () => {
+      const tick = (time: string, last: string) =>
+        isExecutionTime({
+          cronPattern: '30 14 * * *',
+          currentTime: utc(time),
+          lastExecutedAt: utc(last),
+          timezone: 'UTC',
+        });
+      expect(tick('2026-04-29T14:25:00', '2026-04-28T14:30:00')).toBe(false);
+      expect(tick('2026-04-29T14:30:00', '2026-04-28T14:30:00')).toBe(true);
+      expect(tick('2026-04-29T14:35:00', '2026-04-29T14:30:05')).toBe(false);
+    });
+
+    it('never fires an invalid pattern or timezone', () => {
+      for (const [cronPattern, timezone] of [
+        ['0 9 * *', 'UTC'],
+        ['0 0 9 * * *', 'UTC'],
+        ['61 9 * * *', 'UTC'],
+        ['0 9 * * *', 'Mars/Base'],
+      ] as const) {
+        expect(
+          isExecutionTime({
+            cronPattern,
+            currentTime: utc('2026-04-29T09:00:00'),
+            lastExecutedAt: null,
+            timezone,
+          }),
+        ).toBe(false);
+      }
+    });
+  });
+
+  describe('validateCronPattern', () => {
+    it('previews the next runs in the pattern timezone', () => {
+      const result = validateCronPattern('45 11 * * 1-5', 'Asia/Ho_Chi_Minh', {
+        from: utc('2026-09-25T05:00:00'),
+      });
+      expect(result).toEqual({
+        nextRuns: [
+          utc('2026-09-28T04:45:00'),
+          utc('2026-09-29T04:45:00'),
+          utc('2026-09-30T04:45:00'),
+        ],
+        valid: true,
+      });
+    });
+
+    it('previews a one-shot date on its actual date', () => {
+      const result = validateCronPattern('0 10 27 9 *', SHANGHAI, {
+        count: 1,
+        from: utc('2026-09-20T03:15:55'),
+      });
+      expect(result).toEqual({ nextRuns: [utc('2026-09-27T02:00:00')], valid: true });
+    });
+
+    it.each([
+      ['0 9 * *', 'UTC', /expected 5 fields/],
+      ['0 0 9 * * *', 'UTC', /expected 5 fields/],
+      ['@daily', 'UTC', /expected 5 fields/],
+      ['61 9 * * *', 'UTC', /61/],
+      ['0 0 30 2 *', 'UTC', /day of month/],
+      ['0 9 * * *', 'Mars/Base', /unknown timezone/],
+    ])('rejects %s (%s)', (pattern, timezone, error) => {
+      const result = validateCronPattern(pattern, timezone);
+      expect(result.valid).toBe(false);
+      expect(!result.valid && result.error).toMatch(error);
     });
   });
 

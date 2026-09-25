@@ -1,6 +1,7 @@
 import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
 import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
 import type { TaskListItem, TaskParticipant, TaskVerifyConfig } from '@lobechat/types';
+import { isValidTimezone, validateCronPattern } from '@lobechat/utils/cronEval';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -75,6 +76,23 @@ const taskVerifyConfigPatchSchema = z.object({
   verifyRubricId: z.string().nullish(),
 });
 
+// Reject cron the schedule dispatcher cannot evaluate at write time, instead of
+// storing it and letting it silently never fire. An empty string still clears.
+const schedulePatternSchema = z.string().superRefine((pattern, ctx) => {
+  if (!pattern) return;
+  const result = validateCronPattern(pattern, null);
+  if (!result.valid) {
+    ctx.addIssue({
+      code: 'custom',
+      message: `Invalid schedulePattern "${pattern}": ${result.error}`,
+    });
+  }
+});
+
+const scheduleTimezoneSchema = z.string().refine((tz) => !tz || isValidTimezone(tz), {
+  message: 'scheduleTimezone must be an IANA timezone such as "Asia/Shanghai"',
+});
+
 // Priority: 0=None, 1=Urgent, 2=High, 3=Normal, 4=Low
 const createSchema = z.object({
   assigneeAgentId: z.string().optional(),
@@ -93,8 +111,8 @@ const createSchema = z.object({
   parentTaskId: z.string().optional(),
   priority: z.number().min(0).max(4).optional(),
   projectId: z.string().optional(),
-  schedulePattern: z.string().optional(),
-  scheduleTimezone: z.string().optional(),
+  schedulePattern: schedulePatternSchema.optional(),
+  scheduleTimezone: scheduleTimezoneSchema.optional(),
   // When omitted, the server derives visibility from the parent task or the
   // assignee agent's visibility (private agent → private task). UI surfaces
   // such as the top-level "Tasks" create form pass it explicitly.
@@ -129,8 +147,8 @@ const updateSchema = z.object({
   name: z.string().optional(),
   parentTaskId: z.string().nullish(),
   priority: z.number().min(0).max(4).optional(),
-  schedulePattern: z.string().nullish(),
-  scheduleTimezone: z.string().nullish(),
+  schedulePattern: schedulePatternSchema.nullish(),
+  scheduleTimezone: scheduleTimezoneSchema.nullish(),
   status: z.enum(TASK_STATUSES).optional(),
 });
 

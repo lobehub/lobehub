@@ -760,6 +760,100 @@ describe('createTaskRuntime', () => {
       );
     });
 
+    it('returns a next-run preview in the task timezone', async () => {
+      vi.useFakeTimers({ now: new Date('2026-09-25T05:00:00Z') });
+      const taskCaller = {
+        update: vi.fn().mockResolvedValue({}),
+        updateConfig: vi.fn().mockResolvedValue({}),
+      };
+      const taskModel = {
+        resolve: vi.fn().mockResolvedValue({ id: 'task-1', identifier: 'T-13' }),
+      };
+      const runtime = createTaskRuntime({
+        agentModel: { existsById: vi.fn() } as any,
+        taskCaller: taskCaller as any,
+        taskModel: taskModel as any,
+        taskService: {} as any,
+        toolCallId: 'tool-call-schedule',
+      });
+
+      const result = await runtime.setTaskSchedule({
+        automationMode: 'schedule',
+        identifier: 'T-13',
+        schedulePattern: '45 11 * * 1-5',
+        scheduleTimezone: 'Asia/Ho_Chi_Minh',
+      });
+      vi.useRealTimers();
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain(
+        'next runs (Asia/Ho_Chi_Minh) → Mon 2026-09-28 11:45; Tue 2026-09-29 11:45; Wed 2026-09-30 11:45',
+      );
+    });
+
+    it.each([
+      ['0 9 * *', undefined, /expected 5 fields/],
+      ['0 0 9 * * *', undefined, /expected 5 fields/],
+      ['0 0 30 2 *', undefined, /day of month/],
+      ['0 9 * * *', 'Mars/Base', /unknown timezone/],
+    ])('rejects schedule %s (%s) without writing anything', async (pattern, tz, error) => {
+      const taskCaller = {
+        update: vi.fn().mockResolvedValue({}),
+        updateConfig: vi.fn().mockResolvedValue({}),
+      };
+      const taskModel = {
+        resolve: vi.fn().mockResolvedValue({ id: 'task-1', identifier: 'T-1' }),
+      };
+      const runtime = createTaskRuntime({
+        agentModel: { existsById: vi.fn() } as any,
+        taskCaller: taskCaller as any,
+        taskModel: taskModel as any,
+        taskService: {} as any,
+        toolCallId: 'tool-call-schedule',
+      });
+
+      const result = await runtime.setTaskSchedule({
+        automationMode: 'schedule',
+        identifier: 'T-1',
+        maxExecutions: 1,
+        schedulePattern: pattern,
+        scheduleTimezone: tz,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toMatch(error);
+      expect(result.content).toContain('Nothing was updated');
+      expect(taskCaller.update).not.toHaveBeenCalled();
+      expect(taskCaller.updateConfig).not.toHaveBeenCalled();
+    });
+
+    it('validates a timezone-only change against the stored pattern', async () => {
+      const taskCaller = { update: vi.fn().mockResolvedValue({}) };
+      const taskModel = {
+        resolve: vi.fn().mockResolvedValue({
+          id: 'task-1',
+          identifier: 'T-1',
+          schedulePattern: '0 9 * * *',
+          scheduleTimezone: 'UTC',
+        }),
+      };
+      const runtime = createTaskRuntime({
+        agentModel: { existsById: vi.fn() } as any,
+        taskCaller: taskCaller as any,
+        taskModel: taskModel as any,
+        taskService: {} as any,
+        toolCallId: 'tool-call-schedule',
+      });
+
+      const result = await runtime.setTaskSchedule({
+        identifier: 'T-1',
+        scheduleTimezone: 'Europe/Moscow',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('next runs (Europe/Moscow) →');
+    });
+
     it('applies verify config changes and succeeds', async () => {
       const taskCaller = {
         updateVerifyConfig: vi.fn().mockResolvedValue({}),
