@@ -68,6 +68,14 @@ export const uploadFileBuffer = async (
         body: buffer,
         headers: { 'Content-Type': fileType },
         method: 'PUT',
+      }).catch((error: unknown) => {
+        // undici only says "fetch failed"; the socket-level cause is what
+        // tells a reset/timeout apart from a DNS or proxy problem.
+        const cause = (error as { cause?: { code?: string; message?: string } })?.cause;
+        const detail = cause?.code || cause?.message;
+        throw new Error(
+          `Upload to storage failed: ${(error as Error)?.message ?? String(error)}${detail ? ` (${detail})` : ''}`,
+        );
       });
       if (!uploadRes.ok) {
         throw new Error(`Upload failed: ${uploadRes.status} ${uploadRes.statusText}`);

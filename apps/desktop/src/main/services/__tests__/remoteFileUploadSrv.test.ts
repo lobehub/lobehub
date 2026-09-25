@@ -27,8 +27,13 @@ const mockRemoteServerConfigCtr = {
   getRemoteServerUrl: vi.fn(),
 };
 
+const mockStoreManager = {
+  get: vi.fn(),
+};
+
 const mockApp = {
   getController: vi.fn(() => mockRemoteServerConfigCtr),
+  storeManager: mockStoreManager,
 } as unknown as App;
 
 describe('RemoteFileUploadService.uploadLocalFile', () => {
@@ -38,6 +43,7 @@ describe('RemoteFileUploadService.uploadLocalFile', () => {
     vi.clearAllMocks();
     mockRemoteServerConfigCtr.getRemoteServerUrl.mockResolvedValue('https://server.example.com/');
     mockRemoteServerConfigCtr.getAccessToken.mockResolvedValue('token-abc');
+    mockStoreManager.get.mockReturnValue(undefined);
     service = new RemoteFileUploadService(mockApp);
   });
 
@@ -84,6 +90,47 @@ describe('RemoteFileUploadService.uploadLocalFile', () => {
     execFileMock.mockResolvedValue({ stdout: '{}' });
 
     expect(await service.uploadLocalFile('/tmp/none.png')).toBeUndefined();
+  });
+
+  it('forwards the in-app network proxy to the `lh file upload` child process', async () => {
+    mockStoreManager.get.mockImplementation((key: string) =>
+      key === 'networkProxy'
+        ? { enableProxy: true, proxyPort: '7890', proxyServer: '127.0.0.1', proxyType: 'http' }
+        : undefined,
+    );
+    execFileMock.mockResolvedValue({
+      stdout: JSON.stringify({ id: 'file-3', url: 'https://files.example.com/c.png' }),
+    });
+
+    await service.uploadLocalFile('/tmp/cat.png');
+
+    const [, , opts] = execFileMock.mock.calls[0];
+    expect(opts.env.HTTPS_PROXY).toBe('http://127.0.0.1:7890');
+    expect(opts.env.HTTP_PROXY).toBe('http://127.0.0.1:7890');
+    // Node's fetch only honours HTTP(S)_PROXY when env-proxy mode is on.
+    expect(opts.env.NODE_USE_ENV_PROXY).toBe('1');
+  });
+
+  it('retries a transient network failure', async () => {
+    execFileMock
+      .mockRejectedValueOnce(new Error('[ERROR] fetch failed: ECONNRESET'))
+      .mockResolvedValue({
+        stdout: JSON.stringify({ id: 'file-4', url: 'https://files.example.com/d.png' }),
+      });
+
+    const record = await service.uploadLocalFile('/tmp/d.png');
+
+    expect(record).toEqual({ id: 'file-4', url: 'https://files.example.com/d.png' });
+    expect(execFileMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry a storage quota rejection', async () => {
+    execFileMock.mockRejectedValue(new Error('[ERROR] storage_block:upgrade_required'));
+
+    await expect(service.uploadLocalFile('/tmp/full.png')).rejects.toThrow(
+      'storage_block:upgrade_required',
+    );
+    expect(execFileMock).toHaveBeenCalledTimes(1);
   });
 
   it('propagates CLI failures (non-zero exit) to the caller', async () => {

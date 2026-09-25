@@ -90,6 +90,40 @@ const normalizeExecutionError = (error: unknown, fallbackMessage: string) => {
   return { code: normalized.code, kind: normalized.kind, message };
 };
 
+/**
+ * Readable text for a thrown tool failure. Model runtimes reject with plain
+ * objects (e.g. `{ errorType: 'InsufficientBudgetForModel', error: { message } }`)
+ * that have no top-level `message`; reading only `.message` turned those into
+ * an undefined tool result, which the model then saw as `<empty_content>`.
+ */
+const getThrownErrorText = (error: unknown): string => {
+  if (typeof error === 'string') return error;
+  if (error instanceof Error) return error.message || error.name;
+  if (!error || typeof error !== 'object') return String(error);
+
+  const raw = error as {
+    error?: { message?: unknown };
+    errorType?: unknown;
+    message?: unknown;
+    type?: unknown;
+  };
+  const message = [raw.message, raw.error?.message].find(
+    (value): value is string => typeof value === 'string' && value.length > 0,
+  );
+  const errorType = [raw.errorType, raw.type].find(
+    (value): value is string => typeof value === 'string' && value.length > 0,
+  );
+
+  if (message && errorType) return `${errorType}: ${message}`;
+  if (message || errorType) return (message || errorType)!;
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return 'Unknown tool execution error';
+  }
+};
+
 export class ToolExecutionService {
   private builtinToolsExecutor: BuiltinToolsExecutor;
   private mcpService: MCPService;
@@ -194,7 +228,7 @@ export class ToolExecutionService {
     } catch (error) {
       const executionTime = Date.now() - startTime;
       log('Error executing tool %s:%s: %O', identifier, apiName, error);
-      const errorMessage = (error as Error).message;
+      const errorMessage = getThrownErrorText(error);
       const denial = getToolAccessDeniedError(error, errorMessage);
       const content = denial ? JSON.stringify({ error: denial }) : errorMessage;
 

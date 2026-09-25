@@ -23,7 +23,7 @@ import type { LobeChatDatabase } from '@lobechat/database';
 import type { ChatStreamPayload } from '@lobechat/model-runtime';
 import { consumeStreamUntilDone } from '@lobechat/model-runtime';
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
-import { RequestTrigger } from '@lobechat/types';
+import { ChatErrorType, RequestTrigger } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import { parseDataUri } from '@lobechat/utils/uriParser';
 
@@ -67,6 +67,24 @@ const buildError = (content: string, code: string): BuiltinServerRuntimeOutput =
   error: { code, message: content },
   success: false,
 });
+
+/**
+ * Quota rejections from the configured multimodal provider. analyzeMedia always
+ * runs on the platform-configured model, so a user chatting with their own API
+ * key can still hit the LobeHub credit budget here.
+ */
+const CREDIT_ERROR_TYPES = new Set<string>([
+  ChatErrorType.FreePlanLimit,
+  ChatErrorType.InsufficientBudgetForModel,
+  ChatErrorType.SubscriptionPlanLimit,
+]);
+
+const getCreditErrorType = (error: unknown): string | undefined => {
+  if (!error || typeof error !== 'object') return;
+  const errorType = (error as { errorType?: unknown }).errorType;
+
+  return typeof errorType === 'string' && CREDIT_ERROR_TYPES.has(errorType) ? errorType : undefined;
+};
 
 const BASE64_CONTENT_PATTERN = /^[A-Z\d+/]+={0,2}$/i;
 const MAX_INLINE_IMAGE_PIXELS = 25_000_000;
@@ -505,24 +523,36 @@ class LobeAgentExecutionRuntime {
       stream: false,
     } satisfies ChatStreamPayload;
 
-    const response = await runtime.chat(payload, {
-      callback: {
-        onCompletion: (data) => {
-          usage = data.usage;
+    try {
+      const response = await runtime.chat(payload, {
+        callback: {
+          onCompletion: (data) => {
+            usage = data.usage;
+          },
+          onContentPart: (part) => {
+            if (part.partType === 'text') content += part.content;
+          },
+          onText: (text) => {
+            content += text;
+          },
         },
-        onContentPart: (part) => {
-          if (part.partType === 'text') content += part.content;
+        metadata: {
+          trigger: RequestTrigger.MultimodalAnalysis,
         },
-        onText: (text) => {
-          content += text;
-        },
-      },
-      metadata: {
-        trigger: RequestTrigger.MultimodalAnalysis,
-      },
-    });
+      });
 
-    await consumeStreamUntilDone(response);
+      await consumeStreamUntilDone(response);
+    } catch (error) {
+      const creditErrorType = getCreditErrorType(error);
+      if (!creditErrorType) throw error;
+
+      return buildError(
+        `Media analysis could not run: it uses the platform model "${provider}/${model}", which is billed to the user's LobeHub credits, and those credits are exhausted (${creditErrorType}). ` +
+          "The user's own API key for the chat model is not used by this tool, so retrying will not help. " +
+          'Tell the user to top up or upgrade their LobeHub plan, or to switch the conversation to a vision-capable model on their own API key.',
+        creditErrorType,
+      );
+    }
 
     return {
       content: content.trim(),

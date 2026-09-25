@@ -218,6 +218,41 @@ describe('lobeAgentRuntime', () => {
     expect([...pixel.subarray(0, 3)]).toEqual([255, 255, 255]);
   });
 
+  it('should explain that media analysis needs LobeHub credits when the budget is exhausted', async () => {
+    mockChat.mockRejectedValueOnce({
+      budget: { availableCredits: 0, requiredCredits: 1219, shortfallCredits: 1219 },
+      error: { message: 'Budget exceeded' },
+      errorType: 'InsufficientBudgetForModel',
+      provider: 'test-provider',
+    });
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    const result = await runtime.analyzeMedia({
+      question: 'what is this?',
+      urls: ['https://example.com/image.png'],
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({ code: 'InsufficientBudgetForModel' });
+    expect(result.content).toContain('credits');
+    expect(result.content).toContain('test-provider/vision-model');
+    expect(result.content).toMatch(/own API key/i);
+  });
+
+  it('should reject loopback media urls before calling the multimodal model', async () => {
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    const result = await runtime.analyzeMedia({
+      question: 'what is this?',
+      urls: ['http://127.0.0.1:8899/D.jpg'],
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.content).toContain('local or private network address');
+    expect(mockChat).not.toHaveBeenCalled();
+    expect(mockImageUrlToBase64).not.toHaveBeenCalled();
+  });
+
   it('should detect suffixless images after downloading without transcoding supported formats', async () => {
     const runtime = lobeAgentRuntime.factory(baseContext);
 
