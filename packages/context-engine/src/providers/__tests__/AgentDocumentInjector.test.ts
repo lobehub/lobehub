@@ -265,13 +265,43 @@ describe('AgentDocumentInjector', () => {
       expect(result.messages[0].content).toMatchInlineSnapshot(`
         "<agent_documents_index>
         User-created docs, when present, are listed below — use readDocument(id) for full content.
-        Docs marked (created this run) did not exist before this run — you created them, so creating them did not overwrite an existing doc.
+        Docs marked (created this run) (or counted that way in a folder row) did not exist before this run — you created them, so creating them did not overwrite an existing doc.
 
         TITLE                         ID        SIZE   UPDATED
         FASE G-2C (created this run)  ce2c4f3a  empty  2026-09-23
         FASE G-2B                     452eea73  empty  2026-09-21
         </agent_documents_index>"
       `);
+    });
+
+    it('counts docs created during the current run inside collapsed folders', async () => {
+      const runStartedAt = new Date('2026-09-23T22:57:30.000Z').getTime();
+      const inFolder = (id: string, createdAt: string) => ({
+        createdAt: new Date(createdAt),
+        filename: `${id}.md`,
+        folderTitle: 'Reports',
+        id,
+        loadPosition: 'before-first-user' as const,
+        loadRules: { rule: 'always' as const },
+        parentId: 'folder-1',
+        policyLoad: 'progressive' as const,
+        title: id,
+        updatedAt: new Date(createdAt),
+      });
+      const provider = new AgentDocumentContextInjector({
+        documents: [
+          inFolder('new-report', '2026-09-23T22:57:58.000Z'),
+          inFolder('old-report', '2026-09-21T23:12:00.000Z'),
+        ],
+      });
+
+      const result = await provider.process(
+        createContext([{ content: 'go', createdAt: runStartedAt, id: 'user-1', role: 'user' }]),
+      );
+      const content = result.messages[0].content as string;
+
+      expect(content).toContain('did not exist before this run');
+      expect(content).toMatch(/📁 Reports\s+folder-1\s+2 docs \(1 created this run\)/);
     });
 
     // https://github.com/lobehub/lobehub/issues/15624 — relative times ("15m ago")
