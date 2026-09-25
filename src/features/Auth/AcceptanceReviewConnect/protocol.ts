@@ -1,5 +1,6 @@
 /**
- * The popup ↔ review-toolbar handshake. The toolbar (apps/review-sdk) opens
+ * The popup ↔ review-toolbar handshake. The toolbar — the embeddable review
+ * SDK, maintained outside this repository — opens
  * `/oauth/acceptance-review?acceptance=<id>&origin=<its origin>`; once the
  * reviewer approves, this page posts ONE message to `window.opener`, targeted at
  * exactly that origin, then closes. Keep the type string in sync with the SDK.

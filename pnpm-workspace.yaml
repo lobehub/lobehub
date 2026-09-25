@@ -24,7 +24,6 @@ packages:
   - apps/desktop/src/main
   - apps/auth
   - apps/server
-  - apps/review-sdk
   - apps/share
   - apps/workbench
 
