@@ -1,4 +1,4 @@
-import type { TaskExecutionConfig, WorkingDirConfig } from '@lobechat/types';
+import type { ChatTopicMetadata, TaskExecutionConfig, WorkingDirConfig } from '@lobechat/types';
 
 /**
  * What a task's own execution selection contributes to ONE run.
@@ -61,4 +61,52 @@ export const resolveTaskRunExecution = (
   };
 
   return Object.keys(runExecution).length > 0 ? runExecution : undefined;
+};
+
+/** The execution axes a topic carries, in the shape the readers expect. */
+const topicExecutionOf = (metadata?: ChatTopicMetadata | null): string =>
+  JSON.stringify({
+    boundDeviceId: metadata?.boundDeviceId ?? null,
+    repos: metadata?.repos ?? null,
+    workingDirectory: metadata?.workingDirectory ?? null,
+    workingDirectoryConfig: metadata?.workingDirectoryConfig ?? null,
+  });
+
+/**
+ * The execution metadata a CONTINUED topic has to carry before this run.
+ *
+ * A topic's own values outrank everything a later run brings: `turnSetup` stamps
+ * `initialTopicMetadata` only when it CREATES the topic, `heteroDispatch`'s cwd
+ * resolver reads `topic.metadata.workingDirectory` above the run's initial
+ * metadata (and above the agent's per-device pick and the device default), and
+ * `topic.metadata.boundDeviceId` is what project grouping and the client's
+ * worktree probes read. So a task retargeted since its topic was written would
+ * continue on the machine it now pins with the PREVIOUS machine's directory —
+ * a path that may not exist there — while the UI kept filing the topic under the
+ * old machine.
+ *
+ * The task's own selection is the one statement that covers EVERY run of it, so
+ * mirror it onto the topic before dispatching. Axes the task does not pin are
+ * CLEARED, because "inherit the agent" is a decision too: a pin the user removed
+ * must stop deciding where the run goes.
+ *
+ * Returns `undefined` when the topic already agrees — the common case, and a
+ * continuation should not pay for a write it does not need.
+ */
+export const resolveTopicExecutionPatch = (
+  topicMetadata: ChatTopicMetadata | null | undefined,
+  execution?: TaskExecutionConfig,
+): ChatTopicMetadata | undefined => {
+  const initial = resolveTaskRunExecution(execution)?.initialTopicMetadata;
+
+  const next: ChatTopicMetadata = {
+    // `undefined` clears the axis: `TopicModel.updateMetadata` shallow-merges, so
+    // the key is dropped rather than kept at its previous value.
+    boundDeviceId: execution?.boundDeviceId,
+    repos: initial?.repos,
+    workingDirectory: initial?.workingDirectory,
+    workingDirectoryConfig: initial?.workingDirectoryConfig,
+  };
+
+  return topicExecutionOf(topicMetadata) === topicExecutionOf(next) ? undefined : next;
 };

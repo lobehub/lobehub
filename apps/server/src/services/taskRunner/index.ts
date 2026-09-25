@@ -2,7 +2,12 @@ import { TaskIdentifier as TaskSkillIdentifier } from '@lobechat/builtin-skills'
 import { AcceptanceEvidenceIdentifier } from '@lobechat/builtin-tool-acceptance-evidence';
 import { BriefIdentifier } from '@lobechat/builtin-tool-brief';
 import { INBOX_SESSION_ID } from '@lobechat/const';
-import type { ExecAgentResult, TaskItem, TaskRunTrigger } from '@lobechat/types';
+import type {
+  ExecAgentResult,
+  TaskExecutionConfig,
+  TaskItem,
+  TaskRunTrigger,
+} from '@lobechat/types';
 import { readTaskExecutionConfig } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
@@ -12,12 +17,13 @@ import { AgentModel } from '@/database/models/agent';
 import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
+import { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { TaskLifecycleService } from '@/server/services/taskLifecycle';
 
 import { buildTaskPrompt } from './buildTaskPrompt';
-import { resolveTaskRunExecution } from './resolveRunExecution';
+import { resolveTaskRunExecution, resolveTopicExecutionPatch } from './resolveRunExecution';
 
 const log = debug('task-runner');
 
@@ -55,6 +61,7 @@ export class TaskRunnerService {
   private taskLifecycle: TaskLifecycleService;
   private taskModel: TaskModel;
   private taskTopicModel: TaskTopicModel;
+  private topicModel: TopicModel;
   private userId: string;
 
   private workspaceId?: string;
@@ -66,8 +73,30 @@ export class TaskRunnerService {
     this.agentModel = new AgentModel(db, userId, workspaceId);
     this.taskModel = new TaskModel(db, userId, workspaceId);
     this.taskTopicModel = new TaskTopicModel(db, userId, workspaceId);
+    this.topicModel = new TopicModel(db, userId, workspaceId);
     this.briefModel = new BriefModel(db, userId, workspaceId);
     this.taskLifecycle = new TaskLifecycleService(db, userId, workspaceId);
+  }
+
+  /**
+   * Mirror a task's execution selection onto a topic one of its runs continues.
+   *
+   * Deliberately NOT swallowed: the topic's stored directory outranks the
+   * selection this run brings, so an unsynced topic means the run may start in
+   * the previous machine's directory — failing the kickoff (and letting the
+   * caller's error path restore the task's resting state) is better than
+   * running somewhere the user did not pin.
+   */
+  private async syncTopicExecution(
+    topicId: string,
+    execution?: TaskExecutionConfig,
+  ): Promise<void> {
+    const topic = await this.topicModel.findById(topicId);
+    const patch = resolveTopicExecutionPatch(topic?.metadata, execution);
+    if (!patch) return;
+
+    await this.topicModel.updateMetadata(topicId, patch);
+    log('runTask: synced topic %s execution metadata', topicId);
   }
 
   async runTask(params: RunTaskParams): Promise<RunTaskResult> {
@@ -218,7 +247,17 @@ export class TaskRunnerService {
       // The execution selection the task itself carries — a pinned device and/or
       // a working directory. Undefined when the task pins nothing, in which case
       // the run keeps inheriting the assignee agent's target and cwd.
-      const runExecution = resolveTaskRunExecution(readTaskExecutionConfig(taskConfig));
+      const taskExecution = readTaskExecutionConfig(taskConfig);
+      const runExecution = resolveTaskRunExecution(taskExecution);
+
+      // A continued topic keeps its own metadata (`turnSetup` stamps
+      // `initialTopicMetadata` only for a topic it creates) and those stored
+      // values outrank what this run brings — the directory this task pins would
+      // be ignored, and the previous machine's kept. Stamp the task's selection
+      // onto the topic first; see `resolveTopicExecutionPatch`.
+      if (continueTopicId) {
+        await this.syncTopicExecution(continueTopicId, taskExecution);
+      }
 
       log('runTask: %s (continue=%s)', taskIdentifier, continueTopicId);
 
