@@ -699,8 +699,12 @@ export class AgentBridgeService {
         await thread.setState({ ...threadState, topicId: undefined });
         return this.handleMention(thread, message, opts);
       }
+      // A platform thread that is itself a bounded conversation (e.g. a
+      // Discord guild thread) keeps its topic regardless of idle time — a
+      // reply hours later is still the same conversation.
+      const expiresWhenIdle = opts.client?.shouldExpireIdleTopic?.(thread.id) ?? true;
       const elapsed = Date.now() - new Date(existingTopic.updatedAt).getTime();
-      if (elapsed > TOPIC_STALE_THRESHOLD) {
+      if (expiresWhenIdle && elapsed > TOPIC_STALE_THRESHOLD) {
         log(
           'handleSubscribedMessage: topic=%s is stale (%.1fh since last activity), creating new topic',
           topicId,

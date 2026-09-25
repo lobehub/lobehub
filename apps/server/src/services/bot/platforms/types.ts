@@ -440,6 +440,14 @@ export interface PlatformClient {
   sanitizeUserInput?: (text: string, message?: unknown) => string;
 
   /**
+   * Whether a subscribed thread's topic expires after the idle threshold
+   * (4h), so the next message starts a fresh topic. Default: true.
+   * Discord: returns false for guild threads — a thread is already a bounded
+   * conversation, so a late reply must continue the same topic.
+   */
+  shouldExpireIdleTopic?: (threadId: string) => boolean;
+
+  /**
    * Whether the bot should subscribe to a thread. Default: true.
    * Discord: returns false for top-level channels (not threads).
    */
