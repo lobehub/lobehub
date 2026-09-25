@@ -17,11 +17,7 @@ import {
   isParkedStatus,
 } from '@lobechat/agent-runtime';
 import type { ISnapshotStore } from '@lobechat/agent-tracing';
-import {
-  appendSubAgentReference,
-  LobeAgentApiName,
-  LobeAgentIdentifier,
-} from '@lobechat/builtin-tool-lobe-agent';
+import { appendSubAgentReference, isCallSubAgentCall } from '@lobechat/builtin-tool-lobe-agent';
 import { dynamicInterventionAudits } from '@lobechat/builtin-tools/dynamicInterventionAudits';
 import { parse } from '@lobechat/conversation-flow';
 import { getModelPropertyWithFallback } from '@lobechat/model-runtime';
@@ -3530,11 +3526,7 @@ export class AgentRuntimeService {
   ): Promise<boolean> {
     if (!threadId) return false;
     try {
-      const plugin = await this.messageModel.findMessagePlugin(toolMessageId);
-      return (
-        plugin?.identifier === LobeAgentIdentifier &&
-        plugin.apiName === LobeAgentApiName.callSubAgent
-      );
+      return isCallSubAgentCall(await this.messageModel.findMessagePlugin(toolMessageId));
     } catch (error) {
       log('[%s] sub-agent bridge: failed to read tool plugin: %O', toolMessageId, error);
       return false;

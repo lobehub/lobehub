@@ -1,10 +1,10 @@
 import type {
   AgentOperationCompletionReason,
-  AgentOperationStatus,
   GoalGraphSnapshot,
   GoalItem,
   TaskItem,
 } from '@lobechat/types';
+import { isAgentOperationInFlight } from '@lobechat/types';
 
 import type { AgentOperationItem } from '@/database/schemas/agentOperations';
 import { HETERO_DISPATCH_ERROR_HEADLINES } from '@/server/services/aiAgent/helpers/heteroErrors';
@@ -58,14 +58,6 @@ export const statusAuthoredByActor = (
   return Boolean(latest.actorUserId || latest.actorAgentId);
 };
 
-/** The run has not settled yet; the lease reclaim owns it, not recovery. */
-const IN_FLIGHT_STATUSES = new Set<AgentOperationStatus>([
-  'idle',
-  'running',
-  'waiting_for_async_tool',
-  'waiting_for_human',
-]);
-
 /**
  * Gateway codes whose own message states the run never started, so a retry cannot
  * duplicate committed work. `DEVICE_GATEWAY_UNAUTHORIZED` and `GATEWAY_NOT_CONFIGURED`
@@ -107,7 +99,8 @@ export const recoveryEligibility = (
   if (graph.goal.status !== 'running' || graph.decisions.some((d) => d.status === 'pending')) {
     return { eligible: false, reason: 'Goal is stopped or has a pending decision' };
   }
-  if (operation && IN_FLIGHT_STATUSES.has(operation.status)) {
+  // The run has not settled yet; the lease reclaim owns it, not recovery.
+  if (operation && isAgentOperationInFlight(operation.status)) {
     return { eligible: false, reason: 'The operation has not settled yet' };
   }
   if (

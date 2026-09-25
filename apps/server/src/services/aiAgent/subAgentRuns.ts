@@ -1,6 +1,5 @@
-import { LobeAgentApiName, LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
+import { isCallSubAgentCall } from '@lobechat/builtin-tool-lobe-agent';
 import type {
-  AgentOperationStatus,
   ExecAgentResult,
   ExecSubAgentParams,
   ExecSubAgentResult,
@@ -8,7 +7,7 @@ import type {
   LobeAgentChatConfig,
   ThreadMetadata,
 } from '@lobechat/types';
-import { ThreadStatus, ThreadType } from '@lobechat/types';
+import { isAgentOperationInFlight, ThreadStatus, ThreadType } from '@lobechat/types';
 import debug from 'debug';
 
 import type { AgentOperationModel } from '@/database/models/agentOperation';
@@ -26,6 +25,8 @@ import {
   createGroupActionMemberBridgeHook,
   createSubAgentBridgeHook,
   createThreadHooks,
+  pickThreadUsageBaseline,
+  type ThreadUsageBaseline,
 } from './hooks/threadRunHooks';
 import type { InternalExecAgentParams } from './types';
 
@@ -84,18 +85,6 @@ export interface ExecAgentThreadRunOptions {
   resumeParentOnComplete?: boolean;
 }
 
-/**
- * Operation states after which a run can no longer write to its thread. Used
- * instead of the thread row's own `status`, which is not authoritative: the
- * inactivity watchdog abandons a stuck operation without touching its thread.
- */
-const SETTLED_OPERATION_STATUSES = new Set<AgentOperationStatus>([
-  'abandoned',
-  'done',
-  'error',
-  'interrupted',
-]);
-
 type ThreadRow = NonNullable<Awaited<ReturnType<ThreadModel['findById']>>>;
 
 /**
@@ -106,13 +95,15 @@ type ThreadRow = NonNullable<Awaited<ReturnType<ThreadModel['findById']>>>;
  * `callSubAgent` (group members, `callAgent` children, …), and threads whose
  * previous run is still going. The final compare-and-set claim makes
  * concurrent follow-ups to one sub-agent race-safe.
+ *
+ * Returns the usage the thread accumulated so far; the claim and every later
+ * write of this run carry it forward instead of resetting the totals.
  */
 const claimSubAgentThread = async (
   deps: SubAgentRunDeps,
-  params: { agentId: string; threadId: string; topicId: string },
-  metadata: ThreadMetadata,
-): Promise<{ error: string } | { thread: ThreadRow }> => {
-  const { agentId, threadId, topicId } = params;
+  params: { agentId: string; startedAt: string; threadId: string; topicId: string },
+): Promise<{ error: string } | { thread: ThreadRow; usageBaseline: ThreadUsageBaseline }> => {
+  const { agentId, startedAt, threadId, topicId } = params;
   const thread = await deps.threadModel.findById(threadId);
 
   if (
@@ -127,31 +118,32 @@ const claimSubAgentThread = async (
   const sourcePlugin = thread.sourceMessageId
     ? await deps.messageModel.findMessagePlugin(thread.sourceMessageId)
     : undefined;
-  if (
-    sourcePlugin?.identifier !== LobeAgentIdentifier ||
-    sourcePlugin.apiName !== LobeAgentApiName.callSubAgent
-  ) {
+  if (!isCallSubAgentCall(sourcePlugin)) {
     return { error: `"${threadId}" is not a sub-agent started by callSubAgent.` };
   }
 
-  const previousOperationId = (thread.metadata as ThreadMetadata | null)?.operationId;
+  const previousMetadata = thread.metadata as ThreadMetadata | null;
+  const previousOperationId = previousMetadata?.operationId;
   const previousOperation = previousOperationId
     ? await deps.agentOperationModel.findById(previousOperationId)
     : null;
+  // The operation, not the thread row's own `status`, is authoritative: the
+  // inactivity watchdog abandons a stuck operation without touching its thread.
   const stillRunning = previousOperation
-    ? !SETTLED_OPERATION_STATUSES.has(previousOperation.status)
+    ? isAgentOperationInFlight(previousOperation.status)
     : thread.status === ThreadStatus.Processing;
   const busyError = `Sub-agent "${threadId}" is still running. Wait for its result before sending it another instruction.`;
 
   if (stillRunning) return { error: busyError };
 
+  const usageBaseline = pickThreadUsageBaseline(previousMetadata);
   const claimed = await deps.threadModel.claimForRun(
     thread.id,
     { operationId: previousOperationId ?? null, status: thread.status },
-    metadata,
+    { ...usageBaseline, startedAt },
   );
 
-  return claimed ? { thread } : { error: busyError };
+  return claimed ? { thread, usageBaseline } : { error: busyError };
 };
 
 /**
@@ -192,17 +184,19 @@ export const execAgentThreadRun = async (
   const startedAt = new Date().toISOString();
   const continueThreadId = 'threadId' in params ? params.threadId : undefined;
   let thread: ThreadRow;
+  let usageBaseline: ThreadUsageBaseline = {};
 
   if (continueThreadId) {
     // 1-2. Continue an earlier callSubAgent thread: claim it (→ processing).
     // The new instruction lands as the next user turn on that thread, so the
     // sub-agent keeps its full history. Its original source message stays the
     // thread anchor; this run reports to the new placeholder (`parentMessageId`).
-    const claim = await claimSubAgentThread(
-      deps,
-      { agentId, threadId: continueThreadId, topicId },
-      { startedAt },
-    );
+    const claim = await claimSubAgentThread(deps, {
+      agentId,
+      startedAt,
+      threadId: continueThreadId,
+      topicId,
+    });
 
     if ('error' in claim) {
       log('%s: cannot continue thread %s: %s', options.logScope, continueThreadId, claim.error);
@@ -227,6 +221,7 @@ export const execAgentThreadRun = async (
     }
 
     thread = claim.thread;
+    usageBaseline = claim.usageBaseline;
     log('%s: continuing thread %s', options.logScope, thread.id);
   } else {
     // 1. Create Thread for isolated agent execution
@@ -262,6 +257,7 @@ export const execAgentThreadRun = async (
     startedAt,
     parentMessageId,
     options.logScope,
+    usageBaseline,
   );
   // For the virtual sub-agent path, also register the completion bridge that
   // backfills the parent's placeholder tool message and resumes the parked
@@ -343,10 +339,22 @@ export const execAgentThreadRun = async (
     // forever, which would lock the sub-agent against any later follow-up.
     await deps.threadModel
       .update(thread.id, {
-        metadata: { completedAt: new Date().toISOString(), error: String(error), startedAt },
+        metadata: {
+          ...usageBaseline,
+          completedAt: new Date().toISOString(),
+          error: String(error),
+          startedAt,
+        },
         status: ThreadStatus.Failed,
       })
-      .catch(() => {});
+      .catch((updateError) =>
+        log(
+          '%s: failed to mark thread %s failed after execAgent threw: %O',
+          options.logScope,
+          thread.id,
+          updateError,
+        ),
+      );
     throw error;
   }
 
@@ -359,7 +367,7 @@ export const execAgentThreadRun = async (
 
   // 5. Store operationId in Thread metadata
   await deps.threadModel.update(thread.id, {
-    metadata: { operationId: result.operationId, startedAt },
+    metadata: { ...usageBaseline, operationId: result.operationId, startedAt },
   });
 
   // 6. If operation failed to start, update thread status
@@ -367,6 +375,7 @@ export const execAgentThreadRun = async (
     const completedAt = new Date().toISOString();
     await deps.threadModel.update(thread.id, {
       metadata: {
+        ...usageBaseline,
         completedAt,
         duration: Date.now() - new Date(startedAt).getTime(),
         error: result.error,

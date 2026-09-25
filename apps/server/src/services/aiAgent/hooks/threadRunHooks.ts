@@ -1,4 +1,5 @@
 import type { AgentHookEvent, AgentState } from '@lobechat/agent-runtime';
+import type { ThreadMetadata } from '@lobechat/types';
 import { ThreadStatus } from '@lobechat/types';
 import debug from 'debug';
 
@@ -21,6 +22,26 @@ export function calculateTotalTokens(usage?: AgentState['usage']): number | unde
   if (!usage) return undefined;
   return usage.llm?.tokens?.total;
 }
+
+/**
+ * Usage a continued sub-agent thread accumulated in its earlier runs. Every
+ * run starts fresh counters and each thread write replaces `metadata`, so a
+ * follow-up run carries these forward and adds its own usage on top.
+ */
+export type ThreadUsageBaseline = Pick<
+  ThreadMetadata,
+  'totalCost' | 'totalMessages' | 'totalTokens' | 'totalToolCalls'
+>;
+
+export const pickThreadUsageBaseline = (metadata?: ThreadMetadata | null): ThreadUsageBaseline => ({
+  totalCost: metadata?.totalCost,
+  totalMessages: metadata?.totalMessages,
+  totalTokens: metadata?.totalTokens,
+  totalToolCalls: metadata?.totalToolCalls,
+});
+
+const addUsage = (baseline?: number, run?: number): number | undefined =>
+  baseline === undefined ? run : baseline + (run ?? 0);
 
 /**
  * Create step lifecycle callbacks for updating Thread metadata
@@ -163,6 +184,7 @@ export function createThreadHooks(
   startedAt: string,
   sourceMessageId: string,
   logScope: 'execSubAgent' | 'execVirtualSubAgent',
+  usageBaseline: ThreadUsageBaseline = {},
 ): AgentHook[] {
   let accumulatedToolCalls = 0;
 
@@ -183,9 +205,10 @@ export function createThreadHooks(
             metadata: {
               operationId: event.operationId,
               startedAt,
+              totalCost: usageBaseline.totalCost,
               totalMessages: state.messages?.length ?? 0,
-              totalTokens: calculateTotalTokens(state.usage),
-              totalToolCalls: accumulatedToolCalls,
+              totalTokens: addUsage(usageBaseline.totalTokens, calculateTotalTokens(state.usage)),
+              totalToolCalls: addUsage(usageBaseline.totalToolCalls, accumulatedToolCalls),
             },
           });
         } catch (error) {
@@ -258,10 +281,13 @@ export function createThreadHooks(
               error: formattedError,
               operationId: finalState.operationId,
               startedAt,
-              totalCost: finalState.cost?.total,
+              totalCost: addUsage(usageBaseline.totalCost, finalState.cost?.total),
               totalMessages: finalState.messages?.length ?? 0,
-              totalTokens: calculateTotalTokens(finalState.usage),
-              totalToolCalls: accumulatedToolCalls,
+              totalTokens: addUsage(
+                usageBaseline.totalTokens,
+                calculateTotalTokens(finalState.usage),
+              ),
+              totalToolCalls: addUsage(usageBaseline.totalToolCalls, accumulatedToolCalls),
             },
             status,
           });

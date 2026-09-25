@@ -174,7 +174,7 @@ export class ThreadModel {
    */
   claimForRun = async (
     id: string,
-    expected: { operationId?: string | null; status?: string | null },
+    expected: { operationId?: string | null; status?: ThreadItem['status'] },
     metadata: ThreadMetadata,
   ): Promise<boolean> => {
     const rows = await this.db
@@ -184,12 +184,13 @@ export class ThreadModel {
         and(
           eq(threads.id, id),
           this.ownership(),
-          expected.status
-            ? eq(threads.status, expected.status as ThreadStatus)
-            : isNull(threads.status),
+          expected.status ? eq(threads.status, expected.status) : isNull(threads.status),
+          // COALESCE instead of `IS NULL` on the extracted path: a bare jsonb null
+          // test breaks the planner once the table carries a pg_search index (see
+          // `__tests__/jsonbNullTest.test.ts`).
           expected.operationId
             ? sql`${threads.metadata} ->> 'operationId' = ${expected.operationId}`
-            : sql`${threads.metadata} ->> 'operationId' IS NULL`,
+            : sql`COALESCE(${threads.metadata} ->> 'operationId', '') = ''`,
         ),
       )
       .returning({ id: threads.id });

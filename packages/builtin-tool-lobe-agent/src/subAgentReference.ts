@@ -1,3 +1,15 @@
+import { LobeAgentApiName, LobeAgentIdentifier } from './types';
+
+/**
+ * Whether a tool call is `lobe-agent.callSubAgent` — the only call whose
+ * result carries the sub-agent reference and whose sub-agent can be continued
+ * (`callAgent` children and group members cannot).
+ */
+export const isCallSubAgentCall = (
+  plugin?: { apiName?: string | null; identifier?: string | null } | null,
+): boolean =>
+  plugin?.identifier === LobeAgentIdentifier && plugin.apiName === LobeAgentApiName.callSubAgent;
+
 /**
  * Trailer appended to every server `callSubAgent` tool result. It is the
  * parent model's only handle on the sub-agent it just ran: passing the id back

@@ -722,6 +722,60 @@ describe('AiAgentService.execSubAgent', () => {
       expect(result.error).toContain(error);
     });
 
+    it('adds the new run usage to the totals of earlier runs', async () => {
+      mockThreadModel.findById.mockResolvedValue({
+        agentId: 'agent-1',
+        id: 'thread-old',
+        metadata: {
+          operationId: 'op-old',
+          totalCost: 0.5,
+          totalMessages: 6,
+          totalTokens: 1000,
+          totalToolCalls: 3,
+        },
+        sourceMessageId: 'tool-msg-1',
+        status: ThreadStatus.Failed,
+        topicId: 'topic-1',
+        type: ThreadType.Isolation,
+      });
+      const execAgentSpy = vi.spyOn(service, 'execAgent').mockResolvedValue(execAgentResult);
+
+      await service.execVirtualSubAgent(followUp);
+
+      const carried = { totalCost: 0.5, totalMessages: 6, totalTokens: 1000, totalToolCalls: 3 };
+      expect(mockThreadModel.claimForRun).toHaveBeenCalledWith(
+        'thread-old',
+        expect.anything(),
+        expect.objectContaining(carried),
+      );
+      expect(mockThreadModel.update).toHaveBeenCalledWith('thread-old', {
+        metadata: expect.objectContaining({ ...carried, operationId: 'op-new' }),
+      });
+
+      const completion = execAgentSpy.mock.calls[0][0].hooks?.find(
+        (h) => h.id === 'thread-completion',
+      );
+      await completion!.handler({
+        finalState: {
+          cost: { total: 0.25 },
+          messages: [{ content: 'part 4', role: 'assistant' }],
+          operationId: 'op-new',
+          usage: { llm: { tokens: { total: 400 } } },
+        },
+        operationId: 'op-new',
+        reason: 'done',
+      } as any);
+
+      expect(mockThreadModel.update).toHaveBeenLastCalledWith('thread-old', {
+        metadata: expect.objectContaining({
+          totalCost: 0.75,
+          totalTokens: 1400,
+          totalToolCalls: 3,
+        }),
+        status: ThreadStatus.Completed,
+      });
+    });
+
     it('marks the claimed thread failed when the run cannot be created', async () => {
       vi.spyOn(service, 'execAgent').mockRejectedValue(new Error('db down'));
 
