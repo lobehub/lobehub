@@ -247,7 +247,9 @@ agent-browser --session "$RUN_SESSION" \
 ```
 
 Then assert `get url` and `app-probe.sh auth` on that exact session before
-capturing evidence.
+capturing evidence, and close it at teardown
+(`agent-browser --session "$RUN_SESSION" close`, PROCESS.md Step 6) — a
+run-specific session is never reused, so an unclosed one is a leaked browser.
 
 A cross-wired session can also look perfectly healthy while running STALE code:
 if the other instance's Vite has since died, the browser keeps serving its last

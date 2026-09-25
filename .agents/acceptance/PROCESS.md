@@ -388,6 +388,14 @@ in a source file corrupts the next run and the next agent's mental model.
 - **Stop only what THIS run started**, using `PROJECT.md` §2 stop commands. Never a
   global process-name kill; never a listener you did not launch. A dev server the
   user started stays up.
+- **Close every agent-browser session this run opened**:
+  `agent-browser --session "$SESSION" close` per session. Each named session is a
+  detached daemon plus a headless Chrome that never exits on its own, so
+  run-specific session names (P05) leak one browser per run until someone closes
+  them — dozens of stale sessions add up to tens of GB. Never `close --all`: it
+  kills sibling runs' browsers. Export `AGENT_BROWSER_IDLE_TIMEOUT_MS=1800000`
+  before the first `agent-browser` call so a run that dies before teardown
+  still releases its browser.
 - **Revert every code injection.** Restore the file and verify: `grep -rn AGENT-TEST`
   returns nothing. When you injected into a file that already had uncommitted
   changes, `git checkout --` is the WRONG revert — it wipes the branch's edits too;
