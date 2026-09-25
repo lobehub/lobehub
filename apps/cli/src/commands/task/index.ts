@@ -264,14 +264,13 @@ export function registerTaskCommand(program: Command) {
 
       // Default: task detail
       const result = await client.task.detail.query({ id });
-
-      if (options.json !== undefined) {
-        outputJson(result.data, options.json);
-        return;
-      }
-
       const t = result.data;
       const url = await resolveAppUrl(client, taskPath(t.identifier, t.name));
+
+      if (options.json !== undefined) {
+        outputJson({ ...t, url }, options.json);
+        return;
+      }
 
       // ── Header ──
       console.log(`\n${pc.bold(t.identifier)} ${t.name || ''}`);

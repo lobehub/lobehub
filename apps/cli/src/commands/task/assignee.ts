@@ -2,21 +2,25 @@ import type { TrpcClient } from '../../api/client';
 import { resolveWorkspaceId } from '../../api/workspace';
 
 /**
- * Resolve `--user` to a member's user id. A raw `user_…` id passes through;
- * anything else is matched against the active workspace's members by email or
- * username, so `--user neko@ayaka.moe` works without looking the id up first.
+ * Resolve `--user` to a member's user id. Under a workspace scope the value is
+ * matched against members by user id, email or username — usernames may start
+ * with `user_` too, so the prefix alone never decides. Personal scope has no
+ * member list, so only a raw `user_…` id is accepted there.
  */
 export const resolveAssigneeUserId = async (client: TrpcClient, value: string) => {
   const needle = value.trim();
-  if (needle.startsWith('user_')) return needle;
 
   if (!resolveWorkspaceId()) {
+    if (needle.startsWith('user_')) return needle;
     throw new Error(
       `Cannot resolve "${needle}" outside a workspace — pass a user id (user_…) or run under a workspace scope.`,
     );
   }
 
   const members = await client.workspaceMember.list.query({});
+  const byId = members.find((m) => m.userId === needle);
+  if (byId) return byId.userId;
+
   const lower = needle.toLowerCase();
   const matches = members.filter(
     (m) => m.user?.email?.toLowerCase() === lower || m.user?.username?.toLowerCase() === lower,

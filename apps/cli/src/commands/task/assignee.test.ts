@@ -21,11 +21,32 @@ describe('resolveAssigneeUserId', () => {
     vi.mocked(resolveWorkspaceId).mockReset();
   });
 
-  it('passes a raw user id through without a member lookup', async () => {
+  it('passes a raw user id through in personal scope, where there is no member list', async () => {
+    vi.mocked(resolveWorkspaceId).mockReturnValue(undefined);
     const { client, query } = clientWith();
 
     await expect(resolveAssigneeUserId(client, 'user_neko')).resolves.toBe('user_neko');
     expect(query).not.toHaveBeenCalled();
+  });
+
+  it('matches a member by user id under a workspace scope', async () => {
+    vi.mocked(resolveWorkspaceId).mockReturnValue('ws-1');
+
+    await expect(resolveAssigneeUserId(clientWith().client, 'user_neko')).resolves.toBe(
+      'user_neko',
+    );
+  });
+
+  it('resolves a username that happens to start with user_ instead of treating it as an id', async () => {
+    vi.mocked(resolveWorkspaceId).mockReturnValue('ws-1');
+    const list = [
+      ...members,
+      { user: { email: 'ops@lobehub.com', username: 'user_ops' }, userId: 'user_real_ops' },
+    ];
+
+    await expect(resolveAssigneeUserId(clientWith(list).client, 'user_ops')).resolves.toBe(
+      'user_real_ops',
+    );
   });
 
   it('resolves a member by email or username, case-insensitively', async () => {
