@@ -985,8 +985,16 @@ describe('AgentRuntimeService', () => {
         const lifecycle = (svc as any).completionLifecycle;
         const emit = vi.spyOn(lifecycle, 'emitSignalEvents').mockResolvedValue([]);
         const dispatch = vi.spyOn(lifecycle, 'dispatchHooks').mockResolvedValue(undefined);
+        const publish = vi.spyOn((svc as any).streamManager, 'publishStreamEvent');
 
         const result = await svc.executeStep({ ...mockParams, stepIndex: 0 });
+
+        // Persisting the stop already published `agent_runtime_end`: no step
+        // event may follow it.
+        expect(publish).not.toHaveBeenCalledWith(
+          'test-operation-1',
+          expect.objectContaining({ type: 'step_start' }),
+        );
 
         expect(result.success).toBe(true);
         expect(runDeferredInit).not.toHaveBeenCalled();
@@ -1013,11 +1021,16 @@ describe('AgentRuntimeService', () => {
         const lifecycle = (svc as any).completionLifecycle;
         vi.spyOn(lifecycle, 'emitSignalEvents').mockResolvedValue([]);
         vi.spyOn(lifecycle, 'dispatchHooks').mockResolvedValue(undefined);
+        const publish = vi.spyOn((svc as any).streamManager, 'publishStreamEvent');
 
         await svc.executeStep({ ...mockParams, stepIndex: 0 });
 
         expect(runDeferredInit).toHaveBeenCalledTimes(1);
         expect(step).not.toHaveBeenCalled();
+        expect(publish).not.toHaveBeenCalledWith(
+          'test-operation-1',
+          expect.objectContaining({ type: 'step_start' }),
+        );
         // Nothing wrote the pre-init `running` state back over the stop.
         for (const [, saved] of coordinator.saveAgentState.mock.calls) {
           expect(saved.status).toBe('interrupted');
