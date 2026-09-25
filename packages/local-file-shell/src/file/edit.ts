@@ -1,8 +1,9 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 
 import { createPatch } from 'diff';
 
 import type { EditFileParams, EditFileResult } from '../types';
+import { verifyWrittenContent, withFileLock, writeFileAtomic } from './atomicWrite';
 import { resolveAgainstCwd } from './expandTilde';
 
 /** Cap the diagnosis scan so a stray edit against a huge file stays cheap. */
@@ -82,14 +83,10 @@ const findOccurrenceLines = (content: string, search: string, cap: number): numb
   return lines;
 };
 
-export async function editLocalFile({
-  file_path: rawPath,
-  old_string,
-  new_string,
-  replace_all = false,
-  cwd,
-}: EditFileParams): Promise<EditFileResult> {
-  const filePath = resolveAgainstCwd(rawPath, cwd) ?? rawPath;
+const applyEdit = async (
+  filePath: string,
+  { old_string, new_string, replace_all = false }: EditFileParams,
+): Promise<EditFileResult> => {
   try {
     const content = await readFile(filePath, 'utf8');
 
@@ -163,7 +160,10 @@ export async function editLocalFile({
       replacements = 1;
     }
 
-    await writeFile(filePath, newContent, 'utf8');
+    await writeFileAtomic(filePath, newContent);
+
+    const writeError = await verifyWrittenContent(filePath, newContent);
+    if (writeError) return { error: writeError, replacements: 0, success: false };
 
     const patch = createPatch(filePath, content, newContent, '', '');
     const diffText = `diff --git a${filePath} b${filePath}\n${patch}`;
@@ -181,4 +181,12 @@ export async function editLocalFile({
   } catch (error) {
     return { error: (error as Error).message, replacements: 0, success: false };
   }
+};
+
+export async function editLocalFile(params: EditFileParams): Promise<EditFileResult> {
+  const filePath = resolveAgainstCwd(params.file_path, params.cwd) ?? params.file_path;
+
+  // Serialize the whole read → replace → write per path: parallel edits to one
+  // file otherwise read the same snapshot and the last write drops the rest.
+  return withFileLock(filePath, () => applyEdit(filePath, params));
 }

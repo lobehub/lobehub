@@ -220,6 +220,17 @@ export interface LobeChatPluginApi {
    * @default 'collapsed'
    */
   renderDisplayControl?: RenderDisplayControl;
+  /**
+   * Name of the argument that identifies the resource this API mutates (e.g.
+   * a file path). Within one tool batch, calls to the same tool whose argument
+   * holds the same value run one after another in emission order — across
+   * APIs of that tool, so a `writeFile` and an `editFile` on one path queue
+   * together. Calls on different values stay concurrent.
+   *
+   * Framework-only config like `ordered`: it never reaches the LLM-facing
+   * tool spec.
+   */
+  serializeBy?: string;
   url?: string;
   /**
    * Declarative Work-registration config. When present, the tool-execution
@@ -237,6 +248,7 @@ export const LobeChatPluginApiSchema = z.object({
   ordered: z.boolean().optional(),
   parameters: z.record(z.string(), z.any()),
   renderDisplayControl: RenderDisplayControlSchema.optional(),
+  serializeBy: z.string().optional(),
   url: z.string().optional(),
   work: PluginApiWorkConfigSchema.optional(),
 });

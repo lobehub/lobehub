@@ -131,26 +131,66 @@ const buildEffectiveManifestMap = (state: AgentState): Record<string, any> => ({
 });
 
 /**
- * Split a batch into the calls whose API is marked `ordered` (kept in emission
- * order) and the rest. The flag lives on the manifest API entry, so it is read
- * from the same effective map the run context exposes to executors.
+ * Resource an API call mutates, read from the argument its manifest names in
+ * `serializeBy`. Undefined when the API declares none or the argument is not a
+ * non-empty string.
  */
-const partitionOrderedCalls = (
+const readSerializeKey = (tool: ChatToolPayload, argName: string): string | undefined => {
+  try {
+    const value = JSON.parse(tool.arguments || '{}')?.[argName];
+    return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * Split a batch into lanes. Calls within a lane run one after another in
+ * emission order; lanes run concurrently. The flags live on the manifest API
+ * entry, so they are read from the same effective map the run context exposes
+ * to executors.
+ *
+ * - every call to an API marked `ordered` shares one lane;
+ * - calls to one tool that name the same resource through `serializeBy` (the
+ *   same file path) share a lane, across that tool's APIs;
+ * - everything else gets a lane of its own.
+ */
+const planBatchLanes = (
   state: AgentState,
   toolsCalling: ChatToolPayload[],
-): { ordered: ChatToolPayload[]; unordered: ChatToolPayload[] } => {
+): ChatToolPayload[][] => {
   const manifestMap = buildEffectiveManifestMap(state);
   const ordered: ChatToolPayload[] = [];
-  const unordered: ChatToolPayload[] = [];
+  const serialized = new Map<string, ChatToolPayload[]>();
+  const lanes: ChatToolPayload[][] = [ordered];
 
   for (const tool of toolsCalling) {
     const apis = manifestMap[tool.identifier]?.api as
-      Array<{ name?: string; ordered?: boolean }> | undefined;
+      Array<{ name?: string; ordered?: boolean; serializeBy?: string }> | undefined;
     const api = apis?.find((item) => item.name === tool.apiName);
-    (api?.ordered === true ? ordered : unordered).push(tool);
+
+    if (api?.ordered === true) {
+      ordered.push(tool);
+      continue;
+    }
+
+    const resource = api?.serializeBy ? readSerializeKey(tool, api.serializeBy) : undefined;
+    if (resource === undefined) {
+      lanes.push([tool]);
+      continue;
+    }
+
+    const key = `${tool.identifier}\u0000${resource}`;
+    const lane = serialized.get(key);
+    if (lane) lane.push(tool);
+    else {
+      const created = [tool];
+      serialized.set(key, created);
+      lanes.push(created);
+    }
   }
 
-  return { ordered, unordered };
+  return lanes.filter((lane) => lane.length > 0);
 };
 
 const resolveCallIndex = (state: AgentState, toolName: string) => {
@@ -1002,15 +1042,17 @@ export const callToolsBatch =
     // Calls to an API marked `ordered` (posting successive chat messages) run
     // one after another in the order the model emitted them: handing them to
     // the platform concurrently let the channel keep whichever request landed
-    // first, so a report emitted as nine sends arrived shuffled. The chain runs
-    // alongside the unordered calls so a read-only sibling never waits on it.
-    const { ordered, unordered } = partitionOrderedCalls(state, toolsToExecute);
-    await Promise.all([
-      ...unordered.map((tool) => runOne(tool)),
-      (async () => {
-        for (const tool of ordered) await runOne(tool);
-      })(),
-    ]);
+    // first, so a report emitted as nine sends arrived shuffled. Calls that
+    // mutate the same resource (`serializeBy`, e.g. several edits to one file)
+    // queue the same way: devices that apply them concurrently read one
+    // snapshot and keep only the last write, while each call reports success.
+    // Each chain runs alongside everything else, so a read-only sibling never
+    // waits on it.
+    await Promise.all(
+      planBatchLanes(state, toolsToExecute).map(async (lane) => {
+        for (const tool of lane) await runOne(tool);
+      }),
+    );
 
     // Client tools in a mixed batch never entered `toolsToExecute` — they were
     // waiting for the pause below to hand them to the client. Once the operation
