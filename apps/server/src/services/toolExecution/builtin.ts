@@ -31,6 +31,22 @@ const getManifestApiNames = (identifier: string): string[] =>
   );
 
 /**
+ * Required parameter names declared by a builtin API. Prefers the manifest the
+ * run was assembled with, falling back to the static builtin manifest.
+ */
+const getRequiredParams = (
+  identifier: string,
+  apiName: string,
+  context: ToolExecutionContext,
+): string[] => {
+  const manifest =
+    context.toolManifestMap?.[identifier] ??
+    builtinTools.find((tool) => tool.identifier === identifier)?.manifest;
+  const required = manifest?.api?.find((api) => api.name === apiName)?.parameters?.required;
+  return Array.isArray(required) ? required : [];
+};
+
+/**
  * Fallback when a manifest isn't available (e.g. a runtime registered without a
  * matching manifest entry): collect callable names across the whole prototype
  * chain — both own arrow-field methods and class prototype methods — which
@@ -84,6 +100,29 @@ export class BuiltinToolsExecutor implements IToolExecutor {
     context: ToolExecutionContext,
   ): Promise<ToolExecutionResult> {
     const { identifier, apiName, arguments: argsStr, source } = payload;
+
+    // An empty arguments string means the call reached us without any argument
+    // deltas (not generated, or dropped by the provider / an OpenAI-compatible
+    // proxy in transit). Falling back to `{}` for an API with required params
+    // surfaced as a misleading tool error (e.g. "command is required") that the
+    // model blamed on the platform. APIs without required params keep `{}`.
+    if (!argsStr?.trim()) {
+      const required = getRequiredParams(identifier, apiName, context);
+      if (required.length > 0) {
+        const message =
+          `The tool call arrived with an empty arguments string, so the tool was not invoked. ` +
+          `The arguments were either not generated or lost in transit before reaching the tool. ` +
+          `Resend the call with the complete JSON arguments, including the required parameters: ` +
+          `${required.join(', ')}.`;
+        log('Rejected empty arguments for %s:%s', identifier, apiName);
+        return {
+          content: message,
+          error: { code: 'EMPTY_ARGUMENTS', message },
+          success: false,
+        };
+      }
+    }
+
     const parsed = safeParseJSON(argsStr);
 
     // When JSON.parse fails, return a dedicated error rather than silently
@@ -93,7 +132,7 @@ export class BuiltinToolsExecutor implements IToolExecutor {
     // max_tokens is exhausted mid-tool-call) from plain malformed JSON, and
     // echo the raw arguments string so the model can verify it is exactly
     // what it produced.
-    if (parsed === undefined && argsStr) {
+    if (parsed === undefined && argsStr?.trim()) {
       const truncationReason = detectTruncatedJSON(argsStr);
       const explanation = truncationReason
         ? `The tool call arguments JSON appears to be truncated (${truncationReason}), ` +
