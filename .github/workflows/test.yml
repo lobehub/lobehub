@@ -206,14 +206,16 @@ jobs:
       - name: Run tests
         run: bunx vitest --coverage --silent='passed-only' --reporter=default --project app --shard=${{ matrix.shard }}/3
 
-      - name: Upload App Coverage to Codecov
+      # Codecov scores a flag on whatever uploads it has, so a shard uploading
+      # alone reports a fraction of the coverage as a drop. Hand the report to
+      # `upload-sharded-coverage`, which uploads all shards together.
+      - name: Save App Coverage shard
         if: success()
-        uses: codecov/codecov-action@v5
+        uses: actions/upload-artifact@v6
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage/app/lcov.info
-          flags: app
-          name: app-shard-${{ matrix.shard }}
+          name: coverage-app-${{ matrix.shard }}
+          path: ./coverage/app/lcov.info
+          retention-days: 1
 
   # Windows-only verification of the local shell execution strategy.
   # The unit tests mock process.platform and fs.existsSync, so they prove
@@ -369,14 +371,68 @@ jobs:
       - name: Test Server Coverage
         run: bunx vitest --coverage --silent='passed-only' --reporter=default --coverage.reportsDirectory=./apps/server/coverage --project server --shard=${{ matrix.shard }}/2
 
-      - name: Upload Server Coverage to Codecov
+      # See the App shard above: uploaded together by `upload-sharded-coverage`.
+      - name: Save Server Coverage shard
         if: success()
+        uses: actions/upload-artifact@v6
+        with:
+          name: coverage-server-${{ matrix.shard }}
+          path: ./apps/server/coverage/lcov.info
+          retention-days: 1
+
+  # One Codecov upload per sharded flag, sent only once every shard of that
+  # flag has passed. Uploading each shard as it finished let Codecov score a
+  # flag on a partial report and fail its project status with a false drop
+  # (e.g. -25% after 1/3 app shards) until the remaining shards landed.
+  upload-sharded-coverage:
+    name: Upload Sharded Coverage
+    needs: [test-app, test-server]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        env:
+          REF_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          REPOSITORY: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+        run: |
+          git init .
+          git remote add origin "https://github.com/${REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "${REF_SHA}"
+          git checkout --force FETCH_HEAD
+
+      - name: Download App Coverage shards
+        if: needs.test-app.result == 'success'
+        uses: actions/download-artifact@v7
+        with:
+          pattern: coverage-app-*
+          path: ./coverage-shards
+
+      - name: Upload App Coverage to Codecov
+        if: needs.test-app.result == 'success'
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./apps/server/coverage/lcov.info
+          files: ./coverage-shards/coverage-app-1/lcov.info,./coverage-shards/coverage-app-2/lcov.info,./coverage-shards/coverage-app-3/lcov.info
+          disable_search: true
+          flags: app
+          name: app
+
+      - name: Download Server Coverage shards
+        if: needs.test-server.result == 'success'
+        uses: actions/download-artifact@v7
+        with:
+          pattern: coverage-server-*
+          path: ./coverage-shards
+
+      - name: Upload Server Coverage to Codecov
+        if: needs.test-server.result == 'success'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage-shards/coverage-server-1/lcov.info,./coverage-shards/coverage-server-2/lcov.info
+          disable_search: true
           flags: server
-          name: server-shard-${{ matrix.shard }}
+          name: server
 
   test-databsae:
     name: Test Database
