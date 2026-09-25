@@ -2,8 +2,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
+import { testProvider } from '../../providerTestUtils';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { LobeGroq, params } from './index';
+
+testProvider({
+  provider: 'groq',
+  defaultBaseURL: 'https://api.groq.com/openai/v1',
+  chatModel: 'mistralai/mistral-7b-instruct:free',
+  Runtime: LobeGroq,
+  chatDebugEnv: 'DEBUG_GROQ_CHAT_COMPLETION',
+});
 
 // Mock the console.error to avoid polluting test output
 vi.spyOn(console, 'error').mockImplementation(() => {});

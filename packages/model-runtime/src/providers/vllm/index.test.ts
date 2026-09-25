@@ -1,8 +1,18 @@
 // @vitest-environment node
+import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { testProvider } from '../../providerTestUtils';
 import type { VLLMModelCard } from './index';
 import { LobeVLLMAI } from './index';
+
+testProvider({
+  Runtime: LobeVLLMAI,
+  provider: ModelProvider.VLLM,
+  defaultBaseURL: 'http://localhost:8000/v1',
+  chatDebugEnv: 'DEBUG_VLLM_CHAT_COMPLETION',
+  chatModel: 'llama-2-7b-chat',
+});
 
 describe('LobeVLLMAI - custom features', () => {
   let instance: InstanceType<typeof LobeVLLMAI>;
@@ -43,26 +53,6 @@ describe('LobeVLLMAI - custom features', () => {
       const models = await instance.models();
 
       expect(models).toEqual([]);
-    });
-  });
-
-  describe('debug', () => {
-    it('should enable request debug when DEBUG_VLLM_CHAT_COMPLETION is set to 1', async () => {
-      process.env.DEBUG_VLLM_CHAT_COMPLETION = '1';
-      vi.spyOn(instance['client'].chat.completions, 'create').mockResolvedValue(
-        new ReadableStream() as any,
-      );
-      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-
-      await instance.chat({
-        messages: [{ content: 'Hello', role: 'user' }],
-        model: 'test-model',
-      });
-
-      expect(logSpy).toHaveBeenCalledWith('[requestPayload]');
-
-      logSpy.mockRestore();
-      delete process.env.DEBUG_VLLM_CHAT_COMPLETION;
     });
   });
 });

@@ -2,8 +2,23 @@
 import { ModelProvider } from 'model-bank';
 import { describe, expect, it } from 'vitest';
 
+import { testProvider } from '../../providerTestUtils';
 import { AgentRuntimeErrorType } from '../../types/error';
-import { params } from './index';
+import { Lobe302AI, params } from './index';
+
+testProvider({
+  Runtime: Lobe302AI,
+  provider: ModelProvider.Ai302,
+  defaultBaseURL: 'https://api.302.ai/v1',
+  chatDebugEnv: 'DEBUG_AI302_CHAT_COMPLETION',
+  chatModel: 'gpt-3.5-turbo',
+  invalidErrorType: 'InvalidProviderAPIKey',
+  bizErrorType: 'ProviderBizError',
+  test: {
+    skipAPICall: true,
+    skipErrorHandle: true,
+  },
+});
 
 describe('Lobe302AI - params', () => {
   it('should have correct baseURL', () => {
@@ -40,19 +55,6 @@ describe('Lobe302AI - params', () => {
       const result = params.chatCompletion?.handleError?.(error);
 
       expect(result?.error).toBe(error);
-    });
-  });
-
-  describe('debug', () => {
-    it('should return false when DEBUG_AI302_CHAT_COMPLETION is not set', () => {
-      delete process.env.DEBUG_AI302_CHAT_COMPLETION;
-      expect(params.debug?.chatCompletion()).toBe(false);
-    });
-
-    it('should return true when DEBUG_AI302_CHAT_COMPLETION is set to 1', () => {
-      process.env.DEBUG_AI302_CHAT_COMPLETION = '1';
-      expect(params.debug?.chatCompletion()).toBe(true);
-      delete process.env.DEBUG_AI302_CHAT_COMPLETION;
     });
   });
 });

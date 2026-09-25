@@ -2,7 +2,22 @@
 import { ModelProvider } from 'model-bank';
 import { describe, expect, it, vi } from 'vitest';
 
-import { params } from './index';
+import { testProvider } from '../../providerTestUtils';
+import { LobeHigressAI, params } from './index';
+
+testProvider({
+  Runtime: LobeHigressAI,
+  provider: ModelProvider.Higress,
+  defaultBaseURL: 'https://api.openai.com/v1',
+  chatDebugEnv: 'DEBUG_HIGRESS_CHAT_COMPLETION',
+  chatModel: 'gpt-3.5-turbo',
+  invalidErrorType: 'InvalidProviderAPIKey',
+  bizErrorType: 'ProviderBizError',
+  test: {
+    skipAPICall: true,
+    skipErrorHandle: true,
+  },
+});
 
 describe('LobeHigressAI - params', () => {
   it('should have correct baseURL default', () => {
@@ -122,19 +137,6 @@ describe('LobeHigressAI - params', () => {
 
       const models = await params.models!({ client: mockClient as any });
       expect(models[0].reasoning).toBe(true);
-    });
-  });
-
-  describe('debug', () => {
-    it('should return false when DEBUG_HIGRESS_CHAT_COMPLETION is not set', () => {
-      delete process.env.DEBUG_HIGRESS_CHAT_COMPLETION;
-      expect(params.debug?.chatCompletion()).toBe(false);
-    });
-
-    it('should return true when DEBUG_HIGRESS_CHAT_COMPLETION is set to 1', () => {
-      process.env.DEBUG_HIGRESS_CHAT_COMPLETION = '1';
-      expect(params.debug?.chatCompletion()).toBe(true);
-      delete process.env.DEBUG_HIGRESS_CHAT_COMPLETION;
     });
   });
 });

@@ -1,10 +1,23 @@
 // @vitest-environment node
+import { ModelProvider } from 'model-bank';
 import type { Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
+import { testProvider } from '../../providerTestUtils';
 import models from './fixtures/models.json';
 import { LobeNovitaAI } from './index';
+
+const provider = ModelProvider.Novita;
+const defaultBaseURL = 'https://api.novita.ai/v3/openai';
+
+testProvider({
+  Runtime: LobeNovitaAI,
+  provider,
+  defaultBaseURL,
+  chatDebugEnv: 'DEBUG_NOVITA_CHAT_COMPLETION',
+  chatModel: 'gpt-3.5-turbo',
+});
 
 // Mock the console.error to avoid polluting test output
 vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -34,23 +47,6 @@ describe('NovitaAI', () => {
       const list = await instance.models();
 
       expect(list).toMatchSnapshot();
-    });
-  });
-
-  describe('debug', () => {
-    it('should enable request debug when DEBUG_NOVITA_CHAT_COMPLETION is set to 1', async () => {
-      process.env.DEBUG_NOVITA_CHAT_COMPLETION = '1';
-      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-
-      await instance.chat({
-        messages: [{ content: 'Hello', role: 'user' }],
-        model: 'test-model',
-      });
-
-      expect(logSpy).toHaveBeenCalledWith('[requestPayload]');
-
-      logSpy.mockRestore();
-      delete process.env.DEBUG_NOVITA_CHAT_COMPLETION;
     });
   });
 });

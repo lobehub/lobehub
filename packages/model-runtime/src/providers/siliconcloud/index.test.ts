@@ -3,9 +3,24 @@ import { ModelProvider } from 'model-bank';
 import OpenAI from 'openai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { testProvider } from '../../providerTestUtils';
 import { AgentRuntimeErrorType } from '../../types/error';
 import type { SiliconCloudModelCard } from './index';
-import { LobeSiliconCloudAI, params } from './index';
+import { LobeSiliconCloudAI } from './index';
+
+testProvider({
+  Runtime: LobeSiliconCloudAI,
+  provider: ModelProvider.SiliconCloud,
+  defaultBaseURL: 'https://api.siliconflow.cn/v1',
+  chatDebugEnv: 'DEBUG_SILICONCLOUD_CHAT_COMPLETION',
+  chatModel: 'Qwen/Qwen2.5-7B-Instruct',
+  invalidErrorType: 'InvalidProviderAPIKey',
+  bizErrorType: 'ProviderBizError',
+  test: {
+    skipAPICall: true,
+    skipErrorHandle: true,
+  },
+});
 
 describe('LobeSiliconCloudAI - custom features', () => {
   let instance: InstanceType<typeof LobeSiliconCloudAI>;
@@ -281,29 +296,6 @@ describe('LobeSiliconCloudAI - custom features', () => {
 
       expect(instance['client'].models.list).toHaveBeenCalled();
       expect(models.length).toBeGreaterThan(0);
-    });
-  });
-
-  describe('params', () => {
-    it('should use the expected base URL', () => {
-      expect(params.baseURL).toBe('https://api.siliconflow.cn/v1');
-    });
-
-    it('should expose the expected provider identity', () => {
-      expect(params.provider).toBe(ModelProvider.SiliconCloud);
-    });
-
-    describe('debug', () => {
-      it('should return false when DEBUG_SILICONCLOUD_CHAT_COMPLETION is not set', () => {
-        delete process.env.DEBUG_SILICONCLOUD_CHAT_COMPLETION;
-        expect(params.debug?.chatCompletion()).toBe(false);
-      });
-
-      it('should return true when DEBUG_SILICONCLOUD_CHAT_COMPLETION is set to 1', () => {
-        process.env.DEBUG_SILICONCLOUD_CHAT_COMPLETION = '1';
-        expect(params.debug?.chatCompletion()).toBe(true);
-        delete process.env.DEBUG_SILICONCLOUD_CHAT_COMPLETION;
-      });
     });
   });
 });
