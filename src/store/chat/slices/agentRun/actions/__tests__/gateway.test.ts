@@ -1490,6 +1490,134 @@ describe('GatewayActionImpl', () => {
     });
 
     /**
+     * @example A stop confirmed before the new topic's sidebar refetch lands still retires the row.
+     */
+    it('settles a late-cancelled new topic only after the sidebar refetch installs its row', async () => {
+      // ROOT CAUSE:
+      //
+      // The late-interrupt settle ran as soon as `interruptTask` confirmed. For
+      // a new topic the fire-and-forget `refreshTopic()` could land after it,
+      // so the settle found no marker to clear and the refetch then installed a
+      // `running` row that nothing on this socket-less path would ever retire.
+      //
+      // Before: settle raced the refetch and no-op'd on the missing marker.
+      // After: settle waits for both the confirmation and the refetch.
+      const controller = new AbortController();
+      const internalDispatchTopic = vi.fn();
+      const internalPinTopicStatus = vi.fn();
+      const state: Record<string, any> = { gatewayConnections: {}, topicDataMap: {} };
+      let landRefresh!: () => void;
+      const refreshTopic = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            landRefresh = () => {
+              state.topicDataMap = {
+                'agent_agent-1': {
+                  items: [
+                    {
+                      id: 'topic-1',
+                      metadata: {
+                        runningOperation: {
+                          assistantMessageId: 'ast-1',
+                          operationId: 'server-op-late',
+                        },
+                      },
+                      status: 'running',
+                    },
+                  ],
+                },
+              };
+              resolve();
+            };
+          }),
+      );
+      const set = vi.fn((updater: any) => {
+        if (typeof updater === 'function') Object.assign(state, updater(state));
+        else Object.assign(state, updater);
+      });
+      const get = vi.fn(() => ({
+        ...state,
+        associateMessageWithOperation: vi.fn(),
+        completeOperation: vi.fn(),
+        connectToGateway: vi.fn(),
+        getOperationAbortSignal: vi.fn(() => controller.signal),
+        internal_dispatchTopic: internalDispatchTopic,
+        internal_pinTopicStatus: internalPinTopicStatus,
+        internal_replaceTopicId: vi.fn(),
+        moveQueuedMessages: vi.fn(),
+        moveVoiceMessages: vi.fn(),
+        onOperationCancel: vi.fn(),
+        refreshTopic,
+        replaceMessages: vi.fn(),
+        startOperation: vi.fn(),
+        switchTopic: vi.fn(),
+      })) as any;
+
+      (globalThis as any).window = {
+        global_serverConfigStore: {
+          getState: () => ({ serverConfig: { agentGatewayUrl: 'https://gateway.test.com' } }),
+        },
+      };
+
+      const action = new GatewayActionImpl(set as any, get, undefined);
+      action.createClient = vi.fn(() => createMockClient());
+      vi.mocked(aiAgentService.interruptTask).mockResolvedValue({
+        operationId: 'server-op-late',
+        success: true,
+      });
+      const persisted = {
+        agentId: 'agent-1',
+        assistantMessageId: 'ast-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        message: 'ok',
+        operationId: 'server-op-late',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'test-token',
+        topicId: 'topic-1',
+        userMessageId: 'usr-1',
+      } as const;
+      let resolvePersistence!: (value: typeof persisted) => void;
+      vi.mocked(aiAgentService.execAgentTask).mockReturnValue(
+        new Promise((resolve) => {
+          resolvePersistence = resolve;
+        }),
+      );
+
+      const execution = action.executeGatewayAgent({
+        context: { agentId: 'agent-1', scope: 'main', threadId: null, topicId: null },
+        message: 'Hello',
+        parentOperationId: 'parent-send-msg-op',
+      });
+      await vi.waitFor(() => expect(aiAgentService.execAgentTask).toHaveBeenCalledOnce());
+      controller.abort('user cancelled');
+      resolvePersistence(persisted);
+      await execution;
+
+      // The interrupt is confirmed, but the refetch has not landed yet.
+      await vi.waitFor(() => expect(aiAgentService.interruptTask).toHaveBeenCalled());
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(refreshTopic).toHaveBeenCalledOnce();
+      expect(internalPinTopicStatus).not.toHaveBeenCalled();
+
+      landRefresh();
+
+      await vi.waitFor(() =>
+        expect(internalPinTopicStatus).toHaveBeenCalledWith(
+          expect.objectContaining({ status: 'active', topicId: 'topic-1' }),
+        ),
+      );
+      expect(internalDispatchTopic).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'topic-1',
+          value: { metadata: { runningOperation: null } },
+        }),
+      );
+    });
+
+    /**
      * @example Send now receives the server's physical device cancellation result.
      */
     it('registers a cancel handler that propagates unconfirmed device shutdown', async () => {

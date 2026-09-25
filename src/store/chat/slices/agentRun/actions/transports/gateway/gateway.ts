@@ -900,6 +900,11 @@ export class GatewayActionImpl {
     }
 
     let hasInterruptedAfterPersistence = false;
+    // Owner-scoped late interrupt, resolved to whether the server confirmed it.
+    let lateInterruptConfirmed: Promise<boolean> | undefined;
+    // The fire-and-forget sidebar refetch below; it may install the server's
+    // `running` row after the interrupt has already been confirmed.
+    let topicRefresh: Promise<void> | undefined;
     const interruptIfCancelledAfterPersistence = () => {
       if (!abortSignal?.aborted) return false;
 
@@ -916,22 +921,16 @@ export class GatewayActionImpl {
               console.error('[Gateway] share interruptTask after cancel failed:', err),
             );
         else
-          interruptGatewayTaskOrThrow({
+          lateInterruptConfirmed = interruptGatewayTaskOrThrow({
             operationId: result.operationId,
             topicId: result.topicId,
-          })
-            .then(() => {
-              // This path never opens a socket, so no terminal frame will ever
-              // retire a `running` row that `refreshTopic` already pulled in.
-              if (!result.topicId) return;
-              this.#settleLocalTopicAfterConfirmedStop({
-                agentId: messageContext.agentId,
-                groupId: messageContext.groupId,
-                operationId: result.operationId,
-                topicId: result.topicId,
-              });
-            })
-            .catch((err) => console.error('[Gateway] interruptTask after cancel failed:', err));
+          }).then(
+            () => true,
+            (err) => {
+              console.error('[Gateway] interruptTask after cancel failed:', err);
+              return false;
+            },
+          );
       }
 
       return true;
@@ -1061,7 +1060,7 @@ export class GatewayActionImpl {
       // Share visitors have no owner topic sidebar — their list refreshes via
       // the share feature's own SWR hook, and refreshTopic is owner-scoped.
       if (!agentShareId)
-        this.#get()
+        topicRefresh = this.#get()
           .refreshTopic()
           .catch((err) =>
             console.error('[Gateway] refreshTopic after topic creation failed:', err),
@@ -1082,6 +1081,22 @@ export class GatewayActionImpl {
     cancelledAfterPersistence = interruptIfCancelledAfterPersistence() || cancelledAfterPersistence;
 
     if (cancelledAfterPersistence) {
+      // This path never opens a socket, so no terminal frame will ever retire
+      // the topic row. Settle it once the stop is confirmed AND the sidebar
+      // refetch has landed: settling first would find no marker to clear, and
+      // the refetch would then install a `running` row nobody retires.
+      const { topicId } = result;
+      if (lateInterruptConfirmed && topicId) {
+        void Promise.all([lateInterruptConfirmed, topicRefresh]).then(([confirmed]) => {
+          if (!confirmed) return;
+          this.#settleLocalTopicAfterConfirmedStop({
+            agentId: messageContext.agentId,
+            groupId: messageContext.groupId,
+            operationId: result.operationId,
+            topicId,
+          });
+        });
+      }
       if (parentOperationId) this.#get().completeOperation(parentOperationId);
       return result;
     }
