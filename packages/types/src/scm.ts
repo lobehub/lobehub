@@ -38,6 +38,24 @@ export const SCM_TRUSTED_ASSOCIATIONS: ReadonlySet<ScmActorAssociation> = new Se
   'owner',
 ]);
 
+/**
+ * Review bots whose feedback may steer the agent even though the provider
+ * reports them as `none` (GitHub App bots never hold an association). Only
+ * a repository admin can install such an app, and the `[bot]` suffix cannot
+ * be taken by a user account, so the login alone identifies it.
+ */
+export const SCM_TRUSTED_REVIEW_BOTS: ReadonlySet<string> = new Set([
+  'chatgpt-codex-connector[bot]',
+]);
+
+/** Whether an actor's review text may become an instruction for an unattended agent. */
+export const isTrustedScmReviewer = (actor: {
+  association?: ScmActorAssociation;
+  login?: string;
+}): boolean =>
+  (!!actor.association && SCM_TRUSTED_ASSOCIATIONS.has(actor.association)) ||
+  (!!actor.login && SCM_TRUSTED_REVIEW_BOTS.has(actor.login));
+
 /** One repository granted to an installation. Snapshot maintained from provider events. */
 export interface ScmInstallationRepository {
   externalId: string;

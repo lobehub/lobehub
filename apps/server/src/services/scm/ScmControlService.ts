@@ -1,5 +1,5 @@
 import type { GithubIntegrationPreference } from '@lobechat/types';
-import { RequestTrigger, SCM_TRUSTED_ASSOCIATIONS } from '@lobechat/types';
+import { isTrustedScmReviewer, RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 import { eq } from 'drizzle-orm';
 
@@ -132,8 +132,9 @@ export class ScmControlService {
         // only someone the repository already trusts may steer it. Anyone
         // else is still free to comment; their words just do not become
         // instructions.
-        const association = event.type === 'review' ? event.actor?.association : undefined;
-        if (!association || !SCM_TRUSTED_ASSOCIATIONS.has(association)) {
+        const actor = event.type === 'review' ? event.actor : undefined;
+        const association = actor?.association;
+        if (!actor || !association || !isTrustedScmReviewer(actor)) {
           return { detail: `reviewer is ${association ?? 'unknown'}`, outcome: 'skipped' };
         }
         if (!(await this.isEnabled(row, WAKE_PREFERENCE[kind]))) {
@@ -558,7 +559,9 @@ export class ScmControlService {
       : [];
     // The window may also hold comments from people the repository does not
     // trust; the agent is told about the trusted ones only.
-    const trusted = feedback.filter((item) => SCM_TRUSTED_ASSOCIATIONS.has(item.association));
+    const trusted = feedback.filter((item) =>
+      isTrustedScmReviewer({ association: item.association, login: item.author }),
+    );
     const known = new Set(trusted.map((item) => item.url ?? `${item.author}:${item.body}`));
     const all =
       trigger && !known.has(trigger.url ?? `${trigger.author}:${trigger.body}`)
