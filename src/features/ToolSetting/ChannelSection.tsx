@@ -23,7 +23,7 @@ const ChannelSection = memo<ChannelSectionProps>((props) => {
 
   // Keep at least one channel enabled: once a single channel is left on, lock
   // its switch so users can't disable the whole section from here.
-  const enabledCount = rows.filter((row) => row.enabled).length;
+  const enabledIds = rows.filter((row) => row.enabled).map((row) => row.id);
 
   return (
     <Flexbox gap={8}>
@@ -41,9 +41,10 @@ const ChannelSection = memo<ChannelSectionProps>((props) => {
             items={rows}
             renderItem={(item: ChannelRow) => (
               <ChannelItem
-                disabled={item.enabled && enabledCount <= 1}
                 enabled={item.enabled}
                 id={item.id}
+                locked={item.enabled && enabledIds.length <= 1}
+                rank={item.enabled ? enabledIds.indexOf(item.id) + 1 : undefined}
                 onToggle={toggle}
               />
             )}

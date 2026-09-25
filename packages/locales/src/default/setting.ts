@@ -1492,9 +1492,10 @@ export default {
   'settingTool.crawler.desc':
     'Order the services used to read full web pages. Higher items are tried first; disabled ones are skipped.',
   'settingTool.crawler.title': 'Web Reader',
-  'settingTool.empty': 'No channels available',
+  'settingTool.empty': 'No services available',
   'settingTool.item.disabled': 'Disabled',
   'settingTool.item.enabled': 'Enabled',
+  'settingTool.item.locked': 'Keep at least one service enabled',
   'settingTool.search.desc':
     'Order the services used to search the web. Higher items are tried first; disabled ones are skipped.',
   'settingTool.search.title': 'Search Engines',
