@@ -2350,6 +2350,51 @@ describe('ConversationLifecycle actions', () => {
         );
       });
 
+      // A native agent with no directory configured is a valid setup, but the
+      // topic still has to remember its machine — the client runtime creates
+      // it, so no server turn would stamp the device later.
+      it('should pin a client-runtime new topic to its device even without a directory', async () => {
+        mockConstEnv.isDesktop = true;
+        const deviceId = 'device-1';
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: { boundDeviceId: deviceId, executionTarget: 'local' },
+          },
+        });
+
+        const sendMessageInServerSpy = vi
+          .spyOn(aiChatService, 'sendMessageInServer')
+          .mockResolvedValue({
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            messages: [
+              createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+              createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+            ],
+            topicId: TEST_IDS.NEW_TOPIC_ID,
+            topics: [],
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          } as any);
+
+        const { result } = renderHook(() => useChatStore());
+        act(() => {
+          useChatStore.setState({ isGatewayModeEnabled: () => false });
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: { agentId: TEST_IDS.SESSION_ID, threadId: null, topicId: null },
+            message: 'No directory here',
+          });
+        });
+
+        expect(sendMessageInServerSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            newTopic: expect.objectContaining({ metadata: { boundDeviceId: deviceId } }),
+          }),
+          expect.any(AbortController),
+        );
+      });
+
       it('should leave a plain-chat agent topic unbound', async () => {
         mockConstEnv.isDesktop = true;
         const deviceId = 'device-1';

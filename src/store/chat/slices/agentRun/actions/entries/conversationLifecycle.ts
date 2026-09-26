@@ -1269,7 +1269,12 @@ export class ConversationLifecycleActionImpl {
               workingDirectory,
               ...(workingDirectoryConfig ? { workingDirectoryConfig } : {}),
             }
-          : undefined;
+          : // No directory is a valid state for a native agent, but the machine
+            // still has to be recorded: the client runtime creates this topic
+            // itself, so no server turn would stamp it afterwards.
+            newTopicDeviceId
+            ? { boundDeviceId: newTopicDeviceId }
+            : undefined;
     /** First-send persistence bypasses turnSetup, so both runtime paths must carry the effort snapshot. */
     const optimisticTopicMetadata = newTopicReasoningSnapshot
       ? { ...workingDirectoryMetadata, ...newTopicReasoningSnapshot }

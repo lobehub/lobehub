@@ -47,6 +47,7 @@ import { topicSelectors } from '@/store/chat/selectors';
 import { useElectronStore } from '@/store/electron';
 
 import { formatLockedControlTooltip } from '../utils/lockedControlTooltip';
+import { moveTopicToTarget } from './moveTopicToTarget';
 import { useCommitWorkingDirectory } from './useCommitWorkingDirectory';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -520,19 +521,24 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
    * default is written into the same setting the chip reads, so the answer to
    * "where is this running?" stays visible and changeable.
    */
-  const ensureSandboxWorkingDirectory = useCallback(async () => {
-    if (configuredWorkingDirectory) return;
+  // `force`: the caller just cleared the directory, which this closure cannot
+  // see yet.
+  const ensureSandboxWorkingDirectory = useCallback(
+    async (force = false) => {
+      if (configuredWorkingDirectory && !force) return;
 
-    const { path } = await localFileService.ensureSandboxWorkspace({ agentId });
-    // Leave it unset if the directory could not be created: pointing the fence
-    // at a path that does not exist would fail later and less clearly.
-    //
-    // `localTarget` because the sandbox pick is about to make `local` the
-    // target: the config still describes the previous one here, so without it a
-    // workspace member's first pick would file the path against the shared
-    // target (or nowhere) and the very next command would refuse again.
-    if (path) await commitWorkingDirectory({ path }, { localTarget: true });
-  }, [agentId, commitWorkingDirectory, configuredWorkingDirectory]);
+      const { path } = await localFileService.ensureSandboxWorkspace({ agentId });
+      // Leave it unset if the directory could not be created: pointing the fence
+      // at a path that does not exist would fail later and less clearly.
+      //
+      // `localTarget` because the sandbox pick is about to make `local` the
+      // target: the config still describes the previous one here, so without it a
+      // workspace member's first pick would file the path against the shared
+      // target (or nowhere) and the very next command would refuse again.
+      if (path) await commitWorkingDirectory({ path }, { localTarget: true });
+    },
+    [agentId, commitWorkingDirectory, configuredWorkingDirectory],
+  );
 
   const selectExecutionTarget = useSelectExecutionTarget(agentId);
 
@@ -576,19 +582,25 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
         }),
         okText: t('heteroAgent.executionTarget.switchTopic.ok'),
         onOk: async () => {
-          // The cwd and session are bare values that only hold on the old
-          // machine — drop them with the pin so the next turn resolves fresh
-          // ones where it now runs.
-          await updateTopicMetadata(activeTopicId, {
-            boundDeviceId: nextMachineId,
-            heteroSessionBindingKey: undefined,
-            heteroSessionBindingKeyByWorkingDirectory: undefined,
-            heteroSessionId: undefined,
-            heteroSessionIdByWorkingDirectory: undefined,
-            workingDirectory: undefined,
-            workingDirectoryConfig: undefined,
+          const result = await moveTopicToTarget({
+            afterRepin: localSandbox ? () => ensureSandboxWorkingDirectory(true) : undefined,
+            // The cwd and session are bare values that only hold on the old
+            // machine — drop them with the pin so the next turn resolves fresh
+            // ones where it now runs.
+            repinTopic: () =>
+              updateTopicMetadata(activeTopicId, {
+                boundDeviceId: nextMachineId,
+                heteroSessionBindingKey: undefined,
+                heteroSessionBindingKeyByWorkingDirectory: undefined,
+                heteroSessionId: undefined,
+                heteroSessionIdByWorkingDirectory: undefined,
+                workingDirectory: undefined,
+                workingDirectoryConfig: undefined,
+              }),
+            saveTarget: () => selectExecutionTarget(target, deviceId, { localSandbox }),
           });
-          await apply();
+          // A refused/failed target save already toasted inside the hook.
+          if (result === 'topic-not-saved') toast.error(t('saveAgentConfigFail', { ns: 'common' }));
         },
         title: t('heteroAgent.executionTarget.switchTopic.title'),
       });
