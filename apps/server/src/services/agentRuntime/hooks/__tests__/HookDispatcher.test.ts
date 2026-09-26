@@ -1101,8 +1101,12 @@ describe('HookDispatcher', () => {
       );
     });
   });
-describe('deliverWebhook URL base resolution', () => {
-    const saved = { APP_URL: process.env.APP_URL, INTERNAL_APP_URL: process.env.INTERNAL_APP_URL, QSTASH_TOKEN: process.env.QSTASH_TOKEN };
+  describe('deliverWebhook URL base resolution', () => {
+    const saved = {
+      APP_URL: process.env.APP_URL,
+      INTERNAL_APP_URL: process.env.INTERNAL_APP_URL,
+      QSTASH_TOKEN: process.env.QSTASH_TOKEN,
+    };
 
     beforeEach(() => {
       global.fetch = vi.fn().mockResolvedValue({ status: 200 });
@@ -1121,10 +1125,15 @@ describe('deliverWebhook URL base resolution', () => {
     });
 
     it('resolves a relative qstash webhook against APP_URL so the relay can reach it', async () => {
-      await deliverWebhook({ delivery: 'qstash', url: '/api/workflows/verify/on-evidence-complete' }, {});
+      await deliverWebhook(
+        { delivery: 'qstash', url: '/api/workflows/verify/on-evidence-complete' },
+        {},
+      );
 
       expect(mockPublishJSON).toHaveBeenCalledWith(
-        expect.objectContaining({ url: 'https://lobe.example.com/api/workflows/verify/on-evidence-complete' }),
+        expect.objectContaining({
+          url: 'https://lobe.example.com/api/workflows/verify/on-evidence-complete',
+        }),
       );
     });
 
@@ -1141,7 +1150,7 @@ describe('deliverWebhook URL base resolution', () => {
       await deliverWebhook({ delivery: 'qstash', fallback: 'none', url: '/api/x' }, {});
 
       const called = mockPublishJSON.mock.calls[0][0];
-      expect(called.url.startsWith('https://lobe.example.com')).toBe(true);
+      expect(called.url).toBe('https://lobe.example.com/api/x');
     });
   });
 });
