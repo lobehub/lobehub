@@ -109,6 +109,42 @@ describe('useOperationState', () => {
         expect(state.isGenerating).toBe(false);
       });
 
+      it('should return false when a running runtime op is marked isAborting', () => {
+        // LOBE-13794 regression: when a gateway Stop's device cancellation is
+        // unconfirmed, cancelOperation rolls the op back to `running` while
+        // keeping `isAborting: true`. Every loading selector excludes such ops;
+        // the per-message generating state must too, or the bubble keeps
+        // spinning forever after Stop.
+        const messageId = 'test-message-id';
+
+        act(() => {
+          useChatStore.setState({
+            operations: {
+              'op-1': {
+                id: 'op-1',
+                type: 'execServerAgentRuntime',
+                status: 'running',
+                context: { messageId },
+                abortController: new AbortController(),
+                metadata: { startTime: Date.now(), isAborting: true },
+              },
+            },
+            operationsByMessage: {
+              [messageId]: ['op-1'],
+            },
+          });
+        });
+
+        const { result } = renderHook(() => useOperationState(TEST_CONTEXT));
+
+        const state = result.current.getMessageOperationState(messageId);
+        expect(state.isGenerating).toBe(false);
+        // The unconfirmed cancel keeps the op `running` (with `isAborting`),
+        // so it is neither generating nor terminal-interrupted — the bubble
+        // just stops spinning instead of staying stuck.
+        expect(state.isInterrupted).toBe(false);
+      });
+
       it('should return false when no operations exist for the message', () => {
         const { result } = renderHook(() => useOperationState(TEST_CONTEXT));
 
