@@ -19,7 +19,11 @@ import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 import { FileService } from '@/server/services/file';
 
-import { resolveModelReadableFrameUrl } from './modelFrames';
+import {
+  isInlineableFrameSize,
+  MAX_INLINE_REQUEST_BYTES,
+  resolveModelReadableFrameUrl,
+} from './modelFrames';
 import type { ReviewEvidenceRow } from './reviewEvidence';
 import { formatTextEvidence, TEXT_EVIDENCE_TYPES } from './reviewEvidence';
 import { describeWithheldEvidence } from './reviewInspection';
@@ -370,12 +374,25 @@ export class VerifyReviewPredictorService {
       .filter((row) => VISUAL_EVIDENCE_TYPES.has(row.type) && row.fileId)
       .slice(0, maxVisuals);
 
+    const files = await Promise.all(visual.map((row) => this.fileModel.findById(row.fileId!)));
+
+    // Spend the request's inline budget in evidence order; later frames are
+    // linked, so a many-frame check cannot push the body past provider limits.
+    let inlineBytes = 0;
+    const inline = files.map((file) => {
+      const size = file?.size;
+      if (!isInlineableFrameSize(size) || inlineBytes + size > MAX_INLINE_REQUEST_BYTES)
+        return false;
+      inlineBytes += size;
+      return true;
+    });
+
     const resolved = await Promise.all(
-      visual.map(async (row) => {
-        const file = await this.fileModel.findById(row.fileId!);
+      visual.map(async (row, index) => {
+        const file = files[index];
         if (!file) return null;
         return {
-          accessUrl: await resolveModelReadableFrameUrl(this.fileService, file),
+          accessUrl: await resolveModelReadableFrameUrl(this.fileService, file, inline[index]),
           description: row.description,
           evidenceId: row.id,
         };

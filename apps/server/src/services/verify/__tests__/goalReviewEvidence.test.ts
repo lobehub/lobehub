@@ -212,6 +212,32 @@ describe('Goal review evidence', () => {
     expect(mocks.url).not.toHaveBeenCalled();
   });
 
+  /**
+   * Regression: the inline ceiling was per frame only, so a gate review carrying
+   * twelve large frames could build a request body far past provider limits.
+   */
+  it('links the frames past the per-request inline budget', async () => {
+    const size = 4 * 1024 * 1024;
+    const ids = ['s1', 's2', 's3', 's4', 's5'];
+    mocks.evidence.mockResolvedValue(ids.map((id) => ({ fileId: id, id, type: 'screenshot' })));
+    mocks.file.mockImplementation(async (id: string) => ({
+      fileType: 'image/png',
+      id,
+      size,
+      url: `key-${id}`,
+    }));
+    mocks.bytes.mockResolvedValue(new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+    mocks.url.mockImplementation(async ({ id }: { id: string }) => `https://x/${id}`);
+
+    await review().predict({ ...params, maxVisuals: GATE_REVIEW_MAX_VISUALS });
+    // 15 MiB budget: three 4 MiB frames inline, the fourth and fifth are linked.
+    expect(mocks.bytes).toHaveBeenCalledTimes(3);
+    const payload = JSON.stringify(mocks.generate.mock.calls[0][0].messages);
+    expect(payload).not.toContain('https://x/s3');
+    expect(payload).toContain('https://x/s4');
+    expect(payload).toContain('https://x/s5');
+  });
+
   it('links a frame too large to send inline', async () => {
     mocks.evidence.mockResolvedValue([{ fileId: 'f1', id: 's1', type: 'screenshot' }]);
     mocks.file.mockResolvedValue({
