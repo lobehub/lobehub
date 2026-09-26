@@ -192,9 +192,12 @@ describe('useFileTreeActions — create', () => {
     );
     expect(openLocalFile).not.toHaveBeenCalled();
 
+    handle.getSelectedIds.mockReturnValue(['src/app.ts']);
     view.rerender({ ...params, nodes: toNodes([...baseEntries, entry('src/new.ts')]) });
 
     expect(handle.setExpanded).toHaveBeenCalledWith([PROJECT_ROOT_NODE_ID, 'src/']);
+    // The previous selection is replaced, not extended.
+    expect(handle.deselect).toHaveBeenCalledWith('src/app.ts');
     expect(handle.select).toHaveBeenCalledWith('src/new.ts');
     expect(handle.focus).toHaveBeenCalledWith('src/new.ts');
     expect(openLocalFile).toHaveBeenCalledWith({
@@ -390,6 +393,7 @@ describe('useFileTreeActions — move to trash', () => {
     expect(config.content).toContain('workingPanel.files.delete.fileDesc');
     expect(config.content).toContain('workingPanel.files.delete.dirtyWarning');
     expect(config.okButtonProps).toEqual({ danger: true });
+    expect(config.cancelText).toBe('cancel {"ns":"common"}');
 
     await act(() => config.onOk());
 

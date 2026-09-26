@@ -180,6 +180,8 @@ export const useFileOperations = ({
     const ancestors = [PROJECT_ROOT_NODE_ID, ...getAncestorIds(pending.id)];
     const self = pending.id.endsWith('/') ? [pending.id] : [];
     tree.setExpanded([...new Set([...expandedIdsRef.current, ...ancestors, ...self])]);
+    // `select` adds to the selection, so drop whatever the write replaced.
+    for (const id of tree.getSelectedIds()) if (id !== pending.id) tree.deselect(id);
     tree.select(pending.id);
     tree.focus(pending.id);
     if (pending.rename) tree.startRenaming(pending.id);
@@ -383,6 +385,7 @@ export const useFileOperations = ({
             : t('workingPanel.files.delete.fileDesc', { trash: trashName });
 
       confirmModal({
+        cancelText: t('cancel', { ns: 'common' }),
         content: isDirty
           ? `${description} ${t('workingPanel.files.delete.dirtyWarning')}`
           : description,
