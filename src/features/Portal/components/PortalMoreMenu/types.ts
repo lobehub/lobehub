@@ -11,6 +11,11 @@ export interface PortalMoreMenuConfig {
   /** Absolute shareable URL of the entity; the menu copies it and confirms. */
   copyLink?: string;
   /**
+   * Copy the entity's file path — for entities addressed by a path instead of
+   * an id (local files).
+   */
+  copyPath?: string;
+  /**
    * Delete the entity. The portal owns the confirmation dialog and what
    * happens to the panel afterwards.
    */

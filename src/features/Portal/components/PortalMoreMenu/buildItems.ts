@@ -1,6 +1,6 @@
 import { Icon } from '@lobehub/ui';
 import { type DropdownItem } from '@lobehub/ui/base-ui';
-import { Copy, Link, Maximize2, Pencil, RotateCw, Trash2 } from 'lucide-react';
+import { Copy, FileText, Link, Maximize2, Pencil, RotateCw, Trash2 } from 'lucide-react';
 import { createElement } from 'react';
 
 import { type PortalMoreMenuConfig } from './types';
@@ -10,6 +10,8 @@ export type PortalMoreMenuLabelKey =
   | 'moreMenu.copyIdSuccess'
   | 'moreMenu.copyLink'
   | 'moreMenu.copyLinkSuccess'
+  | 'moreMenu.copyPath'
+  | 'moreMenu.copyPathSuccess'
   | 'moreMenu.delete'
   | 'moreMenu.openInPage'
   | 'moreMenu.refresh'
@@ -24,7 +26,7 @@ interface BuildOptions {
  * Maps declared capabilities to menu items in the one fixed order every
  * portal shares:
  *
- *   rename | copy link, copy id, open in page, refresh | extra items | delete
+ *   rename | copy link, copy id, copy path, open in page, refresh | extra items | delete
  *
  * Groups with nothing declared vanish together with their divider.
  */
@@ -44,7 +46,7 @@ export const buildPortalMoreMenuItems = (
     });
 
   const share: DropdownItem[] = [];
-  const { copyId, copyLink } = config;
+  const { copyId, copyLink, copyPath } = config;
   if (copyLink)
     share.push({
       icon: createElement(Icon, { icon: Link }),
@@ -58,6 +60,13 @@ export const buildPortalMoreMenuItems = (
       key: 'copyId',
       label: t('moreMenu.copyId'),
       onClick: () => copy(copyId, 'moreMenu.copyIdSuccess'),
+    });
+  if (copyPath)
+    share.push({
+      icon: createElement(Icon, { icon: FileText }),
+      key: 'copyPath',
+      label: t('moreMenu.copyPath'),
+      onClick: () => copy(copyPath, 'moreMenu.copyPathSuccess'),
     });
   if (config.openInPage)
     share.push({

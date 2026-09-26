@@ -1,6 +1,5 @@
 import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Skeleton, Text } from '@lobehub/ui/base-ui';
-import { ArrowLeft } from 'lucide-react';
+import { Skeleton, Text } from '@lobehub/ui/base-ui';
 
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
@@ -8,10 +7,7 @@ import { useFileStore } from '@/store/file';
 import { oneLineEllipsis } from '@/styles';
 
 const Title = () => {
-  const [closeFilePreview, previewFileId] = useChatStore((s) => [
-    s.closeFilePreview,
-    chatPortalSelectors.previewFileId(s),
-  ]);
+  const previewFileId = useChatStore(chatPortalSelectors.previewFileId);
 
   const useFetchFileItem = useFileStore((s) => s.useFetchKnowledgeItem);
 
@@ -19,8 +15,7 @@ const Title = () => {
 
   return (
     <Flexbox horizontal align={'center'} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>
-      <ActionIcon icon={ArrowLeft} size={'small'} onClick={() => closeFilePreview()} />
-
+      {/* Back and close live in the shared portal header — no second arrow here. */}
       {isLoading ? (
         <Skeleton height={28} />
       ) : (

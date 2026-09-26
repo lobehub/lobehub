@@ -10,7 +10,7 @@ import Header from '../components/Header';
 import Title from './Title';
 import { useVerifyReportUrl } from './useReportUrl';
 
-const VerifyReportHeader = memo(() => {
+const VerifyReportHeader = memo<{ onClose?: () => void }>(({ onClose }) => {
   const { t } = useTranslation('verify');
   const { externalUrl } = useVerifyReportUrl();
 
@@ -29,6 +29,7 @@ const VerifyReportHeader = memo(() => {
           }}
         />
       }
+      onClose={onClose}
     />
   );
 });

@@ -49,6 +49,8 @@ export default {
   'moreMenu.copyIdSuccess': 'ID copied',
   'moreMenu.copyLink': 'Copy link',
   'moreMenu.copyLinkSuccess': 'Link copied',
+  'moreMenu.copyPath': 'Copy path',
+  'moreMenu.copyPathSuccess': 'Path copied',
   'moreMenu.delete': 'Delete',
   'moreMenu.openInPage': 'Open in page',
   'moreMenu.refresh': 'Refresh',

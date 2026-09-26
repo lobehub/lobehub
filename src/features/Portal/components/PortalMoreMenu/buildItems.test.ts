@@ -42,6 +42,21 @@ describe('buildPortalMoreMenuItems', () => {
     ]);
   });
 
+  it('places copy path right after copy id in the share group', () => {
+    const items = build({ copyId: 'id_1', copyPath: '/repo/a.ts', refresh: vi.fn() });
+
+    expect(keysOf(items)).toEqual(['copyId', 'copyPath', 'refresh']);
+  });
+
+  it('copies a path with its own label and success message', () => {
+    const copy = vi.fn();
+    const [item] = build({ copyPath: '/repo/a.ts' }, copy);
+
+    expect(item).toMatchObject({ label: 't:moreMenu.copyPath' });
+    (item as any).onClick();
+    expect(copy).toHaveBeenCalledWith('/repo/a.ts', 'moreMenu.copyPathSuccess');
+  });
+
   it('ignores the declaration order of the config', () => {
     const items = build({
       delete: vi.fn(),

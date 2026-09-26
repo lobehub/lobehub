@@ -1,50 +1,44 @@
-import { Flexbox } from '@lobehub/ui';
+import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@lobechat/const';
 import { ActionIcon } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
-import { ArrowLeftRight, XIcon } from 'lucide-react';
+import { ArrowLeftRight } from 'lucide-react';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
-import NavHeader from '@/features/NavHeader';
+import PortalHeader from '@/features/Portal/components/Header';
 import { useChatStore } from '@/store/chat';
 
 import Title from './Title';
 
-const Header = memo(() => {
-  const [hasPortal, portalThreadId, closeThreadPortal, switchThread] = useChatStore((s) => [
-    !!s.portalThreadId,
+const Header = memo<{ onClose?: () => void }>(({ onClose }) => {
+  const { t } = useTranslation('thread');
+  const [portalThreadId, closeThreadPortal, switchThread] = useChatStore((s) => [
     s.portalThreadId,
     s.closeThreadPortal,
     s.switchThread,
   ]);
 
   return (
-    <NavHeader
-      left={<Title />}
-      paddingBlock={6}
-      paddingInline={8}
-      showTogglePanelButton={false}
-      right={
-        <Flexbox horizontal gap={4}>
-          {hasPortal && (
-            <ActionIcon
-              icon={ArrowLeftRight}
-              size={'small'}
-              onClick={() => {
-                if (!portalThreadId) return;
-
-                switchThread(portalThreadId);
-                closeThreadPortal();
-              }}
-            />
-          )}
-          <ActionIcon icon={XIcon} size={'small'} onClick={closeThreadPortal} />
-        </Flexbox>
+    <PortalHeader
+      title={<Title />}
+      rightExtra={
+        portalThreadId && (
+          <ActionIcon
+            aria-label={t('portal.openInMain')}
+            icon={ArrowLeftRight}
+            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            title={t('portal.openInMain')}
+            onClick={() => {
+              switchThread(portalThreadId);
+              closeThreadPortal();
+            }}
+          />
+        )
       }
-      style={{
-        borderBottom: `1px solid ${cssVar.colorBorderSecondary}`,
-      }}
+      onClose={onClose ?? closeThreadPortal}
     />
   );
 });
+
+Header.displayName = 'PortalThreadHeader';
 
 export default Header;

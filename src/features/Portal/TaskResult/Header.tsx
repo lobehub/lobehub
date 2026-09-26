@@ -9,7 +9,7 @@ import { chatPortalSelectors } from '@/store/chat/selectors';
 import PortalHeader from '../components/Header';
 import Title from './Title';
 
-const Header = memo(() => {
+const Header = memo<{ onClose?: () => void }>(({ onClose }) => {
   const { t } = useTranslation('chat');
   const taskId = useChatStore(chatPortalSelectors.taskResultId);
   const openTaskDetail = useChatStore((state) => state.openTaskDetail);
@@ -28,6 +28,7 @@ const Header = memo(() => {
           {t('goalDetail.viewOriginalTask')}
         </Button>
       }
+      onClose={onClose}
     />
   );
 });

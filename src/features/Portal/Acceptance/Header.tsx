@@ -10,7 +10,7 @@ import Header from '../components/Header';
 import Title from './Title';
 import { useAcceptancePageUrl } from './usePageUrl';
 
-const AcceptanceHeader = memo(() => {
+const AcceptanceHeader = memo<{ onClose?: () => void }>(({ onClose }) => {
   const { t } = useTranslation('verify');
   const { externalUrl } = useAcceptancePageUrl();
 
@@ -30,6 +30,7 @@ const AcceptanceHeader = memo(() => {
           }}
         />
       }
+      onClose={onClose}
     />
   );
 });

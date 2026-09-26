@@ -41,6 +41,8 @@
   "moreMenu.copyIdSuccess": "ID 已复制",
   "moreMenu.copyLink": "复制链接",
   "moreMenu.copyLinkSuccess": "链接已复制",
+  "moreMenu.copyPath": "复制路径",
+  "moreMenu.copyPathSuccess": "路径已复制",
   "moreMenu.delete": "删除",
   "moreMenu.openInPage": "在页面中打开",
   "moreMenu.refresh": "刷新",
