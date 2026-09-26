@@ -83,6 +83,9 @@ import type { MessagesEngineParams, MessagesEngineResult } from './types';
 
 const log = debug('context-engine:MessagesEngine');
 
+/** `AttachmentsIdentifier` from `@lobechat/builtin-tool-attachments`, inlined to avoid a package cycle */
+const ATTACHMENTS_TOOL_ID = 'lobe-attachments';
+
 /**
  * MessagesEngine - High-level message processing engine
  *
@@ -248,6 +251,9 @@ export class MessagesEngine {
     // documentation is confirmed to be injected into the system prompt for this
     // request.
     const canUseFC = capabilities?.isCanUseFC || (() => true);
+    // Oversized file previews may only promise `readAttachment` when the model is actually sent that
+    // tool; custom / exclusive tool modes, share visitors and clients without it get a plain preview.
+    const canReadAttachment = toolIds.includes(ATTACHMENTS_TOOL_ID) && !!canUseFC(model, provider);
     const injectedActivatedSkills =
       isAgentMode && (skillsConfig?.enabledSkills?.length ?? 0) > 0
         ? selectActivatedSkills(skillsConfig?.enabledSkills)
@@ -393,6 +399,7 @@ export class MessagesEngine {
       new PlanInjector({ enabled: !!isPlanEnabled, plan: planTodo?.plan }),
       // Knowledge (agent files + knowledge bases)
       new KnowledgeInjector({
+        canReadAttachment,
         fileContents: knowledge?.fileContents,
         knowledgeBases: knowledge?.knowledgeBases,
       }),
@@ -600,6 +607,7 @@ export class MessagesEngine {
       new ReactionFeedbackProcessor({ enabled: true }),
       // Message content processing (image encoding, multimodal)
       new MessageContentProcessor({
+        canReadAttachment,
         fileContext: fileContext || { enabled: true, includeFileUrl: true },
         isCanUseAudio: capabilities?.isCanUseAudio || (() => false),
         isCanUseVideo: capabilities?.isCanUseVideo || (() => false),

@@ -91,6 +91,18 @@ describe('formatTextWindowNotice', () => {
     );
   });
 
+  it('re-reads a cut line in full when the continuation budget holds it', () => {
+    const window = sliceTextWindow(`${'x'.repeat(30)}\nb`, { maxChars: 10 });
+
+    expect(formatTextWindowNotice(window, { continueFrom, continueMaxChars: 30 })).toBe(
+      '[Showing lines 1-1 of 2 lines, 32 characters. Line 1 is 30 characters long and was cut at 10. To read it in full and continue, call read with offset=1.]',
+    );
+    // A line the continuation cannot hold either is still skipped, or paging would stall on it.
+    expect(formatTextWindowNotice(window, { continueFrom, continueMaxChars: 29 })).toContain(
+      'the rest of that line cannot be paged. To continue with the next line, call read with offset=2.',
+    );
+  });
+
   it('reports an offset past the end', () => {
     const window = sliceTextWindow('a\nb', { offset: 5 });
 

@@ -399,7 +399,7 @@ describe('filesPrompts', () => {
       const result = filesPrompts({ addUrl: true, fileList: [{ ...mockFile, content }] });
 
       expect(result).toContain(
-        `url="https://example.com/test.pdf" lines="1-1" total_lines="1" total_chars="${content.length}" truncated="true">${'a'.repeat(FILE_PREVIEW_CHARS)}\n[This is a preview, not the complete file.`,
+        `url="https://example.com/test.pdf" lines="1-1" total_lines="1" total_chars="${content.length}" truncated="true">${'a'.repeat(FILE_PREVIEW_CHARS)}\n[This is a preview, not the complete file`,
       );
       expect(result).toContain(
         `Line 1 is ${content.length} characters long and was cut at ${FILE_PREVIEW_CHARS}`,
@@ -409,12 +409,41 @@ describe('filesPrompts', () => {
 
     it('previews whole lines and names the readAttachment call for the next window', () => {
       const content = 'row,value\n'.repeat(FILE_INLINE_MAX_CHARS / 10 + 1);
-      const result = filesPrompts({ addUrl: false, fileList: [{ ...mockFile, content }] });
+      const result = filesPrompts({
+        addUrl: false,
+        canReadAttachment: true,
+        fileList: [{ ...mockFile, content }],
+      });
 
       expect(result).toContain(`lines="1-400" total_lines="${FILE_INLINE_MAX_CHARS / 10 + 2}"`);
       expect(result).toContain(
         `To continue, call readAttachment with fileId="${mockFile.id}" and offset=401.`,
       );
+    });
+
+    it('does not promise readAttachment when the request does not carry the tool', () => {
+      const content = 'row,value\n'.repeat(FILE_INLINE_MAX_CHARS / 10 + 1);
+      const result = filesPrompts({ addUrl: false, fileList: [{ ...mockFile, content }] });
+
+      expect(result).toContain(`lines="1-400" total_lines="${FILE_INLINE_MAX_CHARS / 10 + 2}"`);
+      expect(result).toContain('no tool to read the rest is available here');
+      expect(result).toContain(`Lines 401-${FILE_INLINE_MAX_CHARS / 10 + 2} were left out.`);
+      expect(result).not.toContain('readAttachment');
+    });
+
+    it('re-reads a long first line in full when readAttachment can hold it', () => {
+      // One line longer than the preview but within one readAttachment window.
+      const content = `${'a'.repeat(6000)}\n${'row,value\n'.repeat(FILE_INLINE_MAX_CHARS / 10)}`;
+      const result = filesPrompts({
+        addUrl: false,
+        canReadAttachment: true,
+        fileList: [{ ...mockFile, content }],
+      });
+
+      expect(result).toContain(
+        `Line 1 is 6000 characters long and was cut at ${FILE_PREVIEW_CHARS}. To read it in full and continue, call readAttachment with fileId="${mockFile.id}" and offset=1.`,
+      );
+      expect(result).not.toContain('cannot be paged');
     });
 
     it('marks stored text that was cut at parse time even when it is short', () => {

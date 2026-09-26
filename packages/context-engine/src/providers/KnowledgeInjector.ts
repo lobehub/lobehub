@@ -16,6 +16,8 @@ declare module '../types' {
 const log = debug('context-engine:provider:KnowledgeInjector');
 
 export interface KnowledgeInjectorConfig {
+  /** Whether `readAttachment` is in the request's tool set, so oversized file previews can name it */
+  canReadAttachment?: boolean;
   /** File contents to inject */
   fileContents?: FileContent[];
   /** Knowledge bases to inject */
@@ -42,7 +44,11 @@ export class KnowledgeInjector extends BaseFirstUserContentProvider {
     const knowledgeBases = this.config.knowledgeBases || [];
 
     // Generate unified knowledge prompt
-    const formattedContent = promptAgentKnowledge({ fileContents, knowledgeBases });
+    const formattedContent = promptAgentKnowledge({
+      canReadAttachment: this.config.canReadAttachment,
+      fileContents,
+      knowledgeBases,
+    });
 
     if (!formattedContent) {
       log('No knowledge to inject');

@@ -511,8 +511,9 @@ export const discoverTools = async (
   /**
    * Whether this turn sends any file as a truncated preview (see `previewLongFileContent`):
    * an enabled agent file, or a parsed attachment of this turn or topic, over the inline limit.
-   * The preview tells the model to page through the rest with `readAttachment`, so the
-   * attachments tool must be enabled for this run.
+   * Enables the attachments tool in the modes whose rules include it (agent / chat). The preview
+   * only names `readAttachment` when the final tool set carries it (see `MessagesEngine`), so
+   * custom / exclusive tool turns and share visitors fall back to a plain preview.
    */
   async function readHasOversizedFiles(): Promise<boolean> {
     const hasOversizedAgentFile = agentConfig.files?.some(

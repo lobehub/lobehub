@@ -58,8 +58,9 @@ export const resolveToolRules = (request: ToolRuleRequest): ResolvedToolRules =>
   const searchMode = agent.chatConfig?.searchMode ?? 'auto';
   const isSearchEnabled = request.useApplicationBuiltinSearchTool ?? searchMode !== 'off';
   const kbEnabled = request.hasEnabledKnowledgeBases ?? false;
-  // Oversized attachments are sent as previews whose notice names `readAttachment`; only that
-  // read-only tool is enabled, not the knowledge-base tool with its search and write APIs.
+  // Oversized attachments are sent as previews that can be paged with `readAttachment`; only that
+  // read-only tool is enabled, not the knowledge-base tool with its search and write APIs. The
+  // preview names it only when it survives into the final tool set (see `MessagesEngine`).
   const attachmentsEnabled = request.hasOversizedFiles ?? false;
   const memoryEnabled = request.memoryEnabled ?? false;
   // Image generation is never auto-injected: the user opts in by pinning the

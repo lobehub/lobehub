@@ -52,6 +52,13 @@ export interface TextWindowNoticeOptions {
    */
   continueFrom?: (line: number) => string;
   /**
+   * Character budget of the call `continueFrom` names, when it is larger than the budget that cut
+   * this window (a 4k attachment preview continued by a 10k `readAttachment`). A cut line that fits
+   * this budget can be re-read whole from its own line, so the notice points there instead of
+   * skipping it.
+   */
+  continueMaxChars?: number;
+  /**
    * Character count of the original text when the stored text was cut before it was stored (for
    * example a parsed file above the parse-time cap). Ignored unless larger than `totalChars`.
    */
@@ -207,6 +214,16 @@ export const formatTextWindowAttributes = (
   return ` ${attributes.join(' ')}`;
 };
 
+const withStoredCutNotice = (parts: string[], range: TextWindowRange, originalChars?: number) => {
+  if (hasStoredCut(range, originalChars)) {
+    parts.push(
+      `[The stored text is incomplete: only the first ${range.totalChars} of the original ${originalChars} characters were kept, ending at line ${range.totalLines}. Paging cannot go past that point. If the task needs the rest (for example aggregating a whole table), process the original file in a code sandbox or at its local path when available.]`,
+    );
+  }
+
+  return parts.join('\n');
+};
+
 /**
  * The model-facing notice for a window. Empty when the window is the complete text.
  *
@@ -214,7 +231,7 @@ export const formatTextWindowAttributes = (
  */
 export const formatTextWindowNotice = (
   range: TextWindowRange,
-  { continueFrom, originalChars }: TextWindowNoticeOptions = {},
+  { continueFrom, continueMaxChars, originalChars }: TextWindowNoticeOptions = {},
 ): string => {
   const parts: string[] = [];
   const size =
@@ -228,6 +245,12 @@ export const formatTextWindowNotice = (
     );
   } else if (range.cutLine) {
     const { keptChars, line, totalChars } = range.cutLine;
+    if (continueFrom && continueMaxChars !== undefined && totalChars <= continueMaxChars) {
+      parts.push(
+        `[Showing lines ${range.startLine}-${line} of ${size}. Line ${line} is ${totalChars} characters long and was cut at ${keptChars}. To read it in full and continue, ${continueFrom(line)}.]`,
+      );
+      return withStoredCutNotice(parts, range, originalChars);
+    }
     const next =
       line < range.totalLines
         ? continueFrom
@@ -244,13 +267,7 @@ export const formatTextWindowNotice = (
     parts.push(`[Showing lines ${range.startLine}-${range.endLine} of ${size}.${next}]`);
   }
 
-  if (hasStoredCut(range, originalChars)) {
-    parts.push(
-      `[The stored text is incomplete: only the first ${range.totalChars} of the original ${originalChars} characters were kept, ending at line ${range.totalLines}. Paging cannot go past that point. If the task needs the rest (for example aggregating a whole table), process the original file in a code sandbox or at its local path when available.]`,
-    );
-  }
-
-  return parts.join('\n');
+  return withStoredCutNotice(parts, range, originalChars);
 };
 
 /** `content` followed by its notice on a new line, or `content` alone when nothing was left out. */
