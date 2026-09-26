@@ -511,8 +511,8 @@ export const discoverTools = async (
   /**
    * Whether this turn sends any file as a truncated preview (see `previewLongFileContent`):
    * an enabled agent file, or a parsed attachment of this turn or topic, over the inline limit.
-   * The preview tells the model to page through the rest with `readKnowledge`, so the
-   * knowledge-base tool must be available even when the agent has no knowledge base.
+   * The preview tells the model to page through the rest with `readAttachment`, so the
+   * attachments tool must be enabled for this run.
    */
   async function readHasOversizedFiles(): Promise<boolean> {
     const hasOversizedAgentFile = agentConfig.files?.some(

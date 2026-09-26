@@ -1778,6 +1778,9 @@ When I am ___, I need ___
   'tab.uploadZip': 'Upload Zip',
   'tab.uploadZip.desc': 'Upload a local .zip or .skill file',
   'tab.usage': 'Usage',
+  'tools.builtins.lobe-attachments.description':
+    'Page through attached files that were too long to include in full',
+  'tools.builtins.lobe-attachments.title': 'Attachments',
   'workspace.create.descPlaceholder': 'Describe what this workspace is for (optional)',
   'workspace.create.namePlaceholder': 'e.g. Acme Team',
   'workspace.create.submit': 'Create workspace',

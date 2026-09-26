@@ -52,7 +52,7 @@ export interface ToolRuleRequest {
   hasEnabledKnowledgeBases?: boolean;
   /**
    * An attached or agent-assigned file is too long to inline and is sent as a preview; the
-   * knowledge-base tool is enabled so the model can read the rest with `readKnowledge`.
+   * attachments tool is enabled so the model can read the rest with `readAttachment`.
    */
   hasOversizedFiles?: boolean;
   isBotConversation?: boolean;

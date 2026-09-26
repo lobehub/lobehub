@@ -1540,6 +1540,8 @@
   "tools.builtins.lobe-artifacts.description": "Generate and preview interactive UI components and visualizations",
   "tools.builtins.lobe-artifacts.readme": "Generate and live-preview interactive UI components, data visualizations, charts, SVG graphics, and web applications. Create rich visual content that users can interact with directly.",
   "tools.builtins.lobe-artifacts.title": "Artifacts",
+  "tools.builtins.lobe-attachments.description": "Page through attached files that were too long to include in full",
+  "tools.builtins.lobe-attachments.title": "Attachments",
   "tools.builtins.lobe-brief.description": "Report progress, deliver results, and request user decisions",
   "tools.builtins.lobe-brief.title": "Brief Tools",
   "tools.builtins.lobe-calculator.description": "Perform mathematical calculations, solve equations, and work with symbolic expressions",

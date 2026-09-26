@@ -180,6 +180,8 @@
   "builtins.lobe-agent.todos.completedStep": "Completed",
   "builtins.lobe-agent.todos.currentStep": "Current step",
   "builtins.lobe-agent.todos.todos": "Todos",
+  "builtins.lobe-attachments.apiName.readAttachment": "Read attachment",
+  "builtins.lobe-attachments.title": "Attachments",
   "builtins.lobe-browser.apiName.click": "Clicked element",
   "builtins.lobe-browser.apiName.fill": "Filled input",
   "builtins.lobe-browser.apiName.navigate": "Opened page",

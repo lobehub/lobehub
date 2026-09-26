@@ -1,4 +1,5 @@
 import { formatSearchResults, promptFileContents, promptNoSearchResults } from '@lobechat/prompts';
+import { sliceReadWindow } from '@lobechat/prompts/textWindow';
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
 import type {
@@ -25,7 +26,6 @@ import type {
   ViewKnowledgeBaseArgs,
   ViewKnowledgeBaseState,
 } from '../types';
-import { sliceReadWindow } from './readWindow';
 
 interface FileContentResult {
   content: string;

@@ -1,4 +1,6 @@
 export default {
+  'builtins.lobe-attachments.apiName.readAttachment': 'Read attachment',
+  'builtins.lobe-attachments.title': 'Attachments',
   'builtins.lobe-goal-supervisor.apiName.inspectGoal': 'Inspect goal',
   'builtins.lobe-goal-supervisor.apiName.inspectTask': 'Inspect interrupted task',
   'builtins.lobe-goal-supervisor.apiName.readArtifact': 'Read goal artifact',

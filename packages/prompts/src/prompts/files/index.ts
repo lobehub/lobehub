@@ -10,6 +10,7 @@ export {
   FILE_PREVIEW_CHARS,
   isOversizedFileContent,
   previewLongFileContent,
+  readAttachmentContinuation,
 } from './file';
 export type { KnowledgeBaseInfo, PromptKnowledgeOptions } from './knowledgeBase';
 export { promptAgentKnowledge } from './knowledgeBase';

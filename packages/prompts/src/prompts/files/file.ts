@@ -5,7 +5,6 @@ import {
   formatTextWindowNotice,
   sliceTextWindow,
 } from '../../textWindow';
-import { readKnowledgeContinuation } from '../knowledgeBaseQA/formatFileContents';
 
 /**
  * Attachments whose extracted text exceeds this many characters are previewed instead of inlined.
@@ -20,8 +19,12 @@ export const FILE_INLINE_MAX_CHARS = 100_000;
 /** Leading characters kept as a preview when an attachment exceeds `FILE_INLINE_MAX_CHARS`. */
 export const FILE_PREVIEW_CHARS = 4000;
 
+/** The exact `readAttachment` call that continues reading `fileId` from a 1-based line. */
+export const readAttachmentContinuation = (fileId: string) => (line: number) =>
+  `call readAttachment with fileId="${fileId}" and offset=${line}`;
+
 export interface PreviewLongFileContentOptions {
-  /** File id the model passes to `readKnowledge` to page through the rest. */
+  /** File id the model passes to `readAttachment` to page through the rest. */
   fileId: string;
   /** Original character count when the stored text was cut at parse time. */
   originalChars?: number;
@@ -30,7 +33,7 @@ export interface PreviewLongFileContentOptions {
 /**
  * Whether a file's text is sent as a preview instead of inlined: it exceeds
  * `FILE_INLINE_MAX_CHARS`, or the stored text is shorter than the original. Tool discovery uses the
- * same predicate to decide whether `readKnowledge` must be enabled for the preview's continuation.
+ * same predicate to decide whether `readAttachment` must be enabled for the preview's continuation.
  */
 export const isOversizedFileContent = (contentLength: number, originalChars?: number) =>
   contentLength > FILE_INLINE_MAX_CHARS ||
@@ -39,8 +42,8 @@ export const isOversizedFileContent = (contentLength: number, originalChars?: nu
 /**
  * Inline a file's text, or replace it with a preview when it exceeds `FILE_INLINE_MAX_CHARS` or
  * its stored text is known to be incomplete. The preview uses the shared text-window contract:
- * attributes report the window and full size, and the notice names the exact `readKnowledge` call
- * for the next window. The runtime enables `readKnowledge` whenever such a preview is sent.
+ * attributes report the window and full size, and the notice names the exact `readAttachment` call
+ * for the next window. The runtime enables `readAttachment` whenever such a preview is sent.
  */
 export const previewLongFileContent = (
   content: string,
@@ -51,7 +54,7 @@ export const previewLongFileContent = (
   }
 
   const window = sliceTextWindow(content, { maxChars: FILE_PREVIEW_CHARS });
-  const options = { continueFrom: readKnowledgeContinuation(fileId), originalChars };
+  const options = { continueFrom: readAttachmentContinuation(fileId), originalChars };
   const notice = formatTextWindowNotice(window, options);
 
   return {

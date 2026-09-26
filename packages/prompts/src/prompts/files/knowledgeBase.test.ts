@@ -15,9 +15,7 @@ describe('promptAgentKnowledge', () => {
     expect(result).toContain(
       `<file id="file1" name="big.csv" lines="1-1" total_lines="2" total_chars="${content.length}" truncated="true">`,
     );
-    expect(result).toContain(
-      'To continue, call readKnowledge with fileIds=["file1"] and offset=2.',
-    );
+    expect(result).toContain('To continue, call readAttachment with fileId="file1" and offset=2.');
     expect(result).not.toContain('bbbb');
   });
 

@@ -15,6 +15,7 @@ import {
   agentSignalReviewManifest,
   agentSignalSkillManagementManifest,
 } from '@lobechat/builtin-tool-agent-signal';
+import { AttachmentsManifest } from '@lobechat/builtin-tool-attachments';
 import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { BriefManifest } from '@lobechat/builtin-tool-brief';
 import { BrowserManifest } from '@lobechat/builtin-tool-browser';
@@ -63,6 +64,7 @@ export const defaultToolIds = [
   SkillStoreManifest.identifier,
   WebBrowsingManifest.identifier,
   KnowledgeBaseManifest.identifier,
+  AttachmentsManifest.identifier,
   MemoryManifest.identifier,
   LocalSystemManifest.identifier,
   BrowserManifest.identifier,
@@ -126,6 +128,7 @@ export const manualModeExcludeToolIds = [
  * `allowExplicitActivation` so the activator can't smuggle other tools in.
  */
 export const chatModeAllowedToolIds = [
+  AttachmentsManifest.identifier,
   KnowledgeBaseManifest.identifier,
   MemoryManifest.identifier,
   WebBrowsingManifest.identifier,
@@ -169,6 +172,7 @@ export const groupSupervisorToolIds = [GroupManagementManifest.identifier];
  * `src/helpers/toolEngineering/index.ts`.
  */
 export const runtimeManagedToolIds = [
+  AttachmentsManifest.identifier,
   BrowserManifest.identifier,
   CloudSandboxManifest.identifier,
   KnowledgeBaseManifest.identifier,
@@ -427,6 +431,13 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     hidden: true,
     identifier: KnowledgeBaseManifest.identifier,
     manifest: KnowledgeBaseManifest,
+    type: 'builtin',
+  },
+  {
+    discoverable: false,
+    hidden: true,
+    identifier: AttachmentsManifest.identifier,
+    manifest: AttachmentsManifest,
     type: 'builtin',
   },
   {

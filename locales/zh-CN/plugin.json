@@ -180,6 +180,8 @@
   "builtins.lobe-agent.todos.completedStep": "已完成",
   "builtins.lobe-agent.todos.currentStep": "当前步骤",
   "builtins.lobe-agent.todos.todos": "待办",
+  "builtins.lobe-attachments.apiName.readAttachment": "读取附件",
+  "builtins.lobe-attachments.title": "附件",
   "builtins.lobe-browser.apiName.click": "点击了元素",
   "builtins.lobe-browser.apiName.fill": "填写了输入框",
   "builtins.lobe-browser.apiName.navigate": "打开了页面",

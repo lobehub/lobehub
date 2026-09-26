@@ -407,13 +407,13 @@ describe('filesPrompts', () => {
       expect(result).not.toContain('bbbb');
     });
 
-    it('previews whole lines and names the readKnowledge call for the next window', () => {
+    it('previews whole lines and names the readAttachment call for the next window', () => {
       const content = 'row,value\n'.repeat(FILE_INLINE_MAX_CHARS / 10 + 1);
       const result = filesPrompts({ addUrl: false, fileList: [{ ...mockFile, content }] });
 
       expect(result).toContain(`lines="1-400" total_lines="${FILE_INLINE_MAX_CHARS / 10 + 2}"`);
       expect(result).toContain(
-        `To continue, call readKnowledge with fileIds=["${mockFile.id}"] and offset=401.`,
+        `To continue, call readAttachment with fileId="${mockFile.id}" and offset=401.`,
       );
     });
 

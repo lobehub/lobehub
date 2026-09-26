@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  DEFAULT_READ_KNOWLEDGE_LINE_LIMIT,
-  MAX_READ_KNOWLEDGE_CHARS_PER_FILE,
-  MAX_READ_KNOWLEDGE_LINE_LIMIT,
+  DEFAULT_READ_WINDOW_LINES,
+  MAX_READ_WINDOW_CHARS,
+  MAX_READ_WINDOW_LINES,
   sliceReadWindow,
-} from './readWindow';
+} from './index';
 
 const buildLines = (count: number, width = 5) =>
   Array.from({ length: count }, (_, i) => `${i + 1}`.padStart(width, 'L')).join('\n');
@@ -26,13 +26,13 @@ describe('sliceReadWindow', () => {
   });
 
   it('caps at the default line limit and flags truncation', () => {
-    const content = buildLines(DEFAULT_READ_KNOWLEDGE_LINE_LIMIT + 10);
+    const content = buildLines(DEFAULT_READ_WINDOW_LINES + 10);
     const window = sliceReadWindow(content);
 
     expect(window.startLine).toBe(1);
-    expect(window.endLine).toBe(DEFAULT_READ_KNOWLEDGE_LINE_LIMIT);
+    expect(window.endLine).toBe(DEFAULT_READ_WINDOW_LINES);
     expect(window.truncated).toBe(true);
-    expect(window.content.split('\n')).toHaveLength(DEFAULT_READ_KNOWLEDGE_LINE_LIMIT);
+    expect(window.content.split('\n')).toHaveLength(DEFAULT_READ_WINDOW_LINES);
   });
 
   it('pages from a 1-based offset with an explicit limit', () => {
@@ -65,7 +65,7 @@ describe('sliceReadWindow', () => {
     const content = ['x'.repeat(4000), 'y'.repeat(4000), 'z'.repeat(4000)].join('\n');
     const window = sliceReadWindow(content);
 
-    expect(window.content.length).toBeLessThanOrEqual(MAX_READ_KNOWLEDGE_CHARS_PER_FILE);
+    expect(window.content.length).toBeLessThanOrEqual(MAX_READ_WINDOW_CHARS);
     expect(window.endLine).toBe(2);
     expect(window.truncated).toBe(true);
 
@@ -78,12 +78,12 @@ describe('sliceReadWindow', () => {
     const content = ['a'.repeat(30_000), 'b'].join('\n');
     const window = sliceReadWindow(content);
 
-    expect(window.content).toBe('a'.repeat(MAX_READ_KNOWLEDGE_CHARS_PER_FILE));
-    expect(window.content.length).toBe(MAX_READ_KNOWLEDGE_CHARS_PER_FILE);
+    expect(window.content).toBe('a'.repeat(MAX_READ_WINDOW_CHARS));
+    expect(window.content.length).toBe(MAX_READ_WINDOW_CHARS);
     expect(window.endLine).toBe(1);
     expect(window.truncated).toBe(true);
     expect(window.cutLine).toEqual({
-      keptChars: MAX_READ_KNOWLEDGE_CHARS_PER_FILE,
+      keptChars: MAX_READ_WINDOW_CHARS,
       line: 1,
       totalChars: 30_000,
     });
@@ -97,7 +97,7 @@ describe('sliceReadWindow', () => {
   it('flags a cut even when the oversized line is the last line', () => {
     const window = sliceReadWindow('x'.repeat(20_000));
 
-    expect(window.content.length).toBe(MAX_READ_KNOWLEDGE_CHARS_PER_FILE);
+    expect(window.content.length).toBe(MAX_READ_WINDOW_CHARS);
     expect(window.truncated).toBe(true);
     expect(window.cutLine?.totalChars).toBe(20_000);
   });
@@ -117,10 +117,10 @@ describe('sliceReadWindow', () => {
     expect(sliceReadWindow(content, { limit: 0, offset: 0 }).content).toBe('LLLL1');
     expect(sliceReadWindow(content, { limit: Number.NaN, offset: -3 }).endLine).toBe(5);
     expect(
-      sliceReadWindow(buildLines(MAX_READ_KNOWLEDGE_LINE_LIMIT + 5), {
+      sliceReadWindow(buildLines(MAX_READ_WINDOW_LINES + 5), {
         limit: 999_999,
         maxChars: Number.MAX_SAFE_INTEGER,
       }).endLine,
-    ).toBe(MAX_READ_KNOWLEDGE_LINE_LIMIT);
+    ).toBe(MAX_READ_WINDOW_LINES);
   });
 });

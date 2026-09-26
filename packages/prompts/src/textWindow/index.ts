@@ -148,6 +148,42 @@ export const sliceTextWindow = (text: string, options: TextWindowOptions = {}): 
   };
 };
 
+/** Default number of lines a paged read tool returns when the model passes no `limit`. */
+export const DEFAULT_READ_WINDOW_LINES = 400;
+
+/** Upper bound on a paged read's `limit`, so a model cannot opt back into whole-file reads. */
+export const MAX_READ_WINDOW_LINES = 2000;
+
+/**
+ * Hard cap on characters a paged read returns per file per call, applied on top of the line
+ * limit. Two files at this cap stay under the 25k tool-result archive threshold.
+ */
+export const MAX_READ_WINDOW_CHARS = 10_000;
+
+export interface ReadWindowOptions {
+  /** Maximum number of lines to return; defaults to {@link DEFAULT_READ_WINDOW_LINES}. */
+  limit?: number | string;
+  /** Maximum characters to return; defaults to {@link MAX_READ_WINDOW_CHARS}. */
+  maxChars?: number;
+  /** 1-based line number to start from; defaults to 1. */
+  offset?: number | string;
+}
+
+/**
+ * The window a paged read tool (`readKnowledge`, `readAttachment`) returns for one call: the
+ * model-supplied `limit` is clamped to {@link MAX_READ_WINDOW_LINES}, and the character budget
+ * defaults to {@link MAX_READ_WINDOW_CHARS}.
+ */
+export const sliceReadWindow = (content: string, options: ReadWindowOptions = {}): TextWindow =>
+  sliceTextWindow(content, {
+    maxChars: options.maxChars ?? MAX_READ_WINDOW_CHARS,
+    maxLines: Math.min(
+      MAX_READ_WINDOW_LINES,
+      toInteger(options.limit, DEFAULT_READ_WINDOW_LINES, 1),
+    ),
+    offset: options.offset,
+  });
+
 const hasStoredCut = (range: TextWindowRange, originalChars?: number) =>
   originalChars !== undefined && range.totalChars !== undefined && originalChars > range.totalChars;
 
