@@ -1,3 +1,4 @@
+import { ENABLE_TOOL_CHANNEL_SETTINGS } from '@lobechat/business-const';
 import { isDesktop } from '@lobechat/const';
 import { Avatar } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
@@ -215,7 +216,7 @@ export const useCategory = () => {
         key: SettingsTabs.Memory,
         label: t('tab.memory'),
       },
-      {
+      ENABLE_TOOL_CHANNEL_SETTINGS && {
         icon: Wrench,
         key: SettingsTabs.Tools,
         label: t('tab.tools'),
