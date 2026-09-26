@@ -57,6 +57,26 @@ export const PARSED_FILE_CONTENT_MAX_CHARS = 5_000_000;
 
 type ParsedFileDocument = Awaited<ReturnType<typeof loadFile>>;
 
+const PAGE_CLOSE_TAG = '\n</page>';
+
+/**
+ * PDF loaders wrap each page in `<page ...>...</page>`. A cut inside a page leaves an opening tag
+ * with no closing tag (or a half-written tag at the tail), which previews and `readAttachment`
+ * would expose as malformed markup. Close the cut page, or drop a half-written opening tag, while
+ * staying within the cap. Page tags are kept rather than stripped so page numbers survive.
+ */
+const closeCutPage = (content: string): string => {
+  const open = content.lastIndexOf('<page');
+  if (open === -1 || open < content.lastIndexOf('</page>')) return content;
+
+  const openEnd = content.indexOf('>', open);
+  if (openEnd === -1) return content.slice(0, open).trimEnd();
+
+  const bodyEnd = Math.max(openEnd + 1, content.length - PAGE_CLOSE_TAG.length);
+  const body = content.slice(0, bodyEnd).replace(/<\/?(?:p(?:a(?:ge?)?)?)?$/, '');
+  return `${body}${PAGE_CLOSE_TAG}`;
+};
+
 /**
  * Truncates oversized parsed text before it is stored. `pages` repeats the full text, so it is
  * dropped for truncated documents; `metadata` records the original length.
@@ -64,7 +84,7 @@ type ParsedFileDocument = Awaited<ReturnType<typeof loadFile>>;
 export const capParsedFileDocument = (fileDocument: ParsedFileDocument): ParsedFileDocument => {
   if (fileDocument.content.length <= PARSED_FILE_CONTENT_MAX_CHARS) return fileDocument;
 
-  const content = sliceHead(fileDocument.content, PARSED_FILE_CONTENT_MAX_CHARS);
+  const content = closeCutPage(sliceHead(fileDocument.content, PARSED_FILE_CONTENT_MAX_CHARS));
   return {
     ...fileDocument,
     content,

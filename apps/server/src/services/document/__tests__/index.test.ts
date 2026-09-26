@@ -2206,6 +2206,27 @@ describe('capParsedFileDocument', () => {
     expect(result.content).toBe('a'.repeat(PARSED_FILE_CONTENT_MAX_CHARS - 1));
   });
 
+  it('closes a PDF page cut by the cap without exceeding it', () => {
+    const page = (n: number, body: string) => `<page pageNumber="${n}">\n${body}\n</page>\n`;
+    const content = page(1, 'first') + page(2, 'b'.repeat(PARSED_FILE_CONTENT_MAX_CHARS));
+    const result = capParsedFileDocument(fileDocument(content));
+
+    expect(result.content.startsWith(page(1, 'first'))).toBe(true);
+    expect(result.content.endsWith('b\n</page>')).toBe(true);
+    expect(result.content.length).toBeLessThanOrEqual(PARSED_FILE_CONTENT_MAX_CHARS);
+    expect(result.content.match(/<page /g)).toHaveLength(2);
+    expect(result.content.match(/<\/page>/g)).toHaveLength(2);
+  });
+
+  it('drops a page opening tag cut by the cap', () => {
+    const first = `<page pageNumber="1">\n${'a'.repeat(PARSED_FILE_CONTENT_MAX_CHARS - 40)}\n</page>\n`;
+    const result = capParsedFileDocument(
+      fileDocument(`${first}<page pageNumber="2">\nsecond\n</page>`),
+    );
+
+    expect(result.content).toBe(first.trimEnd());
+  });
+
   it('truncates oversized parsed text and drops the duplicated pages', () => {
     const originalLength = PARSED_FILE_CONTENT_MAX_CHARS + 10;
     const result = capParsedFileDocument(fileDocument(`${'a\n'.repeat(originalLength / 2)}`));
