@@ -69,7 +69,21 @@ describe('useAgentLabGate', () => {
     const { result } = renderHook(() => useAgentLabGate());
 
     // The gate itself stays unjudged — the route reads `isUserStateInitError`
-    // separately and falls through to the redirect instead of hanging forever.
-    expect(result.current.isPreferenceInit).toBe(false);
+    // separately, skips the skeleton, and this redirect is what actually gets
+    // the visitor off the page instead of an empty pane with no exit.
+    expect(result.current).toMatchObject({
+      initFailed: true,
+      isPreferenceInit: false,
+      shouldRedirect: true,
+    });
+  });
+
+  it('treats a falsy init error as no failure', () => {
+    userStateMock.initError = null;
+    userStateMock.isUserStateInit = false;
+
+    const { result } = renderHook(() => useAgentLabGate());
+
+    expect(result.current).toMatchObject({ initFailed: false, shouldRedirect: false });
   });
 });
