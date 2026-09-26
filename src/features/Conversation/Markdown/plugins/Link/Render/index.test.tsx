@@ -336,6 +336,25 @@ describe('Link Render — internal entities', () => {
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
+  it('opens page links as the standalone page on mobile instead of the portal modal', () => {
+    vi.stubGlobal('__MOBILE__', true);
+
+    try {
+      const { getByRole } = renderLink({
+        linkHref: '/page/doc1',
+        linkKind: 'generic',
+        linkLabel: 'Meeting notes',
+      });
+
+      fireEvent.click(getByRole('link', { name: 'Meeting notes' }));
+
+      expect(mockNavigate).toHaveBeenCalledWith('/page/doc1');
+      expect(mockOpenDocument).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('opens tasks and agents in their portal views', () => {
     const task = renderLink({
       linkHref: '/task/T-198',
