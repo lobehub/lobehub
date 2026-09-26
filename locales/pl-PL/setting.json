@@ -2015,6 +2015,8 @@
   "workspace.billingPage.billing.cancelPlanModal.keepCta": "Zachowaj plan",
   "workspace.billingPage.billing.cancelPlanModal.limitDesc": "Darmowe miejsca pracy są ograniczone do {{maxSeats}} miejsc i nie obejmują miesięcznych kredytów na miejsce pracy. Możesz nadal korzystać z miejsca pracy i w przyszłości ponownie je uaktualnić.",
   "workspace.billingPage.billing.cancelPlanModal.overLimitDesc": "Ten workspace ma obecnie {{currentSeats}} płatnych członków. Darmowy plan obsługuje do {{maxSeats}} miejsc. Usuń członków lub zmień ich na {{viewerRole}} przed anulowaniem planu.",
+  "workspace.billingPage.billing.cancelPlanModal.pendingInvitationsNotice_one": "To miejsce pracy ma {{pending}} oczekujące zaproszenie, a plan Free obsługuje maksymalnie {{maxSeats}} miejsc, więc {{count}} z nich nie będzie już pasować. Miejsce otrzyma osoba, która zaakceptuje jako pierwsza, a pozostała zostanie odrzucona przy próbie dołączenia. Aby wybrać, kto zachowa miejsce, cofnij inne zaproszenie przed kontynuowaniem.",
+  "workspace.billingPage.billing.cancelPlanModal.pendingInvitationsNotice_other": "To miejsce pracy ma {{pending}} oczekujących zaproszeń, a plan Free obsługuje maksymalnie {{maxSeats}} miejsc, więc {{count}} z nich nie będzie już pasować. Miejsca otrzymają osoby, które zaakceptują jako pierwsze, a pozostałe zostaną odrzucone przy próbie dołączenia. Aby wybrać, kto zachowa miejsce, cofnij inne zaproszenia przed kontynuowaniem.",
   "workspace.billingPage.billing.cancelPlanModal.seatLimit": "{{maxSeats}} miejsc",
   "workspace.billingPage.billing.cancelPlanModal.title": "Anulować plan?",
   "workspace.billingPage.billing.cancelSuccess": "Anulowanie zaplanowane.",

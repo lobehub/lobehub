@@ -2015,6 +2015,8 @@
   "workspace.billingPage.billing.cancelPlanModal.keepCta": "Planı koru",
   "workspace.billingPage.billing.cancelPlanModal.limitDesc": "Ücretsiz çalışma alanları {{maxSeats}} koltukla sınırlıdır ve aylık çalışma alanı kredilerini içermez. Çalışma alanını kullanmaya devam edebilir ve gelecekte tekrar yükseltebilirsiniz.",
   "workspace.billingPage.billing.cancelPlanModal.overLimitDesc": "Bu çalışma alanında şu anda {{currentSeats}} faturalandırılabilir üye var. Ücretsiz plan en fazla {{maxSeats}} koltuğu destekler. Planı iptal etmeden önce üyeleri kaldırın veya onları {{viewerRole}} olarak değiştirin.",
+  "workspace.billingPage.billing.cancelPlanModal.pendingInvitationsNotice_one": "Bu çalışma alanında {{pending}} bekleyen davet var ve Ücretsiz {{maxSeats}} koltuğa kadar destekliyor, bu yüzden {{count}} tanesi artık sığmayacak. Koltuk, daveti ilk kabul eden kişiye gider ve diğer kişi katılmaya çalıştığında reddedilir. Kimin tutacağını seçmek için devam etmeden önce diğer daveti iptal edin.",
+  "workspace.billingPage.billing.cancelPlanModal.pendingInvitationsNotice_other": "Bu çalışma alanında {{pending}} bekleyen davet var ve Ücretsiz {{maxSeats}} koltuğa kadar destekliyor, bu yüzden {{count}} tanesi artık sığmayacak. Koltuklar daveti ilk kabul eden kişilere gider ve geri kalanlar katılmaya çalıştığında reddedilir. Bir koltuğu kimin tutacağını seçmek için diğer davetleri iptal edin.",
   "workspace.billingPage.billing.cancelPlanModal.seatLimit": "{{maxSeats}} koltuk",
   "workspace.billingPage.billing.cancelPlanModal.title": "Planı iptal et?",
   "workspace.billingPage.billing.cancelSuccess": "İptal planlandı.",

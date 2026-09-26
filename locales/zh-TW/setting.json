@@ -2015,6 +2015,8 @@
   "workspace.billingPage.billing.cancelPlanModal.keepCta": "保留方案",
   "workspace.billingPage.billing.cancelPlanModal.limitDesc": "免費工作區最多可容納 {{maxSeats}} 個席位，且不包含每月的工作區點數。您可以繼續使用工作區，並在未來再次升級。",
   "workspace.billingPage.billing.cancelPlanModal.overLimitDesc": "此工作區目前有 {{currentSeats}} 位需付費的成員。免費版最多支持 {{maxSeats}} 位成員。在取消計劃前，請移除成員或將其更改為 {{viewerRole}}。",
+  "workspace.billingPage.billing.cancelPlanModal.pendingInvitationsNotice_one": "此工作區有 {{pending}} 個待處理邀請，而免費版最多支持 {{maxSeats}} 個席位，因此其中的 {{count}} 個將無法容納。席位將分配給最先接受的人，其他人嘗試加入時將被拒絕。要選擇誰保留席位，請在繼續之前撤銷其他邀請。",
+  "workspace.billingPage.billing.cancelPlanModal.pendingInvitationsNotice_other": "此工作區有 {{pending}} 個待處理邀請，而免費版最多支持 {{maxSeats}} 個席位，因此其中的 {{count}} 個將無法容納。席位將分配給最先接受的人，其餘人在嘗試加入時將被拒絕。要選擇誰保留席位，請在繼續之前撤銷其他邀請。",
   "workspace.billingPage.billing.cancelPlanModal.seatLimit": "{{maxSeats}} 個席位",
   "workspace.billingPage.billing.cancelPlanModal.title": "取消方案？",
   "workspace.billingPage.billing.cancelSuccess": "已安排取消。",

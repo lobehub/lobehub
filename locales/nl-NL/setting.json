@@ -2015,6 +2015,8 @@
   "workspace.billingPage.billing.cancelPlanModal.keepCta": "Plan behouden",
   "workspace.billingPage.billing.cancelPlanModal.limitDesc": "Gratis werkruimtes zijn beperkt tot {{maxSeats}} plaatsen en bevatten geen maandelijkse werkruimtecredits. U kunt de werkruimte blijven gebruiken en in de toekomst opnieuw upgraden.",
   "workspace.billingPage.billing.cancelPlanModal.overLimitDesc": "Deze werkruimte heeft momenteel {{currentSeats}} betaalde leden. Gratis ondersteunt maximaal {{maxSeats}} plaatsen. Verwijder leden of wijzig ze naar {{viewerRole}} voordat u het abonnement annuleert.",
+  "workspace.billingPage.billing.cancelPlanModal.pendingInvitationsNotice_one": "Deze werkruimte heeft {{pending}} openstaande uitnodigingen en Free ondersteunt maximaal {{maxSeats}} plaatsen, dus {{count}} daarvan passen niet meer. De plaats gaat naar degene die het eerst accepteert, en de ander wordt geweigerd wanneer ze proberen deel te nemen. Om te kiezen wie het behoudt, trek de andere uitnodiging in voordat u doorgaat.",
+  "workspace.billingPage.billing.cancelPlanModal.pendingInvitationsNotice_other": "Deze werkruimte heeft {{pending}} openstaande uitnodigingen en Free ondersteunt maximaal {{maxSeats}} plaatsen, dus {{count}} daarvan passen niet meer. Plaatsen gaan naar degenen die het eerst accepteren, en de rest wordt geweigerd wanneer ze proberen deel te nemen. Om te kiezen wie een plaats behoudt, trek de andere uitnodigingen in voordat u doorgaat.",
   "workspace.billingPage.billing.cancelPlanModal.seatLimit": "{{maxSeats}} plaatsen",
   "workspace.billingPage.billing.cancelPlanModal.title": "Plan annuleren?",
   "workspace.billingPage.billing.cancelSuccess": "Annulering gepland.",

@@ -2015,6 +2015,8 @@
   "workspace.billingPage.billing.cancelPlanModal.keepCta": "Mantieni il piano",
   "workspace.billingPage.billing.cancelPlanModal.limitDesc": "I workspace gratuiti sono limitati a {{maxSeats}} posti e non includono crediti mensili per il workspace. Puoi continuare a utilizzare il workspace e fare un upgrade in futuro.",
   "workspace.billingPage.billing.cancelPlanModal.overLimitDesc": "Questo workspace ha attualmente {{currentSeats}} membri a pagamento. Il piano gratuito supporta fino a {{maxSeats}} posti. Rimuovi membri o cambiali in {{viewerRole}} prima di annullare il piano.",
+  "workspace.billingPage.billing.cancelPlanModal.pendingInvitationsNotice_one": "Questo spazio di lavoro ha {{pending}} inviti in sospeso e il piano Free supporta fino a {{maxSeats}} posti, quindi {{count}} di essi non saranno più compatibili. Il posto va a chi accetta per primo, e l'altro viene rifiutato quando tenta di unirsi. Per scegliere chi mantiene il posto, revoca l'altro invito prima di continuare.",
+  "workspace.billingPage.billing.cancelPlanModal.pendingInvitationsNotice_other": "Questo spazio di lavoro ha {{pending}} inviti in sospeso e il piano Free supporta fino a {{maxSeats}} posti, quindi {{count}} di essi non saranno più compatibili. I posti vanno a chi accetta per primo, e gli altri vengono rifiutati quando tentano di unirsi. Per scegliere chi mantiene un posto, revoca gli altri inviti prima di continuare.",
   "workspace.billingPage.billing.cancelPlanModal.seatLimit": "{{maxSeats}} posti",
   "workspace.billingPage.billing.cancelPlanModal.title": "Annullare il piano?",
   "workspace.billingPage.billing.cancelSuccess": "Cancellazione programmata.",

@@ -2015,6 +2015,8 @@
   "workspace.billingPage.billing.cancelPlanModal.keepCta": "プランを維持",
   "workspace.billingPage.billing.cancelPlanModal.limitDesc": "無料プランのワークスペースは{{maxSeats}}席に制限され、月間ワークスペースクレジットは含まれません。ワークスペースを引き続き使用し、将来的に再度アップグレードすることができます。",
   "workspace.billingPage.billing.cancelPlanModal.overLimitDesc": "このワークスペースには現在{{currentSeats}}人の請求対象メンバーがいます。無料プランでは最大{{maxSeats}}人までサポートされます。プランをキャンセルする前にメンバーを削除するか、{{viewerRole}}に変更してください。",
+  "workspace.billingPage.billing.cancelPlanModal.pendingInvitationsNotice_one": "このワークスペースには{{pending}}件の保留中の招待があり、Freeプランは最大{{maxSeats}}席をサポートするため、{{count}}件が収まらなくなります。席は最初に受け入れた人に割り当てられ、他の人は参加しようとすると拒否されます。誰が席を保持するかを選ぶには、続行する前に他の招待を取り消してください。",
+  "workspace.billingPage.billing.cancelPlanModal.pendingInvitationsNotice_other": "このワークスペースには{{pending}}件の保留中の招待があり、Freeプランは最大{{maxSeats}}席をサポートするため、{{count}}件が収まらなくなります。席は最初に受け入れた人に割り当てられ、残りの人は参加しようとすると拒否されます。誰が席を保持するかを選ぶには、続行する前に他の招待を取り消してください。",
   "workspace.billingPage.billing.cancelPlanModal.seatLimit": "{{maxSeats}}席",
   "workspace.billingPage.billing.cancelPlanModal.title": "プランをキャンセルしますか？",
   "workspace.billingPage.billing.cancelSuccess": "キャンセルが予定されました。",

@@ -2015,6 +2015,8 @@
   "workspace.billingPage.billing.cancelPlanModal.keepCta": "플랜 유지",
   "workspace.billingPage.billing.cancelPlanModal.limitDesc": "무료 워크스페이스는 최대 {{maxSeats}}석으로 제한되며 월간 워크스페이스 크레딧이 포함되지 않습니다. 워크스페이스를 계속 사용할 수 있으며, 나중에 다시 업그레이드할 수 있습니다.",
   "workspace.billingPage.billing.cancelPlanModal.overLimitDesc": "이 워크스페이스에는 현재 {{currentSeats}}명의 청구 가능한 멤버가 있습니다. 무료 플랜은 최대 {{maxSeats}}명의 좌석을 지원합니다. 플랜을 취소하기 전에 멤버를 제거하거나 {{viewerRole}}로 변경하세요.",
+  "workspace.billingPage.billing.cancelPlanModal.pendingInvitationsNotice_one": "이 작업 공간에는 {{pending}}개의 대기 중인 초대가 있으며, Free는 최대 {{maxSeats}}개의 좌석을 지원하므로 {{count}}개의 초대가 더 이상 맞지 않습니다. 좌석은 먼저 수락한 사람에게 할당되며, 나머지는 가입 시 거부됩니다. 누가 좌석을 유지할지 선택하려면 계속하기 전에 다른 초대를 취소하세요.",
+  "workspace.billingPage.billing.cancelPlanModal.pendingInvitationsNotice_other": "이 작업 공간에는 {{pending}}개의 대기 중인 초대가 있으며, Free는 최대 {{maxSeats}}개의 좌석을 지원하므로 {{count}}개의 초대가 더 이상 맞지 않습니다. 좌석은 먼저 수락한 사람에게 할당되며, 나머지는 가입 시 거부됩니다. 누가 좌석을 유지할지 선택하려면 계속하기 전에 다른 초대를 취소하세요.",
   "workspace.billingPage.billing.cancelPlanModal.seatLimit": "{{maxSeats}}석",
   "workspace.billingPage.billing.cancelPlanModal.title": "플랜을 취소하시겠습니까?",
   "workspace.billingPage.billing.cancelSuccess": "취소가 예정되었습니다.",

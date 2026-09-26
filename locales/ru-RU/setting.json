@@ -2015,6 +2015,8 @@
   "workspace.billingPage.billing.cancelPlanModal.keepCta": "Оставить план",
   "workspace.billingPage.billing.cancelPlanModal.limitDesc": "Бесплатные рабочие пространства ограничены {{maxSeats}} местами и не включают ежемесячные кредиты рабочего пространства. Вы можете продолжать использовать рабочее пространство и обновить его позже.",
   "workspace.billingPage.billing.cancelPlanModal.overLimitDesc": "В этом рабочем пространстве сейчас {{currentSeats}} платных участников. Бесплатный план поддерживает до {{maxSeats}} мест. Удалите участников или измените их роль на {{viewerRole}} перед отменой плана.",
+  "workspace.billingPage.billing.cancelPlanModal.pendingInvitationsNotice_one": "В этом рабочем пространстве {{pending}} ожидающих приглашений, а Free поддерживает до {{maxSeats}} мест, поэтому {{count}} из них больше не поместятся. Место достанется тому, кто примет приглашение первым, а остальные будут отклонены при попытке присоединиться. Чтобы выбрать, кто сохранит место, отзовите другое приглашение перед продолжением.",
+  "workspace.billingPage.billing.cancelPlanModal.pendingInvitationsNotice_other": "В этом рабочем пространстве {{pending}} ожидающих приглашений, а Free поддерживает до {{maxSeats}} мест, поэтому {{count}} из них больше не поместятся. Места достанутся тем, кто примет приглашение первым, а остальные будут отклонены при попытке присоединиться. Чтобы выбрать, кто сохранит место, отзовите другие приглашения перед продолжением.",
   "workspace.billingPage.billing.cancelPlanModal.seatLimit": "{{maxSeats}} мест",
   "workspace.billingPage.billing.cancelPlanModal.title": "Отменить план?",
   "workspace.billingPage.billing.cancelSuccess": "Отмена запланирована.",

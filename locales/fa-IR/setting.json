@@ -2015,6 +2015,8 @@
   "workspace.billingPage.billing.cancelPlanModal.keepCta": "نگه داشتن طرح",
   "workspace.billingPage.billing.cancelPlanModal.limitDesc": "فضاهای کاری رایگان به {{maxSeats}} نفر محدود هستند و شامل اعتبار ماهانه فضای کاری نمی‌شوند. شما می‌توانید به استفاده از فضای کاری ادامه دهید و در آینده دوباره ارتقا دهید.",
   "workspace.billingPage.billing.cancelPlanModal.overLimitDesc": "این فضای کاری در حال حاضر {{currentSeats}} عضو قابل پرداخت دارد. طرح رایگان تا {{maxSeats}} عضو را پشتیبانی می‌کند. قبل از لغو طرح، اعضا را حذف کنید یا آنها را به {{viewerRole}} تغییر دهید.",
+  "workspace.billingPage.billing.cancelPlanModal.pendingInvitationsNotice_one": "این فضای کاری {{pending}} دعوت‌نامه در انتظار دارد و طرح رایگان تا {{maxSeats}} صندلی را پشتیبانی می‌کند، بنابراین {{count}} از آنها دیگر جا نمی‌شوند. صندلی به کسی می‌رسد که ابتدا قبول کند، و دیگری وقتی تلاش می‌کند بپیوندد رد می‌شود. برای انتخاب اینکه چه کسی صندلی را نگه دارد، دعوت‌نامه دیگر را قبل از ادامه لغو کنید.",
+  "workspace.billingPage.billing.cancelPlanModal.pendingInvitationsNotice_other": "این فضای کاری {{pending}} دعوت‌نامه در انتظار دارد و طرح رایگان تا {{maxSeats}} صندلی را پشتیبانی می‌کند، بنابراین {{count}} از آنها دیگر جا نمی‌شوند. صندلی‌ها به کسانی می‌رسند که ابتدا قبول کنند، و بقیه وقتی تلاش می‌کنند بپیوندند رد می‌شوند. برای انتخاب اینکه چه کسی صندلی را نگه دارد، دعوت‌نامه‌های دیگر را قبل از ادامه لغو کنید.",
   "workspace.billingPage.billing.cancelPlanModal.seatLimit": "{{maxSeats}} نفر",
   "workspace.billingPage.billing.cancelPlanModal.title": "لغو طرح؟",
   "workspace.billingPage.billing.cancelSuccess": "لغو برنامه‌ریزی شد.",

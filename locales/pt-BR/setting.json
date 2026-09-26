@@ -2015,6 +2015,8 @@
   "workspace.billingPage.billing.cancelPlanModal.keepCta": "Manter plano",
   "workspace.billingPage.billing.cancelPlanModal.limitDesc": "Espaços de trabalho gratuitos são limitados a {{maxSeats}} assentos e não incluem créditos mensais para o espaço de trabalho. Você pode continuar usando o espaço de trabalho e fazer o upgrade novamente no futuro.",
   "workspace.billingPage.billing.cancelPlanModal.overLimitDesc": "Este espaço de trabalho atualmente possui {{currentSeats}} membros faturáveis. O plano gratuito suporta até {{maxSeats}} assentos. Remova membros ou altere-os para {{viewerRole}} antes de cancelar o plano.",
+  "workspace.billingPage.billing.cancelPlanModal.pendingInvitationsNotice_one": "Este espaço de trabalho tem {{pending}} convites pendentes e o plano Gratuito suporta até {{maxSeats}} assentos, então {{count}} deles não caberão mais. O assento vai para quem aceitar primeiro, e o outro será recusado ao tentar ingressar. Para escolher quem fica com ele, revogue o outro convite antes de continuar.",
+  "workspace.billingPage.billing.cancelPlanModal.pendingInvitationsNotice_other": "Este espaço de trabalho tem {{pending}} convites pendentes e o plano Gratuito suporta até {{maxSeats}} assentos, então {{count}} deles não caberão mais. Os assentos vão para quem aceitar primeiro, e os demais serão recusados ao tentar ingressar. Para escolher quem fica com um assento, revogue os outros convites antes de continuar.",
   "workspace.billingPage.billing.cancelPlanModal.seatLimit": "{{maxSeats}} assentos",
   "workspace.billingPage.billing.cancelPlanModal.title": "Cancelar plano?",
   "workspace.billingPage.billing.cancelSuccess": "Cancelamento agendado.",

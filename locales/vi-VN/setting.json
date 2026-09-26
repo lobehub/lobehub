@@ -2015,6 +2015,8 @@
   "workspace.billingPage.billing.cancelPlanModal.keepCta": "Giữ gói",
   "workspace.billingPage.billing.cancelPlanModal.limitDesc": "Không gian làm việc miễn phí bị giới hạn {{maxSeats}} chỗ ngồi và không bao gồm tín dụng hàng tháng cho không gian làm việc. Bạn có thể tiếp tục sử dụng không gian làm việc và nâng cấp lại trong tương lai.",
   "workspace.billingPage.billing.cancelPlanModal.overLimitDesc": "Không gian làm việc này hiện có {{currentSeats}} thành viên tính phí. Gói miễn phí hỗ trợ tối đa {{maxSeats}} ghế. Hãy xóa thành viên hoặc chuyển họ sang {{viewerRole}} trước khi hủy gói.",
+  "workspace.billingPage.billing.cancelPlanModal.pendingInvitationsNotice_one": "Không gian làm việc này có {{pending}} lời mời đang chờ và gói Miễn phí hỗ trợ tối đa {{maxSeats}} chỗ ngồi, vì vậy {{count}} trong số đó sẽ không còn phù hợp. Chỗ ngồi sẽ thuộc về người chấp nhận đầu tiên, và người khác sẽ bị từ chối khi họ cố gắng tham gia. Để chọn ai giữ chỗ, hãy thu hồi lời mời khác trước khi tiếp tục.",
+  "workspace.billingPage.billing.cancelPlanModal.pendingInvitationsNotice_other": "Không gian làm việc này có {{pending}} lời mời đang chờ và gói Miễn phí hỗ trợ tối đa {{maxSeats}} chỗ ngồi, vì vậy {{count}} trong số đó sẽ không còn phù hợp. Chỗ ngồi sẽ thuộc về những người chấp nhận đầu tiên, và những người còn lại sẽ bị từ chối khi họ cố gắng tham gia. Để chọn ai giữ chỗ, hãy thu hồi các lời mời khác trước khi tiếp tục.",
   "workspace.billingPage.billing.cancelPlanModal.seatLimit": "{{maxSeats}} chỗ ngồi",
   "workspace.billingPage.billing.cancelPlanModal.title": "Hủy gói?",
   "workspace.billingPage.billing.cancelSuccess": "Đã lên lịch hủy.",

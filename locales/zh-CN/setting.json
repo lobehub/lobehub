@@ -2039,6 +2039,8 @@
   "workspace.billingPage.billing.cancelPlanModal.keepCta": "保留计划",
   "workspace.billingPage.billing.cancelPlanModal.limitDesc": "免费工作区最多支持 {{maxSeats}} 个席位，并且不包含每月的工作区积分。您可以继续使用工作区，并在未来再次升级。",
   "workspace.billingPage.billing.cancelPlanModal.overLimitDesc": "当前工作区有 {{currentSeats}} 名有效成员，免费计划最多支持 {{maxSeats}} 个席位。请先移除成员，或将成员改为 {{viewerRole}} 后再取消计划。",
+  "workspace.billingPage.billing.cancelPlanModal.pendingInvitationsNotice_one": "此工作区有 {{pending}} 个待处理邀请，免费版最多支持 {{maxSeats}} 个席位，因此其中的 {{count}} 个将无法容纳。席位将分配给最先接受邀请的人，其他人在尝试加入时会被拒绝。若要选择谁保留席位，请在继续之前撤销其他邀请。",
+  "workspace.billingPage.billing.cancelPlanModal.pendingInvitationsNotice_other": "此工作区有 {{pending}} 个待处理邀请，免费版最多支持 {{maxSeats}} 个席位，因此其中的 {{count}} 个将无法容纳。席位将分配给最先接受邀请的人，其余人在尝试加入时会被拒绝。若要选择谁保留席位，请在继续之前撤销其他邀请。",
   "workspace.billingPage.billing.cancelPlanModal.seatLimit": "{{maxSeats}} 个席位",
   "workspace.billingPage.billing.cancelPlanModal.title": "取消计划？",
   "workspace.billingPage.billing.cancelSuccess": "已安排取消。",

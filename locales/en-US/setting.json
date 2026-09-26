@@ -2039,6 +2039,8 @@
   "workspace.billingPage.billing.cancelPlanModal.keepCta": "Keep plan",
   "workspace.billingPage.billing.cancelPlanModal.limitDesc": "Free workspaces are limited to {{maxSeats}} seats and do not include monthly workspace credits. You can keep using the workspace and upgrade again in the future.",
   "workspace.billingPage.billing.cancelPlanModal.overLimitDesc": "This workspace currently has {{currentSeats}} billable members. Free supports up to {{maxSeats}} seats. Remove members or change them to {{viewerRole}} before canceling the plan.",
+  "workspace.billingPage.billing.cancelPlanModal.pendingInvitationsNotice_one": "This workspace has {{pending}} pending invites and Free supports up to {{maxSeats}} seats, so {{count}} of them will no longer fit. The seat goes to whoever accepts first, and the other is turned away when they try to join. To choose who keeps it, revoke the other invite before continuing.",
+  "workspace.billingPage.billing.cancelPlanModal.pendingInvitationsNotice_other": "This workspace has {{pending}} pending invites and Free supports up to {{maxSeats}} seats, so {{count}} of them will no longer fit. Seats go to whoever accepts first, and the rest are turned away when they try to join. To choose who keeps a seat, revoke the other invites before continuing.",
   "workspace.billingPage.billing.cancelPlanModal.seatLimit": "{{maxSeats}} seats",
   "workspace.billingPage.billing.cancelPlanModal.title": "Cancel plan?",
   "workspace.billingPage.billing.cancelSuccess": "Cancellation scheduled.",

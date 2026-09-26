@@ -2015,6 +2015,8 @@
   "workspace.billingPage.billing.cancelPlanModal.keepCta": "الاحتفاظ بالخطة",
   "workspace.billingPage.billing.cancelPlanModal.limitDesc": "المساحات المجانية محدودة بـ {{maxSeats}} مقعد ولا تتضمن أرصدة شهرية لمساحة العمل. يمكنك الاستمرار في استخدام مساحة العمل والترقية مرة أخرى في المستقبل.",
   "workspace.billingPage.billing.cancelPlanModal.overLimitDesc": "تحتوي هذه المساحة على {{currentSeats}} أعضاء قابلين للفوترة حاليًا. تدعم الخطة المجانية حتى {{maxSeats}} مقاعد. قم بإزالة الأعضاء أو تغييرهم إلى {{viewerRole}} قبل إلغاء الخطة.",
+  "workspace.billingPage.billing.cancelPlanModal.pendingInvitationsNotice_one": "لدى مساحة العمل هذه {{pending}} دعوات معلقة ويدعم الإصدار المجاني حتى {{maxSeats}} مقاعد، لذا لن تتسع {{count}} منها. تذهب المقاعد إلى من يقبل أولاً، ويتم رفض الآخرين عند محاولة الانضمام. لاختيار من يحتفظ بالمقعد، قم بإلغاء الدعوة الأخرى قبل المتابعة.",
+  "workspace.billingPage.billing.cancelPlanModal.pendingInvitationsNotice_other": "لدى مساحة العمل هذه {{pending}} دعوات معلقة ويدعم الإصدار المجاني حتى {{maxSeats}} مقاعد، لذا لن تتسع {{count}} منها. تذهب المقاعد إلى من يقبل أولاً، ويتم رفض الباقين عند محاولة الانضمام. لاختيار من يحتفظ بالمقعد، قم بإلغاء الدعوات الأخرى قبل المتابعة.",
   "workspace.billingPage.billing.cancelPlanModal.seatLimit": "{{maxSeats}} مقعد",
   "workspace.billingPage.billing.cancelPlanModal.title": "إلغاء الخطة؟",
   "workspace.billingPage.billing.cancelSuccess": "تم جدولة الإلغاء.",
