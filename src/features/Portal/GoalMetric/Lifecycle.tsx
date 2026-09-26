@@ -111,15 +111,25 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     min-width: 0;
+    margin: 0;
     padding-block: 1px;
     padding-inline: 6px;
+    border: none;
     border-radius: ${cssVar.borderRadiusSM};
 
+    font: inherit;
     color: ${cssVar.colorText};
+    text-align: start;
+
+    background: none;
 
     &:hover {
-      color: ${cssVar.colorText};
       background: ${cssVar.colorFillTertiary};
+    }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimaryBorder};
+      outline-offset: 1px;
     }
   `,
   subjectTitle: css`
@@ -209,10 +219,11 @@ const eventKind = (
 
 const Subject = memo<{ onSelect: (nodeId: string) => void; view: GoalNodeView }>(
   ({ onSelect, view }) => (
-    <span className={styles.subject} onClick={() => onSelect(view.node.id)}>
+    // A real button, so the node is reachable by Tab and opens on Enter / Space.
+    <button className={styles.subject} type={'button'} onClick={() => onSelect(view.node.id)}>
       <Icon color={cssVar.colorTextTertiary} icon={KIND_ICON[view.node.kind]} size={13} />
       <span className={styles.subjectTitle}>{view.node.title}</span>
-    </span>
+    </button>
   ),
 );
 
