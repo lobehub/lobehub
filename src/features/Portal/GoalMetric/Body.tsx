@@ -14,7 +14,6 @@ import {
   buildGoalGraphView,
   type GoalGraphView,
   type GoalNodeView,
-  isRunningNode,
 } from '@/features/AgentGoals/ProcessControl/goalGraphViewModel';
 import { KindDot } from '@/features/AgentGoals/ProcessControl/shared';
 import { formatElapsed, useElapsed } from '@/features/AgentGoals/ProcessControl/useElapsed';
@@ -25,6 +24,8 @@ import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { goalSelectors, useGoalStore } from '@/store/goal';
+
+import { taskRowSpan, type TaskRowState, taskRowState, taskRowStateLabelKey } from './taskRowState';
 
 /**
  * Drill-down behind each header metric of the goal detail page. Every view is
@@ -151,20 +152,13 @@ const Lifecycle = memo<{ goalId: string; graph: GoalGraphView }>(({ graph }) => 
 
 Lifecycle.displayName = 'GoalMetricLifecycle';
 
-const attemptSpan = (view: GoalNodeView) => {
-  const first = view.attempts[0];
-  const last = view.attempts.at(-1);
-  if (!first || !last) return undefined;
-  return { endedAt: last.endedAt, startedAt: first.startedAt };
-};
-
 /**
- * How long the Task has taken across every attempt — a live clock while the
- * latest attempt is still running, the settled span once it closed. A Task that
- * was never dispatched has nothing to show.
+ * How long the Task has taken across every attempt — a live clock only while
+ * it is genuinely running, a frozen span otherwise. A Task that was never
+ * dispatched has nothing to show.
  */
 const TaskDuration = memo<{ view: GoalNodeView }>(({ view }) => {
-  const span = attemptSpan(view);
+  const span = taskRowSpan(view);
   const elapsed = useElapsed(span && !span.endedAt ? span.startedAt : undefined);
   if (!span) return null;
 
@@ -184,7 +178,7 @@ TaskDuration.displayName = 'GoalMetricTaskDuration';
  */
 const TaskStartDate = memo<{ view: GoalNodeView }>(({ view }) => {
   const { t, i18n } = useTranslation('common');
-  const span = attemptSpan(view);
+  const span = taskRowSpan(view);
   const date = span
     ? formatTaskItemDate(span.startedAt, {
         formatOtherYear: t('time.formatOtherYear'),
@@ -214,32 +208,31 @@ const TaskStartDate = memo<{ view: GoalNodeView }>(({ view }) => {
 
 TaskStartDate.displayName = 'GoalMetricTaskStartDate';
 
-/** The Task-list visual for a settled (not running) Task node. */
-const settledTaskVisual = (view: GoalNodeView) => {
-  if (view.isStale) return TASK_STATUS_VISUALS.failed;
-  if (view.decision) return TASK_STATUS_VISUALS.paused;
-  if (view.node.status === 'resolved') return TASK_STATUS_VISUALS.completed;
-  if (view.node.status === 'rejected' || view.node.status === 'retired')
-    return TASK_STATUS_VISUALS.canceled;
-  return TASK_STATUS_VISUALS.backlog;
-};
+/** The Task-list visual for each row state; `running` draws the animated ring instead. */
+const STATE_VISUAL = {
+  decision: TASK_STATUS_VISUALS.paused,
+  done: TASK_STATUS_VISUALS.completed,
+  lost: TASK_STATUS_VISUALS.failed,
+  queued: TASK_STATUS_VISUALS.backlog,
+  retired: TASK_STATUS_VISUALS.canceled,
+} as const satisfies Record<Exclude<TaskRowState, 'running'>, unknown>;
 
 /**
  * A Task node's state as the leading glyph the Task list uses — the same marks
  * the goal page's own frontier draws, so a row reads the same in both places.
- * The status name stays one hover away.
+ * The status name stays one hover away, worded from the same state as the icon.
  */
 const TaskStatusGlyph = memo<{ view: GoalNodeView }>(({ view }) => {
   const { t } = useTranslation('chat');
-  const visual = settledTaskVisual(view);
+  const state = taskRowState(view);
 
   return (
-    <Tooltip title={t(`goalProcess.nodeStatus.${view.node.status}` as const)}>
+    <Tooltip title={t(taskRowStateLabelKey(view, state))}>
       <span style={{ display: 'inline-flex', flex: 'none' }}>
-        {isRunningNode(view) ? (
+        {state === 'running' ? (
           <RunningGlyph size={16} />
         ) : (
-          <Icon color={visual.color} icon={visual.icon} size={16} />
+          <Icon color={STATE_VISUAL[state].color} icon={STATE_VISUAL[state].icon} size={16} />
         )}
       </span>
     </Tooltip>
