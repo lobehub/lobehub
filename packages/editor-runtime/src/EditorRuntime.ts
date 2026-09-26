@@ -456,9 +456,13 @@ export class EditorRuntime {
     // Dispatch one step at a time and confirm each changed the page before
     // reporting it: the editor drops operations with unknown ids (or that it
     // cannot apply) without an error.
-    for (const step of planLiteXMLEditSteps(operations)) {
+    // A step may apply only part of one operation (a split `modify`), so an
+    // operation succeeds only when none of its steps failed.
+    for (const step of planLiteXMLEditSteps(operations, indexLiteXMLDocument(readLiteXML()))) {
       const fail = (error: string) => {
-        for (const index of step.indexes) results[index] = { ...results[index], error };
+        for (const index of step.indexes) {
+          results[index] = { ...results[index], error, success: false };
+        }
       };
 
       try {
@@ -485,7 +489,9 @@ export class EditorRuntime {
           );
         }
 
-        for (const index of step.indexes) results[index] = { ...results[index], success: true };
+        for (const index of step.indexes) {
+          if (!results[index].error) results[index] = { ...results[index], success: true };
+        }
       } catch (error) {
         const err = error as Error;
         console.error(

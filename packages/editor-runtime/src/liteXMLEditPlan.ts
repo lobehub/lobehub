@@ -28,15 +28,18 @@ const LITEXML_ID_ATTRIBUTE = /\bid="([^"]+)"/;
 const LIST_TAGS = new Set(['li', 'ol', 'ul']);
 
 export interface LiteXMLDocumentIndex {
+  /** Ids of the nodes enclosing each node, nearest first. */
+  ancestorIds: Map<string, string[]>;
   ids: Set<string>;
   /** Ids of list containers, list items and every node nested inside them. */
   listIds: Set<string>;
 }
 
 export const indexLiteXMLDocument = (litexml: string): LiteXMLDocumentIndex => {
+  const ancestorIds = new Map<string, string[]>();
   const ids = new Set<string>();
   const listIds = new Set<string>();
-  const stack: boolean[] = [];
+  const stack: { id?: string; inList: boolean }[] = [];
 
   for (const [, closing, tag, attributes = ''] of litexml.matchAll(LITEXML_TAG_PATTERN)) {
     if (closing) {
@@ -44,16 +47,22 @@ export const indexLiteXMLDocument = (litexml: string): LiteXMLDocumentIndex => {
       continue;
     }
 
-    const inList = (stack.at(-1) ?? false) || LIST_TAGS.has(tag.toLowerCase());
+    const inList = (stack.at(-1)?.inList ?? false) || LIST_TAGS.has(tag.toLowerCase());
     const id = attributes.match(LITEXML_ID_ATTRIBUTE)?.[1];
     if (id) {
       ids.add(id);
       if (inList) listIds.add(id);
+      const ancestors: string[] = [];
+      for (let depth = stack.length - 1; depth >= 0; depth -= 1) {
+        const ancestorId = stack[depth].id;
+        if (ancestorId) ancestors.push(ancestorId);
+      }
+      ancestorIds.set(id, ancestors);
     }
-    if (!attributes.endsWith('/')) stack.push(inList);
+    if (!attributes.endsWith('/')) stack.push({ id, inList });
   }
 
-  return { ids, listIds };
+  return { ancestorIds, ids, listIds };
 };
 
 /** Ids carried by the top-level nodes of a `modify` payload — the nodes it replaces. */
@@ -98,6 +107,10 @@ export const getReferencedIds = (operation: ModifyOperation): (string | undefine
 
 const LIST_MARKUP_PATTERN = /<(?:li|ol|ul)[\s/>]/i;
 
+const fragmentTouchesList = (litexml: string, document: LiteXMLDocumentIndex) =>
+  LIST_MARKUP_PATTERN.test(litexml) ||
+  getTopLevelLiteXMLIds(litexml).some((id) => id !== undefined && document.listIds.has(id));
+
 /**
  * Pending review diffs (`delay: true`) are not safe for lists in @lobehub/editor:
  * list-item add/remove diffs serialize as empty items, a whole-list modify drops
@@ -128,21 +141,72 @@ const hasListMarkup = (operation: ModifyOperation) =>
   operation.action !== 'remove' &&
   toFragments(operation.litexml).some((litexml) => LIST_MARKUP_PATTERN.test(litexml));
 
+/** An insert with nothing to insert; kept on its own so its no-op is reported. */
+const isEmptyInsert = (operation: AfterInsertOperation) =>
+  stripRootElement(operation.litexml).trim().length === 0;
+
+/**
+ * Whether `operation` can remove or replace `anchorId`: it targets the anchor
+ * itself, one of the nodes enclosing it, or a node it cannot identify.
+ */
+const affectsAnchor = (
+  operation: ModifyOperation,
+  anchorId: string,
+  document: LiteXMLDocumentIndex,
+) => {
+  const scope = new Set([anchorId, ...(document.ancestorIds.get(anchorId) ?? [])]);
+
+  return getReferencedIds(operation).some((id) => id === undefined || scope.has(id));
+};
+
+/**
+ * A `modify` whose fragments mix list and non-list nodes is split into one step
+ * per kind, so only the list fragments skip the review diff.
+ */
+const splitModifyByList = (
+  operation: Extract<ModifyOperation, { action: 'modify' }>,
+  document: LiteXMLDocumentIndex,
+): ModifyOperation[] => {
+  if (!Array.isArray(operation.litexml)) return [operation];
+
+  const list = operation.litexml.filter((litexml) => fragmentTouchesList(litexml, document));
+  const other = operation.litexml.filter((litexml) => !fragmentTouchesList(litexml, document));
+  if (list.length === 0 || other.length === 0) return [operation];
+
+  return [
+    { ...operation, litexml: other },
+    { ...operation, litexml: list },
+  ];
+};
+
 /**
  * Keep the caller's order. Inserts after the same anchor are merged: applied one
  * by one, each would land directly after the anchor and the batch would come out
  * reversed. The merge reaches past operations in between as long as they leave
- * the anchor alone; one that removes or replaces the anchor ends it. A run mixing
- * list and non-list content is split where that changes, so only the list part
- * skips the review diff; the pieces are then applied last-first, each landing
- * after the anchor ahead of the previous piece.
+ * the anchor alone; one that removes or replaces the anchor or a node enclosing
+ * it ends it. A run mixing list and non-list content is split where that
+ * changes, so only the list part skips the review diff; the pieces are then
+ * applied last-first, each landing after the anchor ahead of the previous piece.
+ * An empty insert stays a piece of its own so its no-op fails instead of riding
+ * on a neighbour's change.
+ *
+ * `document` is the LiteXML index of the document before any operation runs.
  */
-export const planLiteXMLEditSteps = (operations: ModifyOperation[]): LiteXMLEditStep[] => {
+export const planLiteXMLEditSteps = (
+  operations: ModifyOperation[],
+  document: LiteXMLDocumentIndex,
+): LiteXMLEditStep[] => {
   const steps: LiteXMLEditStep[] = [];
   const merged = new Set<number>();
 
   operations.forEach((operation, index) => {
     if (merged.has(index)) return;
+    if (operation.action === 'modify') {
+      for (const part of splitModifyByList(operation, document)) {
+        steps.push({ indexes: [index], operation: part });
+      }
+      return;
+    }
     if (!isAfterInsert(operation)) {
       steps.push({ indexes: [index], operation });
       return;
@@ -154,13 +218,18 @@ export const planLiteXMLEditSteps = (operations: ModifyOperation[]): LiteXMLEdit
 
       const next = operations[nextIndex];
       if (!isAfterInsert(next) || next.afterId !== operation.afterId) {
-        if (getReferencedIds(next).includes(operation.afterId)) break;
+        if (affectsAnchor(next, operation.afterId, document)) break;
         continue;
       }
       merged.add(nextIndex);
 
       const piece = pieces.at(-1);
-      if (piece && hasListMarkup(piece.operation) === hasListMarkup(next)) {
+      if (
+        piece &&
+        !isEmptyInsert(piece.operation) &&
+        !isEmptyInsert(next) &&
+        hasListMarkup(piece.operation) === hasListMarkup(next)
+      ) {
         piece.indexes.push(nextIndex);
         piece.operation = {
           ...next,
