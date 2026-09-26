@@ -5,6 +5,7 @@ import {
   type RuntimeImageGenParamsKeys,
   type RuntimeImageGenParamsValue,
 } from 'model-bank';
+import { nanoBanana2Parameters } from 'model-bank/imageParameters';
 import { extractDefaultValues } from 'model-bank/standardParameters';
 
 import { aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
@@ -46,7 +47,10 @@ export function getModelAndDefaults(model: string, provider: string) {
     );
   }
 
-  const parametersSchema = activeModel.parameters as ModelParamsSchema;
+  // User-created image models have no parameters editor, so `parameters` is undefined.
+  // Fall back to the default image schema so selection still applies with prompt-only config.
+  // https://linear.app/lobehub/issue/LOBE-13928
+  const parametersSchema = (activeModel.parameters ?? nanoBanana2Parameters) as ModelParamsSchema;
   const defaultValues = extractDefaultValues(parametersSchema);
 
   return { defaultValues, activeModel, parametersSchema };
