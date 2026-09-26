@@ -25,6 +25,7 @@ import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { goalSelectors, useGoalStore } from '@/store/goal';
 
+import Lifecycle from './Lifecycle';
 import { taskRowSpan, type TaskRowState, taskRowState, taskRowStateLabelKey } from './taskRowState';
 
 /**
@@ -101,56 +102,6 @@ const NodeRow = memo<{
 });
 
 NodeRow.displayName = 'GoalMetricNodeRow';
-
-const Lifecycle = memo<{ goalId: string; graph: GoalGraphView }>(({ graph }) => {
-  const { t } = useTranslation('chat');
-  const snapshot = useGoalStore(goalSelectors.goalGraph(graph.goal.id));
-  const events = useMemo(
-    () =>
-      [...(snapshot?.events ?? [])].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),
-    [snapshot],
-  );
-
-  if (events.length === 0)
-    return (
-      <Text fontSize={13} type={'secondary'}>
-        {t('goalProcess.metricDetail.lifecycle.empty')}
-      </Text>
-    );
-
-  return (
-    <Flexbox gap={0}>
-      {events.map((event) => {
-        const subject = graph.byId[event.entityId]?.node.title;
-        return (
-          <Flexbox
-            horizontal
-            align={'baseline'}
-            className={styles.staticRow}
-            gap={10}
-            key={event.id}
-          >
-            <Text className={styles.mono} fontSize={12} style={{ flex: 'none' }} type={'secondary'}>
-              {dayjs(event.createdAt).format('MM-DD HH:mm')}
-            </Text>
-            <Flexbox flex={1} gap={1} style={{ minWidth: 0 }}>
-              <Text fontSize={13}>
-                {t(`goalProcess.eventType.${event.eventType}` as const)}
-                {subject ? ` · ${subject}` : ''}
-              </Text>
-              <Text fontSize={12} type={'secondary'}>
-                {t(`goalProcess.actor.${event.actorType}` as const)}
-                {event.reason ? ` · ${event.reason}` : ''}
-              </Text>
-            </Flexbox>
-          </Flexbox>
-        );
-      })}
-    </Flexbox>
-  );
-});
-
-Lifecycle.displayName = 'GoalMetricLifecycle';
 
 /**
  * How long the Task has taken across every attempt — a live clock only while
