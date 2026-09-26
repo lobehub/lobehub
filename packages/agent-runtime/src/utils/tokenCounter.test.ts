@@ -132,12 +132,17 @@ describe('tokenCounter', () => {
       expect(result.currentTokenCount).toBe(0);
     });
 
-    // Bug B: tool definitions also occupy the input window, so a
-    // message payload that fits when tools are absent can overflow once tool
-    // definitions are accounted for. Without this, compression only fires on
-    // message size and leaves the tool budget to silently push the request
-    // past the model's context window (openrouter "ExceededContextWindow").
-    it('should count tool definition tokens against the budget', () => {
+    // Tool definitions do occupy the input window, but they are per-step
+    // overhead that the caller has already reserved headroom for, and
+    // compressing the transcript cannot shrink a tool manifest. Charging them to
+    // the conversation budget meant a broadly tooled agent compressed its
+    // history on nearly every turn while the overhead stayed put — measured at
+    // 43.7k of a 64k budget spent before the user's first token.
+    //
+    // So they are excluded from the ratio threshold and covered by
+    // MAX_PROMPT_RATIO instead, which is the assertion that actually matters:
+    // the request must not approach the window. See the two tests below.
+    it('should not let tool definitions alone trip the ratio threshold', () => {
       const messages = [
         mkMsg({
           role: 'assistant',
@@ -146,10 +151,6 @@ describe('tokenCounter', () => {
       ];
       const options = { driftMultiplier: 1, maxWindowToken: 100_000, thresholdRatio: 0.6 };
 
-      const withoutTools = shouldCompress(messages, options);
-      expect(withoutTools.needsCompression).toBe(false);
-
-      // A chunky tool manifest (~20K tokens of JSON) should push us over.
       const bigTool = {
         function: {
           description: 'x'.repeat(80_000),
@@ -160,8 +161,76 @@ describe('tokenCounter', () => {
       };
       const withTools = shouldCompress(messages, { ...options, tools: [bigTool] });
 
-      expect(withTools.needsCompression).toBe(true);
-      expect(withTools.currentTokenCount).toBeGreaterThan(withoutTools.currentTokenCount);
+      // 50k conversation fits the 60k budget; 20k of tools is overhead on top.
+      expect(withTools.needsCompression).toBe(false);
+      // Still counted in the reported total — this is a budget change, not a
+      // measurement change.
+      expect(withTools.currentTokenCount).toBeGreaterThan(50_000);
+    });
+
+    it('should still compress when tool definitions push the request near the window', () => {
+      const options = { driftMultiplier: 1, maxWindowToken: 100_000, thresholdRatio: 0.6 };
+      // ~100k tokens of tool schema against an 80k (80% of window) ceiling. The
+      // ratio threshold alone would not fire here: the budget grows by the same
+      // overhead we are adding.
+      const hugeTool = {
+        function: {
+          description: 'x'.repeat(600_000),
+          name: 'huge_tool',
+          parameters: { properties: {}, type: 'object' },
+        },
+        type: 'function',
+      };
+
+      const result = shouldCompress([mkMsg({ role: 'user', content: 'Hi' })], {
+        ...options,
+        tools: [hugeTool],
+      });
+
+      expect(result.needsCompression).toBe(true);
+    });
+
+    it('should exclude the system role and tool definitions from the conversation budget', () => {
+      const messages = [
+        mkMsg({ role: 'system', content: 's'.repeat(120_000) }),
+        mkMsg({ role: 'user', content: 'u'.repeat(120_000) }),
+      ];
+      const options = { driftMultiplier: 1, maxWindowToken: 100_000, thresholdRatio: 0.6 };
+
+      const result = shouldCompress(messages, {
+        ...options,
+        tools: [
+          {
+            function: {
+              description: 'x'.repeat(120_000),
+              name: 'tool',
+              parameters: { properties: {}, type: 'object' },
+            },
+            type: 'function',
+          },
+        ],
+      });
+
+      // ~40k of system role + tool definitions, leaving the 60k conversation
+      // budget to the ~27k of dialogue. The unfixed total (~67k) was over the
+      // threshold, which is exactly the premature compression being corrected.
+      expect(result.fixedOverhead).toBeGreaterThan(30_000);
+      expect(result.needsCompression).toBe(false);
+    });
+
+    it('should compress once the conversation alone exceeds the budget', () => {
+      const messages = [
+        mkMsg({ role: 'system', content: 's'.repeat(60_000) }),
+        mkMsg({ role: 'user', content: 'u'.repeat(400_000) }),
+      ];
+      const options = { driftMultiplier: 1, maxWindowToken: 100_000, thresholdRatio: 0.6 };
+
+      const result = shouldCompress(messages, options);
+
+      // ~67k of dialogue against a 60k budget, on top of ~10k of system role.
+      // Stays under the 80k ceiling, so the ratio threshold is what fires.
+      expect(result.fixedOverhead).toBeGreaterThan(5_000);
+      expect(result.needsCompression).toBe(true);
     });
   });
 });

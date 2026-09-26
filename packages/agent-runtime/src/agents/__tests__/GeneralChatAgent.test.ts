@@ -224,9 +224,13 @@ describe('GeneralChatAgent', () => {
       });
     });
 
-    // Bug B: state.tools must feed into the compression budget,
-    // otherwise large tool manifests (16-22K tokens observed on openrouter)
-    // slip past the threshold and overflow the model context window.
+    // state.tools must reach the compression check, otherwise the request's
+    // real size is invisible. Tool schemas are per-step overhead though, not
+    // conversation: they are counted and reported, but charged against the
+    // headroom the caller already reserves rather than the transcript budget,
+    // because summarizing the transcript cannot shrink a tool manifest. They
+    // only force compression once they approach the window on their own
+    // (MAX_PROMPT_RATIO).
     it('should fold state.tools into the compression budget on init', async () => {
       const compressionConfig = {
         enabled: true,
@@ -252,8 +256,8 @@ describe('GeneralChatAgent', () => {
       const noToolsResult = await agentNoTools.runner(context, createMockState({ messages }));
       expect((noToolsResult as any).type).toBe('call_llm');
 
-      // With a chunky tool manifest (~66K tokens) total raw input is ~116K,
-      // drift-adjusted ~145K, which crosses the 100K threshold.
+      // A ~66K-token tool manifest does not consume the 100K conversation
+      // budget, and sits under the 160K (80% of window) ceiling.
       const bigTool = {
         function: {
           description: 'x'.repeat(400_000),
@@ -272,7 +276,23 @@ describe('GeneralChatAgent', () => {
         context,
         createMockState({ messages, tools: [bigTool] as any }),
       );
-      expect((withToolsResult as any).type).toBe('compress_context');
+      expect((withToolsResult as any).type).toBe('call_llm');
+
+      // A ~400K-token manifest does cross the ceiling, so the request is still
+      // stopped before it reaches the model.
+      const hugeTool = {
+        function: {
+          description: 'x'.repeat(2_400_000),
+          name: 'huge_tool',
+          parameters: { properties: {}, type: 'object' },
+        },
+        type: 'function',
+      };
+      const hugeToolsResult = await agentWithTools.runner(
+        context,
+        createMockState({ messages, tools: [hugeTool] as any }),
+      );
+      expect((hugeToolsResult as any).type).toBe('compress_context');
     });
   });
 
@@ -1268,11 +1288,11 @@ describe('GeneralChatAgent', () => {
         },
         { role: 'tool', content: 'Result', tool_call_id: 'call-1' },
       ] as any;
-      // Chunky tool manifest that alone is enough to push the request over the
-      // compression threshold when counted in the budget.
+      // Chunky tool manifest large enough to cross the absolute prompt ceiling
+      // on its own, so the forceFinish branch below is observable.
       const bigTool = {
         function: {
-          description: 'x'.repeat(400_000),
+          description: 'x'.repeat(2_400_000),
           name: 'big_tool',
           parameters: { properties: {}, type: 'object' },
         },
