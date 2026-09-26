@@ -16,6 +16,7 @@ import {
 } from '@lobechat/builtin-tool-creds';
 import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
 import { LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
+import { SkillsIdentifier } from '@lobechat/builtin-tool-skills';
 import { WebOnboardingIdentifier } from '@lobechat/builtin-tool-web-onboarding';
 import { COMPOSIO_APP_TYPES } from '@lobechat/const';
 import {
@@ -436,6 +437,13 @@ export const gatherContextFacts = async (
 ): Promise<GatheredContextFacts> => {
   const docsAgentId = documentsAgentId(request);
   const sandboxEnabled = request.enabledToolIds.includes(CloudSandboxIdentifier);
+  // Two tools reach the sandbox, and the optional one is not the common case:
+  // `lobe-skills` is always on, and its runCommand / execScript open the SAME
+  // session in the SAME directory as the cloud-sandbox tool. Asking only
+  // whether the optional tool is enabled told a skills-driven run the
+  // ephemeral wording while its commands ran in a persistent workspace — so it
+  // cloned into /tmp and the user's file browser stayed empty.
+  const sandboxShellEnabled = sandboxEnabled || request.enabledToolIds.includes(SkillsIdentifier);
 
   const tasks = [
     () =>
@@ -457,7 +465,7 @@ export const gatherContextFacts = async (
       ),
     () =>
       attempt('sandboxPersistence', () =>
-        sandboxEnabled ? providers.resolveSandboxPersistence?.() : undefined,
+        sandboxShellEnabled ? providers.resolveSandboxPersistence?.() : undefined,
       ),
     () =>
       attempt('topic', () =>

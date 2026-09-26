@@ -371,3 +371,37 @@ describe('gatherContextFacts', () => {
     });
   });
 });
+
+describe('which tool counts as reaching the sandbox', () => {
+  const persistence = { cwd: 'lobehub-dev', mode: 'persistent' as const };
+
+  it('describes the persistent workspace for a run that only has the always-on skills tool', async () => {
+    // `lobe-skills` runCommand opens the same session in the same directory as
+    // the cloud-sandbox tool, and it ships with every run. Gating the placement
+    // on the optional tool left a skills-driven run reading the ephemeral
+    // wording while its commands ran in a persistent workspace.
+    const facts = await gatherContextFacts(request({ enabledToolIds: ['lobe-skills'] }), {
+      resolveSandboxPersistence: async () => persistence,
+    });
+
+    expect(facts.variables.sandbox_workspace).toContain('persistent workspace');
+    expect(facts.variables.sandbox_workspace).toContain('`lobehub-dev`');
+  });
+
+  it('still describes it for the cloud-sandbox tool on its own', async () => {
+    const facts = await gatherContextFacts(request({ enabledToolIds: ['lobe-cloud-sandbox'] }), {
+      resolveSandboxPersistence: async () => persistence,
+    });
+
+    expect(facts.variables.sandbox_workspace).toContain('persistent workspace');
+  });
+
+  it('asks for nothing when no tool can run a command in the sandbox', async () => {
+    const resolveSandboxPersistence = vi.fn(async () => persistence);
+    await gatherContextFacts(request({ enabledToolIds: ['lobe-agent'] }), {
+      resolveSandboxPersistence,
+    });
+
+    expect(resolveSandboxPersistence).not.toHaveBeenCalled();
+  });
+});

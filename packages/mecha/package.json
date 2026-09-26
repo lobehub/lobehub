@@ -30,6 +30,7 @@
     "@lobechat/builtin-tool-message": "workspace:*",
     "@lobechat/builtin-tool-page-agent": "workspace:*",
     "@lobechat/builtin-tool-remote-device": "workspace:*",
+    "@lobechat/builtin-tool-skills": "workspace:*",
     "@lobechat/builtin-tool-task": "workspace:*",
     "@lobechat/builtin-tool-video-generation": "workspace:*",
     "@lobechat/builtin-tool-web-browsing": "workspace:*",
