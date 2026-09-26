@@ -18,6 +18,8 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
+import { PortalMoreMenuSlot } from './PortalMoreMenu/context';
+
 const Header = memo<{
   onClose?: () => void;
   paddingInline?: number;
@@ -54,6 +56,9 @@ const Header = memo<{
             />
           )}
           {title}
+          {/* The `…` belongs to the thing the title names, not to the panel
+              chrome on the far edge, so it rides right behind the title. */}
+          <PortalMoreMenuSlot />
         </Flexbox>
       }
       right={

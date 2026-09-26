@@ -181,11 +181,10 @@ export const resolvePortalDocumentPath = (
 };
 
 /**
- * Header menu actions shared by every portal document: copy a link to the
- * full-page view and refetch the document from the server.
+ * Header menu actions shared by every portal document: the absolute link to
+ * the full-page view and a refetch of the document from the server.
  */
 export const usePortalDocumentHeaderActions = () => {
-  const { t } = useTranslation(['chat', 'file', 'common']);
   const documentId = useResolvedDocumentId();
   // The resolved agent-documents binding is the ownership proof: only a bound
   // document may be linked through the active agent's docs route.
@@ -195,14 +194,9 @@ export const usePortalDocumentHeaderActions = () => {
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
 
   const path = resolvePortalDocumentPath(documentId, agentId, agentDocumentId);
-
-  const copyLink = useCallback(async () => {
-    if (!path || !appOrigin) return;
-    const workspacePrefix = activeWorkspaceSlug ? `/${activeWorkspaceSlug}` : '';
-    const url = `${appOrigin.replace(/\/+$/, '')}${workspacePrefix}${path}`;
-    await navigator.clipboard.writeText(url);
-    toast.success(t('agentDocument.linkCopied', { ns: 'chat' }));
-  }, [activeWorkspaceSlug, appOrigin, path, t]);
+  const workspacePrefix = activeWorkspaceSlug ? `/${activeWorkspaceSlug}` : '';
+  const url =
+    path && appOrigin ? `${appOrigin.replace(/\/+$/, '')}${workspacePrefix}${path}` : undefined;
 
   const refresh = useCallback(async () => {
     if (!documentId) return;
@@ -213,5 +207,5 @@ export const usePortalDocumentHeaderActions = () => {
     });
   }, [agentDocumentId, agentId, documentId]);
 
-  return { agentDocumentId, agentId, copyLink, documentId, path, refresh };
+  return { agentDocumentId, agentId, documentId, path, refresh, url };
 };

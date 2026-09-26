@@ -34,7 +34,6 @@
   "agentDocument.openAsPage": "打开整页",
   "agentDocument.portal.chatWithDocument": "对话编辑",
   "agentDocument.portal.export": "导出",
-  "agentDocument.portal.refresh": "刷新",
   "agentDocument.portal.titlePlaceholder": "未命名文稿",
   "agentDocument.portal.viewAll": "查看全部文稿",
   "agentNotFound.desc": "该助理不存在或您已无权访问，可能已被删除或被其所有者设为私人。",

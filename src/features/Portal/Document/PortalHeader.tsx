@@ -1,6 +1,7 @@
 'use client';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@lobechat/const';
+import { Flexbox } from '@lobehub/ui';
 import { ActionIcon } from '@lobehub/ui/base-ui';
 import { Maximize2Icon } from 'lucide-react';
 import { memo } from 'react';
@@ -12,8 +13,10 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 
+import AutoSaveHint from './AutoSaveHint';
 import { useResolvedAgentDocumentId } from './documentViewContext';
 import DocumentTitle from './Header';
+import { usePortalDocumentTitleState } from './titleContext';
 import { usePortalDocumentHeaderActions } from './usePortalDocumentHeader';
 
 /**
@@ -48,6 +51,7 @@ const PortalHeader = () => {
   // and that agent's index is not this document's home.
   const agentDocumentId = useResolvedAgentDocumentId();
   const navigate = useWorkspaceAwareNavigate();
+  const { isLoading, metaLocked } = usePortalDocumentTitleState();
 
   // Agent documents have a documents index to land on; plain notebook
   // documents keep a non-navigating crumb label.
@@ -56,8 +60,13 @@ const PortalHeader = () => {
 
   return (
     <PortalChromeHeader
-      rightExtra={<OpenAsPageAction />}
       title={<DocumentTitle onOpenDocumentsIndex={openDocumentsIndex} />}
+      rightExtra={
+        <Flexbox horizontal align={'center'} gap={4}>
+          {!isLoading && !metaLocked && <AutoSaveHint />}
+          <OpenAsPageAction />
+        </Flexbox>
+      }
     />
   );
 };

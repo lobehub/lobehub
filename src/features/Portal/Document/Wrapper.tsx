@@ -5,13 +5,18 @@ import { type PropsWithChildren } from 'react';
 import { memo } from 'react';
 
 import { useResolvedDocumentId } from './documentViewContext';
+import { PortalDocumentTitleProvider } from './titleContext';
 
 const Wrapper = memo<PropsWithChildren>(({ children }) => {
   const documentId = useResolvedDocumentId();
 
   if (!documentId) return null;
 
-  return <EditorProvider>{children}</EditorProvider>;
+  return (
+    <EditorProvider>
+      <PortalDocumentTitleProvider>{children}</PortalDocumentTitleProvider>
+    </EditorProvider>
+  );
 });
 
 export default Wrapper;

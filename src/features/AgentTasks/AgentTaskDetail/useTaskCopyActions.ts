@@ -1,6 +1,6 @@
 import { copyToClipboard } from '@lobehub/ui';
 import { toast } from '@lobehub/ui/base-ui';
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
@@ -31,18 +31,24 @@ export const useTaskCopyActions = () => {
     toast.success(t('taskList.contextMenu.copyIdSuccess'));
   }, [taskId, t]);
 
+  // Carry the title into the link so a pasted URL says what the task is.
+  const link = useMemo(
+    () =>
+      taskId
+        ? `${appOrigin}${buildWorkspaceAwarePath(
+            taskDetailPath(taskId, taskAgentId ?? undefined, taskTitle),
+            activeWorkspaceSlug,
+          )}`
+        : undefined,
+    [taskId, taskAgentId, taskTitle, appOrigin, activeWorkspaceSlug],
+  );
+
   const copyLink = useCallback(async () => {
-    if (!taskId) return;
+    if (!link) return;
 
-    // Carry the title into the copied link so a pasted URL says what the task is.
-    const taskUrl = `${appOrigin}${buildWorkspaceAwarePath(
-      taskDetailPath(taskId, taskAgentId ?? undefined, taskTitle),
-      activeWorkspaceSlug,
-    )}`;
-
-    await copyToClipboard(taskUrl);
+    await copyToClipboard(link);
     toast.success(t('taskList.contextMenu.copyLinkSuccess'));
-  }, [taskId, taskAgentId, taskTitle, appOrigin, activeWorkspaceSlug, t]);
+  }, [link, t]);
 
-  return { copyId, copyLink, taskId };
+  return { copyId, copyLink, link, taskId };
 };

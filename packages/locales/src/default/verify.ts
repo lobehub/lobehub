@@ -120,8 +120,6 @@ export default {
   'acceptance.actions.accept': 'Accept delivery',
   'acceptance.actions.cancel': 'Cancel',
   'acceptance.actions.confirmAccept': 'Confirm acceptance',
-  'acceptance.actions.more': 'More actions',
-  'acceptance.actions.refresh': 'Refresh',
   'acceptance.actions.confirmRejectCopy': 'Reject & copy prompt',
   'acceptance.actions.confirmReject': 'Reject and start the next round',
   'acceptance.actions.reject': 'Reject delivery',

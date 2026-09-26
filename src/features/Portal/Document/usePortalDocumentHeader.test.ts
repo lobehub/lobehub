@@ -72,7 +72,6 @@ vi.mock('@/store/chat', () => ({
 
 const toastSuccess = vi.hoisted(() => vi.fn());
 const toastError = vi.hoisted(() => vi.fn());
-const clipboardWrite = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 
 vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
@@ -333,42 +332,23 @@ describe('usePortalDocumentHeaderActions', () => {
   beforeEach(() => {
     mockChatState.current.portalStack[0].agentDocumentId = 'agent-document-1';
     mockAgentState.current.activeAgentId = 'agent-1';
-    clipboardWrite.mockClear();
-    toastSuccess.mockClear();
-    // jsdom exposes `navigator.clipboard` as getter-only; swap it per test.
-    Object.defineProperty(navigator, 'clipboard', {
-      configurable: true,
-      value: { writeText: clipboardWrite },
-    });
   });
 
-  it('copies the agent-document URL when the binding proves ownership', async () => {
+  it('links the agent-document route when the binding proves ownership', () => {
     const { result } = renderHook(() => usePortalDocumentHeaderActions());
 
-    await act(async () => {
-      await result.current.copyLink();
-    });
-
-    expect(clipboardWrite).toHaveBeenCalledWith(
-      'https://app.lobehub.com/agent/agent-1/docs/document-1',
-    );
-    expect(toastSuccess).toHaveBeenCalled();
+    expect(result.current.url).toBe('https://app.lobehub.com/agent/agent-1/docs/document-1');
   });
 
-  it('links an unbound document (e.g. a goal deliverable) to the page editor', async () => {
+  it('links an unbound document (e.g. a goal deliverable) to the page editor', () => {
     mockChatState.current.portalStack[0].agentDocumentId = undefined;
 
     const { result } = renderHook(() => usePortalDocumentHeaderActions());
 
-    await act(async () => {
-      await result.current.copyLink();
-    });
-
     // The agent docs route redirects unowned ids to its index, so the link
     // must not point there.
     expect(result.current.path).toBe('/page/document-1');
-    expect(clipboardWrite).toHaveBeenCalledWith('https://app.lobehub.com/page/document-1');
-    expect(toastSuccess).toHaveBeenCalled();
+    expect(result.current.url).toBe('https://app.lobehub.com/page/document-1');
   });
 
   it('refresh revalidates the document caches', async () => {
