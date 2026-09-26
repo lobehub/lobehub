@@ -335,8 +335,8 @@ export function registerDocCommand(program: Command) {
     .action(async (docId: string, topicId: string) => {
       const client = await getTrpcClient();
 
-      // Create the document via notebook router which handles topic association
-      // First verify the document exists
+      // Attach the existing document; creating a copy here used to leave two
+      // documents (and two run deliverables) for a single link.
       const document = await client.document.getDocumentById.query({ id: docId });
       if (!document) {
         log.error(`Document not found: ${docId}`);
@@ -344,19 +344,10 @@ export function registerDocCommand(program: Command) {
         return;
       }
 
-      // Use notebook.createDocument to create a linked copy, associating with the topic
-      const result = await client.notebook.createDocument.mutate({
-        content: document.content || '',
-        description: document.description || '',
-        ...(process.env.LOBEHUB_TOPIC_ID === topicId && process.env.LOBEHUB_OPERATION_ID
-          ? { operationId: process.env.LOBEHUB_OPERATION_ID }
-          : {}),
-        title: document.title || 'Untitled',
-        topicId,
-      });
+      const result = await client.notebook.associateDocument.mutate({ documentId: docId, topicId });
 
       console.log(
-        `${pc.green('✓')} Linked document ${pc.bold(result.id)} to topic ${pc.bold(topicId)}`,
+        `${pc.green('✓')} Linked document ${pc.bold(result.documentId)} to topic ${pc.bold(topicId)}`,
       );
     });
 
