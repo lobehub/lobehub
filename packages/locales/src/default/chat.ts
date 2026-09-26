@@ -2478,6 +2478,8 @@ export default {
     'File uploads are not supported in browser mode; only images are allowed.',
   'upload.clientMode.visionNotSupported':
     'The current model does not support visual recognition. Please switch to a different model to use this feature.',
+  'upload.localPathReference':
+    'Large files are referenced by their local path instead of uploaded, so the agent reads the original file directly.',
   'upload.preview.prepareTasks': 'Preparing chunks...',
   'upload.preview.status.cancelled': 'Upload cancelled',
   'upload.preview.status.error': 'Upload failed',

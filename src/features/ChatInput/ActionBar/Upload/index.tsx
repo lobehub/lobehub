@@ -176,7 +176,8 @@ const FileUpload = memo(() => {
           onFiles={async (files) => {
             setDropdownOpen(false);
             editor?.focus();
-            await upload(files, agentId);
+            const filesToUpload = routeLargeFilesToLocalPaths(files);
+            if (filesToUpload.length > 0) await upload(filesToUpload, agentId);
           }}
         >
           <div className={cx(hotArea)}>{t('upload.action.folderUpload')}</div>

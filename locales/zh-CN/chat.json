@@ -2170,6 +2170,7 @@
   "upload.clientMode.disabled": "当前模型不支持视觉识别和文件分析。请切换模型后使用",
   "upload.clientMode.fileNotSupported": "浏览器模式暂不支持上传文件。仅支持图片",
   "upload.clientMode.visionNotSupported": "当前模型不支持视觉识别。请切换模型后使用",
+  "upload.localPathReference": "大文件改为引用本地路径，不再上传，助手会直接读取原文件。",
   "upload.preview.prepareTasks": "正在准备分块…",
   "upload.preview.status.cancelled": "已取消上传",
   "upload.preview.status.error": "上传失败",

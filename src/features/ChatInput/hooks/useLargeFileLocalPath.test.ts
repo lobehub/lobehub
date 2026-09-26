@@ -1,9 +1,29 @@
-import { describe, expect, it } from 'vitest';
+import type { IEditor } from '@lobehub/editor';
+import { renderHook } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   LOCAL_PATH_REFERENCE_MIN_FILE_SIZE,
   partitionLargeFilesAsLocalPaths,
+  useLargeFileLocalPath,
 } from './useLargeFileLocalPath';
+
+const { insertLocalPathTagsMock, toastInfoMock } = vi.hoisted(() => ({
+  insertLocalPathTagsMock: vi.fn(),
+  toastInfoMock: vi.fn(),
+}));
+
+vi.mock('@lobehub/ui/base-ui', () => ({ toast: { info: toastInfoMock } }));
+vi.mock('@/features/ChatInput/InputEditor/insertLocalFileTags', () => ({
+  insertLocalPathTags: insertLocalPathTagsMock,
+}));
+vi.mock('@/features/Conversation/useLocalPathReference', () => ({
+  useLocalPathReference: () => ({ enableLocalPathReference: true }),
+}));
+vi.mock('@/utils/electron/localFilePath', () => ({
+  getElectronLocalFilePath: (file: File) => `/Users/me/${file.name}`,
+}));
+vi.mock('./useTopicId', () => ({ useTopicId: () => 'topic-1' }));
 
 const createFile = (name: string, type: string, size: number) => {
   const file = new File(['x'], name, { type });
@@ -41,5 +61,24 @@ describe('partitionLargeFilesAsLocalPaths', () => {
       files: [pasted],
       localPaths: [],
     });
+  });
+});
+
+describe('useLargeFileLocalPath', () => {
+  it('inserts path tags and tells the user once per burst of picked files', () => {
+    const editor = {} as IEditor;
+    const { result } = renderHook(() => useLargeFileLocalPath('agent-1', editor));
+    const large = (name: string) =>
+      createFile(name, 'text/csv', LOCAL_PATH_REFERENCE_MIN_FILE_SIZE + 1);
+    const small = createFile('notes.txt', 'text/plain', 10);
+
+    expect(result.current([large('a.csv'), small])).toEqual([small]);
+    expect(result.current([large('b.csv')])).toEqual([]);
+
+    expect(insertLocalPathTagsMock).toHaveBeenCalledTimes(2);
+    expect(insertLocalPathTagsMock).toHaveBeenLastCalledWith(editor, [
+      { isDirectory: false, name: 'b.csv', path: '/Users/me/b.csv' },
+    ]);
+    expect(toastInfoMock).toHaveBeenCalledTimes(1);
   });
 });

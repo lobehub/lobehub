@@ -23,6 +23,8 @@ import {
   type ListProjectSkillsResult,
   type LocalFileItem,
   type LocalFilePreviewUrlParams,
+  type LocalFileStats,
+  type LocalFileStatsParams,
   type LocalMoveFilesResultItem,
   type LocalReadFileParams,
   type LocalReadFileResult,
@@ -205,6 +207,10 @@ class LocalFileService {
 
   async hashLocalFile(params: HashLocalFileParams): Promise<string> {
     return ensureElectronIpc().localSystem.hashLocalFile(params);
+  }
+
+  async getLocalFileStats(params: LocalFileStatsParams): Promise<LocalFileStats> {
+    return ensureElectronIpc().localSystem.getLocalFileStats(params);
   }
 
   async readLocalFiles(params: LocalReadFilesParams): Promise<LocalReadFileResult[]> {

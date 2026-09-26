@@ -29,6 +29,8 @@ import {
   type LocalFilePreviewResult,
   type LocalFilePreviewUrlParams,
   type LocalFilePreviewUrlResult,
+  type LocalFileStats,
+  type LocalFileStatsParams,
   type LocalMoveFilesResultItem,
   type LocalReadFileParams,
   type LocalReadFileResult,
@@ -70,6 +72,7 @@ import {
   writeLocalFile,
 } from '@lobechat/local-file-shell/file';
 import type { FileResult, SearchOptions } from '@lobechat/local-file-shell/types';
+import { sniffBinaryBuffer } from '@lobechat/utils/isBinaryContent';
 import { resolveMimeType } from '@lobechat/utils/mimeType';
 import { dialog, shell } from 'electron';
 
@@ -150,6 +153,12 @@ const resolvePathWithScope = (inputPath: string, scope: string): string =>
 
 const isWithinSafePathPrefixes = (targetPath: string, prefixes: readonly string[]): boolean =>
   prefixes.some((prefix) => targetPath === prefix || targetPath.startsWith(`${prefix}${path.sep}`));
+
+/** Bytes sampled to decide whether a file is text before counting its lines. */
+const LOCAL_FILE_SNIFF_BYTES = 8 * 1024;
+
+/** Files above this size skip line counting so inserting a reference stays fast. */
+const LOCAL_FILE_LINE_COUNT_MAX_BYTES = 256 * 1024 * 1024;
 
 const resolveNearestExistingRealPath = async (targetPath: string): Promise<string | undefined> => {
   let currentPath = targetPath;
@@ -434,6 +443,49 @@ export default class LocalFileCtr extends ControllerModule {
     const hash = createHash('sha256');
     for await (const chunk of createReadStream(filePath)) hash.update(chunk);
     return hash.digest('hex');
+  }
+
+  /**
+   * Size, MIME type, and line count of a local file, attached to `<localFile>` references so the
+   * model knows whether to read the file whole or in windows. Lines are counted by streaming, so
+   * memory stays flat; binary files and files above {@link LOCAL_FILE_LINE_COUNT_MAX_BYTES} skip it.
+   */
+  @IpcMethod()
+  async getLocalFileStats({ path: filePath }: LocalFileStatsParams): Promise<LocalFileStats> {
+    const fileStat = await stat(filePath);
+    if (!fileStat.isFile()) return { size: fileStat.size };
+
+    let head: Buffer | undefined;
+    let lineCount: number | undefined;
+    let lastByte: number | undefined;
+
+    for await (const chunk of createReadStream(filePath)) {
+      const buffer = chunk as Buffer;
+      if (!head) {
+        head = buffer.subarray(0, LOCAL_FILE_SNIFF_BYTES);
+        if (sniffBinaryBuffer(head).isBinary || fileStat.size > LOCAL_FILE_LINE_COUNT_MAX_BYTES) {
+          break;
+        }
+        lineCount = 0;
+      }
+      for (
+        let index = buffer.indexOf(0x0a);
+        index !== -1;
+        index = buffer.indexOf(0x0a, index + 1)
+      ) {
+        lineCount! += 1;
+      }
+      lastByte = buffer.at(-1);
+    }
+
+    // A final line without a trailing newline still counts as a line.
+    if (lineCount !== undefined && lastByte !== undefined && lastByte !== 0x0a) lineCount += 1;
+
+    const mimeType = await resolveMimeType(filePath, head ?? new Uint8Array()).catch(
+      () => undefined,
+    );
+
+    return { lineCount, mimeType: mimeType || undefined, size: fileStat.size };
   }
 
   @IpcMethod()

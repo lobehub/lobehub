@@ -1,7 +1,9 @@
 'use client';
 
 import type { IEditor } from '@lobehub/editor';
-import { useCallback } from 'react';
+import { toast } from '@lobehub/ui/base-ui';
+import { useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import type { DroppedLocalPath } from '@/components/DragUploadZone';
 import { insertLocalPathTags } from '@/features/ChatInput/InputEditor/insertLocalFileTags';
@@ -19,6 +21,9 @@ import { useTopicId } from './useTopicId';
  * script over the original file instead.
  */
 export const LOCAL_PATH_REFERENCE_MIN_FILE_SIZE = 1024 * 1024;
+
+/** Folder picks call the router once per file; show the notice at most once per burst. */
+const NOTICE_THROTTLE_MS = 3000;
 
 const isMediaFile = (file: File) =>
   file.type.startsWith('image') || file.type.startsWith('video') || file.type.startsWith('audio');
@@ -54,22 +59,31 @@ export const partitionLargeFilesAsLocalPaths = (
 };
 
 /**
- * Routes large picked/pasted files to `<localFile>` references in the given editor on desktop and
+ * Routes large picked/pasted files (including files inside a picked folder) to `<localFile>` references in the given editor on desktop and
  * returns the files that still need uploading. Outside desktop local execution it returns the
  * input unchanged, matching the drag-and-drop routing in `useLocalPathReference`.
  */
 export const useLargeFileLocalPath = (agentId: string, editor: IEditor | undefined) => {
+  const { t } = useTranslation('chat');
   const topicId = useTopicId();
   const { enableLocalPathReference } = useLocalPathReference(agentId, topicId);
+  const lastNoticeAt = useRef(0);
 
   return useCallback(
     (files: File[]): File[] => {
       if (!enableLocalPathReference || !editor) return files;
 
       const partitioned = partitionLargeFilesAsLocalPaths(files);
-      insertLocalPathTags(editor, partitioned.localPaths);
+      if (partitioned.localPaths.length > 0) {
+        insertLocalPathTags(editor, partitioned.localPaths);
+        // Tell the user why the file shows up as a path chip instead of an upload card.
+        if (Date.now() - lastNoticeAt.current > NOTICE_THROTTLE_MS) {
+          lastNoticeAt.current = Date.now();
+          toast.info(t('upload.localPathReference'));
+        }
+      }
       return partitioned.files;
     },
-    [editor, enableLocalPathReference],
+    [editor, enableLocalPathReference, t],
   );
 };

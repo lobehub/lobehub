@@ -1,4 +1,5 @@
 import { $wrapNodeInElement } from '@lexical/utils';
+import type { LocalFileStats } from '@lobechat/electron-client-ipc';
 import { escapeXmlAttr } from '@lobechat/prompts';
 import {
   type getKernelFromEditor,
@@ -8,6 +9,7 @@ import {
 import {
   $createParagraphNode,
   $createTextNode,
+  $getNodeByKey,
   $insertNodes,
   $isRootOrShadowRoot,
   COMMAND_PRIORITY_HIGH,
@@ -36,8 +38,29 @@ type IEditorKernel = ReturnType<typeof getKernelFromEditor>;
 
 export interface LocalFileTagPluginOptions {
   decorator: (node: LocalFileTagNode, editor: LexicalEditor) => any;
+  /**
+   * Looks up size, line count, and MIME type for an inserted file reference. The result is
+   * written into the tag so the model can plan how to read the file before opening it.
+   */
+  resolveFileStats?: (path: string) => Promise<LocalFileStats>;
   theme?: { localFileTag?: string };
 }
+
+/**
+ * Serialized `<localFile>` attributes carrying file stats. `size` is in bytes; `lines` is omitted
+ * for binary files.
+ */
+const localFileStatsAttributes = (stats: Partial<LocalFileStats>): Record<string, string> => ({
+  ...(stats.size === undefined ? {} : { size: String(stats.size) }),
+  ...(stats.lineCount === undefined ? {} : { lines: String(stats.lineCount) }),
+  ...(stats.mimeType ? { type: stats.mimeType } : {}),
+});
+
+const readNumberAttribute = (value: string | null | undefined) => {
+  if (!value) return undefined;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : undefined;
+};
 
 /**
  * Owns the `local-file-tag` node: its decorator, its `<localFile … />`
@@ -83,7 +106,10 @@ export class LocalFileTagPlugin {
         const name = escapeXmlAttr(node.name);
         const path = escapeXmlAttr(node.path);
         const isDirectory = node.isDirectory ? ' isDirectory' : '';
-        ctx.appendLine(`<localFile name="${name}" path="${path}"${isDirectory} />`);
+        const stats = Object.entries(localFileStatsAttributes(node.stats))
+          .map(([key, value]) => ` ${key}="${escapeXmlAttr(value)}"`)
+          .join('');
+        ctx.appendLine(`<localFile name="${name}" path="${path}"${stats}${isDirectory} />`);
       }
     });
   }
@@ -99,11 +125,31 @@ export class LocalFileTagPlugin {
           if ($isRootOrShadowRoot(node.getParentOrThrow())) {
             $wrapNodeInElement(node, $createParagraphNode).selectEnd();
           }
+          // Commands can run inside a deferred update, so start the lookup once the key exists.
+          if (!payload.isDirectory) this.fillFileStats(editor, node.getKey(), payload.path);
         });
         return true;
       },
       COMMAND_PRIORITY_HIGH,
     );
+  }
+
+  /**
+   * Stats are filled in after insertion so the tag appears immediately; a message sent before the
+   * lookup finishes (or on a path this machine cannot read) keeps the plain name/path reference.
+   */
+  private fillFileStats(editor: LexicalEditor, nodeKey: string, path: string): void {
+    const resolveFileStats = this.config?.resolveFileStats;
+    if (!resolveFileStats || !path) return;
+
+    resolveFileStats(path)
+      .then((stats) => {
+        editor.update(() => {
+          const node = $getNodeByKey(nodeKey);
+          if ($isLocalFileTagNode(node)) node.setStats(stats);
+        });
+      })
+      .catch(() => {});
   }
 
   private registerLiteXml(): void {
@@ -115,6 +161,7 @@ export class LocalFileTagPlugin {
           ...(node.isDirectory ? { isDirectory: 'true' } : {}),
           name: node.name,
           path: node.path,
+          ...localFileStatsAttributes(node.stats),
         });
       }
       return false;
@@ -125,8 +172,11 @@ export class LocalFileTagPlugin {
         isDirectory:
           xmlElement.hasAttribute?.('isDirectory') ||
           xmlElement.getAttribute('isDirectory') === 'true',
+        lineCount: readNumberAttribute(xmlElement.getAttribute('lines')),
+        mimeType: xmlElement.getAttribute('type') || undefined,
         name: xmlElement.getAttribute('name') || '',
         path: xmlElement.getAttribute('path') || '',
+        size: readNumberAttribute(xmlElement.getAttribute('size')),
         type: LocalFileTagNode.getType(),
         version: 1,
       } satisfies SerializedLocalFileTagNode;
