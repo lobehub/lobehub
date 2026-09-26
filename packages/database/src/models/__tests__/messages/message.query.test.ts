@@ -2463,6 +2463,58 @@ describe('MessageModel Query Tests', () => {
         originalCharCount: 9_000_000,
       });
     });
+
+    it('should pick the oldest document when a file owns several', async () => {
+      const fileId = uuid();
+      const doc = {
+        fileId,
+        fileType: 'text/plain',
+        source: 'notes.txt',
+        sourceType: 'file',
+        totalLineCount: 1,
+        userId,
+      } as const;
+
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values({ id: 'session1', userId });
+        await trx.insert(files).values({
+          fileType: 'text/plain',
+          id: fileId,
+          name: 'notes.txt',
+          size: 100,
+          url: 'notes.txt',
+          userId,
+        });
+        // Inserted oldest first: an unordered, last-wins read would return the newer copy.
+        await trx.insert(documents).values({
+          ...doc,
+          content: 'parse cache',
+          createdAt: new Date('2026-01-01'),
+          totalCharCount: 11,
+        });
+        await trx.insert(documents).values({
+          ...doc,
+          content: 'page-editor copy',
+          createdAt: new Date('2026-02-01'),
+          totalCharCount: 16,
+        });
+
+        const messageId = uuid();
+        await trx.insert(messages).values({
+          content: 'Message with a twice-parsed file',
+          id: messageId,
+          role: 'user',
+          sessionId: 'session1',
+          userId,
+        });
+        await trx.insert(messagesFiles).values({ fileId, messageId, userId });
+      });
+
+      const result = await messageModel.query({ sessionId: 'session1' });
+
+      // Same document `DocumentModel.findByFileId` returns, which `readAttachment` pages through.
+      expect(result[0].fileList![0].content).toBe('parse cache');
+    });
   });
 
   describe('query messages with threadId filter', () => {

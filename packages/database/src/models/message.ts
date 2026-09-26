@@ -117,13 +117,22 @@ const fileDocumentColumns = {
   >`(${documents.metadata} ->> 'originalCharCount')::bigint`.mapWith(Number),
 };
 
+/**
+ * A file can own more than one document (`parseDocument` writes a page-editor copy next to the parse
+ * cache). Every reader picks the oldest, matching `DocumentModel.findByFileId`, so a preview and the
+ * `readAttachment` pages that continue it come from the same text.
+ */
+const fileDocumentsOrder = [asc(documents.createdAt), asc(documents.id)];
+
 type FileDocumentsMap = Record<string, { content: string; originalCharCount?: number }>;
 
 const toFileDocumentsMap = (
   rows: { content: string | null; fileId: string | null; originalCharCount: number | null }[],
 ): FileDocumentsMap =>
   rows.reduce<FileDocumentsMap>((acc, doc) => {
-    if (doc.fileId) {
+    // Rows arrive oldest first (see `fileDocumentsOrder`); keep the first so the prompt shows the
+    // same document `DocumentModel.findByFileId` — and therefore `readAttachment` — pages through.
+    if (doc.fileId && !(doc.fileId in acc)) {
       acc[doc.fileId] = {
         content: doc.content as string,
         originalCharCount: doc.originalCharCount ?? undefined,
@@ -1921,7 +1930,8 @@ export class MessageModel {
         this.db
           .select(fileDocumentColumns)
           .from(documents)
-          .where(inArray(documents.fileId, fileIds)),
+          .where(inArray(documents.fileId, fileIds))
+          .orderBy(...fileDocumentsOrder),
       { fileCount: fileIds.length },
     );
 

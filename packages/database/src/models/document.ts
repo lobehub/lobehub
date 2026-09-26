@@ -17,6 +17,7 @@ import {
   ne,
   notInArray,
   or,
+  sql,
   sum,
 } from 'drizzle-orm';
 
@@ -305,9 +306,10 @@ export class DocumentModel {
   };
 
   /**
-   * Whether a parsed document longer than `minChars` exists for the given files or for any file
-   * attached to a message in `topicId`. Such files are previewed instead of inlined, so the run
-   * needs a tool that can read them in windows.
+   * Whether a parsed document that prompts preview instead of inline exists for the given files or
+   * for any file attached to a message in `topicId`: longer than `minChars`, or cut at parse time
+   * (`metadata.originalCharCount` above the stored length). Mirrors `isOversizedFileContent` in
+   * `@lobechat/prompts`, so the run gets a tool that can read those previews in windows.
    */
   hasFileDocumentsOverChars = async ({
     fileIds = [],
@@ -337,7 +339,16 @@ export class DocumentModel {
     const [row] = await this.db
       .select({ id: documents.id })
       .from(documents)
-      .where(and(this.ownership(), gt(documents.totalCharCount, minChars), or(...fileConditions)))
+      .where(
+        and(
+          this.ownership(),
+          or(
+            gt(documents.totalCharCount, minChars),
+            sql`(${documents.metadata} ->> 'originalCharCount')::bigint > ${documents.totalCharCount}`,
+          ),
+          or(...fileConditions),
+        ),
+      )
       .limit(1);
 
     return !!row;

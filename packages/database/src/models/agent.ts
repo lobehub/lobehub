@@ -791,10 +791,16 @@ export class AgentModel {
 
     if (enabledFileIds.length > 0) {
       const documentsData = await this.db.query.documents.findMany({
+        // A file can own several documents; take the oldest, like `DocumentModel.findByFileId`
+        // (which `readAttachment` pages through), so the preview and its continuation agree.
+        orderBy: [asc(documents.createdAt), asc(documents.id)],
         where: and(this.documentsOwnership(), inArray(documents.fileId, enabledFileIds)),
       });
 
-      const documentMap = new Map(documentsData.map((doc) => [doc.fileId, doc]));
+      const documentMap = new Map<string | null, (typeof documentsData)[number]>();
+      for (const doc of documentsData) {
+        if (!documentMap.has(doc.fileId)) documentMap.set(doc.fileId, doc);
+      }
       files = knowledge.files.map((file) => {
         const document = file.enabled && file.id ? documentMap.get(file.id) : undefined;
         return {

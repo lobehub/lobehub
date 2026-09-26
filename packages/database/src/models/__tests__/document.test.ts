@@ -733,6 +733,20 @@ describe('DocumentModel', () => {
       ).resolves.toBe(false);
     });
 
+    it('detects a short document whose stored text was cut at parse time', async () => {
+      const { documentId, file } = await createTestDocument(
+        documentModel,
+        fileModel,
+        'x'.repeat(5),
+      );
+      await documentModel.update(documentId, { metadata: { originalCharCount: 50 } });
+
+      // Below the size threshold, but prompts still preview it because the text is incomplete.
+      await expect(
+        documentModel.hasFileDocumentsOverChars({ fileIds: [file.id], minChars: 10 }),
+      ).resolves.toBe(true);
+    });
+
     it('ignores other users documents and returns false without inputs', async () => {
       const { file } = await createTestDocument(documentModel, fileModel, 'x'.repeat(20));
 

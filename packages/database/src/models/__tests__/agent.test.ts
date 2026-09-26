@@ -161,6 +161,39 @@ describe('AgentModel', () => {
       expect(result!.files[0].originalCharCount).toBe(9_000_000);
     });
 
+    it('should pick the oldest document when a file owns several', async () => {
+      const agentId = 'test-agent-with-two-docs';
+      await serverDB.insert(agents).values({ id: agentId, userId });
+      await serverDB.insert(agentsFiles).values({ agentId, fileId: '1', userId, enabled: true });
+      const doc = {
+        fileId: '1',
+        fileType: 'text/plain',
+        source: 'notes.txt',
+        sourceType: 'file',
+        totalCharCount: 10,
+        totalLineCount: 1,
+        userId,
+      } as const;
+      // Inserted oldest first: an unordered, last-wins read would return the newer copy.
+      await serverDB.insert(documents).values({
+        ...doc,
+        content: 'parse cache',
+        createdAt: new Date('2026-01-01'),
+        id: 'doc-old',
+      });
+      await serverDB.insert(documents).values({
+        ...doc,
+        content: 'page-editor copy',
+        createdAt: new Date('2026-02-01'),
+        id: 'doc-new',
+      });
+
+      const result = await agentModel.getAgentConfigById(agentId);
+
+      // Same document `DocumentModel.findByFileId` returns, which `readAttachment` pages through.
+      expect(result!.files[0].content).toBe('parse cache');
+    });
+
     it('should not include content for disabled files', async () => {
       const agentId = 'test-agent-disabled-file';
       await serverDB.insert(agents).values({ id: agentId, userId });
