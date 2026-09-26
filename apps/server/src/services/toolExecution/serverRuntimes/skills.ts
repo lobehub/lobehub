@@ -837,12 +837,19 @@ export const skillsRuntime: ServerRuntimeRegistration = {
     const isSkillReachable = (identifier: string) =>
       !disabledSkillIds.has(identifier) && (isSkillGranted?.(identifier) ?? true);
 
-    const skillModel = new AgentSkillModel(context.serverDB, context.userId, context.workspaceId);
-    const resourceService = new SkillResourceService(
-      context.serverDB,
-      context.userId,
-      context.workspaceId,
-    );
+    /**
+     * The workspace everything this runtime touches belongs to — the skills it
+     * can see, the files it writes, and the sandbox session it reaches.
+     *
+     * Recovered rather than read off the context: the dispatch and resume paths
+     * do not carry it, and there a workspace topic resolved in the personal
+     * scope, came back "no such topic", and ran ephemeral — `pwd` answered
+     * `/workspace` while the conversation showed a persistent instance.
+     */
+    const workspaceId = await resolveContentWorkspaceId(context);
+
+    const skillModel = new AgentSkillModel(context.serverDB, context.userId, workspaceId);
+    const resourceService = new SkillResourceService(context.serverDB, context.userId, workspaceId);
     /**
      * `workspaceId` decides which sandbox session this runtime reaches: the
      * session is keyed by the acting account, so a token without it acts as the
@@ -857,7 +864,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       serverDB: context.serverDB,
       topicId: context.topicId,
       userId: context.userId,
-      workspaceId: context.workspaceId,
+      workspaceId,
     });
 
     const marketService = new MarketService({
@@ -865,11 +872,11 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       userInfo: {
         sandboxWorkspace: sandbox.claim,
         userId: context.userId,
-        workspaceId: context.workspaceId,
+        workspaceId,
       },
     });
-    const fileService = new FileService(context.serverDB, context.userId, context.workspaceId);
-    const fileModel = new FileModel(context.serverDB, context.userId, context.workspaceId);
+    const fileService = new FileService(context.serverDB, context.userId, workspaceId);
+    const fileModel = new FileModel(context.serverDB, context.userId, workspaceId);
 
     // `activeDeviceId` presence is the device-branch switch: execScript then
     // runs on the device instead of the cloud sandbox. The executors filter
@@ -910,7 +917,9 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       skillModel,
       topicId: context.topicId,
       userId: context.userId,
-      workspaceId: context.workspaceId,
+      // The recovered id, so the `lh` prelude names the same workspace the
+      // sandbox session was opened under rather than looking it up again.
+      workspaceId,
     });
 
     // Surface this agent's skill-bundle documents as `BuiltinSkill`-shaped

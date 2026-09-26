@@ -323,7 +323,12 @@ describe('skillsRuntime', () => {
     }));
     mocks.isLhCommand.mockReturnValue(false);
     mocks.buildDeviceLhEnv.mockReturnValue(undefined);
-    mocks.resolveContentWorkspaceId.mockResolvedValue(undefined);
+    // Mirrors the real helper: the context's own id when it has one, the
+    // agent's workspace when the dispatch path dropped it. Tests that exercise
+    // the recovery override this with a value of their own.
+    mocks.resolveContentWorkspaceId.mockImplementation(
+      async (ctx?: { workspaceId?: string }) => ctx?.workspaceId,
+    );
     mocks.resolveRunWorkspaceId.mockResolvedValue(undefined);
     mocks.sandboxService.callTool.mockResolvedValue({
       result: {
@@ -1315,6 +1320,11 @@ describe('skillsRuntime', () => {
     const { MarketService } = await import('@/server/services/market');
     const { skillsRuntime } = await import('../skills');
 
+    // The id now comes from the recovery helper, which answers with the
+    // context's own value when it has one and with the agent's workspace when
+    // the dispatch path dropped it.
+    mocks.resolveContentWorkspaceId.mockResolvedValueOnce('workspace-1');
+
     await skillsRuntime.factory({
       serverDB: {} as never,
       toolManifestMap: {},
@@ -1339,6 +1349,36 @@ describe('skillsRuntime', () => {
     expect(MarketService).toHaveBeenLastCalledWith(
       expect.objectContaining({
         userInfo: expect.objectContaining({ userId: 'user-1', workspaceId: undefined }),
+      }),
+    );
+  });
+
+  // The dispatch and resume paths reach this runtime without `workspaceId`, and
+  // a workspace topic resolved in the personal scope came back as "no such
+  // topic" — the run went ephemeral, `pwd` answered `/workspace`, and whatever
+  // the conversation wrote was thrown away with the session.
+  it('recovers the workspace from the agent when the context lost it', async () => {
+    const { MarketService } = await import('@/server/services/market');
+    const { skillsRuntime } = await import('../skills');
+
+    mocks.resolveContentWorkspaceId.mockImplementation(async () => 'workspace-1');
+
+    await skillsRuntime.factory({
+      agentId: 'agt-1',
+      serverDB: {} as never,
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    // The same id the session is keyed by, so the sandbox this runtime reaches
+    // is the workspace's and not the member's personal one.
+    expect(mocks.resolveContentWorkspaceId).toHaveBeenCalledWith(
+      expect.objectContaining({ agentId: 'agt-1' }),
+    );
+    expect(MarketService).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        userInfo: expect.objectContaining({ workspaceId: 'workspace-1' }),
       }),
     );
   });

@@ -7,6 +7,7 @@ import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import { MarketService } from '@/server/services/market';
 import { resolveSandboxSessionConfig } from '@/server/services/sandbox';
 
+import { resolveContentWorkspaceId } from './resolveWorkspaceScope';
 import { type ServerRuntimeRegistration } from './types';
 
 const log = debug('lobe-server:creds-runtime');
@@ -198,13 +199,18 @@ export const credsRuntime: ServerRuntimeRegistration = {
       throw new Error('userId is required for Creds execution');
     }
 
-    if (context.workspaceId) {
+    // Recovered, not read off the context: the dispatch and resume paths drop
+    // it, and credentials must be injected into the SAME sandbox session the
+    // commands run in — the sandbox runtimes recover it the same way.
+    const workspaceId = await resolveContentWorkspaceId(context);
+
+    if (workspaceId) {
       if (!context.serverDB) {
         throw new Error('serverDB is required for workspace Creds execution');
       }
 
       const membership = await new WorkspaceMemberModel(context.serverDB, context.userId).getMember(
-        context.workspaceId,
+        workspaceId,
         context.userId,
       );
       if (!membership) {
@@ -216,7 +222,7 @@ export const credsRuntime: ServerRuntimeRegistration = {
       'Creating CredsExecutionRuntime for userId=%s, topicId=%s, workspaceId=%s',
       context.userId,
       context.topicId,
-      context.workspaceId,
+      workspaceId,
     );
 
     // Read market accessToken from DB so server-side creds runtime can authenticate.
@@ -241,7 +247,7 @@ export const credsRuntime: ServerRuntimeRegistration = {
       serverDB: context.serverDB,
       topicId: context.topicId,
       userId: context.userId,
-      workspaceId: context.workspaceId,
+      workspaceId,
     });
 
     const marketService = new MarketService({
@@ -249,13 +255,13 @@ export const credsRuntime: ServerRuntimeRegistration = {
       userInfo: {
         sandboxWorkspace: sandbox.claim,
         userId: context.userId,
-        workspaceId: context.workspaceId,
+        workspaceId,
       },
     });
 
     const credsService = new ServerCredsService(
       marketService,
-      context.workspaceId,
+      workspaceId,
       Boolean(context.agentShareVisitor),
     );
 

@@ -125,27 +125,26 @@ export const cloudSandboxRuntime: ServerRuntimeRegistration = {
       // non-fatal — MarketService will fall back to trustedClientToken
     }
 
+    // The workspace this run belongs to. `context.workspaceId` is empty on the
+    // dispatch and resume paths, which is most of them: a workspace agent's
+    // tool call then resolved its topic in the personal scope, found nothing,
+    // and ran ephemeral — the conversation said "Lobehub Dev" while `pwd`
+    // answered `/workspace` and the clone went somewhere nothing reads.
+    //
+    // Recovered once and used for everything this runtime builds, because the
+    // danger is not the recovery but a disagreement: the claim signs a
+    // directory that the token's identity must also name, or an organization's
+    // files mount inside a personal session. `creds.ts` recovers the same way.
+    const workspaceId = await resolveContentWorkspaceId(context);
+
     // Persistence for this run: the entitlement that goes on the trust token,
     // and the topic's own preferences that go on each request.
-    //
-    // Keyed on the RAW `context.workspaceId`, the same value the token carries,
-    // not on the recovered `resolveContentWorkspaceId` below. The two disagree
-    // only on dispatch/resume paths that drop the id, and there the claim must
-    // follow the token: signing `ws-org-<id>` onto a token market reads as
-    // personal would mount an organization's directory inside a personal
-    // session. Self-consistency is the property that protects the storage.
-    // The cost is real and worth writing down — such a run stores into the
-    // member's personal workspace instead of the organization's. Fixing it
-    // means making the recovered id authoritative for `MarketService` here AND
-    // in `creds.ts`, which also decides which sandbox session credentials are
-    // injected into; that is a routing change, not a storage one, and does not
-    // belong in this feature.
     const sandbox = await resolveSandboxSessionConfig({
       isShareVisitorRun: Boolean(context.agentShareVisitor),
       serverDB: context.serverDB,
       topicId: context.topicId,
       userId: context.userId,
-      workspaceId: context.workspaceId,
+      workspaceId,
     });
 
     const marketService = new MarketService({
@@ -153,10 +152,10 @@ export const cloudSandboxRuntime: ServerRuntimeRegistration = {
       userInfo: {
         sandboxWorkspace: sandbox.claim,
         userId: context.userId,
-        workspaceId: context.workspaceId,
+        workspaceId,
       },
     });
-    const fileService = new FileService(context.serverDB, context.userId, context.workspaceId);
+    const fileService = new FileService(context.serverDB, context.userId, workspaceId);
     const sandboxService = createSandboxService({
       fileService,
       marketService,
@@ -169,14 +168,12 @@ export const cloudSandboxRuntime: ServerRuntimeRegistration = {
       userId: context.userId,
     });
 
-    let workspaceIdPromise: Promise<string | undefined> | undefined;
-
     return new CloudSandboxExecutionRuntime(
       withLhPreprocessing(sandboxService, {
         isShareVisitor: Boolean(context.agentShareVisitor),
         userId: context.userId,
-        workspaceId: () => (workspaceIdPromise ??= resolveContentWorkspaceId(context)),
-        workspaceIdHint: context.workspaceId,
+        workspaceId: async () => workspaceId,
+        workspaceIdHint: workspaceId,
       }),
     );
   },
