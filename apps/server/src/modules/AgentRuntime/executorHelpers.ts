@@ -58,6 +58,7 @@ export const archiveRuntimeToolResult = async (
   result: ToolExecutionResultResponse,
   {
     agentId,
+    canReadArchive,
     identifier,
     limit,
     serverDB,
@@ -67,6 +68,7 @@ export const archiveRuntimeToolResult = async (
     workspaceId,
   }: {
     agentId?: string | null;
+    canReadArchive?: boolean;
     identifier?: string;
     limit?: number;
     serverDB: LobeChatDatabase;
@@ -78,6 +80,7 @@ export const archiveRuntimeToolResult = async (
 ): Promise<ToolExecutionResultResponse> => {
   const archive = await archiveToolResultIfNeeded({
     agentId,
+    canReadArchive,
     content: result.content,
     identifier,
     limit,

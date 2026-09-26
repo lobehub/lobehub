@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 
+import { MAX_READ_DOCUMENT_CONTENT_CHARS } from '@lobechat/builtin-tool-agent-documents';
 import type { LobeChatDatabase } from '@lobechat/database';
 import {
   appendTextWindowNotice,
@@ -40,6 +41,12 @@ export interface ToolResultArchiveOutcome {
 
 interface ArchiveToolResultParams {
   agentId?: string | null;
+  /**
+   * Whether the run can call `lobe-agent-documents` readDocument, the only way to page an archive.
+   * When false, nothing is persisted and the model gets the truncated window with a notice that
+   * names no tool. Defaults to true for callers that cannot resolve the run's tool set.
+   */
+  canReadArchive?: boolean;
   content: string;
   identifier?: string;
   limit?: number;
@@ -97,6 +104,7 @@ const buildArchivedContent = (
   const notice = formatTextWindowNotice(window, {
     continueFrom: (line) =>
       `call lobe-agent-documents readDocument with id="${documentId}", format="markdown" and offset=${line}`,
+    continueMaxChars: MAX_READ_DOCUMENT_CONTENT_CHARS,
   });
   const agentDocumentIdHint =
     agentDocumentId ??
@@ -107,6 +115,7 @@ const buildArchivedContent = (
 
 export const archiveToolResultIfNeeded = async ({
   agentId,
+  canReadArchive = true,
   content,
   identifier,
   limit,
@@ -129,7 +138,7 @@ export const archiveToolResultIfNeeded = async ({
   const window = sliceToolResult(content, maxLength);
   const truncatedContent = appendTextWindowNotice(window);
 
-  if (!agentId || !topicId || !toolCallId || !serverDB || !userId) {
+  if (!canReadArchive || !agentId || !topicId || !toolCallId || !serverDB || !userId) {
     return { archived: false, content: truncatedContent };
   }
 

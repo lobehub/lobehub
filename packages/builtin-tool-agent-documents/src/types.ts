@@ -1,5 +1,17 @@
 export const AgentDocumentsIdentifier = 'lobe-agent-documents';
 
+/**
+ * Upper bound on the characters a single readDocument result feeds back into the
+ * model context. Agent documents can hold whole email/newsletter archives that
+ * run into the millions of characters; returning one whole once pushed a task
+ * past the model's context window — a lone tool result reached ~591k tokens and
+ * the next completion 400'd with ExceededContextWindow. The client Inspector
+ * still renders the full document from `state`, so only the LLM-facing `content`
+ * is capped. ~200k chars is roughly 50k tokens per field — generous for a real
+ * document read while leaving ample room in the window.
+ */
+export const MAX_READ_DOCUMENT_CONTENT_CHARS = 200_000;
+
 export const AgentDocumentsApiName = {
   createDocument: 'createDocument',
   copyDocument: 'copyDocument',
