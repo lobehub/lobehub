@@ -1,18 +1,26 @@
 import type { GoalSpend } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Tag, Text, toast } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Text, toast } from '@lobehub/ui/base-ui';
 import { InputNumber } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import { memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import { formatSpan, formatUsd } from '@/features/AgentGoals/goalPresentation';
+import AssigneeProfileAvatar from '@/features/AgentGoals/ProcessControl/AssigneeProfileAvatar';
 import {
   buildGoalGraphView,
   type GoalGraphView,
+  type GoalNodeView,
+  isRunningNode,
 } from '@/features/AgentGoals/ProcessControl/goalGraphViewModel';
 import { KindDot } from '@/features/AgentGoals/ProcessControl/shared';
+import { formatElapsed, useElapsed } from '@/features/AgentGoals/ProcessControl/useElapsed';
+import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
+import { formatTaskItemDate } from '@/features/AgentTasks/features/formatTaskItemDate';
+import RunningGlyph from '@/features/Home/components/RunningGlyph';
 import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
@@ -51,11 +59,18 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const NodeRow = memo<{
+  /** Sits right after the title rather than at the row's far end. */
+  afterTitle?: ReactNode;
   extra?: ReactNode;
   goalId: string;
   nodeId: string;
   graph: GoalGraphView;
-}>(({ extra, goalId, graph, nodeId }) => {
+  /**
+   * Replaces the kind dot — the status glyph, when every row is the same kind,
+   * as on the Task list.
+   */
+  leading?: ReactNode;
+}>(({ afterTitle, extra, goalId, graph, leading, nodeId }) => {
   const openGoalNode = useChatStore((s) => s.openGoalNode);
   const view = graph.byId[nodeId];
   if (!view) return null;
@@ -73,10 +88,12 @@ const NodeRow = memo<{
           #{view.seq}
         </Text>
       )}
-      <KindDot kind={view.node.kind} />
-      <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={500}>
+      {leading ?? <KindDot kind={view.node.kind} />}
+      <Text ellipsis style={{ flex: afterTitle ? '0 1 auto' : 1, minWidth: 0 }} weight={500}>
         {view.node.title}
       </Text>
+      {afterTitle}
+      {afterTitle && <Flexbox flex={1} />}
       {extra}
     </Flexbox>
   );
@@ -134,20 +151,126 @@ const Lifecycle = memo<{ goalId: string; graph: GoalGraphView }>(({ graph }) => 
 
 Lifecycle.displayName = 'GoalMetricLifecycle';
 
-const Tasks = memo<{ goalId: string; graph: GoalGraphView }>(({ goalId, graph }) => {
+const attemptSpan = (view: GoalNodeView) => {
+  const first = view.attempts[0];
+  const last = view.attempts.at(-1);
+  if (!first || !last) return undefined;
+  return { endedAt: last.endedAt, startedAt: first.startedAt };
+};
+
+/**
+ * How long the Task has taken across every attempt — a live clock while the
+ * latest attempt is still running, the settled span once it closed. A Task that
+ * was never dispatched has nothing to show.
+ */
+const TaskDuration = memo<{ view: GoalNodeView }>(({ view }) => {
+  const span = attemptSpan(view);
+  const elapsed = useElapsed(span && !span.endedAt ? span.startedAt : undefined);
+  if (!span) return null;
+
+  return (
+    <Text className={styles.mono} fontSize={12} style={{ flex: 'none' }} type={'secondary'}>
+      {span.endedAt ? formatElapsed(span.endedAt.getTime() - span.startedAt.getTime()) : elapsed}
+    </Text>
+  );
+});
+
+TaskDuration.displayName = 'GoalMetricTaskDuration';
+
+/**
+ * When the Task started, in the Task list's own date column — same format and
+ * width, with the exact start → end one hover away. An undispatched Task still
+ * holds the column so the avatars stay aligned.
+ */
+const TaskStartDate = memo<{ view: GoalNodeView }>(({ view }) => {
+  const { t, i18n } = useTranslation('common');
+  const span = attemptSpan(view);
+  const date = span
+    ? formatTaskItemDate(span.startedAt, {
+        formatOtherYear: t('time.formatOtherYear'),
+        formatThisYear: t('time.formatThisYear'),
+        locale: i18n.language,
+      })
+    : '';
+
+  return (
+    <Text
+      align={'right'}
+      fontSize={12}
+      style={{ flex: 'none', whiteSpace: 'nowrap', width: 48 }}
+      type={'secondary'}
+      title={
+        span
+          ? `${dayjs(span.startedAt).format('YYYY-MM-DD HH:mm:ss')} → ${
+              span.endedAt ? dayjs(span.endedAt).format('YYYY-MM-DD HH:mm:ss') : '…'
+            }`
+          : undefined
+      }
+    >
+      {date}
+    </Text>
+  );
+});
+
+TaskStartDate.displayName = 'GoalMetricTaskStartDate';
+
+/** The Task-list visual for a settled (not running) Task node. */
+const settledTaskVisual = (view: GoalNodeView) => {
+  if (view.isStale) return TASK_STATUS_VISUALS.failed;
+  if (view.decision) return TASK_STATUS_VISUALS.paused;
+  if (view.node.status === 'resolved') return TASK_STATUS_VISUALS.completed;
+  if (view.node.status === 'rejected' || view.node.status === 'retired')
+    return TASK_STATUS_VISUALS.canceled;
+  return TASK_STATUS_VISUALS.backlog;
+};
+
+/**
+ * A Task node's state as the leading glyph the Task list uses — the same marks
+ * the goal page's own frontier draws, so a row reads the same in both places.
+ * The status name stays one hover away.
+ */
+const TaskStatusGlyph = memo<{ view: GoalNodeView }>(({ view }) => {
   const { t } = useTranslation('chat');
+  const visual = settledTaskVisual(view);
+
+  return (
+    <Tooltip title={t(`goalProcess.nodeStatus.${view.node.status}` as const)}>
+      <span style={{ display: 'inline-flex', flex: 'none' }}>
+        {isRunningNode(view) ? (
+          <RunningGlyph size={16} />
+        ) : (
+          <Icon color={visual.color} icon={visual.icon} size={16} />
+        )}
+      </span>
+    </Tooltip>
+  );
+});
+
+TaskStatusGlyph.displayName = 'GoalMetricTaskStatusGlyph';
+
+/** Laid out like a Task list row: number and state, the title, then who is on it and when. */
+const Tasks = memo<{ goalId: string; graph: GoalGraphView }>(({ goalId, graph }) => {
   const works = graph.nodes.filter((view) => view.node.kind === 'task');
 
   return (
     <Flexbox gap={0}>
       {works.map((view) => (
         <NodeRow
+          afterTitle={<TaskDuration view={view} />}
           goalId={goalId}
           graph={graph}
           key={view.node.id}
+          leading={<TaskStatusGlyph view={view} />}
           nodeId={view.node.id}
           extra={
-            <Tag size={'small'}>{t(`goalProcess.nodeStatus.${view.node.status}` as const)}</Tag>
+            <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
+              {view.assigneeAgentId ? (
+                <AssigneeProfileAvatar agentId={view.assigneeAgentId} />
+              ) : (
+                <AssigneeAvatar />
+              )}
+              <TaskStartDate view={view} />
+            </Flexbox>
           }
         />
       ))}
