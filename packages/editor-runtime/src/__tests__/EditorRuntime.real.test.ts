@@ -238,6 +238,38 @@ describe('EditorRuntime - Real Cases', () => {
       expect(xml.indexOf('P2')).toBeLessThan(xml.indexOf('P3'));
     });
 
+    it('does not report inserts erased by a later replacement of the enclosing list as applied', async () => {
+      const anchor = idOf('li', 'a');
+      const list = liteXML().match(/<ul id="\w+">[\s\S]*?<\/ul>/)![0];
+      const result = await runtime.modifyNodes({
+        operations: [
+          { action: 'insert', afterId: anchor, litexml: '<li><span>A</span></li>' },
+          { action: 'modify', litexml: list.replace('>b</span>', '>b2</span>') },
+          { action: 'insert', afterId: anchor, litexml: '<li><span>B</span></li>' },
+        ],
+      });
+
+      // Applied in caller order: the list replacement drops A and re-keys the
+      // list, so the later insert is reported as failed instead of vanishing
+      // behind a success.
+      expect(result.results.map((r) => r.success)).toEqual([true, true, false]);
+      expect(result.results[2].error).toContain('not found');
+      expect(editor.getDocument('markdown') as unknown as string).toContain('- b2');
+    });
+
+    it('reports an empty insert as failed even when merged with a real one', async () => {
+      const anchor = idOf('p', 'intro');
+      const result = await runtime.modifyNodes({
+        operations: [
+          { action: 'insert', afterId: anchor, litexml: '' },
+          { action: 'insert', afterId: anchor, litexml: '<p>B</p>' },
+        ],
+      });
+
+      expect(result.results[0]).toMatchObject({ success: false });
+      expect(result.results[1]).toMatchObject({ success: true });
+    });
+
     it('keeps the text of an inserted list item', async () => {
       const result = await runtime.modifyNodes({
         operations: [

@@ -256,7 +256,10 @@ export const applyLiteXMLOperations = async ({
       // Apply in array order, one operation at a time, so every operation is
       // checked on its own: an unknown id or an operation the editor silently
       // drops fails the whole batch instead of being counted as applied.
-      for (const step of planLiteXMLEditSteps(operations)) {
+      for (const step of planLiteXMLEditSteps(
+        operations,
+        indexLiteXMLDocument(beforeSnapshot.litexml ?? ''),
+      )) {
         const { operation } = step;
         const label = describeLiteXMLEditStep(step, operations.length);
         const document = indexLiteXMLDocument(current.litexml ?? '');
