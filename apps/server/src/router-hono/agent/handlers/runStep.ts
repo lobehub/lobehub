@@ -5,7 +5,11 @@ import type { Context } from 'hono';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { agentOperations } from '@/database/schemas/agentOperations';
 import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime';
-import type { AgentExecutionResult, AgentStepContinuation } from '@/server/services/agentRuntime';
+import {
+  AbandonOperationService,
+  type AgentExecutionResult,
+  type AgentStepContinuation,
+} from '@/server/services/agentRuntime';
 import { AiAgentService } from '@/server/services/aiAgent';
 import {
   flushScheduledWork,
@@ -72,6 +76,7 @@ async function getOperationRowDiagnostic(operationId: string) {
         status: agentOperations.status,
         stepCount: agentOperations.stepCount,
         traceS3Key: agentOperations.traceS3Key,
+        updatedAt: agentOperations.updatedAt,
       })
       .from(agentOperations)
       .where(eq(agentOperations.id, operationId))
@@ -84,6 +89,7 @@ async function getOperationRowDiagnostic(operationId: string) {
       status: row?.status ?? null,
       stepCount: row?.stepCount ?? null,
       traceS3KeyPresent: Boolean(row?.traceS3Key),
+      updatedAt: toIsoString(row?.updatedAt),
     };
   } catch (error) {
     return {
@@ -91,6 +97,44 @@ async function getOperationRowDiagnostic(operationId: string) {
       exists: null,
       status: null,
     };
+  }
+}
+
+/**
+ * How long a `running` row may go without a lease refresh before a delivery
+ * that finds no coordinator metadata treats the run as dead. A live step
+ * refreshes the lease every few minutes (see `touchRunning`), and this matches
+ * the agent-gateway idle watchdog window.
+ */
+const ORPHANED_RUNNING_LEASE_MS = 10 * 60 * 1000;
+
+/**
+ * Settle a run that can never make progress again: its row still claims
+ * `running`, but the coordinator metadata every step needs is gone.
+ *
+ * Returning 401 alone leaves the row `running` and the assistant placeholder
+ * loading forever, since nothing else revisits it when the gateway watchdog
+ * never armed or already fired. The metadata read also returns null on a
+ * Redis error, so a fresh lease is taken as proof the run is still alive.
+ */
+async function settleOrphanedRunningOperation(
+  operationId: string,
+  dbRow: Awaited<ReturnType<typeof getOperationRowDiagnostic>>,
+): Promise<void> {
+  if (dbRow.status !== 'running' || !('updatedAt' in dbRow) || !dbRow.updatedAt) return;
+  if (Date.now() - new Date(dbRow.updatedAt).getTime() < ORPHANED_RUNNING_LEASE_MS) return;
+
+  try {
+    const serverDB = await getServerDB();
+    const result = await new AbandonOperationService(serverDB).finalizeAbandoned(
+      operationId,
+      'operation_metadata_missing',
+    );
+    console.warn(
+      JSON.stringify({ event: 'agent.run_step.orphaned_operation_settled', operationId, result }),
+    );
+  } catch (error) {
+    console.error('[run-step] failed to settle orphaned operation %s: %O', operationId, error);
   }
 }
 
@@ -160,6 +204,8 @@ export async function runStep(c: Context): Promise<Response> {
 
       log(`[${operationId}] Invalid operation or no userId found: %O`, diagnostic);
       console.warn(JSON.stringify(diagnostic));
+
+      await settleOrphanedRunningOperation(operationId, dbRow);
       return c.json({ error: 'Invalid operation or unauthorized' }, 401);
     }
 
