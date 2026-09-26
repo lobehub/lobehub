@@ -96,3 +96,19 @@ describe('mobile community route layouts', () => {
     ).toBe(true);
   });
 });
+
+describe('mobileRouter page routes', () => {
+  it('renders /page/:id instead of falling through to the catch-all redirect', () => {
+    const matches = matchRoutes(mobileRoutes, '/page/docs_abc123');
+
+    expect(matches?.at(-1)?.route.path).toBe(':id');
+    expect(matches?.at(-1)?.params).toMatchObject({ id: 'docs_abc123' });
+  });
+
+  it('mirrors the page detail route under a workspace slug', () => {
+    const matches = matchRoutes(mobileRoutes, '/my-team/page/docs_abc123');
+
+    expect(matches?.some((match) => match.route.path === ':workspaceSlug')).toBe(true);
+    expect(matches?.at(-1)?.route.path).toBe(':id');
+  });
+});

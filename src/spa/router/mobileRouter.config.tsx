@@ -289,6 +289,23 @@ export const sharedMainAreaChildren: RouteObject[] = [
     ),
   },
 
+  // Page detail. Mobile has no page list, so `/page` itself goes home; without
+  // these routes `/page/:id` fell through to the `*` redirect.
+  {
+    children: [
+      {
+        element: redirectElement('..'),
+        index: true,
+      },
+      {
+        element: dynamicElement(() => import('@/routes/(mobile)/page/[id]'), 'Mobile > Page'),
+        path: ':id',
+      },
+    ],
+    errorElement: <ErrorBoundary />,
+    path: 'page',
+  },
+
   ...BusinessMobileRoutesWithMainLayout,
 ];
 
