@@ -1,4 +1,5 @@
 import {
+  findSiblingCreateGroupCallIds,
   GroupAgentBuilderApiName,
   GroupAgentBuilderIdentifier,
 } from '@lobechat/builtin-tool-group-agent-builder';
@@ -47,4 +48,56 @@ export const resolveBuilderGroupId = async ({
   }
 
   return editingGroupId;
+};
+
+interface AwaitingSiblingCreateGroupParams {
+  /** The assistant message that issued this tool call (and its siblings). */
+  assistantMessageId?: string;
+  db: LobeChatDatabase;
+  toolCallId?: string;
+  userId: string;
+  workspaceId?: string;
+}
+
+/**
+ * Whether a `createGroup` issued in the same step as this call has not returned
+ * a group yet.
+ *
+ * `createGroup` needs approval, so the runtime runs its siblings first — before
+ * any group exists. Resolving "the group" then falls back to the pinned one and
+ * a write meant for the new group lands on the old. Such a call has to be
+ * refused rather than guessed at; once `createGroup` has produced its group the
+ * normal resolution applies.
+ */
+export const isAwaitingSiblingCreateGroup = async ({
+  assistantMessageId,
+  db,
+  toolCallId,
+  userId,
+  workspaceId,
+}: AwaitingSiblingCreateGroupParams): Promise<boolean> => {
+  if (!assistantMessageId) return false;
+
+  const messageModel = new MessageModel(db, userId, workspaceId);
+  const assistant = await messageModel.findById(assistantMessageId);
+  const siblingIds = findSiblingCreateGroupCallIds(
+    assistant?.tools as Parameters<typeof findSiblingCreateGroupCallIds>[0],
+    toolCallId,
+  );
+  if (siblingIds.length === 0) return false;
+
+  const createdGroupIds = await Promise.all(
+    siblingIds.map(async (siblingId) => {
+      const toolMessageId = await messageModel.findToolMessageIdByToolCallId(
+        siblingId,
+        assistantMessageId,
+      );
+      const plugin = toolMessageId
+        ? await messageModel.findMessagePlugin(toolMessageId)
+        : undefined;
+      return plugin?.state?.groupId;
+    }),
+  );
+
+  return createdGroupIds.some((groupId) => typeof groupId !== 'string' || !groupId);
 };

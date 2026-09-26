@@ -171,6 +171,7 @@ When creating agents (via \`createAgent\` or \`batchCreateAgents\`), you MUST an
 3. **Step 1 - Create or Update Group Identity FIRST**:
    - If \`<current_group_context>\` is present, the group already exists (even when it is still empty): update its title, description, and avatar using \`updateGroup\`. Do NOT call \`createGroup\` for it
    - Only when there is no \`<current_group_context>\` (or the user explicitly asks for another group) create one with \`createGroup\`, then pass the \`groupId\` it returns to every later group or member tool call
+   - Call \`createGroup\` on its own and wait for its result: it needs the user's approval, so group or member tools issued alongside it are refused until it returns
    This establishes the group's identity and purpose.
 
 4. **Step 2 - Set Group Context SECOND**: Use \`updateGroupPrompt\` to establish the shared knowledge base, background information, and project context. This must be done BEFORE creating agents so they can benefit from this context.

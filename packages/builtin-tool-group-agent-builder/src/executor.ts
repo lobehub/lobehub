@@ -19,6 +19,7 @@ import { getChatGroupStoreState } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat';
 import { useGroupProfileStore } from '@/store/groupProfile';
 
+import { AWAITING_CREATE_GROUP_RESULT, findSiblingCreateGroupCallIds } from './createGroupOrdering';
 import { GroupAgentBuilderExecutionRuntime } from './ExecutionRuntime';
 import type {
   BatchCreateAgentsParams,
@@ -90,6 +91,33 @@ const findGroupCreatedInConversation = ({
 };
 
 /**
+ * Client mirror of the server's `isAwaitingSiblingCreateGroup`: `createGroup`
+ * needs approval, so the runtime runs the calls issued alongside it first. A
+ * call that leaves its target to the conversation would then act on the active
+ * group instead of the one about to be created, so it is refused until that
+ * `createGroup` has returned its group. An explicit `groupId` is never held back.
+ */
+const awaitingCreateGroup = (
+  ctx: BuiltinToolContext,
+  override?: string,
+): BuiltinToolResult | undefined => {
+  if (override || !ctx.anchorMessageId) return undefined;
+
+  const conversation = Object.values(useChatStore.getState().dbMessagesMap).find((messages) =>
+    messages.some((m) => m.id === ctx.anchorMessageId),
+  );
+  const assistant = conversation?.find((m) => m.id === ctx.anchorMessageId);
+  const siblingIds = findSiblingCreateGroupCallIds(assistant?.tools, ctx.toolCallId);
+
+  const awaiting = siblingIds.some((siblingId) => {
+    const groupId = conversation?.find((m) => m.tool_call_id === siblingId)?.pluginState?.groupId;
+    return typeof groupId !== 'string' || !groupId;
+  });
+
+  return awaiting ? { ...AWAITING_CREATE_GROUP_RESULT } : undefined;
+};
+
+/**
  * The Group Agent Builder conversation is keyed by the builtin builder agent, so
  * its ConversationContext deliberately carries no groupId. The edited group is
  * whatever the profile page has active — the same source `resolveGroupTarget`
@@ -118,6 +146,9 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
     params: GetAgentInfoParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
+    const blocked = awaitingCreateGroup(ctx, params.groupId);
+    if (blocked) return blocked;
+
     return groupAgentBuilderRuntime.getAgentInfo(resolveActiveGroupId(ctx, params.groupId), params);
   };
 
@@ -135,6 +166,9 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
     params: CreateAgentParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
+    const blocked = awaitingCreateGroup(ctx, params.groupId);
+    if (blocked) return blocked;
+
     const groupId = resolveActiveGroupId(ctx, params.groupId);
 
     if (!groupId) return NO_GROUP_CONTEXT;
@@ -146,6 +180,9 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
     params: BatchCreateAgentsParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
+    const blocked = awaitingCreateGroup(ctx, params.groupId);
+    if (blocked) return blocked;
+
     const groupId = resolveActiveGroupId(ctx, params.groupId);
 
     if (!groupId) return NO_GROUP_CONTEXT;
@@ -157,6 +194,9 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
     params: InviteAgentParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
+    const blocked = awaitingCreateGroup(ctx, params.groupId);
+    if (blocked) return blocked;
+
     const groupId = resolveActiveGroupId(ctx, params.groupId);
 
     if (!groupId) return NO_GROUP_CONTEXT;
@@ -168,6 +208,9 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
     params: RemoveAgentParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
+    const blocked = awaitingCreateGroup(ctx, params.groupId);
+    if (blocked) return blocked;
+
     const groupId = resolveActiveGroupId(ctx, params.groupId);
 
     if (!groupId) return NO_GROUP_CONTEXT;
@@ -181,6 +224,9 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
     params: UpdateAgentPromptParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
+    const blocked = awaitingCreateGroup(ctx, params.groupId);
+    if (blocked) return blocked;
+
     const groupId = resolveActiveGroupId(ctx, params.groupId);
 
     if (!groupId) return NO_GROUP_CONTEXT;
@@ -194,6 +240,9 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
     params: UpdateGroupParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
+    const blocked = awaitingCreateGroup(ctx, params.groupId);
+    if (blocked) return blocked;
+
     return groupAgentBuilderRuntime.updateGroup({
       ...params,
       groupId: params.groupId ?? findGroupCreatedInConversation({ messageId: ctx.messageId }),
@@ -204,6 +253,9 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
     params: UpdateGroupPromptParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
+    const blocked = awaitingCreateGroup(ctx, params.groupId);
+    if (blocked) return blocked;
+
     return groupAgentBuilderRuntime.updateGroupPrompt({
       streaming: true,
       ...params,

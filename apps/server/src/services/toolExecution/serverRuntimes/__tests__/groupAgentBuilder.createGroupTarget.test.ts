@@ -44,9 +44,22 @@ vi.mock('@/database/models/chatGroup', () => ({
   }),
 }));
 
+/** Messages / tool results the fake message model serves, keyed by id / tool call id. */
+let assistantMessages: Record<string, { tools?: unknown[] }> = {};
+let toolStates: Record<string, Record<string, unknown> | undefined> = {};
+
 vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn(function () {
-    return { findLatestPluginStateInTopic: mockFindLatestPluginStateInTopic };
+    return {
+      findById: vi.fn(async (id: string) => assistantMessages[id]),
+      findLatestPluginStateInTopic: mockFindLatestPluginStateInTopic,
+      findMessagePlugin: vi.fn(async (id: string) =>
+        id in toolStates ? { id, state: toolStates[id] } : undefined,
+      ),
+      findToolMessageIdByToolCallId: vi.fn(async (toolCallId: string) =>
+        toolCallId in toolStates ? toolCallId : null,
+      ),
+    };
   }),
 }));
 
@@ -223,5 +236,106 @@ describe('group agent builder — members after createGroup', () => {
         topicId: 'tpc_builder',
       },
     ]);
+  });
+});
+
+/**
+ * One assistant message issues createGroup + updateGroup + updateGroupPrompt +
+ * createAgent. createGroup needs approval, so GeneralChatAgent runs the other
+ * three first; the created-group lookup finds nothing yet and would fall back to
+ * the pinned shell group — silently editing the wrong group.
+ */
+describe('group agent builder — siblings of a createGroup awaiting approval', () => {
+  const ctxFor = (toolCallId: string) =>
+    ({
+      assistantMessageId: 'msg_assistant',
+      editingGroupId: 'cg_shell',
+      toolCallId,
+      topicId: 'tpc_builder',
+    }) as never;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockFindById.mockImplementation(async (id: string) => ({ id, title: id }));
+    mockGetGroupAgentsWithMeta.mockResolvedValue([]);
+    mockBatchCreate.mockResolvedValue([{ id: 'agt_m1', visibility: 'public' }]);
+    mockAddAgentsToGroup.mockResolvedValue({ added: ['agt_m1'] });
+    mockUpdateGroup.mockResolvedValue({});
+    // createGroup has not run, so no created group is on record yet.
+    persistToolState(undefined);
+    assistantMessages = {
+      msg_assistant: {
+        tools: [
+          { apiName: 'createGroup', id: 'call_group', identifier: 'lobe-group-agent-builder' },
+          { apiName: 'updateGroup', id: 'call_update', identifier: 'lobe-group-agent-builder' },
+          {
+            apiName: 'updateGroupPrompt',
+            id: 'call_prompt',
+            identifier: 'lobe-group-agent-builder',
+          },
+          { apiName: 'createAgent', id: 'call_agent', identifier: 'lobe-group-agent-builder' },
+        ],
+      },
+    };
+    toolStates = {};
+  });
+
+  it('refuses dependent writes instead of editing the pinned group', async () => {
+    const update = await createRuntime().updateGroup(
+      { meta: { title: 'Dev Team' } } as never,
+      ctxFor('call_update'),
+    );
+    const prompt = await createRuntime().updateGroupPrompt(
+      { prompt: 'shared' } as never,
+      ctxFor('call_prompt'),
+    );
+    const agent = await createRuntime().createAgent(
+      { systemRole: 'r', title: 'Tech Lead' } as never,
+      ctxFor('call_agent'),
+    );
+
+    for (const result of [update, prompt, agent]) {
+      expect(result).toMatchObject({ error: { type: 'AwaitingCreateGroup' }, success: false });
+    }
+    expect(mockUpdateGroup).not.toHaveBeenCalled();
+    expect(mockAddAgentsToGroup).not.toHaveBeenCalled();
+  });
+
+  it('runs them on the created group once createGroup has returned', async () => {
+    toolStates = { call_group: { groupId: 'cg_new', success: true } };
+    persistToolState({ groupId: 'cg_new', success: true });
+
+    await createRuntime().createAgent(
+      { systemRole: 'r', title: 'Tech Lead' } as never,
+      ctxFor('call_agent'),
+    );
+
+    expect(mockAddAgentsToGroup).toHaveBeenCalledWith('cg_new', ['agt_m1']);
+  });
+
+  it('does not hold back a call that names its group', async () => {
+    await createRuntime().createAgent(
+      { groupId: 'cg_named', systemRole: 'r', title: 'Tech Lead' } as never,
+      ctxFor('call_agent'),
+    );
+
+    expect(mockAddAgentsToGroup).toHaveBeenCalledWith('cg_named', ['agt_m1']);
+  });
+
+  it('keeps the pinned group when the step has no createGroup', async () => {
+    assistantMessages = {
+      msg_assistant: {
+        tools: [
+          { apiName: 'createAgent', id: 'call_agent', identifier: 'lobe-group-agent-builder' },
+        ],
+      },
+    };
+
+    await createRuntime().createAgent(
+      { systemRole: 'r', title: 'Tech Lead' } as never,
+      ctxFor('call_agent'),
+    );
+
+    expect(mockAddAgentsToGroup).toHaveBeenCalledWith('cg_shell', ['agt_m1']);
   });
 });

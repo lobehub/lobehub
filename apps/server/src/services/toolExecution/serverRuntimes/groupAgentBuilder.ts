@@ -45,7 +45,10 @@ import type {
   UpdateGroupPromptState,
   UpdateGroupState,
 } from '@lobechat/builtin-tool-group-agent-builder';
-import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
+import {
+  AWAITING_CREATE_GROUP_RESULT,
+  GroupAgentBuilderIdentifier,
+} from '@lobechat/builtin-tool-group-agent-builder';
 import { formatAgentProfile } from '@lobechat/prompts';
 
 import { AgentModel } from '@/database/models/agent';
@@ -59,7 +62,7 @@ import { assertCanPerformResourceAction } from '@/server/services/resourcePermis
 
 import { type ToolExecutionContext, type ToolExecutionResult } from '../types';
 import { agentBuilderRuntime } from './agentBuilder';
-import { resolveBuilderGroupId } from './groupAgentBuilderTarget';
+import { isAwaitingSiblingCreateGroup, resolveBuilderGroupId } from './groupAgentBuilderTarget';
 import { type ServerRuntimeRegistration } from './types';
 
 const handleError = (error: unknown, message: string): ToolExecutionResult => {
@@ -108,6 +111,26 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
       })) ??
       ctx.groupId ??
       undefined;
+
+    /**
+     * A call that leaves its target to the conversation must not run ahead of a
+     * `createGroup` issued in the same step — see `isAwaitingSiblingCreateGroup`.
+     * An explicit `groupId` names its target, so it is never held back.
+     */
+    const awaitingCreateGroup = async (
+      ctx: ToolExecutionContext,
+      override?: string,
+    ): Promise<ToolExecutionResult | undefined> => {
+      if (override) return undefined;
+      const awaiting = await isAwaitingSiblingCreateGroup({
+        assistantMessageId: ctx.assistantMessageId,
+        db: serverDB,
+        toolCallId: ctx.toolCallId,
+        userId,
+        workspaceId,
+      });
+      return awaiting ? { ...AWAITING_CREATE_GROUP_RESULT } : undefined;
+    };
 
     /**
      * Mutating a group's roster or config is a group edit — same ACL as the
@@ -175,6 +198,9 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
         params: GetAgentInfoParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
+        const blocked = await awaitingCreateGroup(ctx, params.groupId);
+        if (blocked) return blocked;
+
         const groupId = await resolveGroupId(ctx, params.groupId);
         if (!groupId) return noGroupContext();
 
@@ -321,6 +347,9 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
         params: CreateAgentParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
+        const blocked = await awaitingCreateGroup(ctx, params.groupId);
+        if (blocked) return blocked;
+
         const groupId = await resolveGroupId(ctx, params.groupId);
         if (!groupId) return noGroupContext();
 
@@ -365,6 +394,9 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
         params: BatchCreateAgentsParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
+        const blocked = await awaitingCreateGroup(ctx, params.groupId);
+        if (blocked) return blocked;
+
         const groupId = await resolveGroupId(ctx, params.groupId);
         if (!groupId) return noGroupContext();
 
@@ -417,6 +449,9 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
         params: InviteAgentParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
+        const blocked = await awaitingCreateGroup(ctx, params.groupId);
+        if (blocked) return blocked;
+
         const groupId = await resolveGroupId(ctx, params.groupId);
         if (!groupId) return noGroupContext();
 
@@ -469,6 +504,9 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
         params: RemoveAgentParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
+        const blocked = await awaitingCreateGroup(ctx, params.groupId);
+        if (blocked) return blocked;
+
         const groupId = await resolveGroupId(ctx, params.groupId);
         if (!groupId) return noGroupContext();
 
@@ -528,6 +566,9 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
         params: UpdateAgentPromptParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
+        const blocked = await awaitingCreateGroup(ctx, params.groupId);
+        if (blocked) return blocked;
+
         const groupId = await resolveGroupId(ctx, params.groupId);
         if (!groupId) return noGroupContext();
 
@@ -574,6 +615,9 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
         params: UpdateGroupParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
+        const blocked = await awaitingCreateGroup(ctx, params.groupId);
+        if (blocked) return blocked;
+
         const groupId = await resolveGroupId(ctx, params.groupId);
         if (!groupId) return noGroupContext();
 
@@ -657,6 +701,9 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
         params: UpdateGroupPromptParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
+        const blocked = await awaitingCreateGroup(ctx, params.groupId);
+        if (blocked) return blocked;
+
         const groupId = await resolveGroupId(ctx, params.groupId);
         if (!groupId) return noGroupContext();
 
@@ -701,6 +748,9 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
         params: UpdateAgentConfigWithIdParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
+        const blocked = await awaitingCreateGroup(ctx);
+        if (blocked) return blocked;
+
         const groupId = await resolveGroupId(ctx);
         const { agentId: paramAgentId, ...rest } = params;
 
@@ -745,6 +795,9 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
         params: InstallPluginParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
+        const blocked = await awaitingCreateGroup(ctx);
+        if (blocked) return blocked;
+
         const groupId = await resolveGroupId(ctx);
         const agentId = groupId ? await findSupervisorAgentId(groupId) : undefined;
 

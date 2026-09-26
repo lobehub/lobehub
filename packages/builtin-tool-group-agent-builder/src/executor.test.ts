@@ -177,6 +177,106 @@ describe('GroupAgentBuilderExecutor', () => {
       expect(mockUpdateGroup.mock.calls[0][0].groupId).toBeUndefined();
     });
 
+    // One assistant message issues createGroup + updateGroupPrompt + createAgent.
+    // createGroup needs approval, so the runtime runs the other two first — at
+    // that point no group has been created yet and they would silently edit the
+    // pinned/active group. They must not run until createGroup has returned.
+    describe('mixed batch with createGroup still awaiting approval', () => {
+      const mixedBatch = (createGroupState?: Record<string, unknown>) => ({
+        'builder-topic': [
+          { id: 'msg_user', role: 'user' },
+          {
+            id: 'msg_assistant',
+            role: 'assistant',
+            tools: [
+              {
+                apiName: 'createGroup',
+                id: 'call_create_group',
+                identifier: GroupAgentBuilderIdentifier,
+              },
+              {
+                apiName: 'updateGroupPrompt',
+                id: 'call_prompt',
+                identifier: GroupAgentBuilderIdentifier,
+              },
+              { apiName: 'createAgent', id: 'call_agent', identifier: GroupAgentBuilderIdentifier },
+            ],
+          },
+          {
+            id: 'msg_create_group',
+            parentId: 'msg_assistant',
+            plugin: { apiName: 'createGroup', identifier: GroupAgentBuilderIdentifier },
+            pluginState: createGroupState,
+            role: 'tool',
+            tool_call_id: 'call_create_group',
+          },
+          {
+            id: 'msg_prompt',
+            parentId: 'msg_assistant',
+            role: 'tool',
+            tool_call_id: 'call_prompt',
+          },
+          { id: 'msg_agent', parentId: 'msg_assistant', role: 'tool', tool_call_id: 'call_agent' },
+        ],
+      });
+
+      it('refuses sibling writes instead of editing the active group', async () => {
+        dbMessagesMap = mixedBatch();
+
+        const prompt = await groupAgentBuilderExecutor.updateGroupPrompt({ prompt: 'shared' }, {
+          anchorMessageId: 'msg_assistant',
+          messageId: 'msg_prompt',
+          toolCallId: 'call_prompt',
+        } as BuiltinToolContext);
+        const agent = await groupAgentBuilderExecutor.createAgent(
+          { systemRole: 'x', title: 'PM' },
+          {
+            anchorMessageId: 'msg_assistant',
+            messageId: 'msg_agent',
+            toolCallId: 'call_agent',
+          } as BuiltinToolContext,
+        );
+
+        for (const result of [prompt, agent]) {
+          expect(result).toMatchObject({
+            error: { type: 'AwaitingCreateGroup' },
+            success: false,
+          });
+        }
+        expect(mockUpdateGroupPrompt).not.toHaveBeenCalled();
+        expect(mockCreateAgent).not.toHaveBeenCalled();
+      });
+
+      it('lets the siblings through once createGroup has returned its group', async () => {
+        dbMessagesMap = mixedBatch({ groupId: 'cg_new', success: true });
+        mockCreateAgent.mockResolvedValue({ content: 'ok', success: true });
+
+        await groupAgentBuilderExecutor.createAgent({ systemRole: 'x', title: 'PM' }, {
+          anchorMessageId: 'msg_assistant',
+          messageId: 'msg_agent',
+          toolCallId: 'call_agent',
+        } as BuiltinToolContext);
+
+        expect(mockCreateAgent).toHaveBeenCalledWith('cg_new', expect.anything());
+      });
+
+      it('an explicit groupId is not held back', async () => {
+        dbMessagesMap = mixedBatch();
+        mockCreateAgent.mockResolvedValue({ content: 'ok', success: true });
+
+        await groupAgentBuilderExecutor.createAgent(
+          { groupId: 'cg_named', systemRole: 'x', title: 'PM' },
+          {
+            anchorMessageId: 'msg_assistant',
+            messageId: 'msg_agent',
+            toolCallId: 'call_agent',
+          } as BuiltinToolContext,
+        );
+
+        expect(mockCreateAgent).toHaveBeenCalledWith('cg_named', expect.anything());
+      });
+    });
+
     it('reports a structured error when there is no group at all', async () => {
       activeGroupId = undefined;
 
