@@ -829,11 +829,7 @@ export class DiscoverService {
     const normalizedLocale = normalizeLocale(locale);
     const mcp = await this.market.plugins.getPluginDetail(
       { ...params, locale: normalizedLocale },
-      {
-        next: {
-          revalidate: 3600,
-        },
-      },
+      { cache: 'no-store' },
     );
 
     // Fetch related MCPs

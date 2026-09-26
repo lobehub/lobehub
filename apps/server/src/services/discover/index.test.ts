@@ -633,7 +633,12 @@ describe('DiscoverService', () => {
 
     describe('getMcpDetail', () => {
       it('should return MCP detail with related items', async () => {
-        const mockMcp = { identifier: 'mcp-1', category: 'tools' };
+        const mockMcp = {
+          category: 'tools',
+          github: { license: 'MIT License', url: 'https://github.com/example/mcp' },
+          identifier: 'mcp-1',
+          overview: { readme: '# MCP server' },
+        };
         mockMarket.plugins.getPluginDetail.mockResolvedValue(mockMcp);
 
         const result = await service.getMcpDetail({
@@ -642,9 +647,15 @@ describe('DiscoverService', () => {
 
         expect(result).toEqual(
           expect.objectContaining({
+            github: expect.objectContaining({ license: 'MIT License' }),
             identifier: 'mcp-1',
+            overview: { readme: '# MCP server' },
             related: expect.any(Array),
           }),
+        );
+        expect(mockMarket.plugins.getPluginDetail).toHaveBeenCalledWith(
+          expect.objectContaining({ identifier: 'mcp-1' }),
+          { cache: 'no-store' },
         );
       });
     });
