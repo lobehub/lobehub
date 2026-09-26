@@ -190,7 +190,13 @@ export class LobeBedrockAI implements LobeRuntimeAI {
       { ...payload, messages: [...systemMessages, ...normalizedMessages] },
       // requestModel keys the prefill guard on the Bedrock id actually sent
       // below, so channel modelIdMapping aliases still get the strip.
-      { maxTokens: resolvedMaxTokens, requestModel: this.resolveModelId(payload.model) },
+      {
+        maxTokens: resolvedMaxTokens,
+        requestModel: this.resolveModelId(payload.model),
+        // On Bedrock, the models that take the auto tool_choice fallback (Opus 5.5,
+        // Fable 5.1) reject `strict` on tools ("Extra inputs are not permitted").
+        schemaToolStrict: false,
+      },
     );
     const bedrockRequestParams: Omit<Anthropic.MessageCreateParams, 'model'> & {
       model?: Anthropic.MessageCreateParams['model'];

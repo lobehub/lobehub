@@ -92,7 +92,9 @@ export const buildAnthropicGenerateObjectRequest = async (
       // schema-valid. Respect an explicit `strict: false` opt-out though: strict
       // mode requires every declared property to be required, and schemas with
       // optional fields would otherwise fail validation with a 400.
-      ...(forcedToolChoiceRejected
+      // Pass `schemaToolStrict: false` where these models reject the field (on Bedrock,
+      // Opus 5.5 and Fable 5.1 return "Extra inputs are not permitted").
+      ...(forcedToolChoiceRejected && config?.schemaToolStrict !== false
         ? { strict: schema.strict !== false }
         : config?.schemaToolStrict && schema.strict !== undefined
           ? { strict: schema.strict }
