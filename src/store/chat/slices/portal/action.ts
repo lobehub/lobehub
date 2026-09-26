@@ -27,6 +27,10 @@ const getCurrentViewType = (portalStack: PortalViewData[]): PortalViewType | nul
   return top?.type ?? null;
 };
 
+/** `filePath` is `dir` itself or lies beneath it, with either path separator (Windows uses a backslash). */
+const isSameOrInsidePath = (filePath: string, dir: string) =>
+  filePath === dir || filePath.startsWith(`${dir}/`) || filePath.startsWith(`${dir}\\`);
+
 const findLocalFileIndexById = (
   openLocalFiles: Array<OpenLocalFileParams & { id?: string }>,
   id: string,
@@ -597,8 +601,7 @@ export class ChatPortalActionImpl {
       this.#get();
     const nextPathOf = (filePath: string) => {
       for (const { from, to } of moves) {
-        if (filePath === from) return to;
-        if (filePath.startsWith(`${from}/`)) return `${to}${filePath.slice(from.length)}`;
+        if (isSameOrInsidePath(filePath, from)) return `${to}${filePath.slice(from.length)}`;
       }
     };
 
@@ -640,7 +643,7 @@ export class ChatPortalActionImpl {
       (file) =>
         !file.sandboxTopicId &&
         file.deviceId === deviceId &&
-        paths.some((path) => file.filePath === path || file.filePath.startsWith(`${path}/`)),
+        paths.some((path) => isSameOrInsidePath(file.filePath, path)),
     );
     for (const file of removed) this.#get().closeLocalFileTab(getLocalFileTabId(file));
   };

@@ -986,6 +986,25 @@ describe('chatDockSlice', () => {
         .map((file) => `${file.deviceId ?? 'local'}:${file.filePath}`);
       expect(paths).toEqual(['local:/mv/lib/src/a.ts', 'remote:/mv/src/a.ts']);
     });
+    it('carries tabs under a moved folder with Windows path separators', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openLocalFile({
+          filePath: 'C:\\win\\src\\a.ts',
+          workingDirectory: 'C:\\win',
+        });
+      });
+      act(() => {
+        result.current.retargetLocalFiles([{ from: 'C:\\win\\src', to: 'C:\\win\\lib' }]);
+      });
+
+      expect(
+        result.current.openLocalFiles
+          .filter((file) => file.workingDirectory === 'C:\\win')
+          .map((file) => file.filePath),
+      ).toEqual(['C:\\win\\lib\\a.ts']);
+    });
   });
 
   describe('closeLocalFilesAt', () => {
@@ -1006,6 +1025,24 @@ describe('chatDockSlice', () => {
           .filter((file) => file.workingDirectory === '/del')
           .map((file) => file.filePath),
       ).toEqual(['/del/keep.md']);
+    });
+
+    it('closes tabs inside a deleted folder with Windows path separators', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openLocalFile({
+          filePath: 'D:\\del\\dir\\b.md',
+          workingDirectory: 'D:\\del',
+        });
+      });
+      act(() => {
+        result.current.closeLocalFilesAt(['D:\\del\\dir']);
+      });
+
+      expect(
+        result.current.openLocalFiles.filter((file) => file.workingDirectory === 'D:\\del'),
+      ).toEqual([]);
     });
   });
 
