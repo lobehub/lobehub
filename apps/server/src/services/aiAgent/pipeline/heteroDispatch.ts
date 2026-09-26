@@ -1127,7 +1127,7 @@ export const dispatchHeteroAgent = async (
       // (which eagerly touches server-only ModelRuntime env at module init), so
       // importing it statically would couple that whole subsystem into every
       // `aiAgent` import. Only this cloud-CLI branch needs it.
-      const { spawnHeteroSandbox } =
+      const { resolveSandboxRunTTL, spawnHeteroSandbox } =
         await import('@/server/services/heterogeneousAgent/sandboxRunner');
       const marketService = await deps.getMarketService();
       // The sandbox authenticates its nested `lh` calls with this JWT. The
@@ -1138,7 +1138,7 @@ export const dispatchHeteroAgent = async (
       // Mint a user-scoped `cli-sandbox` token instead (still `sub: userId`,
       // ownership-gated on heteroIngest/heteroFinish) with a run-length TTL
       // so it outlives a multi-hour run.
-      const sandboxJwt = await signUserJWT(deps.userId, '4h');
+      const sandboxJwt = await signUserJWT(deps.userId, resolveSandboxRunTTL());
       spawnHeteroSandbox({
         ...heteroParams,
         agentType: heteroType as 'claude-code' | 'codex',
