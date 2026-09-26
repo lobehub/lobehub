@@ -3914,6 +3914,47 @@ export class MessageModel {
   };
 
   /**
+   * The `state` of the most recent call to one tool API in a topic that
+   * produced any — a failed or aborted call leaves no state. Lets a tool read
+   * back what an earlier call in the same conversation produced, e.g. the group
+   * a builder conversation last created with `createGroup`.
+   *
+   * Scoped like a message query for the same branch: without `threadId` only
+   * the main conversation counts; with it, the thread plus the parent messages
+   * its type inherits — never a sibling thread.
+   */
+  findLatestPluginStateInTopic = async (params: {
+    apiName: string;
+    identifier: string;
+    threadId?: string | null;
+    topicId: string;
+  }): Promise<Record<string, any> | undefined> => {
+    const threadCondition = params.threadId
+      ? await this.buildThreadQueryCondition(params.threadId)
+      : isNull(messages.threadId);
+
+    const [row] = await this.db
+      .select({ state: messagePlugins.state })
+      .from(messagePlugins)
+      .innerJoin(messages, eq(messagePlugins.id, messages.id))
+      .where(
+        and(
+          eq(messages.topicId, params.topicId),
+          threadCondition,
+          eq(messagePlugins.identifier, params.identifier),
+          eq(messagePlugins.apiName, params.apiName),
+          isNotNull(messagePlugins.state),
+          this.ownership(),
+          this.pluginsOwnership(),
+        ),
+      )
+      .orderBy(desc(messages.createdAt), desc(messages.id))
+      .limit(1);
+
+    return row?.state ?? undefined;
+  };
+
+  /**
    * List the tool/plugin rows produced by ONE agent operation, for the
    * per-operation file-edit scan.
    *
