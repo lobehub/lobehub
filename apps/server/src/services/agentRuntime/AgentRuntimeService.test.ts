@@ -887,6 +887,199 @@ describe('AgentRuntimeService', () => {
       mockCoordinator.getOperationMetadata.mockResolvedValue(mockMetadata);
     });
 
+    // A run created without its init (`host.init`) has to get discovery and the
+    // context assembly done here, before anything is published — the whole point
+    // of returning from the send path early.
+    describe('deferred init', () => {
+      const pendingState = () => ({
+        ...mockState,
+        host: {
+          init: { envelope: { request: { operationId: 'test-operation-1' } }, pending: true },
+        },
+        messages: [],
+        origin: { agentId: 'agent-1', topicId: 'topic-1' },
+        // The turn's ask still on the state = the init has not run yet.
+        request: { approvedToolEntries: [], selectedToolIds: ['lobe-web-browsing'] },
+        stepCount: 0,
+      });
+
+      const buildService = (runDeferredInit: any) =>
+        new AgentRuntimeService(mockDb, mockUserId, { delegate: { runDeferredInit } });
+
+      const wireStep = (svc: AgentRuntimeService) => {
+        const step = vi.fn().mockImplementation(async (input) => ({
+          events: [],
+          newState: { ...input, stepCount: 2 },
+          nextContext: mockParams.context,
+        }));
+        vi.spyOn(svc as any, 'createAgentRuntime').mockResolvedValue({ runtime: { step } });
+        vi.spyOn((svc as any).messageService, 'prepareUiMessages').mockResolvedValue([]);
+        (svc as any).messageModel.query = vi.fn().mockResolvedValue([]);
+        const coordinator = (svc as any).coordinator;
+        for (const key of Object.getOwnPropertyNames(Object.getPrototypeOf(coordinator))) {
+          if (key !== 'constructor' && typeof coordinator[key] === 'function') {
+            vi.spyOn(coordinator, key);
+          }
+        }
+        coordinator.loadAgentState.mockResolvedValue(pendingState());
+        coordinator.getOperationMetadata.mockResolvedValue(mockMetadata);
+        return { coordinator, step };
+      };
+
+      it('runs the init, saves what it produced, and steps on the initialized state', async () => {
+        const initContext = { phase: 'user_input', payload: { assembled: true } };
+        const runDeferredInit = vi.fn().mockResolvedValue({
+          context: initContext,
+          state: {
+            operationToolSet: { enabledToolIds: ['lobe-web-browsing'] },
+            world: { agent: { systemRole: 'ready' } },
+          },
+        });
+        const svc = buildService(runDeferredInit);
+        const { coordinator, step } = wireStep(svc);
+
+        await svc.executeStep({ ...mockParams, stepIndex: 0 });
+
+        expect(runDeferredInit).toHaveBeenCalledTimes(1);
+        expect(runDeferredInit.mock.calls[0][0]).toMatchObject({
+          operationId: 'test-operation-1',
+          request: { selectedToolIds: ['lobe-web-browsing'] },
+        });
+        // Durable before the step runs, and the marker is gone so a retry of
+        // this delivery cannot pay for discovery twice.
+        const saved = coordinator.saveAgentState.mock.calls[0][1];
+        expect(saved.operationToolSet).toEqual({ enabledToolIds: ['lobe-web-browsing'] });
+        expect(saved.request).toBeUndefined();
+        expect(saved.initialContext).toEqual(initContext);
+        // The exit: the step sees the initialized state, not the thin one.
+        expect(step.mock.calls[0][0].operationToolSet).toEqual({
+          enabledToolIds: ['lobe-web-browsing'],
+        });
+        // ...and the context the init assembled, not the placeholder queued
+        // before the init existed.
+        expect(step.mock.calls[0][1]).toEqual(initContext);
+      });
+
+      // The worker can die after saving the init but before the step runs. The
+      // redelivery finds the request gone — and must still start from the
+      // context the init assembled, not the placeholder it was queued with.
+      it('starts a redelivered step 0 from the context the init saved', async () => {
+        const runDeferredInit = vi.fn();
+        const svc = buildService(runDeferredInit);
+        const { coordinator, step } = wireStep(svc);
+        const assembled = { phase: 'user_input', payload: { assembled: true } };
+        const { request: _request, ...initialized } = pendingState();
+        coordinator.loadAgentState.mockResolvedValue({ ...initialized, initialContext: assembled });
+
+        await svc.executeStep({ ...mockParams, stepIndex: 0 });
+
+        expect(runDeferredInit).not.toHaveBeenCalled();
+        expect(step.mock.calls[0][1]).toEqual(assembled);
+      });
+
+      it('skips the init when the run was already stopped, and still settles it', async () => {
+        const runDeferredInit = vi.fn();
+        const svc = buildService(runDeferredInit);
+        const { coordinator, step } = wireStep(svc);
+        coordinator.isInterrupted.mockResolvedValue(true);
+        const lifecycle = (svc as any).completionLifecycle;
+        const emit = vi.spyOn(lifecycle, 'emitSignalEvents').mockResolvedValue([]);
+        const dispatch = vi.spyOn(lifecycle, 'dispatchHooks').mockResolvedValue(undefined);
+        const publish = vi.spyOn((svc as any).streamManager, 'publishStreamEvent');
+
+        const result = await svc.executeStep({ ...mockParams, stepIndex: 0 });
+
+        // Persisting the stop already published `agent_runtime_end`: no step
+        // event may follow it.
+        expect(publish).not.toHaveBeenCalledWith(
+          'test-operation-1',
+          expect.objectContaining({ type: 'step_start' }),
+        );
+
+        expect(result.success).toBe(true);
+        expect(runDeferredInit).not.toHaveBeenCalled();
+        expect(step).not.toHaveBeenCalled();
+        // The completion consumers (and the durable row) hear about the stop.
+        expect(emit).toHaveBeenCalledWith('test-operation-1', expect.anything(), 'interrupted');
+        expect(dispatch).toHaveBeenCalledWith('test-operation-1', expect.anything(), 'interrupted');
+        // The interrupt may have landed only its sentinel: the runtime state has
+        // to be written too, or Redis keeps reading `running` forever.
+        expect(coordinator.saveAgentState).toHaveBeenCalledWith(
+          'test-operation-1',
+          expect.objectContaining({ status: 'interrupted' }),
+        );
+      });
+
+      it('discards the init result when Stop lands while the init runs', async () => {
+        const runDeferredInit = vi.fn().mockResolvedValue({
+          context: { phase: 'user_input', payload: {} },
+          state: { operationToolSet: { enabledToolIds: ['lobe-web-browsing'] } },
+        });
+        const svc = buildService(runDeferredInit);
+        const { coordinator, step } = wireStep(svc);
+        coordinator.isInterrupted.mockResolvedValueOnce(false).mockResolvedValue(true);
+        const lifecycle = (svc as any).completionLifecycle;
+        vi.spyOn(lifecycle, 'emitSignalEvents').mockResolvedValue([]);
+        vi.spyOn(lifecycle, 'dispatchHooks').mockResolvedValue(undefined);
+        const publish = vi.spyOn((svc as any).streamManager, 'publishStreamEvent');
+
+        await svc.executeStep({ ...mockParams, stepIndex: 0 });
+
+        expect(runDeferredInit).toHaveBeenCalledTimes(1);
+        expect(step).not.toHaveBeenCalled();
+        expect(publish).not.toHaveBeenCalledWith(
+          'test-operation-1',
+          expect.objectContaining({ type: 'step_start' }),
+        );
+        // Nothing wrote the pre-init `running` state back over the stop.
+        for (const [, saved] of coordinator.saveAgentState.mock.calls) {
+          expect(saved.status).toBe('interrupted');
+          expect(saved.operationToolSet).toBeUndefined();
+        }
+      });
+
+      it('does not initialize a shared run whose share was revoked after enqueue', async () => {
+        const runDeferredInit = vi.fn();
+        const verifyShareRunStillAuthorized = vi.fn().mockResolvedValue(false);
+        const svc = new AgentRuntimeService(mockDb, mockUserId, {
+          delegate: { runDeferredInit, verifyShareRunStillAuthorized },
+        });
+        const { coordinator, step } = wireStep(svc);
+        coordinator.loadAgentState.mockResolvedValue({
+          ...pendingState(),
+          principal: { actor: { shareVisitor: { agentId: 'agent-1', shareId: 'share-1' } } },
+        });
+        vi.spyOn(svc as any, 'buildShareAbortResult').mockResolvedValue({ success: true });
+
+        await svc.executeStep({ ...mockParams, stepIndex: 0 });
+
+        expect(verifyShareRunStillAuthorized).toHaveBeenCalled();
+        expect(runDeferredInit).not.toHaveBeenCalled();
+        expect(step).not.toHaveBeenCalled();
+      });
+
+      it('fails the step when the init throws instead of stepping on a thin state', async () => {
+        const runDeferredInit = vi.fn().mockRejectedValue(new Error('discovery exploded'));
+        const svc = buildService(runDeferredInit);
+        const { step } = wireStep(svc);
+
+        await expect(svc.executeStep({ ...mockParams, stepIndex: 0 })).rejects.toThrow(
+          'discovery exploded',
+        );
+        expect(step).not.toHaveBeenCalled();
+      });
+
+      it('refuses to run when no runner is wired', async () => {
+        const svc = buildService(undefined);
+        const { step } = wireStep(svc);
+
+        await expect(svc.executeStep({ ...mockParams, stepIndex: 0 })).rejects.toThrow(
+          /no runner is wired/,
+        );
+        expect(step).not.toHaveBeenCalled();
+      });
+    });
+
     it('acks a delayed delivery after the durable operation was abandoned', async () => {
       vi.spyOn((service as any).agentOperationModel, 'findById').mockResolvedValue({
         id: mockParams.operationId,

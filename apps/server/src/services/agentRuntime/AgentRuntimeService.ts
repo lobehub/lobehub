@@ -35,6 +35,7 @@ import {
 } from '@lobechat/observability-otel/modules/agent-runtime';
 import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 import {
+  type AgentRunInitRequest,
   type ChatToolPayload,
   type EvalToolForwardingConfig,
   type ExecSubAgentParams,
@@ -122,6 +123,9 @@ if (process.env.VERCEL) {
 }
 
 const log = debug('lobe-server:agent-runtime-service');
+
+const isTerminalAgentStatus = (status: AgentState['status'] | undefined) =>
+  status === 'done' || status === 'error' || status === 'interrupted';
 
 /**
  * Base delay before the first `verifyAsyncToolBarrier` re-check fires after a
@@ -362,6 +366,27 @@ export interface AgentRuntimeDelegate {
    * placeholder before resuming the parked parent operation.
    */
   execVirtualSubAgent?: (params: ExecVirtualSubAgentParams) => Promise<ExecSubAgentResult>;
+  /**
+   * Run the init an operation was created without: tool discovery and the
+   * message / context assembly for `state.request`. Returns the state slots they
+   * produce, which the step merges before executing.
+   *
+   * Implemented by AiAgentService (it owns the pipeline and the models it needs);
+   * the runtime only knows when to ask and what to do with the answer.
+   */
+  runDeferredInit?: (params: {
+    operationId: string;
+    request: AgentRunInitRequest;
+    state: AgentState;
+  }) => Promise<{
+    /**
+     * The context step 0 must run with. The step was queued before the init
+     * existed, so the context it carries is a placeholder — the assembled base
+     * context (and an approval resume's phase) only exists after init.
+     */
+    context: AgentRuntimeContext;
+    state: Partial<AgentState>;
+  }>;
   /**
    * Re-check that an Agent Share visitor run is STILL authorized to continue,
    * called on EVERY step. Without it, a revocation that lands mid-run (link →
@@ -1704,6 +1729,87 @@ export class AgentRuntimeService {
           throw new Error(`Agent state not found for operation ${operationId}`);
         }
 
+        // The run may have been created without its init — the send path
+        // returned as soon as the messages were durable and left discovery and
+        // the context assembly to this worker. The turn's request is still on the
+        // state, which is exactly what says the init has not run yet.
+        //
+        // It runs after the step claim, so two deliveries of step 0 cannot both
+        // pay for a discovery, and before anything is published, so the client
+        // sees one `step_start` for a fully initialized run. A failure here
+        // falls into the step error handler below: the operation ends with the
+        // error on its assistant message, which is the only honest outcome once
+        // the user has already been told the message was sent.
+        let deferredInitContext: AgentRuntimeContext | undefined;
+        if (agentState.request && !isTerminalAgentStatus(agentState.status)) {
+          if (await this.coordinator.isInterrupted(operationId)) {
+            // Stop pressed during the init window. Skip the discovery nobody is
+            // waiting for, but still settle the run: the state may read
+            // `running` if the interrupt landed only its sentinel before a
+            // crash. Return before `step_start` — persisting the stop publishes
+            // `agent_runtime_end`, and no step event may follow it.
+            log('[%s][%d] Interrupted before deferred init; skipping it', operationId, stepIndex);
+            await this.persistStopBeforeInit(operationId, agentState);
+            return this.settleSkippedStep(operationId, agentState);
+          } else {
+            // A shared-agent run revoked between enqueue and step 0 must not
+            // get creator-scoped discovery and history/persona assembly first:
+            // the per-step authorization re-check below comes too late for that.
+            if (await this.isShareRunRevoked(operationId, stepIndex, agentState)) {
+              return this.buildShareAbortResult(operationId, agentState);
+            }
+
+            if (!this.delegate?.runDeferredInit) {
+              throw new Error(
+                `Operation ${operationId} needs a deferred init but no runner is wired`,
+              );
+            }
+
+            const initStartedAt = Date.now();
+            const initialized = await this.delegate.runDeferredInit({
+              operationId,
+              request: agentState.request,
+              state: agentState,
+            });
+
+            // Stop can land while the init is awaited, and the abort poll is not
+            // armed yet. Saving this worker's pre-init `running` state now would
+            // overwrite the interrupted one and walk straight into LLM work, so
+            // re-read before writing anything.
+            const latest = await this.coordinator.loadAgentState(operationId);
+            if (
+              (await this.coordinator.isInterrupted(operationId)) ||
+              latest?.status === 'interrupted'
+            ) {
+              log(
+                '[%s][%d] Interrupted during deferred init; discarding its result',
+                operationId,
+                stepIndex,
+              );
+              await this.persistStopBeforeInit(operationId, latest ?? agentState);
+              Object.assign(agentState, latest ?? {}, { status: 'interrupted' });
+              return this.settleSkippedStep(operationId, agentState);
+            } else {
+              // One write: the initialized slots, the assembled context (a
+              // redelivery after this save finds the request gone and must still
+              // start from it), and the cleared request (so that redelivery does
+              // not pay for discovery again).
+              Object.assign(agentState, initialized.state, {
+                initialContext: initialized.context,
+                request: undefined,
+              });
+              await this.coordinator.saveAgentState(operationId, agentState);
+              deferredInitContext = initialized.context;
+              log(
+                '[%s][%d] Deferred init finished in %dms',
+                operationId,
+                stepIndex,
+                Date.now() - initStartedAt,
+              );
+            }
+          }
+        }
+
         // A parked approval step is already durable before its generic Review
         // is published. When that final Review write fails, the request returns
         // non-2xx and QStash retries this SAME step with `upstash-retried > 0`.
@@ -1808,19 +1914,7 @@ export class AgentRuntimeService {
             agentState.status,
           );
 
-          const reason = this.determineCompletionReason(agentState);
-
-          await this.completionLifecycle.emitSignalEvents(operationId, agentState, reason);
-
-          // Dispatch completion hooks so consumers (e.g., bot local-mode promise) can finalize
-          await this.completionLifecycle.dispatchHooks(operationId, agentState, reason);
-
-          return {
-            nextStepScheduled: false,
-            state: agentState,
-            stepResult: null,
-            success: true,
-          };
+          return this.settleSkippedStep(operationId, agentState);
         }
 
         // Agent Share: re-prove this visitor run's authorization on EVERY step.
@@ -1833,31 +1927,8 @@ export class AgentRuntimeService {
         // step boundary. See `AgentShareModel.isRunStillAuthorized`'s JSDoc for
         // why one query covers every revocation path (visibility flip — which
         // is what turning sharing off does — share delete, agent delete).
-        if (this.delegate.verifyShareRunStillAuthorized) {
-          const shareMarker = agentState.principal?.actor?.shareVisitor as
-            { agentId?: string; shareId?: string } | undefined;
-          if (shareMarker?.agentId && shareMarker.shareId) {
-            let stillAuthorized = false;
-            try {
-              stillAuthorized = await this.delegate.verifyShareRunStillAuthorized({
-                agentId: shareMarker.agentId,
-                shareId: shareMarker.shareId,
-              });
-            } catch (error) {
-              // Fail closed: a read failure must not be read as "still
-              // authorized". Falls through to the abort below with
-              // `stillAuthorized` left `false`.
-              log(
-                '[%s][%d] Share run authorization re-check failed: %O',
-                operationId,
-                stepIndex,
-                error,
-              );
-            }
-            if (!stillAuthorized) {
-              return this.buildShareAbortResult(operationId, agentState);
-            }
-          }
+        if (await this.isShareRunRevoked(operationId, stepIndex, agentState)) {
+          return this.buildShareAbortResult(operationId, agentState);
         }
 
         let beforeStepSignalEvents: Array<{ [key: string]: unknown; type: string }> = [];
@@ -1986,7 +2057,17 @@ export class AgentRuntimeService {
         });
 
         // Handle human intervention
-        let currentContext = context;
+        // Step 0 starts from the operation's saved initial context — the same rule
+        // `executeSync` follows. For an ordinary run it is the context that was
+        // queued; for a deferred init it is the one the init assembled, which the
+        // queued placeholder predates, including on a redelivery after the save.
+        const savedInitialContext = (
+          agentState as AgentState & {
+            initialContext?: AgentRuntimeContext;
+          }
+        ).initialContext;
+        let currentContext =
+          deferredInitContext ?? (stepIndex === 0 ? (savedInitialContext ?? context) : context);
         let currentState = agentState;
 
         if (humanInput || approvedToolCall || rejectionReason) {
@@ -4237,6 +4318,68 @@ export class AgentRuntimeService {
     }
 
     return undefined;
+  }
+
+  /**
+   * Settle a step that will not run because the operation is already terminal:
+   * emit the completion signals and dispatch the completion hooks so consumers
+   * (e.g. the bot local-mode promise) can finalize. Publishes no step event.
+   */
+  private async settleSkippedStep(operationId: string, agentState: AgentState) {
+    const reason = this.determineCompletionReason(agentState);
+
+    await this.completionLifecycle.emitSignalEvents(operationId, agentState, reason);
+    await this.completionLifecycle.dispatchHooks(operationId, agentState, reason);
+
+    return {
+      nextStepScheduled: false,
+      state: agentState,
+      stepResult: null,
+      success: true,
+    };
+  }
+
+  /**
+   * Make a stop that landed before (or during) a deferred init durable. The
+   * interrupt may have written only its sentinel before crashing, and the
+   * completion lifecycle does not own the runtime-state transition: the
+   * coordinator save does, and it is also what publishes `agent_runtime_end`
+   * exactly once. Idempotent for a state that is already interrupted.
+   */
+  private async persistStopBeforeInit(operationId: string, state: AgentState): Promise<void> {
+    const alreadyPersisted =
+      (await this.coordinator.loadAgentState(operationId))?.status === 'interrupted';
+    state.status = 'interrupted';
+    if (alreadyPersisted) return;
+    await this.coordinator.saveAgentState(operationId, {
+      ...state,
+      lastModified: new Date().toISOString(),
+      status: 'interrupted',
+    });
+  }
+
+  /**
+   * Whether an Agent Share visitor run has lost its authorization. Fails closed:
+   * a read failure is treated as revoked. Non-share runs are never revoked.
+   */
+  private async isShareRunRevoked(
+    operationId: string,
+    stepIndex: number,
+    agentState: AgentState,
+  ): Promise<boolean> {
+    if (!this.delegate.verifyShareRunStillAuthorized) return false;
+    const shareMarker = agentState.principal?.actor?.shareVisitor as
+      { agentId?: string; shareId?: string } | undefined;
+    if (!shareMarker?.agentId || !shareMarker.shareId) return false;
+    try {
+      return !(await this.delegate.verifyShareRunStillAuthorized({
+        agentId: shareMarker.agentId,
+        shareId: shareMarker.shareId,
+      }));
+    } catch (error) {
+      log('[%s][%d] Share run authorization re-check failed: %O', operationId, stepIndex, error);
+      return true;
+    }
   }
 
   /**
