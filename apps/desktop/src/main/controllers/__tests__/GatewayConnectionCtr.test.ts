@@ -1375,7 +1375,7 @@ describe('GatewayConnectionCtr', () => {
       const [spawnCommand, spawnArgs, spawnOptions] = spawnMock.mock.calls[0] as [
         string,
         string[],
-        { env: NodeJS.ProcessEnv },
+        { env: NodeJS.ProcessEnv; stdio?: string[] },
       ];
       expect(spawnCommand).toBe('/resolved/bin/openclaw');
       expect(spawnOptions.env.PATH).toBe('/resolved/bin:/usr/bin');
@@ -1383,6 +1383,11 @@ describe('GatewayConnectionCtr', () => {
       const messageArg = spawnArgs[spawnArgs.indexOf('--message') + 1];
       expect(messageArg).toContain('hello');
       expect(messageArg).toContain('lh notify');
+      // --local opens the session store directly and collides with a running
+      // gateway (issue #19914); the agent must talk to the gateway instead.
+      expect(spawnArgs).not.toContain('--local');
+      // stdout is ignored (not consumed → would hang), stderr is piped.
+      expect(spawnOptions.stdio).toEqual(['ignore', 'ignore', 'pipe']);
     });
 
     it('reports a failed child process as a terminal error', async () => {
@@ -1397,13 +1402,17 @@ describe('GatewayConnectionCtr', () => {
         taskId: 'task-failed-child',
         topicId: 'topic-failed-child',
       });
+      child.stderr._emit('Error: session store is locked by the running gateway\n');
       child._emit('close', 1, null);
       await vi.advanceTimersByTimeAsync(0);
 
       expect(notifySpy).toHaveBeenCalledWith(
         expect.objectContaining({
           done: true,
-          error: { message: 'Task failed (exit code: 1)', type: 'HeteroProcessError' },
+          error: {
+            message: 'Task failed (exit code: 1) — Error: session store is locked by the running gateway',
+            type: 'HeteroProcessError',
+          },
           operationId: 'op-failed-child',
         }),
       );

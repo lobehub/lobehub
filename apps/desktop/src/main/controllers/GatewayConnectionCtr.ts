@@ -902,6 +902,10 @@ export default class GatewayConnectionCtr extends ControllerModule {
         }
       }
 
+      // openclaw agent without --local talks to the running gateway, which owns
+      // the session store lock. --local would open the store directly and collide
+      // with the gateway's lock (the normal self-hosted setup keeps the gateway
+      // running), making the process exit with code 1 immediately.
       const openclawArgs = [
         'agent',
         '--agent',
@@ -910,19 +914,28 @@ export default class GatewayConnectionCtr extends ControllerModule {
         sessionKey,
         '--message',
         enrichedPrompt,
-        '--local',
       ];
       const spawnPlan = await runtime.prepareSpawn(openclawArgs);
       const child = spawn(spawnPlan.command, spawnPlan.args, {
         cwd: workDir,
         detached: true,
         env: spawnPlan.env,
-        stdio: 'ignore',
+        // Keep stdout ignored (it is not consumed here; piping it without a
+        // reader would fill the OS buffer and hang the child). Pipe stderr so
+        // a non-zero exit can surface the agent's real error.
+        stdio: ['ignore', 'ignore', 'pipe'],
       });
 
       const pid = child.pid;
       if (pid === undefined) throw new Error('Failed to get PID for openclaw process');
       child.unref();
+
+      // Cap at 8 KB, retaining the tail so the actual failure stays visible.
+      const STDERR_CAP = 8 * 1024;
+      let stderr = '';
+      child.stderr.on('data', (chunk: Buffer) => {
+        stderr = `${stderr}${chunk.toString()}`.slice(-STDERR_CAP);
+      });
 
       this.platformTasks.set(taskId, {
         agentId,
@@ -942,9 +955,10 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
         this.platformTasks.delete(taskId);
         if (code !== 0 || signal !== null) {
+          const details = stderr.trim().slice(0, 500);
           const text = signal
             ? `Task cancelled (signal: ${signal})`
-            : `Task failed (exit code: ${code})`;
+            : `Task failed (exit code: ${code})${details ? ` — ${details}` : ''}`;
           const terminalError = signal ? undefined : { message: text, type: 'HeteroProcessError' };
           void this.sendNotify({
             agentId,
