@@ -8,8 +8,6 @@
   "acceptance.actions.confirmAccept": "Confirm acceptance",
   "acceptance.actions.confirmReject": "Reject and start the next round",
   "acceptance.actions.confirmRejectCopy": "Reject & copy prompt",
-  "acceptance.actions.more": "More actions",
-  "acceptance.actions.refresh": "Refresh",
   "acceptance.actions.reject": "Reject delivery",
   "acceptance.banner.accepted": "Accepted by you · {{time}}",
   "acceptance.banner.acceptedHint": "{{count}} verification round(s) archived as the acceptance record",

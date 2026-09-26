@@ -23,9 +23,10 @@ const Title = memo(() => {
   }, [snapshot, view]);
 
   return (
-    <Flexbox horizontal align={'center'} flex={1} gap={8} style={{ minWidth: 0 }}>
+    // Hug the content so the shared `…` sits right after the title.
+    <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
       {node && <KindIcon kind={node.kind} />}
-      <Text className={oneLineEllipsis} style={{ flex: 1, fontSize: 14, minWidth: 0 }}>
+      <Text className={oneLineEllipsis} style={{ flex: '0 1 auto', fontSize: 14, minWidth: 0 }}>
         {node?.title ?? t('goalProcess.node.detailTitle')}
       </Text>
     </Flexbox>

@@ -1,7 +1,11 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { usePortalDocumentHeaderActions, usePortalDocumentTitle } from './usePortalDocumentHeader';
+import {
+  resolvePortalDocumentPath,
+  usePortalDocumentHeaderActions,
+  usePortalDocumentTitle,
+} from './usePortalDocumentHeader';
 
 const mockDocumentMeta = vi.hoisted(() => ({
   current: {
@@ -68,7 +72,6 @@ vi.mock('@/store/chat', () => ({
 
 const toastSuccess = vi.hoisted(() => vi.fn());
 const toastError = vi.hoisted(() => vi.fn());
-const clipboardWrite = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 
 vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
@@ -329,40 +332,37 @@ describe('usePortalDocumentHeaderActions', () => {
   beforeEach(() => {
     mockChatState.current.portalStack[0].agentDocumentId = 'agent-document-1';
     mockAgentState.current.activeAgentId = 'agent-1';
-    clipboardWrite.mockClear();
-    toastSuccess.mockClear();
-    // jsdom exposes `navigator.clipboard` as getter-only; swap it per test.
-    Object.defineProperty(navigator, 'clipboard', {
-      configurable: true,
-      value: { writeText: clipboardWrite },
-    });
   });
 
-  it('copies the agent-document URL when the binding proves ownership', async () => {
+  it('links the agent-document route when the binding proves ownership', () => {
     const { result } = renderHook(() => usePortalDocumentHeaderActions());
 
-    await act(async () => {
-      await result.current.copyLink();
-    });
-
-    expect(clipboardWrite).toHaveBeenCalledWith(
-      'https://app.lobehub.com/agent/agent-1/docs/document-1',
-    );
-    expect(toastSuccess).toHaveBeenCalled();
+    expect(result.current.url).toBe('https://app.lobehub.com/agent/agent-1/docs/document-1');
   });
 
-  it('refuses to copy a link for a plain document with no agent binding', async () => {
+  it('links an unbound document (e.g. a goal deliverable) to the page editor', () => {
     mockChatState.current.portalStack[0].agentDocumentId = undefined;
 
     const { result } = renderHook(() => usePortalDocumentHeaderActions());
 
+    // The agent docs route redirects unowned ids to its index, so the link
+    // must not point there.
+    expect(result.current.path).toBe('/page/document-1');
+    expect(result.current.url).toBe('https://app.lobehub.com/page/document-1');
+  });
+
+  it('refresh revalidates the document caches', async () => {
+    const { result } = renderHook(() => usePortalDocumentHeaderActions());
+
     await act(async () => {
-      await result.current.copyLink();
+      await result.current.refresh();
     });
 
-    // No URL was composed (no-op), and no success toast fired.
-    expect(clipboardWrite).not.toHaveBeenCalled();
-    expect(toastSuccess).not.toHaveBeenCalled();
+    expect(mockInvalidate).toHaveBeenCalledWith({
+      agentDocumentId: 'agent-document-1',
+      agentId: 'agent-1',
+      documentId: 'document-1',
+    });
   });
 
   it('surfaces the resolved binding for menu gating', () => {
@@ -370,5 +370,13 @@ describe('usePortalDocumentHeaderActions', () => {
 
     expect(result.current.agentDocumentId).toBe('agent-document-1');
     expect(result.current.agentId).toBe('agent-1');
+  });
+});
+
+describe('resolvePortalDocumentPath', () => {
+  it('uses the agent docs route only for a bound document', () => {
+    expect(resolvePortalDocumentPath('docs_abc', 'agt_1', 'ad_1')).toBe('/agent/agt_1/docs/abc');
+    expect(resolvePortalDocumentPath('docs_abc', 'agt_1', undefined)).toBe('/page/abc');
+    expect(resolvePortalDocumentPath(undefined, 'agt_1', 'ad_1')).toBeUndefined();
   });
 });

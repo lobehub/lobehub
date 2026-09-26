@@ -1,11 +1,11 @@
 'use client';
 
-import { buildAgentDocumentUrl } from '@lobechat/builtin-tool-agent-documents';
 import { toast } from '@lobehub/ui/base-ui';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import { buildAgentDocumentPath } from '@/features/AgentDocumentPage/navigation';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useSingleton } from '@/hooks/useSingleton';
 import { useClientDataSWR } from '@/libs/swr';
@@ -14,6 +14,7 @@ import { documentService } from '@/services/document';
 import { invalidateDocumentMutation } from '@/services/document/invalidation';
 import { useAgentStore } from '@/store/agent';
 import { getDocumentRenderMode } from '@/utils/documentRenderMode';
+import { standardizeIdentifier } from '@/utils/identifier';
 import { isSkillMarkdownDocument } from '@/utils/skillMarkdown';
 
 import { useResolvedAgentDocumentId, useResolvedDocumentId } from './documentViewContext';
@@ -164,37 +165,47 @@ export const usePortalDocumentTitle = () => {
 };
 
 /**
- * Header menu entries: rename (hidden when meta is locked) and copy link
- * (only when the portal viewer carries the agent-documents binding that
- * proves the active agent owns the document).
+ * In-app path of the full-page view for the portal document. An agent-bound
+ * document opens in its agent's docs route; any other document (goal
+ * deliverables, notebook docs) has no agent route to land on — that route
+ * redirects unowned ids to the docs index — so it opens in the page editor.
+ */
+export const resolvePortalDocumentPath = (
+  documentId: string | undefined,
+  agentId: string | undefined,
+  agentDocumentId: string | undefined,
+): string | undefined => {
+  if (!documentId) return undefined;
+  if (agentId && agentDocumentId) return buildAgentDocumentPath(agentId, documentId);
+  return `/page/${standardizeIdentifier(documentId)}`;
+};
+
+/**
+ * Header menu actions shared by every portal document: the absolute link to
+ * the full-page view and a refetch of the document from the server.
  */
 export const usePortalDocumentHeaderActions = () => {
-  const { t } = useTranslation(['chat', 'file', 'common']);
   const documentId = useResolvedDocumentId();
-  // The doc-anchored chat topic binds (agentId, documentId); the standalone
-  // route for "copy link" needs the owning agent id, which equals the store's
-  // activeAgentId inside this portal (see Body's panelEligible gate). The
-  // resolved agent-documents binding is the ownership proof: a plain notebook
-  // document opened beside an active agent must not produce a copy-link for an
-  // agent route that doesn't own it.
+  // The resolved agent-documents binding is the ownership proof: only a bound
+  // document may be linked through the active agent's docs route.
   const agentId = useAgentStore((s) => s.activeAgentId);
   const agentDocumentId = useResolvedAgentDocumentId();
   const appOrigin = useAppOrigin();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
 
-  const { startEdit } = usePortalDocumentTitle();
+  const path = resolvePortalDocumentPath(documentId, agentId, agentDocumentId);
+  const workspacePrefix = activeWorkspaceSlug ? `/${activeWorkspaceSlug}` : '';
+  const url =
+    path && appOrigin ? `${appOrigin.replace(/\/+$/, '')}${workspacePrefix}${path}` : undefined;
 
-  const copyLink = useCallback(async () => {
-    // The binding is the runtime guard too: even a stale callback handed to a
-    // menu must never compose an agent-document URL for an unowned document.
-    if (!documentId || !agentId || !agentDocumentId) return;
-    const url = buildAgentDocumentUrl(appOrigin, agentId, documentId, {
-      workspaceSlug: activeWorkspaceSlug,
+  const refresh = useCallback(async () => {
+    if (!documentId) return;
+    await invalidateDocumentMutation({
+      agentDocumentId,
+      agentId: agentDocumentId ? (agentId ?? undefined) : undefined,
+      documentId,
     });
-    if (!url) return;
-    await navigator.clipboard.writeText(url);
-    toast.success(t('agentDocument.linkCopied', { ns: 'chat' }));
-  }, [activeWorkspaceSlug, agentDocumentId, agentId, appOrigin, documentId, t]);
+  }, [agentDocumentId, agentId, documentId]);
 
-  return { agentDocumentId, agentId, copyLink, documentId, startEdit, t };
+  return { agentDocumentId, agentId, documentId, path, refresh, url };
 };
