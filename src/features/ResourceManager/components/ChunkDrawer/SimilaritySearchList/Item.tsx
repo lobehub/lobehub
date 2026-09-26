@@ -2,6 +2,7 @@ import { Flexbox } from '@lobehub/ui';
 import { Tag } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { memo, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { type SemanticSearchChunk } from '@/types/chunk';
 
@@ -34,6 +35,7 @@ interface ChunkItemProps extends Omit<SemanticSearchChunk, 'index'> {
 }
 
 const SearchItem = memo<ChunkItemProps>(({ text, pageNumber, type, similarity }) => {
+  const { t } = useTranslation('file');
   const typeClassName = useMemo(() => {
     switch (type) {
       default: {
@@ -51,7 +53,9 @@ const SearchItem = memo<ChunkItemProps>(({ text, pageNumber, type, similarity })
 
       <Flexbox horizontal align={'center'} distribution={'space-between'}>
         <Tag variant={'filled'}>{similarity.toFixed(2)}</Tag>
-        <Flexbox className={styles.pageNumber}>第 {pageNumber} 页</Flexbox>
+        <Flexbox className={styles.pageNumber}>
+          {t('chunk.similaritySearch.pageNumber', { pageNumber })}
+        </Flexbox>
       </Flexbox>
     </Flexbox>
   );
