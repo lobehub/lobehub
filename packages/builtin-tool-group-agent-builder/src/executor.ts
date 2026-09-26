@@ -188,14 +188,26 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
     return groupAgentBuilderRuntime.updateAgentPrompt(groupId, params);
   };
 
-  updateGroup = async (params: UpdateGroupParams): Promise<BuiltinToolResult> => {
-    return groupAgentBuilderRuntime.updateGroup(params);
+  // The runtime resolves a missing `groupId` to the profile page's active
+  // group, so a group created in this conversation has to be handed in here.
+  updateGroup = async (
+    params: UpdateGroupParams,
+    ctx: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    return groupAgentBuilderRuntime.updateGroup({
+      ...params,
+      groupId: params.groupId ?? findGroupCreatedInConversation({ messageId: ctx.messageId }),
+    });
   };
 
-  updateGroupPrompt = async (params: UpdateGroupPromptParams): Promise<BuiltinToolResult> => {
+  updateGroupPrompt = async (
+    params: UpdateGroupPromptParams,
+    ctx: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
     return groupAgentBuilderRuntime.updateGroupPrompt({
       streaming: true,
       ...params,
+      groupId: params.groupId ?? findGroupCreatedInConversation({ messageId: ctx.messageId }),
     });
   };
 

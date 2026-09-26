@@ -4,13 +4,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { groupAgentBuilderExecutor } from './executor';
 import { GroupAgentBuilderApiName, GroupAgentBuilderIdentifier } from './types';
 
-const { mockCreateAgent, mockRefreshGroupDetail, mockRefreshGroups, mockSetAgentBuilderContent } =
-  vi.hoisted(() => ({
-    mockCreateAgent: vi.fn(),
-    mockRefreshGroupDetail: vi.fn(),
-    mockRefreshGroups: vi.fn(),
-    mockSetAgentBuilderContent: vi.fn(),
-  }));
+const {
+  mockCreateAgent,
+  mockRefreshGroupDetail,
+  mockRefreshGroups,
+  mockSetAgentBuilderContent,
+  mockUpdateGroup,
+  mockUpdateGroupPrompt,
+} = vi.hoisted(() => ({
+  mockCreateAgent: vi.fn(),
+  mockRefreshGroupDetail: vi.fn(),
+  mockRefreshGroups: vi.fn(),
+  mockSetAgentBuilderContent: vi.fn(),
+  mockUpdateGroup: vi.fn(),
+  mockUpdateGroupPrompt: vi.fn(),
+}));
 
 let activeGroupId: string | undefined = 'cg_1';
 
@@ -60,7 +68,11 @@ vi.mock('@lobechat/agent-manager-runtime', () => ({
 
 vi.mock('./ExecutionRuntime', () => ({
   GroupAgentBuilderExecutionRuntime: vi.fn(function () {
-    return { createAgent: mockCreateAgent };
+    return {
+      createAgent: mockCreateAgent,
+      updateGroup: mockUpdateGroup,
+      updateGroupPrompt: mockUpdateGroupPrompt,
+    };
   }),
 }));
 
@@ -126,6 +138,43 @@ describe('GroupAgentBuilderExecutor', () => {
       );
 
       expect(mockCreateAgent).toHaveBeenCalledWith('cg_named', expect.anything());
+    });
+
+    // Group-level writes resolve their target inside the execution runtime,
+    // which only knows the profile page's active group — the created group has
+    // to be handed to it, or `createGroup` → `updateGroupPrompt` edits the shell.
+    it('group-level writes follow the group createGroup made in this conversation', async () => {
+      dbMessagesMap = conversationWithCreatedGroup();
+      const ctx = { messageId: 'msg_create_agent' } as BuiltinToolContext;
+
+      await groupAgentBuilderExecutor.updateGroupPrompt({ prompt: 'shared' }, ctx);
+      await groupAgentBuilderExecutor.updateGroup({ meta: { title: 'Dev Team' } }, ctx);
+
+      expect(mockUpdateGroupPrompt).toHaveBeenCalledWith(
+        expect.objectContaining({ groupId: 'cg_new', prompt: 'shared' }),
+      );
+      expect(mockUpdateGroup).toHaveBeenCalledWith(
+        expect.objectContaining({ groupId: 'cg_new', meta: { title: 'Dev Team' } }),
+      );
+    });
+
+    it('group-level writes keep an explicit groupId and otherwise defer to the runtime', async () => {
+      dbMessagesMap = conversationWithCreatedGroup();
+
+      await groupAgentBuilderExecutor.updateGroupPrompt({ groupId: 'cg_named', prompt: 'p' }, {
+        messageId: 'msg_create_agent',
+      } as BuiltinToolContext);
+      // No group created in this conversation: leave the target to the runtime's
+      // own active-group resolution.
+      await groupAgentBuilderExecutor.updateGroup(
+        { meta: { title: 'T' } },
+        {} as BuiltinToolContext,
+      );
+
+      expect(mockUpdateGroupPrompt).toHaveBeenCalledWith(
+        expect.objectContaining({ groupId: 'cg_named' }),
+      );
+      expect(mockUpdateGroup.mock.calls[0][0].groupId).toBeUndefined();
     });
 
     it('reports a structured error when there is no group at all', async () => {

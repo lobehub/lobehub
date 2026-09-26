@@ -189,8 +189,39 @@ describe('group agent builder — members after createGroup', () => {
     expect(mockFindLatestPluginStateInTopic).toHaveBeenCalledWith({
       apiName: 'createGroup',
       identifier: 'lobe-group-agent-builder',
+      threadId: null,
       topicId: 'tpc_builder',
     });
     expect(mockAddAgentsToGroup).toHaveBeenCalledWith('cg_shell', ['agt_m1']);
+  });
+
+  // A builder topic can branch into threads. The created group is read back
+  // from the branch the tool call runs in, so a `createGroup` in one thread
+  // must not retarget its siblings or the main conversation.
+  it('reads the created group back from the current thread only', async () => {
+    const threadCtx = {
+      editingGroupId: 'cg_shell',
+      threadId: 'thd_branch',
+      topicId: 'tpc_builder',
+    } as never;
+    const mainCtx = { editingGroupId: 'cg_shell', topicId: 'tpc_builder' } as never;
+
+    await createRuntime().createAgent({ systemRole: 'r', title: 'Tech Lead' } as never, threadCtx);
+    await createRuntime().createAgent({ systemRole: 'r', title: 'Tech Lead' } as never, mainCtx);
+
+    expect(mockFindLatestPluginStateInTopic.mock.calls.map(([params]) => params)).toEqual([
+      {
+        apiName: 'createGroup',
+        identifier: 'lobe-group-agent-builder',
+        threadId: 'thd_branch',
+        topicId: 'tpc_builder',
+      },
+      {
+        apiName: 'createGroup',
+        identifier: 'lobe-group-agent-builder',
+        threadId: null,
+        topicId: 'tpc_builder',
+      },
+    ]);
   });
 });

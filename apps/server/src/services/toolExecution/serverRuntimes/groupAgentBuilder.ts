@@ -101,6 +101,7 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
       (await resolveBuilderGroupId({
         db: serverDB,
         editingGroupId: ctx.editingGroupId,
+        threadId: ctx.threadId,
         topicId: ctx.topicId,
         userId,
         workspaceId,
