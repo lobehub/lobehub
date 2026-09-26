@@ -106,7 +106,15 @@ export async function scheduleDispatch(c: Context) {
     }
 
     const reserved = await reserve(db, due);
-    const dispatched = await fanout(db, reserved);
+    let dispatched: number;
+    try {
+      dispatched = await fanout(db, reserved);
+    } catch (error) {
+      // Nothing was handed off, so give every reservation back; otherwise
+      // later sweeps would treat these occurrences as covered and drop them.
+      await Promise.all(reserved.map((d) => release(db, d)));
+      throw error;
+    }
 
     return c.json({
       dispatched,
@@ -164,7 +172,11 @@ const reserve = async (db: ServerDB, due: DueTask[]): Promise<DueTask[]> => {
   return reserved;
 };
 
-/** Hand a reservation back when its publish failed, so the next tick retries it. */
+/**
+ * Hand a reservation back when its handoff failed, so the next tick retries it.
+ * The swap only succeeds while the row still holds this reservation, so a newer
+ * one written in the meantime is left untouched.
+ */
 const release = async (db: ServerDB, d: DueTask) => {
   try {
     await TaskModel.swapDispatchedScheduleOccurrence(
@@ -220,7 +232,8 @@ const fanout = async (db: ServerDB, due: DueTask[]): Promise<number> => {
   }
 
   // Local / dev: invoke runScheduleTick directly. Errors are logged but don't
-  // fail the dispatch — one bad task shouldn't block the rest.
+  // fail the dispatch — one bad task shouldn't block the rest. A failed tick
+  // releases its reservation so the next sweep retries the occurrence.
   const results = await Promise.allSettled(due.map((d) => runScheduleTick(d.taskId, d.userId)));
   let dispatched = 0;
   for (const [i, r] of results.entries()) {
@@ -232,6 +245,7 @@ const fanout = async (db: ServerDB, due: DueTask[]): Promise<number> => {
         due[i].taskId,
         r.reason,
       );
+      await release(db, due[i]);
     }
   }
   return dispatched;

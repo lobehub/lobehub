@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   getScheduledTasks: vi.fn(),
   getServerDB: vi.fn(),
   publishJSON: vi.fn(),
+  runScheduleTick: vi.fn(),
   swapDispatchedScheduleOccurrence: vi.fn(),
 }));
 
@@ -24,7 +25,9 @@ vi.mock('@/envs/app', () => ({ appEnv: mocks.appEnv }));
 
 vi.mock('@/libs/qstash', () => ({ qstashClient: { publishJSON: mocks.publishJSON } }));
 
-vi.mock('@/server/services/taskRunner/scheduleTick', () => ({ runScheduleTick: vi.fn() }));
+vi.mock('@/server/services/taskRunner/scheduleTick', () => ({
+  runScheduleTick: mocks.runScheduleTick,
+}));
 
 const dispatch = async (dryRun: boolean) => {
   const app = new Hono();
@@ -33,7 +36,10 @@ const dispatch = async (dryRun: boolean) => {
     body: JSON.stringify({ dryRun }),
     method: 'POST',
   });
-  return (await res.json()) as { dispatched: number; due: number; total: number };
+  return {
+    status: res.status,
+    ...((await res.json()) as { dispatched: number; due: number; total: number }),
+  };
 };
 
 const dryRun = () => dispatch(true);
@@ -140,6 +146,59 @@ describe('scheduleDispatch', () => {
         'task-1',
         '2026-09-21T09:00:00.000Z',
         null,
+      );
+    });
+
+    it('releases every reservation when APP_URL is missing', async () => {
+      vi.stubEnv('APP_URL', '');
+      mocks.getScheduledTasks.mockResolvedValue([dailyNineTask({ scheduler: armed })]);
+      mocks.swapDispatchedScheduleOccurrence.mockResolvedValue(true);
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      expect(await dispatch(false)).toMatchObject({ status: 500 });
+      expect(mocks.publishJSON).not.toHaveBeenCalled();
+      expect(mocks.swapDispatchedScheduleOccurrence).toHaveBeenCalledTimes(2);
+      expect(mocks.swapDispatchedScheduleOccurrence).toHaveBeenLastCalledWith(
+        {},
+        'task-1',
+        '2026-09-21T09:00:00.000Z',
+        null,
+      );
+    });
+  });
+
+  describe('inline dispatch', () => {
+    const armed = { scheduleStartedAt: '2026-09-21T08:55:00.000Z' };
+
+    it('keeps the reservation when the tick succeeds', async () => {
+      mocks.getScheduledTasks.mockResolvedValue([dailyNineTask({ scheduler: armed })]);
+      mocks.swapDispatchedScheduleOccurrence.mockResolvedValue(true);
+      mocks.runScheduleTick.mockResolvedValue({ ran: true, taskIdentifier: 'T-1' });
+
+      expect(await dispatch(false)).toMatchObject({ dispatched: 1, due: 1 });
+      expect(mocks.runScheduleTick).toHaveBeenCalledWith('task-1', 'user-1');
+      expect(mocks.swapDispatchedScheduleOccurrence).toHaveBeenCalledTimes(1);
+    });
+
+    it('releases the reservation when the tick fails', async () => {
+      mocks.getScheduledTasks.mockResolvedValue([
+        dailyNineTask({
+          scheduler: { ...armed, lastDispatchedOccurrenceAt: '2026-09-20T09:00:00.000Z' },
+        }),
+      ]);
+      mocks.swapDispatchedScheduleOccurrence.mockResolvedValue(true);
+      mocks.runScheduleTick.mockRejectedValue(new Error('transient'));
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      expect(await dispatch(false)).toMatchObject({ dispatched: 0, due: 1 });
+      expect(mocks.swapDispatchedScheduleOccurrence).toHaveBeenCalledTimes(2);
+      // Compare-and-set back to the previous value: only succeeds while the row
+      // still holds this reservation, so a newer one is never clobbered.
+      expect(mocks.swapDispatchedScheduleOccurrence).toHaveBeenLastCalledWith(
+        {},
+        'task-1',
+        '2026-09-21T09:00:00.000Z',
+        '2026-09-20T09:00:00.000Z',
       );
     });
   });
