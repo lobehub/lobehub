@@ -1,3 +1,5 @@
+import type { DeviceMetricSample } from '@lobechat/types';
+
 import {
   describeGatewayRequestFailure,
   describeGatewayResponseFailure,
@@ -382,6 +384,26 @@ export class GatewayHttpClient {
       success: data.success ?? false,
       systemInfo: data.systemInfo,
     };
+  }
+
+  /**
+   * Health samples the gateway holds for a device (it keeps two days), observed
+   * at or after `since`. Served from gateway storage, so an offline device
+   * still has its history.
+   */
+  async getDeviceMetrics(
+    userId: string,
+    deviceId: string,
+    options: { since?: number; workspaceId?: string } = {},
+  ): Promise<DeviceMetricSample[]> {
+    const res = await this.post(
+      '/api/device/metrics',
+      { deviceId, since: options.since, userId, workspaceId: options.workspaceId },
+      { timeout: DEVICE_QUERY_TIMEOUT_MS },
+    );
+    if (!res.ok) throw new Error(`device metrics read failed: HTTP ${res.status}`);
+    const data = (await res.json()) as { samples?: DeviceMetricSample[] };
+    return data.samples ?? [];
   }
 
   // ─── Tunnel registry (gateway admin API) ───

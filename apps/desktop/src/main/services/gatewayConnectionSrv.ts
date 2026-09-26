@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
+import path from 'node:path';
 
 import { OFFICIAL_DEVICE_GATEWAY_URL } from '@lobechat/const/url';
 import type {
@@ -7,6 +8,7 @@ import type {
   EnrollWorkspaceResult,
   UnenrollWorkspaceParams,
 } from '@lobechat/device-control';
+import type { DeviceMetricsSampler } from '@lobechat/device-control/metrics';
 import type {
   AgentRunRequestMessage,
   DeviceSystemInfo,
@@ -166,6 +168,8 @@ export default class GatewayConnectionService extends ServiceModule {
   private agentRunHandler: AgentRunHandler | null = null;
   private rpcHandler: RpcHandler | null = null;
   private deviceRegistrar: DeviceRegistrar | null = null;
+  /** Samples CPU / memory / load for the personal device while the connection is on. */
+  private metricsSampler: { deviceId: string; sampler: DeviceMetricsSampler } | null = null;
   private workspaceTokenProvider: WorkspaceTokenProvider | null = null;
   private workspaceDeviceChecker: WorkspaceDeviceChecker | null = null;
 
@@ -358,6 +362,11 @@ export default class GatewayConnectionService extends ServiceModule {
   }
 
   async disconnect(): Promise<{ success: boolean }> {
+    // A user-initiated disconnect turns the device off, so stop sampling too —
+    // the page then shows no data rather than "running but unreachable". The
+    // samples since the last upload are pushed first (bounded), while the
+    // socket is still open.
+    await this.stopMetricsSampler({ flushTimeoutMs: 3000 });
     if (this.client) {
       await this.client.disconnect();
       this.client = null;
@@ -414,6 +423,7 @@ export default class GatewayConnectionService extends ServiceModule {
       }).catch((err) => {
         logger.warn(`Device registration failed (non-fatal): ${(err as Error).message}`);
       });
+      await this.startMetricsSampler(identity.deviceId);
     }
 
     const { GatewayClient } = await import('@lobechat/device-gateway-client');
@@ -981,6 +991,44 @@ export default class GatewayConnectionService extends ServiceModule {
     this.powerSaveBlockerId = null;
   }
 
+  // ─── Device Metrics ───
+
+  /**
+   * Keeps sampling across drops and reconnects (that stretch is what explains
+   * a drop); only a new identity or an explicit disconnect replaces it.
+   * Samples go to the device gateway (their only store) over the personal
+   * connection, whichever client instance currently holds it.
+   */
+  private async startMetricsSampler(deviceId: string) {
+    if (this.metricsSampler?.deviceId === deviceId) return;
+    await this.stopMetricsSampler();
+
+    const userData = safeGetPath('userData');
+    const { DeviceMetricsSampler, deviceMetricsBacklogFileName, pushMetrics } =
+      await import('@lobechat/device-control/metrics');
+    const sampler = new DeviceMetricsSampler({
+      isConnected: () => this.status === 'connected',
+      logger: { warn: (msg) => logger.warn(msg) },
+      storagePath: userData
+        ? path.join(userData, 'device-metrics', deviceMetricsBacklogFileName(deviceId))
+        : undefined,
+      // Mirrored to the workspace-share connections so a shared device's
+      // workspace row has the same history (the gateway stores per socket).
+      upload: async (samples) => {
+        if (!this.client) throw new Error('Gateway not connected');
+        await pushMetrics(this.client, this.workspaceClients.values(), samples);
+      },
+    });
+    this.metricsSampler = { deviceId, sampler };
+    await sampler.start();
+  }
+
+  private async stopMetricsSampler(options?: { flushTimeoutMs?: number }) {
+    const current = this.metricsSampler;
+    this.metricsSampler = null;
+    await current?.sampler.stop(options);
+  }
+
   // ─── Status Broadcasting ───
 
   private setStatus(status: GatewayConnectionStatus) {
@@ -989,6 +1037,8 @@ export default class GatewayConnectionService extends ServiceModule {
     logger.info(`Connection status: ${this.status} → ${status}`);
     this.status = status;
 
+    // Upload what accrued while offline right away, not at the next tick.
+    if (status === 'connected') void this.metricsSampler?.sampler.flush();
     this.syncPowerSaveBlocker();
     this.scheduleStatusBroadcast(status);
   }

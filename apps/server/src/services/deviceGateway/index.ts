@@ -47,6 +47,7 @@ import type {
   DeviceListeningPortsResult,
   DeviceListProjectSkillsResult,
   DeviceLocalFilePreviewResult,
+  DeviceMetricSample,
   DeviceMoveProjectFileItem,
   DeviceMoveProjectFileResultItem,
   DeviceProjectDirectoryListResult,
@@ -230,6 +231,25 @@ export class DeviceGateway {
       log('queryDeviceSystemInfo: failed for userId=%s, deviceId=%s', userId, deviceId);
       return undefined;
     }
+  }
+
+  /**
+   * The device's health samples held by the gateway (two days), observed at or
+   * after `since`. Unlike the RPC reads this works while the device is
+   * offline — the samples live in gateway storage, not on the device.
+   */
+  async queryDeviceMetrics(params: {
+    deviceId: string;
+    since: number;
+    userId: string;
+    workspaceId?: string;
+  }): Promise<DeviceMetricSample[]> {
+    const client = this.getClient();
+    if (!client) return [];
+    return client.getDeviceMetrics(params.userId, params.deviceId, {
+      since: params.since,
+      workspaceId: params.workspaceId,
+    });
   }
 
   /**

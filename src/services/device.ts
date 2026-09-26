@@ -84,6 +84,11 @@ class DeviceService {
     return lambdaClient.device.installAppUpdate.mutate(input);
   }
 
+  /** The device's recent CPU / memory / load history, bucketed for charting. */
+  getMetricSeries(deviceId: string) {
+    return lambdaClient.deviceMetric.getSeries.query({ deviceId });
+  }
+
   /** Revoke a link. */
   revokeTunnel(input: Parameters<DeviceClient['revokeTunnel']['mutate']>[0]) {
     return lambdaClient.device.revokeTunnel.mutate(input);
