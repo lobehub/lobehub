@@ -1,7 +1,11 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { usePortalDocumentHeaderActions, usePortalDocumentTitle } from './usePortalDocumentHeader';
+import {
+  resolvePortalDocumentPath,
+  usePortalDocumentHeaderActions,
+  usePortalDocumentTitle,
+} from './usePortalDocumentHeader';
 
 const mockDocumentMeta = vi.hoisted(() => ({
   current: {
@@ -351,7 +355,7 @@ describe('usePortalDocumentHeaderActions', () => {
     expect(toastSuccess).toHaveBeenCalled();
   });
 
-  it('refuses to copy a link for a plain document with no agent binding', async () => {
+  it('links an unbound document (e.g. a goal deliverable) to the page editor', async () => {
     mockChatState.current.portalStack[0].agentDocumentId = undefined;
 
     const { result } = renderHook(() => usePortalDocumentHeaderActions());
@@ -360,9 +364,25 @@ describe('usePortalDocumentHeaderActions', () => {
       await result.current.copyLink();
     });
 
-    // No URL was composed (no-op), and no success toast fired.
-    expect(clipboardWrite).not.toHaveBeenCalled();
-    expect(toastSuccess).not.toHaveBeenCalled();
+    // The agent docs route redirects unowned ids to its index, so the link
+    // must not point there.
+    expect(result.current.path).toBe('/page/document-1');
+    expect(clipboardWrite).toHaveBeenCalledWith('https://app.lobehub.com/page/document-1');
+    expect(toastSuccess).toHaveBeenCalled();
+  });
+
+  it('refresh revalidates the document caches', async () => {
+    const { result } = renderHook(() => usePortalDocumentHeaderActions());
+
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(mockInvalidate).toHaveBeenCalledWith({
+      agentDocumentId: 'agent-document-1',
+      agentId: 'agent-1',
+      documentId: 'document-1',
+    });
   });
 
   it('surfaces the resolved binding for menu gating', () => {
@@ -370,5 +390,13 @@ describe('usePortalDocumentHeaderActions', () => {
 
     expect(result.current.agentDocumentId).toBe('agent-document-1');
     expect(result.current.agentId).toBe('agent-1');
+  });
+});
+
+describe('resolvePortalDocumentPath', () => {
+  it('uses the agent docs route only for a bound document', () => {
+    expect(resolvePortalDocumentPath('docs_abc', 'agt_1', 'ad_1')).toBe('/agent/agt_1/docs/abc');
+    expect(resolvePortalDocumentPath('docs_abc', 'agt_1', undefined)).toBe('/page/abc');
+    expect(resolvePortalDocumentPath(undefined, 'agt_1', 'ad_1')).toBeUndefined();
   });
 });

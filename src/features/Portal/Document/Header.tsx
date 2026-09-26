@@ -3,13 +3,16 @@
 import { Flexbox, Icon } from '@lobehub/ui';
 import { ActionIcon, type DropdownItem, DropdownMenu, Skeleton, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ChevronRight, MoreHorizontal, Pencil } from 'lucide-react';
+import { ChevronRight, Link2, MoreHorizontal, Pencil, RotateCw } from 'lucide-react';
 import { type ChangeEvent, memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AutoSaveHint from './AutoSaveHint';
-import CopyLinkMenuItem from './CopyLinkMenuItem';
-import { TITLE_MAX_LENGTH, usePortalDocumentTitle } from './usePortalDocumentHeader';
+import {
+  TITLE_MAX_LENGTH,
+  usePortalDocumentHeaderActions,
+  usePortalDocumentTitle,
+} from './usePortalDocumentHeader';
 
 const styles = createStaticStyles(({ css }) => ({
   root: css`
@@ -98,6 +101,7 @@ const Header = memo<HeaderProps>(({ onOpenDocumentsIndex }) => {
     syncIdleDraft,
     titleFallback,
   } = usePortalDocumentTitle();
+  const { copyLink, path, refresh } = usePortalDocumentHeaderActions();
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -142,8 +146,24 @@ const Header = memo<HeaderProps>(({ onOpenDocumentsIndex }) => {
       });
     }
 
+    if (path) {
+      items.push({
+        icon: <Icon icon={Link2} />,
+        key: 'copy-link',
+        label: t('pageEditor.menu.copyLink', { ns: 'file' }),
+        onClick: () => void copyLink(),
+      });
+    }
+
+    items.push({
+      icon: <Icon icon={RotateCw} />,
+      key: 'refresh',
+      label: t('agentDocument.portal.refresh', { ns: 'chat' }),
+      onClick: () => void refresh(),
+    });
+
     return items;
-  }, [beginEdit, metaLocked, t]);
+  }, [beginEdit, copyLink, metaLocked, path, refresh, t]);
 
   if (isLoading) {
     return (
@@ -205,21 +225,18 @@ const Header = memo<HeaderProps>(({ onOpenDocumentsIndex }) => {
             {draft || titleFallback}
           </Text>
         )}
+        {/* Same slot as the full-page and modal document headers: actions sit
+            right after the title they act on. */}
+        <DropdownMenu
+          iconSpaceMode={'group'}
+          items={menuItems}
+          placement={'bottomLeft'}
+          popupProps={{ style: { minWidth: 200 } }}
+        >
+          <ActionIcon icon={MoreHorizontal} size={'small'} style={{ flexShrink: 0 }} />
+        </DropdownMenu>
       </Flexbox>
-      <Flexbox horizontal align={'center'} gap={8}>
-        {!metaLocked && <AutoSaveHint />}
-        <CopyLinkMenuItem />
-        {menuItems.length > 0 && (
-          <DropdownMenu
-            iconSpaceMode={'group'}
-            items={menuItems}
-            placement={'bottomRight'}
-            popupProps={{ style: { minWidth: 200 } }}
-          >
-            <ActionIcon icon={MoreHorizontal} size={'small'} />
-          </DropdownMenu>
-        )}
-      </Flexbox>
+      {!metaLocked && <AutoSaveHint />}
     </Flexbox>
   );
 });

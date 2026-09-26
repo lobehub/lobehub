@@ -85,6 +85,7 @@ export default {
   'agentDocument.portal.titlePlaceholder': 'Untitled document',
   'agentDocument.portal.chatWithDocument': 'Chat to edit',
   'agentDocument.portal.export': 'Export',
+  'agentDocument.portal.refresh': 'Refresh',
   'agentNotFound.desc':
     'This agent does not exist or is no longer accessible — it may have been deleted or set to private by its owner.',
   'permission.configAccess.agentChatOnly':

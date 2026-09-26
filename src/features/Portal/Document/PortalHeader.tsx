@@ -6,17 +6,15 @@ import { Maximize2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import {
-  buildAgentDocumentPath,
-  buildAgentDocumentsPath,
-} from '@/features/AgentDocumentPage/navigation';
+import { buildAgentDocumentsPath } from '@/features/AgentDocumentPage/navigation';
 import PortalChromeHeader from '@/features/Portal/components/Header';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 
-import { useResolvedAgentDocumentId, useResolvedDocumentId } from './documentViewContext';
+import { useResolvedAgentDocumentId } from './documentViewContext';
 import DocumentTitle from './Header';
+import { usePortalDocumentHeaderActions } from './usePortalDocumentHeader';
 
 /**
  * Expands the in-chat document portal into the full-page document route, then
@@ -24,12 +22,11 @@ import DocumentTitle from './Header';
  */
 const OpenAsPageAction = memo(() => {
   const { t } = useTranslation('chat');
-  const documentId = useResolvedDocumentId();
-  const agentId = useAgentStore((s) => s.activeAgentId);
+  const { path } = usePortalDocumentHeaderActions();
   const navigate = useWorkspaceAwareNavigate();
   const clearPortalStack = useChatStore((s) => s.clearPortalStack);
 
-  if (!documentId || !agentId) return null;
+  if (!path) return null;
 
   return (
     <ActionIcon
@@ -37,7 +34,7 @@ const OpenAsPageAction = memo(() => {
       size={DESKTOP_HEADER_ICON_SMALL_SIZE}
       title={t('agentDocument.openAsPage')}
       onClick={() => {
-        navigate(buildAgentDocumentPath(agentId, documentId));
+        navigate(path);
         clearPortalStack();
       }}
     />
