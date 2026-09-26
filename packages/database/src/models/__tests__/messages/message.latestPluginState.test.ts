@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { messagePlugins, messages, topics, users } from '../../../schemas';
+import { messagePlugins, messages, threads, topics, users } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { MessageModel } from '../../message';
 
@@ -21,6 +21,7 @@ const seedToolCall = async (opts: {
   id: string;
   ownerId?: string;
   state?: Record<string, unknown> | null;
+  threadId?: string;
   topicId: string;
 }) => {
   const owner = opts.ownerId ?? userId;
@@ -29,6 +30,7 @@ const seedToolCall = async (opts: {
     createdAt: opts.createdAt,
     id: opts.id,
     role: 'tool',
+    threadId: opts.threadId,
     topicId: opts.topicId,
     userId: owner,
   });
@@ -120,5 +122,71 @@ describe('MessageModel.findLatestPluginStateInTopic', () => {
 
     expect(await query('lps-topic1')).toBeUndefined();
     expect(await query('lps-other-topic')).toBeUndefined();
+  });
+});
+
+describe('MessageModel.findLatestPluginStateInTopic thread scoping', () => {
+  const query = (threadId?: string | null) =>
+    messageModel.findLatestPluginStateInTopic({
+      apiName: 'createGroup',
+      identifier,
+      threadId,
+      topicId: 'lps-topic1',
+    });
+
+  // Main conversation made cg_main; a later branch thread made cg_branch.
+  beforeEach(async () => {
+    await seedToolCall({
+      createdAt: new Date('2026-09-25T06:00:00Z'),
+      id: 'lps-main',
+      state: { groupId: 'cg_main' },
+      topicId: 'lps-topic1',
+    });
+    await serverDB.insert(threads).values([
+      {
+        id: 'lps-thread-branch',
+        sourceMessageId: 'lps-main',
+        topicId: 'lps-topic1',
+        type: 'continuation',
+        userId,
+      },
+      {
+        id: 'lps-thread-sibling',
+        sourceMessageId: 'lps-main',
+        topicId: 'lps-topic1',
+        type: 'continuation',
+        userId,
+      },
+      {
+        id: 'lps-thread-isolated',
+        sourceMessageId: 'lps-main',
+        topicId: 'lps-topic1',
+        type: 'isolation',
+        userId,
+      },
+    ]);
+    await seedToolCall({
+      createdAt: new Date('2026-09-25T06:10:00Z'),
+      id: 'lps-branch',
+      state: { groupId: 'cg_branch' },
+      threadId: 'lps-thread-branch',
+      topicId: 'lps-topic1',
+    });
+  });
+
+  it('keeps a group created in a thread out of the main conversation', async () => {
+    expect(await query()).toEqual({ groupId: 'cg_main' });
+    expect(await query(null)).toEqual({ groupId: 'cg_main' });
+  });
+
+  it('keeps a group created in a thread out of its sibling threads', async () => {
+    // A continuation sibling still inherits the main conversation up to its source.
+    expect(await query('lps-thread-sibling')).toEqual({ groupId: 'cg_main' });
+    // An isolated thread inherits nothing.
+    expect(await query('lps-thread-isolated')).toBeUndefined();
+  });
+
+  it('sees the thread’s own call first, then its inherited ancestors', async () => {
+    expect(await query('lps-thread-branch')).toEqual({ groupId: 'cg_branch' });
   });
 });

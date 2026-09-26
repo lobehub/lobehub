@@ -93,6 +93,7 @@ export const buildServerCallLlmContext = async ({
       ? await resolveBuilderGroupId({
           db: ctx.serverDB,
           editingGroupId: state.origin?.editingGroupId,
+          threadId: state.origin?.threadId,
           topicId,
           userId: ctx.userId,
           workspaceId: state.origin?.workspaceId ?? ctx.workspaceId,
