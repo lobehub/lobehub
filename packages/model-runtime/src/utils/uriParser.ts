@@ -113,6 +113,13 @@ const parseContentRangeTotal = (contentRange: string | null): number | null => {
  * Inline data: 100MB general, 50MB for PDFs
  */
 const MAX_EXTERNAL_URL_SIZE = 100 * 1024 * 1024; // 100MB for external URLs (all types)
+
+/**
+ * Upper bound for the whole validation probe, including reading its single body byte.
+ * A server can send headers and then stall the body; `maxContentLength` only caps bytes
+ * already received, so without this the caller would wait forever instead of falling back.
+ */
+export const VALIDATE_EXTERNAL_URL_TIMEOUT_MS = 10_000;
 const MAX_INLINE_DATA_SIZE = 100 * 1024 * 1024; // 100MB for inline data (general)
 const MAX_INLINE_PDF_SIZE = 50 * 1024 * 1024; // 50MB for inline PDFs only
 
@@ -163,6 +170,12 @@ export const isPublicExternalUrl = (url: string): boolean => {
  * @returns Validation result with content info
  */
 export const validateExternalUrl = async (url: string): Promise<ExternalUrlValidation> => {
+  const controller = new AbortController();
+  const timer = setTimeout(
+    () => controller.abort(new Error(`Timed out after ${VALIDATE_EXTERNAL_URL_TIMEOUT_MS}ms`)),
+    VALIDATE_EXTERNAL_URL_TIMEOUT_MS,
+  );
+
   try {
     const res = await ssrfSafeFetch(
       url,
@@ -172,6 +185,7 @@ export const validateExternalUrl = async (url: string): Promise<ExternalUrlValid
           'User-Agent': 'LobeChat/1.0 (https://lobehub.com)',
         },
         method: 'GET',
+        signal: controller.signal,
       },
       {
         allowIPAddressList: [],
@@ -243,5 +257,7 @@ export const validateExternalUrl = async (url: string): Promise<ExternalUrlValid
       isValid: false,
       reason: `Failed to validate URL: ${error instanceof Error ? error.message : String(error)}`,
     };
+  } finally {
+    clearTimeout(timer);
   }
 };

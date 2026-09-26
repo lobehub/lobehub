@@ -1,7 +1,7 @@
 import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { parseDataUri, validateExternalUrl } from './uriParser';
+import { parseDataUri, VALIDATE_EXTERNAL_URL_TIMEOUT_MS, validateExternalUrl } from './uriParser';
 
 vi.mock('@lobechat/ssrf-safe-fetch', () => ({
   ssrfSafeFetch: vi.fn(),
@@ -87,9 +87,34 @@ describe('validateExternalUrl', () => {
       expect.objectContaining({
         headers: expect.objectContaining({ Range: 'bytes=0-0' }),
         method: 'GET',
+        signal: expect.any(AbortSignal),
       }),
       expect.objectContaining({ maxContentLength: 1 }),
     );
+  });
+
+  it('should abort and fail validation when the probe stalls', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(ssrfSafeFetch).mockImplementationOnce(
+        (_url, init) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+          }),
+      );
+
+      const pending = validateExternalUrl('https://example.com/stalled.mp4');
+      await vi.advanceTimersByTimeAsync(VALIDATE_EXTERNAL_URL_TIMEOUT_MS);
+
+      await expect(pending).resolves.toEqual({
+        contentLength: 0,
+        contentType: '',
+        isValid: false,
+        reason: `Failed to validate URL: Timed out after ${VALIDATE_EXTERNAL_URL_TIMEOUT_MS}ms`,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('should read the total size from Content-Range on a 206 response', async () => {
