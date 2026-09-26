@@ -2182,10 +2182,10 @@ describe('DocumentService', () => {
 });
 
 describe('capParsedFileDocument', () => {
-  const fileDocument = (content: string) =>
+  const fileDocument = (content: string, fileType = 'txt') =>
     ({
       content,
-      fileType: 'txt',
+      fileType,
       filename: 'big.txt',
       metadata: { source: 'big.txt' },
       pages: [{ charCount: content.length, lineCount: 1, metadata: {}, pageContent: content }],
@@ -2209,7 +2209,7 @@ describe('capParsedFileDocument', () => {
   it('closes a PDF page cut by the cap without exceeding it', () => {
     const page = (n: number, body: string) => `<page pageNumber="${n}">\n${body}\n</page>\n`;
     const content = page(1, 'first') + page(2, 'b'.repeat(PARSED_FILE_CONTENT_MAX_CHARS));
-    const result = capParsedFileDocument(fileDocument(content));
+    const result = capParsedFileDocument(fileDocument(content, 'pdf'));
 
     expect(result.content.startsWith(page(1, 'first'))).toBe(true);
     expect(result.content.endsWith('b\n</page>')).toBe(true);
@@ -2221,10 +2221,17 @@ describe('capParsedFileDocument', () => {
   it('drops a page opening tag cut by the cap', () => {
     const first = `<page pageNumber="1">\n${'a'.repeat(PARSED_FILE_CONTENT_MAX_CHARS - 40)}\n</page>\n`;
     const result = capParsedFileDocument(
-      fileDocument(`${first}<page pageNumber="2">\nsecond\n</page>`),
+      fileDocument(`${first}<page pageNumber="2">\nsecond\n</page>`, 'pdf'),
     );
 
     expect(result.content).toBe(first.trimEnd());
+  });
+
+  it('leaves a literal page tag in non-PDF text untouched', () => {
+    const content = `<page title="example">\n${'c'.repeat(PARSED_FILE_CONTENT_MAX_CHARS)}`;
+    const result = capParsedFileDocument(fileDocument(content));
+
+    expect(result.content).toBe(content.slice(0, PARSED_FILE_CONTENT_MAX_CHARS));
   });
 
   it('truncates oversized parsed text and drops the duplicated pages', () => {

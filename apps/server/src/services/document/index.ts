@@ -84,7 +84,9 @@ const closeCutPage = (content: string): string => {
 export const capParsedFileDocument = (fileDocument: ParsedFileDocument): ParsedFileDocument => {
   if (fileDocument.content.length <= PARSED_FILE_CONTENT_MAX_CHARS) return fileDocument;
 
-  const content = closeCutPage(sliceHead(fileDocument.content, PARSED_FILE_CONTENT_MAX_CHARS));
+  const head = sliceHead(fileDocument.content, PARSED_FILE_CONTENT_MAX_CHARS);
+  // Only the PDF loader emits page wrappers; other text may contain a literal `<page` to keep.
+  const content = fileDocument.fileType === 'pdf' ? closeCutPage(head) : head;
   return {
     ...fileDocument,
     content,
