@@ -48,6 +48,7 @@ export { LobeBedrockAI } from './providers/bedrock';
 export { LobeBflAI } from './providers/bfl';
 export { LobeCerebrasAI } from './providers/cerebras';
 export { LobeChatGPTAI } from './providers/chatGPT';
+export { LobeCheaperInferenceAI } from './providers/cheaperinference';
 export { LobeCometAPIAI } from './providers/cometapi';
 export { LobeComfyUI } from './providers/comfyui';
 export { LobeDeepSeekAI } from './providers/deepseek';

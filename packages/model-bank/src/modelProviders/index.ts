@@ -16,6 +16,7 @@ import BedrockProvider from './bedrock';
 import BflProvider from './bfl';
 import CerebrasProvider from './cerebras';
 import ChatGPTProvider from './chatGPT';
+import CheaperInferenceProvider from './cheaperinference';
 import CloudflareProvider from './cloudflare';
 import CohereProvider from './cohere';
 import CometAPIProvider from './cometapi';
@@ -228,6 +229,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   OpenCodeZenProvider,
   OpenCodeCodingPlanProvider,
   StraicoProvider,
+  CheaperInferenceProvider,
   LongCatProvider,
   StreamLakeProvider,
   AntGroupProvider,
@@ -272,6 +274,7 @@ export { default as BedrockProviderCard } from './bedrock';
 export { default as BflProviderCard } from './bfl';
 export { default as CerebrasProviderCard } from './cerebras';
 export { default as ChatGPTProviderCard } from './chatGPT';
+export { default as CheaperInferenceProviderCard } from './cheaperinference';
 export { default as CloudflareProviderCard } from './cloudflare';
 export { default as CohereProviderCard } from './cohere';
 export { default as CometAPIProviderCard } from './cometapi';
