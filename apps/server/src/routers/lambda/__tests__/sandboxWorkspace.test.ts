@@ -226,15 +226,22 @@ describe('sandboxWorkspaceRouter', () => {
       mockInstanceFindOwnedById.mockResolvedValue({ id: instanceId, workingDirectory: 'work' });
     });
 
-    it('passes the contents through to the execution plane', async () => {
-      mockWriteFile.mockResolvedValue({ path: 'work/notes.md' });
+    // An instance's directory is the saved copy of its sandbox's work tree and
+    // is written by the sandbox alone (LOBE-14364): a write from here would be
+    // overwritten by the next save, or leave the directory disagreeing with
+    // the record the next restore reads it by. Refused on the server, not only
+    // hidden in the browser — and before the lookup, even for the owner.
+    it.each([
+      ['writeFile', { content: '# notes', path: 'work/notes.md' }],
+      ['createDirectory', { path: 'work/reports' }],
+      ['removeFile', { path: 'work/notes.md' }],
+    ] as const)('refuses %s into an instance, even for its owner', async (route, input) => {
+      await expect(
+        (sandboxWorkspaceRouter.createCaller(ctx) as any)[route]({ ...input, instanceId }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN', message: 'INSTANCE_READ_ONLY' });
 
-      await sandboxWorkspaceRouter
-        .createCaller(ctx)
-        .writeFile({ content: '# notes', instanceId, path: 'work/notes.md' });
-
-      expect(mockInstanceFindOwnedById).toHaveBeenCalledWith(instanceId);
-      expect(mockWriteFile).toHaveBeenCalledWith({ content: '# notes', path: 'work/notes.md' });
+      expect(mockInstanceFindOwnedById).not.toHaveBeenCalled();
+      expect(mockWriteFile).not.toHaveBeenCalled();
     });
 
     it('refuses a path that climbs out of the workspace', async () => {
@@ -273,28 +280,15 @@ describe('sandboxWorkspaceRouter', () => {
       expect(mockWriteFile).not.toHaveBeenCalled();
     });
 
-    it('refuses a write into an instance the caller does not own', async () => {
-      // Published instances are readable by everyone who runs in them, but
-      // only the owner shapes them.
-      mockInstanceFindOwnedById.mockResolvedValue(undefined);
-
-      await expect(
-        sandboxWorkspaceRouter
-          .createCaller(ctx)
-          .writeFile({ content: 'x', instanceId, path: 'work/a.txt' }),
-      ).rejects.toThrow('Instance not found');
-      expect(mockWriteFile).not.toHaveBeenCalled();
-    });
-
-    it("refuses a path outside the instance's directory", async () => {
-      mockInstanceFindOwnedById.mockResolvedValue({ id: instanceId, workingDirectory: 'work' });
+    it("refuses a read outside the instance's directory", async () => {
+      mockInstanceFindById.mockResolvedValue({ id: instanceId, workingDirectory: 'work' });
 
       for (const path of ['other/a.txt', 'workshop/a.txt']) {
         await expect(
-          sandboxWorkspaceRouter.createCaller(ctx).writeFile({ content: 'x', instanceId, path }),
+          sandboxWorkspaceRouter.createCaller(ctx).readFile({ instanceId, path }),
         ).rejects.toThrow('PATH_OUTSIDE_INSTANCE');
       }
-      expect(mockWriteFile).not.toHaveBeenCalled();
+      expect(mockReadFile).not.toHaveBeenCalled();
     });
 
     it("lists the instance's own directory when no path is given", async () => {
@@ -379,6 +373,7 @@ describe('sandboxWorkspaceRouter', () => {
       mockInstanceFindOwnedById.mockResolvedValue({
         configurationSnapshot: spec,
         id: buildInstanceId,
+        workingDirectory: 'atlas',
       });
       mockBuildEnvironment.mockResolvedValue({ buildId: 'b-1' });
 
@@ -386,8 +381,11 @@ describe('sandboxWorkspaceRouter', () => {
         .createCaller(ctx)
         .startInstanceBuild({ id: buildInstanceId, topicId: 'tpc-1' });
 
+      // The instance's own folder is where the checkout lands on the volume,
+      // which is what its file browser opens (LOBE-14362).
       expect(mockBuildEnvironment).toHaveBeenCalledWith({
         credentials: undefined,
+        instanceDir: 'atlas',
         name: buildInstanceId,
         specification: spec,
         topicId: 'tpc-1',
@@ -752,7 +750,10 @@ describe('sandboxWorkspaceRouter', () => {
 
     it('forks the copy off the same environment and copies the built state', async () => {
       mockInstanceFindOwnedById.mockResolvedValue(source);
-      mockInstanceCreate.mockResolvedValue({ id: 'copy-id' });
+      mockInstanceCreate.mockResolvedValue({
+        id: 'copy-id',
+        workingDirectory: 'projects/atlas-copy',
+      });
       mockCopyEnvironment.mockResolvedValue(undefined);
 
       await sandboxWorkspaceRouter.createCaller(ctx).copyInstance({
@@ -768,7 +769,13 @@ describe('sandboxWorkspaceRouter', () => {
           workingDirectory: 'projects/atlas-copy',
         }),
       );
-      expect(mockCopyEnvironment).toHaveBeenCalledWith({ from: environmentId, to: 'copy-id' });
+      // The copy's own folder, never the source's: sharing one would let either
+      // instance's next save delete what the other still lists.
+      expect(mockCopyEnvironment).toHaveBeenCalledWith({
+        from: environmentId,
+        instanceDir: 'projects/atlas-copy',
+        to: 'copy-id',
+      });
     });
 
     it('removes the row again when the built state fails to copy', async () => {
