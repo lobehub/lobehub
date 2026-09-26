@@ -30,7 +30,25 @@ export class FlatListBuilder {
     private branchResolver: BranchResolver,
     private messageCollector: MessageCollector,
     private messageTransformer: MessageTransformer,
+    /** See `HelperMaps.mainFlowOnly`. Threaded messages are out of scope when it is set. */
+    private mainFlowOnly: boolean = false,
   ) {}
+
+  /**
+   * Children of `parentId` that belong to the main conversation flow.
+   *
+   * Threaded messages live outside the main chain, and `buildIdTree` already drops them from
+   * the context tree. The flat list has to apply the same rule: a thread head is parented to
+   * nothing (`parentId: null`) or to the main-chain assistant/tool that spawned it, so an
+   * unfiltered walk reaches it and renders a background run — an isolated memory or sub-agent
+   * turn — as an ordinary bubble in the middle of the user's transcript.
+   */
+  private childIdsInScope(parentId: string | null): string[] {
+    const childIds = this.childrenMap.get(parentId) ?? [];
+    if (!this.mainFlowOnly) return childIds;
+
+    return childIds.filter((childId) => !this.messageMap.get(childId)?.threadId);
+  }
 
   /**
    * Generate flatList from messages array
@@ -40,20 +58,24 @@ export class FlatListBuilder {
     const flatList: Message[] = [];
     const processedIds = new Set<string>();
 
+    const scopedMessages = this.mainFlowOnly
+      ? messages.filter((message) => !message.threadId)
+      : messages;
+
     // Determine the root parentId
     // Normal case: start from null (messages with no parentId)
     // Orphan case: if all messages have parentId (thread mode), use first message as root
     let rootParentId: string | null = null;
 
-    const hasRootMessages = this.childrenMap.has(null) && this.childrenMap.get(null)!.length > 0;
-    if (!hasRootMessages && messages.length > 0) {
+    const hasRootMessages = this.childIdsInScope(null).length > 0;
+    if (!hasRootMessages && scopedMessages.length > 0) {
       // All messages have parentId - this is orphan/thread mode
       // Use the first message's parentId as the virtual root
-      rootParentId = messages[0].parentId ?? null;
+      rootParentId = scopedMessages[0].parentId ?? null;
     }
 
     // Build the active path by traversing from root
-    this.buildFlatListRecursive(rootParentId, flatList, processedIds, messages);
+    this.buildFlatListRecursive(rootParentId, flatList, processedIds, scopedMessages);
 
     // Assistant groups must be assembled before ordering because their members
     // are discovered through recursive tool-result chains. That traversal is
@@ -76,7 +98,7 @@ export class FlatListBuilder {
     processedIds: Set<string>,
     allMessages: Message[],
   ): void {
-    const children = this.childrenMap.get(parentId) ?? [];
+    const children = this.childIdsInScope(parentId);
 
     // Broadcast councils now render in-bubble (a `council` block inside the
     // supervisor's assistant group), so there is no separate agentCouncil message
@@ -319,7 +341,7 @@ export class FlatListBuilder {
       }
 
       // Priority 3a: Compare mode from user message metadata
-      const childMessages = this.childrenMap.get(message.id) ?? [];
+      const childMessages = this.childIdsInScope(message.id);
       // Non-tool children only are branch candidates (dual-form reader invariant: tool children are inline, not branches):
       // a tool child is inline data of its assistant, never a sibling branch.
       const nonToolChildMessages = this.branchResolver.getMetadataBranchIds(childMessages);
@@ -744,7 +766,7 @@ export class FlatListBuilder {
   ): { child: Message; parentId: string } | undefined {
     return parentIds
       .flatMap((parentId) =>
-        (this.childrenMap.get(parentId) ?? [])
+        this.childIdsInScope(parentId)
           .map((childId) => this.messageMap.get(childId))
           .filter((child): child is Message => !!child && !processedIds.has(child.id))
           .map((child) => ({ child, parentId })),
@@ -754,9 +776,7 @@ export class FlatListBuilder {
 
   private shouldDrainParentContinuations(parentId: string, processedIds: Set<string>): boolean {
     const parentMessage = this.messageMap.get(parentId);
-    const children = (this.childrenMap.get(parentId) ?? []).filter(
-      (childId) => !processedIds.has(childId),
-    );
+    const children = this.childIdsInScope(parentId).filter((childId) => !processedIds.has(childId));
     if (!parentMessage || children.length <= 1) return false;
 
     if (this.isAgentCouncilMode(parentMessage)) return true;

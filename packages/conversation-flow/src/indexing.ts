@@ -112,6 +112,7 @@ export function buildHelperMaps(
 
   return {
     childrenMap,
+    mainFlowOnly: messages.some((message) => !message.threadId),
     messageGroupMap,
     messageMap,
     threadMap,
