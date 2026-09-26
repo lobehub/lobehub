@@ -12,9 +12,42 @@ import { ServiceModule } from './index';
 
 const logger = createLogger('services:RemoteFileUploadService');
 
-const UPLOAD_TIMEOUT_MS = 60_000;
+/**
+ * Budget for the whole upload, retries included. readFile runs under a 30s
+ * client deadline; the upload must settle before it so the model gets the
+ * degraded `[Image: …] (upload unavailable — …)` result rather than a
+ * `client_executor_timeout`. `execFile` kills the child when its share runs
+ * out, so nothing keeps uploading after the tool call has returned.
+ */
+const UPLOAD_DEADLINE_MS = 25_000;
 const UPLOAD_MAX_ATTEMPTS = 3;
 const UPLOAD_RETRY_BASE_DELAY_MS = 300;
+/** Not worth starting an attempt with less time than this left. */
+const UPLOAD_MIN_ATTEMPT_MS = 5000;
+
+/**
+ * Proxy variables Node's env-proxy mode reads. Lowercase takes precedence
+ * (`http_proxy || HTTP_PROXY`), so both cases must be set — or cleared — for
+ * the in-app proxy to win over whatever the desktop process inherited.
+ */
+const PROXY_ENV_KEYS = ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY'] as const;
+
+const withProxyEnv = (
+  base: NodeJS.ProcessEnv,
+  proxyEnv: Record<string, string>,
+): NodeJS.ProcessEnv => {
+  if (Object.keys(proxyEnv).length === 0) return { ...base };
+
+  const env: NodeJS.ProcessEnv = { ...base, NODE_USE_ENV_PROXY: '1' };
+  for (const key of PROXY_ENV_KEYS) {
+    const value = proxyEnv[key];
+    for (const name of [key, key.toLowerCase()]) {
+      if (value === undefined) delete env[name];
+      else env[name] = value;
+    }
+  }
+  return env;
+};
 
 export interface UploadedFileRecord {
   id: string;
@@ -60,7 +93,7 @@ export const describeUploadFailure = (error: unknown): UploadFailure => {
   };
 
   if (raw?.killed && raw.signal) {
-    return { kind: 'network', reason: `upload timed out after ${UPLOAD_TIMEOUT_MS / 1000}s` };
+    return { kind: 'network', reason: 'upload timed out' };
   }
 
   const output = raw?.stderr?.trim() ? raw.stderr : (raw?.message ?? String(error));
@@ -102,6 +135,8 @@ export const describeUploadFailure = (error: unknown): UploadFailure => {
  */
 export default class RemoteFileUploadService extends ServiceModule {
   async uploadLocalFile(filePath: string): Promise<UploadedFileRecord | undefined> {
+    const deadline = Date.now() + UPLOAD_DEADLINE_MS;
+
     // The in-app proxy only covers the main process's undici dispatcher; the
     // CLI child needs it as env, plus env-proxy mode so its fetch honours it.
     // Env-proxy mode only reads HTTP(S)_PROXY, so a SOCKS5 proxy is exposed
@@ -116,15 +151,11 @@ export default class RemoteFileUploadService extends ServiceModule {
       proxyEnv.HTTPS_PROXY = socksBridge.url;
     }
 
-    const env: NodeJS.ProcessEnv = {
-      ...process.env,
-      ...proxyEnv,
-      ...(Object.keys(proxyEnv).length > 0 && { NODE_USE_ENV_PROXY: '1' }),
-      ELECTRON_RUN_AS_NODE: '1',
-    };
+    const env = withProxyEnv(process.env, proxyEnv);
+    env.ELECTRON_RUN_AS_NODE = '1';
 
     try {
-      return await this.uploadWithEnv(filePath, env);
+      return await this.uploadWithEnv(filePath, env, deadline);
     } finally {
       await socksBridge?.close();
     }
@@ -133,6 +164,7 @@ export default class RemoteFileUploadService extends ServiceModule {
   private async uploadWithEnv(
     filePath: string,
     env: NodeJS.ProcessEnv,
+    deadline: number,
   ): Promise<UploadedFileRecord | undefined> {
     const remoteCtr = this.app.getController(RemoteServerConfigCtr);
     if (remoteCtr) {
@@ -146,7 +178,7 @@ export default class RemoteFileUploadService extends ServiceModule {
       }
     }
 
-    const stdout = await this.runUploadWithRetry(filePath, env);
+    const stdout = await this.runUploadWithRetry(filePath, env, deadline);
 
     const record = JSON.parse(stdout.trim()) as Partial<UploadedFileRecord>;
     if (!record?.id || !record.url) {
@@ -160,26 +192,39 @@ export default class RemoteFileUploadService extends ServiceModule {
   /**
    * Retry only transient network failures (a flaky PUT to object storage);
    * quota, auth and validation rejections fail the same way every time.
+   * Every attempt — and the pause before it — comes out of one shared
+   * {@link UPLOAD_DEADLINE_MS} budget.
    */
-  private async runUploadWithRetry(filePath: string, env: NodeJS.ProcessEnv): Promise<string> {
+  private async runUploadWithRetry(
+    filePath: string,
+    env: NodeJS.ProcessEnv,
+    deadline: number,
+  ): Promise<string> {
     for (let attempt = 1; ; attempt++) {
       try {
         const { stdout } = await promisify(execFile)(
           process.execPath,
           [resolveCliScript(), 'file', 'upload', filePath, '--json', 'id,url'],
-          { env, timeout: UPLOAD_TIMEOUT_MS },
+          { env, timeout: Math.max(deadline - Date.now(), 1) },
         );
         return stdout;
       } catch (error) {
         const failure = describeUploadFailure(error);
-        if (failure.kind !== 'network' || attempt >= UPLOAD_MAX_ATTEMPTS) throw error;
+        const retryDelay = UPLOAD_RETRY_BASE_DELAY_MS * attempt;
+        if (
+          failure.kind !== 'network' ||
+          attempt >= UPLOAD_MAX_ATTEMPTS ||
+          deadline - Date.now() - retryDelay < UPLOAD_MIN_ATTEMPT_MS
+        ) {
+          throw error;
+        }
 
         logger.warn('Image upload failed, retrying:', {
           attempt,
           filePath,
           reason: failure.reason,
         });
-        await new Promise((resolve) => setTimeout(resolve, UPLOAD_RETRY_BASE_DELAY_MS * attempt));
+        await new Promise((resolve) => setTimeout(resolve, retryDelay));
       }
     }
   }
