@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { indexLiteXMLDocument, planLiteXMLEditSteps, touchesList } from '../liteXMLEditPlan';
+import {
+  describeLiteXMLEditStep,
+  indexLiteXMLDocument,
+  planLiteXMLEditSteps,
+  touchesList,
+} from '../liteXMLEditPlan';
 
 describe('liteXMLEditPlan', () => {
   it('indexes ids and marks nodes nested in lists', () => {
@@ -34,5 +39,27 @@ describe('liteXMLEditPlan', () => {
       litexml: '<root><h3>Title</h3><p>Intro</p></root>',
     });
     expect(steps.map((step) => touchesList(step.operation, empty))).toEqual([true, false, false]);
+  });
+
+  it('groups same-anchor inserts across operations that leave the anchor alone', () => {
+    const steps = planLiteXMLEditSteps([
+      { action: 'insert', afterId: 'x', litexml: '<p>A</p>' },
+      { action: 'modify', litexml: '<p id="y">Y</p>' },
+      { action: 'insert', afterId: 'x', litexml: '<p>B</p>' },
+    ]);
+
+    expect(steps.map((step) => step.indexes)).toEqual([[0, 2], [1]]);
+    expect(steps[0].operation).toMatchObject({ litexml: '<root><p>A</p><p>B</p></root>' });
+    expect(describeLiteXMLEditStep(steps[0], 3)).toBe('Operations 1, 3 of 3 (insert)');
+  });
+
+  it('stops grouping at an operation that touches the anchor', () => {
+    const steps = planLiteXMLEditSteps([
+      { action: 'insert', afterId: 'x', litexml: '<p>A</p>' },
+      { action: 'remove', id: 'x' },
+      { action: 'insert', afterId: 'x', litexml: '<p>B</p>' },
+    ]);
+
+    expect(steps.map((step) => step.indexes)).toEqual([[0], [1], [2]]);
   });
 });

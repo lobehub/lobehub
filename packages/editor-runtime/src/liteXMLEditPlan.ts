@@ -129,52 +129,66 @@ const hasListMarkup = (operation: ModifyOperation) =>
   toFragments(operation.litexml).some((litexml) => LIST_MARKUP_PATTERN.test(litexml));
 
 /**
- * Keep the caller's order. Consecutive inserts after the same anchor are merged:
- * applied one by one, each would land directly after the anchor and the batch
- * would come out reversed. A run mixing list and non-list content is split where
- * that changes, so only the list part skips the review diff; the pieces are then
- * applied last-first, each landing after the anchor ahead of the previous piece.
+ * Keep the caller's order. Inserts after the same anchor are merged: applied one
+ * by one, each would land directly after the anchor and the batch would come out
+ * reversed. The merge reaches past operations in between as long as they leave
+ * the anchor alone; one that removes or replaces the anchor ends it. A run mixing
+ * list and non-list content is split where that changes, so only the list part
+ * skips the review diff; the pieces are then applied last-first, each landing
+ * after the anchor ahead of the previous piece.
  */
 export const planLiteXMLEditSteps = (operations: ModifyOperation[]): LiteXMLEditStep[] => {
   const steps: LiteXMLEditStep[] = [];
-  let index = 0;
+  const merged = new Set<number>();
 
-  while (index < operations.length) {
-    const operation = operations[index];
+  operations.forEach((operation, index) => {
+    if (merged.has(index)) return;
     if (!isAfterInsert(operation)) {
       steps.push({ indexes: [index], operation });
-      index += 1;
-      continue;
+      return;
     }
 
     const pieces: (LiteXMLEditStep & { operation: AfterInsertOperation })[] = [];
-    while (index < operations.length) {
-      const next = operations[index];
-      if (!isAfterInsert(next) || next.afterId !== operation.afterId) break;
+    for (let nextIndex = index; nextIndex < operations.length; nextIndex += 1) {
+      if (merged.has(nextIndex)) continue;
+
+      const next = operations[nextIndex];
+      if (!isAfterInsert(next) || next.afterId !== operation.afterId) {
+        if (getReferencedIds(next).includes(operation.afterId)) break;
+        continue;
+      }
+      merged.add(nextIndex);
 
       const piece = pieces.at(-1);
       if (piece && hasListMarkup(piece.operation) === hasListMarkup(next)) {
-        piece.indexes.push(index);
+        piece.indexes.push(nextIndex);
         piece.operation = {
           ...next,
           litexml: `<root>${stripRootElement(piece.operation.litexml)}${stripRootElement(next.litexml)}</root>`,
         };
       } else {
-        pieces.push({ indexes: [index], operation: next });
+        pieces.push({ indexes: [nextIndex], operation: next });
       }
-      index += 1;
     }
 
     steps.push(...pieces.reverse());
-  }
+  });
 
   return steps;
 };
 
-export const describeLiteXMLEditStep = ({ indexes, operation }: LiteXMLEditStep, total: number) =>
-  indexes.length === 1
-    ? `Operation ${indexes[0] + 1} of ${total} (${operation.action})`
-    : `Operations ${indexes[0] + 1}-${indexes.at(-1)! + 1} of ${total} (${operation.action})`;
+export const describeLiteXMLEditStep = ({ indexes, operation }: LiteXMLEditStep, total: number) => {
+  const first = indexes[0] + 1;
+  const last = indexes.at(-1)! + 1;
+  const positions =
+    indexes.length === 1
+      ? `Operation ${first}`
+      : last - first === indexes.length - 1
+        ? `Operations ${first}-${last}`
+        : `Operations ${indexes.map((index) => index + 1).join(', ')}`;
+
+  return `${positions} of ${total} (${operation.action})`;
+};
 
 /**
  * Why a step cannot run against the current document, or `undefined` when every
