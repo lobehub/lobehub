@@ -270,7 +270,16 @@ const buildHeterogeneousReviewDetail = (
       };
     }
     case 'question': {
-      return { questions, title: first.header, type: 'question' };
+      return {
+        // The shared AskUser form offers "write your own" on every question,
+        // plus whole-form freeform and a supplement note, and the producer's
+        // bridge formats all three. Declare them so the claim accepts typed
+        // answers instead of treating them as off-list selections.
+        answerPolicy: { allowFreeform: true, allowSupplement: true },
+        questions: questions.map((question) => ({ ...question, allowCustomAnswer: true })),
+        title: first.header,
+        type: 'question',
+      };
     }
     default: {
       throw new Error('Unsupported heterogeneous intervention kind');
