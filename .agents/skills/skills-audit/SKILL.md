@@ -93,6 +93,7 @@ An audit-only request produces recommendations. When the user authorizes fixes, 
 
 ## What NOT to do
 
+- ❌ Don't delete a table or section because some of its fields are stale. Update the stale fields (status, paths, counts) and keep decision data that code cannot reproduce: priorities, owners, dates, rationale.
 - ❌ Don't rename skill directories without checking for cross-references AND user memory entries that name the old slug.
 - ❌ Don't remove meaningful selection boundaries merely to shorten a description or fit a template.
 - ❌ Don't fold a heavy 200+ line skill into another just because they share a domain — large skills get loaded selectively and merging makes everything load.

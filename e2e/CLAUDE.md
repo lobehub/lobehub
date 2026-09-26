@@ -18,7 +18,15 @@ Related: [LOBE-2417](https://linear.app/lobehub/issue/LOBE-2417/建立核心产�
 
 ### 产品架构覆盖
 
-已覆盖 Agent、Home、Page（文稿）、Community 和核心路由；知识库、记忆暂无 E2E 覆盖。具体范围以 `e2e/src/features/` 为准。
+| 模块             | 子功能                               | 优先级 | 状态 |
+| ---------------- | ------------------------------------ | ------ | ---- |
+| **Agent**        | Builder, 对话 ✅，Task               | P0     | 🚧   |
+| **Agent Group**  | Builder, 群聊（仅覆盖侧边栏入口）    | P0     | ⏳   |
+| **Page（文稿）** | 侧边栏 CRUD ✅，文档编辑 ✅，Copilot | P0     | 🚧   |
+| **知识库**       | 创建，上传，RAG 对话                 | P1     | ⏳   |
+| **记忆**         | 查看，编辑，关联                     | P2     | ⏳   |
+
+此外已覆盖 Home、Community 和核心路由（未排优先级）。当前覆盖范围以 `e2e/src/features/` 为准。
 
 ### 标签系统
 
