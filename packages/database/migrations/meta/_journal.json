@@ -1204,6 +1204,13 @@
       "when": 1790354510012,
       "tag": "0171_expertise_lessons_order_enforcement",
       "breakpoints": true
+    },
+    {
+      "idx": 172,
+      "version": "7",
+      "when": 1790437187086,
+      "tag": "0172_environment_visibility_and_build_state",
+      "breakpoints": true
     }
   ],
   "version": "6"
