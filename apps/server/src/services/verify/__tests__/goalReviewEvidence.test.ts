@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeChatDatabase } from '@/database/type';
 
-import { VerifyReviewPredictorService } from '../reviewPredictor';
+import { GATE_REVIEW_MAX_VISUALS, VerifyReviewPredictorService } from '../reviewPredictor';
 
 const mocks = vi.hoisted(() => ({
   result: vi.fn(),
@@ -168,6 +168,30 @@ describe('Goal review evidence', () => {
     // The caveat rides on the judged row: "rejected blind" and "rejected having
     // seen everything" are otherwise the same verdict in the agreement stats.
     expect(prediction?.statusReason).toContain('1 more frame(s)');
+  });
+
+  /**
+   * Regression: the Goal review attached only the first three frames. A check
+   * carrying four header shots, a close recording and a tooltip shot came back
+   * "unjudgeable — open the hidden LocalFile screenshot, GIF and tooltip", and a
+   * delivery whose verifiers had all passed was parked on a person.
+   */
+  it('attaches every frame of an ordinary check when the review gates the Task', async () => {
+    const ids = ['s1', 's2', 's3', 's4', 's5', 'g1', 's6'];
+    mocks.evidence.mockResolvedValue(
+      ids.map((id) => ({ fileId: id, id, type: id.startsWith('g') ? 'gif' : 'screenshot' })),
+    );
+    mocks.file.mockImplementation(async (id: string) => ({ id, size: 10, url: `key-${id}` }));
+    mocks.url.mockImplementation(async ({ id }: { id: string }) => `https://x/${id}`);
+
+    const prediction = await review().predict({
+      ...params,
+      includeTextEvidence: true,
+      maxVisuals: GATE_REVIEW_MAX_VISUALS,
+    });
+    const payload = JSON.stringify(mocks.generate.mock.calls[0][0].messages);
+    for (const id of ids) expect(payload).toContain(`https://x/${id}`);
+    expect(prediction?.statusReason).toBeUndefined();
   });
 
   /**

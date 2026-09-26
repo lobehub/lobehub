@@ -43,6 +43,17 @@ const VISUAL_EVIDENCE_TYPES = new Set(['screenshot', 'gif']);
 const MAX_VISUALS = 3;
 
 /**
+ * Frame cap for a review that GATES a delivery (the Goal review) rather than
+ * proposing a card to a person. There, a withheld frame is not a cheaper
+ * opinion but a wrong outcome: the model rightly answers "I cannot see the
+ * screenshot this criterion asks for", which reads as unjudgeable and parks a
+ * passing delivery on a human. Builders routinely attach one frame per surface
+ * plus a recording and a tooltip shot, so three is well below an ordinary
+ * check; twelve covers that with room while still bounding the request.
+ */
+export const GATE_REVIEW_MAX_VISUALS = 12;
+
+/**
  * How many checks may be judged at once when a whole acceptance is requested.
  *
  * Each prediction is a multimodal generation carrying up to three images, so
@@ -59,6 +70,8 @@ export interface PredictReviewParams {
   includeTextEvidence?: boolean;
   /** The check's detailed judging rubric, when the criterion links one. */
   instructionDocumentId?: string | null;
+  /** Frames attached per request; defaults to the shadow-lane cap. */
+  maxVisuals?: number;
   modelConfig: { model: string; provider: string };
   /** The acceptance's requirement, used as the scope test. */
   requirement?: string | null;
@@ -189,7 +202,7 @@ export class VerifyReviewPredictorService {
     // frames to attach, which payloads to inline, and what the request had to
     // hold back — so they cannot disagree about what the check carries.
     const evidence = await this.evidenceModel.listByCheckResult(result.id);
-    const visuals = await this.resolveVisuals(evidence);
+    const visuals = await this.resolveVisuals(evidence, params.maxVisuals ?? MAX_VISUALS);
     // Nothing to look at means nothing this reviewer can honestly say. A
     // text-only opinion here would be the model paraphrasing the verifier's own
     // reasoning back at the user, which is worse than silence.
@@ -352,10 +365,10 @@ export class VerifyReviewPredictorService {
    * in this array, and that index is how a region gets bound back to the
    * evidence row it was drawn on.
    */
-  private async resolveVisuals(evidence: CheckEvidenceRows) {
+  private async resolveVisuals(evidence: CheckEvidenceRows, maxVisuals: number) {
     const visual = evidence
       .filter((row) => VISUAL_EVIDENCE_TYPES.has(row.type) && row.fileId)
-      .slice(0, MAX_VISUALS);
+      .slice(0, maxVisuals);
 
     const resolved = await Promise.all(
       visual.map(async (row) => {
