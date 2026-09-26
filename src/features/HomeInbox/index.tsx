@@ -24,7 +24,7 @@ import { useBriefStore } from '@/store/brief';
 import { briefListSelectors } from '@/store/brief/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { goalSelectors, useGoalStore } from '@/store/goal';
+import { useGoalStore } from '@/store/goal';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/selectors';
@@ -175,9 +175,10 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   const showGoals = isLogin === true && goalsEnabled && showRailSections;
   const useFetchHomeGoals = useGoalStore((s) => s.useFetchHomeGoals);
   const goalsSWR = useFetchHomeGoals(showGoals, cacheScope);
-  const goals = useGoalStore(goalSelectors.homeGoals(cacheScope));
-  const isGoalsInit = useGoalStore(goalSelectors.isHomeGoalsInitialized(cacheScope));
-  // The goal rail reads the goal's own lifecycle state (`goals.status`), so it
+  // Branch off the SWR response: a persisted-cache hit never fires a network
+  // callback, so the store-backed selector lags a frame and the rail would
+  // render nothing until the revalidate lands.
+  const goals = goalsSWR.data?.goals; // The goal rail reads the goal's own lifecycle state (`goals.status`), so it
   // no longer needs a separate acceptance read to decide each pile.
   const goalEntries = useMemo(
     () => (showGoals ? buildHomeGoalEntries(goals) : []),
@@ -292,7 +293,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   // A goal feed failure must not be silent: without this the card just vanishes,
   // which is indistinguishable from having no open goals — the one reading a
   // long-running goal surface can least afford.
-  if (showGoals && goalsSWR.error && !isGoalsInit)
+  if (showGoals && goalsSWR.error && goals === undefined)
     sections.push({
       key: 'goals-error',
       label: t('inbox.goals.title'),
