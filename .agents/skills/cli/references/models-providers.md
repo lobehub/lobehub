@@ -20,7 +20,7 @@ lh model list lobehub --type video --json
 | ----------------- | -------------------------------------------------------------------------------------- | ------- |
 | `-L, --limit <n>` | Maximum items                                                                          | `50`    |
 | `--enabled`       | Only show enabled models                                                               | `false` |
-| `--type <type>`   | Filter by model type (`chat\|embedding\|tts\|stt\|image\|video\|text2music\|realtime`) | -       |
+| `--type <type>`   | Filter by model type (`chat\|embedding\|tts\|asr\|image\|video\|text2music\|realtime`) | -       |
 | `--json [fields]` | Output JSON, optionally specify fields                                                 | -       |
 
 **Table columns**: ID, NAME, ENABLED, TYPE
@@ -29,16 +29,16 @@ lh model list lobehub --type video --json
 
 ### `lh model view <id>`
 
-```bash
-lh model view [fields]] < modelId > [--json
+```text
+lh model view <id> [--json [fields]]
 ```
 
 **Displays**: Name, provider, type, enabled status, capabilities.
 
 ### `lh model create`
 
-```bash
-lh model create --id [--type < id > --provider < providerId > [--display-name < name > ] < type > ]
+```text
+lh model create --id <id> --provider <providerId> [--display-name <name>] [--type <type>]
 ```
 
 | Option                    | Description  | Default  |
@@ -50,17 +50,17 @@ lh model create --id [--type < id > --provider < providerId > [--display-name < 
 
 ### `lh model edit <id>`
 
-```bash
-lh model edit [--type < modelId > --provider < providerId > [--display-name < name > ] < type > ]
+```text
+lh model edit <id> --provider <providerId> [--display-name <name>] [--type <type>]
 ```
 
 ### `lh model toggle <id>`
 
 Enable or disable a model.
 
-```bash
-lh model toggle < modelId > --provider < providerId > --enable
-lh model toggle < modelId > --provider < providerId > --disable
+```text
+lh model toggle <id> --provider <providerId> --enable
+lh model toggle <id> --provider <providerId> --disable
 ```
 
 | Option                    | Description       | Required     |
@@ -79,16 +79,16 @@ lh model batch-toggle model1 model2 model3 --provider openai --enable
 
 ### `lh model delete <id>`
 
-```bash
-lh model delete < modelId > --provider < providerId > [--yes]
+```text
+lh model delete <id> --provider <providerId> [--yes]
 ```
 
 ### `lh model clear`
 
 Clear all models (or only remote/fetched models) for a provider.
 
-```bash
-lh model clear --provider [--yes] < providerId > [--remote]
+```text
+lh model clear --provider <providerId> [--remote] [--yes]
 ```
 
 ---
@@ -101,7 +101,7 @@ Manage AI service providers.
 
 ### `lh provider list`
 
-```bash
+```text
 lh provider list [--json [fields]]
 ```
 
@@ -109,16 +109,16 @@ lh provider list [--json [fields]]
 
 ### `lh provider view <id>`
 
-```bash
-lh provider view [fields]] < providerId > [--json
+```text
+lh provider view <id> [--json [fields]]
 ```
 
 **Displays**: Name, enabled status, source, configuration.
 
 ### `lh provider create`
 
-```bash
-lh provider create --id [-d [--logo [--sdk-type < id > -n < name > [-s < source > ] < desc > ] < url > ] < type > ]
+```text
+lh provider create --id <id> -n <name> [-s <source>] [-d <desc>] [--logo <url>] [--sdk-type <type>]
 ```
 
 | Option                     | Description                                       | Default  |
@@ -132,8 +132,8 @@ lh provider create --id [-d [--logo [--sdk-type < id > -n < name > [-s < source 
 
 ### `lh provider edit <id>`
 
-```bash
-lh provider edit [-d [--logo [--sdk-type < providerId > [-n < name > ] < desc > ] < url > ] < type > ]
+```text
+lh provider edit <id> [-n <name>] [-d <desc>] [--logo <url>] [--sdk-type <type>]
 ```
 
 Requires at least one change flag.
@@ -174,13 +174,13 @@ lh provider test openai -m gpt-4o --json
 
 ### `lh provider toggle <id>`
 
-```bash
-lh provider toggle < providerId > --enable
-lh provider toggle < providerId > --disable
+```text
+lh provider toggle <id> --enable
+lh provider toggle <id> --disable
 ```
 
 ### `lh provider delete <id>`
 
-```bash
-lh provider delete < providerId > [--yes]
+```text
+lh provider delete <id> [--yes]
 ```

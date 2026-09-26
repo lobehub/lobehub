@@ -44,7 +44,7 @@ localStorage.debug = 'lobe-*';
 ### Node.js
 
 ```bash
-DEBUG=lobe-* npm run dev
+DEBUG=lobe-* bun run dev
 DEBUG=lobe-* pnpm dev
 ```
 

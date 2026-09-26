@@ -18,13 +18,7 @@ Related: [LOBE-2417](https://linear.app/lobehub/issue/LOBE-2417/建立核心产�
 
 ### 产品架构覆盖
 
-| 模块             | 子功能                            | 优先级 | 状态 |
-| ---------------- | --------------------------------- | ------ | ---- |
-| **Agent**        | Builder, 对话，Task               | P0     | 🚧   |
-| **Agent Group**  | Builder, 群聊                     | P0     | ⏳   |
-| **Page（文稿）** | 侧边栏 CRUD ✅，文档编辑，Copilot | P0     | 🚧   |
-| **知识库**       | 创建，上传，RAG 对话              | P1     | ⏳   |
-| **记忆**         | 查看，编辑，关联                  | P2     | ⏳   |
+已覆盖 Agent、Home、Page（文稿）、Community 和核心路由；知识库、记忆暂无 E2E 覆盖。具体范围以 `e2e/src/features/` 为准。
 
 ### 标签系统
 
@@ -38,10 +32,11 @@ Related: [LOBE-2417](https://linear.app/lobehub/issue/LOBE-2417/建立核心产�
 @P2           # 中优先级（发版前）
 
 @agent        # Agent 模块
-@agent-group  # Agent Group 模块
+@group        # Agent Group 模块
 @page         # Page 文稿模块
-@knowledge    # 知识库模块
-@memory       # 记忆模块
+@home         # Home 模块
+@community    # 社区模块
+@routes       # 核心路由
 ```
 
 ### 执行策略
@@ -73,30 +68,16 @@ pnpm exec cucumber-js --config cucumber.config.js
 e2e/
 ├── src/
 │   ├── features/                    # Cucumber feature 文件
-│   │   ├── journeys/                # 用户旅程（体验基准线）
-│   │   │   ├── agent/
-│   │   │   │   ├── agent-builder.feature
-│   │   │   │   ├── agent-conversation.feature  ✅
-│   │   │   │   └── agent-task.feature
-│   │   │   ├── agent-group/
-│   │   │   │   ├── group-builder.feature
-│   │   │   │   └── group-chat.feature
-│   │   │   ├── page/
-│   │   │   │   └── page-crud.feature  ✅
-│   │   │   ├── knowledge/
-│   │   │   │   └── knowledge-rag.feature
-│   │   │   └── memory/
-│   │   │       └── memory-crud.feature
-│   │   ├── smoke/                   # 冒烟测试
-│   │   │   └── discover/
+│   │   ├── journeys/agent/          # Agent 用户旅程（体验基准线）
+│   │   ├── home/                    # Home 布局、侧边栏、聊天输入
+│   │   ├── page/                    # Page 文稿 CRUD 与编辑器
+│   │   ├── community/               # 社区详情页与互动
+│   │   ├── routes/                  # 核心路由冒烟
 │   │   └── regression/              # 回归测试
-│   ├── steps/                       # Step definitions
-│   │   ├── agent/                   # Agent 相关 steps
-│   │   ├── page/                    # Page 相关 steps
-│   │   ├── common/                  # 通用 steps (auth, navigation)
+│   ├── steps/                       # Step definitions，按模块分目录（agent/home/page/community/routes/auth/common）
 │   │   └── hooks.ts                 # Before/After hooks
 │   ├── mocks/                       # Mock 框架
-│   │   └── llm/                     # LLM Mock (拦截 AI 请求) ✅
+│   │   └── llm/                     # LLM Mock (拦截 AI 请求)
 │   └── support/                     # 测试支持文件
 │       └── world.ts                 # CustomWorld 定义
 ├── screenshots/                     # 失败截图

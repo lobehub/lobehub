@@ -150,10 +150,7 @@ Known variants today:
 
 ## 5. Progressive Migration (existing code)
 
-We are migrating existing routes to this structure step by step:
-
-- **Phase 1 (done):** `/page` route – segment files in `src/routes/(main)/page/`, implementation in `src/features/Pages/`.
-- **Later phases:** home, settings, agent/group, community/resource/memory, mobile/share/onboarding.
+Existing routes follow this structure unevenly: some are already thin segment files (e.g. `src/routes/(main)/page/`, `src/routes/(main)/settings/`), while others still hold logic or a `features/` folder under `src/routes/`. Check the route's current state instead of assuming.
 
 When touching an old route that still has logic or `features/` inside `src/routes/`:
 

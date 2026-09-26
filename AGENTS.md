@@ -15,6 +15,8 @@ Guidelines for using AI coding agents in this opensource LobeHub repository.
 
 `AGENTS.md` owns repository-wide architecture and workflow. Keep detailed implementation rules in skills so they have one source of truth.
 
+In skill and agent Markdown, put command synopses or shell snippets containing `<placeholder>` or `[optional]` syntax in ` ```text ` fences. Prettier's shell plugin formats ` ```bash ` fences and rewrites those placeholders as redirections and globs, e.g. `<id>` becomes `< id >`.
+
 The `acceptance` skill is generated from the default branch of [lobehub/acceptance](https://github.com/lobehub/acceptance). Maintain its source there; update the committed `.agents/skills/acceptance/` copy using `bun apps/cli/src/index.ts acceptance update`. Repository-specific acceptance setup stays in `.agents/acceptance/`.
 
 - **React and TSX**: Before editing components, component state, render boundaries, or memoization, read the `react` skill. It owns component selection, styling, state locality, and render-performance rules.
@@ -106,4 +108,4 @@ When acceptance is required, put its published `https://app.lobehub.com/acceptan
 
 Before reviewing a PR / diff / branch change, read the **deep-review** skill. Ordinary review requests use its light mode (one independent reviewer against the dimension quick checklists); the full multi-subagent deep mode runs only on explicit invocation.
 
-When designing or reviewing user-facing flows (empty/loading/error states, confirmations, async feedback, button hierarchy, lists at scale, pickers), follow LobeHub's design values in [`DESIGN.md`](./DESIGN.md) — Natural / Meaningful / Certainty / Growth (自然 / 意义感 / 确定性 / 成长).
+When designing or reviewing user-facing flows (empty/loading/error states, confirmations, async feedback, button hierarchy, lists at scale, pickers), follow LobeHub's design values — Natural / Meaningful / Certainty / Growth (自然 / 意义感 / 确定性 / 成长) — in the `ux` skill; [`DESIGN.md`](./DESIGN.md) covers visual tokens and voice.

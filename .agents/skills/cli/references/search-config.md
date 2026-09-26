@@ -2,20 +2,34 @@
 
 ## Global Search (`lh search`)
 
-Search across all LobeHub resource types.
+Search across local resources, or the web with `--web`.
 
 **Source**: `apps/cli/src/commands/search.ts`
 
-### `lh search <query>`
+### `lh search`
 
-```bash
-lh search "meeting notes" [-t [-L [--json [fields]] < type > ] < n > ]
+`-q, --query` is not a positional argument — it's an option. If omitted, the command prints help
+and exits instead of erroring.
+
+```text
+lh search -q <query> [-w] [-t <type>] [-L <n>] [-e <engines>] [-c <categories>] [-T <range>] [--json [fields]]
 ```
 
-| Option              | Description             | Default   |
-| ------------------- | ----------------------- | --------- |
-| `-t, --type <type>` | Filter by resource type | All types |
-| `-L, --limit <n>`   | Results per type        | `10`      |
+```bash
+lh search -q "meeting notes"
+lh search -q "latest AI news" --web
+```
+
+| Option                          | Description                                                       | Default   |
+| ------------------------------- | ----------------------------------------------------------------- | --------- |
+| `-q, --query <query>`           | Search query (required)                                           | -         |
+| `-w, --web`                     | Search the web instead of local resources                         | `false`   |
+| `-t, --type <type>`             | Filter by resource type (local search only)                       | All types |
+| `-L, --limit <n>`               | Results per type (local search only)                              | `10`      |
+| `-e, --engines <engines>`       | Web search engines (comma-separated, requires `--web`)            | -         |
+| `-c, --categories <categories>` | Web search categories (comma-separated, requires `--web`)         | -         |
+| `-T, --time-range <range>`      | Time range filter (e.g. day, week, month, year, requires `--web`) | -         |
+| `--json [fields]`               | JSON output, optionally selecting fields                          | -         |
 
 ### Searchable Types
 
@@ -33,7 +47,24 @@ lh search "meeting notes" [-t [-L [--json [fields]] < type > ] < n > ]
 | `communityAgent` | Community marketplace agents |
 | `knowledgeBase`  | Knowledge bases              |
 
-**Output**: Results grouped by type, showing ID, title/name, description.
+**Output**: Local search results grouped by type, showing ID, title/name, description. Web search
+results are printed as a table of TITLE, URL, SCORE, CONTENT.
+
+### `lh search view <target>`
+
+View details of a single result: a URL crawls the page (web result); `type:id` (e.g.
+`agent:abc123`) looks up a local resource.
+
+```text
+lh search view <target> [-i <impls>] [--json [fields]]
+```
+
+| Option               | Description                                                                                                          |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `-i, --impl <impls>` | Crawler implementations for web URLs (comma-separated: browserless, exa, firecrawl, jina, naive, search1api, tavily) |
+
+**Local view support**: only `agent`, `file`, and `knowledgeBase` types are implemented; other
+`type:id` values error with "View not supported for type".
 
 ---
 
@@ -45,7 +76,7 @@ lh search "meeting notes" [-t [-L [--json [fields]] < type > ] < n > ]
 
 Display current authenticated user information.
 
-```bash
+```text
 lh whoami [--json [fields]]
 ```
 
@@ -55,14 +86,15 @@ lh whoami [--json [fields]]
 
 Display usage statistics.
 
-```bash
-lh usage [--month [--daily] [--json [fields]] < YYYY-MM > ]
+```text
+lh usage [--month <YYYY-MM>] [--agent-id <id>] [--daily] [--json [fields]]
 ```
 
-| Option              | Description    | Default                 |
-| ------------------- | -------------- | ----------------------- |
-| `--month <YYYY-MM>` | Month to query | Current month           |
-| `--daily`           | Group by day   | `false` (monthly total) |
+| Option              | Description               | Default                 |
+| ------------------- | ------------------------- | ----------------------- |
+| `--month <YYYY-MM>` | Month to query            | Current month           |
+| `--agent-id <id>`   | Filter usage to one agent | All agents              |
+| `--daily`           | Group by day              | `false` (monthly total) |
 
 **Output**: Token usage, costs, and model breakdown for the specified period.
 

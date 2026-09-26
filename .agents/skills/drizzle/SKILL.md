@@ -78,7 +78,7 @@ Do not use composite primary keys on new tables. Give every table a single-colum
 surrogate PK and carry business uniqueness in a `uniqueIndex` instead. PK columns
 cannot be nullable, so when the uniqueness scope later grows by a nullable
 dimension the composite PK must be torn down and rebuilt — exactly what happened
-when `ai_providers` / `ai_models` were workspace-scoped (migration 0110 replaced
+when `ai_providers` / `ai_models` were workspace-scoped (migrations 0110–0111 replaced
 their composite PKs with a surrogate `_id` plus partial unique indexes). A unique
 index still works as the arbiter for `onConflictDoUpdate` upserts.
 
@@ -101,7 +101,7 @@ export const workspaceUserSettings = pgTable(
 ```
 
 Existing composite PKs are legacy — leave them alone unless they block a scope
-change, then migrate them the 0110 way.
+change, then migrate them the 0110–0111 way.
 
 ### Foreign Keys
 

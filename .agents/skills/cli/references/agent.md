@@ -8,8 +8,8 @@ Manage AI agents: create, edit, delete, list, run, and check status.
 
 List all agents.
 
-```bash
-lh agent list [-L [-k [--json [fields]] < n > ] < keyword > ]
+```text
+lh agent list [-L <n>] [-k <keyword>] [--json [fields]]
 ```
 
 | Option                    | Description                            | Default |
@@ -22,12 +22,12 @@ lh agent list [-L [-k [--json [fields]] < n > ] < keyword > ]
 
 ---
 
-## `lh agent view <agentId>`
+## `lh agent view [agentId]`
 
-View agent configuration details.
+View agent configuration details. `agentId` may be omitted when `-s, --slug` is given instead.
 
-```bash
-lh agent view [fields]] < agentId > [--json
+```text
+lh agent view [agentId] [-s <slug>] [--json [fields]]
 ```
 
 **Displays**: Title, description, model, provider, system role, plugins, tools.
@@ -38,8 +38,8 @@ lh agent view [fields]] < agentId > [--json
 
 Create a new agent.
 
-```bash
-lh agent create [options]
+```text
+lh agent create [-t <title>] [-d <desc>] [-m <model>] [-p <provider>] [-s <role>] [--group <groupId>]
 ```
 
 | Option                      | Description    | Required |
@@ -55,13 +55,30 @@ lh agent create [options]
 
 ---
 
-## `lh agent edit <agentId>`
+## `lh agent edit [agentId]`
 
-Update an existing agent. Same options as `create`, all optional. Only specified fields are updated.
+Update an existing agent. `agentId` may be omitted when `--slug` is given instead (note: unlike
+`create`/`view`, this flag has no `-s` short alias here because `-s` is used for `--system-role`).
+Only specified fields are updated.
 
-```bash
-lh agent edit [-m [-s ... < agentId > [-t < title > ] < model > ] < role > ]
+```text
+lh agent edit [agentId] [--slug <slug>] [-t <title>] [-d <desc>] [-m <model>] [-p <provider>] [-s <role>] [--graph-file <path>] [--enable-graph] [--disable-graph] [--agency-config-file <path>] [--config-file <path>] [--json [fields]]
 ```
+
+| Option                        | Description                                                                                              |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `--slug <slug>`               | Agent slug, alternative to `agentId`                                                                     |
+| `-t, --title <title>`         | New title                                                                                                |
+| `-d, --description <desc>`    | New description                                                                                          |
+| `-m, --model <model>`         | New model ID                                                                                             |
+| `-p, --provider <provider>`   | New provider ID                                                                                          |
+| `-s, --system-role <role>`    | New system role prompt                                                                                   |
+| `--graph-file <path>`         | AgentGraph JSON file                                                                                     |
+| `--enable-graph`              | Enable graph runtime                                                                                     |
+| `--disable-graph`             | Disable graph runtime                                                                                    |
+| `--agency-config-file <path>` | `agencyConfig` JSON, deep-merged into the agent (send `null` to clear a nested key)                      |
+| `--config-file <path>`        | Agent config JSON for fields without a dedicated flag; deep-merged server-side, identity fields rejected |
+| `--json [fields]`             | Output the updated agent as JSON, optionally selecting fields                                            |
 
 ---
 
@@ -69,8 +86,8 @@ lh agent edit [-m [-s ... < agentId > [-t < title > ] < model > ] < role > ]
 
 Delete an agent.
 
-```bash
-lh agent delete < agentId > [--yes]
+```text
+lh agent delete <agentId> [--yes]
 ```
 
 Requires confirmation unless `--yes` is provided.
@@ -81,8 +98,8 @@ Requires confirmation unless `--yes` is provided.
 
 Duplicate an existing agent.
 
-```bash
-lh agent duplicate < agentId > [-t < title > ]
+```text
+lh agent duplicate <agentId> [-t <title>]
 ```
 
 | Option                | Description                          |
@@ -95,29 +112,35 @@ lh agent duplicate < agentId > [-t < title > ]
 
 ## `lh agent run`
 
-Start an agent execution (streaming SSE).
+Start an agent execution. Streams over the agent gateway WebSocket by default, or via SSE with
+`--sse`.
 
-```bash
-lh agent run [options]
+```text
+lh agent run [-a <id>] [-s <slug>] [-p <text>] [-t <id>] [--no-auto-start] [--device <target>] [--no-headless] [--json] [-v] [--replay <file>] [--sse]
 ```
 
-| Option                | Description                                  |
-| --------------------- | -------------------------------------------- |
-| `-a, --agent-id <id>` | Agent ID to run                              |
-| `-s, --slug <slug>`   | Agent slug (alternative to ID)               |
-| `-p, --prompt <text>` | User prompt                                  |
-| `-t, --topic-id <id>` | Reuse existing topic                         |
-| `--no-auto-start`     | Don't auto-start the agent                   |
-| `--json`              | Output full JSON event stream                |
-| `-v, --verbose`       | Show detailed tool call info                 |
-| `--replay <file>`     | Replay events from saved JSON file (offline) |
+| Option                | Description                                                                            |
+| --------------------- | -------------------------------------------------------------------------------------- |
+| `-a, --agent-id <id>` | Agent ID to run                                                                        |
+| `-s, --slug <slug>`   | Agent slug (alternative to ID)                                                         |
+| `-p, --prompt <text>` | User prompt                                                                            |
+| `-t, --topic-id <id>` | Reuse existing topic                                                                   |
+| `--no-auto-start`     | Don't auto-start the agent                                                             |
+| `--device <target>`   | Target device ID, or `local` for the current connected device                          |
+| `--no-headless`       | Wait for human approval on tool calls instead of auto-running them (default: headless) |
+| `--json`              | Output full JSON event stream                                                          |
+| `-v, --verbose`       | Show detailed tool call info                                                           |
+| `--replay <file>`     | Replay events from saved JSON file (offline)                                           |
+| `--sse`               | Force SSE stream instead of the WebSocket gateway                                      |
 
 ### Streaming Behavior
 
-Uses `utils/agentStream.ts` to handle Server-Sent Events:
+Uses `utils/agentStream.ts`. By default, streams over the agent gateway WebSocket; pass `--sse` to
+force the legacy SSE endpoint instead. If the live stream drops before the run finishes, the CLI
+falls back to polling `agent status` every 10 seconds until the run reaches a terminal state.
 
-1. Sends agent run request to backend
-2. Streams SSE events in real-time
+1. Sends agent run request to backend, receiving an `operationId`
+2. Connects to the gateway WebSocket (or SSE endpoint with `--sse`) and streams events in real-time
 3. Displays: text chunks, tool call status, operation progress
 4. Shows final token usage and cost summary
 
@@ -131,8 +154,8 @@ Uses `utils/agentStream.ts` to handle Server-Sent Events:
 
 Check agent operation status.
 
-```bash
-lh agent status [fields]] [--history] [--history-limit < operationId > [--json < n > ]
+```text
+lh agent status <operationId> [--json [fields]] [--history] [--history-limit <n>]
 ```
 
 | Option                | Description          | Default |

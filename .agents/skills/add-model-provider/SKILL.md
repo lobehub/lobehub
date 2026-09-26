@@ -7,7 +7,7 @@ argument-hint: '[provider-name]'
 
 # Add a Model Provider
 
-Deliver a provider that users can configure, recognize, and use through the supported API paths. This skill includes the documentation workflow formerly maintained in `add-provider-doc`.
+Deliver a provider that users can configure, recognize, and use through the supported API paths. This skill includes the provider documentation workflow.
 
 Paths below are relative to the open-source repository root. In a Cloud checkout, prefix them with `lobehub/` and follow the parent repository's install and Git rules. Hosted model configuration is a separate workflow: use the deployment operator's model-onboarding process when that is the requested target. Do not copy private deployment settings or routing information into this skill or an OSS change.
 

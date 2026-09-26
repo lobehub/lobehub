@@ -80,7 +80,7 @@ packages/builtin-tool-<name>/
         └── components/       # shared subcomponents used by the surfaces above
 ```
 
-**Older packages** (`builtin-tool-task`, `builtin-tool-calculator`, etc.) still have `src/executor/` as a sibling of `src/client/`. That's grandfathered; **don't relocate without a deliberate refactor**. New packages and new APIs added to existing packages should follow the layout above.
+**Older packages** (`builtin-tool-calculator`, etc.) still have `src/executor/` as a sibling of `src/client/`. That's grandfathered; **don't relocate without a deliberate refactor**. New packages and new APIs added to existing packages should follow the layout above.
 
 `package.json` exports map:
 

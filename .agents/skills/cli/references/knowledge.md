@@ -16,8 +16,8 @@ lh kb list [--json [fields]]
 
 ### `lh kb view <id>`
 
-```bash
-lh kb view [fields]] < id > [--json
+```text
+lh kb view <id> [--json [fields]]
 ```
 
 **Displays**: Name, description, full directory tree with all files and documents (recursively fetched). Shows indented tree structure with item type (File/Doc), file type, and size.
@@ -26,8 +26,8 @@ lh kb view [fields]] < id > [--json
 
 ### `lh kb create`
 
-```bash
-lh kb create -n [--avatar < name > [-d < desc > ] < url > ]
+```text
+lh kb create -n <name> [-d <desc>] [--avatar <url>]
 ```
 
 | Option                     | Description         | Required |
@@ -40,16 +40,16 @@ lh kb create -n [--avatar < name > [-d < desc > ] < url > ]
 
 ### `lh kb edit <id>`
 
-```bash
-lh kb edit [-d [--avatar < id > [-n < name > ] < desc > ] < url > ]
+```text
+lh kb edit <id> [-n <name>] [-d <desc>] [--avatar <url>]
 ```
 
 Requires at least one change flag. Errors if none specified.
 
 ### `lh kb delete <id>`
 
-```bash
-lh kb delete [--yes] < id > [--remove-files]
+```text
+lh kb delete <id> [--remove-files] [--yes]
 ```
 
 | Option           | Description                  |
@@ -59,24 +59,24 @@ lh kb delete [--yes] < id > [--remove-files]
 
 ### `lh kb add-files <knowledgeBaseId>`
 
-```bash
-lh kb add-files <kbId> --ids <fileId1> <fileId2> ...
+```text
+lh kb add-files <kbId> --ids <fileId1> [fileId2...]
 ```
 
 Link existing files to a knowledge base.
 
 ### `lh kb remove-files <knowledgeBaseId>`
 
-```bash
-lh kb remove-files <kbId> --ids <fileId1> <fileId2> ... [--yes]
+```text
+lh kb remove-files <kbId> --ids <fileId1> [fileId2...] [--yes]
 ```
 
 Unlink files from a knowledge base.
 
 ### `lh kb mkdir <knowledgeBaseId>`
 
-```bash
-lh kb mkdir < kbId > -n < name > [--parent < folderId > ]
+```text
+lh kb mkdir <kbId> -n <name> [--parent <folderId>]
 ```
 
 Create a folder in a knowledge base. Uses `document.createDocument` with `fileType: 'custom/folder'`.
@@ -88,8 +88,8 @@ Create a folder in a knowledge base. Uses `document.createDocument` with `fileTy
 
 ### `lh kb create-doc <knowledgeBaseId>`
 
-```bash
-lh kb create-doc [--parent < kbId > -t < title > [-c < content > ] < folderId > ]
+```text
+lh kb create-doc <kbId> -t <title> [-c <content>] [--parent <folderId>]
 ```
 
 Create a document in a knowledge base. Uses `document.createDocument` with `fileType: 'custom/document'`.
@@ -102,8 +102,8 @@ Create a document in a knowledge base. Uses `document.createDocument` with `file
 
 ### `lh kb move <id>`
 
-```bash
-lh kb move < id > --type < file | doc > [--parent < folderId > ]
+```text
+lh kb move <id> [--type <file|doc>] [--parent <folderId>]
 ```
 
 Move a file or document to a different folder (or to root if `--parent` is omitted).
@@ -117,7 +117,7 @@ Uses `document.updateDocument` for docs, `file.updateFile` for files.
 
 ### `lh kb upload <knowledgeBaseId> <filePath>`
 
-```bash
+```text
 lh kb upload <kbId> <filePath> [--parent <folderId>]
 ```
 
@@ -139,8 +139,8 @@ Manage uploaded files.
 
 ### `lh file list`
 
-```bash
-lh file list [--kb-id [-L [--json [fields]] < id > ] < n > ]
+```text
+lh file list [--kb-id <id>] [-L <n>] [--json [fields]]
 ```
 
 | Option            | Description              | Default |
@@ -152,24 +152,24 @@ lh file list [--kb-id [-L [--json [fields]] < id > ] < n > ]
 
 ### `lh file view <id>`
 
-```bash
-lh file view [fields]] < id > [--json
+```text
+lh file view <id> [--json [fields]]
 ```
 
 **Displays**: Name, type, size, chunking status, embedding status.
 
 ### `lh file delete <ids...>`
 
-```bash
-lh file delete [--yes] < id1 > [id2...]
+```text
+lh file delete <id1> [id2...] [--yes]
 ```
 
 Supports deleting multiple files at once.
 
 ### `lh file recent`
 
-```bash
-lh file recent [-L [--json [fields]] < n > ]
+```text
+lh file recent [-L <n>] [--json [fields]]
 ```
 
 | Option            | Description     | Default |
@@ -186,8 +186,8 @@ Manage text documents (notes, wiki pages).
 
 ### `lh doc list`
 
-```bash
-lh doc list [-L [--file-type [--source-type [--json [fields]] < n > ] < type > ] < type > ]
+```text
+lh doc list [-L <n>] [--file-type <type>] [--source-type <type>] [--json [fields]]
 ```
 
 | Option                 | Description                                   | Default |
@@ -200,16 +200,16 @@ lh doc list [-L [--file-type [--source-type [--json [fields]] < n > ] < type > ]
 
 ### `lh doc view <id>`
 
-```bash
-lh doc view [fields]] < id > [--json
+```text
+lh doc view <id> [--json [fields]]
 ```
 
 **Displays**: Title, type, KB association, updated time, full content.
 
 ### `lh doc create`
 
-```bash
-lh doc create -t [-F [--parent [--slug [--kb [--file-type < title > [-b < body > ] < path > ] < id > ] < slug > ] < id > ] < type > ]
+```text
+lh doc create -t <title> [-b <content>] [-F <path>] [--parent <id>] [--slug <slug>] [--kb <id>] [--file-type <type>]
 ```
 
 | Option                   | Description                                     | Required |
@@ -236,22 +236,22 @@ Each object in the array can have: `title`, `content`, `fileType`, `knowledgeBas
 
 ### `lh doc edit <id>`
 
-```bash
-lh doc edit [-b [-F [--parent [--file-type < id > [-t < title > ] < body > ] < path > ] < id > ] < type > ]
+```text
+lh doc edit <id> [-t <title>] [-b <content>] [-F <path>] [--parent <id>] [--file-type <type>]
 ```
 
 ### `lh doc delete <ids...>`
 
-```bash
-lh doc delete [--yes] < id1 > [id2...]
+```text
+lh doc delete <id1> [id2...] [--yes]
 ```
 
 ### `lh doc parse <fileId>`
 
 Parse an uploaded file into a document.
 
-```bash
-lh doc parse [--json [fields]] < fileId > [--with-pages]
+```text
+lh doc parse <fileId> [--with-pages] [--json [fields]]
 ```
 
 | Option         | Description             |
@@ -264,7 +264,7 @@ lh doc parse [--json [fields]] < fileId > [--with-pages]
 
 Associate a document with a topic. Creates a linked copy via the notebook router.
 
-```bash
+```text
 lh doc link-topic <docId> <topicId>
 ```
 
@@ -272,8 +272,8 @@ lh doc link-topic <docId> <topicId>
 
 List documents associated with a topic.
 
-```bash
-lh doc topic-docs [--json [fields]] < topicId > [--type < type > ]
+```text
+lh doc topic-docs <topicId> [--type <type>] [--json [fields]]
 ```
 
 | Option          | Description                                      |

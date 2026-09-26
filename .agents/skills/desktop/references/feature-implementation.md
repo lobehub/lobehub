@@ -70,15 +70,17 @@ export interface DesktopNotificationResult {
 ### 3. Create Service Layer
 
 ```typescript
-// src/services/electron/notificationService.ts
+// src/services/electron/desktopNotification.ts
 import type { ShowDesktopNotificationParams } from '@lobechat/electron-client-ipc';
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
-const ipc = ensureElectronIpc();
+export class DesktopNotificationService {
+  async showNotification(params: ShowDesktopNotificationParams) {
+    return ensureElectronIpc().notification.showDesktopNotification(params);
+  }
+}
 
-export const notificationService = {
-  show: (params: ShowDesktopNotificationParams) => ipc.notification.showDesktopNotification(params),
-};
+export const desktopNotificationService = new DesktopNotificationService();
 ```
 
 ### 4. Implement Store Action
@@ -88,16 +90,9 @@ export const notificationService = {
 showNotification: async (title: string, body: string) => {
   if (!isElectron) return;
 
-  const result = await notificationService.show({ title, body });
+  const result = await desktopNotificationService.showNotification({ title, body });
   if (!result.success) {
     console.error('Notification failed:', result.error);
   }
 },
 ```
-
-## Best Practices
-
-1. **Security**: Validate inputs, limit exposed APIs
-2. **Performance**: Use async methods for heavy operations
-3. **Error handling**: Always return structured results
-4. **UX**: Provide loading states and error feedback

@@ -1,6 +1,6 @@
 # Provider Documentation
 
-This replaces the former `add-provider-doc` workflow. Use it for a new integration or a documentation-only update. Derive instructions from implemented behavior and verified public sources, not from a generic API-key template.
+Use this workflow for a new integration or a documentation-only update. Derive instructions from implemented behavior and verified public sources, not from a generic API-key template.
 
 ## Usage Guide
 

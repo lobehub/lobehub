@@ -97,7 +97,3 @@ An audit-only request produces recommendations. When the user authorizes fixes, 
 - ❌ Don't remove meaningful selection boundaries merely to shorten a description or fit a template.
 - ❌ Don't fold a heavy 200+ line skill into another just because they share a domain — large skills get loaded selectively and merging makes everything load.
 - ❌ Don't propose `.agents/skills/INDEX.md` or `<domain>-<skill>` prefix renames unless the user explicitly asks — costs > benefits for cosmetic reorgs.
-
-## Related history
-
-- First audit: `chore/skills-audit` branch (2026-05-25) — deleted `source-command-dedupe`, renamed `data-fetching` → `data-fetching-architecture`, normalized 9 descriptions, created this skill.

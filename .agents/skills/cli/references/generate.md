@@ -12,9 +12,10 @@ lh generate (alias: gen)
 ├── image <prompt>                         # Image generation
 ├── video <prompt>                         # Video generation
 ├── tts <text>                             # Text-to-speech
-├── asr <audioFile>                        # Audio-to-text (speech recognition)
+├── asr <audio-file>                       # Audio-to-text (speech recognition)
 ├── download <generationId> <asyncTaskId>  # Wait & download generation result
 ├── status <generationId> <asyncTaskId>    # Check async task status
+├── delete <generationId>                  # Delete a generation record
 └── list                                   # List generation topics
 ```
 
@@ -30,8 +31,11 @@ Generate text completion.
 
 **Source**: `apps/cli/src/commands/generate/text.ts`
 
+```text
+lh gen text <prompt> [-m <model>] [-p <provider>] [-s <prompt>] [--temperature <n>] [--max-tokens <n>] [--stream] [--json] [--pipe]
+```
+
 ```bash
-lh gen text "Explain quantum computing" [options]
 echo "context" | lh gen text "summarize" --pipe
 ```
 
@@ -62,8 +66,11 @@ Generate images from text prompt. This is an async operation — the command sub
 
 **Source**: `apps/cli/src/commands/generate/image.ts`
 
+```text
+lh gen image <prompt> [-m <model>] [-p <provider>] [-n <n>] [--width <px>] [--height <px>] [--steps <n>] [--seed <n>] [--json]
+```
+
 ```bash
-lh gen image "A sunset over mountains" [options]
 lh gen image "A cute cat" --model dall-e-3 --provider openai --json
 ```
 
@@ -110,19 +117,22 @@ Generate video from text prompt. This is an async operation.
 
 **Source**: `apps/cli/src/commands/generate/video.ts`
 
-```bash
-lh gen video "A cat playing piano" -m < model > -p < provider > [options]
+```text
+lh gen video <prompt> -m <model> -p <provider> [--aspect-ratio <ratio>] [--duration <sec>] [--resolution <res>] [--seed <n>] [--image <url>] [--images <urls...>] [--end-image <url>] [--json]
 ```
 
-| Option                      | Description              | Required |
-| --------------------------- | ------------------------ | -------- |
-| `-m, --model <model>`       | Model ID                 | Yes      |
-| `-p, --provider <provider>` | Provider name            | Yes      |
-| `--aspect-ratio <ratio>`    | Aspect ratio (e.g. 16:9) | No       |
-| `--duration <sec>`          | Duration in seconds      | No       |
-| `--resolution <res>`        | Resolution (e.g. 720p)   | No       |
-| `--seed <n>`                | Random seed              | No       |
-| `--json`                    | Output raw JSON          | No       |
+| Option                      | Description                            | Required |
+| --------------------------- | -------------------------------------- | -------- |
+| `-m, --model <model>`       | Model ID                               | Yes      |
+| `-p, --provider <provider>` | Provider name                          | Yes      |
+| `--aspect-ratio <ratio>`    | Aspect ratio (e.g. 16:9)               | No       |
+| `--duration <sec>`          | Duration in seconds                    | No       |
+| `--resolution <res>`        | Resolution (e.g. 720p, 1080p)          | No       |
+| `--seed <n>`                | Random seed                            | No       |
+| `--image <url>`             | First-frame image URL (image-to-video) | No       |
+| `--images <urls...>`        | Multiple reference image URLs          | No       |
+| `--end-image <url>`         | Last-frame image URL                   | No       |
+| `--json`                    | Output raw JSON                        | No       |
 
 **Note**: Unlike image, video requires `-m` and `-p` (no defaults). Use `lh model list <provider> --type video` to find available video models.
 
@@ -161,21 +171,39 @@ Text-to-speech generation.
 
 **Source**: `apps/cli/src/commands/generate/tts.ts`
 
-```bash
-lh gen tts "Hello, world!" [options]
+```text
+lh gen tts <text> [-o <file>] [--voice <voice>] [--speed <n>] [--model <model>]
 ```
+
+| Option                | Description                 | Default      |
+| --------------------- | --------------------------- | ------------ |
+| `-o, --output <file>` | Output audio file path      | `output.mp3` |
+| `--voice <voice>`     | Voice name                  | `alloy`      |
+| `--speed <n>`         | Speed multiplier (0.25-4.0) | `1`          |
+| `--model <model>`     | TTS model                   | `tts-1`      |
 
 ---
 
-## `lh generate asr <audioFile>` / `lh gen asr <audioFile>`
+## `lh generate asr <audio-file>` / `lh gen asr <audio-file>`
 
-Audio-to-text transcription (Automatic Speech Recognition).
+Audio-to-text transcription (Automatic Speech Recognition). Accepts a local path or a URL.
 
 **Source**: `apps/cli/src/commands/generate/asr.ts`
 
-```bash
-lh gen asr recording.wav [options]
+```text
+lh gen asr <audio-file> [--model <model>] [--provider <provider>] [--language <lang>] [--json]
 ```
+
+```bash
+lh gen asr recording.wav
+```
+
+| Option                  | Description                 | Default     |
+| ----------------------- | --------------------------- | ----------- |
+| `--model <model>`       | STT model                   | `whisper-1` |
+| `--provider <provider>` | AI provider                 | `openai`    |
+| `--language <lang>`     | Language code (e.g. en, zh) | -           |
+| `--json`                | Output raw JSON             | -           |
 
 ---
 
@@ -188,8 +216,11 @@ Wait for an async generation task to complete and download the result file.
 > ⚠️ `<asyncTaskId>` is the UUID printed after "→ Task" in the video/image output.
 > Do **not** pass the generation ID (`gen_xxx`) here — that will cause a server error.
 
+```text
+lh gen download <generationId> <asyncTaskId> [-o <path>] [--interval <sec>] [--timeout <sec>]
+```
+
 ```bash
-lh gen download <generationId> <asyncTaskId> [-o output.png]
 lh gen download gen_xxx 7ad0eb13-xxxx-xxxx-xxxx-xxxxxxxxxxxx -o ~/Desktop/result.mp4 --timeout 600
 ```
 
@@ -216,8 +247,11 @@ Check the status of an async generation task.
 > ⚠️ `<asyncTaskId>` is the UUID printed after "→ Task" in the video/image output.
 > Do **not** pass the generation ID (`gen_xxx`) here — that will cause a server error.
 
-```bash
+```text
 lh gen status <generationId> <asyncTaskId> [--json]
+```
+
+```bash
 lh gen status gen_xxx 7ad0eb13-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 ```
 
@@ -237,7 +271,7 @@ lh gen status gen_xxx 7ad0eb13-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 
 List all generation topics.
 
-```bash
+```text
 lh gen list [--json [fields]]
 ```
 

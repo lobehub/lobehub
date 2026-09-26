@@ -101,14 +101,14 @@ Backfill scripts should be resumable, safe to retry, processed in bounded batche
 
 Schema changes churn during feature development. When the schema changes before the migration has shipped, do not hand-edit the existing migration SQL to chase the new schema shape. Delete the draft migration artifacts added by this branch (SQL file, matching snapshot, and matching journal entry), then run the generator again and re-apply the normal migration review steps below.
 
-For example, if this branch's draft migration is `0110_add_verify_tables_and_ai_infra_id`:
+For example, if this branch's draft migration is `NNNN_add_verify_tables` (substitute the branch's real number — never an already-shipped migration):
 
 ```bash
 # 1. Delete the draft SQL and its snapshot
-rm packages/database/migrations/0110_add_verify_tables_and_ai_infra_id.sql
-rm packages/database/migrations/meta/0110_snapshot.json
+rm packages/database/migrations/NNNN_add_verify_tables.sql
+rm packages/database/migrations/meta/NNNN_snapshot.json
 
-# 2. Remove the matching 0110 entry from the journal's "entries" array
+# 2. Remove the matching NNNN entry from the journal's "entries" array
 #    packages/database/migrations/meta/_journal.json
 
 # 3. Regenerate from the current schema
@@ -119,14 +119,14 @@ This keeps the generated SQL, snapshot, and journal aligned with the actual sche
 
 Before release, if a feature branch accumulated multiple development-only migrations, consolidate them into one migration when possible. Production does not need to replay every intermediate draft shape, and fewer migrations reduce deploy-time risk.
 
-For example, if this branch added `0110`, `0111`, and `0112`, delete all three drafts and regenerate a single migration:
+For example, if this branch added three drafts `AAAA`, `BBBB`, and `CCCC`, delete all three and regenerate a single migration:
 
 ```bash
 # 1. Delete every draft SQL and snapshot this branch added
-rm packages/database/migrations/011{0,1,2}_*.sql
-rm packages/database/migrations/meta/011{0,1,2}_snapshot.json
+rm packages/database/migrations/{AAAA,BBBB,CCCC}_*.sql
+rm packages/database/migrations/meta/{AAAA,BBBB,CCCC}_snapshot.json
 
-# 2. Remove the 0110/0111/0112 entries from the journal's "entries" array
+# 2. Remove those entries from the journal's "entries" array
 #    packages/database/migrations/meta/_journal.json
 
 # 3. Regenerate one migration covering the full schema delta
@@ -135,7 +135,7 @@ bun run db:generate
 
 Do not make a migration compatible with earlier development-only versions of the same branch. While the migration has not shipped, there is no production history to preserve. Fix local/dev databases directly with whatever SQL is simplest (drop the draft table, rename a column, delete draft rows), then regenerate the branch migration from the current schema.
 
-For example, if an earlier draft on this branch created `signup_attempt_id` and you have since renamed it to `user_signup_log_id`, do not add a compatibility `ALTER ... RENAME` to the migration. Just fix the dev DB directly (see the `access-pg` skill for the `bun -e` + `pg` pattern), then regenerate:
+For example, if an earlier draft on this branch created `signup_attempt_id` and you have since renamed it to `user_signup_log_id`, do not add a compatibility `ALTER ... RENAME` to the migration. Just fix the dev DB directly, then regenerate:
 
 ```bash
 # Fix the dev DB to match the new schema (simplest SQL wins)

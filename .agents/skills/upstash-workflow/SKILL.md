@@ -128,7 +128,7 @@ apps/server/src/workflows/
     └── index.ts                       # Workflow class — static trigger*() methods that POST to the routes above
 ```
 
-Routes are no longer one `route.ts` file per layer under `src/app`; every layer is a handler mounted on a per-workflow Hono app under `apps/server/src/router-hono/workflows/`, and the Next.js route only dispatches into it.
+Every layer is a handler mounted on a per-workflow Hono app under `apps/server/src/router-hono/workflows/`; the Next.js route under `src/app` only dispatches into it.
 
 ---
 
