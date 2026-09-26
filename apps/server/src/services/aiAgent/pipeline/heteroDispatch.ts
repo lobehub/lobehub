@@ -1193,6 +1193,7 @@ export const dispatchHeteroAgent = async (
           cwd: sandbox.cwd,
           environment: sandbox.environment,
           mode: sandbox.mode,
+          workingDir: sandbox.workingDir,
         },
         workspaceId: deps.workspaceId,
       }).catch(async (err) => {

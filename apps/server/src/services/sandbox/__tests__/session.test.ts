@@ -81,6 +81,43 @@ describe('resolveSandboxSessionConfig', () => {
     });
   });
 
+  // A built instance's checkout lives on the sandbox's local disk, so commands
+  // run there — while `cwd` keeps naming the instance's directory on the
+  // volume, which is what the call belongs to and may see (LOBE-14363).
+  it('runs a built repository instance on local disk, scoped to its directory', async () => {
+    findInstanceById.mockResolvedValue({
+      configurationSnapshot: { sources: [{ kind: 'git', url: 'https://github.com/a/b' }] },
+      id: INSTANCE_ID,
+      status: 'ready',
+      workingDirectory: 'projects/atlas',
+    });
+
+    await expect(resolve()).resolves.toEqual({
+      claim: CLAIM,
+      cwd: 'projects/atlas',
+      environment: INSTANCE_ID,
+      mode: 'persistent',
+      workingDir: '/root/work',
+    });
+  });
+
+  it.each([
+    ['not built yet', { status: 'pending' }],
+    ['a failed build', { status: 'error' }],
+    ['nothing to clone', { configurationSnapshot: { bootstrapCommand: 'echo' }, status: 'ready' }],
+  ])('keeps an instance with %s on the volume', async (_, fields) => {
+    findInstanceById.mockResolvedValue({
+      configurationSnapshot: { sources: [{ kind: 'git', url: 'https://github.com/a/b' }] },
+      id: INSTANCE_ID,
+      workingDirectory: 'projects/atlas',
+      ...fields,
+    });
+
+    const config = await resolve();
+    expect(config).not.toHaveProperty('workingDir');
+    expect(config.cwd).toBe('projects/atlas');
+  });
+
   // Without an entitlement the execution plane routes to the ephemeral sandbox
   // whatever the request says, so reading the topic buys nothing. Leaving the
   // chosen instance untouched on the topic is what lets a resubscription resume

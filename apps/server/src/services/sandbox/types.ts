@@ -31,6 +31,12 @@ export interface SandboxSessionContext {
    * this service.
    */
   sandboxMode?: SandboxMode;
+  /**
+   * Where commands run, on the sandbox's local disk, for an instance whose
+   * checkout lives there. Sent alongside {@link sandboxCwd}, which keeps
+   * naming the instance the call belongs to on the volume.
+   */
+  sandboxWorkingDir?: string;
   topicId: string;
   userId: string;
 }

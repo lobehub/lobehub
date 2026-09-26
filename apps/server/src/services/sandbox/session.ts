@@ -2,6 +2,7 @@ import {
   DEFAULT_SANDBOX_MODE,
   isSafeSandboxCwd,
   isSafeSandboxEnvironmentId,
+  SANDBOX_LOCAL_WORK_ROOT,
   type SandboxMode,
   type SandboxWorkspaceClaim,
 } from '@lobechat/builtin-tool-cloud-sandbox';
@@ -41,7 +42,28 @@ export interface SandboxSessionConfig {
    */
   environment?: string;
   mode: SandboxMode;
+  /**
+   * Where commands run, when that is not {@link cwd}: the sandbox's local
+   * disk, for an instance that has been built from a repository. The checkout
+   * lives there and installs only work there; {@link cwd} stays the
+   * instance's directory on the volume, which is what the call belongs to —
+   * what a shared workspace narrows its view to, and what the file browser
+   * reads.
+   */
+  workingDir?: string;
 }
+
+/**
+ * Whether an instance's checkout is on the sandbox's local disk: it has been
+ * built, from a definition that clones something. An instance with nothing to
+ * clone has no checkout to run in, and one not built yet has nothing there.
+ */
+const hasLocalCheckout = (instance: {
+  configurationSnapshot?: { sources?: { kind?: string }[] } | null;
+  status?: string | null;
+}): boolean =>
+  instance.status === 'ready' &&
+  !!instance.configurationSnapshot?.sources?.some((source) => source.kind === 'git');
 
 interface SandboxSessionConfigInput {
   /** See `resolveSandboxWorkspaceClaim` — a visitor run never gets an entitlement. */
@@ -87,7 +109,18 @@ export const resolveSandboxSessionConfig = async ({
     workspaceId,
   });
 
-  if (!claim || !topicId) return { claim, mode: DEFAULT_SANDBOX_MODE };
+  if (!claim || !topicId) {
+    log(
+      'Ephemeral for topic %s: claim=%s topicId=%s userId=%s workspaceId=%s',
+      topicId,
+      !!claim,
+      !!topicId,
+      userId,
+      workspaceId,
+    );
+
+    return { claim, mode: DEFAULT_SANDBOX_MODE };
+  }
 
   try {
     // Scoped to the workspace the run is in: without it the model reads the
@@ -97,6 +130,16 @@ export const resolveSandboxSessionConfig = async ({
       topicId,
     );
     if (topic?.metadata?.sandboxMode !== 'persistent') {
+      log(
+        'Ephemeral for topic %s: found=%s mode=%o instance=%o (scope user=%s workspace=%s)',
+        topicId,
+        !!topic,
+        topic?.metadata?.sandboxMode,
+        topic?.metadata?.sandboxInstanceId,
+        userId,
+        workspaceId,
+      );
+
       return { claim, mode: DEFAULT_SANDBOX_MODE };
     }
 
@@ -110,7 +153,11 @@ export const resolveSandboxSessionConfig = async ({
       : { claim, mode: 'persistent' };
 
     const instanceId = topic.metadata.sandboxInstanceId;
-    if (!instanceId) return fallback;
+    if (!instanceId) {
+      log('Falling back for topic %s: persistent with no instance bound', topicId);
+
+      return fallback;
+    }
 
     // A workspace-public agent runs on its caller's session, and a private
     // environment's captured state can hold that caller's credentials — so a
@@ -132,7 +179,16 @@ export const resolveSandboxSessionConfig = async ({
       callerAgentVisibility,
     ).findById(instanceId);
     if (!instance) {
-      log('Ignoring unresolvable sandboxInstanceId on topic %s: %o', topicId, instanceId);
+      log(
+        'Ignoring unresolvable sandboxInstanceId on topic %s: %o (agentId=%o visibility=%o scope user=%s workspace=%s)',
+        topicId,
+        instanceId,
+        topic.agentId,
+        callerAgentVisibility,
+        userId,
+        workspaceId,
+      );
+
       return fallback;
     }
 
@@ -147,7 +203,15 @@ export const resolveSandboxSessionConfig = async ({
       return fallback;
     }
 
-    return { claim, cwd: workingDirectory, environment: id, mode: 'persistent' };
+    log('Persistent for topic %s: instance=%s cwd=%o', topicId, id, workingDirectory);
+
+    return {
+      claim,
+      cwd: workingDirectory,
+      environment: id,
+      mode: 'persistent',
+      ...(hasLocalCheckout(instance) && { workingDir: SANDBOX_LOCAL_WORK_ROOT }),
+    };
   } catch (error) {
     log('Failed to read sandbox preferences for topic %s: %O', topicId, error);
     return { claim, mode: DEFAULT_SANDBOX_MODE };
