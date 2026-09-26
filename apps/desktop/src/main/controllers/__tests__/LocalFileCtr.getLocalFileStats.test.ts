@@ -65,6 +65,20 @@ describe('LocalFileCtr — getLocalFileStats', () => {
     expect(stats.size).toBe(5);
   });
 
+  it('skips line counting for UTF-16 files', async () => {
+    const filePath = path.join(tmpDir, 'export.csv');
+    const content = Buffer.concat([
+      Buffer.from([0xff, 0xfe]),
+      Buffer.from('a,b\nc,d\n', 'utf16le'),
+    ]);
+    await writeFile(filePath, content);
+
+    const stats = await new LocalFileCtr(mockApp).getLocalFileStats({ path: filePath });
+
+    expect(stats.lineCount).toBeUndefined();
+    expect(stats.size).toBe(content.length);
+  });
+
   it('rejects when the file does not exist', async () => {
     await expect(
       new LocalFileCtr(mockApp).getLocalFileStats({ path: path.join(tmpDir, 'missing') }),

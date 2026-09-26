@@ -59,9 +59,14 @@ export const partitionLargeFilesAsLocalPaths = (
 };
 
 /**
- * Routes large picked/pasted files (including files inside a picked folder) to `<localFile>` references in the given editor on desktop and
- * returns the files that still need uploading. Outside desktop local execution it returns the
- * input unchanged, matching the drag-and-drop routing in `useLocalPathReference`.
+ * Routes large picked/pasted files (including files inside a picked folder) to `<localFile>`
+ * references in the given editor on desktop and returns the files that still need uploading.
+ * Outside desktop local execution it returns the input unchanged.
+ *
+ * Only large non-media files are rerouted here, while drag-and-drop
+ * (`partitionDroppedItemsAsLocalPaths` in `useLocalDragUpload`) intentionally references every
+ * dropped file and folder: dragging from the file manager expresses "work on this local file",
+ * whereas the picker and paste are the upload entry points and keep uploading anything that fits.
  */
 export const useLargeFileLocalPath = (agentId: string, editor: IEditor | undefined) => {
   const { t } = useTranslation('chat');

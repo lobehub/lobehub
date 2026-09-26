@@ -1836,6 +1836,34 @@ describe('DocumentService', () => {
       expect(result).toEqual({ id: 'doc-1', title: 'My Doc' });
     });
 
+    it('strips page tags before capping an oversized PDF', async () => {
+      const page = 'x'.repeat(1000);
+      const pageCount = Math.ceil(PARSED_FILE_CONTENT_MAX_CHARS / page.length) + 2;
+      const content = Array.from(
+        { length: pageCount },
+        (_, index) => `<page number="${index + 1}">${page}</page>`,
+      ).join('');
+      vi.mocked(loadFile).mockResolvedValue({
+        content,
+        fileType: 'pdf',
+        metadata: {},
+        pages: undefined,
+        totalCharCount: content.length,
+        totalLineCount: 1,
+      } as any);
+      mockDocumentModel.create.mockResolvedValue({ id: 'doc-1' });
+
+      await service.parseDocument('file-1');
+
+      const created = mockDocumentModel.create.mock.calls[0][0];
+      expect(created.content).toHaveLength(PARSED_FILE_CONTENT_MAX_CHARS);
+      expect(created.content).not.toContain('<page');
+      expect(created.metadata).toMatchObject({
+        originalCharCount: page.length * pageCount,
+        truncated: true,
+      });
+    });
+
     it('should use filename as title when metadata has no title', async () => {
       vi.mocked(loadFile).mockResolvedValue({
         content: 'Content',
@@ -2169,6 +2197,13 @@ describe('capParsedFileDocument', () => {
     const input = fileDocument('hello');
 
     expect(capParsedFileDocument(input)).toBe(input);
+  });
+
+  it('does not split a surrogate pair at the cap', () => {
+    const content = `${'a'.repeat(PARSED_FILE_CONTENT_MAX_CHARS - 1)}🐛`;
+    const result = capParsedFileDocument(fileDocument(content));
+
+    expect(result.content).toBe('a'.repeat(PARSED_FILE_CONTENT_MAX_CHARS - 1));
   });
 
   it('truncates oversized parsed text and drops the duplicated pages', () => {

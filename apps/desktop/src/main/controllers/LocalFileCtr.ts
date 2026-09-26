@@ -72,7 +72,7 @@ import {
   writeLocalFile,
 } from '@lobechat/local-file-shell/file';
 import type { FileResult, SearchOptions } from '@lobechat/local-file-shell/types';
-import { sniffBinaryBuffer } from '@lobechat/utils/isBinaryContent';
+import { isUtf16Buffer, sniffBinaryBuffer } from '@lobechat/utils/isBinaryContent';
 import { resolveMimeType } from '@lobechat/utils/mimeType';
 import { dialog, shell } from 'electron';
 
@@ -448,7 +448,9 @@ export default class LocalFileCtr extends ControllerModule {
   /**
    * Size, MIME type, and line count of a local file, attached to `<localFile>` references so the
    * model knows whether to read the file whole or in windows. Lines are counted by streaming, so
-   * memory stays flat; binary files and files above {@link LOCAL_FILE_LINE_COUNT_MAX_BYTES} skip it.
+   * memory stays flat; binary files, UTF-16 files and files above
+   * {@link LOCAL_FILE_LINE_COUNT_MAX_BYTES} skip it. UTF-16 is skipped because counting `0x0a` bytes
+   * also counts code units such as U+0A00-U+0AFF, so the number would be wrong rather than missing.
    */
   @IpcMethod()
   async getLocalFileStats({ path: filePath }: LocalFileStatsParams): Promise<LocalFileStats> {
@@ -463,7 +465,11 @@ export default class LocalFileCtr extends ControllerModule {
       const buffer = chunk as Buffer;
       if (!head) {
         head = buffer.subarray(0, LOCAL_FILE_SNIFF_BYTES);
-        if (sniffBinaryBuffer(head).isBinary || fileStat.size > LOCAL_FILE_LINE_COUNT_MAX_BYTES) {
+        if (
+          sniffBinaryBuffer(head).isBinary ||
+          isUtf16Buffer(head) ||
+          fileStat.size > LOCAL_FILE_LINE_COUNT_MAX_BYTES
+        ) {
           break;
         }
         lineCount = 0;

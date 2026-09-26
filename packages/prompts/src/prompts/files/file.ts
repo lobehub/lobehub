@@ -28,6 +28,15 @@ export interface PreviewLongFileContentOptions {
 }
 
 /**
+ * Whether a file's text is sent as a preview instead of inlined: it exceeds
+ * `FILE_INLINE_MAX_CHARS`, or the stored text is shorter than the original. Tool discovery uses the
+ * same predicate to decide whether `readKnowledge` must be enabled for the preview's continuation.
+ */
+export const isOversizedFileContent = (contentLength: number, originalChars?: number) =>
+  contentLength > FILE_INLINE_MAX_CHARS ||
+  (originalChars !== undefined && originalChars > contentLength);
+
+/**
  * Inline a file's text, or replace it with a preview when it exceeds `FILE_INLINE_MAX_CHARS` or
  * its stored text is known to be incomplete. The preview uses the shared text-window contract:
  * attributes report the window and full size, and the notice names the exact `readKnowledge` call
@@ -37,8 +46,7 @@ export const previewLongFileContent = (
   content: string,
   { fileId, originalChars }: PreviewLongFileContentOptions,
 ) => {
-  const storedCut = originalChars !== undefined && originalChars > content.length;
-  if (content.length <= FILE_INLINE_MAX_CHARS && !storedCut) {
+  if (!isOversizedFileContent(content.length, originalChars)) {
     return { attributes: '', body: content };
   }
 

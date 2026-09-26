@@ -5,6 +5,7 @@ import { type LobeChatDatabase } from '@lobechat/database';
 import { type DocumentItem } from '@lobechat/database/schemas';
 import { documents, files } from '@lobechat/database/schemas';
 import { loadFile, UnsupportedFileTypeError } from '@lobechat/file-loaders';
+import { sliceHead } from '@lobechat/prompts/textWindow';
 import type { DocumentAccessScope, FileAccessScope } from '@lobechat/types';
 import {
   ordinaryDocumentAccessScope,
@@ -63,7 +64,7 @@ type ParsedFileDocument = Awaited<ReturnType<typeof loadFile>>;
 export const capParsedFileDocument = (fileDocument: ParsedFileDocument): ParsedFileDocument => {
   if (fileDocument.content.length <= PARSED_FILE_CONTENT_MAX_CHARS) return fileDocument;
 
-  const content = fileDocument.content.slice(0, PARSED_FILE_CONTENT_MAX_CHARS);
+  const content = sliceHead(fileDocument.content, PARSED_FILE_CONTENT_MAX_CHARS);
   return {
     ...fileDocument,
     content,
@@ -846,8 +847,17 @@ export class DocumentService {
     log(`${logPrefix} Starting to parse file as document, path: ${filePath}`);
 
     try {
-      // Use loadFile to load file content
-      const fileDocument = capParsedFileDocument(await loadFile(filePath));
+      const loaded = await loadFile(filePath);
+      // Strip <page> wrappers before capping: a cut inside a page would leave an opening tag with
+      // no closing tag, which the strip regex can no longer match.
+      const fileDocument = capParsedFileDocument(
+        loaded.content.includes('<page')
+          ? {
+              ...loaded,
+              content: loaded.content.replaceAll(/<page[^>]*>([\S\s]*?)<\/page>/g, '$1').trim(),
+            }
+          : loaded,
+      );
 
       log(`${logPrefix} File parsed successfully %O`, {
         fileType: fileDocument.fileType,
@@ -860,11 +870,7 @@ export class DocumentService {
         file.name.replace(/\.(pdf|docx?|md|markdown)$/i, '') ||
         'Untitled';
 
-      // Clean up content - remove <page> tags if present
-      let cleanContent = fileDocument.content;
-      if (cleanContent.includes('<page')) {
-        cleanContent = cleanContent.replaceAll(/<page[^>]*>([\S\s]*?)<\/page>/g, '$1').trim();
-      }
+      const cleanContent = fileDocument.content;
 
       const document = await this.documentModel.create({
         content: cleanContent,

@@ -54,4 +54,24 @@ describe('LocalFileTagPlugin', () => {
 
     expect(resolveFileStats).not.toHaveBeenCalled();
   });
+
+  it('limits concurrent stats lookups', async () => {
+    let running = 0;
+    let peak = 0;
+    const resolveFileStats = vi.fn(async () => {
+      running += 1;
+      peak = Math.max(peak, running);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      running -= 1;
+      return { size: 1 };
+    });
+    const editor = createEditor(resolveFileStats);
+
+    for (let index = 0; index < 6; index++) {
+      await insertTag(editor, { path: `/Users/me/file-${index}.csv` });
+    }
+
+    await vi.waitFor(() => expect(resolveFileStats).toHaveBeenCalledTimes(6));
+    expect(peak).toBeLessThanOrEqual(2);
+  });
 });

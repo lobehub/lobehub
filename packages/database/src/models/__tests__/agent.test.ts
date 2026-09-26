@@ -139,6 +139,28 @@ describe('AgentModel', () => {
       expect(result!.files[0].enabled).toBe(true);
     });
 
+    it('should report the original size of a document cut at parse time', async () => {
+      const agentId = 'test-agent-with-cut-doc';
+      await serverDB.insert(agents).values({ id: agentId, userId });
+      await serverDB.insert(agentsFiles).values({ agentId, fileId: '1', userId, enabled: true });
+      await serverDB.insert(documents).values({
+        content: 'Kept head',
+        fileId: '1',
+        fileType: 'application/pdf',
+        id: 'doc-cut',
+        metadata: { originalCharCount: 9_000_000, truncated: true },
+        source: 'document.pdf',
+        sourceType: 'file',
+        totalCharCount: 9,
+        totalLineCount: 1,
+        userId,
+      });
+
+      const result = await agentModel.getAgentConfigById(agentId);
+
+      expect(result!.files[0].originalCharCount).toBe(9_000_000);
+    });
+
     it('should not include content for disabled files', async () => {
       const agentId = 'test-agent-disabled-file';
       await serverDB.insert(agents).values({ id: agentId, userId });

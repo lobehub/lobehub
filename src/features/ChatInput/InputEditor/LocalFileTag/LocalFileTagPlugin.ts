@@ -56,6 +56,12 @@ const localFileStatsAttributes = (stats: Partial<LocalFileStats>): Record<string
   ...(stats.mimeType ? { type: stats.mimeType } : {}),
 });
 
+/**
+ * Stats lookups stream the whole file on the desktop main process to count lines, so dropping a
+ * folder with hundreds of files must not start hundreds of full-file reads at once.
+ */
+const FILE_STATS_CONCURRENCY = 2;
+
 const readNumberAttribute = (value: string | null | undefined) => {
   if (!value) return undefined;
   const number = Number(value);
@@ -76,6 +82,8 @@ export class LocalFileTagPlugin {
 
   config?: LocalFileTagPluginOptions;
   private kernel: IEditorKernel;
+  private pendingFileStats: (() => Promise<void>)[] = [];
+  private runningFileStats = 0;
 
   constructor(kernel: IEditorKernel, config?: LocalFileTagPluginOptions) {
     this.kernel = kernel;
@@ -142,14 +150,28 @@ export class LocalFileTagPlugin {
     const resolveFileStats = this.config?.resolveFileStats;
     if (!resolveFileStats || !path) return;
 
-    resolveFileStats(path)
-      .then((stats) => {
-        editor.update(() => {
-          const node = $getNodeByKey(nodeKey);
-          if ($isLocalFileTagNode(node)) node.setStats(stats);
-        });
-      })
-      .catch(() => {});
+    this.pendingFileStats.push(() =>
+      resolveFileStats(path)
+        .then((stats) => {
+          editor.update(() => {
+            const node = $getNodeByKey(nodeKey);
+            if ($isLocalFileTagNode(node)) node.setStats(stats);
+          });
+        })
+        .catch(() => {}),
+    );
+    this.drainFileStats();
+  }
+
+  private drainFileStats(): void {
+    while (this.runningFileStats < FILE_STATS_CONCURRENCY && this.pendingFileStats.length > 0) {
+      const task = this.pendingFileStats.shift()!;
+      this.runningFileStats += 1;
+      void task().finally(() => {
+        this.runningFileStats -= 1;
+        this.drainFileStats();
+      });
+    }
   }
 
   private registerLiteXml(): void {

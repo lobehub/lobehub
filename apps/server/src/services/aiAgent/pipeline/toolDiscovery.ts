@@ -24,7 +24,7 @@ import {
   resolveDiscoveryPool,
   resolveInvocationToolIds,
 } from '@lobechat/mecha';
-import { FILE_INLINE_MAX_CHARS } from '@lobechat/prompts';
+import { FILE_INLINE_MAX_CHARS, isOversizedFileContent } from '@lobechat/prompts';
 import type {
   ChatTopicBotContext,
   FrozenCredentialFacts,
@@ -516,8 +516,9 @@ export const discoverTools = async (
    */
   async function readHasOversizedFiles(): Promise<boolean> {
     const hasOversizedAgentFile = agentConfig.files?.some(
-      (file: { content?: string | null; enabled?: boolean | null }) =>
-        file.enabled === true && (file.content?.length ?? 0) > FILE_INLINE_MAX_CHARS,
+      (file: { content?: string | null; enabled?: boolean | null; originalCharCount?: number }) =>
+        file.enabled === true &&
+        isOversizedFileContent(file.content?.length ?? 0, file.originalCharCount),
     );
     if (hasOversizedAgentFile) return true;
     if (!topicId && !attachedFileIds?.length) return false;
