@@ -1,4 +1,5 @@
 import type { FileContent } from '../knowledgeBaseQA';
+import { previewLongFileContent } from './file';
 
 export interface KnowledgeBaseInfo {
   description?: string | null;
@@ -21,8 +22,10 @@ const formatFileContent = (file: FileContent): string => {
     return `<file id="${file.fileId}" name="${file.filename}" error="${file.error}" />`;
   }
 
-  return `<file id="${file.fileId}" name="${file.filename}">
-${file.content}
+  // Agent files are re-sent on every turn, so oversized ones get the same preview as attachments.
+  const { attributes, body } = previewLongFileContent(file.content);
+  return `<file id="${file.fileId}" name="${file.filename}"${attributes}>
+${body}
 </file>`;
 };
 

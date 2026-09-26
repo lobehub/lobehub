@@ -56,7 +56,7 @@ export const resolveToolRules = (request: ToolRuleRequest): ResolvedToolRules =>
 
   const searchMode = agent.chatConfig?.searchMode ?? 'auto';
   const isSearchEnabled = request.useApplicationBuiltinSearchTool ?? searchMode !== 'off';
-  const kbEnabled = request.hasEnabledKnowledgeBases ?? false;
+  const kbEnabled = (request.hasEnabledKnowledgeBases || request.hasOversizedFiles) ?? false;
   const memoryEnabled = request.memoryEnabled ?? false;
   // Image generation is never auto-injected: the user opts in by pinning the
   // tool, and a model with native image output never gets the fallback.

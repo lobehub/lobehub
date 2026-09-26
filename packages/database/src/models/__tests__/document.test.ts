@@ -9,6 +9,9 @@ import {
   documentHistories,
   documents,
   files,
+  messages,
+  messagesFiles,
+  topics,
   users,
   workspaces,
 } from '../../schemas';
@@ -692,6 +695,51 @@ describe('DocumentModel', () => {
     it('returns undefined when no matching document exists', async () => {
       const found = await documentModel.findBySource('https://example.com/missing', 'web');
       expect(found).toBeUndefined();
+    });
+  });
+
+  describe('hasFileDocumentsOverChars', () => {
+    const attachToTopic = async (fileId: string) => {
+      await serverDB.insert(topics).values({ id: 'tpc_large', userId });
+      await serverDB.insert(messages).values({
+        id: 'msg_large',
+        role: 'user',
+        topicId: 'tpc_large',
+        userId,
+      });
+      await serverDB.insert(messagesFiles).values({ fileId, messageId: 'msg_large', userId });
+    };
+
+    it('detects an oversized document among the given files', async () => {
+      const { file } = await createTestDocument(documentModel, fileModel, 'x'.repeat(20));
+
+      await expect(
+        documentModel.hasFileDocumentsOverChars({ fileIds: [file.id], minChars: 10 }),
+      ).resolves.toBe(true);
+      await expect(
+        documentModel.hasFileDocumentsOverChars({ fileIds: [file.id], minChars: 20 }),
+      ).resolves.toBe(false);
+    });
+
+    it('detects an oversized document attached earlier in the topic', async () => {
+      const { file } = await createTestDocument(documentModel, fileModel, 'x'.repeat(20));
+      await attachToTopic(file.id);
+
+      await expect(
+        documentModel.hasFileDocumentsOverChars({ minChars: 10, topicId: 'tpc_large' }),
+      ).resolves.toBe(true);
+      await expect(
+        documentModel.hasFileDocumentsOverChars({ minChars: 10, topicId: 'tpc_other' }),
+      ).resolves.toBe(false);
+    });
+
+    it('ignores other users documents and returns false without inputs', async () => {
+      const { file } = await createTestDocument(documentModel, fileModel, 'x'.repeat(20));
+
+      await expect(
+        documentModel2.hasFileDocumentsOverChars({ fileIds: [file.id], minChars: 10 }),
+      ).resolves.toBe(false);
+      await expect(documentModel.hasFileDocumentsOverChars({ minChars: 10 })).resolves.toBe(false);
     });
   });
 

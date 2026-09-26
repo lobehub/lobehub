@@ -5,7 +5,20 @@ import {
   ordinaryFileAccessScope,
   stripAgentShareDocumentProvenance,
 } from '@lobechat/types';
-import { and, asc, count, desc, eq, inArray, isNull, ne, notInArray, or, sum } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  ne,
+  notInArray,
+  or,
+  sum,
+} from 'drizzle-orm';
 
 import type { DocumentItem, NewDocument } from '../schemas';
 import {
@@ -16,6 +29,8 @@ import {
   documents,
   files,
   knowledgeBaseFiles,
+  messages,
+  messagesFiles,
   nextDocumentUpdatedAt,
   works,
 } from '../schemas';
@@ -287,6 +302,45 @@ export class DocumentModel {
       .select()
       .from(documents)
       .where(and(this.readScope(), inArray(documents.id, ids)));
+  };
+
+  /**
+   * Whether a parsed document longer than `minChars` exists for the given files or for any file
+   * attached to a message in `topicId`. Such files are previewed instead of inlined, so the run
+   * needs a tool that can read them in windows.
+   */
+  hasFileDocumentsOverChars = async ({
+    fileIds = [],
+    minChars,
+    topicId,
+  }: {
+    fileIds?: string[];
+    minChars: number;
+    topicId?: string | null;
+  }): Promise<boolean> => {
+    const fileConditions = [];
+    if (fileIds.length > 0) fileConditions.push(inArray(documents.fileId, fileIds));
+    if (topicId) {
+      fileConditions.push(
+        inArray(
+          documents.fileId,
+          this.db
+            .select({ fileId: messagesFiles.fileId })
+            .from(messagesFiles)
+            .innerJoin(messages, eq(messages.id, messagesFiles.messageId))
+            .where(eq(messages.topicId, topicId)),
+        ),
+      );
+    }
+    if (fileConditions.length === 0) return false;
+
+    const [row] = await this.db
+      .select({ id: documents.id })
+      .from(documents)
+      .where(and(this.ownership(), gt(documents.totalCharCount, minChars), or(...fileConditions)))
+      .limit(1);
+
+    return !!row;
   };
 
   findByFileId = async (fileId: string, accessScope: FileAccessScope = ordinaryFileAccessScope) => {

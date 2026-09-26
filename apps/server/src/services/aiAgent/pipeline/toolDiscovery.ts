@@ -24,6 +24,7 @@ import {
   resolveDiscoveryPool,
   resolveInvocationToolIds,
 } from '@lobechat/mecha';
+import { FILE_INLINE_MAX_CHARS } from '@lobechat/prompts';
 import type {
   ChatTopicBotContext,
   FrozenCredentialFacts,
@@ -45,6 +46,7 @@ import { AiProviderModel } from '@/database/models/aiProvider';
 import { ChatGroupModel } from '@/database/models/chatGroup';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
+import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import type { MessageModel } from '@/database/models/message';
 import type { PluginModel } from '@/database/models/plugin';
@@ -506,6 +508,29 @@ export const discoverTools = async (
     return fileRecords.map((file) => file.fileType || '');
   }
 
+  /**
+   * Whether this turn sends any file as a truncated preview (see `previewLongFileContent`):
+   * an enabled agent file, or a parsed attachment of this turn or topic, over the inline limit.
+   * The preview tells the model to page through the rest with `readKnowledge`, so the
+   * knowledge-base tool must be available even when the agent has no knowledge base.
+   */
+  async function readHasOversizedFiles(): Promise<boolean> {
+    const hasOversizedAgentFile = agentConfig.files?.some(
+      (file: { content?: string | null; enabled?: boolean | null }) =>
+        file.enabled === true && (file.content?.length ?? 0) > FILE_INLINE_MAX_CHARS,
+    );
+    if (hasOversizedAgentFile) return true;
+    if (!topicId && !attachedFileIds?.length) return false;
+
+    return traceDiscoveryStage('oversized_files', () =>
+      new DocumentModel(deps.db, deps.userId, deps.workspaceId).hasFileDocumentsOverChars({
+        fileIds: attachedFileIds,
+        minChars: FILE_INLINE_MAX_CHARS,
+        topicId,
+      }),
+    );
+  }
+
   // Every other read this send needs, started together. They hit different
   // backends — Postgres rows, the Market's live skill discovery, the device
   // gateway — and none of them feeds another, so the user waits for the slowest
@@ -524,6 +549,7 @@ export const discoverTools = async (
           ).catch(() => false), // non-critical
         ),
         attachedFileTypes: started(readAttachedFileTypes()),
+        oversizedFiles: started(readHasOversizedFiles().catch(() => false)), // non-critical
         composioManifests: started(
           traceDiscoveryStage('composio', () =>
             deps.composioService.getComposioManifests(resolvedAgentId),
@@ -777,6 +803,7 @@ export const discoverTools = async (
       false;
 
     hasAgentDocuments = await toolReads.agentDocuments;
+    const hasOversizedFiles = await toolReads.oversizedFiles;
 
     log('execAgent: isBotConversation=%s', isBotConversation);
 
@@ -1050,6 +1077,7 @@ export const discoverTools = async (
       executionPlan,
       globalMemoryEnabled,
       hasEnabledKnowledgeBases,
+      hasOversizedFiles,
       isBotConversation,
       isGroupSupervisor,
       modelAbilities,

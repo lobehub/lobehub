@@ -1,10 +1,24 @@
 import { describe, expect, it } from 'vitest';
 
 import type { FileContent } from '../knowledgeBaseQA';
+import { FILE_INLINE_MAX_CHARS, FILE_PREVIEW_CHARS } from './file';
 import type { KnowledgeBaseInfo } from './knowledgeBase';
 import { promptAgentKnowledge } from './knowledgeBase';
 
 describe('promptAgentKnowledge', () => {
+  it('should preview oversized agent files instead of inlining them', () => {
+    const content = `${'a'.repeat(FILE_PREVIEW_CHARS)}${'b'.repeat(FILE_INLINE_MAX_CHARS)}`;
+    const result = promptAgentKnowledge({
+      fileContents: [{ content, fileId: 'file1', filename: 'big.csv' }],
+    });
+
+    expect(result).toContain(
+      `<file id="file1" name="big.csv" truncated="true" total_chars="${content.length}" total_lines="1">`,
+    );
+    expect(result).toContain('readKnowledge tool');
+    expect(result).not.toContain('bbbb');
+  });
+
   it('should return empty string when no files and no knowledge bases', () => {
     const result = promptAgentKnowledge({});
     expect(result).toBe('');

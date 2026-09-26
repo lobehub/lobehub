@@ -399,9 +399,17 @@ describe('filesPrompts', () => {
       const result = filesPrompts({ addUrl: true, fileList: [{ ...mockFile, content }] });
 
       expect(result).toContain(
-        `url="https://example.com/test.pdf" truncated="true" total_chars="${content.length}">${'a'.repeat(FILE_PREVIEW_CHARS)}\n[Only the first ${FILE_PREVIEW_CHARS} of ${content.length} characters are shown.`,
+        `url="https://example.com/test.pdf" truncated="true" total_chars="${content.length}" total_lines="1">${'a'.repeat(FILE_PREVIEW_CHARS)}\n[Only the first ${FILE_PREVIEW_CHARS} of ${content.length} characters (1 lines) are shown.`,
       );
+      expect(result).toContain('readKnowledge tool, passing this file id and an offset');
       expect(result).not.toContain('bbbb');
+    });
+
+    it('counts lines of oversized content', () => {
+      const content = 'line\n'.repeat(FILE_INLINE_MAX_CHARS / 5 + 1);
+      const result = filesPrompts({ addUrl: false, fileList: [{ ...mockFile, content }] });
+
+      expect(result).toContain(`total_lines="${FILE_INLINE_MAX_CHARS / 5 + 2}"`);
     });
   });
 });
