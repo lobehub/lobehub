@@ -33,6 +33,8 @@ export default {
   'actions.copyLinkSuccess': 'Link copied',
   'actions.copySessionId': 'Copy Topic ID',
   'actions.copySessionIdSuccess': 'Topic ID copied',
+  'actions.copyTopicPrompt': 'Copy Topic Prompt',
+  'actions.copyTopicPromptSuccess': 'Topic prompt copied',
   'actions.copyWorkingDirectory': 'Copy Working Directory',
   'actions.copyWorkingDirectorySuccess': 'Working directory copied',
   'actions.duplicate': 'Duplicate',

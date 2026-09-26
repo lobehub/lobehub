@@ -13,6 +13,7 @@ import {
   Hash,
   Link2,
   LucideCopy,
+  MessageSquareText,
   PanelRight,
   PanelTop,
   PencilLine,
@@ -41,6 +42,8 @@ import { useChatStore } from '@/store/chat';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 import { isForbiddenError } from '@/utils/forbiddenError';
+
+import { buildTopicPrompt } from './buildTopicPrompt';
 
 export interface TopicItemDropdownMenuProps {
   fav?: boolean;
@@ -231,6 +234,15 @@ export const useTopicItemDropdownMenu = ({
           const url = `${appOrigin}${AGENT_CHAT_TOPIC_URL(activeAgentId, id)}`;
           await copyToClipboard(url);
           toast.success(t('actions.copyLinkSuccess'));
+        },
+      },
+      {
+        icon: <Icon icon={MessageSquareText} />,
+        key: 'copyTopicPrompt',
+        label: t('actions.copyTopicPrompt'),
+        onClick: async () => {
+          await copyToClipboard(buildTopicPrompt({ id, title }));
+          toast.success(t('actions.copyTopicPromptSuccess'));
         },
       },
       {

@@ -4,6 +4,7 @@
 import { renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { buildTopicPrompt } from './buildTopicPrompt';
 import { useTopicItemDropdownMenu } from './useDropdownMenu';
 
 const permissionMock = vi.hoisted(() => ({
@@ -109,6 +110,7 @@ describe('useTopicItemDropdownMenu', () => {
   it.each([
     ['copySessionId', 'topic-1'],
     ['copyLink', 'https://example.com/agent/agent-1/topic-1'],
+    ['copyTopicPrompt', buildTopicPrompt({ id: 'topic-1', title: 'Topic 1' })],
   ])('copies %s when the Clipboard API is unavailable', async (key, expected) => {
     vi.spyOn(navigator, 'clipboard', 'get').mockReturnValue(undefined as never);
     let copiedText: string | undefined;
@@ -152,6 +154,7 @@ describe('useTopicItemDropdownMenu', () => {
       'divider',
       'copySessionId',
       'copyLink',
+      'copyTopicPrompt',
       'divider',
       'duplicate',
       'forwardToAgent',
@@ -188,5 +191,6 @@ describe('useTopicItemDropdownMenu', () => {
 
     expect(getMenuItem(items, 'copySessionId')).not.toMatchObject({ disabled: true });
     expect(getMenuItem(items, 'copyLink')).not.toMatchObject({ disabled: true });
+    expect(getMenuItem(items, 'copyTopicPrompt')).not.toMatchObject({ disabled: true });
   });
 });
