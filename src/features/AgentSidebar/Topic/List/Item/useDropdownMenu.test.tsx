@@ -12,6 +12,7 @@ const permissionMock = vi.hoisted(() => ({
   edit_own_content: true,
 }));
 const versionMock = vi.hoisted(() => ({ isDesktop: false }));
+const workspaceMock = vi.hoisted(() => ({ id: null as string | null }));
 
 vi.mock('antd', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -25,6 +26,10 @@ vi.mock('antd', async (importOriginal) => ({
       },
     }),
   },
+}));
+
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  useActiveWorkspaceId: () => workspaceMock.id,
 }));
 
 vi.mock('@/components/RenameModal', () => ({
@@ -100,6 +105,7 @@ describe('useTopicItemDropdownMenu', () => {
     permissionMock.create_content = true;
     permissionMock.edit_own_content = true;
     versionMock.isDesktop = false;
+    workspaceMock.id = null;
   });
 
   afterEach(() => {
@@ -130,6 +136,24 @@ describe('useTopicItemDropdownMenu', () => {
     expect(copy).toHaveBeenCalledWith('copy');
     expect(copiedText).toBe(expected);
     expect(document.querySelector('textarea')).toBeNull();
+  });
+
+  it('scopes the copied topic prompt to the active workspace', async () => {
+    workspaceMock.id = 'ws_1';
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(navigator, 'clipboard', 'get').mockReturnValue({ writeText } as never);
+    const { result } = renderHook(() =>
+      useTopicItemDropdownMenu({ id: 'topic-1', title: 'Topic 1' }),
+    );
+    const item = getMenuItem(result.current.dropdownMenu(), 'copyTopicPrompt');
+    if (!item || !('onClick' in item)) throw new Error('Expected copy action');
+
+    await item.onClick?.({} as never);
+
+    expect(writeText).toHaveBeenCalledWith(
+      buildTopicPrompt({ id: 'topic-1', title: 'Topic 1', workspaceId: 'ws_1' }),
+    );
+    expect(writeText.mock.calls[0][0]).toContain('LOBEHUB_WORKSPACE_ID=ws_1 lh topic view');
   });
 
   it('groups desktop topic actions by intent', () => {

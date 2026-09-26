@@ -25,6 +25,7 @@ import {
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { openRenameModal } from '@/components/RenameModal';
 import { isDesktop } from '@/const/version';
@@ -61,6 +62,7 @@ export const useTopicItemDropdownMenu = ({
   const { t } = useTranslation(['topic', 'common', 'chat']);
 
   const navigate = useWorkspaceAwareNavigate();
+  const activeWorkspaceId = useActiveWorkspaceId();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const { allowed: canCreateTopic } = usePermission('create_content');
   const { allowed: canEditTopic } = usePermission('edit_own_content');
@@ -241,7 +243,7 @@ export const useTopicItemDropdownMenu = ({
         key: 'copyTopicPrompt',
         label: t('actions.copyTopicPrompt'),
         onClick: async () => {
-          await copyToClipboard(buildTopicPrompt({ id, title }));
+          await copyToClipboard(buildTopicPrompt({ id, title, workspaceId: activeWorkspaceId }));
           toast.success(t('actions.copyTopicPromptSuccess'));
         },
       },
@@ -323,6 +325,7 @@ export const useTopicItemDropdownMenu = ({
     canCreateTopic,
     canEditTopic,
     activeAgentId,
+    activeWorkspaceId,
     activeWorkspaceSlug,
     appOrigin,
     autoRenameTopicTitle,
