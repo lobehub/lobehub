@@ -790,6 +790,28 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     );
   });
 
+  it('dispatches a reused topic to the device it ran on after the agent moved to the sandbox', async () => {
+    heteroAgentConfig.agencyConfig = {
+      executionTarget: 'sandbox',
+      heterogeneousProvider: { type: 'claude-code' },
+    } as any;
+    topicMock.findById.mockResolvedValue({
+      id: 'topic-existing',
+      metadata: { boundDeviceId: 'device-2', workingDirectory: '/Users/alice/work' },
+    });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-existing' },
+      prompt: 'Keep going where you were',
+    } as any);
+
+    expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
+    expect(mockDispatchAgentRun).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: '/Users/alice/work', deviceId: 'device-2' }),
+    );
+  });
+
   it('should pass resolved Claude Code model and effort args to device dispatch', async () => {
     heteroAgentConfig.agencyConfig = {
       boundDeviceId: 'device-1',

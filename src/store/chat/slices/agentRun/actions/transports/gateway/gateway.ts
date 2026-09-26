@@ -13,6 +13,7 @@ import {
 } from '@lobechat/agent-gateway-client';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import type {
+  ChatTopic,
   ChatTopicMetadata,
   ChatTopicStatus,
   ConversationContext,
@@ -27,7 +28,12 @@ import {
   ensureAgentManagementAccess,
   getRuntimeCanManageAgent,
 } from '@/helpers/agentManagementAccess';
-import { resolveExecutionTarget, resolveWorkspaceScoped } from '@/helpers/executionTarget';
+import {
+  applyTopicDeviceBinding,
+  getTopicBoundDeviceId,
+  resolveExecutionTarget,
+  resolveWorkspaceScoped,
+} from '@/helpers/executionTarget';
 import { trackProductUsageEvent } from '@/libs/analytics/productUsageEvent';
 import {
   aiAgentService,
@@ -45,6 +51,7 @@ import { topicSelectors } from '@/store/chat/selectors';
 import type { ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
+import { getElectronStoreState } from '@/store/electron';
 import { getFileStoreState } from '@/store/file/store';
 import { getServerConfigStoreState } from '@/store/serverConfig';
 import type { StoreSetter } from '@/store/types';
@@ -136,6 +143,7 @@ const interruptGatewayTaskOrThrow = async (
  */
 const resolveDesktopDeviceHints = async (
   agentId?: string,
+  topic?: ChatTopic,
 ): Promise<{ deviceId?: string; localDeviceId?: string }> => {
   if (!isDesktop || !agentId) return {};
 
@@ -175,20 +183,29 @@ const resolveDesktopDeviceHints = async (
   const deviceOverride = agent?.workspaceId
     ? userState.workspaceUserPreference.agentDeviceOverrides?.[agentId]
     : undefined;
-  const agencyConfig = resolveAgentAgencyConfig(
-    agentByIdSelectors.getAgencyConfigById(agentId)(agentState),
-    deviceOverride,
+  // A conversation pinned to another machine must not be preset to this one —
+  // the server then routes it by the topic's own binding.
+  const { agencyConfig, workspaceScoped } = applyTopicDeviceBinding(
     {
-      canManage,
-      visibility: agent?.visibility,
-      workspaceId: agent?.workspaceId,
+      agencyConfig: resolveAgentAgencyConfig(
+        agentByIdSelectors.getAgencyConfigById(agentId)(agentState),
+        deviceOverride,
+        {
+          canManage,
+          visibility: agent?.visibility,
+          workspaceId: agent?.workspaceId,
+        },
+      ),
+      workspaceScoped: resolveWorkspaceScoped(usesWorkspaceMemberSelection, deviceOverride),
     },
+    getTopicBoundDeviceId(topic, agentId),
+    getElectronStoreState().gatewayDeviceInfo?.deviceId,
   );
   const isPlatformTask = isRemoteHeterogeneousType(agencyConfig?.heterogeneousProvider?.type ?? '');
   const executionTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: true,
     isHetero: !!agencyConfig?.heterogeneousProvider,
-    workspaceScoped: resolveWorkspaceScoped(usesWorkspaceMemberSelection, deviceOverride),
+    workspaceScoped,
   });
   // Platform hints are capability claims, not routing overrides. Always send
   // this desktop best-effort and let the server's authoritative execution plan
@@ -925,7 +942,12 @@ export class GatewayActionImpl {
       ? this.#get().getOperationAbortSignal(parentOperationId)
       : undefined;
 
-    const desktopDeviceHints = await resolveDesktopDeviceHints(executionContext.agentId);
+    const desktopDeviceHints = await resolveDesktopDeviceHints(
+      executionContext.agentId,
+      executionContext.topicId
+        ? topicSelectors.getTopicById(executionContext.topicId)(this.#get())
+        : undefined,
+    );
     const userInterventionConfig = {
       approvalMode: toolInterventionSelectors.approvalMode(useUserStore.getState()),
       allowList: toolInterventionSelectors.allowList(useUserStore.getState()),

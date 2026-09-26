@@ -21,7 +21,11 @@ import {
   getRuntimeCanManageAgent,
 } from '@/helpers/agentManagementAccess';
 import { resolveAgentWorkingDirectory } from '@/helpers/agentWorkingDirectory';
-import { resolveWorkspaceScoped } from '@/helpers/executionTarget';
+import {
+  applyTopicDeviceBinding,
+  getTopicBoundDeviceId,
+  resolveWorkspaceScoped,
+} from '@/helpers/executionTarget';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
@@ -124,7 +128,11 @@ export const ensureEffectiveAgencyAccess = async (agentId: string) => {
   });
 };
 
-export const getEffectiveAgencyConfig = (agentId: string) => {
+/**
+ * `topic` keeps the run on the machine that conversation already ran on — see
+ * `applyTopicDeviceBinding`. Omit it for agent-level decisions only.
+ */
+export const getEffectiveAgencyConfig = (agentId: string, topic?: ChatTopic | null) => {
   const agentState = getAgentStoreState();
   const sharedAgencyConfig = agentSelectors.getAgentConfigById(agentId)(agentState)?.agencyConfig;
   const agent = agentByIdSelectors.getAgentById(agentId)(agentState);
@@ -147,15 +155,24 @@ export const getEffectiveAgencyConfig = (agentId: string) => {
     ? getUserStoreState().workspaceUserPreference.agentDeviceOverrides?.[agentId]
     : undefined;
 
+  const { agencyConfig, workspaceScoped } = applyTopicDeviceBinding(
+    {
+      agencyConfig: resolveAgentAgencyConfig(sharedAgencyConfig, deviceOverride, {
+        canManage,
+        visibility: agent?.visibility,
+        workspaceId: agent?.workspaceId,
+      }),
+      workspaceScoped: resolveWorkspaceScoped(usesWorkspaceMemberSelection, deviceOverride),
+    },
+    getTopicBoundDeviceId(topic, agentId),
+    getElectronStoreState().gatewayDeviceInfo?.deviceId,
+  );
+
   return {
-    agencyConfig: resolveAgentAgencyConfig(sharedAgencyConfig, deviceOverride, {
-      canManage,
-      visibility: agent?.visibility,
-      workspaceId: agent?.workspaceId,
-    }),
+    agencyConfig,
     /** True workspace membership — stays true for the author, unlike `workspaceScoped`. */
     isWorkspaceAgent: !!agent?.workspaceId,
-    workspaceScoped: resolveWorkspaceScoped(usesWorkspaceMemberSelection, deviceOverride),
+    workspaceScoped,
   };
 };
 
@@ -189,7 +206,7 @@ export const resolveHeteroRunContext = (
   const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
   const agentState = getAgentStoreState();
   const desktopContext = globalAgentContextManager.getContext();
-  const { agencyConfig, workspaceScoped } = getEffectiveAgencyConfig(agentId);
+  const { agencyConfig, workspaceScoped } = getEffectiveAgencyConfig(agentId, topic);
   const agentWorkingDirectory = resolveAgentWorkingDirectory({
     agencyConfig,
     currentDeviceId,
@@ -468,6 +485,9 @@ const regenerateUserMessageFromSource = async (
     await ensureEffectiveAgencyAccess(context.agentId);
     const { agencyConfig, isWorkspaceAgent, workspaceScoped } = getEffectiveAgencyConfig(
       context.agentId,
+      context.topicId
+        ? topicSelectors.getTopicById(context.topicId)(useChatStore.getState())
+        : undefined,
     );
     const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
     const runtimeType = selectRuntimeType({
@@ -839,6 +859,9 @@ export const generationSlice: StateCreator<
     await ensureEffectiveAgencyAccess(context.agentId);
     const { agencyConfig, isWorkspaceAgent, workspaceScoped } = getEffectiveAgencyConfig(
       context.agentId,
+      context.topicId
+        ? topicSelectors.getTopicById(context.topicId)(useChatStore.getState())
+        : undefined,
     );
     const runtimeType = selectRuntimeType({
       boundDeviceId: agencyConfig?.boundDeviceId,
@@ -930,6 +953,9 @@ export const generationSlice: StateCreator<
     await ensureEffectiveAgencyAccess(context.agentId);
     const { agencyConfig, isWorkspaceAgent, workspaceScoped } = getEffectiveAgencyConfig(
       context.agentId,
+      context.topicId
+        ? topicSelectors.getTopicById(context.topicId)(useChatStore.getState())
+        : undefined,
     );
     const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
     const runtimeType = selectRuntimeType({

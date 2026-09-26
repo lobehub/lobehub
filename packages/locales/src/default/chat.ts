@@ -689,6 +689,11 @@ export default {
   'heteroAgent.executionTarget.downloadDesktopDesc': 'Run agents with access to your computer',
   'heteroAgent.executionTarget.downloadDesktopTitle': 'Get the desktop app',
   'heteroAgent.executionTarget.title': 'Execution Environment',
+  'heteroAgent.executionTarget.topicTag': 'This topic',
+  'heteroAgent.executionTarget.switchTopic.content':
+    'This topic has been running on {{name}}, where its working directory and agent session are kept. After switching, its next turn starts a fresh session in the new environment. New topics will use this choice too.',
+  'heteroAgent.executionTarget.switchTopic.ok': 'Switch',
+  'heteroAgent.executionTarget.switchTopic.title': 'Move this topic to another environment?',
   'heteroAgent.executionTarget.unknownDevice': 'Unknown device',
   'hideForYou':
     "Direct message content is hidden. Please enable 'Show Direct Message Content' in settings to view.",

@@ -91,8 +91,10 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
   // The EFFECTIVE config (override merged) — only for resolving
   // which device the cwd write should target, keeping it on the same machine
   // the picker/GitStatus/`useEffectiveWorkingDirectory` operate on.
-  const { agencyConfig: effectiveAgencyConfig, workspaceScoped } =
-    useEffectiveAgencyConfig(agentId);
+  const { agencyConfig: effectiveAgencyConfig, workspaceScoped } = useEffectiveAgencyConfig(
+    agentId,
+    { topicId: routeTopicId },
+  );
   // Heterogeneous CLI agents (Claude Code, Codex, …) store sessions per-cwd, so
   // their session cwd anchors to the SOURCE repo — a worktree switch (same repo,
   // different activeWorktree) must NOT change the session cwd or reset the

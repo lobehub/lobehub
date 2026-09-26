@@ -2216,8 +2216,10 @@ describe('ConversationLifecycle actions', () => {
 
         // `workingDirectory` is the EFFECTIVE path (the checked-out worktree the
         // run executes in); the config keeps the SOURCE repo, which is what
-        // By-Project groups on.
+        // By-Project groups on. The machine is recorded with it, so the next
+        // turn stays there after the agent default changes.
         const expectedMetadata = {
+          boundDeviceId: deviceId,
           workingDirectory: worktreePath,
           workingDirectoryConfig: {
             git: { activeWorktree: worktreePath },
@@ -2284,6 +2286,7 @@ describe('ConversationLifecycle actions', () => {
           expect.objectContaining({
             optimisticTopic: expect.objectContaining({
               metadata: {
+                boundDeviceId: deviceId,
                 workingDirectory: '/repo/default',
                 workingDirectoryConfig: { path: '/repo/default' },
               },
@@ -2337,6 +2340,7 @@ describe('ConversationLifecycle actions', () => {
           expect.objectContaining({
             newTopic: expect.objectContaining({
               metadata: {
+                boundDeviceId: deviceId,
                 workingDirectory: '/repo/lobehub',
                 workingDirectoryConfig: { path: '/repo/lobehub' },
               },
@@ -2484,6 +2488,7 @@ describe('ConversationLifecycle actions', () => {
             expect.objectContaining({
               newTopic: expect.objectContaining({
                 metadata: {
+                  boundDeviceId: HETERO_DEVICE_ID,
                   workingDirectory: '/repo/device-default',
                   workingDirectoryConfig: { path: '/repo/device-default' },
                 },
@@ -2491,6 +2496,60 @@ describe('ConversationLifecycle actions', () => {
             }),
             expect.any(AbortController),
           );
+        });
+
+        // The topic ran on another machine, where its cwd and CLI session live.
+        // An agent default of `local` must not pull its next turn onto this
+        // desktop — the run goes through the gateway to the topic's machine.
+        it('keeps a topic pinned to another machine off the in-process runtime', async () => {
+          setupHeteroRun();
+          const agentId = TEST_IDS.SESSION_ID;
+          const executeGatewayAgentSpy = vi.fn().mockResolvedValue({
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            operationId: 'gateway-op-remote-topic',
+            topicId: 'remote-topic',
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          });
+          act(() => {
+            useChatStore.setState({
+              executeGatewayAgent: executeGatewayAgentSpy,
+              isGatewayModeEnabled: () => true,
+              topicDataMap: {
+                [topicMapKey({ agentId })]: {
+                  currentPage: 0,
+                  hasMore: false,
+                  isExpandingPageSize: false,
+                  isLoadingMore: false,
+                  items: [
+                    {
+                      agentId,
+                      createdAt: 0,
+                      id: 'remote-topic',
+                      metadata: {
+                        boundDeviceId: 'remote-device',
+                        workingDirectory: '/remote/repo',
+                      },
+                      title: 'Remote work',
+                      updatedAt: 0,
+                    } as any,
+                  ],
+                  pageSize: 20,
+                  total: 1,
+                },
+              },
+            });
+          });
+
+          const { result } = renderHook(() => useChatStore());
+          await act(async () => {
+            await result.current.sendMessage({
+              context: { agentId, threadId: null, topicId: 'remote-topic' },
+              message: 'Continue there',
+            });
+          });
+
+          expect(executeHeterogeneousAgentMock).not.toHaveBeenCalled();
+          expect(executeGatewayAgentSpy).toHaveBeenCalled();
         });
 
         it('keeps the agent per-device pick above the device defaultCwd', async () => {

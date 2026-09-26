@@ -274,19 +274,24 @@ export class AiAgentService {
    * names one) — that is what lets another device skip it. A topic already
    * bound to a different device is left unpinned rather than given this
    * device's path.
+   *
+   * An unbound topic that already carries a cwd (the client's initial
+   * metadata, or a pre-binding row) still gets the device stamped: the run
+   * just used that cwd here, and the binding is what keeps later turns and the
+   * device picker on this machine.
    */
   private async bindTopicWorkingDirectory(params: BindTopicWorkingDirectoryParams): Promise<void> {
     const { config, currentDeviceId, currentWorkingDirectory, deviceId, topicId } = params;
-    if (currentWorkingDirectory || !config) return;
+    if (!config) return;
     if (currentDeviceId && deviceId && currentDeviceId !== deviceId) return;
-    const path = getWorkingDirEffectivePath(config);
-    if (!path) return;
+    const stampDevice = !!deviceId && !currentDeviceId;
+    const path = currentWorkingDirectory ? undefined : getWorkingDirEffectivePath(config);
+    if (!path && !stampDevice) return;
 
     try {
       await this.topicModel.updateMetadata(topicId, {
-        ...(deviceId && !currentDeviceId && { boundDeviceId: deviceId }),
-        workingDirectory: path,
-        workingDirectoryConfig: config,
+        ...(stampDevice && { boundDeviceId: deviceId }),
+        ...(path && { workingDirectory: path, workingDirectoryConfig: config }),
       });
     } catch (err) {
       // Metadata bookkeeping must never fail a run that is otherwise fine.
@@ -1092,7 +1097,7 @@ export class AiAgentService {
           parentOperationId,
           pinnedHeterogeneousTopicModel: turn.pinnedHeterogeneousTopicModel,
           requestTrigger: requestTriggerMetadata.trigger,
-          requestedDeviceId,
+          requestedDeviceId: turn.requestedDeviceId,
           runAttachments,
           selfMessageIds,
           topicStartOwnerOperationId: params.topicStartOwnerOperationId,
@@ -1210,7 +1215,7 @@ export class AiAgentService {
       operationId,
       parentMessageId,
       requestTrigger: requestTriggerMetadata.trigger,
-      requestedDeviceId,
+      requestedDeviceId: turn.requestedDeviceId,
       resumeApproval,
       resumeApprovalPlugin,
       resumeApprovals,

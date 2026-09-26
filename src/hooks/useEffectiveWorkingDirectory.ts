@@ -51,7 +51,7 @@ export const useEffectiveWorkingDirectory = (
   // Effective config = shared row + this member's device override,
   // so `resolveTargetDeviceId` targets the device THIS member's run goes to —
   // not whichever machine landed on the workspace-shared row.
-  const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId);
+  const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId, { topicId });
   const legacyAgentWorkingDirectory = useAgentStore((s) =>
     agentId ? s.localAgentWorkingDirectoryMap[agentId] : undefined,
   );

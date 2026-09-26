@@ -39,6 +39,8 @@ import {
   resolveTargetDeviceId,
 } from '@/helpers/agentWorkingDirectory';
 import {
+  applyTopicDeviceBinding,
+  getTopicBoundDeviceId,
   resolveExecutionTarget,
   resolveToolMode,
   resolveWorkspaceScoped,
@@ -459,15 +461,25 @@ export class ConversationLifecycleActionImpl {
     const deviceOverride = agent?.workspaceId
       ? getUserStoreState().workspaceUserPreference.agentDeviceOverrides?.[agentId]
       : undefined;
-    const workspaceScoped = resolveWorkspaceScoped(usesWorkspaceMemberSelection, deviceOverride);
     // Runtime selection must use the same per-user device override as the
     // switcher. A workspace-local pick is intentionally private to this member
-    // and is therefore safe to execute in-process on their desktop.
-    const agencyConfig = resolveAgentAgencyConfig(agentConfig?.agencyConfig, deviceOverride, {
-      canManage,
-      visibility: agent?.visibility,
-      workspaceId: agent?.workspaceId,
-    });
+    // and is therefore safe to execute in-process on their desktop. An existing
+    // conversation then stays on the machine it already ran on.
+    const { agencyConfig, workspaceScoped } = applyTopicDeviceBinding(
+      {
+        agencyConfig: resolveAgentAgencyConfig(agentConfig?.agencyConfig, deviceOverride, {
+          canManage,
+          visibility: agent?.visibility,
+          workspaceId: agent?.workspaceId,
+        }),
+        workspaceScoped: resolveWorkspaceScoped(usesWorkspaceMemberSelection, deviceOverride),
+      },
+      getTopicBoundDeviceId(
+        context.topicId ? topicSelectors.getTopicById(context.topicId)(this.#get()) : undefined,
+        agentId,
+      ),
+      getElectronStoreState().gatewayDeviceInfo?.deviceId,
+    );
     const isGatewayMode = this.#get().isGatewayModeEnabled(agentId);
     // Legacy agents may only carry `model: '<cli-type>'`. Keep gateway routing
     // unchanged when it is available. Recover the provider when gateway mode is
@@ -1211,15 +1223,30 @@ export class ConversationLifecycleActionImpl {
     const resolveWorkingDirPath = isLocalCliHetero
       ? getWorkingDirSourcePath
       : getWorkingDirEffectivePath;
+    // A topic's cwd is a bare path that only holds on the machine it was pinned
+    // on — never hand another machine's path to this run (mirrors the server's
+    // `topicPinFitsDevice`).
+    const topicDeviceId = existingTopic?.metadata?.boundDeviceId;
+    const topicCwdMetadata =
+      topicDeviceId && runCwdDeviceId && topicDeviceId !== runCwdDeviceId
+        ? undefined
+        : existingTopic?.metadata;
     const workingDirectory =
-      resolveWorkingDirPath(existingTopic?.metadata?.workingDirectoryConfig) ??
-      existingTopic?.metadata?.workingDirectory ??
+      resolveWorkingDirPath(topicCwdMetadata?.workingDirectoryConfig) ??
+      topicCwdMetadata?.workingDirectory ??
       agentWorkingDirectory;
     const workingDirectoryConfig =
-      existingTopic?.metadata?.workingDirectoryConfig ??
-      (existingTopic?.metadata?.workingDirectory
-        ? { path: existingTopic.metadata.workingDirectory }
+      topicCwdMetadata?.workingDirectoryConfig ??
+      (topicCwdMetadata?.workingDirectory
+        ? { path: topicCwdMetadata.workingDirectory }
         : agentWorkingDirectoryConfig);
+    // Record which machine a new conversation runs on, so its next turn — and
+    // the device picker — stay on it after the agent default changes. `auto`
+    // has not picked a machine yet; the server stamps the one it routes to.
+    const newTopicDeviceId =
+      runEffectiveTarget === 'local' || runEffectiveTarget === 'device'
+        ? runCwdDeviceId
+        : undefined;
     const pendingTopicRepos =
       runtimeType === 'gateway' && willCreateNewTopic && operationContext.agentId
         ? getPendingTopicRepos(operationContext.agentId)
@@ -1238,6 +1265,7 @@ export class ConversationLifecycleActionImpl {
           }
         : workingDirectory
           ? {
+              ...(newTopicDeviceId ? { boundDeviceId: newTopicDeviceId } : {}),
               workingDirectory,
               ...(workingDirectoryConfig ? { workingDirectoryConfig } : {}),
             }

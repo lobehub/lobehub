@@ -80,8 +80,10 @@ const ProfileEditor = memo(() => {
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
   const heterogeneousProvider = config?.agencyConfig?.heterogeneousProvider;
-  const { agencyConfig: effectiveAgencyConfig, workspaceScoped } =
-    useEffectiveAgencyConfig(agentId);
+  const { agencyConfig: effectiveAgencyConfig, workspaceScoped } = useEffectiveAgencyConfig(
+    agentId,
+    { topicId: null },
+  );
 
   const updateHeterogeneousCommand = async (command: string) => {
     if (!canEdit) return;

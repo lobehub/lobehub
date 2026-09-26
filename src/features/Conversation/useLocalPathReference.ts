@@ -31,7 +31,7 @@ export const useLocalPathReference = (agentId: string, topicId?: string | null) 
     chatConfigByIdSelectors.isLocalSystemEnabledById(agentId),
   );
   const workingDirectory = useEffectiveWorkingDirectory(agentId, { topicId });
-  const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId);
+  const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId, { topicId });
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
   const executionTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,

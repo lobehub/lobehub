@@ -81,6 +81,7 @@ import {
 import { type ChatStore, useChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { getElectronStoreState } from '@/store/electron';
 import { getUserStoreState, useUserStore } from '@/store/user';
 import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
 
@@ -913,7 +914,11 @@ export const executeHeterogeneousAgent = async (
       .catch(() => {})
       .then(async () => {
         const topicMetadata = getTopicMetadataById(get(), topicId);
+        // The session and its cwd now live on THIS machine, so the topic is
+        // pinned here — its next turn and the device picker follow it.
+        const runDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
         await updateTopicMetadata(topicId, {
+          ...(runDeviceId ? { boundDeviceId: runDeviceId } : {}),
           heteroSessionBindingKey: activeSessionBindingKey,
           heteroSessionBindingKeyByWorkingDirectory: setHeteroSessionBindingKeyForWorkingDirectory(
             topicMetadata,

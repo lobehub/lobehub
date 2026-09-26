@@ -267,6 +267,84 @@ export const canExecutionTargetReadLocalPaths = (
   target === 'local' ||
   (target === 'device' && !!currentDeviceId && agencyConfig?.boundDeviceId === currentDeviceId);
 
+interface TopicDeviceBindingSource {
+  agentId?: string | null;
+  groupId?: string | null;
+  metadata?: { boundDeviceId?: string } | null;
+}
+
+/**
+ * The machine a conversation is pinned to, as seen by `agentId`.
+ *
+ * A group topic's binding belongs to its owning agent; member agents keep
+ * their own target. Mirrors the server's `canUseTopicPin` rule in turnSetup.
+ */
+export const getTopicBoundDeviceId = (
+  topic: TopicDeviceBindingSource | null | undefined,
+  agentId: string | undefined,
+): string | undefined => {
+  const deviceId = topic?.metadata?.boundDeviceId;
+  if (!topic || !deviceId || !agentId) return;
+  if (topic.agentId ? topic.agentId !== agentId : !!topic.groupId) return;
+  return deviceId;
+};
+
+export interface TopicDeviceBindingResult {
+  agencyConfig: LobeAgentAgencyConfig | undefined;
+  workspaceScoped: boolean;
+}
+
+/**
+ * Keep a conversation on the machine it already ran on.
+ *
+ * The agent-level target is only the default for NEW conversations: a topic
+ * that ran on device A holds A's working directory and CLI session, so a later
+ * turn sent after the agent was switched to device B must still go to A —
+ * otherwise the topic's cwd is skipped on B and resume silently starts fresh.
+ *
+ * The agent config is kept as-is when it already targets the topic's machine
+ * (preserving the user's `local` vs gateway transport choice). Otherwise the
+ * topic's machine becomes `local` when it is this desktop and `device`
+ * elsewhere. A `fixed` workspace policy is author-controlled and always wins,
+ * and `auto` opted into a fresh device pick every run. Mirrors the server
+ * default in turnSetup.
+ *
+ * The binding is this member's own run history, so it lifts `workspaceScoped`.
+ */
+export const applyTopicDeviceBinding = (
+  {
+    agencyConfig,
+    workspaceScoped,
+  }: { agencyConfig: LobeAgentAgencyConfig | undefined; workspaceScoped: boolean },
+  topicDeviceId: string | undefined,
+  currentDeviceId: string | undefined,
+): TopicDeviceBindingResult => {
+  const unchanged = { agencyConfig, workspaceScoped };
+  const target = agencyConfig?.executionTarget;
+  if (
+    !topicDeviceId ||
+    target === 'auto' ||
+    agencyConfig?.executionTargetSelectionPolicy === 'fixed'
+  )
+    return unchanged;
+
+  const alreadyOnTopicMachine =
+    (target === 'device' && agencyConfig?.boundDeviceId === topicDeviceId) ||
+    (target === 'local' &&
+      (currentDeviceId ?? agencyConfig?.boundDeviceId) === topicDeviceId &&
+      !workspaceScoped);
+  if (alreadyOnTopicMachine) return unchanged;
+
+  return {
+    agencyConfig: {
+      ...agencyConfig,
+      boundDeviceId: topicDeviceId,
+      executionTarget: topicDeviceId === currentDeviceId ? 'local' : 'device',
+    },
+    workspaceScoped: false,
+  };
+};
+
 /**
  * The effective `runtimeMode` (server tool gate) from the unified execution
  * target.

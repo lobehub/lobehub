@@ -16,7 +16,11 @@ import {
   ensureAgentManagementAccess,
   getRuntimeCanManageAgent,
 } from '@/helpers/agentManagementAccess';
-import { resolveWorkspaceScoped } from '@/helpers/executionTarget';
+import {
+  applyTopicDeviceBinding,
+  getTopicBoundDeviceId,
+  resolveWorkspaceScoped,
+} from '@/helpers/executionTarget';
 import { lambdaClient } from '@/libs/trpc/client';
 import {
   type AgentInterventionSourceAction,
@@ -25,7 +29,7 @@ import {
 } from '@/services/aiAgent';
 import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
-import { displayMessageSelectors } from '@/store/chat/selectors';
+import { displayMessageSelectors, topicSelectors } from '@/store/chat/selectors';
 import {
   type AgentRuntimeType,
   selectRuntimeType,
@@ -37,6 +41,7 @@ import type { Operation } from '@/store/chat/slices/operation/types';
 import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import { type ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { getElectronStoreState } from '@/store/electron';
 import { type StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -252,11 +257,23 @@ export class ConversationControlActionImpl {
     const deviceOverride = agent?.workspaceId
       ? useUserStore.getState().workspaceUserPreference.agentDeviceOverrides?.[agentId]
       : undefined;
-    const agencyConfig = resolveAgentAgencyConfig(agentConfig?.agencyConfig, deviceOverride, {
-      canManage,
-      visibility: agent?.visibility,
-      workspaceId: agent?.workspaceId,
-    });
+    // Same topic machine binding as sendMessage, so the resume takes the path
+    // the paused run was dispatched on.
+    const { agencyConfig, workspaceScoped } = applyTopicDeviceBinding(
+      {
+        agencyConfig: resolveAgentAgencyConfig(agentConfig?.agencyConfig, deviceOverride, {
+          canManage,
+          visibility: agent?.visibility,
+          workspaceId: agent?.workspaceId,
+        }),
+        workspaceScoped: resolveWorkspaceScoped(usesWorkspaceMemberSelection, deviceOverride),
+      },
+      getTopicBoundDeviceId(
+        context.topicId ? topicSelectors.getTopicById(context.topicId)(this.#get()) : undefined,
+        agentId,
+      ),
+      getElectronStoreState().gatewayDeviceInfo?.deviceId,
+    );
     const isGatewayMode = this.#get().isGatewayModeEnabled(agentId);
     const heterogeneousProvider =
       agencyConfig?.heterogeneousProvider ??
@@ -271,7 +288,7 @@ export class ConversationControlActionImpl {
         heterogeneousProvider,
         isGatewayMode,
         isWorkspaceAgent: !!agent?.workspaceId,
-        workspaceScoped: resolveWorkspaceScoped(usesWorkspaceMemberSelection, deviceOverride),
+        workspaceScoped,
       }) === 'gateway'
     );
   };
