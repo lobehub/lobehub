@@ -23,6 +23,29 @@ const keys = (target: FileMenuTarget, env: FileMenuEnv) =>
   buildFileContextMenu(target, env, vi.fn(), t).map((item) => item?.key);
 
 describe('buildFileContextMenu', () => {
+  it('gives every entry both a web icon and a native SF Symbol', () => {
+    const targets: FileMenuTarget[] = [
+      file,
+      folder,
+      root,
+      { isDeleted: false, isDirty: true, kind: 'file' },
+      { isDeleted: true, isDirty: true, kind: 'file' },
+    ];
+    for (const env of [localEnv, remoteEnv, { ...localEnv, canPublish: true }]) {
+      for (const target of targets) {
+        const entries = buildFileContextMenu(target, env, vi.fn(), t).filter(
+          (item) => item && item.type !== 'divider',
+        );
+        expect(entries.length).toBeGreaterThan(0);
+        for (const entry of entries) {
+          expect(entry, String(entry?.key)).toHaveProperty('icon');
+          expect((entry as { icon?: unknown }).icon, String(entry?.key)).toBeTruthy();
+          expect((entry as { sfSymbol?: string }).sfSymbol, String(entry?.key)).toBeTruthy();
+        }
+      }
+    }
+  });
+
   it('builds the local file menu', () => {
     expect(keys(file, localEnv)).toEqual([
       'open',

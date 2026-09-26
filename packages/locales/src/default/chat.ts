@@ -2940,6 +2940,7 @@ export default {
   'workingPanel.files.actions.copy': 'Copy',
   'workingPanel.files.actions.cut': 'Cut',
   'workingPanel.files.actions.duplicate': 'Duplicate',
+  'workingPanel.files.actions.more': 'More',
   'workingPanel.files.actions.moveToTrash': 'Move to {{trash}}',
   'workingPanel.files.actions.new': 'New',
   'workingPanel.files.actions.newFile': 'New File…',

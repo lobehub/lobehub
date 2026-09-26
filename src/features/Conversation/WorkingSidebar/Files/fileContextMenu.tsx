@@ -1,4 +1,25 @@
+import type { SFSymbol } from '@lobechat/electron-client-ipc';
 import type { TFunction } from 'i18next';
+import type { LucideIcon } from 'lucide-react';
+import {
+  AppWindowIcon,
+  ClipboardPasteIcon,
+  CopyIcon,
+  CopyPlusIcon,
+  FilePlusIcon,
+  FileTextIcon,
+  FolderPlusIcon,
+  FolderSearchIcon,
+  FoldVerticalIcon,
+  GitCompareArrowsIcon,
+  LinkIcon,
+  PenLineIcon,
+  RotateCwIcon,
+  ScissorsIcon,
+  Share2Icon,
+  SquareTerminalIcon,
+  Trash2Icon,
+} from 'lucide-react';
 
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
 
@@ -46,6 +67,31 @@ export type FileMenuAction =
 
 type Item = Exclude<NativeContextMenuItem, null>;
 
+/**
+ * Every entry carries both glyphs: `sfSymbol` for the native macOS menu and a
+ * lucide `icon` for the web menu (and non-mac desktops), so the two stay alike.
+ */
+const ACTION_ICONS: Record<FileMenuAction, { icon: LucideIcon; sfSymbol: SFSymbol }> = {
+  collapseAll: { icon: FoldVerticalIcon, sfSymbol: 'rectangle.compress.vertical' },
+  copy: { icon: CopyIcon, sfSymbol: 'doc.on.doc' },
+  copyPath: { icon: LinkIcon, sfSymbol: 'link' },
+  copyRelativePath: { icon: LinkIcon, sfSymbol: 'link' },
+  cut: { icon: ScissorsIcon, sfSymbol: 'scissors' },
+  duplicate: { icon: CopyPlusIcon, sfSymbol: 'plus.square.on.square' },
+  newFile: { icon: FilePlusIcon, sfSymbol: 'doc.badge.plus' },
+  newFolder: { icon: FolderPlusIcon, sfSymbol: 'folder.badge.plus' },
+  open: { icon: FileTextIcon, sfSymbol: 'doc' },
+  openInSystem: { icon: AppWindowIcon, sfSymbol: 'arrow.up.forward.app' },
+  openInTerminal: { icon: SquareTerminalIcon, sfSymbol: 'terminal' },
+  paste: { icon: ClipboardPasteIcon, sfSymbol: 'doc.on.clipboard' },
+  publish: { icon: Share2Icon, sfSymbol: 'square.and.arrow.up' },
+  refresh: { icon: RotateCwIcon, sfSymbol: 'arrow.clockwise' },
+  rename: { icon: PenLineIcon, sfSymbol: 'pencil' },
+  revealInSystem: { icon: FolderSearchIcon, sfSymbol: 'folder' },
+  showInReview: { icon: GitCompareArrowsIcon, sfSymbol: 'arrow.triangle.branch' },
+  trash: { icon: Trash2Icon, sfSymbol: 'trash' },
+};
+
 const joinGroups = (groups: Item[][]): NativeContextMenuItem[] => {
   const items: NativeContextMenuItem[] = [];
   for (const group of groups) {
@@ -69,17 +115,23 @@ export const buildFileContextMenu = (
   run: (action: FileMenuAction) => void,
   t: TFunction<'chat'>,
 ): NativeContextMenuItem[] => {
-  const item = (key: string, action: FileMenuAction, label: string, extra?: Partial<Item>) =>
-    ({ key, label, onClick: () => run(action), ...extra }) as Item;
+  const item = (key: string, action: FileMenuAction, label: string, extra?: Partial<Item>) => {
+    const { icon: IconComponent, sfSymbol } = ACTION_ICONS[action];
+    return {
+      icon: <IconComponent size={14} />,
+      key,
+      label,
+      onClick: () => run(action),
+      sfSymbol,
+      ...extra,
+    } as Item;
+  };
   const local = !env.isRemote;
 
   const copyPathItem = item(
     'copy-absolute-path',
     'copyPath',
     t('workingPanel.files.copyAbsolutePath'),
-    {
-      sfSymbol: 'doc.on.doc',
-    } as Partial<Item>,
   );
   const pasteItem = item('paste', 'paste', t('workingPanel.files.actions.paste'), {
     disabled: !env.canPaste,
@@ -121,9 +173,7 @@ export const buildFileContextMenu = (
     : [];
   const pathItems = [
     copyPathItem,
-    item('copy-relative-path', 'copyRelativePath', t('workingPanel.files.copyRelativePath'), {
-      sfSymbol: 'doc.on.doc',
-    } as Partial<Item>),
+    item('copy-relative-path', 'copyRelativePath', t('workingPanel.files.copyRelativePath')),
   ];
 
   // Nothing exists on disk to open, move or delete: keep the path and review.
@@ -134,11 +184,7 @@ export const buildFileContextMenu = (
     : [
         item('open', 'open', t('workingPanel.files.open')),
         ...(env.canPublish
-          ? [
-              item('publish', 'publish', t('workingPanel.localFile.publish.action'), {
-                sfSymbol: 'square.and.arrow.up',
-              } as Partial<Item>),
-            ]
+          ? [item('publish', 'publish', t('workingPanel.localFile.publish.action'))]
           : []),
       ];
   const systemGroup = [

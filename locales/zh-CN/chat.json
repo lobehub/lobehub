@@ -2463,6 +2463,7 @@
   "workingPanel.files.actions.copy": "复制",
   "workingPanel.files.actions.cut": "剪切",
   "workingPanel.files.actions.duplicate": "创建副本",
+  "workingPanel.files.actions.more": "更多",
   "workingPanel.files.actions.moveToTrash": "移到{{trash}}",
   "workingPanel.files.actions.new": "新建",
   "workingPanel.files.actions.newFile": "新建文件…",

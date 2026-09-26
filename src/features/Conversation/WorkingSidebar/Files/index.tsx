@@ -8,6 +8,7 @@ import { createStaticStyles } from 'antd-style';
 import {
   CheckIcon,
   ChevronDownIcon,
+  EllipsisIcon,
   FileIcon,
   FilePlusIcon,
   FolderPlusIcon,
@@ -24,17 +25,13 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { ExplorerTreeNode } from '@/features/ExplorerTree';
-import {
-  ExplorerTree,
-  FOLDER_ICON_CSS,
-  getExplorerTreeStyleVars,
-  HIDE_POINTER_FOCUS_RING_CSS,
-} from '@/features/ExplorerTree';
+import { ExplorerTree, getExplorerTreeStyleVars } from '@/features/ExplorerTree';
 import type { ExplorerTreeHandle } from '@/features/ExplorerTree/types';
 import { projectFileService } from '@/services/projectFile';
 import { useGlobalStore } from '@/store/global';
 
 import { filterProjectFileEntries, mergeMissingDeletedEntries } from './fileFilter';
+import { FILE_TREE_UNSAFE_CSS } from './fileTreeStyle';
 import { isExcludedProjectFileEntry } from './fileVisibility';
 import { getAncestorIds, getParentRelativePath, PROJECT_ROOT_NODE_ID } from './treePaths';
 import { useCollapsedDirectoryChildren } from './useCollapsedDirectoryChildren';
@@ -95,20 +92,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const IGNORED_FILE_OPACITY_CSS = `
-[data-item-git-status='ignored'] > :where(
-  [data-item-section='icon'],
-  [data-item-section='content'],
-  [data-item-section='decoration'],
-  [data-item-section='git']
-) {
-  opacity: 0.7;
-}`;
-const FILE_TREE_UNSAFE_CSS = [
-  FOLDER_ICON_CSS,
-  HIDE_POINTER_FOCUS_RING_CSS,
-  IGNORED_FILE_OPACITY_CSS,
-].join('\n');
 const FILE_SEARCH_DEBOUNCE_MS = 180;
 const PROJECT_FILE_TREE_SEARCH_LIMIT = 200;
 
@@ -468,6 +451,20 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
     [actions, t],
   );
 
+  // Less frequent tree-level actions live behind "…" so the header keeps room.
+  const moreItems = useMemo(
+    () => [
+      {
+        disabled: actions.refreshing,
+        icon: <RotateCwIcon size={14} />,
+        key: 'refresh',
+        label: t('workingPanel.files.actions.refresh'),
+        onClick: () => void actions.refresh(),
+      },
+    ],
+    [actions, t],
+  );
+
   const isEmpty = displayEntries.length === 0;
 
   if (!data && isLoading) {
@@ -535,20 +532,20 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
           />
         </DropdownMenu>
         <ActionIcon
-          disabled={actions.refreshing}
-          icon={RotateCwIcon}
-          loading={actions.refreshing}
-          size={'small'}
-          title={t('workingPanel.files.actions.refresh')}
-          onClick={() => void actions.refresh()}
-        />
-        <ActionIcon
           disabled={nodes.length === 0}
           icon={FoldVerticalIcon}
           size={'small'}
           title={t('workingPanel.files.collapseAll')}
           onClick={handleCollapseAll}
         />
+        <DropdownMenu items={moreItems} placement={'bottomRight'}>
+          <ActionIcon
+            icon={EllipsisIcon}
+            loading={actions.refreshing}
+            size={'small'}
+            title={t('workingPanel.files.actions.more')}
+          />
+        </DropdownMenu>
       </div>
       {isEmpty && isFiltering && isSearching ? (
         <Center flex={1}>

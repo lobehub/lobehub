@@ -520,10 +520,14 @@ describe('Files — reveal request integration', () => {
     );
   });
 
-  it('wires the header refresh button and the "New" menu', async () => {
+  it('keeps refresh inside the trailing "…" menu and wires the "New" menu', async () => {
     render(<Files workingDirectory="/repo" />);
 
-    fireEvent.click(screen.getByTitle('workingPanel.files.actions.refresh'));
+    // Refresh is no longer its own header button; it sits in the "…" menu.
+    expect(screen.queryByTitle('workingPanel.files.actions.refresh')).toBeNull();
+    expect(screen.getByTitle('workingPanel.files.actions.more')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('workingPanel.files.actions.refresh'));
     await waitFor(() =>
       expect(fileOpsMock.refreshProjectFiles).toHaveBeenCalledWith(undefined, '/repo'),
     );
