@@ -461,6 +461,9 @@ export default class GatewayConnectionCtr extends ControllerModule {
       getProjectFileIndex: (params) => this.localFileCtr.getProjectFileIndex(params),
       listHeterogeneousAgentModels: (params) => this.heterogeneousAgentCtr.listModels(params),
       searchProjectFiles: (params) => this.localFileCtr.searchProjectFiles(params),
+      // Remote "delete" goes to this machine's trash (`shell.trashItem`), same
+      // as the local Files tree, so it stays recoverable.
+      trashLocalFiles: (params) => this.localFileCtr.trashLocalFiles(params),
       unenrollWorkspace: (params) => this.service.unenrollWorkspace(params),
       // Skill-archive cache (`prepareSkillDirectory` RPC): reuse LocalFileCtr's
       // deps so gateway-prepared skills share one cache with the renderer-IPC path.

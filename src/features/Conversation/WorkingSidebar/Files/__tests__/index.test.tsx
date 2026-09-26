@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode as ReactNodeType, Ref } from 'react';
 import { useImperativeHandle } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -13,8 +13,12 @@ import Files from '../index';
 
 const handleSpies = {
   focus: vi.fn(),
+  getSelectedIds: vi.fn((): string[] => []),
+  resync: vi.fn(),
   select: vi.fn(),
   setExpanded: vi.fn(),
+  startCreating: vi.fn(),
+  startRenaming: vi.fn(),
 };
 
 const explorerTreeProps = vi.hoisted(() => ({
@@ -30,6 +34,20 @@ const gitFilesMock = vi.hoisted(() => ({
 const openLocalFileMock = vi.hoisted(() => vi.fn());
 const searchProjectFilesMock = vi.hoisted(() => vi.fn());
 const listProjectDirectoryMock = vi.hoisted(() => vi.fn());
+const fileOpsMock = vi.hoisted(() => ({
+  copyProjectFiles: vi.fn(),
+  createProjectDirectory: vi.fn(),
+  createProjectFile: vi.fn(),
+  moveProjectFiles: vi.fn(),
+  refreshProjectFiles: vi.fn(),
+  renameProjectFile: vi.fn(),
+  trashProjectFiles: vi.fn(),
+}));
+const uiSpies = vi.hoisted(() => ({
+  confirmModal: vi.fn(),
+  toastError: vi.fn(),
+  toastSuccess: vi.fn(),
+}));
 const projectFilesMock = vi.hoisted(() => {
   const baseEntries = [
     { isDirectory: true, name: 'src', path: '/repo/src', relativePath: 'src/' },
@@ -120,11 +138,14 @@ vi.mock('@/features/ExplorerTree', () => {
     explorerTreeProps.current = props;
     useImperativeHandle(ref, () => ({
       focus: handleSpies.focus,
-      getSelectedIds: vi.fn(() => []),
+      getFocusedId: vi.fn(() => null),
+      getSelectedIds: handleSpies.getSelectedIds,
       deselect: vi.fn(),
+      resync: handleSpies.resync,
       select: handleSpies.select,
       setExpanded: handleSpies.setExpanded,
-      startRenaming: vi.fn(),
+      startCreating: handleSpies.startCreating,
+      startRenaming: handleSpies.startRenaming,
     }));
     return <div data-testid="explorer-tree" />;
   };
@@ -164,9 +185,21 @@ vi.mock('../useProjectFiles', () => ({
 
 vi.mock('@/services/projectFile', () => ({
   projectFileService: {
+    copyProjectFiles: fileOpsMock.copyProjectFiles,
+    createProjectDirectory: fileOpsMock.createProjectDirectory,
+    createProjectFile: fileOpsMock.createProjectFile,
     listProjectDirectory: listProjectDirectoryMock,
+    moveProjectFiles: fileOpsMock.moveProjectFiles,
+    renameProjectFile: fileOpsMock.renameProjectFile,
     searchProjectFiles: searchProjectFilesMock,
+    trashProjectFiles: fileOpsMock.trashProjectFiles,
   },
+  refreshProjectFiles: fileOpsMock.refreshProjectFiles,
+}));
+
+vi.mock('@/utils/platform', () => ({
+  getPlatform: () => 'Mac OS',
+  isMacOS: () => true,
 }));
 
 vi.mock('@/store/chat', () => ({
@@ -187,12 +220,15 @@ vi.mock('antd', async (importOriginal) => ({
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: (key: string, options?: Record<string, unknown>) =>
+      options ? `${key} ${JSON.stringify(options)}` : key,
   }),
 }));
 
 vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
+  confirmModal: uiSpies.confirmModal,
+  toast: { error: uiSpies.toastError, success: uiSpies.toastSuccess },
   ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) => (
     <button title={title} type={'button'} onClick={onClick} />
   ),
@@ -273,6 +309,16 @@ beforeEach(() => {
   handleSpies.focus.mockClear();
   handleSpies.select.mockClear();
   handleSpies.setExpanded.mockClear();
+  handleSpies.getSelectedIds.mockReset();
+  handleSpies.getSelectedIds.mockReturnValue([]);
+  handleSpies.resync.mockClear();
+  handleSpies.startCreating.mockClear();
+  handleSpies.startRenaming.mockClear();
+  for (const mock of Object.values(fileOpsMock)) mock.mockReset();
+  fileOpsMock.refreshProjectFiles.mockResolvedValue(undefined);
+  uiSpies.confirmModal.mockReset();
+  uiSpies.toastError.mockReset();
+  uiSpies.toastSuccess.mockReset();
   messageSpy.warning.mockClear();
   openLocalFileMock.mockClear();
   listProjectDirectoryMock.mockReset();
@@ -436,24 +482,79 @@ describe('Files — reveal request integration', () => {
 
     expect(getContextMenuItems(dirtyNode).map((item) => item.key)).toEqual([
       'open',
-      'divider-reveal',
+      'divider-show-in-system',
       'show-in-system',
       'show-in-review',
-      'divider-copy',
+      'divider-cut',
+      'cut',
+      'copy',
+      'paste',
+      'duplicate',
+      'divider-copy-absolute-path',
       'copy-absolute-path',
       'copy-relative-path',
+      'divider-rename',
+      'rename',
+      'trash',
     ]);
     expect(getContextMenuItems(cleanFolderNode).map((item) => item.key)).toEqual([
-      'open',
-      'divider-reveal',
+      'new-file',
+      'new-folder',
+      'divider-open-in-system',
+      'open-in-system',
       'show-in-system',
-      'divider-copy',
+      'divider-cut',
+      'cut',
+      'copy',
+      'paste',
+      'duplicate',
+      'divider-copy-absolute-path',
       'copy-absolute-path',
       'copy-relative-path',
+      'divider-rename',
+      'rename',
+      'trash',
     ]);
     expect(getContextMenuItems(ignoredNode).map((item) => item.key)).not.toContain(
       'show-in-review',
     );
+  });
+
+  it('keeps create and refresh inside the trailing "…" menu', async () => {
+    render(<Files workingDirectory="/repo" />);
+
+    // Neither "New" nor refresh is its own header button; both sit in "…".
+    expect(screen.queryByTitle('workingPanel.files.actions.refresh')).toBeNull();
+    expect(screen.queryByTitle('workingPanel.files.actions.new')).toBeNull();
+    const more = screen.getByTitle('workingPanel.files.actions.more').parentElement!;
+    expect(within(more).getByText('workingPanel.files.actions.newFile')).toBeTruthy();
+    expect(within(more).getByText('workingPanel.files.actions.newFolder')).toBeTruthy();
+    expect(within(more).getByText('workingPanel.files.actions.refresh')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('workingPanel.files.actions.refresh'));
+    await waitFor(() =>
+      expect(fileOpsMock.refreshProjectFiles).toHaveBeenCalledWith(undefined, '/repo'),
+    );
+
+    fireEvent.click(screen.getByText('workingPanel.files.actions.newFolder'));
+    expect(handleSpies.startCreating).toHaveBeenCalledWith('\0project-root', 'folder');
+  });
+
+  it('hands every tree operation to ExplorerTree', () => {
+    render(<Files workingDirectory="/repo" />);
+    for (const prop of [
+      'canDrag',
+      'canDrop',
+      'canRename',
+      'getBlankContextMenuItems',
+      'onCommitCreate',
+      'onCommitRename',
+      'onMove',
+      'onTreeKeyDown',
+      'validateName',
+    ]) {
+      expect(explorerTreeProps.current?.[prop]).toBeTypeOf('function');
+    }
   });
 
   it('does not offer a publish action in the open-source build', () => {

@@ -942,6 +942,110 @@ describe('chatDockSlice', () => {
     });
   });
 
+  describe('retargetLocalFiles', () => {
+    it('moves a renamed file tab, its buffer and active state to the new path', () => {
+      const { result } = renderHook(() => useChatStore());
+      const oldId = localFileTabId({ filePath: '/rt/notes.md', workingDirectory: '/rt' });
+      const newId = localFileTabId({ filePath: '/rt/meeting-notes.md', workingDirectory: '/rt' });
+
+      act(() => {
+        result.current.openLocalFile({ filePath: '/rt/notes.md', workingDirectory: '/rt' });
+        result.current.setLocalFileBuffer(oldId, 'draft');
+      });
+      act(() => {
+        result.current.retargetLocalFiles([{ from: '/rt/notes.md', to: '/rt/meeting-notes.md' }]);
+      });
+
+      const tab = result.current.openLocalFiles.find((file) => file.id === newId);
+      expect(tab?.filePath).toBe('/rt/meeting-notes.md');
+      expect(result.current.openLocalFiles.some((file) => file.id === oldId)).toBe(false);
+      expect(result.current.activeLocalFileId).toBe(newId);
+      expect(result.current.activeLocalFilePath).toBe('/rt/meeting-notes.md');
+      expect(result.current.activeLocalFileIdsByScope[createLocalFileScopeKey('/rt')]).toBe(newId);
+      expect(result.current.dirtyLocalFileContents[newId]).toBe('draft');
+      expect(oldId in result.current.dirtyLocalFileContents).toBe(false);
+    });
+
+    it('carries tabs under a moved folder and leaves other devices alone', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openLocalFile({ filePath: '/mv/src/a.ts', workingDirectory: '/mv' });
+        result.current.openLocalFile({
+          deviceId: 'remote',
+          filePath: '/mv/src/a.ts',
+          workingDirectory: '/mv',
+        });
+      });
+      act(() => {
+        result.current.retargetLocalFiles([{ from: '/mv/src', to: '/mv/lib/src' }]);
+      });
+
+      const paths = result.current.openLocalFiles
+        .filter((file) => file.workingDirectory === '/mv')
+        .map((file) => `${file.deviceId ?? 'local'}:${file.filePath}`);
+      expect(paths).toEqual(['local:/mv/lib/src/a.ts', 'remote:/mv/src/a.ts']);
+    });
+    it('carries tabs under a moved folder with Windows path separators', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openLocalFile({
+          filePath: 'C:\\win\\src\\a.ts',
+          workingDirectory: 'C:\\win',
+        });
+      });
+      act(() => {
+        result.current.retargetLocalFiles([{ from: 'C:\\win\\src', to: 'C:\\win\\lib' }]);
+      });
+
+      expect(
+        result.current.openLocalFiles
+          .filter((file) => file.workingDirectory === 'C:\\win')
+          .map((file) => file.filePath),
+      ).toEqual(['C:\\win\\lib\\a.ts']);
+    });
+  });
+
+  describe('closeLocalFilesAt', () => {
+    it('closes tabs of deleted files and of files inside a deleted folder', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openLocalFile({ filePath: '/del/a.md', workingDirectory: '/del' });
+        result.current.openLocalFile({ filePath: '/del/dir/b.md', workingDirectory: '/del' });
+        result.current.openLocalFile({ filePath: '/del/keep.md', workingDirectory: '/del' });
+      });
+      act(() => {
+        result.current.closeLocalFilesAt(['/del/a.md', '/del/dir']);
+      });
+
+      expect(
+        result.current.openLocalFiles
+          .filter((file) => file.workingDirectory === '/del')
+          .map((file) => file.filePath),
+      ).toEqual(['/del/keep.md']);
+    });
+
+    it('closes tabs inside a deleted folder with Windows path separators', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openLocalFile({
+          filePath: 'D:\\del\\dir\\b.md',
+          workingDirectory: 'D:\\del',
+        });
+      });
+      act(() => {
+        result.current.closeLocalFilesAt(['D:\\del\\dir']);
+      });
+
+      expect(
+        result.current.openLocalFiles.filter((file) => file.workingDirectory === 'D:\\del'),
+      ).toEqual([]);
+    });
+  });
+
   describe('saveLocalFile', () => {
     const target = {
       deviceId: 'device-1',

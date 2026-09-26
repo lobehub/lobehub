@@ -16,6 +16,7 @@ import { z } from 'zod';
 
 import {
   requireWorkspaceRole,
+  requireWorkspaceRoleWhenScoped,
   type WorkspaceRole,
   wsCompatProcedure,
   wsProcedure,
@@ -185,6 +186,15 @@ const workspaceFileProcedure = deviceProcedure.input(workspaceFileInput).use(asy
   await assertWorkspaceRootApproved(opts.ctx.deviceModel, deviceId, workingDirectory);
   return opts.next();
 });
+
+/**
+ * `workspaceFileProcedure` for routes that change files on the device. In a
+ * shared workspace a read-only viewer may browse the tree but not alter it, so
+ * writes also need at least the `member` role; personal mode stays open.
+ */
+const workspaceFileWriteProcedure = workspaceFileProcedure.use(
+  requireWorkspaceRoleWhenScoped('member'),
+);
 
 export const deviceRouter = router({
   /**
@@ -945,7 +955,7 @@ export const deviceRouter = router({
    * Move files/folders within a directory on a remote device, via the device's
    * `moveLocalFiles` RPC. Powers the Files tree's drag-to-move in device mode.
    */
-  moveProjectFiles: workspaceFileProcedure
+  moveProjectFiles: workspaceFileWriteProcedure
     .input(
       z.object({
         items: z.array(z.object({ newPath: z.string(), oldPath: z.string() })),
@@ -965,7 +975,7 @@ export const deviceRouter = router({
    * Rename a single file/folder in a directory on a remote device, via the
    * device's `renameLocalFile` RPC.
    */
-  renameProjectFile: workspaceFileProcedure
+  renameProjectFile: workspaceFileWriteProcedure
     .input(
       z.object({
         newName: z.string(),
@@ -987,7 +997,7 @@ export const deviceRouter = router({
    * Save edited content back to a file on a remote device, via the device's
    * `writeLocalFile` RPC. Powers remote save in the LocalFile editor.
    */
-  writeProjectFile: workspaceFileProcedure
+  writeProjectFile: workspaceFileWriteProcedure
     .input(
       z.object({
         content: z.string(),
@@ -999,6 +1009,82 @@ export const deviceRouter = router({
         content: input.content,
         deviceId: input.deviceId,
         path: input.path,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+        workingDirectory: input.workingDirectory,
+      });
+    }),
+
+  /**
+   * Create a new file on a remote device, via the device's `createLocalFile`
+   * RPC. Fails instead of overwriting when the path is taken.
+   */
+  createProjectFile: workspaceFileWriteProcedure
+    .input(
+      z.object({
+        content: z.string().optional(),
+        path: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      return deviceGateway.createProjectFile({
+        content: input.content,
+        deviceId: input.deviceId,
+        path: input.path,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+        workingDirectory: input.workingDirectory,
+      });
+    }),
+
+  /**
+   * Create a new folder on a remote device, via the device's
+   * `createLocalDirectory` RPC. Fails when the path is taken.
+   */
+  createProjectDirectory: workspaceFileWriteProcedure
+    .input(z.object({ path: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      return deviceGateway.createProjectDirectory({
+        deviceId: input.deviceId,
+        path: input.path,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+        workingDirectory: input.workingDirectory,
+      });
+    }),
+
+  /**
+   * Copy files/folders on a remote device, via the device's `copyLocalFiles`
+   * RPC. An item without `targetPath` is duplicated in place.
+   */
+  copyProjectFiles: workspaceFileWriteProcedure
+    .input(
+      z.object({
+        items: z
+          .array(z.object({ sourcePath: z.string(), targetPath: z.string().optional() }))
+          .min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      return deviceGateway.copyProjectFiles({
+        deviceId: input.deviceId,
+        items: input.items,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+        workingDirectory: input.workingDirectory,
+      });
+    }),
+
+  /**
+   * Move files/folders to a remote device's trash, via the device's
+   * `trashLocalFiles` RPC. Devices without a trash reject rather than delete.
+   */
+  trashProjectFiles: workspaceFileWriteProcedure
+    .input(z.object({ paths: z.array(z.string()).min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      return deviceGateway.trashProjectFiles({
+        deviceId: input.deviceId,
+        paths: input.paths,
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
         workingDirectory: input.workingDirectory,

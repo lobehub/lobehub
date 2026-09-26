@@ -1,5 +1,8 @@
 import { isDesktop } from '@lobechat/const';
 import type {
+  CopyLocalFileItem,
+  CreateLocalEntryResult,
+  LocalCopyFilesResultItem,
   LocalFilePreviewUrlParams,
   LocalMoveFilesResultItem,
   MoveLocalFileParams,
@@ -7,9 +10,13 @@ import type {
   ProjectFileIndexResult,
   ProjectFileSearchResult,
   RenameLocalFileResult,
+  TrashLocalFilesResult,
 } from '@lobechat/electron-client-ipc';
 import type { DeviceLocalFilePreview } from '@lobechat/types';
+import { isAbsolute, relative, resolve } from 'pathe';
 
+import { mutate } from '@/libs/swr';
+import { localFileKeys } from '@/libs/swr/keys';
 import { lambdaClient } from '@/libs/trpc/client';
 import { type LocalFilePreview, localFileService } from '@/services/electron/localFileService';
 
@@ -50,6 +57,37 @@ const deserializeLocalFilePreview = (preview: DeviceLocalFilePreview): LocalFile
       return preview;
     }
   }
+};
+
+/**
+ * Refuse to trash / rename / move / duplicate the workspace root itself: it
+ * would pull the whole tree out from under the UI (and a duplicate would land
+ * outside the workspace). Checked here for both transports so the local IPC
+ * path gets the same guard the device gateway enforces server-side.
+ */
+const assertNotWorkspaceRoot = (workingDirectory: string, paths: string[]): void => {
+  if (!workingDirectory) return;
+  for (const target of paths) {
+    if (isAbsolute(target) && relative(resolve(workingDirectory), resolve(target)) === '') {
+      throw new Error(`This operation is not allowed on the workspace root: ${target}`);
+    }
+  }
+};
+
+/**
+ * Revalidate everything the Files tree reads for a working directory — the
+ * file index and the git dirty-file overlay — after a file operation changed
+ * it. There is no file watcher, so without this a mutation only shows up on
+ * the next window focus.
+ */
+export const refreshProjectFiles = async (
+  deviceId: string | undefined,
+  dirPath: string,
+): Promise<void> => {
+  await Promise.all([
+    mutate(localFileKeys.projectIndex(deviceId, dirPath)),
+    mutate(localFileKeys.gitWorkingTreeFiles(deviceId, dirPath)),
+  ]);
 };
 
 /**
@@ -219,6 +257,11 @@ class ProjectFileService {
     items: MoveLocalFileParams[];
     workingDirectory: string;
   }): Promise<LocalMoveFilesResultItem[]> {
+    assertNotWorkspaceRoot(
+      workingDirectory,
+      items.map((item) => item.oldPath),
+    );
+
     return deviceId
       ? lambdaClient.device.moveProjectFiles.mutate({ deviceId, items, workingDirectory })
       : localFileService.moveLocalFiles({ items });
@@ -236,6 +279,8 @@ class ProjectFileService {
     path: string;
     workingDirectory: string;
   }): Promise<RenameLocalFileResult> {
+    assertNotWorkspaceRoot(workingDirectory, [path]);
+
     return deviceId
       ? lambdaClient.device.renameProjectFile.mutate({ deviceId, newName, path, workingDirectory })
       : localFileService.renameLocalFile({ newName, path });
@@ -261,6 +306,86 @@ class ProjectFileService {
     return deviceId
       ? lambdaClient.device.writeProjectFile.mutate({ content, deviceId, path, workingDirectory })
       : localFileService.writeFile({ content, path });
+  }
+
+  /**
+   * Create a new file in a project working directory (empty unless `content`
+   * is given). Never overwrites: an existing entry resolves `{ success: false }`.
+   */
+  async createProjectFile({
+    content,
+    deviceId,
+    path,
+    workingDirectory,
+  }: {
+    content?: string;
+    deviceId?: string;
+    path: string;
+    workingDirectory: string;
+  }): Promise<CreateLocalEntryResult> {
+    return deviceId
+      ? lambdaClient.device.createProjectFile.mutate({ content, deviceId, path, workingDirectory })
+      : localFileService.createLocalFile({ content, path });
+  }
+
+  /** Create a new folder in a project working directory. Fails when the path is taken. */
+  async createProjectDirectory({
+    deviceId,
+    path,
+    workingDirectory,
+  }: {
+    deviceId?: string;
+    path: string;
+    workingDirectory: string;
+  }): Promise<CreateLocalEntryResult> {
+    return deviceId
+      ? lambdaClient.device.createProjectDirectory.mutate({ deviceId, path, workingDirectory })
+      : localFileService.createLocalDirectory({ path });
+  }
+
+  /**
+   * Copy files/folders within a project working directory. An item without
+   * `targetPath` is duplicated next to its source (`name copy.ext`). Never
+   * overwrites; each item succeeds or fails independently.
+   */
+  async copyProjectFiles({
+    deviceId,
+    items,
+    workingDirectory,
+  }: {
+    deviceId?: string;
+    items: CopyLocalFileItem[];
+    workingDirectory: string;
+  }): Promise<LocalCopyFilesResultItem[]> {
+    assertNotWorkspaceRoot(
+      workingDirectory,
+      items.map((item) => item.sourcePath),
+    );
+
+    return deviceId
+      ? lambdaClient.device.copyProjectFiles.mutate({ deviceId, items, workingDirectory })
+      : localFileService.copyLocalFiles({ items });
+  }
+
+  /**
+   * Move files/folders in a project working directory to the trash. Reports
+   * each path. A remote device without a trash (the CLI daemon) rejects the
+   * whole call rather than deleting permanently.
+   */
+  async trashProjectFiles({
+    deviceId,
+    paths,
+    workingDirectory,
+  }: {
+    deviceId?: string;
+    paths: string[];
+    workingDirectory: string;
+  }): Promise<TrashLocalFilesResult> {
+    assertNotWorkspaceRoot(workingDirectory, paths);
+
+    return deviceId
+      ? lambdaClient.device.trashProjectFiles.mutate({ deviceId, paths, workingDirectory })
+      : localFileService.trashLocalFiles({ paths });
   }
 }
 

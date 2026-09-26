@@ -4,6 +4,7 @@ export {
   DEVICE_RPC_METHODS,
   type DeviceRpcMethod,
   executeDeviceRpc,
+  TRASH_UNSUPPORTED_MESSAGE,
 } from './dispatch';
 export {
   defaultCopyAssetForPublish,

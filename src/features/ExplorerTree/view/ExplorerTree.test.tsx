@@ -1,5 +1,6 @@
 import { AGENT_DOCUMENT_CATEGORY, CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
 import { act, fireEvent, render, waitFor } from '@testing-library/react';
+import type { RefObject } from 'react';
 import { useRef } from 'react';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
@@ -219,5 +220,185 @@ describe('DocumentExplorerTree menu ownership', () => {
       native: canGoNative(items),
     }).toMatchSnapshot();
     expect(toNativeTemplate(items).template).toMatchSnapshot();
+  });
+});
+
+// ─── inline create / rename, blank-area menu and keys ────────────────────────
+
+const inlineNodes: ExplorerTreeNode<{ path: string }>[] = [
+  { id: 'root', isFolder: true, name: 'repo', parentId: null },
+  { data: { path: 'src' }, id: 'src/', isFolder: true, name: 'src', parentId: 'root' },
+  { data: { path: 'a.ts' }, id: 'a.ts', isFolder: false, name: 'a.ts', parentId: 'root' },
+];
+
+const getHost = (container: HTMLElement) => container.querySelector('file-tree-container')!;
+
+const waitForRenameInput = (container: HTMLElement) =>
+  waitFor(() => {
+    const input = getHost(container).shadowRoot?.querySelector('[data-item-rename-input]');
+    expect(input).toBeInstanceOf(HTMLInputElement);
+    return input as HTMLInputElement;
+  });
+
+const renderTree = (props: Partial<Parameters<typeof ExplorerTree>[0]> = {}) => {
+  const ref: RefObject<ExplorerTreeHandle | null> = { current: null };
+  const view = render(
+    <ExplorerTree defaultExpandedIds={['root']} nodes={inlineNodes} ref={ref} {...props} />,
+  );
+  return { ...view, ref };
+};
+
+describe('ExplorerTree inline create', () => {
+  it('opens an empty inline input under the parent and commits the typed name', async () => {
+    const onCommitCreate = vi.fn();
+    const { container, ref } = renderTree({ onCommitCreate });
+
+    act(() => ref.current?.startCreating('src/', 'file'));
+    const input = await waitForRenameInput(container);
+    // The placeholder's own name never shows: the input starts empty.
+    await waitFor(() => expect(input.value).toBe(''));
+
+    fireEvent.input(input, { target: { value: 'notes/today.md' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() =>
+      expect(onCommitCreate).toHaveBeenCalledWith({
+        kind: 'file',
+        name: 'notes/today.md',
+        parentNode: expect.objectContaining({ id: 'src/' }),
+      }),
+    );
+  });
+
+  it('drops the placeholder without committing when the name is left empty', async () => {
+    const onCommitCreate = vi.fn();
+    const { container, ref } = renderTree({ onCommitCreate });
+
+    act(() => ref.current?.startCreating('root', 'folder'));
+    const input = await waitForRenameInput(container);
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() =>
+      expect(getHost(container).shadowRoot?.querySelector('[data-item-rename-input]')).toBeNull(),
+    );
+    expect(onCommitCreate).not.toHaveBeenCalled();
+  });
+
+  it('keeps the input open with a hint while validateName rejects the name', async () => {
+    const onCommitCreate = vi.fn();
+    const validateName = vi.fn((check: { name: string }) =>
+      check.name === 'a.ts' ? 'already exists' : null,
+    );
+    const { container, ref } = renderTree({ onCommitCreate, validateName });
+
+    act(() => ref.current?.startCreating('root', 'file'));
+    const input = await waitForRenameInput(container);
+    fireEvent.input(input, { target: { value: 'a.ts' } });
+
+    // Live hint while typing…
+    await waitFor(() =>
+      expect(document.body.querySelector('[role="alert"]')?.textContent).toBe('already exists'),
+    );
+    expect(validateName).toHaveBeenLastCalledWith(
+      expect.objectContaining({ kind: 'file', mode: 'create', name: 'a.ts' }),
+    );
+
+    // …and neither Enter nor blur commits it.
+    fireEvent.keyDown(input, { key: 'Enter' });
+    fireEvent.blur(input);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(onCommitCreate).not.toHaveBeenCalled();
+    expect(getHost(container).shadowRoot?.querySelector('[data-item-rename-input]')).toBe(input);
+    expect(input.value).toBe('a.ts');
+
+    // Fixing the name clears the hint and commits.
+    fireEvent.input(input, { target: { value: 'b.ts' } });
+    await waitFor(() => expect(document.body.querySelector('[role="alert"]')).toBeNull());
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() =>
+      expect(onCommitCreate).toHaveBeenCalledWith(expect.objectContaining({ name: 'b.ts' })),
+    );
+  });
+});
+
+describe('ExplorerTree inline rename validation', () => {
+  it('blocks a rename that validateName rejects and commits a valid one', async () => {
+    const onCommitRename = vi.fn();
+    const validateName = vi.fn((check: { name: string }) =>
+      check.name.includes(':') ? 'bad name' : null,
+    );
+    const { container, ref } = renderTree({ onCommitRename, validateName });
+
+    act(() => ref.current?.startRenaming('a.ts'));
+    const input = await waitForRenameInput(container);
+
+    fireEvent.input(input, { target: { value: 'a:b.ts' } });
+    fireEvent.blur(input);
+    expect(onCommitRename).not.toHaveBeenCalled();
+    expect(validateName).toHaveBeenLastCalledWith(
+      expect.objectContaining({ mode: 'rename', node: expect.objectContaining({ id: 'a.ts' }) }),
+    );
+
+    fireEvent.input(input, { target: { value: 'b.ts' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onCommitRename).toHaveBeenCalledWith(expect.objectContaining({ id: 'a.ts' }), 'b.ts');
+  });
+});
+
+describe('ExplorerTree blank area and keys', () => {
+  it('opens the blank-area menu for a right click that hits no row', () => {
+    showContextMenu.mockClear();
+    const getBlankContextMenuItems = vi.fn(() => [{ key: 'refresh', label: 'Refresh' }]);
+    const { container } = renderTree({ getBlankContextMenuItems });
+
+    fireEvent.contextMenu(getHost(container));
+
+    expect(getBlankContextMenuItems).toHaveBeenCalledTimes(1);
+    expect(showContextMenu).toHaveBeenCalledWith([
+      expect.objectContaining({ key: 'refresh', label: 'Refresh' }),
+    ]);
+  });
+
+  it('hands row keys to onTreeKeyDown and stops the ones it handles', () => {
+    const onTreeKeyDown = vi.fn((event: { key: string }, _ctx: unknown) => event.key === 'Delete');
+    const outer = vi.fn();
+    const { container } = render(
+      <div onKeyDown={outer}>
+        <ExplorerTree
+          defaultExpandedIds={['root']}
+          nodes={inlineNodes}
+          onTreeKeyDown={onTreeKeyDown}
+        />
+      </div>,
+    );
+
+    fireEvent.keyDown(getHost(container), { key: 'Delete' });
+    fireEvent.keyDown(getHost(container), { key: 'a' });
+
+    expect(onTreeKeyDown).toHaveBeenCalledTimes(2);
+    expect(onTreeKeyDown.mock.calls[0][1]).toEqual({
+      focusedNode: expect.objectContaining({ id: 'root' }),
+      selectedNodes: [],
+    });
+    // Delete was handled, so only the unhandled key reached the page.
+    expect(outer).toHaveBeenCalledTimes(1);
+  });
+
+  it('rolls an optimistic rename back when onCommitRename resolves false', async () => {
+    const onCommitRename = vi.fn(async () => false as const);
+    const { container, ref } = renderTree({ onCommitRename });
+
+    act(() => ref.current?.startRenaming('a.ts'));
+    const input = await waitForRenameInput(container);
+    fireEvent.input(input, { target: { value: 'b.ts' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    const rowPath = (path: string) =>
+      getHost(container).shadowRoot?.querySelector(`[data-item-path="${path}"]`);
+    await waitFor(() => expect(onCommitRename).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(rowPath('repo/a.ts')).not.toBeNull();
+      expect(rowPath('repo/b.ts')).toBeNull();
+    });
   });
 });

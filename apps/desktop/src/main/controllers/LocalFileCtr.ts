@@ -18,6 +18,10 @@ import {
 import {
   type AuditSafePathsParams,
   type AuditSafePathsResult,
+  type CopyLocalFilesParams,
+  type CreateLocalDirectoryParams,
+  type CreateLocalEntryResult,
+  type CreateLocalFileParams,
   type EditLocalFileParams,
   type EditLocalFileResult,
   type GlobFilesParams,
@@ -26,6 +30,7 @@ import {
   type GrepContentResult,
   type HashLocalFileParams,
   type ListLocalFileParams,
+  type LocalCopyFilesResultItem,
   type LocalFilePreviewResult,
   type LocalFilePreviewUrlParams,
   type LocalFilePreviewUrlResult,
@@ -60,6 +65,9 @@ import {
   type WriteLocalFileParams,
 } from '@lobechat/electron-client-ipc';
 import {
+  copyLocalFiles,
+  createLocalDirectory,
+  createLocalFile,
   editLocalFile,
   expandTilde,
   listLocalFiles,
@@ -556,6 +564,37 @@ export default class LocalFileCtr extends ControllerModule {
   async handleWriteFile({ path: filePath, content, cwd }: WriteLocalFileParams) {
     logger.debug(`Writing file ${filePath}`, { contentLength: content?.length });
     return writeLocalFile({ content, cwd, path: filePath });
+  }
+
+  /** Create a new file. Fails instead of overwriting when the path is taken. */
+  @IpcMethod()
+  async handleCreateFile({
+    path: filePath,
+    content,
+    cwd,
+  }: CreateLocalFileParams): Promise<CreateLocalEntryResult> {
+    logger.debug(`Creating file ${filePath}`);
+    return createLocalFile({ content, cwd, path: filePath });
+  }
+
+  /** Create a new folder. Fails instead of reusing it when the path is taken. */
+  @IpcMethod()
+  async handleCreateDirectory({
+    path: dirPath,
+    cwd,
+  }: CreateLocalDirectoryParams): Promise<CreateLocalEntryResult> {
+    logger.debug(`Creating directory ${dirPath}`);
+    return createLocalDirectory({ cwd, path: dirPath });
+  }
+
+  /**
+   * Copy files/folders, or duplicate them in place when an item has no
+   * `targetPath`. Never overwrites; each item reports its own outcome.
+   */
+  @IpcMethod()
+  async handleCopyFiles({ items, cwd }: CopyLocalFilesParams): Promise<LocalCopyFilesResultItem[]> {
+    logger.debug('Starting batch file copy:', { itemsCount: items?.length });
+    return copyLocalFiles({ cwd, items });
   }
 
   @IpcMethod()

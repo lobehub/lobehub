@@ -2,6 +2,10 @@ import { MARKDOWN_MIME_TYPES } from '@lobechat/const';
 import {
   type AuditSafePathsParams,
   type AuditSafePathsResult,
+  type CopyLocalFilesParams,
+  type CreateLocalDirectoryParams,
+  type CreateLocalEntryResult,
+  type CreateLocalFileParams,
   type DeviceSandboxCapabilityResult,
   type DeviceSandboxInstallResult,
   type EditLocalFileParams,
@@ -21,6 +25,7 @@ import {
   type ListLocalFilesResult,
   type ListProjectSkillsParams,
   type ListProjectSkillsResult,
+  type LocalCopyFilesResultItem,
   type LocalFileItem,
   type LocalFilePreviewUrlParams,
   type LocalMoveFilesResultItem,
@@ -46,6 +51,8 @@ import {
   type RunCommandResult,
   type ShowSaveDialogParams,
   type ShowSaveDialogResult,
+  type TrashLocalFilesParams,
+  type TrashLocalFilesResult,
   type WriteLocalFileParams,
 } from '@lobechat/electron-client-ipc';
 
@@ -254,6 +261,26 @@ class LocalFileService {
 
   async writeFile(params: WriteLocalFileParams) {
     return ensureElectronIpc().localSystem.handleWriteFile(params);
+  }
+
+  /** Create a new file; fails instead of overwriting an existing one. */
+  async createLocalFile(params: CreateLocalFileParams): Promise<CreateLocalEntryResult> {
+    return ensureElectronIpc().localSystem.handleCreateFile(params);
+  }
+
+  /** Create a new folder; fails when the path is already taken. */
+  async createLocalDirectory(params: CreateLocalDirectoryParams): Promise<CreateLocalEntryResult> {
+    return ensureElectronIpc().localSystem.handleCreateDirectory(params);
+  }
+
+  /** Copy files/folders, or duplicate in place when an item has no `targetPath`. */
+  async copyLocalFiles(params: CopyLocalFilesParams): Promise<LocalCopyFilesResultItem[]> {
+    return ensureElectronIpc().localSystem.handleCopyFiles(params);
+  }
+
+  /** Move files/folders to the OS trash (recoverable), reporting each path. */
+  async trashLocalFiles(params: TrashLocalFilesParams): Promise<TrashLocalFilesResult> {
+    return ensureElectronIpc().localSystem.trashLocalFiles(params);
   }
 
   async auditSafePaths(params: AuditSafePathsParams): Promise<AuditSafePathsResult> {

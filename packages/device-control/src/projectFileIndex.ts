@@ -73,6 +73,7 @@ const buildEntries = (
   files: string[],
   root: string,
   ignoredPaths: string[] = [],
+  emptyDirectoryPaths: string[] = [],
 ): ProjectFileIndexEntry[] => {
   const seen = new Set<string>();
   const fileEntries = files
@@ -107,9 +108,88 @@ const buildEntries = (
       return true;
     });
 
+  // Git tracks no directories, so an empty (or empty-only) untracked folder —
+  // one the user just created — never shows up among the files. Surface it as
+  // a collapsed directory so it stays visible and expands on demand.
+  const emptyDirectoryEntries = emptyDirectoryPaths
+    .map((relativePath) =>
+      createProjectFileEntry(
+        root,
+        path.resolve(root, relativePath.replace(/\/$/, '')),
+        true,
+        false,
+        true,
+      ),
+    )
+    .filter((entry) => {
+      if (seen.has(entry.path)) return false;
+      seen.add(entry.path);
+      return true;
+    });
+
   return clearCollapsedOnIndexedDirectories(
-    addMissingParentDirectories([...fileEntries, ...ignoredEntries], root),
+    addMissingParentDirectories(
+      [...fileEntries, ...ignoredEntries, ...emptyDirectoryEntries],
+      root,
+    ),
   );
+};
+
+// Upper bound on directories visited while looking for empty folders inside
+// untracked directories, so a huge untracked tree can't stall the index.
+const EMPTY_DIRECTORY_SCAN_LIMIT = 2000;
+
+/**
+ * Untracked folders that hold none of the indexed files: empty folders, or
+ * folders of empty folders. Git lists no directories, and
+ * `git ls-files --others --directory` reports an untracked folder that has
+ * files only as that folder, so empty folders nested inside it are found by a
+ * bounded walk that skips ignored folders.
+ */
+const findEmptyUntrackedDirectories = async (
+  root: string,
+  untrackedDirectoryOutput: string,
+  files: string[],
+  ignoredPaths: string[],
+): Promise<string[]> => {
+  const reported = untrackedDirectoryOutput
+    .split('\n')
+    .map((item) => item.trim())
+    .filter((item) => item.endsWith('/'));
+  if (reported.length === 0) return [];
+
+  const directoriesWithFiles = new Set<string>();
+  for (const file of files) {
+    let parent = getParentRelativePath(file);
+    while (parent && !directoriesWithFiles.has(parent)) {
+      directoriesWithFiles.add(parent);
+      parent = getParentRelativePath(parent);
+    }
+  }
+  const ignored = new Set(ignoredPaths.filter((item) => item.endsWith('/')));
+
+  const empty: string[] = [];
+  const queue = reported.filter((directory) => {
+    if (directoriesWithFiles.has(directory)) return true;
+    empty.push(directory);
+    return false;
+  });
+  let visited = 0;
+  while (queue.length > 0 && visited < EMPTY_DIRECTORY_SCAN_LIMIT) {
+    const directory = queue.shift()!;
+    visited += 1;
+    const children = await readdir(path.resolve(root, directory), { withFileTypes: true }).catch(
+      () => [],
+    );
+    for (const child of children) {
+      if (!child.isDirectory()) continue;
+      const relativePath = `${directory}${child.name}/`;
+      if (ignored.has(relativePath) || child.name === '.git') continue;
+      if (directoriesWithFiles.has(relativePath)) queue.push(relativePath);
+      else empty.push(relativePath);
+    }
+  }
+  return empty;
 };
 
 /**
@@ -245,44 +325,80 @@ export const defaultGetProjectFileIndex = async (
       rootResult?.stdout && !exitCode ? rootResult.stdout.trim() || requestedScope : requestedScope;
 
     if (rootResult?.stdout && !exitCode) {
-      const [trackedResult, untrackedResult, ignoredResult] = await Promise.all([
-        execFileAsync(
-          'git',
-          ['-C', root, '-c', 'core.quotepath=false', 'ls-files', '--recurse-submodules'],
-          { maxBuffer: 64 * 1024 * 1024, timeout: 10_000 },
-        ),
-        execFileAsync(
-          'git',
-          ['-C', root, '-c', 'core.quotepath=false', 'ls-files', '--others', '--exclude-standard'],
-          { maxBuffer: 64 * 1024 * 1024, timeout: 10_000 },
-        ).catch(() => ({ stdout: '' })),
-        execFileAsync(
-          'git',
-          [
-            '-C',
-            root,
-            '-c',
-            'core.quotepath=false',
-            'ls-files',
-            '--others',
-            '--ignored',
-            '--exclude-standard',
-            '--directory',
-          ],
-          { maxBuffer: 64 * 1024 * 1024, timeout: 10_000 },
-        ).catch(() => ({ stdout: '' })),
-      ]);
+      const [trackedResult, untrackedResult, ignoredResult, untrackedDirectoryResult] =
+        await Promise.all([
+          execFileAsync(
+            'git',
+            ['-C', root, '-c', 'core.quotepath=false', 'ls-files', '--recurse-submodules'],
+            { maxBuffer: 64 * 1024 * 1024, timeout: 10_000 },
+          ),
+          execFileAsync(
+            'git',
+            [
+              '-C',
+              root,
+              '-c',
+              'core.quotepath=false',
+              'ls-files',
+              '--others',
+              '--exclude-standard',
+            ],
+            { maxBuffer: 64 * 1024 * 1024, timeout: 10_000 },
+          ).catch(() => ({ stdout: '' })),
+          execFileAsync(
+            'git',
+            [
+              '-C',
+              root,
+              '-c',
+              'core.quotepath=false',
+              'ls-files',
+              '--others',
+              '--ignored',
+              '--exclude-standard',
+              '--directory',
+            ],
+            { maxBuffer: 64 * 1024 * 1024, timeout: 10_000 },
+          ).catch(() => ({ stdout: '' })),
+          execFileAsync(
+            'git',
+            [
+              '-C',
+              root,
+              '-c',
+              'core.quotepath=false',
+              'ls-files',
+              '--others',
+              '--exclude-standard',
+              '--directory',
+            ],
+            { maxBuffer: 64 * 1024 * 1024, timeout: 10_000 },
+          ).catch(() => ({ stdout: '' })),
+        ]);
 
-      const files = [...trackedResult.stdout.split('\n'), ...untrackedResult.stdout.split('\n')]
+      const fileRelativePaths = [
+        ...trackedResult.stdout.split('\n'),
+        ...untrackedResult.stdout.split('\n'),
+      ]
         .map((item) => item.trim())
-        .filter(Boolean)
-        .map((relativePath) => path.resolve(root, relativePath));
+        .filter(Boolean);
+      const files = fileRelativePaths.map((relativePath) => path.resolve(root, relativePath));
 
       const ignoredPaths = ignoredResult.stdout
         .split('\n')
         .map((item) => item.trim())
         .filter(Boolean);
-      const entries = buildEntries(files, root, ignoredPaths);
+      const entries = buildEntries(
+        files,
+        root,
+        ignoredPaths,
+        await findEmptyUntrackedDirectories(
+          root,
+          untrackedDirectoryResult.stdout,
+          fileRelativePaths,
+          ignoredPaths,
+        ),
+      );
 
       return {
         entries,

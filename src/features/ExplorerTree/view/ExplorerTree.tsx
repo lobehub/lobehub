@@ -8,7 +8,7 @@ import type {
 } from '@pierre/trees';
 import { FileTree as PierreFileTree, useFileTree, useFileTreeSelection } from '@pierre/trees/react';
 import debug from 'debug';
-import type { DragEvent, ForwardedRef, MouseEvent } from 'react';
+import type { DragEvent, ForwardedRef, KeyboardEvent, MouseEvent } from 'react';
 import {
   forwardRef,
   useCallback,
@@ -30,6 +30,9 @@ import type {
   ExplorerTreeProps,
 } from '../types';
 import { openExplorerContextMenu } from './ContextMenu';
+import { getItemPathFromEventPath } from './eventPath';
+import NameInputHint from './NameInputHint';
+import { type PendingCreate, useInlineNameEdit } from './useInlineNameEdit';
 
 const log = debug('lobe-explorer-tree');
 
@@ -59,8 +62,6 @@ const getItemSafely = (model: FileTreeModel, path: string): FileTreeItemHandle |
 
 type ExplorerTreeHostEvent = DragEvent<HTMLElement> | MouseEvent<HTMLElement>;
 
-const isHTMLElement = (target: EventTarget): target is HTMLElement => target instanceof HTMLElement;
-
 const getComposedPath = (event: ExplorerTreeHostEvent): EventTarget[] => {
   const path = event.nativeEvent.composedPath();
   if (path.length > 0) return path;
@@ -70,18 +71,7 @@ const getComposedPath = (event: ExplorerTreeHostEvent): EventTarget[] => {
   );
 };
 
-export const getItemPathFromEventPath = (path: EventTarget[]): string | null => {
-  for (const target of path) {
-    if (!isHTMLElement(target)) continue;
-    const flattenedSegmentPath = target.getAttribute('data-item-flattened-subitem');
-    if (flattenedSegmentPath) return flattenedSegmentPath;
-    if (target.dataset.type !== 'item') continue;
-    const path = target.dataset.itemPath;
-    if (path) return path;
-  }
-
-  return null;
-};
+export { getItemPathFromEventPath } from './eventPath';
 
 const getItemPathFromHostEvent = (event: ExplorerTreeHostEvent): string | null =>
   getItemPathFromEventPath(getComposedPath(event));
@@ -110,6 +100,7 @@ function ExplorerTreeInner<TData>(
   );
   const suppressModelEventsRef = useRef(false);
   const renamingRef = useRef(false);
+  const pendingCreateRef = useRef<PendingCreate | null>(null);
 
   const initialOptions = useMemo((): FileTreeOptions => {
     const initial = adapterRef.current;
@@ -188,7 +179,12 @@ function ExplorerTreeInner<TData>(
             targetId,
             targetNode: targetId ? (a.nodeById.get(targetId) ?? null) : null,
           };
-          void onMove(moveEvent);
+          void Promise.resolve(onMove(moveEvent)).then(
+            (result) => {
+              if (result === false) resyncRef.current();
+            },
+            () => resyncRef.current(),
+          );
         },
       },
       icons: {
@@ -211,6 +207,7 @@ function ExplorerTreeInner<TData>(
       renaming: {
         canRename: (item) => {
           const path = toCanonicalTreePath(item.path, item.isFolder);
+          if (pendingCreateRef.current?.path === path) return true;
           const node = adapterRef.current.nodeById.get(adapterRef.current.idByPath.get(path) ?? '');
           if (!node) return false;
           const fn = propsRef.current.canRename;
@@ -229,12 +226,20 @@ function ExplorerTreeInner<TData>(
           renamingNodeRef.current = node;
           const newName = extractName(destinationPath);
           const result = propsRef.current.onCommitRename?.(node, newName);
-          if (result && typeof (result as Promise<void>).then === 'function') {
-            (result as Promise<void>).finally(() => {
-              renamingNodeRef.current = null;
-              renamingRef.current = false;
-            });
+          if (result && typeof (result as Promise<boolean | void>).then === 'function') {
+            (result as Promise<boolean | void>)
+              .then(
+                (value) => {
+                  if (value === false) resyncRef.current();
+                },
+                () => resyncRef.current(),
+              )
+              .finally(() => {
+                renamingNodeRef.current = null;
+                renamingRef.current = false;
+              });
           } else {
+            if (result === false) queueMicrotask(() => resyncRef.current());
             renamingNodeRef.current = null;
             renamingRef.current = false;
           }
@@ -258,6 +263,43 @@ function ExplorerTreeInner<TData>(
 
   const renamingNodeRef = useRef<ExplorerTreeNode<TData> | null>(null);
   const { model } = useFileTree(initialOptions);
+
+  // Drops whatever the tree applied optimistically (rename, drop, new row) by
+  // re-applying the current nodes, keeping expansion, selection and focus.
+  const resync = useCallback(() => {
+    const a = adapterRef.current;
+    const expandedPaths: string[] = [];
+    for (const path of a.paths) {
+      if (asDirectory(getItemSafely(model, path))?.isExpanded()) expandedPaths.push(path);
+    }
+    const selectedPaths = model.getSelectedPaths().filter((path) => a.idByPath.has(path));
+    const focusedPath = model.getFocusedPath();
+    pendingCreateRef.current = null;
+    suppressModelEventsRef.current = true;
+    try {
+      for (const path of model.getSelectedPaths()) {
+        if (!a.idByPath.has(path)) getItemSafely(model, path)?.deselect();
+      }
+      model.resetPaths(a.paths, { initialExpandedPaths: expandedPaths });
+      for (const path of selectedPaths) getItemSafely(model, path)?.select();
+      if (focusedPath && a.idByPath.has(focusedPath)) model.focusPath(focusedPath);
+    } catch (error) {
+      log('resync failed, rebuilding the tree: %O', error);
+      requestTreeRebuild();
+    } finally {
+      suppressModelEventsRef.current = false;
+    }
+  }, [adapterRef, model, requestTreeRebuild]);
+  const resyncRef = useRef(resync);
+  resyncRef.current = resync;
+
+  const { hint, selectRenameStem, startCreating } = useInlineNameEdit({
+    adapterRef,
+    model,
+    pendingCreateRef,
+    propsRef,
+    resync,
+  });
 
   // Observe selection changes so external consumers see updates without needing to pass a selection listener.
   useFileTreeSelection(model);
@@ -465,7 +507,12 @@ function ExplorerTreeInner<TData>(
         if (!path || !getItemSafely(model, path)) return;
         model.focusPath(path);
       },
+      getFocusedId: () => {
+        const path = model.getFocusedPath();
+        return path ? (adapterRef.current.idByPath.get(path) ?? null) : null;
+      },
       getSelectedIds: () => remapPathsToIds(model.getSelectedPaths(), adapterRef.current.idByPath),
+      resync,
       select: (id, opts) => {
         const path = adapterRef.current.pathById.get(id);
         if (!path) return;
@@ -485,21 +532,28 @@ function ExplorerTreeInner<TData>(
           else if (!shouldExpand && dir.isExpanded()) dir.collapse();
         }
       },
+      startCreating,
       startRenaming: (id) => {
         const path = adapterRef.current.pathById.get(id);
         if (!path || !getItemSafely(model, path)) return;
         renamingRef.current = true;
-        model.startRenaming(path);
+        if (model.startRenaming(path)) selectRenameStem(path.endsWith('/'));
       },
     }),
-    [adapterRef, model],
+    [adapterRef, model, resync, selectRenameStem, startCreating],
   );
 
   const handleContextMenu = (event: MouseEvent<HTMLElement>) => {
     const fn = propsRef.current.getContextMenuItems;
-    if (!fn) return;
     const itemPath = getItemPathFromHostEvent(event);
-    if (!itemPath) return;
+    if (!itemPath) {
+      const blankItems = propsRef.current.getBlankContextMenuItems?.();
+      if (!blankItems || blankItems.length === 0) return;
+      event.preventDefault();
+      openExplorerContextMenu(blankItems);
+      return;
+    }
+    if (!fn) return;
     const a = adapterRef.current;
     const id = a.idByPath.get(itemPath);
     if (!id) return;
@@ -552,17 +606,42 @@ function ExplorerTreeInner<TData>(
     onNodeDragStart(node, event);
   };
 
+  const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    const onTreeKeyDown = propsRef.current.onTreeKeyDown;
+    if (!onTreeKeyDown) return;
+    // Keys typed into the rename or search input belong to that input.
+    const [origin] = event.nativeEvent.composedPath();
+    if (origin instanceof HTMLInputElement || origin instanceof HTMLTextAreaElement) return;
+    const a = adapterRef.current;
+    const toNode = (path: string) => a.nodeById.get(a.idByPath.get(path) ?? '');
+    const focusedPath = model.getFocusedPath();
+    const handled = onTreeKeyDown(event, {
+      focusedNode: (focusedPath && toNode(focusedPath)) || null,
+      selectedNodes: model
+        .getSelectedPaths()
+        .map(toNode)
+        .filter((node): node is ExplorerTreeNode<TData> => !!node),
+    });
+    if (!handled) return;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
   return (
-    <PierreFileTree
-      className={props.className}
-      header={props.header}
-      model={model}
-      style={props.style}
-      onClick={handleClick}
-      onContextMenu={handleContextMenu}
-      onDragStart={handleDragStart}
-      onDropCapture={handleDropCapture}
-    />
+    <>
+      <PierreFileTree
+        className={props.className}
+        header={props.header}
+        model={model}
+        style={props.style}
+        onClick={handleClick}
+        onContextMenu={handleContextMenu}
+        onDragStart={handleDragStart}
+        onDropCapture={handleDropCapture}
+        onKeyDown={handleKeyDown}
+      />
+      {hint && <NameInputHint hint={hint} />}
+    </>
   );
 }
 
