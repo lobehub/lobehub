@@ -10,7 +10,7 @@ Only `verdict: confirmed` findings are rendered (plus unverified dimensions — 
 - **Two questions decide a finding's fate, and both render**: _did this change introduce it_ (`nature` / `exposure`) and _how likely is it to fire_ (`likelihood`). Severity alone never decides whether something blocks the merge — see the scope and de-escalation rules below.
 - **Nature line**: `nature: "introduced"` → omit the line (default). `nature: "exposed_legacy"` → render `**Nature**: legacy surfaced by this change (triggered by this diff)` or `... (bystander find)` per `exposure`.
 - **Likelihood line** renders on every confirmed finding: `**Likelihood**: high | medium | low`. Never omit — together with severity it is what tells the user whether a finding is worth another fix round. For `low`, append the precondition chain from `scenario` in parentheses.
-- **Scope rule — legacy findings do not get fixed in this PR.** `nature: "exposed_legacy"` findings never render `Fix options` and never appear in `Safe to fix now`; they render under `Hand off to owner` with a Linear issue draft instead (see below). The only exception: `exposure: "triggered"` P0 — this diff is what makes the old bug fire, so it renders as a normal finding in the severity buckets **and** blocks merge. Everything else legacy is somebody else's task, and pulling it into this PR is exactly the scope creep this rule exists to prevent.
+- **Scope rule — legacy findings do not get fixed in this PR.** `nature: "exposed_legacy"` findings never render `Fix options` and never appear in `Fixing now`; they render under `Hand off to owner` with a Linear issue draft instead (see below). The only exception: `exposure: "triggered"` P0 — this diff is what makes the old bug fire, so it renders as a normal finding in the severity buckets **and** blocks merge. Everything else legacy is somebody else's task, and pulling it into this PR is exactly the scope creep this rule exists to prevent.
 - **Low-likelihood de-escalation**: a confirmed finding with `likelihood: "low"` and `blocks_release: false` renders at its verified severity but never enters `Merge verdict` prerequisites — it goes to `Follow-ups`. If the user says this is a repeat review of the same PR (second round or later), render `low` + non-blocking findings as one line each under `More P2` regardless of their severity, prefixed `[low likelihood]`. Rationale: after a couple of fix rounds the marginal value of chasing rare edges is below the churn and regression risk it creates; say so in the TL;DR rather than silently dropping them.
 - **Issue type** renders the finding's `issue_type` verbatim — never the dimension name.
 - **Blocks release** renders verify's `blocks_release` (`yes`/`no`) on every confirmed finding — this is the user's ship/no-ship signal; never omit. Same-root merged entries take the value belonging to the highest merged severity.
@@ -59,7 +59,8 @@ Before sending, confirm every item; fix and re-render if any is missing:
 - Title + header metadata (scope / background / execution mode with pruned dimensions)
 - TL;DR present; Findings present (or explicit "no confirmed findings"); Statistics present
 - Every confirmed finding **rendered in a severity bucket** has: issue type, location, blocks release, **likelihood**, core problem, evidence, fix cost, fix options, needs test. Findings under `Hand off to owner` are checked by the next item instead — the scope rule forbids their fix options, so requiring them here would make the two rules unsatisfiable together
-- Every `exposed_legacy` finding is either a triggered P0 in the severity buckets, or an entry under `Hand off to owner` — never both, never fixed inline, never in `Safe to fix now`
+- Every `exposed_legacy` finding is either a triggered P0 in the severity buckets, or an entry under `Hand off to owner` — never both, never fixed inline, never in `Fixing now`
+- Every in-scope confirmed finding is in exactly one of `Fixing now`, `Needs decision`, `Follow-ups`, or `Needs your input`, per the decision table in `fix-policy.md`
 - `release_checks` rendered as a checklist under `Pre-deploy checklist`, never counted as findings, never a merge prerequisite
 - No out-of-scope or low-likelihood-non-blocking finding appears in `Merge verdict` prerequisites
 - Merge verdict only in PR mode
@@ -165,11 +166,21 @@ Before sending, confirm every item; fix and re-render if any is missing:
 - Likelihood: high {a} / medium {b} / low {c}
 - By dimension: {dimension: count, ...}
 
-## 🚀 Safe to fix now ({n}) ← omit when empty
+## 🚀 Fixing now ({n}) ← omit when empty
 
-> Single obvious fix, low risk, no product decisions. Can be applied in one batch. Introduced-by-this-change findings only — legacy code is never auto-fixed here.
+> Applied right after this report without asking, per `fix-policy.md`: every in-scope P0/P1 that is not high-risk, plus every quick P2. Legacy code is never fixed here.
 
 - **#{n}** `[{issue_type}]` {summary} (`file:line`)
+
+## 🛠️ Fixed this round ({n}) ← rendered after the fixes ran; omit when nothing was attempted
+
+- **#{n}** {what changed, one line} — checks: {pass | failed: reason} — test: {added | adjusted | none}
+
+## 🧭 Needs decision ({n}) ← high-risk P0/P1 per `fix-policy.md`, and fixes that were stopped; omit when empty
+
+> Not fixed automatically because the wrong choice is expensive: competing design directions, an external contract, a permission boundary, or persisted data. One question each follows this report.
+
+- **#{n}** `[{severity}]` {summary} — why it needs you: {reason}
 
 ## Needs your input ← need_more_context only, omit when empty
 
