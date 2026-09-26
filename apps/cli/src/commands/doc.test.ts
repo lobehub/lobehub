@@ -260,6 +260,10 @@ describe('doc command', () => {
           title: 'My Doc',
         }),
       );
+      // The server builds Lexical editor state from content; a `{ type: 'doc' }`
+      // placeholder made node ids change on every read.
+      const [params] = mockTrpcClient.document.createDocument.mutate.mock.calls[0];
+      expect(params).not.toHaveProperty('editorData');
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('new-doc'));
     });
 
@@ -387,6 +391,8 @@ describe('doc command', () => {
           expect.objectContaining({ content: 'content2', title: 'Doc 2' }),
         ]),
       });
+      const [{ documents }] = mockTrpcClient.document.createDocuments.mutate.mock.calls[0];
+      expect(documents.every((doc: object) => !('editorData' in doc))).toBe(true);
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Created 2'));
 
       vi.restoreAllMocks();
@@ -462,6 +468,8 @@ describe('doc command', () => {
           id: 'doc1',
         }),
       );
+      const [params] = mockTrpcClient.document.updateDocument.mutate.mock.calls[0];
+      expect(params).not.toHaveProperty('editorData');
     });
 
     it('should update file type', async () => {

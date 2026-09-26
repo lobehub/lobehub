@@ -180,6 +180,108 @@ describe('EditorRuntime - Real Cases', () => {
     });
   });
 
+  // Regressions from agent vent reports: the page agent reported every operation
+  // as applied before dispatching, and the batched command reversed inserts that
+  // share a beforeId and emptied list items added as review diffs.
+  describe('modifyNodes - per-operation results', () => {
+    const liteXML = () => editor.getDocument('litexml') as unknown as string;
+    const idOf = (tag: string, text: string) =>
+      liteXML().match(new RegExp(`<${tag} id="(\\w+)">\\s*<span id="\\w+">${text}</span>`))![1];
+
+    beforeEach(async () => {
+      editor.setDocument('markdown', 'intro\n\n- a\n- b\n\ntail\n');
+      await moment();
+    });
+
+    it('reports an operation with an unknown id as failed', async () => {
+      const result = await runtime.modifyNodes({
+        operations: [
+          { action: 'modify', litexml: '<p id="zzzz">stale</p>' },
+          { action: 'insert', afterId: idOf('p', 'tail'), litexml: '<p>ok</p>' },
+        ],
+      });
+
+      expect(result.successCount).toBe(1);
+      expect(result.results[0]).toMatchObject({ action: 'modify', success: false });
+      expect(result.results[0].error).toContain('"zzzz" not found');
+      expect(result.results[1]).toMatchObject({ action: 'insert', success: true });
+    });
+
+    it('keeps array order for inserts sharing a beforeId', async () => {
+      const anchor = idOf('p', 'tail');
+      const result = await runtime.modifyNodes({
+        operations: ['P1', 'P2', 'P3'].map((text) => ({
+          action: 'insert' as const,
+          beforeId: anchor,
+          litexml: `<p>${text}</p>`,
+        })),
+      });
+
+      expect(result.successCount).toBe(3);
+      const xml = liteXML();
+      expect(xml.indexOf('P1')).toBeLessThan(xml.indexOf('P2'));
+      expect(xml.indexOf('P2')).toBeLessThan(xml.indexOf('P3'));
+    });
+
+    it('keeps array order for inserts sharing an afterId', async () => {
+      const anchor = idOf('p', 'intro');
+      await runtime.modifyNodes({
+        operations: ['P1', 'P2', 'P3'].map((text) => ({
+          action: 'insert' as const,
+          afterId: anchor,
+          litexml: `<p>${text}</p>`,
+        })),
+      });
+
+      const xml = liteXML();
+      expect(xml.indexOf('P1')).toBeLessThan(xml.indexOf('P2'));
+      expect(xml.indexOf('P2')).toBeLessThan(xml.indexOf('P3'));
+    });
+
+    it('does not report inserts erased by a later replacement of the enclosing list as applied', async () => {
+      const anchor = idOf('li', 'a');
+      const list = liteXML().match(/<ul id="\w+">[\s\S]*?<\/ul>/)![0];
+      const result = await runtime.modifyNodes({
+        operations: [
+          { action: 'insert', afterId: anchor, litexml: '<li><span>A</span></li>' },
+          { action: 'modify', litexml: list.replace('>b</span>', '>b2</span>') },
+          { action: 'insert', afterId: anchor, litexml: '<li><span>B</span></li>' },
+        ],
+      });
+
+      // Applied in caller order: the list replacement drops A and re-keys the
+      // list, so the later insert is reported as failed instead of vanishing
+      // behind a success.
+      expect(result.results.map((r) => r.success)).toEqual([true, true, false]);
+      expect(result.results[2].error).toContain('not found');
+      expect(editor.getDocument('markdown') as unknown as string).toContain('- b2');
+    });
+
+    it('reports an empty insert as failed even when merged with a real one', async () => {
+      const anchor = idOf('p', 'intro');
+      const result = await runtime.modifyNodes({
+        operations: [
+          { action: 'insert', afterId: anchor, litexml: '' },
+          { action: 'insert', afterId: anchor, litexml: '<p>B</p>' },
+        ],
+      });
+
+      expect(result.results[0]).toMatchObject({ success: false });
+      expect(result.results[1]).toMatchObject({ success: true });
+    });
+
+    it('keeps the text of an inserted list item', async () => {
+      const result = await runtime.modifyNodes({
+        operations: [
+          { action: 'insert', afterId: idOf('li', 'a'), litexml: '<li><span>NEW</span></li>' },
+        ],
+      });
+
+      expect(result.successCount).toBe(1);
+      expect(editor.getDocument('markdown') as unknown as string).toContain('- NEW');
+    });
+  });
+
   describe('modifyNodes - remove then add', () => {
     it('should remove 13 paragraphs then insert a list', async () => {
       // Initialize editor with the JSON fixture

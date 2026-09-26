@@ -159,7 +159,7 @@ describe('agent document headless editor', () => {
     ).rejects.toThrow('unexpectedly produced empty content');
   });
 
-  it('should reject a node edit that silently makes no change', async () => {
+  it('should reject a node edit that targets an unknown node id', async () => {
     const initial = await exportEditorDataSnapshot({
       fallbackContent: 'Original',
       litexml: true,
@@ -177,6 +177,6 @@ describe('agent document headless editor', () => {
           },
         ],
       }),
-    ).rejects.toThrow('did not change the document');
+    ).rejects.toThrow('Operation 1 of 1 (insert) failed: node "missing-node" not found');
   });
 });

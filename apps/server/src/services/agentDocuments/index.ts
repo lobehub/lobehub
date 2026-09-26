@@ -39,6 +39,7 @@ import { isRawTextAgentDocument } from './contentFormat';
 import {
   type AgentDocumentLiteXMLOperation,
   applyLiteXMLOperations,
+  createAgentMarkdownSnapshot,
   createMarkdownEditorSnapshot,
   exportEditorDataSnapshot,
 } from './headlessEditor';
@@ -131,6 +132,7 @@ const toAgentDocumentContextPayload = (
 ): AgentDocumentContextPayload => ({
   content: doc.content,
   contentCharCount: doc.contentCharCount,
+  createdAt: doc.createdAt,
   description: doc.description,
   documentId: doc.documentId,
   filename: doc.filename,
@@ -227,7 +229,10 @@ export class AgentDocumentsService {
     );
   }
 
-  private async attachLiteXML(doc: AgentDocument): Promise<AgentDocumentWithLiteXML> {
+  private async attachLiteXML(
+    doc: AgentDocument,
+    retriesLeft = 2,
+  ): Promise<AgentDocumentWithLiteXML> {
     if (isRawTextAgentDocument(doc)) return doc;
 
     const snapshot = await exportEditorDataSnapshot({
@@ -239,10 +244,25 @@ export class AgentDocumentsService {
     if (snapshot.recoveredFromMarkdown) {
       // Persist the repaired snapshot before exposing its LiteXML IDs. A later
       // node edit must hydrate this exact state or the IDs can no longer target it.
-      await this.agentDocumentModel.update(doc.id, {
-        content: snapshot.content,
-        editorData: snapshot.editorData,
-      });
+      // The write is conditional on the version this repair was built from: a
+      // save that landed after the fetch (e.g. the open page autosaving) must
+      // not be overwritten by the stale repair, so re-read and rebuild instead.
+      const persisted = await this.agentDocumentModel.updateEditorSnapshotIfUnchanged(
+        doc.id,
+        { content: doc.content, editorData: doc.editorData ?? null },
+        { content: snapshot.content, editorData: snapshot.editorData },
+      );
+
+      if (!persisted) {
+        const latest = retriesLeft > 0 ? await this.agentDocumentModel.findById(doc.id) : undefined;
+        if (!latest) {
+          throw new Error(
+            'The document changed while it was being read; nothing was overwritten. Read it again.',
+          );
+        }
+
+        return this.attachLiteXML(latest, retriesLeft - 1);
+      }
 
       return {
         ...doc,
@@ -290,7 +310,7 @@ export class AgentDocumentsService {
       suffix += 1;
     }
 
-    const snapshot = await createMarkdownEditorSnapshot(content);
+    const snapshot = await createAgentMarkdownSnapshot(content);
 
     return this.agentDocumentModel.create(agentId, filename, snapshot.content, {
       ...params,
@@ -626,8 +646,11 @@ export class AgentDocumentsService {
       }
     }
 
+    // The caller's explicit title wins; a leading H1 only names untitled documents.
+    // The H1 is stripped from the body only when it duplicates the chosen title.
     const { title: extractedTitle, content: strippedContent } = extractMarkdownH1Title(content);
-    const finalTitle = extractedTitle || title;
+    const finalTitle = title.trim() || extractedTitle || title;
+    const finalContent = extractedTitle === finalTitle ? strippedContent : content;
     const metadata = options.hintIsSkill
       ? {
           agentSignal: {
@@ -637,7 +660,7 @@ export class AgentDocumentsService {
         }
       : undefined;
 
-    return this.createWithUniqueFilename(agentId, finalTitle, strippedContent, {
+    return this.createWithUniqueFilename(agentId, finalTitle, finalContent, {
       ...(metadata ? { metadata } : {}),
       ...(options.parentId ? { parentId: options.parentId } : {}),
     });
@@ -843,7 +866,7 @@ export class AgentDocumentsService {
   }) {
     const existing = await this.agentDocumentModel.findByFilename(agentId, filename);
     const projectedExisting = await this.projectDocumentContent(existing);
-    const snapshot = await createMarkdownEditorSnapshot(content);
+    const snapshot = await createAgentMarkdownSnapshot(content);
 
     if (existing && projectedExisting?.content !== snapshot.content) {
       await this.documentService.trySaveCurrentDocumentHistory(existing.documentId, 'llm_call');
@@ -857,7 +880,7 @@ export class AgentDocumentsService {
   async replaceDocumentContentById(documentId: string, content: string, expectedAgentId?: string) {
     const doc = await this.getDocumentByIdInAgent(documentId, expectedAgentId);
     if (!doc) return undefined;
-    const snapshot = await createMarkdownEditorSnapshot(content);
+    const snapshot = await createAgentMarkdownSnapshot(content);
 
     if (doc.content !== snapshot.content) {
       await this.documentService.trySaveCurrentDocumentHistory(doc.documentId, 'llm_call');
