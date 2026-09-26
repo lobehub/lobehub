@@ -2,7 +2,7 @@
   "name": "@lobechat/openapi",
   "version": "1.0.0",
   "private": true,
-  "main": "./src/index.ts",
+  "main": "./dist/index.cjs",
   "scripts": {
     "generate:openapi": "bun scripts/generate-openapi.ts",
     "test": "vitest",
