@@ -59,7 +59,7 @@ const Topic = memo<TopicProps>(({ expanded, itemKey }) => {
                   {topicCount}
                 </Text>
               )}
-              {isRevalidating && <Spin size="small" />}
+              {isRevalidating && <Spin size="small" variant="network" />}
             </Flexbox>
           </AccordionTrigger>
           <div

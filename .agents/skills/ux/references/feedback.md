@@ -20,6 +20,7 @@ that matches wins:
 | Unknown-shape content region (file preview, QR, modal body) | `Spin size="large"` centred                                                |
 | Inline / button / background refresh (revalidate, saving)   | `Spin size="small"`, or `Button`'s `loading` prop for the button itself    |
 | AI thinking, generating or running a tool                   | `Spin variant="network"`                                                   |
+| Sidebar nav loading (section header revalidate, nav item)   | `Spin variant="network"` in place of the title suffix or item icon         |
 | Waiting for a streamed reply's first token                  | `BubblesLoading` from `@/components/BubblesLoading`                        |
 | Long job with a known progress value                        | `Progress` + persisted elapsed readout (see below)                         |
 
@@ -28,7 +29,8 @@ Sizes: `small` for 14–20 px contexts (inline, rows, buttons), `middle` for 24�
 body, panel), `large` for 36–48 px (centred region). A pixel number is fine when the loader
 must replace an icon of an exact size.
 
-**`variant="network"` means "the AI is working", nothing else.** A settings save or a list
+**`variant="network"` means "the AI is working" — plus the sidebar nav loading
+indicator above, which keeps the product's signature glyph.** A settings save or a list
 fetch uses the default variant; using `network` for plain I/O dilutes the one signal that
 tells the user the agent is busy.
 

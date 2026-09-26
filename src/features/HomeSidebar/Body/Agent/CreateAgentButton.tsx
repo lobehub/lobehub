@@ -122,7 +122,11 @@ const CreateAgentButton = memo<CreateAgentButtonProps>(({ groupId, className, vi
       onClick={handleClick}
     >
       <Center flex={'none'} height={28} width={28}>
-        {isMutatingAgent ? <Spin size="small" /> : <Icon icon={PlusIcon} size={'small'} />}
+        {isMutatingAgent ? (
+          <Spin size="small" variant="network" />
+        ) : (
+          <Icon icon={PlusIcon} size={'small'} />
+        )}
       </Center>
       <Text style={{ flex: 1 }} type={'secondary'}>
         {t('addAgent')}

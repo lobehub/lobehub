@@ -196,7 +196,7 @@ const NavItem = memo<NavItemProps>(
             width={28}
           >
             {loading ? (
-              <Spin size={iconSize} />
+              <Spin size={iconSize} variant="network" />
             ) : (
               <Icon color={iconColor} icon={icon} size={iconSize} />
             )}

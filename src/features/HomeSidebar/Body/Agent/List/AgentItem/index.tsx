@@ -162,7 +162,7 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
         <span className={styles.wrapper}>
           {avatarNode}
           <span className={styles.runningBadge}>
-            <Spin size={9} />
+            <Spin size={9} style={{ color: 'inherit' }} />
           </span>
         </span>
       );

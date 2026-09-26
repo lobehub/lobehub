@@ -140,7 +140,7 @@ const Recents = memo<RecentsProps>(({ itemKey }) => {
               <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
                 {t('recents')}
               </Text>
-              {syncStatus?.isValidating && query && <Spin size="small" />}
+              {syncStatus?.isValidating && query && <Spin size="small" variant="network" />}
             </Flexbox>
           </AccordionTrigger>
           <div

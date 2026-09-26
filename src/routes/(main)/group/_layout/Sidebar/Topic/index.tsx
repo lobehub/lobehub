@@ -43,7 +43,7 @@ const Topic = memo<TopicProps>(({ itemKey }) => {
               <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
                 {`${t('title')} ${topicCount > 0 ? topicCount : ''}`}
               </Text>
-              {isRevalidating && <Spin size="small" />}
+              {isRevalidating && <Spin size="small" variant="network" />}
             </Flexbox>
           </AccordionTrigger>
           <div

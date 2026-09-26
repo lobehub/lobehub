@@ -105,7 +105,7 @@ const Private = memo<PrivateProps>(({ itemKey }) => {
               <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
                 {t('navPanel.privateAgents', { defaultValue: 'Private' })}
               </Text>
-              {isRevalidating && <Spin size="small" />}
+              {isRevalidating && <Spin size="small" variant="network" />}
             </Flexbox>
           </AccordionTrigger>
           <Flexbox

@@ -128,7 +128,7 @@ const Body = memo(() => {
                 {section.title}
                 {section.count > 0 && ` ${section.count}`}
               </Text>
-              {isValidating && <Spin size="small" />}
+              {isValidating && <Spin size="small" variant="network" />}
             </Flexbox>
           </AccordionTrigger>
           <Flexbox

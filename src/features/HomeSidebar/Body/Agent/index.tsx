@@ -77,7 +77,7 @@ const Agent = memo<AgentProps>(({ itemKey }) => {
               <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
                 {t(titleKey)}
               </Text>
-              {isRevalidating && <Spin size="small" />}
+              {isRevalidating && <Spin size="small" variant="network" />}
             </Flexbox>
           </AccordionTrigger>
           <Flexbox
