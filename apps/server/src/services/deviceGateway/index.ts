@@ -20,6 +20,9 @@ import type {
   DeviceAppUpdateState,
   DeviceAppUpdateStateResult,
   DeviceCopyAssetForPublishResult,
+  DeviceCopyProjectFileItem,
+  DeviceCopyProjectFileResultItem,
+  DeviceCreateProjectEntryResult,
   DeviceDirectoryBrowseResult,
   DeviceExternalAssetForPublishResult,
   DeviceGitAddWorktreeResult,
@@ -53,6 +56,7 @@ import type {
   DeviceProjectFileIndexResult,
   DeviceProjectFileSearchResult,
   DeviceRenameProjectFileResult,
+  DeviceTrashProjectFilesResult,
   DeviceUnavailableErrorData,
   DeviceWriteProjectFileResult,
   HeterogeneousAgentModelCatalog,
@@ -98,6 +102,27 @@ const assertPathsWithinWorkspace = (
   for (const candidate of candidates) {
     if (!candidate || !isPathWithinRoot(workspaceRoot, candidate)) {
       throw new Error(`Path is outside the approved workspace: ${candidate ?? '(empty)'}`);
+    }
+  }
+};
+
+/**
+ * Refuse to trash / rename / move / duplicate the workspace root itself. It
+ * passes the containment check (a root is "within" itself), but removing or
+ * renaming it pulls the whole Files tree out from under the UI, and a duplicate
+ * of the root would land in its parent — outside the workspace.
+ */
+const assertNotWorkspaceRoot = (
+  workspaceRoot: string,
+  candidates: Array<string | undefined>,
+): void => {
+  for (const candidate of candidates) {
+    if (
+      candidate &&
+      isAbsolute(candidate) &&
+      relative(resolve(workspaceRoot), resolve(candidate)) === ''
+    ) {
+      throw new Error(`This operation is not allowed on the workspace root: ${candidate}`);
     }
   }
 };
@@ -1493,6 +1518,10 @@ export class DeviceGateway {
       workingDirectory,
       items.flatMap((item) => [item.oldPath, item.newPath]),
     );
+    assertNotWorkspaceRoot(
+      workingDirectory,
+      items.map((item) => item.oldPath),
+    );
 
     const result = await client.invokeRpc<DeviceMoveProjectFileResultItem[]>(
       { deviceId, timeout, userId, workspaceId },
@@ -1536,6 +1565,7 @@ export class DeviceGateway {
     // The rename stays in the same directory (the device rejects separators in
     // `newName`), so containing the source path also contains the target.
     assertPathsWithinWorkspace(workingDirectory, [path]);
+    assertNotWorkspaceRoot(workingDirectory, [path]);
 
     const result = await client.invokeRpc<DeviceRenameProjectFileResult>(
       { deviceId, timeout, userId, workspaceId },
@@ -1586,6 +1616,153 @@ export class DeviceGateway {
     if (!result.success || !result.data) {
       log('writeProjectFile: failed for deviceId=%s — %s', deviceId, result.error);
       throw new Error(result.error || 'Write failed');
+    }
+
+    return result.data;
+  }
+
+  /**
+   * Create a new, empty (or seeded) file on a remote device via the device's
+   * `createLocalFile` RPC. Never overwrites: an existing entry comes back as
+   * `{ success: false, error }`. A transport failure throws.
+   */
+  async createProjectFile(params: {
+    content?: string;
+    deviceId: string;
+    path: string;
+    timeout?: number;
+    userId: string;
+    workingDirectory: string;
+    workspaceId?: string;
+  }): Promise<DeviceCreateProjectEntryResult> {
+    const {
+      userId,
+      deviceId,
+      path,
+      content,
+      workingDirectory,
+      timeout = 30_000,
+      workspaceId,
+    } = params;
+    const client = this.getClient();
+    if (!client) throw new Error('Device gateway not configured');
+
+    assertPathsWithinWorkspace(workingDirectory, [path]);
+
+    const result = await client.invokeRpc<DeviceCreateProjectEntryResult>(
+      { deviceId, timeout, userId, workspaceId },
+      { method: 'createLocalFile', params: { content, path } },
+    );
+
+    if (!result.success || !result.data) {
+      log('createProjectFile: failed for deviceId=%s — %s', deviceId, result.error);
+      throw new Error(result.error || 'Create file failed');
+    }
+
+    return result.data;
+  }
+
+  /**
+   * Create a new folder on a remote device via the device's
+   * `createLocalDirectory` RPC. An existing entry fails instead of being reused.
+   */
+  async createProjectDirectory(params: {
+    deviceId: string;
+    path: string;
+    timeout?: number;
+    userId: string;
+    workingDirectory: string;
+    workspaceId?: string;
+  }): Promise<DeviceCreateProjectEntryResult> {
+    const { userId, deviceId, path, workingDirectory, timeout = 30_000, workspaceId } = params;
+    const client = this.getClient();
+    if (!client) throw new Error('Device gateway not configured');
+
+    assertPathsWithinWorkspace(workingDirectory, [path]);
+
+    const result = await client.invokeRpc<DeviceCreateProjectEntryResult>(
+      { deviceId, timeout, userId, workspaceId },
+      { method: 'createLocalDirectory', params: { path } },
+    );
+
+    if (!result.success || !result.data) {
+      log('createProjectDirectory: failed for deviceId=%s — %s', deviceId, result.error);
+      throw new Error(result.error || 'Create folder failed');
+    }
+
+    return result.data;
+  }
+
+  /**
+   * Copy (or, without `targetPath`, duplicate in place) files/folders on a
+   * remote device via the device's `copyLocalFiles` RPC. Both ends of every item
+   * must stay inside the workspace. A duplicate lands next to its source, so
+   * containing the source (and refusing the root itself) contains the copy.
+   */
+  async copyProjectFiles(params: {
+    deviceId: string;
+    items: DeviceCopyProjectFileItem[];
+    timeout?: number;
+    userId: string;
+    workingDirectory: string;
+    workspaceId?: string;
+  }): Promise<DeviceCopyProjectFileResultItem[]> {
+    const { userId, deviceId, items, workingDirectory, timeout = 60_000, workspaceId } = params;
+    const client = this.getClient();
+    if (!client) throw new Error('Device gateway not configured');
+
+    assertPathsWithinWorkspace(
+      workingDirectory,
+      items.flatMap((item) =>
+        item.targetPath === undefined ? [item.sourcePath] : [item.sourcePath, item.targetPath],
+      ),
+    );
+    assertNotWorkspaceRoot(
+      workingDirectory,
+      items.map((item) => item.sourcePath),
+    );
+
+    const result = await client.invokeRpc<DeviceCopyProjectFileResultItem[]>(
+      { deviceId, timeout, userId, workspaceId },
+      { method: 'copyLocalFiles', params: { items } },
+    );
+
+    if (!result.success || !result.data) {
+      log('copyProjectFiles: failed for deviceId=%s — %s', deviceId, result.error);
+      throw new Error(result.error || 'Copy failed');
+    }
+
+    return result.data;
+  }
+
+  /**
+   * Move files/folders to the remote device's trash via its `trashLocalFiles`
+   * RPC. A device without a recoverable trash (the CLI daemon) rejects the RPC,
+   * which surfaces here as a thrown error — never as a permanent delete.
+   */
+  async trashProjectFiles(params: {
+    deviceId: string;
+    paths: string[];
+    timeout?: number;
+    userId: string;
+    workingDirectory: string;
+    workspaceId?: string;
+  }): Promise<DeviceTrashProjectFilesResult> {
+    const { userId, deviceId, paths, workingDirectory, timeout = 30_000, workspaceId } = params;
+    const client = this.getClient();
+    if (!client) throw new Error('Device gateway not configured');
+
+    assertPathsWithinWorkspace(workingDirectory, paths);
+    assertNotWorkspaceRoot(workingDirectory, paths);
+
+    const result = await client.invokeRpc<DeviceTrashProjectFilesResult>(
+      { deviceId, timeout, userId, workspaceId },
+      { method: 'trashLocalFiles', params: { paths } },
+    );
+
+    if (!result.success || !result.data) {
+      log('trashProjectFiles: failed for deviceId=%s — %s', deviceId, result.error);
+      throw new Error(result.error || 'Move to trash failed');
     }
 
     return result.data;

@@ -1,4 +1,11 @@
-import { moveLocalFiles, renameLocalFile, writeLocalFile } from '@lobechat/local-file-shell/file';
+import {
+  copyLocalFiles,
+  createLocalDirectory,
+  createLocalFile,
+  moveLocalFiles,
+  renameLocalFile,
+  writeLocalFile,
+} from '@lobechat/local-file-shell/file';
 import {
   addGitWorktree,
   checkoutGitBranch,
@@ -24,6 +31,11 @@ import {
   revertGitFile,
   runPullRequestAction,
 } from '@lobechat/local-file-shell/git';
+import type {
+  CopyFilesParams,
+  CreateDirectoryParams,
+  CreateFileParams,
+} from '@lobechat/local-file-shell/types';
 
 import { getClaudeCodeQuota, type GetClaudeCodeQuotaParams } from './claudeCodeQuota';
 import { getCodexQuota, type GetCodexQuotaParams } from './codexQuota';
@@ -46,6 +58,7 @@ import type {
   ProjectDirectoryListParams,
   ProjectFileIndexParams,
   ProjectFileSearchParams,
+  TrashLocalFilesParams,
   UnenrollWorkspaceParams,
 } from './types';
 import { browseDirectory, initWorkspace, listProjectSkills, statPath } from './workspace';
@@ -77,6 +90,10 @@ export const DEVICE_RPC_METHODS = [
   'moveLocalFiles',
   'renameLocalFile',
   'writeLocalFile',
+  'createLocalFile',
+  'createLocalDirectory',
+  'copyLocalFiles',
+  'trashLocalFiles',
   'getGitBranch',
   'getLinkedPullRequest',
   'getPullRequestDetail',
@@ -109,6 +126,9 @@ export type DeviceRpcMethod = (typeof DEVICE_RPC_METHODS)[number];
 
 /** Why a client without the app-update handlers rejects those RPCs. */
 export const APP_UPDATE_UNSUPPORTED_MESSAGE = 'This device client does not support remote updates';
+
+/** Why a client without a recoverable trash (the CLI daemon) rejects `trashLocalFiles`. */
+export const TRASH_UNSUPPORTED_MESSAGE = 'This device does not support moving files to the trash';
 
 /**
  * Dispatch a generic server-internal device RPC by method name. This is the
@@ -223,6 +243,25 @@ export const executeDeviceRpc = async (
 
     case 'writeLocalFile': {
       return writeLocalFile(params as { content: string; path: string });
+    }
+
+    case 'createLocalFile': {
+      return createLocalFile(params as CreateFileParams);
+    }
+
+    case 'createLocalDirectory': {
+      return createLocalDirectory(params as CreateDirectoryParams);
+    }
+
+    case 'copyLocalFiles': {
+      return copyLocalFiles(params as CopyFilesParams);
+    }
+
+    // Never falls back to a hard delete: a host without a recoverable trash
+    // refuses, so a remote "delete" can always be undone.
+    case 'trashLocalFiles': {
+      if (!deps.trashLocalFiles) throw new Error(TRASH_UNSUPPORTED_MESSAGE);
+      return deps.trashLocalFiles(params as TrashLocalFilesParams);
     }
 
     case 'getGitBranch': {

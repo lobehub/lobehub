@@ -1,10 +1,15 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { APP_UPDATE_UNSUPPORTED_MESSAGE, executeDeviceRpc } from '../dispatch';
+import {
+  APP_UPDATE_UNSUPPORTED_MESSAGE,
+  DEVICE_RPC_METHODS,
+  executeDeviceRpc,
+  TRASH_UNSUPPORTED_MESSAGE,
+} from '../dispatch';
 import type { DeviceControlDeps } from '../types';
 
 let root: string;
@@ -301,6 +306,127 @@ describe('executeDeviceRpc', () => {
 
     expect(result.success).toBe(true);
     expect(await readFile(filePath, 'utf8')).toBe('remote edit');
+  });
+
+  it('refuses to overwrite an existing target when routing moveLocalFiles', async () => {
+    const oldPath = path.join(root, 'move-clash-src.txt');
+    const newPath = path.join(root, 'move-clash-dst.txt');
+    await writeFile(oldPath, 'incoming');
+    await writeFile(newPath, 'keep me');
+
+    const [result] = (await executeDeviceRpc(
+      'moveLocalFiles',
+      { items: [{ newPath, oldPath }] },
+      makeDeps(),
+    )) as { error?: string; success: boolean }[];
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('already exists');
+    expect(await readFile(newPath, 'utf8')).toBe('keep me');
+  });
+
+  it('refuses to overwrite an existing sibling when routing renameLocalFile', async () => {
+    const filePath = path.join(root, 'rename-clash-src.txt');
+    await writeFile(filePath, 'incoming');
+    await writeFile(path.join(root, 'rename-clash-dst.txt'), 'keep me');
+
+    const result = (await executeDeviceRpc(
+      'renameLocalFile',
+      { newName: 'rename-clash-dst.txt', path: filePath },
+      makeDeps(),
+    )) as { error?: string; success: boolean };
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('already exists');
+    expect(await readFile(path.join(root, 'rename-clash-dst.txt'), 'utf8')).toBe('keep me');
+  });
+
+  describe('file tree mutations', () => {
+    it('exposes create / mkdir / copy / trash as device RPC methods', () => {
+      expect(DEVICE_RPC_METHODS).toEqual(
+        expect.arrayContaining([
+          'createLocalFile',
+          'createLocalDirectory',
+          'copyLocalFiles',
+          'trashLocalFiles',
+        ]),
+      );
+    });
+
+    it('routes createLocalFile and refuses an existing file', async () => {
+      const filePath = path.join(root, 'created.ts');
+
+      await expect(
+        executeDeviceRpc('createLocalFile', { path: filePath }, makeDeps()),
+      ).resolves.toEqual({ path: filePath, success: true });
+      await expect(
+        executeDeviceRpc('createLocalFile', { content: 'x', path: filePath }, makeDeps()),
+      ).resolves.toMatchObject({
+        error: expect.stringContaining('already exists'),
+        success: false,
+      });
+      expect(await readFile(filePath, 'utf8')).toBe('');
+    });
+
+    it('routes createLocalDirectory and refuses an existing folder', async () => {
+      const dirPath = path.join(root, 'created-dir');
+
+      await expect(
+        executeDeviceRpc('createLocalDirectory', { path: dirPath }, makeDeps()),
+      ).resolves.toEqual({ path: dirPath, success: true });
+      expect((await stat(dirPath)).isDirectory()).toBe(true);
+      await expect(
+        executeDeviceRpc('createLocalDirectory', { path: dirPath }, makeDeps()),
+      ).resolves.toMatchObject({
+        error: expect.stringContaining('already exists'),
+        success: false,
+      });
+    });
+
+    it('routes copyLocalFiles, duplicating in place when targetPath is omitted', async () => {
+      const src = path.join(root, 'dup.md');
+      await writeFile(src, 'dup');
+
+      const result = await executeDeviceRpc(
+        'copyLocalFiles',
+        { items: [{ sourcePath: src }] },
+        makeDeps(),
+      );
+
+      expect(result).toEqual([
+        { sourcePath: src, success: true, targetPath: path.join(root, 'dup copy.md') },
+      ]);
+      expect(await readFile(path.join(root, 'dup copy.md'), 'utf8')).toBe('dup');
+    });
+
+    it('routes trashLocalFiles to the host trash handler', async () => {
+      const trashLocalFiles = vi.fn(async () => ({
+        items: [{ path: '/p/a.txt', success: true }],
+        success: true,
+      }));
+
+      await expect(
+        executeDeviceRpc(
+          'trashLocalFiles',
+          { paths: ['/p/a.txt'] },
+          {
+            ...makeDeps(),
+            trashLocalFiles,
+          },
+        ),
+      ).resolves.toEqual({ items: [{ path: '/p/a.txt', success: true }], success: true });
+      expect(trashLocalFiles).toHaveBeenCalledWith({ paths: ['/p/a.txt'] });
+    });
+
+    it('rejects trashLocalFiles on a host without a trash instead of hard-deleting', async () => {
+      const filePath = path.join(root, 'must-survive.txt');
+      await writeFile(filePath, 'still here');
+
+      await expect(
+        executeDeviceRpc('trashLocalFiles', { paths: [filePath] }, makeDeps()),
+      ).rejects.toThrow(TRASH_UNSUPPORTED_MESSAGE);
+      expect(await readFile(filePath, 'utf8')).toBe('still here');
+    });
   });
 
   it('routes listGitWorktrees through the shared git dispatcher', async () => {

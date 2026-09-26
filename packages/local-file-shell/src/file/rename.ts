@@ -2,6 +2,7 @@ import { rename } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { RenameFileParams, RenameFileResult } from '../types';
+import { isTakenByAnotherEntry } from './existingEntry';
 import { expandTilde } from './expandTilde';
 
 export async function renameLocalFile({
@@ -47,6 +48,15 @@ export async function renameLocalFile({
   }
 
   try {
+    // `fs.rename` replaces an existing file on POSIX; refuse instead.
+    if (await isTakenByAnotherEntry(currentPath, newPath)) {
+      return {
+        error: `Cannot rename: an item with the name '${newName}' already exists at this location.`,
+        newPath: '',
+        success: false,
+      };
+    }
+
     await rename(currentPath, newPath);
     return { newPath, success: true };
   } catch (error) {

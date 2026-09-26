@@ -886,6 +886,40 @@ export interface DeviceWriteProjectFileResult {
 }
 
 /**
+ * Result of the `createLocalFile` / `createLocalDirectory` device RPCs. Neither
+ * overwrites: an existing entry fails with `error`. Mirrors the desktop
+ * `CreateLocalEntryResult`.
+ */
+export interface DeviceCreateProjectEntryResult {
+  error?: string;
+  path: string;
+  success: boolean;
+}
+
+/**
+ * One item of a `copyLocalFiles` device RPC. Omitting `targetPath` duplicates
+ * the source next to itself under a Finder-style free name (`name copy.ext`).
+ */
+export interface DeviceCopyProjectFileItem {
+  sourcePath: string;
+  targetPath?: string;
+}
+
+/** Per-item result of the `copyLocalFiles` device RPC. Mirrors `LocalCopyFilesResultItem`. */
+export interface DeviceCopyProjectFileResultItem {
+  error?: string;
+  sourcePath: string;
+  success: boolean;
+  targetPath?: string;
+}
+
+/** Result of the `trashLocalFiles` device RPC. Mirrors the desktop `TrashLocalFilesResult`. */
+export interface DeviceTrashProjectFilesResult {
+  items: { error?: string; path: string; success: boolean }[];
+  success: boolean;
+}
+
+/**
  * A single project skill (`.agents/skills` / `.claude/skills`) discovered on a
  * remote device, returned by the `listProjectSkills` device RPC. Mirrors the
  * desktop `ProjectSkillItem` (`@lobechat/electron-client-ipc`).

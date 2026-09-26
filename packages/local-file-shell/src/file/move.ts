@@ -3,9 +3,13 @@ import { access, mkdir, rename } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { MoveFileResultItem, MoveFilesParams } from '../types';
+import { isTakenByAnotherEntry } from './existingEntry';
 import { resolveAgainstCwd } from './expandTilde';
 
-export async function moveLocalFiles({ items, cwd }: MoveFilesParams): Promise<MoveFileResultItem[]> {
+export async function moveLocalFiles({
+  items,
+  cwd,
+}: MoveFilesParams): Promise<MoveFileResultItem[]> {
   const results: MoveFileResultItem[] = [];
 
   if (!items || items.length === 0) {
@@ -46,6 +50,13 @@ export async function moveLocalFiles({ items, cwd }: MoveFilesParams): Promise<M
       if (path.normalize(sourcePath) === path.normalize(newPath)) {
         resultItem.success = true;
         resultItem.newPath = newPath;
+        results.push(resultItem);
+        continue;
+      }
+
+      // `fs.rename` replaces an existing file on POSIX; refuse instead.
+      if (await isTakenByAnotherEntry(sourcePath, newPath)) {
+        resultItem.error = `An item already exists at the target path: ${newPath}.`;
         results.push(resultItem);
         continue;
       }
