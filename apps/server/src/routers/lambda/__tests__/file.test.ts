@@ -1119,6 +1119,14 @@ describe('fileRouter', () => {
       expect(KnowledgeRepo).toHaveBeenCalledWith(expect.anything(), 'test-user', 'workspace-1');
     });
 
+    it.each(['name', 'updatedAt'] as const)('accepts the %s sorter', async (sorter) => {
+      await caller.getKnowledgeItems({ sorter, sortType: 'asc' });
+
+      expect(mockKnowledgeRepoQuery).toHaveBeenCalledWith(
+        expect.objectContaining({ sorter, sortType: 'asc' }),
+      );
+    });
+
     it('should reject preview pages larger than the server limit', async () => {
       await expect(
         caller.getKnowledgeItems({ includeContentPreview: true, limit: 101 }),
