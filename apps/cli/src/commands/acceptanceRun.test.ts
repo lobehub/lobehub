@@ -101,7 +101,7 @@ describe('acceptance publication with missing evidence', () => {
 
     expect(process.exitCode).toBe(1);
     expect(result()).toMatchObject({
-      acceptanceUrl: 'https://app.lobehub.com/acceptance/acceptance-1',
+      acceptanceUrl: 'https://lobehub.com/acceptance/acceptance-1',
       evidence: 1,
       failedEvidence: [
         { checkItemId: 'screen', checkResultId: 'result-screen', reason: 'storage_quota' },
@@ -114,7 +114,7 @@ describe('acceptance publication with missing evidence', () => {
         reason: 'storage_quota',
         upgradeUrl: 'https://lobehub.com/settings/plans',
       },
-      roundUrl: 'https://app.lobehub.com/acceptance/acceptance-1?r=2',
+      roundUrl: 'https://lobehub.com/acceptance/acceptance-1?r=2',
     });
     expect(result().failedEvidence[0].retryCommand).toContain('evidence upload');
     expect(finalCheck()).toMatchObject({
@@ -192,7 +192,7 @@ describe('acceptance publication with missing evidence', () => {
     await run('ingest', dir);
 
     expect(printed.join('\n')).toContain('Partially published');
-    expect(printed.join('\n')).toContain('https://app.lobehub.com/acceptance/acceptance-1?r=2');
+    expect(printed.join('\n')).toContain('https://lobehub.com/acceptance/acceptance-1?r=2');
     expect(printed.join('\n')).toContain('evidence upload');
     expect(printed.join('\n')).toContain('POSIX shell');
     expect(printed.join('\n')).toContain('retryArgs');
@@ -228,6 +228,25 @@ describe('acceptance publication with missing evidence', () => {
     );
     expect(log.warn).toHaveBeenCalledWith(result().recovery.message);
   });
+
+  it.each(['https://lobehub.com', 'https://quota-user:quota%40password@lobehub.com'])(
+    'links personal cleanup to the canonical domain when the Cloud server is %s',
+    async (server) => {
+      vi.mocked(resolveServerUrl).mockReturnValue(server);
+      vi.mocked(uploadLocalFile).mockRejectedValue(new Error('storage_block:upgrade_required'));
+      await report(['screenshot'], ["screen's shot.png"]);
+
+      await run('ingest', dir, '--json');
+
+      expect(result().recovery).toMatchObject({
+        cleanupUrl: 'https://lobehub.com/acceptance',
+        scope: 'personal',
+        upgradeUrl: 'https://lobehub.com/settings/plans',
+      });
+      expect(result().recovery.message).toContain('https://lobehub.com/acceptance');
+      expect(JSON.stringify(result().recovery)).not.toMatch(/quota-user|quota%40password/);
+    },
+  );
 
   it.each([undefined, 'Upload failed: 503 Service Unavailable'])(
     'does not suggest storage recovery for a non-quota outcome: %s',

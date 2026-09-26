@@ -96,3 +96,12 @@ describe('mobile community route layouts', () => {
     ).toBe(true);
   });
 });
+
+describe('mobile Acceptance entry', () => {
+  it('opens the manager index instead of matching a workspace slug', () => {
+    const matches = matchRoutes(mobileRoutes, '/acceptance');
+    expect(matches?.some((match) => match.route.path === '/acceptance')).toBe(true);
+    expect(matches?.at(-1)?.route.index).toBe(true);
+    expect(matches?.some((match) => match.route.path === ':workspaceSlug')).toBe(false);
+  });
+});

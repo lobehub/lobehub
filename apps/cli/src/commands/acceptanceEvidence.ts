@@ -1,6 +1,8 @@
 import { access } from 'node:fs/promises';
 import path from 'node:path';
 
+import { getCanonicalAppOrigin } from '@lobechat/utils/url';
+
 import type { TrpcClient } from '../api/client';
 import { resolveWorkspaceId } from '../api/workspace';
 import { resolveServerUrl } from '../settings';
@@ -16,11 +18,7 @@ import {
 } from './verifyHelpers';
 
 export async function storageQuotaRecovery(client: TrpcClient) {
-  const serverUrl = new URL(resolveServerUrl());
-  serverUrl.username = '';
-  serverUrl.password = '';
-  // Cloud's API still uses app.lobehub.com; user-facing pages use lobehub.com.
-  if (serverUrl.origin === 'https://app.lobehub.com') serverUrl.hostname = 'lobehub.com';
+  const serverUrl = getCanonicalAppOrigin(resolveServerUrl());
   const workspaceId = resolveWorkspaceId();
   let cleanupUrl: string | undefined;
   let upgradeUrl: string | undefined;

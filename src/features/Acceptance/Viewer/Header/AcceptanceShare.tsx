@@ -1,3 +1,4 @@
+import { getCanonicalAppOrigin } from '@lobechat/utils/url';
 import { Button, confirmModal, DropdownMenu, toast } from '@lobehub/ui/base-ui';
 import { Share2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -53,7 +54,10 @@ const AcceptanceShare = () => {
           label: t('report.actions.copyLink'),
           onClick: async () => {
             try {
-              const url = new URL(`/acceptance/${acceptanceId}`, window.location.origin);
+              const url = new URL(
+                `/acceptance/${acceptanceId}`,
+                getCanonicalAppOrigin(window.location.origin),
+              );
               await navigator.clipboard.writeText(url.toString());
               toast.success(t('report.actions.copyLinkSuccess'));
             } catch {

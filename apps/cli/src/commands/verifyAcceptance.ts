@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 
 import { acceptanceSubjectTypes } from '@lobechat/const/verify';
 import type { AcceptanceAttachment, AcceptanceCheckGroup } from '@lobechat/types';
+import { getCanonicalAppOrigin } from '@lobechat/utils/url';
 import type { Command } from 'commander';
 import { InvalidArgumentError } from 'commander';
 import pc from 'picocolors';
@@ -119,7 +120,7 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
         const result = await client.acceptance.ensure.mutate({ ...subject, requirement, title });
         const acceptanceUrl = new URL(
           `/acceptance/${encodeURIComponent(result.id)}`,
-          resolveServerUrl(),
+          getCanonicalAppOrigin(resolveServerUrl()),
         ).toString();
 
         if (options.json !== undefined) {
