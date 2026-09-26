@@ -151,6 +151,13 @@ export class MessageTransformer {
           usage.cost = (usage.cost || 0) + child.usage.cost;
           hasUsageData = true;
         }
+
+        // CLI subscription credits (e.g. Qoder, whose token fields are all 0) —
+        // summed on their own, never folded into USD `cost`.
+        if (typeof child.usage.credits === 'number') {
+          usage.credits = (usage.credits || 0) + child.usage.credits;
+          hasUsageData = true;
+        }
       }
 
       if (child.performance) {

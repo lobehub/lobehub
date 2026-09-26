@@ -154,6 +154,20 @@ describe('MessageTransformer', () => {
   });
 
   describe('aggregateMetadata', () => {
+    it('sums CLI subscription credits across a tool-using group', () => {
+      // Regression: a Qoder run that calls tools collapses into an
+      // assistantGroup, and the group footer lost `credits` here.
+      const children: AssistantContentBlock[] = [
+        { content: '', id: 'msg-1', usage: { credits: 0.25, totalTokens: 0 } },
+        { content: 'done', id: 'msg-2', usage: { credits: 0.5, totalTokens: 0 } },
+      ];
+
+      expect(transformer.aggregateMetadata(children).usage).toEqual({
+        credits: 0.75,
+        totalTokens: 0,
+      });
+    });
+
     it('should aggregate usage and performance from multiple children', () => {
       const children: AssistantContentBlock[] = [
         {
