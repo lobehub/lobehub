@@ -19,6 +19,7 @@ The same change must work across every surface this product ships to. Authors (a
 | Deployment     | Vercel (serverless: no local fs persistence, execution time limits) vs Docker (long-lived process)                  |
 | Edition        | open-source self-hosted (business slots return safe no-op defaults) vs cloud (commercial overrides active)          |
 | Tenancy        | personal context (`workspaceId === null`) vs workspace context (workspace-scoped data, permissions, member sharing) |
+| Tool mode      | agent / chat / custom (pinned tools) / exclusive-tool or goal turns / legacy client tool engine / share visitor     |
 
 ## Quick checklist
 
@@ -32,6 +33,7 @@ The same change must work across every surface this product ships to. Authors (a
 - Workspace-blind logic: new data reads/writes, permission checks, or list scoping that silently assume the personal context — must respect the active workspace scope (`useActiveWorkspaceId` / `workspaceSlug`) or be explicitly personal-only by design
 - Cloud-only assumption: logic that only works when a business slot has its cloud override — must still function against the slot's open-source no-op default (feature hidden or gracefully degraded, not broken)
 - Renamed backend route paths (`src/app/(backend)/webapi/...`) or auth surfaces (`src/app/spa-auth/...`, `src/routes/auth/...`), or changed `@lobechat/business-*` exports — downstream deployments override/extend these paths; flag so they can adapt
+- Prompt text that promises a tool ("call readX to continue", "use tool Y") decided apart from the final tool set — the tool may be missing in custom mode, exclusive-tool / goal turns, the legacy client tool engine, share-visitor allowlists, or models without function calling. Gate the promise on the final enabled tool ids that reach the model (e.g. `toolsConfig.tools` in `MessagesEngine`), not on the signal that enabled the tool, and require tests for both the tool-present and tool-absent prompt
 - Dependency major bumps (`next`, `drizzle-orm`, ...) — downstream lockstep required; call out in the PR description
 
 ## Rule sources (deep mode: read before reviewing)
