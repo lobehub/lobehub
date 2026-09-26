@@ -1004,11 +1004,14 @@ export default class GatewayConnectionService extends ServiceModule {
     await this.stopMetricsSampler();
 
     const userData = safeGetPath('userData');
-    const { DeviceMetricsSampler, pushMetrics } = await import('@lobechat/device-control/metrics');
+    const { DeviceMetricsSampler, deviceMetricsBacklogFileName, pushMetrics } =
+      await import('@lobechat/device-control/metrics');
     const sampler = new DeviceMetricsSampler({
       isConnected: () => this.status === 'connected',
       logger: { warn: (msg) => logger.warn(msg) },
-      storagePath: userData ? path.join(userData, 'device-metrics', `${deviceId}.json`) : undefined,
+      storagePath: userData
+        ? path.join(userData, 'device-metrics', deviceMetricsBacklogFileName(deviceId))
+        : undefined,
       // Mirrored to the workspace-share connections so a shared device's
       // workspace row has the same history (the gateway stores per socket).
       upload: async (samples) => {

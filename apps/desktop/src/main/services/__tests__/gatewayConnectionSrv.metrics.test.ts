@@ -49,7 +49,9 @@ describe('GatewayConnectionService device metrics', () => {
 
     const [sampler] = samplers;
     expect(sampler.start).toHaveBeenCalled();
-    expect(sampler.options.storagePath).toBe('/mock/path/userData/device-metrics/dev-1.json');
+    expect(sampler.options.storagePath).toMatch(
+      /^\/mock\/path\/userData\/device-metrics\/dev-1-[\da-f]{16}\.json$/,
+    );
 
     const samples = [{ observedAt: 1 }];
     await expect(sampler.options.upload(samples)).rejects.toThrow('not connected');

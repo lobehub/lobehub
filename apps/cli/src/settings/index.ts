@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { deviceMetricsBacklogFileName } from '@lobechat/device-control/metrics';
+
 import { resolveCliDirName } from '../constants/identity';
 import { OFFICIAL_AGENT_GATEWAY_URL, OFFICIAL_SERVER_URL } from '../constants/urls';
 import { log } from '../utils/logger';
@@ -71,21 +73,21 @@ export function saveSettings(settings: StoredSettings): void {
 }
 
 /**
+ * Machine health samples not yet uploaded, one file per device identity so a
+ * personal and a workspace connection on the same machine keep separate
+ * backlogs.
+ */
+export function resolveDeviceMetricsBacklogPath(deviceId: string): string {
+  return path.join(SETTINGS_DIR, 'device-metrics', deviceMetricsBacklogFileName(deviceId));
+}
+
+/**
  * Stable per-install connection routing key for `lh connect`. Decoupled from
  * the (machine-derived, shared-across-clients) deviceId so the gateway only
  * replaces this install's own stale socket — a co-running desktop app on the
  * same machine keeps its connection. Persisted under the CLI home dir, so a
  * separate `LOBEHUB_CLI_HOME` (e.g. a dev build) naturally gets its own id.
  */
-/**
- * Machine health samples not yet uploaded, one file per device identity so a
- * personal and a workspace connection on the same machine keep separate
- * backlogs.
- */
-export function resolveDeviceMetricsBacklogPath(deviceId: string): string {
-  return path.join(SETTINGS_DIR, 'device-metrics', `${deviceId.replaceAll(/[^\w-]/g, '_')}.json`);
-}
-
 export function loadOrCreateConnectionId(): string {
   try {
     const existing = fs.readFileSync(CONNECTION_ID_FILE, 'utf8').trim();
