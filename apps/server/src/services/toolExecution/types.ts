@@ -235,6 +235,11 @@ export interface ToolExecutionContext {
    */
   editingGroupId?: string;
   /**
+   * Tool ids offered to the model in this run (operation tool set plus step activations). Lets a
+   * runtime name a follow-up tool in its result only when the model can actually call it.
+   */
+  enabledToolIds?: string[];
+  /**
    * Legacy agent invocation callback forwarded from RuntimeExecutorContext.
    * Kept for tool runtimes that still dispatch through exec_sub_agent style
    * flows; `lobe-agent.callSubAgent` uses the per-call `subAgent` runner below.

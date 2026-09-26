@@ -25,6 +25,12 @@ export interface WebBrowsingDocumentService {
 
 export interface WebBrowsingRuntimeOptions {
   agentId?: string;
+  /**
+   * Whether `lobe-agent-documents` is in this run's final tool set. A truncated page only names
+   * `readDocument` on its saved copy when the model can actually call it; chat mode or a custom
+   * tool set with browsing alone still saves the page but reports what was left out instead.
+   */
+  canReadSavedDocuments?: boolean;
   documentService?: WebBrowsingDocumentService;
   searchService: SearchServiceImpl;
   topicId?: string;
@@ -32,6 +38,7 @@ export interface WebBrowsingRuntimeOptions {
 
 export class WebBrowsingExecutionRuntime {
   private agentId?: string;
+  private canReadSavedDocuments: boolean;
   private documentService?: WebBrowsingDocumentService;
   private searchService: SearchServiceImpl;
   private topicId?: string;
@@ -39,6 +46,7 @@ export class WebBrowsingExecutionRuntime {
   constructor(options: WebBrowsingRuntimeOptions) {
     this.searchService = options.searchService;
     this.documentService = options.documentService;
+    this.canReadSavedDocuments = options.canReadSavedDocuments ?? false;
     this.agentId = options.agentId;
     this.topicId = options.topicId;
   }
@@ -130,7 +138,7 @@ export class WebBrowsingExecutionRuntime {
         return pageData;
       }
 
-      const savedId = savedDocumentIds.get(pageData.url);
+      const savedId = this.canReadSavedDocuments ? savedDocumentIds.get(pageData.url) : undefined;
       const window = sliceTextWindow(pageData.content, { maxChars: CRAWL_CONTENT_LIMITED_COUNT });
 
       return {

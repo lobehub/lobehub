@@ -149,6 +149,7 @@ describe('WebBrowsingExecutionRuntime', () => {
 
     it('pages a long crawled page through its saved agent document', async () => {
       const runtime = new WebBrowsingExecutionRuntime({
+        canReadSavedDocuments: true,
         documentService: {
           associateDocument: vi.fn().mockResolvedValue({ id: 'agent-doc-1' }),
           createDocument: vi.fn().mockResolvedValue({ id: 'docs-1' }),
@@ -162,6 +163,24 @@ describe('WebBrowsingExecutionRuntime', () => {
       expect(result.content).toMatch(
         /\[Showing lines 1-\d+ of 5000 lines, \d+ characters\. To continue, call lobe-agent-documents readDocument with id="agent-doc-1", format="markdown" and offset=\d+\.\]/,
       );
+    });
+
+    it('does not name readDocument when the run cannot call it', async () => {
+      // Chat mode, or a custom tool set with browsing alone, has no lobe-agent-documents.
+      const createDocument = vi.fn().mockResolvedValue({ id: 'docs-1' });
+      const runtime = new WebBrowsingExecutionRuntime({
+        documentService: {
+          associateDocument: vi.fn().mockResolvedValue({ id: 'agent-doc-1' }),
+          createDocument,
+        },
+        searchService: createSearchService() as any,
+      });
+
+      const result = await runtime.crawlMultiPages({ urls: ['https://example.com/long'] });
+
+      expect(createDocument).toHaveBeenCalled();
+      expect(result.content).toMatch(/Lines \d+-5000 were left out\./);
+      expect(result.content).not.toContain('readDocument');
     });
 
     it('reports what was left out when the page was not saved', async () => {

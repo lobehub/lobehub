@@ -5,7 +5,7 @@ import type {
   ToolTransport,
   ToolWorkRegistration,
 } from '@lobechat/agent-runtime';
-import { executeToolWithRetry } from '@lobechat/agent-runtime';
+import { executeToolWithRetry, selectOperationToolSet } from '@lobechat/agent-runtime';
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import {
   buildExecuteToolAttributes,
@@ -268,6 +268,10 @@ export class ServerToolTransport implements ToolTransport {
               taskId: context.state.origin?.taskId,
               threadId: context.state.origin?.threadId,
               toolCallId: chatToolPayload.id,
+              enabledToolIds: [
+                ...selectOperationToolSet(context.state).enabledToolIds,
+                ...(context.state.activatedStepTools ?? []).map((activation) => activation.id),
+              ],
               toolManifestMap: context.effectiveManifestMap,
               toolMessageId: context.toolMessageId,
               toolResultMaxLength: context.toolResultMaxLength,
