@@ -1,7 +1,6 @@
 'use client';
 
 import { toast } from '@lobehub/ui/base-ui';
-import dayjs from 'dayjs';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,13 +8,12 @@ import { useDownloadImage } from '@/hooks/useDownloadImage';
 import { useImageStore } from '@/store/image';
 import { imageGenerationConfigSelectors } from '@/store/image/selectors';
 import { AsyncTaskStatus } from '@/types/asyncTask';
-import { inferFileExtensionFromImageUrl } from '@/utils/url';
 
 import { ErrorState } from './ErrorState';
 import { LoadingState } from './LoadingState';
 import { SuccessState } from './SuccessState';
 import { type GenerationItemProps } from './types';
-import { getAspectRatio } from './utils';
+import { buildDownloadFileName, getAspectRatio } from './utils';
 
 const isSupportedParamSelector = imageGenerationConfigSelectors.isSupportedParam;
 
@@ -50,14 +48,7 @@ export const GenerationItem = memo<GenerationItemProps>(
     const handleDownloadImage = useCallback(async () => {
       if (!generation.asset?.url) return;
 
-      // Generate filename with prompt and timestamp
-      const timestamp = dayjs(generation.createdAt).format('YYYY-MM-DD_HH-mm-ss');
-      const baseName = prompt.slice(0, 30).trim();
-      const sanitizedBaseName = baseName.replaceAll(/["%*/:<>?\\|]/g, '').replaceAll(/\s+/g, '_');
-      const safePrompt = sanitizedBaseName || 'Untitled';
-
-      const fileExtension = inferFileExtensionFromImageUrl(generation.asset.url);
-      const fileName = `${safePrompt}_${timestamp}.${fileExtension}`;
+      const fileName = buildDownloadFileName(prompt, generation.createdAt, generation.asset.url);
 
       await downloadImage(generation.asset.url, fileName);
     }, [downloadImage, generation.asset?.url, generation.createdAt, prompt]);
