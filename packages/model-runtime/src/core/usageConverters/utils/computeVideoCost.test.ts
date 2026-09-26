@@ -27,7 +27,7 @@ describe('computeVideoCost', () => {
       expect(result?.breakdown?.pricePerMillionTokens).toBe(0.21);
     });
 
-    it('should return undefined when unit is not millionTokens', () => {
+    it('should return undefined for an unsupported unit', () => {
       const pricing: Pricing = {
         units: [
           {
@@ -285,6 +285,143 @@ describe('computeVideoCost', () => {
       expect(result).toBeDefined();
       expect(result?.totalCredits).toBe(1);
       expect(Number.isInteger(result?.totalCredits)).toBe(true);
+    });
+  });
+
+  describe('unit handling', () => {
+    it('should price second-unit fixed pricing from videoSeconds', () => {
+      const pricing: Pricing = {
+        units: [{ name: 'videoGeneration', rate: 0.4, strategy: 'fixed', unit: 'second' }],
+      };
+
+      const result = computeVideoCost(pricing, 0, {}, 8);
+
+      expect(result).toBeDefined();
+      expect(result?.totalCost).toBeCloseTo(3.2, 10);
+      expect(result?.totalCredits).toBe(3_200_000);
+      expect(result?.breakdown?.quantity).toBe(8);
+      expect(result?.breakdown?.rate).toBe(0.4);
+      expect(result?.breakdown?.unit).toBe('second');
+      expect(result?.breakdown?.pricePerMillionTokens).toBeUndefined();
+    });
+
+    it('should fall back to params.duration for second-unit pricing', () => {
+      const pricing: Pricing = {
+        units: [{ name: 'videoGeneration', rate: 0.05, strategy: 'fixed', unit: 'second' }],
+      };
+
+      const result = computeVideoCost(pricing, 0, { duration: 6 });
+
+      expect(result?.totalCost).toBeCloseTo(0.3, 10);
+      expect(result?.breakdown?.quantity).toBe(6);
+    });
+
+    it('should ignore non-finite or negative durations', () => {
+      const pricing: Pricing = {
+        units: [{ name: 'videoGeneration', rate: 0.1, strategy: 'fixed', unit: 'second' }],
+      };
+
+      // Invalid videoSeconds falls back to a valid params.duration...
+      expect(computeVideoCost(pricing, 0, { duration: 8 }, Number.NaN)?.totalCost).toBeCloseTo(
+        0.8,
+        10,
+      );
+      expect(computeVideoCost(pricing, 0, { duration: 8 }, -1)?.totalCost).toBeCloseTo(0.8, 10);
+      // ...and an invalid fallback yields no cost instead of NaN/negative cost.
+      expect(computeVideoCost(pricing, 0, { duration: Number.POSITIVE_INFINITY })).toBeUndefined();
+      expect(computeVideoCost(pricing, 0, {}, Number.POSITIVE_INFINITY)).toBeUndefined();
+    });
+
+    it('should treat a zero duration as unusable rather than free', () => {
+      const pricing: Pricing = {
+        units: [{ name: 'videoGeneration', rate: 0.1, strategy: 'fixed', unit: 'second' }],
+      };
+
+      // A zero videoSeconds falls back to the requested duration...
+      expect(computeVideoCost(pricing, 0, { duration: 8 }, 0)?.totalCost).toBeCloseTo(0.8, 10);
+      // ...and a zero fallback yields no cost instead of a $0 "success".
+      expect(computeVideoCost(pricing, 0, { duration: 0 })).toBeUndefined();
+      expect(computeVideoCost(pricing, 0, {}, 0)).toBeUndefined();
+    });
+
+    it('should return undefined for second-unit pricing without any duration', () => {
+      const pricing: Pricing = {
+        units: [{ name: 'videoGeneration', rate: 0.4, strategy: 'fixed', unit: 'second' }],
+      };
+
+      expect(computeVideoCost(pricing, 500_000, {})).toBeUndefined();
+    });
+
+    it('should price video-unit fixed pricing as a flat per-video rate', () => {
+      const pricing: Pricing = {
+        units: [{ name: 'videoGeneration', rate: 2.5, strategy: 'fixed', unit: 'video' }],
+      };
+
+      const result = computeVideoCost(pricing, 0, {});
+
+      expect(result?.totalCost).toBe(2.5);
+      expect(result?.totalCredits).toBe(2_500_000);
+      expect(result?.breakdown?.quantity).toBe(1);
+      expect(result?.breakdown?.unit).toBe('video');
+    });
+
+    it('should preserve credit rounding for token pricing at FP boundaries', () => {
+      // (37 * 5) / 1e6 rounds to 185 credits; 37 * (5 / 1e6) would round to 186.
+      const pricing: Pricing = {
+        units: [{ name: 'videoGeneration', rate: 37, strategy: 'fixed', unit: 'millionTokens' }],
+      };
+
+      const result = computeVideoCost(pricing, 5, {});
+
+      expect(result?.totalCredits).toBe(185);
+    });
+
+    it('should prefer videoSeconds over params.duration when both are present', () => {
+      const pricing: Pricing = {
+        units: [{ name: 'videoGeneration', rate: 0.1, strategy: 'fixed', unit: 'second' }],
+      };
+
+      const result = computeVideoCost(pricing, 0, { duration: 4 }, 8);
+
+      expect(result?.breakdown?.quantity).toBe(8);
+      expect(result?.totalCost).toBeCloseTo(0.8, 10);
+    });
+
+    it('should honor the second unit under lookup pricing', () => {
+      // A resolution-keyed per-second card, the shape veo-class video models bill by.
+      const pricing: Pricing = {
+        units: [
+          {
+            lookup: { prices: { '1080p': 0.08, '720p': 0.05 }, pricingParams: ['resolution'] },
+            name: 'videoGeneration',
+            strategy: 'lookup',
+            unit: 'second',
+          },
+        ],
+      };
+
+      const result = computeVideoCost(pricing, 0, { resolution: '720p' }, 8);
+
+      expect(result).toBeDefined();
+      expect(result?.totalCost).toBeCloseTo(0.4, 10);
+      expect(result?.totalCredits).toBe(400_000);
+      expect(result?.breakdown?.lookupKey).toBe('720p');
+      expect(result?.breakdown?.quantity).toBe(8);
+      expect(result?.breakdown?.rate).toBe(0.05);
+    });
+
+    it('should convert CNY to USD for second-unit pricing', () => {
+      const pricing: Pricing = {
+        currency: 'CNY',
+        units: [{ name: 'videoGeneration', rate: 7.12, strategy: 'fixed', unit: 'second' }],
+      };
+
+      const result = computeVideoCost(pricing, 0, {}, 5);
+
+      // 7.12 CNY/s * 5s = 35.6 CNY / 7.12 = 5 USD
+      expect(result).toBeDefined();
+      expect(result?.totalCost).toBeCloseTo(35.6 / 7.12, 10);
+      expect(result?.totalCredits).toBe(5_000_000);
     });
   });
 });
