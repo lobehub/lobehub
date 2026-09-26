@@ -257,6 +257,20 @@ describe('topic command', () => {
       expect(output()).toContain('Showing 1–2 of 2');
     });
 
+    it('scopes the read to --workspace', async () => {
+      await createProgram().parseAsync([
+        'node',
+        'test',
+        'topic',
+        'view',
+        't1',
+        '--workspace',
+        'ws_1',
+      ]);
+
+      expect(mockGetTrpcClient).toHaveBeenCalledWith('ws_1');
+    });
+
     it('uses the aggregate endpoint without loading messages for --no-messages', async () => {
       mockTrpcClient.topic.getTopicTranscript.query.mockResolvedValue({
         items: [],

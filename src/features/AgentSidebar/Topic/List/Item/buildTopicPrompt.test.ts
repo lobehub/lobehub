@@ -25,7 +25,7 @@ describe('buildTopicPrompt', () => {
 
   it('pins the CLI to the workspace the topic belongs to', () => {
     expect(buildTopicPrompt({ id: 'tpc_1', title: 'Debug CI', workspaceId: 'ws_1' })).toContain(
-      '\nLOBEHUB_WORKSPACE_ID=ws_1 lh topic view tpc_1 -L 500\n',
+      '\nlh topic view tpc_1 -L 500 --workspace ws_1\n',
     );
   });
 });

@@ -153,7 +153,7 @@ describe('useTopicItemDropdownMenu', () => {
     expect(writeText).toHaveBeenCalledWith(
       buildTopicPrompt({ id: 'topic-1', title: 'Topic 1', workspaceId: 'ws_1' }),
     );
-    expect(writeText.mock.calls[0][0]).toContain('LOBEHUB_WORKSPACE_ID=ws_1 lh topic view');
+    expect(writeText.mock.calls[0][0]).toContain('lh topic view topic-1 -L 500 --workspace ws_1');
   });
 
   it('groups desktop topic actions by intent', () => {
