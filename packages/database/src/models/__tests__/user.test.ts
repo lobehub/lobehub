@@ -510,6 +510,64 @@ describe('UserModel', () => {
     });
   });
 
+  describe('replaceToolChannelsSetting', () => {
+    it('should create the settings row when none exists', async () => {
+      await userModel.replaceToolChannelsSetting({ searchProviders: ['exa', 'searxng'] });
+
+      const settings = await serverDB.query.userSettings.findFirst({
+        where: eq(userSettings.id, userId),
+      });
+
+      expect(settings?.tool).toEqual({ searchProviders: ['exa', 'searxng'] });
+    });
+
+    it('should replace only the given channel list, preserving sibling tool keys', async () => {
+      await serverDB.insert(userSettings).values({
+        id: userId,
+        tool: {
+          crawlerImpls: ['jina'],
+          humanIntervention: { approvalMode: 'auto-run' },
+          searchProviders: ['searxng', 'exa'],
+          uninstalledBuiltinTools: ['dalle'],
+        },
+      });
+
+      await userModel.replaceToolChannelsSetting({ searchProviders: ['exa'] });
+
+      const settings = await serverDB.query.userSettings.findFirst({
+        where: eq(userSettings.id, userId),
+      });
+
+      expect(settings?.tool).toEqual({
+        crawlerImpls: ['jina'],
+        humanIntervention: { approvalMode: 'auto-run' },
+        searchProviders: ['exa'],
+        uninstalledBuiltinTools: ['dalle'],
+      });
+    });
+
+    it('should not drop an approvalMode change when a channel write overlaps it', async () => {
+      await serverDB.insert(userSettings).values({
+        id: userId,
+        tool: { humanIntervention: { approvalMode: 'manual' } },
+      });
+
+      await Promise.all([
+        userModel.mergeToolInterventionSetting({ approvalMode: 'auto-run' }),
+        userModel.replaceToolChannelsSetting({ crawlerImpls: ['naive', 'jina'] }),
+      ]);
+
+      const settings = await serverDB.query.userSettings.findFirst({
+        where: eq(userSettings.id, userId),
+      });
+
+      expect(settings?.tool).toEqual({
+        crawlerImpls: ['naive', 'jina'],
+        humanIntervention: { approvalMode: 'auto-run' },
+      });
+    });
+  });
+
   describe('updatePreference', () => {
     it('should update user preference', async () => {
       await userModel.updatePreference({

@@ -5,7 +5,7 @@ import { useSaveState } from '@/hooks/useSaveState';
 
 import { useChannelRows } from './useChannelRows';
 
-const mockSetSettings = vi.hoisted(() => vi.fn());
+const mockUpdateToolChannels = vi.hoisted(() => vi.fn());
 const mockUseUserStore = vi.hoisted(() => vi.fn());
 
 vi.mock('@/store/user', () => ({
@@ -31,7 +31,7 @@ describe('useChannelRows', () => {
     vi.clearAllMocks();
     mockUseUserStore.mockImplementation((selector) =>
       selector({
-        setSettings: mockSetSettings,
+        updateToolChannels: mockUpdateToolChannels,
         settings: { tool: { searchProviders: ['searxng'] } },
       }),
     );
@@ -39,7 +39,7 @@ describe('useChannelRows', () => {
 
   it('keeps the local change visible and retries a failed preference save', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    mockSetSettings.mockRejectedValueOnce(new Error('network error'));
+    mockUpdateToolChannels.mockRejectedValueOnce(new Error('network error'));
 
     const { result } = renderHook(useSubject);
 
@@ -52,18 +52,18 @@ describe('useChannelRows', () => {
       { enabled: true, id: 'searxng' },
       { enabled: true, id: 'google' },
     ]);
-    expect(mockSetSettings).toHaveBeenLastCalledWith({
-      tool: { searchProviders: ['searxng', 'google'] },
+    expect(mockUpdateToolChannels).toHaveBeenLastCalledWith({
+      searchProviders: ['searxng', 'google'],
     });
 
-    mockSetSettings.mockResolvedValueOnce(undefined);
+    mockUpdateToolChannels.mockResolvedValueOnce(undefined);
     await act(async () => result.current.retry());
 
     expect(result.current.status).toBe('saved');
     expect(result.current.lastSavedAt).toBeInstanceOf(Date);
-    expect(mockSetSettings).toHaveBeenCalledTimes(2);
-    expect(mockSetSettings).toHaveBeenLastCalledWith({
-      tool: { searchProviders: ['searxng', 'google'] },
+    expect(mockUpdateToolChannels).toHaveBeenCalledTimes(2);
+    expect(mockUpdateToolChannels).toHaveBeenLastCalledWith({
+      searchProviders: ['searxng', 'google'],
     });
   });
 });

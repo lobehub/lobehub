@@ -62,16 +62,13 @@ export const useChannelRows = (
   save: SaveStateHandle['save'],
 ) => {
   const savedOrder = useUserStore((s) => settingsSelectors.currentSettings(s).tool?.[channelKey]);
-  const setSettings = useUserStore((s) => s.setSettings);
+  const updateToolChannels = useUserStore((s) => s.updateToolChannels);
 
   const [rows, setRows] = useState<ChannelRow[]>(() => buildRows(availableIds, savedOrder));
 
   const persist = (nextRows: ChannelRow[]) => {
     const enabledIds = nextRows.filter((row) => row.enabled).map((row) => row.id);
-    // The merge util deep-merges and replaces arrays wholesale, so writing a
-    // single top-level channel field stores the ordered enabled ids as-is and
-    // leaves the sibling channel field untouched.
-    return setSettings({ tool: { [channelKey]: enabledIds } });
+    return updateToolChannels({ [channelKey]: enabledIds });
   };
 
   const reorder = (nextRows: ChannelRow[]) => {

@@ -279,6 +279,25 @@ export class UserSettingsActionImpl {
     await this.#get().refreshUserState();
   };
 
+  updateToolChannels = async (channels: {
+    crawlerImpls?: string[];
+    searchProviders?: string[];
+  }): Promise<void> => {
+    // Optimistic local update, then a server-side patch of only these keys —
+    // setSettings would replace the whole `tool` column with this tab's
+    // snapshot and revert sibling keys changed elsewhere (see
+    // updateHumanIntervention). `merge` replaces arrays wholesale, so the new
+    // ordered lists are stored as-is.
+    this.#set(
+      { settings: merge(this.#get().settings, { tool: channels }) },
+      false,
+      'optimistic_updateToolChannels',
+    );
+
+    await userService.updateToolChannels(channels);
+    await this.#get().refreshUserState();
+  };
+
   updateKeyVaults = async (keyVaults: Partial<UserKeyVaults>): Promise<void> => {
     await this.#get().setSettings({ keyVaults });
   };

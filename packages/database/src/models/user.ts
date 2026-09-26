@@ -399,6 +399,32 @@ export class UserModel {
       });
   };
 
+  /**
+   * Atomically replace the ordered search-provider and/or crawler-impl lists
+   * inside the `tool` column, leaving every other key untouched. Same rationale
+   * as `mergeToolInterventionSetting`: a whole-column write built from a
+   * possibly-stale tab snapshot would revert sibling keys (e.g. approvalMode)
+   * changed from other tabs.
+   */
+  replaceToolChannelsSetting = async (value: {
+    crawlerImpls?: string[];
+    searchProviders?: string[];
+  }) => {
+    const patch: Record<string, string[]> = {};
+    if (value.crawlerImpls) patch.crawlerImpls = value.crawlerImpls;
+    if (value.searchProviders) patch.searchProviders = value.searchProviders;
+
+    return this.db
+      .insert(userSettings)
+      .values({ id: this.userId, tool: patch })
+      .onConflictDoUpdate({
+        set: {
+          tool: sql`coalesce(${userSettings.tool}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`,
+        },
+        target: userSettings.id,
+      });
+  };
+
   updatePreference = async (value: Partial<UserPreference>) => {
     const user = await this.db.query.users.findFirst({ where: eq(users.id, this.userId) });
     if (!user) return;

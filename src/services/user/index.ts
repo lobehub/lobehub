@@ -138,6 +138,10 @@ export class UserService {
     return lambdaClient.user.updateToolIntervention.mutate(value);
   };
 
+  updateToolChannels = async (value: { crawlerImpls?: string[]; searchProviders?: string[] }) => {
+    return lambdaClient.user.updateToolChannels.mutate(value);
+  };
+
   updateUninstalledBuiltinTools = async (
     uninstalledBuiltinTools: string[],
     workspaceId: string | null,

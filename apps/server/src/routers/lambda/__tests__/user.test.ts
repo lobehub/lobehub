@@ -983,6 +983,36 @@ describe('userRouter', () => {
     });
   });
 
+  describe('updateToolChannels', () => {
+    it('delegates to the atomic model patch with the raw input', async () => {
+      const replaceToolChannelsSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
+      vi.mocked(UserModel).mockImplementation(function () {
+        return { replaceToolChannelsSetting } as any;
+      });
+
+      await userRouter
+        .createCaller({ ...mockCtx })
+        .updateToolChannels({ searchProviders: ['exa', 'searxng'] });
+
+      expect(replaceToolChannelsSetting).toHaveBeenCalledWith({
+        searchProviders: ['exa', 'searxng'],
+      });
+    });
+
+    it('rejects workspace members without content permission', async () => {
+      const { RbacModel } = await import('@/database/models/rbac');
+      vi.mocked(RbacModel).mockImplementation(function () {
+        return { hasAnyPermission: vi.fn().mockResolvedValue(false) } as any;
+      });
+
+      await expect(
+        userRouter
+          .createCaller({ ...mockCtx, workspaceId: 'ws_1' } as any)
+          .updateToolChannels({ crawlerImpls: ['jina'] }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    });
+  });
+
   describe('updateToolIntervention', () => {
     it('delegates to the atomic model merge with the raw input', async () => {
       const mergeToolInterventionSetting = vi.fn().mockResolvedValue({ rowCount: 1 });

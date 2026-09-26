@@ -12,6 +12,7 @@ import { merge } from '@/utils/merge';
 // Mock userService
 vi.mock('@/services/user', () => ({
   userService: {
+    updateToolChannels: vi.fn(),
     updateToolIntervention: vi.fn(),
     updateUserSettings: vi.fn(),
     resetUserSettings: vi.fn(),
@@ -232,6 +233,28 @@ describe('SettingsAction', () => {
 
       // Optimistic local update
       expect(result.current.settings.tool?.humanIntervention?.approvalMode).toBe('auto-run');
+    });
+  });
+
+  describe('updateToolChannels', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('should write through the server-side patch endpoint instead of setSettings', async () => {
+      const { result } = renderHook(() => useUserStore());
+
+      await act(async () => {
+        await result.current.updateToolChannels({ searchProviders: ['exa', 'searxng'] });
+      });
+
+      expect(userService.updateToolChannels).toHaveBeenCalledWith({
+        searchProviders: ['exa', 'searxng'],
+      });
+      // A whole-settings diff write would replace the full `tool` column with
+      // this tab's possibly-stale snapshot
+      expect(userService.updateUserSettings).not.toHaveBeenCalled();
+      expect(result.current.settings.tool?.searchProviders).toEqual(['exa', 'searxng']);
     });
   });
 
