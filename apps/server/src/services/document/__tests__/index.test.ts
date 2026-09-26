@@ -1904,6 +1904,29 @@ describe('DocumentService', () => {
       });
     });
 
+    it('should cap oversized parsed text before storing it', async () => {
+      vi.mocked(loadFile).mockResolvedValue({
+        content: 'a'.repeat(PARSED_FILE_CONTENT_MAX_CHARS + 10),
+        fileType: 'txt',
+        metadata: {},
+        pages: [{ content: 'a'.repeat(PARSED_FILE_CONTENT_MAX_CHARS + 10) }],
+        totalCharCount: PARSED_FILE_CONTENT_MAX_CHARS + 10,
+        totalLineCount: 1,
+      } as any);
+      mockDocumentModel.create.mockResolvedValue({ id: 'doc-1' });
+
+      await service.parseFile('file-1');
+
+      const created = mockDocumentModel.create.mock.calls.at(-1)![0];
+      expect(created.content).toHaveLength(PARSED_FILE_CONTENT_MAX_CHARS);
+      expect(created.totalCharCount).toBe(PARSED_FILE_CONTENT_MAX_CHARS);
+      expect(created.pages).toBeUndefined();
+      expect(created.metadata).toMatchObject({
+        originalCharCount: PARSED_FILE_CONTENT_MAX_CHARS + 10,
+        truncated: true,
+      });
+    });
+
     it('should parse a file and create document record with pages', async () => {
       vi.mocked(loadFile).mockResolvedValue({
         content: 'Full file content',

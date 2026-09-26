@@ -918,7 +918,7 @@ export class DocumentService {
 
     try {
       // Use loadFile to load file content
-      const fileDocument = await loadFile(filePath);
+      const fileDocument = capParsedFileDocument(await loadFile(filePath));
 
       log(`${logPrefix} File parsed successfully %O`, {
         fileType: fileDocument.fileType,
