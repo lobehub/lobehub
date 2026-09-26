@@ -65,7 +65,9 @@ const parseCron = (cronPattern: string, timezone: string | null, currentDate: Da
 };
 
 /**
- * Decide whether a cron pattern is due on this dispatcher tick.
+ * Find the occurrence a cron pattern is due for on this dispatcher tick, or
+ * `null` when nothing is due. The returned instant identifies the occurrence,
+ * so the dispatcher can reserve it and never publish it twice.
  *
  * The central dispatcher polls on a fixed cadence (every 10 minutes), so the
  * question is not "does `now` match the pattern" but "is there a scheduled
@@ -83,10 +85,14 @@ const parseCron = (cronPattern: string, timezone: string | null, currentDate: Da
  *   once no matter how many ticks fall inside the grace window. A manual run
  *   before the occurrence does not consume it.
  *
+ * The grace window spans more than one tick, so `lastExecutedAt` alone cannot
+ * stop a second tick from re-firing an occurrence whose run has not started
+ * yet; callers pass the latest reserved occurrence into it as well.
+ *
  * Invalid patterns or timezones never fire; use `validateCronPattern` on the
  * write path to reject them up front.
  */
-export const isExecutionTime = (input: IsExecutionTimeInput): boolean => {
+export const findDueOccurrence = (input: IsExecutionTimeInput): Date | null => {
   const {
     armedAt,
     cronPattern,
@@ -100,7 +106,7 @@ export const isExecutionTime = (input: IsExecutionTimeInput): boolean => {
   try {
     expression = parseCron(cronPattern, timezone, currentTime);
   } catch {
-    return false;
+    return null;
   }
 
   // Walk the grace window backwards minute by minute instead of calling
@@ -116,12 +122,16 @@ export const isExecutionTime = (input: IsExecutionTimeInput): boolean => {
     }
   }
 
-  if (prev === undefined) return false;
-  if (armedAt && new Date(armedAt).getTime() > prev) return false;
-  if (lastExecutedAt && new Date(lastExecutedAt).getTime() >= prev) return false;
+  if (prev === undefined) return null;
+  if (armedAt && new Date(armedAt).getTime() > prev) return null;
+  if (lastExecutedAt && new Date(lastExecutedAt).getTime() >= prev) return null;
 
-  return true;
+  return new Date(prev);
 };
+
+/** Whether `findDueOccurrence` finds an occurrence to fire on this tick. */
+export const isExecutionTime = (input: IsExecutionTimeInput): boolean =>
+  findDueOccurrence(input) !== null;
 
 export type CronValidationResult =
   { error: string; valid: false } | { nextRuns: Date[]; valid: true };
@@ -191,3 +201,41 @@ export const previewSchedule = (
 /** The refusal both runtimes return when `setTaskSchedule` is given an unusable schedule. */
 export const formatInvalidScheduleMessage = (identifier: string, error: string): string =>
   `Invalid schedule for task ${identifier}: ${error}. Use a standard 5-field cron expression "minute hour day-of-month month day-of-week" (e.g. "0 9 * * 1-5") with an IANA timezone. Nothing was updated.`;
+
+export interface ScheduleUpdatePatch {
+  automationMode?: string | null;
+  schedulePattern?: string | null;
+  scheduleTimezone?: string | null;
+}
+
+/**
+ * Validate the pattern/timezone pair a task will end up with after `patch` is
+ * applied to its stored schedule. A field the patch leaves out keeps its
+ * stored value, so a pattern-only change is checked against the stored
+ * timezone and enabling schedule mode re-checks the stored pair: a legacy
+ * invalid value is refused instead of being carried into a schedule the
+ * dispatcher can never run.
+ *
+ * Returns `undefined` when the patch does not touch the schedule or leaves no
+ * pattern to check, otherwise the same result as `previewSchedule`.
+ */
+export const validateScheduleUpdate = (
+  stored: { pattern?: string | null; timezone?: string | null } | null | undefined,
+  patch: ScheduleUpdatePatch,
+  options: { count?: number; from?: Date } = {},
+): SchedulePreviewResult | undefined => {
+  const touched =
+    patch.schedulePattern !== undefined ||
+    patch.scheduleTimezone !== undefined ||
+    patch.automationMode === 'schedule';
+  if (!touched) return undefined;
+
+  const pattern = patch.schedulePattern !== undefined ? patch.schedulePattern : stored?.pattern;
+  const timezone = patch.scheduleTimezone !== undefined ? patch.scheduleTimezone : stored?.timezone;
+
+  if (pattern) return previewSchedule(pattern, timezone ?? null, options);
+  if (timezone && !isValidTimezone(timezone)) {
+    return { error: `unknown timezone "${timezone}"`, valid: false };
+  }
+  return undefined;
+};

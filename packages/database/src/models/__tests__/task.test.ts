@@ -2485,6 +2485,45 @@ describe('TaskModel', () => {
     });
   });
 
+  describe('static swapDispatchedScheduleOccurrence', () => {
+    it('reserves an occurrence once and keeps the rest of the context', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({
+        automationMode: 'schedule',
+        instruction: 'Daily',
+        schedulePattern: '0 9 * * *',
+      });
+      await model.updateContext(task.id, {
+        scheduler: { scheduleStartedAt: '2026-09-20T00:00:00.000Z' },
+      });
+      const occurrence = '2026-09-21T09:00:00.000Z';
+
+      expect(
+        await TaskModel.swapDispatchedScheduleOccurrence(serverDB, task.id, null, occurrence),
+      ).toBe(true);
+      // A second dispatcher tick that read the pre-reservation state loses.
+      expect(
+        await TaskModel.swapDispatchedScheduleOccurrence(serverDB, task.id, null, occurrence),
+      ).toBe(false);
+
+      const stored = await model.findById(task.id);
+      expect(stored?.context).toMatchObject({
+        scheduler: {
+          lastDispatchedOccurrenceAt: occurrence,
+          scheduleStartedAt: '2026-09-20T00:00:00.000Z',
+        },
+      });
+
+      // Releasing (e.g. after a failed publish) restores the previous value.
+      expect(
+        await TaskModel.swapDispatchedScheduleOccurrence(serverDB, task.id, occurrence, null),
+      ).toBe(true);
+      expect(
+        await TaskModel.swapDispatchedScheduleOccurrence(serverDB, task.id, null, occurrence),
+      ).toBe(true);
+    });
+  });
+
   describe('static findStuckTasks', () => {
     it('should find running tasks whose heartbeat timed out', async () => {
       const model = new TaskModel(serverDB, userId);

@@ -1496,6 +1496,37 @@ export class TaskModel {
       );
   }
 
+  /**
+   * Atomically move `context.scheduler.lastDispatchedOccurrenceAt` from
+   * `expected` to `next`. Returns false when another writer changed it first.
+   *
+   * The schedule dispatcher reserves a cron occurrence this way before
+   * publishing its execution, so a later tick inside the grace window (or an
+   * overlapping dispatcher run) cannot publish the same occurrence again while
+   * the first delivery is still queued.
+   */
+  static async swapDispatchedScheduleOccurrence(
+    db: LobeChatDatabase,
+    taskId: string,
+    expected: string | null,
+    next: string | null,
+  ): Promise<boolean> {
+    const current = sql`coalesce(${tasks.context}, '{}'::jsonb)`;
+    const rows = await db
+      .update(tasks)
+      .set({
+        context: sql`${current} || jsonb_build_object('scheduler', coalesce(${current} -> 'scheduler', '{}'::jsonb) || jsonb_build_object('lastDispatchedOccurrenceAt', ${next}::text))`,
+      })
+      .where(
+        and(
+          eq(tasks.id, taskId),
+          sql`coalesce(${current} -> 'scheduler' ->> 'lastDispatchedOccurrenceAt', '') = ${expected ?? ''}`,
+        ),
+      )
+      .returning({ id: tasks.id });
+    return rows.length > 0;
+  }
+
   // Find stuck tasks (running but heartbeat timed out)
   // Only checks tasks that have both lastHeartbeatAt and heartbeatTimeout set
   static async findStuckTasks(db: LobeChatDatabase): Promise<TaskItem[]> {

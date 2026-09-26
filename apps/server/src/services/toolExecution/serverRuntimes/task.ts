@@ -20,7 +20,7 @@ import {
   priorityLabel,
 } from '@lobechat/prompts';
 import type { TaskAutomationMode, TaskStatus } from '@lobechat/types';
-import { formatInvalidScheduleMessage, previewSchedule } from '@lobechat/utils/cronEval';
+import { formatInvalidScheduleMessage, validateScheduleUpdate } from '@lobechat/utils/cronEval';
 import { eq } from 'drizzle-orm';
 
 import { notifyTaskAssigned } from '@/business/server/task/notifyTaskAssigned';
@@ -615,25 +615,17 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
 
       // Validate the schedule the task will end up with before writing anything,
       // so an unsupported pattern is refused instead of stored and misfired.
-      const nextPattern =
-        args.schedulePattern !== undefined ? args.schedulePattern : task.schedulePattern;
-      const nextTimezone =
-        args.scheduleTimezone !== undefined ? args.scheduleTimezone : task.scheduleTimezone;
-      const scheduleTouched =
-        args.schedulePattern !== undefined ||
-        args.scheduleTimezone !== undefined ||
-        args.automationMode === 'schedule';
-      let schedulePreview: string | undefined;
-      if (nextPattern && scheduleTouched) {
-        const validation = previewSchedule(nextPattern, nextTimezone ?? null);
-        if (!validation.valid) {
-          return {
-            content: formatInvalidScheduleMessage(task.identifier, validation.error),
-            success: false,
-          };
-        }
-        schedulePreview = validation.preview;
+      const schedule = validateScheduleUpdate(
+        { pattern: task.schedulePattern, timezone: task.scheduleTimezone },
+        args,
+      );
+      if (schedule && !schedule.valid) {
+        return {
+          content: formatInvalidScheduleMessage(task.identifier, schedule.error),
+          success: false,
+        };
       }
+      const schedulePreview = schedule?.valid ? schedule.preview : undefined;
 
       const changes: string[] = [];
       const ops: Promise<unknown>[] = [];

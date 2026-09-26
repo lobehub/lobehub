@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { isExecutionTime, validateCronPattern } from './cronEval';
+import {
+  findDueOccurrence,
+  isExecutionTime,
+  validateCronPattern,
+  validateScheduleUpdate,
+} from './cronEval';
 
 const SHANGHAI = 'Asia/Shanghai';
 
@@ -404,5 +409,74 @@ describe('isExecutionTime — grace window vs the 10-minute dispatcher', () => {
         timezone: 'UTC',
       }),
     ).toBe(false);
+  });
+});
+
+describe('findDueOccurrence', () => {
+  it('identifies the occurrence each tick in the grace window would fire', () => {
+    const input = { cronPattern: '0 9 * * *', timezone: 'UTC' };
+    const occurrence = new Date('2026-09-21T09:00:00Z');
+
+    // Every tick inside the grace window resolves to the same occurrence, so
+    // the dispatcher can key a reservation on it.
+    for (const tick of ['09:00', '09:10', '09:20']) {
+      expect(
+        findDueOccurrence({ ...input, currentTime: new Date(`2026-09-21T${tick}:00Z`) }),
+      ).toEqual(occurrence);
+    }
+    // Once reserved, later ticks see it as covered.
+    expect(
+      findDueOccurrence({
+        ...input,
+        currentTime: new Date('2026-09-21T09:10:00Z'),
+        lastExecutedAt: occurrence,
+      }),
+    ).toBeNull();
+  });
+});
+
+describe('validateScheduleUpdate', () => {
+  const from = new Date('2026-09-26T00:00:00Z');
+
+  it('ignores patches that do not touch the schedule', () => {
+    expect(validateScheduleUpdate({ pattern: '0 0 9 * * *' }, {})).toBeUndefined();
+    expect(
+      validateScheduleUpdate({ pattern: '0 0 9 * * *' }, { automationMode: 'heartbeat' }),
+    ).toBeUndefined();
+  });
+
+  it('checks a pattern-only change against the stored timezone', () => {
+    expect(
+      validateScheduleUpdate(
+        { pattern: '0 9 * * *', timezone: 'Mars/Base' },
+        { schedulePattern: '0 10 * * *' },
+      ),
+    ).toEqual({ error: 'unknown timezone "Mars/Base"', valid: false });
+  });
+
+  it('re-checks the stored pair when schedule mode is enabled', () => {
+    expect(
+      validateScheduleUpdate(
+        { pattern: '0 0 9 * * *', timezone: 'UTC' },
+        { automationMode: 'schedule' },
+      ),
+    ).toMatchObject({ valid: false });
+  });
+
+  it('previews the resulting schedule when it is valid', () => {
+    expect(
+      validateScheduleUpdate(
+        { pattern: '0 9 * * *', timezone: 'UTC' },
+        { scheduleTimezone: 'Asia/Shanghai' },
+        { count: 1, from },
+      ),
+    ).toEqual({ preview: 'next runs (Asia/Shanghai) → Sat 2026-09-26 09:00', valid: true });
+  });
+
+  it('rejects an invalid timezone even when no pattern is set', () => {
+    expect(validateScheduleUpdate(null, { scheduleTimezone: 'Mars/Base' })).toMatchObject({
+      valid: false,
+    });
+    expect(validateScheduleUpdate(null, { scheduleTimezone: null })).toBeUndefined();
   });
 });
