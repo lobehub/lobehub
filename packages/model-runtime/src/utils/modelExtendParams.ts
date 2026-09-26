@@ -61,6 +61,7 @@ export const resolveEffectiveReasoningChatConfig = (
  * Extended parameters for model runtime
  */
 export interface ModelExtendParams {
+  contextCachingTTL?: '5m' | '1h';
   deepseekV4ReasoningEffort?: string;
   effort?: string;
   enabledContextCaching?: boolean;
@@ -276,6 +277,14 @@ export const applyModelExtendParams = (ctx: ApplyModelExtendParamsContext): Mode
   // Context caching
   if (modelExtendParams.includes('disableContextCaching') && chatConfig.disableContextCaching) {
     extendParams.enabledContextCaching = false;
+  }
+
+  if (
+    modelExtendParams.includes('contextCachingTTL') &&
+    chatConfig.contextCachingTTL &&
+    !chatConfig.disableContextCaching
+  ) {
+    extendParams.contextCachingTTL = chatConfig.contextCachingTTL;
   }
 
   // Preserve historical thinking content (provider support required)

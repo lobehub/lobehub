@@ -391,3 +391,17 @@ describe('subscription model catalogs', () => {
     expect(model?.settings?.extendParams).toContain('preserveThinking');
   });
 });
+
+describe('anthropic contextCachingTTL extend param', () => {
+  it('accompanies disableContextCaching on every anthropic card', async () => {
+    const { default: anthropicModels } = await import('../anthropic');
+    const cachingCards = anthropicModels.filter((m) =>
+      m.settings?.extendParams?.includes('disableContextCaching'),
+    );
+
+    expect(cachingCards.length).toBeGreaterThan(0);
+    for (const card of cachingCards) {
+      expect(card.settings!.extendParams, card.id).toContain('contextCachingTTL');
+    }
+  });
+});

@@ -84,6 +84,11 @@ export interface OpenAIChatMessage {
 export interface ChatStreamPayload {
   apiMode?: 'chatCompletion' | 'responses';
   /**
+   * Prompt-cache TTL forwarded to providers that support it
+   * (Anthropic `cache_control.ttl`). Omitted = provider default (5m).
+   */
+  contextCachingTTL?: '5m' | '1h';
+  /**
    * @title Provider deployment name
    */
   deploymentName?: string;
