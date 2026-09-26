@@ -78,6 +78,10 @@ async function generateByImageMode(
     delete userInput.size;
   }
 
+  if (userInput.background === 'auto') {
+    delete userInput.background;
+  }
+
   // gpt-image-2 dropped input_fidelity ("output is already high fidelity by default").
   // https://developers.openai.com/cookbook/examples/multimodal/image-gen-models-prompting-guide
   // Match the gpt-image-1 family (including dated snapshots like

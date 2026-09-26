@@ -1,4 +1,5 @@
 export { default as AspectRatioSelect } from '@/routes/(main)/(create)/image/features/ConfigPanel/components/AspectRatioSelect';
+export { default as BackgroundSelect } from '@/routes/(main)/(create)/image/features/ConfigPanel/components/BackgroundSelect';
 export { default as CfgSliderInput } from '@/routes/(main)/(create)/image/features/ConfigPanel/components/CfgSliderInput';
 export { default as DimensionControlGroup } from '@/routes/(main)/(create)/image/features/ConfigPanel/components/DimensionControlGroup';
 export { default as ImageNum } from '@/routes/(main)/(create)/image/features/ConfigPanel/components/ImageNum';
