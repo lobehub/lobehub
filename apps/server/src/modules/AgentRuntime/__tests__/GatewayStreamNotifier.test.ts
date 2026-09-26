@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GatewayStreamNotifier } from '../GatewayStreamNotifier';
 import { FULL_STRIP_REDACTION, sanitizeGatewayEventData } from '../gatewayVisitorRedaction';
 import type { StreamChunkData } from '../StreamEventManager';
-import type { IStreamEventManager } from '../types';
+import type { IStreamEventManager, PublishAgentRuntimeEndParams } from '../types';
 
 // Mock global fetch
 const mockFetch = vi.fn().mockResolvedValue({ ok: true, text: () => Promise.resolve('') });
@@ -585,7 +585,9 @@ describe('GatewayStreamNotifier', () => {
     });
 
     describe('recordError', () => {
-      const endEventData = async (params: Record<string, any>) => {
+      const endEventData = async (
+        params: Omit<PublishAgentRuntimeEndParams, 'operationId' | 'stepIndex'>,
+      ) => {
         await notifier.publishAgentRuntimeEnd({ operationId: 'op-1', stepIndex: 0, ...params });
         await new Promise((r) => setTimeout(r, 50));
         const pushCall = mockFetch.mock.calls.find((c: any[]) => c[0].includes('push-event'));
