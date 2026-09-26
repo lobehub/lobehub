@@ -60,8 +60,12 @@ jobs:
           git fetch --no-tags --depth=1 origin "${REF_SHA}"
           git checkout --force FETCH_HEAD
 
-      - name: Verify preview build filtering
-        run: node --test .github/scripts/vercel-ignored-build-step.test.cjs
+      - name: Verify CI scripts
+        run: |
+          node --test \
+            .github/scripts/vercel-ignored-build-step.test.cjs \
+            .github/scripts/bundle-size-gate.test.cjs \
+            .github/scripts/size-gate-comment.test.cjs
 
       - name: Setup environment
         uses: ./.github/actions/setup-env
