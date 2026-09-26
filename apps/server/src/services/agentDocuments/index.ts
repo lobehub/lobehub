@@ -229,7 +229,10 @@ export class AgentDocumentsService {
     );
   }
 
-  private async attachLiteXML(doc: AgentDocument): Promise<AgentDocumentWithLiteXML> {
+  private async attachLiteXML(
+    doc: AgentDocument,
+    retriesLeft = 2,
+  ): Promise<AgentDocumentWithLiteXML> {
     if (isRawTextAgentDocument(doc)) return doc;
 
     const snapshot = await exportEditorDataSnapshot({
@@ -241,10 +244,25 @@ export class AgentDocumentsService {
     if (snapshot.recoveredFromMarkdown) {
       // Persist the repaired snapshot before exposing its LiteXML IDs. A later
       // node edit must hydrate this exact state or the IDs can no longer target it.
-      await this.agentDocumentModel.update(doc.id, {
-        content: snapshot.content,
-        editorData: snapshot.editorData,
-      });
+      // The write is conditional on the version this repair was built from: a
+      // save that landed after the fetch (e.g. the open page autosaving) must
+      // not be overwritten by the stale repair, so re-read and rebuild instead.
+      const persisted = await this.agentDocumentModel.updateEditorSnapshotIfUnchanged(
+        doc.id,
+        { content: doc.content, editorData: doc.editorData ?? null },
+        { content: snapshot.content, editorData: snapshot.editorData },
+      );
+
+      if (!persisted) {
+        const latest = retriesLeft > 0 ? await this.agentDocumentModel.findById(doc.id) : undefined;
+        if (!latest) {
+          throw new Error(
+            'The document changed while it was being read; nothing was overwritten. Read it again.',
+          );
+        }
+
+        return this.attachLiteXML(latest, retriesLeft - 1);
+      }
 
       return {
         ...doc,

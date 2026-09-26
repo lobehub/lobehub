@@ -117,6 +117,7 @@ describe('AgentDocumentsService', () => {
     listByDocumentIds: vi.fn(),
     rename: vi.fn(),
     update: vi.fn(),
+    updateEditorSnapshotIfUnchanged: vi.fn(),
     upsert: vi.fn(),
   };
   const mockDocumentService = {
@@ -150,6 +151,7 @@ describe('AgentDocumentsService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockModel.updateEditorSnapshotIfUnchanged.mockResolvedValue(true);
     (AgentDocumentModel as any).mockImplementation(function () {
       return mockModel;
     });
@@ -751,6 +753,7 @@ describe('AgentDocumentsService', () => {
         .mockResolvedValueOnce(staleDocument)
         .mockResolvedValueOnce(repairedDocument)
         .mockResolvedValueOnce(modifiedDocument);
+      mockModel.updateEditorSnapshotIfUnchanged.mockResolvedValueOnce(true);
 
       const service = new AgentDocumentsService(db, userId);
       const readResult = await service.getDocumentSnapshotById(agentDocumentId, 'agent-1');
@@ -760,10 +763,11 @@ describe('AgentDocumentsService', () => {
         'agent-1',
       );
 
-      expect(mockModel.update).toHaveBeenNthCalledWith(1, agentDocumentId, {
-        content: 'fallback content',
-        editorData: repairedEditorData,
-      });
+      expect(mockModel.updateEditorSnapshotIfUnchanged).toHaveBeenCalledWith(
+        agentDocumentId,
+        { content: 'fallback content', editorData: staleEditorData },
+        { content: 'fallback content', editorData: repairedEditorData },
+      );
       expect(readResult?.editorData).toEqual(repairedEditorData);
       expect(mockDocumentService.trySaveCurrentDocumentHistory).toHaveBeenCalledWith(
         'documents-1',
@@ -771,6 +775,46 @@ describe('AgentDocumentsService', () => {
         repairedEditorData,
       );
       expect(modifyResult?.content).toBe('xml updated');
+    });
+
+    it('should not overwrite an autosave that lands between the read and the snapshot repair', async () => {
+      const agentDocumentId = '11111111-1111-4111-8111-111111111111';
+      // Nonempty document whose editorData is missing (legacy `lh doc` write),
+      // so readDocument repairs it from Markdown and wants to persist the repair.
+      const legacyDocument = {
+        agentId: 'agent-1',
+        content: 'stale body',
+        documentId: 'documents-1',
+        editorData: null,
+        id: agentDocumentId,
+        title: 'Doc',
+      };
+      // The mounted page autosaves a newer body before the repair is written.
+      const autosavedEditorData = {
+        root: { children: [{ text: 'newer body', type: 'text' }], type: 'root' },
+      };
+      const autosavedDocument = {
+        ...legacyDocument,
+        content: 'newer body',
+        editorData: autosavedEditorData,
+      };
+      mockModel.findById.mockResolvedValueOnce(legacyDocument);
+      mockModel.findById.mockResolvedValueOnce(autosavedDocument);
+      mockModel.updateEditorSnapshotIfUnchanged.mockResolvedValueOnce(false);
+
+      const service = new AgentDocumentsService(db, userId);
+      const result = await service.getDocumentSnapshotById(agentDocumentId, 'agent-1');
+
+      // The stale repair must only be written behind a version predicate.
+      expect(mockModel.update).not.toHaveBeenCalled();
+      expect(mockModel.updateEditorSnapshotIfUnchanged).toHaveBeenCalledTimes(1);
+      expect(mockModel.updateEditorSnapshotIfUnchanged).toHaveBeenCalledWith(
+        agentDocumentId,
+        { content: 'stale body', editorData: null },
+        { content: 'stale body', editorData: { root: { children: [] } } },
+      );
+      // The read is rebuilt from the autosaved version instead of the stale fetch.
+      expect(result).toMatchObject({ content: 'projected', editorData: autosavedEditorData });
     });
 
     it('should fall back to markdown content when editor data is empty', async () => {
