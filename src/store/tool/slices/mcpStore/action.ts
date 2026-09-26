@@ -211,9 +211,9 @@ export class PluginMCPStoreActionImpl {
 
     if (!plugin) return;
 
-    // Extract haveCloudEndpoint after plugin is loaded
-    // @ts-expect-error
-    const { haveCloudEndpoint } = plugin || {};
+    // Extract haveCloudEndpoint after plugin is loaded. The MCP detail payload
+    // carries it, but market-sdk's PluginItem type does not expose the field.
+    const { haveCloudEndpoint } = plugin as PluginItem & { haveCloudEndpoint?: boolean };
 
     const { updateInstallLoadingState, refreshPlugins, updateMCPInstallProgress } = this.#get();
 

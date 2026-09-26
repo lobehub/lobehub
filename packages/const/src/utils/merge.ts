@@ -37,15 +37,17 @@ export const mergeArrayById = <T extends MergeableItem>(defaultItems: T[], userI
     }
 
     const mergedItem: T = { ...defaultItem };
+    // Dynamic string keys cannot index `T` directly; write through a record view
+    // while `mergedItem` itself keeps its `T` type for the result map.
+    const mergedRecord = mergedItem as Record<string, unknown>;
+    const defaultRecord = defaultItem as Record<string, unknown>;
     Object.entries(userItem).forEach(([key, value]) => {
       if (value !== null && value !== undefined && !(typeof value === 'object' && isEmpty(value))) {
-        // @ts-expect-error
-        mergedItem[key] = value;
+        mergedRecord[key] = value;
       }
 
       if (typeof value === 'object' && !isEmpty(value)) {
-        // @ts-expect-error
-        mergedItem[key] = merge(defaultItem[key], value);
+        mergedRecord[key] = merge(defaultRecord[key], value);
       }
     });
 

@@ -157,6 +157,19 @@ export class DataExporterRepos {
     });
   }
 
+  /**
+   * `EXPORT_TABLES` keys cover every schema export, while `db.query` only lists
+   * tables registered in the drizzle relations schema — narrow the key before
+   * indexing, then read the per-table builder through its minimal shared shape.
+   */
+  private queryRelational(table: keyof typeof EXPORT_TABLES, where?: SQL) {
+    const tableQuery = this.db.query[table as keyof LobeChatDatabase['query']] as unknown as {
+      findMany: (config: { where?: SQL }) => Promise<Record<string, unknown>[]>;
+    };
+
+    return tableQuery.findMany({ where });
+  }
+
   private async queryTable(config: RelationTableConfig, existingData: Record<string, any[]>) {
     const { table } = config;
     const tableObj = EXPORT_TABLES[table];
@@ -194,8 +207,7 @@ export class DataExporterRepos {
       // Combine all conditions
       const where = conditions.length === 1 ? conditions[0] : and(...conditions);
 
-      // @ts-expect-error query
-      const result = await this.db.query[table].findMany({ where });
+      const result = await this.queryRelational(table, where);
 
       // Only remove userId field for tables queried with userId
       console.info(`Successfully exported table: ${table}, count: ${result.length}`);
@@ -238,8 +250,7 @@ export class DataExporterRepos {
       // caveat as `MessageModel.queryBySessionId`).
       const result = shareVisitorWhere
         ? await this.db.select().from(tableObj).where(where)
-        : // @ts-expect-error query
-          await this.db.query[table].findMany({ where });
+        : await this.queryRelational(table, where);
 
       // Only remove userId field for tables queried with userId
       console.info(`Successfully exported table: ${table}, count: ${result.length}`);

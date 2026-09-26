@@ -52,7 +52,9 @@ export const computeImageCost = (
   let pricePerImageInUSD: number;
   let lookupKey: string | undefined;
 
-  switch (imageGenUnit.strategy) {
+  const { strategy } = imageGenUnit;
+
+  switch (strategy) {
     case 'fixed': {
       const fixedUnit = imageGenUnit as FixedPricingUnit;
       if (fixedUnit.unit !== 'image') {
@@ -104,8 +106,9 @@ export const computeImageCost = (
       return undefined;
     }
     default: {
-      // @ts-expect-error - PricingUnit strategy may have unsupported values
-      log(`Unsupported pricing strategy: ${imageGenUnit.strategy}`);
+      // `strategy` narrows to `never` here, but runtime payloads may still
+      // carry strategies the union does not know about.
+      log(`Unsupported pricing strategy: ${strategy}`);
       return undefined;
     }
   }
