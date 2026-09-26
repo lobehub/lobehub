@@ -811,4 +811,100 @@ describe('AbandonOperationService', () => {
     expect(result.subAgentResume).toBeUndefined();
     expect(findOperationMock).not.toHaveBeenCalled();
   });
+  describe('with-state operation row backstop', () => {
+    const runningRow = {
+      agentId: 'agt_x',
+      id: 'op_x',
+      provider: 'openai',
+      startedAt: new Date(Date.now() - 60_000),
+      status: 'running',
+      topicId: 'tpc_x',
+      userId: 'user_x',
+      workspaceId: 'ws_x',
+    };
+
+    const buildSvc = (state: Record<string, any>, db: any) => {
+      const store = buildStore();
+      store.loadPartial.mockResolvedValue(null);
+      return new AbandonOperationService(db, {
+        coordinator: buildCoordinator({ loadAgentState: vi.fn().mockResolvedValue(state) }) as any,
+        snapshotStore: store as any,
+      });
+    };
+
+    it('errors a still-running row when the lifecycle dispatch is skipped for a non-live state', async () => {
+      const svc = buildSvc(stateWith({ status: 'done' }), buildDb({ operationRow: runningRow }));
+
+      await svc.finalizeAbandoned('op_x', 'inactivity_watchdog');
+
+      expect(dispatchHooksMock).not.toHaveBeenCalled();
+      expect(recordCompletionMock).toHaveBeenCalledWith(
+        'op_x',
+        expect.objectContaining({
+          completionReason: 'error',
+          error: expect.objectContaining({
+            message: expect.stringContaining('inactivity_watchdog'),
+          }),
+          status: 'error',
+          stepCount: 5,
+        }),
+      );
+    });
+
+    it('errors a still-running sub-agent row, which never dispatches the lifecycle', async () => {
+      const svc = buildSvc(
+        stateWith({
+          origin: { lineage: { isSubAgent: true }, topicId: 'tpc_x', userId: 'user_x' },
+        }),
+        buildDb({ operationRow: runningRow }),
+      );
+
+      await svc.finalizeAbandoned('op_x', 'inactivity_watchdog');
+
+      expect(dispatchHooksMock).not.toHaveBeenCalled();
+      expect(recordCompletionMock).toHaveBeenCalledWith(
+        'op_x',
+        expect.objectContaining({ status: 'error' }),
+      );
+    });
+
+    it('leaves a row the lifecycle already moved to a terminal status', async () => {
+      const svc = buildSvc(
+        stateWith(),
+        buildDb({ operationRow: { ...runningRow, status: 'error' } }),
+      );
+
+      await svc.finalizeAbandoned('op_x', 'inactivity_watchdog');
+
+      expect(dispatchHooksMock).toHaveBeenCalled();
+      expect(recordCompletionMock).not.toHaveBeenCalled();
+    });
+
+    it('errors the placeholder found by operation row when the state has no assistant message id', async () => {
+      const svc = buildSvc(
+        stateWith({ metadata: {}, status: 'done' }),
+        buildDb({ assistantRow: { id: 'msg_placeholder' }, operationRow: runningRow }),
+      );
+
+      const result = await svc.finalizeAbandoned('op_x', 'inactivity_watchdog');
+
+      expect(result.assistantMessageUpdated).toBe(true);
+      expect(messageUpdateMock).toHaveBeenCalledWith('msg_placeholder', {
+        content: '',
+        error: expect.objectContaining({ type: 'AgentRuntimeError' }),
+      });
+    });
+
+    it('does not rewrite the placeholder already errored from the state', async () => {
+      const svc = buildSvc(
+        stateWith({ status: 'done' }),
+        buildDb({ assistantRow: { id: 'msg_other' }, operationRow: runningRow }),
+      );
+
+      await svc.finalizeAbandoned('op_x', 'inactivity_watchdog');
+
+      expect(messageUpdateMock).toHaveBeenCalledTimes(1);
+      expect(messageUpdateMock).toHaveBeenCalledWith('msg_assist_1', expect.anything());
+    });
+  });
 });

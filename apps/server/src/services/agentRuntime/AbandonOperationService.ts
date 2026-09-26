@@ -23,6 +23,9 @@ import { createDefaultSnapshotStore } from './snapshotStore';
 
 const log = debug('lobe-server:abandon-operation');
 
+/** Operation-row statuses an abandoned run may still be stuck in. */
+const LIVE_OPERATION_STATUSES = new Set(['running', 'waiting_for_human', 'waiting_for_async_tool']);
+
 interface AbandonOperationOptions {
   coordinator?: AgentRuntimeCoordinator;
   snapshotStore?: ISnapshotStore | null;
@@ -202,6 +205,8 @@ export class AbandonOperationService {
       }
     }
 
+    await this.settleLiveOperationRow(operationId, { error, message, result, state });
+
     // Resolve sub-agent → parent linkage. The watchdog killed this op without
     // firing its onComplete bridge, so a parent parked on `callSubAgent` would
     // otherwise wait on this slot forever. We surface the ids the caller needs
@@ -283,13 +288,72 @@ export class AbandonOperationService {
     return result;
   }
 
+  /**
+   * Backstop for the with-state path: make sure the `agent_operations` row
+   * leaves its live status.
+   *
+   * On that path the row is otherwise written only by the lifecycle dispatch,
+   * which is skipped for sub-agents and for coordinator states that are no
+   * longer live, and swallows its own failures. The topic is settled and the
+   * coordinator state deleted regardless, so a row left at `running` is never
+   * revisited: later deliveries 401 on the missing metadata and the watchdog
+   * has already fired. Production showed topics settled by the watchdog whose
+   * operation row stayed `running` for good, and placeholders stuck at the
+   * loading content with no error.
+   */
+  private async settleLiveOperationRow(
+    operationId: string,
+    params: {
+      error: ChatMessageError;
+      message: string;
+      result: FinalizeAbandonedResult;
+      state: { stepCount?: number };
+    },
+  ): Promise<void> {
+    const { error, message, result, state } = params;
+    const op = await this.findOperationRow(operationId);
+    if (!op || !LIVE_OPERATION_STATUSES.has(op.status)) return;
+
+    try {
+      await new AgentOperationModel(
+        this.db,
+        op.userId,
+        op.workspaceId ?? undefined,
+      ).recordCompletion(operationId, {
+        completedAt: new Date(),
+        completionReason: 'error',
+        error: { message, type: String(error.type) },
+        processingTimeMs: op.startedAt ? Date.now() - new Date(op.startedAt).getTime() : null,
+        status: 'error',
+        stepCount: state.stepCount ?? null,
+      });
+    } catch (e) {
+      log('[%s] abandon backstop: recordCompletion failed (non-fatal): %O', operationId, e);
+    }
+
+    // The state carried no assistant message id, so nothing marked the
+    // placeholder; without an error it keeps rendering as an endless loading
+    // bubble.
+    if (result.assistantMessageUpdated) return;
+    const { assistantMessageId } = await this.findPlaceholderMessage(op, operationId);
+    if (!assistantMessageId) return;
+    try {
+      await new MessageModel(this.db, op.userId, op.workspaceId ?? undefined, undefined, {
+        includeShareVisitor: true,
+      }).update(assistantMessageId, { content: '', error });
+      result.assistantMessageUpdated = true;
+    } catch (e) {
+      log('[%s] abandon backstop: placeholder update failed (non-fatal): %O', operationId, e);
+    }
+  }
+
   private async finalizeRunningOperationWithoutState(
     operationId: string,
     reason: string,
     result: FinalizeAbandonedResult,
   ): Promise<void> {
     const op = await this.findOperationRow(operationId);
-    if (!op || !['running', 'waiting_for_human', 'waiting_for_async_tool'].includes(op.status)) {
+    if (!op || !LIVE_OPERATION_STATUSES.has(op.status)) {
       return;
     }
 

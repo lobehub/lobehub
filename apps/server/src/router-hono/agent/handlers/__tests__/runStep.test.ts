@@ -14,6 +14,7 @@ const mockExecuteStep = vi.fn();
 const mockScheduleContinuation = vi.fn();
 const mockReleaseOperationLock = vi.fn();
 const mockGetServerDB = vi.hoisted(() => vi.fn());
+const mockFinalizeAbandoned = vi.hoisted(() => vi.fn());
 // Lets a test force the step-boundary flush to report a timeout; undefined
 // means use the real implementation.
 const flushOverride = vi.hoisted(() => ({ settled: undefined as boolean | undefined }));
@@ -47,6 +48,12 @@ vi.mock('@/server/services/aiAgent', () => ({
       releaseOperationLock: mockReleaseOperationLock,
       scheduleContinuation: mockScheduleContinuation,
     };
+  }),
+}));
+
+vi.mock('@/server/services/agentRuntime', () => ({
+  AbandonOperationService: vi.fn().mockImplementation(function () {
+    return { finalizeAbandoned: mockFinalizeAbandoned };
   }),
 }));
 
@@ -113,6 +120,8 @@ describe('runStep handler', () => {
     mockScheduleContinuation.mockReset();
     mockReleaseOperationLock.mockReset();
     mockGetServerDB.mockResolvedValue({} as any);
+    mockFinalizeAbandoned.mockReset();
+    mockFinalizeAbandoned.mockResolvedValue({ abandoned: true, found: false });
   });
 
   afterEach(() => {
@@ -167,6 +176,70 @@ describe('runStep handler', () => {
       stepIndex: 2,
       upstashRetried: null,
     });
+    warnSpy.mockRestore();
+  });
+
+  it('settles a running operation whose metadata is gone and whose lease expired', async () => {
+    mockGetOperationMetadata.mockResolvedValue(null);
+    mockGetServerDB.mockResolvedValue(
+      buildOperationDiagnosticDB({
+        completedAt: null,
+        startedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        status: 'running',
+        stepCount: null,
+        traceS3Key: null,
+        updatedAt: new Date(Date.now() - 20 * 60 * 1000),
+      }),
+    );
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(function () {});
+    const { ctx } = buildContext({ body: validBody });
+
+    const res = await runStep(ctx);
+
+    expect(res.status).toBe(401);
+    expect(mockFinalizeAbandoned).toHaveBeenCalledWith('op-1', 'operation_metadata_missing');
+    warnSpy.mockRestore();
+  });
+
+  it('leaves a running operation alone while its lease is fresh', async () => {
+    mockGetOperationMetadata.mockResolvedValue(null);
+    mockGetServerDB.mockResolvedValue(
+      buildOperationDiagnosticDB({
+        completedAt: null,
+        startedAt: new Date(Date.now() - 60 * 1000),
+        status: 'running',
+        stepCount: null,
+        traceS3Key: null,
+        updatedAt: new Date(Date.now() - 30 * 1000),
+      }),
+    );
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(function () {});
+    const { ctx } = buildContext({ body: validBody });
+
+    await runStep(ctx);
+
+    expect(mockFinalizeAbandoned).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('does not settle an operation that already reached a terminal status', async () => {
+    mockGetOperationMetadata.mockResolvedValue(null);
+    mockGetServerDB.mockResolvedValue(
+      buildOperationDiagnosticDB({
+        completedAt: new Date(Date.now() - 60 * 60 * 1000),
+        startedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        status: 'error',
+        stepCount: 12,
+        traceS3Key: 'key',
+        updatedAt: new Date(Date.now() - 60 * 60 * 1000),
+      }),
+    );
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(function () {});
+    const { ctx } = buildContext({ body: validBody });
+
+    await runStep(ctx);
+
+    expect(mockFinalizeAbandoned).not.toHaveBeenCalled();
     warnSpy.mockRestore();
   });
 
