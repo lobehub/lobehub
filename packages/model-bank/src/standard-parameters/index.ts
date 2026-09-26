@@ -239,6 +239,15 @@ export const ModelParamsMetaSchema = z.object({
     })
     .optional(),
 
+  thinkingLevel: z
+    .object({
+      default: z.string(),
+      description: z.string().optional(),
+      enum: z.array(z.string()),
+      type: z.literal('string').optional(),
+    })
+    .optional(),
+
   webSearch: z
     .object({
       default: z.boolean().default(true),

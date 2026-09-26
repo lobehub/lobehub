@@ -346,10 +346,13 @@ async function generateImageByChatModel(
     imageConfig.imageSize = params.resolution;
   }
 
+  const thinkingLevel = typeof params.thinkingLevel === 'string' ? params.thinkingLevel : undefined;
+
   const config: GenerateContentConfig = {
     responseModalities: ['TEXT', 'IMAGE'],
     systemInstruction: GOOGLE_IMAGE_GENERATION_SYSTEM_PROMPT,
     ...(Object.keys(imageConfig).length > 0 ? { imageConfig } : {}),
+    ...(thinkingLevel ? { thinkingConfig: { thinkingLevel: thinkingLevel as any } } : {}),
   };
 
   const response = await client.models.generateContent({
