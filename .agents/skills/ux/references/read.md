@@ -16,8 +16,8 @@ clear next action (CTA + value props); distinguish "no data yet" (onboarding CTA
 "no match for filters" (clear-filters affordance) — they are different screens. When a
 surface keeps its toolbar/header mounted with no data (so a create / `+` affordance
 stays reachable), the **body** below must still render an empty placeholder —
-persistent chrome is no excuse for dead space. Loading uses a skeleton /
-`NeuralNetworkLoading`, never a flash of blank or a layout shift; error surfaces the
+persistent chrome is no excuse for dead space. Loading follows the
+[feedback §4.1](./feedback.md) scenario table, never a flash of blank or a layout shift; error surfaces the
 reason and a retry/back path.
 
 The single most common way this breaks: the fetch reads only `{ data, isLoading }`, never
@@ -109,7 +109,7 @@ Distinguish `error` (transient → reason + retry, keep the URL) from a resolved
 - [ ] A list merged from a fetched set + a **static/frontend set** (`[...fetched, ...placeholders]`, a catalog padded with "coming soon" rows) branches `error` **before** merging — a failed fetch there keeps `length > 0` via the static entries, so neither the empty guard nor an error-unread call site catches it (a plausible partial catalog); `fallbackData: []` makes it automatic. _(Certainty・Meaningful)_
 - [ ] A detail page reads `error` before falling to `NotFound` — a failed fetch shows a reload state, not a "doesn't exist" 404 (deleted vs failed-to-load are different screens). _(Certainty・Meaningful)_
 - [ ] Always-rendered chrome still renders a body empty placeholder. _(Meaningful)_
-- [ ] Loading designed (skeleton / NeuralNetworkLoading), no layout shift — a detail page's "record not loaded yet" is a skeleton, never a bare `return null` / blank. _(Natural)_
+- [ ] Loading designed per feedback §4.1 (skeleton / `Spin`), no layout shift — a detail page's "record not loaded yet" is a skeleton, never a bare `return null` / blank. _(Natural)_
 - [ ] Error designed with reason + retry/back path. _(Meaningful)_
 
 ## 1.2 Lists at scale・Certainty・Natural

@@ -8,18 +8,37 @@ tagged with the design value(s) it serves.
 
 ## 4.1 Loading visuals・Natural
 
-**Never use antd `Spin`** — it doesn't match the product's loading visual. Use a project
-loader:
+This section is the single source for **which loading form fits which scenario**; other
+skills link here instead of restating it. Pick by scenario, top to bottom — the first row
+that matches wins:
 
-| Need                        | Component                                                                     |
-| --------------------------- | ----------------------------------------------------------------------------- |
-| Default loading (in-flight) | `NeuralNetworkLoading` from `@/components/NeuralNetworkLoading` (`size` prop) |
-| Inline dots                 | `DotsLoading` / `BubblesLoading` from `@/components`                          |
-| Branded full-page           | `Loading` from `@/components/Loading/BrandTextLoading`                        |
-| List / card placeholder     | a skeleton (e.g. `SkeletonList`)                                              |
+| Scenario                                                    | Form                                                                       |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------- |
+| App boot / full-screen blocking wait                        | `BrandTextLoading` from `@/components/Loading/BrandTextLoading`            |
+| Route / page first paint (layout known)                     | route skeleton from `@/components/Skeleton/*` mirroring the page structure |
+| Known-shape content (list, card, detail)                    | in-place `Skeleton` / `ListSkeleton` — keep the chrome, swap only the text |
+| Unknown-shape content region (file preview, QR, modal body) | `Spin size="large"` centred                                                |
+| Inline / button / background refresh (revalidate, saving)   | `Spin size="small"`, or `Button`'s `loading` prop for the button itself    |
+| AI thinking, generating or running a tool                   | `Spin variant="network"`                                                   |
+| Waiting for a streamed reply's first token                  | `BubblesLoading` from `@/components/BubblesLoading`                        |
+| Long job with a known progress value                        | `Progress` + persisted elapsed readout (see below)                         |
 
-When in doubt, reach for `NeuralNetworkLoading` — the default in-flight indicator (e.g.
-modal "in progress" states). Minimise layout shift (CLS): the strongest loading state
+`Spin` and `Progress` come from `@lobehub/ui/base-ui`; never antd `Spin` / `Progress`.
+Sizes: `small` for 14–20 px contexts (inline, rows, buttons), `middle` for 24–32 px (card
+body, panel), `large` for 36–48 px (centred region). A pixel number is fine when the loader
+must replace an icon of an exact size.
+
+**`variant="network"` means "the AI is working", nothing else.** A settings save or a list
+fetch uses the default variant; using `network` for plain I/O dilutes the one signal that
+tells the user the agent is busy.
+
+**Running-status glyphs are not loaders.** `RingLoading` (a row's running status),
+`StopLoading` (a running action that can be stopped) and `DotsLoading` (a topic row still
+generating) mark an item's _state_ inside a list; keep them there and don't use them as
+region loaders. `CircleLoading` and `ContentLoading` are legacy wrappers — new code uses
+`Spin` directly.
+
+Minimise layout shift (CLS): the strongest loading state
 changes as little of the final layout as possible. When a surface already knows its shape
 (card, row, list item), keep the layout elements — container, border, radius, padding,
 icon — and replace only the text/data with a skeleton sized like the text it stands in
@@ -51,7 +70,8 @@ doesn't leak a stale start onto a later one that reuses the slot.
 
 **Checklist**
 
-- [ ] No antd `Spin`; use `NeuralNetworkLoading` / project loaders. _(Natural)_
+- [ ] Loading form picked from the §4.1 scenario table; base-ui `Spin`, never antd `Spin`. _(Natural)_
+- [ ] `Spin variant="network"` only while the AI is thinking / generating / running a tool. _(Certainty)_
 - [ ] Skeleton reuses the loaded component's chrome — content swap, not relayout. _(Certainty・Natural)_
 - [ ] Skeleton lines match the real text's **height and typical width proportion** (long title line over a shorter subtitle, not equal full-width bars). _(Certainty)_
 - [ ] Known-shape surface not downgraded to a bare block / spinner. _(Natural)_
@@ -233,7 +253,7 @@ flag in `finally`, and on `catch` surface the error + a retry; a failed write mu
 permanently disable the only way forward.
 
 > ✅ A panel whose data request errors or exceeds its timeout shows "加载失败" with a
-> **Reload** button that refetches. ❌ A `NeuralNetworkLoading` that spins indefinitely when
+> **Reload** button that refetches. ❌ A `Spin` that spins indefinitely when
 > the request hangs. ❌ `isInit` set only in the success handler, so a failed fetch leaves
 > the skeleton up forever. ❌ The onboarding language step `await setSettings(...)` — the write
 > that gates `commonStepsCompleted` — with no try/catch/finally, so a failed write leaves

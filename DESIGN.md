@@ -139,7 +139,7 @@ The shadow tokens are shared across light and dark. Only the surface and border 
 
 Motion clarifies change; it is never decoration. Honor `prefers-reduced-motion` by dropping nonessential animation.
 
-When motion helps — revealing, moving, or connecting elements — keep it short and physical: roughly 100–200ms for state changes and popovers, up to \~300ms for overlays and modals. Avoid long, looping, or attention-grabbing animation. For AI/loading moments, prefer the system's purpose-built loaders (skeletons, `NeuralNetworkLoading`) over ad-hoc spinners.
+When motion helps — revealing, moving, or connecting elements — keep it short and physical: roughly 100–200ms for state changes and popovers, up to \~300ms for overlays and modals. Avoid long, looping, or attention-grabbing animation. For AI/loading moments, pick the loader from the `ux` skill's scenario table (skeletons, base-ui `Spin`, `variant="network"` for AI work) over ad-hoc spinners.
 
 ## Shapes
 
