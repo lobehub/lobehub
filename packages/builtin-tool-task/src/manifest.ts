@@ -375,7 +375,7 @@ export const TaskManifest: BuiltinToolManifest = {
           },
           schedulePattern: {
             description:
-              'Cron expression for scheduled mode, e.g. "0 9 * * *" (every day at 09:00). Pass null to clear the pattern.',
+              'Standard 5-field cron expression "minute hour day-of-month month day-of-week" for scheduled mode, e.g. "0 9 * * *" (every day at 09:00), "30 9 * * 1-5" (weekdays at 09:30) or "0 10 27 9 *" (Sep 27 at 10:00; pair with maxExecutions=1 for a one-off). Invalid patterns are rejected; on success the result lists the next run times — check them against what the user asked for. Pass null to clear the pattern.',
             type: ['string', 'null'],
           },
           scheduleTimezone: {

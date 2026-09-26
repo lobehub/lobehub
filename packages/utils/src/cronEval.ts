@@ -1,169 +1,241 @@
-import dayjs from 'dayjs';
-import timezone from 'dayjs/plugin/timezone';
-import utc from 'dayjs/plugin/utc';
-
-dayjs.extend(utc);
-dayjs.extend(timezone);
+import { CronExpressionParser } from 'cron-parser';
 
 export interface IsExecutionTimeInput {
+  /**
+   * When the schedule was (re)armed. An occurrence before it is never fired:
+   * arming after a slot has passed waits for the next one, even when the task
+   * has never run or its last run is older than the arming.
+   */
+  armedAt?: Date | null;
   /** Cron pattern in standard 5-field form: `minute hour day month weekday`. */
   cronPattern: string;
   /** Defaults to `Date.now()` when omitted — exposed for tests. */
   currentTime?: Date;
-  /** Last successful execution; used to dedup within the same window. */
+  /**
+   * How long after a scheduled occurrence a dispatcher tick may still fire it.
+   * Covers a late or skipped tick of the central dispatcher; an occurrence
+   * older than this is skipped rather than replayed.
+   */
+  graceMinutes?: number;
+  /** Last successful execution; an occurrence at or before it is already covered. */
   lastExecutedAt?: Date | null;
   /** IANA timezone (e.g. `Asia/Shanghai`); defaults to `UTC` when null/empty. */
   timezone: string | null;
-  /** Tolerance window in minutes — central dispatchers run on a coarse cadence
-   *  (e.g. every 30 min), so an exact-minute match is too brittle. */
-  toleranceMinutes?: number;
 }
 
-const DAILY_PATTERN_HOUR_REGEX = /^\d+$/;
+/**
+ * Cadence of the central schedule dispatcher (`lobe-task-schedule-dispatch`,
+ * `*\/10 * * * *` in `scripts/serverLauncher/startServer.js`).
+ */
+export const SCHEDULE_DISPATCH_INTERVAL_MINUTES = 10;
 
 /**
- * Decide whether a cron pattern is "due now" within a tolerance window.
- *
- * Designed for a central dispatcher polling on a fixed cadence (e.g. QStash
- * Schedule firing every 30 minutes). The matcher:
- *
- * - Converts the dispatcher's UTC `now` to the pattern's local timezone.
- * - Dedups against `lastExecutedAt` so the same pattern doesn't fire twice
- *   within its own interval (e.g. a daily 09:00 job won't refire at 09:15
- *   on the same day in `Asia/Shanghai`).
- * - Catches up missed daily runs: if the dispatcher missed the scheduled hour
- *   (downtime / cold start) and the job hasn't run today yet, a later tick
- *   on the same day still fires it.
- *
- * Supported patterns (matches what `packages/utils/src/cron.ts` produces):
- *
- *   - `*\/N * * * *`  — every N minutes
- *   - `M * * * *`      — every hour at minute M
- *   - `M *\/N * * *`  — every N hours at minute M
- *   - `M H * * *`      — daily at H:M
- *   - `M H * * D[,D]`  — weekly on weekday list at H:M
- *   - `M *,M * * *`    — minute list (e.g. `0,15,30,45`)
- *   - `M H,H * * *`    — hour list
+ * An occurrence can be up to one interval old on the tick that should fire it;
+ * tolerate one more missed tick plus delivery jitter. Anything older is skipped
+ * rather than replayed, so a stale slot never fires long after the fact.
  */
-export const isExecutionTime = (input: IsExecutionTimeInput): boolean => {
+export const DEFAULT_SCHEDULE_GRACE_MINUTES = SCHEDULE_DISPATCH_INTERVAL_MINUTES * 2 + 5;
+
+const CRON_FIELD_COUNT = 5;
+const MINUTE_MS = 60 * 1000;
+
+export const isValidTimezone = (tz: string): boolean => {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const parseCron = (cronPattern: string, timezone: string | null, currentDate: Date) => {
+  const pattern = cronPattern.trim();
+  // Only the standard 5-field form is accepted: 6-field (seconds) and `@daily`
+  // style aliases are rejected so every stored pattern means the same thing to
+  // the dispatcher, the task UI and the agent that wrote it.
+  if (pattern.split(/\s+/).length !== CRON_FIELD_COUNT) {
+    throw new Error(
+      `expected 5 fields "minute hour day-of-month month day-of-week", got "${cronPattern}"`,
+    );
+  }
+  const tz = timezone || 'UTC';
+  if (!isValidTimezone(tz)) throw new Error(`unknown timezone "${tz}"`);
+
+  return CronExpressionParser.parse(pattern, { currentDate, tz });
+};
+
+/**
+ * Find the occurrence a cron pattern is due for on this dispatcher tick, or
+ * `null` when nothing is due. The returned instant identifies the occurrence,
+ * so the dispatcher can reserve it and never publish it twice.
+ *
+ * The central dispatcher polls on a fixed cadence (every 10 minutes), so the
+ * question is not "does `now` match the pattern" but "is there a scheduled
+ * occurrence that has passed and has not run yet". The matcher:
+ *
+ * - Finds `prev`, the latest occurrence at or before `now` within the grace
+ *   window, in the pattern's timezone with full cron semantics (day-of-month,
+ *   month, ranges, steps, lists, names).
+ * - Fires only when such an occurrence exists, so a task never fires
+ *   ahead of its occurrence.
+ * - Fires only when `prev` is at or after `armedAt`, so arming a task after
+ *   today's slot has passed waits for the next slot instead of replaying the
+ *   missed one.
+ * - Fires only when `lastExecutedAt < prev`, so each occurrence runs at most
+ *   once no matter how many ticks fall inside the grace window. A manual run
+ *   before the occurrence does not consume it.
+ *
+ * The grace window spans more than one tick, so `lastExecutedAt` alone cannot
+ * stop a second tick from re-firing an occurrence whose run has not started
+ * yet; callers pass the latest reserved occurrence into it as well.
+ *
+ * Invalid patterns or timezones never fire; use `validateCronPattern` on the
+ * write path to reject them up front.
+ */
+export const findDueOccurrence = (input: IsExecutionTimeInput): Date | null => {
   const {
+    armedAt,
     cronPattern,
-    timezone: tz,
+    timezone,
     lastExecutedAt,
     currentTime = new Date(),
-    toleranceMinutes = 5,
+    graceMinutes = DEFAULT_SCHEDULE_GRACE_MINUTES,
   } = input;
 
-  const jobTimezone = tz || 'UTC';
-  const localTime = dayjs(currentTime).tz(jobTimezone);
-  const minute = localTime.minute();
-  const hour = localTime.hour();
+  let expression: ReturnType<typeof parseCron>;
+  try {
+    expression = parseCron(cronPattern, timezone, currentTime);
+  } catch {
+    return null;
+  }
 
-  const parts = cronPattern.trim().split(/\s+/);
-  if (parts.length !== 5) return false;
-  const [cronMinute, cronHour, , , cronWeekday] = parts;
-
-  // ── Dedup against last execution ────────────────────────────────
-  if (lastExecutedAt) {
-    const last = new Date(lastExecutedAt);
-    const minutesSince = (currentTime.getTime() - last.getTime()) / (1000 * 60);
-
-    if (cronMinute.startsWith('*/')) {
-      const minIntervalMin = Number.parseInt(cronMinute.slice(2), 10);
-      if (Number.isFinite(minIntervalMin) && minutesSince < minIntervalMin) return false;
-    } else if (cronHour.startsWith('*/')) {
-      const hourInterval = Number.parseInt(cronHour.slice(2), 10);
-      if (Number.isFinite(hourInterval) && minutesSince < hourInterval * 60) return false;
-    } else if (cronHour === '*') {
-      // Every hour at a specific minute (e.g. `30 * * * *`)
-      if (minutesSince < 60) return false;
-    } else if (DAILY_PATTERN_HOUR_REGEX.test(cronHour)) {
-      // Daily at specific H:M — dedup against today's scheduled target, not
-      // the calendar day. A pre-target manual run (e.g. user clicks "run now"
-      // at 18:00 for a 21:00 schedule) must NOT consume the upcoming tick.
-      const targetHour = Number.parseInt(cronHour, 10);
-      const targetMinute = /^\d+$/.test(cronMinute) ? Number.parseInt(cronMinute, 10) : 0;
-      const todaysTarget = dayjs(currentTime)
-        .tz(jobTimezone)
-        .hour(targetHour)
-        .minute(targetMinute)
-        .second(0)
-        .millisecond(0);
-      if (last.getTime() >= todaysTarget.valueOf()) {
-        return false;
-      }
+  // Walk the grace window backwards minute by minute instead of calling
+  // `prev()`: the dispatcher evaluates every scheduled task on each tick, and
+  // `prev()` on a sparse pattern (e.g. a yearly date) scans a whole year.
+  const nowMinute = Math.floor(currentTime.getTime() / MINUTE_MS) * MINUTE_MS;
+  let prev: number | undefined;
+  for (let offset = 0; offset <= graceMinutes; offset += 1) {
+    const candidate = nowMinute - offset * MINUTE_MS;
+    if (expression.includesDate(new Date(candidate))) {
+      prev = candidate;
+      break;
     }
   }
 
-  const weekday = localTime.day();
+  if (prev === undefined) return null;
+  if (armedAt && new Date(armedAt).getTime() > prev) return null;
+  if (lastExecutedAt && new Date(lastExecutedAt).getTime() >= prev) return null;
 
-  // ── Daily catch-up: scheduled hour passed today and we haven't run yet ──
-  const isDailyPattern =
-    DAILY_PATTERN_HOUR_REGEX.test(cronHour) && /^(?:\d+|\*\/\d+)$/.test(cronMinute);
+  return new Date(prev);
+};
 
-  if (isDailyPattern) {
-    const targetHour = Number.parseInt(cronHour, 10);
-    let shouldCatchUp: boolean;
+/** Whether `findDueOccurrence` finds an occurrence to fire on this tick. */
+export const isExecutionTime = (input: IsExecutionTimeInput): boolean =>
+  findDueOccurrence(input) !== null;
 
-    if (lastExecutedAt) {
-      const targetMinute = /^\d+$/.test(cronMinute) ? Number.parseInt(cronMinute, 10) : 0;
-      const todaysTarget = dayjs(currentTime)
-        .tz(jobTimezone)
-        .hour(targetHour)
-        .minute(targetMinute)
-        .second(0)
-        .millisecond(0);
-      const lastCoveredToday = new Date(lastExecutedAt).getTime() >= todaysTarget.valueOf();
-      shouldCatchUp = !lastCoveredToday && hour > targetHour;
-    } else {
-      shouldCatchUp = hour > targetHour;
-    }
+export type CronValidationResult =
+  { error: string; valid: false } | { nextRuns: Date[]; valid: true };
 
-    if (shouldCatchUp) {
-      if (cronWeekday !== '*') {
-        const allowedWeekdays = cronWeekday.split(',').map((d) => Number.parseInt(d.trim(), 10));
-        if (!allowedWeekdays.includes(weekday)) return false;
-      }
-      return true;
-    }
+/**
+ * Validate a cron pattern for the task scheduler and preview its next runs.
+ *
+ * Rejects anything the dispatcher cannot evaluate (wrong field count, out of
+ * range values, unknown timezone) and patterns that never occur (e.g.
+ * `0 0 30 2 *`), so callers can refuse the write instead of storing a
+ * schedule that silently misfires.
+ */
+export const validateCronPattern = (
+  cronPattern: string,
+  timezone: string | null,
+  options: { count?: number; from?: Date } = {},
+): CronValidationResult => {
+  const { count = 3, from = new Date() } = options;
+  try {
+    const expression = parseCron(cronPattern, timezone, from);
+    const nextRuns = expression.take(count).map((date) => new Date(date.getTime()));
+    if (nextRuns.length === 0) return { error: 'the pattern never occurs', valid: false };
+    return { nextRuns, valid: true };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error), valid: false };
   }
+};
 
-  // ── Minute field ────────────────────────────────────────────────
-  if (cronMinute !== '*') {
-    if (cronMinute.startsWith('*/')) {
-      const interval = Number.parseInt(cronMinute.slice(2), 10);
-      if (!Number.isFinite(interval) || interval <= 0) return false;
-      const lastSlot = Math.floor(minute / interval) * interval;
-      if (minute - lastSlot > toleranceMinutes) return false;
-    } else if (cronMinute.includes(',')) {
-      const allowed = cronMinute.split(',').map((m) => Number.parseInt(m, 10));
-      if (!allowed.some((target) => Math.abs(minute - target) <= toleranceMinutes)) return false;
-    } else {
-      const target = Number.parseInt(cronMinute, 10);
-      if (Math.abs(minute - target) > toleranceMinutes) return false;
-    }
+/** "next runs (Asia/Shanghai) → Mon 2026-09-28 09:00; …" so the agent can check the schedule it set. */
+export const formatScheduleNextRuns = (runs: Date[], timezone: string | null): string => {
+  const tz = timezone || 'UTC';
+  const format = new Intl.DateTimeFormat('en-CA', {
+    day: '2-digit',
+    hour: '2-digit',
+    hourCycle: 'h23',
+    minute: '2-digit',
+    month: '2-digit',
+    timeZone: tz,
+    weekday: 'short',
+    year: 'numeric',
+  });
+  const label = (date: Date) => {
+    const parts = Object.fromEntries(format.formatToParts(date).map((p) => [p.type, p.value]));
+    return `${parts.weekday} ${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
+  };
+  return `next runs (${tz}) → ${runs.map(label).join('; ')}`;
+};
+
+export type SchedulePreviewResult =
+  { error: string; valid: false } | { preview: string; valid: true };
+
+/**
+ * Validate the schedule a task will end up with and describe its next runs,
+ * shared by every runtime of the `setTaskSchedule` tool so they all return the
+ * same confirmation (or refusal) to the agent.
+ */
+export const previewSchedule = (
+  cronPattern: string,
+  timezone: string | null,
+  options: { count?: number; from?: Date } = {},
+): SchedulePreviewResult => {
+  const result = validateCronPattern(cronPattern, timezone, options);
+  if (!result.valid) return result;
+  return { preview: formatScheduleNextRuns(result.nextRuns, timezone), valid: true };
+};
+
+/** The refusal both runtimes return when `setTaskSchedule` is given an unusable schedule. */
+export const formatInvalidScheduleMessage = (identifier: string, error: string): string =>
+  `Invalid schedule for task ${identifier}: ${error}. Use a standard 5-field cron expression "minute hour day-of-month month day-of-week" (e.g. "0 9 * * 1-5") with an IANA timezone. Nothing was updated.`;
+
+export interface ScheduleUpdatePatch {
+  automationMode?: string | null;
+  schedulePattern?: string | null;
+  scheduleTimezone?: string | null;
+}
+
+/**
+ * Validate the pattern/timezone pair a task will end up with after `patch` is
+ * applied to its stored schedule. A field the patch leaves out keeps its
+ * stored value, so a pattern-only change is checked against the stored
+ * timezone and enabling schedule mode re-checks the stored pair: a legacy
+ * invalid value is refused instead of being carried into a schedule the
+ * dispatcher can never run.
+ *
+ * Returns `undefined` when the patch does not touch the schedule or leaves no
+ * pattern to check, otherwise the same result as `previewSchedule`.
+ */
+export const validateScheduleUpdate = (
+  stored: { pattern?: string | null; timezone?: string | null } | null | undefined,
+  patch: ScheduleUpdatePatch,
+  options: { count?: number; from?: Date } = {},
+): SchedulePreviewResult | undefined => {
+  const touched =
+    patch.schedulePattern !== undefined ||
+    patch.scheduleTimezone !== undefined ||
+    patch.automationMode === 'schedule';
+  if (!touched) return undefined;
+
+  const pattern = patch.schedulePattern !== undefined ? patch.schedulePattern : stored?.pattern;
+  const timezone = patch.scheduleTimezone !== undefined ? patch.scheduleTimezone : stored?.timezone;
+
+  if (pattern) return previewSchedule(pattern, timezone ?? null, options);
+  if (timezone && !isValidTimezone(timezone)) {
+    return { error: `unknown timezone "${timezone}"`, valid: false };
   }
-
-  // ── Hour field ──────────────────────────────────────────────────
-  if (cronHour !== '*') {
-    if (cronHour.startsWith('*/')) {
-      const interval = Number.parseInt(cronHour.slice(2), 10);
-      if (!Number.isFinite(interval) || interval <= 0) return false;
-      const lastSlot = Math.floor(hour / interval) * interval;
-      if (hour - lastSlot > 0) return false;
-    } else if (cronHour.includes(',')) {
-      const allowed = cronHour.split(',').map((h) => Number.parseInt(h, 10));
-      if (!allowed.includes(hour)) return false;
-    } else {
-      if (hour !== Number.parseInt(cronHour, 10)) return false;
-    }
-  }
-
-  // ── Weekday field ───────────────────────────────────────────────
-  if (cronWeekday !== '*') {
-    const allowed = cronWeekday.split(',').map((d) => Number.parseInt(d.trim(), 10));
-    if (!allowed.includes(weekday)) return false;
-  }
-
-  return true;
+  return undefined;
 };
