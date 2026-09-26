@@ -76,7 +76,7 @@ const isTerminal = (status: string) => TERMINAL_STATUSES.has(status);
 // transient upstream hiccup (429 / network / upstream 500) must NOT permanently
 // stop a recurring task — only this many *consecutive* failures do. Hardcoded
 // for now; move to task.config later if it needs to be tunable per-task.
-const AUTOMATION_FAILURE_FUSE = 3;
+export const AUTOMATION_FAILURE_FUSE = 3;
 
 // Terminal error codes whose fix lives in billing, not in a retry — running the
 // same task again just reproduces the same wall. For these the error brief leads
