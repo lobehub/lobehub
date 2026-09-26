@@ -18,6 +18,11 @@ const APP_SERVER_RPC_TIMEOUT_MS = 30_000;
 const DEFAULT_RECONNECT_BASE_DELAY_MS = 250;
 const DEFAULT_RECONNECT_MAX_DELAY_MS = 4000;
 const DEFAULT_RECONNECT_MAX_ATTEMPTS = 5;
+const SESSION_PROVENANCE_ENV_KEYS = new Set([
+  'LOBEHUB_AGENT_ID',
+  'LOBEHUB_OPERATION_ID',
+  'LOBEHUB_TOPIC_ID',
+]);
 const APPROVAL_REQUEST_METHODS = new Set([
   'item/commandExecution/requestApproval',
   'item/fileChange/requestApproval',
@@ -167,8 +172,12 @@ export class CodexAppServerClient {
       return false;
     }
 
-    const currentEnv = Object.entries(this.options.env).filter(([, value]) => value !== undefined);
-    const nextEnv = Object.entries(options.env).filter(([, value]) => value !== undefined);
+    const currentEnv = Object.entries(this.options.env).filter(
+      ([key, value]) => value !== undefined && !SESSION_PROVENANCE_ENV_KEYS.has(key),
+    );
+    const nextEnv = Object.entries(options.env).filter(
+      ([key, value]) => value !== undefined && !SESSION_PROVENANCE_ENV_KEYS.has(key),
+    );
     return (
       currentEnv.length === nextEnv.length &&
       currentEnv.every(([key, value]) => options.env[key] === value)
