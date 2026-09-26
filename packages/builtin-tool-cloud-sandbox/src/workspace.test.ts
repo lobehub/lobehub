@@ -57,3 +57,15 @@ describe('formatSandboxWorkspacePromptVariables', () => {
     expect(prompt).not.toContain('Your working directory is `r18-copy`');
   });
 });
+
+describe('the placement text the skills runtime also renders', () => {
+  it('keeps the ephemeral default renderable without any persistence input', () => {
+    // The skills tool now carries `{{sandbox_workspace}}` too, and its prompt
+    // is assembled for every run — including the ones with no entitlement, where
+    // the variable generators call this with nothing.
+    const { sandbox_workspace: prompt } = formatSandboxWorkspacePromptVariables();
+
+    expect(prompt).toContain('Files created here are temporary and session-specific');
+    expect(prompt).not.toContain('{{');
+  });
+});
