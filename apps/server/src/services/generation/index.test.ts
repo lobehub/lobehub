@@ -216,12 +216,71 @@ describe('GenerationService', () => {
         });
       });
 
-      it('should throw error when network request fails', async () => {
-        mockSsrfSafeFetch.mockRejectedValueOnce(new Error('Network error'));
+      describe('transient failures', () => {
+        const okResponse = () => ({
+          ok: true,
+          status: 200,
+          headers: { get: vi.fn().mockReturnValue('image/jpeg') },
+          arrayBuffer: vi.fn().mockResolvedValue(Buffer.from('img').buffer),
+        });
 
-        await expect(fetchImageFromUrl('https://example.com/image.jpg')).rejects.toThrow(
-          'Network error',
-        );
+        beforeEach(() => {
+          vi.useFakeTimers();
+        });
+
+        afterEach(() => {
+          vi.useRealTimers();
+        });
+
+        it('should retry a reset connection and return the image', async () => {
+          mockSsrfSafeFetch
+            .mockRejectedValueOnce(
+              new Error('Fetch failed: Invalid response body while trying to fetch: aborted'),
+            )
+            .mockResolvedValueOnce(okResponse());
+
+          const promise = fetchImageFromUrl('https://example.com/image.jpg');
+          await vi.runAllTimersAsync();
+
+          await expect(promise).resolves.toMatchObject({ mimeType: 'image/jpeg' });
+          expect(mockSsrfSafeFetch).toHaveBeenCalledTimes(2);
+        });
+
+        it('should retry 5xx responses', async () => {
+          mockSsrfSafeFetch
+            .mockResolvedValueOnce({ ok: false, status: 503, statusText: 'Service Unavailable' })
+            .mockResolvedValueOnce(okResponse());
+
+          const promise = fetchImageFromUrl('https://example.com/image.jpg');
+          await vi.runAllTimersAsync();
+
+          await expect(promise).resolves.toMatchObject({ mimeType: 'image/jpeg' });
+          expect(mockSsrfSafeFetch).toHaveBeenCalledTimes(2);
+        });
+
+        it('should give up after all retries without reporting an abort', async () => {
+          mockSsrfSafeFetch.mockRejectedValue(new Error('Fetch failed: aborted'));
+
+          const promise = fetchImageFromUrl('https://example.com/image.jpg');
+          const assertion = expect(promise).rejects.toThrow(
+            'Failed to fetch image from https://example.com/image.jpg after 3 attempts: network error',
+          );
+          await vi.runAllTimersAsync();
+
+          await assertion;
+          expect(mockSsrfSafeFetch).toHaveBeenCalledTimes(3);
+        });
+
+        it('should not retry SSRF blocks', async () => {
+          mockSsrfSafeFetch.mockRejectedValueOnce(
+            new Error('SSRF blocked: 10.0.0.1 is not allowed'),
+          );
+
+          await expect(fetchImageFromUrl('https://example.com/image.jpg')).rejects.toThrow(
+            'SSRF blocked',
+          );
+          expect(mockSsrfSafeFetch).toHaveBeenCalledTimes(1);
+        });
       });
     });
 
