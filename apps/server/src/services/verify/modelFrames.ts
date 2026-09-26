@@ -11,6 +11,18 @@ const log = debug('lobe-server:verify-model-frames');
  */
 export const MAX_INLINE_FRAME_BYTES = 5 * 1024 * 1024;
 
+/**
+ * Ceiling on the frames inlined into ONE request, summed over raw file size
+ * (~20 MiB once base64-encoded). The per-frame ceiling alone lets a request
+ * carrying many frames grow past provider body limits; frames past this budget
+ * are linked instead, like an oversized frame.
+ */
+export const MAX_INLINE_REQUEST_BYTES = 15 * 1024 * 1024;
+
+/** Whether a frame of this size may be sent inline at all. */
+export const isInlineableFrameSize = (size?: number | null): size is number =>
+  typeof size === 'number' && size > 0 && size <= MAX_INLINE_FRAME_BYTES;
+
 interface StoredFrame {
   fileType?: string | null;
   id: string;
@@ -47,8 +59,10 @@ const sniffImageMimeType = (bytes: Uint8Array): string | undefined => {
 export const resolveModelReadableFrameUrl = async (
   fileService: FileService,
   file: StoredFrame,
+  /** False once the request's inline budget is spent: link the frame instead. */
+  inline = true,
 ): Promise<string> => {
-  if (typeof file.size === 'number' && file.size > 0 && file.size <= MAX_INLINE_FRAME_BYTES) {
+  if (inline && isInlineableFrameSize(file.size)) {
     try {
       const bytes = await fileService.getFileByteArray(file.url);
       const mimeType = file.fileType?.startsWith('image/')

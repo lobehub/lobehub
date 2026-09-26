@@ -9,7 +9,11 @@ import type { LobeChatDatabase } from '@/database/type';
 import { AcceptanceService, buildAcceptanceCheckUnion } from './acceptanceService';
 import { mapWithConcurrency } from './concurrency';
 import { resolveGoalReviewModelConfig } from './goalReviewModelConfig';
-import { REVIEW_PREDICT_CONCURRENCY, VerifyReviewPredictorService } from './reviewPredictor';
+import {
+  GATE_REVIEW_MAX_VISUALS,
+  REVIEW_PREDICT_CONCURRENCY,
+  VerifyReviewPredictorService,
+} from './reviewPredictor';
 
 /**
  * The startup failures this review can name back to a person. Everything else that
@@ -130,6 +134,9 @@ export const reviewGoalDelivery = async (
             checkResultId,
             includeTextEvidence: true,
             instructionDocumentId: check.planItem?.documentId,
+            // This review gates the Task, so it must see the frames the check
+            // carries rather than the shadow lane's cost-capped sample.
+            maxVisuals: GATE_REVIEW_MAX_VISUALS,
             modelConfig,
             requirement: acceptance.requirement,
             surface: check.surface,

@@ -41,6 +41,7 @@ vi.mock('../acceptanceService', async (original) => ({
   }),
 }));
 vi.mock('../reviewPredictor', () => ({
+  GATE_REVIEW_MAX_VISUALS: 12,
   REVIEW_PREDICT_CONCURRENCY: 4,
   VerifyReviewPredictorService: vi.fn(function () {
     return { predict: mocks.predict };
@@ -102,7 +103,12 @@ describe('Goal automatic Acceptance review', () => {
       goalReview: { status: 'passed', predictionIds: ['p1'], feedback: '' },
     });
     expect(mocks.predict).toHaveBeenCalledWith(
-      expect.objectContaining({ includeTextEvidence: true, checkResultId: 'result1' }),
+      expect.objectContaining({
+        checkResultId: 'result1',
+        includeTextEvidence: true,
+        // The gate must not judge on the shadow lane's three-frame sample.
+        maxVisuals: 12,
+      }),
     );
   });
 
