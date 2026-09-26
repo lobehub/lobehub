@@ -10,7 +10,7 @@
   "agent_intervention_required": "{{agent}} sizin girdinize ihtiyaç duyuyor: {{summary}}",
   "agent_intervention_required_title": "{{agent}} incelemenizi bekliyor",
   "agent_run_completed": "{{preview}}",
-  "agent_run_completed_title": "Ajans görevi tamamlandı",
+  "agent_run_completed_title": "Ajan görevi tamamlandı",
   "agent_transfer_reassigned": "Bir çalışma alanı sahibi, \"{{agentTitle}}\" adlı ajanınızı {{recipientLabel}}'e aktardı.",
   "agent_transfer_reassigned_title": "Ajan yeniden atandı",
   "agent_transfer_requested": "{{actorLabel}}, \"{{agentTitle}}\" adlı ajanı size aktarmak istiyor. Bildirimlerden kabul edin veya reddedin.",
