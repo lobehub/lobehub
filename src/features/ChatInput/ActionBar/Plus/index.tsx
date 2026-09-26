@@ -47,6 +47,7 @@ import { labPreferSelectors, settingsSelectors } from '@/store/user/selectors';
 import { useAgentId } from '../../hooks/useAgentId';
 import { useChatInputResourceAccess } from '../../hooks/useChatInputResourceAccess';
 import { useEffectiveModel } from '../../hooks/useEffectiveModel';
+import { useLargeFileLocalPath } from '../../hooks/useLargeFileLocalPath';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 import { insertGoalTag } from '../../InputEditor/ActionTag/goalTag';
 import { useChatInputStore } from '../../store';
@@ -317,6 +318,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
   const isMemoryEnabled = useMemoryEnabled(agentId);
   const [showTypoBar, setShowTypoBar] = useChatInputStore((s) => [s.showTypoBar, s.setShowTypoBar]);
   const editor = useChatInputStore((s) => s.editor);
+  const routeLargeFilesToLocalPaths = useLargeFileLocalPath(agentId, editor);
   const { canUploadImage, canUploadVideo, canUploadAudio } = useMediaUploadAbility(
     model,
     provider,
@@ -481,7 +483,8 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
               }
               close();
               editor?.focus();
-              await upload([file], agentId);
+              const filesToUpload = routeLargeFilesToLocalPaths([file]);
+              if (filesToUpload.length > 0) await upload(filesToUpload, agentId);
               return false;
             }}
           >
@@ -748,6 +751,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
     skillMarketFooter,
     skillMarketHeader,
     upload,
+    routeLargeFilesToLocalPaths,
     close,
   ]);
 
