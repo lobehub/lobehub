@@ -18,6 +18,7 @@ import {
   createServerContextFactProviders,
   resolveServerConnectorFeatures,
 } from '@/server/modules/Mecha/ContextEngineering/providers';
+import { resolveKnowledgeFileContents } from '@/server/services/file/resolveKnowledgeFileContents';
 
 import type { RuntimeExecutorContext } from '../context';
 import {
@@ -144,13 +145,18 @@ export const buildServerCallLlmContext = async ({
     historyCount,
     initialContext: (state as any).initialContext?.initialContext,
     knowledge: {
-      fileContents: agentConfig.files
-        ?.filter((file: { enabled?: boolean | null }) => file.enabled === true)
-        .map((file: { content?: string | null; id?: string; name?: string }) => ({
-          content: file.content ?? '',
-          fileId: file.id ?? '',
-          filename: file.name ?? '',
-        })),
+      // Files whose parse never ran (or failed at upload time) carry a null
+      // content here; resolve them the way message attachments are resolved
+      // instead of injecting an empty <file> block the model reads as a
+      // missing attachment.
+      fileContents: await resolveKnowledgeFileContents({
+        db: ctx.serverDB,
+        files: agentConfig.files,
+        userId: ctx.userId,
+        // Same workspace source as the context fact providers: the operation's
+        // workspace wins over the executor's, so the document scope matches.
+        workspaceId: state.origin?.workspaceId ?? ctx.workspaceId,
+      }),
       knowledgeBases: agentConfig.knowledgeBases
         ?.filter((knowledgeBase: { enabled?: boolean | null }) => knowledgeBase.enabled === true)
         .map((knowledgeBase: { id?: string; name?: string }) => ({

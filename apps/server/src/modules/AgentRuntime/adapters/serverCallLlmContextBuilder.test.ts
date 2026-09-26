@@ -12,6 +12,8 @@ const resolveServerCallLlmContextHintsMock = vi.hoisted(() => vi.fn());
 const serverMessagesEngineMock = vi.hoisted(() => vi.fn());
 const marketCredsListMock = vi.hoisted(() => vi.fn());
 const workspaceFindByIdMock = vi.hoisted(() => vi.fn());
+const parseFileMock = vi.hoisted(() => vi.fn());
+const documentServiceCtorMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/database/models/user', () => ({
   UserModel: class {
@@ -41,6 +43,16 @@ vi.mock('@/server/services/market', () => ({
 
 vi.mock('@/config/composio', () => ({
   composioEnv: { COMPOSIO_API_KEY: undefined },
+}));
+
+vi.mock('@/server/services/document', () => ({
+  // Constructible on purpose: the resolver does `new DocumentService(db, userId, workspaceId)`.
+  DocumentService: class {
+    constructor(...args: unknown[]) {
+      documentServiceCtorMock(...args);
+    }
+    parseFile = parseFileMock;
+  },
 }));
 
 vi.mock('./serverCallLlmContextHints', () => ({
@@ -301,6 +313,120 @@ describe('buildServerCallLlmContext - workspace context', () => {
 
     expect(serverMessagesEngineMock).toHaveBeenCalledWith(
       expect.not.objectContaining({ workspaceContext: expect.anything() }),
+    );
+  });
+});
+
+/**
+ * The knowledge-file hydration is the one place this builder does I/O on the
+ * way to the engine, so the boundary is tested through the real builder and
+ * resolver with only DocumentService mocked: a helper test alone cannot show
+ * that the parsed content reaches `serverMessagesEngine`, nor that the parse
+ * is awaited before the engine runs.
+ */
+describe('buildServerCallLlmContext - knowledge files reach the engine parsed', () => {
+  const unparsedFile = { content: null, enabled: true, id: 'file-1', name: 'setup.md' };
+  const agentWithFile = {
+    ...agent,
+    files: [unparsedFile],
+  } as unknown as AgentWorldSnapshot['agent'];
+
+  it('waits for the on-demand parse and hands the parsed content to the engine', async () => {
+    let releaseParse: (value: { content: string }) => void = () => {};
+    parseFileMock.mockReturnValue(
+      new Promise<{ content: string }>((resolve) => {
+        releaseParse = resolve;
+      }),
+    );
+
+    const pending = buildServerCallLlmContext({
+      ctx: createCtx(),
+      llmPayload,
+      model: 'gpt-4',
+      provider: 'openai',
+      state: createState({ world: { agent: agentWithFile } }),
+      tooling,
+    });
+
+    // Execution must have reached the parse before anything is asserted about
+    // the engine; otherwise "not called yet" would also hold for a builder that
+    // never parses at all.
+    await vi.waitFor(() => expect(parseFileMock).toHaveBeenCalledWith('file-1'));
+    expect(serverMessagesEngineMock).not.toHaveBeenCalled();
+
+    releaseParse({ content: 'Project setup steps' });
+    await pending;
+
+    expect(serverMessagesEngineMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        knowledge: expect.objectContaining({
+          fileContents: [
+            { content: 'Project setup steps', fileId: 'file-1', filename: 'setup.md' },
+          ],
+        }),
+      }),
+    );
+  });
+
+  it('scopes the parse to the workspace recorded on the operation, not the executor', async () => {
+    parseFileMock.mockResolvedValue({ content: 'parsed' });
+    const ctx = createCtx({ workspaceId: 'workspace-1' });
+
+    await buildServerCallLlmContext({
+      ctx,
+      llmPayload,
+      model: 'gpt-4',
+      provider: 'openai',
+      state: createState({
+        origin: { workspaceId: 'workspace-2' },
+        world: { agent: agentWithFile },
+      }),
+      tooling,
+    });
+
+    expect(documentServiceCtorMock).toHaveBeenCalledWith(ctx.serverDB, 'creator-1', 'workspace-2');
+  });
+
+  it('falls back to the executor workspace when the operation records none', async () => {
+    parseFileMock.mockResolvedValue({ content: 'parsed' });
+    const ctx = createCtx({ workspaceId: 'workspace-1' });
+
+    await buildServerCallLlmContext({
+      ctx,
+      llmPayload,
+      model: 'gpt-4',
+      provider: 'openai',
+      state: createState({ world: { agent: agentWithFile } }),
+      tooling,
+    });
+
+    expect(documentServiceCtorMock).toHaveBeenCalledWith(ctx.serverDB, 'creator-1', 'workspace-1');
+  });
+
+  it('forwards a parse failure to the engine as the file error instead of an empty block', async () => {
+    parseFileMock.mockRejectedValue(new Error('unsupported format'));
+
+    await buildServerCallLlmContext({
+      ctx: createCtx(),
+      llmPayload,
+      model: 'gpt-4',
+      provider: 'openai',
+      state: createState({ world: { agent: agentWithFile } }),
+      tooling,
+    });
+
+    expect(serverMessagesEngineMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        knowledge: expect.objectContaining({
+          fileContents: [
+            expect.objectContaining({
+              content: '',
+              error: 'The file is attached but its contents could not be extracted.',
+              fileId: 'file-1',
+            }),
+          ],
+        }),
+      }),
     );
   });
 });
