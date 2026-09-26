@@ -20,6 +20,9 @@ export default async function handleRequest(
       <ServerRouter context={routerContext} url={request.url} />
     </StyleProvider>,
     {
+      // This response is fully buffered. Keep completed Suspense content inline
+      // instead of sending a fallback and a hidden segment that needs browser JS.
+      progressiveChunkSize: Number.MAX_SAFE_INTEGER,
       onError(error) {
         status = 500;
         console.error(error);
