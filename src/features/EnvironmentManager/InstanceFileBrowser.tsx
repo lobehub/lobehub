@@ -1,16 +1,7 @@
 'use client';
 
-import { Flexbox, Icon, TextArea } from '@lobehub/ui';
-import {
-  ActionIcon,
-  Button,
-  confirmModal,
-  createModal,
-  Input,
-  Skeleton,
-  Text,
-  toast,
-} from '@lobehub/ui/base-ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, createModal, Skeleton, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import {
@@ -18,10 +9,7 @@ import {
   ChevronRightIcon,
   CornerLeftUpIcon,
   FileIcon,
-  FilePlusIcon,
   FolderIcon,
-  FolderPlusIcon,
-  Trash2Icon,
 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -29,8 +17,6 @@ import useSWR from 'swr';
 
 import { sandboxWorkspaceService } from '@/services/sandboxWorkspace';
 import { formatSize } from '@/utils/format';
-
-import { describeError } from './errorMessage';
 
 const styles = createStaticStyles(({ css }) => ({
   body: css`
@@ -59,9 +45,17 @@ const styles = createStaticStyles(({ css }) => ({
     cursor: default;
     color: ${cssVar.colorText};
   `,
-  editor: css`
+  viewer: css`
+    overflow: auto;
+    flex: 1;
+
+    margin: 0;
+
     font-family: ${cssVar.fontFamilyCode};
     font-size: ${cssVar.fontSizeSM};
+    line-height: 1.6;
+    color: ${cssVar.colorText};
+    white-space: pre;
   `,
   meta: css`
     flex: none;
@@ -91,16 +85,6 @@ const styles = createStaticStyles(({ css }) => ({
     &:hover {
       background: ${cssVar.colorFillTertiary};
     }
-
-    &:hover .file-row-actions {
-      opacity: 1;
-    }
-  `,
-  rowActions: css`
-    flex: none;
-    width: 28px;
-    opacity: 0;
-    transition: opacity 150ms ${cssVar.motionEaseOut};
   `,
   scroll: css`
     overflow-y: auto;
@@ -123,10 +107,9 @@ const looksBinary = (content: string) => content.includes(String.fromCharCode(0)
 
 /**
  * The execution plane answers 404 for a directory that is not there, and an
- * instance that has never run does not have one: the row is created in the
- * database, while the folder appears the first time a conversation works in it.
- * That is a normal state, not a failure — and writing here makes the folder,
- * because the write endpoint creates parents.
+ * instance that has never been built or run does not have one: the row is
+ * created in the database, while the folder appears the first time the
+ * sandbox saves its work tree. That is a normal state, not a failure.
  */
 const isMissingDirectory = (error: unknown) =>
   (error as { data?: { code?: string } })?.data?.code === 'NOT_FOUND';
@@ -143,7 +126,15 @@ interface InstanceFileBrowserProps {
 }
 
 /**
- * The files an instance has kept, in a window of its own.
+ * The files an instance has kept, in a window of its own — to look at, not to
+ * change (LOBE-14364).
+ *
+ * This directory is the saved copy of the instance's work tree: the sandbox
+ * runs the checkout on its own disk and writes it here, and it is the only
+ * writer. An edit made here would be overwritten by the next save, or leave
+ * the directory disagreeing with the record the next restore reads it by — so
+ * nothing here writes, and the server refuses it too. Rebuildable content such
+ * as `node_modules` is kept elsewhere and does not appear.
  *
  * Every path here is relative to the WORKSPACE root, which is the vocabulary the
  * execution plane speaks — an instance's directory is a prefix inside it, not a
@@ -161,15 +152,6 @@ const InstanceFileBrowser = memo<InstanceFileBrowserProps>(({ instanceId, root }
 
   const [cwd, setCwd] = useState(root);
   const [openFile, setOpenFile] = useState<string | undefined>();
-  // Only the person's edits live here, keyed by the file they were made in;
-  // what was read stays in the SWR cache, which is keyed by path. Reads land
-  // out of order when someone moves between files quickly, and a read that
-  // wrote into shared state would let the last one to arrive win — so Save
-  // could write one file's contents into another.
-  const [edit, setEdit] = useState<{ content: string; path: string } | undefined>();
-  const [saving, setSaving] = useState(false);
-  const [creating, setCreating] = useState<'directory' | 'file' | undefined>();
-  const [newName, setNewName] = useState('');
 
   const listing = useSWR(
     ['sandbox-instance-files', cwd],
@@ -186,7 +168,7 @@ const InstanceFileBrowser = memo<InstanceFileBrowserProps>(({ instanceId, root }
     openFile ? ['sandbox-instance-file', openFile] : null,
     ([, path]: [string, string]) => sandboxWorkspaceService.readFile({ instanceId, path }),
   );
-  const draft = edit && edit.path === openFile ? edit.content : (file.data?.content ?? '');
+  const content = file.data?.content ?? '';
 
   const entries = [...(listing.data?.entries ?? [])].sort((a, b) =>
     a.isDirectory === b.isDirectory ? a.name.localeCompare(b.name) : a.isDirectory ? -1 : 1,
@@ -196,82 +178,10 @@ const InstanceFileBrowser = memo<InstanceFileBrowserProps>(({ instanceId, root }
   // the workspace root, which this window deliberately does not offer.
   const crumbs = cwd === root ? [] : cwd.slice(root.length + 1).split('/');
 
-  // Takes the translated fallback rather than its key: `t` is typed against the
-  // literal key union, so threading a key through a `string` parameter loses
-  // exactly the check that would catch a typo in one.
-  const fail = (error: unknown, fallback: string) => toast.error(describeError(error, t, fallback));
-
-  // Opening a file starts from what is on disk, not from edits left behind the
-  // last time it was open and closed without saving.
-  const openFileAt = (path: string) => {
-    setEdit(undefined);
-    setOpenFile(path);
-  };
-
   const openDirectory = (path: string) => {
     setCwd(path);
     setOpenFile(undefined);
-    setCreating(undefined);
   };
-
-  const save = async () => {
-    if (!openFile) return;
-    setSaving(true);
-    try {
-      await sandboxWorkspaceService.writeFile({ content: draft, instanceId, path: openFile });
-      await file.mutate();
-      toast.success(t('environments.files.saved'));
-    } catch (error) {
-      fail(error, t('environments.files.saveFailed'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const create = async () => {
-    const name = newName.trim();
-    if (!name) return;
-    const path = `${cwd}/${name}`;
-    try {
-      await (creating === 'directory'
-        ? sandboxWorkspaceService.createDirectory({ instanceId, path })
-        : sandboxWorkspaceService.writeFile({ content: '', instanceId, path }));
-      setCreating(undefined);
-      setNewName('');
-      await listing.mutate();
-    } catch (error) {
-      fail(error, t('environments.files.createFailed'));
-    }
-  };
-
-  const remove = async (path: string, isDirectory: boolean) => {
-    try {
-      // A directory is removed with everything under it: the API refuses a
-      // non-empty one otherwise, which would make the action fail for exactly
-      // the directories someone wants gone.
-      await sandboxWorkspaceService.removeFile({ instanceId, path, recursive: isDirectory });
-      if (openFile === path) setOpenFile(undefined);
-      await listing.mutate();
-    } catch (error) {
-      fail(error, t('environments.files.removeFailed'));
-    }
-  };
-
-  // Asked first: there is no trash here, and a folder goes with everything
-  // under it, so a slip on the one icon in the row was permanent.
-  const confirmRemove = (entry: { isDirectory: boolean; name: string; path: string }) =>
-    confirmModal({
-      content: t(
-        entry.isDirectory
-          ? 'environments.files.removeConfirmDirectory'
-          : 'environments.files.removeConfirmFile',
-      ),
-      cancelText: t('cancel', { ns: 'common' }),
-      okButtonProps: { danger: true },
-      okText: t('environments.files.remove'),
-      onOk: () => remove(entry.path, entry.isDirectory),
-      title: t('environments.files.removeConfirmTitle', { name: entry.name }),
-    });
 
   if (openFile)
     return (
@@ -286,14 +196,6 @@ const InstanceFileBrowser = memo<InstanceFileBrowserProps>(({ instanceId, root }
           <Text className={styles.name} title={openFile}>
             {openFile.slice(cwd.length + 1)}
           </Text>
-          <Button
-            disabled={file.isLoading || draft === file.data?.content}
-            loading={saving}
-            type={'primary'}
-            onClick={save}
-          >
-            {t('environments.files.save')}
-          </Button>
         </Flexbox>
 
         <Flexbox className={styles.body} padding={16}>
@@ -303,19 +205,14 @@ const InstanceFileBrowser = memo<InstanceFileBrowserProps>(({ instanceId, root }
             <Text fontSize={12} type={'danger'}>
               {t('environments.files.unreadable')}
             </Text>
-          ) : looksBinary(file.data?.content ?? '') ? (
-            // Refused rather than rendered: the write path carries text only, so
-            // opening this in an editor would offer a save that corrupts it.
+          ) : looksBinary(content) ? (
+            // Not rendered: the read path carries text, and a binary shown as
+            // text is noise rather than its contents.
             <Text fontSize={12} type={'secondary'}>
               {t('environments.files.binary')}
             </Text>
           ) : (
-            <TextArea
-              className={styles.editor}
-              style={{ height: '100%', resize: 'none' }}
-              value={draft}
-              onChange={(event) => setEdit({ content: event.target.value, path: openFile! })}
-            />
+            <pre className={styles.viewer}>{content}</pre>
           )}
         </Flexbox>
       </Flexbox>
@@ -362,55 +259,10 @@ const InstanceFileBrowser = memo<InstanceFileBrowserProps>(({ instanceId, root }
             );
           })}
         </Flexbox>
-        <Button
-          icon={<Icon icon={FilePlusIcon} />}
-          size={'small'}
-          onClick={() => setCreating('file')}
-        >
-          {t('environments.files.newFile')}
-        </Button>
-        <Button
-          icon={<Icon icon={FolderPlusIcon} />}
-          size={'small'}
-          onClick={() => setCreating('directory')}
-        >
-          {t('environments.files.newDirectory')}
-        </Button>
       </Flexbox>
 
       <Flexbox className={styles.body}>
         <Flexbox className={styles.scroll}>
-          {creating && (
-            <Flexbox horizontal align={'center'} className={styles.row} gap={8}>
-              <Icon
-                icon={creating === 'directory' ? FolderIcon : FileIcon}
-                size={14}
-                style={{ color: cssVar.colorTextTertiary, flex: 'none' }}
-              />
-              <Input
-                autoFocus
-                style={{ flex: 1, minWidth: 0 }}
-                value={newName}
-                placeholder={t(
-                  creating === 'directory'
-                    ? 'environments.files.directoryPlaceholder'
-                    : 'environments.files.filePlaceholder',
-                )}
-                onChange={(event) => setNewName(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') void create();
-                  if (event.key === 'Escape') setCreating(undefined);
-                }}
-              />
-              <Button disabled={!newName.trim()} size={'small'} type={'primary'} onClick={create}>
-                {t('environments.files.create')}
-              </Button>
-              <Button size={'small'} onClick={() => setCreating(undefined)}>
-                {t('environments.cancel')}
-              </Button>
-            </Flexbox>
-          )}
-
           {listing.isLoading ? (
             <Flexbox gap={8} padding={16}>
               <Skeleton.Text rows={5} />
@@ -421,7 +273,7 @@ const InstanceFileBrowser = memo<InstanceFileBrowserProps>(({ instanceId, root }
                 {t('environments.files.listFailed')}
               </Text>
             </Flexbox>
-          ) : entries.length === 0 && !creating ? (
+          ) : entries.length === 0 ? (
             <Flexbox padding={16}>
               <Text fontSize={12} type={'secondary'}>
                 {t(
@@ -442,7 +294,7 @@ const InstanceFileBrowser = memo<InstanceFileBrowserProps>(({ instanceId, root }
                 // Double-click to open, the way a file manager does. A single
                 // click on a whole row is too easy to trigger while reading one.
                 onDoubleClick={() =>
-                  entry.isDirectory ? openDirectory(entry.path) : openFileAt(entry.path)
+                  entry.isDirectory ? openDirectory(entry.path) : setOpenFile(entry.path)
                 }
               >
                 <Icon
@@ -457,26 +309,18 @@ const InstanceFileBrowser = memo<InstanceFileBrowserProps>(({ instanceId, root }
                 <span className={styles.meta}>
                   {entry.modifiedAt ? dayjs(entry.modifiedAt).format('MM-DD HH:mm') : ''}
                 </span>
-                <span
-                  className={`${styles.rowActions} file-row-actions`}
-                  onDoubleClick={(event) => event.stopPropagation()}
-                >
-                  <ActionIcon
-                    icon={Trash2Icon}
-                    size={'small'}
-                    title={t('environments.files.remove')}
-                    onClick={() => confirmRemove(entry)}
-                  />
-                </span>
               </Flexbox>
             ))
           )}
         </Flexbox>
       </Flexbox>
 
-      <Flexbox horizontal align={'center'} className={styles.toolbar}>
+      <Flexbox className={styles.toolbar} gap={2}>
         <Text fontSize={12} type={'secondary'}>
           {t('environments.files.openHint')}
+        </Text>
+        <Text fontSize={12} type={'secondary'}>
+          {t('environments.files.readOnlyHint')}
         </Text>
       </Flexbox>
     </Flexbox>
