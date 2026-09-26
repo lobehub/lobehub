@@ -256,6 +256,64 @@ describe('SettingsAction', () => {
       expect(userService.updateUserSettings).not.toHaveBeenCalled();
       expect(result.current.settings.tool?.searchProviders).toEqual(['exa', 'searxng']);
     });
+
+    it('should send rapid successive writes one at a time, in call order', async () => {
+      const { result } = renderHook(() => useUserStore());
+      const resolvers: Array<() => void> = [];
+      vi.mocked(userService.updateToolChannels).mockImplementation(
+        () => new Promise((resolve) => resolvers.push(() => resolve(undefined as any))),
+      );
+
+      let first!: Promise<void>;
+      let second!: Promise<void>;
+      act(() => {
+        first = result.current.updateToolChannels({ searchProviders: ['exa'] });
+        second = result.current.updateToolChannels({ searchProviders: ['searxng'] });
+      });
+
+      // The second request is not sent until the first has committed
+      await vi.waitFor(() => expect(userService.updateToolChannels).toHaveBeenCalledTimes(1));
+      expect(userService.updateToolChannels).toHaveBeenLastCalledWith({
+        searchProviders: ['exa'],
+      });
+
+      await act(async () => {
+        resolvers[0]();
+        await first;
+      });
+      await vi.waitFor(() => expect(userService.updateToolChannels).toHaveBeenCalledTimes(2));
+      expect(userService.updateToolChannels).toHaveBeenLastCalledWith({
+        searchProviders: ['searxng'],
+      });
+
+      await act(async () => {
+        resolvers[1]();
+        await second;
+      });
+      expect(result.current.settings.tool?.searchProviders).toEqual(['searxng']);
+    });
+
+    it('should still send a later write after an earlier one fails', async () => {
+      const { result } = renderHook(() => useUserStore());
+      vi.mocked(userService.updateToolChannels)
+        .mockRejectedValueOnce(new Error('network error'))
+        .mockResolvedValueOnce(undefined as any);
+
+      let first!: Promise<void>;
+      let second!: Promise<void>;
+      act(() => {
+        first = result.current.updateToolChannels({ crawlerImpls: ['jina'] });
+        second = result.current.updateToolChannels({ crawlerImpls: ['naive'] });
+      });
+
+      await expect(first).rejects.toThrow('network error');
+      await act(async () => {
+        await second;
+      });
+      expect(userService.updateToolChannels).toHaveBeenLastCalledWith({
+        crawlerImpls: ['naive'],
+      });
+    });
   });
 
   describe('addToolToAllowList', () => {
