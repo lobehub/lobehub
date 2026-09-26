@@ -94,6 +94,18 @@ const parseContentLength = (contentLength: string | null): number | null => {
 };
 
 /**
+ * Read the full resource size from `Content-Range: bytes 0-0/<total>`.
+ * Returns null when the total is unknown (`*`) or the header is malformed.
+ */
+const parseContentRangeTotal = (contentRange: string | null): number | null => {
+  const match = contentRange?.trim().match(/^bytes\s+\d+-\d+\/(\d+)$/i);
+  if (!match) return null;
+
+  const value = Number(match[1]);
+  return Number.isSafeInteger(value) ? value : null;
+};
+
+/**
  * Maximum file size limits for Google Gemini file input
  * @see https://ai.google.dev/gemini-api/docs/file-input-methods#method-comparison
  *
@@ -140,25 +152,33 @@ export const isPublicExternalUrl = (url: string): boolean => {
 
 /**
  * Validate an external URL for Google Gemini file input
- * Performs a HEAD request to check Content-Length and Content-Type
+ * Probes the URL with a single-byte ranged GET to read Content-Type and the total size
+ *
+ * A HEAD request is not used on purpose: S3/R2 presigned URLs sign the HTTP method,
+ * so a URL presigned for GET always answers HEAD with 403. That made every private
+ * bucket file fail validation and fall back to downloading + inlining the whole
+ * file as base64, which blows past V8's max string length on media-heavy topics.
  *
  * @param url - The URL to validate
  * @returns Validation result with content info
  */
 export const validateExternalUrl = async (url: string): Promise<ExternalUrlValidation> => {
   try {
-    // Perform HEAD request to get headers without downloading the file
     const res = await ssrfSafeFetch(
       url,
       {
         headers: {
+          'Range': 'bytes=0-0',
           'User-Agent': 'LobeChat/1.0 (https://lobehub.com)',
         },
-        method: 'HEAD',
+        method: 'GET',
       },
       {
         allowIPAddressList: [],
         allowPrivateIPAddress: false,
+        // Servers that ignore Range reply 200 with the full body; stop reading after
+        // one byte so validation never downloads the file.
+        maxContentLength: 1,
       },
     );
 
@@ -171,7 +191,11 @@ export const validateExternalUrl = async (url: string): Promise<ExternalUrlValid
       };
     }
 
-    const contentLength = parseContentLength(res.headers.get('content-length'));
+    // 206 carries the total size in Content-Range; Content-Length is only the range length.
+    const contentLength =
+      res.status === 206
+        ? parseContentRangeTotal(res.headers.get('content-range'))
+        : parseContentLength(res.headers.get('content-length'));
     const contentType = normalizeExternalContentType(
       (res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase(),
     );
@@ -191,7 +215,7 @@ export const validateExternalUrl = async (url: string): Promise<ExternalUrlValid
         contentLength: 0,
         contentType,
         isValid: false,
-        reason: 'Missing or invalid Content-Length header',
+        reason: 'Missing or invalid content size header',
       };
     }
 
