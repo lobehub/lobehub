@@ -132,6 +132,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
   private userId: string;
   private workspaceId?: string;
   private sandboxCwd?: string;
+  private sandboxWorkingDir?: string;
   private sandboxEnvironment?: string;
   private sandboxMode?: SandboxMode;
   private device?: SkillDeviceExecution;
@@ -169,6 +170,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     sandboxCwd?: string;
     sandboxEnvironment?: string;
     sandboxMode?: SandboxMode;
+    sandboxWorkingDir?: string;
     serverDB: LobeChatDatabase;
     /** Agent Share only: `lh` must not mint a creator-scoped token for a visitor. */
     shareVisitorBlocked?: boolean;
@@ -188,6 +190,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     this.userId = options.userId;
     this.workspaceId = options.workspaceId;
     this.sandboxCwd = options.sandboxCwd;
+    this.sandboxWorkingDir = options.sandboxWorkingDir;
     this.sandboxEnvironment = options.sandboxEnvironment;
     this.sandboxMode = options.sandboxMode;
     this.device = options.device;
@@ -326,6 +329,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         sandboxCwd: this.sandboxCwd,
         sandboxEnvironment: this.sandboxEnvironment,
         sandboxMode: this.sandboxMode,
+        sandboxWorkingDir: this.sandboxWorkingDir,
         serverDB: this.serverDB,
         topicId: this.topicId,
         userId: this.userId,
@@ -672,6 +676,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         sandboxCwd: this.sandboxCwd,
         sandboxEnvironment: this.sandboxEnvironment,
         sandboxMode: this.sandboxMode,
+        sandboxWorkingDir: this.sandboxWorkingDir,
         serverDB: this.serverDB,
         topicId: this.topicId,
         userId: this.userId,
@@ -733,6 +738,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         sandboxCwd: this.sandboxCwd,
         sandboxEnvironment: this.sandboxEnvironment,
         sandboxMode: this.sandboxMode,
+        sandboxWorkingDir: this.sandboxWorkingDir,
         topicId: this.topicId,
         userId: this.userId,
       });
@@ -898,6 +904,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       sandboxCwd: sandbox.cwd,
       sandboxEnvironment: sandbox.environment,
       sandboxMode: sandbox.mode,
+      sandboxWorkingDir: sandbox.workingDir,
       serverDB: context.serverDB,
       shareVisitorBlocked: !!shareVisitor,
       skillModel,

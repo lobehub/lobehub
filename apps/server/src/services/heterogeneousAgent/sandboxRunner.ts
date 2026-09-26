@@ -50,7 +50,7 @@ export interface SandboxRunParams {
    * sandbox every run used before persistence existed. The entitlement itself
    * travels on `marketService`'s trust token, not here.
    */
-  sandbox?: Pick<SandboxSessionConfig, 'cwd' | 'environment' | 'mode'>;
+  sandbox?: Pick<SandboxSessionConfig, 'cwd' | 'environment' | 'mode' | 'workingDir'>;
   /**
    * Optional context injected as a text block BEFORE the user's prompt.
    * Useful for priming CC with workspace state (cloned repos, env info, etc.).
@@ -247,6 +247,7 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
     sandboxCwd: sandbox?.cwd,
     sandboxEnvironment: sandbox?.environment,
     sandboxMode: sandbox?.mode,
+    sandboxWorkingDir: sandbox?.workingDir,
     topicId,
     userId,
   });

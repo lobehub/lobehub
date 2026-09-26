@@ -49,6 +49,7 @@ describe('createSandboxWorkspaceClient', () => {
     respond(200, { data: { buildId: 'build-1' } });
 
     await client.buildEnvironment({
+      instanceDir: 'app-dev',
       name: 'env-1',
       specification: { sources: [{ kind: 'git', url: 'https://github.com/a/b' }] },
     });
@@ -59,6 +60,7 @@ describe('createSandboxWorkspaceClient', () => {
     );
     expect(init.headers['Content-Type']).toBe('application/json');
     expect(JSON.parse(init.body).specification.sources[0].url).toBe('https://github.com/a/b');
+    expect(JSON.parse(init.body).instanceDir).toBe('app-dev');
   });
 
   it('should read one environment run history from the control plane', async () => {
