@@ -42,6 +42,8 @@ import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirecto
 import { localFileService } from '@/services/electron/localFileService';
 import { useAgentStore } from '@/store/agent';
 import { useElectronStore } from '@/store/electron';
+import { useServerConfigStore } from '@/store/serverConfig';
+import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 
 import { formatLockedControlTooltip } from '../utils/lockedControlTooltip';
 import { useCommitWorkingDirectory } from './useCommitWorkingDirectory';
@@ -398,8 +400,12 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   // Heterogeneous agents bring their own toolchain and must execute somewhere, so `'none'`
   // (plain chat, no execution environment) isn't a valid target for them: hide
   // the option and never fall back to / honour a stale stored `'none'`.
+  const sandboxAgentTypes = useServerConfigStore(serverConfigSelectors.sandboxAgentTypes);
   const isHetero = !!heteroType;
-  const supportsSandbox = isHeterogeneousSandboxExecutionAvailable(heteroType);
+  const supportsSandbox = isHeterogeneousSandboxExecutionAvailable(
+    heteroType,
+    sandboxAgentTypes,
+  );
 
   // Workspace-keyed SWR fetch — the raw lambdaQuery key has no workspace
   // dimension, so the picker kept showing the previous workspace's pool after

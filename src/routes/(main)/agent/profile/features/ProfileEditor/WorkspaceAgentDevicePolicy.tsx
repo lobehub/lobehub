@@ -21,6 +21,8 @@ import {
   resolveExecutionTargetSelection,
 } from '@/features/ExecutionTargetPicker';
 import { isHeterogeneousSandboxExecutionAvailable } from '@/helpers/executionTarget';
+import { useServerConfigStore } from '@/store/serverConfig';
+import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { useAgentStore } from '@/store/agent';
 
 import { WorkspaceAgentPolicyCard } from './WorkspaceAgentPolicyCard';
@@ -176,7 +178,11 @@ const WorkspaceAgentDevicePolicy = memo<WorkspaceAgentDevicePolicyProps>(
     const agencyConfig = config?.agencyConfig;
     const heterogeneousType = agencyConfig?.heterogeneousProvider?.type;
     const isHeterogeneous = !!heterogeneousType;
-    const supportsSandbox = isHeterogeneousSandboxExecutionAvailable(heterogeneousType);
+    const sandboxAgentTypes = useServerConfigStore(serverConfigSelectors.sandboxAgentTypes);
+    const supportsSandbox = isHeterogeneousSandboxExecutionAvailable(
+      heterogeneousType,
+      sandboxAgentTypes,
+    );
 
     const targetLabels = useMemo(
       () => ({

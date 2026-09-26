@@ -48,6 +48,20 @@ Supported values:
 - Default: -
 - Example: `your-market-trusted-client-secret`
 
+### `HETERO_SANDBOX_AGENT_TYPES`
+
+- Type: Optional
+- Description: Comma-separated coding-agent CLIs allowed to run in the cloud sandbox. Set it only together with a runtime image that carries those binaries. The value replaces the default rather than extending it, so it can also narrow the set. Unrecognised names never match.
+- Default: `claude-code,codex`
+- Example: `claude-code,codex,opencode`
+
+### `HETERO_SANDBOX_FORWARD_ENV`
+
+- Type: Optional
+- Description: Comma-separated names of environment variables the server may forward into a sandbox run. An allowlist, not a passthrough — a variable travels only when it is named here and set on the server. Use it to hand a coding agent its own provider configuration.
+- Default: -
+- Example: `OPENCODE_CONFIG_CONTENT,LITELLM_API_KEY`
+
 ### `ONLYBOXES_BASE_URL`
 
 - Type: Required when `SANDBOX_PROVIDER=onlyboxes`
@@ -135,4 +149,25 @@ CONSOLE_JIT_SIGNING_KEY=onlyboxes-jit-signing-secret
 <Callout type={'info'}>
   File export still writes the exported artifact to the configured LobeHub S3 storage. Configure the
   S3 environment variables when users need to download files generated inside the sandbox.
+</Callout>
+
+## Running Coding Agents in a Self-Hosted Sandbox
+
+Claude Code and Codex agents can run in the cloud sandbox instead of on a local or connected device. The server launches every one of them the same way — `lh hetero exec` inside the box — so which ones are available comes down to what the runtime image contains.
+
+To run another CLI, add its binary to the image and name it in `HETERO_SANDBOX_AGENT_TYPES`:
+
+```bash
+HETERO_SANDBOX_AGENT_TYPES=claude-code,codex,opencode
+```
+
+Agents outside the provider-binding set read their model provider from their own environment. Forward what they need by name:
+
+```bash
+HETERO_SANDBOX_FORWARD_ENV=OPENCODE_CONFIG_CONTENT,LITELLM_API_KEY
+```
+
+<Callout type={'warning'}>
+  Every forwarded variable is written into the command that starts the sandbox run. Forward only
+  what the agent needs, and treat a sandbox you do not operate as a place secrets should not go.
 </Callout>

@@ -25,6 +25,7 @@ import { t as i18nT } from 'i18next';
 import {
   ArrowLeft,
   CheckCircle2,
+  ContainerIcon,
   Download,
   LaptopIcon,
   RefreshCw,
@@ -45,6 +46,8 @@ import { useAgentStore } from '@/store/agent';
 import { heteroAgentDefaultName } from '@/store/agent/utils/heteroAgentDefaultName';
 import { useElectronStore } from '@/store/electron';
 import { useHomeStore } from '@/store/home';
+import { useServerConfigStore } from '@/store/serverConfig';
+import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 
 import { getDeviceListState } from './deviceListState';
 import type { ConnectableProvider, ConnectAgentProfile } from './providers';
@@ -422,6 +425,11 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
       mutate: refetchDevices,
     } = useDeviceList();
 
+    // Non-empty only where the deployment's runtime image actually carries a
+    // coding agent, so the sandbox is never offered as a target that cannot run.
+    const hasSandbox =
+      useServerConfigStore(serverConfigSelectors.sandboxAgentTypes).length > 0;
+
     const listedDevices = useMemo(
       () => (devices ?? []).filter((d) => !restrictToWorkspaceDevices || d.scope === 'workspace'),
       [devices, restrictToWorkspaceDevices],
@@ -434,7 +442,13 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
     );
 
     const targetLabel =
-      target?.kind === 'device' ? deviceLabel(target.device) : t('connectAgent.create.localDevice');
+      target?.kind === 'device'
+        ? deviceLabel(target.device)
+        : t(
+            target?.kind === 'sandbox'
+              ? 'connectAgent.create.cloudSandbox'
+              : 'connectAgent.create.localDevice',
+          );
 
     const inventory = useMemo(() => {
       if (scanState.status !== 'success' || !scanState.agents) return [];
@@ -519,7 +533,9 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
             target:
               target?.kind === 'device'
                 ? { deviceId: target.device.deviceId, kind: 'device' }
-                : { kind: 'local' },
+                : target?.kind === 'sandbox'
+                  ? { kind: 'sandbox' }
+                  : { kind: 'local' },
           }),
           groupId,
           visibility,
@@ -637,7 +653,11 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
         hasDevices: listedDevices.length > 0,
         isFetching: isRefreshing,
       });
-      const showEmpty = !isDesktop && !isRefreshing && onlineDevices.length === 0;
+      // The empty card sends the user off to install the desktop app or run
+      // `lh connect`. Neither is the answer when this deployment can run agents
+      // in its own sandbox, so offer that instead of a dead end.
+      const showEmpty =
+        !isDesktop && !hasSandbox && !isRefreshing && onlineDevices.length === 0;
 
       return (
         <Flexbox gap={16} paddingBlock={'16px 8px'}>
@@ -707,6 +727,20 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
             </div>
           ) : (
             <Flexbox gap={16}>
+              {hasSandbox && (
+                <Flexbox gap={6}>
+                  <SectionLabel>{t('connectAgent.create.cloudSandboxSection')}</SectionLabel>
+                  <div className={styles.groupList}>
+                    <DeviceRow
+                      icon={<Icon icon={ContainerIcon} size={18} />}
+                      statusText={t('connectAgent.create.online')}
+                      subtitle={t('connectAgent.create.cloudSandboxDesc')}
+                      title={t('connectAgent.create.cloudSandbox')}
+                      onClick={() => pickTarget({ kind: 'sandbox' })}
+                    />
+                  </div>
+                </Flexbox>
+              )}
               {isDesktop && (
                 <Flexbox gap={6}>
                   <SectionLabel>{t('connectAgent.create.thisDevice')}</SectionLabel>
@@ -936,7 +970,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
                 {target?.kind === 'device' ? (
                   getDeviceIcon(target.device.platform, 18)
                 ) : (
-                  <Icon icon={LaptopIcon} size={18} />
+                  <Icon icon={target?.kind === 'sandbox' ? ContainerIcon : LaptopIcon} size={18} />
                 )}
               </div>
               <Flexbox flex={1} gap={1} style={{ minWidth: 0 }}>

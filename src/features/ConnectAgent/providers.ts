@@ -70,7 +70,7 @@ interface BuildConnectAgentConfigOptions {
   overrides?: { description?: string; name?: string };
   profile?: ConnectAgentProfile;
   provider: ConnectableProvider;
-  target: { deviceId: string; kind: 'device' } | { kind: 'local' };
+  target: { deviceId: string; kind: 'device' } | { kind: 'local' } | { kind: 'sandbox' };
 }
 
 const CLI_BRANDS: Record<LocalHeterogeneousAgentType, ConnectableProvider['brand']> = {
@@ -116,7 +116,7 @@ export const getConnectableProvider = (type: HeterogeneousAgentType) =>
 
 export const buildPlatformAgencyConfig = (
   type: RemoteHeterogeneousAgentType,
-  target: { deviceId: string; kind: 'device' } | { kind: 'local' },
+  target: { deviceId: string; kind: 'device' } | { kind: 'local' } | { kind: 'sandbox' },
 ) => ({
   ...(target.kind === 'device'
     ? { boundDeviceId: target.deviceId, executionTarget: 'device' as const }
@@ -162,6 +162,19 @@ export const buildConnectAgentConfig = ({
         boundDeviceId: target.deviceId,
         executionTarget: 'device' as const,
         heterogeneousProvider: { command: provider.command, type: provider.type },
+      },
+    };
+  }
+
+  // A sandbox agent binds to no device: the box is created per topic when the
+  // run starts. The command is left to the image's PATH for the same reason —
+  // there is no machine here whose install the wizard could have inspected.
+  if (target.kind === 'sandbox') {
+    return {
+      ...base,
+      agencyConfig: {
+        executionTarget: 'sandbox' as const,
+        heterogeneousProvider: { type: provider.type },
       },
     };
   }

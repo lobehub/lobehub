@@ -6,9 +6,11 @@ import {
   buildHeteroExecStdinPayload,
   type HeteroExecImageRef,
 } from '@lobechat/heterogeneous-agents/protocol';
+import type { LocalHeterogeneousAgentType } from '@lobechat/types';
 import debug from 'debug';
 
 import { appEnv } from '@/envs/app';
+import { sandboxEnv } from '@/envs/sandbox';
 import type { MarketService } from '@/server/services/market';
 import { createSandboxService } from '@/server/services/sandbox';
 
@@ -17,7 +19,7 @@ const log = debug('lobe-server:hetero-sandbox-runner');
 const shellQuote = (value: string): string => `'${value.replaceAll("'", "'\\''")}'`;
 
 export interface SandboxRunParams {
-  agentType: 'claude-code' | 'codex';
+  agentType: LocalHeterogeneousAgentType;
   /** Resolved `lh hetero exec` wrapper args. */
   args?: string[];
   /** Initial assistant placeholder message id — injected as LOBEHUB_ASSISTANT_MESSAGE_ID so
@@ -54,6 +56,25 @@ export interface SandboxRunParams {
   /** Topic/run workspace — injected as `LOBEHUB_WORKSPACE_ID` for ingest. */
   workspaceId?: string;
 }
+
+/**
+ * Extra environment the deployment has opted to forward into the sandbox.
+ *
+ * Coding CLIs outside the provider-binding set read their model provider from
+ * their own environment — OpenCode, for one, takes an entire inline config from
+ * `OPENCODE_CONFIG_CONTENT`. Rather than teach this runner about each CLI's
+ * variables, the operator names the ones that may cross into the box. An
+ * allowlist and not a passthrough: nothing the server happens to hold in its
+ * environment travels unless it was asked for by name.
+ */
+const buildForwardedEnv = (): string[] =>
+  (sandboxEnv.HETERO_SANDBOX_FORWARD_ENV?.split(',') ?? [])
+    .map((name) => name.trim())
+    .filter(Boolean)
+    .flatMap((name) => {
+      const value = process.env[name];
+      return value ? [`${name}=${shellQuote(value)}`] : [];
+    });
 
 /**
  * Derive the local directory name from a repo identifier.
@@ -206,6 +227,7 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
     // Inject GitHub token so CC can authenticate git operations and GitHub API
     // calls inside the sandbox (e.g. gh CLI, git push, API requests).
     ...(githubToken ? [`GITHUB_TOKEN=${shellQuote(githubToken)}`] : []),
+    ...buildForwardedEnv(),
   ].join(' ');
   const shellArgs = args.map(shellQuote).join(' ');
   const mainCommand = `echo ${shellQuote(base64Payload)} | base64 -d | ${envVars} ${shellArgs}`;

@@ -111,20 +111,35 @@ export interface ResolveExecutionTargetOptions {
   workspaceScoped?: boolean;
 }
 
-/** Whether a heterogeneous provider can run in LobeHub's cloud sandbox. */
-export const isHeterogeneousSandboxExecutionAvailable = (type: string | undefined): boolean =>
-  type !== 'amp' &&
-  type !== 'codebuddy' &&
-  type !== 'cursor' &&
-  type !== 'droid' &&
-  type !== 'devin' &&
-  type !== 'kimi-code' &&
-  type !== 'hermes' &&
-  type !== 'opencode' &&
-  type !== 'openclaw' &&
-  type !== 'pi' &&
-  type !== 'qoder' &&
-  type !== 'trae';
+/**
+ * Whether a heterogeneous provider can run in LobeHub's cloud sandbox.
+ *
+ * `sandboxAgentTypes` is the deployment's own answer, published in the server
+ * config: it names the CLIs its runtime image holds, which is the only thing
+ * that decides this. Callers that have it should pass it — the server gates
+ * dispatch on the same list, so a client deciding for itself can offer a target
+ * the server will refuse, or hide one it would have accepted.
+ *
+ * The literals below are the fallback for callers without that list.
+ */
+export const isHeterogeneousSandboxExecutionAvailable = (
+  type: string | undefined,
+  sandboxAgentTypes?: readonly string[],
+): boolean =>
+  sandboxAgentTypes?.length
+    ? !!type && sandboxAgentTypes.includes(type)
+    : type !== 'amp' &&
+      type !== 'codebuddy' &&
+      type !== 'cursor' &&
+      type !== 'droid' &&
+      type !== 'devin' &&
+      type !== 'kimi-code' &&
+      type !== 'hermes' &&
+      type !== 'opencode' &&
+      type !== 'openclaw' &&
+      type !== 'pi' &&
+      type !== 'qoder' &&
+      type !== 'trae';
 
 /**
  * Single source of truth for where an agent executes — one global
