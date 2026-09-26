@@ -14,6 +14,7 @@ import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import type { FtsSearchKnowledgeBaseDocumentHit } from '@/database/repositories/ftsSearch';
 import { knowledgeBaseFiles } from '@/database/schemas';
+import { readOriginalCharCount } from '@/database/utils/parsedDocument';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
@@ -26,6 +27,8 @@ export interface FileContentResult {
   fileId: string;
   filename: string;
   metadata?: Record<string, any> | null;
+  /** Original character count when the stored text was cut at parse time. */
+  originalCharCount?: number;
   preview?: string;
   totalCharCount?: number;
   totalLineCount?: number;
@@ -248,6 +251,7 @@ export class KnowledgeBaseSearchService {
             fileId: id,
             filename: doc.title || doc.filename || 'Untitled',
             metadata: doc.metadata,
+            originalCharCount: readOriginalCharCount(doc.metadata),
             preview: lines.slice(0, 5).join('\n'),
             totalCharCount: content.length,
             totalLineCount: lines.length,
@@ -288,6 +292,7 @@ export class KnowledgeBaseSearchService {
           fileId: id,
           filename: file.name,
           metadata: document.metadata,
+          originalCharCount: readOriginalCharCount(document.metadata),
           preview: lines.slice(0, 5).join('\n'),
           totalCharCount: content.length,
           totalLineCount: lines.length,

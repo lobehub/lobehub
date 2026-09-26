@@ -296,7 +296,9 @@ describe('LocalSystemExecutionRuntime.readFile', () => {
 
     const output = await runtime.readFile({ path: '/tmp/big.txt' });
 
-    expect(output.content).toBe('(lines 1-200 of 2545)\n1 first 200 lines…');
+    expect(output.content).toBe(
+      '1 first 200 lines…\n[Showing lines 1-200 of 2545 lines, 148370 characters. To continue, call readFile again with path="/tmp/big.txt" and loc=[200, 400].]',
+    );
   });
 
   it('omits the window marker when the window reaches the end of the file', async () => {
@@ -385,7 +387,9 @@ describe('LocalSystemExecutionRuntime.readFile', () => {
 
     const output = await runtime.readFile({ endLine: 200, path: '/tmp/big.txt', startLine: 1 });
 
-    expect(output.content).toContain('(lines 1-200 of 2545)');
+    expect(output.content).toContain(
+      '[Showing lines 1-200 of 2545 lines, 148370 characters. To continue, call readFile again with path="/tmp/big.txt", startLine=201 and endLine=400.]',
+    );
     expect(output.content).toContain('1 some lines');
   });
 
@@ -406,7 +410,9 @@ describe('LocalSystemExecutionRuntime.readFile', () => {
 
     const output = await runtime.readFile({ endLine: 200, path: '/tmp/big.txt' });
 
-    expect(output.content).toContain('(lines 1-200 of 2545)');
+    expect(output.content).toContain(
+      '[Showing lines 1-200 of 2545 lines, 148370 characters. To continue, call readFile again with path="/tmp/big.txt", startLine=201 and endLine=400.]',
+    );
     expect(output.content).toContain('1 some lines');
   });
 

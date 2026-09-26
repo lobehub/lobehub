@@ -7,15 +7,17 @@ import { promptAgentKnowledge } from './knowledgeBase';
 
 describe('promptAgentKnowledge', () => {
   it('should preview oversized agent files instead of inlining them', () => {
-    const content = `${'a'.repeat(FILE_PREVIEW_CHARS)}${'b'.repeat(FILE_INLINE_MAX_CHARS)}`;
+    const content = `${'a'.repeat(FILE_PREVIEW_CHARS)}\n${'b'.repeat(FILE_INLINE_MAX_CHARS)}`;
     const result = promptAgentKnowledge({
       fileContents: [{ content, fileId: 'file1', filename: 'big.csv' }],
     });
 
     expect(result).toContain(
-      `<file id="file1" name="big.csv" truncated="true" total_chars="${content.length}" total_lines="1">`,
+      `<file id="file1" name="big.csv" lines="1-1" total_lines="2" total_chars="${content.length}" truncated="true">`,
     );
-    expect(result).toContain('readKnowledge tool');
+    expect(result).toContain(
+      'To continue, call readKnowledge with fileIds=["file1"] and offset=2.',
+    );
     expect(result).not.toContain('bbbb');
   });
 

@@ -125,15 +125,15 @@ Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu 
         range: {
           endLine: 0,
           startLine: 900,
-          totalCharCount: 100,
-          totalLineCount: 800,
+          totalChars: 100,
+          totalLines: 800,
           truncated: false,
         },
       },
     ]);
 
     expect(result).toContain('lines="900-0"');
-    expect(result).toContain('offset 900 is past the end of this 800-line file');
+    expect(result).toContain('Line 900 is past the end of this text (800 lines, 100 characters)');
   });
 
   it('should explain a line that was cut to fit the per-call cap', () => {
@@ -146,15 +146,17 @@ Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu 
           cutLine: { keptChars: 10, line: 1, totalChars: 30_000 },
           endLine: 1,
           startLine: 1,
-          totalCharCount: 30_002,
-          totalLineCount: 2,
+          totalChars: 30_002,
+          totalLines: 2,
           truncated: true,
         },
       },
     ]);
 
     expect(result).toContain('Line 1 is 30000 characters long and was cut at 10');
-    expect(result).toContain('offset=2 to continue with the next line');
+    expect(result).toContain(
+      'To continue with the next line, call readKnowledge with fileIds=["file-cut"] and offset=2.',
+    );
   });
 
   it('should render a paged window with range attributes and a continue notice', () => {
@@ -166,8 +168,8 @@ Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu 
         range: {
           endLine: 2,
           startLine: 1,
-          totalCharCount: 30_334,
-          totalLineCount: 800,
+          totalChars: 30_334,
+          totalLines: 800,
           truncated: true,
         },
       },
@@ -178,8 +180,8 @@ Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu 
         range: {
           endLine: 1,
           startLine: 1,
-          totalCharCount: 9,
-          totalLineCount: 1,
+          totalChars: 9,
+          totalLines: 1,
           truncated: false,
         },
       },
@@ -187,8 +189,33 @@ Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu 
 
     const result = promptFileContents(fileContents);
     expect(result).toMatchSnapshot();
-    expect(result).toContain('lines="1-2" totalLines="800" totalChars="30334" truncated="true"');
-    expect(result).toContain('Call readKnowledge again with offset=3 to continue.');
-    expect(result).not.toContain('offset=2 to continue');
+    expect(result).toContain('lines="1-2" total_lines="800" total_chars="30334" truncated="true"');
+    expect(result).toContain(
+      '[Showing lines 1-2 of 800 lines, 30334 characters. To continue, call readKnowledge with fileIds=["file-paged"] and offset=3.]',
+    );
+    expect(result).not.toContain('offset=2');
+  });
+
+  it('should say the stored text is incomplete when the original file was longer', () => {
+    const result = promptFileContents([
+      {
+        content: 'last line',
+        fileId: 'file-capped',
+        filename: 'huge.csv',
+        originalChars: 9_000_000,
+        range: {
+          endLine: 80,
+          startLine: 80,
+          totalChars: 5_000_000,
+          totalLines: 80,
+          truncated: false,
+        },
+      },
+    ]);
+
+    expect(result).toContain('truncated="true" original_chars="9000000"');
+    expect(result).toContain(
+      'only the first 5000000 of the original 9000000 characters were kept, ending at line 80',
+    );
   });
 });

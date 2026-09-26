@@ -50,6 +50,12 @@ export interface ChatFileItem {
    */
   inaccessible?: boolean;
   name: string;
+  /**
+   * Character count of the original parsed text when the stored `content` was cut at parse time
+   * (see `metadata.originalCharCount` on the document). Lets prompts tell the model the text is
+   * incomplete instead of leaving it to guess from the file size.
+   */
+  originalCharCount?: number;
   size: number;
   url: string;
 }

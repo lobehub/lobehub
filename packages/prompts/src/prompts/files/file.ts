@@ -1,5 +1,12 @@
 import type { ChatFileItem } from '@lobechat/types';
 
+import {
+  formatTextWindowAttributes,
+  formatTextWindowNotice,
+  sliceTextWindow,
+} from '../../textWindow';
+import { readKnowledgeContinuation } from '../knowledgeBaseQA/formatFileContents';
+
 /**
  * Attachments whose extracted text exceeds this many characters are previewed instead of inlined.
  *
@@ -13,32 +20,44 @@ export const FILE_INLINE_MAX_CHARS = 100_000;
 /** Leading characters kept as a preview when an attachment exceeds `FILE_INLINE_MAX_CHARS`. */
 export const FILE_PREVIEW_CHARS = 4000;
 
-const countLines = (content: string) => {
-  let lines = 1;
-  for (let index = content.indexOf('\n'); index !== -1; index = content.indexOf('\n', index + 1)) {
-    lines += 1;
-  }
-  return lines;
-};
+export interface PreviewLongFileContentOptions {
+  /** File id the model passes to `readKnowledge` to page through the rest. */
+  fileId: string;
+  /** Original character count when the stored text was cut at parse time. */
+  originalChars?: number;
+}
 
 /**
- * Inline a file's text, or replace it with a preview when it exceeds `FILE_INLINE_MAX_CHARS`.
- * The returned attributes tell the model the full size so it can page through the rest with
- * `readKnowledge`, which the runtime enables whenever such a preview is sent.
+ * Inline a file's text, or replace it with a preview when it exceeds `FILE_INLINE_MAX_CHARS` or
+ * its stored text is known to be incomplete. The preview uses the shared text-window contract:
+ * attributes report the window and full size, and the notice names the exact `readKnowledge` call
+ * for the next window. The runtime enables `readKnowledge` whenever such a preview is sent.
  */
-export const previewLongFileContent = (content: string) => {
-  if (content.length <= FILE_INLINE_MAX_CHARS) return { attributes: '', body: content };
+export const previewLongFileContent = (
+  content: string,
+  { fileId, originalChars }: PreviewLongFileContentOptions,
+) => {
+  const storedCut = originalChars !== undefined && originalChars > content.length;
+  if (content.length <= FILE_INLINE_MAX_CHARS && !storedCut) {
+    return { attributes: '', body: content };
+  }
 
-  const totalLines = countLines(content);
+  const window = sliceTextWindow(content, { maxChars: FILE_PREVIEW_CHARS });
+  const options = { continueFrom: readKnowledgeContinuation(fileId), originalChars };
+  const notice = formatTextWindowNotice(window, options);
+
   return {
-    attributes: ` truncated="true" total_chars="${content.length}" total_lines="${totalLines}"`,
-    body: `${content.slice(0, FILE_PREVIEW_CHARS)}
-[Only the first ${FILE_PREVIEW_CHARS} of ${content.length} characters (${totalLines} lines) are shown. Do not treat this preview as the complete file. Read the rest with the readKnowledge tool, passing this file id and an offset to page through it; if the task needs the whole file (for example aggregating a large table), process it in a code sandbox or at its local path when available. Do not ask the user to paste it.]`,
+    attributes: formatTextWindowAttributes(window, options),
+    body: `${window.content}
+[This is a preview, not the complete file. Do not ask the user to paste the rest.]${notice ? `\n${notice}` : ''}`,
   };
 };
 
 const filePrompt = (item: ChatFileItem, addUrl: boolean) => {
-  const { attributes, body } = previewLongFileContent(item.content || '');
+  const { attributes, body } = previewLongFileContent(item.content || '', {
+    fileId: item.id,
+    originalChars: item.originalCharCount,
+  });
   return addUrl
     ? `<file id="${item.id}" name="${item.name}" type="${item.fileType}" size="${item.size}" url="${item.url}"${attributes}>${body}</file>`
     : `<file id="${item.id}" name="${item.name}" type="${item.fileType}" size="${item.size}"${attributes}>${body}</file>`;

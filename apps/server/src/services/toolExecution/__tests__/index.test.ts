@@ -316,7 +316,7 @@ describe('ToolExecutionService', () => {
     );
 
     expect(result.content).toContain('01234');
-    expect(result.content).toContain('Content truncated');
+    expect(result.content).toContain('[Showing lines 1-');
   });
 
   /**
@@ -352,7 +352,7 @@ describe('ToolExecutionService', () => {
     const message = (result.error as { message: string }).message;
     expect(message.length).toBeLessThan(5000);
     expect(message).toContain('Command failed with exit code 1');
-    expect(message).toContain('Content truncated');
+    expect(message).toContain('[Showing lines 1-');
     // The archival opt-out covers the LLM-facing content, never the error.
     expect(result.content).toBe(runawayOutput);
   });

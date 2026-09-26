@@ -4,7 +4,8 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
-    "./fileSystem": "./src/prompts/fileSystem/index.ts"
+    "./fileSystem": "./src/prompts/fileSystem/index.ts",
+    "./textWindow": "./src/textWindow/index.ts"
   },
   "main": "./src/index.ts",
   "scripts": {

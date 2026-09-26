@@ -399,10 +399,32 @@ describe('filesPrompts', () => {
       const result = filesPrompts({ addUrl: true, fileList: [{ ...mockFile, content }] });
 
       expect(result).toContain(
-        `url="https://example.com/test.pdf" truncated="true" total_chars="${content.length}" total_lines="1">${'a'.repeat(FILE_PREVIEW_CHARS)}\n[Only the first ${FILE_PREVIEW_CHARS} of ${content.length} characters (1 lines) are shown.`,
+        `url="https://example.com/test.pdf" lines="1-1" total_lines="1" total_chars="${content.length}" truncated="true">${'a'.repeat(FILE_PREVIEW_CHARS)}\n[This is a preview, not the complete file.`,
       );
-      expect(result).toContain('readKnowledge tool, passing this file id and an offset');
+      expect(result).toContain(
+        `Line 1 is ${content.length} characters long and was cut at ${FILE_PREVIEW_CHARS}`,
+      );
       expect(result).not.toContain('bbbb');
+    });
+
+    it('previews whole lines and names the readKnowledge call for the next window', () => {
+      const content = 'row,value\n'.repeat(FILE_INLINE_MAX_CHARS / 10 + 1);
+      const result = filesPrompts({ addUrl: false, fileList: [{ ...mockFile, content }] });
+
+      expect(result).toContain(`lines="1-400" total_lines="${FILE_INLINE_MAX_CHARS / 10 + 2}"`);
+      expect(result).toContain(
+        `To continue, call readKnowledge with fileIds=["${mockFile.id}"] and offset=401.`,
+      );
+    });
+
+    it('marks stored text that was cut at parse time even when it is short', () => {
+      const result = filesPrompts({
+        addUrl: false,
+        fileList: [{ ...mockFile, content: 'head', originalCharCount: 9_000_000 }],
+      });
+
+      expect(result).toContain('truncated="true" original_chars="9000000"');
+      expect(result).toContain('only the first 4 of the original 9000000 characters were kept');
     });
 
     it('counts lines of oversized content', () => {

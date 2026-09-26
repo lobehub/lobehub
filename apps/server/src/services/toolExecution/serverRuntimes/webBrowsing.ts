@@ -29,7 +29,7 @@ export const webBrowsingRuntime: ServerRuntimeRegistration = {
                 context.workspaceId,
                 agentVisibility,
               );
-              await service.associateDocument(agentId, documentId);
+              return service.associateDocument(agentId, documentId);
             },
             createDocument: async (params) => {
               // Same service the client trpc procedure uses — dedupe by URL,

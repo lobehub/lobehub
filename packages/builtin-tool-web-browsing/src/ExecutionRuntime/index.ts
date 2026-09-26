@@ -1,4 +1,5 @@
 import { crawlResultsPrompt, searchResultsPrompt } from '@lobechat/prompts';
+import { appendTextWindowNotice, sliceTextWindow } from '@lobechat/prompts/textWindow';
 import type {
   BuiltinServerRuntimeOutput,
   CrawlMultiPagesQuery,
@@ -12,7 +13,8 @@ import type { CrawlSuccessResult } from '@lobechat/web-crawler';
 import { CRAWL_CONTENT_LIMITED_COUNT, SEARCH_ITEM_LIMITED_COUNT } from '../const';
 
 export interface WebBrowsingDocumentService {
-  associateDocument: (documentId: string) => Promise<void>;
+  /** Returns the agent document binding when one was created, so its id can be handed to the model. */
+  associateDocument: (documentId: string) => Promise<{ id?: string } | void>;
   createDocument: (params: {
     content: string;
     description?: string;
@@ -90,7 +92,9 @@ export class WebBrowsingExecutionRuntime {
 
     const { results } = response;
 
-    // Save crawled pages as documents and associate with agent
+    // Save crawled pages as documents and associate with agent. The agent document id lets a
+    // truncated page point the model at the full saved copy.
+    const savedDocumentIds = new Map<string, string>();
     if (this.documentService) {
       await Promise.all(
         results.map(async (item) => {
@@ -107,7 +111,8 @@ export class WebBrowsingExecutionRuntime {
               url: pageData.url,
             });
 
-            await this.documentService!.associateDocument(doc.id);
+            const binding = await this.documentService!.associateDocument(doc.id);
+            if (binding?.id) savedDocumentIds.set(pageData.url, binding.id);
           } catch (error) {
             console.error('[WebBrowsing] Failed to save crawl result to agent document:', error);
           }
@@ -115,17 +120,29 @@ export class WebBrowsingExecutionRuntime {
       );
     }
 
-    const content = results.map((item) =>
-      'errorMessage' in item.data
-        ? // keep the failing url attached so the model knows which page to give up on
-          { ...item.data, url: item.data.url ?? item.originalUrl }
-        : {
-            ...item.data,
-            // if crawl too many content
-            // slice the top 10000 char
-            content: item.data.content?.slice(0, CRAWL_CONTENT_LIMITED_COUNT),
-          },
-    );
+    const content = results.map((item) => {
+      // keep the failing url attached so the model knows which page to give up on
+      if ('errorMessage' in item.data)
+        return { ...item.data, url: item.data.url ?? item.originalUrl };
+
+      const pageData = item.data as CrawlSuccessResult;
+      if (!pageData.content || pageData.content.length <= CRAWL_CONTENT_LIMITED_COUNT) {
+        return pageData;
+      }
+
+      const savedId = savedDocumentIds.get(pageData.url);
+      const window = sliceTextWindow(pageData.content, { maxChars: CRAWL_CONTENT_LIMITED_COUNT });
+
+      return {
+        ...pageData,
+        content: appendTextWindowNotice(window, {
+          continueFrom: savedId
+            ? (line) =>
+                `call lobe-agent-documents readDocument with id="${savedId}", format="markdown" and offset=${line}`
+            : undefined,
+        }),
+      };
+    });
     const xmlContent = crawlResultsPrompt(content as any);
 
     return {

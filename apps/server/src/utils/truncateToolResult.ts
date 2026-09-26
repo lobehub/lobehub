@@ -1,3 +1,9 @@
+import {
+  appendTextWindowNotice,
+  sliceTextWindow,
+  type TextWindow,
+} from '@lobechat/prompts/textWindow';
+
 /**
  * Shared utility for truncating tool execution results
  * Used by both frontend tRPC routers and backend tool execution service
@@ -16,8 +22,15 @@ export const DEFAULT_TOOL_RESULT_MAX_LENGTH = 25_000;
 export const ARCHIVE_BYPASS_IDENTIFIERS = new Set<string>(['lobe-agent-documents']);
 
 /**
- * Truncate tool result content if it exceeds the maximum length
- * Adds a truncation notice to inform the LLM that content was cut off
+ * The leading window of an oversized tool result: whole lines up to `maxLength` characters, using
+ * the shared text-window contract so archived results can be paged with the same line numbers.
+ */
+export const sliceToolResult = (content: string, maxLength?: number): TextWindow =>
+  sliceTextWindow(content, { maxChars: maxLength ?? DEFAULT_TOOL_RESULT_MAX_LENGTH });
+
+/**
+ * Truncate tool result content if it exceeds the maximum length.
+ * Keeps whole leading lines and appends the shared notice with the shown range and total size.
  *
  * @param content - The tool result content to truncate
  * @param maxLength - Maximum allowed length (uses default if not provided)
@@ -30,23 +43,7 @@ export function truncateToolResult(content: string, maxLength?: number): string 
     return content;
   }
 
-  // Avoid splitting a UTF-16 surrogate pair: if the cutoff lands right after a
-  // high surrogate (e.g. half of an emoji), step back one code unit. Otherwise
-  // JSON.stringify emits a lone `\uD83D`-style escape, which some upstream
-  // providers (DeepSeek, Anthropic) reject as "unexpected end of hex escape".
-  let cutoff = limit;
-  const lastCharCode = content.charCodeAt(cutoff - 1);
-  if (lastCharCode >= 0xd8_00 && lastCharCode <= 0xdb_ff) {
-    cutoff -= 1;
-  }
-
-  const truncated = content.slice(0, cutoff);
-  const remainingChars = content.length - cutoff;
-
-  // Add truncation notice
-  const notice = `\n\n[Content truncated: ${remainingChars.toLocaleString()} characters omitted to prevent context overflow. Original length: ${content.length.toLocaleString()} characters]`;
-
-  return truncated + notice;
+  return appendTextWindowNotice(sliceToolResult(content, limit));
 }
 
 /**

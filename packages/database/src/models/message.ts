@@ -104,6 +104,34 @@ import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { recomputeTopicUsage } from './topicUsage';
 import { WorkModel } from './work';
 
+/**
+ * Parsed-document columns attached to chat file items. `originalCharCount` is only set when the
+ * stored text was cut at parse time; prompts use it to tell the model the text is incomplete.
+ * Selected as a scalar so the rest of `metadata` never leaves the database.
+ */
+const fileDocumentColumns = {
+  content: documents.content,
+  fileId: documents.fileId,
+  originalCharCount: sql<
+    number | null
+  >`(${documents.metadata} ->> 'originalCharCount')::bigint`.mapWith(Number),
+};
+
+type FileDocumentsMap = Record<string, { content: string; originalCharCount?: number }>;
+
+const toFileDocumentsMap = (
+  rows: { content: string | null; fileId: string | null; originalCharCount: number | null }[],
+): FileDocumentsMap =>
+  rows.reduce<FileDocumentsMap>((acc, doc) => {
+    if (doc.fileId) {
+      acc[doc.fileId] = {
+        content: doc.content as string,
+        originalCharCount: doc.originalCharCount ?? undefined,
+      };
+    }
+    return acc;
+  }, {});
+
 const createChatImageItem = ({
   id,
   metadata,
@@ -316,7 +344,7 @@ interface ActiveBranchSnapshot {
 }
 
 interface MessageFileRelations {
-  documentsMap: Record<string, string>;
+  documentsMap: FileDocumentsMap;
   relatedFileList: MessageRelatedFile[];
 }
 
@@ -1672,7 +1700,8 @@ export class MessageModel {
                   name === null
                     ? { fileType: '', id, inaccessible: true, name: '', size: 0, url: '' }
                     : {
-                        content: documentsMap[id],
+                        content: documentsMap[id]?.content,
+                        originalCharCount: documentsMap[id]?.originalCharCount,
                         fileType: fileType!,
                         id,
                         name,
@@ -1890,22 +1919,13 @@ export class MessageModel {
       'db.message.queryWithWhere.documents.select',
       () =>
         this.db
-          .select({
-            content: documents.content,
-            fileId: documents.fileId,
-          })
+          .select(fileDocumentColumns)
           .from(documents)
           .where(inArray(documents.fileId, fileIds)),
       { fileCount: fileIds.length },
     );
 
-    const documentsMap = documentsList.reduce(
-      (acc, doc) => {
-        if (doc.fileId) acc[doc.fileId] = doc.content as string;
-        return acc;
-      },
-      {} as Record<string, string>,
-    );
+    const documentsMap = toFileDocumentsMap(documentsList);
 
     return { documentsMap, relatedFileList };
   };
@@ -2279,24 +2299,15 @@ export class MessageModel {
       .map((file) => file.id)
       .filter(Boolean);
 
-    let documentsMap: Record<string, string> = {};
+    let documentsMap: FileDocumentsMap = {};
 
     if (fileIds.length > 0) {
       const documentsList = await this.db
-        .select({
-          content: documents.content,
-          fileId: documents.fileId,
-        })
+        .select(fileDocumentColumns)
         .from(documents)
         .where(inArray(documents.fileId, fileIds));
 
-      documentsMap = documentsList.reduce(
-        (acc, doc) => {
-          if (doc.fileId) acc[doc.fileId] = doc.content as string;
-          return acc;
-        },
-        {} as Record<string, string>,
-      );
+      documentsMap = toFileDocumentsMap(documentsList);
     }
 
     const imageList = relatedFileList.filter((i) => (i.fileType || '').startsWith('image'));
@@ -2377,7 +2388,8 @@ export class MessageModel {
               name === null
                 ? { fileType: '', id, inaccessible: true, name: '', size: 0, url: '' }
                 : {
-                    content: documentsMap[id],
+                    content: documentsMap[id]?.content,
+                    originalCharCount: documentsMap[id]?.originalCharCount,
                     fileType: fileType!,
                     id,
                     name,

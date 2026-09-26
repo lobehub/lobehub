@@ -46,6 +46,10 @@ export interface CreateDocumentState {
 export interface ReadDocumentArgs {
   format?: 'xml' | 'markdown' | 'both';
   id: string;
+  /** Maximum number of lines to return. */
+  limit?: number;
+  /** 1-based line to start reading from. */
+  offset?: number;
 }
 
 export interface ReadDocumentState {

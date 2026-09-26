@@ -19,8 +19,8 @@ describe('sliceReadWindow', () => {
       content,
       endLine: 3,
       startLine: 1,
-      totalCharCount: 5,
-      totalLineCount: 3,
+      totalChars: 5,
+      totalLines: 3,
       truncated: false,
     });
   });
@@ -57,7 +57,7 @@ describe('sliceReadWindow', () => {
     expect(window.startLine).toBe(5);
     expect(window.endLine).toBe(0);
     expect(window.truncated).toBe(false);
-    expect(window.totalLineCount).toBe(2);
+    expect(window.totalLines).toBe(2);
   });
 
   it('stops before exceeding the per-file character cap', () => {

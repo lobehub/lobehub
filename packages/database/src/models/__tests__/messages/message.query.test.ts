@@ -2417,6 +2417,51 @@ describe('MessageModel Query Tests', () => {
       expect(result[0].fileList).toHaveLength(1);
       expect(result[0].fileList![0].id).toBe(fileId);
       expect(result[0].fileList![0].content).toBe('This is the document content for testing');
+      expect(result[0].fileList![0].originalCharCount).toBeUndefined();
+    });
+
+    it('should report the original size of document text cut at parse time', async () => {
+      const fileId = uuid();
+
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values({ id: 'session1', userId });
+        await trx.insert(files).values({
+          fileType: 'text/csv',
+          id: fileId,
+          name: 'big.csv',
+          size: 5000,
+          url: 'big.csv',
+          userId,
+        });
+        await trx.insert(documents).values({
+          content: 'stored head',
+          fileId,
+          fileType: 'text/csv',
+          metadata: { originalCharCount: 9_000_000, truncated: true },
+          source: 'big.csv',
+          sourceType: 'file',
+          totalCharCount: 11,
+          totalLineCount: 1,
+          userId,
+        });
+
+        const messageId = uuid();
+        await trx.insert(messages).values({
+          content: 'Message with a capped document',
+          id: messageId,
+          role: 'user',
+          sessionId: 'session1',
+          userId,
+        });
+        await trx.insert(messagesFiles).values({ fileId, messageId, userId });
+      });
+
+      const result = await messageModel.query({ sessionId: 'session1' });
+
+      expect(result[0].fileList![0]).toMatchObject({
+        content: 'stored head',
+        originalCharCount: 9_000_000,
+      });
     });
   });
 

@@ -1,6 +1,11 @@
 import { createHash } from 'node:crypto';
 
 import type { LobeChatDatabase } from '@lobechat/database';
+import {
+  appendTextWindowNotice,
+  formatTextWindowNotice,
+  type TextWindow,
+} from '@lobechat/prompts/textWindow';
 import debug from 'debug';
 import { sql } from 'drizzle-orm';
 
@@ -9,7 +14,7 @@ import { AgentDocumentVfsService } from '@/server/services/agentDocumentVfs';
 import {
   ARCHIVE_BYPASS_IDENTIFIERS,
   DEFAULT_TOOL_RESULT_MAX_LENGTH,
-  truncateToolResult,
+  sliceToolResult,
 } from '@/server/utils/truncateToolResult';
 
 import { TOOL_RESULTS_DIR_NAME } from './constants';
@@ -79,16 +84,25 @@ const hashArchiveContent = (content: string) =>
 const getErrorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error || 'Unknown archive error');
 
+/**
+ * The model sees the leading window of the result plus the shared notice, whose continuation
+ * pages the archive through `readDocument` with the same line numbers.
+ */
 const buildArchivedContent = (
-  truncatedContent: string,
+  window: TextWindow,
   archivePath: string,
   agentDocumentId?: string,
 ) => {
+  const documentId = agentDocumentId ?? '<Agent Document ID>';
+  const notice = formatTextWindowNotice(window, {
+    continueFrom: (line) =>
+      `call lobe-agent-documents readDocument with id="${documentId}", format="markdown" and offset=${line}`,
+  });
   const agentDocumentIdHint =
     agentDocumentId ??
     '(call lobe-agent-documents.listDocuments with scope=currentTopic to look up)';
 
-  return `${truncatedContent}\nFull content archived to the agent-document VFS.\nPath: ${archivePath}\nAgent Document ID: ${agentDocumentIdHint}\nTo inspect specific sections, call the lobe-agent-documents tool with apiName=readDocument and id=<Agent Document ID above>. Do NOT activate cloud-sandbox or local-system file tools — this archive exists only inside the agent document tree.`;
+  return `${window.content}\n${notice}\nFull content archived to the agent-document VFS.\nPath: ${archivePath}\nAgent Document ID: ${agentDocumentIdHint}\nRead it with the lobe-agent-documents tool: apiName=readDocument, id=<Agent Document ID above>, format="markdown", and offset/limit to page by line. Do NOT activate cloud-sandbox or local-system file tools — this archive exists only inside the agent document tree.`;
 };
 
 export const archiveToolResultIfNeeded = async ({
@@ -112,7 +126,8 @@ export const archiveToolResultIfNeeded = async ({
     return { archived: false, content };
   }
 
-  const truncatedContent = truncateToolResult(content, maxLength);
+  const window = sliceToolResult(content, maxLength);
+  const truncatedContent = appendTextWindowNotice(window);
 
   if (!agentId || !topicId || !toolCallId || !serverDB || !userId) {
     return { archived: false, content: truncatedContent };
@@ -211,7 +226,7 @@ export const archiveToolResultIfNeeded = async ({
     return {
       archivePath: handle.archivePath,
       archived: true,
-      content: buildArchivedContent(truncatedContent, handle.archivePath, handle.agentDocumentId),
+      content: buildArchivedContent(window, handle.archivePath, handle.agentDocumentId),
     };
   } catch (error) {
     const message = getErrorMessage(error);

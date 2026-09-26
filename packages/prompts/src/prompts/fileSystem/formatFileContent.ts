@@ -1,5 +1,12 @@
+import { formatTextWindowNotice, type TextWindowNoticeOptions } from '../../textWindow';
+
 export interface FormatFileContentParams {
   content: string;
+  /**
+   * Builds the call that reads the next window from a 1-based line. The read tools differ in
+   * argument shape (`loc` vs `startLine`), so each caller supplies its own.
+   */
+  continueFrom?: TextWindowNoticeOptions['continueFrom'];
   /**
    * 1-based line number of the first content line. When set, every line is
    * prefixed with its line number (right-aligned, space-separated) so the
@@ -7,6 +14,7 @@ export interface FormatFileContentParams {
    */
   firstLineNumber?: number;
   lineRange?: [number, number];
+  totalChars?: number;
   totalLines?: number;
   /**
    * The service cut the content at its character cap, so the window's tail
@@ -50,7 +58,9 @@ const numberLines = (
 
 export const formatFileContent = ({
   content,
+  continueFrom,
   lineRange,
+  totalChars,
   totalLines,
   firstLineNumber,
   truncated,
@@ -72,9 +82,9 @@ export const formatFileContent = ({
     capped = true;
   }
 
-  // Only a window that stops before EOF gets a marker — that's the one piece
-  // of information the numbered lines can't convey (how much is left). A
-  // capped payload never claims the full window.
+  // Only a window that stops before EOF gets the shared window notice — how
+  // much is left and how to read it is the one piece of information the
+  // numbered lines can't convey. A capped payload never claims the full window.
   if (
     truncated ||
     capped ||
@@ -86,8 +96,17 @@ export const formatFileContent = ({
     return body;
   }
 
-  const start = firstLineNumber ?? lineRange[0];
-  const marker = `(lines ${start}-${start + (end - lineRange[0]) - 1} of ${totalLines})`;
+  const startLine = firstLineNumber ?? lineRange[0];
+  const notice = formatTextWindowNotice(
+    {
+      endLine: startLine + (end - lineRange[0]) - 1,
+      startLine,
+      totalChars,
+      totalLines,
+      truncated: true,
+    },
+    { continueFrom },
+  );
 
-  return `${marker}\n${body}`;
+  return `${body}\n${notice}`;
 };

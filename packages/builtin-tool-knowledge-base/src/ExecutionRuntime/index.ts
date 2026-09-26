@@ -32,6 +32,8 @@ interface FileContentResult {
   error?: string;
   fileId: string;
   filename: string;
+  /** Original character count when the stored text was cut at parse time. */
+  originalCharCount?: number;
   preview?: string;
   totalCharCount?: number;
   totalLineCount?: number;
@@ -344,14 +346,8 @@ export class KnowledgeBaseExecutionRuntime {
                 content: window.content,
                 fileId: file.fileId,
                 filename: file.filename,
-                range: {
-                  cutLine: window.cutLine,
-                  endLine: window.endLine,
-                  startLine: window.startLine,
-                  totalCharCount: window.totalCharCount,
-                  totalLineCount: window.totalLineCount,
-                  truncated: window.truncated,
-                },
+                originalChars: file.originalCharCount,
+                range: window,
               }
             : {
                 content: file.content,
@@ -372,8 +368,8 @@ export class KnowledgeBaseExecutionRuntime {
           // its own first lines on the card instead of the file head.
           preview: window ? window.content.split('\n').slice(0, 5).join('\n') : file.preview,
           startLine: window?.startLine,
-          totalCharCount: file.totalCharCount ?? window?.totalCharCount,
-          totalLineCount: file.totalLineCount ?? window?.totalLineCount,
+          totalCharCount: file.totalCharCount ?? window?.totalChars,
+          totalLineCount: file.totalLineCount ?? window?.totalLines,
           truncated: window?.truncated,
         })),
       };

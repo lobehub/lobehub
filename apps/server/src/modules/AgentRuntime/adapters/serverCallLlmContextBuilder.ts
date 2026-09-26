@@ -146,11 +146,19 @@ export const buildServerCallLlmContext = async ({
     knowledge: {
       fileContents: agentConfig.files
         ?.filter((file: { enabled?: boolean | null }) => file.enabled === true)
-        .map((file: { content?: string | null; id?: string; name?: string }) => ({
-          content: file.content ?? '',
-          fileId: file.id ?? '',
-          filename: file.name ?? '',
-        })),
+        .map(
+          (file: {
+            content?: string | null;
+            id?: string;
+            name?: string;
+            originalCharCount?: number;
+          }) => ({
+            content: file.content ?? '',
+            fileId: file.id ?? '',
+            filename: file.name ?? '',
+            originalChars: file.originalCharCount,
+          }),
+        ),
       knowledgeBases: agentConfig.knowledgeBases
         ?.filter((knowledgeBase: { enabled?: boolean | null }) => knowledgeBase.enabled === true)
         .map((knowledgeBase: { id?: string; name?: string }) => ({

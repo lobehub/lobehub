@@ -85,6 +85,7 @@ import { rehomeAgentQuotaBindingsForRecipient } from '../utils/agentQuotaBinding
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { resolveGroupMembershipType } from '../utils/groupMembership';
 import { normalizeInboxAgentMeta } from '../utils/inboxAgent';
+import { readOriginalCharCount } from '../utils/parsedDocument';
 import { sanitizeAgentApiConfig } from '../utils/sanitizeAgentApiConfig';
 import { notShareVisitorTopic } from '../utils/shareVisitor';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
@@ -784,19 +785,24 @@ export class AgentModel {
       .filter((f) => f.enabled)
       .map((f) => f.id)
       .filter((id) => id !== undefined);
-    let files: Array<(typeof knowledge.files)[number] & { content?: string | null }> =
-      knowledge.files;
+    let files: Array<
+      (typeof knowledge.files)[number] & { content?: string | null; originalCharCount?: number }
+    > = knowledge.files;
 
     if (enabledFileIds.length > 0) {
       const documentsData = await this.db.query.documents.findMany({
         where: and(this.documentsOwnership(), inArray(documents.fileId, enabledFileIds)),
       });
 
-      const documentMap = new Map(documentsData.map((doc) => [doc.fileId, doc.content]));
-      files = knowledge.files.map((file) => ({
-        ...file,
-        content: file.enabled && file.id ? documentMap.get(file.id) : undefined,
-      }));
+      const documentMap = new Map(documentsData.map((doc) => [doc.fileId, doc]));
+      files = knowledge.files.map((file) => {
+        const document = file.enabled && file.id ? documentMap.get(file.id) : undefined;
+        return {
+          ...file,
+          content: document?.content,
+          originalCharCount: readOriginalCharCount(document?.metadata),
+        };
+      });
     }
 
     return { ...normalizedAgent, ...knowledge, files };

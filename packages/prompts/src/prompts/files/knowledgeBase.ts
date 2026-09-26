@@ -23,7 +23,10 @@ const formatFileContent = (file: FileContent): string => {
   }
 
   // Agent files are re-sent on every turn, so oversized ones get the same preview as attachments.
-  const { attributes, body } = previewLongFileContent(file.content);
+  const { attributes, body } = previewLongFileContent(file.content, {
+    fileId: file.fileId,
+    originalChars: file.originalChars,
+  });
   return `<file id="${file.fileId}" name="${file.filename}"${attributes}>
 ${body}
 </file>`;
