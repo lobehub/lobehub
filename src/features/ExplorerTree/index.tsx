@@ -11,8 +11,12 @@ export {
 } from './folderIconStyle';
 export type {
   ExplorerTreeCanDropCtx,
+  ExplorerTreeCreateEvent,
+  ExplorerTreeEntryKind,
   ExplorerTreeHandle,
+  ExplorerTreeKeyDownCtx,
   ExplorerTreeMoveEvent,
+  ExplorerTreeNameCheck,
   ExplorerTreeNode,
   ExplorerTreeProps,
   ExplorerTreeRowDecorationCtx,

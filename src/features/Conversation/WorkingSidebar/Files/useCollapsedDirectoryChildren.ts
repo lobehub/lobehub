@@ -1,8 +1,10 @@
 import type { ProjectFileIndexEntry } from '@lobechat/electron-client-ipc';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { useSingleton } from '@/hooks/useSingleton';
 import { projectFileService } from '@/services/projectFile';
+
+import { getParentRelativePath } from './treePaths';
 
 interface UseCollapsedDirectoryChildrenParams {
   deviceId?: string;
@@ -15,6 +17,11 @@ interface UseCollapsedDirectoryChildrenParams {
 
 interface CollapsedDirectoryChildren {
   children: ProjectFileIndexEntry[];
+  /**
+   * Forget every listing so expanded collapsed directories are read again —
+   * call it after a write, since the listings are not part of the SWR index.
+   */
+  invalidate: () => void;
   /** Expanded directories whose on-disk listing exceeded the host-side cap. */
   truncatedCount: number;
 }
@@ -76,9 +83,15 @@ export const useCollapsedDirectoryChildren = ({
             const base = previous.scopeKey === scopeKey ? previous.entries : [];
             const baseTruncated = previous.scopeKey === scopeKey ? previous.truncatedDirs : [];
             const freshPaths = new Set(result.entries.map((child) => child.relativePath));
+            // A re-read replaces the directory's listing, so drop children
+            // that are gone from disk along with the ones being refreshed.
             return {
               entries: [
-                ...base.filter((child) => !freshPaths.has(child.relativePath)),
+                ...base.filter(
+                  (child) =>
+                    !freshPaths.has(child.relativePath) &&
+                    getParentRelativePath(child.relativePath) !== id,
+                ),
                 ...result.entries,
               ],
               scopeKey,
@@ -97,5 +110,12 @@ export const useCollapsedDirectoryChildren = ({
     }
   }, [children, deviceId, entries, expandedIds, projectRoot, scopeKey]);
 
-  return { children, truncatedCount };
+  const invalidate = useCallback(() => {
+    requested.clear();
+    // Keep what is shown until the re-read lands; a fresh array identity is
+    // what re-runs the fetch effect for every expanded collapsed directory.
+    setLoaded((previous) => ({ ...previous, entries: [...previous.entries] }));
+  }, [requested]);
+
+  return { children, invalidate, truncatedCount };
 };
