@@ -102,4 +102,51 @@ describe('TaskExecutor — setTaskSchedule', () => {
     expect(result.content).not.toContain('next runs');
     expect(mocks.getDetail).not.toHaveBeenCalled();
   });
+
+  it('validates a pattern-only change against the stored timezone', async () => {
+    mocks.getDetail.mockResolvedValue({
+      data: { schedule: { pattern: '0 9 * * *', timezone: 'Mars/Base' } },
+    });
+
+    const result = await taskExecutor.setTaskSchedule({
+      identifier: 'T-1',
+      schedulePattern: '0 10 * * *',
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.content).toMatch(/^Invalid schedule for task T-1: unknown timezone "Mars\/Base"/);
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
+  it('refuses to enable schedule mode over a stored pattern the dispatcher cannot run', async () => {
+    mocks.getDetail.mockResolvedValue({
+      data: { schedule: { pattern: '0 0 9 * * *', timezone: 'UTC' } },
+    });
+
+    const result = await taskExecutor.setTaskSchedule({
+      automationMode: 'schedule',
+      identifier: 'T-1',
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.content).toMatch(/^Invalid schedule for task T-1: expected 5 fields/);
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
+  it('checks the stored schedule before any write happens', async () => {
+    mocks.getDetail.mockResolvedValue({
+      data: { schedule: { pattern: '0 9 * * *', timezone: 'Asia/Shanghai' } },
+    });
+
+    const result = await taskExecutor.setTaskSchedule({
+      automationMode: 'schedule',
+      identifier: 'T-1',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.content).toContain('next runs (Asia/Shanghai) → Sat 2026-09-26 09:00');
+    expect(mocks.getDetail.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.update.mock.invocationCallOrder[0],
+    );
+  });
 });

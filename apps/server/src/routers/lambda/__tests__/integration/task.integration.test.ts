@@ -446,6 +446,29 @@ describe('Task Router Integration', () => {
         caller.update({ id: created.data.id, scheduleTimezone: 'Mars/Base' }),
       ).rejects.toThrow(/IANA timezone/);
     });
+
+    it('checks the resulting pattern/timezone pair against the stored schedule', async () => {
+      const created = await caller.create({ instruction: 'Legacy schedule' });
+      // A row written before write-time validation existed.
+      await new TaskModel(testDB, userId).update(created.data.id, {
+        schedulePattern: '0 0 9 * * *',
+        scheduleTimezone: 'Mars/Base',
+      });
+
+      await expect(
+        caller.update({ id: created.data.id, schedulePattern: '0 9 * * *' }),
+      ).rejects.toThrow(/Invalid schedule: unknown timezone "Mars\/Base"/);
+      await expect(
+        caller.update({ automationMode: 'schedule', id: created.data.id }),
+      ).rejects.toThrow(/Invalid schedule: expected 5 fields/);
+
+      const updated = await caller.update({
+        id: created.data.id,
+        schedulePattern: '0 9 * * *',
+        scheduleTimezone: 'Asia/Shanghai',
+      });
+      expect(updated.data.scheduleTimezone).toBe('Asia/Shanghai');
+    });
   });
 
   describe('status transitions', () => {

@@ -1,4 +1,4 @@
-import { isExecutionTime } from '@lobechat/utils/cronEval';
+import { findDueOccurrence } from '@lobechat/utils/cronEval';
 import debug from 'debug';
 import type { Context } from 'hono';
 
@@ -18,7 +18,11 @@ export interface ScheduleDispatchPayload {
 }
 
 interface DueTask {
+  /** The cron occurrence (ISO) this dispatch fires. */
+  occurrence: string;
   pattern: string;
+  /** `context.scheduler.lastDispatchedOccurrenceAt` as read on this tick. */
+  previousOccurrence: string | null;
   taskId: string;
   taskIdentifier: string;
   timezone: string | null;
@@ -31,8 +35,9 @@ interface DueTask {
  * this endpoint. On each tick:
  *
  *   1. Loads all schedule-mode tasks in dispatchable status (`scheduled`/`backlog`).
- *   2. Filters by cron pattern + timezone + last-run dedup (`isExecutionTime`).
- *   3. Fan-outs one QStash message per due task to `/schedule-execute`.
+ *   2. Filters by cron pattern + timezone + last-run dedup (`findDueOccurrence`).
+ *   3. Reserves each due occurrence on the task row, then fans out one QStash
+ *      message per reserved task to `/schedule-execute`.
  *
  * No per-user authentication: this is a global sweep. Signature verification is
  * handled by the `qstashAuth` middleware on the route.
@@ -49,21 +54,31 @@ export async function scheduleDispatch(c: Context) {
     const due: DueTask[] = [];
     for (const task of tasks) {
       if (!task.schedulePattern) continue;
+      const scheduler = (
+        task.context as {
+          scheduler?: { lastDispatchedOccurrenceAt?: string; scheduleStartedAt?: string };
+        } | null
+      )?.scheduler;
       // Stamped when the user (re)starts the schedule; an occurrence before it
       // must not fire, or arming just after a slot would replay that slot.
-      const scheduleStartedAt = (
-        task.context as { scheduler?: { scheduleStartedAt?: string } } | null
-      )?.scheduler?.scheduleStartedAt;
-      const matches = isExecutionTime({
+      const scheduleStartedAt = scheduler?.scheduleStartedAt;
+      // `lastHeartbeatAt` only moves once the run starts, and the grace window
+      // spans several ticks, so an occurrence whose delivery is still queued
+      // is covered by the reservation made when it was dispatched.
+      const previousOccurrence = scheduler?.lastDispatchedOccurrenceAt ?? null;
+      const coveredUntil = latest(task.lastHeartbeatAt, previousOccurrence);
+      const occurrence = findDueOccurrence({
         armedAt: scheduleStartedAt ? new Date(scheduleStartedAt) : null,
         cronPattern: task.schedulePattern,
         currentTime: now,
-        lastExecutedAt: task.lastHeartbeatAt ?? null,
+        lastExecutedAt: coveredUntil,
         timezone: task.scheduleTimezone,
       });
-      if (!matches) continue;
+      if (!occurrence) continue;
       due.push({
+        occurrence: occurrence.toISOString(),
         pattern: task.schedulePattern,
+        previousOccurrence,
         taskId: task.id,
         taskIdentifier: task.identifier,
         timezone: task.scheduleTimezone,
@@ -90,7 +105,8 @@ export async function scheduleDispatch(c: Context) {
       });
     }
 
-    const dispatched = await fanout(due);
+    const reserved = await reserve(db, due);
+    const dispatched = await fanout(db, reserved);
 
     return c.json({
       dispatched,
@@ -105,7 +121,69 @@ export async function scheduleDispatch(c: Context) {
   }
 }
 
-const fanout = async (due: DueTask[]): Promise<number> => {
+const latest = (...dates: (Date | string | null | undefined)[]): Date | null => {
+  let result: Date | null = null;
+  for (const value of dates) {
+    if (!value) continue;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) continue;
+    if (!result || date > result) result = date;
+  }
+  return result;
+};
+
+type ServerDB = Awaited<ReturnType<typeof getServerDB>>;
+
+/**
+ * Reserve each due occurrence with a compare-and-set on the task row. Only the
+ * dispatcher that wins the swap publishes it, so an occurrence still queued
+ * from an earlier tick (or claimed by an overlapping dispatcher run) is never
+ * published twice.
+ */
+const reserve = async (db: ServerDB, due: DueTask[]): Promise<DueTask[]> => {
+  const results = await Promise.allSettled(
+    due.map((d) =>
+      TaskModel.swapDispatchedScheduleOccurrence(db, d.taskId, d.previousOccurrence, d.occurrence),
+    ),
+  );
+  const reserved: DueTask[] = [];
+  for (const [i, r] of results.entries()) {
+    if (r.status === 'fulfilled' && r.value) {
+      reserved.push(due[i]);
+    } else if (r.status === 'fulfilled') {
+      log('skip task=%s occurrence=%s reason=already-reserved', due[i].taskId, due[i].occurrence);
+    } else {
+      console.error(
+        '[task/schedule-dispatch] failed to reserve task=%s occurrence=%s: %O',
+        due[i].taskId,
+        due[i].occurrence,
+        r.reason,
+      );
+    }
+  }
+  return reserved;
+};
+
+/** Hand a reservation back when its publish failed, so the next tick retries it. */
+const release = async (db: ServerDB, d: DueTask) => {
+  try {
+    await TaskModel.swapDispatchedScheduleOccurrence(
+      db,
+      d.taskId,
+      d.occurrence,
+      d.previousOccurrence,
+    );
+  } catch (error) {
+    console.error(
+      '[task/schedule-dispatch] failed to release task=%s occurrence=%s: %O',
+      d.taskId,
+      d.occurrence,
+      error,
+    );
+  }
+};
+
+const fanout = async (db: ServerDB, due: DueTask[]): Promise<number> => {
   // In queue mode, hand off via QStash so each task gets its own retry budget
   // and runs in an isolated handler invocation. Locally, just run inline so
   // dev / electron can exercise the path without QStash.
@@ -135,6 +213,7 @@ const fanout = async (due: DueTask[]): Promise<number> => {
           due[i].taskIdentifier,
           r.reason,
         );
+        await release(db, due[i]);
       }
     }
     return dispatched;
