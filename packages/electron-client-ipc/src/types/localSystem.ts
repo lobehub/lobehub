@@ -92,6 +92,20 @@ export interface HashLocalFileParams {
   path: string;
 }
 
+export interface LocalFileStatsParams {
+  path: string;
+}
+
+/** Basic facts about a local file, so a model can plan how to read it before opening it. */
+export interface LocalFileStats {
+  /** Number of lines; omitted for binary files and files too large to scan. */
+  lineCount?: number;
+  /** Detected MIME type, when it can be determined. */
+  mimeType?: string;
+  /** Size in bytes. */
+  size: number;
+}
+
 export interface LocalReadFileParams {
   /** Working directory a relative `path` resolves against. See {@link ListLocalFileParams.cwd}. */
   cwd?: string;

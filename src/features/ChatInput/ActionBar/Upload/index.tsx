@@ -180,7 +180,8 @@ const FileUpload = memo(() => {
 
             setDropdownOpen(false);
             editor?.focus();
-            await upload([file], agentId);
+            const filesToUpload = routeLargeFilesToLocalPaths([file]);
+            if (filesToUpload.length > 0) await upload(filesToUpload, agentId);
 
             return false;
           }}
