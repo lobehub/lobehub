@@ -220,6 +220,99 @@ export const validateHeteroOperationJWT = async (
   }
 };
 
+export const ACCEPTANCE_REVIEW_JWT_AUDIENCE = 'urn:lobehub:acceptance-review';
+export const ACCEPTANCE_REVIEW_JWT_PURPOSE = 'acceptance-review';
+
+/**
+ * What a review session may do on its one acceptance. `reject` is only granted
+ * to a caller who could reject from the viewer; a visitor on a public link gets
+ * `comment` alone.
+ */
+export type AcceptanceReviewCapability = 'comment' | 'reject';
+
+export interface AcceptanceReviewJwtClaims {
+  acceptance_id: string;
+  aud: typeof ACCEPTANCE_REVIEW_JWT_AUDIENCE;
+  capabilities: AcceptanceReviewCapability[];
+  exp: number;
+  iat: number;
+  iss: typeof HETERO_OPERATION_JWT_ISSUER;
+  jti: string;
+  /** The exact web origin the reviewer approved; requests from anywhere else are refused. */
+  origin: string;
+  purpose: typeof ACCEPTANCE_REVIEW_JWT_PURPOSE;
+  sub: string;
+}
+
+/**
+ * Sign the token an embedded review toolbar uses from a third-party page. It
+ * is bound to one acceptance and one approved origin, carries only review
+ * capabilities, and lives an hour. It is NOT a user session: `validateOIDCJWT`
+ * refuses it, so it cannot reach `/trpc` or `/api/v1`.
+ */
+export const signAcceptanceReviewJWT = async (params: {
+  acceptanceId: string;
+  capabilities: AcceptanceReviewCapability[];
+  expiration?: string;
+  origin: string;
+  userId: string;
+}): Promise<string> => {
+  const { key, kid } = await getSigningKey();
+
+  return new SignJWT({
+    acceptance_id: params.acceptanceId,
+    capabilities: params.capabilities,
+    origin: params.origin,
+    purpose: ACCEPTANCE_REVIEW_JWT_PURPOSE,
+  })
+    .setProtectedHeader({ alg: 'RS256', kid })
+    .setIssuer(HETERO_OPERATION_JWT_ISSUER)
+    .setAudience(ACCEPTANCE_REVIEW_JWT_AUDIENCE)
+    .setSubject(params.userId)
+    .setJti(randomUUID())
+    .setIssuedAt()
+    .setExpirationTime(params.expiration ?? '1h')
+    .sign(key);
+};
+
+export const validateAcceptanceReviewClaims = (
+  payload: Record<string, unknown>,
+): AcceptanceReviewJwtClaims | null => {
+  const capabilities = payload.capabilities;
+  if (
+    payload.iss !== HETERO_OPERATION_JWT_ISSUER ||
+    payload.aud !== ACCEPTANCE_REVIEW_JWT_AUDIENCE ||
+    payload.purpose !== ACCEPTANCE_REVIEW_JWT_PURPOSE ||
+    typeof payload.sub !== 'string' ||
+    typeof payload.acceptance_id !== 'string' ||
+    typeof payload.origin !== 'string' ||
+    typeof payload.jti !== 'string' ||
+    typeof payload.exp !== 'number' ||
+    !Array.isArray(capabilities) ||
+    !capabilities.every((capability) => capability === 'comment' || capability === 'reject')
+  ) {
+    return null;
+  }
+  return payload as unknown as AcceptanceReviewJwtClaims;
+};
+
+export const validateAcceptanceReviewJWT = async (
+  token: string,
+): Promise<AcceptanceReviewJwtClaims | null> => {
+  try {
+    const publicKey = await getVerificationKey();
+    const { payload } = await jwtVerify(token, publicKey, {
+      algorithms: ['RS256'],
+      audience: ACCEPTANCE_REVIEW_JWT_AUDIENCE,
+      issuer: HETERO_OPERATION_JWT_ISSUER,
+    });
+    return validateAcceptanceReviewClaims(payload);
+  } catch (error) {
+    log('Acceptance review JWT validation failed: %O', error);
+    return null;
+  }
+};
+
 /**
  * Sign a connection token for a WORKSPACE-owned device. The device gateway reads
  * the `workspace_id` claim and routes the socket to the `workspace:<id>`

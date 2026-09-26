@@ -133,11 +133,15 @@ export interface AcceptanceCommentItem extends AcceptanceCommentAnchor {
   editorData: DocumentCommentJson | null;
   id: string;
   kind: AcceptanceCommentKind;
+  /** Open, server-written per-remark facts; see `acceptance_comments.metadata`. */
+  metadata: Record<string, unknown> | null;
   parentCommentId: string | null;
   /** Tallied from this comment's reaction rows; empty when nobody reacted. */
   reactions: AcceptanceCommentReaction[];
   resolvedAt: Date | null;
   resolvedByUserId: string | null;
+  /** Set when the remark was made on a page of the product, not in the viewer. */
+  source: AcceptanceCommentSource | null;
   updatedAt: Date;
 }
 

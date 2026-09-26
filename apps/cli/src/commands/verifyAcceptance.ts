@@ -2,7 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 
 import { acceptanceSubjectTypes } from '@lobechat/const/verify';
-import type { AcceptanceAttachment, AcceptanceCheckGroup } from '@lobechat/types';
+import type {
+  AcceptanceAttachment,
+  AcceptanceCheckGroup,
+  AcceptanceCommentSource,
+} from '@lobechat/types';
 import type { Command } from 'commander';
 import { InvalidArgumentError } from 'commander';
 import pc from 'picocolors';
@@ -11,7 +15,7 @@ import { getTrpcClient } from '../api/client';
 import { resolveServerUrl } from '../settings';
 import { outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
-import { collectCommentFeedback } from './acceptanceCommentFeedback';
+import { collectCommentFeedback, formatCommentSource } from './acceptanceCommentFeedback';
 import { attachAcceptanceFlowCommands } from './acceptanceFlow';
 import { attachAcceptanceRunCommands } from './acceptanceRun';
 import type { ReviewAnnotationRegion } from './verifyHelpers';
@@ -304,6 +308,8 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
           fileIds?: string[];
           kind: 'check' | 'group' | 'flow' | 'comment' | 'decision';
           roundIndex: number;
+          /** The product page a comment was made on (embedded review toolbar). */
+          source?: AcceptanceCommentSource;
           title?: string;
         }
 
@@ -452,6 +458,9 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
                     : `group · ${entry.category || 'overall'}`;
           console.log(`${marker} ${label} ${pc.dim(`(r${entry.roundIndex})`)}`);
           if (entry.comment) console.log(`    ${entry.comment}`);
+          if (entry.source)
+            for (const line of formatCommentSource(entry.source))
+              console.log(`    ${pc.dim(line)}`);
           for (const annotation of entry.annotations ?? []) {
             if (annotation.comment && annotation.comment !== entry.comment)
               console.log(`    ${pc.dim('region:')} ${annotation.comment}`);

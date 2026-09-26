@@ -24,6 +24,7 @@ import { userProfileSelectors } from '@/store/user/selectors';
 import { commentAnchorUrl } from './anchor';
 import CommentContent from './CommentContent';
 import CommentReactions from './CommentReactions';
+import CommentSource from './CommentSource';
 import { styles } from './styles';
 
 export const commentAuthorName = (author: AcceptanceCommentItem['author']) =>
@@ -193,6 +194,7 @@ const CommentCard = memo<CommentCardProps>(
             </span>
           )}
           {badges}
+          {comment.source && <CommentSource source={comment.source} />}
           {menuItems.length > 0 && (
             <div data-comment-actions className={styles.rowActions}>
               <DropdownMenu
