@@ -66,5 +66,11 @@ describe('AiInfraRepos', () => {
         source: 'builtin',
       });
     });
+
+    it('should return undefined for a missing custom provider', async () => {
+      vi.spyOn(repo.aiProviderModel, 'getAiProviderById').mockResolvedValue(undefined);
+
+      await expect(repo.getAiProviderDetail('missing-custom-provider')).resolves.toBeUndefined();
+    });
   });
 });

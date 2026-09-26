@@ -7,7 +7,6 @@ import { type FC } from 'react';
 import { HotkeysProvider } from 'react-hotkeys-hook';
 import { Outlet } from 'react-router';
 
-import ProtocolUrlHandler from '@/features/ProtocolUrlHandler';
 import { useFetchActiveTopicDetail } from '@/hooks/useFetchActiveTopicDetail';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
@@ -39,7 +38,6 @@ const PopupLayout: FC = () => {
         <Flexbox flex={1} style={{ minHeight: 0, overflow: 'hidden', position: 'relative' }}>
           <Outlet />
         </Flexbox>
-        <ProtocolUrlHandler />
       </Flexbox>
     </HotkeysProvider>
   );

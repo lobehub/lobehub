@@ -2,9 +2,7 @@ import { Flexbox } from '@lobehub/ui';
 import { type FC } from 'react';
 import { Outlet } from 'react-router';
 
-import { isDesktop } from '@/const/version';
 import { GroupNotFoundGuard } from '@/features/GroupNotFound';
-import ProtocolUrlHandler from '@/features/ProtocolUrlHandler';
 import { useInitGroupConfig } from '@/hooks/useInitGroupConfig';
 
 import GroupIdSync from './GroupIdSync';
@@ -26,7 +24,6 @@ const Layout: FC = () => {
         </GroupNotFoundGuard>
       </Flexbox>
       <RegisterHotkeys />
-      {isDesktop && <ProtocolUrlHandler />}
       <GroupIdSync />
     </>
   );

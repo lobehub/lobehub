@@ -99,14 +99,14 @@ export class ProtocolManager {
     // Handle protocol URL from cold start (Windows/Linux)
     const protocolUrl = this.getProtocolUrlFromArgs(process.argv);
     if (protocolUrl) {
-      logger.debug(`🔗 [Protocol] Found protocol URL from cold start: ${protocolUrl}`);
+      logger.debug('🔗 [Protocol] Found protocol URL from cold start');
       this.pendingUrls.push(protocolUrl);
     }
 
     // Handle protocol URL from macOS open-url event
     app.on('open-url', (event, url) => {
       event.preventDefault();
-      logger.debug(`🔗 [Protocol] Received URL from open-url event: ${url}`);
+      logger.debug('🔗 [Protocol] Received URL from open-url event');
       logger.debug(`🔗 [Protocol] App ready state: ${app.isReady()}`);
       logger.debug(`🔗 [Protocol] Event prevented, processing URL...`);
       this.handleProtocolUrl(url);
@@ -116,7 +116,7 @@ export class ProtocolManager {
     app.on('second-instance', (event, commandLine) => {
       const url = this.getProtocolUrlFromArgs(commandLine);
       if (url) {
-        logger.debug(`🔗 [Protocol] Received protocol URL from second instance: ${url}`);
+        logger.debug('🔗 [Protocol] Received protocol URL from second instance');
         this.handleProtocolUrl(url);
       }
       // Show main window when second instance is triggered
@@ -129,12 +129,12 @@ export class ProtocolManager {
    */
   private getProtocolUrlFromArgs(args: string[]): string | null {
     const protocolPrefix = `${this.protocolScheme}://`;
-    logger.debug(`🔗 [Protocol] Searching for protocol URLs in args: ${JSON.stringify(args)}`);
+    logger.debug(`🔗 [Protocol] Searching ${args.length} arguments for a protocol URL`);
     logger.debug(`🔗 [Protocol] Looking for prefix: ${protocolPrefix}`);
 
     for (const arg of args) {
       if (arg.startsWith(protocolPrefix)) {
-        logger.debug(`🔗 [Protocol] Found protocol URL in args: ${arg}`);
+        logger.debug('🔗 [Protocol] Found protocol URL in args');
         return arg;
       }
     }
@@ -147,7 +147,7 @@ export class ProtocolManager {
    */
   private handleProtocolUrl(url: string): void {
     try {
-      logger.debug(`🔗 [Protocol] handleProtocolUrl called with: ${url}`);
+      logger.debug('🔗 [Protocol] handleProtocolUrl called');
       logger.debug(`🔗 [Protocol] App ready state: ${app.isReady()}`);
       logger.debug(`🔗 [Protocol] Current pending URLs count: ${this.pendingUrls.length}`);
 
@@ -172,11 +172,11 @@ export class ProtocolManager {
    */
   private async processProtocolUrl(url: string): Promise<void> {
     try {
-      logger.debug(`🔗 [Protocol] processProtocolUrl called with: ${url}`);
+      logger.debug('🔗 [Protocol] processProtocolUrl called');
 
       // Basic URL validation - just check if it's our protocol
       if (!url.startsWith(`${this.protocolScheme}://`)) {
-        logger.warn(`🔗 [Protocol] Invalid protocol scheme in URL: ${url}`);
+        logger.warn('🔗 [Protocol] Invalid protocol scheme in URL');
         return;
       }
 
@@ -188,14 +188,11 @@ export class ProtocolManager {
       const parsed = parseProtocolUrl(url);
 
       if (!parsed) {
-        logger.warn(`🔗 [Protocol] Failed to parse protocol URL: ${url}`);
+        logger.warn('🔗 [Protocol] Failed to parse protocol URL');
         return;
       }
 
-      logger.debug(
-        `🔗 [Protocol] Parsed URL - type: ${parsed.urlType}, action: ${parsed.action}, data: %s`,
-        parsed.params,
-      );
+      logger.debug(`🔗 [Protocol] Parsed URL - type: ${parsed.urlType}, action: ${parsed.action}`);
 
       // Dispatch to registered protocol handlers via App with parsed data
       logger.debug('🔗 [Protocol] Dispatching to protocol handlers...');
@@ -230,13 +227,10 @@ export class ProtocolManager {
       return;
     }
 
-    logger.debug(
-      `🔗 [Protocol] Processing ${this.pendingUrls.length} pending protocol URLs:`,
-      this.pendingUrls,
-    );
+    logger.debug(`🔗 [Protocol] Processing ${this.pendingUrls.length} pending protocol URLs`);
 
     for (const url of this.pendingUrls) {
-      logger.debug(`🔗 [Protocol] Processing pending URL: ${url}`);
+      logger.debug('🔗 [Protocol] Processing pending URL');
       await this.processProtocolUrl(url);
     }
 
