@@ -1,6 +1,15 @@
-import { renderHook } from '@testing-library/react';
+import { ModalHost } from '@lobehub/ui/base-ui';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
-import { createMemoryRouter } from 'react-router';
+import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as slugModule from '@/business/client/hooks/useActiveWorkspaceSlug';
@@ -11,8 +20,30 @@ import {
 } from '@/features/Electron/TabHost';
 
 const mocks = vi.hoisted(() => ({
+  shareDevice: vi.fn().mockResolvedValue({ success: true }),
   storeState: { activeTabId: 'tA' as string | null, addNewTab: vi.fn() },
 }));
+
+vi.mock('@/business/client/hooks/useWorkspaces', () => ({
+  useWorkspaces: () => [{ id: 'workspace-target', name: 'Target', role: 'member', slug: 'target' }],
+}));
+
+vi.mock('@/libs/trpc/client', () => ({
+  createWorkspaceLambdaClient: () => ({
+    device: { shareDeviceToWorkspace: { mutate: mocks.shareDevice } },
+  }),
+}));
+
+vi.mock('@/features/DeviceManager/const', () => ({ refreshDeviceList: vi.fn() }));
+
+// NOTICE:
+// Exercise the same platform module replacement as the Electron renderer.
+// Vitest otherwise resolves the Web hook used by the shared modal.
+// Source: useWorkspaceAwareNavigate.desktop.ts and the Vite platform resolver.
+// Remove when this test project resolves desktop twins automatically.
+vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () =>
+  vi.importActual('@/features/Workspace/useWorkspaceAwareNavigate.desktop'),
+);
 
 vi.mock('@/store/electron', () => ({
   useElectronStore: Object.assign(
@@ -46,6 +77,7 @@ const renderNavigate = (tabId?: string) =>
   }).result.current;
 
 afterEach(() => {
+  cleanup();
   resetTabRouterManager();
   vi.restoreAllMocks();
   mocks.storeState.activeTabId = 'tA';
@@ -53,6 +85,49 @@ afterEach(() => {
 });
 
 describe('useWorkspaceAwareNavigate (desktop)', () => {
+  /** @example Sharing from personal settings opens the destination in the visible tab. */
+  it('navigates the active tab from the globally hosted device-share completion', async () => {
+    // ROOT CAUSE:
+    // The share modal is rendered by the global ModalHost outside the tab router.
+    // Its raw useNavigate updated the root router, leaving the visible tab unchanged.
+    // The workspace-aware desktop hook instead resolves the active tab router.
+    const { openShareDeviceModal } = await import('@/features/DeviceManager/ShareDeviceModal');
+    vi.spyOn(slugModule, 'getActiveWorkspaceSlug').mockReturnValue('source');
+    const tabRouter = getOrCreateTabRouter('tA', '/settings/devices', makeRouter);
+    const rootRouter = createMemoryRouter([{ element: createElement(ModalHost), path: '*' }], {
+      initialEntries: ['/'],
+    });
+    render(createElement(RouterProvider, { router: rootRouter }));
+
+    act(() => {
+      openShareDeviceModal({
+        channels: [],
+        defaultCwd: null,
+        deviceId: 'local-device',
+        enroller: null,
+        friendlyName: null,
+        hostname: 'Local Mac',
+        identitySource: 'machine-id',
+        lastSeen: new Date(0).toISOString(),
+        online: true,
+        platform: 'darwin',
+        registered: true,
+        scope: 'personal',
+        visibility: null,
+        workingDirs: [],
+      });
+    });
+    fireEvent.click(await screen.findByRole('button', { name: 'devices.share.confirm' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'devices.share.goToTarget' }));
+
+    /** @example The tab reaches /target/settings/devices while the root stays frozen. */
+    await waitFor(() => expect(tabRouter.state.location.pathname).toBe('/target/settings/devices'));
+    expect(rootRouter.state.location.pathname).toBe('/');
+    /** @example The success modal closes after navigation. */
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    rootRouter.dispose();
+  });
+
   it('shell (no tab context): navigates the active tab with the workspace-resolved url', () => {
     vi.spyOn(slugModule, 'getActiveWorkspaceSlug').mockReturnValue('acme');
     const navigateA = seedRouter('tA');
