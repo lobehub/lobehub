@@ -678,6 +678,6 @@ describe('AgentDocumentsGroup', () => {
     });
 
     render(<AgentDocumentsGroup />);
-    expect(screen.getByTestId('neural-network-loading')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
   });
 });

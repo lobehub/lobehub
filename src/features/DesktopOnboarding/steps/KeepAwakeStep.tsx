@@ -59,7 +59,7 @@ const KeepAwakeStep = memo<KeepAwakeStepProps>(({ onBack, onNext }) => {
           <Empty
             description={t('keepAwake.on.description')}
             icon={MonitorCheck}
-            padding={0}
+            style={{ padding: 0 }}
             type={'page'}
             descriptionProps={{
               fontSize: 14,

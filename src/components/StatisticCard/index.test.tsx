@@ -61,7 +61,7 @@ describe('StatisticCard', () => {
   });
 
   it('replaces extra with a small spinner while loading', () => {
-    const { container } = render(
+    render(
       <StatisticCard
         loading
         extra={<button type="button">More</button>}
@@ -71,7 +71,7 @@ describe('StatisticCard', () => {
     );
 
     expect(screen.queryByText('More')).toBeNull();
-    expect(container.querySelector('.ant-spin')).not.toBeNull();
+    expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
   it('applies valueStyle to the statistic content', () => {
