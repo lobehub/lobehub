@@ -109,4 +109,36 @@ describe('buildReviewPrompt', () => {
     expect(prompt).toContain('Reviewers left feedback on pull request o/r#7');
     expect(prompt).toContain('The review carried no text');
   });
+
+  it('asks for a Codex re-review after a pushed fix, once per bot', () => {
+    const codex = 'chatgpt-codex-connector[bot]';
+    const prompt = buildReviewPrompt({
+      feedback: [
+        { association: 'none' as const, author: codex, body: 'Codex Review' },
+        {
+          association: 'none' as const,
+          author: codex,
+          body: 'Make it a button.',
+          line: 3,
+          path: 'a.tsx',
+        },
+      ],
+      reason: 'review_commented',
+      row,
+    });
+    expect(prompt).toContain(
+      'If you pushed a fix, then comment `@codex review` on the pull request so the reviewer checks it again',
+    );
+    expect(prompt.match(/@codex review/g)).toHaveLength(1);
+    expect(hasBlankLine(prompt)).toBe(false);
+  });
+
+  it('asks for no re-review when the feedback is from a human', () => {
+    const prompt = buildReviewPrompt({
+      feedback: [{ association: 'member' as const, author: 'alice', body: 'Rename it.' }],
+      reason: 'review_commented',
+      row,
+    });
+    expect(prompt).not.toContain('@codex review');
+  });
 });
