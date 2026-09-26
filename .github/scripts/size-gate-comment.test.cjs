@@ -164,7 +164,7 @@ test('a skipped gate folds into a single warning line', async () => {
   );
 });
 
-test('a report that never reached the gate still folds to one line', async () => {
+test('a report that never reached the gate folds to a warning line, not a pass', async () => {
   const github = fakeGithub();
   await sizeGateComment({
     context: { repo: { owner: 'o', repo: 'r' } },
@@ -178,7 +178,7 @@ test('a report that never reached the gate still folds to one line', async () =>
 
   const body = bodyOf(github, 'createComment');
   assert.ok(
-    body.includes('<summary>✅ Bundle Size Gate — Web dist — expand for the details</summary>'),
+    body.includes('<summary>⚠️ Bundle Size Gate — Web dist — expand for the details</summary>'),
   );
   assert.ok(body.includes('Build did not reach the size gate step.'));
 });

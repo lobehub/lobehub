@@ -33,7 +33,9 @@ const summarize = ({ report, title }) => {
   const passed = headings.filter((heading) => heading.startsWith('✅')).length;
   const icon = skipped > 0 ? '⚠️' : '✅';
 
-  if (headings.length === 0) return `${icon} Bundle Size Gate — ${title} — expand for the details`;
+  // No headings means the report never got produced (an earlier step failed, or the run
+  // was cancelled). That is not a pass, and folding the only explanation away would hide it.
+  if (headings.length === 0) return `⚠️ Bundle Size Gate — ${title} — expand for the details`;
 
   const detail =
     skipped > 0

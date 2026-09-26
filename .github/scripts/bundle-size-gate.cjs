@@ -270,15 +270,20 @@ const formatCountLimit = (count) => (Number.isInteger(count) ? String(count) : c
  * Verdict line appended to the section heading. The heading is the only place the PR
  * comment can see the numbers from — a passing gate is folded to a single line, so the
  * magnitude has to live where that line can be built without re-deriving the tables.
+ *
+ * `unit` separates measurements that are not byte sizes: the Vite file count can decide
+ * the verdict, but it must never be rendered through the byte-oriented `formatDelta`.
  */
 const buildHeadline = (compared) => {
   if (compared.length === 0) return '';
   const overCount = compared.filter((entry) => entry.over).length;
   if (overCount > 0) return `exceeds the gate on ${overCount} of ${compared.length} entries`;
-  const worst = compared.reduce((max, entry) =>
+  const sizes = compared.filter((entry) => entry.unit !== 'files');
+  if (sizes.length === 0) return '';
+  const worst = sizes.reduce((max, entry) =>
     Math.abs(entry.delta) > Math.abs(max.delta) ? entry : max,
   );
-  const count = `${compared.length} ${compared.length === 1 ? 'entry' : 'entries'}`;
+  const count = `${sizes.length} ${sizes.length === 1 ? 'entry' : 'entries'}`;
   return `${count}, largest Δ ${formatDelta(worst.delta, worst.base)}`;
 };
 
@@ -345,7 +350,7 @@ const check = (args) => {
     const limit = Math.max((base * percent) / 100, floor);
     const over = delta > limit;
     if (over) failed = true;
-    compared.push({ base, delta, over });
+    compared.push({ base, delta, over, unit: 'bytes' });
     rows.push(
       `| ${key} | ${humanSize(base)} | ${humanSize(cur)} | ${formatDelta(delta, base)} | ${over ? '❌' : '✅'} |`,
     );
@@ -376,6 +381,7 @@ const check = (args) => {
         base: baselineJsChunks.total,
         delta: currentJsChunks.total - baselineJsChunks.total,
         over,
+        unit: 'files',
       });
       const targetKeys = [
         ...new Set([
