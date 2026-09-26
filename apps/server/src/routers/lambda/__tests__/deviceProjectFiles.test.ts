@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { deviceRouter } from '../device';
@@ -8,8 +9,27 @@ const mocks = vi.hoisted(() => ({
   createProjectDirectory: vi.fn(),
   createProjectFile: vi.fn(),
   findByDeviceId: vi.fn(),
+  moveProjectFiles: vi.fn(),
+  renameProjectFile: vi.fn(),
   trashProjectFiles: vi.fn(),
+  writeProjectFile: vi.fn(),
 }));
+
+// The OSS role guard is a no-op stub; stand in for the cloud one so the test
+// can see which routes are write-gated. Like the real guard it only bites when
+// the request carries a workspace role below `member`.
+vi.mock('@/business/server/trpc-middlewares/workspaceAuth', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const { trpc } = await vi.importActual<{ trpc: any }>('@/libs/trpc/lambda/init');
+  return {
+    ...actual,
+    requireWorkspaceRoleWhenScoped: () =>
+      trpc.middleware(async (opts: any) => {
+        if (opts.ctx.workspaceRole === 'viewer') throw new TRPCError({ code: 'FORBIDDEN' });
+        return opts.next();
+      }),
+  };
+});
 
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: vi.fn() }));
 vi.mock('@/database/models/device', () => ({
@@ -23,7 +43,10 @@ vi.mock('@/server/services/deviceGateway', async (importOriginal) => ({
     copyProjectFiles: mocks.copyProjectFiles,
     createProjectDirectory: mocks.createProjectDirectory,
     createProjectFile: mocks.createProjectFile,
+    moveProjectFiles: mocks.moveProjectFiles,
+    renameProjectFile: mocks.renameProjectFile,
     trashProjectFiles: mocks.trashProjectFiles,
+    writeProjectFile: mocks.writeProjectFile,
   },
 }));
 
@@ -73,5 +96,24 @@ describe('device project file mutations', () => {
       code: 'BAD_REQUEST',
     });
     expect(mocks.trashProjectFiles).not.toHaveBeenCalled();
+  });
+
+  const writeRoutes = [
+    ...routes,
+    [
+      'moveProjectFiles',
+      { ...base, items: [{ newPath: '/Users/me/proj/b.ts', oldPath: '/Users/me/proj/a.ts' }] },
+    ],
+    ['renameProjectFile', { ...base, newName: 'b.ts', path: '/Users/me/proj/a.ts' }],
+    ['writeProjectFile', { ...base, content: 'x', path: '/Users/me/proj/a.ts' }],
+  ] as const;
+
+  it.each(writeRoutes)('%s refuses a read-only workspace viewer', async (route, input) => {
+    const viewer = deviceRouter.createCaller({
+      userId: 'user-1',
+      workspaceRole: 'viewer',
+    } as never);
+    await expect((viewer[route] as any)(input)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(mocks[route]).not.toHaveBeenCalled();
   });
 });

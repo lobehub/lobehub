@@ -1525,7 +1525,7 @@ export class DeviceGateway {
 
     const result = await client.invokeRpc<DeviceMoveProjectFileResultItem[]>(
       { deviceId, timeout, userId, workspaceId },
-      { method: 'moveLocalFiles', params: { items } },
+      { method: 'moveLocalFiles', params: { items, workspaceRoot: workingDirectory } },
     );
 
     if (!result.success || !result.data) {
@@ -1569,7 +1569,7 @@ export class DeviceGateway {
 
     const result = await client.invokeRpc<DeviceRenameProjectFileResult>(
       { deviceId, timeout, userId, workspaceId },
-      { method: 'renameLocalFile', params: { newName, path } },
+      { method: 'renameLocalFile', params: { newName, path, workspaceRoot: workingDirectory } },
     );
 
     if (!result.success || !result.data) {
@@ -1610,7 +1610,7 @@ export class DeviceGateway {
 
     const result = await client.invokeRpc<DeviceWriteProjectFileResult>(
       { deviceId, timeout, userId, workspaceId },
-      { method: 'writeLocalFile', params: { content, path } },
+      { method: 'writeLocalFile', params: { content, path, workspaceRoot: workingDirectory } },
     );
 
     if (!result.success || !result.data) {
@@ -1651,7 +1651,7 @@ export class DeviceGateway {
 
     const result = await client.invokeRpc<DeviceCreateProjectEntryResult>(
       { deviceId, timeout, userId, workspaceId },
-      { method: 'createLocalFile', params: { content, path } },
+      { method: 'createLocalFile', params: { content, path, workspaceRoot: workingDirectory } },
     );
 
     if (!result.success || !result.data) {
@@ -1682,7 +1682,7 @@ export class DeviceGateway {
 
     const result = await client.invokeRpc<DeviceCreateProjectEntryResult>(
       { deviceId, timeout, userId, workspaceId },
-      { method: 'createLocalDirectory', params: { path } },
+      { method: 'createLocalDirectory', params: { path, workspaceRoot: workingDirectory } },
     );
 
     if (!result.success || !result.data) {
@@ -1724,7 +1724,7 @@ export class DeviceGateway {
 
     const result = await client.invokeRpc<DeviceCopyProjectFileResultItem[]>(
       { deviceId, timeout, userId, workspaceId },
-      { method: 'copyLocalFiles', params: { items } },
+      { method: 'copyLocalFiles', params: { items, workspaceRoot: workingDirectory } },
     );
 
     if (!result.success || !result.data) {
@@ -1757,7 +1757,7 @@ export class DeviceGateway {
 
     const result = await client.invokeRpc<DeviceTrashProjectFilesResult>(
       { deviceId, timeout, userId, workspaceId },
-      { method: 'trashLocalFiles', params: { paths } },
+      { method: 'trashLocalFiles', params: { paths, workspaceRoot: workingDirectory } },
     );
 
     if (!result.success || !result.data) {

@@ -1033,7 +1033,10 @@ describe('DeviceGateway', () => {
         expect(result).toEqual({ success: true });
         expect(mockClient.invokeRpc).toHaveBeenCalledWith(
           { deviceId: 'dev-1', timeout: 30_000, userId: 'user-1' },
-          { method: 'writeLocalFile', params: { content: 'next', path: '/proj/src/App.tsx' } },
+          {
+            method: 'writeLocalFile',
+            params: { content: 'next', path: '/proj/src/App.tsx', workspaceRoot: '/proj' },
+          },
         );
       });
 
@@ -1123,7 +1126,10 @@ describe('DeviceGateway', () => {
         expect(result).toEqual({ path: '/proj/new.ts', success: true });
         expect(mockClient.invokeRpc).toHaveBeenCalledWith(
           { deviceId: 'dev-1', timeout: 30_000, userId: 'user-1' },
-          { method: 'createLocalFile', params: { content: undefined, path: '/proj/new.ts' } },
+          {
+            method: 'createLocalFile',
+            params: { content: undefined, path: '/proj/new.ts', workspaceRoot: '/proj' },
+          },
         );
       });
 
@@ -1180,7 +1186,10 @@ describe('DeviceGateway', () => {
         ).resolves.toEqual({ path: '/proj/src/new', success: true });
         expect(mockClient.invokeRpc).toHaveBeenCalledWith(
           { deviceId: 'dev-1', timeout: 30_000, userId: 'user-1' },
-          { method: 'createLocalDirectory', params: { path: '/proj/src/new' } },
+          {
+            method: 'createLocalDirectory',
+            params: { path: '/proj/src/new', workspaceRoot: '/proj' },
+          },
         );
       });
 
@@ -1222,7 +1231,7 @@ describe('DeviceGateway', () => {
 
         expect(mockClient.invokeRpc).toHaveBeenCalledWith(
           { deviceId: 'dev-1', timeout: 60_000, userId: 'user-1' },
-          { method: 'copyLocalFiles', params: { items } },
+          { method: 'copyLocalFiles', params: { items, workspaceRoot: '/proj' } },
         );
       });
 
@@ -1291,7 +1300,7 @@ describe('DeviceGateway', () => {
         ).resolves.toEqual({ items: [{ path: '/proj/a.ts', success: true }], success: true });
         expect(mockClient.invokeRpc).toHaveBeenCalledWith(
           { deviceId: 'dev-1', timeout: 30_000, userId: 'user-1' },
-          { method: 'trashLocalFiles', params: { paths: ['/proj/a.ts'] } },
+          { method: 'trashLocalFiles', params: { paths: ['/proj/a.ts'], workspaceRoot: '/proj' } },
         );
       });
 
@@ -1436,7 +1445,10 @@ describe('DeviceGateway', () => {
           { deviceId: 'dev-1', timeout: 30_000, userId: 'user-1' },
           {
             method: 'moveLocalFiles',
-            params: { items: [{ newPath: '/proj/b.ts', oldPath: '/proj/a.ts' }] },
+            params: {
+              items: [{ newPath: '/proj/b.ts', oldPath: '/proj/a.ts' }],
+              workspaceRoot: '/proj',
+            },
           },
         );
       });
