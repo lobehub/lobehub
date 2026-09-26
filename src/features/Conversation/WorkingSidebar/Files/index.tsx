@@ -16,7 +16,6 @@ import {
   FoldVerticalIcon,
   GitCompareArrowsIcon,
   ListFilterIcon,
-  PlusIcon,
   RotateCwIcon,
   SearchIcon,
   XIcon,
@@ -433,7 +432,9 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
     workingDirectory,
   });
 
-  const newItems = useMemo(
+  // Tree-level actions live behind "…" so the header keeps room: creating at
+  // the project root, then refresh.
+  const moreItems = useMemo(
     () => [
       {
         icon: <FilePlusIcon size={14} />,
@@ -447,13 +448,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
         label: t('workingPanel.files.actions.newFolder'),
         onClick: () => actions.startCreateFromHeader('folder'),
       },
-    ],
-    [actions, t],
-  );
-
-  // Less frequent tree-level actions live behind "…" so the header keeps room.
-  const moreItems = useMemo(
-    () => [
+      { key: 'divider-refresh', type: 'divider' as const },
       {
         disabled: actions.refreshing,
         icon: <RotateCwIcon size={14} />,
@@ -491,7 +486,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
               <Button
                 icon={viewMode === 'project' ? FolderTreeIcon : GitCompareArrowsIcon}
                 size={'small'}
-                style={{ maxWidth: 'calc(100% - 136px)' }}
+                style={{ maxWidth: 'calc(100% - 108px)' }}
                 title={t('workingPanel.files.views.title')}
                 type={'text'}
               >
@@ -505,15 +500,6 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
             </DropdownMenu>
             <div style={{ flex: 1 }} />
           </>
-        )}
-        {!searchExpanded && (
-          <DropdownMenu items={newItems} placement={'bottomRight'}>
-            <ActionIcon
-              icon={PlusIcon}
-              size={'small'}
-              title={t('workingPanel.files.actions.new')}
-            />
-          </DropdownMenu>
         )}
         {!searchExpanded && (
           <ActionIcon

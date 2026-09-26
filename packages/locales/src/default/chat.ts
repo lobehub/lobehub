@@ -2942,7 +2942,6 @@ export default {
   'workingPanel.files.actions.duplicate': 'Duplicate',
   'workingPanel.files.actions.more': 'More',
   'workingPanel.files.actions.moveToTrash': 'Move to {{trash}}',
-  'workingPanel.files.actions.new': 'New',
   'workingPanel.files.actions.newFile': 'New File…',
   'workingPanel.files.actions.newFolder': 'New Folder…',
   'workingPanel.files.actions.openInSystem': 'Open in System',

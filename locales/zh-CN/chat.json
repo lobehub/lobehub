@@ -2465,7 +2465,6 @@
   "workingPanel.files.actions.duplicate": "创建副本",
   "workingPanel.files.actions.more": "更多",
   "workingPanel.files.actions.moveToTrash": "移到{{trash}}",
-  "workingPanel.files.actions.new": "新建",
   "workingPanel.files.actions.newFile": "新建文件…",
   "workingPanel.files.actions.newFolder": "新建文件夹…",
   "workingPanel.files.actions.openInSystem": "在系统中打开",

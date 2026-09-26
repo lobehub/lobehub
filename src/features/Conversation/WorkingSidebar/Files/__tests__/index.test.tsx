@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode as ReactNodeType, Ref } from 'react';
 import { useImperativeHandle } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -520,12 +520,16 @@ describe('Files — reveal request integration', () => {
     );
   });
 
-  it('keeps refresh inside the trailing "…" menu and wires the "New" menu', async () => {
+  it('keeps create and refresh inside the trailing "…" menu', async () => {
     render(<Files workingDirectory="/repo" />);
 
-    // Refresh is no longer its own header button; it sits in the "…" menu.
+    // Neither "New" nor refresh is its own header button; both sit in "…".
     expect(screen.queryByTitle('workingPanel.files.actions.refresh')).toBeNull();
-    expect(screen.getByTitle('workingPanel.files.actions.more')).toBeTruthy();
+    expect(screen.queryByTitle('workingPanel.files.actions.new')).toBeNull();
+    const more = screen.getByTitle('workingPanel.files.actions.more').parentElement!;
+    expect(within(more).getByText('workingPanel.files.actions.newFile')).toBeTruthy();
+    expect(within(more).getByText('workingPanel.files.actions.newFolder')).toBeTruthy();
+    expect(within(more).getByText('workingPanel.files.actions.refresh')).toBeTruthy();
 
     fireEvent.click(screen.getByText('workingPanel.files.actions.refresh'));
     await waitFor(() =>
