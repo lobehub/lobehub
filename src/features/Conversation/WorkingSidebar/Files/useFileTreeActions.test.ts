@@ -21,6 +21,8 @@ const service = vi.hoisted(() => ({
 }));
 const ui = vi.hoisted(() => ({ confirmModal: vi.fn(), error: vi.fn(), success: vi.fn() }));
 const openLocalFile = vi.hoisted(() => vi.fn());
+const retargetLocalFiles = vi.hoisted(() => vi.fn());
+const closeLocalFilesAt = vi.hoisted(() => vi.fn());
 const terminal = vi.hoisted(() => ({
   createErrors: {} as Record<string, string | undefined>,
   createTab: vi.fn(),
@@ -44,7 +46,13 @@ vi.mock('@/utils/platform', () => ({ getPlatform: () => 'Mac OS', isMacOS: () =>
 
 vi.mock('@/store/chat', () => ({
   useChatStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ activeAgentId: 'agt_1', activeTopicId: 'tpc_1', openLocalFile }),
+    selector({
+      activeAgentId: 'agt_1',
+      activeTopicId: 'tpc_1',
+      closeLocalFilesAt,
+      openLocalFile,
+      retargetLocalFiles,
+    }),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -150,6 +158,8 @@ beforeEach(() => {
   ui.error.mockReset();
   ui.success.mockReset();
   openLocalFile.mockReset();
+  retargetLocalFiles.mockReset();
+  closeLocalFilesAt.mockReset();
   terminal.createTab.mockReset();
   terminal.createErrors = {};
   useFileClipboardStore.setState({ clipboard: undefined });
@@ -350,6 +360,11 @@ describe('useFileTreeActions — rename', () => {
       path: '/repo/root.ts',
       workingDirectory: '/repo',
     });
+    // An open tab of the renamed file follows it to the new path.
+    expect(retargetLocalFiles).toHaveBeenCalledWith(
+      [{ from: '/repo/root.ts', to: '/repo/main.ts' }],
+      undefined,
+    );
     expect(service.refreshProjectFiles).toHaveBeenCalledTimes(1);
   });
 
@@ -405,6 +420,7 @@ describe('useFileTreeActions — move to trash', () => {
     expect(ui.success).toHaveBeenCalledWith(
       'workingPanel.files.feedback.trashed {"name":"app.ts","trash":"workingPanel.files.trashName.mac"}',
     );
+    expect(closeLocalFilesAt).toHaveBeenCalledWith(['/repo/src/app.ts'], undefined);
     expect(service.refreshProjectFiles).toHaveBeenCalledTimes(1);
   });
 
@@ -587,6 +603,10 @@ describe('useFileTreeActions — cut / paste, duplicate and move', () => {
       }),
     );
     await waitFor(() => expect(useFileClipboardStore.getState().clipboard).toBeUndefined());
+    expect(retargetLocalFiles).toHaveBeenCalledWith(
+      [{ from: '/repo/root.ts', to: '/repo/src/root.ts' }],
+      undefined,
+    );
   });
 
   it('keeps the clipboard scoped to its device and project', () => {

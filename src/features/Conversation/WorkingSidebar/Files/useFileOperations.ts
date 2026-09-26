@@ -1,7 +1,7 @@
 import { isDesktop } from '@lobechat/const';
 import type { ProjectFileIndexEntry } from '@lobechat/electron-client-ipc';
 import { confirmModal, toast } from '@lobehub/ui/base-ui';
-import { basename, join, relative } from 'pathe';
+import { basename, dirname, join, relative } from 'pathe';
 import type { RefObject } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -96,6 +96,8 @@ export const useFileOperations = ({
   const { t } = useTranslation('chat');
   const isRemote = !!deviceId;
   const openLocalFile = useChatStore((s) => s.openLocalFile);
+  const retargetLocalFiles = useChatStore((s) => s.retargetLocalFiles);
+  const closeLocalFilesAt = useChatStore((s) => s.closeLocalFilesAt);
   const activeTopicId = useChatStore((s) => s.activeTopicId);
   const activeAgentId = useChatStore((s) => s.activeAgentId);
   const toggleTerminalPanel = useGlobalStore((s) => s.toggleTerminalPanel);
@@ -271,10 +273,14 @@ export const useFileOperations = ({
         await afterWrite();
         return false;
       }
+      retargetLocalFiles(
+        [{ from: node.data.path, to: join(dirname(node.data.path), newName) }],
+        deviceId,
+      );
       const parentRel = getParentRelativePath(node.id) ?? '';
       await afterWrite({ id: toEntryId(`${parentRel}${newName}`, !!node.isFolder) });
     },
-    [afterWrite, deviceId, projectRoot, reasonOf, t],
+    [afterWrite, deviceId, projectRoot, reasonOf, retargetLocalFiles, t],
   );
 
   /** Moves entries into `targetDirRel`, skipping (and reporting) name clashes. */
@@ -318,6 +324,12 @@ export const useFileOperations = ({
           }),
         );
       }
+      retargetLocalFiles(
+        results.flatMap((result) =>
+          result.success && result.newPath ? [{ from: result.sourcePath, to: result.newPath }] : [],
+        ),
+        deviceId,
+      );
       const moved = results.find((result) => result.success && result.newPath);
       const movedEntry = moved && movable.find((entry) => entry.path === moved.sourcePath);
       await afterWrite(
@@ -333,6 +345,7 @@ export const useFileOperations = ({
       deviceId,
       projectRoot,
       reasonOf,
+      retargetLocalFiles,
       siblingsOf,
       t,
       toAbsolute,
@@ -411,6 +424,10 @@ export const useFileOperations = ({
             return;
           }
           const trashed = items.filter((item) => item.success);
+          closeLocalFilesAt(
+            trashed.map((item) => item.path),
+            deviceId,
+          );
           if (trashed.length === 1) {
             toast.success(
               t('workingPanel.files.feedback.trashed', {
@@ -446,7 +463,7 @@ export const useFileOperations = ({
             : t('workingPanel.files.delete.confirmTitle', { name: first.name, trash: trashName }),
       });
     },
-    [afterWrite, deviceId, dirtyFilePaths, projectRoot, reasonOf, t, trashName],
+    [afterWrite, closeLocalFilesAt, deviceId, dirtyFilePaths, projectRoot, reasonOf, t, trashName],
   );
 
   const duplicate = useCallback(
