@@ -1,5 +1,5 @@
 import type { ProjectFileIndexEntry } from '@lobechat/electron-client-ipc';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useSingleton } from '@/hooks/useSingleton';
 import { projectFileService } from '@/services/projectFile';
@@ -25,6 +25,41 @@ interface CollapsedDirectoryChildren {
   /** Expanded directories whose on-disk listing exceeded the host-side cap. */
   truncatedCount: number;
 }
+
+/**
+ * Listed children the tree should still show: those whose parent is a
+ * collapsed directory (indexed, or itself a listed child still shown) and that
+ * the index does not list itself. A write can turn a collapsed folder into an
+ * indexed one — pasting into a new empty folder does — and its old listing
+ * must then yield to the index instead of duplicating its rows.
+ */
+export const selectCollapsedChildren = (
+  entries: ProjectFileIndexEntry[],
+  children: ProjectFileIndexEntry[],
+): ProjectFileIndexEntry[] => {
+  if (children.length === 0) return children;
+  const indexed = new Map(entries.map((entry) => [entry.relativePath, entry]));
+  const listed = new Map(children.map((child) => [child.relativePath, child]));
+  const visible = new Map<string, boolean>();
+
+  const isVisible = (child: ProjectFileIndexEntry): boolean => {
+    const cached = visible.get(child.relativePath);
+    if (cached !== undefined) return cached;
+    visible.set(child.relativePath, false);
+    const parentPath = getParentRelativePath(child.relativePath);
+    const indexedParent = parentPath ? indexed.get(parentPath) : undefined;
+    const listedParent = parentPath ? listed.get(parentPath) : undefined;
+    const result =
+      !indexed.has(child.relativePath) &&
+      (indexedParent
+        ? !!indexedParent.collapsed
+        : !!listedParent?.collapsed && isVisible(listedParent));
+    visible.set(child.relativePath, result);
+    return result;
+  };
+
+  return children.filter(isVisible);
+};
 
 /**
  * Children of collapsed (fully git-ignored) directories, fetched one level at a
@@ -55,6 +90,10 @@ export const useCollapsedDirectoryChildren = ({
   }, [scopeKey]);
 
   const children = loaded.scopeKey === scopeKey ? loaded.entries : [];
+  const visibleChildren = useMemo(
+    () => selectCollapsedChildren(entries, children),
+    [children, entries],
+  );
   const truncatedCount = loaded.scopeKey === scopeKey ? loaded.truncatedDirs.length : 0;
 
   useEffect(() => {
@@ -117,5 +156,5 @@ export const useCollapsedDirectoryChildren = ({
     setLoaded((previous) => ({ ...previous, entries: [...previous.entries] }));
   }, [requested]);
 
-  return { children, invalidate, truncatedCount };
+  return { children: visibleChildren, invalidate, truncatedCount };
 };
