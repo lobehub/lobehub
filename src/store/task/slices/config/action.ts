@@ -3,14 +3,16 @@ import type {
   TaskAutomationMode,
   TaskAutomationSnapshot,
   TaskDetailData,
+  TaskExecutionConfig,
 } from '@lobechat/types';
+import { toTaskExecutionConfigPatch } from '@lobechat/types';
+import type { Draft } from 'immer';
 
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 import { OptimisticEngine } from '@/store/utils/optimisticEngine';
-import { runMutation } from '@/store/utils/runMutation';
 import { saveToast } from '@/store/utils/saveToast';
 
 import type { TaskStore } from '../../store';
@@ -19,11 +21,11 @@ import {
   buildOptimisticPropertyActivity,
 } from '../detail/optimisticActivity';
 
-// Slice of TaskStore that the OptimisticEngine for setAutomationMode reads/writes.
+// Slice of TaskStore that the OptimisticEngine for detail writes reads/writes.
 // Keeping it narrow ensures `extractAffectedPaths` produces `taskDetailMap.<id>`
-// keys so concurrent toggles for the same task serialize, while toggles for
+// keys so concurrent writes for the same task serialize, while writes for
 // different tasks stay parallel.
-interface AutomationModeOptimisticState {
+interface TaskDetailWriteState {
   taskDetailMap: Record<string, TaskDetailData>;
 }
 
@@ -63,10 +65,10 @@ export class TaskConfigSliceActionImpl {
   readonly #get: () => TaskStore;
   readonly #set: Setter;
   // Lazily-initialized engine shared by every action that mutates a task's
-  // `taskDetailMap` entry (setAutomationMode, updateSchedule). Per-task path
-  // conflicts serialize rapid edits for the same task while different tasks
-  // stay parallel.
-  #automationEngine?: OptimisticEngine<AutomationModeOptimisticState>;
+  // `taskDetailMap` entry (setAutomationMode, updateSchedule, updateCheckpoint,
+  // updateTaskExecution, updateTaskModelConfig). Per-task path conflicts
+  // serialize rapid edits for the same task while different tasks stay parallel.
+  #detailWriteEngine?: OptimisticEngine<TaskDetailWriteState>;
 
   constructor(set: Setter, get: () => TaskStore, _api?: unknown) {
     void _api;
@@ -77,17 +79,57 @@ export class TaskConfigSliceActionImpl {
   // `getState` exposes only the taskDetailMap slice so the engine's patches
   // refer to keys under it — needed for `extractAffectedPaths` to produce
   // `taskDetailMap.<id>` conflict keys.
-  #getAutomationEngine = (): OptimisticEngine<AutomationModeOptimisticState> => {
-    if (this.#automationEngine) return this.#automationEngine;
-    this.#automationEngine = new OptimisticEngine(
+  #getDetailWriteEngine = (): OptimisticEngine<TaskDetailWriteState> => {
+    if (this.#detailWriteEngine) return this.#detailWriteEngine;
+    this.#detailWriteEngine = new OptimisticEngine(
       {
         getState: () => ({ taskDetailMap: this.#get().taskDetailMap }),
         setState: (next) =>
-          this.#set(next as Partial<TaskStore>, false, 'taskConfig/automationEngine'),
+          this.#set(next as Partial<TaskStore>, false, 'taskConfig/detailWriteEngine'),
       },
       { maxRetries: 0 },
     );
-    return this.#automationEngine;
+    return this.#detailWriteEngine;
+  };
+
+  /**
+   * Commit one write to the task's `config` column.
+   *
+   * Every writer of that column goes through the detail-write engine so they
+   * serialize per task on `taskDetailMap.<id>`. That matters because the server
+   * merges the column with a read-modify-write (`TaskModel.updateTaskConfig`):
+   * two in-flight writes can read the same snapshot and let the later one
+   * silently drop the other's key — and the fields a user edits in one sitting
+   * (model, run location, checkpoint) all live in that one column.
+   *
+   * The optimistic patch is applied synchronously and a failure replays exactly
+   * its inverse, so there is deliberately NO refetch: a refresh is an async SWR
+   * write that can land after the user's next edit and replace it.
+   */
+  #commitConfigWrite = async (
+    id: string,
+    write: {
+      mutate: () => Promise<unknown>;
+      name: string;
+      onError: (error: unknown) => void;
+      optimistic: (draft: Draft<TaskDetailWriteState>) => void;
+    },
+  ): Promise<void> => {
+    const engine = this.#getDetailWriteEngine();
+    const tx = engine.createTransaction(`${write.name}(${id})`);
+    tx.set(write.optimistic);
+    tx.mutation = write.mutate;
+    tx.onError = write.onError;
+
+    this.#get().internal_setTaskSaveStatus(id, 'saving');
+    try {
+      await tx.commit();
+      this.#get().internal_setTaskSaveStatus(id, 'saved');
+    } catch {
+      // The engine already replayed the inverse patch and `onError` surfaced the
+      // failure — never leave the write looking idle.
+      this.#get().internal_setTaskSaveStatus(id, 'failed');
+    }
   };
 
   markBriefRead = async (briefId: string): Promise<void> => {
@@ -117,19 +159,19 @@ export class TaskConfigSliceActionImpl {
   };
 
   updateCheckpoint = async (id: string, checkpoint: CheckpointConfig): Promise<void> => {
-    this.#get().internal_dispatchTaskDetail({
-      id,
-      type: 'updateTaskDetail',
-      value: { checkpoint },
+    await this.#commitConfigWrite(id, {
+      mutate: () => taskService.updateCheckpoint(id, checkpoint),
+      name: 'updateCheckpoint',
+      onError: (error) => {
+        console.error('[TaskStore] Failed to update checkpoint:', error);
+        saveToast(error, { retry: () => void this.#get().updateCheckpoint(id, checkpoint) });
+      },
+      optimistic: (draft) => {
+        const target = draft.taskDetailMap[id];
+        if (!target) return;
+        target.checkpoint = checkpoint;
+      },
     });
-
-    try {
-      await taskService.updateCheckpoint(id, checkpoint);
-      await this.#get().internal_refreshTaskDetail(id);
-    } catch (error) {
-      console.error('[TaskStore] Failed to update checkpoint:', error);
-      await this.#get().internal_refreshTaskDetail(id);
-    }
   };
 
   updateReview = async (
@@ -166,26 +208,56 @@ export class TaskConfigSliceActionImpl {
     id: string,
     modelConfig: { model?: string; provider?: string },
   ): Promise<void> => {
-    // Optimistic update — immediately reflect new model/provider in UI
-    this.#get().internal_dispatchTaskDetail({
-      id,
-      type: 'updateTaskDetail',
-      value: { config: { ...this.#get().taskDetailMap[id]?.config, ...modelConfig } },
-    });
-    await runMutation(this.#set, this.#get, {
-      mutate: async () => {
-        await taskService.updateConfig(id, modelConfig);
-        await this.#get().internal_refreshTaskDetail(id);
-      },
+    // Serialized with every other `config` writer, and with no refetch: switching
+    // the model while picking a run location is the same column, and a late
+    // refresh would replace the run-location chip's optimistic state.
+    await this.#commitConfigWrite(id, {
+      mutate: () => taskService.updateConfig(id, modelConfig),
       name: 'updateTaskModelConfig',
-      onError: async (error) => {
+      onError: (error) => {
         console.error('[TaskStore] Failed to update task model config:', error);
-        await this.#get().internal_refreshTaskDetail(id);
         saveToast(error, { retry: () => void this.#get().updateTaskModelConfig(id, modelConfig) });
       },
-      // Best-effort toggle — the toast + refetch surface the failure, callers don't rethrow.
-      rethrow: false,
-      setStatus: (status) => this.#get().internal_setTaskSaveStatus(id, status),
+      optimistic: (draft) => {
+        const target = draft.taskDetailMap[id];
+        if (!target) return;
+        target.config = { ...target.config, ...modelConfig };
+      },
+    });
+  };
+
+  /**
+   * Set where this task's runs execute — a pinned device and/or a working
+   * directory. `undefined` (or an axis set to `undefined`) returns that axis to
+   * inheritance, so a task that pins nothing runs wherever its assignee agent
+   * does.
+   *
+   * Written through `task.updateConfig`, which DEEP MERGES, and never through
+   * `task.update`: that one replaces the whole `config` column and would take
+   * model / brief / review / checkpoint down with it. `toTaskExecutionConfigPatch`
+   * therefore writes every axis explicitly, `null` for a cleared one — under a
+   * merge an omitted key keeps its previous value, which would leave the old
+   * device or directory in place while the control reads "follow the agent".
+   */
+  updateTaskExecution = async (id: string, execution?: TaskExecutionConfig): Promise<void> => {
+    const patch = toTaskExecutionConfigPatch(execution);
+
+    // Every axis is written explicitly on every call, so two of these in flight
+    // can put the previous selection back if the older one lands last — hence the
+    // shared config-write path (`#commitConfigWrite`), same as the model and
+    // checkpoint writers, which merge into the same column.
+    await this.#commitConfigWrite(id, {
+      mutate: () => taskService.updateConfig(id, { execution: patch }),
+      name: 'updateTaskExecution',
+      onError: (error) => {
+        console.error('[TaskStore] Failed to update task execution:', error);
+        saveToast(error, { retry: () => void this.#get().updateTaskExecution(id, execution) });
+      },
+      optimistic: (draft) => {
+        const target = draft.taskDetailMap[id];
+        if (!target) return;
+        target.config = { ...target.config, execution: patch };
+      },
     });
   };
 
@@ -232,7 +304,7 @@ export class TaskConfigSliceActionImpl {
     // The patch also mirrors every server-bound field locally, so no post-PUT
     // refresh is needed — refresh would be an async SWR write that could land
     // after the user's next click and clobber their latest state.
-    const engine = this.#getAutomationEngine();
+    const engine = this.#getDetailWriteEngine();
     const tx = engine.createTransaction(`setAutomationMode(${id})`);
     // The feed row for this change rides the same optimistic patch as the
     // fields themselves — there is deliberately no refetch here (see below),
@@ -318,7 +390,7 @@ export class TaskConfigSliceActionImpl {
     // normalized store copy), so we don't need a follow-up refresh — that
     // refresh used to be the race source: an async SWR write that could
     // arrive after the user's next click and overwrite their input.
-    const engine = this.#getAutomationEngine();
+    const engine = this.#getDetailWriteEngine();
     const tx = engine.createTransaction(`updateSchedule(${id})`);
     // The server logs a pattern / timezone edit as an automation change when
     // the schedule is on; this path never refetches, so the feed row has to

@@ -1,5 +1,7 @@
 'use client';
 
+import type { TaskExecutionConfig } from '@lobechat/types';
+import { toTaskExecutionConfigPatch } from '@lobechat/types';
 import { useEditor } from '@lobehub/editor/react';
 import { Block, Flexbox } from '@lobehub/ui';
 import { ActionIcon, Button, Text, toast, useModalContext } from '@lobehub/ui/base-ui';
@@ -24,6 +26,7 @@ import AssigneeAgentSelector from '../features/AssigneeAgentSelector';
 import AssigneeAvatar from '../features/AssigneeAvatar';
 import AssigneeMemberSelector from '../features/AssigneeMemberSelector';
 import AssigneeUserAvatar from '../features/AssigneeUserAvatar';
+import TaskExecutionControls from '../features/TaskExecutionControls';
 import TaskPriorityTag from '../features/TaskPriorityTag';
 import TaskVisibilityChipLabel from '../features/TaskVisibilityChipLabel';
 import TaskVisibilityTag from '../features/TaskVisibilityTag';
@@ -64,6 +67,10 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
     const [priority, setPriority] = useState(0);
     const [assigneeAgentId, setAssigneeAgentId] = useState<string | undefined>(agentId);
     const [assigneeUserId, setAssigneeUserId] = useState<string | undefined>();
+    // Where this task will run, if not simply wherever the assignee runs.
+    // Undefined = inherit, and then nothing is sent, so an untouched modal
+    // creates exactly the task it always did.
+    const [execution, setExecution] = useState<TaskExecutionConfig | undefined>();
     // Default to workspace-visible: workspace tasks are team work by default,
     // and going private stays one click away. In personal mode the field is
     // irrelevant and the chip is hidden anyway.
@@ -95,6 +102,19 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
 
     const handleAgentChange = useCallback((nextAgentId: string | null) => {
       setAssigneeAgentId(nextAgentId ?? undefined);
+      // The repo list belongs to the assignee (its provider env), so a
+      // selection made for the previous agent must not carry over. A pinned
+      // device is the user's machine and stays valid across agents.
+      setExecution((current) =>
+        current?.repos
+          ? {
+              ...current,
+              repos: undefined,
+              workingDirectory: undefined,
+              workingDirectoryConfig: undefined,
+            }
+          : current,
+      );
     }, []);
     const handleMemberChange = useCallback((nextUserId: string | null) => {
       setAssigneeUserId(nextUserId ?? undefined);
@@ -129,6 +149,9 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
         const result = await createTask({
           assigneeAgentId,
           assigneeUserId,
+          // Only present when the user pinned a run location / directory —
+          // otherwise the task inherits the assignee agent entirely.
+          ...(execution ? { config: { execution: toTaskExecutionConfigPatch(execution) } } : {}),
           editorData: editorJson,
           instruction: instruction || title.trim(),
           name: title.trim() || undefined,
@@ -155,6 +178,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
       assigneeUserId,
       canCreateTask,
       close,
+      execution,
       createTask,
       editor,
       onCreated,
@@ -346,6 +370,13 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
                 <TaskVisibilityChipLabel visibility={visibility} />
               </TaskVisibilityTag>
             )}
+
+            <TaskExecutionControls
+              assigneeAgentId={assigneeAgentId}
+              disabled={!canCreateTask}
+              value={execution}
+              onChange={setExecution}
+            />
 
             <ActionIcon
               icon={Paperclip}

@@ -1,4 +1,9 @@
 // @vitest-environment node
+import {
+  applyTaskReposSelection,
+  readTaskExecutionConfig,
+  toTaskExecutionConfigPatch,
+} from '@lobechat/types';
 import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -1768,6 +1773,129 @@ describe('TaskModel', () => {
       await model.updateWithLog(task.id, { name: 'Renamed' }, { userId });
 
       expect(await model.getActivities(task.id)).toHaveLength(0);
+    });
+
+    it('drops the previous assignee cloud-repo selection when the task is reassigned', async () => {
+      const model = new TaskModel(serverDB, userId);
+      await createAgent('agt_repos_a');
+      await createAgent('agt_repos_b');
+      const task = await model.create({ assigneeAgentId: 'agt_repos_a', instruction: 'Test' });
+      await model.updateTaskConfig(task.id, {
+        execution: toTaskExecutionConfigPatch(
+          applyTaskReposSelection(undefined, ['lobehub/lobehub']),
+        ),
+      });
+
+      const updated = await model.updateWithLog(
+        task.id,
+        { assigneeAgentId: 'agt_repos_b' },
+        { userId },
+      );
+
+      // `repos` resolve against the assignee agent's provider env, so agent B
+      // must not inherit agent A's: every later run would start in a directory
+      // agent B cannot open.
+      expect(readTaskExecutionConfig(updated?.config as Record<string, unknown>)).toBeUndefined();
+      expect((updated?.config as { execution: unknown }).execution).toEqual({
+        boundDeviceId: null,
+        repos: null,
+        workingDirectory: null,
+        workingDirectoryConfig: null,
+      });
+    });
+
+    it('keeps a machine-local selection across a reassignment', async () => {
+      const model = new TaskModel(serverDB, userId);
+      await createAgent('agt_keep_a');
+      await createAgent('agt_keep_b');
+      const task = await model.create({ assigneeAgentId: 'agt_keep_a', instruction: 'Test' });
+      await model.updateTaskConfig(task.id, {
+        execution: toTaskExecutionConfigPatch({
+          boundDeviceId: 'device-a',
+          workingDirectory: '/srv/app',
+        }),
+      });
+
+      const updated = await model.updateWithLog(
+        task.id,
+        { assigneeAgentId: 'agt_keep_b' },
+        { userId },
+      );
+
+      // A device pin and a path on that machine are the user's own, not the
+      // agent's — only the cloud-repo axis is tied to the assignee.
+      expect(readTaskExecutionConfig(updated?.config as Record<string, unknown>)).toEqual({
+        boundDeviceId: 'device-a',
+        workingDirectory: '/srv/app',
+      });
+    });
+
+    it('keeps the repo selection when the assignee does not move', async () => {
+      const model = new TaskModel(serverDB, userId);
+      await createAgent('agt_stable');
+      const task = await model.create({ assigneeAgentId: 'agt_stable', instruction: 'Test' });
+      await model.updateTaskConfig(task.id, {
+        execution: toTaskExecutionConfigPatch(
+          applyTaskReposSelection(undefined, ['lobehub/lobehub']),
+        ),
+      });
+
+      const updated = await model.updateWithLog(task.id, { name: 'Renamed' }, { userId });
+
+      expect(readTaskExecutionConfig(updated?.config as Record<string, unknown>)?.repos).toEqual([
+        'lobehub/lobehub',
+      ]);
+    });
+
+    it('keeps the repos the runner fallback inherits, since nobody chose a new agent', async () => {
+      const model = new TaskModel(serverDB, userId);
+      await createAgent('agt_fallback');
+      const task = await model.create({ instruction: 'Test' });
+      await model.updateTaskConfig(task.id, {
+        execution: toTaskExecutionConfigPatch(
+          applyTaskReposSelection(undefined, ['lobehub/lobehub']),
+        ),
+      });
+
+      // The runner assigns the inbox agent to make an unassigned task runnable.
+      // Dropping the selection there would strip the directory the run is about
+      // to use, in the same breath as starting it.
+      const updated = await model.updateWithLog(task.id, { assigneeAgentId: 'agt_fallback' }, {});
+
+      expect(readTaskExecutionConfig(updated?.config as Record<string, unknown>)?.repos).toEqual([
+        'lobehub/lobehub',
+      ]);
+    });
+
+    it('keeps the execution this update states for the new assignee', async () => {
+      const model = new TaskModel(serverDB, userId);
+      await createAgent('agt_stated_a');
+      await createAgent('agt_stated_b');
+      const task = await model.create({ assigneeAgentId: 'agt_stated_a', instruction: 'Test' });
+      await model.updateTaskConfig(task.id, {
+        execution: toTaskExecutionConfigPatch(
+          applyTaskReposSelection(undefined, ['lobehub/lobehub']),
+        ),
+      });
+
+      const updated = await model.updateWithLog(
+        task.id,
+        {
+          assigneeAgentId: 'agt_stated_b',
+          config: {
+            execution: toTaskExecutionConfigPatch(
+              applyTaskReposSelection(undefined, ['lobehub/other']),
+            ),
+          },
+        },
+        { userId },
+      );
+
+      // Moving the assignee and naming a directory in one write means the new
+      // agent's run — the caller's intent, not a leftover to clean up.
+      expect(readTaskExecutionConfig(updated?.config as Record<string, unknown>)?.repos).toEqual([
+        'lobehub/other',
+      ]);
     });
 
     it('records an actorless row for a system assignment', async () => {

@@ -22,6 +22,11 @@ vi.mock('@/libs/swr', () => ({
   useClientDataSWR: vi.fn(),
 }));
 
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ...(await import('~base-ui-stubs')).baseUiStubs,
+}));
+
 const mockDetail = {
   checkpoint: { onAgentRequest: false },
   identifier: 'T-1',
@@ -49,13 +54,24 @@ describe('TaskConfigSliceAction', () => {
       expect(taskService.updateCheckpoint).toHaveBeenCalledWith('T-1', checkpoint);
     });
 
-    it('should refresh on error', async () => {
+    it('rolls back and marks the save failed when the PUT rejects', async () => {
       const { mutate } = await import('@/libs/swr');
+      const { toast } = await import('@lobehub/ui/base-ui');
       vi.mocked(taskService.updateCheckpoint).mockRejectedValue(new Error('fail'));
 
       await useTaskStore.getState().updateCheckpoint('T-1', { onAgentRequest: true });
 
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
+      // The optimistic patch is replayed back; a failure must never leave the
+      // toggle looking saved, and it must not depend on a refetch to say so.
+      expect(useTaskStore.getState().taskDetailMap['T-1'].checkpoint).toEqual({
+        onAgentRequest: false,
+      });
+      expect(useTaskStore.getState().taskSaveStatusMap['T-1']).toBe('failed');
+      expect(toast.error).toHaveBeenCalled();
+      const refreshes = vi
+        .mocked(mutate)
+        .mock.calls.filter((call) => Array.isArray(call[0]) && call[0][0] === 'task:detail');
+      expect(refreshes).toHaveLength(0);
     });
   });
 
@@ -98,7 +114,7 @@ describe('TaskConfigSliceAction', () => {
   });
 
   describe('updateTaskModelConfig', () => {
-    it('should call updateConfig with model/provider and refresh detail', async () => {
+    it('should call updateConfig with model/provider and never refetch', async () => {
       const { mutate } = await import('@/libs/swr');
       vi.mocked(taskService.updateConfig).mockResolvedValue({ success: true } as any);
 
@@ -110,7 +126,179 @@ describe('TaskConfigSliceAction', () => {
         model: 'claude-sonnet-4-6',
         provider: 'anthropic',
       });
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
+      expect(useTaskStore.getState().taskDetailMap['T-1'].config).toMatchObject({
+        model: 'claude-sonnet-4-6',
+        provider: 'anthropic',
+      });
+      expect(useTaskStore.getState().taskSaveStatusMap['T-1']).toBe('saved');
+      // A refresh here is an async write that could land after the user's next
+      // run-location pick and replace it.
+      const refreshes = vi
+        .mocked(mutate)
+        .mock.calls.filter((call) => Array.isArray(call[0]) && call[0][0] === 'task:detail');
+      expect(refreshes).toHaveLength(0);
+    });
+
+    it('serializes with the run-location writes they share a config column with', async () => {
+      const flush = () => new Promise((r) => setTimeout(r, 0));
+      const settlers: Array<() => void> = [];
+      vi.mocked(taskService.updateConfig).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            settlers.push(() => resolve({ success: true } as any));
+          }),
+      );
+
+      // Both writes merge into `tasks.config` server-side with a
+      // read-modify-write, so two in flight let the later one erase the other.
+      const store = useTaskStore.getState();
+      const p1 = store.updateTaskModelConfig('T-1', { model: 'claude-sonnet-4-6' });
+      const p2 = store.updateTaskExecution('T-1', { boundDeviceId: 'device-a' });
+
+      // Both are already visible, and only the first PUT is on the wire.
+      expect(useTaskStore.getState().taskDetailMap['T-1'].config).toMatchObject({
+        execution: { boundDeviceId: 'device-a' },
+        model: 'claude-sonnet-4-6',
+      });
+
+      await flush();
+      expect(taskService.updateConfig).toHaveBeenCalledTimes(1);
+
+      settlers[0]();
+      await flush();
+      expect(taskService.updateConfig).toHaveBeenCalledTimes(2);
+
+      settlers[1]();
+      await Promise.all([p1, p2]);
+
+      expect(vi.mocked(taskService.updateConfig).mock.calls.map((call) => call[1])).toEqual([
+        { model: 'claude-sonnet-4-6' },
+        {
+          execution: {
+            boundDeviceId: 'device-a',
+            repos: null,
+            workingDirectory: null,
+            workingDirectoryConfig: null,
+          },
+        },
+      ]);
+    });
+  });
+
+  describe('updateTaskExecution', () => {
+    // Macrotask flush — enough for OptimisticEngine to resolve the previous PUT,
+    // run its post-await steps, and kick off the next mutation's PUT.
+    const flush = () => new Promise((r) => setTimeout(r, 0));
+
+    const executionOf = (id = 'T-1') =>
+      useTaskStore.getState().taskDetailMap[id].config?.execution as Record<string, unknown>;
+
+    it('serializes rapid device + directory edits, keeps the last one, and never refetches', async () => {
+      const { mutate } = await import('@/libs/swr');
+      const settlers: Array<() => void> = [];
+      vi.mocked(taskService.updateConfig).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            settlers.push(() => resolve({ success: true } as any));
+          }),
+      );
+
+      // Every call writes a COMPLETE four-axis patch, so the older PUT landing
+      // last would put the previous selection back — silently moving the run.
+      const store = useTaskStore.getState();
+      const p1 = store.updateTaskExecution('T-1', { boundDeviceId: 'device-a' });
+      const p2 = store.updateTaskExecution('T-1', {
+        boundDeviceId: 'device-a',
+        workingDirectory: '/srv/app',
+      });
+      const p3 = store.updateTaskExecution('T-1', {
+        boundDeviceId: 'device-b',
+        workingDirectory: '/srv/app',
+      });
+
+      // The last click is already on screen while the first PUT is in flight.
+      expect(executionOf()).toEqual({
+        boundDeviceId: 'device-b',
+        repos: null,
+        workingDirectory: '/srv/app',
+        workingDirectoryConfig: null,
+      });
+
+      await flush();
+      expect(taskService.updateConfig).toHaveBeenCalledTimes(1);
+
+      settlers[0]();
+      await flush();
+      expect(taskService.updateConfig).toHaveBeenCalledTimes(2);
+
+      settlers[1]();
+      await flush();
+      expect(taskService.updateConfig).toHaveBeenCalledTimes(3);
+
+      settlers[2]();
+      await Promise.all([p1, p2, p3]);
+
+      expect(
+        vi
+          .mocked(taskService.updateConfig)
+          .mock.calls.map((call) => (call[1] as any).execution.boundDeviceId),
+      ).toEqual(['device-a', 'device-a', 'device-b']);
+      expect(executionOf()).toEqual({
+        boundDeviceId: 'device-b',
+        repos: null,
+        workingDirectory: '/srv/app',
+        workingDirectoryConfig: null,
+      });
+
+      const refreshes = vi
+        .mocked(mutate)
+        .mock.calls.filter((call) => Array.isArray(call[0]) && call[0][0] === 'task:detail');
+      expect(refreshes).toHaveLength(0);
+    });
+
+    it('rolls the optimistic patch back, marks the save failed, and offers a retry', async () => {
+      const { toast } = await import('@lobehub/ui/base-ui');
+      useTaskStore.setState({
+        taskDetailMap: {
+          'T-1': {
+            ...mockDetail,
+            config: { execution: { boundDeviceId: 'device-a' }, model: 'x' },
+          },
+        },
+      });
+      vi.mocked(taskService.updateConfig).mockRejectedValue(new Error('boom'));
+
+      await useTaskStore.getState().updateTaskExecution('T-1', { boundDeviceId: 'device-b' });
+
+      // Engine replayed the inverse patch: the stored selection is back, and the
+      // other config pockets were never touched.
+      expect(useTaskStore.getState().taskDetailMap['T-1'].config).toEqual({
+        execution: { boundDeviceId: 'device-a' },
+        model: 'x',
+      });
+      expect(useTaskStore.getState().taskSaveStatusMap['T-1']).toBe('failed');
+
+      const toastOptions = vi.mocked(toast.error).mock.calls.at(-1)?.[0];
+      if (!toastOptions || typeof toastOptions === 'string') {
+        throw new Error('Expected the failed save toast to expose a Retry action.');
+      }
+      expect(toastOptions.actions?.[0]).toBeDefined();
+    });
+
+    it('marks the save saved when the write lands', async () => {
+      vi.mocked(taskService.updateConfig).mockResolvedValue({ success: true } as any);
+
+      await useTaskStore.getState().updateTaskExecution('T-1', { boundDeviceId: 'device-a' });
+
+      expect(taskService.updateConfig).toHaveBeenCalledWith('T-1', {
+        execution: {
+          boundDeviceId: 'device-a',
+          repos: null,
+          workingDirectory: null,
+          workingDirectoryConfig: null,
+        },
+      });
+      expect(useTaskStore.getState().taskSaveStatusMap['T-1']).toBe('saved');
     });
   });
 

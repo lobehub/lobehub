@@ -26,6 +26,7 @@ import { useLocalSandboxCapability } from '@/features/ChatInput/hooks/useLocalSa
 import { useSelectExecutionTarget } from '@/features/ChatInput/hooks/useSelectExecutionTarget';
 import { useDeviceList } from '@/features/DeviceManager/useDeviceList';
 import {
+  devicePoolForAgent,
   ExecutionTargetDeviceStatus,
   ExecutionTargetIcon,
   groupExecutionTargetDevices,
@@ -638,9 +639,9 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   // Empty-state accounting must use the rows the CURRENT agent can actually
   // pick (post scope filtering) — a workspace agent whose members only have
   // personal devices would otherwise render neither devices nor an empty state.
-  const deviceRows = isWorkspaceAgent
-    ? [...privateDevices, ...workspaceDevices]
-    : [...personalOnlyDevices];
+  // The pool rule itself lives in `devicePoolForAgent`, shared with every other
+  // surface that lists devices for an agent (e.g. the Task run-location chip).
+  const deviceRows = devicePoolForAgent(devices, isWorkspaceAgent);
   const hasNoDevices = deviceRows.length === 0;
   // On web with no device, the prominent download card below replaces the small
   // header link — avoid showing the same CTA twice. Workspace agents get the

@@ -982,6 +982,9 @@ export const dispatchHeteroAgent = async (
         devicePlatform: boundDevice?.platform,
         initialWorkingDirectory: appContext?.initialTopicMetadata?.workingDirectory,
         initialWorkingDirectoryConfig: appContext?.initialTopicMetadata?.workingDirectoryConfig,
+        // The run's repos, so a directory that IS one of them is skipped: this
+        // device cannot have it (`owner/repo` is a cloud repo identifier).
+        repos: topicRepos,
         topicDeviceId: topic?.metadata?.boundDeviceId,
         topicWorkingDirectory: topic?.metadata?.workingDirectory,
         topicWorkingDirectoryConfig: topic?.metadata?.workingDirectoryConfig,
