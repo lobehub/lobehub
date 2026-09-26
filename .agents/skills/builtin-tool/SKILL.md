@@ -51,7 +51,7 @@ A builtin tool is a package the agent runtime can call. It ships **five faces**:
 5. **UI defaults to "do nothing".** Inspector is required (the header strip). Render/Placeholder/Streaming/Intervention/Portal are added **only when there's something specific to show** — empty registries are fine.
 6. **Style with `createStaticStyles + cssVar.*`** (zero-runtime). Fall back to `createStyles + token` only when you genuinely need runtime values. Use `@lobehub/ui` components, not raw antd.
 7. **i18n keys live in `packages/locales/src/default/plugin.ts`.** Inspector titles must come from `t('builtins.<identifier>.apiName.<api>')` so something renders while args stream.
-8. **Recovery continues the actor, not a side view.** When a tool run can fail or stop partway, start from the user's next step. If they want the work finished, let the same actor (same thread/operation identity) take a new instruction instead of adding a read-only inspection API the model must remember to call. Add a model-visible tool only when it has its own user scenario, and accept it by walking fail → user action → completed result.
+8. **A failed long-running call should be continuable, not just inspectable.** Example: when `callSubAgent` stops halfway, the user says "keep going". So the fix was an optional `subAgentId` on `callSubAgent` that appends a new instruction to the same sub-agent thread — not a new "look up that run" API the model has to remember to call before retrying from scratch. Add a new API only when a user would ask for it on its own.
 
 ---
 
