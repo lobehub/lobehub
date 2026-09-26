@@ -394,6 +394,21 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
     expect(mockUpdateTopicMetadata).toHaveBeenCalledWith('topic-1', { boundDeviceId: DEVICE_ID });
   });
 
+  it('pins the topic to the run device even when no directory resolves there', async () => {
+    mockTopicFindById.mockResolvedValue({ id: 'topic-1', metadata: {} });
+    mockGetAgentConfig.mockResolvedValue(
+      createAgentConfig({ boundDeviceId: DEVICE_ID, executionTarget: 'device' }),
+    );
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      prompt: 'Hello',
+    });
+
+    expect(mockUpdateTopicMetadata).toHaveBeenCalledWith('topic-1', { boundDeviceId: DEVICE_ID });
+  });
+
   it('leaves the topic unbound when neither the agent nor the device has a directory', async () => {
     mockGetAgentConfig.mockResolvedValue(
       createAgentConfig({ boundDeviceId: DEVICE_ID, executionTarget: 'device' }),

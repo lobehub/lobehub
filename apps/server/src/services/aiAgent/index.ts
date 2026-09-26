@@ -282,7 +282,13 @@ export class AiAgentService {
    */
   private async bindTopicWorkingDirectory(params: BindTopicWorkingDirectoryParams): Promise<void> {
     const { config, currentDeviceId, currentWorkingDirectory, deviceId, topicId } = params;
-    if (!config) return;
+    if (!config) {
+      // No directory resolved on this machine (no agent pick, no device
+      // default), so the caller never read the topic either. The run still
+      // happened here — pin an unbound topic to it all the same.
+      if (deviceId) await this.stampTopicDevice(topicId, deviceId);
+      return;
+    }
     if (currentDeviceId && deviceId && currentDeviceId !== deviceId) return;
     const stampDevice = !!deviceId && !currentDeviceId;
     const path = currentWorkingDirectory ? undefined : getWorkingDirEffectivePath(config);
@@ -296,6 +302,16 @@ export class AiAgentService {
     } catch (err) {
       // Metadata bookkeeping must never fail a run that is otherwise fine.
       log('execAgent: bindTopicWorkingDirectory failed (non-fatal): %O', err);
+    }
+  }
+
+  private async stampTopicDevice(topicId: string, deviceId: string): Promise<void> {
+    try {
+      const topic = await this.topicModel.findById(topicId);
+      if (!topic || topic.metadata?.boundDeviceId) return;
+      await this.topicModel.updateMetadata(topicId, { boundDeviceId: deviceId });
+    } catch (err) {
+      log('execAgent: stampTopicDevice failed (non-fatal): %O', err);
     }
   }
 
