@@ -639,6 +639,56 @@ export class AgentDocumentModel {
       : undefined;
   }
 
+  /**
+   * Writes a repaired editor snapshot only if the backing document still holds
+   * the version the repair was computed from.
+   *
+   * Use when:
+   * - A read path rebuilds `editorData` from Markdown and must persist it so the
+   *   node ids it exposes stay addressable, without clobbering a concurrent save.
+   *
+   * Expects:
+   * - `expected` is the `content` / `editorData` pair the caller read.
+   *
+   * Returns:
+   * - `true` when the snapshot was written; `false` when the document changed
+   *   (or is gone) since it was read, in which case nothing is written.
+   */
+  async updateEditorSnapshotIfUnchanged(
+    documentId: string,
+    expected: { content: string; editorData: Record<string, any> | null },
+    next: { content: string; editorData: Record<string, any> },
+  ): Promise<boolean> {
+    const existing = await this.findById(documentId);
+    if (!existing) return false;
+
+    const stats = this.getDocumentStats(next.content);
+    const expectedEditorData =
+      expected.editorData === null || expected.editorData === undefined
+        ? null
+        : JSON.stringify(expected.editorData);
+
+    const updated = await this.db
+      .update(documents)
+      .set({
+        content: next.content,
+        editorData: next.editorData,
+        totalCharCount: stats.totalCharCount,
+        totalLineCount: stats.totalLineCount,
+      })
+      .where(
+        and(
+          eq(documents.id, existing.documentId),
+          this.documentOwnership(),
+          sql`coalesce(${documents.content}, '') = ${expected.content}`,
+          sql`${documents.editorData} IS NOT DISTINCT FROM ${expectedEditorData}::jsonb`,
+        ),
+      )
+      .returning({ id: documents.id });
+
+    return updated.length > 0;
+  }
+
   async update(
     documentId: string,
     params?: {

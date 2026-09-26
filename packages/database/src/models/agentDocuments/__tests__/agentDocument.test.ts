@@ -595,6 +595,62 @@ describe('AgentDocumentModel', () => {
     });
   });
 
+  describe('updateEditorSnapshotIfUnchanged', () => {
+    const repaired = {
+      content: 'body',
+      editorData: { root: { children: [{ type: 'paragraph' }], type: 'root' } },
+    };
+
+    it('writes the repaired snapshot when the document still matches the read version', async () => {
+      const created = await agentDocumentModel.create(agentId, 'repair.md', 'body');
+      const read = (await agentDocumentModel.findById(created.id))!;
+
+      const written = await agentDocumentModel.updateEditorSnapshotIfUnchanged(
+        created.id,
+        { content: read.content, editorData: read.editorData },
+        repaired,
+      );
+
+      expect(written).toBe(true);
+      const after = await agentDocumentModel.findById(created.id);
+      expect(after?.editorData).toEqual(repaired.editorData);
+    });
+
+    it('does not overwrite a save that landed after the read', async () => {
+      const created = await agentDocumentModel.create(agentId, 'repair.md', 'body');
+      const read = (await agentDocumentModel.findById(created.id))!;
+      const autosaved = { root: { children: [{ text: 'newer' }], type: 'root' } };
+      await agentDocumentModel.update(created.id, { content: 'newer', editorData: autosaved });
+
+      const written = await agentDocumentModel.updateEditorSnapshotIfUnchanged(
+        created.id,
+        { content: read.content, editorData: read.editorData },
+        repaired,
+      );
+
+      expect(written).toBe(false);
+      const after = await agentDocumentModel.findById(created.id);
+      expect(after?.content).toBe('newer');
+      expect(after?.editorData).toEqual(autosaved);
+    });
+
+    it('treats an editorData-only save as a new version', async () => {
+      const created = await agentDocumentModel.create(agentId, 'repair.md', 'body');
+      const read = (await agentDocumentModel.findById(created.id))!;
+      const autosaved = { root: { children: [{ text: 'body' }], type: 'root' } };
+      await agentDocumentModel.update(created.id, { editorData: autosaved });
+
+      const written = await agentDocumentModel.updateEditorSnapshotIfUnchanged(
+        created.id,
+        { content: read.content, editorData: read.editorData },
+        repaired,
+      );
+
+      expect(written).toBe(false);
+      expect((await agentDocumentModel.findById(created.id))?.editorData).toEqual(autosaved);
+    });
+  });
+
   describe('rename and copy', () => {
     it('should rename and preserve human-readable filename/source', async () => {
       const created = await agentDocumentModel.create(agentId, 'old-name.md', 'hello');
