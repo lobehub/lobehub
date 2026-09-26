@@ -49,6 +49,7 @@
     "./kimiCodingPlan": "./src/aiModels/kimiCodingPlan.ts",
     "./lmstudio": "./src/aiModels/lmstudio.ts",
     "./longcat": "./src/aiModels/longcat.ts",
+    "./melious": "./src/aiModels/melious.ts",
     "./meta": "./src/aiModels/meta.ts",
     "./minimax": "./src/aiModels/minimax.ts",
     "./minimaxCodingPlan": "./src/aiModels/minimaxCodingPlan.ts",
