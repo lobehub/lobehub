@@ -8,7 +8,7 @@ Manage conversation topics (threads).
 
 ### `lh topic list`
 
-```text
+```bash
 lh topic list [--agent-id <id>] [-L <n>] [-P <n>] [--json [fields]]
 ```
 
@@ -22,13 +22,13 @@ lh topic list [--agent-id <id>] [-L <n>] [-P <n>] [--json [fields]]
 
 ### `lh topic search <keywords>`
 
-```text
+```bash
 lh topic search <keywords> [--agent-id <id>] [--json [fields]]
 ```
 
 ### `lh topic create`
 
-```text
+```bash
 lh topic create -t <title> [--agent-id <id>] [--favorite]
 ```
 
@@ -40,7 +40,7 @@ lh topic create -t <title> [--agent-id <id>] [--favorite]
 
 ### `lh topic edit <id>`
 
-```text
+```bash
 lh topic edit <id> [-t <title>] [--favorite] [--no-favorite]
 ```
 
@@ -49,13 +49,13 @@ lh topic edit <id> [-t <title>] [--favorite] [--no-favorite]
 IDs may be passed as arguments, read from a file with `-f, --file <path>` (one per line, or a
 JSON array), or both combined; at least one ID must resolve or the command errors.
 
-```text
+```bash
 lh topic delete [id1] [id2...] [-f <path>] [--yes]
 ```
 
 ### `lh topic recent`
 
-```text
+```bash
 lh topic recent [-L <n>] [--json [fields]]
 ```
 
@@ -73,7 +73,7 @@ Manage chat messages within topics.
 
 ### `lh message list`
 
-```text
+```bash
 lh message list [--topic-id <id>] [--agent-id <id>] [--role <role>] [--start <date>] [--end <date>] [-L <n>] [-P <n>] [--user] [--json [fields]]
 ```
 
@@ -94,7 +94,7 @@ lh message list [--topic-id <id>] [--agent-id <id>] [--role <role>] [--start <da
 
 ### `lh message search <keywords>`
 
-```text
+```bash
 lh message search <keywords> [--json [fields]]
 ```
 
@@ -102,13 +102,13 @@ Full-text search across all messages.
 
 ### `lh message delete <ids...>`
 
-```text
+```bash
 lh message delete <id1> [id2...] [--yes]
 ```
 
 ### `lh message count`
 
-```text
+```bash
 lh message count [--topic-id <id>] [--agent-id <id>] [--role <role>] [--start <date>] [--end <date>] [--group-by <field>] [--json]
 ```
 
@@ -126,7 +126,7 @@ lh message count [--topic-id <id>] [--agent-id <id>] [--role <role>] [--start <d
 
 ### `lh message heatmap`
 
-```text
+```bash
 lh message heatmap [--json]
 ```
 

@@ -11,7 +11,7 @@ Search across local resources, or the web with `--web`.
 `-q, --query` is not a positional argument — it's an option. If omitted, the command prints help
 and exits instead of erroring.
 
-```text
+```bash
 lh search -q <query> [-w] [-t <type>] [-L <n>] [-e <engines>] [-c <categories>] [-T <range>] [--json [fields]]
 ```
 
@@ -55,7 +55,7 @@ results are printed as a table of TITLE, URL, SCORE, CONTENT.
 View details of a single result: a URL crawls the page (web result); `type:id` (e.g.
 `agent:abc123`) looks up a local resource.
 
-```text
+```bash
 lh search view <target> [-i <impls>] [--json [fields]]
 ```
 
@@ -76,7 +76,7 @@ lh search view <target> [-i <impls>] [--json [fields]]
 
 Display current authenticated user information.
 
-```text
+```bash
 lh whoami [--json [fields]]
 ```
 
@@ -86,7 +86,7 @@ lh whoami [--json [fields]]
 
 Display usage statistics.
 
-```text
+```bash
 lh usage [--month <YYYY-MM>] [--agent-id <id>] [--daily] [--json [fields]]
 ```
 

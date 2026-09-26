@@ -38,7 +38,7 @@ lh memory list preference # Only preferences
 
 Create a new identity memory entry.
 
-```text
+```bash
 lh memory create [--type <type>] [--role <role>] [--relationship <rel>] [-d <desc>] [--labels <labels...>]
 ```
 
@@ -56,7 +56,7 @@ lh memory create [--type <type>] [--role <role>] [--relationship <rel>] [-d <des
 
 Edit a memory entry. Options vary by category:
 
-```text
+```bash
 lh memory edit identity <id> [--type <type>] [--role <role>] [--relationship <rel>] [-d <desc>] [--labels <labels...>]
 lh memory edit activity <id> [--narrative <text>] [--notes <text>] [--status <status>]
 lh memory edit context <id> [--title <title>] [--description <desc>] [--status <status>]
@@ -90,7 +90,7 @@ lh memory edit preference <id> [--directives <text>] [--suggestions <text>]
 
 ## `lh memory delete <category> <id>`
 
-```text
+```bash
 lh memory delete <category> <id> [--yes]
 ```
 
@@ -100,7 +100,7 @@ lh memory delete <category> <id> [--yes]
 
 Display the compiled memory persona summary.
 
-```text
+```bash
 lh memory persona [--json [fields]]
 ```
 
@@ -112,7 +112,7 @@ lh memory persona [--json [fields]]
 
 Trigger async memory extraction from chat history.
 
-```text
+```bash
 lh memory extract [--from <date>] [--to <date>]
 ```
 
@@ -129,7 +129,7 @@ Starts a background task that analyzes chat history and creates new memory entri
 
 Check the status of a memory extraction task.
 
-```text
+```bash
 lh memory extract-status [--task-id <id>] [--json [fields]]
 ```
 

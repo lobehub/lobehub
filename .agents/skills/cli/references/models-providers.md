@@ -29,7 +29,7 @@ lh model list lobehub --type video --json
 
 ### `lh model view <id>`
 
-```text
+```bash
 lh model view <id> [--json [fields]]
 ```
 
@@ -37,7 +37,7 @@ lh model view <id> [--json [fields]]
 
 ### `lh model create`
 
-```text
+```bash
 lh model create --id <id> --provider <providerId> [--display-name <name>] [--type <type>]
 ```
 
@@ -50,7 +50,7 @@ lh model create --id <id> --provider <providerId> [--display-name <name>] [--typ
 
 ### `lh model edit <id>`
 
-```text
+```bash
 lh model edit <id> --provider <providerId> [--display-name <name>] [--type <type>]
 ```
 
@@ -58,7 +58,7 @@ lh model edit <id> --provider <providerId> [--display-name <name>] [--type <type
 
 Enable or disable a model.
 
-```text
+```bash
 lh model toggle <id> --provider <providerId> --enable
 lh model toggle <id> --provider <providerId> --disable
 ```
@@ -79,7 +79,7 @@ lh model batch-toggle model1 model2 model3 --provider openai --enable
 
 ### `lh model delete <id>`
 
-```text
+```bash
 lh model delete <id> --provider <providerId> [--yes]
 ```
 
@@ -87,7 +87,7 @@ lh model delete <id> --provider <providerId> [--yes]
 
 Clear all models (or only remote/fetched models) for a provider.
 
-```text
+```bash
 lh model clear --provider <providerId> [--remote] [--yes]
 ```
 
@@ -101,7 +101,7 @@ Manage AI service providers.
 
 ### `lh provider list`
 
-```text
+```bash
 lh provider list [--json [fields]]
 ```
 
@@ -109,7 +109,7 @@ lh provider list [--json [fields]]
 
 ### `lh provider view <id>`
 
-```text
+```bash
 lh provider view <id> [--json [fields]]
 ```
 
@@ -117,7 +117,7 @@ lh provider view <id> [--json [fields]]
 
 ### `lh provider create`
 
-```text
+```bash
 lh provider create --id <id> -n <name> [-s <source>] [-d <desc>] [--logo <url>] [--sdk-type <type>]
 ```
 
@@ -132,7 +132,7 @@ lh provider create --id <id> -n <name> [-s <source>] [-d <desc>] [--logo <url>] 
 
 ### `lh provider edit <id>`
 
-```text
+```bash
 lh provider edit <id> [-n <name>] [-d <desc>] [--logo <url>] [--sdk-type <type>]
 ```
 
@@ -174,13 +174,13 @@ lh provider test openai -m gpt-4o --json
 
 ### `lh provider toggle <id>`
 
-```text
+```bash
 lh provider toggle <id> --enable
 lh provider toggle <id> --disable
 ```
 
 ### `lh provider delete <id>`
 
-```text
+```bash
 lh provider delete <id> [--yes]
 ```

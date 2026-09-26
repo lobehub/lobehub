@@ -15,8 +15,6 @@ Guidelines for using AI coding agents in this opensource LobeHub repository.
 
 `AGENTS.md` owns repository-wide architecture and workflow. Keep detailed implementation rules in skills so they have one source of truth.
 
-In skill and agent Markdown, put command synopses or shell snippets containing `<placeholder>` or `[optional]` syntax in ` ```text ` fences. Prettier's shell plugin formats ` ```bash ` fences and rewrites those placeholders as redirections and globs, e.g. `<id>` becomes `< id >`.
-
 The `acceptance` skill is generated from the default branch of [lobehub/acceptance](https://github.com/lobehub/acceptance). Maintain its source there; update the committed `.agents/skills/acceptance/` copy using `bun apps/cli/src/index.ts acceptance update`. Repository-specific acceptance setup stays in `.agents/acceptance/`.
 
 - **React and TSX**: Before editing components, component state, render boundaries, or memoization, read the `react` skill. It owns component selection, styling, state locality, and render-performance rules.

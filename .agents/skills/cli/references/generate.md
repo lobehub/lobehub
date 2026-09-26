@@ -31,7 +31,7 @@ Generate text completion.
 
 **Source**: `apps/cli/src/commands/generate/text.ts`
 
-```text
+```bash
 lh gen text <prompt> [-m <model>] [-p <provider>] [-s <prompt>] [--temperature <n>] [--max-tokens <n>] [--stream] [--json] [--pipe]
 ```
 
@@ -66,7 +66,7 @@ Generate images from text prompt. This is an async operation — the command sub
 
 **Source**: `apps/cli/src/commands/generate/image.ts`
 
-```text
+```bash
 lh gen image <prompt> [-m <model>] [-p <provider>] [-n <n>] [--width <px>] [--height <px>] [--steps <n>] [--seed <n>] [--json]
 ```
 
@@ -117,7 +117,7 @@ Generate video from text prompt. This is an async operation.
 
 **Source**: `apps/cli/src/commands/generate/video.ts`
 
-```text
+```bash
 lh gen video <prompt> -m <model> -p <provider> [--aspect-ratio <ratio>] [--duration <sec>] [--resolution <res>] [--seed <n>] [--image <url>] [--images <urls...>] [--end-image <url>] [--json]
 ```
 
@@ -171,7 +171,7 @@ Text-to-speech generation.
 
 **Source**: `apps/cli/src/commands/generate/tts.ts`
 
-```text
+```bash
 lh gen tts <text> [-o <file>] [--voice <voice>] [--speed <n>] [--model <model>]
 ```
 
@@ -190,7 +190,7 @@ Audio-to-text transcription (Automatic Speech Recognition). Accepts a local path
 
 **Source**: `apps/cli/src/commands/generate/asr.ts`
 
-```text
+```bash
 lh gen asr <audio-file> [--model <model>] [--provider <provider>] [--language <lang>] [--json]
 ```
 
@@ -216,7 +216,7 @@ Wait for an async generation task to complete and download the result file.
 > ⚠️ `<asyncTaskId>` is the UUID printed after "→ Task" in the video/image output.
 > Do **not** pass the generation ID (`gen_xxx`) here — that will cause a server error.
 
-```text
+```bash
 lh gen download <generationId> <asyncTaskId> [-o <path>] [--interval <sec>] [--timeout <sec>]
 ```
 
@@ -247,7 +247,7 @@ Check the status of an async generation task.
 > ⚠️ `<asyncTaskId>` is the UUID printed after "→ Task" in the video/image output.
 > Do **not** pass the generation ID (`gen_xxx`) here — that will cause a server error.
 
-```text
+```bash
 lh gen status <generationId> <asyncTaskId> [--json]
 ```
 
@@ -271,7 +271,7 @@ lh gen status gen_xxx 7ad0eb13-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 
 List all generation topics.
 
-```text
+```bash
 lh gen list [--json [fields]]
 ```
 

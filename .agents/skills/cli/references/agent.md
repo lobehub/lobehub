@@ -8,7 +8,7 @@ Manage AI agents: create, edit, delete, list, run, and check status.
 
 List all agents.
 
-```text
+```bash
 lh agent list [-L <n>] [-k <keyword>] [--json [fields]]
 ```
 
@@ -26,7 +26,7 @@ lh agent list [-L <n>] [-k <keyword>] [--json [fields]]
 
 View agent configuration details. `agentId` may be omitted when `-s, --slug` is given instead.
 
-```text
+```bash
 lh agent view [agentId] [-s <slug>] [--json [fields]]
 ```
 
@@ -38,7 +38,7 @@ lh agent view [agentId] [-s <slug>] [--json [fields]]
 
 Create a new agent.
 
-```text
+```bash
 lh agent create [-t <title>] [-d <desc>] [-m <model>] [-p <provider>] [-s <role>] [--group <groupId>]
 ```
 
@@ -61,7 +61,7 @@ Update an existing agent. `agentId` may be omitted when `--slug` is given instea
 `create`/`view`, this flag has no `-s` short alias here because `-s` is used for `--system-role`).
 Only specified fields are updated.
 
-```text
+```bash
 lh agent edit [agentId] [--slug <slug>] [-t <title>] [-d <desc>] [-m <model>] [-p <provider>] [-s <role>] [--graph-file <path>] [--enable-graph] [--disable-graph] [--agency-config-file <path>] [--config-file <path>] [--json [fields]]
 ```
 
@@ -86,7 +86,7 @@ lh agent edit [agentId] [--slug <slug>] [-t <title>] [-d <desc>] [-m <model>] [-
 
 Delete an agent.
 
-```text
+```bash
 lh agent delete <agentId> [--yes]
 ```
 
@@ -98,7 +98,7 @@ Requires confirmation unless `--yes` is provided.
 
 Duplicate an existing agent.
 
-```text
+```bash
 lh agent duplicate <agentId> [-t <title>]
 ```
 
@@ -115,7 +115,7 @@ lh agent duplicate <agentId> [-t <title>]
 Start an agent execution. Streams over the agent gateway WebSocket by default, or via SSE with
 `--sse`.
 
-```text
+```bash
 lh agent run [-a <id>] [-s <slug>] [-p <text>] [-t <id>] [--no-auto-start] [--device <target>] [--no-headless] [--json] [-v] [--replay <file>] [--sse]
 ```
 
@@ -154,7 +154,7 @@ falls back to polling `agent status` every 10 seconds until the run reaches a te
 
 Check agent operation status.
 
-```text
+```bash
 lh agent status <operationId> [--json [fields]] [--history] [--history-limit <n>]
 ```
 

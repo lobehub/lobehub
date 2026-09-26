@@ -8,7 +8,7 @@ Manage agent skills (custom instructions and capabilities).
 
 ### `lh skill list`
 
-```text
+```bash
 lh skill list [--source <source>] [--json [fields]]
 ```
 
@@ -20,7 +20,7 @@ lh skill list [--source <source>] [--json [fields]]
 
 ### `lh skill view <id>`
 
-```text
+```bash
 lh skill view <id> [--json [fields]]
 ```
 
@@ -28,7 +28,7 @@ lh skill view <id> [--json [fields]]
 
 ### `lh skill create`
 
-```text
+```bash
 lh skill create -n <name> -d <desc> -c <content> [-i <id>]
 ```
 
@@ -43,19 +43,19 @@ lh skill create -n <name> -d <desc> -c <content> [-i <id>]
 
 Requires at least one of `-c`/`-n`/`-d`; errors if none specified.
 
-```text
+```bash
 lh skill edit <id> [-n <name>] [-d <desc>] [-c <content>]
 ```
 
 ### `lh skill delete <id>`
 
-```text
+```bash
 lh skill delete <id> [--yes]
 ```
 
 ### `lh skill search <query>`
 
-```text
+```bash
 lh skill search <query> [--json [fields]]
 ```
 
@@ -93,7 +93,7 @@ lh skill i my-cool-skill
 
 List files/resources within a skill.
 
-```text
+```bash
 lh skill resources <id> [--json [fields]]
 ```
 
@@ -103,7 +103,7 @@ lh skill resources <id> [--json [fields]]
 
 Read a specific resource file from a skill.
 
-```text
+```bash
 lh skill read-resource <id> <path>
 ```
 
@@ -119,7 +119,7 @@ Install and manage plugins (external tool integrations).
 
 ### `lh plugin list`
 
-```text
+```bash
 lh plugin list [--json [fields]]
 ```
 
@@ -127,7 +127,7 @@ lh plugin list [--json [fields]]
 
 ### `lh plugin install`
 
-```text
+```bash
 lh plugin install -i <id> --manifest <json> [--type <type>] [--settings <json>]
 ```
 
@@ -140,7 +140,7 @@ lh plugin install -i <id> --manifest <json> [--type <type>] [--settings <json>]
 
 ### `lh plugin uninstall <id>`
 
-```text
+```bash
 lh plugin uninstall <id> [--yes]
 ```
 
@@ -148,6 +148,6 @@ lh plugin uninstall <id> [--yes]
 
 Requires `--manifest` or `--settings` (at least one); errors if neither is specified.
 
-```text
+```bash
 lh plugin update <id> [--manifest <json>] [--settings <json>]
 ```
