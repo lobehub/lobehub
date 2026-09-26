@@ -196,6 +196,7 @@ vi.mock('@/server/services/heterogeneousAgent', () => ({
 }));
 
 vi.mock('@/server/services/heterogeneousAgent/sandboxRunner', () => ({
+  resolveSandboxRunTTL: () => '14400s',
   spawnHeteroSandbox: mockSpawnHeteroSandbox,
 }));
 

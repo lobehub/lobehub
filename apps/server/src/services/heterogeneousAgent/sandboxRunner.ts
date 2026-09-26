@@ -9,6 +9,7 @@ import {
 import debug from 'debug';
 
 import { appEnv } from '@/envs/app';
+import { sandboxEnv } from '@/envs/sandbox';
 import type { MarketService } from '@/server/services/market';
 import { createSandboxService } from '@/server/services/sandbox';
 
@@ -54,6 +55,37 @@ export interface SandboxRunParams {
   /** Topic/run workspace — injected as `LOBEHUB_WORKSPACE_ID` for ingest. */
   workspaceId?: string;
 }
+
+/** A run lasts as long as the token it authenticates with. */
+const DEFAULT_SANDBOX_RUN_TTL_SEC = 4 * 60 * 60;
+
+/**
+ * Lifetime of the token a sandbox run authenticates with, as a JWT duration.
+ *
+ * The token is user-scoped, not a `hetero-operation` token, so `lh` does not
+ * renew it: when it expires every ingest is rejected, heartbeats included, and
+ * the operation is reclaimed while the agent is still working. A deployment
+ * that runs agents overnight raises `HETERO_SANDBOX_RUN_TTL_SEC`.
+ */
+export const resolveSandboxRunTTL = (): string =>
+  `${sandboxEnv.HETERO_SANDBOX_RUN_TTL_SEC ?? DEFAULT_SANDBOX_RUN_TTL_SEC}s`;
+
+/** Long enough for the box to start and the launch to return. */
+const DETACHED_LAUNCH_TIMEOUT_MS = 120_000;
+
+/**
+ * Start `command` in the box and return without waiting for it.
+ *
+ * An Onlyboxes task lasts at most ten minutes, and when one times out the worker
+ * destroys the session's container, so a run that stayed inside its task would
+ * die at ten minutes however long the lease. Detached into its own session, the
+ * run outlives the launch and is bounded only by the box's lease. Its output
+ * stays in the box, in `/tmp/lobe-hetero-<operationId>.log`.
+ */
+const buildDetachedCommand = (command: string, operationId: string): string =>
+  `setsid nohup sh -c ${shellQuote(command)} > ${shellQuote(
+    `/tmp/lobe-hetero-${operationId}.log`,
+  )} 2>&1 < /dev/null &`;
 
 /**
  * Derive the local directory name from a repo identifier.
@@ -225,11 +257,15 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
   );
 
   const sandboxService = createSandboxService({ marketService, topicId, userId });
-  const result = await sandboxService.callTool('runCommand', {
-    background: true,
-    command: shellCommand,
-    timeout: 600_000,
-  });
+  const result = await sandboxService.callTool(
+    'runCommand',
+    sandboxService.kind === 'onlyboxes'
+      ? {
+          command: buildDetachedCommand(shellCommand, operationId),
+          timeout: DETACHED_LAUNCH_TIMEOUT_MS,
+        }
+      : { background: true, command: shellCommand, timeout: 600_000 },
+  );
 
   if (!result.success) {
     throw new Error(result.error?.message || 'Failed to spawn heterogeneous sandbox');
