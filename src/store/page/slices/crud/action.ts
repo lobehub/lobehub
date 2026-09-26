@@ -413,15 +413,15 @@ export class CrudActionImpl {
         onData: (document) => {
           if (!document || !pageId) return;
 
-          // Auto-sync to documents array via internal dispatch
+          // Auto-sync to documents array via internal dispatch. A deep-linked page
+          // may be outside the paginated sidebar list (or no list is mounted, as
+          // on mobile); add it so title, emoji and workspace lock state resolve.
           const { documents } = this.#get();
-          if (documents?.some((doc) => doc.id === pageId)) {
-            this.#get().internal_dispatchDocuments({
-              document,
-              id: pageId,
-              type: 'updateDocument',
-            });
-          }
+          this.#get().internal_dispatchDocuments(
+            documents?.some((doc) => doc.id === pageId)
+              ? { document, id: pageId, type: 'updateDocument' }
+              : { document, type: 'addDocument' },
+          );
         },
         revalidateOnFocus: true,
       },

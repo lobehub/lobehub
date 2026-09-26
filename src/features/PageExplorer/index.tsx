@@ -14,6 +14,8 @@ interface PageExplorerProps {
    */
   header?: ReactNode | null;
   pageId: string;
+  /** Forwarded to PageEditor. Mobile has no room for the copilot / comments panel. */
+  rightPanel?: boolean;
 }
 
 /**
@@ -21,7 +23,7 @@ interface PageExplorerProps {
  *
  * Work together with a sidebar @/features/Pages/PageLayout/Body
  */
-const PageExplorer = memo<PageExplorerProps>(({ pageId, header, fullWidthHeader }) => {
+const PageExplorer = memo<PageExplorerProps>(({ pageId, header, fullWidthHeader, rightPanel }) => {
   const updatePageOptimistically = usePageStore((s) => s.updatePageOptimistically);
 
   // Get document title and emoji from PageStore
@@ -51,6 +53,7 @@ const PageExplorer = memo<PageExplorerProps>(({ pageId, header, fullWidthHeader 
       header={header}
       key={pageId}
       pageId={pageId}
+      rightPanel={rightPanel}
       title={title}
       onEmojiChange={handleEmojiChange}
       onTitleChange={handleTitleChange}
