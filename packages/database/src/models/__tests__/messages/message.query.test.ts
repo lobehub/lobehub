@@ -2464,6 +2464,48 @@ describe('MessageModel Query Tests', () => {
       });
     });
 
+    it('should treat malformed originalCharCount metadata as absent', async () => {
+      const fileId = uuid();
+
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values({ id: 'session1', userId });
+        await trx.insert(files).values({
+          fileType: 'text/plain',
+          id: fileId,
+          name: 'note.txt',
+          size: 10,
+          url: 'note.txt',
+          userId,
+        });
+        await trx.insert(documents).values({
+          content: 'note',
+          fileId,
+          fileType: 'text/plain',
+          metadata: { originalCharCount: 'not-a-number' },
+          source: 'note.txt',
+          sourceType: 'file',
+          totalCharCount: 4,
+          totalLineCount: 1,
+          userId,
+        });
+
+        const messageId = uuid();
+        await trx.insert(messages).values({
+          content: 'Message with odd metadata',
+          id: messageId,
+          role: 'user',
+          sessionId: 'session1',
+          userId,
+        });
+        await trx.insert(messagesFiles).values({ fileId, messageId, userId });
+      });
+
+      const result = await messageModel.query({ sessionId: 'session1' });
+
+      expect(result[0].fileList![0].content).toBe('note');
+      expect(result[0].fileList![0].originalCharCount).toBeUndefined();
+    });
+
     it('should pick the oldest document when a file owns several', async () => {
       const fileId = uuid();
       const messageId = uuid();

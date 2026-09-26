@@ -747,6 +747,22 @@ describe('DocumentModel', () => {
       ).resolves.toBe(true);
     });
 
+    it('ignores malformed originalCharCount metadata instead of failing', async () => {
+      const { documentId, file } = await createTestDocument(
+        documentModel,
+        fileModel,
+        'x'.repeat(5),
+      );
+
+      for (const originalCharCount of ['not-a-number', '1e30', 1.5, { n: 1 }]) {
+        await documentModel.update(documentId, { metadata: { originalCharCount } });
+
+        await expect(
+          documentModel.hasFileDocumentsOverChars({ fileIds: [file.id], minChars: 10 }),
+        ).resolves.toBe(false);
+      }
+    });
+
     it('ignores other users documents and returns false without inputs', async () => {
       const { file } = await createTestDocument(documentModel, fileModel, 'x'.repeat(20));
 

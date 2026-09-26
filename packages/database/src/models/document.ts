@@ -17,7 +17,6 @@ import {
   ne,
   notInArray,
   or,
-  sql,
   sum,
 } from 'drizzle-orm';
 
@@ -41,6 +40,7 @@ import {
   fileReferenceMatchesAccessScope,
   notAgentShareFileReference,
 } from '../utils/fileVisibility';
+import { documentOriginalCharCount } from '../utils/originalCharCount';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export interface QueryDocumentParams {
@@ -344,7 +344,7 @@ export class DocumentModel {
           this.ownership(),
           or(
             gt(documents.totalCharCount, minChars),
-            sql`(${documents.metadata} ->> 'originalCharCount')::bigint > ${documents.totalCharCount}`,
+            gt(documentOriginalCharCount(), documents.totalCharCount),
           ),
           or(...fileConditions),
         ),

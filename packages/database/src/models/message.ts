@@ -98,6 +98,7 @@ import { notCopiedTranscript } from '../utils/copiedTranscript';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
 import { inJsonStringArray } from '../utils/inJsonStringArray';
+import { documentOriginalCharCount } from '../utils/originalCharCount';
 import { searchableMessage } from '../utils/searchableMessage';
 import { notShareVisitorMessage, notShareVisitorTopicRef } from '../utils/shareVisitor';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
@@ -112,9 +113,7 @@ import { WorkModel } from './work';
 const fileDocumentColumns = {
   content: documents.content,
   fileId: documents.fileId,
-  originalCharCount: sql<
-    number | null
-  >`(${documents.metadata} ->> 'originalCharCount')::bigint`.mapWith(Number),
+  originalCharCount: documentOriginalCharCount().mapWith(Number),
 };
 
 /**
