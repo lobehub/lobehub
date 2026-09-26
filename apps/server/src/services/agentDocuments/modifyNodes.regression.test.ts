@@ -100,6 +100,19 @@ describe('agent document modifyNodes regressions', () => {
     expect(back.content).toContain('intro\n\nP1\n\nP2\n\nP3\n\n- a');
   });
 
+  it('R4d same-afterId inserts separated by an unrelated modify keep array order', async () => {
+    const base = await load(LIST);
+    const anchor = blockId(base.litexml!, 'p', 'intro');
+    const tail = blockId(base.litexml!, 'p', 'tail');
+    const back = await editThenRead(base, [
+      { action: 'insert', afterId: anchor, litexml: '<p><span>P1</span></p>' },
+      { action: 'modify', litexml: `<p id="${tail}"><span>TAIL</span></p>` },
+      { action: 'insert', afterId: anchor, litexml: '<p><span>P2</span></p>' },
+    ]);
+    expect(back.content).toContain('intro\n\nP1\n\nP2\n\n- a');
+    expect(back.content).toContain('TAIL');
+  });
+
   it('R4c a paragraph and a list inserted after the same anchor keep order and review mode', async () => {
     const base = await load(LIST);
     const anchor = blockId(base.litexml!, 'p', 'intro');
