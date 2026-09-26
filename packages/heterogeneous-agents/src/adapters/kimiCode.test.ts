@@ -127,6 +127,40 @@ describe('KimiCodeAdapter', () => {
     expect(adapter.flush()).toEqual([]);
   });
 
+  it('lifts ReadMediaFile image parts onto pluginState and leaves a placeholder in content', () => {
+    const adapter = new KimiCodeAdapter();
+    adapter.adapt({
+      role: 'assistant',
+      tool_calls: [
+        {
+          function: { arguments: '{"path":"/tmp/screen.png"}', name: 'ReadMediaFile' },
+          id: 'call-1',
+          type: 'function',
+        },
+      ],
+    });
+
+    const events = adapter.adapt({
+      content: [
+        { text: '<image path="/tmp/screen.png">', type: 'text' },
+        { imageUrl: { url: 'data:image/png;base64,iVBORw0KGgo=' }, type: 'image_url' },
+        { text: '</image>', type: 'text' },
+      ],
+      role: 'tool',
+      tool_call_id: 'call-1',
+    });
+
+    const content = '<image path="/tmp/screen.png">\n[Image: image/png]\n</image>';
+    expect(events[0].data).toEqual({
+      content,
+      isError: false,
+      pluginState: { images: [{ data: 'iVBORw0KGgo=', mediaType: 'image/png' }] },
+      toolCallId: 'call-1',
+    });
+    expect(events[0].data.content).not.toContain('base64');
+    expect(events[1].data.result).toEqual({ content, success: true });
+  });
+
   it('ignores malformed input', () => {
     const adapter = new KimiCodeAdapter();
     expect(adapter.adapt(null)).toEqual([]);
