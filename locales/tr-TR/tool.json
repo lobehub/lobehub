@@ -159,6 +159,7 @@
   "localFiles.open": "Aç",
   "localFiles.openFile": "Dosya Aç",
   "localFiles.openFolder": "Klasör Aç",
+  "localFiles.openInPanel": "Yan panelde aç",
   "localFiles.outOfScope.requestedPaths": "İstenen Yollar",
   "localFiles.outOfScope.warning": "Uyarı: Aşağıdaki yol(lar) yapılandırılmış çalışma dizininin dışında. Erişime izin vermek istediğinizi lütfen onaylayın.",
   "localFiles.outOfScope.workingDirectory": "Çalışma Dizini",

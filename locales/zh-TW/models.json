@@ -530,6 +530,7 @@
   "gemini-3.8-flash.description": "Gemini 3.8 Flash是Google最智能的Flash模型，專為長期軟件工程、自主代理和複雜企業工作流程設計。",
   "gemini-flash-latest.description": "指向 gemini-3.7-flash",
   "gemini-flash-lite-latest.description": "指向 gemini-3.1-flash-lite",
+  "gemini-omni-1.1-flash.description": "Gemini Omni Flash 是一個原生多模態模型，用於文字轉影片、圖片轉影片、參考轉影片以及對話式影片編輯。",
   "gemini-pro-latest.description": "指向 gemini-3.1-pro-preview",
   "gemma-4-31B-it.description": "Gemma 4 31B IT是Google最新的多模態模型，支持文本、圖像和視頻理解。僅供評估用途的預覽模型。",
   "gemma-4-31b.description": "此模型在跨屏幕截圖、文檔、圖表和設計資產的多模態推理方面表現出色。非常適合視覺代理工作流、圖像感知助手以及從封閉多模態 API 遷移到開放模型的團隊。",

@@ -14,6 +14,7 @@
   "ConversationParentMissing": "Il contesto della conversazione per questo messaggio non è stato trovato. Riapri la conversazione o inizia un nuovo argomento, quindi invia nuovamente la richiesta.",
   "DatabasePersistError": "Un'operazione sul database è fallita durante il salvataggio o il caricamento di questa conversazione. Riprova; se il problema persiste, contatta l'assistenza.",
   "ExceededContextWindow": "Il contenuto della richiesta corrente supera la lunghezza che il modello può gestire. Riduci la quantità di contenuto e riprova.",
+  "ExceededImageLimit": "Questa conversazione contiene più immagini di quante ne consenta il fornitore del modello in una singola richiesta. Inizia un nuovo argomento o rimuovi alcune immagini, quindi riprova.",
   "ExceededToolLimit": "Questa esecuzione ha raggiunto il limite di utilizzo degli strumenti. Suddividi il compito in passaggi più piccoli o chiedi al proprietario dell'agente di regolare il limite di utilizzo degli strumenti.",
   "HarnessJsonParseError": "Un payload interno non è stato possibile leggere, quindi questa operazione è stata interrotta. Ripetere la stessa richiesta porterà allo stesso errore — si prega di iniziare un nuovo messaggio; se il problema persiste, contattare il supporto.",
   "InsufficientQuota": "Spiacenti, la quota per questa chiave è stata raggiunta. Controlla se il saldo del tuo account è sufficiente o riprova dopo aver aumentato la quota della chiave.",

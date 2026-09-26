@@ -14,6 +14,7 @@
   "ConversationParentMissing": "Bu mesaj için konuşma bağlamı bulunamadı. Konuşmayı yeniden açın veya yeni bir konu başlatın, ardından isteği tekrar gönderin.",
   "DatabasePersistError": "Bu konuşmayı kaydederken veya yüklerken bir veritabanı işlemi başarısız oldu. Lütfen yeniden deneyin; devam ederse destekle iletişime geçin.",
   "ExceededContextWindow": "Mevcut istek içeriği modelin işleyebileceği uzunluğu aşıyor. Lütfen içerik miktarını azaltıp yeniden deneyin.",
+  "ExceededImageLimit": "Bu konuşma, model sağlayıcının bir istekte izin verdiğinden daha fazla görüntü içeriyor. Yeni bir konu başlatın veya bazı görüntüleri kaldırın, ardından tekrar deneyin.",
   "ExceededToolLimit": "Bu işlem araç çağırma limitine ulaştı. Görevi daha küçük adımlara bölün veya ajan sahibinden araç çağırma limitini ayarlamasını isteyin.",
   "HarnessJsonParseError": "Dahili bir yük geri okunamadığı için bu işlem durduruldu. Aynı isteği yeniden denemek aynı hatayı verecektir — lütfen yeni bir mesaj başlatın; devam ederse, destek ile iletişime geçin.",
   "InsufficientQuota": "Üzgünüz, bu anahtar için kota doldu. Lütfen hesap bakiyenizin yeterli olup olmadığını kontrol edin veya anahtarın kotasını artırdıktan sonra yeniden deneyin.",

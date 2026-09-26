@@ -24,6 +24,8 @@
   "actions.copyLinkSuccess": "Link skopiowany",
   "actions.copySessionId": "Kopiuj ID sesji",
   "actions.copySessionIdSuccess": "ID sesji skopiowane",
+  "actions.copyTopicPrompt": "Skopiuj podpowiedź tematu",
+  "actions.copyTopicPromptSuccess": "Podpowiedź tematu skopiowana",
   "actions.copyWorkingDirectory": "Kopiuj katalog roboczy",
   "actions.copyWorkingDirectorySuccess": "Katalog roboczy skopiowany",
   "actions.diagnose": "Sprawdź łańcuch wiadomości",

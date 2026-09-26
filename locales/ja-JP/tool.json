@@ -159,6 +159,7 @@
   "localFiles.open": "開く",
   "localFiles.openFile": "ファイルを開く",
   "localFiles.openFolder": "フォルダーを開く",
+  "localFiles.openInPanel": "サイドパネルで開く",
   "localFiles.outOfScope.requestedPaths": "リクエストされたパス",
   "localFiles.outOfScope.warning": "警告：以下のパスは設定された作業ディレクトリの外にあります。アクセスを許可するかご確認ください。",
   "localFiles.outOfScope.workingDirectory": "作業ディレクトリ",

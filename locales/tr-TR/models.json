@@ -530,6 +530,7 @@
   "gemini-3.8-flash.description": "Gemini 3.8 Flash, uzun vadeli yazılım mühendisliği, otonom ajanlar ve karmaşık kurumsal iş akışları için tasarlanmış Google'ın en akıllı Flash modelidir.",
   "gemini-flash-latest.description": "gemini-3.7-flash'e işaret eder",
   "gemini-flash-lite-latest.description": "gemini-3.1-flash-lite modeline işaret eder.",
+  "gemini-omni-1.1-flash.description": "Gemini Omni Flash, metinden videoya, görüntüden videoya, referanstan videoya ve konuşmalı video düzenleme için doğal olarak çok modlu bir modeldir.",
   "gemini-pro-latest.description": "gemini-3.1-pro-preview'e işaret eder",
   "gemma-4-31B-it.description": "Gemma 4 31B IT, metin, görüntü ve video anlama desteği sunan Google'ın en son çok modlu modelidir. Sadece değerlendirme amaçlı önizleme modeli.",
   "gemma-4-31b.description": "Bu model, ekran görüntüleri, belgeler, diyagramlar ve tasarım varlıkları arasında çok modlu akıl yürütmede mükemmeldir. Görsel ajanlık iş akışları, görüntü farkındalığına sahip yardımcılar ve kapalı çok modlu API'lerden açık modellere geçiş yapan ekipler için idealdir.",

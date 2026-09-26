@@ -14,6 +14,7 @@
   "ConversationParentMissing": "Der Gesprächskontext für diese Nachricht konnte nicht gefunden werden. Öffnen Sie das Gespräch erneut oder starten Sie ein neues Thema, und senden Sie die Anfrage erneut.",
   "DatabasePersistError": "Ein Datenbankvorgang ist beim Speichern oder Laden dieser Konversation fehlgeschlagen. Bitte versuchen Sie es erneut; falls das Problem weiterhin besteht, wenden Sie sich an den Support.",
   "ExceededContextWindow": "Der aktuelle Anfrageinhalt überschreitet die Länge, die das Modell verarbeiten kann. Bitte reduzieren Sie die Menge des Inhalts und versuchen Sie es erneut.",
+  "ExceededImageLimit": "Dieses Gespräch enthält mehr Bilder, als der Modellanbieter in einer Anfrage zulässt. Beginnen Sie ein neues Thema oder entfernen Sie einige Bilder und versuchen Sie es erneut.",
   "ExceededToolLimit": "Dieses Durchlauf hat das Tool-Aufruf-Limit erreicht. Teilen Sie die Aufgabe in kleinere Schritte auf oder bitten Sie den Agentenbesitzer, das Tool-Aufruf-Limit anzupassen.",
   "HarnessJsonParseError": "Ein interner Payload konnte nicht zurückgelesen werden, daher wurde dieser Vorgang abgebrochen. Das erneute Senden derselben Anfrage führt zum gleichen Fehler — bitte starten Sie eine neue Nachricht; falls das Problem weiterhin besteht, kontaktieren Sie den Support.",
   "InsufficientQuota": "Entschuldigung, das Kontingent für diesen Schlüssel wurde erreicht. Bitte überprüfen Sie, ob Ihr Kontostand ausreicht, oder versuchen Sie es erneut, nachdem Sie das Kontingent des Schlüssels erhöht haben.",

@@ -14,6 +14,7 @@
   "ConversationParentMissing": "Nie można znaleźć kontekstu rozmowy dla tej wiadomości. Otwórz rozmowę ponownie lub rozpocznij nowy temat, a następnie wyślij żądanie ponownie.",
   "DatabasePersistError": "Operacja na bazie danych nie powiodła się podczas zapisywania lub ładowania tej rozmowy. Proszę spróbować ponownie; jeśli problem będzie się powtarzał, skontaktuj się z pomocą techniczną.",
   "ExceededContextWindow": "Treść bieżącego żądania przekracza długość, którą model może obsłużyć. Proszę zmniejszyć ilość treści i spróbować ponownie.",
+  "ExceededImageLimit": "Ta rozmowa zawiera więcej obrazów, niż pozwala na to dostawca modelu w jednym żądaniu. Rozpocznij nowy temat lub usuń niektóre obrazy, a następnie spróbuj ponownie.",
   "ExceededToolLimit": "Przekroczono limit wywołań narzędzi w tym uruchomieniu. Podziel zadanie na mniejsze kroki lub poproś właściciela agenta o dostosowanie limitu wywołań narzędzi.",
   "HarnessJsonParseError": "Nie można odczytać wewnętrznego ładunku, więc operacja została przerwana. Ponowienie tego samego żądania spowoduje ten sam błąd — proszę rozpocząć nową wiadomość; jeśli problem będzie się powtarzał, skontaktuj się z pomocą techniczną.",
   "InsufficientQuota": "Przepraszamy, osiągnięto limit przydziału dla tego klucza. Proszę sprawdzić, czy saldo konta jest wystarczające, lub spróbować ponownie po zwiększeniu przydziału klucza.",

@@ -159,6 +159,7 @@
   "localFiles.open": "Apri",
   "localFiles.openFile": "Apri File",
   "localFiles.openFolder": "Apri Cartella",
+  "localFiles.openInPanel": "Apri nel pannello laterale",
   "localFiles.outOfScope.requestedPaths": "Percorsi richiesti",
   "localFiles.outOfScope.warning": "Attenzione: I seguenti percorsi sono al di fuori della directory di lavoro configurata. Conferma se desideri consentire l'accesso.",
   "localFiles.outOfScope.workingDirectory": "Directory di lavoro",

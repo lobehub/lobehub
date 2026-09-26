@@ -24,6 +24,8 @@
   "actions.copyLinkSuccess": "連結已複製",
   "actions.copySessionId": "複製 Session ID",
   "actions.copySessionIdSuccess": "Session ID 已複製",
+  "actions.copyTopicPrompt": "複製主題提示",
+  "actions.copyTopicPromptSuccess": "主題提示已複製",
   "actions.copyWorkingDirectory": "複製工作目錄",
   "actions.copyWorkingDirectorySuccess": "工作目錄已複製",
   "actions.diagnose": "檢查訊息鏈",

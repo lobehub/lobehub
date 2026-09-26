@@ -24,6 +24,8 @@
   "actions.copyLinkSuccess": "Link gekopieerd",
   "actions.copySessionId": "Sessie-ID kopiëren",
   "actions.copySessionIdSuccess": "Sessie-ID gekopieerd",
+  "actions.copyTopicPrompt": "Kopieer onderwerp prompt",
+  "actions.copyTopicPromptSuccess": "Onderwerp prompt gekopieerd",
   "actions.copyWorkingDirectory": "Werkmap kopiëren",
   "actions.copyWorkingDirectorySuccess": "Werkmap gekopieerd",
   "actions.diagnose": "Controleer berichtketen",

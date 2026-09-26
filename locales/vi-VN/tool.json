@@ -159,6 +159,7 @@
   "localFiles.open": "Mở",
   "localFiles.openFile": "Mở tệp",
   "localFiles.openFolder": "Mở thư mục",
+  "localFiles.openInPanel": "Mở trong bảng bên",
   "localFiles.outOfScope.requestedPaths": "Đường dẫn yêu cầu",
   "localFiles.outOfScope.warning": "Cảnh báo: Các đường dẫn sau nằm ngoài thư mục làm việc đã cấu hình. Vui lòng xác nhận nếu bạn muốn cho phép truy cập.",
   "localFiles.outOfScope.workingDirectory": "Thư mục làm việc",

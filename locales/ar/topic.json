@@ -24,6 +24,8 @@
   "actions.copyLinkSuccess": "تم نسخ الرابط",
   "actions.copySessionId": "نسخ معرّف الجلسة",
   "actions.copySessionIdSuccess": "تم نسخ معرّف الجلسة",
+  "actions.copyTopicPrompt": "نسخ موجه الموضوع",
+  "actions.copyTopicPromptSuccess": "تم نسخ موجه الموضوع",
   "actions.copyWorkingDirectory": "نسخ دليل العمل",
   "actions.copyWorkingDirectorySuccess": "تم نسخ دليل العمل",
   "actions.diagnose": "تحقق من سلسلة الرسائل",

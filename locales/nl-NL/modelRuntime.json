@@ -14,6 +14,7 @@
   "ConversationParentMissing": "De gesprekscontext voor dit bericht kon niet worden gevonden. Heropen het gesprek of begin een nieuw onderwerp en stuur de aanvraag opnieuw.",
   "DatabasePersistError": "Een databasebewerking is mislukt bij het opslaan of laden van dit gesprek. Probeer het opnieuw; neem contact op met de ondersteuning als het probleem aanhoudt.",
   "ExceededContextWindow": "De inhoud van het huidige verzoek overschrijdt de lengte die het model aankan. Verminder de hoeveelheid inhoud en probeer het opnieuw.",
+  "ExceededImageLimit": "Dit gesprek bevat meer afbeeldingen dan de modelprovider in één verzoek toestaat. Begin een nieuw onderwerp of verwijder enkele afbeeldingen en probeer het opnieuw.",
   "ExceededToolLimit": "Deze uitvoering heeft de limiet voor hulpmiddelen bereikt. Verdeel de taak in kleinere stappen of vraag de eigenaar van de agent om de limiet voor hulpmiddelen aan te passen.",
   "HarnessJsonParseError": "Een interne payload kon niet worden teruggelezen, waardoor deze operatie is gestopt. Het opnieuw proberen van dezelfde aanvraag zal dezelfde fout opleveren — start een nieuw bericht; als het probleem aanhoudt, neem dan contact op met de ondersteuning.",
   "InsufficientQuota": "Sorry, het quotum voor deze sleutel is bereikt. Controleer of uw accountbalans toereikend is of probeer het opnieuw nadat u het quotum van de sleutel hebt verhoogd.",

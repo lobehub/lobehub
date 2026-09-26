@@ -24,6 +24,8 @@
   "actions.copyLinkSuccess": "링크가 복사되었습니다",
   "actions.copySessionId": "세션 ID 복사",
   "actions.copySessionIdSuccess": "세션 ID가 복사되었습니다",
+  "actions.copyTopicPrompt": "주제 프롬프트 복사",
+  "actions.copyTopicPromptSuccess": "주제 프롬프트가 복사되었습니다",
   "actions.copyWorkingDirectory": "작업 디렉터리 복사",
   "actions.copyWorkingDirectorySuccess": "작업 디렉터리가 복사되었습니다",
   "actions.diagnose": "메시지 체인 확인",

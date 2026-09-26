@@ -24,6 +24,8 @@
   "actions.copyLinkSuccess": "Линкът е копиран",
   "actions.copySessionId": "Копирай Session ID",
   "actions.copySessionIdSuccess": "Session ID е копиран",
+  "actions.copyTopicPrompt": "Копирай темата на подканата",
+  "actions.copyTopicPromptSuccess": "Подканата за темата е копирана",
   "actions.copyWorkingDirectory": "Копирай работната директория",
   "actions.copyWorkingDirectorySuccess": "Работната директория е копирана",
   "actions.diagnose": "Проверка на съобщенията във веригата",

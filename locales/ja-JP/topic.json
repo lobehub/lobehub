@@ -24,6 +24,8 @@
   "actions.copyLinkSuccess": "リンクをコピーしました",
   "actions.copySessionId": "セッションIDをコピー",
   "actions.copySessionIdSuccess": "セッションIDをコピーしました",
+  "actions.copyTopicPrompt": "トピックプロンプトをコピー",
+  "actions.copyTopicPromptSuccess": "トピックプロンプトがコピーされました",
   "actions.copyWorkingDirectory": "作業ディレクトリをコピー",
   "actions.copyWorkingDirectorySuccess": "作業ディレクトリをコピーしました",
   "actions.diagnose": "メッセージチェーンを確認",

@@ -159,6 +159,7 @@
   "localFiles.open": "打開",
   "localFiles.openFile": "打開檔案",
   "localFiles.openFolder": "打開資料夾",
+  "localFiles.openInPanel": "在側邊面板中打開",
   "localFiles.outOfScope.requestedPaths": "請求的路徑",
   "localFiles.outOfScope.warning": "警告：以下路徑超出已設定的工作目錄範圍。請確認您是否允許存取。",
   "localFiles.outOfScope.workingDirectory": "工作目錄",

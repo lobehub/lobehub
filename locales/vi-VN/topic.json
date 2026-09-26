@@ -24,6 +24,8 @@
   "actions.copyLinkSuccess": "Đã sao chép liên kết",
   "actions.copySessionId": "Sao chép Session ID",
   "actions.copySessionIdSuccess": "Đã sao chép Session ID",
+  "actions.copyTopicPrompt": "Sao chép Lời nhắc Chủ đề",
+  "actions.copyTopicPromptSuccess": "Lời nhắc chủ đề đã được sao chép",
   "actions.copyWorkingDirectory": "Sao chép thư mục làm việc",
   "actions.copyWorkingDirectorySuccess": "Đã sao chép thư mục làm việc",
   "actions.diagnose": "Kiểm tra Chuỗi Tin nhắn",

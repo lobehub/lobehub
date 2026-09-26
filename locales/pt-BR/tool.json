@@ -159,6 +159,7 @@
   "localFiles.open": "Abrir",
   "localFiles.openFile": "Abrir Arquivo",
   "localFiles.openFolder": "Abrir Pasta",
+  "localFiles.openInPanel": "Abrir no painel lateral",
   "localFiles.outOfScope.requestedPaths": "Caminhos solicitados",
   "localFiles.outOfScope.warning": "Aviso: Os seguintes caminhos estão fora do diretório de trabalho configurado. Por favor, confirme se deseja permitir o acesso.",
   "localFiles.outOfScope.workingDirectory": "Diretório de trabalho",
