@@ -174,18 +174,18 @@ describe('AgentModel', () => {
         totalLineCount: 1,
         userId,
       } as const;
-      // Inserted oldest first: an unordered, last-wins read would return the newer copy.
-      await serverDB.insert(documents).values({
-        ...doc,
-        content: 'parse cache',
-        createdAt: new Date('2026-01-01'),
-        id: 'doc-old',
-      });
+      // Inserted newest first: without an explicit order, a first-wins read would take the newer copy.
       await serverDB.insert(documents).values({
         ...doc,
         content: 'page-editor copy',
         createdAt: new Date('2026-02-01'),
         id: 'doc-new',
+      });
+      await serverDB.insert(documents).values({
+        ...doc,
+        content: 'parse cache',
+        createdAt: new Date('2026-01-01'),
+        id: 'doc-old',
       });
 
       const result = await agentModel.getAgentConfigById(agentId);

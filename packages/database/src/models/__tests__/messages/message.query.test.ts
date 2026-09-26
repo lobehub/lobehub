@@ -2466,6 +2466,7 @@ describe('MessageModel Query Tests', () => {
 
     it('should pick the oldest document when a file owns several', async () => {
       const fileId = uuid();
+      const messageId = uuid();
       const doc = {
         fileId,
         fileType: 'text/plain',
@@ -2485,21 +2486,20 @@ describe('MessageModel Query Tests', () => {
           url: 'notes.txt',
           userId,
         });
-        // Inserted oldest first: an unordered, last-wins read would return the newer copy.
-        await trx.insert(documents).values({
-          ...doc,
-          content: 'parse cache',
-          createdAt: new Date('2026-01-01'),
-          totalCharCount: 11,
-        });
+        // Inserted newest first: without an explicit order, a first-wins read would take the newer copy.
         await trx.insert(documents).values({
           ...doc,
           content: 'page-editor copy',
           createdAt: new Date('2026-02-01'),
           totalCharCount: 16,
         });
+        await trx.insert(documents).values({
+          ...doc,
+          content: 'parse cache',
+          createdAt: new Date('2026-01-01'),
+          totalCharCount: 11,
+        });
 
-        const messageId = uuid();
         await trx.insert(messages).values({
           content: 'Message with a twice-parsed file',
           id: messageId,
@@ -2514,6 +2514,9 @@ describe('MessageModel Query Tests', () => {
 
       // Same document `DocumentModel.findByFileId` returns, which `readAttachment` pages through.
       expect(result[0].fileList![0].content).toBe('parse cache');
+
+      const [byId] = await messageModel.queryByIds([messageId]);
+      expect(byId.fileList![0].content).toBe('parse cache');
     });
   });
 

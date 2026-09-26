@@ -2315,7 +2315,8 @@ export class MessageModel {
       const documentsList = await this.db
         .select(fileDocumentColumns)
         .from(documents)
-        .where(inArray(documents.fileId, fileIds));
+        .where(inArray(documents.fileId, fileIds))
+        .orderBy(...fileDocumentsOrder);
 
       documentsMap = toFileDocumentsMap(documentsList);
     }
