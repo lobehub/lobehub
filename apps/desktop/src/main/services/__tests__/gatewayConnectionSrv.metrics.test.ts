@@ -1,4 +1,4 @@
-import type * as GatewayClientModule from '@lobechat/device-gateway-client';
+import type * as DeviceMetricsModule from '@lobechat/device-control/metrics';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
@@ -15,8 +15,8 @@ vi.mock('electron', () => ({
   powerSaveBlocker: { isStarted: vi.fn(() => false), start: vi.fn(() => 1), stop: vi.fn() },
 }));
 
-vi.mock('@lobechat/device-gateway-client', async (importOriginal) => ({
-  pushMetrics: (await importOriginal<typeof GatewayClientModule>()).pushMetrics,
+vi.mock('@lobechat/device-control/metrics', async (importOriginal) => ({
+  ...(await importOriginal<typeof DeviceMetricsModule>()),
   DeviceMetricsSampler: vi.fn().mockImplementation(function (options: any) {
     const sampler = {
       flush: vi.fn().mockResolvedValue(undefined),

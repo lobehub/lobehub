@@ -18,6 +18,7 @@ export {
   type ListListeningPortsParams,
   type ListListeningPortsResult,
 } from './listeningPorts';
+export { DeviceMetricsSampler, type DeviceMetricsSamplerOptions, pushMetrics } from './metrics';
 export {
   defaultGetProjectFileIndex,
   defaultListProjectDirectory,

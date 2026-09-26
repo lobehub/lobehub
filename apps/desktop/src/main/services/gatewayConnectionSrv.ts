@@ -8,9 +8,9 @@ import type {
   EnrollWorkspaceResult,
   UnenrollWorkspaceParams,
 } from '@lobechat/device-control';
+import type { DeviceMetricsSampler } from '@lobechat/device-control/metrics';
 import type {
   AgentRunRequestMessage,
-  DeviceMetricsSampler,
   DeviceSystemInfo,
   GatewayClient,
   GatewayMcpParams,
@@ -1004,7 +1004,7 @@ export default class GatewayConnectionService extends ServiceModule {
     await this.stopMetricsSampler();
 
     const userData = safeGetPath('userData');
-    const { DeviceMetricsSampler, pushMetrics } = await import('@lobechat/device-gateway-client');
+    const { DeviceMetricsSampler, pushMetrics } = await import('@lobechat/device-control/metrics');
     const sampler = new DeviceMetricsSampler({
       isConnected: () => this.status === 'connected',
       logger: { warn: (msg) => logger.warn(msg) },

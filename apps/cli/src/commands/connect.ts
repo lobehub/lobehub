@@ -7,7 +7,9 @@ import {
   defaultGetProjectFileIndex,
   defaultSearchProjectFiles,
   type DeviceControlDeps,
+  DeviceMetricsSampler,
   executeDeviceRpc,
+  pushMetrics,
 } from '@lobechat/device-control';
 import type {
   AgentRunRequestMessage,
@@ -16,7 +18,7 @@ import type {
   SystemInfoRequestMessage,
   ToolCallRequestMessage,
 } from '@lobechat/device-gateway-client';
-import { DeviceMetricsSampler, GatewayClient, pushMetrics } from '@lobechat/device-gateway-client';
+import { GatewayClient } from '@lobechat/device-gateway-client';
 import { listHeterogeneousAgentModels } from '@lobechat/heterogeneous-agents/models';
 import { getShellInfo } from '@lobechat/local-file-shell';
 import type { Command } from 'commander';
