@@ -1133,6 +1133,15 @@ export const expertiseKeys = {
   ]),
   lesson: def('expertise:lesson', (lessonId: string) => ['expertise:lesson', lessonId]),
   overview: def('expertise:overview', (agentId: string) => ['expertise:overview', agentId]),
+  ruleRevisions: def('expertise:ruleRevisions', (lessonId: string) => [
+    'expertise:ruleRevisions',
+    lessonId,
+  ]),
+  ruleSources: def('expertise:ruleSources', (lessonId: string) => [
+    'expertise:ruleSources',
+    lessonId,
+  ]),
+  rules: def('expertise:rules', () => ['expertise:rules']),
 };
 
 export const verifyKeys = {

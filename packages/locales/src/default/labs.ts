@@ -45,6 +45,9 @@ export default {
     'Show the Integrations settings page: connect the GitHub App so merged pull requests accept deliveries and failing checks or reviews reach the agent that opened them. Hidden by default.',
   'features.integrations.title': 'Integrations',
   'features.inputMarkdown.title': 'Input Markdown Rendering',
+  'features.memoryRules.desc':
+    'Adds "My rules" under Memory: the delivery rules distilled from the acceptance rounds you sent back, with ordering, grouping and block / remind controls.',
+  'features.memoryRules.title': 'My rules',
   'features.messageTextSelectionActions.desc':
     'Show a quick action when selecting text in chat messages so the selected text can be added to the next conversation context.',
   'features.messageTextSelectionActions.title': 'Message Text Selection Actions',

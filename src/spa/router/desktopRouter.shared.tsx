@@ -12,6 +12,7 @@ import {
   LayoutPanelTopIcon,
   LibraryBigIcon,
   Mic2,
+  Scale,
   Settings,
   ShapesIcon,
   SquarePlay,
@@ -779,6 +780,17 @@ export const sharedMainAreaChildren: RouteObject[] = [
           meta: routeMeta({ icon: BrainCircuit, titleKey: 'navigation.memoryPreferences' }),
         },
         path: 'preferences',
+      },
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/memory/rules'),
+          'Desktop > Memory > Rules',
+        ),
+        handle: {
+          // Same icon the memory sidebar uses, so a desktop tab and the nav item agree.
+          meta: routeMeta({ icon: Scale, titleKey: 'navigation.memoryRules' }),
+        },
+        path: 'rules',
       },
       {
         element: dynamicElement(
