@@ -187,6 +187,82 @@ describe('hetero exec command', () => {
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
+  it('stops the agent as soon as the server starts discarding its output', async () => {
+    // A refusal is terminal for the whole run: the operation no longer owns the
+    // topic, so every later batch is discarded the same way. The verdict used
+    // to surface only at `drain()` — i.e. after the agent had finished — so a
+    // run whose output was already being thrown away kept working for as long
+    // as it had left (observed: 15 minutes of a CLI producing output nobody
+    // stored, then one error card).
+    mockHeteroIngestMutate.mockResolvedValue({ accepted: false, reason: 'stale-operation' });
+
+    let markKilled!: () => void;
+    const killed = new Promise<void>((resolve) => {
+      markKilled = resolve;
+    });
+    const kill = vi.fn(() => markKilled());
+    const stderr = new PassThrough();
+    stderr.end();
+
+    mockSpawnAgent.mockReturnValue(
+      Promise.resolve({
+        // A long-running agent: one event, then nothing until it is killed.
+        events: {
+          [Symbol.asyncIterator]() {
+            let sent = false;
+            return {
+              async next() {
+                if (!sent) {
+                  sent = true;
+                  return {
+                    done: false,
+                    value: {
+                      data: { chunkType: 'text', content: 'working' },
+                      operationId: 'op-1',
+                      stepIndex: 0,
+                      timestamp: Date.now(),
+                      type: 'stream_chunk',
+                    },
+                  };
+                }
+                await killed;
+                return { done: true, value: undefined };
+              },
+            };
+          },
+        } as AsyncIterable<any>,
+        exit: killed.then(() => ({ code: null, signal: 'SIGTERM' as NodeJS.Signals })),
+        kill,
+        pid: 12_345,
+        stderr,
+      }),
+    );
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'claude-code',
+      '--prompt',
+      'hi',
+      '--topic',
+      'topic-1',
+      '--operation-id',
+      'op-1',
+    ]);
+
+    expect(kill).toHaveBeenCalledWith('SIGTERM');
+    // And it is reported as a failed run, not a cancellation: nobody stopped
+    // this agent, and `cancelled` would leave the server operation running with
+    // nothing left to drive it.
+    expect(mockHeteroFinishMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.objectContaining({ message: expect.stringContaining('stale-operation') }),
+        result: 'error',
+      }),
+    );
+  });
+
   it('supports exactly the local agent descriptor types', () => {
     expect([...SUPPORTED_AGENT_TYPES].toSorted()).toEqual(
       HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type).toSorted(),

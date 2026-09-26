@@ -212,6 +212,8 @@ export class HeterogeneousAgentService {
     this.persistenceHandler =
       options.persistenceHandler ??
       new HeterogeneousPersistenceHandler({
+        isOperationLiveOnTopic: (operationId, topicId) =>
+          this.agentOperationModel.isRunningOnTopic(operationId, topicId),
         messageModel: this.messageModel,
         threadModel: new ThreadModel(db, userId, workspaceId),
         topicModel: this.topicModel,

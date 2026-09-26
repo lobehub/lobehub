@@ -422,6 +422,34 @@ describe('AgentOperationModel', () => {
   });
 
   describe('operation lease', () => {
+    it('answers whether a run is still live on a given topic', async () => {
+      // The ingest path falls back to this when a topic loses its
+      // `runningOperation` marker: the row, not the marker, says whether the
+      // producer behind a batch is still alive — and the topic pairing keeps
+      // the answer from authorizing a write to someone else's topic.
+      await serverDB.insert(topics).values([
+        { id: 'live-topic', userId },
+        { id: 'other-topic', userId },
+      ]);
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-live-on-topic';
+      await model.recordStart({ operationId, topicId: 'live-topic' });
+
+      expect(await model.isRunningOnTopic(operationId, 'live-topic')).toBe(true);
+      // Bound to another topic, so it cannot vouch for a write to this one.
+      expect(await model.isRunningOnTopic(operationId, 'other-topic')).toBe(false);
+      // Another user's row is out of scope entirely.
+      expect(
+        await new AgentOperationModel(serverDB, otherUserId).isRunningOnTopic(
+          operationId,
+          'live-topic',
+        ),
+      ).toBe(false);
+
+      await model.recordCompletion(operationId, { status: 'done' });
+      expect(await model.isRunningOnTopic(operationId, 'live-topic')).toBe(false);
+    });
+
     it('refreshes a running operation and only settles an expired lease', async () => {
       const model = new AgentOperationModel(serverDB, userId);
       const operationId = 'op-lease';

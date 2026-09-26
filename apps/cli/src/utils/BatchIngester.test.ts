@@ -149,6 +149,46 @@ describe('BatchIngester', () => {
     expect(ingest).toHaveBeenCalledTimes(1);
   });
 
+  it('reports a lost stream the moment it happens, not only at drain', async () => {
+    // The refusal above is terminal, but the caller only learned about it when
+    // it drained — i.e. after the agent had finished. A run whose output is
+    // already being discarded kept working until then (observed: 15 minutes of
+    // a CLI producing output nobody stored). The callback is what lets the
+    // caller stop the agent instead.
+    const ingest = vi
+      .fn<IngestSink['ingest']>()
+      .mockResolvedValue({ accepted: false, reason: 'stale-operation' });
+    const onFatal = vi.fn();
+    const ingester = new BatchIngester({ finish: vi.fn(), ingest }, undefined, onFatal);
+
+    ingester.push(makeEvent(1));
+    const drained = expect(ingester.drain()).rejects.toThrow('stale-operation');
+    await vi.advanceTimersByTimeAsync(20_000);
+    await drained;
+
+    expect(onFatal).toHaveBeenCalledTimes(1);
+    expect(onFatal.mock.calls[0][0]).toBeInstanceOf(Error);
+    expect(onFatal.mock.calls[0][0].message).toContain('stale-operation');
+
+    // Latched: a second failure (or a later push on a dead stream) must not
+    // re-fire it and abort a run twice.
+    ingester.push(makeEvent(2));
+    await expect(ingester.drain()).rejects.toThrow('stale-operation');
+    expect(onFatal).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports an overflow through the same callback', () => {
+    const maxBytes = Buffer.byteLength(JSON.stringify(makeEvent(1)));
+    const onFatal = vi.fn();
+    const ingester = new BatchIngester({ finish: vi.fn(), ingest: vi.fn() }, maxBytes, onFatal);
+
+    ingester.push(makeEvent(1));
+    ingester.push(makeEvent(2));
+
+    expect(onFatal).toHaveBeenCalledTimes(1);
+    expect(onFatal.mock.calls[0][0].message).toContain('buffer limit exceeded');
+  });
+
   it('treats an ack without a verdict as accepted so older servers keep working', async () => {
     const ingest = vi.fn<IngestSink['ingest']>().mockResolvedValue(undefined as never);
     const ingester = new BatchIngester({ finish: vi.fn(), ingest });

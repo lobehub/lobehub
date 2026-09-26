@@ -70,6 +70,14 @@ export class BatchIngester {
   constructor(
     private readonly sink: IngestSink,
     private readonly maxBufferedBytes = 16 * 1024 * 1024,
+    /**
+     * Called once, the moment the stream becomes unrecoverable (the server
+     * discarded a batch, or the buffer overflowed). Without it the verdict only
+     * surfaces at `drain()`, i.e. after the agent has finished — so a run whose
+     * output is already being thrown away keeps working for however long it had
+     * left. The caller uses this to stop the agent instead.
+     */
+    private readonly onFatal?: (error: Error) => void,
   ) {}
 
   /** Only a lost/overflowed stream is permanent; a transport outage can recover. */
@@ -81,7 +89,7 @@ export class BatchIngester {
     if (this.fatalError) return;
     const size = Buffer.byteLength(JSON.stringify(event));
     if (this.bufferedBytes + size > this.maxBufferedBytes) {
-      this.fatalError = new Error('Agent event buffer limit exceeded while waiting for upload');
+      this.fail(new Error('Agent event buffer limit exceeded while waiting for upload'));
       this.buffer = [];
       this.bufferedBytes = 0;
       if (this.timer) clearTimeout(this.timer);
@@ -111,6 +119,13 @@ export class BatchIngester {
     await this.worker;
     if (this.fatalError) throw this.fatalError;
     if (this.lastSendError) throw this.lastSendError;
+  }
+
+  /** Latch the terminal state and tell the caller once, never twice. */
+  private fail(error: Error): void {
+    if (this.fatalError) return;
+    this.fatalError = error;
+    this.onFatal?.(error);
   }
 
   private startPump(): void {
@@ -154,7 +169,7 @@ export class BatchIngester {
         return;
       } catch (error) {
         if (error instanceof IngestRejectedError) {
-          this.fatalError = error;
+          this.fail(error);
           throw error;
         }
         if (attempt === MAX_RETRIES) throw error;

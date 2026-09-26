@@ -56,6 +56,8 @@ interface FakeTopic {
 const createHarness = (params: {
   assistantAgentId?: string | null;
   assistantMessageId: string;
+  /** Stands in for the operation row: is this run still live on this topic? */
+  isOperationLiveOnTopic?: (operationId: string, topicId: string) => Promise<boolean>;
   operationId: string;
   topicAgentId?: string | null;
   topicId: string;
@@ -176,6 +178,7 @@ const createHarness = (params: {
   };
 
   const handler = new HeterogeneousPersistenceHandler({
+    isOperationLiveOnTopic: params.isOperationLiveOnTopic,
     messageModel: messageModel as any,
     threadModel: threadModel as any,
     topicModel: topicModel as any,
@@ -275,6 +278,112 @@ describe('HeterogeneousPersistenceHandler', () => {
           topicId: 'topic-1',
         }),
       ).rejects.toThrow(/no active runningOperation/);
+    });
+
+    it('keeps persisting when the marker is gone but the operation is still running', async () => {
+      // The marker is a rendering pointer any client can settle — a transport
+      // signal (a raw session_complete, or one multiplexed socket failing auth
+      // for every operation on the tab) clears it while the CLI keeps
+      // streaming. Refusing here discards the rest of a live run's output.
+      const isOperationLiveOnTopic = vi.fn(async () => true);
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        isOperationLiveOnTopic,
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+      h.topicModel.findById.mockResolvedValueOnce({
+        agentId: null,
+        id: 'topic-1',
+        metadata: {} as any,
+      });
+
+      await h.handler.ingest({
+        assistantMessageId: 'asst-1',
+        events: [buildEvent('stream_chunk', 0, { chunkType: 'text', content: 'kept' })],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      expect(isOperationLiveOnTopic).toHaveBeenCalledWith('op-1', 'topic-1');
+      expect(h.messageModel.update).toHaveBeenCalledWith('asst-1', { content: 'kept' });
+    });
+
+    it('recovers the assistant pointer from heteroCurrentMsgId when the marker is gone', async () => {
+      // Desktop / old-CLI callers forward no assistantMessageId, so once the
+      // marker is gone the operation-scoped `heteroCurrentMsgId` is the only
+      // pointer left to the turn in flight.
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        isOperationLiveOnTopic: async () => true,
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+      h.topicModel.findById.mockResolvedValueOnce({
+        agentId: null,
+        id: 'topic-1',
+        metadata: { heteroCurrentMsgId: { msgId: 'asst-1', operationId: 'op-1' } } as any,
+      });
+
+      await h.handler.ingest({
+        events: [buildEvent('stream_chunk', 0, { chunkType: 'text', content: 'kept' })],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      expect(h.messageModel.update).toHaveBeenCalledWith('asst-1', { content: 'kept' });
+    });
+
+    it('still refuses a marker-less batch once the operation row is terminal', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        isOperationLiveOnTopic: async () => false,
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+      h.topicModel.findById.mockResolvedValueOnce({
+        agentId: null,
+        id: 'topic-1',
+        metadata: {} as any,
+      });
+
+      await expect(
+        h.handler.ingest({
+          assistantMessageId: 'asst-1',
+          events: [buildEvent('stream_chunk', 0, { chunkType: 'text', content: 'x' })],
+          operationId: 'op-1',
+          topicId: 'topic-1',
+        }),
+      ).rejects.toThrow(/no active runningOperation/);
+    });
+
+    it('refuses a superseded batch even while its own operation row is alive', async () => {
+      // Liveness must NOT override ownership: a marker naming another run means
+      // the topic has moved on, and writing here would mutate a newer turn.
+      const isOperationLiveOnTopic = vi.fn(async () => true);
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        isOperationLiveOnTopic,
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+      h.topicModel.findById.mockResolvedValueOnce({
+        agentId: null,
+        id: 'topic-1',
+        metadata: {
+          runningOperation: { assistantMessageId: 'asst-other', operationId: 'op-OTHER' },
+        },
+      });
+
+      await expect(
+        h.handler.ingest({
+          assistantMessageId: 'asst-1',
+          events: [buildEvent('stream_chunk', 0, { chunkType: 'text', content: 'x' })],
+          operationId: 'op-1',
+          topicId: 'topic-1',
+        }),
+      ).rejects.toThrow(/current operation is op-OTHER/);
+      expect(isOperationLiveOnTopic).not.toHaveBeenCalled();
     });
 
     it('validates seeded assistant ids belong to the current topic', async () => {

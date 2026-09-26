@@ -414,6 +414,34 @@ export class AgentOperationModel {
   }
 
   /**
+   * Whether this operation is still running AND owns the given topic.
+   *
+   * The row — not `topic.metadata.runningOperation` — is the authority on
+   * liveness: the marker is a best-effort rendering pointer that any client can
+   * clear (a transport-level completion settles it while the producer keeps
+   * going), whereas the row only leaves `running` through a terminal path.
+   * Pairing it with `topicId` is what makes the answer safe to act on: it proves
+   * the caller is about to write to the topic this operation actually belongs
+   * to, not one it was handed.
+   */
+  async isRunningOnTopic(operationId: string, topicId: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ id: agentOperations.id })
+      .from(agentOperations)
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          eq(agentOperations.status, 'running'),
+          eq(agentOperations.topicId, topicId),
+          this.ownership(),
+        ),
+      )
+      .limit(1);
+
+    return Boolean(row);
+  }
+
+  /**
    * Atomically retire an operation whose liveness lease has expired. A concurrent
    * heartbeat wins by moving updatedAt past staleBefore, preventing false recovery.
    */
