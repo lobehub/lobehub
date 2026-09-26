@@ -1225,7 +1225,7 @@
   "settingTTS.voice.desc": "Geçerli ajan için bir ses seçin, farklı TTS hizmetleri farklı sesleri destekler",
   "settingTTS.voice.preview": "Ses Önizlemesi",
   "settingTTS.voice.title": "Metinden Konuşmaya Sesi",
-  "settingTool.crawler.desc": "Tam web sayfalarını okumak için kullanılan hizmetleri sırala. Üstteki öğeler önce denenir; devre dışı bırakılanlar atlanır.",
+  "settingTool.crawler.desc": "Tam web sayfalarını okumak için kullanılan hizmetleri sırala. Üstteki öğeler önce denenir; devre dışı bırakılanlar atlanır. PDF'ler ve YouTube gibi bazı siteler her zaman özel bir hizmet kullanır.",
   "settingTool.crawler.title": "Web Okuyucu",
   "settingTool.empty": "Kanal bulunamadı",
   "settingTool.item.disabled": "Devre Dışı",

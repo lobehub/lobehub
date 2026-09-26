@@ -1225,7 +1225,7 @@
   "settingTTS.voice.desc": "Stimme für den aktuellen Agenten auswählen – je nach Dienst unterschiedlich",
   "settingTTS.voice.preview": "Stimmvorschau",
   "settingTTS.voice.title": "Text-zu-Sprache-Stimme",
-  "settingTool.crawler.desc": "Ordnen Sie die Dienste, die zum Lesen vollständiger Webseiten verwendet werden. Höher platzierte Elemente werden zuerst ausprobiert; deaktivierte werden übersprungen.",
+  "settingTool.crawler.desc": "Ordnen Sie die Dienste, die zum Lesen vollständiger Webseiten verwendet werden. Höher platzierte Elemente werden zuerst ausprobiert; deaktivierte werden übersprungen. Einige Websites, etwa PDFs und YouTube, verwenden immer einen speziellen Dienst.",
   "settingTool.crawler.title": "Web-Leser",
   "settingTool.empty": "Keine Kanäle verfügbar",
   "settingTool.item.disabled": "Deaktiviert",

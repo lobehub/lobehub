@@ -1490,7 +1490,7 @@ export default {
   'settingTTS.voice.preview': 'Voice Preview',
   'settingTTS.voice.title': 'Text-to-Speech Voice',
   'settingTool.crawler.desc':
-    'Order the services used to read full web pages. Higher items are tried first; disabled ones are skipped.',
+    'Order the services used to read full web pages. Higher items are tried first; disabled ones are skipped. Some sites, such as PDFs and YouTube, always use a dedicated service.',
   'settingTool.crawler.title': 'Web Reader',
   'settingTool.empty': 'No services available',
   'settingTool.item.disabled': 'Disabled',

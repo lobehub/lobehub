@@ -1225,7 +1225,7 @@
   "settingTTS.voice.desc": "Selecione uma voz para o agente atual, diferentes serviços TTS suportam vozes diferentes",
   "settingTTS.voice.preview": "Prévia da Voz",
   "settingTTS.voice.title": "Voz de Texto para Fala",
-  "settingTool.crawler.desc": "Organize os serviços usados para ler páginas da web completas. Os itens mais altos são tentados primeiro; os desativados são ignorados.",
+  "settingTool.crawler.desc": "Organize os serviços usados para ler páginas da web completas. Os itens mais altos são tentados primeiro; os desativados são ignorados. Alguns sites, como PDFs e YouTube, sempre usam um serviço dedicado.",
   "settingTool.crawler.title": "Leitor de Web",
   "settingTool.empty": "Nenhum canal disponível",
   "settingTool.item.disabled": "Desativado",

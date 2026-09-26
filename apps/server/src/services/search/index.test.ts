@@ -896,7 +896,10 @@ describe('SearchService', () => {
       });
       await searchService.crawlPages({ urls: ['https://example.com'] });
 
-      expect(Crawler).toHaveBeenCalledWith({ impls: ['firecrawl', 'jina'] });
+      expect(Crawler).toHaveBeenCalledWith({
+        impls: ['firecrawl', 'jina'],
+        urlRuleImpls: ['jina', 'naive', 'firecrawl'],
+      });
     });
 
     it('should intersect against Crawler defaults when env is not configured', async () => {
@@ -909,7 +912,10 @@ describe('SearchService', () => {
       await searchService.crawlPages({ urls: ['https://example.com'] });
 
       // 'firecrawl' is not a default impl, so it is dropped; the rest keep user order.
-      expect(Crawler).toHaveBeenCalledWith({ impls: ['naive', 'jina'] });
+      expect(Crawler).toHaveBeenCalledWith({
+        impls: ['naive', 'jina'],
+        urlRuleImpls: ['jina', 'naive', 'search1api', 'browserless'],
+      });
     });
 
     it('should fall back to env impls when user preference filters to empty', async () => {
@@ -919,7 +925,10 @@ describe('SearchService', () => {
       searchService = new SearchService({ userChannels: { crawlerImpls: ['firecrawl'] } });
       await searchService.crawlPages({ urls: ['https://example.com'] });
 
-      expect(Crawler).toHaveBeenCalledWith({ impls: ['jina', 'naive'] });
+      expect(Crawler).toHaveBeenCalledWith({
+        impls: ['jina', 'naive'],
+        urlRuleImpls: ['jina', 'naive'],
+      });
     });
 
     it('should forward the raw env list unchanged when userChannels is omitted', async () => {

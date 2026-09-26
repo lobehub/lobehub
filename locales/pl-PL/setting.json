@@ -1225,7 +1225,7 @@
   "settingTTS.voice.desc": "Wybierz głos dla bieżącego agenta, różne usługi TTS obsługują różne głosy",
   "settingTTS.voice.preview": "Podgląd głosu",
   "settingTTS.voice.title": "Głos syntezy mowy",
-  "settingTool.crawler.desc": "Ustal kolejność usług używanych do odczytu pełnych stron internetowych. Wyższe pozycje są próbowane jako pierwsze; wyłączone są pomijane.",
+  "settingTool.crawler.desc": "Ustal kolejność usług używanych do odczytu pełnych stron internetowych. Wyższe pozycje są próbowane jako pierwsze; wyłączone są pomijane. Niektóre witryny, takie jak pliki PDF i YouTube, zawsze korzystają z dedykowanej usługi.",
   "settingTool.crawler.title": "Czytnik stron internetowych",
   "settingTool.empty": "Brak dostępnych kanałów",
   "settingTool.item.disabled": "Wyłączone",

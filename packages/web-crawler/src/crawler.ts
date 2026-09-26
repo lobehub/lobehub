@@ -29,6 +29,14 @@ const PREFLIGHT_CRAWLER = 'preflight';
 
 interface CrawlOptions {
   impls?: string[];
+  /**
+   * Impls that URL rules may pick from. Defaults to `impls`.
+   *
+   * Lets a caller narrow the general fallback order (e.g. to a user's preferred
+   * channels) while site-specific rules (PDF, YouTube, ...) can still use any
+   * server-enabled impl, so their crawl quality does not regress.
+   */
+  urlRuleImpls?: string[];
 }
 
 /**
@@ -61,13 +69,18 @@ const buildErrorData = (error: Error | undefined): CrawlErrorResult => {
   };
 };
 
+const toKnownImpls = (impls: string[] | undefined): CrawlImplType[] =>
+  impls?.length
+    ? (impls.filter((impl) => Object.keys(crawlImpls).includes(impl)) as CrawlImplType[])
+    : DEFAULT_CRAWL_IMPLS;
+
 export class Crawler {
   impls: CrawlImplType[];
+  urlRuleImpls: CrawlImplType[];
 
   constructor(options: CrawlOptions = {}) {
-    this.impls = !!options.impls?.length
-      ? (options.impls.filter((impl) => Object.keys(crawlImpls).includes(impl)) as CrawlImplType[])
-      : DEFAULT_CRAWL_IMPLS;
+    this.impls = toKnownImpls(options.impls);
+    this.urlRuleImpls = options.urlRuleImpls ? toKnownImpls(options.urlRuleImpls) : this.impls;
   }
 
   /**
@@ -121,7 +134,9 @@ export class Crawler {
     let finalError: Error | undefined;
 
     const filteredRuleImpls = ruleImpls
-      ? (ruleImpls.filter((impl) => this.impls.includes(impl as CrawlImplType)) as CrawlImplType[])
+      ? (ruleImpls.filter((impl) =>
+          this.urlRuleImpls.includes(impl as CrawlImplType),
+        ) as CrawlImplType[])
       : undefined;
     const systemImpls = (
       filteredRuleImpls?.length ? filteredRuleImpls : this.impls

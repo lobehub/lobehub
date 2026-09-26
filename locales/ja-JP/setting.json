@@ -1225,7 +1225,7 @@
   "settingTTS.voice.desc": "現在のアシスタントに適した音声を選択します。異なる TTS サービスは異なる音声をサポートしています",
   "settingTTS.voice.preview": "音声を試聴",
   "settingTTS.voice.title": "音声合成音声",
-  "settingTool.crawler.desc": "ウェブページ全体を読むために使用されるサービスの順序を設定します。上位の項目が優先され、無効化されたものはスキップされます。",
+  "settingTool.crawler.desc": "ウェブページ全体を読むために使用されるサービスの順序を設定します。上位の項目が優先され、無効化されたものはスキップされます。PDF や YouTube など一部のサイトでは、常に専用のサービスが使用されます。",
   "settingTool.crawler.title": "ウェブリーダー",
   "settingTool.empty": "利用可能なチャンネルがありません",
   "settingTool.item.disabled": "無効",

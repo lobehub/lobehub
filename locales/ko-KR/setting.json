@@ -1225,7 +1225,7 @@
   "settingTTS.voice.desc": "현재 도우미에 대한 음성을 선택하십시오. 각 TTS 서비스는 다른 음성을 지원합니다",
   "settingTTS.voice.preview": "음성 미리듣기",
   "settingTTS.voice.title": "음성 합성 음성",
-  "settingTool.crawler.desc": "전체 웹 페이지를 읽는 데 사용되는 서비스를 순서대로 정렬합니다. 상위 항목이 먼저 시도되며, 비활성화된 항목은 건너뜁니다.",
+  "settingTool.crawler.desc": "전체 웹 페이지를 읽는 데 사용되는 서비스를 순서대로 정렬합니다. 상위 항목이 먼저 시도되며, 비활성화된 항목은 건너뜁니다. PDF, YouTube 등 일부 사이트는 항상 전용 서비스를 사용합니다.",
   "settingTool.crawler.title": "웹 리더",
   "settingTool.empty": "사용 가능한 채널이 없습니다",
   "settingTool.item.disabled": "비활성화됨",

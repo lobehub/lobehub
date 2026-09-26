@@ -1225,7 +1225,7 @@
   "settingTTS.voice.desc": "為當前助手挑選一個聲音，不同 TTS 服務支持的聲源不同",
   "settingTTS.voice.preview": "試聽聲源",
   "settingTTS.voice.title": "語音合成聲源",
-  "settingTool.crawler.desc": "排序用於閱讀完整網頁的服務。優先嘗試排在前面的項目；已停用的項目將被跳過。",
+  "settingTool.crawler.desc": "排序用於閱讀完整網頁的服務。優先嘗試排在前面的項目；已停用的項目將被跳過。PDF、YouTube 等特定網站固定使用專門的服務。",
   "settingTool.crawler.title": "網頁閱讀器",
   "settingTool.empty": "沒有可用的頻道",
   "settingTool.item.disabled": "已停用",

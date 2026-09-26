@@ -118,19 +118,29 @@ export class SearchService {
   private searchImpList: SearchServiceImpl[];
   private userChannels?: UserChannelPreferences;
 
-  private get crawlerImpls() {
+  private get crawlerOptions(): { impls: string[]; urlRuleImpls?: string[] } {
     const enabledFromEnv = parseImplEnv(toolsEnv.CRAWLER_IMPLS);
 
     // No user preference → preserve current behavior exactly: forward the env
     // list as-is (possibly empty, letting `Crawler` apply its own defaults).
-    if (!this.userChannels?.crawlerImpls?.length) return enabledFromEnv;
+    if (!this.userChannels?.crawlerImpls?.length) return { impls: enabledFromEnv };
 
     // When crawler impls aren't configured via env, the effective enabled set
     // is the Crawler's built-in default order — intersect against that so a
     // user preference still resolves in a default deployment.
     const enabledSet = enabledFromEnv.length > 0 ? enabledFromEnv : DEFAULT_CRAWLER_IMPLS;
 
-    return resolveOrderedChannels(this.userChannels.crawlerImpls, enabledSet);
+    return {
+      impls: resolveOrderedChannels(this.userChannels.crawlerImpls, enabledSet),
+      // URL rules (PDF, YouTube, ...) keep choosing from every server-enabled
+      // impl, even ones the user disabled: the user order only applies to URLs
+      // no rule matches, so rule-specific crawl quality does not regress.
+      urlRuleImpls: enabledSet,
+    };
+  }
+
+  private get crawlerImpls() {
+    return this.crawlerOptions.impls;
   }
 
   private get crawlConcurrency() {
@@ -189,7 +199,7 @@ export class SearchService {
     } catch {}
 
     const { Crawler } = await import('@lobechat/web-crawler');
-    const crawler = new Crawler({ impls: this.crawlerImpls });
+    const crawler = new Crawler(this.crawlerOptions);
 
     const results = await pMap(
       input.urls,
