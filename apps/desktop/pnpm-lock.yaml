@@ -340,6 +340,9 @@ importers:
       '@lobechat/local-file-shell':
         specifier: workspace:*
         version: link:../local-file-shell
+      '@lobechat/types':
+        specifier: workspace:*
+        version: link:../types
       '@lobechat/utils':
         specifier: workspace:*
         version: link:../utils
