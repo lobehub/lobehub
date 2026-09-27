@@ -11,7 +11,6 @@ import { DEFAULT_MODEL } from './llm';
 
 export const DEFAUTT_AGENT_TTS_CONFIG: LobeAgentTTSConfig = {
   showAllLocaleVoice: false,
-  sttLocale: 'auto',
   ttsService: 'openai',
   voice: {
     openai: 'alloy',

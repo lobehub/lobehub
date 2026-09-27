@@ -22,7 +22,7 @@ The \`--type\` filter accepts the following values:
 | \`chat\` | Text chat / LLM models |
 | \`embedding\` | Text embedding models |
 | \`tts\` | Text-to-speech models |
-| \`stt\` | Speech-to-text models |
+| \`asr\` | Speech-to-text models |
 | \`image\` | Image generation models |
 | \`video\` | Video generation models |
 | \`text2music\` | Music generation models |
