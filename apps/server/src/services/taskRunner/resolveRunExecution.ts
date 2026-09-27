@@ -1,4 +1,9 @@
-import type { ChatTopicMetadata, TaskExecutionConfig, WorkingDirConfig } from '@lobechat/types';
+import type {
+  ChatTopicMetadata,
+  LobeAgentAgencyConfig,
+  TaskExecutionConfig,
+  WorkingDirConfig,
+} from '@lobechat/types';
 
 /**
  * What a task's own execution selection contributes to ONE run.
@@ -20,6 +25,34 @@ export interface TaskRunExecution {
 }
 
 /**
+ * The device a task's run will ACTUALLY use, once the assignee agent's own
+ * target policy has had its say.
+ *
+ * A workspace author can fix the agent's execution target
+ * (`executionTargetSelectionPolicy: 'fixed'`), and `turnSetup` then drops
+ * whatever device the run asks for and routes to the agent's own target
+ * instead (`effectiveRequestedDeviceId`, `topicBoundDeviceId`). This mirrors
+ * that derivation, because the task side has to tell a pin the run will use
+ * from one it will not — see `resolveTaskRunExecution`.
+ *
+ * `undefined` means the run does not land on a device at all (the sandbox).
+ */
+export const resolveRunDeviceId = (
+  execution: TaskExecutionConfig | undefined,
+  agencyConfig: LobeAgentAgencyConfig | null | undefined,
+  workspaceId?: string,
+): string | undefined => {
+  const isFixedSelection =
+    !!workspaceId && agencyConfig?.executionTargetSelectionPolicy === 'fixed';
+
+  // A member-selected target is exactly the task-level pin, so nothing replaces it.
+  if (!isFixedSelection) return execution?.boundDeviceId;
+
+  // Only a `device` fixed target names a machine; a fixed sandbox names none.
+  return agencyConfig?.executionTarget === 'device' ? agencyConfig.boundDeviceId : undefined;
+};
+
+/**
  * Map a task's stored execution selection onto run parameters.
  *
  * Returns `undefined` when the task pins nothing, so callers spread it away and
@@ -29,7 +62,13 @@ export interface TaskRunExecution {
  * metadata" at the topic-creation site and change how the topic row is built.
  */
 export const resolveTaskRunExecution = (
-  execution?: TaskExecutionConfig,
+  execution: TaskExecutionConfig | undefined,
+  /**
+   * The device this run will use — `resolveRunDeviceId`. Required, not optional:
+   * it decides whether the directory may travel, and a caller that forgot it
+   * would silently drop the directory of every pinned task.
+   */
+  runDeviceId: string | undefined,
 ): TaskRunExecution | undefined => {
   if (!execution) return undefined;
 
@@ -40,13 +79,21 @@ export const resolveTaskRunExecution = (
   // repo selection as the run's directory (as a github repo) so a task that
   // only picked repos still starts somewhere — the cloud repo surface has no
   // absolute path to offer.
+  const deviceDirectory =
+    workingDirectoryConfig ?? (workingDirectory ? { path: workingDirectory } : undefined);
+
+  // A directory is picked FOR a machine — `TaskWorkingDirectoryChip` offers the
+  // run target's OWN directories — so it may only travel with that machine. When
+  // the run does not land on the pinned device (a fixed agent target replaced
+  // it, or the run goes to the sandbox), the path has to stay behind with the
+  // pin. Nothing downstream can catch it: the topic carries the EFFECTIVE
+  // device, so `resolveDeviceWorkingDirectoryConfig` sees matching run/topic
+  // device ids and accepts another machine's absolute path as this one's.
+  const isDeviceDirectoryUsable = !boundDeviceId || boundDeviceId === runDeviceId;
+
   const directoryConfig: WorkingDirConfig | undefined =
-    workingDirectoryConfig ??
-    (workingDirectory
-      ? { path: workingDirectory }
-      : repos && repos.length > 0
-        ? { path: repos[0], repoType: 'github' }
-        : undefined);
+    (isDeviceDirectoryUsable ? deviceDirectory : undefined) ??
+    (repos && repos.length > 0 ? { path: repos[0], repoType: 'github' } : undefined);
 
   const initialTopicMetadata = {
     ...(repos && repos.length > 0 ? { repos } : {}),
@@ -95,9 +142,11 @@ const topicExecutionOf = (metadata?: ChatTopicMetadata | null): string =>
  */
 export const resolveTopicExecutionPatch = (
   topicMetadata: ChatTopicMetadata | null | undefined,
-  execution?: TaskExecutionConfig,
+  execution: TaskExecutionConfig | undefined,
+  /** The device this run will use — see {@link resolveTaskRunExecution}. */
+  runDeviceId: string | undefined,
 ): ChatTopicMetadata | undefined => {
-  const initial = resolveTaskRunExecution(execution)?.initialTopicMetadata;
+  const initial = resolveTaskRunExecution(execution, runDeviceId)?.initialTopicMetadata;
 
   const next: ChatTopicMetadata = {
     // `undefined` clears the axis: `TopicModel.updateMetadata` shallow-merges, so

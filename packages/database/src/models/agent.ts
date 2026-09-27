@@ -538,6 +538,24 @@ export class AgentModel {
   };
 
   /**
+   * Single-SELECT lookup of an agent's `agencyConfig`.
+   *
+   * The task runner needs the target the agent would use on its own — and
+   * whether a workspace author FIXED it — to tell a task-level pin the run will
+   * use from one the runtime replaces (see `resolveRunDeviceId`). The enriched
+   * `getAgentConfig` would drag knowledge/file queries into every run.
+   */
+  getAgentAgencyConfig = async (idOrSlug: string): Promise<LobeAgentAgencyConfig | null> => {
+    const rows = await this.db
+      .select({ agencyConfig: agents.agencyConfig })
+      .from(agents)
+      .where(and(this.ownership(), or(eq(agents.id, idOrSlug), eq(agents.slug, idOrSlug))))
+      .limit(1);
+
+    return rows[0]?.agencyConfig ?? null;
+  };
+
+  /**
    * Single-SELECT lookup of the fields `TaskService.createTask` needs in one
    * round-trip: the model/provider snapshot (for `task.config`) and the
    * visibility (for inference + cross-table invariant assertion). Replaces

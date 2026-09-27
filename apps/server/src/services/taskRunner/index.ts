@@ -24,7 +24,11 @@ import { resolveFailedRunStatus } from '@/server/services/goal/recoveryPolicy';
 import { TaskLifecycleService } from '@/server/services/taskLifecycle';
 
 import { buildTaskPrompt } from './buildTaskPrompt';
-import { resolveTaskRunExecution, resolveTopicExecutionPatch } from './resolveRunExecution';
+import {
+  resolveRunDeviceId,
+  resolveTaskRunExecution,
+  resolveTopicExecutionPatch,
+} from './resolveRunExecution';
 
 const log = debug('task-runner');
 
@@ -92,10 +96,11 @@ export class TaskRunnerService {
    */
   private async syncTopicExecution(
     topicId: string,
-    execution?: TaskExecutionConfig,
+    execution: TaskExecutionConfig | undefined,
+    runDeviceId: string | undefined,
   ): Promise<void> {
     const topic = await this.topicModel.findById(topicId);
-    const patch = resolveTopicExecutionPatch(topic?.metadata, execution);
+    const patch = resolveTopicExecutionPatch(topic?.metadata, execution, runDeviceId);
     if (!patch) return;
 
     await this.topicModel.updateMetadata(topicId, patch);
@@ -263,7 +268,17 @@ export class TaskRunnerService {
       // a working directory. Undefined when the task pins nothing, in which case
       // the run keeps inheriting the assignee agent's target and cwd.
       const taskExecution = readTaskExecutionConfig(taskConfig);
-      const runExecution = resolveTaskRunExecution(taskExecution);
+      // The device the run will actually use. It differs from the task's pin
+      // when the author FIXED the agent's target, and that difference decides
+      // whether the directory may travel: see `resolveTaskRunExecution`.
+      const runDeviceId = taskExecution
+        ? resolveRunDeviceId(
+            taskExecution,
+            await this.agentModel.getAgentAgencyConfig(agentRef),
+            this.workspaceId,
+          )
+        : undefined;
+      const runExecution = resolveTaskRunExecution(taskExecution, runDeviceId);
 
       // A continued topic keeps its own metadata (`turnSetup` stamps
       // `initialTopicMetadata` only for a topic it creates) and those stored
@@ -271,7 +286,7 @@ export class TaskRunnerService {
       // be ignored, and the previous machine's kept. Stamp the task's selection
       // onto the topic first; see `resolveTopicExecutionPatch`.
       if (continueTopicId) {
-        await this.syncTopicExecution(continueTopicId, taskExecution);
+        await this.syncTopicExecution(continueTopicId, taskExecution, runDeviceId);
       }
 
       log('runTask: %s (continue=%s)', taskIdentifier, continueTopicId);
