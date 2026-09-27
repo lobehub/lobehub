@@ -6,12 +6,8 @@
  * received string". Coerce the unambiguous literals; leave anything else for
  * the schema to report.
  */
-export const normalizeSetTaskVerifyParams = <
-  T extends { enabled?: unknown; maxIterations?: unknown },
->(
-  params: T,
-): T => {
-  const normalized: Record<string, unknown> = { ...params };
+export const normalizeSetTaskVerifyParams = <T extends object>(params: T): T => {
+  const normalized = { ...params } as Record<string, unknown>;
   // Some models double-encode: `"\"true\""`.
   const literal = (value: string) =>
     value
@@ -19,15 +15,15 @@ export const normalizeSetTaskVerifyParams = <
       .replace(/^"(.*)"$/, '$1')
       .trim();
 
-  if (typeof params.enabled === 'string') {
-    const value = literal(params.enabled).toLowerCase();
+  if (typeof normalized.enabled === 'string') {
+    const value = literal(normalized.enabled).toLowerCase();
     if (value === 'true') normalized.enabled = true;
     else if (value === 'false') normalized.enabled = false;
     else if (value === 'null') normalized.enabled = null;
   }
 
-  if (typeof params.maxIterations === 'string') {
-    const value = literal(params.maxIterations);
+  if (typeof normalized.maxIterations === 'string') {
+    const value = literal(normalized.maxIterations);
     if (value === 'null') normalized.maxIterations = null;
     else if (/^\d+$/.test(value)) normalized.maxIterations = Number(value);
   }
