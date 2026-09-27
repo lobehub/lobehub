@@ -316,12 +316,19 @@ export class TaskRunnerService {
           return true;
         });
         if (!recorded) {
-          await aiAgentService
+          const stop = await aiAgentService
             .interruptTask({ operationId: result.operationId })
-            .catch((error) => log('runTask: failed to stop orphaned run: %O', error));
+            .catch((error) => {
+              log('runTask: failed to stop orphaned run: %O', error);
+              return undefined;
+            });
+          // Same confirmation gate as TaskService.interruptTaskOperation.
+          const stopped = !!stop?.success && stop.deviceCancellationConfirmed !== false;
           throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'The task was deleted while its run was starting; the run was stopped.',
+            code: stopped ? 'NOT_FOUND' : 'INTERNAL_SERVER_ERROR',
+            message: stopped
+              ? 'The task was deleted while its run was starting; the run was stopped.'
+              : `The task was deleted while its run was starting, and stopping that run (operation ${result.operationId}) could not be confirmed.`,
           });
         }
       }

@@ -109,6 +109,21 @@ describe('TaskRunnerService.runTask vs. a concurrent delete', () => {
     expect(taskTopicModel.add).not.toHaveBeenCalled();
   });
 
+  it.each([{ success: false }, { deviceCancellationConfirmed: false, success: true }])(
+    'does not claim the orphaned run stopped when the stop is unconfirmed (%j)',
+    async (stop) => {
+      taskModel.lockForUpdate.mockResolvedValue(false);
+      mocks.interruptTask.mockResolvedValue(stop);
+
+      await expect(
+        new TaskRunnerService(db, 'user-1').runTask({ taskId: 'T-1' }),
+      ).rejects.toMatchObject({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: expect.stringContaining('could not be confirmed'),
+      });
+    },
+  );
+
   it('does not dispatch at all when the task changed before its run could start', async () => {
     taskModel.updateStatusIfCurrent.mockResolvedValue(null);
 
