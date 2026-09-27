@@ -394,11 +394,26 @@ export class TaskService {
       }
     }
 
-    // Compare-and-delete: a run that started after the checks above moved the
-    // status on, so this delete loses instead of orphaning that run (the
-    // runner's own start write is conditional on the status it read, too).
-    if (!(await this.taskModel.deleteIfStatus(task.id, task.status))) {
-      if (!(await this.taskModel.findById(task.id))) return task;
+    // Decide and delete under the task's row lock — the same lock a run takes
+    // to record its topic. A run that recorded one after the checks above is
+    // seen here and wins; a run that records later finds the task gone and
+    // stops its own execution. Compare-and-delete on the status as well, so a
+    // run that moved the task on in the meantime is never deleted under.
+    const handled = new Set(runningTopics.map((topic) => topic.operationId));
+    const outcome = await this.db.transaction(async (tx) => {
+      const taskModel = new TaskModel(tx, this.userId, this.workspaceId);
+      if (!(await taskModel.lockForUpdate(task.id))) return 'gone' as const;
+      const nowRunning = await new TaskTopicModel(
+        tx,
+        this.userId,
+        this.workspaceId,
+      ).findRunningByTaskIds([task.id]);
+      if (nowRunning.some((topic) => !handled.has(topic.operationId))) return 'conflict' as const;
+      return (await taskModel.deleteIfStatus(task.id, task.status))
+        ? ('deleted' as const)
+        : ('conflict' as const);
+    });
+    if (outcome === 'conflict') {
       throw new TRPCError({
         code: 'CONFLICT',
         message:

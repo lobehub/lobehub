@@ -101,6 +101,7 @@ describe('TaskService', () => {
     create: vi.fn(),
     delete: vi.fn(),
     deleteIfStatus: vi.fn().mockResolvedValue(true),
+    lockForUpdate: vi.fn().mockResolvedValue(true),
     findById: vi.fn(),
     findByIds: vi.fn(),
     findAllDescendants: vi.fn(),
@@ -1486,6 +1487,12 @@ describe('TaskService', () => {
   });
 
   describe('deleteTask', () => {
+    beforeEach(() => {
+      (db as any).transaction = async (fn: (tx: unknown) => Promise<unknown>) => fn(db);
+      mockTaskModel.lockForUpdate.mockResolvedValue(true);
+      mockTaskModel.deleteIfStatus.mockResolvedValue(true);
+    });
+
     it('interrupts a running execution before deleting the task row', async () => {
       mockTaskModel.resolve.mockResolvedValue({
         id: 'task-live',
@@ -1557,14 +1564,42 @@ describe('TaskService', () => {
         identifier: 'T-6',
         status: 'backlog',
       });
-      mockTaskTopicModel.findRunningByTaskIds.mockResolvedValue([]);
       mockTaskModel.deleteIfStatus.mockResolvedValueOnce(false);
-      mockTaskModel.findById.mockResolvedValueOnce({ id: 'task-race', status: 'running' });
 
       await expect(new TaskService(db, userId).deleteTask('T-6')).rejects.toMatchObject({
         code: 'CONFLICT',
       });
       expect(mockTaskModel.deleteIfStatus).toHaveBeenCalledWith('task-race', 'backlog');
+    });
+
+    it('loses to a run that recorded a new topic while the delete was interrupting', async () => {
+      mockTaskModel.resolve.mockResolvedValue({
+        id: 'task-cont',
+        identifier: 'T-8',
+        status: 'running',
+      });
+      const liveA = {
+        operationId: 'op-a',
+        status: 'running',
+        taskId: 'task-cont',
+        topicId: 'topic-a',
+      };
+      const continuedB = {
+        operationId: 'op-b',
+        status: 'running',
+        taskId: 'task-cont',
+        topicId: 'topic-b',
+      };
+      mockTaskTopicModel.findRunningByTaskIds
+        .mockResolvedValueOnce([liveA])
+        .mockResolvedValueOnce([liveA, continuedB]);
+
+      await expect(new TaskService(db, userId).deleteTask('T-8')).rejects.toMatchObject({
+        code: 'CONFLICT',
+      });
+      expect(interruptTaskMock).toHaveBeenCalledWith({ operationId: 'op-a' });
+      expect(mockTaskModel.lockForUpdate).toHaveBeenCalledWith('task-cont');
+      expect(mockTaskModel.deleteIfStatus).not.toHaveBeenCalled();
     });
 
     it('treats a task already gone as deleted', async () => {
@@ -1573,13 +1608,12 @@ describe('TaskService', () => {
         identifier: 'T-7',
         status: 'backlog',
       });
-      mockTaskTopicModel.findRunningByTaskIds.mockResolvedValue([]);
-      mockTaskModel.deleteIfStatus.mockResolvedValueOnce(false);
-      mockTaskModel.findById.mockResolvedValueOnce(null);
+      mockTaskModel.lockForUpdate.mockResolvedValueOnce(false);
 
       await expect(new TaskService(db, userId).deleteTask('T-7')).resolves.toMatchObject({
         id: 'task-gone',
       });
+      expect(mockTaskModel.deleteIfStatus).not.toHaveBeenCalled();
     });
 
     it("does not interrupt the caller's own run", async () => {

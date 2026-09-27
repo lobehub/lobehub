@@ -292,17 +292,36 @@ export class TaskRunnerService {
       }
 
       if (result.topicId) {
-        if (continueTopicId) {
-          await this.taskTopicModel.updateStatus(task.id, continueTopicId, 'running');
-          await this.taskTopicModel.updateOperationId(task.id, continueTopicId, result.operationId);
-          await this.taskModel.updateCurrentTopic(task.id, continueTopicId);
-        } else {
-          await this.taskModel.incrementTopicCount(task.id);
-          await this.taskModel.updateCurrentTopic(task.id, result.topicId);
-          await this.taskTopicModel.add(task.id, result.topicId, {
-            operationId: result.operationId,
-            seq: (task.totalTopics || 0) + 1,
-            trigger,
+        const topicId = result.topicId;
+        // Record the run under the task's row lock (see TaskService.deleteTask).
+        // If the task was deleted while this run was being dispatched, nobody
+        // is left to stop it — stop it here instead of orphaning it.
+        const recorded = await this.db.transaction(async (tx) => {
+          const taskModel = new TaskModel(tx, this.userId, this.workspaceId);
+          const taskTopicModel = new TaskTopicModel(tx, this.userId, this.workspaceId);
+          if (!(await taskModel.lockForUpdate(task.id))) return false;
+          if (continueTopicId) {
+            await taskTopicModel.updateStatus(task.id, continueTopicId, 'running');
+            await taskTopicModel.updateOperationId(task.id, continueTopicId, result.operationId);
+            await taskModel.updateCurrentTopic(task.id, continueTopicId);
+          } else {
+            await taskModel.incrementTopicCount(task.id);
+            await taskModel.updateCurrentTopic(task.id, topicId);
+            await taskTopicModel.add(task.id, topicId, {
+              operationId: result.operationId,
+              seq: (task.totalTopics || 0) + 1,
+              trigger,
+            });
+          }
+          return true;
+        });
+        if (!recorded) {
+          await aiAgentService
+            .interruptTask({ operationId: result.operationId })
+            .catch((error) => log('runTask: failed to stop orphaned run: %O', error));
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'The task was deleted while its run was starting; the run was stopped.',
           });
         }
       }

@@ -662,6 +662,21 @@ export class TaskModel {
   }
 
   /**
+   * Row-lock the task for the rest of the enclosing transaction. Serializes a
+   * run recording its topic against a delete deciding there is nothing left to
+   * interrupt. Returns false when the task no longer exists.
+   */
+  async lockForUpdate(id: string): Promise<boolean> {
+    const rows = await this.db
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(and(eq(tasks.id, id), this.ownership()))
+      .for('update');
+
+    return rows.length > 0;
+  }
+
+  /**
    * Delete a task only while it still has `status`. Lets a delete that
    * inspected the task's runs lose cleanly to a run that started meanwhile,
    * instead of removing the row out from under it.
