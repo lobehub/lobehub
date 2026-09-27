@@ -214,6 +214,54 @@ describe('driveTaskFromVerify', () => {
     );
   });
 
+  it('explains a failure from stored evidence when the verifier gave no reasoning', async () => {
+    runFindByOperation.mockResolvedValue({ id: 'run-1', status: 'failed' });
+    checkResultsListByRun.mockResolvedValueOnce([
+      {
+        checkItemTitle: 'Screenshot shows the saved report',
+        required: true,
+        status: 'failed',
+        suggestion: null,
+        toulmin: { evidence: 'The screenshot shows an empty editor.' },
+        verdict: 'failed',
+      },
+    ]);
+
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+
+    expect(deliverMock.mock.calls[0][0].errorMessage).toContain(
+      '- Screenshot shows the saved report: The screenshot shows an empty editor.',
+    );
+  });
+
+  it('lists no optional checks when the Acceptance review is what rejected the delivery', async () => {
+    runFindByOperation.mockResolvedValue({ acceptanceId: 'a-1', id: 'run-1', status: 'passed' });
+    vi.mocked(reviewGoalDelivery).mockResolvedValueOnce({
+      feedback: 'The table is missing the totals row.',
+      predictionIds: [],
+      status: 'rejected',
+    });
+    checkResultsListByRun.mockResolvedValueOnce([
+      {
+        checkItemTitle: 'Optional style polish',
+        required: false,
+        status: 'failed',
+        suggestion: 'Tighten the intro.',
+        toulmin: null,
+        verdict: 'failed',
+      },
+    ]);
+
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+
+    expect(deliverMock.mock.calls[0][0].errorMessage).toBe(
+      [
+        'Delivery did not pass verification.',
+        'Acceptance review: The table is missing the totals row.',
+      ].join('\n'),
+    );
+  });
+
   it('still sends the bare verdict when the failure details cannot be read', async () => {
     runFindByOperation.mockResolvedValue({ id: 'run-1', status: 'failed' });
     checkResultsListByRun.mockRejectedValueOnce(new Error('connection reset'));

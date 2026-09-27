@@ -86,14 +86,25 @@ export const describeVerifyFailure = (
       r.status !== 'errored' &&
       (r.status === 'failed' || r.verdict === 'failed' || r.verdict === 'uncertain'),
   );
-  // Only required checks gate the run; an optional failure listed first would
-  // otherwise take a slot from the check that actually rejected the delivery.
-  const gating = failed.filter((r) => r.required);
-  const reasons = (gating.length > 0 ? gating : failed).map((r) => {
-    const why = (r.toulmin?.reasoning || r.suggestion || '').replaceAll(/\s+/g, ' ').trim();
-    const clipped = why.length > MAX_REASON_CHARS ? `${why.slice(0, MAX_REASON_CHARS)}…` : why;
-    return `- ${r.checkItemTitle || 'Untitled check'}${clipped ? `: ${clipped}` : ''}`;
-  });
+  // Only required checks gate the run. Optional failures stay out entirely —
+  // when the Acceptance review is what rejected a passing run, its feedback is
+  // the reason, not unrelated optional rows.
+  const reasons = failed
+    .filter((r) => r.required)
+    .map((r) => {
+      // Verifier agents may submit a verdict with only evidence or a limitation.
+      const why = (
+        r.toulmin?.reasoning ||
+        r.suggestion ||
+        r.toulmin?.limitation ||
+        r.toulmin?.evidence ||
+        ''
+      )
+        .replaceAll(/\s+/g, ' ')
+        .trim();
+      const clipped = why.length > MAX_REASON_CHARS ? `${why.slice(0, MAX_REASON_CHARS)}…` : why;
+      return `- ${r.checkItemTitle || 'Untitled check'}${clipped ? `: ${clipped}` : ''}`;
+    });
 
   const lines = ['Delivery did not pass verification.'];
   if (reviewFeedback?.trim()) lines.push(`Acceptance review: ${reviewFeedback.trim()}`);
