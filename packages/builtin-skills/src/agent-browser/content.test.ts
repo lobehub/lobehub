@@ -19,8 +19,14 @@ describe('agent-browser skill content', () => {
 
   it('tells the model to check for the CLI and fall back to a pinned npx run', () => {
     expect(systemPrompt).toContain('command -v agent-browser');
-    expect(systemPrompt).toContain('where agent-browser');
     expect(systemPrompt).toContain(`npx -y agent-browser@${AGENT_BROWSER_PINNED_VERSION}`);
+  });
+
+  // Windows commands usually run in PowerShell, where a bare `where` is the
+  // Where-Object alias and finds nothing even when the binary is installed.
+  it('probes Windows with where.exe, which works in both cmd and PowerShell', () => {
+    expect(systemPrompt).toContain('where.exe agent-browser');
+    expect(systemPrompt).not.toMatch(/^where agent-browser/m);
   });
 
   it('gives a Chrome launch command for each desktop platform', () => {

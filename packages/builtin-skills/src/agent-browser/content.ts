@@ -19,7 +19,7 @@ The desktop app downloads \`agent-browser\` in the background, so it may be miss
 
 \`\`\`bash
 command -v agent-browser   # macOS / Linux
-where agent-browser        # Windows
+where.exe agent-browser    # Windows (cmd or PowerShell)
 \`\`\`
 
 - **Found** → use \`agent-browser\` as written below.
