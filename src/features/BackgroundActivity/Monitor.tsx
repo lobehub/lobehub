@@ -7,8 +7,15 @@ import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useSingleton } from '@/hooks/useSingleton';
 import { useGlobalStore } from '@/store/global';
 
-import { BackgroundActivity, topicName } from './index';
-import { ResourceAlerts, selectActivity, useActivities } from './state';
+import ActivityTable, { topicName } from './ActivityTable';
+import {
+  formatCpu,
+  formatMemory,
+  ResourceAlerts,
+  selectActivity,
+  stopActivity,
+  useActivities,
+} from './state';
 
 export default function BackgroundActivityMonitor() {
   const state = useActivities();
@@ -20,13 +27,19 @@ export default function BackgroundActivityMonitor() {
     if (state.error || sampled.current === state.sampledAt) return;
     sampled.current = state.sampledAt;
     for (const activity of alerts.update(state.activities)) {
+      const topic = topicName(activity.topicId);
       toast.warning({
         title: t('backgroundActivity.highUsage'),
         id: `background-${activity.rootId}`,
-        description: `${topicName(activity.topicId) || activity.label} · ${Math.round(activity.memoryMB)} MB · ${Math.round(activity.cpuPercent ?? 0)}% CPU`,
+        description: t('backgroundActivity.alertDesc', {
+          name: topic ? `${activity.label} · ${topic}` : activity.label,
+          memory: formatMemory(activity.memoryMB),
+          cpu: formatCpu(activity.cpuPercent),
+        }),
         actions: [
           {
             label: t('backgroundActivity.details'),
+            variant: 'text',
             onClick: () => {
               selectActivity(activity.rootId);
               if (activity.agentId && activity.topicId) {
@@ -36,11 +49,25 @@ export default function BackgroundActivityMonitor() {
               } else {
                 createModal({
                   title: t('backgroundActivity.title'),
-                  content: <BackgroundActivity global />,
+                  content: (
+                    <div style={{ display: 'flex', maxHeight: '60vh', marginInline: -12 }}>
+                      <ActivityTable />
+                    </div>
+                  ),
                   footer: null,
                   width: 640,
                 });
               }
+            },
+          },
+          {
+            label: t('backgroundActivity.stop'),
+            variant: 'danger',
+            onClick: () => {
+              stopActivity(activity.rootId).catch((error) => {
+                console.error(error);
+                toast.error(t('backgroundActivity.stopFailed'));
+              });
             },
           },
         ],

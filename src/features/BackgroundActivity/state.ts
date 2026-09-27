@@ -48,6 +48,41 @@ export const groupActivities = (snapshot: ProcessSnapshot): Activity[] => {
   return [...groups.values()];
 };
 
+export const formatMemory = (mb: number) =>
+  mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${Math.round(mb)} MB`;
+
+export const formatCpu = (percent: number | null) =>
+  percent === null ? '—' : `${Math.round(percent)}%`;
+
+export const sumCpu = (activities: Activity[]) =>
+  activities.some((row) => row.cpuPercent !== null)
+    ? activities.reduce((sum, row) => sum + (row.cpuPercent ?? 0), 0)
+    : null;
+
+export const processTree = (processes: ProcessRow[]) => {
+  const pids = new Set(processes.map((row) => row.pid));
+  const children = new Map<number, ProcessRow[]>();
+  const roots: ProcessRow[] = [];
+  for (const row of processes) {
+    if (pids.has(row.ppid) && row.ppid !== row.pid) {
+      const siblings = children.get(row.ppid) ?? [];
+      siblings.push(row);
+      children.set(row.ppid, siblings);
+    } else roots.push(row);
+  }
+  const ordered: { depth: number; row: ProcessRow }[] = [];
+  const seen = new Set<number>();
+  const visit = (row: ProcessRow, depth: number) => {
+    if (seen.has(row.pid)) return;
+    seen.add(row.pid);
+    ordered.push({ depth, row });
+    for (const child of children.get(row.pid) ?? []) visit(child, depth + 1);
+  };
+  for (const row of roots) visit(row, 0);
+  for (const row of processes) visit(row, 0);
+  return ordered;
+};
+
 interface State {
   activities: Activity[];
   error: boolean;
@@ -87,6 +122,10 @@ export const refreshActivities = () => {
       emit();
     });
   return pending;
+};
+export const stopActivity = async (rootId: string) => {
+  await electronDevtoolsService.stopManagedProcess(rootId);
+  await refreshActivities();
 };
 const subscribe = (listener: () => void) => {
   listeners.add(listener);

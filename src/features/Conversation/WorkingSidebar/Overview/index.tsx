@@ -27,7 +27,7 @@ import {
   getPullRequestState,
   PR_STATE_VISUAL,
 } from '@/features/AgentSidebar/Topic/List/Item/metaCardData';
-import { BackgroundActivity } from '@/features/BackgroundActivity';
+import { TopicBackgroundActivity } from '@/features/BackgroundActivity/TopicSection';
 import BranchSwitcher from '@/features/ChatInput/ControlBar/BranchSwitcher';
 import WorktreeSwitcher from '@/features/ChatInput/ControlBar/WorktreeSwitcher';
 import { getAllWorkSummaries } from '@/features/Conversation/store/slices/data/workSummaries';
@@ -424,7 +424,7 @@ const Overview = memo<OverviewProps>(
           </>
         )}
 
-        <BackgroundActivity topicId={topicId} />
+        <TopicBackgroundActivity topicId={topicId} />
         {environmentAvailable && !workingDirectory && (
           <Empty
             className={cx(sectionStyles.section, styles.emptyWorkspace)}
