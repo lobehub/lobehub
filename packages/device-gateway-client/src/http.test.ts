@@ -463,6 +463,21 @@ describe('GatewayHttpClient', () => {
       expect(timeoutSpy.mock.calls[0][0]).toBeGreaterThan(10_000 + GATEWAY_RECOVERY_WINDOW_MS);
     });
 
+    it('never pads a call past the agent function window', async () => {
+      mockFetch({
+        json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
+        ok: true,
+      });
+      const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(AbortSignal.abort());
+
+      await client.executeToolCall(
+        { deviceId: 'device-1', timeout: 760_000, userId: 'user-1' },
+        { apiName: 'runCommand', arguments: '{}', identifier: 'test' },
+      );
+
+      expect(timeoutSpy).toHaveBeenCalledWith(800_000);
+    });
+
     it('should pass optional operationId', async () => {
       mockFetch({
         json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),

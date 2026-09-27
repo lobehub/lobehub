@@ -30,6 +30,12 @@ const HTTP_CALL_TIMEOUT_PADDING_MS = 30_000;
  * work may still be running". Keep this above the gateway's window.
  */
 const TOOL_CALL_HTTP_TIMEOUT_PADDING_MS = 60_000;
+/**
+ * The padding must not stretch a call past the agent function window (800s,
+ * the server's tool-timeout ceiling): an invocation killed mid-wait normalizes
+ * nothing at all. Near the ceiling the offline answer is given up instead.
+ */
+const TOOL_CALL_HTTP_DEADLINE_CAP_MS = 800_000;
 
 export interface DeviceStatusResult {
   deviceCount: number;
@@ -193,7 +199,12 @@ export class GatewayHttpClient {
           userId: params.userId,
           workspaceId: params.workspaceId,
         },
-        { timeout: timeout + TOOL_CALL_HTTP_TIMEOUT_PADDING_MS },
+        {
+          timeout: Math.min(
+            timeout + TOOL_CALL_HTTP_TIMEOUT_PADDING_MS,
+            Math.max(timeout, TOOL_CALL_HTTP_DEADLINE_CAP_MS),
+          ),
+        },
       );
     } catch (error) {
       // A client-side deadline or an unreachable gateway host used to escape as
