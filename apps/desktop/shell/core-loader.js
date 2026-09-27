@@ -5,7 +5,6 @@ const path = require('node:path');
 
 const MAX_BOOT_FAILURES = 3;
 const VERSION_NAME = /^[\w.+-]{1,64}$/;
-const VERIFIED_PREFIX = /^(?:(?:dist\/(?:main|preload)|node_modules|cli)\/|package\.json$)/;
 const UNSAFE_SEGMENT = /^\.\.?$/;
 const MAIN_ENTRY = 'dist/main/index.js';
 
@@ -63,13 +62,9 @@ const verifyCandidate = (dir, { abi, publicKey }) => {
     )
       throw new Error(`unsafe tree path ${JSON.stringify(entry.path)}`);
   }
-  const files =
-    process.env.LOBE_CORE_VERIFY === 'full'
-      ? manifest.tree
-      : manifest.tree.filter((entry) => VERIFIED_PREFIX.test(entry.path));
-  if (!files.some((entry) => entry.path === MAIN_ENTRY))
+  if (!manifest.tree.some((entry) => entry.path === MAIN_ENTRY))
     throw new Error(`${MAIN_ENTRY} not in tree`);
-  for (const file of files) {
+  for (const file of manifest.tree) {
     if (sha256(fs.readFileSync(path.join(dir, file.path))) !== file.sha256)
       throw new Error(`hash mismatch ${file.path}`);
   }
@@ -122,8 +117,8 @@ function resolveCore({ userData, builtinDir, abi, publicKey }) {
   };
 
   const verified = new Map();
-  const verify = (version) => {
-    if (typeof version !== 'string' || !VERSION_NAME.test(version) || /^\.\.?$/.test(version))
+  const loadCandidate = (version) => {
+    if (typeof version !== 'string' || !VERSION_NAME.test(version) || UNSAFE_SEGMENT.test(version))
       throw new Error(`invalid core version name ${JSON.stringify(version)}`);
     if (blacklist.includes(version)) throw new Error('blacklisted');
     const dir = path.join(otaRoot, 'cores', version);
@@ -132,7 +127,7 @@ function resolveCore({ userData, builtinDir, abi, publicKey }) {
   };
   const verifies = (version) => {
     try {
-      return Boolean(verify(version));
+      return Boolean(loadCandidate(version));
     } catch {
       return false;
     }
@@ -140,7 +135,7 @@ function resolveCore({ userData, builtinDir, abi, publicKey }) {
 
   if (pointer.staged) {
     try {
-      const { manifest } = verify(pointer.staged);
+      const { manifest } = loadCandidate(pointer.staged);
       const reason = rejectReason(manifest);
       if (reason) {
         log.push(`staged ${pointer.staged} ${reason}`);
@@ -165,7 +160,7 @@ function resolveCore({ userData, builtinDir, abi, publicKey }) {
       continue;
     }
     try {
-      const { dir, manifest } = verify(version);
+      const { dir, manifest } = loadCandidate(version);
       const reason = rejectReason(manifest);
       if (reason) {
         log.push(`core ${version} ${reason}`);

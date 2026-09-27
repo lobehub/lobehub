@@ -127,12 +127,14 @@ describe('resolveCore', () => {
     expect(core.log.join('\n')).toMatch(/dist\/main\/index\.js/);
   });
 
-  it('ignores renderer file hashes', () => {
+  it('rejects a core whose renderer file hash mismatches', () => {
     writeExternal('1.1.0', {
       mutate: (dir) => fs.writeFileSync(path.join(dir, 'dist/renderer/index.html'), 'changed'),
     });
     writePointer({ current: '1.1.0' });
-    expect(resolve().source).toBe('external');
+    const core = resolve();
+    expect(core.source).toBe('builtin');
+    expect(core.log.join('\n')).toContain('hash mismatch dist/renderer/index.html');
   });
 
   it.each(['node_modules/electron-log/main.js', 'cli/lobe-cli.js', 'package.json'])(
@@ -321,17 +323,6 @@ describe('resolveCore', () => {
     const core = resolve();
     expect(core.manifest.version).toBe('1.0.5');
     expect(core.log.join('\n')).toMatch(/1\.1\.0 rejected: blacklisted/);
-  });
-
-  it('verifies every tree entry when LOBE_CORE_VERIFY=full', () => {
-    vi.stubEnv('LOBE_CORE_VERIFY', 'full');
-    writeExternal('1.1.0', {
-      mutate: (dir) => fs.writeFileSync(path.join(dir, 'dist/renderer/index.html'), 'changed'),
-    });
-    writePointer({ current: '1.1.0' });
-    const core = resolve();
-    expect(core.source).toBe('builtin');
-    expect(core.log.join('\n')).toContain('hash mismatch dist/renderer/index.html');
   });
 
   it('rejects version names with path separators', () => {

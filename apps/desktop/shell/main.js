@@ -3,6 +3,15 @@ const { app } = require('electron');
 
 const { installShellResolver, resolveCore } = require('./core-loader');
 
+// resolveCore counts every launch as a boot attempt; a secondary instance exits without ever
+// marking the core healthy, so it must leave before touching OTA state. Packaged only: dev
+// moves userData in pre-app-init, and the lock is keyed by that dir.
+if (app.isPackaged && !app.requestSingleInstanceLock()) {
+  console.info('[shell] Another instance is already running, exiting');
+  app.exit(0);
+  return;
+}
+
 const builtinDir = app.isPackaged
   ? path.join(process.resourcesPath, 'core')
   : path.join(__dirname, '..');
