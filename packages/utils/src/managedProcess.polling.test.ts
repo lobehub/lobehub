@@ -32,8 +32,8 @@ afterEach(() => {
 const start = () => {
   const registry = new ManagedProcessRegistry();
   registry.environment({ topicId: 'topic' });
-  const child = { pid: 123, exitCode: 0, signalCode: null } as ChildProcess;
-  registry.register(child, false, { topicId: 'topic' });
+  const child = { pid: 123, exitCode: 0 as number | null, signalCode: null };
+  registry.register(child as ChildProcess, false, { topicId: 'topic' });
   return { registry, child };
 };
 
@@ -73,7 +73,7 @@ describe('Windows process polling', () => {
     await registry.snapshot();
     expect(enumerate).toHaveBeenCalledTimes(2);
     child.exitCode = null;
-    registry.register(child, false, { topicId: 'topic' });
+    registry.register(child as ChildProcess, false, { topicId: 'topic' });
     await vi.advanceTimersByTimeAsync(3000);
     expect(enumerate).toHaveBeenCalledTimes(5);
   });
