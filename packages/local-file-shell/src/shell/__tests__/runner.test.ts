@@ -39,9 +39,34 @@ describe('runCommand', () => {
       const first = await runCommand({ command: 'echo first' }, { processManager: localManager });
       const second = await runCommand({ command: 'echo second' }, { processManager: localManager });
 
-      expect(first.shell_id).toBe('sh-1');
-      expect(second.shell_id).toBe('sh-2');
+      expect(first.shell_id).toMatch(/^sh-[\da-f]{6}-1$/);
+      expect(second.shell_id).toBe(first.shell_id!.replace(/-1$/, '-2'));
       localManager.cleanupAll();
+    });
+
+    // Regression: shell ids were a bare per-process counter (`sh-1`, `sh-2`…),
+    // so when getCommandOutput reached a different device process than the one
+    // that ran the command (app restart, two device processes on one machine),
+    // the same id named an unrelated command there and its output came back.
+    it('should not resolve a shell ID issued by another process to its own command', async () => {
+      const processA = new ShellProcessManager(tmpDir);
+      const processB = new ShellProcessManager(tmpDir);
+
+      try {
+        const fromA = await runCommand({ command: 'echo from-A' }, { processManager: processA });
+        const fromB = await runCommand({ command: 'echo from-B' }, { processManager: processB });
+
+        expect(fromA.shell_id).not.toBe(fromB.shell_id);
+
+        const crossed = await processB.getOutput({ shell_id: fromA.shell_id!, timeout: 0 });
+
+        expect(crossed.stdout).not.toContain('from-B');
+        expect(crossed.success).toBe(false);
+        expect(crossed.error).toContain(`Shell ID ${fromA.shell_id} not found`);
+      } finally {
+        processA.cleanupAll();
+        processB.cleanupAll();
+      }
     });
 
     it('should capture stderr output separately', async () => {
@@ -243,7 +268,7 @@ describe('runCommand', () => {
       expect(result.success).toBe(true);
       expect(result.shell_id).toBeDefined();
       expect(result.exit_code).toBeUndefined();
-      expect(result.output_files?.stdout.path).toMatch(/sh-\d+\/stdout\.log$/);
+      expect(result.output_files?.stdout.path).toMatch(/sh-[\da-f]{6}-\d+\/stdout\.log$/);
       expect(result.stdout).toBeUndefined();
     });
 
