@@ -12,6 +12,7 @@ export {
   selectAssignableMembers,
 } from './listWorkspaceMembers';
 export { TaskIdentifier, TaskManifest } from './manifest';
+export { normalizeSetTaskVerifyParams } from './setTaskVerify';
 export { systemPrompt } from './systemRole';
 export type {
   CreateGoalParams,

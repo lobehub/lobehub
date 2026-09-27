@@ -958,6 +958,30 @@ describe('createTaskRuntime', () => {
       });
     });
 
+    it('accepts verify booleans and numbers a model sent as strings', async () => {
+      const taskCaller = { updateVerifyConfig: vi.fn().mockResolvedValue({}) };
+      const runtime = createTaskRuntime({
+        agentModel: { existsById: vi.fn() } as any,
+        taskCaller: taskCaller as any,
+        taskModel: {
+          resolve: vi.fn().mockResolvedValue({ id: 'task-1', identifier: 'T-1' }),
+        } as any,
+        taskService: {} as any,
+      });
+
+      const result = await runtime.setTaskVerify({
+        enabled: 'true' as any,
+        identifier: 'T-1',
+        maxIterations: '3' as any,
+      });
+
+      expect(result.success).toBe(true);
+      expect(taskCaller.updateVerifyConfig).toHaveBeenCalledWith({
+        id: 'task-1',
+        verify: { enabled: true, maxIterations: 3 },
+      });
+    });
+
     it('handles status-only updates', async () => {
       const taskCaller = {
         updateStatus: vi.fn().mockResolvedValue({ data: { identifier: 'T-1' } }),

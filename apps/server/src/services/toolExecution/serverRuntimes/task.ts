@@ -2,6 +2,7 @@ import type { ListWorkspaceMembersParams } from '@lobechat/builtin-tool-task';
 import {
   normalizeListTasksParams,
   normalizeListWorkspaceMembersParams,
+  normalizeSetTaskVerifyParams,
   selectAssignableMembers,
   TaskIdentifier,
 } from '@lobechat/builtin-tool-task';
@@ -728,6 +729,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       verifyCriteriaIds?: string[] | null;
       verifyRubricId?: string | null;
     }) => {
+      args = normalizeSetTaskVerifyParams(args);
       const task = await taskModel().resolve(args.identifier);
       if (!task) return { content: `Task not found: ${args.identifier}`, success: false };
 
