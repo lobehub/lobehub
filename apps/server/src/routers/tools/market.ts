@@ -23,7 +23,7 @@ import {
   contentBlocksToString,
   processContentBlocks,
 } from '@/server/services/mcp/contentProcessor';
-import { createSandboxService } from '@/server/services/sandbox';
+import { createSandboxService, resolveSandboxSessionConfig } from '@/server/services/sandbox';
 import { preprocessLhCommand } from '@/server/services/toolExecution/preprocessLhCommand';
 
 import { scheduleToolCallReport } from './_helpers';
@@ -196,7 +196,9 @@ const execInSandboxHandler = async ({
 }: {
   ctx: {
     fileService: FileService;
+    marketAccessToken?: string;
     marketService: MarketService;
+    marketUserInfo?: Record<string, unknown>;
     serverDB: any;
     userId: string;
     workspaceId?: string | null;
@@ -286,9 +288,39 @@ const execInSandboxHandler = async ({
       }
     }
 
+    // The persistent workspace, resolved the same way the server runtimes do.
+    // This route is the client-side executor's way into the sandbox — the one a
+    // conversation uses when its tool calls are not dispatched server-side —
+    // and it used to open a session with no mode, no directory and no claim.
+    // Every run through here was therefore ephemeral: the composer showed the
+    // instance the topic had chosen while `pwd` answered `/workspace`, and
+    // whatever the run wrote went nowhere the file browser reads.
+    const sandbox = await resolveSandboxSessionConfig({
+      // Direct client call, so the caller is always acting as themselves.
+      isShareVisitorRun: false,
+      serverDB: ctx.serverDB,
+      topicId,
+      userId,
+      workspaceId: ctx.workspaceId ?? undefined,
+    });
+
+    // The claim has to ride on the identity this call is signed with, not just
+    // on the request: the execution plane reads the entitlement off the trusted
+    // client token, and `ctx.marketService` was built before it was known.
+    const marketService = sandbox.claim
+      ? new MarketService({
+          accessToken: ctx.marketAccessToken,
+          userInfo: { ...ctx.marketUserInfo, sandboxWorkspace: sandbox.claim },
+        })
+      : ctx.marketService;
+
     const sandboxService = createSandboxService({
       fileService: ctx.fileService,
-      marketService: ctx.marketService,
+      marketService,
+      sandboxCwd: sandbox.cwd,
+      sandboxEnvironment: sandbox.environment,
+      sandboxMode: sandbox.mode,
+      sandboxWorkingDir: sandbox.workingDir,
       serverDB: ctx.serverDB,
       topicId,
       userId,
