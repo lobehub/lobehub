@@ -7,10 +7,12 @@ import { deviceGateway } from '@/server/services/deviceGateway';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 
 import { ToolExecutionService } from '../index';
+import { localSystemRuntime } from '../serverRuntimes/localSystem';
 
 vi.mock('@/server/services/deviceGateway', () => ({
   deviceGateway: {
     executeMcpCall: vi.fn(),
+    executeToolCall: vi.fn(),
     isConfigured: false,
     queryDeviceList: vi.fn().mockResolvedValue([]),
   },
@@ -122,6 +124,55 @@ describe('ToolExecutionService', () => {
       expect(call).toHaveBeenCalledTimes(2);
     },
   );
+
+  it.each([
+    {
+      case: 'the device never answered',
+      failure: {
+        content:
+          'This tool call timed out before the device answered. The work may still be running on the device, so do NOT blindly repeat anything that writes or has side effects.',
+        error: 'DEVICE_RESPONSE_TIMEOUT: The operation was aborted due to timeout',
+        success: false,
+      },
+    },
+  ])('does not replay a device command when $case', async ({ failure }) => {
+    // The device may already be running the first copy: a woken laptop ran a
+    // single `echo >> file` three times after the transport replayed it.
+    vi.mocked(deviceGateway.executeToolCall).mockResolvedValue(failure);
+    const runtime = localSystemRuntime.factory({
+      activeDeviceId: 'device-1',
+      operationId: 'op-1',
+      toolManifestMap: {},
+      userId: 'user-1',
+    }) as Record<string, (args: unknown) => Promise<any>>;
+    const service = new ToolExecutionService({
+      builtinToolsExecutor: {
+        execute: () => runtime.runCommand({ command: 'echo once >> /tmp/count.txt' }),
+      } as any,
+      mcpService: {} as any,
+    });
+
+    const { attempts, result } = await executeToolWithRetry(
+      () =>
+        service.executeTool(
+          {
+            apiName: 'runCommand',
+            arguments: '{}',
+            id: 'device-call',
+            identifier: 'lobe-local-system',
+            type: 'builtin',
+          },
+          { toolManifestMap: {} },
+        ),
+      { maxRetries: 2 },
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.content).toBe(failure.content);
+    expect(result.error).toMatchObject({ kind: 'stop' });
+    expect(attempts).toBe(1);
+    expect(deviceGateway.executeToolCall).toHaveBeenCalledTimes(1);
+  });
 
   describe.each(['writeFile', 'runCommand', 'executeCode', 'exportFile'] as const)(
     'non-retryable sandbox %s failures',

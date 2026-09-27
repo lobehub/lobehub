@@ -10,6 +10,7 @@ import { buildDeviceLhEnv } from '@/server/services/toolExecution/preprocessLhCo
 import { buildNoActiveDeviceResult, REMOTE_DEVICE_TOOL_IDENTIFIER } from './noActiveDevice';
 import { resolveContentWorkspaceId, resolveRunWorkspaceId } from './resolveWorkspaceScope';
 import { type ServerRuntimeRegistration } from './types';
+import { withoutDeviceReplay } from './withoutDeviceReplay';
 
 /**
  * Which arg carries the working directory for the APIs that consume one. The
@@ -152,7 +153,7 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
           }
         }
 
-        return executeAuthorizedDeviceToolCall(
+        const result = await executeAuthorizedDeviceToolCall(
           context.serverDB,
           {
             deviceId: context.activeDeviceId!,
@@ -170,6 +171,8 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
           },
           context.executionTimeoutMs,
         );
+
+        return withoutDeviceReplay(result);
       };
     }
 

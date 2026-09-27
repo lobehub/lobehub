@@ -9,6 +9,7 @@ import { FileService } from '@/server/services/file';
 import { buildNoActiveDeviceResult, REMOTE_DEVICE_TOOL_IDENTIFIER } from './noActiveDevice';
 import { resolveContentWorkspaceId, resolveRunWorkspaceId } from './resolveWorkspaceScope';
 import { type ServerRuntimeRegistration } from './types';
+import { withoutDeviceReplay } from './withoutDeviceReplay';
 
 /**
  * Browser tool server runtime.
@@ -205,7 +206,9 @@ export const browserRuntime: ServerRuntimeRegistration = {
           context.executionTimeoutMs,
         );
 
-        return api.name === 'screenshot' ? storeScreenshot(result, context) : result;
+        return withoutDeviceReplay(
+          api.name === 'screenshot' ? await storeScreenshot(result, context) : result,
+        );
       };
     }
 

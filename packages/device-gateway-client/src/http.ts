@@ -22,6 +22,14 @@ const DEFAULT_GATEWAY_TOOL_CALL_TIMEOUT_MS = 30_000;
  */
 const DEVICE_QUERY_TIMEOUT_MS = 10_000;
 const HTTP_CALL_TIMEOUT_PADDING_MS = 30_000;
+/**
+ * The gateway holds an undelivered tool call for `timeout` plus a recovery
+ * window (45s) waiting for the device to reconnect, then answers 503
+ * `DEVICE_OFFLINE` — "never ran, safe to retry". A client deadline shorter than
+ * that window aborts first, so an offline device always read as "timed out, the
+ * work may still be running". Keep this above the gateway's window.
+ */
+const TOOL_CALL_HTTP_TIMEOUT_PADDING_MS = 60_000;
 
 export interface DeviceStatusResult {
   deviceCount: number;
@@ -185,7 +193,7 @@ export class GatewayHttpClient {
           userId: params.userId,
           workspaceId: params.workspaceId,
         },
-        { timeout: timeout + HTTP_CALL_TIMEOUT_PADDING_MS },
+        { timeout: timeout + TOOL_CALL_HTTP_TIMEOUT_PADDING_MS },
       );
     } catch (error) {
       // A client-side deadline or an unreachable gateway host used to escape as

@@ -430,7 +430,7 @@ describe('GatewayHttpClient', () => {
         { apiName: 'readFile', arguments: '{}', identifier: 'test' },
       );
 
-      expect(timeoutSpy).toHaveBeenCalledWith(35_000);
+      expect(timeoutSpy).toHaveBeenCalledWith(65_000);
       expect(fetch).toHaveBeenCalledWith(
         'https://gateway.test.com/api/device/tool-call',
         expect.objectContaining({
@@ -442,6 +442,25 @@ describe('GatewayHttpClient', () => {
       const init = vi.mocked(fetch).mock.calls[0][1];
       const body = JSON.parse((init as RequestInit).body as string);
       expect(body.toolCall.type).toBe('tool');
+    });
+
+    it("waits out the gateway's reconnect window so an offline device reads as offline", async () => {
+      // The gateway holds an undelivered call for `timeout + 45s` before it
+      // answers 503 DEVICE_OFFLINE. Aborting earlier turned every offline
+      // device into "timed out, the work may still be running".
+      const GATEWAY_RECOVERY_WINDOW_MS = 45_000;
+      mockFetch({
+        json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
+        ok: true,
+      });
+      const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(AbortSignal.abort());
+
+      await client.executeToolCall(
+        { deviceId: 'device-1', timeout: 10_000, userId: 'user-1' },
+        { apiName: 'runCommand', arguments: '{}', identifier: 'test' },
+      );
+
+      expect(timeoutSpy.mock.calls[0][0]).toBeGreaterThan(10_000 + GATEWAY_RECOVERY_WINDOW_MS);
     });
 
     it('should pass optional operationId', async () => {
@@ -473,7 +492,7 @@ describe('GatewayHttpClient', () => {
         { apiName: 'readFile', arguments: '{}', identifier: 'test' },
       );
 
-      expect(timeoutSpy).toHaveBeenCalledWith(60_000);
+      expect(timeoutSpy).toHaveBeenCalledWith(90_000);
       expect(fetch).toHaveBeenCalledWith(
         'https://gateway.test.com/api/device/tool-call',
         expect.objectContaining({ signal }),
