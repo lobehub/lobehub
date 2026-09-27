@@ -661,6 +661,20 @@ export class TaskModel {
     return result.rows.length > 0;
   }
 
+  /**
+   * Delete a task only while it still has `status`. Lets a delete that
+   * inspected the task's runs lose cleanly to a run that started meanwhile,
+   * instead of removing the row out from under it.
+   */
+  async deleteIfStatus(id: string, status: string): Promise<boolean> {
+    const deleted = await this.db
+      .delete(tasks)
+      .where(and(eq(tasks.id, id), eq(tasks.status, status), this.ownership()))
+      .returning({ id: tasks.id });
+
+    return deleted.length > 0;
+  }
+
   /** See {@link delete}: bulk task deletion likewise leaves Work artifacts intact. */
   async deleteAll(options?: { restrictToCreator?: boolean }): Promise<number> {
     // `restrictToCreator` narrows the workspace-wide sweep to rows the caller

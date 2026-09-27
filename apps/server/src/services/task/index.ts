@@ -394,7 +394,17 @@ export class TaskService {
       }
     }
 
-    await this.taskModel.delete(task.id);
+    // Compare-and-delete: a run that started after the checks above moved the
+    // status on, so this delete loses instead of orphaning that run (the
+    // runner's own start write is conditional on the status it read, too).
+    if (!(await this.taskModel.deleteIfStatus(task.id, task.status))) {
+      if (!(await this.taskModel.findById(task.id))) return task;
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message:
+          'The task changed while it was being deleted (it may have just started). Try again.',
+      });
+    }
     return task;
   }
 

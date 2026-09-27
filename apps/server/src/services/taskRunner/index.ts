@@ -156,10 +156,20 @@ export class TaskRunnerService {
       );
 
       if (task.status !== 'running') {
-        await this.taskModel.updateStatus(task.id, 'running', {
-          error: null,
-          startedAt: new Date(),
-        });
+        // Conditional on the status read above: a task deleted (or started by
+        // another caller) in the meantime must not get an agent dispatched.
+        const started = await this.taskModel.updateStatusIfCurrent(
+          task.id,
+          task.status,
+          'running',
+          { error: null, startedAt: new Date() },
+        );
+        if (!started) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'The task changed or was deleted before its run could start.',
+          });
+        }
         weSetRunning = true;
       } else if (task.error) {
         await this.taskModel.update(task.id, { error: null });
