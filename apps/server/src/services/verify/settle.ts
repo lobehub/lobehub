@@ -9,7 +9,9 @@ import debug from 'debug';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
+import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyRunModel } from '@/database/models/verifyRun';
+import type { VerifyCheckResultItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
 import { TaskService } from '@/server/services/task';
@@ -62,6 +64,43 @@ export const recomputeRepairAncestors = async (
     current = await operationModel.findById(parentOperationId);
     depth += 1;
   }
+};
+
+const MAX_REPORTED_FAILURES = 5;
+const MAX_REASON_CHARS = 300;
+
+/**
+ * Turn a failed run's check results into the rejection the dispatching agent
+ * reads. The bare "did not pass" left it unable to tell a real shortfall from
+ * a gate misfire, so it re-verified by hand or overrode the verdict.
+ */
+export const describeVerifyFailure = (
+  results: Pick<
+    VerifyCheckResultItem,
+    'checkItemTitle' | 'status' | 'suggestion' | 'toulmin' | 'verdict'
+  >[],
+  reviewFeedback?: string,
+): string => {
+  const reasons = results
+    .filter(
+      (r) =>
+        r.status !== 'errored' &&
+        (r.status === 'failed' || r.verdict === 'failed' || r.verdict === 'uncertain'),
+    )
+    .map((r) => {
+      const why = (r.toulmin?.reasoning || r.suggestion || '').replaceAll(/\s+/g, ' ').trim();
+      const clipped = why.length > MAX_REASON_CHARS ? `${why.slice(0, MAX_REASON_CHARS)}…` : why;
+      return `- ${r.checkItemTitle || 'Untitled check'}${clipped ? `: ${clipped}` : ''}`;
+    });
+
+  const lines = ['Delivery did not pass verification.'];
+  if (reviewFeedback?.trim()) lines.push(`Acceptance review: ${reviewFeedback.trim()}`);
+  if (reasons.length > 0) {
+    lines.push('Failed checks:', ...reasons.slice(0, MAX_REPORTED_FAILURES));
+    if (reasons.length > MAX_REPORTED_FAILURES)
+      lines.push(`- …and ${reasons.length - MAX_REPORTED_FAILURES} more`);
+  }
+  return lines.join('\n');
 };
 
 interface ReportContext {
@@ -219,7 +258,10 @@ export const driveTaskFromVerify = async (
     try {
       const errorMessage =
         outcome === 'failed'
-          ? 'Delivery did not pass verification.'
+          ? describeVerifyFailure(
+              await new VerifyCheckResultModel(db, userId, workspaceId).listByRun(run.id),
+              goalReview?.status === 'rejected' ? goalReview.feedback : undefined,
+            )
           : outcome === 'errored' || outcome === 'review_errored'
             ? 'Verification could not be completed due to an internal error; the delivery was not evaluated. Please retry or review it manually.'
             : outcome === 'unjudgeable'
