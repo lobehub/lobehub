@@ -18,6 +18,14 @@ ${items.map((item) => `- ${item.id}: ${item.title}${item.description ? ` — ${i
 Call submitEvidence once for each criterion. This is evidence collection only: do not assign verdicts and do not redo the implementation.`;
 
 /**
+ * Stable id of the onComplete hook the evidence turn runs under. The sweep
+ * identifies the evidence continuation among the builder's sub-operations by
+ * carrying this hook in its persisted runtime state — an operation itself
+ * carries no marker, and the builder may have other children from sub-agents.
+ */
+export const EVIDENCE_HOOK_ID = 'acceptance-evidence-on-complete';
+
+/**
  * External CLI agents cannot call server builtin tools. Preserve their final
  * handoff as inline evidence instead of starting an evidence-only hetero turn
  * that can never reach `submitEvidence`.
@@ -104,7 +112,7 @@ export const startEvidenceSubmission = async (params: {
           workspaceId,
         );
       },
-      id: 'acceptance-evidence-on-complete',
+      id: EVIDENCE_HOOK_ID,
       type: 'onComplete',
       webhook: {
         body: {

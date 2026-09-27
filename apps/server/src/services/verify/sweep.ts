@@ -4,13 +4,15 @@ import debug from 'debug';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyRunModel } from '@/database/models/verifyRun';
+import type { AgentOperationItem } from '@/database/schemas/agentOperations';
 import type { VerifyRunItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 import { createAgentStateManager } from '@/server/modules/AgentRuntime';
 
 import { createVerifierAgentRunner } from './agentVerifier';
-import { recordHeterogeneousDeliverableEvidence } from './evidenceSubmission';
+import { EVIDENCE_HOOK_ID, recordHeterogeneousDeliverableEvidence } from './evidenceSubmission';
 import { VerifyExecutorService } from './executor';
+import { resolveVerificationDeliverable } from './lifecycle';
 import { resolveVerifyModelConfig } from './modelConfig';
 import { settleFailedRepair } from './repairTerminal';
 import { planItemToPendingResult } from './resultSnapshot';
@@ -160,20 +162,25 @@ export const sweepStuckVerifyRuns = async (
  * and the run sits in `collecting_evidence` forever — the `claimVerifying`
  * gate would accept it, but nothing re-enters. Guards before acting:
  *
- * - **partial evidence** — some rows already written but the turn died before
- *   covering the plan — is judged rather than backfilled: the real judge pass
- *   sees what was submitted (the structural gate marks the gaps `uncertain`).
- *   A late turn that re-submits over these rows hits the idempotent upsert.
  * - **a live evidence operation** — still running or awaiting human/async tool
- *   work — may yet complete and submit; leave the run alone.
+ *   work — may yet complete and submit; leave the run alone. The continuation
+ *   is the child carrying the `acceptance-evidence-on-complete` hook in its
+ *   persisted state, not just any child (the builder may have others), and a
+ *   state that cannot be read (Redis down) is treated as potentially-live too.
+ * - **partial evidence** — some rows already written but the turn died before
+ *   covering the plan — is judged rather than backfilled, and only against the
+ *   frozen deliverable: judging without it would pass the structural gate on
+ *   uncovered criteria and render verdicts from nothing. A late turn that
+ *   re-submits over these rows hits the idempotent upsert.
  *
  * With both guards cleared, the deliverable that `startEvidenceSubmission`
  * froze into the evidence hook's webhook body is backfilled as inline evidence
- * for every criterion — the same write a heterogeneous builder performs (see
- * {@link recordHeterogeneousDeliverableEvidence}). The hook config is
- * recovered from the persisted agent state; when that is gone (Redis TTL
- * elapsed, instance recycled) the run degrades to the errored-rows ending the
- * plain sweep gives `verifying` runs — still unblocking the acceptance.
+ * for every criterion — inside `enterJudging`, after the recovery lease is
+ * taken, so overlapping sweeps cannot double-insert the evidence rows (see
+ * {@link recordHeterogeneousDeliverableEvidence}). When the hook config is
+ * gone (Redis TTL elapsed, instance recycled) the run degrades to the
+ * errored-rows ending the plain sweep gives `verifying` runs — still
+ * unblocking the acceptance.
  */
 const recoverEvidenceRun = async (
   db: LobeChatDatabase,
@@ -190,37 +197,50 @@ const recoverEvidenceRun = async (
   const resultModel = new VerifyCheckResultModel(db, run.userId, workspaceId);
   const submitted = await resultModel.listByRun(run.id);
 
-  // The evidence hook's terminal callback follows the evidence child op, so a
-  // run with any submitted rows is only judged once that child can no longer
-  // produce an `onComplete` — the same live guard the no-evidence path applies
-  // below. Ordering matters: the claim inside `enterJudging` would otherwise
-  // steal the ending from a collector that is still running with partial rows.
+  // The evidence hook's terminal callback follows the evidence continuation —
+  // the child operation carrying the `acceptance-evidence-on-complete` hook in
+  // its persisted state. The builder may have other children (sub-agents), so
+  // the hook, not child order, identifies it. A state that fails to load
+  // (Redis down) must not read as "not the collector": an unreadable live
+  // child is left alone.
   const operationModel = new AgentOperationModel(db, run.userId, workspaceId);
   const children = await operationModel.listOperationTree(operationId);
-  const evidenceOp = children.find(
-    (op) => op.id !== operationId && op.parentOperationId === operationId,
-  );
-  const evidenceOpLive = Boolean(evidenceOp && LIVE_OPERATION_STATUSES.has(evidenceOp.status));
+
+  let evidenceOp: AgentOperationItem | undefined;
+  let deliverable: string | null = null;
+  let collectorUnknown = false;
+  for (const child of children) {
+    if (child.id === operationId || child.parentOperationId !== operationId) continue;
+    const probe = await probeEvidenceHook(child.id, run.userId);
+    if (probe.kind === 'no-hook') continue;
+    if (probe.kind === 'unknown') {
+      // Redis down: this child might be the collector, so the run is hands-off
+      // entirely — a claim here could steal the ending of a live collector.
+      collectorUnknown = true;
+      break;
+    }
+    evidenceOp = child;
+    deliverable = probe.deliverable;
+    break;
+  }
 
   // Real evidence exists and the collector is gone — a judge pass is the honest
-  // ending. Re-running the executor judges what was submitted (the structural
-  // gate marks uncovered items `uncertain`) instead of inventing verdicts.
+  // ending, judging what was submitted against the frozen deliverable (the
+  // structural gate marks uncovered items `uncertain`). Judging without the
+  // deliverable would pass the structural gate on uncovered criteria and render
+  // verdicts from neither evidence nor the final output.
   if (submitted.length > 0) {
-    if (evidenceOpLive) return 'skipped';
-    return enterJudging(db, run, operationId, run.userId, workspaceId, now, 'settled');
+    if (collectorUnknown || (evidenceOp && LIVE_OPERATION_STATUSES.has(evidenceOp.status)))
+      return 'skipped';
+    if (!deliverable) return closeOutstandingAsErrored(db, run, operationId, now, 'abandoned');
+    return enterJudging(db, run, operationId, run.userId, workspaceId, now, deliverable, 'settled');
   }
 
   // No evidence yet: a live evidence turn may still submit, so only proceed
-  // when its child operation can no longer produce an `onComplete`.
-  if (evidenceOpLive) return 'skipped';
+  // when the continuation can no longer produce an `onComplete`.
+  if (collectorUnknown || (evidenceOp && LIVE_OPERATION_STATUSES.has(evidenceOp.status)))
+    return 'skipped';
 
-  // The evidence hook's webhook body carries the deliverable the turn was
-  // given — read it back from the persisted agent state. The hooks persist onto
-  // the evidence child op's runtime state (the continuation run), not the
-  // builder's, so the child's id is the state key.
-  const deliverable = evidenceOp
-    ? await loadEvidenceHookDeliverable(evidenceOp.id, run.userId)
-    : null;
   const builderOp = children.find((op) => op.id === operationId);
   if (!deliverable || !builderOp) {
     // Nothing to backfill from (no surviving state, or the builder operation
@@ -230,16 +250,16 @@ const recoverEvidenceRun = async (
     return closeOutstandingAsErrored(db, run, operationId, now, 'abandoned');
   }
 
-  await recordHeterogeneousDeliverableEvidence({
+  return enterJudging(
     db,
-    deliverable,
-    operation: builderOp,
-    plan,
-    userId: run.userId,
+    run,
+    operationId,
+    run.userId,
     workspaceId,
-  });
-
-  return enterJudging(db, run, operationId, run.userId, workspaceId, now, 'evidenceRecovered');
+    now,
+    deliverable,
+    'evidenceRecovered',
+  );
 };
 
 /**
@@ -247,26 +267,42 @@ const recoverEvidenceRun = async (
  * persisted agent state (`host.hooks[].webhook.body.deliverable`). Returns
  * null when no state survives (Redis TTL elapsed) or no evidence hook exists.
  */
-const loadEvidenceHookDeliverable = async (
-  operationId: string,
+/**
+ * What the persisted agent state of a child operation says about the evidence
+ * hook: `hook` — the child is the evidence continuation (`deliverable` is the
+ * frozen output, null when the body lacks one), `no-hook` — the state loaded
+ * and carries no evidence hook (an unrelated sub-agent, or TTL-elapsed state),
+ * `unknown` — the state could not be read (Redis down); the child might still
+ * be the collector.
+ */
+type EvidenceHookProbe =
+  { deliverable: string | null; kind: 'hook' } | { kind: 'no-hook' } | { kind: 'unknown' };
+
+const probeEvidenceHook = async (
+  childOperationId: string,
   userId: string,
-): Promise<string | null> => {
+): Promise<EvidenceHookProbe> => {
   try {
     const stateManager = createAgentStateManager();
-    const state = await stateManager.loadAgentState(operationId);
+    const state = await stateManager.loadAgentState(childOperationId);
     const hooks = state?.host?.hooks ?? [];
 
     for (const hook of hooks) {
+      if (hook.id !== EVIDENCE_HOOK_ID) continue;
       const body = hook.webhook?.body as { deliverable?: unknown } | undefined;
       const deliverable = body?.deliverable;
-      if (typeof deliverable === 'string' && deliverable.length > 0) return deliverable;
+      return {
+        deliverable: typeof deliverable === 'string' && deliverable.length > 0 ? deliverable : null,
+        kind: 'hook',
+      };
     }
-    return null;
+    return { kind: 'no-hook' };
   } catch (error) {
-    // A missing Redis or an expired key is the common case; the sweep must
-    // still settle the run, just without the deliverable backfill.
-    log('loading agent state for op %s (user %s) failed: %O', operationId, userId, error);
-    return null;
+    // A missing Redis or an expired connection is transient — the sweep must
+    // not read it as "not the collector" and touch a run that may still be
+    // live. Callers treat `unknown` hands-off for live children.
+    log('probing agent state for op %s (user %s) failed: %O', childOperationId, userId, error);
+    return { kind: 'unknown' };
   }
 };
 
@@ -333,6 +369,12 @@ const closeOutstandingAsErrored = async (
  * `verifying`, `maybeAutoRepair` waits for terminal rows, and `finalizeVerifyRun`
  * early-returns — the run would strand again and the next sweep would close it
  * `errored`, so the recovery would recover nothing.
+ *
+ * `deliverable` is the hook's frozen final output, recovered by the caller —
+ * both call sites pass it non-empty, and the executor requires it for judging.
+ * The evidence backfill runs here, after the claim: an overlapping sweep that
+ * loses the lease must not double-insert the evidence rows (`createMany` is an
+ * unconstrained insert).
  */
 const enterJudging = async (
   db: LobeChatDatabase,
@@ -341,6 +383,7 @@ const enterJudging = async (
   userId: string,
   workspaceId: string | undefined,
   now: Date,
+  deliverable: string,
   action: 'abandoned' | 'settled' | 'evidenceRecovered',
 ): Promise<'abandoned' | 'settled' | 'evidenceRecovered' | 'skipped'> => {
   const statusService = new VerifyStatusService(db, userId, workspaceId);
@@ -360,16 +403,32 @@ const enterJudging = async (
     return closeOutstandingAsErrored(db, run, operationId, now, action);
   }
 
+  // The backfill write follows the lease, not the skip guards — an overlapping
+  // worker that reaches the insert before its claim attempt must not duplicate
+  // the evidence rows against the winner's insert.
+  await recordHeterogeneousDeliverableEvidence({
+    db,
+    deliverable,
+    operation: op,
+    plan: (run.plan ?? []) as VerifyCheckItem[],
+    userId,
+    workspaceId,
+  });
+
   const resolvedAcceptance = op.taskId
     ? await resolveTaskAcceptance(db, userId, op.taskId, workspaceId)
     : undefined;
   const verifierAgentId = resolvedAcceptance?.config.verifierAgentId ?? undefined;
 
-  // No deliverable context — inline (LLM) checks are judged on submitted
-  // evidence alone, and checks needing the deliverable text degrade to the
-  // errored-rows ending below. The task is still driven: the goal has been
-  // waiting on this verdict.
-  const goal = run.goal ?? '';
+  // The same deliverable resolution the completion lifecycle applies: task-pinned
+  // documents join the frozen output so the judge sees the full context.
+  const resolvedDeliverable = await resolveVerificationDeliverable(
+    db,
+    userId,
+    deliverable,
+    op.taskId,
+    workspaceId,
+  );
 
   const modelConfig = await resolveVerifyModelConfig(
     db,
@@ -384,13 +443,13 @@ const enterJudging = async (
 
   const executor = new VerifyExecutorService(db, userId, workspaceId);
   await executor.execute({
-    deliverable: '',
-    goal,
+    deliverable: resolvedDeliverable,
+    goal: run.goal ?? '',
     modelConfig,
     operationId,
     runVerifierAgent: createVerifierAgentRunner({
       db,
-      deliverable: '',
+      deliverable: resolvedDeliverable,
       model: modelConfig.model,
       provider: modelConfig.provider,
       taskId: op.taskId,
