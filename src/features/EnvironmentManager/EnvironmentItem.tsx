@@ -203,6 +203,7 @@ const EnvironmentItem = memo<EnvironmentItemProps>(
     // back. A single click in a menu was the whole gesture.
     const confirmRemove = () =>
       confirmModal({
+        cancelText: tCommon('cancel'),
         content: t('environments.removeConfirmContent'),
         okButtonProps: { danger: true },
         okText: t('environments.remove'),
