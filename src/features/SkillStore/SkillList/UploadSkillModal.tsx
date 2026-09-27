@@ -1,6 +1,5 @@
 'use client';
 
-import { LoadingOutlined } from '@ant-design/icons';
 import { Flexbox, Icon } from '@lobehub/ui';
 import {
   Alert,
@@ -102,7 +101,7 @@ const UploadSkillContent = memo(() => {
         <Flexbox align="center" gap={8} padding={24}>
           {loading ? (
             <>
-              <Spin indicator={<LoadingOutlined spin />} />
+              <Spin />
               <Typography.Text type="secondary">
                 {t('agentSkillModal.upload.uploading')}
               </Typography.Text>
