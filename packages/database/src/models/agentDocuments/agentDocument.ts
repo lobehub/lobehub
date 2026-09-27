@@ -105,6 +105,20 @@ interface AgentDocumentListQueryRow {
   updatedAt: Date;
 }
 
+/**
+ * Map the list API's source filter onto `documents.source_type`.
+ *
+ * The list contract has two buckets: `web` (crawled pages) and `file` (everything
+ * authored or uploaded as an agent document). Authored docs are stored as
+ * `agent` / `agent-signal` / `api`, so `file` means "not web" rather than the
+ * literal `file` source type, which only covers uploaded originals.
+ */
+const listSourceTypeFilter = (sourceType?: AgentDocumentListSourceType) => {
+  if (sourceType === 'web') return [eq(documents.sourceType, 'web')];
+  if (sourceType === 'file') return [ne(documents.sourceType, 'web')];
+  return [];
+};
+
 export class AgentDocumentModel {
   private userId: string;
   private workspaceId?: string;
@@ -1137,7 +1151,7 @@ export class AgentDocumentModel {
           this.agentDocOwnership(),
           eq(agentDocuments.agentId, agentId),
           isNull(agentDocuments.deletedAt),
-          ...(sourceType && sourceType !== 'all' ? [eq(documents.sourceType, sourceType)] : []),
+          ...listSourceTypeFilter(sourceType),
           ...(excludeWeb ? [ne(documents.sourceType, 'web')] : []),
           ...(parentId ? [eq(documents.parentId, parentId)] : []),
         ),
@@ -1323,7 +1337,7 @@ export class AgentDocumentModel {
           eq(agentDocuments.agentId, agentId),
           inArray(agentDocuments.documentId, documentIds),
           isNull(agentDocuments.deletedAt),
-          ...(sourceType && sourceType !== 'all' ? [eq(documents.sourceType, sourceType)] : []),
+          ...listSourceTypeFilter(sourceType),
         ),
       )
       .orderBy(desc(agentDocuments.updatedAt));

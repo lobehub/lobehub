@@ -254,7 +254,7 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
           },
           sourceType: {
             default: 'all',
-            description: `Filter by document source within this agent-document system (unrelated to the user's resource library uploads). "file" = documents authored/edited directly as agent documents; "web" = crawled from external URLs; "all" returns both. Web-crawled documents are hidden from the default agent_documents_index — pass sourceType="web" here to see them.`,
+            description: `Filter by document source within this agent-document system (unrelated to the user's resource library uploads). "file" = every non-web agent document (authored or edited as agent documents, plus uploaded originals); "web" = crawled from external URLs; "all" returns both. Web-crawled documents are hidden from the default agent_documents_index — pass sourceType="web" here to see them.`,
             enum: ['all', 'file', 'web'],
             type: 'string',
           },
