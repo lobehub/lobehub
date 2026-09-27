@@ -1,9 +1,9 @@
 'use client';
 
-import { CaretDownFilled, LoadingOutlined } from '@ant-design/icons';
+import { CaretDownFilled } from '@ant-design/icons';
 import { DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
-import { Block, Flexbox, Icon, stopPropagation, Tooltip } from '@lobehub/ui';
-import { ActionIcon, toast } from '@lobehub/ui/base-ui';
+import { Block, Center, Flexbox, Icon, stopPropagation, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Spin, toast } from '@lobehub/ui/base-ui';
 import { Input } from 'antd';
 import { cx } from 'antd-style';
 import { FileText, FolderIcon, FolderOpenIcon, LockIcon } from 'lucide-react';
@@ -322,7 +322,9 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
             {flat ? (
               <div style={{ width: 20 }} />
             ) : isLoading ? (
-              <ActionIcon spin icon={LoadingOutlined as any} size={'small'} style={{ width: 20 }} />
+              <Center style={{ width: 20 }}>
+                <Spin size={'small'} />
+              </Center>
             ) : (
               <m.div
                 animate={{ rotate: isExpanded ? 0 : -90 }}
