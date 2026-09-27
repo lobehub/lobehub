@@ -153,6 +153,17 @@ describe('createGatewayMemberStreamHandler', () => {
       await vi.waitFor(() => expect(refreshGroup).toHaveBeenCalledTimes(3), { timeout: 4000 });
     });
 
+    // G-02: the server mirrors a member's terminal onto the supervisor's
+    // channel as `member_runtime_end`, so the gateway keeps that session open.
+    it('re-reads the group tree on the mirrored member_runtime_end (G-02)', async () => {
+      const { handler, refreshGroup, store } = setup();
+
+      handler(makeEvent('member_runtime_end', { reason: 'waiting_for_human' }));
+      await vi.waitFor(() => expect(refreshGroup).toHaveBeenCalledTimes(1));
+
+      expect(store.completeOperation).toHaveBeenCalledWith('local-member-op');
+    });
+
     it('leaves a normal member end to the supervisor terminal refetch', () => {
       const { handler, refreshGroup } = setup();
 
@@ -208,5 +219,22 @@ describe('createGatewayMemberStreamHandler', () => {
 
       expect(mergeGroupSnapshot(fetched, [], new Set())).toBe(fetched);
     });
+  });
+
+  it('retires the member column on the mirrored member_runtime_end (G-02)', () => {
+    const store = createStore();
+    const handler = createGatewayMemberStreamHandler(() => store, {
+      context,
+      ensureGroupHydrated: vi.fn().mockResolvedValue(undefined),
+      liveMessageIds: new Set(),
+      memberOperationId: 'server-member-op',
+      parentOperationId: 'owner-op',
+      refreshGroup: vi.fn().mockResolvedValue(undefined),
+    });
+    handler(makeEvent('stream_start', { assistantMessage: { id: 'member-msg' } }));
+
+    handler(makeEvent('member_runtime_end', { reason: 'completed' }));
+
+    expect(store.completeOperation).toHaveBeenCalledWith('local-member-op');
   });
 });

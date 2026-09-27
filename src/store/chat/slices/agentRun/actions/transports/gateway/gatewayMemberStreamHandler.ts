@@ -230,6 +230,10 @@ export const createGatewayMemberStreamHandler = (
         break;
       }
 
+      // `member_runtime_end` is how the server mirrors a member's terminal onto
+      // the supervisor's channel; `agent_runtime_end` is the pre-rename shape
+      // older servers still send.
+      case 'member_runtime_end':
       case 'agent_runtime_end':
       case 'error': {
         ended = true;
@@ -239,7 +243,7 @@ export const createGatewayMemberStreamHandler = (
         // This handler owns only the live text, so just retire the loading op.
         // A member parked on a human approval is the exception (see `refreshGroup`).
         if (
-          event.type === 'agent_runtime_end' &&
+          event.type !== 'error' &&
           (event.data as { reason?: string } | undefined)?.reason === 'waiting_for_human'
         ) {
           // Chained after the stream_start hydration: both reads replace the
