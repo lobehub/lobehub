@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useTopicMoreMenu } from './useMoreMenu';
 
 const mocks = vi.hoisted(() => ({
+  activeGroupId: undefined as string | undefined,
   allowed: true,
   closeTopicPortal: vi.fn(),
   confirmRemoveTopic: vi.fn(),
@@ -26,6 +27,7 @@ vi.mock('@/store/chat', () => ({
   useChatStore: (selector: (s: unknown) => unknown) =>
     selector({
       activeAgentId: 'agt_1',
+      activeGroupId: mocks.activeGroupId,
       closeTopicPortal: mocks.closeTopicPortal,
       refreshMessages: mocks.refreshMessages,
       removeTopic: mocks.removeTopic,
@@ -40,6 +42,7 @@ vi.mock('@/store/chat/selectors', () => ({
 describe('useTopicMoreMenu', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.activeGroupId = undefined;
     mocks.allowed = true;
     mocks.portalTopicId = 'tpc_2';
     mocks.workspaceSlug = null;
@@ -64,6 +67,13 @@ describe('useTopicMoreMenu', () => {
     const { result } = renderHook(() => useTopicMoreMenu());
 
     expect(result.current?.copyLink).toBe('https://app.lobehub.com/acme/agent/agt_1/tpc_2');
+  });
+
+  it('links to the group topic on the group screen, not the supervisor agent', () => {
+    mocks.activeGroupId = 'grp_1';
+    const { result } = renderHook(() => useTopicMoreMenu());
+
+    expect(result.current?.copyLink).toBe('https://app.lobehub.com/group/grp_1/tpc_2');
   });
 
   it('hides rename and delete without edit permission', () => {

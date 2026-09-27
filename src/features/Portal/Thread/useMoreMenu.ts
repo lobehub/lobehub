@@ -17,6 +17,7 @@ export const useThreadMoreMenu = (): PortalMoreMenuConfig | undefined => {
   const thread = useChatStore(portalThreadSelectors.portalCurrentThread, isEqual);
   const [
     activeAgentId,
+    activeGroupId,
     threadId,
     updateThreadTitle,
     removeThread,
@@ -25,6 +26,7 @@ export const useThreadMoreMenu = (): PortalMoreMenuConfig | undefined => {
     closeThreadPortal,
   ] = useChatStore((s) => [
     s.activeAgentId,
+    s.activeGroupId,
     s.portalThreadId,
     s.updateThreadTitle,
     s.removeThread,
@@ -33,7 +35,12 @@ export const useThreadMoreMenu = (): PortalMoreMenuConfig | undefined => {
     s.closeThreadPortal,
   ]);
   const shareUrl = usePortalShareUrl(
-    buildThreadSharePath({ agentId: activeAgentId, threadId, topicId: thread?.topicId }),
+    buildThreadSharePath({
+      agentId: activeAgentId,
+      groupId: activeGroupId,
+      threadId,
+      topicId: thread?.topicId,
+    }),
   );
 
   // A thread being forked has no id yet — nothing to act on until it exists.

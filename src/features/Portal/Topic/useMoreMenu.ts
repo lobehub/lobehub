@@ -1,4 +1,4 @@
-import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
+import { AGENT_CHAT_TOPIC_URL, GROUP_CHAT_TOPIC_URL } from '@lobechat/const';
 import { toast } from '@lobehub/ui/base-ui';
 import { useTranslation } from 'react-i18next';
 
@@ -15,9 +15,11 @@ import { usePortalShareUrl } from '../components/PortalMoreMenu/shareUrl';
 export const useTopicMoreMenu = (): PortalMoreMenuConfig | undefined => {
   const { t } = useTranslation(['topic', 'common']);
   const { allowed: canEdit } = usePermission('edit_own_content');
-  // The side-by-side topic always belongs to the agent of the main column.
+  // The side-by-side topic belongs to the conversation of the main column: an
+  // agent, or a group — where `activeAgentId` is only the supervisor.
   const [
     agentId,
+    groupId,
     topicId,
     title,
     updateTopicTitle,
@@ -28,6 +30,7 @@ export const useTopicMoreMenu = (): PortalMoreMenuConfig | undefined => {
     const id = chatPortalSelectors.portalTopicId(s);
     return [
       s.activeAgentId,
+      s.activeGroupId,
       id,
       id ? topicSelectors.getTopicById(id)(s)?.title : undefined,
       s.updateTopicTitle,
@@ -37,7 +40,13 @@ export const useTopicMoreMenu = (): PortalMoreMenuConfig | undefined => {
     ] as const;
   });
   const shareUrl = usePortalShareUrl(
-    agentId && topicId ? AGENT_CHAT_TOPIC_URL(agentId, topicId) : undefined,
+    !topicId
+      ? undefined
+      : groupId
+        ? GROUP_CHAT_TOPIC_URL(groupId, topicId)
+        : agentId
+          ? AGENT_CHAT_TOPIC_URL(agentId, topicId)
+          : undefined,
   );
 
   if (!topicId) return;

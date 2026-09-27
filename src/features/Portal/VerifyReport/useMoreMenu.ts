@@ -27,7 +27,8 @@ export const useVerifyReportMoreMenu = (): PortalMoreMenuConfig | undefined => {
     copyLink: reportUrl,
     refresh,
     rename:
-      canEdit && data
+      // Report URLs are public; only the author can rename the run.
+      canEdit && data?.isOwner
         ? () =>
             openRenameModal({
               defaultValue: data.run.title ?? '',

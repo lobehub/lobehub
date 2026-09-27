@@ -9,6 +9,17 @@ describe('buildThreadSharePath', () => {
     );
   });
 
+  it('points at the group topic inside a group, not the supervisor agent', () => {
+    expect(
+      buildThreadSharePath({
+        agentId: 'agt_supervisor',
+        groupId: 'grp_1',
+        threadId: 'thd_1',
+        topicId: 'tpc_1',
+      }),
+    ).toBe('/group/grp_1/tpc_1?portalThread=thd_1');
+  });
+
   it('uses the query key ThreadHydration reads', () => {
     const path = buildThreadSharePath({ agentId: 'a', threadId: 'thd_1', topicId: 't' })!;
 
