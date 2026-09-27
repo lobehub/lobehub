@@ -197,6 +197,19 @@ const EnvironmentItem = memo<EnvironmentItemProps>(
           toast.error(describeError(error, t, t('environments.removeFailed'))),
         );
 
+    // Asked for, like deleting an instance is — the row is emptied of
+    // instances by then, but the environment still carries its specification,
+    // its variables and the snapshot built from them, and none of that comes
+    // back. A single click in a menu was the whole gesture.
+    const confirmRemove = () =>
+      confirmModal({
+        content: t('environments.removeConfirmContent'),
+        okButtonProps: { danger: true },
+        okText: t('environments.remove'),
+        onOk: remove,
+        title: t('environments.removeConfirmTitle', { name: environment.name }),
+      });
+
     return (
       <Flexbox
         horizontal
@@ -315,7 +328,7 @@ const EnvironmentItem = memo<EnvironmentItemProps>(
                     icon: <Icon icon={Trash2Icon} />,
                     key: 'remove',
                     label: t('environments.remove'),
-                    onClick: remove,
+                    onClick: confirmRemove,
                   },
                 ]}
               >

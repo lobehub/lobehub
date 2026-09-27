@@ -3922,6 +3922,9 @@ When I am ___, I need ___
   'environments.instances.removeConfirmContent':
     'Its folder and everything it kept — installed packages, reports, data — will be deleted. This cannot be undone.',
   'environments.remove': 'Delete environment',
+  'environments.removeConfirmTitle': 'Delete environment {{name}}?',
+  'environments.removeConfirmContent':
+    'Its specification, variables and saved snapshot go with it, and cannot be recovered.',
   'environments.storage.used': '{{used}} of {{total}}',
   'environments.storage.unmeasured': 'Storage not measured yet · {{total}} available',
   'environments.storage.measuredAt': 'Measured {{time}}. Refresh to measure again.',
