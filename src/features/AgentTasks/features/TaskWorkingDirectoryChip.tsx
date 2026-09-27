@@ -20,6 +20,7 @@ import { deviceService } from '@/services/device';
 import { deviceSelectors, useDeviceStore } from '@/store/device';
 
 import { taskExecutionStyles as styles } from './taskExecutionStyles';
+import TaskPickerOption from './TaskPickerOption';
 
 interface TaskWorkingDirectoryChipProps {
   /** Row class for the trigger. Omitted → the composer's compact chip. */
@@ -103,17 +104,17 @@ const TaskWorkingDirectoryChip = memo<TaskWorkingDirectoryChipProps>(
       : t('taskExecution.followAgent');
 
     const content = (
-      <Flexbox gap={4} style={{ maxWidth: 'calc(100vw - 48px)', width: 320 }}>
+      <Flexbox
+        aria-label={t('taskExecution.workingDirectory')}
+        gap={4}
+        role={'group'}
+        style={{ maxWidth: 'calc(100vw - 48px)', width: 320 }}
+      >
         <div className={styles.sectionTitle}>{t('taskExecution.workingDirectory')}</div>
-        <Flexbox
-          horizontal
-          align={'center'}
-          className={`${styles.row} ${selectedPath ? '' : styles.rowActive}`}
-          gap={8}
-          onClick={() => {
-            if (disabled) return;
-            apply(undefined);
-          }}
+        <TaskPickerOption
+          checked={!selectedPath}
+          disabled={disabled}
+          onSelect={() => apply(undefined)}
         >
           <Icon className={styles.icon} icon={SquircleDashed} size={16} />
           <Flexbox flex={1} style={{ minWidth: 0 }}>
@@ -121,7 +122,7 @@ const TaskWorkingDirectoryChip = memo<TaskWorkingDirectoryChipProps>(
             <div className={styles.rowDesc}>{t('taskExecution.followAgentDesc')}</div>
           </Flexbox>
           {!selectedPath && <Icon className={styles.check} icon={CheckIcon} size={14} />}
-        </Flexbox>
+        </TaskPickerOption>
         <div className={styles.scroll}>
           {recents.length === 0 ? (
             <div className={styles.emptyHint}>
@@ -134,16 +135,11 @@ const TaskWorkingDirectoryChip = memo<TaskWorkingDirectoryChipProps>(
               const isDefault =
                 !!deviceDefaultCwd && getWorkingDirSourcePath(entry) === deviceDefaultCwd;
               return (
-                <Flexbox
-                  horizontal
-                  align={'center'}
-                  className={`${styles.row} ${isActive ? styles.rowActive : ''}`}
-                  gap={8}
+                <TaskPickerOption
+                  checked={isActive}
+                  disabled={disabled}
                   key={entry.path}
-                  onClick={() => {
-                    if (disabled) return;
-                    handlePick(entry);
-                  }}
+                  onSelect={() => handlePick(entry)}
                 >
                   <DirIcon repoType={entry.repoType} />
                   <Flexbox flex={1} style={{ minWidth: 0 }}>
@@ -158,24 +154,15 @@ const TaskWorkingDirectoryChip = memo<TaskWorkingDirectoryChipProps>(
                     <div className={styles.rowDesc}>{path}</div>
                   </Flexbox>
                   {isActive && <Icon className={styles.check} icon={CheckIcon} size={14} />}
-                </Flexbox>
+                </TaskPickerOption>
               );
             })
           )}
         </div>
-        <Flexbox
-          horizontal
-          align={'center'}
-          className={styles.row}
-          gap={8}
-          onClick={() => {
-            if (disabled) return;
-            handleAdd();
-          }}
-        >
+        <TaskPickerOption disabled={disabled} onSelect={() => handleAdd()}>
           <Icon className={styles.icon} icon={FolderPlusIcon} size={16} />
           <div className={styles.rowTitle}>{t('workingDirectory.addFolder', { ns: 'device' })}</div>
-        </Flexbox>
+        </TaskPickerOption>
       </Flexbox>
     );
 

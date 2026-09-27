@@ -144,17 +144,42 @@ export const taskExecutionStyles = createStaticStyles(({ css }) => ({
       background: transparent;
     }
   `,
+  /**
+   * A picker row. Rendered on a native `<button>` (see `TaskPickerOption`), so
+   * the reset below is what keeps it looking like the plain row it replaced:
+   * without it the platform's button chrome, centring and font would show
+   * through the popover.
+   *
+   * No focus style here: the design system draws one global keyboard ring
+   * (`ConfigProvider` installs it) around whatever is focused, so a local
+   * outline would only draw a second ring inside it.
+   */
   row: css`
     cursor: pointer;
 
+    display: block;
+
+    box-sizing: border-box;
+    width: 100%;
     padding-block: 6px;
     padding-inline: 8px;
+    border: none;
     border-radius: ${cssVar.borderRadius};
+
+    font: inherit;
+    color: inherit;
+    text-align: start;
+
+    background: transparent;
 
     transition: background-color 0.2s;
 
     &:hover {
       background: ${cssVar.colorFillTertiary};
+    }
+
+    &:disabled {
+      cursor: not-allowed;
     }
   `,
   rowActive: css`

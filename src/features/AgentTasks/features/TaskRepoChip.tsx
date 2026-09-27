@@ -13,6 +13,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
 import { taskExecutionStyles as styles } from './taskExecutionStyles';
+import TaskPickerOption from './TaskPickerOption';
 
 interface TaskRepoChipProps {
   /** The assignee whose configured repos are offered. */
@@ -87,17 +88,17 @@ const TaskRepoChip = memo<TaskRepoChipProps>(
           : t('heteroAgent.cloudRepo.multiSelected', { count: selected.length });
 
     const content = (
-      <Flexbox gap={4} style={{ minWidth: 280 }}>
+      <Flexbox
+        aria-label={t('heteroAgent.cloudRepo.sectionTitle')}
+        gap={4}
+        role={'group'}
+        style={{ minWidth: 280 }}
+      >
         <div className={styles.sectionTitle}>{t('heteroAgent.cloudRepo.sectionTitle')}</div>
-        <Flexbox
-          horizontal
-          align={'center'}
-          className={`${styles.row} ${selected.length === 0 ? styles.rowActive : ''}`}
-          gap={8}
-          onClick={() => {
-            if (disabled) return;
-            onChange(undefined);
-          }}
+        <TaskPickerOption
+          checked={selected.length === 0}
+          disabled={disabled}
+          onSelect={() => onChange(undefined)}
         >
           <Icon className={styles.icon} icon={SquircleDashed} size={16} />
           <Flexbox flex={1} style={{ minWidth: 0 }}>
@@ -105,18 +106,16 @@ const TaskRepoChip = memo<TaskRepoChipProps>(
             <div className={styles.rowDesc}>{t('taskExecution.followAgentDesc')}</div>
           </Flexbox>
           {selected.length === 0 && <Icon className={styles.check} icon={CheckIcon} size={14} />}
-        </Flexbox>
+        </TaskPickerOption>
         <div className={styles.scroll}>
           {availableRepos.map((repo) => {
             const isChecked = selected.includes(repo);
             return (
-              <Flexbox
-                horizontal
-                align={'center'}
-                className={styles.row}
-                gap={8}
+              <TaskPickerOption
+                checked={isChecked}
+                disabled={disabled}
                 key={repo}
-                onClick={() => toggleRepo(repo)}
+                onSelect={() => toggleRepo(repo)}
               >
                 {/* The row is the control; the box reports the state. Rendered
                     through the design-system checkbox so the glyph, the corner
@@ -132,7 +131,7 @@ const TaskRepoChip = memo<TaskRepoChipProps>(
                   <div className={styles.rowTitle}>{getRepoName(repo)}</div>
                   <div className={styles.rowDesc}>{repo}</div>
                 </Flexbox>
-              </Flexbox>
+              </TaskPickerOption>
             );
           })}
         </div>

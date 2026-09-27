@@ -12,6 +12,7 @@ import { formatLockedControlTooltip } from '@/features/ChatInput/utils/lockedCon
 import { ExecutionTargetDeviceStatus, ExecutionTargetIcon } from '@/features/ExecutionTargetPicker';
 
 import { taskExecutionStyles as styles } from './taskExecutionStyles';
+import TaskPickerOption from './TaskPickerOption';
 import { deviceLabel, useTaskRunTarget } from './useTaskRunTarget';
 
 interface TaskDeviceChipProps {
@@ -95,13 +96,11 @@ const TaskDeviceChip = memo<TaskDeviceChipProps>(
     const renderDeviceRow = (device: DeviceListItem) => {
       const isActive = device.deviceId === pinnedDeviceId;
       return (
-        <Flexbox
-          horizontal
-          align={'center'}
-          className={`${styles.row} ${isActive ? styles.rowActive : ''}`}
-          gap={8}
+        <TaskPickerOption
+          checked={isActive}
+          disabled={isLocked}
           key={device.deviceId}
-          onClick={() => handleSelect(device.deviceId)}
+          onSelect={() => handleSelect(device.deviceId)}
         >
           <ExecutionTargetIcon devicePlatform={device.platform} target={'device'} />
           <Flexbox flex={1} style={{ minWidth: 0 }}>
@@ -115,19 +114,22 @@ const TaskDeviceChip = memo<TaskDeviceChipProps>(
             </div>
           </Flexbox>
           {isActive && <Icon className={styles.check} icon={CheckIcon} size={14} />}
-        </Flexbox>
+        </TaskPickerOption>
       );
     };
 
     const content = (
-      <Flexbox gap={4} style={{ minWidth: 280 }}>
+      <Flexbox
+        aria-label={t('taskExecution.runLocation')}
+        gap={4}
+        role={'group'}
+        style={{ minWidth: 280 }}
+      >
         <div className={styles.sectionTitle}>{t('taskExecution.runLocation')}</div>
-        <Flexbox
-          horizontal
-          align={'center'}
-          className={`${styles.row} ${isInheriting ? styles.rowActive : ''}`}
-          gap={8}
-          onClick={() => handleSelect(undefined)}
+        <TaskPickerOption
+          checked={isInheriting}
+          disabled={isLocked}
+          onSelect={() => handleSelect(undefined)}
         >
           <ExecutionTargetIcon target={inheritedTarget} />
           <Flexbox flex={1} style={{ minWidth: 0 }}>
@@ -137,7 +139,7 @@ const TaskDeviceChip = memo<TaskDeviceChipProps>(
             </div>
           </Flexbox>
           {isInheriting && <Icon className={styles.check} icon={CheckIcon} size={14} />}
-        </Flexbox>
+        </TaskPickerOption>
 
         {isPending && (
           <div className={styles.sectionTitle}>{t('heteroAgent.executionTarget.loading')}</div>
