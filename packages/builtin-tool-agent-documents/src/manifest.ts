@@ -1,7 +1,12 @@
 import type { BuiltinToolManifest } from '@lobechat/types';
 
 import { systemPrompt } from './systemRole';
-import { AgentDocumentsApiName, AgentDocumentsIdentifier } from './types';
+import {
+  AgentDocumentsApiName,
+  AgentDocumentsIdentifier,
+  LIST_DOCUMENTS_DEFAULT_LIMIT,
+  LIST_DOCUMENTS_MAX_LIMIT,
+} from './types';
 
 const AGENT_DOCUMENT_ID_DESCRIPTION =
   'Target agent document ID. Use the "id" field returned by listDocuments, not "documentId".';
@@ -240,6 +245,15 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
       name: AgentDocumentsApiName.listDocuments,
       parameters: {
         properties: {
+          limit: {
+            description: `Maximum number of documents to return (default ${LIST_DOCUMENTS_DEFAULT_LIMIT}, max ${LIST_DOCUMENTS_MAX_LIMIT}).`,
+            type: 'number',
+          },
+          offset: {
+            description:
+              'Number of documents to skip. Use the offset given at the end of a truncated listing to fetch the next page.',
+            type: 'number',
+          },
           parentId: {
             description:
               'Restrict the listing to the direct children of this folder. Pass the folder id shown on a collapsed 📁 row in the agent_documents_index to expand that folder.',

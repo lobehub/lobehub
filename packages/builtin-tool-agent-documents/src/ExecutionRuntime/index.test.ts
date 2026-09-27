@@ -19,6 +19,44 @@ const createRuntime = (overrides = {}) =>
   });
 
 describe('AgentDocumentsExecutionRuntime', () => {
+  // An agent with thousands of web-crawled docs used to get every row in one
+  // result (1.5M chars), overflowing the context window on the next call.
+  describe('listDocuments paging', () => {
+    const docs = Array.from({ length: 120 }, (_, i) => ({
+      documentId: `doc-${i}`,
+      filename: `page-${i}.md`,
+      id: `agent-doc-${i}`,
+      title: `Page ${i}`,
+    }));
+
+    it('returns the first page and tells the model how to fetch the next', async () => {
+      const runtime = createRuntime({ listDocuments: vi.fn().mockResolvedValue(docs) });
+
+      const result = await runtime.listDocuments({}, { agentId: 'agent-1' });
+
+      expect(result.state?.documents).toHaveLength(50);
+      expect(result.content).toContain('"id":"agent-doc-49"');
+      expect(result.content).not.toContain('"id":"agent-doc-50"');
+      expect(result.content).toContain(
+        'Showing documents 1-50 of 120. Call listDocuments again with offset=50 for the next page',
+      );
+    });
+
+    it('pages with offset/limit and omits the note on the last page', async () => {
+      const runtime = createRuntime({ listDocuments: vi.fn().mockResolvedValue(docs) });
+
+      const result = await runtime.listDocuments(
+        { limit: 1000, offset: 100 },
+        { agentId: 'agent-1' },
+      );
+
+      expect(result.state?.documents.map((d: { id: string }) => d.id)).toEqual(
+        docs.slice(100).map((d) => d.id),
+      );
+      expect(result.content).not.toContain('Showing documents');
+    });
+  });
+
   it('returns agentDocumentId and documentId when creating hinted documents', async () => {
     const createDocument = vi.fn().mockResolvedValue({
       documentId: 'backing-doc-1',

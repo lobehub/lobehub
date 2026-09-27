@@ -21,7 +21,17 @@ import type {
   ReplaceDocumentContentArgs,
   UpdateLoadRuleArgs,
 } from '../types';
-import { MAX_READ_DOCUMENT_CONTENT_CHARS } from '../types';
+import {
+  LIST_DOCUMENTS_DEFAULT_LIMIT,
+  LIST_DOCUMENTS_MAX_LIMIT,
+  MAX_READ_DOCUMENT_CONTENT_CHARS,
+} from '../types';
+
+const clampListLimit = (limit: unknown): number => {
+  const value = Math.floor(Number(limit));
+  if (!Number.isFinite(value) || value <= 0) return LIST_DOCUMENTS_DEFAULT_LIMIT;
+  return Math.min(value, LIST_DOCUMENTS_MAX_LIMIT);
+};
 
 interface AgentDocumentRecord {
   content?: string;
@@ -331,8 +341,11 @@ export class AgentDocumentsExecutionRuntime {
             topicId: topicId!,
           })
         : await this.service.listDocuments({ agentId, parentId, scope, sourceType });
+    const limit = clampListLimit(args.limit);
+    const offset = Math.max(0, Math.floor(Number(args.offset) || 0));
+    const page = docs.slice(offset, offset + limit);
     const list = await Promise.all(
-      docs.map(async (d) => {
+      page.map(async (d) => {
         const url = await this.buildDocumentUrl(agentId, d.documentId);
         return {
           ...(d.documentId ? { documentId: d.documentId } : {}),
@@ -346,8 +359,14 @@ export class AgentDocumentsExecutionRuntime {
       }),
     );
 
+    const nextOffset = offset + page.length;
+    const pagingNote =
+      nextOffset < docs.length
+        ? `\n\nShowing documents ${offset + 1}-${nextOffset} of ${docs.length}. Call listDocuments again with offset=${nextOffset} for the next page, or narrow the listing with parentId / sourceType.`
+        : '';
+
     return {
-      content: JSON.stringify(list),
+      content: JSON.stringify(list) + pagingNote,
       state: { documents: list },
       success: true,
     };
