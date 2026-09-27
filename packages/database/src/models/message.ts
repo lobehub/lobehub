@@ -95,6 +95,7 @@ import {
 import type { LobeChatDatabase, Transaction } from '../type';
 import { sanitizeBm25Query } from '../utils/bm25';
 import { notCopiedTranscript } from '../utils/copiedTranscript';
+import { notFileBackedPlaceholder } from '../utils/fileBackedPlaceholder';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
 import { inJsonStringArray } from '../utils/inJsonStringArray';
@@ -1937,7 +1938,7 @@ export class MessageModel {
         this.db
           .select(fileDocumentColumns)
           .from(documents)
-          .where(inArray(documents.fileId, fileIds))
+          .where(and(inArray(documents.fileId, fileIds), notFileBackedPlaceholder()))
           .orderBy(...fileDocumentsOrder),
       { fileCount: fileIds.length },
     );
@@ -2322,7 +2323,7 @@ export class MessageModel {
       const documentsList = await this.db
         .select(fileDocumentColumns)
         .from(documents)
-        .where(inArray(documents.fileId, fileIds))
+        .where(and(inArray(documents.fileId, fileIds), notFileBackedPlaceholder()))
         .orderBy(...fileDocumentsOrder);
 
       documentsMap = toFileDocumentsMap(documentsList);

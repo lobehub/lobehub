@@ -2560,6 +2560,60 @@ describe('MessageModel Query Tests', () => {
       const [byId] = await messageModel.queryByIds([messageId]);
       expect(byId.fileList![0].content).toBe('parse cache');
     });
+
+    it('should skip an agent-document upload placeholder in favor of the parse cache', async () => {
+      const fileId = uuid();
+      const messageId = uuid();
+      const doc = {
+        fileId,
+        source: 'notes.md',
+        sourceType: 'file',
+        totalLineCount: 1,
+        userId,
+      } as const;
+
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values({ id: 'session1', userId });
+        await trx.insert(files).values({
+          fileType: 'text/markdown',
+          id: fileId,
+          name: 'notes.md',
+          size: 100,
+          url: 'notes.md',
+          userId,
+        });
+        // Older empty row written by `AgentDocumentsService.importFile`; bytes live in the file.
+        await trx.insert(documents).values({
+          ...doc,
+          content: '',
+          createdAt: new Date('2026-01-01'),
+          fileType: 'text/markdown',
+          totalCharCount: 0,
+        });
+        await trx.insert(documents).values({
+          ...doc,
+          content: 'parse cache',
+          createdAt: new Date('2026-02-01'),
+          fileType: 'custom/document',
+          totalCharCount: 11,
+        });
+
+        await trx.insert(messages).values({
+          content: 'Message with an uploaded agent document',
+          id: messageId,
+          role: 'user',
+          sessionId: 'session1',
+          userId,
+        });
+        await trx.insert(messagesFiles).values({ fileId, messageId, userId });
+      });
+
+      const result = await messageModel.query({ sessionId: 'session1' });
+      expect(result[0].fileList![0].content).toBe('parse cache');
+
+      const [byId] = await messageModel.queryByIds([messageId]);
+      expect(byId.fileList![0].content).toBe('parse cache');
+    });
   });
 
   describe('query messages with threadId filter', () => {

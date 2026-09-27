@@ -1,4 +1,7 @@
-import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import type {
+  AgentStreamEvent,
+  AgentStreamSessionCompletion,
+} from '@lobechat/agent-gateway-client';
 import { type ExecAgentResult, RequestTrigger } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -2129,18 +2132,19 @@ describe('GatewayActionImpl', () => {
       expect(updateTopicStatus).not.toHaveBeenCalled();
     });
 
-    it('preserves only external-producer resume status without a terminal event', async () => {
+    it('preserves an external producer against every transport-only completion', async () => {
       const runCompletion = async ({
         activeTopicId = 'topic-1',
         authFailed = false,
         completion,
         heteroType,
+        terminalReceived = false,
       }: {
         activeTopicId?: string | null;
         authFailed?: boolean;
-        completion:
-          { source: 'raw_session_complete' } | { source: 'resume_status'; status: 'completed' };
+        completion: AgentStreamSessionCompletion;
         heteroType: string | null | undefined;
+        terminalReceived?: boolean;
       }) => {
         const connectToGateway = vi.fn();
         const completeOperation = vi.fn();
@@ -2216,7 +2220,7 @@ describe('GatewayActionImpl', () => {
         internalDispatchTopic.mockClear();
         vi.mocked(topicService.settleRunningOperation).mockClear();
 
-        onSessionComplete({ authFailed, completion, succeeded: false, terminalReceived: false });
+        onSessionComplete({ authFailed, completion, succeeded: false, terminalReceived });
 
         return { completeOperation, internalDispatchTopic };
       };
@@ -2258,18 +2262,44 @@ describe('GatewayActionImpl', () => {
         'unread',
       );
 
-      await runCompletion({
+      // A hetero CLI streams through `heteroIngest`, not this socket, so none of
+      // these prove it stopped. Settling on one clears the topic marker and the
+      // server then discards everything the still-running CLI produces.
+      const rawHeteroComplete = await runCompletion({
         completion: { source: 'raw_session_complete' },
         heteroType: 'claude-code',
       });
-      expect(topicService.settleRunningOperation).toHaveBeenCalled();
+      expect(topicService.settleRunningOperation).not.toHaveBeenCalled();
+      expect(rawHeteroComplete.internalDispatchTopic).not.toHaveBeenCalled();
 
+      // Protocol v2 only: a terminal `status_change` ends the subscription. v1
+      // ignored the message entirely.
+      await runCompletion({
+        completion: { source: 'status_change', status: 'error' },
+        heteroType: 'claude-code',
+      });
+      expect(topicService.settleRunningOperation).not.toHaveBeenCalled();
+
+      // On the multiplexed socket ONE auth failure is fanned out to every
+      // operation the tab is watching.
       await runCompletion({
         authFailed: true,
         completion: { source: 'resume_status', status: 'completed' },
         heteroType: 'claude-code',
       });
-      expect(topicService.settleRunningOperation).toHaveBeenCalled();
+      expect(topicService.settleRunningOperation).not.toHaveBeenCalled();
+
+      // The producer's own terminal event remains authoritative.
+      await runCompletion({
+        completion: { source: 'agent_event' },
+        heteroType: 'claude-code',
+        terminalReceived: true,
+      });
+      expect(topicService.settleRunningOperation).toHaveBeenCalledWith(
+        'topic-1',
+        'server-op-1',
+        'active',
+      );
     });
 
     // Regression guard: a successful run the user is watching must reset the
@@ -3141,7 +3171,7 @@ describe('GatewayActionImpl', () => {
       expect(topicService.settleRunningOperation).not.toHaveBeenCalled();
     });
 
-    it('settles normal runtime and raw heterogeneous session completions', async () => {
+    it('settles a normal runtime completion but never an external producer', async () => {
       const normal = createOnSessionCompleteHarness();
       await normal.action.reconnectToGatewayOperation({
         assistantMessageId: 'ast-1',
@@ -3164,6 +3194,9 @@ describe('GatewayActionImpl', () => {
         'active',
       );
 
+      // The CLI behind a hetero run streams through `heteroIngest`, so a raw
+      // session_complete on this socket says nothing about whether it stopped —
+      // and settling here makes the server discard the rest of its output.
       const rawHetero = createOnSessionCompleteHarness();
       await rawHetero.action.reconnectToGatewayOperation({
         assistantMessageId: 'ast-1',
@@ -3180,11 +3213,7 @@ describe('GatewayActionImpl', () => {
         terminalReceived: false,
       });
       expect(rawHetero.completeOperation).toHaveBeenCalledWith('gw-op-reconnect');
-      expect(topicService.settleRunningOperation).toHaveBeenCalledWith(
-        'topic-1',
-        'server-op-1',
-        'active',
-      );
+      expect(topicService.settleRunningOperation).not.toHaveBeenCalled();
     });
 
     // A genuine terminal event (agent_runtime_end / error) still finalizes the
@@ -3215,15 +3244,16 @@ describe('GatewayActionImpl', () => {
       );
     });
 
-    // auth_failed (or a failed token refresh) is authoritative that the op is
-    // gone: clear the stale marker AND complete the local op, so reloads / drawer
-    // opens stop reconnecting to a dead operation. Without this the persisted
-    // runningOperation lingers forever.
+    // auth_failed (or a failed token refresh) is authoritative that a
+    // gateway-run op is gone: clear the stale marker AND complete the local op,
+    // so reloads / drawer opens stop reconnecting to a dead operation. Without
+    // this the persisted runningOperation lingers forever.
     it('clears runningOperation and completes the local op on auth failure', async () => {
       const { action, captured, completeOperation } = createOnSessionCompleteHarness();
 
       await action.reconnectToGatewayOperation({
         assistantMessageId: 'ast-1',
+        heteroType: null,
         operationId: 'server-op-1',
         topicId: 'topic-1',
       });
@@ -3239,6 +3269,29 @@ describe('GatewayActionImpl', () => {
         'server-op-1',
         'active',
       );
+    });
+
+    // ...but an auth failure is NOT authoritative for an external producer. On
+    // the multiplexed socket a single refused token fails every subscription on
+    // the tab at once, which would settle every hetero run the user has going
+    // and throw away everything they produce from then on.
+    it('keeps an external producer running when the socket fails auth', async () => {
+      const { action, captured, completeOperation } = createOnSessionCompleteHarness();
+
+      await action.reconnectToGatewayOperation({
+        assistantMessageId: 'ast-1',
+        heteroType: 'claude-code',
+        operationId: 'server-op-1',
+        topicId: 'topic-1',
+      });
+
+      vi.mocked(topicService.settleRunningOperation)
+        .mockClear()
+        .mockResolvedValue(undefined as never);
+      captured.onSessionComplete!({ authFailed: true, succeeded: false, terminalReceived: false });
+
+      expect(completeOperation).toHaveBeenCalledWith('gw-op-reconnect');
+      expect(topicService.settleRunningOperation).not.toHaveBeenCalled();
     });
 
     // The case that stranded 7 topics on a self-hosted deployment: a run that

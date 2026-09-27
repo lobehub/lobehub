@@ -269,6 +269,7 @@ export class ServerToolTransport implements ToolTransport {
                 context.state,
                 chatToolPayload,
                 context.parentMessageId,
+                context.toolMessageId,
               ),
               taskId: context.state.origin?.taskId,
               threadId: context.state.origin?.threadId,

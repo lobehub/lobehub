@@ -588,6 +588,9 @@ describe('AbandonOperationService', () => {
     const result = await svc.finalizeAbandoned('op_child', 'inactivity_watchdog');
 
     expect(result.subAgentResume).toEqual({
+      // The child's coordinator state never gets this error, so the resume
+      // hand-off must carry it or the parent only sees a bare "(error)."
+      errorMessage: 'Operation abandoned: inactivity_watchdog',
       parentOperationId: 'op_parent',
       threadId: 'thread_1',
       toolMessageId: 'msg_tool_placeholder',

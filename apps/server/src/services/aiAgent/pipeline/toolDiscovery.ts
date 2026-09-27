@@ -714,8 +714,14 @@ export const discoverTools = async (
     // Filter out plugin entries that are now handled by real MCP connectors.
     // `let` because community-MCP plugins may be patched with connector
     // permissions below (their connector row has no endpoint, so they stay here).
+    // Composio connections also leave a plugin row behind (customParams.composio),
+    // but they are executable only through `getComposioManifests`, which gates
+    // on an ACTIVE connection and tags the tool source as `composio`. Letting a
+    // PENDING/EXPIRED row through here exposes the full tool schema with no
+    // Composio source, so every call falls to the builtin executor and fails
+    // as "not implemented".
     let pluginsWithoutConnectors = installedPlugins.filter(
-      (p) => !connectorIdentifierSet.has(p.identifier),
+      (p) => !connectorIdentifierSet.has(p.identifier) && !p.customParams?.composio,
     );
     log('execAgent: got %d connector manifests', connectorManifests.length);
 

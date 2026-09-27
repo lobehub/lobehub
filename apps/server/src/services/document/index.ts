@@ -210,11 +210,14 @@ export class DocumentService {
       title,
       fileType = CUSTOM_DOCUMENT_FILE_TYPE,
       metadata,
-      knowledgeBaseId,
-      parentId,
       slug,
       visibility,
     } = params;
+    // Agent tool calls often fill optional ids with "" — that means "unset".
+    // Passed through, it reaches the `parent_id` / `knowledge_base_id` FKs and
+    // fails the insert with an opaque `Failed query` error.
+    const knowledgeBaseId = params.knowledgeBaseId?.trim() || undefined;
+    const parentId = params.parentId?.trim() || undefined;
     const sanitizedMetadata = stripAgentShareDocumentProvenance(metadata);
 
     // Calculate character and line counts
@@ -225,17 +228,21 @@ export class DocumentService {
     // as the document. A library-root document inherits the KB visibility;
     // parent documents remain navigation-only and do not pass visibility or
     // ACL to children. Personal mode leaves it undefined — the ownership
-    // filter ignores the column there.
+    // filter ignores the column there — but still checks the library exists,
+    // so a wrong id fails as NOT_FOUND instead of a foreign-key violation.
     let resolvedVisibility: 'private' | 'public' | undefined = visibility;
-    if (this.workspaceId && knowledgeBaseId) {
+    if (knowledgeBaseId) {
       const knowledgeBase = await this.knowledgeBaseModel.findById(
         knowledgeBaseId,
         this.callerAgentVisibility,
       );
       if (!knowledgeBase) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Knowledge base not found' });
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: `Knowledge base not found: ${knowledgeBaseId}`,
+        });
       }
-      resolvedVisibility = knowledgeBase.visibility;
+      if (this.workspaceId) resolvedVisibility = knowledgeBase.visibility;
     }
     if (!resolvedVisibility && this.workspaceId) resolvedVisibility = 'private';
 

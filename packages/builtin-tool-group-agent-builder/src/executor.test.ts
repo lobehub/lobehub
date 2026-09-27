@@ -6,25 +6,33 @@ import { GroupAgentBuilderApiName, GroupAgentBuilderIdentifier } from './types';
 
 const {
   mockCreateAgent,
+  mockGetGroupDetail,
+  mockInstallPlugin,
   mockRefreshGroupDetail,
   mockRefreshGroups,
   mockSetAgentBuilderContent,
+  mockUpdateAgentConfig,
   mockUpdateGroup,
   mockUpdateGroupPrompt,
 } = vi.hoisted(() => ({
   mockCreateAgent: vi.fn(),
+  mockGetGroupDetail: vi.fn(),
+  mockInstallPlugin: vi.fn(),
   mockRefreshGroupDetail: vi.fn(),
   mockRefreshGroups: vi.fn(),
   mockSetAgentBuilderContent: vi.fn(),
+  mockUpdateAgentConfig: vi.fn(),
   mockUpdateGroup: vi.fn(),
   mockUpdateGroupPrompt: vi.fn(),
 }));
 
 let activeGroupId: string | undefined = 'cg_1';
+let groupMap: Record<string, unknown> = {};
 
 vi.mock('@/store/agentGroup', () => ({
   getChatGroupStoreState: () => ({
     activeGroupId,
+    groupMap,
     refreshGroupDetail: mockRefreshGroupDetail,
     refreshGroups: mockRefreshGroups,
   }),
@@ -59,10 +67,13 @@ vi.mock('@/store/groupProfile', () => ({
 
 vi.mock('@/services/agent', () => ({ agentService: {} }));
 vi.mock('@/services/discover', () => ({ discoverService: {} }));
+vi.mock('@/services/chatGroup', () => ({
+  chatGroupService: { getGroupDetail: mockGetGroupDetail },
+}));
 
 vi.mock('@lobechat/agent-manager-runtime', () => ({
   AgentManagerRuntime: vi.fn(function () {
-    return {};
+    return { installPlugin: mockInstallPlugin, updateAgentConfig: mockUpdateAgentConfig };
   }),
 }));
 
@@ -88,6 +99,7 @@ describe('GroupAgentBuilderExecutor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     activeGroupId = 'cg_1';
+    groupMap = {};
     dbMessagesMap = {};
   });
 
@@ -287,6 +299,203 @@ describe('GroupAgentBuilderExecutor', () => {
 
       expect(result).toMatchObject({ error: { type: 'NoGroupContext' }, success: false });
       expect(mockCreateAgent).not.toHaveBeenCalled();
+    });
+  });
+
+  // The builder panel's ConversationContext is keyed by the builtin builder
+  // agent, so `ctx.agentId` is that builtin agent — never the group's
+  // supervisor. Gateway-disabled parity with the server runtime: the inherited
+  // AgentBuilder APIs resolve the group first and target its supervisor.
+  describe('inherited supervisor APIs (client runtime parity)', () => {
+    const BUILDER_AGENT_ID = 'agt_builtin_group_builder';
+
+    const groupDetail = (id: string, supervisorAgentId: string, memberIds: string[] = []) => ({
+      agents: [
+        { id: supervisorAgentId, isSupervisor: true },
+        ...memberIds.map((memberId) => ({ id: memberId, isSupervisor: false })),
+      ],
+      id,
+      supervisorAgentId,
+    });
+
+    beforeEach(() => {
+      mockUpdateAgentConfig.mockResolvedValue({ content: 'ok', success: true });
+      mockInstallPlugin.mockResolvedValue({ content: 'ok', success: true });
+    });
+
+    it('updateConfig targets the supervisor of the group createGroup made, not ctx.agentId', async () => {
+      dbMessagesMap = conversationWithCreatedGroup();
+      groupMap = {
+        cg_1: groupDetail('cg_1', 'agt_old_supervisor'),
+        cg_new: groupDetail('cg_new', 'agt_new_supervisor'),
+      };
+
+      await groupAgentBuilderExecutor.updateConfig({ config: { model: 'gpt-4o' } }, {
+        agentId: BUILDER_AGENT_ID,
+        messageId: 'msg_create_agent',
+      } as BuiltinToolContext);
+
+      expect(mockUpdateAgentConfig).toHaveBeenCalledWith('agt_new_supervisor', {
+        config: { model: 'gpt-4o' },
+      });
+    });
+
+    it('installPlugin targets the supervisor of the group createGroup made, not ctx.agentId', async () => {
+      dbMessagesMap = conversationWithCreatedGroup();
+      groupMap = { cg_new: groupDetail('cg_new', 'agt_new_supervisor') };
+
+      await groupAgentBuilderExecutor.installPlugin(
+        { identifier: 'web-search', source: 'market' },
+        {
+          agentId: BUILDER_AGENT_ID,
+          messageId: 'msg_create_agent',
+        } as BuiltinToolContext,
+      );
+
+      expect(mockInstallPlugin).toHaveBeenCalledWith('agt_new_supervisor', {
+        identifier: 'web-search',
+        source: 'market',
+      });
+    });
+
+    it('without createGroup, targets the active group supervisor instead of the builder agent', async () => {
+      groupMap = { cg_1: groupDetail('cg_1', 'agt_old_supervisor') };
+
+      await groupAgentBuilderExecutor.updateConfig({ config: { model: 'gpt-4o' } }, {
+        agentId: BUILDER_AGENT_ID,
+      } as BuiltinToolContext);
+
+      expect(mockUpdateAgentConfig).toHaveBeenCalledWith('agt_old_supervisor', expect.anything());
+    });
+
+    it('fetches the group detail when the store has not loaded it yet', async () => {
+      dbMessagesMap = conversationWithCreatedGroup();
+      mockGetGroupDetail.mockResolvedValue(groupDetail('cg_new', 'agt_new_supervisor'));
+
+      await groupAgentBuilderExecutor.installPlugin(
+        { identifier: 'web-search', source: 'market' },
+        {
+          agentId: BUILDER_AGENT_ID,
+          messageId: 'msg_create_agent',
+        } as BuiltinToolContext,
+      );
+
+      expect(mockGetGroupDetail).toHaveBeenCalledWith('cg_new');
+      expect(mockInstallPlugin).toHaveBeenCalledWith('agt_new_supervisor', expect.anything());
+    });
+
+    it('updateConfig with an explicit member agentId targets that member', async () => {
+      dbMessagesMap = conversationWithCreatedGroup();
+      groupMap = { cg_new: groupDetail('cg_new', 'agt_new_supervisor', ['agt_member']) };
+
+      await groupAgentBuilderExecutor.updateConfig(
+        { agentId: 'agt_member', config: { model: 'gpt-4o' } },
+        { agentId: BUILDER_AGENT_ID, messageId: 'msg_create_agent' } as BuiltinToolContext,
+      );
+
+      expect(mockUpdateAgentConfig).toHaveBeenCalledWith('agt_member', {
+        config: { model: 'gpt-4o' },
+      });
+    });
+
+    it('updateConfig refuses an agentId outside the resolved group', async () => {
+      dbMessagesMap = conversationWithCreatedGroup();
+      groupMap = { cg_new: groupDetail('cg_new', 'agt_new_supervisor') };
+
+      const result = await groupAgentBuilderExecutor.updateConfig(
+        { agentId: BUILDER_AGENT_ID, config: { model: 'gpt-4o' } },
+        { agentId: BUILDER_AGENT_ID, messageId: 'msg_create_agent' } as BuiltinToolContext,
+      );
+
+      expect(result).toMatchObject({ error: { type: 'AgentNotFound' }, success: false });
+      expect(mockUpdateAgentConfig).not.toHaveBeenCalled();
+    });
+
+    it('reports a structured error instead of falling back to ctx.agentId when there is no group', async () => {
+      activeGroupId = undefined;
+
+      const config = await groupAgentBuilderExecutor.updateConfig({ config: { model: 'gpt-4o' } }, {
+        agentId: BUILDER_AGENT_ID,
+      } as BuiltinToolContext);
+      const plugin = await groupAgentBuilderExecutor.installPlugin(
+        { identifier: 'web-search', source: 'market' },
+        { agentId: BUILDER_AGENT_ID } as BuiltinToolContext,
+      );
+
+      expect(config).toMatchObject({ error: { type: 'NoAgentContext' }, success: false });
+      expect(plugin).toMatchObject({ error: { type: 'NoAgentContext' }, success: false });
+      expect(mockUpdateAgentConfig).not.toHaveBeenCalled();
+      expect(mockInstallPlugin).not.toHaveBeenCalled();
+    });
+
+    it('holds both back while a sibling createGroup is still awaiting approval', async () => {
+      dbMessagesMap = {
+        'builder-topic': [
+          {
+            id: 'msg_assistant',
+            role: 'assistant',
+            tools: [
+              {
+                apiName: 'createGroup',
+                id: 'call_create_group',
+                identifier: GroupAgentBuilderIdentifier,
+              },
+              {
+                apiName: 'updateConfig',
+                id: 'call_config',
+                identifier: GroupAgentBuilderIdentifier,
+              },
+              {
+                apiName: 'installPlugin',
+                id: 'call_plugin',
+                identifier: GroupAgentBuilderIdentifier,
+              },
+            ],
+          },
+          {
+            id: 'msg_create_group',
+            parentId: 'msg_assistant',
+            plugin: { apiName: 'createGroup', identifier: GroupAgentBuilderIdentifier },
+            role: 'tool',
+            tool_call_id: 'call_create_group',
+          },
+          {
+            id: 'msg_config',
+            parentId: 'msg_assistant',
+            role: 'tool',
+            tool_call_id: 'call_config',
+          },
+          {
+            id: 'msg_plugin',
+            parentId: 'msg_assistant',
+            role: 'tool',
+            tool_call_id: 'call_plugin',
+          },
+        ],
+      };
+      groupMap = { cg_1: groupDetail('cg_1', 'agt_old_supervisor') };
+
+      const config = await groupAgentBuilderExecutor.updateConfig({ config: { model: 'gpt-4o' } }, {
+        agentId: BUILDER_AGENT_ID,
+        anchorMessageId: 'msg_assistant',
+        messageId: 'msg_config',
+        toolCallId: 'call_config',
+      } as BuiltinToolContext);
+      const plugin = await groupAgentBuilderExecutor.installPlugin(
+        { identifier: 'web-search', source: 'market' },
+        {
+          agentId: BUILDER_AGENT_ID,
+          anchorMessageId: 'msg_assistant',
+          messageId: 'msg_plugin',
+          toolCallId: 'call_plugin',
+        } as BuiltinToolContext,
+      );
+
+      for (const result of [config, plugin]) {
+        expect(result).toMatchObject({ error: { type: 'AwaitingCreateGroup' }, success: false });
+      }
+      expect(mockUpdateAgentConfig).not.toHaveBeenCalled();
+      expect(mockInstallPlugin).not.toHaveBeenCalled();
     });
   });
 

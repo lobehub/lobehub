@@ -2,7 +2,7 @@
 
 import { CaretDownFilled } from '@ant-design/icons';
 import { DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
-import { Block, Flexbox, Icon, stopPropagation, Tooltip } from '@lobehub/ui';
+import { Block, Center, Flexbox, Icon, stopPropagation, Tooltip } from '@lobehub/ui';
 import { ActionIcon, Spin, toast } from '@lobehub/ui/base-ui';
 import { Input } from 'antd';
 import { cx } from 'antd-style';
@@ -322,7 +322,9 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
             {flat ? (
               <div style={{ width: 20 }} />
             ) : isLoading ? (
-              <Spin size="small" style={{ width: 20 }} />
+              <Center flex={'none'} width={20}>
+                <Spin size={'small'} />
+              </Center>
             ) : (
               <m.div
                 animate={{ rotate: isExpanded ? 0 : -90 }}

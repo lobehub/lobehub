@@ -14,6 +14,7 @@ import {
   getConnectorToolPermission,
 } from '@/libs/mcp/connectorPermissionCheck';
 import { deviceGateway } from '@/server/services/deviceGateway';
+import { resolveDeviceClientKind } from '@/server/services/deviceGateway/deviceChannels';
 import { resolveDeviceDispatchAuthorizationFailure } from '@/server/services/deviceGateway/dispatchAuthorization';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 import { contentBlocksToString } from '@/server/services/mcp/contentProcessor';
@@ -309,7 +310,7 @@ export class ToolExecutionService {
           : undefined;
         if (!tunnelTarget) {
           log('Device-only MCP %s:%s has no reachable device — failing fast', identifier, apiName);
-          const message = `MCP server '${identifier}' only your own machine can reach (stdio or local network). No online device was found to run it — open the LobeHub desktop app on the machine that hosts this MCP server, then retry.`;
+          const message = `MCP server '${identifier}' only your own machine can reach (stdio or local network). No online LobeHub desktop app was found to run it (a device connected only through the \`lh connect\` CLI cannot run MCP servers) — open the LobeHub desktop app on the machine that hosts this MCP server, then retry.`;
           return {
             content: message,
             error: { code: 'MCP_DEVICE_UNAVAILABLE', message },
@@ -371,7 +372,18 @@ export class ToolExecutionService {
     // do (respects a personal-scope active device, recovers the agent's
     // workspace when the run context lost it).
     const workspaceId = await resolveRunWorkspaceId(context);
-    if (context.activeDeviceId) return { deviceId: context.activeDeviceId, workspaceId };
+    if (context.activeDeviceId) {
+      // Only the desktop app handles `mcp` tool calls; a device whose only
+      // live connection is `lh connect` answers them with `Unknown tool API`.
+      // Such an active device is skipped: personal runs fall through to the
+      // newest desktop device below, workspace runs fail closed.
+      const clientKind =
+        context.userId !== undefined
+          ? await resolveDeviceClientKind(context.userId, context.activeDeviceId, workspaceId)
+          : 'unknown';
+      if (clientKind !== 'cli-only') return { deviceId: context.activeDeviceId, workspaceId };
+      log('Active device %s is CLI-only; not tunneling MCP to it', context.activeDeviceId);
+    }
     // The implicit fallback is PERSONAL-scope only. In a workspace run the
     // connector may have been authorized by ANOTHER member, and tunneling its
     // params (stdio env / HTTP auth) to the caller's own newest device would

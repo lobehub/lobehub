@@ -18,6 +18,8 @@ export enum RequestTrigger {
   AgentShare = 'agent_share',
   AgentSignal = 'agent_signal',
   Api = 'api',
+  /** Speech-to-text transcription, e.g. voice messages and `lh generate asr`. */
+  Asr = 'asr',
   Bot = 'bot',
   /** Agent builder suggestion chips. */
   BuilderSuggestion = 'builder_suggestion',

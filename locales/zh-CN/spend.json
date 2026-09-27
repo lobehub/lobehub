@@ -19,6 +19,7 @@
   "table.columns.trigger.enums.agent_share": "助手分享",
   "table.columns.trigger.enums.agent_signal": "代理信号",
   "table.columns.trigger.enums.api": "API 调用",
+  "table.columns.trigger.enums.asr": "语音转写",
   "table.columns.trigger.enums.bot": "Bot 消息",
   "table.columns.trigger.enums.builder_suggestion": "构建建议",
   "table.columns.trigger.enums.chat": "聊天消息",

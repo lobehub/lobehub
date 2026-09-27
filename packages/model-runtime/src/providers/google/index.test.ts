@@ -1772,6 +1772,54 @@ describe('models', () => {
       expect(parts[1].text).toBeTruthy();
     });
 
+    it('should report Gemini usage metadata of transcriptions', async () => {
+      vi.spyOn(instance['client'].models, 'generateContent').mockResolvedValue({
+        candidates: [{ content: { parts: [{ text: 'hi' }] }, finishReason: 'STOP' }],
+        text: 'hi',
+        usageMetadata: {
+          candidatesTokenCount: 5,
+          promptTokenCount: 160,
+          promptTokensDetails: [
+            { modality: 'AUDIO', tokenCount: 150 },
+            { modality: 'TEXT', tokenCount: 10 },
+          ],
+          totalTokenCount: 165,
+        },
+      } as any);
+      const onUsage = vi.fn();
+
+      const file = new File([new Uint8Array([1, 2, 3])], 'speech.m4a', { type: 'audio/mp4' });
+      const result = await instance.transcribe!(
+        { file, model: 'gemini-3.5-transcribe' },
+        { onUsage },
+      );
+
+      expect(result).toEqual({ text: 'hi' });
+      expect(onUsage).toHaveBeenCalledWith(
+        expect.objectContaining({ inputAudioTokens: 150, totalOutputTokens: 5 }),
+      );
+    });
+
+    it('should read the transcript from audioTranscription parts of dedicated ASR models', async () => {
+      vi.spyOn(instance['client'].models, 'generateContent').mockResolvedValue({
+        candidates: [
+          {
+            content: {
+              parts: [{ audioTranscription: { text: ' 帮我把登录页的按钮颜色改成蓝色。 ' } }],
+            },
+            finishReason: 'STOP',
+          },
+        ],
+        text: undefined,
+      } as any);
+
+      const file = new File([new Uint8Array([1, 2, 3])], 'speech.m4a', { type: 'audio/mp4' });
+
+      const result = await instance.transcribe!({ file, model: 'gemini-3.5-transcribe' });
+
+      expect(result).toEqual({ text: '帮我把登录页的按钮颜色改成蓝色。' });
+    });
+
     it('should include the language hint when provided', async () => {
       const generateContentMock = vi
         .spyOn(instance['client'].models, 'generateContent')

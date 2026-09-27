@@ -50,6 +50,10 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
     "model": "deepseek-v4-flash",
     "provider": "deepseek",
   },
+  "asr": {
+    "model": "gpt-4o-mini-transcribe",
+    "provider": "openai",
+  },
   "enableAutoReply": true,
   "expertise": {
     "model": "gpt-5.6-luna",

@@ -1024,6 +1024,27 @@ describe('TaskModel', () => {
     });
   });
 
+  describe('deleteIfStatus (delete vs. run start)', () => {
+    it('keeps a task that a run started after the delete looked at it', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({ instruction: 'Test' });
+
+      // The runner wins the race: backlog → running before the delete lands.
+      await model.updateStatusIfCurrent(task.id, 'backlog', 'running');
+
+      expect(await model.deleteIfStatus(task.id, 'backlog')).toBe(false);
+      expect((await model.findById(task.id))?.status).toBe('running');
+    });
+
+    it('stops the run start when the delete lands first', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({ instruction: 'Test' });
+
+      expect(await model.deleteIfStatus(task.id, 'backlog')).toBe(true);
+      expect(await model.updateStatusIfCurrent(task.id, 'backlog', 'running')).toBeNull();
+    });
+  });
+
   describe('heartbeat', () => {
     it('should update heartbeat timestamp', async () => {
       const model = new TaskModel(serverDB, userId);
