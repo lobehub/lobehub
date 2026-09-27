@@ -8,6 +8,10 @@ describe('normalizeSetTaskVerifyParams', () => {
       normalizeSetTaskVerifyParams({ enabled: 'true', identifier: 'T-1', maxIterations: '3' }),
     ).toEqual({ enabled: true, identifier: 'T-1', maxIterations: 3 });
     expect(normalizeSetTaskVerifyParams({ enabled: 'False' })).toEqual({ enabled: false });
+    expect(normalizeSetTaskVerifyParams({ enabled: '"true"', maxIterations: '"2"' })).toEqual({
+      enabled: true,
+      maxIterations: 2,
+    });
     expect(normalizeSetTaskVerifyParams({ enabled: 'null', maxIterations: 'null' })).toEqual({
       enabled: null,
       maxIterations: null,
