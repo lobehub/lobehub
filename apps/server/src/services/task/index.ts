@@ -347,6 +347,38 @@ export class TaskService {
   }
 
   /**
+   * Delete a task: interrupt its still-running topics first, then remove the
+   * row. Deleting without the interrupt leaves the run executing against a
+   * task that no longer exists — its task tools answer "Task not found" and
+   * every document it produces fails the `task_documents` foreign key.
+   *
+   * `keepOperationId` spares the caller's own run (an agent deleting the task
+   * it is executing), which would otherwise interrupt itself mid-tool-call.
+   */
+  async deleteTask(
+    idOrIdentifier: string,
+    options: { keepOperationId?: string } = {},
+  ): Promise<TaskItem> {
+    const task = await this.resolveOrThrow(idOrIdentifier);
+
+    const runningTopics = await this.taskTopicModel.findRunningByTaskIds([task.id]);
+    const toInterrupt = runningTopics.filter(
+      (topic) => topic.operationId && topic.operationId !== options.keepOperationId,
+    );
+    if (toInterrupt.length > 0) {
+      const aiAgentService = new AiAgentService(this.db, this.userId, {
+        workspaceId: this.workspaceId,
+      });
+      for (const topic of toInterrupt) {
+        await this.interruptTaskOperation(aiAgentService, topic.operationId!);
+      }
+    }
+
+    await this.taskModel.delete(task.id);
+    return task;
+  }
+
+  /**
    * Run the configured review on `content`, persist the result onto the
    * target topic, and return the review outcome.
    */

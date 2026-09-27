@@ -1484,6 +1484,49 @@ describe('TaskService', () => {
     );
   });
 
+  describe('deleteTask', () => {
+    it('interrupts a running execution before deleting the task row', async () => {
+      mockTaskModel.resolve.mockResolvedValue({ id: 'task-live', identifier: 'T-2' });
+      mockTaskTopicModel.findRunningByTaskIds.mockResolvedValue([
+        { operationId: 'op-live', status: 'running', taskId: 'task-live', topicId: 'topic-live' },
+      ]);
+      mockTaskModel.delete.mockResolvedValue(true);
+
+      await new TaskService(db, userId).deleteTask('T-2');
+
+      expect(interruptTaskMock).toHaveBeenCalledWith({ operationId: 'op-live' });
+      expect(interruptTaskMock.mock.invocationCallOrder[0]).toBeLessThan(
+        mockTaskModel.delete.mock.invocationCallOrder[0],
+      );
+      expect(mockTaskModel.delete).toHaveBeenCalledWith('task-live');
+    });
+
+    it('keeps the task when its execution cannot be stopped', async () => {
+      mockTaskModel.resolve.mockResolvedValue({ id: 'task-live', identifier: 'T-2' });
+      mockTaskTopicModel.findRunningByTaskIds.mockResolvedValue([
+        { operationId: 'op-live', status: 'running', taskId: 'task-live', topicId: 'topic-live' },
+      ]);
+      interruptTaskMock.mockResolvedValueOnce({ success: false });
+
+      await expect(new TaskService(db, userId).deleteTask('T-2')).rejects.toThrow(
+        'Task interruption was not confirmed',
+      );
+      expect(mockTaskModel.delete).not.toHaveBeenCalled();
+    });
+
+    it("does not interrupt the caller's own run", async () => {
+      mockTaskModel.resolve.mockResolvedValue({ id: 'task-self', identifier: 'T-3' });
+      mockTaskTopicModel.findRunningByTaskIds.mockResolvedValue([
+        { operationId: 'op-self', status: 'running', taskId: 'task-self', topicId: 'topic-self' },
+      ]);
+
+      await new TaskService(db, userId).deleteTask('T-3', { keepOperationId: 'op-self' });
+
+      expect(interruptTaskMock).not.toHaveBeenCalled();
+      expect(mockTaskModel.delete).toHaveBeenCalledWith('task-self');
+    });
+  });
+
   describe('updateStatus / scheduleStartedAt', () => {
     const baseTask = (overrides: Partial<Record<string, unknown>> = {}) => ({
       automationMode: 'schedule',

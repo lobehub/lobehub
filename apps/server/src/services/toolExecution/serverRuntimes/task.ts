@@ -367,7 +367,12 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       const task = await taskModel().resolve(args.identifier);
       if (!task) return { content: `Task not found: ${args.identifier}`, success: false };
 
-      await taskModel().delete(task.id);
+      try {
+        await taskService().deleteTask(task.id, { keepOperationId: operationId });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to delete task';
+        return { content: `Failed to delete task ${task.identifier}: ${message}`, success: false };
+      }
 
       return {
         content: formatTaskDeleted(task.identifier, task.name),

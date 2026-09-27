@@ -101,6 +101,51 @@ describe('taskRuntime.factory', () => {
 });
 
 describe('createTaskRuntime', () => {
+  describe('deleteTask', () => {
+    it('deletes through TaskService so a running execution is stopped first', async () => {
+      const taskModel = {
+        delete: vi.fn(),
+        resolve: vi.fn().mockResolvedValue({ id: 'task-2', identifier: 'T-2', name: 'Report' }),
+      };
+      const taskService = { deleteTask: vi.fn().mockResolvedValue({ id: 'task-2' }) };
+      const runtime = createTaskRuntime({
+        agentModel: { existsById: vi.fn() } as any,
+        operationId: 'op-caller',
+        taskCaller: {} as any,
+        taskModel: taskModel as any,
+        taskService: taskService as any,
+      });
+
+      const result = await runtime.deleteTask({ identifier: 'T-2' });
+
+      expect(result.success).toBe(true);
+      expect(taskService.deleteTask).toHaveBeenCalledWith('task-2', {
+        keepOperationId: 'op-caller',
+      });
+      expect(taskModel.delete).not.toHaveBeenCalled();
+    });
+
+    it('reports a failed stop instead of throwing', async () => {
+      const runtime = createTaskRuntime({
+        agentModel: { existsById: vi.fn() } as any,
+        taskCaller: {} as any,
+        taskModel: {
+          resolve: vi.fn().mockResolvedValue({ id: 'task-2', identifier: 'T-2' }),
+        } as any,
+        taskService: {
+          deleteTask: vi.fn().mockRejectedValue(new Error('Task interruption was not confirmed.')),
+        } as any,
+      });
+
+      const result = await runtime.deleteTask({ identifier: 'T-2' });
+
+      expect(result).toMatchObject({
+        content: 'Failed to delete task T-2: Task interruption was not confirmed.',
+        success: false,
+      });
+    });
+  });
+
   describe('task comments', () => {
     it('adds a comment to the current task with agent attribution', async () => {
       const taskCaller = {
