@@ -14,6 +14,13 @@ export interface DataState {
   displayMessages: UIChatMessage[];
 
   /**
+   * The last round-cursor page fetch failed (LOBE-13716). Drives the inline
+   * error row with Retry at the top of the list; cleared when a retry starts
+   * and on conversation switch.
+   */
+  earlierMessagesError?: unknown;
+
+  /**
    * A round-cursor fetch for history older than the server's newest-first
    * window is in flight (LOBE-13716). Drives the top-of-list loading hint.
    */

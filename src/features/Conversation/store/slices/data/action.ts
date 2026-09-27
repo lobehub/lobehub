@@ -82,8 +82,13 @@ export interface DataAction {
    * newest-first window (LOBE-13716) and prepend it to the transcript.
    * Self-guarding: no-ops while a page is in flight, once the beginning has
    * been reached, or when the conversation has no server-backed messages yet.
+   *
+   * Never rejects: a failure is kept in `earlierMessagesError` for the inline
+   * error row. While that error stands, gesture-driven calls no-op so scrolling
+   * does not silently re-fire a failing request; pass `{ retry: true }` from the
+   * explicit Retry action to try again.
    */
-  loadEarlierMessages: () => Promise<void>;
+  loadEarlierMessages: (options?: { retry?: boolean }) => Promise<void>;
 
   /**
    * Replace all messages with new data
@@ -198,32 +203,42 @@ export const dataSlice: StateCreator<
     get().onMessagesChange?.(newDbMessages, get().context);
   },
 
-  loadEarlierMessages: async () => {
+  loadEarlierMessages: async (options) => {
     const context = get().context;
     if (!context.agentId || !context.topicId) return;
+    if (get().earlierMessagesError !== undefined && !options?.retry) return;
     const status = getEarlierHistoryStatus(context);
     if (status.loading || status.exhausted) return;
 
-    set({ isLoadingEarlierMessages: true }, false, 'loadEarlierMessages/start');
+    set(
+      { earlierMessagesError: undefined, isLoadingEarlierMessages: true },
+      false,
+      'loadEarlierMessages/start',
+    );
     try {
-      const merged = await loadEarlierMessagePage(context, get().dbMessages, (before) =>
-        messageService.getEarlierMessages(
-          {
-            agentId: context.agentId,
-            agentShareId: context.agentShareId,
-            groupId: context.groupId,
-            threadId: context.threadId,
-            topicId: context.topicId,
-            topicShareId: context.topicShareId,
-          },
-          before,
-        ),
+      const merged = await loadEarlierMessagePage(
+        context,
+        // Read on demand: the cursor comes from the transcript at request time,
+        // while the merge runs against the transcript at completion — a stream
+        // or edit may have changed it meanwhile. A conversation switch yields
+        // `undefined` so the other conversation's rows are never merged.
+        () => (isSameConversationContext(context, get().context) ? get().dbMessages : undefined),
+        (before) =>
+          messageService.getEarlierMessages(
+            {
+              agentId: context.agentId,
+              agentShareId: context.agentShareId,
+              groupId: context.groupId,
+              threadId: context.threadId,
+              topicId: context.topicId,
+              topicShareId: context.topicShareId,
+            },
+            before,
+          ),
       );
-      // `undefined` → nothing to prepend (no cursor, already loading, or the
-      // beginning was reached — the exhausted flag lives in the cache layer).
+      // `undefined` → nothing to prepend (no cursor, already loading, the
+      // beginning was reached, or the request went stale while in flight).
       if (!merged) return;
-      // The user may have switched conversations while the page was in flight.
-      if (!isSameConversationContext(context, get().context)) return;
 
       log(
         '[loadEarlierMessages] prepended | contextKey=%s | mergedCount=%d',
@@ -232,9 +247,12 @@ export const dataSlice: StateCreator<
       );
       get().replaceMessages(merged, { expectedContext: context });
     } catch (error) {
-      // The list fires this without awaiting; a swallowed failure resets the
-      // flags below, so the next near-top scroll simply retries the page.
       log('[loadEarlierMessages] failed | contextKey=%s | %O', messageMapKey(context), error);
+      // The list fires this without awaiting, so the failure is surfaced
+      // through state (inline error row with Retry) instead of a rejection.
+      if (isSameConversationContext(context, get().context)) {
+        set({ earlierMessagesError: error }, false, 'loadEarlierMessages/error');
+      }
     } finally {
       // The flag is conversation-wide state: after a context switch it belongs
       // to the new conversation (reset by createEphemeralResetState), so a

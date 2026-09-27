@@ -113,20 +113,27 @@ export const getEarlierHistoryStatus = (context: MessageListQueryContext) => {
 
 /**
  * Fetch one round-aligned page of history older than the oldest mainline row
- * of `currentMessages`, remember it for future revalidation merges, and return
- * the full merged transcript — or `undefined` when there is nothing to do
- * (no cursor, already loading, or the beginning was reached).
+ * of `getCurrentMessages()`, remember it for future revalidation merges, and
+ * return the full merged transcript — or `undefined` when there is nothing to
+ * apply (no cursor, already loading, the beginning was reached, or the request
+ * went stale while in flight).
+ *
+ * `getCurrentMessages` is read twice: once for the cursor, and again AFTER the
+ * page arrives so the merge lands on the latest transcript rather than a
+ * snapshot taken before the await (a stream or an edit may have changed it
+ * meanwhile). Return `undefined` from it to skip the merge, e.g. after the
+ * caller switched conversations; the page itself is still cached.
  */
 export const loadEarlierMessagePage = async (
   context: MessageListQueryContext,
-  currentMessages: UIChatMessage[],
+  getCurrentMessages: () => UIChatMessage[] | undefined,
   fetcher: (before: { createdAt: Date; id: string }) => Promise<UIChatMessage[]>,
 ): Promise<UIChatMessage[] | undefined> => {
   const identity = getMessageListCacheIdentity(context);
   const existing = earlierHistoryStates.get(identity);
   if (existing?.exhausted || existing?.loading) return undefined;
 
-  const cursor = currentMessages.find((message) => !isSyntheticGroupNode(message));
+  const cursor = getCurrentMessages()?.find((message) => !isSyntheticGroupNode(message));
   if (!cursor) return undefined;
 
   const state: EarlierHistoryState = existing ?? {
@@ -144,6 +151,10 @@ export const loadEarlierMessagePage = async (
   try {
     const page = await fetcher({ createdAt: new Date(cursor.createdAt), id: cursor.id });
 
+    // An invalidation (edit/delete refresh) dropped this identity while the
+    // page was in flight: its rows may be exactly what changed, so discard it.
+    if (earlierHistoryStates.get(identity) !== state) return undefined;
+
     if (page.length === 0) {
       // `length < pageSize` is NOT a reliable end signal — the round-start trim
       // legitimately shortens full pages — so only an empty page marks the top.
@@ -157,7 +168,13 @@ export const loadEarlierMessagePage = async (
       ...state.messages.filter((message) => !pageIds.has(message.id)),
     ].sort(byCreatedAtAscending);
 
-    return mergeEarlierHistory(identity, currentMessages);
+    const latest = getCurrentMessages();
+    if (!latest) return undefined;
+
+    const merged = mergeEarlierHistory(identity, latest);
+    // No join point in the latest transcript (it slid or was replaced): there
+    // is nothing to prepend, and returning `latest` would only echo it back.
+    return merged === latest ? undefined : merged;
   } finally {
     state.loading = false;
   }

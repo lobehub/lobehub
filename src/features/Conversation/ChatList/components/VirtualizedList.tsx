@@ -38,6 +38,7 @@ import AutoScroll from './AutoScroll';
 import { AT_BOTTOM_THRESHOLD } from './AutoScroll/const';
 import { useAutoScrollEnabled } from './AutoScroll/useAutoScrollEnabled';
 import BackBottom from './BackBottom';
+import EarlierHistoryError from './EarlierHistoryError';
 import EarlierHistorySkeleton from './EarlierHistorySkeleton';
 
 const DebugInspector = lazy(() => import('./AutoScroll/DebugInspector'));
@@ -396,6 +397,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
                 <WideScreenContainer key={messageId} style={{ position: 'relative' }}>
                   {headerSlot}
                   <EarlierHistorySkeleton />
+                  <EarlierHistoryError />
                 </WideScreenContainer>
               );
             }

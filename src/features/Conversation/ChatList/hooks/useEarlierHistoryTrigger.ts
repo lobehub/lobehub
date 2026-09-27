@@ -22,9 +22,8 @@ interface UseEarlierHistoryTriggerOptions {
  * events. A long topic's last round often collapses into a single workflow
  * block, leaving a list shorter than its viewport: it can never scroll, so a
  * scroll-only trigger would leave the older history unreachable. Wheel, touch
- * pull, and upward navigation keys fire whether or not the list moves — which
- * also lets a user retry at scrollTop 0 after a failed page, where further
- * wheel-ups produce no scroll event either.
+ * pull, and upward navigation keys fire whether or not the list moves. After a
+ * failed page the action ignores these gestures until the inline Retry runs.
  */
 export const useEarlierHistoryTrigger = ({
   loadEarlierMessages,

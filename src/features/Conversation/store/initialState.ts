@@ -87,6 +87,7 @@ export const initialState: State = {
 export const createEphemeralResetState = (): Partial<State> => ({
   activeIndex: null,
   atBottom: true,
+  earlierMessagesError: undefined,
   heteroOverloadRetryAttempts: {},
   heteroOverloadWaitOpIds: {},
   inputMessage: '',

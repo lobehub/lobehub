@@ -135,6 +135,7 @@ export default {
   'backToBottom': 'Jump to latest',
   'beforeUnload.confirmLeave': 'A request is still running. Leave anyway?',
   'builtinCopilot': 'Built-in Copilot',
+  'chatList.earlierHistoryError': "Couldn't load earlier messages",
   'chatList.expandMessage': 'Expand Message',
   'chatList.longMessageDetail': 'View Details',
   'chatList.refreshError': "Couldn't refresh messages",

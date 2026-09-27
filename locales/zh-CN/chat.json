@@ -81,6 +81,7 @@
   "backToBottom": "跳转到最新",
   "beforeUnload.confirmLeave": "你有正在生成中的请求，确定要离开吗？",
   "builtinCopilot": "内置 Copilot",
+  "chatList.earlierHistoryError": "未能加载更早的消息",
   "chatList.expandMessage": "展开消息",
   "chatList.longMessageDetail": "查看详情",
   "chatList.refreshError": "未能刷新消息",
