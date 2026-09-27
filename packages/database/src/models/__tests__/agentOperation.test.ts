@@ -520,6 +520,39 @@ describe('AgentOperationModel', () => {
         status: 'abandoned',
       });
     });
+
+    it('lets the retiring caller persist terminal stats onto the abandoned row', async () => {
+      // The stale-operation reaper claims with settleStaleRunning, then runs the
+      // completion lifecycle, whose write must land (so hooks fire) without
+      // moving the row out of `abandoned`.
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-stale-retired-stats';
+      await model.recordStart({ operationId });
+      await serverDB
+        .update(agentOperations)
+        .set({ updatedAt: new Date('2026-01-01T00:00:00.000Z') })
+        .where(eq(agentOperations.id, operationId));
+
+      expect(await model.settleStaleRunning(operationId, new Date(Date.now() - 60_000))).toBe(true);
+      expect(
+        await model.recordCompletion(operationId, {
+          completionReason: 'error',
+          status: 'error',
+        }),
+      ).toBe(false);
+      expect(
+        await model.recordCompletion(operationId, {
+          completionReason: 'lease_expired',
+          status: 'abandoned',
+          stepCount: 4,
+        }),
+      ).toBe(true);
+      expect(await model.findById(operationId)).toMatchObject({
+        completionReason: 'lease_expired',
+        status: 'abandoned',
+        stepCount: 4,
+      });
+    });
   });
 
   describe('hetero ingest rejection marker', () => {

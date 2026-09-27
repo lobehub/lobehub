@@ -104,7 +104,17 @@ export class AbandonOperationService {
     this.traceRecorder = new OperationTraceRecorder(this.snapshotStore);
   }
 
-  async finalizeAbandoned(operationId: string, reason: string): Promise<FinalizeAbandonedResult> {
+  /**
+   * @param options.settledAsAbandoned Set when the caller already retired the
+   * durable row with its own compare-and-set (`settleStaleRunning`) and only
+   * wants the side effects. The lifecycle then persists onto that status rather
+   * than racing it, so `onComplete` / `onError` still fire.
+   */
+  async finalizeAbandoned(
+    operationId: string,
+    reason: string,
+    options?: { settledAsAbandoned?: boolean },
+  ): Promise<FinalizeAbandonedResult> {
     const result: FinalizeAbandonedResult = {
       assistantMessageUpdated: false,
       finalized: false,
@@ -235,6 +245,7 @@ export class AbandonOperationService {
         await new CompletionLifecycle(this.db, origin.userId, origin.workspaceId, {
           includeShareVisitor,
         }).dispatchHooks(operationId, finalState, 'error', {
+          settledAsAbandoned: options?.settledAsAbandoned,
           skipErrorMessageWrite: result.assistantMessageUpdated,
         });
       } catch (e) {

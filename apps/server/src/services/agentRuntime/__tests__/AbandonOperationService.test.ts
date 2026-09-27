@@ -467,6 +467,24 @@ describe('AbandonOperationService', () => {
     expect(coord.deleteAgentOperation).toHaveBeenCalledWith('op_x');
   });
 
+  it('tells the lifecycle when the caller already retired the durable row', async () => {
+    const coord = buildCoordinator({
+      loadAgentState: vi.fn().mockResolvedValue(stateWith()),
+    });
+
+    await new AbandonOperationService(buildDb(), {
+      coordinator: coord as any,
+      snapshotStore: buildPartiallessStore() as any,
+    }).finalizeAbandoned('op_x', 'stale_lease_redrive_exhausted', { settledAsAbandoned: true });
+
+    expect(dispatchHooksMock).toHaveBeenCalledWith(
+      'op_x',
+      expect.anything(),
+      'error',
+      expect.objectContaining({ settledAsAbandoned: true }),
+    );
+  });
+
   it.each(['done', 'error', 'interrupted'])(
     'skips abandoned lifecycle dispatch for terminal coordinator state %s',
     async (status) => {

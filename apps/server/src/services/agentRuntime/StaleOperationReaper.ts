@@ -49,6 +49,12 @@ export interface ReapStaleOperationsResult {
   /** Candidates whose lease was refreshed between select and claim. */
   alive: number;
   examined: number;
+  /**
+   * Candidates whose recovery threw (Redis, database or queue failure). Reported
+   * so a sweep that recovered nothing is visible to whatever polls the endpoint,
+   * rather than looking identical to a quiet tick.
+   */
+  failed: number;
   /** Operations whose next step was re-queued. */
   redriven: number;
   /** Candidates this sweep has no authority over — see `recover`. */
@@ -110,6 +116,7 @@ export class StaleOperationReaper {
       abandoned: 0,
       alive: 0,
       examined: candidates.length,
+      failed: 0,
       redriven: 0,
       skipped: 0,
     };
@@ -120,6 +127,7 @@ export class StaleOperationReaper {
         result[outcome] += 1;
       } catch (e) {
         // One poisoned row must not abort the rest of the sweep.
+        result.failed += 1;
         log('[%s] recovery failed: %O', candidate.id, e);
       }
     }
@@ -370,9 +378,14 @@ export class StaleOperationReaper {
       return 'alive';
     }
 
+    // The claim above already moved the row to `abandoned`; tell the lifecycle
+    // so it persists onto that status instead of being refused as a conflicting
+    // terminal owner — which would skip `onComplete` / `onError` and leave
+    // hook consumers (tasks, bots, parent runs) waiting on a retired operation.
     await new AbandonOperationService(this.db).finalizeAbandoned(
       operationId,
       `stale_lease_${reason}`,
+      { settledAsAbandoned: true },
     );
     log('[%s] abandoned (reason=%s)', operationId, reason);
 

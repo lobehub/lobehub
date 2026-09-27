@@ -38,7 +38,18 @@ export async function reapOperations(c: Context): Promise<Response> {
 
     log('sweep completed in %dms: %O', Date.now() - startedAt, result);
 
-    return c.json({ ...result, executionTime: Date.now() - startedAt, success: true });
+    // A tick where every candidate failed is an outage (Redis, database or
+    // queue down), not a quiet sweep: answer 5xx so cron monitoring alerts while
+    // the operations stay stuck. A partial failure is one poisoned row among
+    // healthy recoveries, so it stays 2xx but still reports `success: false`.
+    const allFailed = result.examined > 0 && result.failed === result.examined;
+    if (result.failed > 0)
+      console.error('[reap-operations] %d candidate(s) failed: %O', result.failed, result);
+
+    return c.json(
+      { ...result, executionTime: Date.now() - startedAt, success: result.failed === 0 },
+      allFailed ? 500 : 200,
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : 'unknown error';
     console.error('[reap-operations] %O', error);

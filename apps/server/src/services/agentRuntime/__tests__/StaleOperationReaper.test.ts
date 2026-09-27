@@ -195,7 +195,11 @@ describe('StaleOperationReaper', () => {
 
     expect(queue.scheduleMessage).not.toHaveBeenCalled();
     expect(settleStaleRunningMock).toHaveBeenCalledWith('op_x', expect.any(Date));
-    expect(finalizeAbandonedMock).toHaveBeenCalledWith('op_x', 'stale_lease_redrive_exhausted');
+    // The claim already retired the row, so the lifecycle must be told —
+    // otherwise its own completion write is refused and no hooks fire.
+    expect(finalizeAbandonedMock).toHaveBeenCalledWith('op_x', 'stale_lease_redrive_exhausted', {
+      settledAsAbandoned: true,
+    });
     expect(result).toMatchObject({ abandoned: 1 });
   });
 
@@ -227,7 +231,7 @@ describe('StaleOperationReaper', () => {
 
     expect(releaseStaleRedriveMock).toHaveBeenCalledWith('op_x', 2);
     expect(finalizeAbandonedMock).not.toHaveBeenCalled();
-    expect(result).toMatchObject({ abandoned: 0, redriven: 0 });
+    expect(result).toMatchObject({ abandoned: 0, failed: 1, redriven: 0 });
   });
 
   it('keeps the attempt when the redrive publishes successfully', async () => {
@@ -249,7 +253,7 @@ describe('StaleOperationReaper', () => {
       queue,
     ).sweep();
 
-    expect(result).toMatchObject({ examined: 2, redriven: 1 });
+    expect(result).toMatchObject({ examined: 2, failed: 1, redriven: 1 });
   });
 
   it('passes the caller stall window through to the claim', async () => {
