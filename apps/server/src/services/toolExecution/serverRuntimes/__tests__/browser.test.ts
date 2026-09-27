@@ -61,7 +61,23 @@ describe('browserRuntime', () => {
       expect(result.success).toBe(false);
       expect(result.error.code).toBe('BROWSER_DEVICE_UNSUPPORTED');
       expect(result.content).toContain('lh connect');
-      expect(result.content).toContain('lobe-web-browsing');
+      // lobe-web-browsing is not in this run's tool set, so it must not be offered.
+      expect(result.content).not.toContain('lobe-web-browsing');
+    });
+
+    it('points at lobe-web-browsing only when the run can call it', async () => {
+      mockQueryDeviceList.mockResolvedValue([
+        { channels: [{ channel: 'cli', connectedAt: 1, connectionId: 'c1' }], deviceId: 'vm-cli' },
+      ]);
+
+      const runtime = browserRuntime.factory({
+        ...context,
+        toolManifestMap: { 'lobe-web-browsing': {} as any },
+      });
+      const result = await runtime.navigate({ url: 'https://example.com' });
+
+      expect(result.error.code).toBe('BROWSER_DEVICE_UNSUPPORTED');
+      expect(result.content).toContain('use lobe-web-browsing (search / crawl) instead');
     });
 
     it('dispatches when the device also has a desktop connection', async () => {

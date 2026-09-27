@@ -1,4 +1,5 @@
 import { BrowserIdentifier, BrowserManifest } from '@lobechat/builtin-tool-browser';
+import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import debug from 'debug';
 
 import { executeAuthorizedDeviceToolCall } from '@/server/services/deviceGateway/authorizedToolCall';
@@ -105,11 +106,19 @@ const storeScreenshot = async (
 
 export const BROWSER_DEVICE_UNSUPPORTED_ERROR_CODE = 'BROWSER_DEVICE_UNSUPPORTED';
 
-const buildCliOnlyDeviceBrowserResult = (deviceId: string) => {
+const buildCliOnlyDeviceBrowserResult = (
+  deviceId: string,
+  { webBrowsingAvailable }: { webBrowsingAvailable: boolean },
+) => {
+  // Only point at lobe-web-browsing when this run can actually call it —
+  // custom / exclusive-tool / share runs may enable the browser without it.
+  const publicPageHint = webBrowsingAvailable
+    ? `For public pages use ${WebBrowsingManifest.identifier} (search / crawl) instead. `
+    : '';
   const message =
     `The active device (${deviceId}) is connected only through the \`lh connect\` CLI, ` +
     `which has no built-in browser, so lobe-browser cannot run there. ` +
-    `For public pages use lobe-web-browsing (search / crawl) instead. ` +
+    publicPageHint +
     `If a signed-in browser session is required, ask the user to open the LobeHub desktop app ` +
     `on a machine and activate that device, then retry.`;
   return {
@@ -169,7 +178,9 @@ export const browserRuntime: ServerRuntimeRegistration = {
     for (const api of BrowserManifest.api) {
       proxy[api.name] = async (args: any) => {
         if ((await getClientKind()) === 'cli-only') {
-          return buildCliOnlyDeviceBrowserResult(context.activeDeviceId!);
+          return buildCliOnlyDeviceBrowserResult(context.activeDeviceId!, {
+            webBrowsingAvailable: WebBrowsingManifest.identifier in (context.toolManifestMap ?? {}),
+          });
         }
 
         // Carry the run identity so the device resolves the right browser
