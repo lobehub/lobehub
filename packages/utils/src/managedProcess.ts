@@ -134,6 +134,8 @@ export class ManagedProcessRegistry {
   private roots = new Map<number, RootProcess>();
   private descendants = new Map<number, ProcessIdentity>();
   private timer?: ReturnType<typeof setInterval>;
+  private nextPollAt = 0;
+  private retryDelay = 0;
   private sampling?: Promise<void>;
   private closing?: Promise<void>;
   private stopping = false;
@@ -261,11 +263,23 @@ export class ManagedProcessRegistry {
     log('register pid=%d detached=%s', child.pid, detached);
     if (this.roots.get(child.pid)?.child !== child) this.owners.delete(child.pid);
     this.roots.set(child.pid, { child, group: process.platform !== 'win32' && detached, owner });
+    this.nextPollAt = 0;
     if (!this.timer) {
       // ponytail: polling can miss a daemon that detaches between samples; strict
       // containment needs a platform supervisor/job, not a faster polling loop.
       this.timer = setInterval(() => {
-        void this.sample().catch((error) => console.error('Process tracking failed:', error));
+        if (this.sampling || Date.now() < this.nextPollAt) return;
+        void this.sample()
+          .then(() => {
+            this.retryDelay = 0;
+            this.nextPollAt =
+              Date.now() + (this.roots.size || this.descendants.size ? 1000 : 30000);
+          })
+          .catch((error) => {
+            this.retryDelay = Math.min(this.retryDelay ? this.retryDelay * 2 : 2000, 60000);
+            this.nextPollAt = Date.now() + this.retryDelay;
+            console.error('Process tracking failed:', error);
+          });
       }, 1000);
       this.timer.unref();
     }
@@ -279,12 +293,53 @@ export class ManagedProcessRegistry {
   }
 
   private async collect() {
-    if (!this.roots.size && !this.descendants.size && !this.browserScopes.size) return;
+    const now = Date.now();
+    // Exited non-group roots and unused scopes can expire even if enumeration fails.
+    for (const [pid, root] of this.roots)
+      if (!root.group && (root.child.exitCode !== null || root.child.signalCode !== null))
+        this.roots.delete(pid);
+    // Old system agent-browser versions do not implement idle-timeout. Reap only
+    // once all commands for this topic have ended and the reuse window expires.
+    if (!this.stopping)
+      for (const [namespace, owner] of this.browserScopes) {
+        const active = [...this.roots.values()].some(
+          (root) =>
+            root.owner.topicId === owner.topicId &&
+            root.owner.agentId === owner.agentId &&
+            root.child.exitCode === null &&
+            root.child.signalCode === null,
+        );
+        if (active) this.browserActivity.set(namespace, now);
+        if (now - (this.browserActivity.get(namespace) ?? now) < 900000) continue;
+        const browsers = this.rows.filter(
+          (item) =>
+            item.label?.startsWith('Agent Browser ·') &&
+            item.topicId === owner.topicId &&
+            item.agentId === owner.agentId,
+        );
+        if (!browsers.length) {
+          this.browserScopes.delete(namespace);
+          this.browserActivity.delete(namespace);
+        }
+        for (const row of browsers) {
+          if (this.idleStopping.has(row.rootId)) continue;
+          this.idleStopping.add(row.rootId);
+          setTimeout(() => {
+            void this.stop(row.rootId)
+              .catch((error) => console.error('Browser idle cleanup failed:', error))
+              .finally(() => this.idleStopping.delete(row.rootId));
+          }, 0).unref();
+        }
+      }
+    if (!this.roots.size && !this.descendants.size && !this.browserScopes.size) {
+      clearInterval(this.timer);
+      this.timer = undefined;
+      return;
+    }
     const roots = [...this.roots];
     const processes = await readProcesses();
     await this.discoverBrowsers(processes);
     const owned = new Set<number>();
-    const now = Date.now();
     const prior = this.descendants;
     const assign = (row: ProcessIdentity, pid: number, owner: ProcessOwner) => {
       const root = processes.find((item) => item.pid === pid);
@@ -348,39 +403,6 @@ export class ManagedProcessRegistry {
       };
     });
     this.sampledAt = now;
-    // Old system agent-browser versions do not implement idle-timeout. Reap only
-    // once all commands for this topic have ended and the reuse window expires.
-    if (!this.stopping)
-      for (const [namespace, owner] of this.browserScopes) {
-        const active = [...this.roots.values()].some(
-          (root) =>
-            root.owner.topicId === owner.topicId &&
-            root.owner.agentId === owner.agentId &&
-            root.child.exitCode === null &&
-            root.child.signalCode === null,
-        );
-        if (active) this.browserActivity.set(namespace, now);
-        if (now - (this.browserActivity.get(namespace) ?? now) < 900000) continue;
-        const browsers = this.rows.filter(
-          (item) =>
-            item.label?.startsWith('Agent Browser ·') &&
-            item.topicId === owner.topicId &&
-            item.agentId === owner.agentId,
-        );
-        if (!browsers.length) {
-          this.browserScopes.delete(namespace);
-          this.browserActivity.delete(namespace);
-        }
-        for (const row of browsers) {
-          if (this.idleStopping.has(row.rootId)) continue;
-          this.idleStopping.add(row.rootId);
-          setTimeout(() => {
-            void this.stop(row.rootId)
-              .catch((error) => console.error('Browser idle cleanup failed:', error))
-              .finally(() => this.idleStopping.delete(row.rootId));
-          }, 0).unref();
-        }
-      }
     for (const pid of this.owners.keys()) if (!this.descendants.has(pid)) this.owners.delete(pid);
     if (!this.roots.size && !this.descendants.size && !this.browserScopes.size) {
       clearInterval(this.timer);
