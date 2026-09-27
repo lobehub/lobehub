@@ -1929,6 +1929,8 @@ export default {
   'goalList.status.verifying': 'Verifying',
   'goalList.status.waiting': 'Waiting',
   'goalTask.checks': '{{passed}}/{{total}} checks passed',
+  'goalTask.currentStep': 'Current: {{title}}',
+  'goalTask.nextStep': 'Up next: {{title}}',
   'goalTask.round': 'Round {{current}}',
   'goalTask.roundWithBudget': 'Round {{current}}/{{total}}',
   'goalTask.tasksDone': '{{passed}}/{{total}} tasks done',
