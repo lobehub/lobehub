@@ -16,9 +16,11 @@ const log = debug('lobe-server:agent:subagent-callback');
  * Backfills the parent's placeholder tool message and barrier-resumes the
  * parked parent op via `completeSubAgentBridge`.
  *
- * Body: `{ operationId, reason, parentOperationId, threadId, toolMessageId }`
+ * Body: `{ operationId, reason, parentOperationId, threadId, toolMessageId, errorMessage? }`
  * — event fields from the hook dispatch plus the bridge params from
- * `webhook.body`.
+ * `webhook.body`. `errorMessage` is set by the watchdog abandon path, whose
+ * child state never records the failure; without it the parent reads a bare
+ * "Sub-agent did not complete (error).".
  *
  * Auth: `qstashAuth` on the route — QStash signature required.
  */
