@@ -1,6 +1,7 @@
 import type {
   GenerateContentConfig,
   GenerateContentResponse,
+  GenerateContentResponseUsageMetadata,
   GoogleGenAI,
   Part,
 } from '@google/genai';
@@ -95,7 +96,7 @@ export const createGoogleTranscription = async (
   client: GoogleGenAI,
   payload: ASRPayload,
   options?: ASROptions,
-): Promise<ASRResponse> => {
+): Promise<ASRResponse & { usageMetadata?: GenerateContentResponseUsageMetadata }> => {
   const { file, fileName, model, language, prompt } = payload;
 
   const mimeType = file.type || guessMimeFromName(fileName ?? (file as File).name) || 'audio/mp3';
@@ -132,5 +133,5 @@ export const createGoogleTranscription = async (
   const text = (response.text || getAudioTranscriptionText(response)).trim();
   debug('transcription completed, text length %d', text.length);
 
-  return { text };
+  return { text, usageMetadata: response.usageMetadata };
 };
