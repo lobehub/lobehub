@@ -57,6 +57,7 @@ import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { AgentGroupRepository } from '@/database/repositories/agentGroup';
 import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
 import type { ChatGroupConfig } from '@/database/types/chatGroup';
+import { getResourceConfigAccess } from '@/server/routers/lambda/_helpers/resourceConfigGuard';
 import { AgentGroupService } from '@/server/services/agentGroup';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 
@@ -175,6 +176,25 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
       );
     };
 
+    /**
+     * Prompts and tools are edit-level config (`resourceConfigGuard`). The model
+     * predicates admit any public workspace row, and the target group/agent id
+     * can come straight from the tool arguments, so every config read or member
+     * config write goes through the same guard as the `agent` / `agentGroup`
+     * routers. Outside a workspace the guard returns `full`.
+     */
+    const getConfigAccess = (resourceType: 'agent' | 'agentGroup', resourceId: string) =>
+      getResourceConfigAccess({ db: serverDB, userId, workspaceId }, resourceType, resourceId);
+
+    const configAccessDenied = (agentId: string): ToolExecutionResult => ({
+      content: `No permission to access the configuration of agent "${agentId}"`,
+      error: {
+        message: `No permission to access the configuration of agent "${agentId}"`,
+        type: 'Forbidden',
+      },
+      success: false,
+    });
+
     const findSupervisorAgentId = async (groupId: string) => {
       const roster = await chatGroupModel.getGroupAgentsWithMeta(groupId);
       return roster.find((member) => member.role === 'supervisor')?.agentId;
@@ -205,10 +225,17 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
         if (!groupId) return noGroupContext();
 
         try {
+          // A group the caller cannot even view is reported as missing, the same
+          // way the `agentGroup` router hides it.
+          if ((await getConfigAccess('agentGroup', groupId)) === 'none') {
+            return groupNotFound(groupId);
+          }
+
           const roster = await chatGroupModel.getGroupAgentsWithMeta(groupId);
           const member = roster.find((item) => item.agentId === params.agentId);
+          const memberAccess = member ? await getConfigAccess('agent', params.agentId) : 'none';
 
-          if (!member) {
+          if (!member || memberAccess === 'none') {
             return {
               content: `Agent "${params.agentId}" not found in this group`,
               error: { message: `Agent "${params.agentId}" not found`, type: 'AgentNotFound' },
@@ -217,11 +244,13 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
           }
 
           const config = await agentModel.getAgentConfigById(params.agentId);
+          // View/use access gets the public profile only — the system prompt is
+          // edit-level config (`redactAgentConfig` keeps `model` but not `systemRole`).
           const agent = {
             description: member.description ?? undefined,
             id: params.agentId,
             model: config?.model ?? undefined,
-            systemRole: config?.systemRole ?? undefined,
+            systemRole: memberAccess === 'full' ? (config?.systemRole ?? undefined) : undefined,
             title: member.title ?? undefined,
           };
 
@@ -582,6 +611,12 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
               error: { message: `Agent "${params.agentId}" not found`, type: 'AgentNotFound' },
               success: false,
             };
+          }
+
+          // Group edit alone is not enough: a linked standalone member keeps its
+          // own ACL, and its prompt is edit-level config.
+          if ((await getConfigAccess('agent', params.agentId)) !== 'full') {
+            return configAccessDenied(params.agentId);
           }
 
           const previous = await agentModel.getAgentConfigById(params.agentId);
