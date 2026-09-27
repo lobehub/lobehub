@@ -1042,6 +1042,11 @@ export class FlatListBuilder {
               content: toolMsg.content || '',
               id: toolMsg.id,
             };
+            // A projected tool has an empty body and its real length here; the
+            // completion checks read this instead of the body.
+            if (typeof toolMsg.contentLength === 'number') {
+              result.contentLength = toolMsg.contentLength;
+            }
             if (toolMsg.error) result.error = toolMsg.error;
             if (toolMsg.pluginError) result.error = toolMsg.pluginError;
             if (toolMsg.pluginState) result.state = toolMsg.pluginState;
@@ -1136,11 +1141,14 @@ export class FlatListBuilder {
 
     const aggregated = this.messageTransformer.aggregateMetadata(children);
 
-    // Collect all non-usage/performance metadata from all children
+    // Finish reasons belong to their own response block; moving one to the first block can
+    // display a terminal notice beside an earlier tool step.
     const groupMetadata: Record<string, any> = {};
     children.forEach((child) => {
       if ((child as any).metadata) {
-        Object.assign(groupMetadata, (child as any).metadata);
+        Object.entries((child as any).metadata).forEach(([key, value]) => {
+          if (key !== 'finishType') groupMetadata[key] = value;
+        });
       }
     });
 
@@ -1152,9 +1160,11 @@ export class FlatListBuilder {
       }
       Object.assign((children[0] as any).metadata, groupMetadata);
 
-      // Remove metadata from subsequent children (keep only in first child)
+      // Keep each child's finish reason while collecting shared metadata on the first child.
       for (let i = 1; i < children.length; i++) {
-        delete (children[i] as any).metadata;
+        const finishType = (children[i] as any).metadata?.finishType;
+        if (finishType === undefined) delete (children[i] as any).metadata;
+        else (children[i] as any).metadata = { finishType };
       }
     }
 

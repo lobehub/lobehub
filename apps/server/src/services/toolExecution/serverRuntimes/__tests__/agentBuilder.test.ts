@@ -12,6 +12,7 @@ const {
   mockGetAiProviderModelList,
   mockGetHiddenBuiltinModelsForUser,
   mockUpdateAgent,
+  mockServiceUpdateConfig,
   mockUpdateConfig,
 } = vi.hoisted(() => ({
   mockCreatePlugin: vi.fn(),
@@ -21,12 +22,19 @@ const {
   mockGetAiProviderModelList: vi.fn(),
   mockGetHiddenBuiltinModelsForUser: vi.fn(),
   mockUpdateAgent: vi.fn(),
+  mockServiceUpdateConfig: vi.fn(),
   mockUpdateConfig: vi.fn(),
 }));
 
 vi.mock('@/business/server/aiProvider', () => ({
   getHiddenBuiltinModelsForUser: mockGetHiddenBuiltinModelsForUser,
   getModelRedirects: vi.fn(async () => ({})),
+}));
+
+vi.mock('@/server/services/agent', () => ({
+  AgentService: vi.fn(function () {
+    return { updateAgentConfig: mockServiceUpdateConfig };
+  }),
 }));
 
 vi.mock('@/database/models/agent', () => ({
@@ -83,7 +91,20 @@ const createWorkspaceRuntime = () =>
 describe('agentBuilderRuntime', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockServiceUpdateConfig.mockImplementation((...args) => mockUpdateConfig(...args));
     mockGetHiddenBuiltinModelsForUser.mockResolvedValue(undefined);
+  });
+
+  it('does not persist a model change rejected by the shared-agent policy', async () => {
+    mockGetAgentConfigById.mockResolvedValue({ id: 'agent-1', provider: 'lobehub' });
+    mockServiceUpdateConfig.mockRejectedValueOnce(new Error('Shared agent provider is restricted'));
+    const result = await createRuntime().updateConfig(
+      { config: { model: 'gpt-4o', provider: 'openai' } },
+      { editingAgentId: 'agent-1', toolManifestMap: {} },
+    );
+    expect(result.success).toBe(false);
+    expect(result.content).toContain('Shared agent provider is restricted');
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
   });
 
   describe('getAvailableModels', () => {
@@ -328,5 +349,53 @@ describe('agentBuilderRuntime', () => {
         userInfo: { userId: 'user-1', workspaceId: 'workspace-1' },
       });
     });
+  });
+});
+
+// A builder run whose tool context lost `editingAgentId` used to fall back to
+// `ctx.agentId` — the builder builtin itself — and report success while the
+// agent the user was editing stayed untouched.
+describe('agentBuilderRuntime without an editing target', () => {
+  const builderRunCtx = {
+    agentId: 'agt_builder_virtual',
+    serverDB: {} as never,
+    toolManifestMap: {},
+    userId: 'user-1',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetAgentConfigById.mockResolvedValue({ plugins: [] });
+  });
+
+  it('updatePrompt refuses instead of writing to the builder itself', async () => {
+    const runtime = agentBuilderRuntime.factory(builderRunCtx);
+    const result = await runtime.updatePrompt({ prompt: 'NEW PROMPT' }, builderRunCtx);
+
+    expect(mockUpdateAgent).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ error: { type: 'NoEditingTarget' }, success: false });
+  });
+
+  it('updateConfig refuses instead of writing to the builder itself', async () => {
+    const runtime = agentBuilderRuntime.factory(builderRunCtx);
+    const result = await runtime.updateConfig(
+      { config: { params: { temperature: 0.8 } } } as any,
+      builderRunCtx,
+    );
+
+    expect(mockServiceUpdateConfig).not.toHaveBeenCalled();
+    expect(mockUpdateAgent).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ error: { type: 'NoEditingTarget' }, success: false });
+  });
+
+  it('installPlugin refuses instead of writing to the builder itself', async () => {
+    const runtime = agentBuilderRuntime.factory(builderRunCtx);
+    const result = await runtime.installPlugin(
+      { identifier: 'lobe-web-browsing', source: 'official' },
+      builderRunCtx,
+    );
+
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ error: { type: 'NoEditingTarget' }, success: false });
   });
 });

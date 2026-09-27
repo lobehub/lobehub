@@ -2,6 +2,7 @@ import { GatewayClient } from '@lobechat/device-gateway-client';
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as RefreshModule from '../auth/refresh';
 import { resolveToken } from '../auth/resolveToken';
 import { removeStatus, spawnDaemon, stopDaemon, writeStatus } from '../daemon/manager';
 import type * as DeviceRegister from '../device/register';
@@ -18,9 +19,11 @@ vi.mock('../device/register', async (importOriginal) => {
   return { ...actual, registerDevice: registerDeviceMock };
 });
 
-vi.mock('../auth/refresh', () => ({
+vi.mock('../auth/refresh', async (importOriginal) => ({
+  ...(await importOriginal<typeof RefreshModule>()),
   getValidToken: vi.fn().mockResolvedValue({
     credentials: { accessToken: 'test-token', expiresAt: undefined, refreshToken: 'test-refresh' },
+    status: 'ok',
   }),
 }));
 vi.mock('../auth/resolveToken', () => ({
@@ -84,7 +87,7 @@ let connectCalled = false;
 let lastSentToolResponse: any = null;
 let lastSentSystemInfoResponse: any = null;
 vi.mock('@lobechat/device-gateway-client', () => ({
-  GatewayClient: vi.fn().mockImplementation((opts: any) => {
+  GatewayClient: vi.fn().mockImplementation(function (opts: any) {
     clientOptions = opts;
     clientEventHandlers = {};
     connectCalled = false;
@@ -113,8 +116,15 @@ vi.mock('@lobechat/device-gateway-client', () => ({
 
 describe('connect command', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
+  let signalListeners: Map<NodeJS.Signals, Set<(...args: unknown[]) => void>>;
 
   beforeEach(() => {
+    signalListeners = new Map(
+      (['SIGINT', 'SIGTERM'] as const).map((signal) => [
+        signal,
+        new Set(process.listeners(signal)),
+      ]),
+    );
     exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
     mockRunningPid = null;
     mockSpawnedPid = 0;
@@ -122,7 +132,12 @@ describe('connect command', () => {
   });
 
   afterEach(() => {
-    exitSpy.mockRestore();
+    for (const [signal, existing] of signalListeners) {
+      for (const listener of process.listeners(signal)) {
+        if (!existing.has(listener)) process.removeListener(signal, listener);
+      }
+    }
+    vi.restoreAllMocks();
     vi.clearAllMocks();
   });
 

@@ -20,6 +20,17 @@ import { resolveBuiltinToolWorkIntent } from './workRegistration';
 const log = debug('lobe-server:builtin-tools-executor');
 
 /**
+ * Market rejects a trusted-client token 5 minutes after it was minted, while one
+ * executor can outlive that (the inline step loop keeps it for a whole
+ * `/api/agent/run` invocation). Rebuild the MarketService — and so re-mint the
+ * token — well before the deadline.
+ */
+const MARKET_SERVICE_MAX_AGE_MS = 4 * 60 * 1000;
+
+/** Market's 401 code for a trusted-client token it refuses (expired, skewed, …). */
+const INVALID_TRUST_TOKEN = 'invalid_trust_token';
+
+/**
  * Declared API names for a builtin tool, read from its manifest — the
  * authoritative source. Runtime instances declare their APIs as prototype
  * methods (`async sendMessage() {}`), which `Object.keys` cannot see, so the
@@ -29,6 +40,22 @@ const getManifestApiNames = (identifier: string): string[] =>
   (builtinTools.find((tool) => tool.identifier === identifier)?.manifest?.api ?? []).map(
     (api) => api.name,
   );
+
+/**
+ * Required parameter names declared by a builtin API. Prefers the manifest the
+ * run was assembled with, falling back to the static builtin manifest.
+ */
+const getRequiredParams = (
+  identifier: string,
+  apiName: string,
+  context: ToolExecutionContext,
+): string[] => {
+  const manifest =
+    context.toolManifestMap?.[identifier] ??
+    builtinTools.find((tool) => tool.identifier === identifier)?.manifest;
+  const required = manifest?.api?.find((api) => api.name === apiName)?.parameters?.required;
+  return Array.isArray(required) ? required : [];
+};
 
 /**
  * Fallback when a manifest isn't available (e.g. a runtime registered without a
@@ -53,15 +80,20 @@ const collectRuntimeApiNames = (runtime: Record<string, any>): string[] => {
 export class BuiltinToolsExecutor implements IToolExecutor {
   private db: LobeChatDatabase;
   private userId: string;
-  private _marketService?: MarketService;
+  private _marketService?: { createdAt: number; service: MarketService };
 
   constructor(db: LobeChatDatabase, userId: string) {
     this.db = db;
     this.userId = userId;
   }
 
-  private async getMarketService(): Promise<MarketService> {
-    if (this._marketService) return this._marketService;
+  private async getMarketService({ fresh }: { fresh?: boolean } = {}): Promise<MarketService> {
+    if (
+      !fresh &&
+      this._marketService &&
+      Date.now() - this._marketService.createdAt < MARKET_SERVICE_MAX_AGE_MS
+    )
+      return this._marketService.service;
 
     let accessToken: string | undefined;
     try {
@@ -72,11 +104,12 @@ export class BuiltinToolsExecutor implements IToolExecutor {
       // non-fatal — MarketService will fall back to trustedClientToken
     }
 
-    this._marketService = new MarketService({
+    const service = new MarketService({
       accessToken,
       userInfo: { userId: this.userId },
     });
-    return this._marketService;
+    this._marketService = { createdAt: Date.now(), service };
+    return service;
   }
 
   async execute(
@@ -84,6 +117,29 @@ export class BuiltinToolsExecutor implements IToolExecutor {
     context: ToolExecutionContext,
   ): Promise<ToolExecutionResult> {
     const { identifier, apiName, arguments: argsStr, source } = payload;
+
+    // An empty arguments string means the call reached us without any argument
+    // deltas (not generated, or dropped by the provider / an OpenAI-compatible
+    // proxy in transit). Falling back to `{}` for an API with required params
+    // surfaced as a misleading tool error (e.g. "command is required") that the
+    // model blamed on the platform. APIs without required params keep `{}`.
+    if (!argsStr?.trim()) {
+      const required = getRequiredParams(identifier, apiName, context);
+      if (required.length > 0) {
+        const message =
+          `The tool call arrived with an empty arguments string, so the tool was not invoked. ` +
+          `The arguments were either not generated or lost in transit before reaching the tool. ` +
+          `Resend the call with the complete JSON arguments, including the required parameters: ` +
+          `${required.join(', ')}.`;
+        log('Rejected empty arguments for %s:%s', identifier, apiName);
+        return {
+          content: message,
+          error: { code: 'EMPTY_ARGUMENTS', message },
+          success: false,
+        };
+      }
+    }
+
     const parsed = safeParseJSON(argsStr);
 
     // When JSON.parse fails, return a dedicated error rather than silently
@@ -93,7 +149,7 @@ export class BuiltinToolsExecutor implements IToolExecutor {
     // max_tokens is exhausted mid-tool-call) from plain malformed JSON, and
     // echo the raw arguments string so the model can verify it is exactly
     // what it produced.
-    if (parsed === undefined && argsStr) {
+    if (parsed === undefined && argsStr?.trim()) {
       const truncationReason = detectTruncatedJSON(argsStr);
       const explanation = truncationReason
         ? `The tool call arguments JSON appears to be truncated (${truncationReason}), ` +
@@ -148,16 +204,25 @@ export class BuiltinToolsExecutor implements IToolExecutor {
 
     // Route LobeHub Skills to MarketService
     if (source === 'lobehubSkill') {
-      const marketService = await this.getMarketService();
-      const result = await marketService.executeLobehubSkill({
-        args,
-        context: {
-          topicId: context.topicId,
-        },
-        provider: identifier,
-        timeoutMs: context.executionTimeoutMs,
-        toolName: apiName,
-      });
+      const callSkill = (marketService: MarketService) =>
+        marketService.executeLobehubSkill({
+          args,
+          context: {
+            topicId: context.topicId,
+          },
+          provider: identifier,
+          timeoutMs: context.executionTimeoutMs,
+          toolName: apiName,
+        });
+
+      let result = await callSkill(await this.getMarketService());
+
+      // Market refuses the token at its auth middleware, before the skill runs,
+      // so re-minting and retrying once cannot repeat a side effect.
+      if (result.error?.code === INVALID_TRUST_TOKEN) {
+        log('Trust token rejected for %s:%s, retrying with a fresh token', identifier, apiName);
+        result = await callSkill(await this.getMarketService({ fresh: true }));
+      }
 
       if (result.success && isWorkSkillProvider(identifier)) {
         // Defer Work registration to the agent runtime so the version is written

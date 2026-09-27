@@ -4,13 +4,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { groupAgentBuilderExecutor } from './executor';
 import { GroupAgentBuilderApiName, GroupAgentBuilderIdentifier } from './types';
 
-const { mockCreateAgent, mockRefreshGroupDetail, mockRefreshGroups, mockSetAgentBuilderContent } =
-  vi.hoisted(() => ({
-    mockCreateAgent: vi.fn(),
-    mockRefreshGroupDetail: vi.fn(),
-    mockRefreshGroups: vi.fn(),
-    mockSetAgentBuilderContent: vi.fn(),
-  }));
+const {
+  mockCreateAgent,
+  mockRefreshGroupDetail,
+  mockRefreshGroups,
+  mockSetAgentBuilderContent,
+  mockUpdateGroup,
+  mockUpdateGroupPrompt,
+} = vi.hoisted(() => ({
+  mockCreateAgent: vi.fn(),
+  mockRefreshGroupDetail: vi.fn(),
+  mockRefreshGroups: vi.fn(),
+  mockSetAgentBuilderContent: vi.fn(),
+  mockUpdateGroup: vi.fn(),
+  mockUpdateGroupPrompt: vi.fn(),
+}));
 
 let activeGroupId: string | undefined = 'cg_1';
 
@@ -21,6 +29,27 @@ vi.mock('@/store/agentGroup', () => ({
     refreshGroups: mockRefreshGroups,
   }),
 }));
+
+let dbMessagesMap: Record<string, unknown[]> = {};
+
+vi.mock('@/store/chat', () => ({
+  useChatStore: { getState: () => ({ dbMessagesMap }) },
+}));
+
+/** A builder conversation whose earlier `createGroup` produced `cg_new`. */
+const conversationWithCreatedGroup = () => ({
+  'builder-topic': [
+    { id: 'msg_user', role: 'user' },
+    {
+      id: 'msg_create_group',
+      plugin: { apiName: 'createGroup', identifier: GroupAgentBuilderIdentifier },
+      pluginState: { groupId: 'cg_new', success: true },
+      role: 'tool',
+      tool_call_id: 'call_create_group',
+    },
+    { id: 'msg_create_agent', role: 'tool', tool_call_id: 'call_create_agent' },
+  ],
+});
 
 vi.mock('@/store/groupProfile', () => ({
   useGroupProfileStore: {
@@ -39,7 +68,11 @@ vi.mock('@lobechat/agent-manager-runtime', () => ({
 
 vi.mock('./ExecutionRuntime', () => ({
   GroupAgentBuilderExecutionRuntime: vi.fn(function () {
-    return { createAgent: mockCreateAgent };
+    return {
+      createAgent: mockCreateAgent,
+      updateGroup: mockUpdateGroup,
+      updateGroupPrompt: mockUpdateGroupPrompt,
+    };
   }),
 }));
 
@@ -55,6 +88,7 @@ describe('GroupAgentBuilderExecutor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     activeGroupId = 'cg_1';
+    dbMessagesMap = {};
   });
 
   describe('group context resolution', () => {
@@ -73,6 +107,174 @@ describe('GroupAgentBuilderExecutor', () => {
         'cg_1',
         expect.objectContaining({ title: 'PM' }),
       );
+    });
+
+    // Client-runtime counterpart of the server fix: createGroup does not make
+    // the new group active, so without reading it back from the conversation a
+    // member tool without groupId lands in the old (shell) group.
+    it('follows the group createGroup made earlier in this conversation', async () => {
+      dbMessagesMap = conversationWithCreatedGroup();
+      mockCreateAgent.mockResolvedValue({ content: 'ok', success: true });
+
+      await groupAgentBuilderExecutor.createAgent({ systemRole: 'x', title: 'PM' }, {
+        messageId: 'msg_create_agent',
+      } as BuiltinToolContext);
+
+      expect(mockCreateAgent).toHaveBeenCalledWith(
+        'cg_new',
+        expect.objectContaining({ title: 'PM' }),
+      );
+    });
+
+    it('an explicit groupId wins over the created group', async () => {
+      dbMessagesMap = conversationWithCreatedGroup();
+      mockCreateAgent.mockResolvedValue({ content: 'ok', success: true });
+
+      await groupAgentBuilderExecutor.createAgent(
+        { groupId: 'cg_named', systemRole: 'x', title: 'PM' },
+        {
+          messageId: 'msg_create_agent',
+        } as BuiltinToolContext,
+      );
+
+      expect(mockCreateAgent).toHaveBeenCalledWith('cg_named', expect.anything());
+    });
+
+    // Group-level writes resolve their target inside the execution runtime,
+    // which only knows the profile page's active group — the created group has
+    // to be handed to it, or `createGroup` → `updateGroupPrompt` edits the shell.
+    it('group-level writes follow the group createGroup made in this conversation', async () => {
+      dbMessagesMap = conversationWithCreatedGroup();
+      const ctx = { messageId: 'msg_create_agent' } as BuiltinToolContext;
+
+      await groupAgentBuilderExecutor.updateGroupPrompt({ prompt: 'shared' }, ctx);
+      await groupAgentBuilderExecutor.updateGroup({ meta: { title: 'Dev Team' } }, ctx);
+
+      expect(mockUpdateGroupPrompt).toHaveBeenCalledWith(
+        expect.objectContaining({ groupId: 'cg_new', prompt: 'shared' }),
+      );
+      expect(mockUpdateGroup).toHaveBeenCalledWith(
+        expect.objectContaining({ groupId: 'cg_new', meta: { title: 'Dev Team' } }),
+      );
+    });
+
+    it('group-level writes keep an explicit groupId and otherwise defer to the runtime', async () => {
+      dbMessagesMap = conversationWithCreatedGroup();
+
+      await groupAgentBuilderExecutor.updateGroupPrompt({ groupId: 'cg_named', prompt: 'p' }, {
+        messageId: 'msg_create_agent',
+      } as BuiltinToolContext);
+      // No group created in this conversation: leave the target to the runtime's
+      // own active-group resolution.
+      await groupAgentBuilderExecutor.updateGroup(
+        { meta: { title: 'T' } },
+        {} as BuiltinToolContext,
+      );
+
+      expect(mockUpdateGroupPrompt).toHaveBeenCalledWith(
+        expect.objectContaining({ groupId: 'cg_named' }),
+      );
+      expect(mockUpdateGroup.mock.calls[0][0].groupId).toBeUndefined();
+    });
+
+    // One assistant message issues createGroup + updateGroupPrompt + createAgent.
+    // createGroup needs approval, so the runtime runs the other two first — at
+    // that point no group has been created yet and they would silently edit the
+    // pinned/active group. They must not run until createGroup has returned.
+    describe('mixed batch with createGroup still awaiting approval', () => {
+      const mixedBatch = (createGroupState?: Record<string, unknown>) => ({
+        'builder-topic': [
+          { id: 'msg_user', role: 'user' },
+          {
+            id: 'msg_assistant',
+            role: 'assistant',
+            tools: [
+              {
+                apiName: 'createGroup',
+                id: 'call_create_group',
+                identifier: GroupAgentBuilderIdentifier,
+              },
+              {
+                apiName: 'updateGroupPrompt',
+                id: 'call_prompt',
+                identifier: GroupAgentBuilderIdentifier,
+              },
+              { apiName: 'createAgent', id: 'call_agent', identifier: GroupAgentBuilderIdentifier },
+            ],
+          },
+          {
+            id: 'msg_create_group',
+            parentId: 'msg_assistant',
+            plugin: { apiName: 'createGroup', identifier: GroupAgentBuilderIdentifier },
+            pluginState: createGroupState,
+            role: 'tool',
+            tool_call_id: 'call_create_group',
+          },
+          {
+            id: 'msg_prompt',
+            parentId: 'msg_assistant',
+            role: 'tool',
+            tool_call_id: 'call_prompt',
+          },
+          { id: 'msg_agent', parentId: 'msg_assistant', role: 'tool', tool_call_id: 'call_agent' },
+        ],
+      });
+
+      it('refuses sibling writes instead of editing the active group', async () => {
+        dbMessagesMap = mixedBatch();
+
+        const prompt = await groupAgentBuilderExecutor.updateGroupPrompt({ prompt: 'shared' }, {
+          anchorMessageId: 'msg_assistant',
+          messageId: 'msg_prompt',
+          toolCallId: 'call_prompt',
+        } as BuiltinToolContext);
+        const agent = await groupAgentBuilderExecutor.createAgent(
+          { systemRole: 'x', title: 'PM' },
+          {
+            anchorMessageId: 'msg_assistant',
+            messageId: 'msg_agent',
+            toolCallId: 'call_agent',
+          } as BuiltinToolContext,
+        );
+
+        for (const result of [prompt, agent]) {
+          expect(result).toMatchObject({
+            error: { type: 'AwaitingCreateGroup' },
+            success: false,
+          });
+        }
+        expect(mockUpdateGroupPrompt).not.toHaveBeenCalled();
+        expect(mockCreateAgent).not.toHaveBeenCalled();
+      });
+
+      it('lets the siblings through once createGroup has returned its group', async () => {
+        dbMessagesMap = mixedBatch({ groupId: 'cg_new', success: true });
+        mockCreateAgent.mockResolvedValue({ content: 'ok', success: true });
+
+        await groupAgentBuilderExecutor.createAgent({ systemRole: 'x', title: 'PM' }, {
+          anchorMessageId: 'msg_assistant',
+          messageId: 'msg_agent',
+          toolCallId: 'call_agent',
+        } as BuiltinToolContext);
+
+        expect(mockCreateAgent).toHaveBeenCalledWith('cg_new', expect.anything());
+      });
+
+      it('an explicit groupId is not held back', async () => {
+        dbMessagesMap = mixedBatch();
+        mockCreateAgent.mockResolvedValue({ content: 'ok', success: true });
+
+        await groupAgentBuilderExecutor.createAgent(
+          { groupId: 'cg_named', systemRole: 'x', title: 'PM' },
+          {
+            anchorMessageId: 'msg_assistant',
+            messageId: 'msg_agent',
+            toolCallId: 'call_agent',
+          } as BuiltinToolContext,
+        );
+
+        expect(mockCreateAgent).toHaveBeenCalledWith('cg_named', expect.anything());
+      });
     });
 
     it('reports a structured error when there is no group at all', async () => {
@@ -95,6 +297,20 @@ describe('GroupAgentBuilderExecutor', () => {
       await afterCall(GroupAgentBuilderApiName.batchCreateAgents, { agents: [] }, true);
 
       expect(mockRefreshGroupDetail).toHaveBeenCalledWith('cg_1');
+    });
+
+    it('refreshes the group createGroup made in this conversation', async () => {
+      dbMessagesMap = conversationWithCreatedGroup();
+
+      await groupAgentBuilderExecutor.onAfterCall({
+        apiName: GroupAgentBuilderApiName.createAgent,
+        identifier: GroupAgentBuilderIdentifier,
+        params: { title: 'PM' },
+        result: { content: '', success: true },
+        toolCallId: 'call_create_agent',
+      });
+
+      expect(mockRefreshGroupDetail).toHaveBeenCalledWith('cg_new');
     });
 
     it('does not refresh when the tool call failed', async () => {

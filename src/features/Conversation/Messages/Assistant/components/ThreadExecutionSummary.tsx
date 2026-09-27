@@ -39,7 +39,16 @@ const ThreadExecutionSummary = memo<ThreadExecutionSummaryProps>(({ messageId })
   return (
     <Accordion
       indicatorPlacement="inline"
-      items={[{ key: 'execution-record', title: <Text type={'secondary'}>{label}</Text> }]}
+      items={[
+        {
+          key: 'execution-record',
+          title: (
+            <Text style={{ whiteSpace: 'nowrap' }} type={'secondary'}>
+              {label}
+            </Text>
+          ),
+        },
+      ]}
       styles={{ trigger: { paddingBlock: 4, paddingInline: 4 } }}
       value={[]}
       variant={'borderless'}

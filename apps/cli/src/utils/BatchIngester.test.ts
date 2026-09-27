@@ -40,6 +40,7 @@ describe('BatchIngester', () => {
       ingest: vi.fn(async (events) => {
         batches.push(numbers(events));
         if (batches.length === 1) await firstAck; // slow first round-trip
+        return { accepted: true };
       }),
     };
     const ingester = new BatchIngester(sink);
@@ -97,6 +98,7 @@ describe('BatchIngester', () => {
       finish: vi.fn(async () => {}),
       ingest: vi.fn(async (events) => {
         batches.push(numbers(events));
+        return { accepted: true };
       }),
     };
     const ingester = new BatchIngester(sink);
@@ -115,11 +117,45 @@ describe('BatchIngester', () => {
     const failedDrain = expect(ingester.drain()).rejects.toThrow('offline');
     await vi.advanceTimersByTimeAsync(20_000);
     await failedDrain;
-    ingest.mockResolvedValue(undefined);
+    ingest.mockResolvedValue({ accepted: true });
     await ingester.drain();
     expect(numbers(ingest.mock.calls.at(-1)![0])).toEqual([1]);
     await ingester.drain();
     expect(ingest).toHaveBeenCalledTimes(7);
+  });
+
+  it('fails the stream on a refused batch instead of retrying output the server threw away', async () => {
+    // Regression: a refusal arrives as a 200 (the operation is over server-side,
+    // so the batch is discarded), which the ingester read as "delivered". The
+    // agent kept working, every later batch was discarded the same way, and the
+    // run finished reporting success on output nobody ever stored.
+    const ingest = vi
+      .fn<IngestSink['ingest']>()
+      .mockResolvedValue({ accepted: false, reason: 'stale-operation' });
+    const ingester = new BatchIngester({ finish: vi.fn(), ingest });
+
+    ingester.push(makeEvent(1));
+    const drained = expect(ingester.drain()).rejects.toThrow('stale-operation');
+    await vi.advanceTimersByTimeAsync(20_000);
+    await drained;
+
+    expect(ingest).toHaveBeenCalledTimes(1); // refusal is permanent — no retries
+    expect(ingester.failed).toBe(true);
+
+    // And the stream stays failed: later events are dropped rather than queued
+    // for an upload that cannot succeed.
+    ingester.push(makeEvent(2));
+    await expect(ingester.drain()).rejects.toThrow('stale-operation');
+    expect(ingest).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats an ack without a verdict as accepted so older servers keep working', async () => {
+    const ingest = vi.fn<IngestSink['ingest']>().mockResolvedValue(undefined as never);
+    const ingester = new BatchIngester({ finish: vi.fn(), ingest });
+
+    ingester.push(makeEvent(1));
+    await expect(ingester.drain()).resolves.toBeUndefined();
+    expect(ingester.failed).toBe(false);
   });
 
   it('fails closed on overflow instead of dropping a prefix then uploading a gapped stream', async () => {

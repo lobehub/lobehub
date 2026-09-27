@@ -7,6 +7,10 @@ import { type StreamChunkData, type StreamEvent } from './StreamEventManager';
 
 export interface PublishAgentRuntimeEndParams {
   finalState: any;
+  /** Protocol-v2 native run: terminal reconciliation arrived as message_patch. */
+  messagePatchMode?: boolean;
+  /** Last message patch revision the client must have applied before settling. */
+  messageRevision?: number;
   operationId: string;
   reason?: string;
   reasonDetail?: string;
@@ -180,6 +184,13 @@ export interface IStreamEventManager {
    * Close connections
    */
   disconnect: () => Promise<void>;
+
+  /**
+   * Wait for the gateway pushes this process issued for an operation to land.
+   * Only the gateway-backed manager has anything to drain; the invocation that
+   * produced the pushes calls it before it can be frozen or handed over.
+   */
+  drainPushes?: (operationId: string) => Promise<void>;
 
   /**
    * Get count of active operations

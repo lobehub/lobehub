@@ -10,12 +10,15 @@ import { Flexbox, Icon } from '@lobehub/ui';
 import { Accordion, Button, confirmModal, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { RotateCcwIcon } from 'lucide-react';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
+import { createCodexQuotaReader } from '@/services/codexQuota';
 import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
 
-import type { FetchQuotaOptions, QuotaMenuHelpers, QuotaWindowItem } from './QuotaMenu';
+import QuotaAccountSwitcher from './QuotaAccountSwitcher';
+import type { QuotaMenuHelpers, QuotaWindowItem } from './QuotaMenu';
 import QuotaMenu, { createQuotaSourceKey } from './QuotaMenu';
 
 const FIVE_HOUR_WINDOW_MINUTES = 5 * 60;
@@ -120,6 +123,7 @@ const getAvailableResetCredits = (credits: CodexRateLimitResetCredit[] | undefin
 
 interface CodexQuotaMenuProps {
   command?: string;
+  deviceId?: string;
   env?: Record<string, string>;
 }
 
@@ -133,9 +137,10 @@ interface ResetFeedback {
   text: string;
 }
 
-const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, env }) => {
+const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, deviceId, env }) => {
   const { t } = useTranslation('chat');
-  const sourceKey = createQuotaSourceKey('codex', command, env);
+  const agentId = useAgentId();
+  const sourceKey = createQuotaSourceKey('codex', agentId, deviceId, command, env);
   const activeSourceKeyRef = useRef(sourceKey);
   const resetAttemptRef = useRef<ResetAttempt | null>(null);
   const [resetFeedback, setResetFeedback] = useState<ResetFeedback>();
@@ -148,14 +153,9 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, env }) => {
     setResetting(false);
   }, [sourceKey]);
 
-  const fetchQuota = useCallback(
-    (options?: FetchQuotaOptions<CodexQuotaSnapshot>) =>
-      heterogeneousAgentService.getCodexQuota({
-        command,
-        env,
-        ...(options?.force ? { force: true } : {}),
-      }),
-    [command, env],
+  const fetchQuota = useMemo(
+    () => createCodexQuotaReader({ agentId, command, deviceId, env }),
+    [agentId, command, deviceId, env],
   );
 
   const getWindowLabel = useCallback(
@@ -216,8 +216,8 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, env }) => {
   );
 
   const hasExtraData = useCallback(
-    (quota: CodexQuotaSnapshot) => !!quota.rateLimitResetCredits,
-    [],
+    (quota: CodexQuotaSnapshot) => !deviceId && !!quota.rateLimitResetCredits,
+    [deviceId],
   );
 
   const getErrorText = useCallback(
@@ -256,6 +256,9 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, env }) => {
         if (activeSourceKeyRef.current !== requestSourceKey) return;
 
         applyQuota(result.quota);
+        void fetchQuota
+          .acceptLocalSnapshot(result.quota)
+          .catch((error) => console.error('[codexQuota:reset-ingest]', error));
         resetAttemptRef.current = null;
 
         switch (result.outcome) {
@@ -292,7 +295,7 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, env }) => {
         if (activeSourceKeyRef.current === requestSourceKey) setResetting(false);
       }
     },
-    [command, env, t],
+    [command, env, fetchQuota, t],
   );
 
   const confirmReset = useCallback(
@@ -462,6 +465,9 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, env }) => {
       sourceKey={sourceKey}
       title={t('heteroAgent.codexQuota.title')}
       tooltip={t('heteroAgent.codexQuota.tooltip')}
+      renderHeader={(quota) => (
+        <QuotaAccountSwitcher placement="top" provider="codex" snapshot={quota} />
+      )}
     />
   );
 });

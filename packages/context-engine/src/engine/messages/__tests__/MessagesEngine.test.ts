@@ -682,6 +682,79 @@ describe('MessagesEngine', () => {
 
       expect(content[0].text).toContain('url="https://files.example.com/test.txt"');
     });
+
+    describe('oversized attachment previews', () => {
+      const oversizedParams = (overrides?: Partial<MessagesEngineParams>) =>
+        createBasicParams({
+          knowledge: {
+            fileContents: [
+              { content: 'agent,row\n'.repeat(20_000), fileId: 'agent-file', filename: 'a.csv' },
+            ],
+          },
+          messages: [
+            {
+              content: 'Summarize this',
+              createdAt: Date.now(),
+              fileList: [
+                {
+                  content: 'row,value\n'.repeat(20_000),
+                  fileType: 'text/csv',
+                  id: 'big-file',
+                  name: 'big.csv',
+                  size: 200_000,
+                  url: 'https://files.example.com/big.csv',
+                },
+              ],
+              id: 'msg-1',
+              role: 'user',
+              updatedAt: Date.now(),
+            } as UIChatMessage,
+          ],
+          ...overrides,
+        });
+
+      const userText = async (params: MessagesEngineParams) => {
+        const result = await new MessagesEngine(params).process();
+        return result.messages
+          .filter((message) => message.role === 'user')
+          .flatMap((message) =>
+            typeof message.content === 'string'
+              ? [message.content]
+              : (message.content as any[]).map((part) => part.text ?? ''),
+          )
+          .join('\n');
+      };
+
+      it('names readAttachment when the final tool set carries it', async () => {
+        const text = await userText(
+          oversizedParams({ toolsConfig: { tools: ['lobe-attachments'] } }),
+        );
+
+        expect(text).toContain('call readAttachment with fileId="big-file" and offset=401');
+        expect(text).toContain('call readAttachment with fileId="agent-file" and offset=401');
+      });
+
+      it('does not promise readAttachment when the tool is not enabled', async () => {
+        // Custom / exclusive tool modes, share visitors and legacy clients never enable it.
+        const text = await userText(
+          oversizedParams({ toolsConfig: { tools: ['lobe-web-browsing'] } }),
+        );
+
+        expect(text).toContain('no tool to read the rest is available here');
+        expect(text).not.toContain('readAttachment');
+      });
+
+      it('does not promise readAttachment when the model cannot call tools', async () => {
+        const text = await userText(
+          oversizedParams({
+            capabilities: { isCanUseFC: () => false },
+            toolsConfig: { tools: ['lobe-attachments'] },
+          }),
+        );
+
+        expect(text).not.toContain('readAttachment');
+      });
+    });
   });
 
   describe('tools config', () => {

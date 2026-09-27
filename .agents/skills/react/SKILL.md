@@ -82,7 +82,7 @@ Use `Flexbox` and `Center` from `@lobehub/ui`. See `references/layout-kit.md` fo
 
 ## Related Skills
 
-- **`ux`**: loading visuals and user-facing interaction design. Do not use antd `Spin` / `<Spin />`.
+- **`ux`**: loading visuals (scenario → loader table in `references/feedback.md` §4.1) and user-facing interaction design.
 - **`modal`**: imperative base-ui modal patterns.
 - **`spa-routes`**: SPA navigation, route ownership, router configuration, and `.desktop` variants.
 - **`compose-atoms`**: split a heavy domain feature into mountable capability atoms; each host imports only what it mounts.

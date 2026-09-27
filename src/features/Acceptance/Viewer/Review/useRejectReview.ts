@@ -10,6 +10,7 @@ import type { MobileReviewEvent, MobileReviewStep } from '../Evidence/mobileRevi
 import { nextMobileReviewStep } from '../Evidence/mobileReviewFlow';
 import type { DraftAnnotationEntry, RejectableEvidence } from './rejectDraft';
 import {
+  clampZoom,
   clearDraft,
   mergeRejectComments,
   nextAnnotationKey,
@@ -180,6 +181,8 @@ export const useRejectReview = ({
     removeAttachment: remove,
     selectEvidence,
     setComment,
+    /** A pinch lands anywhere in range; the buttons still step by notches from there. */
+    setZoom: (value: number) => setZoom(clampZoom(value)),
     stepZoom: (direction: 1 | -1) => setZoom((current) => nextZoom(current, direction)),
     submitReject: async () => {
       const confirmed = await submit(() =>

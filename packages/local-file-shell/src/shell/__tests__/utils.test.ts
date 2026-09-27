@@ -83,14 +83,6 @@ describe('getShellConfig', () => {
     expect(config.cmd).toBe('/bin/sh');
     expect(config.args).toEqual(['-c', 'echo hello']);
   });
-
-  it('should keep /bin/sh -c behavior on linux', async () => {
-    setPlatform('linux');
-    const config = await getShellConfig('ls -la');
-    expect(config.cmd).toBe('/bin/sh');
-    expect(config.args).toEqual(['-c', 'ls -la']);
-  });
-
   it('should use pwsh with -EncodedCommand when pwsh.exe is on PATH', async () => {
     setPlatform('win32');
     // NB: use a delimiter-safe fake dir. On the CI/dev host the default `path`

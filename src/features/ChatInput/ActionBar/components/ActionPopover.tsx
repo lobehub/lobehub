@@ -2,12 +2,12 @@
 
 import { type PopoverProps } from '@lobehub/ui';
 import { Flexbox, Popover } from '@lobehub/ui';
+import { Spin } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { type ReactNode } from 'react';
 import { memo, Suspense } from 'react';
 
 import DebugNode from '@/components/DebugNode';
-import UpdateLoading from '@/components/Loading/UpdateLoading';
 import { useIsMobile } from '@/hooks/useIsMobile';
 
 const prefixCls = 'ant';
@@ -74,7 +74,7 @@ const ActionPopover = memo<ActionPopoverProps>(
             <Flexbox horizontal gap={8} justify={'space-between'} style={{ marginBottom: 16 }}>
               {title}
               {extra}
-              {loading && <UpdateLoading style={{ color: cssVar.colorTextSecondary }} />}
+              {loading && <Spin size="small" style={{ color: cssVar.colorTextSecondary }} />}
             </Flexbox>
           )}
           {content}

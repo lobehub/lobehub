@@ -51,7 +51,7 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Read an existing agent document by ID. Prefer XML format before node-level edits because XML includes stable node IDs.',
+        'Read an existing agent document by ID. Prefer XML format before node-level edits because XML includes stable node IDs. Long documents are returned one window at a time; a partial read ends with the offset to continue from.',
       name: AgentDocumentsApiName.readDocument,
       parameters: {
         properties: {
@@ -65,6 +65,16 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
           id: {
             description: AGENT_DOCUMENT_ID_DESCRIPTION,
             type: 'string',
+          },
+          limit: {
+            description:
+              'Maximum number of lines to return. Omit to read as much as fits in one response.',
+            type: 'integer',
+          },
+          offset: {
+            description:
+              '1-based line to start reading from. Use the offset given at the end of a partial read to continue.',
+            type: 'integer',
           },
         },
         required: ['id'],

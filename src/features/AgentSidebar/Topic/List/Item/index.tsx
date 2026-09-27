@@ -141,15 +141,32 @@ const getWorkingDirectoryDisplay = (metadata: ChatTopicMetadata | undefined) => 
 
 interface RunningElapsedTimeProps {
   agentId?: string;
+  /**
+   * Server-side start of the topic's current run (list query's
+   * `runStartedAt`). Fallback for topics that are running on the server but
+   * have no local operation — after a page refresh only the ACTIVE topic is
+   * reconnected into the in-memory store, so every other running row would
+   * otherwise render no timer at all.
+   */
+  runStartedAt?: Date | string | number | null;
   topicId: string;
 }
 
-const RunningElapsedTime = memo<RunningElapsedTimeProps>(({ agentId, topicId }) => {
-  const startTime = useChatStore(
+const RunningElapsedTime = memo<RunningElapsedTimeProps>(({ agentId, runStartedAt, topicId }) => {
+  const localStartTime = useChatStore(
     agentId
       ? operationSelectors.getVisibleAgentRuntimeStartTimeByContext({ agentId, topicId })
       : () => undefined,
   );
+
+  // Prefer the in-memory operation: it tracks the local run precisely and
+  // updates the moment a run starts/stops. The server stamp only covers the
+  // refresh case above. Normalize like the server fallback does — the value
+  // crosses the wire as an ISO string.
+  const serverStartTimeMs = runStartedAt == null ? undefined : new Date(runStartedAt).getTime();
+  const startTime =
+    localStartTime ?? (Number.isFinite(serverStartTimeMs) ? serverStartTimeMs : undefined);
+
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -175,7 +192,13 @@ interface TopicItemProps {
   id?: string;
   metadata?: ChatTopicMetadata;
   /**
-   * Show the topic's project directory as a second line under the title. Used by
+   * Server-side start of the topic's current run (list query's
+   * `runStartedAt`). Lets running topics that have no local operation
+   * (refreshed, non-active) still show an elapsed timer — see
+   * `RunningElapsedTime`.
+   */
+  runStartedAt?: Date | string | number | null;
+  /** Show the topic's project directory as a second line under the title. Used by
    * the by-status grouping, where the row otherwise carries no project context
    * (by-project mode already puts the directory in the group header).
    */
@@ -204,6 +227,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
     title,
     fav,
     metadata,
+    runStartedAt,
     status,
     showWorkingDirectory,
     userId,
@@ -514,7 +538,20 @@ const TopicItemRow = memo<TopicItemRowProps>(
           extra={
             <>
               <TopicMigrationIndicator agentId={activeAgentId} topicId={id} />
-              <RunningElapsedTime agentId={activeAgentId} topicId={id} />
+              {/* Gated on the SAME boolean that draws the running ring: both say
+                  "this row is visibly running", and a row that stopped spinning
+                  must not keep counting. The server `runStartedAt` fallback only
+                  knows the persisted `running` status, which outlives the answer
+                  — it stays set through the post-visible-output tail where the
+                  ring is deliberately masked (#16518) and the terminal
+                  bookkeeping can run for tens of seconds. */}
+              {shouldShowRunningIcon && (
+                <RunningElapsedTime
+                  agentId={activeAgentId}
+                  runStartedAt={runStartedAt}
+                  topicId={id}
+                />
+              )}
             </>
           }
           onClick={handleClick}

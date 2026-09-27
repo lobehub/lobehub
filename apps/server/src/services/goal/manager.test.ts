@@ -452,6 +452,73 @@ describe('CLI main Agent planning', () => {
     });
   });
 
+  /**
+   * Regression: every planned task used to hang only off the problem node, so a
+   * multi-round Goal rendered as one flat row with no visible progression.
+   */
+  it('links planned tasks to earlier rounds and earlier tasks through depends_on', async () => {
+    const graph = await service().create({
+      title: 'Second round',
+      createdByAgentId: agentId,
+      config: { manager: { maxTurns: 4 } },
+    });
+    const earlier = await new GoalGraphModel(db, userId).createNode(graph.goal.id, {
+      kind: 'task',
+      status: 'resolved',
+      title: 'R1 · Facts',
+    });
+    expect((await service().tick(graph.goal.id)).outcome).toBe('waiting_external');
+    const state = (await model().findById(graph.goal.id))!.config!.managerState!;
+    const op = await ops().findByTopicSourceMessage(
+      state.topicId,
+      `msg_goal_manager_${state.token}`,
+    );
+
+    await manager().submit(graph.goal.id, state.token, op!.id, {
+      action: 'tasks',
+      reason: 'Analyse on top of the facts',
+      tasks: [
+        { title: 'R2 · Options', description: 'Compare options', dependsOn: [earlier!.id] },
+        { title: 'R3 · Report', description: 'Write the report', dependsOn: [0] },
+      ],
+    });
+
+    const current = await service().graph(graph.goal.id);
+    const byTitle = (title: string) => current.nodes.find((n) => n.title === title)!;
+    const dependsOn = current.edges
+      .filter((edge) => edge.kind === 'depends_on')
+      .map((edge) => [edge.sourceNodeId, edge.targetNodeId]);
+    expect(dependsOn).toEqual(
+      expect.arrayContaining([
+        [byTitle('R2 · Options').id, earlier!.id],
+        [byTitle('R3 · Report').id, byTitle('R2 · Options').id],
+      ]),
+    );
+    expect(dependsOn).toHaveLength(2);
+  });
+
+  it.each([
+    { label: 'a forward index', dependsOn: [1] },
+    { label: 'an unknown node', dependsOn: ['node-that-does-not-exist'] },
+  ])(
+    'rejects a plan whose dependsOn names $label without writing any task',
+    async ({ dependsOn }) => {
+      const { id, state, op } = await start();
+      await expect(
+        manager().submit(id, state.token, op.id, {
+          action: 'tasks',
+          reason: 'Plan with a bad reference',
+          tasks: [
+            { title: 'First', description: 'First task', dependsOn },
+            { title: 'Second', description: 'Second task' },
+          ],
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      expect((await service().graph(id)).nodes.filter((n) => n.kind === 'task')).toHaveLength(0);
+      expect((await model().findById(id))!.config!.managerState!.submitted).toBeUndefined();
+    },
+  );
+
   it('does not dispatch the previous supervisor when a handoff lands before the claim', async () => {
     const { id, op } = await start();
     await ops().recordCompletion(op.id, { status: 'done' });

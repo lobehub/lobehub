@@ -494,6 +494,61 @@ describe('AgentOperationModel', () => {
     });
   });
 
+  describe('hetero ingest rejection marker', () => {
+    const marker = {
+      at: '2026-09-18T04:44:38.923Z',
+      droppedEvents: 12,
+      reason: 'stale-operation',
+    } as const;
+
+    it('keeps the first refusal, survives a terminal row, and stays owner-scoped', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-ingest-refused';
+      await model.recordStart({ operationId });
+
+      expect(await model.recordHeteroIngestRejection(operationId, marker)).toBe(true);
+      // Later batches of the same run are refused too — the first refusal is the
+      // one that explains where the output started disappearing.
+      expect(
+        await model.recordHeteroIngestRejection(operationId, {
+          ...marker,
+          at: '2026-09-18T04:46:00.000Z',
+          droppedEvents: 3,
+        }),
+      ).toBe(false);
+      expect((await model.findById(operationId))?.metadata).toMatchObject({
+        heteroIngestRejection: marker,
+      });
+
+      // "The row is already terminal" is itself a refusal reason, so unlike the
+      // lease writes this one must not be gated on status = running.
+      const terminalId = 'op-ingest-refused-terminal';
+      await model.recordStart({ operationId: terminalId });
+      await model.settleRunning(terminalId, 'done');
+      expect(await model.recordHeteroIngestRejection(terminalId, marker)).toBe(true);
+
+      expect(
+        await new AgentOperationModel(serverDB, otherUserId).recordHeteroIngestRejection(
+          'op-ingest-refused-foreign',
+          marker,
+        ),
+      ).toBe(false);
+    });
+
+    it('merges into existing metadata instead of replacing it', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-ingest-refused-merge';
+      await model.recordStart({ operationId, metadata: { assistantMessageId: 'asst-1' } });
+
+      await model.recordHeteroIngestRejection(operationId, marker);
+
+      expect((await model.findById(operationId))?.metadata).toMatchObject({
+        assistantMessageId: 'asst-1',
+        heteroIngestRejection: marker,
+      });
+    });
+  });
+
   describe('sumChildUsage', () => {
     const seedChild = async (
       model: AgentOperationModel,

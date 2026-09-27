@@ -5,6 +5,7 @@ import {
 } from '@lobechat/const';
 import {
   type SharedAgentData,
+  type SharedAgentDeliveryStats,
   type SharedAgentUploadAbility,
   type SharedTopicData,
 } from '@lobechat/types';
@@ -14,6 +15,7 @@ import type { ModelAbilities } from 'model-bank';
 import { z } from 'zod';
 
 import { AgentShareModel } from '@/database/models/agentShare';
+import { AgentShareProfileModel } from '@/database/models/agentShareProfile';
 import { AiModelModel } from '@/database/models/aiModel';
 import { TopicModel } from '@/database/models/topic';
 import { TopicShareModel } from '@/database/models/topicShare';
@@ -22,6 +24,7 @@ import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { resolveModelMediaCapabilities } from '@/server/modules/AgentRuntime/resolveModelMediaCapabilities';
 import { AgentService } from '@/server/services/agent';
+import { getCachedDeliveryStats } from '@/server/services/agentShare/deliveryStatsCache';
 
 import { assertAgentShareVisitorEnabled } from './_helpers/agentShareFeatureGate';
 
@@ -47,21 +50,27 @@ const log = debug('lobe-server:router:share');
  */
 const resolveVisitorUploadAbility = async (
   db: LobeChatDatabase,
-  share: { agentModel: string | null; agentProvider: string | null; ownerId: string },
+  share: {
+    agentModel: string | null;
+    agentProvider: string | null;
+    ownerId: string;
+    workspaceId: string | null;
+  },
 ): Promise<SharedAgentUploadAbility> => {
   try {
     const { loadModels } = await import('@/business/client/model-bank/loadModels');
     const [builtinModels, { model, provider }] = await Promise.all([
       loadModels(),
-      new AgentService(db, share.ownerId).resolveModelSelection({
+      new AgentService(db, share.ownerId, share.workspaceId ?? undefined).resolveModelSelection({
         model: share.agentModel,
         provider: share.agentProvider,
       }),
     ]);
-    const ownerModel = await new AiModelModel(db, share.ownerId).findByIdAndProvider(
-      model,
-      provider,
-    );
+    const ownerModel = await new AiModelModel(
+      db,
+      share.ownerId,
+      share.workspaceId ?? undefined,
+    ).findByIdAndProvider(model, provider);
     const abilities = resolveModelMediaCapabilities({
       builtinModels,
       model,
@@ -132,11 +141,35 @@ export const shareRouter = router({
       // them. Best-effort — analytics must never turn a valid share page into
       // an error.
       let stats = { conversations: 0, visitors: 0 };
-      const [uploadAbility] = await Promise.all([
+      const profileModel = new AgentShareProfileModel(ctx.serverDB, share.ownerId);
+      let deliveryStats: SharedAgentDeliveryStats = {
+        averageOperationDurationSeconds: null,
+        averageWorkCost: null,
+        lastDeliveredAt: null,
+        workCount: 0,
+      };
+      const [uploadAbility, featuredWorks] = await Promise.all([
         resolveVisitorUploadAbility(ctx.serverDB, share),
+        profileModel.listFeaturedWorks(share.agentId, share.shareConfig.featuredWorkIds ?? []),
         (async () => {
           try {
-            const topicModel = new TopicModel(ctx.serverDB, share.ownerId);
+            deliveryStats = await getCachedDeliveryStats(
+              ctx.serverDB,
+              share.ownerId,
+              share.agentId,
+              () => profileModel.getStats(share.agentId),
+            );
+          } catch (error) {
+            log('failed to count share deliveries for %s: %O', share.shareId, error);
+          }
+        })(),
+        (async () => {
+          try {
+            const topicModel = new TopicModel(
+              ctx.serverDB,
+              share.ownerId,
+              share.workspaceId ?? undefined,
+            );
             const counts = await topicModel.countShareVisitors({ agentId: share.agentId });
             stats = { conversations: counts.topicCount, visitors: counts.visitorCount };
           } catch (error) {
@@ -156,14 +189,17 @@ export const shareRouter = router({
           tags: share.agentTags ?? [],
           title: share.agentTitle,
         },
+        billingScope: share.workspaceId ? 'workspace' : 'personal',
         creator: {
           avatar: share.ownerAvatar ?? null,
           name: share.ownerFullName ?? share.ownerUsername ?? null,
         },
+        demoCases: share.shareConfig.demoCases ?? [],
+        featuredWorks,
         isOwner,
         shareId: share.shareId,
         slug: share.shareConfig.slug ?? null,
-        stats: { ...stats, views: share.userViewCount },
+        stats: { ...stats, ...deliveryStats, views: share.userViewCount },
         terms: {
           allowCreatorViewSessions: share.shareConfig.allowCreatorViewSessions ?? false,
           maxFileStorage: share.shareConfig.maxFileStorage ?? AGENT_SHARE_DEFAULT_MAX_FILE_STORAGE,

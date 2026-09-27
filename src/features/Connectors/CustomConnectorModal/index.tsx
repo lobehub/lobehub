@@ -6,8 +6,10 @@ import { ConnectorSourceType } from '@/database/schemas';
 import DevModal from '@/features/PluginDevModal';
 import { useToolStore } from '@/store/tool';
 import { connectorSelectors } from '@/store/tool/slices/connector';
+import { waitForConnectorOAuth } from '@/utils/connectorOAuth';
 
 import { executeLegacyMigrationSave } from './legacyPluginMigration';
+import { executeOAuthCreate } from './oauthCreate';
 
 interface CustomConnectorModalProps {
   connectorId?: string;
@@ -26,49 +28,6 @@ interface CustomConnectorModalProps {
   onEditSuccess?: () => void;
   open: boolean;
 }
-
-interface OAuthPopupResult {
-  error?: string;
-  status: 'success' | 'error' | 'dismissed';
-  synced?: boolean;
-}
-
-/**
- * Wait for an already-opened popup to report the OAuth result. The popup MUST be
- * opened synchronously from the user's click (see DevModal) and then navigated
- * to the authorize URL. The callback page posts a message before attempting
- * `window.close()`, so the message signal is reliable even when the browser
- * refuses to close a cross-origin-navigated popup.
- */
-const waitForOAuthPopup = (popup: Window, connectorId: string): Promise<OAuthPopupResult> =>
-  new Promise((resolve) => {
-    const cleanup = () => {
-      window.removeEventListener('message', onMessage);
-      clearInterval(timer);
-    };
-
-    const onMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-      const data = event.data;
-      if (!data || data.type !== 'lobe-connector-oauth') return;
-      if (data.connectorId && data.connectorId !== connectorId) return;
-      cleanup();
-      resolve(
-        data.success
-          ? { status: 'success', synced: data.synced }
-          : { error: data.error, status: 'error' },
-      );
-    };
-
-    window.addEventListener('message', onMessage);
-
-    const timer = setInterval(() => {
-      if (popup.closed) {
-        cleanup();
-        resolve({ status: 'dismissed' });
-      }
-    }, 800);
-  });
 
 /** Drop empty key/value pairs a user may have left behind in an editor. */
 const cleanRecord = (record?: Record<string, string>): Record<string, string> | undefined => {
@@ -309,19 +268,13 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         await updateConnector(connectorId, patch);
 
         if (authType === 'oauth2' && isHttp) {
-          const popup = ctx?.oauthPopup ?? null;
-          if (!popup) throw new Error('OAuth popup was blocked');
+          const popup = ctx?.oauthPopup;
           try {
             const authorizationUrl = await startConnectorOAuth(connectorId);
-            popup.location.href = authorizationUrl;
-            const result = await waitForOAuthPopup(popup, connectorId);
+            await waitForConnectorOAuth(popup, connectorId, authorizationUrl);
+          } finally {
+            popup?.close();
             await fetchConnectors();
-            if (result.status !== 'success') {
-              throw new Error(result.error || 'Authorization was not completed');
-            }
-          } catch (e) {
-            if (!popup.closed) popup.close();
-            throw e;
           }
         }
 
@@ -346,35 +299,29 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
       };
 
       // OAuth: create with the OIDC config, then drive the authorize popup that
-      // DevModal already opened synchronously for us.
+      // DevModal opened for web, or the native desktop authorization window.
       if (isHttp && authType === 'oauth2') {
-        const popup = ctx?.oauthPopup ?? null;
-        if (!popup) throw new Error('OAuth popup was blocked');
+        const popup = ctx?.oauthPopup;
 
         const clientId = mcp.auth?.clientId?.trim();
         try {
-          const { id: newConnectorId } = await createConnector({
-            ...base,
-            oidcConfig: {
-              clientId: clientId || undefined,
-              clientSecret: mcp.auth?.clientSecret?.trim() || undefined,
-              // client_id present → pre-registration; absent → dynamic registration.
-              scheme: clientId ? 'pre_registration' : 'dcr',
+          await executeOAuthCreate(
+            {
+              ...base,
+              oidcConfig: {
+                clientId: clientId || undefined,
+                clientSecret: mcp.auth?.clientSecret?.trim() || undefined,
+                // client_id present → pre-registration; absent → dynamic registration.
+                scheme: clientId ? 'pre_registration' : 'dcr',
+              },
             },
-          });
-
-          const authorizationUrl = await startConnectorOAuth(newConnectorId);
-          popup.location.href = authorizationUrl;
-          const result = await waitForOAuthPopup(popup, newConnectorId);
-          await fetchConnectors();
-          if (result.status !== 'success') {
-            throw new Error(result.error || 'Authorization was not completed');
-          }
-        } catch (e) {
+            popup,
+            { createConnector, deleteConnector, startConnectorOAuth, waitForConnectorOAuth },
+          );
+        } finally {
           // Close the blank/in-flight popup we opened so it isn't left dangling.
-          // On success the OAuth callback page closes it itself.
-          if (!popup.closed) popup.close();
-          throw e;
+          popup?.close();
+          await fetchConnectors();
         }
         return;
       }

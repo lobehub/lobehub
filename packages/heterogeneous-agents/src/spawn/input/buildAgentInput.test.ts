@@ -9,17 +9,6 @@ import { buildAgentInput } from './buildAgentInput';
 const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x10]);
 
 describe('buildAgentInput', () => {
-  it('puts Kimi Code text in argv and rejects images', async () => {
-    await expect(buildAgentInput('kimi-code', 'hello')).resolves.toEqual({
-      args: ['--prompt', 'hello'],
-      stdin: '',
-    });
-    await expect(
-      buildAgentInput('kimi-code', [
-        { source: { type: 'url', url: 'https://example.com/a.png' }, type: 'image' },
-      ]),
-    ).rejects.toThrow(/Kimi Code does not support image attachments/);
-  });
   let tmp: string;
 
   beforeEach(async () => {
@@ -326,6 +315,56 @@ describe('buildAgentInput', () => {
       expect(plan.args[0]).toBe('--attachment');
       expect(plan.args[1]).toMatch(/\.png$/);
       expect(JSON.parse(plan.stdin.trim()).message.content).toEqual([]);
+    });
+  });
+
+  describe('kimi-code', () => {
+    it('puts text in the --prompt argv with no stdin', async () => {
+      await expect(buildAgentInput('kimi-code', 'hello')).resolves.toEqual({
+        args: ['--prompt', 'hello'],
+        stdin: '',
+      });
+    });
+
+    it('references a path-source image in the prompt without re-materializing', async () => {
+      const filePath = path.join(tmp, 'on-disk.png');
+      await writeFile(filePath, PNG_BYTES);
+
+      const plan = await buildAgentInput(
+        'kimi-code',
+        [
+          { text: 'what color is this?', type: 'text' },
+          { source: { path: filePath, type: 'path' }, type: 'image' },
+        ],
+        { cacheDir: tmp },
+      );
+
+      expect(plan.stdin).toBe('');
+      expect(plan.args[0]).toBe('--prompt');
+      expect(plan.args[1]).toBe(
+        `what color is this?\n\n[Image attached: ${filePath}] Use the ReadMediaFile tool to view this image.`,
+      );
+    });
+
+    it('materializes base64 images into cacheDir and references the path in the prompt', async () => {
+      const plan = await buildAgentInput(
+        'kimi-code',
+        [
+          {
+            source: { data: PNG_BYTES.toString('base64'), mediaType: 'image/png', type: 'base64' },
+            type: 'image',
+          },
+        ],
+        { cacheDir: tmp },
+      );
+
+      expect(plan.args[0]).toBe('--prompt');
+      const prompt = plan.args[1]!;
+      const match = prompt.match(/^\[Image attached: (.+\.png)\]/);
+      expect(match).not.toBeNull();
+      expect(match![1]!.startsWith(tmp)).toBe(true);
+      const written = await readFile(match![1]!);
+      expect(written.equals(PNG_BYTES)).toBe(true);
     });
   });
 

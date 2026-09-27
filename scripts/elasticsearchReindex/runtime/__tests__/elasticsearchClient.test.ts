@@ -367,7 +367,7 @@ describe('FtsSearchReindexHttpClient', () => {
     });
 
     await expect(client.ensureAlias('lobehub-messages', 'lobehub-messages-v2')).rejects.toThrow(
-      'Elasticsearch alias lobehub-messages points to legacy-messages-index instead of a single writable lobehub-messages-v<n> generation',
+      'Elasticsearch alias lobehub-messages points to legacy-messages-index instead of a single writable lobehub-messages-v<n>[-r<run-id>] generation',
     );
     expect(fetchMock).toHaveBeenCalledOnce();
   });
@@ -691,6 +691,29 @@ describe('FtsSearchReindexHttpClient', () => {
     ).rejects.toThrow('Elasticsearch mapping upgrade failed for lobehub-messages-v1 (400)');
   });
 
+  it('marks a detached generation with the run that superseded it', async () => {
+    const successor = '00000000-0000-4000-8000-000000000002';
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response({ 'lobehub-messages-v1': { mappings: { _meta: reindexMeta } } }),
+      )
+      .mockResolvedValueOnce(response({ acknowledged: true }));
+    vi.stubGlobal('fetch', fetchMock);
+    const client = new FtsSearchReindexHttpClient({
+      apiKey: 'secret-key',
+      url: 'https://search.example.com',
+    });
+
+    await expect(
+      client.markGenerationSuperseded('lobehub-messages-v1', successor),
+    ).resolves.toBeUndefined();
+    expect(String(fetchMock.mock.calls[0][0])).toContain('filter_path=*.mappings._meta');
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
+      _meta: { ...reindexMeta, superseded_by_reindex_run_id: successor },
+    });
+  });
+
   it('promotes a generation and removes the alias from every previous generation', async () => {
     const fetchMock = vi.fn().mockResolvedValue(response({ acknowledged: true }));
     vi.stubGlobal('fetch', fetchMock);
@@ -868,6 +891,43 @@ describe('FtsSearchReindexHttpClient', () => {
     expect(beforeMutation).not.toHaveBeenCalled();
   });
 
+  it('accepts unsafe-integer priorities on unrelated Elastic Cloud templates', async () => {
+    const index = 'lobehub-messages-v1';
+    const templateName = getRetiredIndexProtectionTemplateName(index);
+    const fetchMock = vi.fn().mockResolvedValue(
+      response({
+        index_templates: [
+          {
+            index_template: {
+              _meta: { index, owner: 'lobehub-fts-search-retirement' },
+              allow_auto_create: false,
+              index_patterns: [index],
+              priority: 1_000_000,
+              template: {},
+            },
+            name: templateName,
+          },
+          {
+            index_template: {
+              index_patterns: ['.elastic-cloud-*'],
+              priority: Number.MAX_SAFE_INTEGER + 1,
+              template: {},
+            },
+            name: 'elastic-cloud-defaults',
+          },
+        ],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const client = new FtsSearchReindexHttpClient({
+      apiKey: 'secret-key',
+      url: 'https://search.example.com',
+    });
+
+    await expect(client.ensureRetiredIndexProtection(index)).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
   it('refuses to shadow an external template matching the retired index', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       response({
@@ -1019,6 +1079,12 @@ describe('parseGenerationVersion', () => {
   it('parses the generation of an index that follows the alias naming scheme', () => {
     expect(parseGenerationVersion('lobehub-messages', 'lobehub-messages-v1')).toBe(1);
     expect(parseGenerationVersion('lobehub-messages', 'lobehub-messages-v12')).toBe(12);
+    expect(
+      parseGenerationVersion(
+        'lobehub-messages',
+        'lobehub-messages-v1-r00000000-0000-4000-8000-000000000001',
+      ),
+    ).toBe(1);
   });
 
   it('returns undefined for an index outside the alias naming scheme', () => {

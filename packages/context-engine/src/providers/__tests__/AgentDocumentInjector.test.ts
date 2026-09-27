@@ -226,6 +226,84 @@ describe('AgentDocumentInjector', () => {
       expect(result.messages[0].content).not.toContain('Full content that should NOT appear');
     });
 
+    // The index is rebuilt every step, so a doc the agent created earlier in the
+    // same run showed up as if it already existed and was read as "overwritten".
+    it('marks docs created during the current run in the progressive index', async () => {
+      const runStartedAt = new Date('2026-09-23T22:57:30.000Z').getTime();
+      const provider = new AgentDocumentContextInjector({
+        documents: [
+          {
+            createdAt: new Date('2026-09-23T22:57:58.000Z'),
+            filename: 'fase-g-2c.md',
+            id: 'ce2c4f3a',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            policyLoad: 'progressive',
+            title: 'FASE G-2C',
+            updatedAt: new Date('2026-09-23T22:57:58.000Z'),
+          },
+          {
+            createdAt: new Date('2026-09-21T23:12:00.000Z'),
+            filename: 'fase-g-2b.md',
+            id: '452eea73',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            policyLoad: 'progressive',
+            title: 'FASE G-2B',
+            updatedAt: new Date('2026-09-21T23:12:00.000Z'),
+          },
+        ],
+      });
+
+      const context = createContext([
+        { content: 'earlier', createdAt: runStartedAt - 3_600_000, id: 'user-0', role: 'user' },
+        { content: 'ok', createdAt: runStartedAt - 3_500_000, id: 'a-0', role: 'assistant' },
+        { content: 'Write the G-2C report', createdAt: runStartedAt, id: 'user-1', role: 'user' },
+      ]);
+      const result = await provider.process(context);
+
+      expect(result.messages[0].content).toMatchInlineSnapshot(`
+        "<agent_documents_index>
+        User-created docs, when present, are listed below — use readDocument(id) for full content.
+        Docs marked (created this run) (or counted that way in a folder row) did not exist before this run — you created them, so creating them did not overwrite an existing doc.
+
+        TITLE                         ID        SIZE   UPDATED
+        FASE G-2C (created this run)  ce2c4f3a  empty  2026-09-23
+        FASE G-2B                     452eea73  empty  2026-09-21
+        </agent_documents_index>"
+      `);
+    });
+
+    it('counts docs created during the current run inside collapsed folders', async () => {
+      const runStartedAt = new Date('2026-09-23T22:57:30.000Z').getTime();
+      const inFolder = (id: string, createdAt: string) => ({
+        createdAt: new Date(createdAt),
+        filename: `${id}.md`,
+        folderTitle: 'Reports',
+        id,
+        loadPosition: 'before-first-user' as const,
+        loadRules: { rule: 'always' as const },
+        parentId: 'folder-1',
+        policyLoad: 'progressive' as const,
+        title: id,
+        updatedAt: new Date(createdAt),
+      });
+      const provider = new AgentDocumentContextInjector({
+        documents: [
+          inFolder('new-report', '2026-09-23T22:57:58.000Z'),
+          inFolder('old-report', '2026-09-21T23:12:00.000Z'),
+        ],
+      });
+
+      const result = await provider.process(
+        createContext([{ content: 'go', createdAt: runStartedAt, id: 'user-1', role: 'user' }]),
+      );
+      const content = result.messages[0].content as string;
+
+      expect(content).toContain('did not exist before this run');
+      expect(content).toMatch(/📁 Reports\s+folder-1\s+2 docs \(1 created this run\)/);
+    });
+
     // https://github.com/lobehub/lobehub/issues/15624 — relative times ("15m ago")
     // in the index changed the prompt prefix every minute and broke provider-side
     // prompt caching. The index must stay byte-identical as wall-clock time passes.

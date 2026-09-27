@@ -26,6 +26,7 @@ class StatefulElasticsearch {
 
   beforeNextDelete?: () => void;
   createAcknowledged = true;
+  createFailure?: { body: unknown; status: number };
   lockCreateError?: Error;
   lockDeleteBody?: unknown;
   lockReadBody?: unknown;
@@ -44,6 +45,9 @@ class StatefulElasticsearch {
     const index = this.indexes.get(indexName);
 
     if (method === 'PUT' && operation === undefined) {
+      if (this.createFailure) {
+        return jsonResponse(this.createFailure.body, this.createFailure.status);
+      }
       if (index) return jsonResponse({ error: { type: 'resource_already_exists_exception' } }, 400);
       const body = JSON.parse(String(init.body)) as { mappings: Record<string, unknown> };
       this.indexes.set(indexName, { mappings: body.mappings });
@@ -146,7 +150,7 @@ describe('FtsSearchMigrationLockClient', () => {
     expect(elasticsearch.indexes.has('preview-b-fts-search-control')).toBe(true);
   });
 
-  it('creates a strict, owned one-shard control index and releases after success', async () => {
+  it('creates a strict owned control index without unsupported serverless settings', async () => {
     const elasticsearch = new StatefulElasticsearch();
     vi.stubGlobal('fetch', vi.fn(elasticsearch.fetch));
     const client = createClient('test');
@@ -171,8 +175,24 @@ describe('FtsSearchMigrationLockClient', () => {
           owner: { type: 'keyword' },
         },
       },
-      settings: { number_of_shards: 1 },
     });
+  });
+
+  it('does not misclassify an invalid create request as an existing index', async () => {
+    const elasticsearch = new StatefulElasticsearch();
+    elasticsearch.createFailure = {
+      body: { error: { type: 'illegal_argument_exception' } },
+      status: 400,
+    };
+    vi.stubGlobal('fetch', vi.fn(elasticsearch.fetch));
+
+    await expect(createClient('test').acquire('--apply')).rejects.toMatchObject({
+      message: 'Elasticsearch migration control index creation failed (400)',
+      status: 400,
+    });
+    expect(elasticsearch.requests).toEqual([
+      { body: expect.any(String), method: 'PUT', pathname: '/test-fts-search-control' },
+    ]);
   });
 
   it('retains the lock when the callback fails and supports explicit recovery', async () => {

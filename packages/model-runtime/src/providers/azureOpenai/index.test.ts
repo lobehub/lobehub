@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as nonStreamToStreamModule from '../../core/openaiCompatibleFactory/nonStreamToStream';
 import * as streamsModule from '../../core/streams';
+import { AgentRuntimeErrorType } from '../../types/error';
 import * as debugStreamModule from '../../utils/debugStream';
 import * as getModelPricingModule from '../../utils/getModelPricing';
 import { LobeAzureOpenAI } from './index';
@@ -378,6 +379,64 @@ describe('LobeAzureOpenAI', () => {
     });
 
     describe('Error', () => {
+      it('should classify a Responses API remote media download timeout as retryable', async () => {
+        const message =
+          'Unable to download content from the provided URL before the timeout. Check that the URL is publicly accessible and responds promptly, or upload the file and provide a file_id instead.';
+        const apiError = new OpenAI.APIError(
+          400,
+          {
+            code: 'invalid_value',
+            error: {
+              code: 'invalid_value',
+              message,
+              param: 'url',
+              type: 'invalid_request_error',
+            },
+            param: 'url',
+            status: 400,
+            type: 'invalid_request_error',
+          },
+          message,
+          new Headers(),
+        );
+
+        (instance['client'].responses.create as Mock).mockRejectedValue(apiError);
+
+        await expect(
+          instance.chat({
+            messages: [{ content: 'Describe this image', role: 'user' }],
+            model: 'gpt-5.4-mini',
+            temperature: 0,
+          }),
+        ).rejects.toMatchObject({
+          errorType: AgentRuntimeErrorType.RemoteMediaDownloadTimeout,
+          provider: 'azure',
+        });
+      });
+
+      it('should classify a Responses API image count limit error for route fallback', async () => {
+        const message = 'Exceeded maximum number of images (50) allowed in the request.';
+        const apiError = new OpenAI.APIError(
+          400,
+          { code: null, message, param: 'input', type: 'invalid_request_error' },
+          message,
+          new Headers(),
+        );
+
+        (instance['client'].responses.create as Mock).mockRejectedValue(apiError);
+
+        await expect(
+          instance.chat({
+            messages: [{ content: 'Describe these images', role: 'user' }],
+            model: 'gpt-5.4-mini',
+            temperature: 0,
+          }),
+        ).rejects.toMatchObject({
+          errorType: AgentRuntimeErrorType.ExceededImageLimit,
+          provider: 'azure',
+        });
+      });
+
       it('should return AzureBizError with DeploymentNotFound error', async () => {
         // Arrange
         const error = {

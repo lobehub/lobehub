@@ -5,8 +5,15 @@ import { TrpcIngestSink } from './TrpcIngestSink';
 
 const setup = () => {
   const mutate = vi.fn();
-  const client = { aiAgent: { heteroFinish: { mutate } } } as unknown as TrpcClient;
-  return { mutate, sink: new TrpcIngestSink(client, 'kimi-code', 'owned-op', 'owned-topic') };
+  const ingestMutate = vi.fn();
+  const client = {
+    aiAgent: { heteroFinish: { mutate }, heteroIngest: { mutate: ingestMutate } },
+  } as unknown as TrpcClient;
+  return {
+    ingestMutate,
+    mutate,
+    sink: new TrpcIngestSink(client, 'kimi-code', 'owned-op', 'owned-topic'),
+  };
 };
 afterEach(() => vi.useRealTimers());
 
@@ -36,6 +43,20 @@ describe('heterogeneous completion delivery', () => {
     mutate.mockRejectedValue(error);
     await expect(sink.finish({ result: 'error' })).rejects.toBe(error);
     expect(mutate).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports the server verdict on an ingest batch, defaulting to accepted', async () => {
+    const { ingestMutate, sink } = setup();
+
+    // A server that predates the verdict answers `{ ack: true }` only.
+    ingestMutate.mockResolvedValueOnce({ ack: true });
+    await expect(sink.ingest([])).resolves.toEqual({ accepted: true, reason: undefined });
+
+    ingestMutate.mockResolvedValueOnce({ accepted: false, ack: true, reason: 'stale-operation' });
+    await expect(sink.ingest([])).resolves.toEqual({
+      accepted: false,
+      reason: 'stale-operation',
+    });
   });
 
   it('surfaces exhausted transport retries instead of acknowledging delivery', async () => {

@@ -45,6 +45,49 @@ class DeviceService {
   scanAgents(input: Parameters<DeviceClient['scanAgents']['query']>[0]) {
     return lambdaClient.device.scanAgents.query(input);
   }
+
+  /** Live tunnel links, optionally narrowed to one device. */
+  listTunnels(input?: Parameters<DeviceClient['listTunnels']['query']>[0]) {
+    return lambdaClient.device.listTunnels.query(input);
+  }
+
+  /** Expose a port on a device and get back a link, ready to open. */
+  createTunnel(input: Parameters<DeviceClient['createTunnel']['mutate']>[0]) {
+    return lambdaClient.device.createTunnel.mutate(input);
+  }
+
+  /**
+   * Mint the one-shot token that opens an existing link. Called per click:
+   * tokens are short-lived and never stored alongside the link.
+   */
+  openTunnel(input: Parameters<DeviceClient['openTunnel']['mutate']>[0]) {
+    return lambdaClient.device.openTunnel.mutate(input);
+  }
+
+  /** Ports the device is listening on; `null` when it can't answer. */
+  listListeningPorts(input: Parameters<DeviceClient['listListeningPorts']['query']>[0]) {
+    return lambdaClient.device.listListeningPorts.query(input);
+  }
+
+  /** Where the device's desktop app update stands; never starts a check. */
+  getAppUpdateState(input: Parameters<DeviceClient['getAppUpdateState']['query']>[0]) {
+    return lambdaClient.device.getAppUpdateState.query(input);
+  }
+
+  /** Start an update check on the device; a found update downloads on its own. */
+  checkAppUpdate(input: Parameters<DeviceClient['checkAppUpdate']['mutate']>[0]) {
+    return lambdaClient.device.checkAppUpdate.mutate(input);
+  }
+
+  /** Restart the device's desktop app into its downloaded update. */
+  installAppUpdate(input: Parameters<DeviceClient['installAppUpdate']['mutate']>[0]) {
+    return lambdaClient.device.installAppUpdate.mutate(input);
+  }
+
+  /** Revoke a link. */
+  revokeTunnel(input: Parameters<DeviceClient['revokeTunnel']['mutate']>[0]) {
+    return lambdaClient.device.revokeTunnel.mutate(input);
+  }
 }
 
 export const deviceService = new DeviceService();

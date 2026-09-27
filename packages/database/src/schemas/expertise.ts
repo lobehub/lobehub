@@ -2,6 +2,7 @@ import type {
   ExpertiseAnchorCandidate,
   ExpertiseBacktestResult,
   ExpertiseCanonEntry,
+  ExpertiseEnforcement,
   ExpertiseEvidenceSpecItem,
   ExpertiseInsightEvidenceRef,
   ExpertiseLayerDefinition,
@@ -364,18 +365,33 @@ export const expertiseLessons = pgTable(
     }),
     retiredAt: timestamptz('retired_at'),
 
+    /**
+     * Where the reviewer put this rule in their own ordering; lower first, ties by creation.
+     * Nullable with an app-side default: rows that predate the column read as unordered and sort
+     * after the ones the reviewer placed.
+     */
+    sortOrder: integer('sort_order').$defaultFn(() => 0),
+    /**
+     * Whether breaking it should hold the delivery (`block`) or only inform the agent (`remind`).
+     * Nullable with an app-side default; readers treat null as `remind`.
+     */
+    enforcement: text('enforcement')
+      .$type<ExpertiseEnforcement>()
+      .$defaultFn(() => 'remind'),
+
     /** Where a lesson ends up: compiled into a machine-runnable criterion. Mental-model-layer lessons are always not-compilable. */
     compilability: text('compilability', { enum: EXPERTISE_COMPILABILITIES })
       .notNull()
       .default('compilable'),
     /**
-     * Pre-compile check-up: run the lesson against deliveries the owner judged **in the past** and
-     * see whether the owner actually rejected when it fired.
+     * How this standard scored against deliveries the reviewer already judged.
      *
-     * Only this can answer "would compiling it block things they would have passed", and that is the
-     * one failure mode that makes someone turn the whole feature off. jsonb rather than a few named
-     * columns: the metrics will still change (precision/fired first, possibly per-layer breakdowns
-     * later), and a migration per new metric is not worth it. null = not measured yet.
+     * Nothing writes it yet, deliberately. Measured on 898 circled rejections, a score against
+     * those labels cannot gate compilation: a reviewer circles the worst thing in a delivery, so a
+     * standard that correctly spots a defect they did not circle that time reads as a false alarm.
+     * See `ExpertiseBacktestResult` for the numbers. The column stays because the measurement
+     * belongs on the lesson once one with unbiased labels exists; jsonb so its shape can change
+     * without a migration each time.
      */
     backtest: jsonb('backtest').$type<ExpertiseBacktestResult>(),
     compiledCriterionId: uuid('compiled_criterion_id').references(() => verifyCriteria.id, {

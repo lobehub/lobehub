@@ -23,6 +23,7 @@ import { goals } from '@/database/schemas/goal';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiAgentService } from '@/server/services/aiAgent';
 
+import { DEFAULT_MANAGER_MAX_TURNS } from './recoveryPolicy';
 import { scheduleGoalAdvance } from './scheduler';
 import { recoveryEligibility } from './supervisor/policy';
 
@@ -33,7 +34,22 @@ export const goalPlanSchema = z.discriminatedUnion('action', [
       action: z.literal('tasks'),
       reason,
       tasks: z
-        .array(z.object({ title: z.string().trim().min(1).max(255), description: reason }))
+        .array(
+          z.object({
+            title: z.string().trim().min(1).max(255),
+            description: reason,
+            /**
+             * What this task builds on: an existing task node ID from the Goal
+             * graph, or the 0-based index of an earlier task in this same plan.
+             * Becomes a `depends_on` edge, which both gates dispatch and lays
+             * the graph out round by round instead of as one flat row.
+             */
+            dependsOn: z
+              .array(z.union([z.number().int().min(0), z.string().trim().min(1)]))
+              .max(20)
+              .optional(),
+          }),
+        )
         .min(1)
         .max(10),
     })
@@ -464,7 +480,10 @@ export class GoalManagerService {
       const blocked = await this.uninvitedTurnBlocked(graph, unfinished, tasks);
       if (blocked) return null;
     }
-    if ((state?.turns ?? 0) >= (policy.maxTurns ?? 12) || (await this.budgetBlocked(graph))) {
+    if (
+      (state?.turns ?? 0) >= (policy.maxTurns ?? DEFAULT_MANAGER_MAX_TURNS) ||
+      (await this.budgetBlocked(graph))
+    ) {
       // An invited turn declines instead of pausing. The caller was about to open
       // a gate carrying the actual problem; pausing here would replace that
       // question with "the main Agent is out of turns" and lose it.
@@ -489,7 +508,8 @@ export class GoalManagerService {
       const current = await this.graph(db).getGraph(goal.id);
       if (!current || managerSnapshot(current) !== managerSnapshot(graph)) return;
       if (
-        (fresh.config?.managerState?.turns ?? 0) >= (fresh.config?.manager?.maxTurns ?? 12) ||
+        (fresh.config?.managerState?.turns ?? 0) >=
+          (fresh.config?.manager?.maxTurns ?? DEFAULT_MANAGER_MAX_TURNS) ||
         (await this.budgetBlocked(current, db))
       )
         return;
@@ -687,15 +707,52 @@ export class GoalManagerService {
           await authored.updateNodeStatus(goalId, inherited.id, 'retired', plan.reason);
       }
       if (plan.action === 'tasks') {
+        // Resolve every reference before writing anything, so a bad one rejects
+        // the plan whole instead of leaving half of it on the graph. A prerequisite
+        // only counts as met once `resolved`, so a retired or rejected node would
+        // block its dependent forever — refuse it here rather than deadlock later.
+        // That includes the stuck node a takeover turn is replacing: `graph` is the
+        // snapshot from before the retirement above.
+        const dependable = new Set(
+          graph.nodes
+            .filter(
+              (n) =>
+                n.kind === 'task' &&
+                n.status !== 'retired' &&
+                n.status !== 'rejected' &&
+                !(state.problem && n.taskId === state.problemTaskId),
+            )
+            .map((n) => n.id),
+        );
+        plan.tasks.forEach((task, index) => {
+          for (const dep of task.dependsOn ?? []) {
+            const valid = typeof dep === 'number' ? dep < index : dependable.has(dep);
+            if (!valid)
+              throw new TRPCError({
+                code: 'BAD_REQUEST',
+                message: `Task ${index} dependsOn ${JSON.stringify(dep)} is neither an earlier task in this plan nor an active task node of this Goal`,
+              });
+          }
+        });
         const problem = graph.nodes.find((n) => n.kind === 'problem');
-        for (const task of plan.tasks) {
+        const createdIds: string[] = [];
+        for (const { dependsOn: _dependsOn, ...task } of plan.tasks) {
           const node = await authored.createNode(goalId, {
             ...task,
             kind: 'task',
             status: 'proposed',
             createdByAgentId: agentId,
           });
-          if (node && problem) await authored.createEdge(goalId, problem.id, node.id, 'decomposes');
+          if (!node) throw new Error('Failed to create a planned task');
+          createdIds.push(node.id);
+          if (problem) await authored.createEdge(goalId, problem.id, node.id, 'decomposes');
+        }
+        // Drawn dependent → prerequisite, the direction `selectFrontier` reads a blocker.
+        for (const [index, task] of plan.tasks.entries()) {
+          for (const dep of new Set(task.dependsOn ?? [])) {
+            const prerequisiteId = typeof dep === 'number' ? createdIds[dep] : dep;
+            await authored.createEdge(goalId, createdIds[index], prerequisiteId, 'depends_on');
+          }
         }
       } else if (plan.action === 'retry') {
         const node = unfinished.find((n) => n.taskId === plan.taskId);

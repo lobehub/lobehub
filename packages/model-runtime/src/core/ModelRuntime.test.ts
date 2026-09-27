@@ -309,17 +309,39 @@ describe('ModelRuntime', () => {
         model: 'sora-1',
         params: { prompt: 'a cat' } as any,
       };
-      const mockResponse = { inferenceId: 'job-1' };
-      const createVideo = vi.fn().mockResolvedValue(mockResponse);
+      const createVideo = vi.fn().mockResolvedValue({ inferenceId: 'job-1' });
 
       // @ts-ignore - injecting a minimal runtime for this case
-      mockModelRuntime['_runtime'] = { createVideo };
+      mockModelRuntime['_runtime'] = {
+        createVideo,
+        getVideoGenerationCapabilities: () => ({ completionModes: ['polling'] }),
+      };
 
-      const options = { metadata: { trigger: 'video' } };
+      const options = {
+        metadata: { trigger: 'video' },
+        preferredCompletionMode: 'webhook' as const,
+      };
       const result = await mockModelRuntime.createVideo(payload, options);
 
       expect(createVideo).toHaveBeenCalledWith(payload, options);
-      expect(result).toBe(mockResponse);
+      expect(result).toEqual({ completionMode: 'polling', inferenceId: 'job-1' });
+    });
+
+    it('should preserve completion mode from an orchestrating runtime', async () => {
+      const payload: CreateVideoPayload = {
+        model: 'sora-1',
+        params: { prompt: 'a cat' } as any,
+      };
+      const response = { completionMode: 'webhook' as const, inferenceId: 'job-2' };
+      const createVideo = vi.fn().mockResolvedValue(response);
+
+      // @ts-ignore - injecting a minimal composite runtime for this case
+      mockModelRuntime['_runtime'] = {
+        createVideo,
+        orchestratesVideoGenerationCompletion: true,
+      };
+
+      await expect(mockModelRuntime.createVideo(payload)).resolves.toBe(response);
     });
 
     it('should handle undefined createVideo method gracefully', async () => {
@@ -657,6 +679,32 @@ describe('ModelRuntime', () => {
 
         await expect(runtime.chat(chatPayload)).resolves.toBeInstanceOf(Response);
       });
+
+      it('handleChatStreamError forwards a stream failure to onChatStreamError', async () => {
+        const streamError = { errorType: 'ProviderBizError', error: { message: 'fail' } };
+        const options = { metadata: { trigger: 'chat' } };
+        const onChatStreamError = vi.fn();
+        const { runtime } = createMockRuntime({ onChatStreamError });
+
+        await runtime.handleChatStreamError(streamError, { options, payload: chatPayload });
+
+        expect(onChatStreamError).toHaveBeenCalledWith(streamError, {
+          options,
+          payload: chatPayload,
+        });
+      });
+
+      it('handleChatStreamError keeps a failing hook from replacing the stream error', async () => {
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const onChatStreamError = vi.fn().mockRejectedValue(new Error('hook failed'));
+        const { runtime } = createMockRuntime({ onChatStreamError });
+
+        await expect(
+          runtime.handleChatStreamError(new Error('stream failed'), { payload: chatPayload }),
+        ).resolves.toBeUndefined();
+        expect(consoleError).toHaveBeenCalled();
+        consoleError.mockRestore();
+      });
     });
 
     describe('generateObject hooks', () => {
@@ -820,6 +868,28 @@ describe('ModelRuntime', () => {
         const [data] = onGenerateObjectComplete.mock.calls[0];
         expect(data.error?.code).toBe('InvalidProviderAPIKey');
         expect(data.error?.message).toBe('invalid key');
+      });
+
+      it('onGenerateObjectComplete keeps the provider body when the payload has no message', async () => {
+        const onGenerateObjectComplete = vi.fn();
+        const { runtime, mockRuntimeAI } = createMockRuntime({ onGenerateObjectComplete });
+        // Production shape of a refined upstream rejection: the body is the only description,
+        // and it is the part that names which field the provider refused.
+        const cause = {
+          endpoint: 'https://api.example.com',
+          error: {
+            error: { code: 'invalid_value', param: 'input[1].content[0].type' },
+            status: 400,
+          },
+          errorType: 'UpstreamHttpError',
+          provider: 'azure',
+        };
+        mockRuntimeAI.generateObject.mockRejectedValue(cause);
+
+        await expect(runtime.generateObject(genObjPayload)).rejects.toBe(cause);
+        const [data] = onGenerateObjectComplete.mock.calls[0];
+        expect(data.error?.code).toBe('UpstreamHttpError');
+        expect(data.error?.message).toContain('input[1].content[0].type');
       });
 
       it('onGenerateObjectComplete falls back to error.name for AI SDK errors', async () => {

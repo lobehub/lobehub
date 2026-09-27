@@ -29,7 +29,8 @@ export const projectWindows = (
   for (const r of readings) {
     if (r.resetsAt == null) continue;
     const resetsAt = canonicalizeWindowResetAt(r.resetsAt);
-    const windowSeconds = windowSecondsFor(r.limitType);
+    const windowSeconds =
+      r.windowMinutes == null ? windowSecondsFor(r.limitType) : r.windowMinutes * 60;
     const key = keyOf({ ...r, resetsAt });
     const existing = byWindow.get(key);
 

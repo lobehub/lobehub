@@ -1,7 +1,12 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { fetchCappedBuffer, loadAttachmentBuffer } from './loadAttachmentBuffer';
+import {
+  fetchCappedBuffer,
+  fetchCappedBufferWithDetail,
+  loadAttachmentBuffer,
+  loadAttachmentBufferWithDetail,
+} from './loadAttachmentBuffer';
 import type * as PublicUrlFetch from './publicUrlFetch';
 
 // These tests stub `fetch` directly; the SSRF guard in front of it resolves DNS
@@ -147,5 +152,95 @@ describe('loadAttachmentBuffer', () => {
 
   it('returns undefined when the attachment carries no source', async () => {
     expect(await loadAttachmentBuffer({}, { limit: 100 })).toBeUndefined();
+  });
+});
+
+describe('loadAttachmentBufferWithDetail', () => {
+  // The bare `undefined` these loaders used to return is how a whole-platform
+  // download regression stayed invisible: the senders could not tell a broken
+  // fetch from a missing source. The reason has to survive to the boundary.
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('surfaces the fetch error AND its cause — that is where undici puts the diagnosis', async () => {
+    // Shaped like the real thing: Node's connect error carries a `code`, and
+    // that is what identifies the pinned-lookup failure in a tool result.
+    const error = new TypeError('fetch failed');
+    (error as any).cause = Object.assign(new TypeError('Invalid IP address: undefined'), {
+      code: 'ERR_INVALID_IP_ADDRESS',
+    });
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(error));
+
+    const result = await fetchCappedBufferWithDetail('https://x/f', { limit: 100 });
+
+    expect(result.buffer).toBeUndefined();
+    expect(result.error).toBe('fetch failed: fetch failed (ERR_INVALID_IP_ADDRESS)');
+  });
+
+  it('falls back to the cause message when it carries no code', async () => {
+    const error = new TypeError('fetch failed');
+    (error as any).cause = new TypeError('Invalid IP address: undefined');
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(error));
+
+    const result = await fetchCappedBufferWithDetail('https://x/f', { limit: 100 });
+
+    expect(result.error).toBe('fetch failed: fetch failed (Invalid IP address: undefined)');
+  });
+
+  it('reports the cause code rather than its message when the cause carries one', async () => {
+    // A system error message names the resolved host:port — for a trusted
+    // origin that is our own storage address, which must not reach the model.
+    const error = new TypeError('fetch failed');
+    (error as any).cause = Object.assign(new Error('connect ECONNREFUSED 10.0.0.12:9000'), {
+      code: 'ECONNREFUSED',
+    });
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(error));
+
+    const result = await fetchCappedBufferWithDetail('https://x/f', { limit: 100 });
+
+    expect(result.error).toBe('fetch failed: fetch failed (ECONNREFUSED)');
+    expect(result.error).not.toContain('10.0.0.12');
+  });
+
+  it('reports the HTTP status of a non-OK response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 403 }));
+
+    expect(await fetchCappedBufferWithDetail('https://x/f', { limit: 100 })).toEqual({
+      error: 'HTTP 403',
+    });
+  });
+
+  it('reports the advertised size when content-length exceeds the cap', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(responseOf([], { 'content-length': '5000' })));
+
+    expect(await fetchCappedBufferWithDetail('https://x/f', { limit: 100 })).toEqual({
+      error: 'content-length 5000 exceeds the 100 byte cap',
+    });
+  });
+
+  it('reports oversize inline data without touching the network', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await loadAttachmentBufferWithDetail(
+      { data: Buffer.alloc(200).toString('base64'), fetchUrl: 'https://x/f' },
+      { limit: 100 },
+    );
+
+    expect(result).toEqual({ error: '200 inline bytes exceed the 100 byte cap' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('reports an attachment with no source at all', async () => {
+    expect(await loadAttachmentBufferWithDetail({})).toEqual({
+      error: 'attachment carries neither data nor fetchUrl',
+    });
+  });
+
+  it('hands back the bytes when the source is usable', async () => {
+    expect(
+      await loadAttachmentBufferWithDetail({ data: Buffer.from('ok').toString('base64') }),
+    ).toEqual({
+      buffer: Buffer.from('ok'),
+    });
   });
 });

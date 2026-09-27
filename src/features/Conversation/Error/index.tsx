@@ -1,12 +1,13 @@
 import { isDesktop } from '@lobechat/const';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
+import { readHeterogeneousErrorContext } from '@lobechat/heterogeneous-agents/errors';
 import { type ILobeAgentRuntimeErrorType } from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType, getErrorCodeSpec } from '@lobechat/model-runtime';
 import { type ChatMessageError, type ErrorType, type IToolErrorType } from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import { Block, Highlighter } from '@lobehub/ui';
-import { type AlertProps, Skeleton } from '@lobehub/ui/base-ui';
+import { type AlertProps, Skeleton, toast } from '@lobehub/ui/base-ui';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -15,7 +16,12 @@ import useBusinessErrorContent from '@/business/client/hooks/useBusinessErrorCon
 import useRenderBusinessChatErrorMessageExtra from '@/business/client/hooks/useRenderBusinessChatErrorMessageExtra';
 import ErrorContent from '@/features/Conversation/ChatItem/components/ErrorContent';
 import { useConversationResourceAccess } from '@/features/Conversation/hooks/useConversationResourceAccess';
-import { dataSelectors, useConversationStore } from '@/features/Conversation/store';
+import { createTopicForwardModal } from '@/features/Conversation/MessageForward/TopicForwardModal';
+import {
+  contextSelectors,
+  dataSelectors,
+  useConversationStore,
+} from '@/features/Conversation/store';
 import HeterogeneousAgentStatusGuide from '@/features/Electron/HeterogeneousAgent/StatusGuide';
 import type { HeterogeneousAgentScheduleState } from '@/features/Electron/HeterogeneousAgent/StatusGuide/types';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -29,6 +35,7 @@ import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfi
 import { getRuntimeErrorMessage } from '@/utils/locale/runtimeErrorMessage';
 
 import ChatInvalidAPIKey from './ChatInvalidApiKey';
+import { type DedicatedErrorCardType, isDedicatedErrorCardType } from './dedicatedErrorCards';
 import { isHeterogeneousAgentStatusGuideError } from './heterogeneous';
 import { useHeterogeneousAutoRetry } from './useHeterogeneousAutoRetry';
 
@@ -274,6 +281,7 @@ interface ErrorExtraProps {
 const ErrorMessageExtra = memo<ErrorExtraProps>(
   ({ error: alertError, data, onRegenerate, retryScopeId }) => {
     const error = data.error;
+    const { t } = useTranslation('chat');
     const navigate = useWorkspaceAwareNavigate();
     const enableBusinessFeatures = useServerConfigStore(
       serverConfigSelectors.enableBusinessFeatures,
@@ -283,6 +291,8 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
     // access on top of the workspace-role capability.
     const { canUseResource } = useConversationResourceAccess();
     const canCreate = canCreateContent && canUseResource;
+    const conversationAgentId = useConversationStore(contextSelectors.agentId);
+    const conversationTopicId = useConversationStore(contextSelectors.topicId);
     const isSharedTopic = useConversationStore((s) => !!s.context?.topicShareId);
     const sessionErrorBody = error?.body;
     const rawErrorMessage = getRawErrorMessage(error);
@@ -384,29 +394,33 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
     // orchestration lives in the conversation store; this only binds the actions.
     const scheduleHeteroContinuation = useConversationStore((s) => s.scheduleHeteroContinuation);
     const cancelHeteroContinuation = useConversationStore((s) => s.cancelHeteroContinuation);
-    const activeTopicScheduled = useChatStore(
-      (s) => topicSelectors.currentActiveTopic(s)?.status === 'scheduled',
-    );
     const activeAgentId = useChatStore((s) => s.activeAgentId);
-    const scheduledResetsAt = useChatStore((s) => {
-      const scheduledRun = topicSelectors.currentActiveTopic(s)?.metadata?.scheduledRun;
-      return scheduledRun?.kind === 'resume_after_rate_limit'
+    const conversationTopic = useChatStore((s) =>
+      conversationTopicId ? topicSelectors.getTopicById(conversationTopicId)(s) : undefined,
+    );
+    const conversationTopicScheduled = conversationTopic?.status === 'scheduled';
+    const scheduledRun = conversationTopic?.metadata?.scheduledRun;
+    const scheduledResetsAt =
+      scheduledRun?.kind === 'resume_after_rate_limit'
         ? scheduledRun.rateLimit?.resetsAt
         : undefined;
-    });
 
     const isRateLimitError =
       canCreate &&
       isHeterogeneousAgentStatusGuideError(sessionErrorBody) &&
       sessionErrorBody.code === HeterogeneousAgentSessionErrorCode.RateLimit;
     const rateLimitInfo = isHeterogeneousAgentStatusGuideError(sessionErrorBody)
-      ? sessionErrorBody.rateLimitInfo
+      ? readHeterogeneousErrorContext({ type: 'AgentRuntimeError', body: sessionErrorBody })
       : undefined;
 
     const schedule: HeterogeneousAgentScheduleState | undefined = isRateLimitError
       ? {
-          isScheduled: activeTopicScheduled,
-          onCancel: () => void cancelHeteroContinuation(),
+          isScheduled: conversationTopicScheduled,
+          onCancel: () =>
+            void cancelHeteroContinuation(conversationTopicId).catch((error) => {
+              console.error('[ErrorMessageExtra] Failed to cancel scheduled continuation:', error);
+              toast.error(t('heteroRateLimit.cancelFailed'));
+            }),
           // Same fallback as the retry button: `onRegenerate` is absent on the
           // standalone surfaces, where a bare `onRegenerate?.()` was a no-op.
           onRunNow: handleManualRetry,
@@ -440,6 +454,17 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
                   : '/settings/credential',
             )
           }
+          onTransfer={
+            isRateLimitError && conversationAgentId && conversationTopicId
+              ? () =>
+                  createTopicForwardModal({
+                    cancelSourceContinuation: true,
+                    sourceAgentId: conversationAgentId,
+                    topicId: conversationTopicId,
+                    topicTitle: conversationTopic?.title || '',
+                  })
+              : undefined
+          }
         />
       );
     }
@@ -447,57 +472,69 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
     if (enableBusinessFeatures && businessChatErrorMessageExtra)
       return businessChatErrorMessageExtra;
 
-    switch (error?.type) {
-      // Lightweight fallbacks for cloud billing errors, used in builds without a
-      // business override (e.g. desktop). The business hook above takes
-      // precedence when installed.
-      case ChatErrorType.FreePlanLimit:
-      case ChatErrorType.SubscriptionPlanLimit:
-      case ChatErrorType.InsufficientBudgetForModel: {
-        if (enableBusinessFeatures)
+    /**
+     * Typed against `DEDICATED_ERROR_CARD_TYPES`: a missing case fails the `never` check
+     * and a case outside the list fails as "not comparable", so the exported list always
+     * matches what this renderer customizes.
+     */
+    const renderDedicatedCard = (type: DedicatedErrorCardType) => {
+      switch (type) {
+        // Lightweight fallbacks for cloud billing errors, used in builds without a
+        // business override (e.g. desktop). The business hook above takes
+        // precedence when installed.
+        case ChatErrorType.FreePlanLimit:
+        case ChatErrorType.SubscriptionPlanLimit:
+        case ChatErrorType.InsufficientBudgetForModel: {
+          if (!enableBusinessFeatures) return;
           return (
             <PlanLimitCard
               errorBody={error?.body}
-              errorType={error?.type}
+              errorType={type}
               onRetry={handleRetryAgentMessage}
             />
           );
-        break;
-      }
+        }
 
-      case ChatErrorType.LobeHubModelDeprecated: {
-        if (enableBusinessFeatures)
+        case ChatErrorType.LobeHubModelDeprecated: {
+          if (!enableBusinessFeatures) return;
           return <DeprecatedModelError requestedModel={error?.body?.requestedModel} />;
-        break;
-      }
+        }
 
-      case AgentRuntimeErrorType.QuotaLimitReached:
-      case AgentRuntimeErrorType.RateLimitExceeded: {
-        if (enableBusinessFeatures)
+        case AgentRuntimeErrorType.QuotaLimitReached:
+        case AgentRuntimeErrorType.RateLimitExceeded: {
+          if (!enableBusinessFeatures) return;
           return (
             <QuotaLimitError id={data.id} onRetry={canRetry ? handleManualRetry : undefined} />
           );
-        break;
-      }
+        }
 
-      case AgentRuntimeErrorType.OllamaServiceUnavailable: {
-        return <OllamaSetupGuide id={data.id} />;
-      }
+        case AgentRuntimeErrorType.OllamaServiceUnavailable: {
+          return <OllamaSetupGuide id={data.id} />;
+        }
 
-      case AgentRuntimeErrorType.OllamaBizError: {
-        return <OllamaBizError {...data} />;
-      }
+        case AgentRuntimeErrorType.OllamaBizError: {
+          return <OllamaBizError {...data} />;
+        }
 
-      case AgentRuntimeErrorType.ExceededContextWindow: {
-        return <ExceededContextWindowError id={data.id} />;
-      }
+        case AgentRuntimeErrorType.ExceededContextWindow: {
+          return <ExceededContextWindowError id={data.id} />;
+        }
 
-      case AgentRuntimeErrorType.NoOpenAIAPIKey: {
-        {
+        case AgentRuntimeErrorType.NoOpenAIAPIKey: {
           return <ChatInvalidAPIKey id={data.id} provider={data.error?.body?.provider} />;
         }
+
+        default: {
+          const unhandled: never = type;
+          return unhandled;
+        }
       }
-    }
+    };
+
+    const dedicatedCard = isDedicatedErrorCardType(error?.type)
+      ? renderDedicatedCard(error.type)
+      : undefined;
+    if (dedicatedCard) return dedicatedCard;
 
     if (error?.type?.toString().includes('Invalid')) {
       return <ChatInvalidAPIKey id={data.id} provider={data.error?.body?.provider} />;

@@ -1,4 +1,6 @@
 export {
+  createFrozenModelParamsProviders,
+  readFrozenModelFacts,
   resolveHistoryCount,
   resolveModelExtendParamList,
   resolveModelParams,

@@ -9,6 +9,7 @@ import {
   type DropdownItem,
   DropdownMenu,
   Select,
+  Spin,
   Tag,
   Text,
   toast,
@@ -29,7 +30,6 @@ import {
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import {
   CriterionList,
   CriterionRequiredChip,
@@ -574,7 +574,7 @@ const TaskVerifyConfig = memo(() => {
     return (
       <Block className={styles.section} variant={'outlined'}>
         <Flexbox horizontal align={'center'} gap={12}>
-          <NeuralNetworkLoading size={20} />
+          <Spin size="middle" variant="network" />
           <Text className={styles.subtitle}>{t('verifyConfig.generating')}</Text>
         </Flexbox>
       </Block>

@@ -88,8 +88,63 @@ export interface RenameLocalFileResult {
   success: boolean;
 }
 
+export interface CreateLocalFileParams {
+  /** Initial content. Defaults to an empty file. */
+  content?: string;
+  /** Working directory a relative `path` resolves against. See {@link ListLocalFileParams.cwd}. */
+  cwd?: string;
+  path: string;
+}
+
+export interface CreateLocalDirectoryParams {
+  /** Working directory a relative `path` resolves against. See {@link ListLocalFileParams.cwd}. */
+  cwd?: string;
+  path: string;
+}
+
+/** Result of creating a file or folder. Never overwrites: an existing entry fails. */
+export interface CreateLocalEntryResult {
+  error?: string;
+  path: string;
+  success: boolean;
+}
+
+export interface CopyLocalFileItem {
+  sourcePath: string;
+  /** Omit to duplicate next to the source as `name copy.ext` / `name copy 2.ext`. */
+  targetPath?: string;
+}
+
+export interface CopyLocalFilesParams {
+  /** Working directory each item's relative paths resolve against. See {@link ListLocalFileParams.cwd}. */
+  cwd?: string;
+  items: CopyLocalFileItem[];
+}
+
+export interface LocalCopyFilesResultItem {
+  error?: string;
+  sourcePath: string;
+  success: boolean;
+  /** The path the copy was written to, when it succeeded. */
+  targetPath?: string;
+}
+
 export interface HashLocalFileParams {
   path: string;
+}
+
+export interface LocalFileStatsParams {
+  path: string;
+}
+
+/** Basic facts about a local file, so a model can plan how to read it before opening it. */
+export interface LocalFileStats {
+  /** Number of lines; omitted for binary files and files too large to scan. */
+  lineCount?: number;
+  /** Detected MIME type, when it can be determined. */
+  mimeType?: string;
+  /** Size in bytes. */
+  size: number;
 }
 
 export interface LocalReadFileParams {
@@ -240,6 +295,11 @@ export interface LocalReadFileResult {
    * Total line count of the entire file.
    */
   totalLineCount: number;
+  /**
+   * True when the content was cut at the output character cap before the
+   * requested `loc` window ended.
+   */
+  truncated?: boolean;
 }
 
 export interface LocalSearchFilesParams {

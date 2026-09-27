@@ -231,6 +231,22 @@ export class UpdaterManager {
   };
 
   /**
+   * Check for updates because someone explicitly asked to update this app from
+   * another device. An earlier local "install later" would keep the found
+   * update from downloading, so the explicit request overrides it.
+   */
+  public checkForUpdatesOnRequest = () => {
+    if (this.installLaterVersion) {
+      logger.info(
+        `Remote update requested; clearing install-later for v${this.installLaterVersion}`,
+      );
+      this.installLaterVersion = null;
+    }
+
+    void this.checkForUpdates({ manual: true });
+  };
+
+  /**
    * Download update
    */
   public downloadUpdate = async () => {

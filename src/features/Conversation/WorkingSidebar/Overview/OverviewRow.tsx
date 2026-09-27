@@ -92,6 +92,7 @@ export interface OverviewRowProps {
   iconSize?: number;
   interactive?: boolean;
   onClick?: () => void;
+  spin?: boolean;
   title?: string;
   trailing?: ReactNode;
   value: ReactNode;
@@ -107,6 +108,7 @@ export const OverviewRow = memo<OverviewRowProps>(
     iconSize = 16,
     interactive,
     onClick,
+    spin,
     title,
     trailing,
     value,
@@ -125,6 +127,7 @@ export const OverviewRow = memo<OverviewRowProps>(
           className={rowStyles.icon}
           icon={icon!}
           size={iconSize}
+          spin={spin}
           style={iconColor ? { color: iconColor } : undefined}
         />
       )}

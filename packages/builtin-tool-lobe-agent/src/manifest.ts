@@ -234,7 +234,7 @@ export const LobeAgentManifest: BuiltinToolManifest = {
     // ==================== Sub-Agent ====================
     {
       description:
-        'Dispatch a single sub-agent that runs in an isolated context to handle a long-running, multi-step request. Use this when the request requires extended processing (web research, multi-source synthesis, deep investigation) that benefits from running independently of the main conversation.',
+        'Dispatch a single sub-agent that runs in an isolated context to handle a long-running, multi-step request. Use this when the request requires extended processing (web research, multi-source synthesis, deep investigation) that benefits from running independently of the main conversation. Pass `subAgentId` to send a follow-up message to an earlier sub-agent instead of starting a new one.',
       name: LobeAgentApiName.callSubAgent,
       parameters: {
         properties: {
@@ -250,6 +250,11 @@ export const LobeAgentManifest: BuiltinToolManifest = {
             description:
               'Whether to inherit context messages from the parent conversation. Default is false.',
             type: 'boolean',
+          },
+          subAgentId: {
+            description:
+              'Optional. The id from the `<sub_agent id="..." />` tag at the end of an earlier callSubAgent result. Sends `instruction` as a new message to that same sub-agent, which keeps all of its previous work and history — use it to continue a sub-agent that stopped or failed, ask it to hand over what it has found so far, or follow up on its answer. Omit to start a new sub-agent.',
+            type: 'string',
           },
           ...(isDesktop && {
             runInClient: {

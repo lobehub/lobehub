@@ -2,6 +2,7 @@ import type {
   AgentInterventionRequestData,
   AgentInterventionResponseData,
   AgentStreamEvent,
+  MessagePatchData,
   StepCompleteData,
   StreamChunkData,
   StreamStartData,
@@ -11,13 +12,9 @@ import type {
   ToolStartData,
   ToolStateChunkData,
 } from '@lobechat/agent-gateway-client';
-import type {
-  BuiltinToolResult,
-  ChatMessageError,
-  ConversationContext,
-  UIChatMessage,
-} from '@lobechat/types';
-import { AgentRuntimeErrorType } from '@lobechat/types';
+import { normalizeHeterogeneousMessageError } from '@lobechat/heterogeneous-agents/errors';
+import { normalizeChatMessageError } from '@lobechat/model-runtime/errors';
+import type { BuiltinToolResult, ConversationContext, UIChatMessage } from '@lobechat/types';
 import { isRecord, pickNonEmptyString, toRecord } from '@lobechat/utils/object';
 
 import { messageService } from '@/services/message';
@@ -32,6 +29,8 @@ import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import type { ChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+
+import { applyMessagePatch } from './messagePatch';
 
 // `agent_runtime_end` reasons that are NOT a clean completion: a mid-stream
 // cancel and a deferred-tool park. These must NOT mark the topic unread, and
@@ -276,111 +275,6 @@ const findNextAssistantMessageId = (
   }
 };
 
-const isErrorType = (value: unknown): value is ChatMessageError['type'] =>
-  typeof value === 'string' || typeof value === 'number';
-
-const getMessageFromErrorData = (data: unknown): string | undefined => {
-  if (!isRecord(data)) return undefined;
-
-  const message = pickNonEmptyString(data.message);
-  if (message) return message;
-
-  const error = data.error;
-  const errorString = pickNonEmptyString(error);
-  if (errorString) return errorString;
-  if (isRecord(error)) {
-    const errorMessage = pickNonEmptyString(error.message);
-    if (errorMessage) return errorMessage;
-
-    const nestedError = error.error;
-    if (isRecord(nestedError)) {
-      const nestedMessage = pickNonEmptyString(nestedError.message);
-      if (nestedMessage) return nestedMessage;
-    }
-  }
-
-  const responseBody = data._responseBody;
-  const responseBodyMessage = getMessageFromErrorData(responseBody);
-  if (responseBodyMessage) return responseBodyMessage;
-
-  const body = data.body;
-  if (isRecord(body)) {
-    const bodyMessage = pickNonEmptyString(body.message);
-    if (bodyMessage) return bodyMessage;
-  }
-};
-
-const mergeGatewayPayloadError = (
-  sourceBody: Record<string, unknown>,
-  payloadError: unknown,
-): Record<string, unknown> => {
-  if (payloadError === undefined) return sourceBody;
-  if (!('error' in sourceBody)) return { ...sourceBody, error: payloadError };
-  if (isRecord(sourceBody.error) && isRecord(payloadError)) {
-    return { ...sourceBody, error: { ...payloadError, ...sourceBody.error } };
-  }
-  return sourceBody;
-};
-
-const buildGatewayRuntimeErrorBody = (
-  data: Record<string, unknown>,
-  message: string,
-): Record<string, unknown> => {
-  const body = toRecord(data.body);
-  const responseBody = toRecord(data._responseBody);
-  const errorBody = toRecord(data.error);
-  const sourceBody = body ?? responseBody ?? errorBody ?? {};
-  const shouldMergePayloadError = body === undefined && data._responseBody !== undefined;
-  const mergedBody = shouldMergePayloadError
-    ? mergeGatewayPayloadError(sourceBody, data.error)
-    : sourceBody;
-
-  return {
-    ...mergedBody,
-    ...(data.budget === undefined || 'budget' in mergedBody ? {} : { budget: data.budget }),
-    ...(typeof data.provider === 'string' && !('provider' in mergedBody)
-      ? { provider: data.provider }
-      : {}),
-    ...('message' in mergedBody ? {} : { message }),
-  };
-};
-
-const toChatMessageError = (data: unknown): ChatMessageError => {
-  if (isRecord(data) && isErrorType(data.type)) {
-    const message =
-      typeof data.message === 'string' && data.message
-        ? data.message
-        : getMessageFromErrorData({ body: data.body });
-
-    return {
-      ...data,
-      ...(message ? { message } : {}),
-      type: data.type,
-    };
-  }
-
-  // Gateway realtime error events can carry the model-runtime payload shape
-  // (`errorType` + `error`) before the terminal DB message is refreshed. Treat
-  // it as the same semantic error instead of falling back to AgentRuntimeError.
-  if (isRecord(data) && isErrorType(data.errorType)) {
-    const message = getMessageFromErrorData(data) || String(data.errorType);
-
-    return {
-      body: buildGatewayRuntimeErrorBody(data, message),
-      message,
-      type: data.errorType,
-    };
-  }
-
-  const message = getMessageFromErrorData(data) || 'Unknown error';
-
-  return {
-    body: { message },
-    message,
-    type: AgentRuntimeErrorType.AgentRuntimeError,
-  };
-};
-
 /**
  * Creates a handler function that processes Agent Gateway events
  * and maps them to the chat store's message update actions.
@@ -466,6 +360,7 @@ export const createGatewayEventHandler = (
   // NOT reset on stream boundaries — a seq ≤ these is a redelivered duplicate.
   let lastTextSnapshotSeq = 0;
   let lastReasoningSnapshotSeq = 0;
+  let lastMessagePatchRevision = 0;
   const latestToolStateByCallId = new Map<string, ToolStateChunkData & { operationId: string }>();
   const toolStateBootstrapPromiseByCallId = new Map<string, Promise<void>>();
   const lastAppliedToolStateSeqByCallId = new Map<string, number>();
@@ -1053,11 +948,25 @@ export const createGatewayEventHandler = (
 
       case 'step_start': {
         const data = event.data as {
+          messageRevision?: number;
           pendingToolsCalling?: unknown[];
           phase?: string;
           requiresApproval?: boolean;
           uiMessages?: UIChatMessage[];
         };
+
+        if (
+          typeof data?.messageRevision === 'number' &&
+          data.messageRevision !== lastMessagePatchRevision
+        ) {
+          enqueue(async () => {
+            const messages = await refreshMessagesFromDb({ skipWorks: true }).catch((error) => {
+              console.error(error);
+              return undefined;
+            });
+            if (messages) lastMessagePatchRevision = data.messageRevision!;
+          });
+        }
 
         // The server's stepIndex is the authoritative step counter — mirror it
         // onto the operation so step-based UI (OpStatusTray) stays correct
@@ -1087,6 +996,32 @@ export const createGatewayEventHandler = (
           writeTopicStatus('waitingForHuman');
         }
 
+        break;
+      }
+
+      case 'message_patch': {
+        const patch = event.data as MessagePatchData;
+        if (patch.revision <= lastMessagePatchRevision) break;
+
+        const current = get().dbMessagesMap[messageMapKey(context)] ?? [];
+        const next =
+          patch.revision === lastMessagePatchRevision + 1
+            ? applyMessagePatch(current, patch)
+            : undefined;
+
+        if (next) {
+          applyPushedSnapshot(next, { action: 'gateway/message_patch', preserveWorks: true });
+          lastMessagePatchRevision = patch.revision;
+          hasStreamedContent = true;
+        } else {
+          enqueue(async () => {
+            const messages = await refreshMessagesFromDb({ skipWorks: true }).catch((error) => {
+              console.error(error);
+              return undefined;
+            });
+            if (messages) lastMessagePatchRevision = patch.revision;
+          });
+        }
         break;
       }
 
@@ -1210,7 +1145,14 @@ export const createGatewayEventHandler = (
 
       case 'agent_runtime_end': {
         enqueue(async () => {
-          const data = event.data as { reason?: string; uiMessages?: UIChatMessage[] } | undefined;
+          const data = event.data as
+            | {
+                messagePatchMode?: boolean;
+                messageRevision?: number;
+                reason?: string;
+                uiMessages?: UIChatMessage[];
+              }
+            | undefined;
 
           void emitAgentSignal({
             payload: {
@@ -1256,6 +1198,16 @@ export const createGatewayEventHandler = (
               applyPushedSnapshot(data.uiMessages, {
                 action: 'gateway/agent_runtime_end',
               });
+            }
+          } else if (data?.messagePatchMode) {
+            if (
+              typeof data.messageRevision === 'number' &&
+              data.messageRevision !== lastMessagePatchRevision
+            ) {
+              terminalMessages = await refreshMessagesFromDb();
+              if (terminalMessages) lastMessagePatchRevision = data.messageRevision;
+            } else {
+              terminalMessages = get().dbMessagesMap[messageMapKey(context)] ?? [];
             }
           } else if (
             (data?.reason === 'interrupted' || data?.reason === 'waiting_for_async_tool') &&
@@ -1357,7 +1309,9 @@ export const createGatewayEventHandler = (
 
       case 'error': {
         enqueue(async () => {
-          const messageError = toChatMessageError(event.data);
+          const messageError = normalizeHeterogeneousMessageError(
+            normalizeChatMessageError(event.data),
+          );
           const errorMessage = messageError.message;
 
           void emitAgentSignal({

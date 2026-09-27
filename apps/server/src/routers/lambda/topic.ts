@@ -36,6 +36,7 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
 import { createFtsSearchRepo } from '@/server/services/ftsSearch';
+import { TopicReferenceService } from '@/server/services/topicReference';
 import { after } from '@/server/utils/scheduleAfterResponse';
 import { type BatchTaskResult } from '@/types/service';
 
@@ -248,6 +249,22 @@ const recordTopicShareAudit = async (
 };
 
 export const topicRouter = router({
+  cancelRateLimitContinuation: topicProcedure
+    .use(withScopedPermission('topic:update'))
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      await assertCanUseTopicTargets(guardCtx(ctx), [input.id]);
+      await assertCreatorTopicTargets(guardCtx(ctx), [input.id]);
+      const result = await ctx.topicModel.cancelRateLimitContinuation(input.id);
+      if (result.status === 'busy')
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'The source continuation has already been claimed or started.',
+        });
+      if (result.status === 'unchanged') return null;
+      return { metadata: result.metadata };
+    }),
+
   getTopicDetail: topicProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ input, ctx }) => {
@@ -290,44 +307,13 @@ export const topicRouter = router({
 
   getTopicContext: topicProcedure
     .input(z.object({ topicId: z.string() }))
-    .query(async ({ input, ctx }) => {
-      const topic = await ctx.topicModel.findOwnTopicById(input.topicId);
-
-      if (!topic) {
-        return { content: `Topic not found: ${input.topicId}`, success: false };
-      }
-
-      const title = topic.title || 'Untitled';
-
-      // Prefer historySummary if available
-      if (topic.historySummary) {
-        return {
-          content: `# Topic: ${title}\n\n## Summary\n${topic.historySummary}`,
-          success: true,
-        };
-      }
-
-      // Fallback: fetch recent messages with correct agentId/groupId
-      const messages = await ctx.messageModel.query({
-        agentId: topic.agentId ?? undefined,
-        groupId: topic.groupId ?? undefined,
-        topicId: input.topicId,
-      });
-
-      const recentMessages = messages.slice(-30);
-      const lines = [`# Topic: ${title}`, '', '## Recent Messages', ''];
-
-      for (const msg of recentMessages) {
-        const role =
-          msg.role === 'user' ? 'User' : msg.role === 'assistant' ? 'Assistant' : msg.role;
-        const content = (msg.content || '').trim();
-        if (content) {
-          lines.push(`**${role}**: ${content}`, '');
-        }
-      }
-
-      return { content: lines.join('\n'), success: true };
-    }),
+    .query(async ({ input, ctx }) =>
+      new TopicReferenceService(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      ).getTopicContext(input),
+    ),
 
   batchCreateTopics: topicProcedure
     .use(withScopedPermission('topic:create'))

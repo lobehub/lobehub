@@ -1,8 +1,9 @@
+import { normalizeHeterogeneousMessageError } from '@lobechat/heterogeneous-agents/errors';
+import { normalizeChatMessageError } from '@lobechat/model-runtime/errors';
 import {
   type ChatMessageError,
   type ChatMessagePluginError,
   type ChatTranslate,
-  type ChatTTS,
   type CreateMessageParams,
   type CreateMessageResult,
   type HeterogeneousToolStateSnapshot,
@@ -15,6 +16,7 @@ import {
   type UpdateMessageResult,
 } from '@lobechat/types';
 import { type HeatmapsProps } from '@lobehub/charts';
+import pMap from 'p-map';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -99,6 +101,9 @@ const getBatchMutationAbortKey = (operations: MessageBatchOperation[]) => {
   if (operation.type === 'updateToolMessage') return `tool-message-${operation.id}`;
 };
 
+/** Matches the `getToolResultPayloads` input cap in the lambda router. */
+const TOOL_PAYLOAD_BATCH_SIZE = 500;
+
 export class MessageService {
   batchMutate = async (operations: MessageBatchOperation[], signal?: AbortSignal) => {
     const input = {
@@ -157,6 +162,7 @@ export class MessageService {
       if (!params.topicId) return [];
 
       const shared = await lambdaClient.shareChat.getMessages.query({
+        includeFileWorks: true,
         shareId: params.agentShareId,
         topicId: params.topicId,
       });
@@ -174,6 +180,40 @@ export class MessageService {
     });
 
     return data as unknown as UIChatMessage[];
+  };
+
+  /**
+   * Stored tool payload for a message whose projected copy dropped it
+   * (`UIChatMessage.payloadOmitted`). Called by detail surfaces on open, never
+   * as part of loading a conversation.
+   */
+  getToolResultPayload = async (messageId: string) => {
+    return lambdaClient.message.getToolResultPayload.query({ messageId });
+  };
+
+  /**
+   * Bulk form, for surfaces that need every omitted row at once (export).
+   *
+   * Chunked to the endpoint's own cap: a tool-dense topic can hold more
+   * projected rows than one request accepts, and the schema would reject the
+   * whole set rather than return what it could.
+   */
+  getToolResultPayloads = async (messageIds: string[]) => {
+    const chunks: string[][] = [];
+    for (let i = 0; i < messageIds.length; i += TOOL_PAYLOAD_BATCH_SIZE) {
+      chunks.push(messageIds.slice(i, i + TOOL_PAYLOAD_BATCH_SIZE));
+    }
+
+    const results = await pMap(
+      chunks,
+      (ids) => lambdaClient.message.getToolResultPayloads.query({ messageIds: ids }),
+      { concurrency: 3 },
+    );
+
+    return Object.assign({}, ...results) as Record<
+      string,
+      { content: string; pluginState?: unknown }
+    >;
   };
 
   diagnoseTopic = async (params: { agentId?: string | null; topicId: string }) => {
@@ -214,9 +254,7 @@ export class MessageService {
   };
 
   updateMessageError = async (id: string, value: ChatMessageError, ctx?: MessageQueryContext) => {
-    const error = value.type
-      ? value
-      : { body: value, message: value.message, type: 'ApplicationRuntimeError' };
+    const error = normalizeHeterogeneousMessageError(normalizeChatMessageError(value));
 
     return lambdaClient.message.update.mutate({
       ...ctx,
@@ -260,10 +298,6 @@ export class MessageService {
 
   updateMessageTranslate = async (id: string, translate: Partial<ChatTranslate> | false) => {
     return lambdaClient.message.updateTranslate.mutate({ id, value: translate as ChatTranslate });
-  };
-
-  updateMessageTTS = async (id: string, tts: Partial<ChatTTS> | false) => {
-    return lambdaClient.message.updateTTS.mutate({ id, value: tts });
   };
 
   updateMessageMetadata = async (

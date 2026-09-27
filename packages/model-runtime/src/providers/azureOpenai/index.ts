@@ -4,6 +4,7 @@ import type OpenAI from 'openai';
 
 import { pruneReasoningPayload } from '../../core/contextBuilders/openai';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import { refineErrorCode } from '../../errors';
 import type { ChatMethodOptions, ChatStreamPayload } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import type { CreateImagePayload } from '../../types/image';
@@ -309,12 +310,24 @@ export class LobeAzureOpenAI extends BaseAzureOpenAI {
       };
     }
 
+    const fallbackErrorType = normalizedError.code
+      ? AgentRuntimeErrorType.ProviderBizError
+      : AgentRuntimeErrorType.AgentRuntimeError;
+    const errorMessage =
+      typeof normalizedError.error?.message === 'string'
+        ? normalizedError.error.message
+        : normalizedError.message;
+    const refinedErrorType = refineErrorCode({
+      errorType: fallbackErrorType,
+      httpStatus: normalizedError.status,
+      message: errorMessage,
+      provider: ModelProvider.Azure,
+    });
+
     return AgentRuntimeError.chat({
       endpoint: maskSensitiveUrl(this.baseURL),
       error: sanitizeError(normalizedError),
-      errorType: normalizedError.code
-        ? AgentRuntimeErrorType.ProviderBizError
-        : AgentRuntimeErrorType.AgentRuntimeError,
+      errorType: refinedErrorType ?? fallbackErrorType,
       provider: ModelProvider.Azure,
     });
   }

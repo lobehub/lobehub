@@ -23,6 +23,7 @@ export {
   getErrorCodeSpec,
   getRuntimeErrorI18nKey,
   isEmptyModelCompletion,
+  isModelRefusalFinishReason,
   isUserSideError,
   matchErrorPattern,
   type MatchInput,

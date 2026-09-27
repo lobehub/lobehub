@@ -98,7 +98,7 @@ const CrawlerResultCard = memo<CrawlerData>(({ result, messageId, crawler, origi
     );
   }
 
-  const { url, title, description } = result as CrawlSuccessResult;
+  const { url, title, description, length } = result as CrawlSuccessResult;
 
   return (
     <Block
@@ -132,7 +132,9 @@ const CrawlerResultCard = memo<CrawlerData>(({ result, messageId, crawler, origi
           }}
           items={[
             {
-              children: result.content?.length,
+              // `length` is pinned to the crawled body; `content` may be a
+              // preview once the read path projects this tool.
+              children: length ?? result.content?.length,
               label: t('search.crawPages.meta.words'),
             },
             {

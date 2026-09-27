@@ -192,7 +192,12 @@ export const contextEngineering = async ({
 
   const fileContents = agentFiles
     .filter((file) => file.enabled && file.content)
-    .map((file) => ({ content: file.content!, fileId: file.id, filename: file.name }));
+    .map((file) => ({
+      content: file.content!,
+      fileId: file.id,
+      filename: file.name,
+      originalChars: file.originalCharCount,
+    }));
 
   const knowledgeBases = agentKnowledgeBases
     .filter((kb) => kb.enabled)
@@ -242,15 +247,16 @@ export const contextEngineering = async ({
     : undefined;
   const agentMeta = agentId ? agentSelectors.getAgentMetaById(agentId)(agentStoreState) : undefined;
   const agentItem = agentId ? agentByIdSelectors.getAgentById(agentId)(agentStoreState) : undefined;
-  const isInAutoSkillMode =
-    agentChatConfigSelectors.skillActivateMode(agentStoreState) !== 'manual';
+  // The responding agent's chat config — the transient target's own row when
+  // there is one, otherwise the current agent's.
+  const respondingChatConfig =
+    agentConfig?.chatConfig ?? agentChatConfigSelectors.currentChatConfig(agentStoreState);
   const facts = await gatherContextFacts(
     {
       agent: {
         // The current-agent chat config carries the skill activation mode the
         // management rule reads, even when `agentId` is a transient target.
-        chatConfig:
-          agentConfig?.chatConfig ?? agentChatConfigSelectors.currentChatConfig(agentStoreState),
+        chatConfig: respondingChatConfig,
         description: agentMeta?.description,
         slug: agentItem?.slug,
         title: agentMeta?.title,
@@ -279,13 +285,15 @@ export const contextEngineering = async ({
   // In manual mode: only expose user-selected skills (filtered by pluginIds).
   let enabledSkills: OperationSkillSet['skills'] | undefined;
   if (plugins) {
-    const skillSet = await resolveClientSkills(plugins, disabledPluginIds);
-    if (isInAutoSkillMode) {
-      enabledSkills = skillSet.skills;
-    } else {
-      const selectedIds = new Set(plugins);
-      enabledSkills = skillSet.skills.filter((s) => selectedIds.has(s.identifier));
-    }
+    // Manual mode narrows the pool itself, so an unselected skill is neither
+    // listed nor resolvable by `activateSkill`.
+    enabledSkills = (
+      await resolveClientSkills(
+        plugins,
+        disabledPluginIds,
+        agentChatConfigSelectors.skillActivateMode(agentStoreState),
+      )
+    ).skills;
   }
 
   // One timezone for every date the prompt renders — the core's temporal
@@ -299,6 +307,9 @@ export const contextEngineering = async ({
     agent: {
       documents: facts.agentDocuments,
       enableHistoryCount,
+      // Pass the raw value through (explicit false preserved); the engine
+      // treats undefined as enabled.
+      enableStaleToolResultTrim: respondingChatConfig.enableStaleToolResultTrim,
       historyCount,
       // The agent's identity lives on the agent row (name/title), not in the
       // prompt text — inject it so the model can answer "who are you?" with
@@ -360,7 +371,7 @@ export const contextEngineering = async ({
 
   log('Input messages count: %d', messages.length);
 
-  const processed = await runContextEngineering(snapshot);
+  const { messages: processed } = await runContextEngineering(snapshot);
 
   log('Output messages count: %d', processed.length);
 

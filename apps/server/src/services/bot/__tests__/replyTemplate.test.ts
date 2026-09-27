@@ -1,3 +1,4 @@
+import { ERROR_CODE_SPECS, formatErrorRef } from '@lobechat/model-runtime/errors';
 import { describe, expect, it } from 'vitest';
 
 import type { RenderStepParams } from '../replyTemplate';
@@ -364,6 +365,72 @@ describe('replyTemplate', () => {
   // ==================== renderAgentError ====================
 
   describe('renderAgentError', () => {
+    it.each(Object.values(ERROR_CODE_SPECS).filter((spec) => !spec.isFallback))(
+      'renders actionable localized copy and a stable reference for $code',
+      (spec) => {
+        for (const locale of ['en-US', 'zh-CN'] as const) {
+          const output = renderAgentError(
+            spec.code,
+            'private upstream payload',
+            'op-known',
+            locale,
+          );
+          expect(output).toContain(formatErrorRef(spec.code));
+          expect(output).toContain('op-known');
+          expect(output).not.toContain('private upstream payload');
+          expect(output).not.toContain('{{');
+          expect(output.split('\n').length).toBeGreaterThanOrEqual(3);
+        }
+      },
+    );
+
+    it('renders a known request error instead of the attribution fallback', () => {
+      const output = renderAgentError(
+        'RequestBodyTooLarge',
+        'secret upstream payload',
+        'op-size',
+        'en-US',
+        'harness',
+      );
+      expect(output).toContain('request is too large');
+      expect(output).toContain('Error code: `E');
+      expect(output).toContain('op-size');
+      expect(output).not.toContain('Something went wrong on our side');
+      expect(output).not.toContain('secret upstream payload');
+    });
+
+    it('names the unreachable device instead of falling to the legacy tier', () => {
+      // A hetero dispatch failure (device offline / unregistered / no gateway)
+      // reaches the bot as `DeviceGatewayNotConfigured` with no attribution, so
+      // without its own mapping it rendered a bare "Agent Execution Failed".
+      const output = renderAgentError(
+        'DeviceGatewayNotConfigured',
+        '{"error":"DEVICE_NOT_FOUND","success":false}',
+        'op-device',
+      );
+      expect(output).toContain("Couldn't reach the device this agent runs on");
+      expect(output).toContain('op-device');
+      expect(output).not.toContain('Agent Execution Failed');
+      expect(output).not.toContain('DEVICE_NOT_FOUND');
+
+      const zh = renderAgentError('DeviceGatewayNotConfigured', undefined, 'op-device', 'zh-CN');
+      expect(zh).toContain('无法连接到运行该 Agent 的设备');
+      expect(zh).not.toContain('Agent 执行失败');
+    });
+
+    it('classifies a legacy envelope before choosing IM copy', () => {
+      const output = renderAgentError('ProviderBizError', 'insufficient quota', 'op-quota');
+      expect(output).toContain('Provider quota exhausted');
+      expect(output).toContain('Error code: `E');
+    });
+
+    it('renders a known request error in Chinese with a stable reference', () => {
+      const output = renderAgentError('RequestBodyTooLarge', undefined, 'op-size', 'zh-CN');
+      expect(output).toContain('错误码:');
+      expect(output).not.toContain('Something went wrong');
+      expect(output).not.toContain('RequestBodyTooLarge');
+    });
+
     it('returns the friendly NoAvailableProvider copy and appends the operation id footer', () => {
       const out = renderAgentError('NoAvailableProvider', undefined, 'op-abc');
       expect(out).toContain('No model provider configured');
@@ -563,12 +630,13 @@ describe('replyTemplate', () => {
       });
     });
 
-    it('maps both QuotaLimitReached and InsufficientQuota to the same quota copy', () => {
+    it('resolves the legacy rate-limit alias separately from exhausted quota', () => {
       const a = renderAgentError('QuotaLimitReached', undefined, 'op-1');
       const b = renderAgentError('InsufficientQuota', undefined, 'op-1');
-      expect(a).toContain('quota');
+      expect(a).toContain('Too many requests');
       expect(b).toContain('quota');
-      expect(a).toBe(b);
+      expect(a).toContain('E3001');
+      expect(b).toContain('E2001');
     });
 
     it('uses friendly copy for command connection close failures wrapped as 500 errors', () => {
@@ -620,7 +688,7 @@ describe('replyTemplate', () => {
         'en-US',
         'system',
       );
-      expect(en).toContain('temporary system error');
+      expect(en).toContain('session state was unavailable');
       expect(en).not.toContain('model provider');
       expect(en).not.toMatch(/switch to a different model/i);
       expect(en).toContain('op-1');
@@ -632,7 +700,7 @@ describe('replyTemplate', () => {
         'zh-CN',
         'system',
       );
-      expect(zh).toContain('临时系统错误');
+      expect(zh).toContain('会话状态不可用');
     });
 
     it('still gives ProviderNetworkError the provider-specific network copy', () => {
@@ -685,7 +753,9 @@ describe('replyTemplate', () => {
       const unavailable = renderAgentError('ProviderServiceUnavailable', undefined, 'op-1');
       const noChannel = renderAgentError('NoAvailableChannel', undefined, 'op-1');
       expect(unavailable).toContain('temporarily unavailable');
-      expect(unavailable).toBe(noChannel);
+      expect(noChannel).toContain('temporarily unavailable');
+      expect(unavailable).toContain('E3002');
+      expect(noChannel).toContain('E3003');
 
       expect(renderAgentError('RateLimitExceeded', undefined, 'op-1')).toContain(
         'Too many requests',

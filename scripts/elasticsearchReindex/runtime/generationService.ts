@@ -7,6 +7,7 @@ import {
   getFtsSearchIndexSchemaFingerprint,
   getFtsSearchIndexSchemaVersion,
   getFtsSearchPhysicalIndexName,
+  parseFtsSearchPhysicalIndexName,
 } from '../../../packages/database/src/repositories/ftsSearchDocument';
 import type { FtsSearchProjectionCompatibility } from '../../../packages/database/src/repositories/ftsSearchDocument/projectionCompatibility';
 import { getFtsSearchProjectionCompatibility } from '../../../packages/database/src/repositories/ftsSearchDocument/projectionCompatibility';
@@ -21,6 +22,7 @@ export interface FtsSearchGenerationElasticsearchClient {
   deleteIndex: (index: string) => Promise<void>;
   describeGenerations: (alias: string) => Promise<FtsSearchReindexGenerationDescription[]>;
   ensureRetiredIndexProtection: (index: string) => Promise<void>;
+  markGenerationSuperseded: (index: string, supersededByReindexRunId: string) => Promise<void>;
   promoteAlias: (alias: string, from: readonly string[], to: string) => Promise<void>;
 }
 
@@ -28,6 +30,7 @@ export interface FtsSearchGenerationElasticsearchClient {
 export type FtsSearchGenerationCheckpointReader = (
   namespace: string,
   schemaVersion: number,
+  reindexRunId: string | null,
 ) => Promise<FtsSearchReindexRunState | undefined>;
 
 /**
@@ -62,6 +65,7 @@ export interface FtsSearchGenerationSummary {
   matchesDeclared: boolean;
   reindexRunId: string | null;
   state: 'closed' | 'open';
+  supersededByReindexRunId: string | null;
   version: number | null;
 }
 
@@ -135,6 +139,7 @@ const summarize = (
       (fingerprint === null || fingerprint === getFtsSearchIndexSchemaFingerprint(entity)),
     reindexRunId: generation.meta?.reindex_run_id ?? null,
     state: generation.state,
+    supersededByReindexRunId: generation.meta?.superseded_by_reindex_run_id ?? null,
     version: generation.meta?.schema_version ?? generation.version,
   };
 };
@@ -159,23 +164,34 @@ export const describeEntityGeneration = async ({
   };
   const generations = await client.describeGenerations(alias);
 
-  const checkpoints = new Map<number, FtsSearchReindexRunState | undefined>();
-  const checkpointFor = async (version: number | null) => {
+  const checkpoints = new Map<string, FtsSearchReindexRunState | undefined>();
+  const checkpointFor = async (version: number | null, reindexRunId: string | null) => {
     if (version === null) return;
-    if (!checkpoints.has(version)) {
-      checkpoints.set(version, await readCheckpoint(namespace, version));
+    const key = `${version}:${reindexRunId ?? 'canonical'}`;
+    if (!checkpoints.has(key)) {
+      checkpoints.set(key, await readCheckpoint(namespace, version, reindexRunId));
     }
-    return checkpoints.get(version);
+    return checkpoints.get(key);
   };
 
   const liveGeneration = generations.find((generation) => generation.isWriteIndex);
   const live = liveGeneration
-    ? summarize(entity, liveGeneration, await checkpointFor(liveGeneration.version))
+    ? summarize(
+        entity,
+        liveGeneration,
+        await checkpointFor(liveGeneration.version, liveGeneration.meta?.reindex_run_id ?? null),
+      )
     : null;
   const candidates: FtsSearchGenerationSummary[] = [];
   for (const generation of generations) {
     if (generation === liveGeneration) continue;
-    candidates.push(summarize(entity, generation, await checkpointFor(generation.version)));
+    candidates.push(
+      summarize(
+        entity,
+        generation,
+        await checkpointFor(generation.version, generation.meta?.reindex_run_id ?? null),
+      ),
+    );
   }
   const mappingDiff =
     liveGeneration?.mappings && liveGeneration.state === 'open'
@@ -243,9 +259,12 @@ export const describeEntityGeneration = async ({
 export interface FtsSearchPromoteGenerationOptions {
   client: FtsSearchGenerationElasticsearchClient;
   entity: FtsSearchDocumentEntity;
+  /** Exact target required when more than one physical generation implements the same version. */
+  generation?: string;
   namespace: string;
   outboxStats: FtsSearchSyncOutboxStats;
   readCheckpoint: FtsSearchGenerationCheckpointReader;
+  validateCheckpointCapture?: (runId: string) => Promise<void>;
   /** Target generation; defaults to the declared version. Any other existing version is a rollback. */
   version?: number;
 }
@@ -266,18 +285,39 @@ export interface FtsSearchPromoteGenerationResult {
 export const promoteGeneration = async ({
   client,
   entity,
+  generation,
   namespace,
   outboxStats,
   readCheckpoint,
-  version = getFtsSearchIndexSchemaVersion(entity),
+  validateCheckpointCapture = async () => {},
+  version: requestedVersion,
 }: FtsSearchPromoteGenerationOptions): Promise<FtsSearchPromoteGenerationResult> => {
   const alias = getFtsSearchIndexAlias(namespace, entity);
   const status = await describeEntityGeneration({ client, entity, namespace, readCheckpoint });
-  const target = [...status.candidates, ...(status.live ? [status.live] : [])].find(
-    (generation) => generation.version === version,
-  );
+  const available = [...status.candidates, ...(status.live ? [status.live] : [])];
+  const version = requestedVersion ?? getFtsSearchIndexSchemaVersion(entity);
+  const versionTargets = available.filter((candidate) => candidate.version === version);
+  const target = generation
+    ? available.find((candidate) => candidate.index === generation)
+    : versionTargets.length === 1
+      ? versionTargets[0]
+      : undefined;
   if (!target) {
+    if (!generation && versionTargets.length > 1) {
+      throw new Error(
+        `Multiple v${version} generations exist for ${alias}; choose one with --generation=<exact-index>`,
+      );
+    }
     throw new Error(`No v${version} generation exists for ${alias}; run --apply first`);
+  }
+  const targetVersion = generation && requestedVersion === undefined ? target.version : version;
+  if (targetVersion === null) {
+    throw new Error(`${target.index} carries no managed schema version and cannot be promoted`);
+  }
+  if (target.version !== targetVersion) {
+    throw new Error(
+      `${target.index} implements v${target.version ?? 'unknown'}, not the requested v${targetVersion}`,
+    );
   }
   if (target.state !== 'open') {
     throw new Error(`${target.index} is closed (being retired) and cannot be promoted`);
@@ -298,14 +338,14 @@ export const promoteGeneration = async ({
       `${target.index} requires source fields the current projection cannot preserve: ${details}; retain compatible source bridge fields before promoting`,
     );
   }
-  if (version === getFtsSearchIndexSchemaVersion(entity) && !target.matchesDeclared) {
+  if (targetVersion === getFtsSearchIndexSchemaVersion(entity) && !target.matchesDeclared) {
     throw new Error(
-      `${target.index} was not built from the declared v${version} mapping; rebuild it before promoting`,
+      `${target.index} was not built from the declared v${targetVersion} mapping; rebuild it before promoting`,
     );
   }
   if (
     status.live?.index === target.index &&
-    version === getFtsSearchIndexSchemaVersion(entity) &&
+    targetVersion === getFtsSearchIndexSchemaVersion(entity) &&
     status.mappingChange !== 'identical'
   ) {
     throw new Error(
@@ -314,6 +354,9 @@ export const promoteGeneration = async ({
   }
   if (target.backfill === 'backfilling') {
     throw new Error(`${target.index} backfill is incomplete; finish --apply --entity=${entity}`);
+  }
+  if (target.backfill !== 'unknown' && target.reindexRunId) {
+    await validateCheckpointCapture(target.reindexRunId);
   }
   if (status.live?.index === target.index) {
     if (target.reindexRunId === null || target.version === null) {
@@ -326,7 +369,7 @@ export const promoteGeneration = async ({
       `${target.index} has no checkpoint and no reindex _meta, so its contents cannot be trusted`,
     );
   }
-  if (target.backfill === 'unknown' && version > (status.live?.version ?? 0)) {
+  if (target.backfill === 'unknown' && (targetVersion ?? 0) > (status.live?.version ?? 0)) {
     throw new Error(
       `No checkpoint proves ${target.index} finished its backfill; keep ES_REINDEX_STATE_DIR from the --apply run`,
     );
@@ -341,6 +384,12 @@ export const promoteGeneration = async ({
   }
 
   const from = status.live ? [status.live.index] : [];
+  if (!target.reindexRunId) {
+    throw new Error(`${target.index} carries no managed reindex identity and cannot be promoted`);
+  }
+  for (const previous of from) {
+    await client.markGenerationSuperseded(previous, target.reindexRunId);
+  }
   await client.promoteAlias(alias, from, target.index);
   return { alias, from, outcome: 'promoted', to: target.index };
 };
@@ -372,10 +421,8 @@ const isKnownManagedGeneration = (
   alias: string,
   generation: FtsSearchGenerationSummary,
 ): boolean => {
-  const suffix = generation.index.slice(`${alias}-v`.length);
   return (
-    generation.index.startsWith(`${alias}-v`) &&
-    /^\d+$/.test(suffix) &&
+    parseFtsSearchPhysicalIndexName(alias, generation.index) !== undefined &&
     generation.reindexRunId !== null &&
     generation.version !== null
   );
@@ -394,7 +441,10 @@ const isRetirementCandidate = (
     liveVersion !== null &&
     liveVersion !== undefined &&
     candidate.version !== null &&
-    candidate.version < liveVersion
+    (candidate.version < liveVersion ||
+      (candidate.version === liveVersion &&
+        status.live?.reindexRunId !== null &&
+        candidate.supersededByReindexRunId === status.live?.reindexRunId))
   );
 };
 
@@ -420,7 +470,9 @@ export const planRetiredGenerations = (
       continue;
     }
     if (!isRetirementCandidate(status, candidate)) {
-      blockedBy.push(`${candidate.index} is not older than the live generation`);
+      blockedBy.push(
+        `${candidate.index} is neither older than the live generation nor marked as superseded by it`,
+      );
       continue;
     }
     if (candidate.backfill === 'backfilling') {
@@ -431,8 +483,8 @@ export const planRetiredGenerations = (
       close.push(candidate.index);
     } else {
       alreadyClosed.push(candidate.index);
-      purgeCandidates.push(candidate.index);
     }
+    purgeCandidates.push(candidate.index);
   }
   return { alreadyClosed, blockedBy, close, purgeCandidates };
 };
@@ -478,7 +530,7 @@ export interface FtsSearchPurgeRetiredGenerationsResult {
   kept: string;
 }
 
-/** Permanently deletes closed, detached generations after installing an exact-index write guard. */
+/** Permanently deletes detached generations after installing an exact-index write guard. */
 export const purgeRetiredGenerations = async ({
   client,
   entity,
@@ -497,10 +549,7 @@ export const purgeRetiredGenerations = async ({
 
   const plan = planRetiredGenerations(status);
   const backfilling = status.candidates.find(
-    (candidate) =>
-      isRetirementCandidate(status, candidate) &&
-      candidate.state === 'closed' &&
-      candidate.backfill === 'backfilling',
+    (candidate) => isRetirementCandidate(status, candidate) && candidate.backfill === 'backfilling',
   );
   if (backfilling) {
     throw new Error(`${backfilling.index} backfill is still running; it cannot be purged`);

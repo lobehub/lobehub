@@ -6,10 +6,15 @@ import {
   isHeteroStatusGuideErrorData,
   type LocalHeterogeneousAgentType,
 } from '@lobechat/heterogeneous-agents';
+import { normalizeHeterogeneousMessageError } from '@lobechat/heterogeneous-agents/errors';
 import { ThreadStatus } from '@lobechat/types';
 import debug from 'debug';
 
-import { AgentOperationModel } from '@/database/models/agentOperation';
+import {
+  AgentOperationModel,
+  type HeteroIngestRejectionMarker,
+  type HeteroIngestRejectionReason,
+} from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
@@ -41,6 +46,20 @@ export interface HeterogeneousIngestParams {
   events: AgentStreamEvent[];
   operationId: string;
   topicId: string;
+}
+
+/**
+ * Outcome of one ingest batch, reported back to the producer.
+ *
+ * A refused batch is NOT an error the producer should retry — the operation it
+ * belongs to is over as far as the server is concerned, and every later batch
+ * will be refused too. It IS, however, a failure of the run: the producer's
+ * output is not being persisted, so it must stop pushing and finish as failed
+ * rather than exit 0 on an empty turn.
+ */
+export interface HeterogeneousIngestResult {
+  accepted: boolean;
+  reason?: HeteroIngestRejectionReason;
 }
 
 export interface HeterogeneousFinishParams {
@@ -81,7 +100,18 @@ export const normalizeHeterogeneousFinishError = (
   agentType: HeterogeneousAgentType,
   error: HeterogeneousFinishError | undefined,
 ): HeterogeneousFinishError | undefined => {
-  if (!error || isHeteroStatusGuideErrorData(error.body)) return error;
+  if (!error) return error;
+  const normalized = normalizeHeterogeneousMessageError(
+    { ...error, type: 'AgentRuntimeError' },
+    agentType,
+  );
+  if (normalized.errorRef)
+    return {
+      ...normalized,
+      message: normalized.message ?? error.message,
+      type: 'AgentRuntimeError',
+    };
+  if (isHeteroStatusGuideErrorData(error.body)) return error;
 
   const body = error.body;
   const bodyDetails = body
@@ -94,12 +124,32 @@ export const normalizeHeterogeneousFinishError = (
 
   if (!classified) return error;
 
-  return {
+  return normalizeHeterogeneousMessageError({
     body: { ...classified },
     message: classified.message,
     type: 'AgentRuntimeError',
-  };
+  }) as HeterogeneousFinishError;
 };
+
+/**
+ * User-facing failure for a run whose events ingest refused. Deliberately not a
+ * status-guide code: nothing is wrong with the user's machine, credentials or
+ * the CLI — the turn simply has to be re-sent.
+ */
+const buildIngestRejectionError = (
+  rejection: HeteroIngestRejectionMarker,
+): HeterogeneousFinishError => ({
+  body: {
+    droppedEvents: rejection.droppedEvents,
+    reason: rejection.reason,
+    rejectedAt: rejection.at,
+  },
+  message:
+    rejection.reason === 'stale-operation'
+      ? 'This run was replaced while it was still working, so its output was not saved. Send the message again.'
+      : 'This run had already been closed when its output arrived, so nothing was saved. Send the message again.',
+  type: 'AgentRuntimeError',
+});
 
 export interface HeterogeneousAgentServiceOptions {
   /** Inject a pre-built operation model (used by tests). */
@@ -170,7 +220,7 @@ export class HeterogeneousAgentService {
       });
   }
 
-  async heteroIngest(params: HeterogeneousIngestParams): Promise<void> {
+  async heteroIngest(params: HeterogeneousIngestParams): Promise<HeterogeneousIngestResult> {
     const { agentType, assistantMessageId, events, operationId, topicId } = params;
 
     log(
@@ -185,7 +235,7 @@ export class HeterogeneousAgentService {
     const leaseRefreshed = await this.agentOperationModel.touchRunning(operationId);
     if (!leaseRefreshed) {
       log('heteroIngest: ignore terminal or missing operation op=%s', operationId);
-      return;
+      return this.rejectIngest(operationId, 'operation-not-running', events.length);
     }
 
     // Persist FIRST, then publish — the renderer's gateway handler triggers
@@ -204,7 +254,7 @@ export class HeterogeneousAgentService {
           operationId,
           err.message,
         );
-        return;
+        return this.rejectIngest(operationId, 'stale-operation', events.length);
       }
       throw err;
     }
@@ -246,6 +296,60 @@ export class HeterogeneousAgentService {
     if (unpublished.length > 0) {
       await this.traceRecorder.appendBatch(operationId, events);
     }
+
+    return { accepted: true };
+  }
+
+  /**
+   * Turn a discarded batch into a durable, reportable refusal.
+   *
+   * Two consumers, because either can be missing: the return value lets a
+   * current producer stop and finish as failed, while the row marker covers the
+   * producers that predate that contract (and any that die before finishing) —
+   * `heteroFinish` reads it back and refuses to settle the run as a clean turn.
+   * Best-effort on the write: losing the marker must not turn a refusal into a
+   * silent acceptance for the producer that CAN act on it.
+   */
+  private async rejectIngest(
+    operationId: string,
+    reason: HeteroIngestRejectionReason,
+    droppedEvents: number,
+  ): Promise<HeterogeneousIngestResult> {
+    const marker: HeteroIngestRejectionMarker = {
+      at: new Date().toISOString(),
+      droppedEvents,
+      reason,
+    };
+
+    try {
+      await this.agentOperationModel.recordHeteroIngestRejection(operationId, marker);
+    } catch (err) {
+      log('heteroIngest: failed to record rejection op=%s (non-fatal): %O', operationId, err);
+    }
+
+    return { accepted: false, reason };
+  }
+
+  /**
+   * Read back the refusal {@link rejectIngest} stamped, if any. Never throws: a
+   * failed read must leave the producer's own verdict standing rather than
+   * fabricate a failure for a run that was fine.
+   */
+  private async readIngestRejection(
+    operationId: string,
+  ): Promise<HeteroIngestRejectionMarker | undefined> {
+    try {
+      const operation = await this.agentOperationModel.findById(operationId);
+      const marker = (operation?.metadata as Record<string, unknown> | null | undefined)
+        ?.heteroIngestRejection;
+
+      return marker && typeof marker === 'object'
+        ? (marker as HeteroIngestRejectionMarker)
+        : undefined;
+    } catch (err) {
+      log('heteroFinish: failed to read ingest rejection op=%s (non-fatal): %O', operationId, err);
+      return undefined;
+    }
   }
 
   async heteroFinish(params: HeterogeneousFinishParams): Promise<void> {
@@ -253,12 +357,35 @@ export class HeterogeneousAgentService {
       agentType,
       assistantMessageId: seedAssistantMessageId,
       operationId,
-      result,
+      result: reportedResult,
       resumeSessionInvalidated,
       sessionId,
       topicId,
     } = params;
-    const error = normalizeHeterogeneousFinishError(agentType, params.error);
+
+    // A producer only sees HTTP acks, so it reports success for a run whose
+    // output ingest discarded — the CLI did exit 0, it just has no idea none of
+    // its work was persisted. That turn is a failure from the user's side: the
+    // assistant placeholder never fills in, and settling it as `done` retires
+    // the topic/task as if it had been answered. Downgrade it here, where the
+    // refusal was recorded, so every terminal consumer below (error bubble,
+    // operation row, completion hooks, bot callback) agrees it failed.
+    const rejection =
+      reportedResult === 'success' ? await this.readIngestRejection(operationId) : undefined;
+    const result: HeterogeneousFinishResult = rejection ? 'error' : reportedResult;
+    const error = rejection
+      ? buildIngestRejectionError(rejection)
+      : normalizeHeterogeneousFinishError(agentType, params.error);
+
+    if (rejection) {
+      log(
+        'heteroFinish: downgrading success to error topic=%s op=%s reason=%s dropped=%d',
+        topicId,
+        operationId,
+        rejection.reason,
+        rejection.droppedEvents,
+      );
+    }
 
     log(
       'heteroFinish: user=%s topic=%s op=%s type=%s result=%s sessionId=%s',

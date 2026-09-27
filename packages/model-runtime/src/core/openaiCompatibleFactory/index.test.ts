@@ -15,6 +15,7 @@ import {
   createSignatureScope,
   serializeScopedSignature,
 } from '../../utils/signatureScope';
+import { createVideoWithCompletionMode } from '../../utils/videoCompletionMode';
 import * as openaiHelpers from '../contextBuilders/openai';
 import { createOpenAICompatibleRuntime } from './index';
 
@@ -788,7 +789,7 @@ describe('LobeOpenAICompatibleFactory', () => {
           'data: {"inputTextTokens":5,"outputTextTokens":5,"totalInputTokens":5,"totalOutputTokens":5,"totalTokens":10}\n\n',
           'id: output_speed\n',
           'event: speed\n',
-          expect.stringMatching(/^data: \{.*"tps":.*,"ttft":.*\}\n\n$/), // tps ttft should be calculated with elapsed time
+          'data: {"latency":10}\n\n',
           'id: a\n',
           'event: stop\n',
           'data: "stop"\n\n',
@@ -864,7 +865,7 @@ describe('LobeOpenAICompatibleFactory', () => {
           'data: {"inputTextTokens":5,"outputTextTokens":5,"totalInputTokens":5,"totalOutputTokens":5,"totalTokens":10}\n\n',
           'id: output_speed\n',
           'event: speed\n',
-          expect.stringMatching(/^data: \{.*"tps":.*,"ttft":.*\}\n\n$/), // tps ttft should be calculated with elapsed time
+          'data: {"latency":10}\n\n',
           'id: a\n',
           'event: stop\n',
           'data: "stop"\n\n',
@@ -1373,6 +1374,41 @@ describe('LobeOpenAICompatibleFactory', () => {
           }),
         ).rejects.toMatchObject({
           errorType: AgentRuntimeErrorType.InvalidRequestFormat,
+          provider,
+        });
+      });
+
+      it('should classify a remote media download timeout as retryable', async () => {
+        const message =
+          'Unable to download content from the provided URL before the timeout. Check that the URL is publicly accessible and responds promptly, or upload the file and provide a file_id instead.';
+        const apiError = new OpenAI.APIError(
+          400,
+          {
+            code: 'invalid_value',
+            error: {
+              code: 'invalid_value',
+              message,
+              param: 'url',
+              type: 'invalid_request_error',
+            },
+            param: 'url',
+            status: 400,
+            type: 'invalid_request_error',
+          },
+          message,
+          new Headers(),
+        );
+
+        vi.spyOn(instance['client'].chat.completions, 'create').mockRejectedValue(apiError);
+
+        await expect(
+          instance.chat({
+            messages: [{ content: 'Describe this image', role: 'user' }],
+            model: 'gpt-4o',
+            temperature: 0,
+          }),
+        ).rejects.toMatchObject({
+          errorType: AgentRuntimeErrorType.RemoteMediaDownloadTimeout,
           provider,
         });
       });
@@ -4180,6 +4216,83 @@ describe('LobeOpenAICompatibleFactory', () => {
           type: 'chat',
         },
       ]);
+    });
+  });
+
+  describe('createVideo completion mode', () => {
+    it('should default to polling and strip callback URLs', async () => {
+      const createVideo = vi.fn().mockResolvedValue({ inferenceId: 'video-1' });
+      const Runtime = createOpenAICompatibleRuntime({
+        createVideo,
+        provider: 'video-provider',
+      });
+      const runtime = new Runtime({ apiKey: 'test' });
+
+      await expect(
+        createVideoWithCompletionMode(
+          runtime,
+          {
+            callbackUrl: 'https://example.com/webhook',
+            model: 'video-model',
+            params: { prompt: 'A cat' },
+          },
+          { preferredCompletionMode: 'webhook' },
+        ),
+      ).resolves.toEqual({
+        completionMode: 'polling',
+        inferenceId: 'video-1',
+      });
+      expect(createVideo).toHaveBeenCalledWith(
+        {
+          model: 'video-model',
+          params: { prompt: 'A cat' },
+        },
+        expect.any(Object),
+      );
+    });
+
+    it('should use webhook mode for a webhook-only runtime', async () => {
+      const createVideo = vi.fn().mockResolvedValue({ inferenceId: 'video-2' });
+      const Runtime = createOpenAICompatibleRuntime({
+        createVideo,
+        provider: 'webhook-video-provider',
+        videoGenerationCapabilities: { completionModes: ['webhook'] },
+      });
+      const runtime = new Runtime({ apiKey: 'test' });
+      const payload = {
+        callbackUrl: 'https://example.com/webhook',
+        model: 'video-model',
+        params: { prompt: 'A cat' },
+      };
+
+      await expect(createVideoWithCompletionMode(runtime, payload)).resolves.toEqual({
+        completionMode: 'webhook',
+        inferenceId: 'video-2',
+      });
+      expect(createVideo).toHaveBeenCalledWith(payload, expect.any(Object));
+    });
+
+    it('should resolve model capabilities using the mapped upstream model', async () => {
+      const createVideo = vi.fn().mockResolvedValue({ inferenceId: 'video-3' });
+      const resolveCapabilities = vi
+        .fn()
+        .mockReturnValue({ completionModes: ['polling'] as const });
+      const Runtime = createOpenAICompatibleRuntime({
+        createVideo,
+        provider: 'mapped-video-provider',
+        videoGenerationCapabilities: resolveCapabilities,
+      });
+      const runtime = new Runtime({
+        apiKey: 'test',
+        modelIdMapping: { 'logical-video-model': 'upstream-video-model' },
+      });
+
+      await createVideoWithCompletionMode(runtime, {
+        model: 'logical-video-model',
+        params: { prompt: 'A cat' },
+      });
+
+      expect(resolveCapabilities).toHaveBeenCalledWith('upstream-video-model');
     });
   });
 

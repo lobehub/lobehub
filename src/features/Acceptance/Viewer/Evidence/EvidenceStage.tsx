@@ -7,6 +7,7 @@ import { memo, useEffect, useRef } from 'react';
 import type { DraftAnnotation } from './Annotation';
 import { AnnotationCanvas } from './Annotation';
 import { useMeasuredWidth } from './useMeasuredWidth';
+import { usePinchZoom } from './usePinchZoom';
 
 type Rect = AcceptanceReviewAnnotation['rect'];
 
@@ -47,6 +48,8 @@ interface EvidenceStageProps {
   /** Step to the previous (-1) or next (1) image. Touch only. */
   onSwipe?: (direction: 1 | -1) => void;
   onUpdate: (index: number, rect: Rect) => void;
+  /** Two-finger zoom. Touch only; absent on the desktop stage. */
+  onZoom?: (zoom: number) => void;
   src: string;
   /** Coarse pointer: allow page panning and swipe-to-switch at 1x. */
   touch?: boolean;
@@ -62,8 +65,9 @@ interface EvidenceStageProps {
  * the moment the layout swaps (see useMeasuredWidth).
  */
 export const EvidenceStage = memo<EvidenceStageProps>(
-  ({ annotations, drawing, onDraw, onRemove, onSwipe, onUpdate, src, touch, zoom }) => {
+  ({ annotations, drawing, onDraw, onRemove, onSwipe, onUpdate, onZoom, src, touch, zoom }) => {
     const { node, ref, width } = useMeasuredWidth<HTMLDivElement>();
+    const pinch = usePinchZoom({ node, onZoom: touch ? onZoom : undefined, zoom });
     const swipeStart = useRef<{ x: number; y: number } | null>(null);
     const canSwipe = Boolean(touch && onSwipe) && !drawing && zoom === 1;
 
@@ -77,8 +81,21 @@ export const EvidenceStage = memo<EvidenceStageProps>(
       <div
         className={styles.viewport}
         ref={ref}
-        style={{ touchAction: canSwipe ? 'pan-y pinch-zoom' : undefined }}
+        // With our own pinch the browser must not zoom the page on two
+        // fingers; without it, leave the native gesture alone.
+        style={{
+          touchAction: onZoom
+            ? canSwipe
+              ? 'pan-y'
+              : 'pan-x pan-y'
+            : canSwipe
+              ? 'pan-y pinch-zoom'
+              : undefined,
+        }}
+        onTouchCancel={pinch.handlers.onTouchCancel}
+        onTouchMove={pinch.handlers.onTouchMove}
         onTouchEnd={(event) => {
+          pinch.handlers.onTouchEnd?.(event);
           const start = swipeStart.current;
           swipeStart.current = null;
           const point = event.changedTouches[0];
@@ -89,6 +106,7 @@ export const EvidenceStage = memo<EvidenceStageProps>(
             onSwipe?.(dx < 0 ? 1 : -1);
         }}
         onTouchStart={(event) => {
+          pinch.handlers.onTouchStart?.(event);
           const point = event.touches[0];
           swipeStart.current =
             canSwipe && event.touches.length === 1 ? { x: point.clientX, y: point.clientY } : null;

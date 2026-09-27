@@ -3,6 +3,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
 
 import { resolveElasticsearchTransport } from '../../../packages/database/src/repositories/ftsSearch/elasticsearch/url';
+import { parseFtsSearchPhysicalIndexName } from '../../../packages/database/src/repositories/ftsSearchDocument';
 import type {
   FtsSearchReindexAliasOutcome,
   FtsSearchReindexBulkItemResult,
@@ -74,6 +75,20 @@ const mappingResponseSchema = z.record(
   }),
 );
 
+const indexMetaResponseSchema = z.record(
+  z.string(),
+  z.object({
+    mappings: z.object({
+      _meta: z.object({
+        reindex_run_id: z.string(),
+        schema_fingerprint: z.string().optional(),
+        schema_version: z.number().int().positive(),
+        superseded_by_reindex_run_id: z.string().optional(),
+      }),
+    }),
+  }),
+);
+
 const catIndicesResponseSchema = z.array(z.object({ index: z.string(), status: z.string() }));
 
 const generationDetailSchema = z.record(
@@ -85,6 +100,7 @@ const generationDetailSchema = z.record(
           reindex_run_id: z.string().optional(),
           schema_fingerprint: z.string().optional(),
           schema_version: z.number().int().positive().optional(),
+          superseded_by_reindex_run_id: z.string().optional(),
         })
         .passthrough()
         .optional(),
@@ -107,6 +123,7 @@ export interface FtsSearchReindexGenerationDescription {
     reindex_run_id?: string;
     schema_fingerprint?: string;
     schema_version?: number;
+    superseded_by_reindex_run_id?: string;
   } | null;
   /** Closed generations are mid-retirement: sync no longer targets them, deletion comes next. */
   state: 'closed' | 'open';
@@ -122,16 +139,14 @@ export interface FtsSearchReindexGenerationDescription {
  * never managed, whatever `_meta` they carry (for example a snapshot restored under another name).
  */
 const generationVersion = (alias: string, index: string, stampedVersion: number | undefined) => {
-  const built = parseGenerationVersion(alias, index);
+  const built = parseFtsSearchPhysicalIndexName(alias, index)?.builtSchemaVersion;
   if (built === undefined) return null;
   return stampedVersion ?? built;
 };
 
-/** Generation number of `index` if it is named `<alias>-v<n>`. */
+/** Generation number of a canonical or same-schema rebuild physical index. */
 export const parseGenerationVersion = (alias: string, index: string): number | undefined => {
-  if (!index.startsWith(`${alias}-v`)) return;
-  const suffix = index.slice(alias.length + 2);
-  return /^\d+$/.test(suffix) ? Number(suffix) : undefined;
+  return parseFtsSearchPhysicalIndexName(alias, index)?.builtSchemaVersion;
 };
 
 const settingsResponseSchema = z.record(
@@ -384,7 +399,7 @@ export class FtsSearchReindexHttpClient implements FtsSearchReindexElasticsearch
         return 'kept_other_generation';
       }
       throw new FtsSearchReindexRequestError(
-        `Elasticsearch alias ${alias} points to ${targets.map(([index]) => index).join(', ') || 'no index'} instead of a single writable ${alias}-v<n> generation`,
+        `Elasticsearch alias ${alias} points to ${targets.map(([index]) => index).join(', ') || 'no index'} instead of a single writable ${alias}-v<n>[-r<run-id>] generation`,
       );
     }
     if (response.status !== 404) {
@@ -543,6 +558,48 @@ export class FtsSearchReindexHttpClient implements FtsSearchReindexElasticsearch
       );
     }
     await this.assertAcknowledged(response, `alias promotion for ${alias}`);
+  }
+
+  async markGenerationSuperseded(index: string, supersededByReindexRunId: string): Promise<void> {
+    const metaResponse = await this.request(
+      `/${encodeURIComponent(index)}/_mapping?filter_path=*.mappings._meta`,
+      { method: 'GET' },
+    );
+    if (!metaResponse.ok) {
+      throw new FtsSearchReindexRequestError(
+        `Elasticsearch generation metadata lookup failed for ${index} (${metaResponse.status})`,
+        metaResponse.status,
+      );
+    }
+    const parsed = indexMetaResponseSchema.safeParse(await metaResponse.json());
+    const meta = parsed.success ? parsed.data[index]?.mappings._meta : undefined;
+    if (!parsed.success || !meta) {
+      throw new FtsSearchReindexRequestError(
+        `Elasticsearch generation metadata response has an invalid shape for ${index}`,
+        metaResponse.status,
+        parsed.success ? undefined : parsed.error,
+      );
+    }
+    if (meta.superseded_by_reindex_run_id === supersededByReindexRunId) return;
+
+    await this.beforeMutation();
+    const response = await this.request(`/${encodeURIComponent(index)}/_mapping`, {
+      body: JSON.stringify({
+        _meta: {
+          ...meta,
+          superseded_by_reindex_run_id: supersededByReindexRunId,
+        },
+      }),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'PUT',
+    });
+    if (!response.ok) {
+      throw new FtsSearchReindexRequestError(
+        `Elasticsearch generation supersession failed for ${index} (${response.status})`,
+        response.status,
+      );
+    }
+    await this.assertAcknowledged(response, `generation supersession for ${index}`);
   }
 
   async closeIndex(index: string): Promise<void> {

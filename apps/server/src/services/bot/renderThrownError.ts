@@ -1,3 +1,5 @@
+import { readHeterogeneousErrorContext } from '@lobechat/heterogeneous-agents/errors';
+
 import {
   formatErrorForState,
   readErrorBudgetContext,
@@ -44,5 +46,6 @@ export const renderThrownAgentError = (
     replyLocale,
     formatted.attribution ?? 'harness',
     readErrorBudgetContext(formatted),
+    readHeterogeneousErrorContext(formatted),
   );
 };

@@ -391,6 +391,7 @@ describe('ElasticsearchFtsSearchHttpClient', () => {
   });
 
   it('lists every live generation behind each alias, including the writable index', async () => {
+    const rebuildRunId = '00000000-0000-4000-8000-000000000003';
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -405,6 +406,7 @@ describe('ElasticsearchFtsSearchHttpClient', () => {
           'lobehub-agents-v1': { aliases: { 'lobehub-agents': { is_write_index: false } } },
           'lobehub-agents-v2': { aliases: { 'lobehub-agents': { is_write_index: true } } },
           'lobehub-agents-v3': { aliases: {} },
+          [`lobehub-agents-v3-r${rebuildRunId}`]: { aliases: {} },
           'lobehub-agents-v3-backup': { aliases: {} },
         }),
       );
@@ -417,7 +419,12 @@ describe('ElasticsearchFtsSearchHttpClient', () => {
     await expect(
       client.getFtsSearchSyncGenerationTargets(['lobehub-topics', 'lobehub-agents']),
     ).resolves.toEqual({
-      'lobehub-agents': ['lobehub-agents-v1', 'lobehub-agents-v2', 'lobehub-agents-v3'],
+      'lobehub-agents': [
+        'lobehub-agents-v1',
+        'lobehub-agents-v2',
+        'lobehub-agents-v3',
+        `lobehub-agents-v3-r${rebuildRunId}`,
+      ],
       'lobehub-topics': ['custom-topics'],
     });
     expect(fetchMock.mock.calls.map(([url]) => url.toString())).toEqual([
@@ -765,7 +772,38 @@ describe('ElasticsearchFtsSearchHttpClient', () => {
       incompatibilities: [],
     });
     expect(fetchMock.mock.calls[0][0].toString()).toBe(
-      'https://search.example.com/lobehub-topics-v1,lobehub-topics-v2/_mapping?filter_path=*.mappings.properties',
+      'https://search.example.com/lobehub-topics-v1,lobehub-topics-v2/_mapping?filter_path=*.mappings._meta,*.mappings.properties',
+    );
+  });
+
+  it('validates the run identity of a same-schema rebuild target before syncing it', async () => {
+    const runId = '00000000-0000-4000-8000-000000000003';
+    const index = `lobehub-topics-v1-r${runId}`;
+    const response = (reindexRunId: string) =>
+      Response.json({
+        [index]: {
+          mappings: {
+            _meta: { reindex_run_id: reindexRunId, schema_version: 1 },
+            properties: { id: { type: 'keyword' }, title: { type: 'text' } },
+          },
+        },
+      });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(response(runId))
+      .mockResolvedValueOnce(response('00000000-0000-4000-8000-000000000004'));
+    vi.stubGlobal('fetch', fetchMock);
+    const client = new ElasticsearchFtsSearchHttpClient({
+      apiKey: 'test-api-key',
+      indexNamespace: 'lobehub',
+      url: 'https://search.example.com',
+    });
+
+    await expect(client.getFtsSearchSyncIndexFields({ [index]: 'topics' })).resolves.toMatchObject({
+      fieldsByIndex: { [index]: ['id', 'title'] },
+    });
+    await expect(client.getFtsSearchSyncIndexFields({ [index]: 'topics' })).rejects.toThrow(
+      'has incompatible reindex metadata',
     );
   });
 

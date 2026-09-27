@@ -36,14 +36,17 @@ export const viewGateKind = (view: GoalNodeView): CoordinatorGateKind | undefine
 
 export const gateTitleKey = (kind: CoordinatorGateKind): string => `goalProcess.gate.title.${kind}`;
 
+/** The coordinator's terminal Task that accepts the whole Goal (matched by its fixed title). */
+export const isGoalAcceptanceTask = (view: GoalNodeView): boolean =>
+  view.node.kind === 'task' && view.node.title === GOAL_ACCEPTANCE_TASK_TITLE;
+
 /**
  * Locale key for a coordinator-authored fixed node title (gate nodes and the
  * terminal Goal-acceptance Task), or undefined for user/agent-authored nodes.
  */
 export const coordinatorNodeTitleKey = (view: GoalNodeView): string | undefined => {
   const { node } = view;
-  if (node.kind === 'task' && node.title === GOAL_ACCEPTANCE_TASK_TITLE)
-    return 'goalProcess.node.terminalAcceptance';
+  if (isGoalAcceptanceTask(view)) return 'goalProcess.node.terminalAcceptance';
   if (node.kind === 'decision') {
     const kind = viewGateKind(view);
     if (kind) return gateTitleKey(kind);

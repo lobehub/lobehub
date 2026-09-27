@@ -1,9 +1,8 @@
 'use client';
 
-import { Flexbox, Icon, Input } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Input } from '@lobehub/ui';
+import { Button, Spin, Text } from '@lobehub/ui/base-ui';
 import { type InputRef } from 'antd';
-import { Loader2Icon } from 'lucide-react';
 import { type ChangeEvent } from 'react';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -93,7 +92,7 @@ const UsernameRow = () => {
   return (
     <ProfileRow anchor={'profile-username'} label={t('profile.username')}>
       <Flexbox horizontal align="center" gap={8}>
-        {saving && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />}
+        {saving && <Spin size="small" style={{ opacity: 0.5 }} />}
         {error && (
           <Text style={{ fontSize: 12, whiteSpace: 'nowrap' }} type="danger">
             {error}

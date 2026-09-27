@@ -25,6 +25,37 @@ vi.mock('@/server/services/deviceGateway/scopedDevices', () => ({
 }));
 
 describe('ToolExecutionService', () => {
+  it('keeps a readable content when a runtime throws a plain budget error object', async () => {
+    // The lobehub provider rejects with a plain object (not an Error) whose
+    // message is nested under `error.message`.
+    const budgetError = {
+      budget: { availableCredits: 0, requiredCredits: 1219, shortfallCredits: 1219 },
+      error: { message: 'Budget exceeded' },
+      errorType: 'InsufficientBudgetForModel',
+      provider: 'lobehub',
+    };
+    const service = new ToolExecutionService({
+      builtinToolsExecutor: { execute: vi.fn().mockRejectedValue(budgetError) } as any,
+      mcpService: {} as any,
+    });
+
+    const result = await service.executeTool(
+      {
+        apiName: 'analyzeMedia',
+        arguments: '{}',
+        id: 'call_budget',
+        identifier: 'lobe-agent',
+        type: 'builtin',
+      },
+      { toolManifestMap: {} },
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.content).toContain('Budget exceeded');
+    expect(result.content).toContain('InsufficientBudgetForModel');
+    expect(result.error).toMatchObject({ errorType: 'InsufficientBudgetForModel' });
+  });
+
   it('keeps a failed command HTTP status as command output', async () => {
     const output = 'curl: (22) The requested URL returned error: 403';
     const service = new ToolExecutionService({
@@ -285,7 +316,7 @@ describe('ToolExecutionService', () => {
     );
 
     expect(result.content).toContain('01234');
-    expect(result.content).toContain('Content truncated');
+    expect(result.content).toContain('[Showing lines 1-');
   });
 
   /**
@@ -321,7 +352,7 @@ describe('ToolExecutionService', () => {
     const message = (result.error as { message: string }).message;
     expect(message.length).toBeLessThan(5000);
     expect(message).toContain('Command failed with exit code 1');
-    expect(message).toContain('Content truncated');
+    expect(message).toContain('[Showing lines 1-');
     // The archival opt-out covers the LLM-facing content, never the error.
     expect(result.content).toBe(runawayOutput);
   });

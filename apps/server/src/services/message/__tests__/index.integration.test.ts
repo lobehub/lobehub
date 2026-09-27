@@ -267,7 +267,7 @@ describe('MessageService Integration Tests', () => {
       expect(result.messages![0].content).toBe('updated content');
     });
 
-    it('should persist message errors and return them in queried messages', async () => {
+    it('should persist normalized message errors and return them in queried messages', async () => {
       const messageService = new MessageService(serverDB, userId);
 
       await serverDB.insert(agents).values({ id: 'agent-1', userId });
@@ -304,7 +304,31 @@ describe('MessageService Integration Tests', () => {
 
       expect(result.success).toBe(true);
       expect(result.messages).toHaveLength(1);
-      expect(result.messages![0].error).toEqual(messageError);
+      const expectedError = {
+        ...messageError,
+        attribution: 'user',
+        body: {
+          ...messageError.body,
+          details: { kind: 'auth_required' },
+        },
+        category: 'auth',
+        countAsFailure: false,
+        errorRef: 'H1001',
+        httpStatus: 470,
+        isFallback: false,
+        numericId: 1001,
+        retryable: false,
+        severity: 'warning',
+      };
+
+      expect(result.messages![0].error).toEqual(expectedError);
+
+      const [persistedMessage] = await serverDB
+        .select({ error: messages.error })
+        .from(messages)
+        .where(eq(messages.id, 'msg-err-1'));
+
+      expect(persistedMessage.error).toEqual(expectedError);
     });
   });
 

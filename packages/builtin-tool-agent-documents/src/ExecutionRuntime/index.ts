@@ -7,6 +7,7 @@ import {
   formatReplaceDocumentResult,
   formatUpdateLoadRuleResult,
 } from '@lobechat/prompts';
+import { appendTextWindowNotice, sliceTextWindow } from '@lobechat/prompts/textWindow';
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
 import type {
@@ -20,6 +21,7 @@ import type {
   ReplaceDocumentContentArgs,
   UpdateLoadRuleArgs,
 } from '../types';
+import { MAX_READ_DOCUMENT_CONTENT_CHARS } from '../types';
 
 interface AgentDocumentRecord {
   content?: string;
@@ -85,18 +87,6 @@ interface AgentDocumentToolTriggerInput {
 const CURRENT_PAGE_DOCUMENT_WRITE_ERROR_CODE = 'CURRENT_PAGE_DOCUMENT_WRITE_FORBIDDEN';
 const CURRENT_PAGE_DOCUMENT_WRITE_ERROR_TYPE = 'CurrentPageDocumentWriteForbidden';
 
-/**
- * Upper bound on the characters a single readDocument result feeds back into the
- * model context. Agent documents can hold whole email/newsletter archives that
- * run into the millions of characters; returning one whole once pushed a task
- * past the model's context window — a lone tool result reached ~591k tokens and
- * the next completion 400'd with ExceededContextWindow. The client Inspector
- * still renders the full document from `state`, so only the LLM-facing `content`
- * is capped. ~200k chars is roughly 50k tokens per field — generous for a real
- * document read while leaving ample room in the window.
- */
-const MAX_READ_DOCUMENT_CONTENT_CHARS = 200_000;
-
 type MaybePromise<T> = T | Promise<T>;
 
 export interface AgentDocumentsRuntimeService {
@@ -160,6 +150,8 @@ export interface AgentDocumentsRuntimeService {
 }
 
 export interface AgentDocumentsRuntimeOptions {
+  /** Keep the backing id for bookkeeping while hiding owner-only edit affordances. */
+  documentReadonly?: boolean;
   /**
    * Build a shareable URL that opens a document in the standalone document
    * route. When provided and it returns a URL, the create result surfaces the
@@ -170,13 +162,14 @@ export interface AgentDocumentsRuntimeOptions {
     documentId: string;
   }) => MaybePromise<string | undefined>;
   /**
-   * Fired after a document-mutating tool call finishes (create / remove /
-   * rename / copy) so the host can invalidate client-side caches. This is the
-   * only refresh signal for the server-runtime path — where the tool executes
-   * on the gateway and the client service layer (which normally invalidates)
-   * never runs. Invoked from the executor's `onAfterCall` lifecycle hook.
+   * Fired after a document-mutating tool call finishes so the host can
+   * invalidate client-side caches. This is the only refresh signal for the
+   * server-runtime path — where the tool executes on the gateway and the
+   * client service layer (which normally invalidates) never runs. Invoked from
+   * the executor's `onAfterCall` lifecycle hook. `documentId` is set only when
+   * the call wrote the body or metadata of an existing `documents` row.
    */
-  onDocumentsMutated?: () => MaybePromise<void>;
+  onDocumentsMutated?: (params: { documentId?: string }) => MaybePromise<void>;
 }
 
 export class AgentDocumentsExecutionRuntime {
@@ -192,8 +185,8 @@ export class AgentDocumentsExecutionRuntime {
    * mutation ran client- or server-side — covering the server-runtime path the
    * inline client service invalidation can't reach.
    */
-  notifyMutated(): Promise<void> {
-    return Promise.resolve(this.options.onDocumentsMutated?.());
+  notifyMutated(params: { documentId?: string } = {}): Promise<void> {
+    return Promise.resolve(this.options.onDocumentsMutated?.(params));
   }
 
   private resolveAgentId(context?: AgentDocumentOperationContext) {
@@ -274,45 +267,35 @@ export class AgentDocumentsExecutionRuntime {
   }
 
   /**
-   * Cap a single field so one oversized document can't blow the model's context
-   * window. Truncation is byte-cheap `slice` on characters (not tokens), so the
-   * cap is deliberately conservative; the trailing marker tells the model the
-   * document was cut and to work with a smaller/targeted read instead of
-   * assuming it saw the whole thing.
+   * Returns one window of a field using the shared text-window contract. A field within the cap
+   * and read without `offset`/`limit` is returned whole, exactly as before; otherwise the window
+   * ends with the range, total size and the exact readDocument call for the next window.
    */
-  private capReadContent(content: string) {
-    if (content.length <= MAX_READ_DOCUMENT_CONTENT_CHARS) return content;
+  private windowReadContent(content: string, args: ReadDocumentArgs, format: string) {
+    const paged = args.offset !== undefined || args.limit !== undefined;
+    if (!paged && content.length <= MAX_READ_DOCUMENT_CONTENT_CHARS) return content;
 
-    // Avoid splitting a UTF-16 surrogate pair: if the cutoff lands right after a
-    // high surrogate (e.g. half of an emoji), step back one code unit. Otherwise
-    // JSON.stringify emits a lone `\uD83D`-style escape, which some upstream
-    // providers (DeepSeek, Anthropic) reject — which would re-break the exact
-    // large-document requests this cap is meant to protect.
-    let cutoff = MAX_READ_DOCUMENT_CONTENT_CHARS;
-    const lastCharCode = content.charCodeAt(cutoff - 1);
-    if (lastCharCode >= 0xd8_00 && lastCharCode <= 0xdb_ff) cutoff -= 1;
+    const window = sliceTextWindow(content, {
+      maxChars: MAX_READ_DOCUMENT_CONTENT_CHARS,
+      maxLines: args.limit,
+      offset: args.offset,
+    });
 
-    const omitted = content.length - cutoff;
-    return (
-      content.slice(0, cutoff) +
-      `\n\n[... document truncated to fit the context window: ${omitted} of ${content.length} ` +
-      `characters omitted. This is only the beginning of the document — do not assume it is ` +
-      `complete. Read a smaller/specific document, or list and target sections instead of ` +
-      `loading the whole file.]`
-    );
+    return appendTextWindowNotice(window, {
+      continueFrom: (line) =>
+        `call readDocument again with id="${args.id}", format="${format}" and offset=${line}`,
+    });
   }
 
-  private formatDocumentReadContent(
-    doc: AgentDocumentRecord,
-    format: 'xml' | 'markdown' | 'both' = 'xml',
-  ) {
-    const markdown = this.capReadContent(doc.content || '');
-    const xml = this.capReadContent(doc.litexml || '');
+  private formatDocumentReadContent(doc: AgentDocumentRecord, args: ReadDocumentArgs) {
+    const format = args.format ?? 'xml';
+    const markdown = () => this.windowReadContent(doc.content || '', args, format);
+    const xml = () => this.windowReadContent(doc.litexml || '', args, format);
 
-    if (format === 'markdown') return markdown;
-    if (format === 'both') return JSON.stringify({ markdown, xml });
+    if (format === 'markdown') return markdown();
+    if (format === 'both') return JSON.stringify({ markdown: markdown(), xml: xml() });
 
-    return xml || markdown;
+    return doc.litexml ? xml() : markdown();
   }
 
   async listDocuments(
@@ -411,7 +394,12 @@ export class AgentDocumentsExecutionRuntime {
 
     return {
       content: formatCreateDocumentResult({ id: created.id, title, url }),
-      state: { agentDocumentId: created.id, agentId, documentId: created.documentId },
+      state: {
+        agentDocumentId: created.id,
+        agentId,
+        documentId: created.documentId,
+        ...(this.options.documentReadonly && { readonly: true }),
+      },
       success: true,
     };
   }
@@ -428,13 +416,12 @@ export class AgentDocumentsExecutionRuntime {
       };
     }
 
-    const doc = await this.service.readDocument({ ...args, agentId });
+    const { limit: _limit, offset: _offset, ...readArgs } = args;
+    const doc = await this.service.readDocument({ ...readArgs, agentId });
     if (!doc) return { content: `Document not found: ${args.id}`, success: false };
 
-    const format = args.format ?? 'xml';
-
     return {
-      content: this.formatDocumentReadContent(doc, format),
+      content: this.formatDocumentReadContent(doc, args),
       state: { content: doc.content, id: doc.id, title: doc.title, xml: doc.litexml },
       success: true,
     };
@@ -517,6 +504,9 @@ export class AgentDocumentsExecutionRuntime {
     });
     if (!updated) return { content: `Failed to modify document ${args.id}.`, success: false };
 
+    // The service applies the batch atomically: an unknown id or an operation the
+    // editor rejects throws with that operation's position, and nothing is saved.
+    // Reaching this point therefore means every operation was applied.
     const results = operations.map((operation) => ({
       action: operation.action,
       success: true,

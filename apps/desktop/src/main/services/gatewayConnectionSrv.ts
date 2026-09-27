@@ -35,6 +35,13 @@ const logger = createLogger('services:GatewayConnectionSrv');
 const DEFAULT_GATEWAY_URL = OFFICIAL_DEVICE_GATEWAY_URL;
 
 /**
+ * The socket drops about once an hour (Cloudflare moving the Durable Object,
+ * edge link resets) and is back within ~2s. A drop that recovers inside this
+ * window is not surfaced to the UI, so the device indicator doesn't flicker.
+ */
+const RECONNECT_UI_GRACE_MS = 5000;
+
+/**
  * Result envelope a tool-call handler must return. Mirrors
  * `BuiltinServerRuntimeOutput` so the renderer-side and remote-device paths
  * stay symmetric: `content` is the LLM-facing prompt text; `state` carries the
@@ -104,9 +111,11 @@ interface RpcHandler {
 
 interface DeviceRegistrar {
   (info: {
+    architecture: string;
     deviceId: string;
     hostname: string;
     identitySource: IdentitySource;
+    metadata: Record<string, string>;
     platform: string;
   }): Promise<void>;
 }
@@ -143,6 +152,9 @@ export default class GatewayConnectionService extends ServiceModule {
   private status: GatewayConnectionStatus = 'disconnected';
   private deviceId: string | null = null;
   private powerSaveBlockerId: number | null = null;
+  /** Status last pushed to renderers; lags `status` during a transient drop. */
+  private displayedStatus: GatewayConnectionStatus = 'disconnected';
+  private statusBroadcastTimer: ReturnType<typeof setTimeout> | null = null;
 
   private identitySource: IdentitySource | null = null;
 
@@ -298,6 +310,11 @@ export default class GatewayConnectionService extends ServiceModule {
     return this.status;
   }
 
+  /** Status as shown in the UI — hides reconnects that recover quickly. */
+  getDisplayedStatus(): GatewayConnectionStatus {
+    return this.displayedStatus;
+  }
+
   getDeviceInfo() {
     return {
       deviceId: this.getDeviceId(),
@@ -383,9 +400,16 @@ export default class GatewayConnectionService extends ServiceModule {
     if (userId) {
       const identity = await this.resolveDeviceIdentity(userId);
       await this.deviceRegistrar?.({
+        architecture: os.arch(),
         deviceId: identity.deviceId,
         hostname: os.hostname(),
         identitySource: identity.identitySource,
+        metadata: {
+          appVersion: app.getVersion(),
+          electron: process.versions.electron,
+          node: process.versions.node,
+          osRelease: os.release(),
+        },
         platform: process.platform,
       }).catch((err) => {
         logger.warn(`Device registration failed (non-fatal): ${(err as Error).message}`);
@@ -912,10 +936,37 @@ export default class GatewayConnectionService extends ServiceModule {
 
   // ─── Power Save Blocker ───
 
+  getKeepAwake(): boolean {
+    return this.app.storeManager.get('gatewayKeepAwake', true);
+  }
+
+  setKeepAwake(enabled: boolean) {
+    this.app.storeManager.set('gatewayKeepAwake', enabled);
+    logger.info(`Keep awake while connected: ${enabled}`);
+    this.syncPowerSaveBlocker();
+  }
+
   /**
-   * Start power save blocker to prevent macOS App Nap from suspending the process
-   * while the gateway connection is active. Uses 'prevent-app-suspension' so the
-   * display can still sleep — only the app process is kept alive.
+   * Hold the blocker for as long as the device is meant to be online — not
+   * just while the socket is `connected`. Releasing it on every transient drop
+   * (the socket blips every few tens of minutes) hands macOS a window to idle
+   * sleep: with the default "sleep 1 minute after the display turns off" the
+   * idle timer has long expired, so the machine sleeps before the ~2s reconnect
+   * lands and stays offline until the user comes back. Only an explicit
+   * disconnect (status settles on `disconnected`) or the user opting out lets
+   * the system sleep again.
+   */
+  private syncPowerSaveBlocker() {
+    if (this.status !== 'disconnected' && this.getKeepAwake()) {
+      this.startPowerSaveBlocker();
+    } else {
+      this.stopPowerSaveBlocker();
+    }
+  }
+
+  /**
+   * 'prevent-app-suspension' keeps the system from idle-sleeping (and App Nap
+   * from suspending the process) while still letting the display sleep.
    */
   private startPowerSaveBlocker() {
     if (this.powerSaveBlockerId !== null) return;
@@ -938,14 +989,34 @@ export default class GatewayConnectionService extends ServiceModule {
     logger.info(`Connection status: ${this.status} → ${status}`);
     this.status = status;
 
-    // Keep the app process alive while gateway is connected so macOS App Nap
-    // does not suspend it during display sleep, which would drop the WebSocket.
-    if (status === 'connected') {
-      this.startPowerSaveBlocker();
-    } else {
-      this.stopPowerSaveBlocker();
+    this.syncPowerSaveBlocker();
+    this.scheduleStatusBroadcast(status);
+  }
+
+  private scheduleStatusBroadcast(status: GatewayConnectionStatus) {
+    if (this.statusBroadcastTimer) {
+      clearTimeout(this.statusBroadcastTimer);
+      this.statusBroadcastTimer = null;
     }
 
+    // Leaving `connected` for a reconnect: hold the UI on `connected` for a
+    // grace period. An explicit `disconnected` is always shown immediately.
+    const isTransientDrop =
+      this.displayedStatus === 'connected' && status !== 'connected' && status !== 'disconnected';
+    if (isTransientDrop) {
+      this.statusBroadcastTimer = setTimeout(() => {
+        this.statusBroadcastTimer = null;
+        this.broadcastStatus(this.status);
+      }, RECONNECT_UI_GRACE_MS);
+      return;
+    }
+
+    this.broadcastStatus(status);
+  }
+
+  private broadcastStatus(status: GatewayConnectionStatus) {
+    if (this.displayedStatus === status) return;
+    this.displayedStatus = status;
     this.app.browserManager.broadcastToAllWindows('gatewayConnectionStatusChanged', { status });
   }
 

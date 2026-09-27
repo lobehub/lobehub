@@ -160,6 +160,27 @@ describe('callLlmFinalizer', () => {
         type: 'stream_end',
       }),
     );
+    // The turn finalizes with no tool calls, so the run ends in `status: 'done'`
+    // like any other. This marker is the only thing that says it was cut short.
+    expect(result.newState.toolCallRepeatGuard?.stoppedByRepeatLimit).toBe(true);
+  });
+
+  it('keeps the repeat-limit marker on later turns that call no tools', async () => {
+    const state = AgentRuntime.createInitialState({ operationId: 'operation-1' });
+    state.toolCallRepeatGuard = { counts: {}, stoppedByRepeatLimit: true };
+
+    const result = await finalizeCallLlmTurn({
+      assistantMessageId: 'assistant-6',
+      events: [],
+      host: createHost(),
+      model: 'glm',
+      output: createOutput({ content: 'done' }),
+      provider: 'lobehub',
+      shouldReplayAssistantReasoning: false,
+      state,
+    });
+
+    expect(result.newState.toolCallRepeatGuard?.stoppedByRepeatLimit).toBe(true);
   });
 
   it('preserves user cancellation when an aborted stream emits the limit-th repeated tool call', async () => {

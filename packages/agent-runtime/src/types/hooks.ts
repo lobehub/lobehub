@@ -1,4 +1,4 @@
-import type { ChatErrorBudgetContext } from '@lobechat/types';
+import type { ChatErrorBudgetContext, ChatErrorHeterogeneousContext } from '@lobechat/types';
 
 import type { ToolRunResult } from '../transport/tool';
 
@@ -83,6 +83,7 @@ export interface AgentHookEvent {
   errorBudget?: ChatErrorBudgetContext;
   // Content
   errorDetail?: string;
+  errorHeterogeneous?: ChatErrorHeterogeneousContext;
 
   errorMessage?: string;
 

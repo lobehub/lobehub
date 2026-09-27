@@ -78,7 +78,11 @@ describe('topicReferenceRuntime', () => {
         workspaceId: 'workspace-1',
       });
 
-      mockTopicModelFindOwnTopicById.mockResolvedValue({ id: 'topic-1', title: 'Topic' });
+      mockTopicModelFindOwnTopicById.mockResolvedValue({
+        id: 'topic-1',
+        title: 'Topic',
+        workspaceId: 'workspace-1',
+      });
       mockMessageModelQuery.mockResolvedValue([]);
 
       await runtime.getTopicContext({ topicId: 'topic-1' });
@@ -107,6 +111,36 @@ describe('topicReferenceRuntime', () => {
       const result = await runtime.getTopicContext({ topicId: '' });
 
       expect(result).toEqual({ content: 'topicId is required', success: false });
+    });
+
+    it('reads personal messages after a workspace lookup misses', async () => {
+      const serverDB = {} as any;
+      runtime = topicReferenceRuntime.factory({
+        serverDB,
+        toolManifestMap: {},
+        userId: 'user-1',
+        workspaceId: 'workspace-1',
+      });
+      mockTopicModelFindOwnTopicById.mockResolvedValueOnce(null).mockResolvedValueOnce({
+        agentId: 'personal-agent',
+        id: 'personal-topic',
+        title: 'Personal notes',
+        workspaceId: null,
+      });
+      mockMessageModelQuery.mockResolvedValue([{ content: 'Pitch notes', role: 'user' }]);
+
+      const result = await runtime.getTopicContext({ topicId: 'personal-topic' });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('Pitch notes');
+      expect(TopicModel).toHaveBeenNthCalledWith(1, serverDB, 'user-1', 'workspace-1');
+      expect(TopicModel).toHaveBeenNthCalledWith(2, serverDB, 'user-1');
+      expect(MessageModel).toHaveBeenCalledWith(serverDB, 'user-1', undefined);
+      expect(mockMessageModelQuery).toHaveBeenCalledWith({
+        agentId: 'personal-agent',
+        groupId: undefined,
+        topicId: 'personal-topic',
+      });
     });
 
     it('should return error when topicId is undefined', async () => {

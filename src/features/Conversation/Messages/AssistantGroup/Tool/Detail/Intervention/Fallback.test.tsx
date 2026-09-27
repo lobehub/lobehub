@@ -72,6 +72,11 @@ vi.mock('@/store/tool', () => ({
   useToolStore: (selector: (state: unknown) => unknown) => selector({}),
 }));
 
+vi.mock('@/store/chat', () => ({
+  useChatStore: (selector: (state: unknown) => unknown) =>
+    selector({ runQuestionSubmission: vi.fn() }),
+}));
+
 vi.mock('@/store/user', () => ({
   useUserStore: (selector: (state: unknown) => unknown) => selector({}),
 }));

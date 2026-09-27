@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   setMetadata: vi.fn(),
   setPlan: vi.fn(),
   taskFindById: vi.fn(),
+  taskAcceptanceAttachRun: vi.fn(),
   taskAcceptanceResolve: vi.fn(),
 }));
 
@@ -51,6 +52,7 @@ vi.mock('../planGenerator', () => ({
 }));
 
 vi.mock('../taskAcceptance', () => ({
+  attachTaskRunToAcceptance: mocks.taskAcceptanceAttachRun,
   resolveTaskAcceptance: mocks.taskAcceptanceResolve,
 }));
 
@@ -144,6 +146,67 @@ describe('Verify acceptance lifecycle', () => {
     );
 
     expect(mocks.acceptanceAttachPolicyRun).toHaveBeenCalledWith('run-1', 'acceptance-1');
+  });
+
+  /**
+   * Regression: the builder authored and confirmed its own plan through the CLI,
+   * so this function found a plan and returned before the attach below it. The
+   * round stayed orphaned from the Task's Acceptance, passed verification, and
+   * the Goal review then errored with "no Acceptance" — parking a delivery that
+   * met every criterion on a human decision gate.
+   */
+  it('binds a plan the builder authored itself to the task acceptance', async () => {
+    mocks.taskAcceptanceResolve.mockResolvedValue({
+      acceptance: { id: 'acceptance-1' },
+      config: { enabled: true },
+      requirement: 'Cut an isolated worktree',
+    });
+    mocks.taskFindById.mockResolvedValue({ name: 'Worktree' });
+    const authored = { acceptanceId: null, id: 'run-1', plan, planConfirmedAt: new Date() };
+    mocks.runFindByOperation.mockResolvedValue(authored);
+
+    await instantiateVerifyPlanOnStart(db, 'user-1', {
+      operationId: 'operation-1',
+      taskId: 'task-1',
+    });
+
+    // The plan is the builder's — regenerating it is exactly what the early
+    // return protects — but the round still has to belong to the Acceptance.
+    expect(mocks.generateDraftPlan).not.toHaveBeenCalled();
+    expect(mocks.taskAcceptanceAttachRun).toHaveBeenCalledWith(
+      db,
+      'user-1',
+      { acceptanceId: 'acceptance-1', run: authored },
+      undefined,
+    );
+  });
+
+  /**
+   * Regression: an unconfirmed builder plan was bound too. It stayed the
+   * Acceptance's newest round as a draft, and the next attempt folded into it — so
+   * the round a later attempt ran in carried an operation that was not running.
+   */
+  it('leaves an unconfirmed builder plan unbound', async () => {
+    mocks.taskAcceptanceResolve.mockResolvedValue({
+      acceptance: { id: 'acceptance-1' },
+      config: { enabled: true },
+      requirement: 'Cut an isolated worktree',
+    });
+    mocks.taskFindById.mockResolvedValue({ name: 'Worktree' });
+    mocks.runFindByOperation.mockResolvedValue({
+      acceptanceId: null,
+      id: 'run-1',
+      plan,
+      planConfirmedAt: null,
+    });
+
+    await instantiateVerifyPlanOnStart(db, 'user-1', {
+      operationId: 'operation-1',
+      taskId: 'task-1',
+    });
+
+    expect(mocks.taskAcceptanceAttachRun).not.toHaveBeenCalled();
+    expect(mocks.generateDraftPlan).not.toHaveBeenCalled();
   });
 
   it('skips instantiation for a recurring task, even when an Acceptance policy exists', async () => {

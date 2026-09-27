@@ -17,7 +17,7 @@ import { hookDispatcher } from '../hooks';
 vi.mock('@/envs/app', () => ({ appEnv: { APP_URL: 'http://localhost:3010' } }));
 vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn().mockImplementation(function () {
-    return {};
+    return { query: vi.fn().mockResolvedValue([]) };
   }),
 }));
 vi.mock('@/server/modules/AgentRuntime', () => ({
@@ -721,6 +721,40 @@ describe('AgentRuntimeService.executeStep - step idempotency (distributed lock)'
     expect(result.nextStepScheduled).toBe(false);
     expect(coordinator.loadAgentState).toHaveBeenCalledWith('op-locked');
     expect(coordinator.releaseStepLock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['a stale delivery it acks', 9],
+    ['a live holder it hands back', 5],
+  ])('drops the buffered trace partial on %s', async (_label, stepCount) => {
+    const service = createService();
+    const coordinator = (service as any).coordinator;
+    coordinator.tryClaimStep = vi.fn().mockResolvedValue(false);
+    coordinator.loadAgentState = vi.fn().mockResolvedValue({ status: 'running', stepCount });
+    const discardPartial = vi.spyOn((service as any).traceRecorder, 'discardPartial');
+
+    await service.executeStep({ operationId: 'op-locked', stepIndex: 5 });
+
+    expect(discardPartial).toHaveBeenCalled();
+  });
+
+  it('drops the buffered trace partial when it re-queues itself after losing the lock', async () => {
+    const scheduleMessage = vi.fn().mockResolvedValue('msg-1');
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      queueService: { getImpl: () => ({}), scheduleMessage } as any,
+    });
+    const coordinator = (service as any).coordinator;
+    coordinator.tryClaimStep = vi.fn().mockResolvedValue(false);
+    coordinator.loadAgentState = vi.fn().mockResolvedValue({ status: 'running', stepCount: 5 });
+    const discardPartial = vi.spyOn((service as any).traceRecorder, 'discardPartial');
+
+    const result = await service.executeStep({ operationId: 'op-requeue', stepIndex: 5 });
+
+    // This path returns before the generic lock-conflict fallback, so it needs
+    // the same hand-over cleanup: the steps this invocation buffered belong to
+    // whoever holds the operation now.
+    expect(result.lockRescheduled).toBe(true);
+    expect(discardPartial).toHaveBeenCalled();
   });
 
   it('should re-queue the same step on its own backoff for a non-stale lock conflict', async () => {
@@ -1669,11 +1703,13 @@ describe('AgentRuntimeService.executeStep - step_start uiMessages payload', () =
     });
     streamManager.publishStreamEvent = vi.fn().mockResolvedValue(undefined);
 
-    // Inject a uiMessages-returning messageService — the runtime queries
-    // through MessageService (not the bare messageModel) so that file URLs
-    // go through FileService postProcessUrl.
-    const stubMessages = [{ id: 'msg_1', role: 'user' }];
+    // The DB read and UI preparation are separate boundaries. Keep their
+    // results distinct so this asserts the event carries the prepared UI view.
+    const rawMessages = [{ id: 'msg_1', role: 'user', content: 'raw' }];
+    const stubMessages = [{ id: 'msg_1', role: 'user', content: 'prepared' }];
+    (service as any).messageModel.query.mockResolvedValue(rawMessages);
     (service as any).messageServiceInstance = {
+      prepareUiMessages: vi.fn().mockResolvedValue(stubMessages),
       queryMessages: vi.fn().mockResolvedValue(stubMessages),
     };
 
@@ -1705,8 +1741,8 @@ describe('AgentRuntimeService.executeStep - step_start uiMessages payload', () =
     });
     streamManager.publishStreamEvent = vi.fn().mockResolvedValue(undefined);
 
-    const queryMock = vi.fn();
-    (service as any).messageServiceInstance = { queryMessages: queryMock };
+    const queryMock = (service as any).messageModel.query;
+    (service as any).messageServiceInstance = { prepareUiMessages: vi.fn() };
 
     await service.executeStep({
       operationId: 'op-noctx',
@@ -1721,6 +1757,38 @@ describe('AgentRuntimeService.executeStep - step_start uiMessages payload', () =
     expect(stepStartCall[1].data).not.toHaveProperty('uiMessages');
     // Did not even attempt the DB query when context is missing.
     expect(queryMock).not.toHaveBeenCalled();
+  });
+
+  it('sends only the expected revision for a Gateway mux native run', async () => {
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      gatewayMuxEnabledResolver: async () => true,
+      queueService: null,
+    });
+    const coordinator = (service as any).coordinator;
+    const streamManager = (service as any).streamManager;
+
+    coordinator.tryClaimStep = vi.fn().mockResolvedValue(true);
+    coordinator.loadAgentState = vi.fn().mockResolvedValue({
+      lastModified: new Date().toISOString(),
+      origin: { agentId: 'agt_1', topicId: 'tpc_1' },
+      status: 'done',
+      stepCount: 3,
+    });
+    streamManager.publishStreamEvent = vi.fn().mockResolvedValue(undefined);
+    (service as any).messageServiceInstance = {
+      prepareUiMessages: vi.fn().mockResolvedValue([{ id: 'large-history', role: 'user' }]),
+    };
+
+    await service.executeStep({
+      context: { phase: 'user_input' } as any,
+      operationId: 'op-patch',
+      stepIndex: 5,
+    });
+
+    const stepStartCall = streamManager.publishStreamEvent.mock.calls.find(
+      ([, evt]: any) => evt?.type === 'step_start',
+    );
+    expect(stepStartCall[1].data).toEqual({ messageRevision: 5 });
   });
 });
 

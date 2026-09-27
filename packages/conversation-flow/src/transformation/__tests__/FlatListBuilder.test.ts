@@ -280,6 +280,50 @@ describe('FlatListBuilder', () => {
       expect(result[1].usage).toBeDefined();
     });
 
+    it('keeps a terminal finish type on its originating assistant block', () => {
+      const messages: Message[] = [
+        { content: 'Request', createdAt: 0, id: 'user-1', role: 'user', updatedAt: 0 },
+        {
+          content: 'Using tool',
+          createdAt: 1,
+          id: 'assistant-1',
+          parentId: 'user-1',
+          role: 'assistant',
+          tools: [
+            { apiName: 'test', arguments: '{}', id: 'tool-1', identifier: 'test', type: 'default' },
+          ],
+          updatedAt: 1,
+        },
+        {
+          content: 'Tool result',
+          createdAt: 2,
+          id: 'tool-result-1',
+          parentId: 'assistant-1',
+          role: 'tool',
+          tool_call_id: 'tool-1',
+          updatedAt: 2,
+        },
+        {
+          content: 'I cannot help with that.',
+          createdAt: 3,
+          id: 'assistant-2',
+          metadata: { collapsed: true, finishType: 'refusal' },
+          parentId: 'tool-result-1',
+          role: 'assistant',
+          updatedAt: 3,
+        },
+      ];
+
+      const result = createBuilder(messages).flatten(messages);
+      const [initial, terminal] = result[1].children ?? [];
+
+      expect(result[1].role).toBe('assistantGroup');
+      expect(initial?.metadata?.finishType).toBeUndefined();
+      expect(initial?.metadata?.collapsed).toBe(true);
+      expect(terminal?.metadata?.finishType).toBe('refusal');
+      expect(terminal?.metadata?.collapsed).toBeUndefined();
+    });
+
     it('should handle user message with branches', () => {
       const messages: Message[] = [
         {

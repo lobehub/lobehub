@@ -320,6 +320,32 @@ describe('AiModelModel', () => {
       });
     });
 
+    it('should list every personal reasoning config in one read', async () => {
+      await workspaceAiModelModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
+        gpt5_6ReasoningEffort: 'low',
+      });
+      await aiProviderModel.updateModelReasoningConfig('claude-opus-5', 'anthropic', {
+        reasoningMode: 'pro',
+      });
+      // A row without chatConfig is not a saved preference
+      await aiProviderModel.create({ id: 'gpt-4o', providerId: 'openai' });
+      await new AiModelModel(serverDB, 'user2').updateModelReasoningConfig(
+        'gpt-5.6-sol',
+        'openai',
+        {
+          gpt5_6ReasoningEffort: 'high',
+        },
+      );
+
+      const expected = {
+        'anthropic/claude-opus-5': { reasoningMode: 'pro' },
+        'openai/gpt-5.6-sol': { gpt5_6ReasoningEffort: 'low' },
+      };
+      expect(await aiProviderModel.getAllModelReasoningConfigs()).toEqual(expected);
+      // Cross-workspace, like the single-model read
+      expect(await workspaceAiModelModel.getAllModelReasoningConfigs()).toEqual(expected);
+    });
+
     it('should isolate configs across providers and users', async () => {
       await aiProviderModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
         gpt5_6ReasoningEffort: 'high',

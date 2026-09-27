@@ -7,6 +7,7 @@
     ".": "./src/index.ts",
     "./askUser": "./src/askUser/index.ts",
     "./builtinMcp": "./src/builtinMcp/index.ts",
+    "./errors": "./src/errors/index.ts",
     "./client": "./src/client/index.ts",
     "./models": "./src/models/index.ts",
     "./protocol": "./src/protocol/index.ts",

@@ -1,7 +1,10 @@
 import { AcceptanceEvidenceManifest } from '@lobechat/builtin-tool-acceptance-evidence';
 import { LobeActivatorManifest } from '@lobechat/builtin-tool-activator';
 import { AgentBuilderManifest } from '@lobechat/builtin-tool-agent-builder';
-import { AgentDocumentsManifest } from '@lobechat/builtin-tool-agent-documents';
+import {
+  AgentDocumentsManifest,
+  resolveAgentDocumentsRestrictedManifest,
+} from '@lobechat/builtin-tool-agent-documents';
 import {
   AgentManagementManifest,
   resolveAgentManagementManifest,
@@ -12,6 +15,7 @@ import {
   agentSignalReviewManifest,
   agentSignalSkillManagementManifest,
 } from '@lobechat/builtin-tool-agent-signal';
+import { AttachmentsManifest } from '@lobechat/builtin-tool-attachments';
 import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { BriefManifest } from '@lobechat/builtin-tool-brief';
 import { BrowserManifest } from '@lobechat/builtin-tool-browser';
@@ -28,18 +32,23 @@ import {
   LocalSystemManifest,
   resolveLocalSystemManifest,
 } from '@lobechat/builtin-tool-local-system';
-import { MemoryManifest } from '@lobechat/builtin-tool-memory';
+import { MemoryManifest, resolveMemoryRestrictedManifest } from '@lobechat/builtin-tool-memory';
 import { MessageManifest, resolveMessageManifest } from '@lobechat/builtin-tool-message';
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import { selfFeedbackIntentManifest } from '@lobechat/builtin-tool-self-iteration';
 import { SkillMaintainerManifest } from '@lobechat/builtin-tool-skill-maintainer';
 import { SkillStoreManifest } from '@lobechat/builtin-tool-skill-store';
-import { resolveSkillsManifest, SkillsManifest } from '@lobechat/builtin-tool-skills';
+import {
+  resolveSkillsManifest,
+  resolveSkillsRestrictedManifest,
+  SkillsManifest,
+} from '@lobechat/builtin-tool-skills';
 import { TaskManifest } from '@lobechat/builtin-tool-task';
 import { TopicReferenceManifest } from '@lobechat/builtin-tool-topic-reference';
 import { UserInteractionManifest } from '@lobechat/builtin-tool-user-interaction';
 import { VerifyToolManifest } from '@lobechat/builtin-tool-verify';
+import { VideoGenerationManifest } from '@lobechat/builtin-tool-video-generation';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { WebOnboardingManifest } from '@lobechat/builtin-tool-web-onboarding';
 import { isDesktop, RECOMMENDED_SKILLS, RecommendedSkillType } from '@lobechat/const';
@@ -55,6 +64,7 @@ export const defaultToolIds = [
   SkillStoreManifest.identifier,
   WebBrowsingManifest.identifier,
   KnowledgeBaseManifest.identifier,
+  AttachmentsManifest.identifier,
   MemoryManifest.identifier,
   LocalSystemManifest.identifier,
   BrowserManifest.identifier,
@@ -108,20 +118,22 @@ export const manualModeExcludeToolIds = [
  * (`chatConfig.enableAgentMode === false`). Each one still passes through
  * its own runtime gate (e.g. knowledge base requires `hasEnabledKnowledgeBases`,
  * memory requires the global memory setting, web-browsing requires search
- * enabled, image-generation requires an explicit pin). This list is the
+ * enabled, image/video generation require an explicit pin). This list is the
  * strict outer whitelist.
  *
  * In chat mode, both the server `createServerAgentToolsEngine` and the
  * frontend `createAgentToolsEngine` build their rules from ONLY these
  * identifiers, drop user plugins / `alwaysOnToolIds` entirely (except
- * image-generation, which is re-enabled only when pinned), and disable
+ * image/video generation, which are re-enabled only when pinned), and disable
  * `allowExplicitActivation` so the activator can't smuggle other tools in.
  */
 export const chatModeAllowedToolIds = [
+  AttachmentsManifest.identifier,
   KnowledgeBaseManifest.identifier,
   MemoryManifest.identifier,
   WebBrowsingManifest.identifier,
   ImageGenerationManifest.identifier,
+  VideoGenerationManifest.identifier,
 ];
 
 /**
@@ -160,6 +172,7 @@ export const groupSupervisorToolIds = [GroupManagementManifest.identifier];
  * `src/helpers/toolEngineering/index.ts`.
  */
 export const runtimeManagedToolIds = [
+  AttachmentsManifest.identifier,
   BrowserManifest.identifier,
   CloudSandboxManifest.identifier,
   KnowledgeBaseManifest.identifier,
@@ -207,7 +220,7 @@ export const runtimeManagedToolIds = [
  * (`apps/server/src/services/toolExecution/serverRuntimes/*`), not just its
  * manifest. For the rationale behind every DENIED identifier
  * (`lobe-agent-management`, `lobe-task`, `lobe-creds`, `lobe-message`,
- * `lobe-skill-store`, `lobe-agent-builder`, `lobe-skills`,
+ * `lobe-skill-store`, `lobe-agent-builder`,
  * `lobe-group-agent-builder`, `lobe-group-management`, `agent-signal-review`,
  * `lobe-user-interaction`, `lobe-activator`,
  * `lobe-local-system`, `lobe-browser`, `lobe-remote-device`,
@@ -219,6 +232,9 @@ export const AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS = new Set<string>([
   CalculatorManifest.identifier,
   WebBrowsingManifest.identifier,
   ImageGenerationManifest.identifier,
+  // Like image generation: a visitor run spends the creator's quota, so it still needs the
+  // owner's explicit share tool grant, and its charges carry the share `spendOrigin`.
+  VideoGenerationManifest.identifier,
   VerifyToolManifest.identifier,
   AcceptanceEvidenceManifest.identifier,
   LobeAgentManifest.identifier,
@@ -238,6 +254,15 @@ export const AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS = new Set<string>([
   KnowledgeBaseManifest.identifier,
   MemoryManifest.identifier,
   AgentDocumentsManifest.identifier,
+  // `lobe-skills`: a skill-driven agent is broken the moment it is shared
+  // without this, since skills are loaded on demand through this tool. It is
+  // allowed only in the narrow shape `DATA_TOOL_ACCESS_RULES` gives it —
+  // `activateSkill` / `readReference` on skills the creator explicitly listed
+  // in `shareConfig.skillGrants`, enforced again at load time in the server
+  // runtime so the model cannot name a skill outside that list. Every other
+  // API of the tool is blocked. See the positive-evidence doc block in
+  // `shareGate.ts`.
+  SkillsManifest.identifier,
 ]);
 
 /**
@@ -247,7 +272,8 @@ export const AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS = new Set<string>([
  * `apps/server/src/services/aiAgent/shareGate.ts`, for every API and no matter
  * what the share config says. There is no knowledge-base or agent-file grant
  * in `AgentShareConfig` at all (see `applyShareGateToAgentConfig`), so a
- * visitor run can never reach either store.
+ * visitor run can never reach the knowledge-base store. Agent Documents is
+ * separately narrowed to share-scoped authoring APIs.
  *
  * Memory is deliberately NOT here: its grant is conditional on
  * `allowReadMemory`, so the owner enabling that switch does change what a
@@ -262,7 +288,6 @@ export const AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS = new Set<string>([
  */
 export const AGENT_SHARE_NO_DATA_GRANT_BUILTIN_IDENTIFIERS = new Set<string>([
   KnowledgeBaseManifest.identifier,
-  AgentDocumentsManifest.identifier,
 ]);
 
 const builtinToolRegistry: LobeBuiltinTool[] = [
@@ -296,6 +321,10 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     // actual execution environment (cloud sandbox as fallback / offline
     // degradation), so the model never assumes they run on the user's machine.
     resolveManifest: resolveSkillsManifest,
+    // Agent Share projection: only `activateSkill` / `readReference` survive
+    // the gate, so the full five-API systemRole is replaced with one that
+    // describes just those two.
+    resolveRestrictedManifest: resolveSkillsRestrictedManifest,
     type: 'builtin',
   },
   {
@@ -372,6 +401,7 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     hidden: true,
     identifier: MemoryManifest.identifier,
     manifest: MemoryManifest,
+    resolveRestrictedManifest: resolveMemoryRestrictedManifest,
     type: 'builtin',
   },
   {
@@ -389,6 +419,7 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
   {
     identifier: AgentDocumentsManifest.identifier,
     manifest: AgentDocumentsManifest,
+    resolveRestrictedManifest: resolveAgentDocumentsRestrictedManifest,
     type: 'builtin',
   },
   {
@@ -403,10 +434,23 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
+    discoverable: false,
+    hidden: true,
+    identifier: AttachmentsManifest.identifier,
+    manifest: AttachmentsManifest,
+    type: 'builtin',
+  },
+  {
     // Opt-in image generation: chat mode no longer auto-injects it, so the
     // Tools popover must expose a pin/disable control.
     identifier: ImageGenerationManifest.identifier,
     manifest: ImageGenerationManifest,
+    type: 'builtin',
+  },
+  {
+    // Opt-in video generation: exposed in the Tools popover so users can pin it.
+    identifier: VideoGenerationManifest.identifier,
+    manifest: VideoGenerationManifest,
     type: 'builtin',
   },
   {

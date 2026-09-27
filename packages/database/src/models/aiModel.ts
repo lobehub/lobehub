@@ -247,6 +247,31 @@ export class AiModelModel {
   };
 
   /**
+   * Bulk counterpart of getModelReasoningConfig (same personal scope): every
+   * saved reasoning default, keyed by `${providerId}/${modelId}`. Lets the
+   * client seed all model-list rows with one read instead of one per model.
+   */
+  getAllModelReasoningConfigs = async (): Promise<Record<string, AiModelReasoningConfig>> => {
+    const rows = await this.db
+      .select({ config: aiModels.config, id: aiModels.id, providerId: aiModels.providerId })
+      .from(aiModels)
+      .where(
+        and(
+          this.personalScopeWhere(),
+          sql`COALESCE(jsonb_exists(${aiModels.config}, 'chatConfig'), false)`,
+        ),
+      );
+
+    const configs: Record<string, AiModelReasoningConfig> = {};
+    for (const row of rows) {
+      const chatConfig = (row.config as AiModelConfig | null)?.chatConfig;
+      if (chatConfig) configs[`${row.providerId}/${row.id}`] = chatConfig;
+    }
+
+    return configs;
+  };
+
+  /**
    * Personal-scope partial update of `config.chatConfig` (see
    * getModelReasoningConfig for the scoping rationale).
    */

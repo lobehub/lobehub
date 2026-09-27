@@ -125,6 +125,13 @@ LobeHub 在部署时提供了一些额外的配置项，你可以使用环境变
 - 默认值：-
 - 示例：`https://agent-gateway.example.com`
 
+### `AGENT_GATEWAY_PROTOCOL`
+
+- 类型：可选
+- 描述：客户端可以使用的 Agent Gateway 协议版本。`1` 是按运行建连的 WebSocket（`GET /ws`），也就是 `lobehub/lobehub-gateway` 提供的那个；`2` 额外提供按用户复用的连接（`GET /v2/ws`）。自托管部署默认为 `1`—— 网关没有 `/v2/ws` 时，客户端会一直拨不通，直到回退才能恢复流式输出。只有当你运行的网关确实提供 `/v2/ws` 时才需要设置。
+- 默认值：`1`
+- 示例：`2`
+
 ### `AGENT_GATEWAY_INTERNAL_URL`
 
 - 类型：可选

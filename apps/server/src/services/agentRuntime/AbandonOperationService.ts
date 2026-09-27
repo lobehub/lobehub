@@ -1,5 +1,6 @@
 import type { ISnapshotStore } from '@lobechat/agent-tracing';
 import { LOADING_FLAT } from '@lobechat/const';
+import { ABANDONED_OPERATION_ERROR_PREFIX } from '@lobechat/const/goal';
 import type { ChatMessageError } from '@lobechat/types';
 import { AgentRuntimeErrorType } from '@lobechat/types';
 import debug from 'debug';
@@ -16,6 +17,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime/AgentRuntimeCoordinator';
 
 import { CompletionLifecycle } from './CompletionLifecycle';
+import type { SerializedHook } from './hooks/types';
 import { OperationTraceRecorder } from './OperationTraceRecorder';
 import { createDefaultSnapshotStore } from './snapshotStore';
 
@@ -42,7 +44,7 @@ export interface AbandonedSubAgentResume {
    */
   streamOwnerUserId?: string;
   threadId: string;
-  /** The parent's placeholder `role: 'tool'` message to backfill (= thread.sourceMessageId). */
+  /** The parent's placeholder `role: 'tool'` message this run reports to. */
   toolMessageId: string;
   userId: string;
   workspaceId?: string;
@@ -121,7 +123,7 @@ export class AbandonOperationService {
       state.status === 'running' ||
       state.status === 'waiting_for_human' ||
       state.status === 'waiting_for_async_tool';
-    const message = `Operation abandoned: ${reason}`;
+    const message = `${ABANDONED_OPERATION_ERROR_PREFIX} ${reason}`;
     const error: ChatMessageError = {
       body: { message },
       message,
@@ -205,8 +207,11 @@ export class AbandonOperationService {
     // otherwise wait on this slot forever. We surface the ids the caller needs
     // to backfill the placeholder tool message and CAS-resume the parent.
     // parentOperationId + threadId live on the (persistent) operation row;
-    // toolMessageId is the thread's sourceMessageId (the parent's placeholder),
-    // set when the sub-agent was dispatched. When this is set, the coordinator
+    // toolMessageId is this run's own placeholder (`lineage.progressAnchor`),
+    // falling back to the thread's sourceMessageId. The fallback alone is not
+    // enough: a continued sub-agent (`callSubAgent({ subAgentId })`) reuses its
+    // thread, whose sourceMessageId is the FIRST run's placeholder, while the
+    // parent now waits on a new one. When this is set, the coordinator
     // cleanup below is SKIPPED so the durable resume can still resolve userId.
     //
     // Isolated group members ALSO run with `isSubAgent: true` and an isolation
@@ -229,10 +234,15 @@ export class AbandonOperationService {
         const parentOperationId = opRow?.parentOperationId ?? undefined;
         const threadId = opRow?.threadId ?? origin.threadId ?? undefined;
         if (parentOperationId && threadId) {
-          const thread = await new ThreadModel(this.db, origin.userId, origin.workspaceId).findById(
-            threadId,
-          );
-          const toolMessageId = thread?.sourceMessageId ?? undefined;
+          const anchoredToolMessageId =
+            origin.lineage?.progressAnchor?.parentOperationId === parentOperationId
+              ? origin.lineage.progressAnchor.toolMessageId
+              : undefined;
+          const toolMessageId =
+            anchoredToolMessageId ??
+            (await new ThreadModel(this.db, origin.userId, origin.workspaceId).findById(threadId))
+              ?.sourceMessageId ??
+            undefined;
           if (toolMessageId) {
             result.subAgentResume = {
               parentOperationId,
@@ -285,7 +295,7 @@ export class AbandonOperationService {
 
     result.abandoned = true;
 
-    const message = `Operation abandoned: ${reason}`;
+    const message = `${ABANDONED_OPERATION_ERROR_PREFIX} ${reason}`;
     const error: ChatMessageError = {
       body: { message },
       message,
@@ -312,27 +322,63 @@ export class AbandonOperationService {
       log('[%s] no-state abandon: recordCompletion failed (non-fatal): %O', operationId, e);
     }
 
-    const assistantMessageId = await this.resolveAssistantMessageIdForOperation(op, operationId);
-    if (!assistantMessageId) return;
+    const settled = await this.settleOperationTopic(op, operationId);
+    if (settled.assistantMessageId) {
+      try {
+        // No-state cleanup path: this is a system-side finalize keyed on ids
+        // read from the persisted `agentOperations` row (no user input), and the
+        // op may belong to a shared-agent visitor conversation whose rows the
+        // default MessageModel gate would hide. Opt in unconditionally so the
+        // placeholder can still be marked errored when the coordinator state has
+        // already evaporated.
+        const messageModel = new MessageModel(
+          this.db,
+          op.userId,
+          op.workspaceId ?? undefined,
+          undefined,
+          { includeShareVisitor: true },
+        );
+        await messageModel.update(settled.assistantMessageId, { content: '', error });
+        result.assistantMessageUpdated = true;
+      } catch (e) {
+        log(
+          '[%s] no-state abandon: assistant message update failed (non-fatal): %O',
+          operationId,
+          e,
+        );
+      }
+    }
+
+    // Heterogeneous and device runs never have coordinator state, so this is
+    // the only terminal they get when the process dies silently. Their hooks
+    // (task lifecycle, bot callbacks) must still hear about it — otherwise the
+    // Task keeps a `running` topic forever and a Goal waits on it indefinitely.
+    // A newer operation owning the topic means this callback cannot prove which
+    // run the hooks belong to, the same rule `heteroFinish` applies.
+    if (settled.ownershipUnproven) return;
+    const serializedHooks = settled.hooks ?? readDurableHooks(op.metadata);
+    if (!serializedHooks?.length) return;
 
     try {
-      // No-state cleanup path: this is a system-side finalize keyed on ids
-      // read from the persisted `agentOperations` row (no user input), and the
-      // op may belong to a shared-agent visitor conversation whose rows the
-      // default MessageModel gate would hide. Opt in unconditionally so the
-      // placeholder can still be marked errored when the coordinator state has
-      // already evaporated.
-      const messageModel = new MessageModel(
-        this.db,
-        op.userId,
-        op.workspaceId ?? undefined,
-        undefined,
-        { includeShareVisitor: true },
+      await new CompletionLifecycle(this.db, op.userId, op.workspaceId ?? undefined, {
+        includeShareVisitor: true,
+      }).completeOperation(
+        {
+          agentId: op.agentId ?? undefined,
+          assistantMessageId: settled.assistantMessageId,
+          error,
+          operationId,
+          orchestrationRole: settled.orchestrationRole,
+          serializedHooks,
+          startedAt: op.startedAt ?? undefined,
+          topicId: op.topicId ?? undefined,
+          userId: op.userId,
+        },
+        'error',
+        { skipErrorMessageWrite: true },
       );
-      await messageModel.update(assistantMessageId, { content: '', error });
-      result.assistantMessageUpdated = true;
     } catch (e) {
-      log('[%s] no-state abandon: assistant message update failed (non-fatal): %O', operationId, e);
+      log('[%s] no-state abandon: lifecycle dispatch failed (non-fatal): %O', operationId, e);
     }
   }
 
@@ -347,10 +393,10 @@ export class AbandonOperationService {
     }
   }
 
-  private async resolveAssistantMessageIdForOperation(
+  private async settleOperationTopic(
     op: typeof agentOperations.$inferSelect,
     operationId: string,
-  ): Promise<string | undefined> {
+  ): Promise<SettledOperationTopic> {
     let topicModel: TopicModel | undefined;
 
     if (op.topicId) {
@@ -363,13 +409,31 @@ export class AbandonOperationService {
           includeShareVisitor: true,
         });
         const settled = await topicModel.settleRunningOperation(op.topicId, operationId);
-        if (settled.status !== 'settled') return undefined;
-        if (settled.assistantMessageId) return settled.assistantMessageId;
+        if (settled.status === 'conflict') return { ownershipUnproven: true };
+        if (settled.status !== 'settled') return {};
+        const topicHooks = {
+          hooks: settled.hooks as SerializedHook[] | undefined,
+          orchestrationRole: settled.orchestrationRole,
+        };
+        if (settled.assistantMessageId) {
+          return { ...topicHooks, assistantMessageId: settled.assistantMessageId };
+        }
+        return { ...topicHooks, ...(await this.findPlaceholderMessage(op, operationId)) };
       } catch (e) {
         log('[%s] no-state abandon: topic lookup failed (non-fatal): %O', operationId, e);
+        // A failed settle cannot rule out a newer operation on the topic, and
+        // firing this run's task hook would then pause the replacement's Task.
+        return { ...(await this.findPlaceholderMessage(op, operationId)), ownershipUnproven: true };
       }
     }
 
+    return this.findPlaceholderMessage(op, operationId);
+  }
+
+  private async findPlaceholderMessage(
+    op: typeof agentOperations.$inferSelect,
+    operationId: string,
+  ): Promise<{ assistantMessageId?: string }> {
     try {
       const startedAt = op.startedAt ? new Date(op.startedAt) : undefined;
       const lowerBound = startedAt ? new Date(startedAt.getTime() - 5000) : undefined;
@@ -388,10 +452,27 @@ export class AbandonOperationService {
         ),
       });
 
-      return assistant?.id;
+      return { assistantMessageId: assistant?.id };
     } catch (e) {
       log('[%s] no-state abandon: assistant lookup failed (non-fatal): %O', operationId, e);
-      return undefined;
+      return {};
     }
   }
 }
+
+interface SettledOperationTopic {
+  assistantMessageId?: string;
+  hooks?: SerializedHook[];
+  orchestrationRole?: 'member' | 'supervisor';
+  /**
+   * The topic could not prove this run still owns it — a newer operation holds
+   * it, or the settle itself failed — so this run's hooks must not fire.
+   */
+  ownershipUnproven?: boolean;
+}
+
+/** Queue-mode dispatch serializes the run's hooks onto the operation row. */
+const readDurableHooks = (metadata: unknown): SerializedHook[] | undefined => {
+  const hooks = (metadata as { _hooks?: unknown } | null | undefined)?._hooks;
+  return Array.isArray(hooks) ? (hooks as SerializedHook[]) : undefined;
+};

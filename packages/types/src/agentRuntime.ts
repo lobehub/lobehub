@@ -13,26 +13,67 @@ export interface RouterRuntimeRequestContext {
 }
 
 export enum RequestTrigger {
+  /** Agent profile autocomplete: title, description, tags and avatar emoji. */
+  AgentMeta = 'agent_meta',
   AgentShare = 'agent_share',
   AgentSignal = 'agent_signal',
   Api = 'api',
   Bot = 'bot',
+  /** Agent builder suggestion chips. */
+  BuilderSuggestion = 'builder_suggestion',
   Chat = 'chat',
   Cli = 'cli',
+  /** Context compression summary that replaces older messages in a conversation. */
+  ContextCompression = 'context_compression',
   Cron = 'cron',
   Eval = 'eval',
+  /** Agent self-evolution: expertise ingestion, domain drafts and consolidation. */
+  Expertise = 'expertise',
   FileEmbedding = 'file_embedding',
+  /** Follow-up suggestions generated after an assistant reply. */
+  FollowUp = 'follow_up',
+  /** Image / video generation topic title summaries. */
+  GenerationTopicTitle = 'generation_topic_title',
+  /** Goal planning: exploration, acceptance criteria drafts and decomposition. */
+  Goal = 'goal',
+  /** Rolling history summary stored on a topic. */
+  HistorySummary = 'history_summary',
   Image = 'image',
+  /** Chat input inline completion suggestions while the user is typing. */
+  InputCompletion = 'input_completion',
   Memory = 'memory',
   MultimodalAnalysis = 'multimodal_analysis',
   Notify = 'notify',
   Onboarding = 'onboarding',
   Openapi = 'openapi',
+  /** Rewrite of an image / video generation prompt. */
+  PromptRewrite = 'prompt_rewrite',
+  /** Connectivity check from the provider settings page. */
+  ProviderCheck = 'provider_check',
   /** A run the user deferred to a future time (`topic.metadata.scheduledRun`). */
   Scheduled = 'scheduled',
+  /** A provider event on a pull request (CI failure, review) woke the agent that opened it. */
+  Scm = 'scm',
   SemanticSearch = 'semantic_search',
   SignupEmailLLMReview = 'signup_email_llm_review',
+  /** Task runs and their auxiliary calls (briefs, handoff, intent, instructions). */
+  Task = 'task',
+  /** Thread (sub-topic) title summaries. */
+  ThreadTitle = 'thread_title',
+  /**
+   * @deprecated Legacy bucket for every title summary. New requests use
+   * {@link RequestTrigger.TopicTitle}, {@link RequestTrigger.ThreadTitle} or
+   * {@link RequestTrigger.GenerationTopicTitle}; kept so historical logs still resolve a label.
+   */
   Topic = 'topic',
+  /** Server-side topic auto summary (description + rolling summary). */
+  TopicSummary = 'topic_summary',
+  /** Chat topic title summaries, both client and server generated. */
+  TopicTitle = 'topic_title',
+  /** Translation of a chat message or a generation prompt, including language detection. */
+  Translate = 'translate',
+  /** Acceptance verification: plan generation, judging, review prediction and reports. */
+  Verify = 'verify',
   Video = 'video',
 }
 
@@ -81,6 +122,13 @@ export interface AgentShareVisitorContext {
   showErrorDetails?: boolean;
   /** `AgentShareConfig.showModelInfo` — gates visitor-facing model/provider/usage redaction. */
   showModelInfo?: boolean;
+  /**
+   * Mirrors `shareConfig.skillGrants` so the skill runtime can enforce the same
+   * per-skill allowlist the operation's skill pool was built from. Absent or
+   * empty grants no skill. Carried separately from {@link toolGrants} because a
+   * skill grant also governs the no-tool pinned-content path.
+   */
+  skillGrants?: string[];
   /**
    * Mirrors `shareConfig.toolGrants` so tool runtimes that resolve their
    * target outside `toolManifestMap` (e.g. `activateSkill`,
@@ -192,6 +240,8 @@ export const AgentRuntimeErrorType = {
   ProviderServiceUnavailable: 'ProviderServiceUnavailable',
   /** Network timeout / connection drop talking to the provider. */
   ProviderNetworkError: 'ProviderNetworkError',
+  /** Provider timed out while downloading a remote image or file URL. */
+  RemoteMediaDownloadTimeout: 'RemoteMediaDownloadTimeout',
   /** Proxy/router has no channel for the requested model (key pool exhausted, no upstream). */
   NoAvailableChannel: 'NoAvailableChannel',
   /** Upstream content-moderation / safety filter rejected the input or output. */
@@ -202,6 +252,12 @@ export const AgentRuntimeErrorType = {
   InvalidRequestFormat: 'InvalidRequestFormat',
   /** Upstream rejected the serialized request body as too large (HTTP 413). */
   RequestBodyTooLarge: 'RequestBodyTooLarge',
+  /**
+   * Upstream rejected the request for carrying more images than the channel allows
+   * (e.g. Azure OpenAI caps each request at 50). The limit is per channel, so another
+   * route for the same model may still accept the request.
+   */
+  ExceededImageLimit: 'ExceededImageLimit',
   /**
    * Upstream proxy / gateway layer failed (openresty, litellm, HTML 5xx,
    * Cloudflare 525) — distinct from the provider's own service. Split out of

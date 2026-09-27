@@ -16,13 +16,16 @@ import { useChatStore } from '@/store/chat';
 
 import type { AgentSignalReceiptView } from '../hooks/useAgentSignalReceipts';
 
-const MEMORY_ROUTE_BY_LAYER = {
+/**
+ * The experience layer has no page any more — nothing writes one and its surface is gone — so a
+ * receipt that still points at one lands on the memory home rather than a dead route.
+ */
+const MEMORY_ROUTE_BY_LAYER: Partial<Record<LayersEnum, { idParam: string; path: string }>> = {
   [LayersEnum.Activity]: { idParam: 'activityId', path: '/memory/activities' },
   [LayersEnum.Context]: { idParam: 'contextId', path: '/memory/contexts' },
-  [LayersEnum.Experience]: { idParam: 'experienceId', path: '/memory/experiences' },
   [LayersEnum.Identity]: { idParam: 'identityId', path: '/memory/identities' },
   [LayersEnum.Preference]: { idParam: 'preferenceId', path: '/memory/preferences' },
-} satisfies Record<LayersEnum, { idParam: string; path: string }>;
+};
 
 const styles = createStaticStyles(({ css }) => ({
   list: css`

@@ -1066,6 +1066,100 @@ describe('createGatewayEventHandler', () => {
     expect(lastCall?.[0]).not.toEqual(staleSnapshot);
   });
 
+  it('applies an in-sequence protocol-v2 message patch without a DB refetch', async () => {
+    const getMessages = vi.spyOn(messageService, 'getMessages');
+    const key = messageMapKey(context);
+    const current = [
+      { content: 'question', id: 'user-1', role: 'user' },
+      { content: 'draft', id: 'asst-1', role: 'assistant' },
+    ] as unknown as UIChatMessage[];
+    const settled = { ...current[1], content: 'settled' };
+    const tool = { content: 'result', id: 'tool-1', role: 'tool' } as UIChatMessage;
+    const store = createStore({ [key]: current });
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'asst-1',
+      context,
+      operationId: 'op-1',
+    });
+
+    handler(
+      makeEvent('message_patch', {
+        deletes: [],
+        revision: 1,
+        upserts: [
+          { afterId: 'user-1', message: settled },
+          { afterId: 'asst-1', message: tool },
+        ],
+      }),
+    );
+
+    expect(store.replaceMessages).toHaveBeenCalledWith([current[0], settled, tool], {
+      action: 'gateway/message_patch',
+      context,
+      preserveWorks: true,
+    });
+    expect(getMessages).not.toHaveBeenCalled();
+  });
+
+  it('falls back to one DB reconciliation when a message patch revision is missing', async () => {
+    const recovered = [
+      { content: 'canonical', id: 'asst-1', role: 'assistant' },
+    ] as unknown as UIChatMessage[];
+    const getMessages = vi.spyOn(messageService, 'getMessages').mockResolvedValue(recovered);
+    const store = createStore();
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'asst-1',
+      context,
+      operationId: 'op-1',
+    });
+
+    handler(makeEvent('message_patch', { deletes: [], revision: 2, upserts: [] }));
+    await flush();
+
+    expect(getMessages).toHaveBeenCalledWith({ ...context, skipWorks: true });
+    expect(store.replaceMessages).toHaveBeenCalledWith(recovered, {
+      context,
+      preserveWorks: true,
+    });
+  });
+
+  it('settles a patched terminal event without downloading the full topic', async () => {
+    const getMessages = vi.spyOn(messageService, 'getMessages');
+    const key = messageMapKey(context);
+    const current = [
+      { content: 'draft', id: 'asst-1', role: 'assistant' },
+    ] as unknown as UIChatMessage[];
+    const settled = { ...current[0], content: 'settled' };
+    const store = createStore({ [key]: current });
+    vi.mocked(store.replaceMessages).mockImplementation((messages) => {
+      store.dbMessagesMap[key] = messages;
+    });
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'asst-1',
+      context,
+      operationId: 'op-1',
+    });
+
+    handler(
+      makeEvent('message_patch', {
+        deletes: [],
+        revision: 1,
+        upserts: [{ afterId: null, message: settled }],
+      }),
+    );
+    handler(
+      makeEvent('agent_runtime_end', {
+        messagePatchMode: true,
+        messageRevision: 1,
+        reason: 'completed',
+      }),
+    );
+    await flush();
+
+    expect(store.dbMessagesMap[key]).toEqual([settled]);
+    expect(getMessages).not.toHaveBeenCalled();
+  });
+
   // Hetero / old-server stream_start has no assistantMessage.id, so it
   // resolves the next bubble from the fetch return value. If that fetch
   // started before step_start and we still returned the stale list, chunks

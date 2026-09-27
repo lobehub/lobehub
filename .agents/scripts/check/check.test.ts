@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { findNewComponentTestAdvisories } from './advisories';
+import { parseAlintJson } from './alint';
 import { diffStat, renderDiffsForStdout } from './autofix';
 import { lobehubPipelines } from './pipelines';
 import {
@@ -228,5 +229,37 @@ describe('compactVitestOutput', () => {
   it('falls back to filtering noise when no failed-tests section exists', () => {
     const raw = [' RUN  v3.2.4 /repo', 'Error: config not found', '   Duration  1ms'].join('\n');
     expect(compactVitestOutput(raw)).toBe('Error: config not found');
+  });
+});
+
+describe('parseAlintJson', () => {
+  it('maps alint diagnostics to root-relative lint problems', () => {
+    const stdout = JSON.stringify({
+      diagnostics: [
+        {
+          evidence: { confidence: 'high' },
+          filePath: '/repo/apps/server/src/services/x.ts',
+          loc: { start: { column: 0, line: 12 } },
+          message: 'Promise.all fans out over rows\nSuggestion: use pMap',
+          ruleId: 'lobehub/pmap-over-promise-all',
+          severity: 'warn',
+        },
+      ],
+      execution: {},
+      usage: {},
+    });
+    expect(parseAlintJson(stdout, '/repo')).toEqual([
+      {
+        file: 'apps/server/src/services/x.ts',
+        line: 12,
+        message: 'Promise.all fans out over rows',
+        rule: 'lobehub/pmap-over-promise-all',
+        severity: 'warning',
+      },
+    ]);
+  });
+
+  it('returns null when stdout is not alint JSON', () => {
+    expect(parseAlintJson('alint: no .alint config', '/repo')).toBeNull();
   });
 });

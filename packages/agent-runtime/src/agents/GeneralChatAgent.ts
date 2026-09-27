@@ -25,6 +25,8 @@ import {
   type SubAgentResultPayload,
   type SubAgentsBatchResultPayload,
 } from '../types';
+import { selectRunTools, selectToolManifestMap } from '../utils/operationToolSet';
+import { selectSecurityBlacklist, selectUserInterventionConfig } from '../utils/stateSlots';
 import { shouldCompress } from '../utils/tokenCounter';
 
 const TOOL_NOT_ALLOWED_CONTENT =
@@ -72,7 +74,7 @@ export class GeneralChatAgent implements Agent {
   }
 
   private getTools(state: AgentState, fallbackTools?: any[]): any[] | undefined {
-    return this.config.tools ?? state.tools ?? state.operationToolSet?.tools ?? fallbackTools;
+    return this.config.tools ?? selectRunTools(state) ?? fallbackTools;
   }
 
   private getAllowedToolNamesPayload() {
@@ -108,7 +110,7 @@ export class GeneralChatAgent implements Agent {
     state: AgentState,
   ): ExtendedHumanInterventionConfig | undefined {
     const { identifier, apiName } = toolCalling;
-    const manifest = state.toolManifestMap[identifier];
+    const manifest = selectToolManifestMap(state)[identifier];
 
     if (!manifest) return undefined;
 
@@ -159,7 +161,7 @@ export class GeneralChatAgent implements Agent {
     const toolsToExecute: ChatToolPayload[] = [];
 
     // Get security blacklist for resolver metadata
-    const securityBlacklist = state.securityBlacklist ?? DEFAULT_SECURITY_BLACKLIST;
+    const securityBlacklist = selectSecurityBlacklist(state) ?? DEFAULT_SECURITY_BLACKLIST;
 
     // Resolvers see one flat record: the run ledger plus the facts they audit
     // against — the security blacklist and the plan's working directory (the
@@ -171,7 +173,7 @@ export class GeneralChatAgent implements Agent {
     };
 
     // Get user config (default to 'manual' mode)
-    const userConfig = state.userInterventionConfig || { approvalMode: 'manual' };
+    const userConfig = selectUserInterventionConfig(state) || { approvalMode: 'manual' };
     const { approvalMode, allowList = [] } = userConfig;
 
     // Global audits: default to security blacklist audit if not provided
@@ -217,7 +219,7 @@ export class GeneralChatAgent implements Agent {
       }
 
       // Phase 2.5: Get manifest for later use
-      const manifest = state.toolManifestMap?.[identifier];
+      const manifest = selectToolManifestMap(state)[identifier];
 
       // Phase 3: Per-tool dynamic resolver
       const config = this.getToolInterventionConfig(toolCalling, state);
@@ -272,7 +274,7 @@ export class GeneralChatAgent implements Agent {
       // Only applies to manual/allow-list modes; auto-run users accept the risk
       if (!manifest) {
         console.warn(
-          `[InterventionGuard] Unknown tool "${identifier}/${apiName}" not found in toolManifestMap (keys: ${Object.keys(state.toolManifestMap ?? {}).join(', ')}), requiring intervention`,
+          `[InterventionGuard] Unknown tool "${identifier}/${apiName}" not found in toolManifestMap (keys: ${Object.keys(selectToolManifestMap(state)).join(', ')}), requiring intervention`,
         );
         toolsNeedingIntervention.push(toolCalling);
         continue;
@@ -752,9 +754,12 @@ export class GeneralChatAgent implements Agent {
           // Request approval for tools that need intervention
           // Non-headless mode waits for human approval; headless mode returns blocked tool results.
           if (toolsNeedingIntervention.length > 0) {
-            if (state.userInterventionConfig?.approvalMode === 'headless') {
+            if (selectUserInterventionConfig(state)?.approvalMode === 'headless') {
               instructions.push({
                 payload: {
+                  blockedContent:
+                    'This run cannot wait for user interaction. Continue in a user-facing conversation to answer questions or approve tools.',
+                  blockedReason: 'human_intervention_unavailable',
                   parentMessageId,
                   toolsCalling: toolsNeedingIntervention,
                 },

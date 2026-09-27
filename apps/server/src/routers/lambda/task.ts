@@ -1,6 +1,11 @@
 import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
 import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
 import type { TaskListItem, TaskParticipant, TaskVerifyConfig } from '@lobechat/types';
+import {
+  isValidTimezone,
+  validateCronPattern,
+  validateScheduleUpdate,
+} from '@lobechat/utils/cronEval';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -75,6 +80,23 @@ const taskVerifyConfigPatchSchema = z.object({
   verifyRubricId: z.string().nullish(),
 });
 
+// Reject cron the schedule dispatcher cannot evaluate at write time, instead of
+// storing it and letting it silently never fire. An empty string still clears.
+const schedulePatternSchema = z.string().superRefine((pattern, ctx) => {
+  if (!pattern) return;
+  const result = validateCronPattern(pattern, null);
+  if (!result.valid) {
+    ctx.addIssue({
+      code: 'custom',
+      message: `Invalid schedulePattern "${pattern}": ${result.error}`,
+    });
+  }
+});
+
+const scheduleTimezoneSchema = z.string().refine((tz) => !tz || isValidTimezone(tz), {
+  message: 'scheduleTimezone must be an IANA timezone such as "Asia/Shanghai"',
+});
+
 // Priority: 0=None, 1=Urgent, 2=High, 3=Normal, 4=Low
 const createSchema = z.object({
   assigneeAgentId: z.string().optional(),
@@ -93,8 +115,8 @@ const createSchema = z.object({
   parentTaskId: z.string().optional(),
   priority: z.number().min(0).max(4).optional(),
   projectId: z.string().optional(),
-  schedulePattern: z.string().optional(),
-  scheduleTimezone: z.string().optional(),
+  schedulePattern: schedulePatternSchema.optional(),
+  scheduleTimezone: scheduleTimezoneSchema.optional(),
   // When omitted, the server derives visibility from the parent task or the
   // assignee agent's visibility (private agent → private task). UI surfaces
   // such as the top-level "Tasks" create form pass it explicitly.
@@ -129,8 +151,8 @@ const updateSchema = z.object({
   name: z.string().optional(),
   parentTaskId: z.string().nullish(),
   priority: z.number().min(0).max(4).optional(),
-  schedulePattern: z.string().nullish(),
-  scheduleTimezone: z.string().nullish(),
+  schedulePattern: schedulePatternSchema.nullish(),
+  scheduleTimezone: scheduleTimezoneSchema.nullish(),
   status: z.enum(TASK_STATUSES).optional(),
 });
 
@@ -192,6 +214,29 @@ const groupListSchema = z
   });
 
 // Helper: resolve id/identifier and throw if not found
+/**
+ * The field schemas check `schedulePattern` and `scheduleTimezone` one at a
+ * time; this checks the pair the task ends up with, filling any field the
+ * input leaves out from the stored row, so e.g. a pattern-only update cannot
+ * keep a legacy invalid timezone and still report success.
+ */
+function assertResultingScheduleValid(
+  stored: { schedulePattern?: string | null; scheduleTimezone?: string | null } | null,
+  input: {
+    automationMode?: string | null;
+    schedulePattern?: string | null;
+    scheduleTimezone?: string | null;
+  },
+) {
+  const result = validateScheduleUpdate(
+    stored ? { pattern: stored.schedulePattern, timezone: stored.scheduleTimezone } : null,
+    input,
+  );
+  if (result && !result.valid) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: `Invalid schedule: ${result.error}` });
+  }
+}
+
 async function resolveOrThrow(model: TaskModel, id: string) {
   const task = await model.resolve(id);
   if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
@@ -750,6 +795,7 @@ export const taskRouter = router({
           'Creating a goal through task.create is no longer supported. Reload the app, then create the goal again.',
       });
     }
+    assertResultingScheduleValid(null, createInput);
     try {
       const parsedVerify = taskVerifyConfigPatchSchema.safeParse(createInput.config?.verify);
       const { verify: _legacyVerify, ...taskConfig } = createInput.config ?? {};
@@ -1467,6 +1513,7 @@ export const taskRouter = router({
           data.assigneeAgentId,
         );
         const resolved = await resolveOrThrow(model, id);
+        assertResultingScheduleValid(resolved, data);
 
         // Collaborative edit lock: reject writes to a workspace task another member
         // is actively editing. Inert until a client acquires the lock.

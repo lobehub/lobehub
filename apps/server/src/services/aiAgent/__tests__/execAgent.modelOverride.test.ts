@@ -358,8 +358,13 @@ describe('AiAgentService.execAgent - model/provider override', () => {
     const callArgs = mockCreateOperation.mock.calls[0][0];
     expect(callArgs.agentConfig.model).toBe('step-3.7-flash');
     expect(callArgs.agentConfig.provider).toBe('stepfun');
-    expect(callArgs.modelRuntimeConfig).toEqual({
+    expect(callArgs.modelRuntimeConfig).toMatchObject({
       mediaCapabilities: { video: true, vision: true },
+      model: 'step-3.7-flash',
+      provider: 'stepfun',
+    });
+    // The model facts frozen for the run follow the override too.
+    expect(callArgs.modelRuntimeConfig.modelFacts).toMatchObject({
       model: 'step-3.7-flash',
       provider: 'stepfun',
     });
@@ -377,8 +382,13 @@ describe('AiAgentService.execAgent - model/provider override', () => {
     });
 
     const callArgs = mockCreateOperation.mock.calls[0][0];
-    expect(callArgs.modelRuntimeConfig).toEqual({
+    expect(callArgs.modelRuntimeConfig).toMatchObject({
       mediaCapabilities: { video: true, vision: true },
+      model: 'step-3.7-flash',
+      provider: 'stepfun',
+    });
+    // The model facts frozen for the run follow the override too.
+    expect(callArgs.modelRuntimeConfig.modelFacts).toMatchObject({
       model: 'step-3.7-flash',
       provider: 'stepfun',
     });

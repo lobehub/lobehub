@@ -1,183 +1,57 @@
 'use client';
 
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Block } from '@lobehub/ui';
+import { PreviewGroup } from '@lobehub/ui';
 import { Alert, Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useClientDataSWR } from '@/libs/swr';
-import { imageKeys } from '@/libs/swr/keys';
+import { downloadPreviewImage } from '@/features/Conversation/Messages/components/downloadPreviewImage';
 import { normalizeAsyncError } from '@/libs/swr/normalizeError';
-import { generationService } from '@/services/generation';
 
-import type {
-  GeneratedImageTask,
-  GenerateImageParams,
-  GenerateImageState,
-  GetImageGenerationStatusParams,
-  GetImageGenerationStatusState,
-} from '../../types';
-
-const POLLING_INTERVAL = 3000;
+import type { GeneratedImageTask, GenerateImageParams, GenerateImageState } from '../../types';
+import { resolveAspectRatio } from '../components/aspectRatio';
+import { peekGenerationClock } from '../components/generationClock';
+import ImageCanvas from '../components/ImageCanvas';
+import ImageCanvasGrid from '../components/ImageCanvasGrid';
+import {
+  getStateAssetUrl,
+  getStateErrorDetail,
+  getTaskAssetUrl,
+  getTaskErrorDetail,
+  isTerminalStatus,
+  useGenerationStatus,
+} from '../components/useGenerationStatus';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  error: css`
-    color: ${cssVar.colorError};
-  `,
-  grid: css`
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
-    gap: 10px;
-    padding: 12px;
-  `,
-  header: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    justify-content: space-between;
-
-    min-width: 0;
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  image: css`
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  `,
-  meta: css`
-    overflow: hidden;
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: 2px;
-
-    min-width: 0;
-  `,
-  model: css`
+  caption: css`
     overflow: hidden;
 
     font-family: ${cssVar.fontFamilyCode};
     font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
+    color: ${cssVar.colorTextQuaternary};
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
-  prompt: css`
-    overflow: hidden;
-
-    font-size: 13px;
-    font-weight: 500;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  status: css`
-    flex-shrink: 0;
-
-    padding-block: 2px;
-    padding-inline: 8px;
-    border-radius: 999px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  tile: css`
-    overflow: hidden;
-
-    aspect-ratio: 1;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 8px;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  tileBody: css`
+  root: css`
     display: flex;
     flex-direction: column;
     gap: 8px;
-    align-items: center;
-    justify-content: center;
-
-    width: 100%;
-    height: 100%;
-    padding: 12px;
-
-    text-align: center;
   `,
 }));
 
-const isTerminalStatus = (status?: string) => status === 'success' || status === 'error';
-
-const getAssetUrl = (state?: GetImageGenerationStatusState) => {
-  const asset = state?.generation?.asset;
-  return asset?.url || asset?.thumbnailUrl || asset?.originalUrl;
-};
-
-const getTaskAssetUrl = (task: GeneratedImageTask) =>
-  task.asset?.url || task.asset?.thumbnailUrl || task.asset?.originalUrl;
-
-const getErrorDetail = (state?: GetImageGenerationStatusState) => {
-  const error = state?.error;
-  if (!error) return;
-  const body = error.body;
-  if (typeof body === 'string') return body;
-  return body.detail;
-};
-
-const getTaskErrorDetail = (task: GeneratedImageTask) => {
-  const error = task.error;
-  if (!error) return;
-  const body = error.body;
-  if (typeof body === 'string') return body;
-  return body.detail;
-};
-
-const useGenerationStatus = (params: GetImageGenerationStatusParams, enabled: boolean) => {
-  const [pollingStopped, setPollingStopped] = useState(false);
-
-  useEffect(() => {
-    setPollingStopped(false);
-  }, [params.asyncTaskId, params.generationId]);
-
-  const result = useClientDataSWR<GetImageGenerationStatusState>(
-    enabled && params.asyncTaskId
-      ? imageKeys.generationStatus(params.generationId, params.asyncTaskId)
-      : null,
-    async () => {
-      const result = await generationService.getGenerationStatus(
-        params.generationId,
-        params.asyncTaskId,
-      );
-      return {
-        ...result,
-        asyncTaskId: params.asyncTaskId,
-        generationId: params.generationId,
-      };
-    },
-    {
-      onError: () => setPollingStopped(true),
-      onSuccess: () => setPollingStopped(false),
-      refreshInterval: (data?: GetImageGenerationStatusState) =>
-        pollingStopped || isTerminalStatus(data?.status) ? 0 : POLLING_INTERVAL,
-      shouldRetryOnError: false,
-    },
-  );
-
-  const { mutate } = result;
-  const retry = useCallback(() => {
-    setPollingStopped(false);
-    void mutate();
-  }, [mutate]);
-
-  return { ...result, retry };
-};
-
-const GenerationTile = memo<{ index: number; task: GeneratedImageTask }>(({ index, task }) => {
+const GenerationTile = memo<{
+  index: number;
+  parameters?: Record<string, unknown>;
+  /**
+   * Shared footprint for multi-image grids. Omitted for a lone image, which
+   * takes the real ratio of its own asset once it lands.
+   */
+  ratio?: number;
+  startedAt?: number;
+  task: GeneratedImageTask;
+}>(({ index, parameters, ratio: sharedRatio, startedAt, task }) => {
   const { t } = useTranslation('plugin');
   const shouldFetchStatus = !isTerminalStatus(task.status);
   const { data, error, isLoading, isValidating, retry } = useGenerationStatus(
@@ -193,39 +67,36 @@ const GenerationTile = memo<{ index: number; task: GeneratedImageTask }>(({ inde
     data?.status ||
     task.status ||
     (isLoading ? 'processing' : 'pending');
-  const url = getTaskAssetUrl(task) || getAssetUrl(data);
+  const url = getTaskAssetUrl(task) || getStateAssetUrl(data);
   const errorDetail =
-    error instanceof Error ? error.message : getTaskErrorDetail(task) || getErrorDetail(data);
+    error instanceof Error ? error.message : getTaskErrorDetail(task) || getStateErrorDetail(data);
   const canRetry = Boolean(error) && normalizeAsyncError(error).retryable;
+  const ratio =
+    sharedRatio ?? resolveAspectRatio(parameters, task.asset ?? data?.generation?.asset);
 
   return (
-    <div className={styles.tile}>
-      {url ? (
-        <img
-          alt={t('builtins.lobe-image-generation.render.imageAlt', { index: index + 1 })}
-          className={styles.image}
-          src={url}
-        />
-      ) : (
-        <div className={styles.tileBody}>
-          <Text
-            as={'span'}
-            className={status === 'error' ? styles.error : undefined}
-            color={status === 'error' ? cssVar.colorError : cssVar.colorTextSecondary}
-            fontSize={12}
-          >
-            {status === 'error'
-              ? errorDetail || t('builtins.lobe-image-generation.render.status.error')
-              : t(`builtins.lobe-image-generation.render.status.${status}`)}
+    <ImageCanvas
+      alt={t('builtins.lobe-image-generation.render.imageAlt', { index: index + 1 })}
+      badge={t(`builtins.lobe-image-generation.render.status.${status}`)}
+      ratio={ratio}
+      seed={index}
+      startedAt={startedAt}
+      url={url}
+      onDownload={downloadPreviewImage}
+    >
+      {status === 'error' && !url && (
+        <>
+          <Text as={'span'} color={cssVar.colorError} fontSize={12}>
+            {errorDetail || t('builtins.lobe-image-generation.render.status.error')}
           </Text>
           {canRetry && (
             <Button loading={isValidating} size={'small'} onClick={retry}>
               {t('builtins.lobe-image-generation.render.retry')}
             </Button>
           )}
-        </div>
+        </>
       )}
-    </div>
+    </ImageCanvas>
   );
 });
 
@@ -233,7 +104,7 @@ GenerationTile.displayName = 'GenerationTile';
 
 export const GenerateImageRender = memo<
   BuiltinRenderProps<GenerateImageParams, GenerateImageState>
->(({ args, pluginError, pluginState }) => {
+>(({ args, pluginError, pluginState, toolCallId }) => {
   const { t } = useTranslation('plugin');
   const generations = pluginState?.generations ?? [];
 
@@ -252,31 +123,30 @@ export const GenerateImageRender = memo<
 
   const provider = pluginState?.provider || args?.provider;
   const model = pluginState?.model || args?.model;
-  const prompt = pluginState?.prompt || args?.prompt;
+  const parameters = args?.parameters;
+  // Canvases in a grid share one footprint so a finished image never resizes
+  // its cell out of line with the ones still generating.
+  const gridRatio = resolveAspectRatio(parameters, generations[0]?.asset);
+  const isGrid = generations.length > 1;
 
   return (
-    <Block variant={'outlined'} width={'100%'}>
-      <div className={styles.header}>
-        <div className={styles.meta}>
-          <div className={styles.prompt}>{prompt}</div>
-          <div className={styles.model}>{[provider, model].filter(Boolean).join('/')}</div>
-        </div>
-        <span className={styles.status}>
-          {t('builtins.lobe-image-generation.render.generatedCount', {
-            count: generations.length,
-          })}
-        </span>
-      </div>
-      <div className={styles.grid}>
-        {generations.map((task, index) => (
-          <GenerationTile
-            index={index}
-            key={`${task.generationId}-${task.asyncTaskId}`}
-            task={task}
-          />
-        ))}
-      </div>
-    </Block>
+    <div className={styles.root}>
+      <PreviewGroup preview={{ onDownload: downloadPreviewImage }}>
+        <ImageCanvasGrid count={generations.length} ratio={gridRatio}>
+          {generations.map((task, index) => (
+            <GenerationTile
+              index={index}
+              key={`${task.generationId}-${task.asyncTaskId}`}
+              parameters={parameters}
+              ratio={isGrid ? gridRatio : undefined}
+              startedAt={peekGenerationClock(toolCallId)}
+              task={task}
+            />
+          ))}
+        </ImageCanvasGrid>
+      </PreviewGroup>
+      {model && <div className={styles.caption}>{[provider, model].filter(Boolean).join('/')}</div>}
+    </div>
   );
 });
 

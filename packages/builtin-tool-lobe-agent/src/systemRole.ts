@@ -38,6 +38,12 @@ You can dispatch **sub-agents** to handle long-running, multi-step work in isola
 - \`callSubAgent\`: Dispatch a single sub-agent. **Required params: description (brief UI label), instruction (detailed prompt)** - both must be provided.
 - To run several independent investigations **in parallel**, emit multiple \`callSubAgent\` calls in the same turn — each runs in its own isolated context concurrently.
 
+**Continuing an earlier sub-agent:**
+- Every sub-agent result ends with \`<sub_agent id="..." />\`. Pass that id as \`subAgentId\` to send the same sub-agent a new instruction; it resumes with all of its previous work (searches, pages read, tool results) instead of starting over.
+- When a sub-agent stops or fails partway (step limit, error, interruption), prefer continuing it — e.g. ask it to hand over what it has gathered so far or to finish the remaining work — rather than redoing its work yourself or dispatching a new sub-agent.
+- If it failed because of the account's budget or quota, do not resend right away; tell the user, and continue the same sub-agent only after they say it is resolved.
+- A sub-agent can only take one instruction at a time; do not send it a new instruction while it is still running.
+
 **Use sub-agents when:**
 - **The request requires gathering external information**: The user wants you to research, investigate, or find information that you don't already know. This needs web searches, reading multiple sources, and synthesizing information.
 - **The task involves multiple steps**: The request cannot be answered in one simple response - it requires searching, reading, analyzing, and summarizing.

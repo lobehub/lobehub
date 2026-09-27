@@ -40,6 +40,7 @@ export interface StartOperationInput {
   evalContext?: InternalExecAgentParams['evalContext'];
   evalRuntime?: InternalExecAgentParams['evalRuntime'];
   hooks?: InternalExecAgentParams['hooks'];
+  includeFinalState?: boolean;
   /** Final runtime context — base prep context with 16b/16c overrides applied. */
   initialContext: OperationPrepResult['initialContext'];
   initialStepCount?: number;
@@ -85,6 +86,7 @@ export const startOperation = async (
     provider,
     resolvedAgentId,
     shareGate,
+    topicEditingGroupId,
     topicId,
     trigger,
     userMessageId,
@@ -123,6 +125,12 @@ export const startOperation = async (
     userTimezone,
   } = input;
   const { audio, video, vision } = discovery.modelMediaCapabilities;
+  // A builder topic continued from another surface (scope `main`, an approval
+  // resume) arrives without the group it edits; the group the topic was opened
+  // on stands in, so the run still knows its target.
+  const editingGroupId =
+    (appContext?.scope === 'group_agent_builder' ? appContext.editingGroupId : undefined) ||
+    topicEditingGroupId;
 
   log(
     'execAgent: creating operation %s — agentDocuments=%d, knowledgeBases=%s, tools=%d, skills=%d',
@@ -137,6 +145,7 @@ export const startOperation = async (
   // If createOperation fails, we still have valid messages that need error info
   try {
     const result = await deps.agentRuntimeService.createOperation({
+      includeFinalState: input.includeFinalState,
       activeDeviceId: discovery.activeDeviceId,
       activeDeviceScope: discovery.activeDeviceScope,
       agentConfig,
@@ -170,6 +179,12 @@ export const startOperation = async (
             // creation time. See `AgentShareGate.shareId`'s JSDoc for why the
             // id itself is the revocation token.
             shareId: shareGate.shareId,
+            // Mirrors `shareConfig.skillGrants` so the skill runtime can
+            // re-check every load against the SAME allowlist the skill pool was
+            // assembled from. Assembly alone is not enough: `activateSkill`
+            // resolves a model-supplied skill NAME, so a name the pool never
+            // offered still reaches the runtime.
+            skillGrants: shareGate.shareConfig.skillGrants,
             showErrorDetails: shareGate.shareConfig.showErrorDetails,
             showModelInfo: shareGate.shareConfig.showModelInfo,
             visitorUserId: shareGate.visitorUserId,
@@ -206,9 +221,7 @@ export const startOperation = async (
         // owned by the builtin builder agent, so the edited group only rides
         // here. Read by the group-agent-builder server runtime and by the
         // `<current_group_context>` injector.
-        ...(appContext?.scope === 'group_agent_builder' && appContext?.editingGroupId
-          ? { editingGroupId: appContext.editingGroupId }
-          : {}),
+        ...(editingGroupId ? { editingGroupId } : {}),
         // Run-scoped Agent Signal marker for background self-iteration / memory
         // runs — lands in state.origin.signal so the completion path can
         // project receipts/briefs. Undefined for ordinary chat runs.
@@ -272,10 +285,18 @@ export const startOperation = async (
           ...(typeof video === 'boolean' && { video }),
           ...(typeof vision === 'boolean' && { vision }),
         },
+        // Read once during discovery: every LLM attempt of this run resolves its
+        // parameters from here, so no step re-reads the bank, the user's model
+        // row or the reasoning config — and none of them can change mid-run.
+        modelFacts: discovery.modelFacts,
         model,
         provider,
       },
       hooks,
+      // Listed once during discovery: every step renders {{CREDS_LIST}} from
+      // here instead of asking the Market API again. Awaited only now, so the
+      // read overlapped with the operation preparation that ran in between.
+      operationCredentials: await discovery.credentialFactsPromise,
       operationId,
       parentOperationId,
       signal,

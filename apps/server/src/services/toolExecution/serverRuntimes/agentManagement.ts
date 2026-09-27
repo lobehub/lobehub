@@ -20,6 +20,7 @@ import {
 
 import { AgentModel } from '@/database/models/agent';
 import { PluginModel } from '@/database/models/plugin';
+import { AgentService } from '@/server/services/agent';
 import { DiscoverService } from '@/server/services/discover';
 
 import { type ToolExecutionContext, type ToolExecutionResult } from '../types';
@@ -40,6 +41,7 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
     }
 
     const agentModel = new AgentModel(context.serverDB, context.userId, context.workspaceId);
+    const agentService = new AgentService(context.serverDB, context.userId, context.workspaceId);
     const pluginModel = new PluginModel(context.serverDB, context.userId, context.workspaceId);
     // Same identity requirement as the Agent Builder runtime: built without an
     // identity, DiscoverService sends no credentials and every market read fails
@@ -386,7 +388,7 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
           const updatedParts: string[] = [];
 
           if (config && Object.keys(config).length > 0) {
-            await agentModel.updateConfig(agentId, config as Record<string, unknown>);
+            await agentService.updateAgentConfig(agentId, config);
             updatedParts.push(`config: ${Object.keys(config).join(', ')}`);
           }
 

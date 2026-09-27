@@ -7,7 +7,7 @@ description: >-
 tags:
   - LobeHub
   - Getting Started
-  - Agent Workspace
+  - Personal AI Assistant
   - AI Collaboration
   - Agent Teams
   - Memory
@@ -28,6 +28,26 @@ Today’s agents are one-off, task-driven tools. They lack context, live in isol
 
 LobeHub is a work-and-lifestyle space to find, build, and collaborate with agent teammates that grow with you. In LobeHub, we treat **Agents as the unit of work**, providing an infrastructure where humans and agents co-evolve.
 
+LobeHub brings your agents together: create agents here or [connect external agents](/docs/usage/agent/connect-external-agents), including coding CLIs and personal agent platforms.
+
+### Start with a Conversation
+
+Choose an **Agent** and open a **Topic** for the work you want to do. Use a **Task** for work that needs follow-up, and save useful results as documents.
+
+| What you want to do | What to use |
+| --- | --- |
+| Bring an existing external agent into LobeHub | **[Connect External Agents](/docs/usage/agent/connect-external-agents)** |
+| Give your Agent a method for a particular job | **Skills** provide instructions and supporting material |
+| Let your Agent use a service or tool | **[Connectors](/docs/usage/agent/connectors)** connect services and control tool permissions |
+| Upload material for your Agent to search and reference | **Resource Library** |
+| Write and collaborate on a standalone document | **Pages** |
+| Save notes for this conversation | **Agent Documents** linked to the current topic |
+| Keep reference material across topics with the same Agent | **Agent Documents** |
+| Choose which computer runs your tools | **Execution Devices**; use a **Cloud Sandbox** for a cloud code environment |
+
+Some features are still in testing or available only in certain editions. See [Feature Status](/docs/usage/feature-status).
+
+
 ---
 
 <Image alt={'create with LobeHub'} cover src={'https://hub-apac-1.lobeobjects.space/blog/assets/2204cde2228fb3f583f3f2c090bc49fb.webp'} />
@@ -37,10 +57,12 @@ LobeHub is a work-and-lifestyle space to find, build, and collaborate with agent
 Building a personalized AI team starts with the **Agent Builder**. You can describe what you need once, and the agent setup starts right away, applying auto-configurations so you can use it instantly.
 
 - **Unified Intelligence**: Seamlessly access any model and any modality—all under your control.
-- **10,000+ Skills**: Connect your agents to the skills you use every day with a library of over 10,000 tools and MCP-compatible plugins.
+- **Skills and Connectors**: Give your agents reusable methods and connect them to the tools you use every day.
 
 <Cards>
   <Card href={'/docs/usage/getting-started/agent'} title={'Create a Custom Agent'} />
+
+  <Card href={'/docs/usage/agent/connect-external-agents'} title={'Connect External Agents'} />
 
   <Card href={'/docs/usage/community/agent-market'} title={'Agent Marketplace'} />
 </Cards>
@@ -55,13 +77,12 @@ LobeHub introduces **Agent Groups**, allowing you to work with agents like real 
 
 - **Pages**: Write and refine content with multiple agents in one place with a shared context.
 - **Schedule**: Schedule runs and let agents do the work at the right time, even while you are away.
-- **Project**: Organize work by project to keep everything structured and easy to track.
-- **Workspace**: A shared space for teams to collaborate with agents, ensuring clear ownership and visibility across the organization.
+- **Project (Alpha)**: Organize related work by project. Projects is still in testing; availability and controls can change between versions.
 
 <Cards>
   <Card href={'/docs/usage/agent/agent-team'} title={'Agent Groups'} />
 
-  <Card href={'/docs/usage/agent/pages'} title={'Pages'} />
+  <Card href={'/docs/usage/getting-started/page'} title={'Pages'} />
 </Cards>
 
 ---
@@ -123,13 +144,13 @@ Each Agent can have its own default model. Your code reviewer uses one model whi
   <Card href={'/docs/usage/getting-started/lobe-ai'} title={'Try Lobe AI'} />
 </Cards>
 
-### 10,000+ Skills: Connect Agents to the tools you use
+### Skills and Connectors: Connect Agents to the tools you use
 
 An Agent that can only chat is only half the story.
 
-With [Skills](/docs/usage/agent/skills), your Agent reads your GitHub issues, queries your database, sends a Slack message, generates a PDF, or books a meeting. All within the same conversation.
+With [Connectors](/docs/usage/agent/connectors), your Agent reads your GitHub issues, queries your database, sends a Slack message, generates a PDF, or books a meeting. All within the same conversation.
 
-LobeHub supports the [Model Context Protocol (MCP)](/docs/usage/community/mcp-market), an open standard that connects Agents to an ever-growing ecosystem of **10,000+ tools**. Install a Skill from the marketplace in one click, or build your own and share it with the Community.
+LobeHub supports the [Model Context Protocol (MCP)](/docs/usage/community/mcp-market), an open standard that connects Agents to an ever-growing ecosystem of **10,000+ tools**. Install tool connections from the MCP marketplace, or add reusable methods from the Skills marketplace.
 
 A few real-world examples:
 
@@ -138,31 +159,31 @@ A few real-world examples:
 - *"Find flights to Tokyo next month under $800"* → your Agent searches, compares, and presents options with booking links.
 
 <Cards>
-  <Card href={'/docs/usage/agent/skills'} title={'Agent Skills'} />
+  <Card href={'/docs/usage/community/skills-market'} title={'Agent Skills'} />
 
   <Card href={'/docs/usage/community/mcp-market'} title={'MCP Marketplace'} />
 </Cards>
 
 ### Resource Library: Give your Agents real knowledge
 
-Generic AI answers are fine for generic questions. But when you need an Agent that knows *your* codebase, *your* product docs, *your* company policies, the [Resource Library](/docs/usage/agent/resources) is where you start.
+Generic AI answers are fine for generic questions. But when you need an Agent that knows *your* codebase, *your* product docs, *your* company policies, the [Resource Library](/docs/usage/getting-started/resource) is where you start.
 
-Upload documents, images, spreadsheets, audio, or video. Your Agent references them during conversations, so its answers are grounded in your actual data, not just training-set knowledge. Build a knowledge base for each Agent, or share resources across your Workspace.
+Upload documents, images, spreadsheets, audio, or video. Your Agent references them during conversations, so its answers are grounded in your actual data, not just training-set knowledge. Organize your files into knowledge bases and attach the relevant ones to your Agents.
 
 Imagine a customer support Agent that knows your entire help center. A legal assistant trained on your contract templates. A product manager who has read every PRD you've ever written. That's Resource Library at work.
 
 <Cards>
-  <Card href={'/docs/usage/agent/resources'} title={'Resource Library'} />
+  <Card href={'/docs/usage/getting-started/resource'} title={'Resource Library'} />
 </Cards>
 
 ### Create visuals without leaving the conversation
 
 Need a hero image for a blog post? A diagram for your architecture doc? A quick mockup to pitch an idea?
 
-Ask your Agent. It generates images using GPT Image, Flux, and other models, and renders them as Artifacts right in the chat. No switching to a separate design tool, no export-download-reupload cycle. The image is there, in context, next to the conversation that produced it.
+Ask your Agent. Use Image Generation to create images with an available image model, or Artifacts to build previewable web pages, SVG graphics, and interactive components. These are different capabilities managed through [Connectors](/docs/usage/agent/connectors); their availability depends on the model, permissions, and execution environment.
 
 <Cards>
-  <Card href={'/docs/usage/agent/artifacts'} title={'Artifacts'} />
+  <Card href={'/docs/usage/agent/connectors'} title={'Connectors'} />
 </Cards>
 
 ### Community: Shared intelligence
@@ -173,6 +194,8 @@ Found an Agent that's 80% of what you need? Install it, tweak the prompt, swap t
 
 <Cards>
   <Card href={'/docs/usage/community/agent-market'} title={'Agent Marketplace'} />
+
+  <Card href={'/docs/usage/community/skills-market'} title={'Skills Marketplace'} />
 
   <Card href={'/docs/usage/community/mcp-market'} title={'MCP Marketplace'} />
 

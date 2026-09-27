@@ -13,8 +13,12 @@ import {
   resolveRemotePlatformRuntime,
 } from '@lobechat/heterogeneous-agents/scanHost';
 import { type ILocalSystemService, LocalSystemExecutionRuntime } from '@lobechat/tool-runtime';
+import { app as electronApp } from 'electron';
 
+import { updaterConfig } from '@/modules/updater/configs';
+import { createRemoteAppUpdateDeps } from '@/modules/updater/remoteUpdate';
 import AuvService, { type AuvRunCommandParams } from '@/services/auvSrv';
+import { backfillDeviceArchitecture } from '@/services/deviceArchitectureBackfill';
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import ImessageBridgeService from '@/services/imessageBridgeSrv';
 import { findHeteroExecProcesses } from '@/utils/heteroExecProcess';
@@ -247,7 +251,18 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
   @IpcMethod()
   async getConnectionStatus(): Promise<{ status: GatewayConnectionStatus }> {
-    return { status: this.service.getStatus() };
+    return { status: this.service.getDisplayedStatus() };
+  }
+
+  @IpcMethod()
+  async getKeepAwake(): Promise<{ enabled: boolean }> {
+    return { enabled: this.service.getKeepAwake() };
+  }
+
+  @IpcMethod()
+  async setKeepAwake({ enabled }: { enabled: boolean }): Promise<{ enabled: boolean }> {
+    this.service.setKeepAwake(enabled);
+    return { enabled: this.service.getKeepAwake() };
   }
 
   @IpcMethod()
@@ -256,7 +271,26 @@ export default class GatewayConnectionCtr extends ControllerModule {
     hostname: string;
     platform: string;
   }> {
-    return this.service.getDeviceInfo();
+    const info = this.service.getDeviceInfo();
+    try {
+      const [serverUrl, token] = await Promise.all([
+        this.remoteServerConfigCtr.getRemoteServerUrl(),
+        this.remoteServerConfigCtr.getAccessToken(),
+      ]);
+      if (serverUrl && token && info.deviceId !== 'unknown') {
+        const headers = { 'Content-Type': 'application/json', 'Oidc-Auth': token };
+        setDesktopUserAgentHeader(headers);
+        await backfillDeviceArchitecture({
+          architecture: os.arch(),
+          deviceId: info.deviceId,
+          headers,
+          serverUrl,
+        });
+      }
+    } catch (error) {
+      logger.warn('Could not backfill local device architecture; will retry on next read', error);
+    }
+    return info;
   }
 
   /**
@@ -427,10 +461,20 @@ export default class GatewayConnectionCtr extends ControllerModule {
       getProjectFileIndex: (params) => this.localFileCtr.getProjectFileIndex(params),
       listHeterogeneousAgentModels: (params) => this.heterogeneousAgentCtr.listModels(params),
       searchProjectFiles: (params) => this.localFileCtr.searchProjectFiles(params),
+      // Remote "delete" goes to this machine's trash (`shell.trashItem`), same
+      // as the local Files tree, so it stays recoverable.
+      trashLocalFiles: (params) => this.localFileCtr.trashLocalFiles(params),
       unenrollWorkspace: (params) => this.service.unenrollWorkspace(params),
       // Skill-archive cache (`prepareSkillDirectory` RPC): reuse LocalFileCtr's
       // deps so gateway-prepared skills share one cache with the renderer-IPC path.
       ...this.localFileCtr.getSkillDirectoryDeps(),
+      // Remote app update from the web device page, over the same updater the
+      // local "Check for updates" menu drives.
+      ...createRemoteAppUpdateDeps({
+        currentVersion: electronApp.getVersion(),
+        enabled: updaterConfig.enableAppUpdate,
+        getUpdater: () => this.app.getUpdaterManager(),
+      }),
     };
   }
 

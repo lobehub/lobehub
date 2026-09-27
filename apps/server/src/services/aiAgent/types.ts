@@ -3,6 +3,7 @@ import type {
   BotSenderMetadata,
   ChatTopicBotContext,
   ExecAgentParams,
+  ExternalOriginMetadata,
   LobeAgentChatConfig,
   RuntimeMentionedAgent,
   UserInterventionConfig,
@@ -16,6 +17,7 @@ import type { AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import type { EvalRuntimeContext } from '@/server/services/agentRuntime/types';
 
 import type { DeviceAccessReason } from './deviceAccessPolicy';
+import type { RunFacts } from './runFacts';
 import type { AgentShareGate } from './shareGate';
 
 /**
@@ -46,12 +48,19 @@ export interface ExecRunContext {
   /** The actual executing agent row id resolved from id/slug. */
   resolvedAgentId: string;
   /**
+   * Turn-invariant facts (device system info, the user's row), read once and
+   * shared by every stage of the send window.
+   */
+  runFacts: RunFacts;
+  /**
    * Shared-agent visitor gate for this run, mirrored from
    * {@link InternalExecAgentParams.shareGate} so every extracted pipeline stage
    * can enforce it without threading a separate argument. Undefined for every
    * ordinary (non-share) run.
    */
   shareGate?: AgentShareGate;
+  /** The group a reused Group Agent Builder topic was opened on — see `TurnSetupResult`. */
+  topicEditingGroupId?: string;
   /** Topic id — guaranteed to exist by the time pipeline stages run. */
   topicId: string;
   trigger?: string;
@@ -128,6 +137,12 @@ export interface InternalExecAgentParams extends ExecAgentParams {
    * as well as activator-discoverable manifests.
    */
   exclusivePluginIds?: string[];
+  /**
+   * Provider event that produced this server-injected turn (a GitHub CI
+   * failure waking the agent, …), persisted on the user message as
+   * `metadata.externalOrigin` so the bubble carries its source.
+   */
+  externalOrigin?: ExternalOriginMetadata;
   /** External files to upload to S3 and attach to the user message */
   files?: Array<{
     /** Pre-downloaded buffer (from adapter/platform layer) */
@@ -295,6 +310,16 @@ export interface InternalExecAgentParams extends ExecAgentParams {
  * project path placeholder (and the tool cwd/scope downstream) without re-loading
  * the device + topic the scan already read.
  */
+export interface BindTopicWorkingDirectoryParams {
+  config?: WorkingDirConfig;
+  /** The topic's existing `metadata.boundDeviceId`, if any. */
+  currentDeviceId?: string;
+  currentWorkingDirectory?: string;
+  /** The device {@link config} was resolved for. */
+  deviceId?: string;
+  topicId: string;
+}
+
 export interface ResolvedWorkspaceInit {
   boundCwd?: string;
   /**
@@ -304,6 +329,8 @@ export interface ResolvedWorkspaceInit {
    * a linked worktree must still file under its repo.
    */
   boundCwdConfig?: WorkingDirConfig;
+  /** The device the topic's cwd is pinned on (`topic.metadata.boundDeviceId`). */
+  topicDeviceId?: string;
   /**
    * The cwd the topic was ALREADY pinned to, so a caller can tell a first-time
    * binding from a no-op rewrite without re-reading the topic row.

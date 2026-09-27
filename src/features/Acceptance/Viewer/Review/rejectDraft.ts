@@ -104,9 +104,21 @@ export const mergeRejectComments = (initialComment = '', storedComment = '') => 
 
 export const ZOOM_STEPS = [0.5, 0.75, 1, 1.5, 2, 3, 4];
 
-/** Step one notch along ZOOM_STEPS, clamped at both ends. */
+export const clampZoom = (value: number) =>
+  Math.min(Math.max(value, ZOOM_STEPS[0]), ZOOM_STEPS.at(-1)!);
+
+/**
+ * Step one notch along ZOOM_STEPS, clamped at both ends. A pinch can leave the
+ * zoom between two notches; from there a step lands on the next notch in that
+ * direction rather than snapping back to 100%.
+ */
 export const nextZoom = (current: number, direction: 1 | -1) => {
   const index = ZOOM_STEPS.findIndex((step) => Math.abs(step - current) < 0.001);
-  const at = index === -1 ? 2 : index;
-  return ZOOM_STEPS[Math.min(Math.max(at + direction, 0), ZOOM_STEPS.length - 1)];
+  if (index !== -1)
+    return ZOOM_STEPS[Math.min(Math.max(index + direction, 0), ZOOM_STEPS.length - 1)];
+  const candidate =
+    direction === 1
+      ? ZOOM_STEPS.find((step) => step > current)
+      : [...ZOOM_STEPS].reverse().find((step) => step < current);
+  return candidate ?? clampZoom(current);
 };

@@ -429,7 +429,9 @@ export const HETERO_SELECTOR_CAPABILITIES = {
       source: 'catalog',
     },
   },
-  'kimi-code': {},
+  'kimi-code': {
+    model: { encodings: [MODEL_FLAGS_ENCODING], resolve: resolvePersistedModel, source: 'catalog' },
+  },
   'opencode': {
     model: { encodings: [MODEL_FLAGS_ENCODING], resolve: resolvePersistedModel, source: 'catalog' },
   },

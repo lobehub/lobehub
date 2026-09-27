@@ -301,6 +301,79 @@ describe('createTaskRuntime', () => {
       });
     });
 
+    it('treats empty-string assignees as omitted so they never reach the FK columns', async () => {
+      const deps = makeDeps();
+
+      const runtime = createTaskRuntime({
+        agentModel: deps.agentModel as any,
+        agentId: 'agt-xyz',
+        taskCaller: deps.taskCaller,
+        taskModel: deps.taskModel as any,
+        taskService: deps.taskService as any,
+      });
+
+      const result = await runtime.createTask({
+        assigneeAgentId: '',
+        assigneeUserId: ' ',
+        instruction: 'Do something',
+        name: 'Test',
+        parentIdentifier: '',
+      });
+
+      expect(result.success).toBe(true);
+      expect(deps.agentModel.existsById).not.toHaveBeenCalled();
+      expect(deps.taskModel.resolve).not.toHaveBeenCalled();
+      expect(deps.taskService.createTask).toHaveBeenCalledWith(
+        expect.objectContaining({ assigneeAgentId: 'agt-xyz', assigneeUserId: undefined }),
+      );
+    });
+
+    it('surfaces the PG error code and constraint instead of only the drizzle query text', async () => {
+      const deps = makeDeps();
+      const pgCause = Object.assign(
+        new Error(
+          'insert or update on table "tasks" violates foreign key constraint "tasks_assignee_user_id_users_id_fk"',
+        ),
+        {
+          code: '23503',
+          constraint: 'tasks_assignee_user_id_users_id_fk',
+          detail: 'Key (assignee_user_id)=(usr_missing) is not present in table "users".',
+          severity: 'ERROR',
+          table: 'tasks',
+        },
+      );
+      deps.taskService.createTask.mockRejectedValue(
+        new Error('Failed query: insert into "tasks" (...) values (...) params: ...', {
+          cause: pgCause,
+        }),
+      );
+
+      const runtime = createTaskRuntime({
+        agentModel: deps.agentModel as any,
+        agentId: 'agt-xyz',
+        taskCaller: deps.taskCaller,
+        taskModel: deps.taskModel as any,
+        taskService: deps.taskService as any,
+      });
+
+      const result = await runtime.createTask({
+        assigneeUserId: 'usr_missing',
+        instruction: 'Do something',
+        name: 'Test',
+      });
+      const batch = await runtime.createTasks({
+        tasks: [{ assigneeUserId: 'usr_missing', instruction: 'Do something', name: 'Test' }],
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('Failed to create task');
+      expect(result.content).toContain('PG 23503');
+      expect(result.content).toContain('constraint=tasks_assignee_user_id_users_id_fk');
+      expect(result.content).not.toContain('Failed query');
+      expect(batch.success).toBe(false);
+      expect(batch.content).toContain('constraint=tasks_assignee_user_id_users_id_fk');
+    });
+
     it('leaves createdByAgentId undefined when no agentId in context', async () => {
       const deps = makeDeps();
 
@@ -758,6 +831,100 @@ describe('createTaskRuntime', () => {
       expect(taskCaller.update).toHaveBeenCalledWith(
         expect.objectContaining({ automationMode: 'schedule', id: 'task-1' }),
       );
+    });
+
+    it('returns a next-run preview in the task timezone', async () => {
+      vi.useFakeTimers({ now: new Date('2026-09-25T05:00:00Z') });
+      const taskCaller = {
+        update: vi.fn().mockResolvedValue({}),
+        updateConfig: vi.fn().mockResolvedValue({}),
+      };
+      const taskModel = {
+        resolve: vi.fn().mockResolvedValue({ id: 'task-1', identifier: 'T-13' }),
+      };
+      const runtime = createTaskRuntime({
+        agentModel: { existsById: vi.fn() } as any,
+        taskCaller: taskCaller as any,
+        taskModel: taskModel as any,
+        taskService: {} as any,
+        toolCallId: 'tool-call-schedule',
+      });
+
+      const result = await runtime.setTaskSchedule({
+        automationMode: 'schedule',
+        identifier: 'T-13',
+        schedulePattern: '45 11 * * 1-5',
+        scheduleTimezone: 'Asia/Ho_Chi_Minh',
+      });
+      vi.useRealTimers();
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain(
+        'next runs (Asia/Ho_Chi_Minh) → Mon 2026-09-28 11:45; Tue 2026-09-29 11:45; Wed 2026-09-30 11:45',
+      );
+    });
+
+    it.each([
+      ['0 9 * *', undefined, /expected 5 fields/],
+      ['0 0 9 * * *', undefined, /expected 5 fields/],
+      ['0 0 30 2 *', undefined, /day of month/],
+      ['0 9 * * *', 'Mars/Base', /unknown timezone/],
+    ])('rejects schedule %s (%s) without writing anything', async (pattern, tz, error) => {
+      const taskCaller = {
+        update: vi.fn().mockResolvedValue({}),
+        updateConfig: vi.fn().mockResolvedValue({}),
+      };
+      const taskModel = {
+        resolve: vi.fn().mockResolvedValue({ id: 'task-1', identifier: 'T-1' }),
+      };
+      const runtime = createTaskRuntime({
+        agentModel: { existsById: vi.fn() } as any,
+        taskCaller: taskCaller as any,
+        taskModel: taskModel as any,
+        taskService: {} as any,
+        toolCallId: 'tool-call-schedule',
+      });
+
+      const result = await runtime.setTaskSchedule({
+        automationMode: 'schedule',
+        identifier: 'T-1',
+        maxExecutions: 1,
+        schedulePattern: pattern,
+        scheduleTimezone: tz,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toMatch(error);
+      expect(result.content).toContain('Nothing was updated');
+      expect(taskCaller.update).not.toHaveBeenCalled();
+      expect(taskCaller.updateConfig).not.toHaveBeenCalled();
+    });
+
+    it('validates a timezone-only change against the stored pattern', async () => {
+      const taskCaller = { update: vi.fn().mockResolvedValue({}) };
+      const taskModel = {
+        resolve: vi.fn().mockResolvedValue({
+          id: 'task-1',
+          identifier: 'T-1',
+          schedulePattern: '0 9 * * *',
+          scheduleTimezone: 'UTC',
+        }),
+      };
+      const runtime = createTaskRuntime({
+        agentModel: { existsById: vi.fn() } as any,
+        taskCaller: taskCaller as any,
+        taskModel: taskModel as any,
+        taskService: {} as any,
+        toolCallId: 'tool-call-schedule',
+      });
+
+      const result = await runtime.setTaskSchedule({
+        identifier: 'T-1',
+        scheduleTimezone: 'Europe/Moscow',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('next runs (Europe/Moscow) →');
     });
 
     it('applies verify config changes and succeeds', async () => {

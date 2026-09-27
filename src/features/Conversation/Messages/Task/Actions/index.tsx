@@ -42,8 +42,7 @@ interface AssistantActionsBarProps {
 
 /**
  * Action bar for Task / Tasks / GroupTasks messages. Uses `assistant` role
- * context but with a slimmer default menu (no tts / translate /
- * delAndRegenerate).
+ * context but with a slimmer default menu (no translate / delAndRegenerate).
  */
 export const AssistantActionsBar = memo<AssistantActionsBarProps>(({ actionsConfig, id, data }) => {
   const ctx = useMemo<MessageActionContext>(() => ({ data, id, role: 'assistant' }), [data, id]);

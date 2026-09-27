@@ -12,6 +12,8 @@ import {
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useToolResultPayload } from '@/hooks/useToolResultPayload';
+
 interface DebugProps {
   apiName: string;
   identifier: string;
@@ -19,12 +21,21 @@ interface DebugProps {
   requestArgs?: string;
   result?: { content: string | null; error?: any; state?: any };
   toolCallId: string;
+  /** Tool message this panel inspects; lets it pull back a projected payload. */
+  toolMessageId?: string;
   type?: string;
 }
 
 const Debug = memo<DebugProps>(
-  ({ result, requestArgs, toolCallId, apiName, identifier, type, intervention }) => {
+  ({ result, requestArgs, toolCallId, apiName, identifier, type, intervention, toolMessageId }) => {
     const { t } = useTranslation('plugin');
+
+    // This panel IS the raw viewer, and it only mounts once the user toggles it
+    // on — so whenever the read path projected this tool, fetch what it dropped.
+    const projected = useToolResultPayload(toolMessageId, !!toolMessageId);
+    const rawResult = projected.payload
+      ? { ...result, content: projected.payload.content, state: projected.payload.pluginState }
+      : result;
 
     const params = useMemo(() => {
       try {
@@ -45,7 +56,7 @@ const Debug = memo<DebugProps>(
     }, [requestArgs, toolCallId, apiName, identifier, type]);
 
     const isJsonResult =
-      result?.content?.trim().startsWith('{') || result?.content?.trim().startsWith('[');
+      rawResult?.content?.trim().startsWith('{') || rawResult?.content?.trim().startsWith('[');
 
     const items: TabsProps['items'] = useMemo(
       () => [
@@ -70,7 +81,9 @@ const Debug = memo<DebugProps>(
               style={{ background: 'transparent', borderRadius: 0, height: '100%' }}
               variant={'filled'}
             >
-              {isJsonResult ? JSON.stringify(result?.content, null, 2) : result?.content || ''}
+              {isJsonResult
+                ? JSON.stringify(rawResult?.content, null, 2)
+                : rawResult?.content || ''}
             </Highlighter>
           ),
           icon: <Icon icon={SquareArrowDownIcon} />,
@@ -98,7 +111,7 @@ const Debug = memo<DebugProps>(
               style={{ background: 'transparent', borderRadius: 0, height: '100%' }}
               variant={'filled'}
             >
-              {JSON.stringify(result?.state, null, 2)}
+              {JSON.stringify(rawResult?.state, null, 2)}
             </Highlighter>
           ),
           icon: <Icon icon={BracesIcon} />,
@@ -142,9 +155,9 @@ const Debug = memo<DebugProps>(
         functionCall,
         isJsonResult,
         params,
-        result?.content,
+        rawResult?.content,
         result?.error,
-        result?.state,
+        rawResult?.state,
         intervention,
         t,
       ],

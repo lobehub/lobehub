@@ -1,4 +1,5 @@
 import type { FileContent } from '../knowledgeBaseQA';
+import { previewLongFileContent } from './file';
 
 export interface KnowledgeBaseInfo {
   description?: string | null;
@@ -7,6 +8,8 @@ export interface KnowledgeBaseInfo {
 }
 
 export interface PromptKnowledgeOptions {
+  /** Whether `readAttachment` is in the request's tool set; see `PreviewLongFileContentOptions`. */
+  canReadAttachment?: boolean;
   /** File contents to inject */
   fileContents?: FileContent[];
   /** Knowledge bases to include */
@@ -16,13 +19,19 @@ export interface PromptKnowledgeOptions {
 /**
  * Formats a single file content with XML tags
  */
-const formatFileContent = (file: FileContent): string => {
+const formatFileContent = (file: FileContent, canReadAttachment: boolean): string => {
   if (file.error) {
     return `<file id="${file.fileId}" name="${file.filename}" error="${file.error}" />`;
   }
 
-  return `<file id="${file.fileId}" name="${file.filename}">
-${file.content}
+  // Agent files are re-sent on every turn, so oversized ones get the same preview as attachments.
+  const { attributes, body } = previewLongFileContent(file.content, {
+    canReadAttachment,
+    fileId: file.fileId,
+    originalChars: file.originalChars,
+  });
+  return `<file id="${file.fileId}" name="${file.filename}"${attributes}>
+${body}
 </file>`;
 };
 
@@ -30,6 +39,7 @@ ${file.content}
  * Format agent knowledge (files + knowledge bases) as unified XML prompt
  */
 export const promptAgentKnowledge = ({
+  canReadAttachment = false,
   fileContents = [],
   knowledgeBases = [],
 }: PromptKnowledgeOptions) => {
@@ -60,7 +70,9 @@ export const promptAgentKnowledge = ({
 
   // Add files section
   if (hasFiles) {
-    const filesXml = fileContents.map((file) => formatFileContent(file)).join('\n');
+    const filesXml = fileContents
+      .map((file) => formatFileContent(file, canReadAttachment))
+      .join('\n');
     contentParts.push(`<files totalCount="${fileContents.length}">
 ${filesXml}
 </files>`);

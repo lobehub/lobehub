@@ -8,7 +8,7 @@ export type MainConversationScrollToIndex = (
 
 /**
  * Last `op_lifecycle` notice the shared gateway socket delivered for an
- * operation. Written only when the `enableGatewayMux` lab flag routes runs
+ * operation. Written only when the multiplexed transport routes runs
  * over the multiplexed socket; the hub emits one for every op the user owns,
  * whether or not this tab is subscribed to it.
  */
@@ -20,6 +20,8 @@ export interface GatewayFeedEntry {
   /** `SessionStatus` or `gone` once the hub has forgotten the op. */
   status: string;
 }
+
+export type QuestionSubmissionPhase = 'submitting' | 'checking' | 'failed' | 'uncertain';
 
 export interface ChatAIChatState {
   /**
@@ -45,6 +47,8 @@ export interface ChatAIChatState {
    * UI can render a distinct "running on device" state.
    */
   pendingClientToolExecutions: Record<string, boolean>;
+  /** Local UI feedback only; never persisted as the server intervention status. */
+  questionSubmissions: Record<string, QuestionSubmissionPhase>;
   searchWorkflowLoadingIds: string[];
   threadInputEditor: ChatInputEditor | null;
   /**
@@ -61,6 +65,7 @@ export const initialAiChatState: ChatAIChatState = {
   mainConversationScrollToIndex: null,
   mainInputEditor: null,
   pendingClientToolExecutions: {},
+  questionSubmissions: {},
   searchWorkflowLoadingIds: [],
   threadInputEditor: null,
   toolCallingStreamIds: {},

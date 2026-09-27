@@ -14,6 +14,8 @@ vi.mock('../serverRuntimes', () => ({
   hasServerRuntime: vi.fn().mockReturnValue(true),
   getServerRuntime: vi.fn(async () => ({
     createDocument: mocks.apiHandler,
+    getCommandOutput: mocks.apiHandler,
+    runCommand: mocks.apiHandler,
     searchUserMemory: mocks.apiHandler,
   })),
 }));
@@ -47,6 +49,25 @@ vi.mock('@lobechat/builtin-tools', () => ({
     {
       identifier: 'lobe-notebook',
       manifest: { api: [{ name: 'createDocument' }, { name: 'listDocuments' }] },
+    },
+    {
+      identifier: 'lobe-local-system',
+      manifest: {
+        api: [
+          {
+            name: 'runCommand',
+            parameters: {
+              properties: { command: { type: 'string' }, description: { type: 'string' } },
+              required: ['description', 'command'],
+              type: 'object',
+            },
+          },
+          {
+            name: 'getCommandOutput',
+            parameters: { properties: { shell_id: { type: 'string' } }, type: 'object' },
+          },
+        ],
+      },
     },
     {
       identifier: 'lobe-user-memory',
@@ -191,6 +212,80 @@ describe('BuiltinToolsExecutor truncated arguments', () => {
 
     expect(mockApiHandler).toHaveBeenCalledWith({}, context);
     expect(result.success).toBe(true);
+  });
+
+  describe('empty arguments string', () => {
+    const buildRunCommandPayload = (argsStr: string): ChatToolPayload => ({
+      apiName: 'runCommand',
+      arguments: argsStr,
+      id: 't-run',
+      identifier: 'lobe-local-system',
+      type: 'builtin' as any,
+    });
+
+    // A tool call whose argument deltas never arrived (e.g. an OpenAI-compatible
+    // proxy that drops them) accumulates to `arguments: ""`. Silently passing
+    // `{}` made the device reply "command is required", which misled the model
+    // into blaming the platform instead of resending the call.
+    it('returns EMPTY_ARGUMENTS without invoking an API that declares required params', async () => {
+      const result = await executor.execute(buildRunCommandPayload(''), context);
+
+      expect(mockApiHandler).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe('EMPTY_ARGUMENTS');
+      expect(result.content).toMatch(/empty arguments string/);
+      expect(result.content).toMatch(/command/);
+    });
+
+    it('treats a whitespace-only arguments string as empty', async () => {
+      const result = await executor.execute(buildRunCommandPayload('   '), context);
+
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe('EMPTY_ARGUMENTS');
+      expect(mockApiHandler).not.toHaveBeenCalled();
+    });
+
+    it('prefers the manifest from the execution context when present', async () => {
+      const result = await executor.execute(
+        { ...buildRunCommandPayload(''), apiName: 'createDocument', identifier: 'lobe-notebook' },
+        {
+          ...context,
+          toolManifestMap: {
+            'lobe-notebook': {
+              api: [
+                {
+                  description: '',
+                  name: 'createDocument',
+                  parameters: {
+                    properties: { title: { type: 'string' } },
+                    required: ['title'],
+                    type: 'object',
+                  },
+                },
+              ],
+              identifier: 'lobe-notebook',
+              meta: {},
+              type: 'builtin',
+            } as any,
+          },
+        },
+      );
+
+      expect(mockApiHandler).not.toHaveBeenCalled();
+      expect(result.error?.code).toBe('EMPTY_ARGUMENTS');
+    });
+
+    it('still dispatches with {} for an API without required params', async () => {
+      mockApiHandler.mockResolvedValueOnce({ content: 'ok', success: true });
+
+      const result = await executor.execute(
+        { ...buildRunCommandPayload(''), apiName: 'getCommandOutput' },
+        context,
+      );
+
+      expect(mockApiHandler).toHaveBeenCalledWith({}, context);
+      expect(result.success).toBe(true);
+    });
   });
 
   it('returns a recoverable UNKNOWN_API error for a hallucinated apiName', async () => {

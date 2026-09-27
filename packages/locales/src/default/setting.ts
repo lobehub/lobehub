@@ -1,4 +1,8 @@
 export default {
+  'devices.keepAwake.desc':
+    'Prevent automatic sleep while this computer is connected as a device, so it stays reachable. The display can still turn off; closing a laptop lid without an external display still puts it to sleep.',
+  'devices.keepAwake.title': 'Keep Awake While Connected',
+  'devices.thisComputer': 'This Computer',
   'marketSubmission.entry': 'Publish',
   'marketSubmission.title': 'Publish to Market',
   'marketSubmission.submit': 'Publish',
@@ -606,7 +610,27 @@ export default {
   'devices.actions.edit': 'Edit',
   'devices.actions.refresh': 'Refresh',
   'devices.actions.remove': 'Remove',
+  'devices.appUpdate.checkFailed': "Couldn't check for updates: {{message}}",
+  'devices.appUpdate.confirmDesc':
+    'LobeHub on this device will quit and restart. Anything it is running, including agent tasks, will be interrupted.',
+  'devices.appUpdate.confirmTitle': 'Restart and update to v{{version}}?',
+  'devices.appUpdate.downloading': 'Downloading v{{version}}',
+  'devices.appUpdate.installFailed':
+    "The device came back on v{{version}}, so the update didn't apply. Check for updates to try again.",
+  'devices.appUpdate.ready': 'v{{version}} is downloaded and ready to install',
+  'devices.appUpdate.restarting': 'Restarting…',
+  'devices.appUpdate.restartingHint': 'Waiting for the device to come back on v{{version}}',
+  'devices.appUpdate.timedOut':
+    "The device hasn't come back online. Check the app on that machine.",
+  'devices.appUpdate.unavailable': "Couldn't read the desktop app's update status. Try again.",
+  'devices.appUpdate.unsupported.cli':
+    'lh connect answered instead of the desktop app. Stop lh connect on this device, then try again.',
+  'devices.appUpdate.unsupported.devBuild': "Development builds can't update themselves.",
+  'devices.appUpdate.unsupported.outdated':
+    "This app version can't be updated remotely. Update it once on the device to enable remote updates.",
+  'devices.appUpdate.updated': 'Updated to v{{version}}',
   'devices.channel.connected': 'Connected {{time}}',
+  'devices.channel.unknown': 'Unknown client',
   'devices.currentBadge': 'This device',
   'devices.detail.addDir': 'Add directory',
   'devices.detail.connections': 'Connections',
@@ -1134,6 +1158,9 @@ export default {
   'settingChat.enableHistoryCount.setlimited': 'Set limited history messages',
   'settingChat.enableHistoryCount.title': 'Limit History Message Count',
   'settingChat.enableHistoryCount.unlimited': 'Unlimited history message count',
+  'settingChat.enableStaleToolResultTrim.desc':
+    'Replace outdated tool outputs (overwritten file reads, old browser snapshots, stale command output) with short placeholders in the model context to save tokens. Disable if the assistant needs full historical tool output.',
+  'settingChat.enableStaleToolResultTrim.title': 'Trim Stale Tool Results',
   'settingChat.enableStreaming.desc':
     'Enable streaming output to display responses in real-time. When disabled, only the complete response is shown.',
   'settingChat.enableStreaming.title': 'Enable Streaming Output',
@@ -1347,6 +1374,8 @@ export default {
   'settingsSearch.tabKeywords.hotkey': 'hotkey, shortcut, keyboard',
   'settingsSearch.tabKeywords.labels': 'labels, tags, grouping',
   'settingsSearch.tabKeywords.labs': 'labs, experiment, beta, preview, developer',
+  'settingsSearch.tabKeywords.integrations':
+    'integrations, github, pull request, ci, review, merge, repository',
   'settingsSearch.tabKeywords.memory': 'memory, memories, personalization',
   'settingsSearch.tabKeywords.messenger':
     'messenger, chat platform, bot, telegram, slack, discord, wechat',
@@ -1361,7 +1390,7 @@ export default {
   'settingsSearch.tabKeywords.proxy': 'proxy, network, connection, proxy settings',
   'settingsSearch.tabKeywords.referral': 'referral, invite, rewards, bonus',
   'settingsSearch.tabKeywords.serviceModel':
-    'service model, model assignment, topic naming, translation, tts, tts settings, voice, speech, image, image generation, embedding, prompt rewrite, suggestion, search, search model',
+    'service model, model assignment, topic naming, translation, image, image generation, embedding, prompt rewrite, suggestion, search, search model',
   'settingsSearch.tabKeywords.skill': 'skills, plugins, tools',
   'settingsSearch.tabKeywords.stats': 'analytics, statistics, stats',
   'settingsSearch.tabKeywords.storage':
@@ -1463,6 +1492,16 @@ export default {
     'Select a voice for the current agent, different TTS services support different voices',
   'settingTTS.voice.preview': 'Voice Preview',
   'settingTTS.voice.title': 'Text-to-Speech Voice',
+  'settingTool.crawler.desc':
+    'Order the services used to read full web pages. Higher items are tried first; disabled ones are skipped. Some sites, such as PDFs and YouTube, always use a dedicated service.',
+  'settingTool.crawler.title': 'Web Reader',
+  'settingTool.empty': 'No services available',
+  'settingTool.item.disabled': 'Disabled',
+  'settingTool.item.enabled': 'Enabled',
+  'settingTool.item.locked': 'Keep at least one service enabled',
+  'settingTool.search.desc':
+    'Order the services used to search the web. Higher items are tried first; disabled ones are skipped.',
+  'settingTool.search.title': 'Search Engines',
   'skillGroup.agentConnectors': 'Agent Connectors',
   'skillGroup.builtinSkills': 'Built-in Skills',
   'skillGroup.builtinTools': 'Built-in Tools',
@@ -1715,6 +1754,7 @@ When I am ___, I need ___
   'tab.llm': 'Language Model',
   'tab.manualFill': 'Manually Fill In',
   'tab.manualFill.desc': 'Configure a custom MCP skill manually',
+  'tab.integrations': 'Integrations',
   'tab.memory': 'Memory',
   'tab.messenger': 'Messenger',
   'tab.notification': 'Notifications',
@@ -1733,10 +1773,14 @@ When I am ___, I need ___
   'tab.storage': 'Storage',
   'tab.sync': 'Cloud Sync',
   'tab.systemTools': 'System Tools',
+  'tab.tools': 'Tools',
   'tab.tts': 'Text-to-Speech',
   'tab.uploadZip': 'Upload Zip',
   'tab.uploadZip.desc': 'Upload a local .zip or .skill file',
   'tab.usage': 'Usage',
+  'tools.builtins.lobe-attachments.description':
+    'Page through attached files that were too long to include in full',
+  'tools.builtins.lobe-attachments.title': 'Attachments',
   'workspace.create.descPlaceholder': 'Describe what this workspace is for (optional)',
   'workspace.create.namePlaceholder': 'e.g. Acme Team',
   'workspace.create.submit': 'Create workspace',
@@ -1833,6 +1877,10 @@ When I am ___, I need ___
     'Free workspaces are limited to {{maxSeats}} seats and do not include monthly workspace credits. You can keep using the workspace and upgrade again in the future.',
   'workspace.billingPage.billing.cancelPlanModal.overLimitDesc':
     'This workspace currently has {{currentSeats}} billable members. Free supports up to {{maxSeats}} seats. Remove members or change them to {{viewerRole}} before canceling the plan.',
+  'workspace.billingPage.billing.cancelPlanModal.pendingInvitationsNotice_one':
+    'This workspace has {{pending}} pending invites and Free supports up to {{maxSeats}} seats, so {{count}} of them will no longer fit. The seat goes to whoever accepts first, and the other is turned away when they try to join. To choose who keeps it, revoke the other invite before continuing.',
+  'workspace.billingPage.billing.cancelPlanModal.pendingInvitationsNotice_other':
+    'This workspace has {{pending}} pending invites and Free supports up to {{maxSeats}} seats, so {{count}} of them will no longer fit. Seats go to whoever accepts first, and the rest are turned away when they try to join. To choose who keeps a seat, revoke the other invites before continuing.',
   'workspace.billingPage.billing.cancelPlanModal.seatLimit': '{{maxSeats}} seats',
   'workspace.billingPage.billing.cancelPlanModal.title': 'Cancel plan?',
   'workspace.billingPage.billing.downgradePlanModal.body':
@@ -3513,6 +3561,11 @@ When I am ___, I need ___
   'tools.builtins.lobe-image-generation.readme':
     'Opt-in image generation for models without native image output. Pin this tool to enable it in chat or agent mode; leave unpinned to avoid the tool schema cost.',
   'tools.builtins.lobe-image-generation.title': 'Image Generation',
+  'tools.builtins.lobe-video-generation.description':
+    'Generate videos through LobeHub providers from text or reference images.',
+  'tools.builtins.lobe-video-generation.readme':
+    'Opt-in video generation. Pin this tool to enable it in chat or agent mode; leave unpinned to avoid the tool schema cost.',
+  'tools.builtins.lobe-video-generation.title': 'Video Generation',
   'tools.builtins.lobe-web-onboarding.description':
     'Drive the web onboarding flow with a controlled agent runtime',
   'tools.builtins.lobe-web-onboarding.title': 'Web Onboarding',

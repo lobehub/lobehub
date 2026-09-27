@@ -11,6 +11,7 @@ import { readAudioDurationMs } from '@lobechat/utils/audio';
 import debug from 'debug';
 
 import { FileModel } from '@/database/models/file';
+import { readOriginalCharCount } from '@/database/utils/parsedDocument';
 import { DocumentService } from '@/server/services/document';
 import { FileService, getFileProxyUrl } from '@/server/services/file';
 
@@ -114,14 +115,16 @@ export const resolveAttachmentsByFileIds = async ({
         return { file, fileType, id, resolvedUrl };
       }
       let content: string | undefined;
+      let originalCharCount: number | undefined;
       let parseError: unknown;
       try {
         const document = await documentService.parseFile(file.id, fileAccessScope);
         content = document.content ?? undefined;
+        originalCharCount = readOriginalCharCount(document.metadata);
       } catch (error) {
         parseError = error;
       }
-      return { content, file, fileType, id, parseError, resolvedUrl };
+      return { content, file, fileType, id, originalCharCount, parseError, resolvedUrl };
     }),
   );
 
@@ -160,6 +163,7 @@ export const resolveAttachmentsByFileIds = async ({
       fileType: fileType || 'application/octet-stream',
       id: file.id,
       name: file.name || 'file',
+      originalCharCount: entry.originalCharCount,
       size: file.size ?? 0,
       url: resolvedUrl,
     });

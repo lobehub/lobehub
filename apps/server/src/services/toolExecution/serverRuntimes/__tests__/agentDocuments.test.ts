@@ -36,6 +36,21 @@ describe('agentDocumentsRuntime', () => {
       'userId and serverDB are required for Agent Documents execution',
     );
   });
+
+  it('fails closed when a Share document call has no topic context', () => {
+    expect(() =>
+      agentDocumentsRuntime.factory({
+        agentShareVisitor: {
+          agentId: 'agent-1',
+          shareId: 'share-1',
+          visitorUserId: 'visitor-1',
+        },
+        serverDB: {} as any,
+        toolManifestMap: {},
+        userId: 'user-1',
+      }),
+    ).toThrow('topicId is required for Agent Share document execution');
+  });
 });
 
 describe('agentDocumentsRuntime auto-pin to task', () => {
@@ -51,6 +66,8 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
     createDocument: ReturnType<typeof vi.fn>;
     createForTopic: ReturnType<typeof vi.fn>;
     getDocumentSnapshotById: ReturnType<typeof vi.fn>;
+    listDocuments: ReturnType<typeof vi.fn>;
+    listDocumentsForTopic: ReturnType<typeof vi.fn>;
     renameDocumentById: ReturnType<typeof vi.fn>;
   };
   let pinDocument: ReturnType<typeof vi.fn>;
@@ -63,6 +80,8 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
       createDocument: vi.fn().mockResolvedValue(newDoc),
       createForTopic: vi.fn().mockResolvedValue(newDoc),
       getDocumentSnapshotById: vi.fn().mockResolvedValue(newDoc),
+      listDocuments: vi.fn().mockResolvedValue([newDoc]),
+      listDocumentsForTopic: vi.fn().mockResolvedValue([newDoc]),
       renameDocumentById: vi.fn().mockResolvedValue(newDoc),
     };
     pinDocument = vi.fn().mockResolvedValue(undefined);
@@ -79,7 +98,11 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
     });
   });
 
-  const buildContext = (taskId?: string, workspaceId?: string) => {
+  const buildContext = (
+    taskId?: string,
+    workspaceId?: string,
+    overrides?: Partial<ToolExecutionContext>,
+  ) => {
     // Mock the workspace lookup chain that `pinToTask` runs against the task
     // row. Returning `workspaceId: null` reproduces personal-mode behavior.
     const limit = vi.fn().mockResolvedValue([{ workspaceId: null }]);
@@ -92,6 +115,7 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
       toolManifestMap: {},
       userId: 'user-1',
       workspaceId,
+      ...overrides,
     };
   };
 
@@ -229,6 +253,60 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
 
     expect(result.content).toBe(
       'Created document "Daily Brief" (internal id: agent-doc-assoc-id).',
+    );
+  });
+
+  it('forces Share creation and listing into the visitor current-topic scope', async () => {
+    const runtime = agentDocumentsRuntime.factory(
+      buildContext(undefined, undefined, {
+        agentShareVisitor: {
+          agentId: 'agent-1',
+          shareId: 'share-1',
+          visitorUserId: 'visitor-1',
+        },
+        topicId: 'topic-1',
+      }),
+    );
+
+    const created = await runtime.createDocument(
+      {
+        content: 'body',
+        hintIsSkill: true,
+        parentId: 'creator-folder',
+        scope: 'agent',
+        title: 'Visitor Note',
+      },
+      { agentId: 'agent-1', topicId: 'topic-1' },
+    );
+    await runtime.listDocuments(
+      { parentId: 'creator-folder', scope: 'agent' },
+      { agentId: 'agent-1', topicId: 'topic-1' },
+    );
+
+    expect(serviceImpl.createForTopic).toHaveBeenCalledWith(
+      'agent-1',
+      'Visitor Note',
+      'body',
+      'topic-1',
+    );
+    expect(serviceImpl.createDocument).not.toHaveBeenCalled();
+    expect(serviceImpl.listDocumentsForTopic).toHaveBeenCalledWith('agent-1', 'topic-1', 'all', {
+      includeArchivedToolResults: true,
+    });
+    expect(serviceImpl.listDocuments).not.toHaveBeenCalled();
+    expect(created.content).not.toContain('https://app.example.com');
+    expect(created.state).toMatchObject({ readonly: true });
+    expect(AgentDocumentsService).toHaveBeenLastCalledWith(
+      expect.anything(),
+      'user-1',
+      undefined,
+      undefined,
+      {
+        shareId: 'share-1',
+        topicId: 'topic-1',
+        type: 'agentShare',
+        visitorUserId: 'visitor-1',
+      },
     );
   });
 });

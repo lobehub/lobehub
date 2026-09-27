@@ -672,6 +672,33 @@ describe('AgentRuntimeCoordinator', () => {
       });
     });
 
+    it('marks a protocol-v2 patched terminal event with its expected revision', async () => {
+      const coordinatorWithResolver = new AgentRuntimeCoordinator({
+        messagePatchModeResolver: vi.fn().mockResolvedValue(true),
+        stateManager: mockStateManager,
+        streamEventManager: mockStreamManager,
+        uiMessagesResolver: vi.fn().mockResolvedValue(undefined),
+      });
+      const stepResult = {
+        executionTime: 100,
+        newState: { status: 'done', stepCount: 4 },
+        stepIndex: 4,
+      };
+      mockStateManager.loadAgentState.mockResolvedValue({ status: 'running', stepCount: 3 });
+
+      await coordinatorWithResolver.saveStepResult('op-patch', stepResult as any);
+
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith({
+        finalState: stepResult.newState,
+        messagePatchMode: true,
+        messageRevision: 5,
+        operationId: 'op-patch',
+        reason: 'done',
+        stepIndex: 4,
+        uiMessages: undefined,
+      });
+    });
+
     it('publishes with uiMessages=undefined when resolver rejects (must never fail the surrounding save)', async () => {
       const resolver = vi.fn().mockRejectedValue(new Error('db down'));
       const coordinatorWithResolver = new AgentRuntimeCoordinator({

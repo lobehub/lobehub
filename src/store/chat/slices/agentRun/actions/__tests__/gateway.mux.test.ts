@@ -42,20 +42,22 @@ vi.mock('@/store/file/store', () => ({
   getFileStoreState: () => ({ moveChatContextSelections: vi.fn() }),
 }));
 
-const mockLab = vi.hoisted(() => ({ enableGatewayMux: false }));
+/** The two server-side halves the transport requires: capability + rollout. */
+const mockServer = vi.hoisted(() => ({ agentGatewayProtocol: 2 as 1 | 2, enableGatewayMux: true }));
 const mockUserState = vi.hoisted(() => ({
   profile: { id: 'user-1' },
   workspaceUserPreference: { agentDeviceOverrides: {} as Record<string, any> },
 }));
 
 vi.mock('@/store/user', () => ({
+  getUserStoreState: vi.fn(() => mockUserState),
   useUserStore: { getState: vi.fn(() => mockUserState) },
 }));
 
 vi.mock('@/store/user/selectors', () => ({
-  labPreferSelectors: { enableGatewayMux: () => mockLab.enableGatewayMux },
   settingsSelectors: { defaultAgentConfig: () => ({ chatConfig: {} }) },
   toolInterventionSelectors: { allowList: () => [], approvalMode: () => 'manual' },
+  userGeneralSettingsSelectors: { telemetry: () => false },
   userProfileSelectors: { userId: (state: typeof mockUserState) => state.profile.id },
 }));
 
@@ -77,7 +79,10 @@ vi.mock('@/store/agent/selectors', () => ({
     getAgencyConfigById: () => () => undefined,
     getAgentById: () => () => undefined,
   },
-  agentSelectors: { currentAgentWorkingDirectory: () => () => undefined },
+  agentSelectors: {
+    currentAgentWorkingDirectory: () => () => undefined,
+    getAgentConfigById: () => () => undefined,
+  },
   chatConfigByIdSelectors: {
     getChatConfigById: () => () => ({}),
     isChatModeById: () => () => false,
@@ -119,7 +124,6 @@ function createMockV1Client() {
     emit,
     on,
     reconnect: vi.fn(async () => {}),
-    sendInterrupt: vi.fn(),
     sendToolResult: vi.fn(() => true),
     updateToken: vi.fn(),
   };
@@ -133,9 +137,9 @@ function createMockOperationClient(): OperationClient & Emitter {
     connectionStatus: 'disconnected',
     disconnect: vi.fn(),
     emit,
+    lastEventId: '',
     on: on as OperationClient['on'],
     reconnect: vi.fn(async () => {}),
-    sendInterrupt: vi.fn(),
     sendToolResult: vi.fn(() => true),
     updateToken: vi.fn(),
   };
@@ -150,6 +154,7 @@ function createFakeMux(): GatewayMuxClient & Emitter {
     on,
     status: 'disconnected',
     subscribe: vi.fn(),
+    takePendingToolResults: vi.fn(() => []),
   } as unknown as GatewayMuxClient & Emitter;
 }
 
@@ -176,9 +181,31 @@ function createTestAction(overrides: Record<string, any> = {}) {
 
 const flushMicrotasks = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
-describe('GatewayActionImpl (enableGatewayMux lab)', () => {
+describe('GatewayActionImpl (multiplexed gateway transport)', () => {
   beforeEach(() => {
-    mockLab.enableGatewayMux = true;
+    mockServer.agentGatewayProtocol = 2;
+    mockServer.enableGatewayMux = true;
+    (globalThis as any).window = {
+      global_serverConfigStore: {
+        getState: () => ({
+          featureFlags: { enableGatewayMux: mockServer.enableGatewayMux },
+          serverConfig: {
+            agentGatewayProtocol: mockServer.agentGatewayProtocol,
+            agentGatewayUrl: GATEWAY_URL,
+            enableGatewayMode: true,
+          },
+        }),
+      },
+    };
+    // The conversation read resolves Gateway mode from this store too.
+    vi.spyOn(serverConfigStore, 'getServerConfigStoreState').mockReturnValue({
+      featureFlags: { enableGatewayMux: mockServer.enableGatewayMux },
+      serverConfig: {
+        agentGatewayProtocol: mockServer.agentGatewayProtocol,
+        agentGatewayUrl: GATEWAY_URL,
+        enableGatewayMode: true,
+      },
+    } as unknown as ReturnType<typeof serverConfigStore.getServerConfigStoreState>);
     vi.mocked(messageService.getMessages).mockClear();
   });
 
@@ -216,8 +243,8 @@ describe('GatewayActionImpl (enableGatewayMux lab)', () => {
       expect(state.gatewayConnections['op-1']).toEqual({ client: muxClient, status: 'connecting' });
     });
 
-    it('keeps the v1 per-operation socket byte-for-byte when the flag is off', () => {
-      mockLab.enableGatewayMux = false;
+    it('keeps the v1 per-operation socket byte-for-byte outside the rollout', () => {
+      mockServer.enableGatewayMux = false;
       const { action, state, v1Client } = createTestAction();
 
       action.connectToGateway({
@@ -238,6 +265,33 @@ describe('GatewayActionImpl (enableGatewayMux lab)', () => {
       expect(action.createMuxClient).not.toHaveBeenCalled();
       expect(v1Client.connect).toHaveBeenCalled();
       expect(state.gatewayConnections['op-1'].client).toBe(v1Client);
+    });
+
+    it('uses the share-scoped mux even outside the rollout', () => {
+      mockServer.enableGatewayMux = false;
+      const { action, mux, muxClient, state, v1Client } = createTestAction();
+
+      action.connectToGateway({
+        agentShareId: 'share-1',
+        executor: true,
+        gatewayUrl: GATEWAY_URL,
+        operationId: 'op-1',
+        token: 'unused-in-mux',
+        topicId: 'topic-1',
+      });
+
+      expect(action.resolveGatewayMux).toHaveBeenCalledWith({
+        agentShareId: 'share-1',
+        gatewayUrl: GATEWAY_URL,
+      });
+      expect(action.createMuxClient).toHaveBeenCalledWith(mux, 'op-1', {
+        executor: true,
+        resumeOnConnect: undefined,
+      });
+      expect(action.createClient).not.toHaveBeenCalled();
+      expect(muxClient.connect).toHaveBeenCalled();
+      expect(v1Client.connect).not.toHaveBeenCalled();
+      expect(state.gatewayConnections['op-1']).toEqual({ client: muxClient, status: 'connecting' });
     });
 
     it('resolves the page-wide registry mux by default', () => {
@@ -338,10 +392,131 @@ describe('GatewayActionImpl (enableGatewayMux lab)', () => {
     });
   });
 
+  describe('fallback to v1 when the mux is unavailable', () => {
+    const connectParams = (operationId: string) => ({
+      executor: true,
+      gatewayUrl: GATEWAY_URL,
+      operationId,
+      token: 'tok',
+      topicId: 'topic-1',
+    });
+
+    it('re-establishes every live operation on the v1 socket, resuming', () => {
+      const { action, mux, state, v1Client } = createTestAction();
+
+      action.connectToGateway(connectParams('op-1'));
+      action.connectToGateway(connectParams('op-2'));
+      expect(action.createClient).not.toHaveBeenCalled();
+
+      mux.emit('unavailable', 'no usable connection after 3 attempts');
+
+      expect(action.createClient).toHaveBeenCalledTimes(2);
+      expect(action.createClient).toHaveBeenNthCalledWith(1, {
+        gatewayUrl: GATEWAY_URL,
+        operationId: 'op-1',
+        // The run kept executing on the server while the mux was failing, so a
+        // fresh subscribe would skip everything it missed.
+        resumeOnConnect: true,
+        token: 'tok',
+      });
+      expect(v1Client.connect).toHaveBeenCalledTimes(2);
+      expect(state.gatewayConnections['op-1'].client).toBe(v1Client);
+      expect(state.gatewayConnections['op-2'].client).toBe(v1Client);
+    });
+
+    it('resumes the v1 socket from the cursor the mux had already delivered', () => {
+      const { action, mux, muxClient } = createTestAction();
+
+      action.connectToGateway(connectParams('op-1'));
+      // Mid-run: the shared socket had streamed through event 42 before dying.
+      (muxClient as { lastEventId: string }).lastEventId = '42';
+      mux.emit('unavailable', 'no usable connection after 3 attempts');
+
+      // Replaying from the start would re-apply chunks and re-run
+      // `tool_execute` events this tab already executed.
+      expect(action.createClient).toHaveBeenCalledWith({
+        gatewayUrl: GATEWAY_URL,
+        lastEventId: '42',
+        operationId: 'op-1',
+        resumeOnConnect: true,
+        token: 'tok',
+      });
+    });
+
+    it('sends later connects straight to v1 without touching the mux again', () => {
+      const { action, mux } = createTestAction();
+
+      action.connectToGateway(connectParams('op-1'));
+      mux.emit('unavailable', 'auth_failed');
+      vi.mocked(action.createMuxClient).mockClear();
+
+      action.connectToGateway(connectParams('op-2'));
+
+      expect(action.createMuxClient).not.toHaveBeenCalled();
+      expect(action.createClient).toHaveBeenCalledWith(
+        expect.objectContaining({ operationId: 'op-2' }),
+      );
+    });
+
+    it('delivers tool results the mux had queued once the v1 socket connects', () => {
+      const { action, mux, state, v1Client } = createTestAction();
+      const pending = { content: 'tool output', success: true, toolCallId: 'call_1' };
+      vi.mocked(mux.takePendingToolResults).mockImplementation((operationId) =>
+        operationId === 'op-1' ? [pending] : [],
+      );
+
+      action.connectToGateway(connectParams('op-1'));
+      mux.emit('unavailable', 'no usable connection after 3 attempts');
+
+      // The executing tool was already told this result was sent; losing it
+      // would park the run until the server's tool timeout.
+      expect(mux.takePendingToolResults).toHaveBeenCalledWith('op-1');
+      expect(v1Client.sendToolResult).not.toHaveBeenCalled();
+
+      state.gatewayConnections['op-1'].status = 'connected';
+      v1Client.emit('connected');
+
+      expect(v1Client.sendToolResult).toHaveBeenCalledWith(pending);
+    });
+
+    it('keeps retrying a carried-over result on the next connect if the first send fails', () => {
+      const { action, mux, v1Client } = createTestAction();
+      const pending = { content: 'tool output', success: true, toolCallId: 'call_1' };
+      vi.mocked(mux.takePendingToolResults).mockReturnValue([pending]);
+      vi.mocked(v1Client.sendToolResult).mockReturnValueOnce(false).mockReturnValue(true);
+
+      action.connectToGateway(connectParams('op-1'));
+      mux.emit('unavailable', 'auth_failed');
+      v1Client.emit('connected');
+      v1Client.emit('connected');
+      v1Client.emit('connected');
+
+      expect(v1Client.sendToolResult).toHaveBeenCalledTimes(2);
+    });
+
+    it('leaves a completed operation alone', () => {
+      const { action, mux } = createTestAction();
+
+      action.connectToGateway(connectParams('op-1'));
+      action.disconnectFromGateway('op-1');
+      mux.emit('unavailable', 'auth_failed');
+
+      expect(action.createClient).not.toHaveBeenCalled();
+    });
+  });
+
   describe('warmupGatewayMux', () => {
     const withServerConfig = (serverConfig: Record<string, unknown>) => {
       (globalThis as any).window = {
-        global_serverConfigStore: { getState: () => ({ serverConfig }) },
+        global_serverConfigStore: {
+          getState: () => ({
+            featureFlags: { enableGatewayMux: mockServer.enableGatewayMux },
+            serverConfig: {
+              agentGatewayProtocol: mockServer.agentGatewayProtocol,
+              ...serverConfig,
+            },
+          }),
+        },
       };
     };
 
@@ -369,8 +544,13 @@ describe('GatewayActionImpl (enableGatewayMux lab)', () => {
         const { action, mux } = createTestAction();
         Reflect.deleteProperty(globalThis, 'window');
         vi.spyOn(serverConfigStore, 'getServerConfigStoreState').mockReturnValue({
-          serverConfig: { agentGatewayUrl: GATEWAY_URL, enableGatewayMode: enabled },
-        } as ReturnType<typeof serverConfigStore.getServerConfigStoreState>);
+          featureFlags: { enableGatewayMux: true },
+          serverConfig: {
+            agentGatewayProtocol: 2,
+            agentGatewayUrl: GATEWAY_URL,
+            enableGatewayMode: enabled,
+          },
+        } as unknown as ReturnType<typeof serverConfigStore.getServerConfigStoreState>);
 
         action.warmupGatewayMux();
 
@@ -384,18 +564,26 @@ describe('GatewayActionImpl (enableGatewayMux lab)', () => {
       },
     );
 
-    it('is a no-op when the lab flag is off or gateway mode is unavailable', () => {
+    it('is a no-op outside the rollout, without gateway mode, or on a v1 deployment', () => {
+      mockServer.enableGatewayMux = false;
       withServerConfig({ agentGatewayUrl: GATEWAY_URL, enableGatewayMode: true });
-      mockLab.enableGatewayMux = false;
       const off = createTestAction();
       off.action.warmupGatewayMux();
       expect(off.mux.connect).not.toHaveBeenCalled();
 
-      mockLab.enableGatewayMux = true;
+      mockServer.enableGatewayMux = true;
       withServerConfig({ agentGatewayUrl: GATEWAY_URL, enableGatewayMode: false });
       const noGateway = createTestAction();
       noGateway.action.warmupGatewayMux();
       expect(noGateway.mux.connect).not.toHaveBeenCalled();
+
+      // The deployment's gateway has no `/v2/ws` at all: dialing it would only
+      // burn the client's fallback budget on 404s.
+      mockServer.agentGatewayProtocol = 1;
+      withServerConfig({ agentGatewayUrl: GATEWAY_URL, enableGatewayMode: true });
+      const v1Deployment = createTestAction();
+      v1Deployment.action.warmupGatewayMux();
+      expect(v1Deployment.mux.connect).not.toHaveBeenCalled();
     });
   });
 
@@ -418,7 +606,13 @@ describe('GatewayActionImpl (enableGatewayMux lab)', () => {
     beforeEach(() => {
       (globalThis as any).window = {
         global_serverConfigStore: {
-          getState: () => ({ serverConfig: { agentGatewayUrl: GATEWAY_URL } }),
+          getState: () => ({
+            featureFlags: { enableGatewayMux: mockServer.enableGatewayMux },
+            serverConfig: {
+              agentGatewayProtocol: mockServer.agentGatewayProtocol,
+              agentGatewayUrl: GATEWAY_URL,
+            },
+          }),
         },
       };
     });

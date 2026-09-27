@@ -1,5 +1,5 @@
 import { INBOX_SESSION_ID } from '@lobechat/const';
-import { MessageGroupType } from '@lobechat/types';
+import { agentShareWorkAccessScope, MessageGroupType } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -29,6 +29,7 @@ import {
 } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { MessageModel, toVisitorMessage } from '../../message';
+import { WorkModel } from '../../work';
 import { codeEmbedding } from '../fixtures/embedding';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -1557,6 +1558,94 @@ describe('MessageModel Query Tests', () => {
       expect(result.map((item) => item.id)).toEqual(['visitor-direct-msg']);
     });
 
+    describe('Work summaries', () => {
+      const provenance = { shareId: 'share-works', topicId: visitorTopicId, visitorUserId };
+      const rootOperationId = 'op-visitor-works';
+
+      beforeEach(async () => {
+        await serverDB.insert(messages).values({
+          content: 'visitor reply',
+          id: 'visitor-anchor-msg',
+          metadata: { work: { rootOperationId } },
+          role: 'assistant',
+          topicId: visitorTopicId,
+          userId,
+        });
+        // A file Work the visitor's run registered under the share scope.
+        await new WorkModel(
+          serverDB,
+          userId,
+          undefined,
+          agentShareWorkAccessScope(provenance),
+        ).registerFile({
+          cumulativeCost: 0.42,
+          cumulativeUsage: { capturedAt: '2026-01-01T00:00:00.000Z', usage: { totalTokens: 9 } },
+          filePath: '/mnt/data/report.md',
+          metadata: { fileId: 'file-report', filePath: '/mnt/data/report.md' },
+          rootOperationId,
+          title: 'report.md',
+          toolCallId: `op:${rootOperationId}`,
+          toolIdentifier: 'lobe-cloud-sandbox',
+          toolName: 'writeFile',
+          topicId: visitorTopicId,
+          userId,
+        });
+      });
+
+      const findAnchor = (rows: { id: string }[]) =>
+        rows.find((item) => item.id === 'visitor-anchor-msg') as any;
+
+      it('skips Work assembly entirely without a share scope (fail closed)', async () => {
+        const result = await messageModel.queryForVisitor({
+          includeFileWorks: true,
+          topicId: visitorTopicId,
+        });
+
+        expect(findAnchor(result).works).toBeUndefined();
+      });
+
+      it('serves the share-scoped Works with the creator spend redacted', async () => {
+        const result = await messageModel.queryForVisitor(
+          { includeFileWorks: true, topicId: visitorTopicId },
+          { workAccessScope: agentShareWorkAccessScope(provenance) },
+        );
+
+        const works = findAnchor(result).works;
+        expect(works).toHaveLength(1);
+        expect(works[0]).toMatchObject({ title: 'report.md', totalCost: null, type: 'file' });
+        expect(works[0].event).toMatchObject({ cumulativeCost: null, cumulativeUsage: null });
+        // The run executes as the creator: their account/workspace ids must not leak.
+        expect(works[0]).not.toHaveProperty('userId');
+        expect(works[0]).not.toHaveProperty('workspaceId');
+      });
+
+      it('keeps the spend snapshot when the share exposes model info', async () => {
+        const result = await messageModel.queryForVisitor(
+          { includeFileWorks: true, topicId: visitorTopicId },
+          {
+            redaction: { showModelInfo: true },
+            workAccessScope: agentShareWorkAccessScope(provenance),
+          },
+        );
+
+        const works = findAnchor(result).works;
+        expect(works[0]).toMatchObject({ totalCost: 0.42 });
+        expect(works[0].event.cumulativeUsage).toMatchObject({ usage: { totalTokens: 9 } });
+        // `showModelInfo` exposes spend only, never the creator's identity.
+        expect(works[0]).not.toHaveProperty('userId');
+        expect(works[0]).not.toHaveProperty('workspaceId');
+      });
+
+      it('never resolves the visitor Works through the creator scope', async () => {
+        const result = await messageModel.query(
+          { includeFileWorks: true, topicId: visitorTopicId },
+          { allowShareVisitor: true },
+        );
+
+        expect(findAnchor(result).works).toBeUndefined();
+      });
+    });
+
     it('honours an explicit allowShareVisitor opt-in (agent runtime path)', async () => {
       const result = await messageModel.query(
         { topicId: visitorTopicId },
@@ -2328,6 +2417,148 @@ describe('MessageModel Query Tests', () => {
       expect(result[0].fileList).toHaveLength(1);
       expect(result[0].fileList![0].id).toBe(fileId);
       expect(result[0].fileList![0].content).toBe('This is the document content for testing');
+      expect(result[0].fileList![0].originalCharCount).toBeUndefined();
+    });
+
+    it('should report the original size of document text cut at parse time', async () => {
+      const fileId = uuid();
+
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values({ id: 'session1', userId });
+        await trx.insert(files).values({
+          fileType: 'text/csv',
+          id: fileId,
+          name: 'big.csv',
+          size: 5000,
+          url: 'big.csv',
+          userId,
+        });
+        await trx.insert(documents).values({
+          content: 'stored head',
+          fileId,
+          fileType: 'text/csv',
+          metadata: { originalCharCount: 9_000_000, truncated: true },
+          source: 'big.csv',
+          sourceType: 'file',
+          totalCharCount: 11,
+          totalLineCount: 1,
+          userId,
+        });
+
+        const messageId = uuid();
+        await trx.insert(messages).values({
+          content: 'Message with a capped document',
+          id: messageId,
+          role: 'user',
+          sessionId: 'session1',
+          userId,
+        });
+        await trx.insert(messagesFiles).values({ fileId, messageId, userId });
+      });
+
+      const result = await messageModel.query({ sessionId: 'session1' });
+
+      expect(result[0].fileList![0]).toMatchObject({
+        content: 'stored head',
+        originalCharCount: 9_000_000,
+      });
+    });
+
+    it('should treat malformed originalCharCount metadata as absent', async () => {
+      const fileId = uuid();
+
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values({ id: 'session1', userId });
+        await trx.insert(files).values({
+          fileType: 'text/plain',
+          id: fileId,
+          name: 'note.txt',
+          size: 10,
+          url: 'note.txt',
+          userId,
+        });
+        await trx.insert(documents).values({
+          content: 'note',
+          fileId,
+          fileType: 'text/plain',
+          metadata: { originalCharCount: 'not-a-number' },
+          source: 'note.txt',
+          sourceType: 'file',
+          totalCharCount: 4,
+          totalLineCount: 1,
+          userId,
+        });
+
+        const messageId = uuid();
+        await trx.insert(messages).values({
+          content: 'Message with odd metadata',
+          id: messageId,
+          role: 'user',
+          sessionId: 'session1',
+          userId,
+        });
+        await trx.insert(messagesFiles).values({ fileId, messageId, userId });
+      });
+
+      const result = await messageModel.query({ sessionId: 'session1' });
+
+      expect(result[0].fileList![0].content).toBe('note');
+      expect(result[0].fileList![0].originalCharCount).toBeUndefined();
+    });
+
+    it('should pick the oldest document when a file owns several', async () => {
+      const fileId = uuid();
+      const messageId = uuid();
+      const doc = {
+        fileId,
+        fileType: 'text/plain',
+        source: 'notes.txt',
+        sourceType: 'file',
+        totalLineCount: 1,
+        userId,
+      } as const;
+
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values({ id: 'session1', userId });
+        await trx.insert(files).values({
+          fileType: 'text/plain',
+          id: fileId,
+          name: 'notes.txt',
+          size: 100,
+          url: 'notes.txt',
+          userId,
+        });
+        // Inserted newest first: without an explicit order, a first-wins read would take the newer copy.
+        await trx.insert(documents).values({
+          ...doc,
+          content: 'page-editor copy',
+          createdAt: new Date('2026-02-01'),
+          totalCharCount: 16,
+        });
+        await trx.insert(documents).values({
+          ...doc,
+          content: 'parse cache',
+          createdAt: new Date('2026-01-01'),
+          totalCharCount: 11,
+        });
+
+        await trx.insert(messages).values({
+          content: 'Message with a twice-parsed file',
+          id: messageId,
+          role: 'user',
+          sessionId: 'session1',
+          userId,
+        });
+        await trx.insert(messagesFiles).values({ fileId, messageId, userId });
+      });
+
+      const result = await messageModel.query({ sessionId: 'session1' });
+
+      // Same document `DocumentModel.findByFileId` returns, which `readAttachment` pages through.
+      expect(result[0].fileList![0].content).toBe('parse cache');
+
+      const [byId] = await messageModel.queryByIds([messageId]);
+      expect(byId.fileList![0].content).toBe('parse cache');
     });
   });
 

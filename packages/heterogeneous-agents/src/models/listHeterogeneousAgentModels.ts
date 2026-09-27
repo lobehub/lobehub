@@ -17,7 +17,8 @@ import { resolveHeteroSpawnCommand } from '../spawn/resolveCliCommand';
 import { listTraeAcpModels } from '../spawn/traeAcpSession';
 
 const execFilePromise = promisify(execFile);
-const MODEL_CATALOG_MAX_BUFFER = 256 * 1024;
+// Large catalogs (including Devin's model variants and metadata) exceed 256 KiB.
+const MODEL_CATALOG_MAX_BUFFER = 4 * 1024 * 1024;
 const MODEL_CATALOG_TIMEOUT_MS = 15_000;
 const CODEBUDDY_MODEL_OPTION = '--model <model>';
 const CODEBUDDY_SUPPORTED_MODELS_LABEL = 'Currently supported:';
@@ -189,6 +190,37 @@ export const parsePiModelCatalog = (stdout: string): HeterogeneousAgentModel[] =
 };
 
 /**
+ * Parse the JSON emitted by `kimi provider list --json`. The `-m` flag accepts
+ * the model alias (the `models` table key), so the alias is the catalog id.
+ */
+export const parseKimiCodeModelCatalog = (stdout: string): HeterogeneousAgentModel[] => {
+  let result: unknown;
+  try {
+    result = JSON.parse(stdout);
+  } catch {
+    return [];
+  }
+  if (!isRecord(result) || !isRecord(result.models)) return [];
+
+  const models: HeterogeneousAgentModel[] = [];
+  for (const [alias, entry] of Object.entries(result.models)) {
+    if (!alias || !isRecord(entry) || typeof entry.model !== 'string' || !entry.model) continue;
+
+    const separatorIndex = alias.indexOf('/');
+    models.push({
+      id: alias,
+      ...(typeof entry.displayName === 'string' && entry.displayName
+        ? { label: entry.displayName }
+        : undefined),
+      modelId: entry.model,
+      providerId: separatorIndex > 0 ? alias.slice(0, separatorIndex) : alias,
+    });
+  }
+
+  return models;
+};
+
+/**
  * Parse the one-column table emitted by `qodercli --list-models`.
  * Built-in models are selected by name; custom models append their modelID in
  * parentheses and must be selected by that id.
@@ -302,7 +334,9 @@ export const listHeterogeneousAgentModels = async (
           ? ['models', 'list', '--format', 'json']
           : params.type === 'grok-build' || params.type === 'opencode'
             ? ['models']
-            : ['--list-models'];
+            : params.type === 'kimi-code'
+              ? ['provider', 'list', '--json']
+              : ['--list-models'];
     const spawnPlan = await resolveCliSpawnPlan(resolved.command, args);
     const { stderr, stdout } = await execFilePromise(spawnPlan.command, spawnPlan.args, {
       cwd: params.cwd,
@@ -339,11 +373,13 @@ export const listHeterogeneousAgentModels = async (
             ? parseDevinModelCatalog(String(stdout))
             : params.type === 'grok-build'
               ? parseGrokBuildModelCatalog(String(stdout))
-              : params.type === 'pi'
-                ? parsePiModelCatalog(String(stdout))
-                : params.type === 'qoder'
-                  ? parseQoderModelCatalog(String(stdout))
-                  : parseOpenCodeModelCatalog(String(stdout)),
+              : params.type === 'kimi-code'
+                ? parseKimiCodeModelCatalog(String(stdout))
+                : params.type === 'pi'
+                  ? parsePiModelCatalog(String(stdout))
+                  : params.type === 'qoder'
+                    ? parseQoderModelCatalog(String(stdout))
+                    : parseOpenCodeModelCatalog(String(stdout)),
       status: 'success',
       updatedAt,
     };

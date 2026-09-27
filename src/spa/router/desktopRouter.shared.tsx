@@ -782,16 +782,6 @@ export const sharedMainAreaChildren: RouteObject[] = [
       },
       {
         element: dynamicElement(
-          () => import('@/routes/(main)/memory/experiences'),
-          'Desktop > Memory > Experiences',
-        ),
-        handle: {
-          meta: routeMeta({ icon: BrainCircuit, titleKey: 'navigation.memoryExperiences' }),
-        },
-        path: 'experiences',
-      },
-      {
-        element: dynamicElement(
           () => import('@/routes/(main)/memory/activities'),
           'Desktop > Memory > Activities',
         ),
@@ -1494,6 +1484,23 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
                 ),
                 handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('list') }) },
                 path: 'messenger/:sub',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/integrations'),
+                  'Desktop > Workspace > Settings > Integrations',
+                ),
+                handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('list') }) },
+                path: 'integrations',
+              },
+              // Integration detail level — the page reads the integration from `sub`.
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/integrations'),
+                  'Desktop > Workspace > Settings > Integrations > Detail',
+                ),
+                handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('list') }) },
+                path: 'integrations/:sub',
               },
               // Developer tools mirrored inside the workspace (user preferences).
               {

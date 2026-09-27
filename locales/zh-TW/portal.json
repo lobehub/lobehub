@@ -1,4 +1,5 @@
 {
+  "FilePreview.actions.download": "下載原始檔案",
   "FilePreview.tabs.chunk": "分塊",
   "FilePreview.tabs.file": "檔案",
   "Plugins": "外掛",
@@ -29,6 +30,7 @@
   "artifacts.svg.copySuccess": "圖片複製成功",
   "artifacts.svg.download.png": "下載為 PNG",
   "artifacts.svg.download.svg": "下載為 SVG",
+  "document.saveConflict": "此文件已在其他地方更新。正在刷新至最新版本。",
   "document.todos.allCompleted": "所有任務已完成",
   "document.todos.title": "任務",
   "emptyArtifactList": "當前文物列表為空，請在會話中按需使用插件後再查看",

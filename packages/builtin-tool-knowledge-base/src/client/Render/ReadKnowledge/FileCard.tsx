@@ -123,7 +123,10 @@ const FileCard = memo<FileCardProps>(({ file }) => {
               label: 'Chars',
             },
             {
-              children: file.totalLineCount?.toLocaleString(),
+              children:
+                file.startLine && file.endLine && (file.truncated || file.startLine > 1)
+                  ? `${file.startLine.toLocaleString()}-${file.endLine.toLocaleString()} / ${file.totalLineCount?.toLocaleString()}`
+                  : file.totalLineCount?.toLocaleString(),
               label: 'Lines',
             },
           ]}

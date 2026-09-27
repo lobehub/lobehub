@@ -26,4 +26,5 @@ export {
   type RegisterWorksForOperationParams,
   type WorksRegistrationOutcome,
 } from './registerWorksForOperation';
+export { resolveRunWorkAccessScope, type ShareVisitorWorkIdentity } from './shareWorkScope';
 export { stateHasEntityFileEdits } from './stateHasEntityFileEdits';
