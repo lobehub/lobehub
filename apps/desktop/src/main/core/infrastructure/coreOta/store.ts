@@ -6,8 +6,12 @@ import { zstdDecompress } from 'node:zlib';
 
 import { unzip } from 'fflate';
 
+import { createLogger } from '@/utils/logger';
+
 import { type CoreManifest, findMissingEntryAssets, sha256File } from './manifest';
 import { applyZstdPatch } from './zstdPatch';
+
+const logger = createLogger('core:CoreStore');
 
 type FetchImpl = (url: string) => Promise<Response>;
 type LocalCore = { dir: string; manifest: CoreManifest };
@@ -36,18 +40,34 @@ export const SAFE_VERSION = /^[\w.+-]{1,64}$/;
 
 const zstdDecompressAsync = promisify(zstdDecompress);
 
+// Settles every lane before rethrowing so callers' cleanup never races in-flight writes.
 const runPool = async <T>(items: T[], worker: (item: T) => Promise<void>) => {
   let next = 0;
+  let failed = false;
   const lane = async () => {
-    while (next < items.length) await worker(items[next++]);
+    while (!failed && next < items.length) {
+      try {
+        await worker(items[next++]);
+      } catch (error) {
+        failed = true;
+        throw error;
+      }
+    }
   };
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, items.length) }, lane));
+  const results = await Promise.allSettled(
+    Array.from({ length: Math.min(CONCURRENCY, items.length) }, lane),
+  );
+  const rejected = results.find((result) => result.status === 'rejected');
+  if (rejected) throw rejected.reason;
 };
 
-const attempt = (task: () => Promise<void>) =>
+const attempt = (label: string, task: () => Promise<void>) =>
   task().then(
     () => true,
-    () => false,
+    (error) => {
+      logger.warn(`Core OTA ${label} failed`, error);
+      return false;
+    },
   );
 
 const resolveInside = (root: string, relPath: string): string => {
@@ -134,7 +154,7 @@ export class CoreStore {
         const patch = patches.get(sha256);
         const patched =
           patch &&
-          (await attempt(async () => {
+          (await attempt(`patch ${patch.fromSha256}->${patch.toSha256}`, async () => {
             const url = `${objectsBaseUrl}/patches/${patch.fromSha256}-${patch.toSha256}.zst`;
             const raw = await this.fetchBytes(url);
             const base = await readFile(byHash.get(patch.fromSha256)!);
@@ -143,7 +163,7 @@ export class CoreStore {
             downloaded.bytes += raw.byteLength;
           }));
         if (patched) return;
-        const fetched = await attempt(async () => {
+        const fetched = await attempt(`object ${sha256}`, async () => {
           const raw = await this.fetchBytes(`${objectsBaseUrl}/objects/${sha256}.zst`);
           await this.putObject(sha256, Buffer.from(await zstdDecompressAsync(raw)));
           downloaded.objects += 1;
@@ -186,9 +206,10 @@ export class CoreStore {
       for (const file of manifest?.tree ?? []) referenced.add(file.sha256);
     }
     if (keepStore) return;
-    for (const name of await readDirNames(this.storeDir)) {
-      if (!referenced.has(name)) await rm(path.join(this.storeDir, name), { force: true });
-    }
+    const unreferenced = (await readDirNames(this.storeDir)).filter(
+      (name) => !referenced.has(name),
+    );
+    await runPool(unreferenced, (name) => rm(path.join(this.storeDir, name), { force: true }));
   }
 
   private objectPath(sha256: string) {
@@ -222,7 +243,7 @@ export class CoreStore {
     await rm(tmpDir, { force: true, recursive: true });
     await mkdir(tmpDir, { mode: DIR_MODE, recursive: true });
     try {
-      for (const file of remote.tree) {
+      await runPool(remote.tree, async (file) => {
         const target = resolveInside(tmpDir, file.path);
         await mkdir(path.dirname(target), { mode: DIR_MODE, recursive: true });
         const source = byHash.get(file.sha256) ?? this.objectPath(file.sha256);
@@ -231,7 +252,7 @@ export class CoreStore {
         } catch {
           await copyFile(source, target);
         }
-      }
+      });
       await writeFile(path.join(tmpDir, 'manifest.json'), JSON.stringify(remote));
       const rendererDir = path.join(tmpDir, RENDERER_ROOT);
       for (const entry of ENTRY_HTMLS) {

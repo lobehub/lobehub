@@ -68,6 +68,9 @@ export const coreManifestSchema = z
   })
   .strict();
 
+// The builtin manifest ships inside the code-signed app bundle, so it is built without the OTA key.
+export const builtinManifestSchema = coreManifestSchema.extend({ signature: z.string() });
+
 export type CoreManifest = z.infer<typeof coreManifestSchema>;
 export type CorePatch = z.infer<typeof corePatchSchema>;
 export type RendererArtifact = z.infer<typeof rendererArtifactSchema>;

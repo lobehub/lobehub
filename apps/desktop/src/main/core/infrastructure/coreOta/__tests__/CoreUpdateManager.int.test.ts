@@ -296,6 +296,21 @@ describe('CoreUpdateManager initialize', () => {
     expect(readPointer(otaRoot(), ABI)).toMatchObject({ current: '1.0.1', previous: null });
   });
 
+  it('accepts an unsigned builtin manifest while running an external core', async () => {
+    materialize(builtinDir, BASE_FILES, { ...builtinManifest, signature: '' });
+    const v1Files = { ...BASE_FILES, 'dist/renderer/assets/index.js': 'index-1.0.1' };
+    const v1 = buildManifest('1.0.1', 1, v1Files);
+    materialize(coreDir('1.0.1'), v1Files, v1);
+    pointerAt({ current: '1.0.1' });
+
+    const { manager } = await loadManager(
+      makeApp(),
+      makeShell({ coreDir: coreDir('1.0.1'), manifest: v1, source: 'external' }),
+    );
+
+    expect(manager.disabledReasons).toEqual([]);
+  });
+
   it('shares the version-name rule with the shell loader', () => {
     const loader = readFileSync(
       path.join(__dirname, '../../../../../../shell/core-loader.js'),
@@ -694,6 +709,25 @@ describe('CoreUpdateManager checkForUpdates', () => {
       blur();
       vi.advanceTimersByTime(6 * 60 * 1000);
       expect(app.rendererUrlManager.setActiveRendererDir).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('auto-applies a new stage even if an unload was vetoed before it was staged', async () => {
+    vi.useFakeTimers();
+    try {
+      serveLatest(rendererOnly('1.0.1', 1));
+      const { app, manager } = await loadManager();
+      manager.startScheduledChecks();
+      manager.handleUnloadPrevented();
+      await manager.checkForUpdates();
+
+      vi.advanceTimersByTime(5 * 60 * 1000);
+
+      expect(app.rendererUrlManager.setActiveRendererDir).toHaveBeenCalledWith(
+        path.join(coreDir('1.0.1'), 'dist/renderer'),
+      );
     } finally {
       vi.useRealTimers();
     }

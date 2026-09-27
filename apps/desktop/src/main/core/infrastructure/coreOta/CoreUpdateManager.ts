@@ -16,7 +16,12 @@ import { createLogger } from '@/utils/logger';
 
 import type { App } from '../../App';
 import { type ApplyMode, computeApplyMode } from './applyMode';
-import { type CoreManifest, coreManifestSchema, verifyManifestSignature } from './manifest';
+import {
+  builtinManifestSchema,
+  type CoreManifest,
+  coreManifestSchema,
+  verifyManifestSignature,
+} from './manifest';
 import {
   type CorePointer,
   emptyPointer,
@@ -50,7 +55,7 @@ const readBuiltinManifest = (shell: ShellGlobal): CoreManifest | null => {
   if (shell.source === 'builtin') return shell.manifest;
   try {
     const raw = JSON.parse(readFileSync(path.join(shell.builtinDir, 'manifest.json'), 'utf8'));
-    return coreManifestSchema.parse(raw);
+    return builtinManifestSchema.parse(raw);
   } catch {
     return null;
   }
@@ -254,6 +259,7 @@ export class CoreUpdateManager {
     this.rollbackRendererDir = this.app.rendererUrlManager.getActiveRendererDir();
     this.app.rendererUrlManager.setActiveRendererDir(rendererDir);
     if (this.app.rendererUrlManager.getActiveRendererDir() !== rendererDir) {
+      logger.warn('Core OTA staged apply rejected', { reason: 'renderer-dir-unusable', version });
       this.app.rendererUrlManager.setActiveRendererDir(this.rollbackRendererDir);
       this.rollbackRendererDir = null;
       this.savePointer({
@@ -326,6 +332,7 @@ export class CoreUpdateManager {
       const applyMode = computeApplyMode(this.running.tree, remote.tree);
       logger.info('Core OTA staged', { applyMode, version, ...staged.downloaded });
       this.staged = { applyMode, version };
+      this.unloadPrevented = false;
       this.savePointer(
         applyMode === 'relaunch'
           ? { current: version, previous: this.pointer.current, staged: null }
