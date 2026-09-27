@@ -1,4 +1,9 @@
-import type { GenerateContentConfig, GoogleGenAI, Part } from '@google/genai';
+import type {
+  GenerateContentConfig,
+  GenerateContentResponse,
+  GoogleGenAI,
+  Part,
+} from '@google/genai';
 import { createPartFromUri, FileState } from '@google/genai';
 import Debug from 'debug';
 
@@ -36,6 +41,16 @@ const guessMimeFromName = (fileName?: string): string | undefined => {
 };
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Dedicated speech-to-text models (e.g. `gemini-3.5-transcribe`) return the
+ * transcript in `Part.audioTranscription` instead of a text part, so
+ * `response.text` is empty for them.
+ */
+const getAudioTranscriptionText = (response: GenerateContentResponse): string =>
+  response.candidates?.[0]?.content?.parts
+    ?.map((part) => part.audioTranscription?.text ?? '')
+    .join('') ?? '';
 
 /**
  * Upload audio via the Gemini Files API and wait until it is processed, then
@@ -114,7 +129,7 @@ export const createGoogleTranscription = async (
     model,
   });
 
-  const text = (response.text ?? '').trim();
+  const text = (response.text || getAudioTranscriptionText(response)).trim();
   debug('transcription completed, text length %d', text.length);
 
   return { text };
