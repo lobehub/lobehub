@@ -201,15 +201,6 @@ vi.mock('@/features/Electron/HeterogeneousAgent/StatusGuide', () => ({
   ),
 }));
 
-vi.mock('@/features/HeterogeneousAgent/hooks/useProviderBinding', () => ({
-  useProviderBindingCompatibleProviders: () => ({
-    modelsByProvider: {
-      anthropic: [{ id: 'claude-primary', providerId: 'anthropic' }],
-    },
-    providers: [{ id: 'anthropic', name: 'Anthropic' }],
-  }),
-}));
-
 vi.mock('@/features/ModelSelect', () => ({
   default: ({ allowClear, onClear }: { allowClear?: boolean; onClear?: () => void }) => (
     <div>
@@ -232,8 +223,27 @@ vi.mock('@/components/ModelSelect', () => ({
 }));
 
 vi.mock('@/store/aiInfra', () => ({
-  useAiInfraStore: (selector: (state: { builtinAiModelList: never[] }) => unknown) =>
-    selector({ builtinAiModelList: [] }),
+  useAiInfraStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({
+      builtinAiModelList: [],
+      enabledAiModels: [
+        { abilities: {}, id: 'claude-primary', providerId: 'anthropic', type: 'chat' },
+        {
+          abilities: { functionCall: false },
+          id: 'no-tools',
+          providerId: 'custom',
+          type: 'chat',
+        },
+      ],
+      enabledAiProviders: [
+        { id: 'anthropic', name: 'Anthropic', source: 'builtin' },
+        { id: 'custom', name: 'Custom provider', source: 'custom' },
+      ],
+      providerBindingAgentTypes: {
+        anthropic: ['claude-code', 'kimi-code'],
+        custom: ['kimi-code'],
+      },
+    }),
 }));
 
 vi.mock('@/services/electron/binary', () => ({
@@ -750,5 +760,27 @@ describe('HeterogeneousAgentStatusCard', () => {
       providerId: 'anthropic',
       smallFastModel: null,
     });
+  });
+
+  it('keeps a bound Kimi provider visible and offers settings when its models are incompatible', async () => {
+    detectHeterogeneousAgentCommand.mockResolvedValue({ available: true });
+    const provider = {
+      apiConfig: { model: 'no-tools', providerId: 'custom' },
+      authMode: 'api',
+      type: 'kimi-code',
+    } satisfies HeterogeneousProviderConfig;
+
+    render(
+      <MemoryRouter>
+        <HeterogeneousAgentStatusCard apiModeAvailable provider={provider} />
+      </MemoryRouter>,
+    );
+
+    const boundProvider = await screen.findByRole('option', { name: 'Custom provider' });
+    expect(boundProvider).toBeEnabled();
+    expect(boundProvider.closest('select')).toHaveValue('provider:custom');
+    expect(
+      screen.getByRole('button', { name: 'heterogeneousStatus.apiMode.configureProvider' }),
+    ).toBeEnabled();
   });
 });

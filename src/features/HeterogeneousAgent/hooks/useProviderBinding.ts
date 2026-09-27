@@ -79,6 +79,7 @@ export const useProviderBindingValidation = (
 /** Providers whose actual wire protocol intersects with the selected local agent driver. */
 export const useProviderBindingCompatibleProviders = (
   agentType: string | undefined,
+  boundProviderId?: string,
 ): CompatibleProvidersResult => {
   const providerList = useAiInfraStore((state) => state.enabledAiProviders ?? [], isEqual);
   const bindingAgentTypes = useAiInfraStore((state) => state.providerBindingAgentTypes, isEqual);
@@ -103,8 +104,9 @@ export const useProviderBindingCompatibleProviders = (
     }
 
     const providers = candidateProviders
-      .filter(({ id }) => modelsByProvider[id]?.length)
+      // Keep the current binding diagnosable even when its models are filtered out.
+      .filter(({ id }) => id === boundProviderId || modelsByProvider[id]?.length)
       .map(({ id, logo, name, source }) => ({ id, logo, name, source }));
     return { modelsByProvider, providers };
-  }, [agentType, bindingAgentTypes, enabledModels, providerList]);
+  }, [agentType, bindingAgentTypes, boundProviderId, enabledModels, providerList]);
 };

@@ -295,7 +295,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
       firstServerDefaultModel;
     const providerBindingSupported = isHeterogeneousProviderBindingSupported(provider.type);
     const { modelsByProvider, providers: compatibleProviders } =
-      useProviderBindingCompatibleProviders(provider.type);
+      useProviderBindingCompatibleProviders(provider.type, providerApiConfig?.providerId);
     const providerOptions = useMemo(
       () => [
         {
@@ -842,6 +842,11 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
                   void handlePrimaryModelChange(value);
                 }}
               />
+              {!modelsByProvider[providerApiConfig.providerId]?.length && (
+                <Button size="small" type="text" onClick={() => navigate('/settings/provider')}>
+                  {t('heterogeneousStatus.apiMode.configureProvider')}
+                </Button>
+              )}
             </div>
           ) : (
             <div className={styles.detailRow}>

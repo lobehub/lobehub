@@ -6,10 +6,11 @@ import {
 } from '@lobechat/heterogeneous-agents';
 import type { HeterogeneousApiConfig } from '@lobechat/types';
 import { applyTopicModelToHeterogeneousProvider } from '@lobechat/types';
-import { TooltipGroup } from '@lobehub/ui';
-import { Select } from '@lobehub/ui/base-ui';
+import { Flexbox, TooltipGroup } from '@lobehub/ui';
+import { Button, Select } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { memo, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useProviderBindingCompatibleProviders } from '@/features/HeterogeneousAgent/hooks/useProviderBinding';
 import {
@@ -21,6 +22,7 @@ import {
   resolveServerDefaultAgentModels,
 } from '@/features/HeterogeneousAgent/modelPicker';
 import ModelSelect from '@/features/ModelSelect';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useAiInfraStore } from '@/store/aiInfra';
@@ -36,13 +38,24 @@ const compactTriggerLabel = (option: { title?: string; value?: unknown }) => (
 );
 
 const ApiModeModelBar = memo<ApiModeModelBarProps>(({ agentId }) => {
+  const { t } = useTranslation('setting');
+  const navigate = useWorkspaceAwareNavigate();
   const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
   const updateAgentConfigById = useAgentStore((state) => state.updateAgentConfigById);
   const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
   const activeTopicId = useChatStore((state) => state.activeTopicId);
   const topicModel = useChatStore(topicSelectors.activeTopicHeteroPin, isEqual);
   const updateTopicModel = useChatStore((state) => state.updateTopicModel);
-  const { providers } = useProviderBindingCompatibleProviders(heterogeneousProvider?.type);
+  const effectiveProvider = heterogeneousProvider
+    ? applyTopicModelToHeterogeneousProvider(heterogeneousProvider, topicModel)
+    : undefined;
+  const effectiveApiConfig = effectiveProvider?.apiConfig;
+  const effectiveProviderApiConfig =
+    effectiveApiConfig?.source !== 'server-default' ? effectiveApiConfig : undefined;
+  const { modelsByProvider, providers } = useProviderBindingCompatibleProviders(
+    heterogeneousProvider?.type,
+    effectiveProviderApiConfig?.providerId,
+  );
   const providerIds = useMemo(() => providers.map(({ id }) => id), [providers]);
   const serverDefaultAgentType =
     heterogeneousProvider && isServerDefaultHeterogeneousAgentType(heterogeneousProvider.type)
@@ -73,14 +86,6 @@ const ApiModeModelBar = memo<ApiModeModelBarProps>(({ agentId }) => {
     (!serverDefaultApiConfig && providerIds.length === 0)
   )
     return null;
-
-  const effectiveProvider = applyTopicModelToHeterogeneousProvider(
-    heterogeneousProvider,
-    topicModel,
-  );
-  const effectiveApiConfig = effectiveProvider.apiConfig;
-  const effectiveProviderApiConfig =
-    effectiveApiConfig?.source !== 'server-default' ? effectiveApiConfig : undefined;
 
   const persist = async (apiConfig: HeterogeneousApiConfig) => {
     if (activeTopicId && apiConfig.source !== 'server-default' && apiConfig.providerId) {
@@ -121,31 +126,40 @@ const ApiModeModelBar = memo<ApiModeModelBarProps>(({ agentId }) => {
   }
 
   return (
-    <ModelSelect
-      labelRender={compactTriggerLabel}
-      modelFilter={heterogeneousProvider.type === 'kimi-code' ? isKimiModelCandidate : undefined}
-      popupWidth={360}
-      providerIds={providerIds}
-      size="small"
-      style={COMPACT_MODEL_PICKER_STYLE}
-      variant="borderless"
-      modelOptionRender={
-        heterogeneousProvider.type === 'kimi-code' ? renderKimiModelOption : undefined
-      }
-      value={
-        effectiveProviderApiConfig
-          ? {
-              model: effectiveProviderApiConfig.model,
-              provider: effectiveProviderApiConfig.providerId,
-            }
-          : undefined
-      }
-      onChange={({ model, provider }) => {
-        const smallFastModel =
-          providerApiConfig?.providerId === provider ? providerApiConfig.smallFastModel : undefined;
-        void persist({ model, providerId: provider, smallFastModel });
-      }}
-    />
+    <Flexbox horizontal align="center" gap={8}>
+      <ModelSelect
+        labelRender={compactTriggerLabel}
+        modelFilter={heterogeneousProvider.type === 'kimi-code' ? isKimiModelCandidate : undefined}
+        popupWidth={360}
+        providerIds={providerIds}
+        size="small"
+        style={COMPACT_MODEL_PICKER_STYLE}
+        variant="borderless"
+        modelOptionRender={
+          heterogeneousProvider.type === 'kimi-code' ? renderKimiModelOption : undefined
+        }
+        value={
+          effectiveProviderApiConfig
+            ? {
+                model: effectiveProviderApiConfig.model,
+                provider: effectiveProviderApiConfig.providerId,
+              }
+            : undefined
+        }
+        onChange={({ model, provider }) => {
+          const smallFastModel =
+            providerApiConfig?.providerId === provider
+              ? providerApiConfig.smallFastModel
+              : undefined;
+          void persist({ model, providerId: provider, smallFastModel });
+        }}
+      />
+      {!Object.values(modelsByProvider).some((models) => models.length > 0) && (
+        <Button size="small" type="text" onClick={() => navigate('/settings/provider')}>
+          {t('heterogeneousStatus.apiMode.configureProvider')}
+        </Button>
+      )}
+    </Flexbox>
   );
 });
 
