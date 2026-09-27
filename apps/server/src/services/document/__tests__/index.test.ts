@@ -479,6 +479,52 @@ describe('DocumentService', () => {
       });
     });
 
+    it('treats blank parentId and knowledgeBaseId from tool calls as unset', async () => {
+      mockFileModel.create.mockResolvedValue({ id: 'file-1' });
+      mockDocumentModel.create.mockResolvedValue({ id: 'doc-1' });
+
+      await service.createDocument({
+        title: 'Root Doc',
+        editorData: {},
+        knowledgeBaseId: 'kb-1',
+        parentId: '',
+      });
+      await service.createDocument({
+        title: 'Loose Doc',
+        editorData: {},
+        knowledgeBaseId: ' ',
+        parentId: ' ',
+      });
+
+      expect(mockFileModel.create).toHaveBeenCalledTimes(1);
+      expect(mockFileModel.create.mock.calls[0]?.[0]).toMatchObject({ parentId: undefined });
+      for (const [input] of mockDocumentModel.create.mock.calls) {
+        expect(input.parentId).toBeUndefined();
+      }
+      expect(mockDocumentModel.create.mock.calls[1]?.[0]).toMatchObject({
+        fileId: null,
+        knowledgeBaseId: undefined,
+      });
+    });
+
+    it('rejects an unknown knowledge base in personal mode before writing any row', async () => {
+      mockKnowledgeBaseModel.findById.mockResolvedValue(undefined);
+
+      await expect(
+        service.createDocument({
+          title: 'Doc',
+          editorData: {},
+          knowledgeBaseId: 'default',
+        }),
+      ).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+        message: 'Knowledge base not found: default',
+      });
+
+      expect(mockFileModel.create).not.toHaveBeenCalled();
+      expect(mockDocumentModel.create).not.toHaveBeenCalled();
+    });
+
     it('omits visibility on the KB mirror file in personal mode', async () => {
       mockFileModel.create.mockResolvedValue({ id: 'file-1' });
       mockDocumentModel.create.mockResolvedValue({ id: 'doc-1' });
