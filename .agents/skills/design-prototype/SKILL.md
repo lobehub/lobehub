@@ -83,9 +83,9 @@ See [`assets/entry.mjs`](assets/entry.mjs) — the single source of truth. Curre
 - `@lobehub/icons`: Amp, ClaudeCode, Codex, HermesAgent, OpenClaw, OpenCode
 - `@lobehub/ui`: ActionIcon, Alert, Avatar, Block, Button, Center, Collapse,
   ConfigProvider, DraggablePanel, Drawer, DropdownMenu, Empty, Flexbox, Highlighter, Hotkey, Icon,
-  Image, Input, InputNumber, Markdown, Modal, MotionProvider, NeuralNetworkLoading, Popover,
-  ScrollShadow, SearchBar, Segmented, Select, Skeleton, SortableList, Tabs, Tag,
-  Text, TextArea, ThemeProvider, Tooltip
+  Image, Input, InputNumber, Markdown, Modal, MotionProvider, Popover, ScrollShadow,
+  SearchBar, Segmented, Select, Skeleton, SortableList, Tabs, Tag, Text, TextArea,
+  ThemeProvider, Tooltip
 - `@lobehub/ui/base-ui`: full namespace (Select, Modal, DropdownMenu, Switch, Toast,
   FloatingSheet, …)
 - `antd`: App, Badge, Checkbox, Divider, Dropdown, Progress, Radio, Slider, Space,
