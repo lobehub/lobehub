@@ -808,11 +808,25 @@ const exec = async (options: ExecOptions): Promise<void> => {
       await Promise.all(cancellations);
       if (cancellationError) throw cancellationError;
     };
-    const applyCancellation = (signal: NodeJS.Signals) => {
-      cancellationSignal = signal;
-      if (inheritsWrapperProcessGroup) return;
+    // Deliberately NOT `interrupted`: the user did not stop this run, so the
+    // finish leg must report `error` (with the ingest failure as its detail)
+    // rather than `cancelled`, which would leave the operation running on the
+    // server with nothing left to drive it.
+    let ingestLoss: Error | undefined;
+    // Inside an inherited wrapper group an external SIGINT/SIGTERM already
+    // reaches the agent, so forwarding it would signal twice. An ingest-loss
+    // abort has no OS signal behind it — the CLI decided on its own — so it
+    // must always deliver the signal itself, or the agent keeps running (the
+    // desktop and connected-device dispatches are exactly the inherited case).
+    const ownsSignalDelivery = () => !inheritsWrapperProcessGroup || ingestLoss !== undefined;
+    const signalAgent = (signal: NodeJS.Signals) => {
       if (startupControl) cancelStartup(startupControl, signal);
       else handle?.kill(signal);
+    };
+    const applyCancellation = (signal: NodeJS.Signals) => {
+      cancellationSignal = signal;
+      if (!ownsSignalDelivery()) return;
+      signalAgent(signal);
     };
     const onSigint = () => {
       const signal = interrupted ? 'SIGKILL' : 'SIGINT';
@@ -831,11 +845,6 @@ const exec = async (options: ExecOptions): Promise<void> => {
     process.on('SIGINT', onSigint);
     process.on('SIGTERM', onSigterm);
 
-    // Deliberately NOT `interrupted`: the user did not stop this run, so the
-    // finish leg must report `error` (with the ingest failure as its detail)
-    // rather than `cancelled`, which would leave the operation running on the
-    // server with nothing left to drive it.
-    let ingestLoss: Error | undefined;
     abortForIngestLoss = (error) => {
       if (ingestLoss) return;
       ingestLoss = error;
@@ -854,11 +863,11 @@ const exec = async (options: ExecOptions): Promise<void> => {
     try {
       handle = await spawnAgentOrRuntime(spawnOpts, dumpAttempt?.writeStdout, (control) => {
         startupControl = control;
-        if (cancellationSignal && !inheritsWrapperProcessGroup) {
+        if (cancellationSignal && ownsSignalDelivery()) {
           cancelStartup(control, cancellationSignal);
         }
       });
-      if (cancellationSignal && !startupControl && !inheritsWrapperProcessGroup) {
+      if (cancellationSignal && !startupControl && ownsSignalDelivery()) {
         handle.kill(cancellationSignal);
       }
     } catch (err) {
