@@ -36,7 +36,7 @@ export const topicName = (id?: string) => {
 
 const GRID = '16px minmax(0, 1fr) 88px 72px 56px 28px';
 
-const styles = createStaticStyles(({ css }) => ({
+const tableStyles = createStaticStyles(({ css }) => ({
   alert: css`
     display: flex;
     gap: 8px;
@@ -50,11 +50,6 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorError};
 
     background: ${cssVar.colorErrorBg};
-  `,
-  body: css`
-    overflow: auto;
-    flex: 1;
-    min-height: 0;
   `,
   chevron: css`
     color: ${cssVar.colorTextQuaternary};
@@ -96,6 +91,13 @@ const styles = createStaticStyles(({ css }) => ({
 
     font-size: 11px;
     color: ${cssVar.colorTextTertiary};
+  `,
+  headLabel: css`
+    font-size: 11px;
+    font-weight: 600;
+    color: ${cssVar.colorTextTertiary};
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
   `,
   headNum: css`
     text-align: end;
@@ -166,6 +168,14 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
+export function TopicTitle({ id }: { id: string }) {
+  const { t } = useTranslation('chat');
+  const title = useChatStore(() => topicName(id));
+  const useFetchTopicDetail = useChatStore((s) => s.useFetchTopicDetail);
+  useFetchTopicDetail(title ? undefined : id);
+  return title || t('backgroundActivity.topic');
+}
+
 function ActivityRows({ activity, selected }: { activity: Activity; selected: boolean }) {
   const { t } = useTranslation('chat');
   const [open, setOpen] = useState(selected);
@@ -176,12 +186,12 @@ function ActivityRows({ activity, selected }: { activity: Activity; selected: bo
     ref.current?.scrollIntoView({ block: 'nearest' });
   }, [selected]);
   const alert = activity.severity !== 'normal';
-  const tone = activity.severity === 'critical' ? styles.critical : styles.warning;
+  const tone = activity.severity === 'critical' ? tableStyles.critical : tableStyles.warning;
   return (
     <>
       <div
         aria-expanded={open}
-        className={cx(styles.row, selected && styles.selected)}
+        className={cx(tableStyles.row, selected && tableStyles.selected)}
         ref={ref}
         role={'button'}
         style={{ gridTemplateColumns: GRID }}
@@ -196,32 +206,34 @@ function ActivityRows({ activity, selected }: { activity: Activity; selected: bo
         }}
       >
         <Icon
-          className={cx(styles.chevron, open && styles.chevronOpen)}
+          className={cx(tableStyles.chevron, open && tableStyles.chevronOpen)}
           icon={ChevronRightIcon}
           size={14}
         />
-        <span className={styles.label} title={activity.label}>
+        <span className={tableStyles.label} title={activity.label}>
           {alert && <Icon className={tone} icon={TriangleAlertIcon} size={14} />}
           {activity.label}
         </span>
-        <span className={styles.num}>
+        <span className={tableStyles.num}>
           {t('backgroundActivity.processCount', { count: activity.processes.length })}
         </span>
-        <span className={cx(styles.num, alert && tone)}>{formatMemory(activity.memoryMB)}</span>
-        <span className={styles.num}>{formatCpu(activity.cpuPercent)}</span>
+        <span className={cx(tableStyles.num, alert && tone)}>
+          {formatMemory(activity.memoryMB)}
+        </span>
+        <span className={tableStyles.num}>{formatCpu(activity.cpuPercent)}</span>
         <StopButton rootId={activity.rootId} />
       </div>
       {open &&
         processTree(activity.processes).map(({ depth, row }) => (
-          <div className={styles.proc} key={row.id} style={{ gridTemplateColumns: GRID }}>
+          <div className={tableStyles.proc} key={row.id} style={{ gridTemplateColumns: GRID }}>
             <span />
-            <span className={styles.procName} style={{ paddingInlineStart: depth * 14 }}>
+            <span className={tableStyles.procName} style={{ paddingInlineStart: depth * 14 }}>
               {depth > 0 && '└ '}
               {row.name}
             </span>
-            <span className={styles.num}>{row.pid}</span>
-            <span className={styles.num}>{formatMemory(row.memoryMB)}</span>
-            <span className={styles.num}>{formatCpu(row.cpuPercent)}</span>
+            <span className={tableStyles.num}>{row.pid}</span>
+            <span className={tableStyles.num}>{formatMemory(row.memoryMB)}</span>
+            <span className={tableStyles.num}>{formatCpu(row.cpuPercent)}</span>
             <span />
           </div>
         ))}
@@ -242,9 +254,9 @@ export default function ActivityTable() {
     (a, b) => Number(a === undefined) - Number(b === undefined),
   );
   return (
-    <Flexbox className={styles.body}>
+    <Flexbox>
       {state.error && (
-        <div className={styles.alert} role={'alert'}>
+        <div className={tableStyles.alert} role={'alert'}>
           <Icon icon={TriangleAlertIcon} size={14} />
           <Flexbox flex={1}>{t('backgroundActivity.unavailable')}</Flexbox>
           <Button
@@ -266,22 +278,22 @@ export default function ActivityTable() {
           />
         )
       ) : (
-        <div className={cx(state.error && styles.stale)}>
-          <div className={styles.head} style={{ gridTemplateColumns: GRID }}>
+        <div className={cx(state.error && tableStyles.stale)}>
+          <div className={tableStyles.head} style={{ gridTemplateColumns: GRID }}>
             <span />
-            <span>{t('backgroundActivity.activityCount', { count: state.activities.length })}</span>
+            <span className={tableStyles.headLabel}>
+              {t('backgroundActivity.title')} · {state.activities.length}
+            </span>
             <span />
-            <span className={styles.headNum}>{t('backgroundActivity.memory')}</span>
-            <span className={styles.headNum}>{t('backgroundActivity.cpu')}</span>
+            <span className={tableStyles.headNum}>{t('backgroundActivity.memory')}</span>
+            <span className={tableStyles.headNum}>{t('backgroundActivity.cpu')}</span>
             <span />
           </div>
           {groups.map((group) => (
             <div key={group ?? 'shared'}>
-              <div className={styles.group}>
+              <div className={tableStyles.group}>
                 <Icon icon={group ? MessageSquareIcon : CpuIcon} size={13} />
-                {group
-                  ? topicName(group) || t('backgroundActivity.topic')
-                  : t('backgroundActivity.shared')}
+                {group ? <TopicTitle id={group} /> : t('backgroundActivity.shared')}
               </div>
               {state.activities
                 .filter((row) => row.topicId === group)

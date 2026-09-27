@@ -1,13 +1,14 @@
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
-import { createModal, toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui/base-ui';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useSingleton } from '@/hooks/useSingleton';
+import { electronDevtoolsService } from '@/services/electron/devtools';
 import { useGlobalStore } from '@/store/global';
 
-import ActivityTable, { topicName } from './ActivityTable';
+import { topicName } from './ActivityTable';
 import {
   formatCpu,
   formatMemory,
@@ -47,16 +48,7 @@ export default function BackgroundActivityMonitor() {
                 useGlobalStore.getState().toggleRightPanel(false);
                 useGlobalStore.getState().toggleWorkingOverview(true);
               } else {
-                createModal({
-                  title: t('backgroundActivity.title'),
-                  content: (
-                    <div style={{ display: 'flex', maxHeight: '60vh', marginInline: -12 }}>
-                      <ActivityTable />
-                    </div>
-                  ),
-                  footer: null,
-                  width: 640,
-                });
+                void electronDevtoolsService.openProcessExplorer();
               }
             },
           },

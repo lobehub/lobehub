@@ -89,8 +89,9 @@ interface State {
   loaded: boolean;
   sampledAt: number;
   selected?: string;
+  totalMemoryMB: number;
 }
-let state: State = { activities: [], error: false, loaded: false, sampledAt: 0 };
+let state: State = { activities: [], error: false, loaded: false, sampledAt: 0, totalMemoryMB: 0 };
 const listeners = new Set<() => void>();
 let timer: ReturnType<typeof setInterval> | undefined;
 let pending: Promise<void> | undefined;
@@ -109,6 +110,7 @@ export const refreshActivities = () => {
         ...state,
         activities: groupActivities(snapshot),
         sampledAt: snapshot.sampledAt,
+        totalMemoryMB: snapshot.totalMemoryMB,
         error: false,
         loaded: true,
       };

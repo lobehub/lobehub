@@ -10,7 +10,9 @@ export default function BackgroundActivityPanel() {
   const processes = activities.reduce((sum, row) => sum + row.processes.length, 0);
   return (
     <Flexbox className={devDockPanelStyles.root}>
-      <ActivityTable />
+      <Flexbox flex={1} style={{ minHeight: 0, overflow: 'auto' }}>
+        <ActivityTable />
+      </Flexbox>
       <div className={devDockPanelStyles.statusBar}>
         <span>
           {processes} proc · {formatMemory(activities.reduce((sum, row) => sum + row.memoryMB, 0))}{' '}

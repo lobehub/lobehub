@@ -1,6 +1,4 @@
 export default {
-  'backgroundActivity.activityCount_one': '{{count}} activity',
-  'backgroundActivity.activityCount_other': '{{count}} activities',
   'backgroundActivity.alertDesc': '{{name}} is using {{memory}} of memory and {{cpu}} CPU.',
   'backgroundActivity.cpu': 'CPU',
   'backgroundActivity.details': 'View details',
@@ -19,6 +17,18 @@ export default {
   'backgroundActivity.topic': 'Conversation',
   'backgroundActivity.unavailable':
     'Resource data is unavailable. Displayed values may be out of date.',
+  'processExplorer.copyPid': 'Copy PID',
+  'processExplorer.filter': 'Filter',
+  'processExplorer.live': 'Live · updates every 2 s',
+  'processExplorer.name': 'Name',
+  'processExplorer.processes': 'Processes',
+  'processExplorer.gpu': 'GPU',
+  'processExplorer.main': 'Main process',
+  'processExplorer.pid': 'PID',
+  'processExplorer.title': 'Process Explorer',
+  'processExplorer.updated': 'Updated {{time}}',
+  'processExplorer.utility': 'Utility',
+  'processExplorer.window': 'Window',
 
   'response.contentSafetyNotice':
     'This reply was limited for content safety reasons. If this happens often, you may temporarily lose access to this model.',

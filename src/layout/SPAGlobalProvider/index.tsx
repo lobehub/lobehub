@@ -57,7 +57,7 @@ class DevDockBoundary extends Component<PropsWithChildren, { failed: boolean }> 
 }
 
 export const DevDockLayout = memo<PropsWithChildren>(({ children }) => {
-  const mounted = useDevDockMounted();
+  const mounted = useDevDockMounted() && !window.location.pathname.startsWith('/popup/processes');
 
   return (
     <>
@@ -114,7 +114,9 @@ const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
                 <ContextMenuHost />
                 <Suspense>
                   <TaskDock />
-                  {isDesktop && <BackgroundActivityMonitor />}
+                  {isDesktop && !window.location.pathname.startsWith('/popup') && (
+                    <BackgroundActivityMonitor />
+                  )}
                   <ImperativeMountHost />
                 </Suspense>
               </LazyMotion>
