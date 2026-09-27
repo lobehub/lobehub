@@ -1949,6 +1949,50 @@ describe('TaskModel', () => {
       ]);
     });
 
+    it('drops stale repos when a coordinator reassigns through the plain update', async () => {
+      const model = new TaskModel(serverDB, userId);
+      await createAgent('agt_coord_a');
+      await createAgent('agt_coord_b');
+      const task = await model.create({ assigneeAgentId: 'agt_coord_a', instruction: 'Test' });
+      await model.updateTaskConfig(task.id, {
+        execution: toTaskExecutionConfigPatch(
+          applyTaskReposSelection(undefined, ['lobehub/lobehub']),
+        ),
+      });
+
+      // The goal coordinator's handoff / restart hands work on with a plain
+      // `update` — no activity row, and no second chance to clean up: the repos
+      // agent A's provider env resolved must not follow the task to agent B.
+      const updated = await model.update(task.id, { assigneeAgentId: 'agt_coord_b' });
+
+      expect(readTaskExecutionConfig(updated?.config as Record<string, unknown>)).toBeUndefined();
+    });
+
+    it('keeps a machine-local selection when a coordinator reassigns', async () => {
+      const model = new TaskModel(serverDB, userId);
+      await createAgent('agt_coord_keep_a');
+      await createAgent('agt_coord_keep_b');
+      const task = await model.create({
+        assigneeAgentId: 'agt_coord_keep_a',
+        instruction: 'Test',
+      });
+      await model.updateTaskConfig(task.id, {
+        execution: toTaskExecutionConfigPatch({
+          boundDeviceId: 'device-a',
+          workingDirectory: '/srv/app',
+        }),
+      });
+
+      const updated = await model.update(task.id, { assigneeAgentId: 'agt_coord_keep_b' });
+
+      // A pin and a path on that machine are the user's own, not the previous
+      // assignee's to hand over — only the repo axis is tied to the agent.
+      expect(readTaskExecutionConfig(updated?.config as Record<string, unknown>)).toEqual({
+        boundDeviceId: 'device-a',
+        workingDirectory: '/srv/app',
+      });
+    });
+
     it('records an actorless row for a system assignment', async () => {
       const model = new TaskModel(serverDB, userId);
       const task = await model.create({ instruction: 'Test' });

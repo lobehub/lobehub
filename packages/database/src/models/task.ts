@@ -137,6 +137,49 @@ const normalizeTaskRefs = <
   return normalized;
 };
 
+/**
+ * The data to write when a task moves to another assignee, with the previous
+ * assignee's cloud-repo selection dropped in the same write.
+ *
+ * `repos` resolve against the assignee agent's provider env, so they belong to
+ * the agent they were picked for: carrying them to another agent leaves every
+ * later run pointing at a repository the new assignee cannot open. The
+ * machine-local axes (the device pin and a path on that machine) are the user's
+ * own and stay.
+ *
+ * Only a change of the AGENT counts, and only when the write does not state an
+ * execution of its own — a writer that moves the assignee AND names a directory
+ * is describing the new assignee's run on purpose. Returns `data` untouched when
+ * there is nothing to drop.
+ */
+const withStaleReposCleared = (
+  before: { assigneeAgentId: string | null; config: unknown },
+  data: Partial<Omit<NewTask, 'id' | 'identifier' | 'seq' | 'createdByUserId'>>,
+): Partial<Omit<NewTask, 'id' | 'identifier' | 'seq' | 'createdByUserId'>> => {
+  // Nothing to drop for a task that had no assignee to begin with (the runner's
+  // "unassigned → inbox agent" fallback), nor for a write that keeps it.
+  if (!before.assigneeAgentId) return data;
+  if (data.assigneeAgentId === undefined || data.assigneeAgentId === before.assigneeAgentId) {
+    return data;
+  }
+
+  const statedExecution = (data.config as Record<string, unknown> | undefined)?.execution;
+  if (statedExecution !== undefined) return data;
+
+  const currentConfig = (before.config ?? {}) as Record<string, unknown>;
+  const cleared = clearTaskReposSelection(readTaskExecutionConfig(currentConfig));
+  if (cleared === readTaskExecutionConfig(currentConfig)) return data;
+
+  return {
+    ...data,
+    config: {
+      ...currentConfig,
+      ...(data.config as Record<string, unknown> | undefined),
+      execution: toTaskExecutionConfigPatch(cleared),
+    },
+  };
+};
+
 export const isTaskIdentifierUniqueViolation = (error: unknown): boolean => {
   const message = error instanceof Error ? error.message : String(error);
   const code =
@@ -484,7 +527,37 @@ export class TaskModel {
   ): Promise<TaskItem | null> {
     if (Object.keys(data).length === 0) return this.findById(id);
 
-    const updated = await this.db
+    // A reassignment is not a plain column write: the row being moved away from
+    // decides whether the previous assignee's cloud-repo selection has to go,
+    // so read it under a lock — a config write landing between the read and the
+    // merge below would be lost. Every writer of the assignee column comes
+    // through here (`updateWithLog`, the update procedure, the coordinator's
+    // handoff/restart, the runner's inbox fallback), so this is the one place
+    // the invariant has to hold; `updateWithLog` locks its own read for the
+    // activity log and then delegates.
+    if (data.assigneeAgentId === undefined) return this.writeRow(this.db, id, data);
+
+    return this.db.transaction(async (tx) => {
+      const runner = tx as LobeChatDatabase;
+      const [before] = await runner
+        .select({ assigneeAgentId: tasks.assigneeAgentId, config: tasks.config })
+        .from(tasks)
+        .where(and(eq(tasks.id, id), this.ownership()))
+        .for('update')
+        .limit(1);
+      if (!before) return null;
+
+      return this.writeRow(runner, id, withStaleReposCleared(before, data));
+    });
+  }
+
+  /** The column write itself — the assignee rule lives in `update`. */
+  private async writeRow(
+    db: LobeChatDatabase,
+    id: string,
+    data: Partial<Omit<NewTask, 'id' | 'identifier' | 'seq' | 'createdByUserId'>>,
+  ): Promise<TaskItem | null> {
+    const updated = await db
       .update(tasks)
       .set({ ...normalizeTaskRefs(data), updatedAt: new Date() })
       .where(and(eq(tasks.id, id), this.ownership()))
@@ -2125,40 +2198,11 @@ export class TaskModel {
 
       const scoped = new TaskModel(runner, this.userId, this.workspaceId);
 
-      // Reassigning a task drops the previous assignee's cloud-repo selection in
-      // this same write: `repos` is resolved by the assignee agent's provider
-      // env, so carrying it to another agent leaves every later run pointing at
-      // a directory that agent cannot open. Machine-local selections (the device
-      // pin and a path on that machine) are the user's own and stay.
-      //
-      // Three guards: only when a previous assignee actually existed (the
-      // runner's "unassigned → inbox agent" fallback has nothing to drop), only
-      // when the assignee really moves, and only when this update does not state
-      // an execution of its own — a writer that moves the assignee AND names a
-      // directory is describing the NEW assignee's run on purpose.
-      const assignedAgentId =
-        data.assigneeAgentId === undefined ? before.assigneeAgentId : data.assigneeAgentId;
-      const currentConfig = (before.config ?? {}) as Record<string, unknown>;
-      const currentExecution = readTaskExecutionConfig(currentConfig);
-      const clearedExecution = clearTaskReposSelection(currentExecution);
-      const statedExecution = (data.config as Record<string, unknown> | undefined)?.execution;
-      const reassignedWithStaleRepos =
-        !!before.assigneeAgentId &&
-        assignedAgentId !== before.assigneeAgentId &&
-        statedExecution === undefined &&
-        clearedExecution !== currentExecution;
-      const writeData: typeof data = reassignedWithStaleRepos
-        ? {
-            ...data,
-            config: {
-              ...currentConfig,
-              ...(data.config as Record<string, unknown> | undefined),
-              execution: toTaskExecutionConfigPatch(clearedExecution),
-            },
-          }
-        : data;
-
-      const updated = await scoped.update(id, writeData);
+      // The reassignment rule — dropping the previous assignee's cloud-repo
+      // selection — lives in `update`, which is the only writer of the assignee
+      // column, so this locked read is kept for the activity-log diff only and
+      // the write below re-checks the rule in the same transaction.
+      const updated = await scoped.update(id, data);
       if (!updated) return null;
 
       const events: { payload: TaskActivityLogPayload; type: TaskActivityLogType }[] = [];
