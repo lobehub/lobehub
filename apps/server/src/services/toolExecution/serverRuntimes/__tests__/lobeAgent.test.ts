@@ -968,12 +968,34 @@ describe('lobeAgentRuntime', () => {
       );
     });
 
-    it('rejects an empty subAgentId instead of silently starting a new sub-agent', async () => {
+    // GPT-family models fill every declared field, so "start a new sub-agent"
+    // arrives as `subAgentId: ""` rather than an omitted key.
+    it.each(['', '  '])('starts a new sub-agent when subAgentId is blank (%j)', async (blank) => {
+      const runtime = lobeAgentRuntime.factory(baseContext);
+      const run = vi
+        .fn()
+        .mockResolvedValue({ started: true, subOperationId: 'sub-op-3', threadId: 'thread-3' });
+
+      const result = await runtime.callSubAgent(
+        { description: 'Research', instruction: 'Find the answer', subAgentId: blank },
+        { ...baseContext, subAgent: { run } } as ToolExecutionContext,
+      );
+
+      expect(run).toHaveBeenCalledWith({
+        description: 'Research',
+        instruction: 'Find the answer',
+        subAgentId: undefined,
+        timeout: undefined,
+      });
+      expect(result).toMatchObject({ deferred: true, success: true });
+    });
+
+    it('rejects a non-string subAgentId', async () => {
       const runtime = lobeAgentRuntime.factory(baseContext);
       const run = vi.fn();
 
       const result = await runtime.callSubAgent(
-        { description: 'Hand over', instruction: 'Summarize', subAgentId: '  ' },
+        { description: 'Hand over', instruction: 'Summarize', subAgentId: 42 as any },
         { ...baseContext, subAgent: { run } } as ToolExecutionContext,
       );
 

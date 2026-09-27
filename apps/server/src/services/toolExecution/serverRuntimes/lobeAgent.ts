@@ -266,18 +266,22 @@ class LobeAgentExecutionRuntime {
       );
     }
 
-    const { description, instruction, subAgentId, timeout } = params;
+    const { description, instruction, timeout } = params;
     if (!instruction || typeof instruction !== 'string') {
       return buildError('instruction is required.', 'INVALID_ARGUMENTS');
     }
-    if (subAgentId !== undefined && (typeof subAgentId !== 'string' || !subAgentId.trim())) {
-      return buildError('subAgentId must be a non-empty string.', 'INVALID_ARGUMENTS');
+    if (params.subAgentId !== undefined && typeof params.subAgentId !== 'string') {
+      return buildError('subAgentId must be a string.', 'INVALID_ARGUMENTS');
     }
+    // Models trained on strict function schemas (the GPT family) fill every
+    // declared field, so "start a new sub-agent" arrives as `subAgentId: ""`
+    // rather than an omitted key. Blank means new.
+    const subAgentId = params.subAgentId?.trim() || undefined;
 
     const { started, error, threadId, subOperationId, toolMessageId } = await ctx.subAgent.run({
       description,
       instruction,
-      subAgentId: subAgentId?.trim(),
+      subAgentId,
       timeout,
     });
 

@@ -456,7 +456,9 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
       return nestedSubAgentDisabledResult();
     }
 
-    const { description, instruction, inheritMessages, subAgentId, timeout } = params;
+    const { description, instruction, inheritMessages, timeout } = params;
+    // Strict-schema models send `subAgentId: ""` to mean "start a new one".
+    const subAgentId = typeof params.subAgentId === 'string' ? params.subAgentId.trim() : undefined;
 
     if (!description || !instruction) {
       return { content: 'Sub-agent description and instruction are required.', success: false };
@@ -468,7 +470,7 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
     if (subAgentId) {
       return {
         content:
-          'Continuing an earlier sub-agent (subAgentId) is not supported in this runtime. Omit subAgentId to start a new sub-agent.',
+          'Continuing an earlier sub-agent (subAgentId) is not supported in this runtime. Leave subAgentId empty to start a new sub-agent.',
         success: false,
       };
     }

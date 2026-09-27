@@ -60,6 +60,20 @@ describe('lobeAgentExecutor.callSubAgent', () => {
     expect(run).not.toHaveBeenCalled();
   });
 
+  // GPT-family models fill every declared field, so a fresh dispatch arrives as
+  // `subAgentId: ""` (or whitespace) instead of an omitted key.
+  it('treats a blank subAgentId as starting a new sub-agent', async () => {
+    const run = vi.fn().mockResolvedValue({ result: 'done', success: true, threadId: 'thd_2' });
+
+    const result = await lobeAgentExecutor.callSubAgent(
+      { ...params, subAgentId: '  ' },
+      createContext(run),
+    );
+
+    expect(result.success).toBe(true);
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
   it('surfaces a failed run as a tool error without state', async () => {
     const run = vi.fn().mockResolvedValue({
       error: 'boom',
