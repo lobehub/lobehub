@@ -8,6 +8,7 @@ import {
   type SharedAgentDeliveryStats,
   type SharedAgentUploadAbility,
   type SharedTopicData,
+  type UIChatMessage,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
@@ -17,6 +18,7 @@ import { z } from 'zod';
 import { AgentShareModel } from '@/database/models/agentShare';
 import { AgentShareProfileModel } from '@/database/models/agentShareProfile';
 import { AiModelModel } from '@/database/models/aiModel';
+import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
 import { TopicShareModel } from '@/database/models/topicShare';
 import type { LobeChatDatabase } from '@/database/type';
@@ -27,6 +29,7 @@ import { AgentService } from '@/server/services/agent';
 import { getCachedDeliveryStats } from '@/server/services/agentShare/deliveryStatsCache';
 
 import { assertAgentShareVisitorEnabled } from './_helpers/agentShareFeatureGate';
+import { sharedTopicText } from './_helpers/sharedTopicText';
 
 const log = debug('lobe-server:router:share');
 
@@ -96,6 +99,46 @@ const resolveVisitorUploadAbility = async (
 };
 
 export const shareRouter = router({
+  getSharedTopicText: publicProcedure
+    .use(serverDatabase)
+    .input(z.object({ shareId: z.string().trim().min(1) }))
+    .query(async ({ input, ctx }) => {
+      const share = await TopicShareModel.findByShareIdWithAccessCheck(
+        ctx.serverDB,
+        input.shareId,
+        ctx.userId ?? undefined,
+      );
+      const model = new MessageModel(ctx.serverDB, share.ownerId, share.workspaceId ?? undefined);
+      const messages: UIChatMessage[] = [];
+      let offset = 0;
+      while (true) {
+        const { items, total } = await model.queryTopicTranscript({
+          limit: 1000,
+          offset,
+          topicId: share.topicId,
+        });
+        messages.push(
+          ...items
+            .filter((item) => !item.threadId)
+            .map(
+              (item) =>
+                ({
+                  ...item,
+                  agentId: item.agentId ?? undefined,
+                  content: item.content ?? '',
+                  createdAt: item.createdAt.getTime(),
+                  updatedAt: item.createdAt.getTime(),
+                  parentId: item.parentId ?? undefined,
+                  tools: item.tools ?? undefined,
+                }) as UIChatMessage,
+            ),
+        );
+        offset += items.length;
+        if (offset >= total || items.length === 0) break;
+      }
+
+      return { text: sharedTopicText(messages), title: share.title };
+    }),
   /**
    * Resolve the visitor-facing metadata for an agent share, by its custom
    * slug or its raw share id, after enforcing signed-in access.

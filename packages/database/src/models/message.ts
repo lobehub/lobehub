@@ -266,10 +266,13 @@ export interface QueryMessagesOptions {
 }
 
 export interface TopicTranscriptMessage {
+  agentId: string | null;
   content: string | null;
   createdAt: Date;
+  error: ChatMessageError | null;
   id: string;
   messageGroupId: string | null;
+  metadata: MessageMetadata | null;
   parentId: string | null;
   role: string;
   threadId: string | null;
@@ -1382,6 +1385,9 @@ export class MessageModel {
     const [items, totalResult] = await Promise.all([
       this.db
         .select({
+          agentId: messages.agentId,
+          error: messages.error,
+          metadata: messages.metadata,
           content: messages.content,
           createdAt: messages.createdAt,
           id: messages.id,
@@ -1405,6 +1411,8 @@ export class MessageModel {
     return {
       items: items.map(({ tools, ...message }) => ({
         ...message,
+        error: message.error as ChatMessageError | null,
+        metadata: message.metadata as MessageMetadata | null,
         tools: Array.isArray(tools) ? (tools as ChatToolPayload[]) : null,
       })),
       total: totalResult[0]?.count ?? 0,

@@ -17,8 +17,11 @@ export interface ShareShellShareInfo {
 }
 
 export interface ShareShellProps {
+  actions?: ReactNode;
   aside?: ReactNode;
   children?: ReactNode;
+  /** Centered reading-column width; enables a header that floats in its side gutters. */
+  contentWidth?: number;
   error?: unknown;
   loading?: boolean;
   share?: ShareShellShareInfo;
@@ -47,17 +50,18 @@ export const ShareHero = ({ avatar, byline, title }: ShareHeroProps) => (
   </Flexbox>
 );
 
-export default function ShareShell({ aside, children, error, loading }: ShareShellProps) {
+export default function ShareShell({ actions, aside, children, error, loading }: ShareShellProps) {
   let body = children;
   if (error) body = <ShareErrorView error={error} />;
   else if (loading) body = <Loading debugId="share shell" />;
 
   return (
     <Flexbox height={'100%'} width={'100%'}>
-      <Flexbox horizontal align={'center'} padding={12}>
+      <Flexbox horizontal align={'center'} justify={'space-between'} padding={12}>
         <Link style={{ color: 'inherit' }} to="/">
           <ProductLogo size={32} />
         </Link>
+        {!error && !loading && actions}
       </Flexbox>
       <Flexbox horizontal flex={1} style={{ overflow: 'hidden' }}>
         <Flexbox flex={1} style={{ overflow: 'hidden' }}>
