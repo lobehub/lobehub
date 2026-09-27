@@ -74,6 +74,21 @@ describe('lobeAgentExecutor.callSubAgent', () => {
     expect(run).toHaveBeenCalledTimes(1);
   });
 
+  it.each([42, true, {}])(
+    'rejects a non-string subAgentId (%j) without dispatching',
+    async (id) => {
+      const run = vi.fn();
+
+      const result = await lobeAgentExecutor.callSubAgent(
+        { ...params, subAgentId: id as any },
+        createContext(run),
+      );
+
+      expect(result).toEqual({ content: 'subAgentId must be a string.', success: false });
+      expect(run).not.toHaveBeenCalled();
+    },
+  );
+
   it('surfaces a failed run as a tool error without state', async () => {
     const run = vi.fn().mockResolvedValue({
       error: 'boom',

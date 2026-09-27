@@ -457,12 +457,18 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
     }
 
     const { description, instruction, inheritMessages, timeout } = params;
-    // Strict-schema models send `subAgentId: ""` to mean "start a new one".
-    const subAgentId = typeof params.subAgentId === 'string' ? params.subAgentId.trim() : undefined;
 
     if (!description || !instruction) {
       return { content: 'Sub-agent description and instruction are required.', success: false };
     }
+
+    // Tool-call JSON reaches this executor without schema validation; a
+    // malformed id must not silently start a fresh (billed) sub-agent.
+    if (params.subAgentId !== undefined && typeof params.subAgentId !== 'string') {
+      return { content: 'subAgentId must be a string.', success: false };
+    }
+    // Strict-schema models send `subAgentId: ""` to mean "start a new one".
+    const subAgentId = params.subAgentId?.trim();
 
     // Continuing an earlier sub-agent is implemented by the server runtime only.
     // Fail loudly instead of silently starting a fresh sub-agent that has none
