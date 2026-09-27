@@ -1,6 +1,7 @@
 import {
   type HeterogeneousProviderBindingError,
   isHeterogeneousProviderBindingSupported,
+  isKimiModelCandidate,
 } from '@lobechat/heterogeneous-agents';
 import type { HeterogeneousProviderApiConfig } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
@@ -56,7 +57,8 @@ export const useProviderBindingValidation = (
           (model) =>
             model.providerId === apiConfig.providerId &&
             model.id === boundModel &&
-            model.type === 'chat',
+            model.type === 'chat' &&
+            (agentType !== 'kimi-code' || isKimiModelCandidate(model)),
         ),
     );
     if (unavailableModel) {
@@ -91,6 +93,7 @@ export const useProviderBindingCompatibleProviders = (
 
     for (const model of enabledModels) {
       if (model.type !== 'chat' || !compatibleProviderIds.has(model.providerId)) continue;
+      if (agentType === 'kimi-code' && !isKimiModelCandidate(model)) continue;
       modelsByProvider[model.providerId] ??= [];
       modelsByProvider[model.providerId].push({
         displayName: model.displayName,

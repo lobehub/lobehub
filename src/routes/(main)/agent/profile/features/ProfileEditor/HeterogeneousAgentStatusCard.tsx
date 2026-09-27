@@ -2,7 +2,10 @@
 
 import { isDesktop } from '@lobechat/const';
 import { type BinaryStatus, type ClaudeAuthStatus } from '@lobechat/electron-client-ipc';
-import { isHeterogeneousProviderBindingSupported } from '@lobechat/heterogeneous-agents';
+import {
+  isHeterogeneousProviderBindingSupported,
+  isKimiModelCandidate,
+} from '@lobechat/heterogeneous-agents';
 import {
   getHeterogeneousAgentClientConfig,
   isRemoteHeterogeneousType,
@@ -26,6 +29,7 @@ import {
   buildServerDefaultModelOptions,
   MODEL_PICKER_STYLE,
   modelPickerStyles,
+  type ServerDefaultModel,
 } from '@/features/HeterogeneousAgent/modelPicker';
 import ModelSelect from '@/features/ModelSelect';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -224,10 +228,6 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextSecondary};
   `,
 }));
-
-interface ServerDefaultModel {
-  model: string;
-}
 
 interface HeterogeneousAgentStatusCardProps {
   apiModeAvailable?: boolean;
@@ -826,6 +826,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
               <ModelSelect
                 initialWidth
                 disabled={!canEdit || !apiModeAvailable}
+                modelFilter={provider.type === 'kimi-code' ? isKimiModelCandidate : undefined}
                 placeholder={t('heterogeneousStatus.apiMode.modelPlaceholder')}
                 popupWidth={360}
                 providerIds={[providerApiConfig.providerId]}

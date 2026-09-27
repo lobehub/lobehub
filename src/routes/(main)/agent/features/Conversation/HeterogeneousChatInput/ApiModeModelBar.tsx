@@ -1,6 +1,9 @@
 'use client';
 
-import { isServerDefaultHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
+import {
+  isKimiModelCandidate,
+  isServerDefaultHeterogeneousAgentType,
+} from '@lobechat/heterogeneous-agents';
 import type { HeterogeneousApiConfig } from '@lobechat/types';
 import { applyTopicModelToHeterogeneousProvider } from '@lobechat/types';
 import { TooltipGroup } from '@lobehub/ui';
@@ -119,6 +122,7 @@ const ApiModeModelBar = memo<ApiModeModelBarProps>(({ agentId }) => {
   return (
     <ModelSelect
       labelRender={compactTriggerLabel}
+      modelFilter={heterogeneousProvider.type === 'kimi-code' ? isKimiModelCandidate : undefined}
       popupWidth={360}
       providerIds={providerIds}
       size="small"

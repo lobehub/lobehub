@@ -17,6 +17,29 @@ const runtime = (
 });
 
 describe('heterogeneous provider binding protocol resolver', () => {
+  it('rejects an explicitly tool-less Kimi model on both primary and background bindings', () => {
+    for (const apiConfig of [
+      { model: 'no-tools', providerId: 'openai' },
+      { model: 'tools', providerId: 'openai', smallFastModel: 'no-tools' },
+    ]) {
+      const result = resolveHeterogeneousProviderBinding({
+        agentType: 'kimi-code',
+        apiConfig,
+        enabledModels: [
+          {
+            abilities: { functionCall: false },
+            id: 'no-tools',
+            providerId: 'openai',
+            type: 'chat',
+          },
+          { abilities: { functionCall: true }, id: 'tools', providerId: 'openai', type: 'chat' },
+        ],
+        providerEnabled: true,
+        runtimeConfig: runtime('openai'),
+      });
+      expect(result.error).toMatchObject({ code: 'modelUnavailable', model: 'no-tools' });
+    }
+  });
   it('maps Anthropic and Google providers to their canonical protocols', () => {
     expect(getProviderInferenceProtocols('anthropic', runtime('anthropic'))).toEqual([
       'anthropic-messages',

@@ -67,7 +67,7 @@ describe('heterogeneous direct invocation protocol', () => {
     { expected: 4096, maxOutput: 65_536, requested: 4096 },
     { expected: 65_536, maxOutput: 65_536, requested: 65_536 },
     { expected: 65_536, maxOutput: 65_536, requested: undefined },
-    { expected: 262_144, maxOutput: undefined, requested: 262_144 },
+    { expected: undefined, maxOutput: undefined, requested: 262_144 },
   ])('bounds Kimi output by the selected model: $requested / $maxOutput', async (testCase) => {
     const chat = vi.fn().mockResolvedValue(new Response('stream'));
     vi.mocked(resolveServerDefaultHeterogeneousModel).mockResolvedValue({
@@ -93,11 +93,35 @@ describe('heterogeneous direct invocation protocol', () => {
       userId: 'user-1',
     });
 
-    expect(chat.mock.calls[0][0]).toMatchObject({
-      max_tokens: testCase.expected,
-      model: 'deployed-model',
-    });
+    expect(chat.mock.calls[0][0].max_tokens).toBe(testCase.expected);
+    expect(chat.mock.calls[0][0].model).toBe('deployed-model');
     expect(payload.max_tokens).toBe(testCase.requested);
+  });
+
+  it('adapts Kimi Anthropic defaults to the selected model output and thinking capabilities', async () => {
+    const chat = vi.fn().mockResolvedValue(new Response('stream'));
+    vi.mocked(resolveServerDefaultHeterogeneousModel).mockResolvedValue({
+      model: 'glm-5.3',
+      provider: 'lobehub',
+      maxOutput: 131072,
+      supportsAdaptiveThinking: false,
+    });
+    vi.mocked(initModelRuntimeFromServerConfig).mockResolvedValue({ chat } as any);
+    await invokeServerDefaultModel({
+      agentType: 'kimi-code',
+      model: 'glm-5.3',
+      userId: 'user-1',
+      signal: new AbortController().signal,
+      payload: {
+        model: 'lobehub/glm-5.3',
+        messages: [],
+        max_tokens: 262144,
+        thinking: { type: 'adaptive' },
+      },
+    });
+    const payload = chat.mock.calls[0][0];
+    expect(payload.max_tokens).toBe(131072);
+    expect(payload.thinking).toBeUndefined();
   });
 
   it('preserves adaptive thinking through the Anthropic relay for a compatible model', async () => {
@@ -133,6 +157,7 @@ describe('heterogeneous direct invocation protocol', () => {
     expect(resolveServerDefaultHeterogeneousModel).toHaveBeenCalledWith(
       'claude-code',
       'claude-sonnet-4-6',
+      { userId: 'user-1' },
     );
     expect(chat).toHaveBeenCalledWith(
       expect.objectContaining({

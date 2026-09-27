@@ -1,5 +1,6 @@
 import type { LobeDefaultAiModelListItem } from 'model-bank';
-import { describe, expect, it } from 'vitest';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   buildServerDefaultModelOptions,
@@ -7,6 +8,10 @@ import {
   resolveServerDefaultAgentModels,
   resolveServerDefaultModelMeta,
 } from './modelPicker';
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key: string) => key }),
+}));
 
 const catalogItem = (partial: {
   displayName?: string;
@@ -67,6 +72,18 @@ describe('compactModelTriggerText', () => {
 });
 
 describe('buildServerDefaultModelOptions', () => {
+  it.each(['untested', 'toolsUnknown'] as const)(
+    'renders %s without changing the model title or claiming verification',
+    (compatibility) => {
+      const [option] = buildServerDefaultModelOptions(
+        [{ model: 'glm-5v-turbo', compatibility }],
+        [catalogItem({ displayName: 'GLM-5V Turbo', id: 'glm-5v-turbo', providerId: 'lobehub' })],
+      );
+      expect(option.title).toBe('GLM-5V Turbo');
+      expect(renderToStaticMarkup(option.label)).toContain(`compatibility.${compatibility}`);
+    },
+  );
+
   it('puts the catalog display name on Select title for the closed trigger', () => {
     const options = buildServerDefaultModelOptions(
       [{ model: 'gpt-5.6' }],

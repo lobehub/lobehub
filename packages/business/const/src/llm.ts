@@ -35,3 +35,7 @@ export const DEFAULT_REVIEW_PREDICT_PROVIDER = 'google';
  */
 export const DEFAULT_VERIFY_MODEL = 'glm-5.3-flash';
 export const DEFAULT_VERIFY_PROVIDER = 'zhipu';
+
+/** Deployments can expose unverified Kimi candidates from their own enabled catalog. */
+export const SERVER_DEFAULT_KIMI_MODEL_POLICY: 'profile-attested' | 'profile-candidate' =
+  'profile-attested';

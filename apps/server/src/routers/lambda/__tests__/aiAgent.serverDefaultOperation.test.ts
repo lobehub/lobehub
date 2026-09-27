@@ -111,7 +111,9 @@ describe('server-default heterogeneous operation control', () => {
       userId,
       workspaceId: undefined,
     });
-    expect(resolveModel).toHaveBeenCalledWith('codex', 'gpt-5.4');
+    expect(resolveModel).toHaveBeenCalledWith('codex', 'gpt-5.4', {
+      userEmail: null,
+    });
     expect(initRuntime).toHaveBeenCalledWith({
       actorUserId: userId,
       workspaceId: undefined,
@@ -140,7 +142,9 @@ describe('server-default heterogeneous operation control', () => {
       provider: 'lobehub',
       status: 'running',
     });
-    expect(resolveModel).toHaveBeenCalledWith('kimi-code', 'kimi-k2.6');
+    expect(resolveModel).toHaveBeenCalledWith('kimi-code', 'kimi-k2.6', {
+      userEmail: null,
+    });
   });
 
   it('requires a normal user OIDC token for the control plane', async () => {

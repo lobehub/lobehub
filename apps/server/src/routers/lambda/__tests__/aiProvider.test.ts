@@ -1,6 +1,7 @@
 // @vitest-environment node
 import type * as BusinessConst from '@lobechat/business-const';
 import { OFFICIAL_PROVIDER_DISABLE_ERROR } from '@lobechat/business-const';
+import { resolveHeterogeneousProviderBinding } from '@lobechat/heterogeneous-agents';
 import { RequestTrigger } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -333,7 +334,7 @@ describe('aiProviderRouter', () => {
         ...mockRuntimeState,
         enabledAiModels: [
           {
-            abilities: { reasoning: true, vision: true },
+            abilities: { functionCall: false, reasoning: true, vision: true },
             contextWindowTokens: 200_000,
             displayName: 'Claude Test',
             id: 'claude-test',
@@ -348,7 +349,7 @@ describe('aiProviderRouter', () => {
         runtimeConfig: {
           [mockProviderId]: {
             config: {},
-            keyVaults: { apiKey: 'selected-secret' },
+            keyVaults: { apiKey: 'selected-secret', baseURL: 'https://provider.example.test/v1' },
             settings: { sdkType: 'anthropic' as const },
           },
         },
@@ -359,7 +360,7 @@ describe('aiProviderRouter', () => {
 
       expect(result.enabledModels).toEqual([
         {
-          abilities: { reasoning: true, vision: true },
+          abilities: { functionCall: false, reasoning: true, vision: true },
           contextWindowTokens: 200_000,
           displayName: 'Claude Test',
           id: 'claude-test',
@@ -377,6 +378,14 @@ describe('aiProviderRouter', () => {
           type: 'embedding',
         },
       ]);
+      const binding = resolveHeterogeneousProviderBinding({
+        agentType: 'kimi-code',
+        apiConfig: { model: 'claude-test', providerId: mockProviderId },
+        enabledModels: result.enabledModels,
+        providerEnabled: result.enabled,
+        runtimeConfig: result.runtimeConfig,
+      });
+      expect(binding.error).toMatchObject({ code: 'modelUnavailable', model: 'claude-test' });
     });
   });
 

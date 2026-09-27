@@ -448,6 +448,10 @@ export default {
   // Heterogeneous agent CLI status (shown on agent profile page in integration mode)
   'heterogeneousStatus.account.label': 'Account',
   'heterogeneousStatus.apiMode.configureProvider': 'Go to provider settings',
+  'heterogeneousStatus.apiMode.compatibility.untested': 'Pending verification',
+  'heterogeneousStatus.apiMode.compatibility.toolsUnknown': 'Tool support unknown',
+  'heterogeneousStatus.apiMode.compatibility.hint':
+    'Candidate based on model capabilities. Tool execution and continuation still need testing with this Kimi Code version and provider route.',
   'heterogeneousStatus.apiMode.localOnly': 'Available only for Desktop local execution',
   'heterogeneousStatus.apiMode.defaultProvider': 'LobeHub',
   'heterogeneousStatus.apiMode.model': 'Model',

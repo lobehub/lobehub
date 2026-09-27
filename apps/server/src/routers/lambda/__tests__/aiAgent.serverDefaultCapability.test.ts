@@ -69,6 +69,11 @@ describe('resolveServerDefaultHeterogeneousCapability', () => {
     });
   });
 
+  it('passes the caller scope to the model catalog', async () => {
+    await resolveServerDefaultHeterogeneousCapability('normal@example.com');
+    expect(getSupportedModels).toHaveBeenCalledWith({ userEmail: 'normal@example.com' });
+  });
+
   it('does not read the model catalog when the deployment feature is disabled', async () => {
     vi.stubEnv('ENABLE_SERVER_DEFAULT_HETEROGENEOUS_AGENT', '0');
 

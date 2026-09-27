@@ -1,7 +1,13 @@
 import { type GoogleGenAIOptions } from '@google/genai';
+import {
+  ENABLE_BUSINESS_FEATURES,
+  SERVER_DEFAULT_KIMI_MODEL_POLICY,
+} from '@lobechat/business-const';
+import { isLobeHubModelAvailable } from '@lobechat/business-model-bank/model-config';
 import type { ServerDefaultHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import {
-  isServerDefaultHeterogeneousProfileModel,
+  getKimiModelCompatibility,
+  isKimiServerDefaultModelSupported,
   SERVER_DEFAULT_HETEROGENEOUS_AGENT_CONFIG,
   SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES,
 } from '@lobechat/heterogeneous-agents';
@@ -37,6 +43,8 @@ import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 import { loadModels } from '@/business/client/model-bank/loadModels';
 import { getBusinessModelRuntimeHooks } from '@/business/server/model-runtime';
 import { AiProviderModel } from '@/database/models/aiProvider';
+import { UserModel } from '@/database/models/user';
+import { getServerDB } from '@/database/server';
 import { type LobeChatDatabase } from '@/database/type';
 import { getLLMConfig } from '@/envs/llm';
 import { getServerGlobalConfig } from '@/server/globalConfig';
@@ -532,6 +540,7 @@ export const initModelRuntimeFromDB = async (
 };
 
 export interface ServerDefaultHeterogeneousModelReference {
+  compatibility?: 'untested' | 'toolsUnknown';
   model: string;
 }
 
@@ -539,6 +548,22 @@ export type ServerDefaultHeterogeneousModels = Record<
   ServerDefaultHeterogeneousAgentType,
   ServerDefaultHeterogeneousModelReference[]
 >;
+
+interface ServerDefaultModelAccess {
+  userEmail?: string | null;
+  userId?: string;
+}
+
+const isServerDefaultModelAvailable = (model: string, access: ServerDefaultModelAccess) => {
+  // OSS deployments use the enabled server catalog without a business access policy.
+  if (!ENABLE_BUSINESS_FEATURES) return true;
+  return isLobeHubModelAvailable(model, 'chat', {
+    userEmail: access.userEmail,
+    getUserEmail: access.userId
+      ? async () => (await UserModel.findById(await getServerDB(), access.userId!))?.email
+      : undefined,
+  });
+};
 
 /**
  * Every supported CLI uses the single LobeHub relay provider. `lobehub` is a
@@ -554,8 +579,9 @@ export type ServerDefaultHeterogeneousModels = Record<
  *
  * Legacy agent policies accept any tool-capable chat model; the
  * `parseClaudeModelId` arm keeps Claude ids eligible in deployments whose
- * catalog omits `abilities`. Profile-attested agents instead require a tested
- * client payload/continuation contract. Codex retains its narrower policy: it
+ * catalog omits `abilities`. Kimi keeps profile attestations by default; a
+ * deployment can opt into capability candidates through its business slot.
+ * Candidates do not claim CLI verification. Codex retains its narrower policy: it
  * accepts native Responses models plus an explicit set of tool-capable relay
  * models configured through its custom model-catalog path.
  */
@@ -571,11 +597,7 @@ const supportsServerDefaultHeterogeneousAgent = (
     return parseClaudeModelId(model.id) !== undefined || model.abilities?.functionCall === true;
   }
   if (modelPolicy === 'profile-attested') {
-    if (model.abilities?.functionCall === false) return false;
-    const deploymentProfiles = model.agentCompatibility?.serverDefaultHeterogeneousProfiles;
-    return deploymentProfiles
-      ? deploymentProfiles.includes(config.compatibilityProfile)
-      : isServerDefaultHeterogeneousProfileModel(config.compatibilityProfile, model.id);
+    return isKimiServerDefaultModelSupported(model, SERVER_DEFAULT_KIMI_MODEL_POLICY);
   }
 
   return (
@@ -618,16 +640,26 @@ const toServerModelSelection = (provider: string, modelConfig: AiFullModelCard) 
 });
 
 /** Return compatible models from the single deployment-owned relay provider. */
-export const getServerDefaultHeterogeneousModels = async () => {
+export const getServerDefaultHeterogeneousModels = async (
+  access: ServerDefaultModelAccess = {},
+) => {
   const models = {} as ServerDefaultHeterogeneousModels;
   for (const agentType of SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES) {
     models[agentType] = [];
   }
 
   for (const model of await getEnabledServerChatModels(ModelProvider.LobeHub)) {
+    if (!(await isServerDefaultModelAvailable(model.id, access))) continue;
     for (const agentType of SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES) {
       if (supportsServerDefaultHeterogeneousAgent(agentType, model)) {
-        models[agentType].push({ model: model.id });
+        const compatibility =
+          agentType === 'kimi-code' ? getKimiModelCompatibility(model, true) : undefined;
+        models[agentType].push({
+          ...(compatibility === 'untested' || compatibility === 'toolsUnknown'
+            ? { compatibility }
+            : {}),
+          model: model.id,
+        });
       }
     }
   }
@@ -643,15 +675,22 @@ export const resolveServerModel = async (provider: string, model: string) =>
 export const resolveServerDefaultHeterogeneousModel = async (
   agentType: ServerDefaultHeterogeneousAgentType,
   model: string,
+  access: ServerDefaultModelAccess = {},
 ) => {
   const modelConfig = await findEnabledServerChatModel(ModelProvider.LobeHub, model);
-  if (!supportsServerDefaultHeterogeneousAgent(agentType, modelConfig)) {
+  if (
+    !supportsServerDefaultHeterogeneousAgent(agentType, modelConfig) ||
+    !(await isServerDefaultModelAvailable(model, access))
+  ) {
     throw new Error('The selected server model is not compatible with this heterogeneous agent');
   }
 
   return {
     ...toServerModelSelection(ModelProvider.LobeHub, modelConfig),
     ...(modelConfig.maxOutput !== undefined && { maxOutput: modelConfig.maxOutput }),
+    ...(modelConfig.contextWindowTokens !== undefined && {
+      contextWindowTokens: modelConfig.contextWindowTokens,
+    }),
     supportsAdaptiveThinking:
       modelConfig.settings?.extendParams?.includes('enableAdaptiveThinking') === true,
   };

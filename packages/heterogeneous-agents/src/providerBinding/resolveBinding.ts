@@ -1,4 +1,5 @@
 import type { LocalHeterogeneousAgentType } from '../config';
+import { isKimiModelCandidate } from './modelCompatibility';
 import type {
   HeterogeneousProviderBindingCapability,
   HeterogeneousProviderBindingError,
@@ -228,7 +229,8 @@ export const resolveHeterogeneousProviderBinding = ({
           (model) =>
             model.providerId === apiConfig.providerId &&
             model.id === boundModel &&
-            model.type === 'chat',
+            model.type === 'chat' &&
+            (capability.agentType !== 'kimi-code' || isKimiModelCandidate(model)),
         ),
     );
     if (unavailableModel) {
