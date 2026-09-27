@@ -53,7 +53,7 @@ const SharedTopicView = memo(() => {
 
   return (
     <ShareShell
-      actions={id && data ? <ExplainTopic shareId={id} /> : undefined}
+      actions={id && data?.visibility === 'link' ? <ExplainTopic shareId={id} /> : undefined}
       aside={<SharedTopicAside />}
       contentWidth={wideScreen ? undefined : CONVERSATION_MIN_WIDTH}
       error={error}
