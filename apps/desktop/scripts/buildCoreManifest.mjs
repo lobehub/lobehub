@@ -26,7 +26,8 @@ const assertManifest = (manifest) => {
   if (manifest.tree.some((file) => !SHA256.test(file.sha256))) problems.push('tree sha256');
   if (!URL.canParse(manifest.objectsBaseUrl)) problems.push('objectsBaseUrl');
   if (manifest.full?.path !== `packs/${manifest.full?.sha256}.zip`) problems.push('full');
-  if (manifest.rollout < 0 || manifest.rollout > 1) problems.push(`rollout ${manifest.rollout}`);
+  if (!Number.isFinite(manifest.rollout) || manifest.rollout < 0 || manifest.rollout > 1)
+    problems.push(`rollout ${manifest.rollout}`);
   if (problems.length) throw new Error(`core manifest invalid: ${problems.join(', ')}`);
 };
 
@@ -70,7 +71,9 @@ export function createCoreManifest({
   };
   assertManifest(unsigned);
   if (privateKeyPem) return signManifest(unsigned, privateKeyPem);
-  console.warn('core manifest: no private key, writing unsigned manifest (local dev only)');
+  console.info(
+    'core manifest: no private key, writing unsigned manifest (builtin cores need no signature)',
+  );
   return { ...unsigned, signature: '' };
 }
 

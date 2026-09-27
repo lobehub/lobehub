@@ -156,7 +156,10 @@ const steps = {
   kill() {
     try {
       execSync(`pkill -f "${PRODUCT}.app/Contents/MacOS/${PRODUCT}"`);
-    } catch {}
+    } catch (error) {
+      // pkill exits 1 when no process matched; anything else is a real failure
+      if (error.status !== 1) throw error;
+    }
   },
 
   tamper() {

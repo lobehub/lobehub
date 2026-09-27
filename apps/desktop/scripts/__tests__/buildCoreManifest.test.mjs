@@ -12,6 +12,7 @@ import {
 } from '../../src/main/core/infrastructure/coreOta/manifest';
 import {
   buildCoreManifest,
+  createCoreManifest,
   PLACEHOLDER_FULL,
   PLACEHOLDER_OBJECTS_BASE_URL,
 } from '../buildCoreManifest.mjs';
@@ -116,5 +117,17 @@ describe('buildCoreManifest', () => {
   it('rejects a manifest whose shellAbi is not a sha256', async () => {
     await setup();
     await expect(buildCoreManifest(options({ shellAbi: 'dev' }))).rejects.toThrow(/shellAbi/);
+  });
+
+  it('rejects a non-numeric rollout', () => {
+    const tree = [{ path: 'dist/main/index.js', sha256: 'b'.repeat(64), size: 1 }];
+    expect(() =>
+      createCoreManifest({
+        ...options({ rollout: Number('50%') }),
+        full: PLACEHOLDER_FULL,
+        objectsBaseUrl: PLACEHOLDER_OBJECTS_BASE_URL,
+        tree,
+      }),
+    ).toThrow(/rollout/);
   });
 });
