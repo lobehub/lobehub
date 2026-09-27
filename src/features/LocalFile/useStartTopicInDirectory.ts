@@ -19,15 +19,23 @@ export const useStartTopicInDirectory = ({
 }: UseStartTopicInDirectoryParams) => {
   const { t } = useTranslation('components');
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
-  const { commitAgentDefault } = useCommitWorkingDirectory(activeAgentId ?? '');
+  const { commitAgentDefault, isPreferenceLoading } = useCommitWorkingDirectory(
+    activeAgentId ?? '',
+  );
   const switchTopic = useChatStore((s) => s.switchTopic);
-  const canStartTopic = isDesktop && isDirectory && !readonly && !!path && !!activeAgentId;
+  // Wait for a workspace agent's preference fetch: until it settles the write
+  // may route to the workspace-shared device instead of this member's own slot.
+  const canStartTopic =
+    isDesktop && isDirectory && !readonly && !!path && !!activeAgentId && !isPreferenceLoading;
 
   const startTopic = async () => {
-    if (!path || !activeAgentId) return;
+    if (!canStartTopic || !path) return;
 
     try {
-      await commitAgentDefault(path);
+      // Rethrow so a failed save keeps the user on the current topic instead of
+      // opening a fresh one without the chosen directory; the toast below
+      // replaces the store's generic save-failure message.
+      await commitAgentDefault(path, { rethrow: true, showErrorMessage: false });
       await switchTopic(null, { skipRefreshMessage: true });
     } catch {
       toast.error(t('LocalFile.action.startTopicFailed'));

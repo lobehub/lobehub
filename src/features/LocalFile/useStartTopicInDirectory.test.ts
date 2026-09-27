@@ -8,6 +8,7 @@ import { useStartTopicInDirectory } from './useStartTopicInDirectory';
 
 const mocks = vi.hoisted(() => ({
   commitAgentDefault: vi.fn(),
+  isPreferenceLoading: false,
   switchTopic: vi.fn(),
   toastError: vi.fn(),
 }));
@@ -23,7 +24,10 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
 }));
 
 vi.mock('@/features/ChatInput/ControlBar/useCommitWorkingDirectory', () => ({
-  useCommitWorkingDirectory: () => ({ commitAgentDefault: mocks.commitAgentDefault }),
+  useCommitWorkingDirectory: () => ({
+    commitAgentDefault: mocks.commitAgentDefault,
+    isPreferenceLoading: mocks.isPreferenceLoading,
+  }),
 }));
 
 vi.mock('@/store/agent', () => ({
@@ -39,6 +43,7 @@ vi.mock('@/store/chat', () => ({
 describe('useStartTopicInDirectory', () => {
   afterEach(() => {
     vi.clearAllMocks();
+    mocks.isPreferenceLoading = false;
   });
 
   it('starts a fresh topic after saving the directory as the agent default', async () => {
@@ -55,7 +60,12 @@ describe('useStartTopicInDirectory', () => {
     expect(result.current.canStartTopic).toBe(true);
     await result.current.startTopic();
 
-    expect(mocks.commitAgentDefault).toHaveBeenCalledWith('/Users/me/Compositor');
+    // `rethrow` makes a failed save reject instead of being swallowed by the
+    // store, so the topic switch below never runs on an unsaved directory.
+    expect(mocks.commitAgentDefault).toHaveBeenCalledWith('/Users/me/Compositor', {
+      rethrow: true,
+      showErrorMessage: false,
+    });
     expect(mocks.switchTopic).toHaveBeenCalledWith(null, { skipRefreshMessage: true });
     expect(mocks.commitAgentDefault.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.switchTopic.mock.invocationCallOrder[0]!,
@@ -75,6 +85,23 @@ describe('useStartTopicInDirectory', () => {
     await result.current.startTopic();
 
     expect(mocks.toastError).toHaveBeenCalledWith('LocalFile.action.startTopicFailed');
+    expect(mocks.switchTopic).not.toHaveBeenCalled();
+  });
+
+  it('stays disabled until workspace preferences resolve the target device', async () => {
+    mocks.isPreferenceLoading = true;
+    const { result } = renderHook(() =>
+      useStartTopicInDirectory({
+        isDirectory: true,
+        path: '/Users/me/Compositor',
+        readonly: false,
+      }),
+    );
+
+    expect(result.current.canStartTopic).toBe(false);
+    await result.current.startTopic();
+
+    expect(mocks.commitAgentDefault).not.toHaveBeenCalled();
     expect(mocks.switchTopic).not.toHaveBeenCalled();
   });
 
