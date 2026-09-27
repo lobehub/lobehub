@@ -94,7 +94,7 @@ interface ModelSelectProps extends Pick<
 > {
   defaultValue?: { model: string; provider?: string };
   initialWidth?: boolean;
-  modelType?: 'chat' | 'embedding';
+  modelType?: 'asr' | 'chat' | 'embedding';
   onChange?: (props: { model: string; provider: string }) => void;
   /** Fired when the selection is cleared via `allowClear`. */
   onClear?: () => void;
@@ -132,7 +132,9 @@ const ModelSelect = memo<ModelSelectProps>(
     const fullEnabledList = useAiInfraStore((s) =>
       modelType === 'embedding'
         ? aiProviderSelectors.enabledEmbeddingModelList(s)
-        : s.enabledChatModelList || [],
+        : modelType === 'asr'
+          ? aiProviderSelectors.enabledAsrModelList(s)
+          : s.enabledChatModelList || [],
     );
     const enabledList = useMemo(() => {
       if (!providerIds) return fullEnabledList;

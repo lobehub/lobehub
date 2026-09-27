@@ -1593,6 +1593,7 @@ export const openaiASRModels: AIASRModelCard[] = [
     description:
       'A general speech recognition model supporting multilingual ASR, speech translation, and language identification.',
     displayName: 'Whisper',
+    enabled: true,
     id: 'whisper-1',
     pricing: {
       units: [
@@ -1627,6 +1628,7 @@ export const openaiASRModels: AIASRModelCard[] = [
     description:
       'GPT-4o Mini Transcribe is a speech-to-text model that transcribes audio with GPT-4o, improving word error rate, language ID, and accuracy over the original Whisper model.',
     displayName: 'GPT-4o Mini Transcribe',
+    enabled: true,
     id: 'gpt-4o-mini-transcribe',
     maxOutput: 2000,
     pricing: {

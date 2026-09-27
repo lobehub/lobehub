@@ -19,7 +19,6 @@ import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 import type { SystemAgentItem, UserServiceModelConfigKey } from '@/types/user/settings';
 
-import AsrModelSelect from './AsrModelSelect';
 import { serviceModelFormStyles as styles } from './styles';
 
 type ModelAssignmentItemKey = Exclude<
@@ -295,14 +294,29 @@ const ModelAssignmentsForm = memo(() => {
     } satisfies FormItemProps;
   });
 
+  const asrValue = systemAgentSettings.asr;
   const asrItem: FormItemProps = {
     children: (
       <Tooltip title={reason}>
-        <AsrModelSelect
-          disabled={!canManageServiceModel}
-          value={systemAgentSettings.asr}
-          onChange={(value) => updateSystemAgentModel('asr', value)}
-        />
+        <Flexbox
+          align="center"
+          direction="horizontal"
+          gap={12}
+          style={{ width: 'min(100%, 448px)' }}
+        >
+          <ModelSelect
+            allowClear
+            disabled={!canManageServiceModel}
+            modelType={'asr'}
+            placeholder={t('systemAgent.asr.placeholder')}
+            showAbility={false}
+            style={{ minWidth: 0, width: '100%' }}
+            // Empty means unconfigured: render the placeholder rather than a blank selection.
+            value={asrValue.model && asrValue.provider ? asrValue : undefined}
+            onChange={(props) => updateSystemAgentModel('asr', props)}
+            onClear={() => updateSystemAgentModel('asr', { model: '', provider: '' })}
+          />
+        </Flexbox>
       </Tooltip>
     ),
     desc: t('systemAgent.asr.modelDesc'),
