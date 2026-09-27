@@ -72,3 +72,6 @@ packages/heterogeneous-agents/src/codex/protocol/generated.ts
 
 # Generated from lobehub/acceptance releases; preserve the upstream bytes.
 .agents/skills/acceptance/**
+
+# generated files (regenerate with `bun run shell:vendor` in apps/desktop)
+apps/desktop/shell/rescue/electron-updater.cjs

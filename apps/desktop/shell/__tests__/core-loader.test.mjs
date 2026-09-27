@@ -267,7 +267,7 @@ describe('resolveCore', () => {
     expect(core.manifest.version).toBe('2.0.0');
     expect(core.log).toContain('core 1.1.0 seq 5 superseded by builtin seq 5');
     expect(readPointer()).toMatchObject({ blacklist: [], current: null, previous: null });
-    expect(fs.existsSync(path.join(otaRoot(), 'boot.json'))).toBe(false);
+    expect(readBoot().version).toMatch(/^builtin@/);
   });
 
   it('still loads an external core whose seq is above the builtin', () => {
@@ -350,7 +350,7 @@ describe('resolveCore', () => {
     expect(core.log.join('\n')).toMatch(/dist\/main\/index\.js/);
   });
 
-  it('markHealthy resets failures for external and is a no-op for builtin', () => {
+  it('markHealthy resets failures for external cores', () => {
     writeExternal('1.1.0');
     writePointer({ current: '1.1.0' });
     writeJson(path.join(otaRoot(), 'boot.json'), { failures: 2, version: '1.1.0' });
@@ -360,15 +360,54 @@ describe('resolveCore', () => {
     expect(readBoot()).toEqual({ failures: 0, healthy: true, version: '1.1.0' });
     resolve();
     expect(readBoot()).toEqual({ failures: 1, healthy: true, version: '1.1.0' });
+  });
 
-    expect(() =>
-      resolveCore({
-        abi: ABI,
-        builtinDir,
-        publicKey: '',
-        userData: path.join(tmp, 'none'),
-      }).markHealthy(),
-    ).not.toThrow();
+  it('counts builtin boots under a builtin key and markHealthy resets them', () => {
+    resolve();
+    const core = resolve();
+    expect(core.source).toBe('builtin');
+    expect(readBoot()).toEqual({ failures: 2, healthy: false, version: 'builtin@1.0.0' });
+    core.markHealthy();
+    expect(readBoot()).toEqual({ failures: 0, healthy: true, version: 'builtin@1.0.0' });
+  });
+
+  it('asks for rescue after 3 unhealthy builtin boots', () => {
+    for (let i = 0; i < 3; i += 1) expect(resolve().source).toBe('builtin');
+    const core = resolve();
+    expect(core.source).toBe('rescue');
+    expect(core.log.join('\n')).toMatch(/builtin@1\.0\.0 failed 3 boots/);
+    expect(readBoot().failures).toBe(3);
+  });
+
+  it('gives a new builtin version a fresh boot budget', () => {
+    writeJson(path.join(otaRoot(), 'boot.json'), { failures: 3, version: 'builtin@0.9.0' });
+    expect(resolve().source).toBe('builtin');
+    expect(readBoot()).toEqual({ failures: 1, healthy: false, version: 'builtin@1.0.0' });
+  });
+
+  it('markBroken on builtin sends the next launch to rescue', () => {
+    resolve().markBroken();
+    expect(resolve().source).toBe('rescue');
+  });
+
+  it('markBroken on an external core falls back to previous on the next launch', () => {
+    writeExternal('1.1.0');
+    writeExternal('1.0.5');
+    writePointer({ current: '1.1.0', previous: '1.0.5' });
+    resolve().markBroken();
+    const core = resolve();
+    expect(core.manifest.version).toBe('1.0.5');
+    expect(readPointer().blacklist).toEqual(['1.1.0']);
+  });
+
+  it('boots builtin even when boot state cannot be written', () => {
+    const blocked = path.join(tmp, 'blocked');
+    fs.writeFileSync(blocked, '');
+    const core = resolveCore({ abi: ABI, builtinDir, publicKey: publicKeyPem, userData: blocked });
+    expect(core.source).toBe('builtin');
+    expect(core.log.join('\n')).toMatch(/builtin boot count failed/);
+    expect(() => core.markHealthy()).not.toThrow();
+    expect(() => core.markBroken()).not.toThrow();
   });
 
   it('never throws on corrupt pointer or missing core dir', () => {

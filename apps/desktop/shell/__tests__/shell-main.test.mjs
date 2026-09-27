@@ -7,27 +7,64 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mainPath = fileURLToPath(new URL('../main.js', import.meta.url));
+const loaderPath = fileURLToPath(new URL('../core-loader.js', import.meta.url));
+const rescuePath = fileURLToPath(new URL('../rescue/index.js', import.meta.url));
 const require = createRequire(mainPath);
 const electronPath = require.resolve('electron');
 
 let tmp;
 let resourcesPath;
+let coreMain;
 
-const loadMain = (app) => {
-  require.cache[electronPath] = { exports: { app }, id: electronPath, loaded: true };
+const stub = (file, exports) => {
+  require.cache[file] = { exports, id: file, loaded: true };
+};
+
+const loadMain = ({ app, electron = {}, resolveCore, runRescue = vi.fn() }) => {
+  stub(electronPath, { app, ...electron });
+  if (resolveCore) stub(loaderPath, { installShellResolver: vi.fn(), resolveCore });
+  stub(rescuePath, { runRescue });
   delete require.cache[mainPath];
+  delete require.cache[coreMain];
   require(mainPath);
+  return { runRescue };
+};
+
+const packagedApp = (overrides = {}) => ({
+  exit: vi.fn(),
+  getPath: vi.fn(() => path.join(tmp, 'userData')),
+  getVersion: () => '1.0.0',
+  isPackaged: true,
+  relaunch: vi.fn(),
+  requestSingleInstanceLock: vi.fn(() => true),
+  whenReady: vi.fn(() => Promise.resolve()),
+  ...overrides,
+});
+
+const fakeCore = (source, body = 'module.exports = 1;') => {
+  fs.mkdirSync(path.dirname(coreMain), { recursive: true });
+  fs.writeFileSync(coreMain, body);
+  return {
+    dir: path.join(tmp, 'core'),
+    log: ['a log line'],
+    manifest: null,
+    markBroken: vi.fn(),
+    markHealthy: vi.fn(),
+    source,
+  };
 };
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'shell-main-'));
+  coreMain = path.join(tmp, 'core', 'dist', 'main', 'index.js');
   resourcesPath = process.resourcesPath;
   process.resourcesPath = path.join(tmp, 'resources');
 });
 
 afterEach(() => {
-  delete require.cache[electronPath];
-  delete require.cache[mainPath];
+  for (const file of [electronPath, loaderPath, rescuePath, mainPath, coreMain])
+    delete require.cache[file];
+  delete global.__SHELL__;
   process.resourcesPath = resourcesPath;
   fs.rmSync(tmp, { force: true, recursive: true });
 });
@@ -43,10 +80,87 @@ describe('shell main', () => {
       requestSingleInstanceLock: vi.fn(() => false),
     };
 
-    loadMain(app);
+    stub(electronPath, { app });
+    delete require.cache[mainPath];
+    require(mainPath);
 
     expect(app.exit).toHaveBeenCalledWith(0);
     expect(app.getPath).not.toHaveBeenCalled();
     expect(fs.existsSync(path.join(userData, 'core-ota', 'boot.json'))).toBe(false);
+  });
+
+  it('boots the resolved core and exposes markHealthy to it', () => {
+    const core = fakeCore('builtin', 'global.__BOOTED__ = true;');
+    const { runRescue } = loadMain({ app: packagedApp(), resolveCore: () => core });
+
+    expect(global.__BOOTED__).toBe(true);
+    expect(global.__SHELL__.markHealthy).toBe(core.markHealthy);
+    expect(runRescue).not.toHaveBeenCalled();
+    delete global.__BOOTED__;
+  });
+
+  it('rescues in-process when the builtin core throws while loading', () => {
+    const core = fakeCore('builtin', 'throw new Error("builtin boom");');
+    const { runRescue } = loadMain({ app: packagedApp(), resolveCore: () => core });
+
+    expect(core.markBroken).toHaveBeenCalled();
+    expect(runRescue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        downloadUrl: 'https://lobehub.com/downloads',
+        error: expect.objectContaining({ message: 'builtin boom' }),
+        log: ['a log line'],
+      }),
+    );
+  });
+
+  it('relaunches instead of rescuing when an external core throws while loading', () => {
+    const app = packagedApp();
+    const core = fakeCore('external', 'throw new Error("external boom");');
+    const { runRescue } = loadMain({ app, resolveCore: () => core });
+
+    expect(core.markBroken).toHaveBeenCalled();
+    expect(app.relaunch).toHaveBeenCalled();
+    expect(app.exit).toHaveBeenCalledWith(1);
+    expect(runRescue).not.toHaveBeenCalled();
+  });
+
+  it('rescues without loading any core when the loader asks for it', () => {
+    const core = fakeCore('rescue', 'global.__BOOTED__ = true;');
+    const { runRescue } = loadMain({ app: packagedApp(), resolveCore: () => core });
+
+    expect(global.__BOOTED__).toBeUndefined();
+    expect(runRescue).toHaveBeenCalledWith(expect.objectContaining({ log: ['a log line'] }));
+  });
+
+  it('rescues when the shell itself throws before a core is resolved', () => {
+    const { runRescue } = loadMain({
+      app: packagedApp(),
+      resolveCore: () => {
+        throw new Error('loader boom');
+      },
+    });
+
+    expect(runRescue).toHaveBeenCalledWith(
+      expect.objectContaining({ error: expect.objectContaining({ message: 'loader boom' }) }),
+    );
+  });
+
+  it('falls back to the download page when the rescue module itself fails', async () => {
+    const app = packagedApp();
+    const dialog = { showErrorBox: vi.fn() };
+    const shell = { openExternal: vi.fn(() => Promise.resolve()) };
+    const core = fakeCore('rescue');
+    loadMain({
+      app,
+      electron: { dialog, shell },
+      resolveCore: () => core,
+      runRescue: () => {
+        throw new Error('rescue boom');
+      },
+    });
+
+    await vi.waitFor(() => expect(app.exit).toHaveBeenCalledWith(1));
+    expect(dialog.showErrorBox).toHaveBeenCalled();
+    expect(shell.openExternal).toHaveBeenCalledWith('https://lobehub.com/downloads');
   });
 });

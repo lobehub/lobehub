@@ -116,6 +116,20 @@ function resolveCore({ userData, builtinDir, abi, publicKey }) {
     return null;
   };
 
+  const bootMarkers = (version) => {
+    const mark = (label, value) => () => {
+      try {
+        writeJson(bootFile, { ...value, version });
+      } catch (error) {
+        log.push(`${label} failed: ${error.message}`);
+      }
+    };
+    return {
+      markBroken: mark('markBroken', { failures: MAX_BOOT_FAILURES, healthy: false }),
+      markHealthy: mark('markHealthy', { failures: 0, healthy: true }),
+    };
+  };
+
   const verified = new Map();
   const loadCandidate = (version) => {
     if (typeof version !== 'string' || !VERSION_NAME.test(version) || UNSAFE_SEGMENT.test(version))
@@ -169,21 +183,36 @@ function resolveCore({ userData, builtinDir, abi, publicKey }) {
       }
       const healthy = boot.version === version && boot.healthy === true;
       writeJson(bootFile, { failures: failures + 1, healthy, version });
-      const markHealthy = () => {
-        try {
-          writeJson(bootFile, { failures: 0, healthy: true, version });
-        } catch (error) {
-          log.push(`markHealthy failed: ${error.message}`);
-        }
-      };
-      return { dir, log, manifest, markHealthy, source: 'external' };
+      return { dir, log, manifest, ...bootMarkers(version), source: 'external' };
     } catch (error) {
       log.push(`core ${version} rejected: ${error.message}`);
     }
   }
 
   if (!builtinManifest) log.push(`builtin manifest missing at ${builtinDir}`);
-  return { dir: builtinDir, log, manifest: builtinManifest, markHealthy() {}, source: 'builtin' };
+  const builtinKey = `builtin@${builtinManifest?.version ?? 'unknown'}`;
+  const builtinFailures = boot.version === builtinKey ? Number(boot.failures) || 0 : 0;
+  if (builtinFailures >= MAX_BOOT_FAILURES) {
+    log.push(`${builtinKey} failed ${builtinFailures} boots`);
+    return { dir: builtinDir, log, manifest: builtinManifest, source: 'rescue' };
+  }
+  try {
+    fs.mkdirSync(otaRoot, { recursive: true });
+    writeJson(bootFile, {
+      failures: builtinFailures + 1,
+      healthy: boot.version === builtinKey && boot.healthy === true,
+      version: builtinKey,
+    });
+  } catch (error) {
+    log.push(`builtin boot count failed: ${error.message}`);
+  }
+  return {
+    dir: builtinDir,
+    log,
+    manifest: builtinManifest,
+    ...bootMarkers(builtinKey),
+    source: 'builtin',
+  };
 }
 
 const packageName = (request) =>
@@ -205,4 +234,9 @@ function installShellResolver(shellNodeModules) {
   };
 }
 
-module.exports = { canonicalJson, installShellResolver, resolveCore, verifyManifestSignature };
+module.exports = {
+  canonicalJson,
+  installShellResolver,
+  resolveCore,
+  verifyManifestSignature,
+};

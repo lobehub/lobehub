@@ -63,6 +63,22 @@ node scripts/core-ota-test/run.mjs eval "window.electronAPI.invoke('rendererOta.
 窗口回到 v3 的 renderer。冷启动检查：把 `pointer.current` 手动指回 `1.0.0-core.3`、删掉 `boot.json` 再 `launch`，
 60 s 后 `Core OTA rolled back {coldBoot: true}` 并自动 relaunch 到上一版本。
 
+## 6. 壳救援（内置 core 坏掉）
+
+```bash
+R=release/core-ota-e2e/app/mac-arm64/lobehub-core-ota-e2e.app/Contents/Resources
+cp $R/core/dist/main/index.js /tmp/core-main.js # 结束后拷回
+sed -i '' '1s/^/throw new Error("e2e builtin boom");/' $R/core/dist/main/index.js
+# --dir 打包没有 app-update.yml，救援靠它拿 feed 地址
+printf 'provider: generic\nurl: http://127.0.0.1:8787/stable\n' > $R/app-update.yml
+```
+
+在 `feed/` 放一个 `stable-mac.yml`（`version: 1.0.0` 走「已是最新」，更高版本走下载 → `quitAndInstall`）。
+
+期望：`launch` 后出现救援窗口和对话框，`userData/logs/shell-rescue.log` 记录原始错误和检查结果；
+`boot.json` 为 `builtin@1.0.0` failures 3，下一次启动不再加载 core 直接进救援；「重试启动」清掉计数并真正重新加载 core。
+假 zip 会让 Squirrel.Mac 报 `Could not locate update bundle`，此时应回到失败对话框而不是卡在「正在安装」。
+
 ## 辅助
 
 `launch` 带 `--remote-debugging-port=9333`，`run.mjs eval "<js>"` 在主窗口里求值（`window.electronAPI.invoke('rendererOta.<applyNow|checkNow|getStatus>')`），
