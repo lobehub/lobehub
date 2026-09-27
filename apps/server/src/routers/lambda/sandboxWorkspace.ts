@@ -487,6 +487,34 @@ export const sandboxWorkspaceRouter = router({
   })),
 
   /**
+   * Where this topic's commands will run, for the prompt that describes it.
+   *
+   * The browser assembles the system role on the client-executor path, and it
+   * cannot resolve this itself: the placement follows an entitlement that is
+   * signed server-side. Without it the prompt fell back to the disposable
+   * wording — "files created here are temporary" — while the run had a
+   * persistent directory, and the model worked in /tmp on the strength of what
+   * it had been told.
+   *
+   * Returns the placement only. The claim stays on this side; a browser has no
+   * use for an entitlement it cannot sign anything with, and every sandbox call
+   * it makes is routed through a server that resolves the claim again.
+   */
+  resolveSessionPlacement: workspaceProcedure
+    .input(z.object({ topicId: z.string().optional() }))
+    .query(async ({ ctx, input }) => {
+      const { claim, cwd, mode, workingDir } = await resolveSandboxSessionConfig({
+        isShareVisitorRun: false,
+        serverDB: ctx.serverDB,
+        topicId: input.topicId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+
+      return claim ? { cwd, mode, workingDir } : null;
+    }),
+
+  /**
    * Fork an instance: a second directory that starts with everything the
    * first one had installed. The point of copying rather than creating is to
    * skip the rebuild — the specification alone would give an empty directory

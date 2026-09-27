@@ -144,6 +144,13 @@ class SandboxWorkspaceService {
     lambdaClient.sandboxWorkspace.renameInstance.mutate(params);
 
   /** A second directory that starts with everything the first one had installed. */
+  /**
+   * Where this topic's sandbox commands run, for the prompt that describes it.
+   * The placement only — the entitlement it follows never leaves the server.
+   */
+  resolveSessionPlacement = async (params: { topicId?: string }) =>
+    lambdaClient.sandboxWorkspace.resolveSessionPlacement.query(params);
+
   copyInstance = async (params: { id: string; name: string; workingDirectory: string }) =>
     lambdaClient.sandboxWorkspace.copyInstance.mutate(params);
 
