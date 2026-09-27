@@ -76,6 +76,22 @@ const projectGatewayEventData = (data: unknown, eventType: unknown): unknown => 
   return data;
 };
 
+/**
+ * Shape an event for delivery on ANOTHER op's channel (a group member's events
+ * mirrored onto the supervisor's socket).
+ *
+ * The gateway DO ends its session on any `agent_runtime_end` it receives,
+ * whichever op the event names — so a member's terminal, mirrored verbatim,
+ * closed the supervisor's session and every later supervisor step (the resume
+ * after the member barrier, its final reply) was never streamed. The mirrored
+ * copy is renamed to the non-terminal `member_runtime_end`: the client's member
+ * handler still retires that member's column on it, while the DO, which only
+ * reacts to `agent_runtime_end`, keeps the supervisor session open. The
+ * member's own channel still receives the real terminal.
+ */
+export const toMirroredEvent = (event: Record<string, unknown>): Record<string, unknown> =>
+  event.type === 'agent_runtime_end' ? { ...event, type: 'member_runtime_end' } : event;
+
 const POST_TIMEOUT = 5000; // 5s per request
 const MAX_INFLIGHT = 20; // bounded concurrency
 
@@ -603,7 +619,7 @@ export class GatewayStreamNotifier implements IStreamEventManager {
 
   private mirrorPush(mirrorTo: string, event: Record<string, unknown>): Promise<void> {
     return this.httpPost('/api/operations/push-event', {
-      event,
+      event: toMirroredEvent(event),
       operationId: mirrorTo,
     });
   }

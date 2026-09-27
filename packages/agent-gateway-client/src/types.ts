@@ -5,6 +5,13 @@ import type { UIChatMessage } from '@lobechat/types';
 export type AgentStreamEventType =
   | 'agent_runtime_init'
   | 'agent_runtime_end'
+  /**
+   * A mirrored operation's terminal, delivered on another operation's channel
+   * (a group member finishing, forwarded onto the supervisor's socket). Same
+   * payload as `agent_runtime_end`, but NOT terminal for the channel it rides
+   * on: the gateway only closes a session on `agent_runtime_end`.
+   */
+  | 'member_runtime_end'
   | 'stream_start'
   | 'stream_chunk'
   | 'stream_end'
