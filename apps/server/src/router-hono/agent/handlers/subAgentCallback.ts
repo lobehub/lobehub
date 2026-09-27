@@ -30,7 +30,7 @@ export async function subAgentCallback(c: Context): Promise<Response> {
     return c.json({ error: 'Invalid JSON body' }, 400);
   }
 
-  const { operationId, parentOperationId, reason, threadId, toolMessageId } = body;
+  const { errorMessage, operationId, parentOperationId, reason, threadId, toolMessageId } = body;
 
   log(
     'subagent-callback: operationId=%s, parentOperationId=%s, reason=%s, toolMessageId=%s',
@@ -74,6 +74,7 @@ export async function subAgentCallback(c: Context): Promise<Response> {
     });
 
     const resumed = await aiAgentService.completeSubAgentBridge({
+      errorMessage: typeof errorMessage === 'string' ? errorMessage : undefined,
       operationId,
       parentOperationId,
       reason: reason ?? 'done',
