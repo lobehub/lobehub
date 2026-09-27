@@ -130,6 +130,7 @@ export const workRouter = router({
         provider: z.enum(WORK_SKILL_PROVIDERS).optional(),
         type: z.enum(['task', 'document', 'external', 'file']).nullable().optional(),
         visibility: z.enum(['private', 'public']).optional(),
+        workId: z.string().min(1).optional(),
       }),
     )
     .query(async ({ ctx, input }) => ctx.workModel.listByWorkspace(input)),

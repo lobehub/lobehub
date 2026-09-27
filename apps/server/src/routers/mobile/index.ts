@@ -33,6 +33,7 @@ import { taskTemplateRouter } from '../lambda/taskTemplate';
 import { topicRouter } from '../lambda/topic';
 import { uploadRouter } from '../lambda/upload';
 import { userRouter } from '../lambda/user';
+import { workRouter } from '../lambda/work';
 
 export const mobileRouter = router({
   agent: agentRouter,
@@ -65,4 +66,5 @@ export const mobileRouter = router({
   topic: topicRouter,
   upload: uploadRouter,
   user: userRouter,
+  work: workRouter,
 });

@@ -264,6 +264,38 @@ describe('WorkModel · queries', () => {
     ]);
   });
 
+  it('narrows the workspace list to a single Work by id', async () => {
+    const workModel = new WorkModel(serverDB, userId);
+    const created = await workModel.registerExternal({
+      changeType: 'created',
+      identifier: 'lobehub/lobehub#21',
+      patchFields: ['identifier', 'title'],
+      resourceId: 'lobehub/lobehub#21',
+      resourceType: 'github_pull_request',
+      toolCallId: 'tool-call-single-work',
+      toolIdentifier: 'github',
+      toolName: 'create_pull_request',
+      title: 'Single work',
+    });
+    await workModel.registerExternal({
+      changeType: 'created',
+      identifier: 'lobehub/lobehub#22',
+      patchFields: ['identifier', 'title'],
+      resourceId: 'lobehub/lobehub#22',
+      resourceType: 'github_issue',
+      toolCallId: 'tool-call-other-work',
+      toolIdentifier: 'github',
+      toolName: 'create_issue',
+      title: 'Other work',
+    });
+
+    const page = await workModel.listByWorkspace({ limit: 1, workId: created!.id });
+
+    expect(page.nextCursor).toBeNull();
+    expect(page.items).toHaveLength(1);
+    expect(page.items[0]).toMatchObject({ id: created!.id, title: 'Single work' });
+  });
+
   it('joins the origin topic title onto workspace list rows for grouping', async () => {
     const titledTopicId = 'work-origin-titled-topic';
     await serverDB.insert(topics).values({ id: titledTopicId, title: 'Origin topic', userId });

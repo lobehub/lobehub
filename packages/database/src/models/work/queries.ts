@@ -277,6 +277,8 @@ export interface ListByWorkspaceParams {
   type?: WorkType | null;
   /** Narrow the Resources gallery to Private or Workspace rows. */
   visibility?: WorkVisibility;
+  /** Fetch a single Work (e.g. a mobile detail screen) through the same card shaping. */
+  workId?: string;
 }
 
 // Not exported: only used as this module's own return-type annotation. The
@@ -330,6 +332,7 @@ export const listByWorkspace = async (
     inArray(works.type, resolveAllowedWorkTypes(params.includeFileWorks)),
   ];
   if (params.type) filters.push(eq(works.type, params.type));
+  if (params.workId) filters.push(eq(works.id, params.workId));
   if (params.originAgentId) filters.push(eq(works.originAgentId, params.originAgentId));
   if (ctx.workspaceId && params.visibility) filters.push(eq(works.visibility, params.visibility));
   // User-visible gallery tabs stay per-provider (Linear / GitHub) but filter by
