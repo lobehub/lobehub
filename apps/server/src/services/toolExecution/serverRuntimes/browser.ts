@@ -2,6 +2,7 @@ import { BrowserIdentifier, BrowserManifest } from '@lobechat/builtin-tool-brows
 import debug from 'debug';
 
 import { executeAuthorizedDeviceToolCall } from '@/server/services/deviceGateway/authorizedToolCall';
+import { resolveDeviceClientKind } from '@/server/services/deviceGateway/deviceChannels';
 import { FileService } from '@/server/services/file';
 
 import { buildNoActiveDeviceResult, REMOTE_DEVICE_TOOL_IDENTIFIER } from './noActiveDevice';
@@ -102,6 +103,22 @@ const storeScreenshot = async (
   }
 };
 
+export const BROWSER_DEVICE_UNSUPPORTED_ERROR_CODE = 'BROWSER_DEVICE_UNSUPPORTED';
+
+const buildCliOnlyDeviceBrowserResult = (deviceId: string) => {
+  const message =
+    `The active device (${deviceId}) is connected only through the \`lh connect\` CLI, ` +
+    `which has no built-in browser, so lobe-browser cannot run there. ` +
+    `For public pages use lobe-web-browsing (search / crawl) instead. ` +
+    `If a signed-in browser session is required, ask the user to open the LobeHub desktop app ` +
+    `on a machine and activate that device, then retry.`;
+  return {
+    content: message,
+    error: { code: BROWSER_DEVICE_UNSUPPORTED_ERROR_CODE, message },
+    success: false,
+  };
+};
+
 export const browserRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
     if (!context.userId) {
@@ -137,10 +154,24 @@ export const browserRuntime: ServerRuntimeRegistration = {
     let workspaceIdPromise: Promise<string | undefined> | undefined;
     const getDeviceWorkspaceId = () => (workspaceIdPromise ??= resolveRunWorkspaceId(context));
 
+    // Only the desktop app hosts the browser panel. A device whose only live
+    // connection is `lh connect` answers every browser api with
+    // `Unknown tool API: <api>`, which tells the model nothing — check the
+    // client kind once per runtime and explain the dead end instead.
+    let clientKindPromise: Promise<string> | undefined;
+    const getClientKind = async () =>
+      (clientKindPromise ??= getDeviceWorkspaceId().then((workspaceId) =>
+        resolveDeviceClientKind(context.userId!, context.activeDeviceId!, workspaceId),
+      ));
+
     const proxy: Record<string, (args: any) => Promise<any>> = {};
 
     for (const api of BrowserManifest.api) {
       proxy[api.name] = async (args: any) => {
+        if ((await getClientKind()) === 'cli-only') {
+          return buildCliOnlyDeviceBrowserResult(context.activeDeviceId!);
+        }
+
         // Carry the run identity so the device resolves the right browser
         // session (`topic:<topicId>`); the agentId rides along so the device can
         // decide whether revealing the panel would yank the user's view. Both

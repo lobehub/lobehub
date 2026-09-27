@@ -512,6 +512,76 @@ describe('ToolExecutionService', () => {
       );
     });
 
+    // `lh connect` answers `mcp` tool calls with `Unknown tool API: <tool>` — an
+    // active device that is CLI-only must not receive the tunnel (Honcho-Memory
+    // vents: calls worked until the agent activated a CLI-only Mac mini).
+    it('skips a CLI-only active device and tunnels to the newest desktop device', async () => {
+      vi.mocked(deviceGateway.queryDeviceList).mockResolvedValue([
+        { channels: [{ channel: 'cli' }], deviceId: 'mac-mini-cli' },
+      ] as any);
+      vi.mocked(getScopedOnlineDevices).mockResolvedValue([
+        { channels: [{ channel: 'cli' }], deviceId: 'mac-mini-cli', online: true },
+        { channels: [{ channel: 'desktop' }], deviceId: 'macbook', online: true },
+      ] as any);
+      const service = makeService();
+
+      const result = await service.executeTool(
+        mcpPayload,
+        contextWith(
+          { name: 'Honcho-Memory', type: 'http', url: 'http://localhost:8787/' },
+          { activeDeviceId: 'mac-mini-cli' },
+        ),
+      );
+
+      expect(result.success).toBe(true);
+      expect(deviceGateway.executeMcpCall).toHaveBeenCalledWith(
+        expect.objectContaining({ deviceId: 'macbook' }),
+        undefined,
+      );
+    });
+
+    it('fails with an actionable error when only CLI devices are online', async () => {
+      vi.mocked(deviceGateway.queryDeviceList).mockResolvedValue([
+        { channels: [{ channel: 'cli' }], deviceId: 'mac-mini-cli' },
+      ] as any);
+      vi.mocked(getScopedOnlineDevices).mockResolvedValue([
+        { channels: [{ channel: 'cli' }], deviceId: 'mac-mini-cli', online: true },
+      ] as any);
+      const service = makeService();
+
+      const result = await service.executeTool(
+        mcpPayload,
+        contextWith(
+          { name: 'Honcho-Memory', type: 'http', url: 'http://localhost:8787/' },
+          { activeDeviceId: 'mac-mini-cli' },
+        ),
+      );
+
+      expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect((result.error as any)?.code).toBe('MCP_DEVICE_UNAVAILABLE');
+      expect(result.content).toContain('lh connect');
+    });
+
+    it('fails closed for a workspace run whose active device is CLI-only', async () => {
+      vi.mocked(deviceGateway.queryDeviceList).mockResolvedValue([
+        { channels: [{ channel: 'cli' }], deviceId: 'ws-cli' },
+      ] as any);
+      const service = makeService();
+
+      const result = await service.executeTool(
+        mcpPayload,
+        contextWith(
+          { args: [], command: 'npx', name: 'my-mcp', type: 'stdio' },
+          { activeDeviceId: 'ws-cli', workspaceId: 'ws-1' },
+        ),
+      );
+
+      expect(deviceGateway.queryDeviceList).toHaveBeenCalledWith('user-1', 'ws-1');
+      expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
+      expect((result.error as any)?.code).toBe('MCP_DEVICE_UNAVAILABLE');
+    });
+
     it('addresses the workspace pool for a plan-routed device in a workspace run', async () => {
       // Workspace devices live under the `workspace:<id>` principal in the
       // gateway — the tunneled call must carry the scope or an online
