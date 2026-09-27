@@ -1187,7 +1187,10 @@ export default class HeterogeneousAgentCtr {
     );
   }
 
-  private buildSessionSpawnEnv(session: AgentSession): NodeJS.ProcessEnv {
+  private buildSessionSpawnEnv(
+    session: AgentSession,
+    includeProcessOwnership = true,
+  ): NodeJS.ProcessEnv {
     // Forward the user's proxy settings to the CLI/SDK subprocess. The
     // main-process undici dispatcher doesn't reach child processes — they need
     // env vars.
@@ -1204,10 +1207,12 @@ export default class HeterogeneousAgentCtr {
         ? { CODEBUDDY_CODE_DISABLE_BACKGROUND_TASKS: '1' }
         : {}),
       ...session.env,
-      ...managedProcessEnvironment(
-        { ...session.processOwner, label: session.agentType },
-        session.env?.AGENT_BROWSER_SESSION,
-      ),
+      ...(includeProcessOwnership
+        ? managedProcessEnvironment(
+            { ...session.processOwner, label: session.agentType },
+            session.env?.AGENT_BROWSER_SESSION,
+          )
+        : {}),
     };
     const operationTokenEnvKey = session.hostedProviderBinding?.operationTokenEnvKey;
     if (session.serverOperationToken && operationTokenEnvKey) {
@@ -2181,7 +2186,8 @@ export default class HeterogeneousAgentCtr {
     session: AgentSession,
   ): Promise<boolean> {
     const cwd = session.cwd || electronApp.getPath('desktop');
-    const spawnEnv = this.buildSessionSpawnEnv(session);
+    // One app-server serves multiple topics; ownership belongs to each thread, not its process.
+    const spawnEnv = this.buildSessionSpawnEnv(session, false);
     const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
     const promptInput = buildHeterogeneousPrompt({
       imageList: params.imageList,
