@@ -1,4 +1,5 @@
 import type { AppProcessMetrics, GpuStatus, MemoryDump } from '@lobechat/electron-client-ipc';
+import { getManagedProcesses, stopManagedProcess } from '@lobechat/utils/managedProcess';
 import { app } from 'electron';
 
 import { collectRendererGarbage, startIdleRendererGc } from '@/utils/idleRendererGc';
@@ -20,6 +21,17 @@ const MEMORY_DUMP_TIMEOUT = 15_000;
 
 export default class DevtoolsCtr extends ControllerModule {
   static override readonly groupName = 'devtools';
+
+  @IpcMethod()
+  async getManagedProcesses() {
+    return getManagedProcesses();
+  }
+
+  @IpcMethod()
+  async stopManagedProcess({ id }: { id: string }) {
+    if (typeof id !== 'string' || !id) throw new Error('Invalid process identity');
+    await stopManagedProcess(id);
+  }
 
   @IpcMethod()
   async openDevtools() {

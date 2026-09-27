@@ -1,10 +1,10 @@
 import type { ChildProcess } from 'node:child_process';
-import { spawn } from 'node:child_process';
 import { platform } from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import { spawnManaged } from '@lobechat/utils/managedProcess';
 
 import type { AskUserBridge } from '../askUser/AskUserBridge';
 import { resolveHeterogeneousAgentCommand } from '../config';
@@ -708,7 +708,7 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
 
   const cliSpawnPlan = await resolveCliSpawnPlan(command, args);
   const detached = platform() !== 'win32' && (options.detached ?? true);
-  const proc = spawn(cliSpawnPlan.command, cliSpawnPlan.args, {
+  const proc = spawnManaged(cliSpawnPlan.command, cliSpawnPlan.args, {
     cwd,
     detached,
     env: childEnv,

@@ -1,4 +1,18 @@
 export default {
+  'backgroundActivity.title': 'Background activity',
+  'backgroundActivity.highUsage': 'High resource usage',
+  'backgroundActivity.processCount': '{{count}} processes',
+  'backgroundActivity.stop': 'Stop activity',
+  'backgroundActivity.stopping': 'Stopping\u2026',
+  'backgroundActivity.stopFailed': 'Could not stop this activity. Try again.',
+  'backgroundActivity.unavailable':
+    'Resource data is unavailable. Displayed values may be out of date.',
+  'backgroundActivity.retry': 'Retry',
+  'backgroundActivity.empty': 'No background activity',
+  'backgroundActivity.topic': 'Conversation',
+  'backgroundActivity.shared': 'Shared / unassigned',
+  'backgroundActivity.details': 'View details',
+
   'response.contentSafetyNotice':
     'This reply was limited for content safety reasons. If this happens often, you may temporarily lose access to this model.',
   'goalExperiment.continuedFrom': 'Continued exploration',

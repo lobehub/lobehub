@@ -1826,6 +1826,7 @@ export class DeviceGateway {
   }
 
   async dispatchAgentRun(params: {
+    agentId?: string;
     agentType: HeterogeneousAgentType;
     assistantMessageId: string;
     /** Resolved `lh hetero exec` wrapper args. */

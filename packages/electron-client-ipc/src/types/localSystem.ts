@@ -424,6 +424,7 @@ export interface OpenLocalFolderParams {
 
 // Shell command types
 export interface RunCommandParams {
+  agentId?: string;
   command: string;
   cwd?: string;
   description?: string;
@@ -451,6 +452,7 @@ export interface RunCommandParams {
    */
   sandboxNetwork?: boolean;
   timeout?: number;
+  topicId?: string;
 }
 
 /**

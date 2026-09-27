@@ -32,6 +32,7 @@ registerNativeContextMenuInterceptor();
 const DevDock = lazy(() => import('@/features/DevDock'));
 const ImperativeMountHost = lazy(() => import('@/components/ImperativeMount'));
 const DynamicFavicon = lazy(() => import('@/layout/GlobalProvider/DynamicFavicon'));
+const BackgroundActivityMonitor = lazy(() => import('@/features/BackgroundActivity/Monitor'));
 const TaskDock = lazy(() => import('@/features/TaskDock'));
 
 const devDockLayoutStyle: CSSProperties = {
@@ -113,6 +114,7 @@ const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
                 <ContextMenuHost />
                 <Suspense>
                   <TaskDock />
+                  {isDesktop && <BackgroundActivityMonitor />}
                   <ImperativeMountHost />
                 </Suspense>
               </LazyMotion>

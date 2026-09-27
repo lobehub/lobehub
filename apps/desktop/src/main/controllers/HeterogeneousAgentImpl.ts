@@ -114,6 +114,11 @@ import type {
   HeteroSessionImportMessage,
   ListHeterogeneousAgentModelsParams,
 } from '@lobechat/types';
+import {
+  managedProcessEnvironment,
+  shutdownManagedProcesses,
+  spawnManaged,
+} from '@lobechat/utils/managedProcess';
 import { sleep } from '@lobechat/utils/sleep';
 import { app as electronApp, BrowserWindow } from 'electron';
 import { isPlainObject } from 'es-toolkit';
@@ -487,6 +492,7 @@ interface AgentSession {
   /** Active pi RPC run (per-run process; cleared when the run settles). */
   piRpcSession?: PiRpcSession;
   process?: ChildProcess;
+  processOwner?: { topicId?: string; agentId?: string };
   /**
    * Absolute CLI path resolved by spawn preflight detection. Used for spawn()
    * when the configured command is bare: detection can find the CLI through
@@ -1198,6 +1204,10 @@ export default class HeterogeneousAgentCtr {
         ? { CODEBUDDY_CODE_DISABLE_BACKGROUND_TASKS: '1' }
         : {}),
       ...session.env,
+      ...managedProcessEnvironment(
+        { ...session.processOwner, label: session.agentType },
+        session.env?.AGENT_BROWSER_SESSION,
+      ),
     };
     const operationTokenEnvKey = session.hostedProviderBinding?.operationTokenEnvKey;
     if (session.serverOperationToken && operationTokenEnvKey) {
@@ -1749,7 +1759,10 @@ export default class HeterogeneousAgentCtr {
     params: SendPromptParams,
   ): Promise<ServerDefaultOperationSettlement | HeteroTranscriptReplayOutcome | void> {
     const session = this.sessions.get(params.sessionId);
-    if (session) session.cancelledByUs = false;
+    if (session) {
+      session.cancelledByUs = false;
+      session.processOwner = { topicId: params.topicId, agentId: params.agentId };
+    }
     // A replay reads a file and calls no model, so it bypasses server-default
     // operation accounting entirely.
     if (params.replayTranscript) return this.replayTranscript(params);
@@ -1998,7 +2011,11 @@ export default class HeterogeneousAgentCtr {
         // is matched against, and the CLI may append this turn's prompt record
         // the moment it starts.
         const startedAt = new Date().toISOString();
-        const proc = spawn(resolvedCliSpawnPlan.command, resolvedCliSpawnPlan.args, spawnOptions);
+        const proc = spawnManaged(
+          resolvedCliSpawnPlan.command,
+          resolvedCliSpawnPlan.args,
+          spawnOptions,
+        );
         this.handleSpawnedAgentProcess({
           cwd,
           intervention,
@@ -4110,7 +4127,7 @@ export default class HeterogeneousAgentCtr {
       event.preventDefault();
       if (this.shuttingDown) return;
       this.shuttingDown = true;
-      const piClosing: Promise<void>[] = [];
+      const piClosing: Promise<void>[] = [shutdownManagedProcesses()];
       this.unlinkPendingInterventionConfigsSync();
       for (const [, session] of this.sessions) {
         session.hostedProviderBinding?.cleanupSync();
@@ -4201,6 +4218,7 @@ export default class HeterogeneousAgentCtr {
    * eager accepted ack would strand the server operation without a producer.
    */
   spawnLhHeteroExec(params: {
+    agentId?: string;
     agentType: string;
     assistantMessageId?: string;
     /** Resolved `lh hetero exec` wrapper args. */
@@ -4318,10 +4336,13 @@ export default class HeterogeneousAgentCtr {
     // `killPlatformProcessTree(-pid, signal)` reaches the CLI and its children;
     // the inherited-group env contract prevents the inner agent from detaching
     // into a second, unreachable group.
-    const child = spawn(process.execPath, [cliScript, ...args], {
+    const child = spawnManaged(process.execPath, [cliScript, ...args], {
       cwd: spawnCwd,
       detached: true,
-      env,
+      env: {
+        ...env,
+        ...managedProcessEnvironment({ topicId, agentId: params.agentId, label: agentType }),
+      },
       stdio: ['pipe', 'inherit', 'inherit'],
       windowsHide: true,
     });
