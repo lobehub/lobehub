@@ -3705,6 +3705,63 @@ describe('AgentRuntimeService', () => {
       expect(call.pluginError).toEqual({ message: 'Operation abandoned: inactivity_watchdog' });
     });
 
+    // "Budget exceeded" alone reads like a per-sub-agent allowance, so parents
+    // retried or fanned out more sub-agents against the same exhausted limit.
+    describe('billing-limit failures', () => {
+      const budgetError = (type: string, budgetTypeAtError?: string) => ({
+        body: {
+          budget: {
+            availableCredits: 24_659,
+            budgetTypeAtError,
+            requiredCredits: 50_638,
+          },
+          message: 'Budget exceeded',
+        },
+        message: 'Budget exceeded',
+        type,
+      });
+      const bridgeContent = async (error: unknown) => {
+        await service.completeSubAgentBridge({
+          ...bridgeParams,
+          finalState: { ...childState, error } as any,
+          reason: 'error',
+        });
+        return updateToolMessage.mock.calls.at(-1)?.[1];
+      };
+
+      it('explains a personal credit shortfall without quoting the balance', async () => {
+        const error = budgetError('InsufficientBudgetForModel', 'subscription');
+        const call = await bridgeContent(error);
+
+        expect(call.content).toBe(
+          'Sub-agent did not complete (error): stopped by a LobeHub billing limit (InsufficientBudgetForModel): ' +
+            "the account's LobeHub credits are too low for this model; the account owner has to top up or upgrade. " +
+            'This limit is shared by every sub-agent and by this conversation, so retrying or dispatching more sub-agents will not get past it. ' +
+            'Finish with what you already have and tell the user about the limit.',
+        );
+        expect(call.content).not.toMatch(/24659|24,659|50638/);
+        expect(call.pluginError).toEqual(error);
+      });
+
+      it.each([
+        ['workspace', "the workspace's shared LobeHub credits are used up"],
+        ['workspace_member', "this member's workspace credit allowance is used up"],
+      ])('names the %s allowance as the one to raise', async (scope, expected) => {
+        const call = await bridgeContent(budgetError('InsufficientBudgetForModel', scope));
+
+        expect(call.content).toContain(expected);
+        expect(call.content).not.toContain('top up');
+      });
+
+      it('points plan-limit failures at the plan, not at credits', async () => {
+        const call = await bridgeContent(budgetError('SubscriptionPlanLimit', 'subscription'));
+
+        expect(call.content).toContain(
+          'plan limit was reached or the plan does not cover this model',
+        );
+      });
+    });
+
     it('truncates an oversized child error so it cannot bloat the parent context', async () => {
       const huge = 'x'.repeat(500);
       await service.completeSubAgentBridge({

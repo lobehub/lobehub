@@ -43,7 +43,7 @@ import {
   type ExecVirtualSubAgentParams,
   type UIChatMessage,
 } from '@lobechat/types';
-import { RequestTrigger } from '@lobechat/types';
+import { ChatErrorType, RequestTrigger } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import debug from 'debug';
 import urlJoin from 'url-join';
@@ -302,6 +302,52 @@ const formatErrorForMetadata = (error: unknown): Record<string, any> | undefined
   return { message: String(error) };
 };
 
+const SUB_AGENT_CREDIT_ERROR_TYPES = new Set<string>([
+  ChatErrorType.FreePlanLimit,
+  ChatErrorType.InsufficientBudgetForModel,
+  ChatErrorType.SubscriptionPlanLimit,
+]);
+
+/**
+ * A child stopped by the cost-admission gate fails with the bare message
+ * "Budget exceeded", which reads like a per-sub-agent allowance. The parent
+ * then retries or fans out more sub-agents against the same limit. Say which
+ * limit it is and who can lift it.
+ *
+ * Mirrors the bot reply copy (`bot/replyTemplate.ts`): the payer is not
+ * addressed as "you" and figures are never quoted, because a bot run is billed
+ * to its owner while the parent's reply may reach a shared channel.
+ */
+const formatSubAgentCreditErrorReason = (error: unknown): string | undefined => {
+  if (!error || typeof error !== 'object') return;
+  const { body, errorType, type } = error as {
+    body?: { budget?: { budgetTypeAtError?: unknown } };
+    errorType?: unknown;
+    type?: unknown;
+  };
+  const creditType = [type, errorType].find(
+    (value): value is string =>
+      typeof value === 'string' && SUB_AGENT_CREDIT_ERROR_TYPES.has(value),
+  );
+  if (!creditType) return;
+
+  const budgetType = body?.budget?.budgetTypeAtError;
+  const limit =
+    budgetType === 'workspace'
+      ? "the workspace's shared LobeHub credits are used up; a workspace admin has to add credits"
+      : budgetType === 'workspace_member'
+        ? "this member's workspace credit allowance is used up; a workspace admin has to raise it"
+        : creditType === ChatErrorType.InsufficientBudgetForModel
+          ? "the account's LobeHub credits are too low for this model; the account owner has to top up or upgrade"
+          : "the account's LobeHub plan limit was reached or the plan does not cover this model; the account owner has to upgrade the plan";
+
+  return (
+    `stopped by a LobeHub billing limit (${creditType}): ${limit}. ` +
+    'This limit is shared by every sub-agent and by this conversation, so retrying or dispatching more sub-agents will not get past it. ' +
+    'Finish with what you already have and tell the user about the limit.'
+  );
+};
+
 /**
  * Extract a short, human-readable reason string from a failed operation's
  * `state.error`, for inlining into the tool-result `content` a parent agent
@@ -312,6 +358,9 @@ const formatErrorForMetadata = (error: unknown): Record<string, any> | undefined
  * error still rides on `pluginError`; this is just the readable summary.
  */
 const formatSubAgentErrorReason = (error: unknown): string | undefined => {
+  const creditReason = formatSubAgentCreditErrorReason(error);
+  if (creditReason) return creditReason;
+
   const message = formatErrorForMetadata(error)?.message;
   if (typeof message !== 'string') return undefined;
   const trimmed = message.trim();
