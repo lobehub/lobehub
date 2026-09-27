@@ -75,6 +75,15 @@ Use [`.github/PULL_REQUEST_TEMPLATE.md`](../../../.github/PULL_REQUEST_TEMPLATE.
 
 Prompts and transcripts are private by default and are not required fields. Only if the author explicitly requests sharing them, review the exact proposed text for sensitive information and obtain confirmation before publishing that text. Authorization to create or update a PR is not consent to publish a conversation. Check attached logs and screenshots for sensitive information too.
 
+### No production data identifiers
+
+PR titles, bodies, comments and review replies are public. Never put an identifier or detail taken from production data in them, even when that is where the bug was found:
+
+- Record ids: topic (`tpc_…`), message (`msg_…`), operation (`op_…`), agent (`agt_…`), document (`docs_…`), user, device and bot ids. This includes agent vent ids and ids of internal reproduction reports.
+- User details: device or host names, local paths, file names, quoted user text, and app links to a user's agent or topic.
+
+Describe the evidence instead: "observed in a production topic", "a user with two desktops (device A and device B)". Obvious placeholders (`tpc_xxx`, `C:\Users\user`) are fine in examples. Commit hashes, deployment ids and code identifiers are not production data. The same rule applies to commit messages and code comments.
+
 ## Notes
 
 - **Language**: All PR content must be in English
