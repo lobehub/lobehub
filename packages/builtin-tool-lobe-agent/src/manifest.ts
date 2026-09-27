@@ -274,7 +274,7 @@ export const LobeAgentManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Privately report friction in your own working conditions to the platform builders when you are genuinely blocked — a missing tool, a parameter/schema mismatch, conflicting or wrong docs, anomalous platform behavior, or an environment limit causing repeated failure. Not user-facing; it only records the report and does not fix anything. Use sparingly: at most one vent per task, only for the single worst blocker.',
+        'Privately report friction in your own working conditions to the platform builders when you are genuinely blocked — a missing tool, a parameter/schema mismatch, conflicting or wrong docs, anomalous platform behavior, or an environment limit causing repeated failure. Not user-facing; it only records the report and does not fix anything. Use sparingly: at most one vent per run, only for the single worst blocker. It never stops a tool loop or ends your turn — to stop, just reply to the user; repeated or empty vents are rejected.',
       name: LobeAgentApiName.vent,
       parameters: {
         additionalProperties: false,

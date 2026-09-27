@@ -29,9 +29,15 @@ import { parseDataUri } from '@lobechat/utils/uriParser';
 
 import { MessageModel } from '@/database/models/message';
 import { toolsEnv } from '@/envs/tools';
+import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { FileService } from '@/server/services/file';
-import { createVentService, formatVentResultContent } from '@/server/services/vent';
+import {
+  createRedisVentLedger,
+  createVentService,
+  formatVentResultContent,
+  type VentRuntimeService,
+} from '@/server/services/vent';
 
 import type { ToolExecutionContext } from '../types';
 import { normalizeMultimodalImageItems } from './lobeAgentImage';
@@ -40,9 +46,20 @@ import type { ServerRuntimeRegistration } from './types';
 
 // The durable record of a vent is the persisted vent tool-call message itself.
 // This shared service only validates input, assigns a stable id, and enforces
-// per-scope rate limits. Module-scoped so the rate-limit state survives across
-// per-request runtime instances.
-const sharedVentService = createVentService({ nextToolCallId: () => nanoid() });
+// the per-run cap. The cap lives in Redis because consecutive steps of one run
+// may execute on different instances; created lazily so importing this module
+// does not open a connection.
+let sharedVentService: VentRuntimeService | undefined;
+const getVentService = () => {
+  if (!sharedVentService) {
+    const redis = getAgentRuntimeRedisClient();
+    sharedVentService = createVentService({
+      ledger: redis ? createRedisVentLedger(redis) : undefined,
+      nextToolCallId: () => nanoid(),
+    });
+  }
+  return sharedVentService;
+};
 
 interface LobeAgentRuntimeContext {
   agentId?: string | null;
@@ -299,7 +316,7 @@ class LobeAgentExecutionRuntime {
     }
 
     try {
-      const result = await sharedVentService.recordVent({
+      const result = await getVentService().recordVent({
         agentId: this.agentId,
         input: params,
         topicId: this.topicId,

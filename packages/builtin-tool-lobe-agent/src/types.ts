@@ -92,7 +92,8 @@ export interface VentParams {
   toolName?: string;
 }
 
-export type VentRejectionReason = 'invalid_category' | 'invalid_severity' | 'rate_limited';
+export type VentRejectionReason =
+  'duplicate' | 'empty_content' | 'invalid_category' | 'invalid_severity' | 'rate_limited';
 
 export type VentStateReason = VentRejectionReason | 'missing_context' | 'runtime_error' | null;
 
