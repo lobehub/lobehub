@@ -2584,6 +2584,7 @@ export const aiAgentRouter = router({
           workspaceId: ctx.workspaceId,
         });
         const result = await ctx.aiAgentService.execAgent({
+          acceptsMemberRuntimeEnd: task.streamFeatures?.includes('member_runtime_end'),
           includeFinalState: task.includeFinalState,
           agentId,
           appContext,

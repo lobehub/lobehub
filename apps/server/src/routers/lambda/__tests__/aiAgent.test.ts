@@ -189,6 +189,33 @@ describe('AI Agent Router Integration Tests', () => {
       expect(await serverDB.select().from(topics).where(eq(topics.userId, userId))).toEqual([]);
     });
 
+    // G-02: only a client that declares `member_runtime_end` gets mirrored member
+    // terminals under that name (Codex on #20102: the batch route dropped it).
+    it('forwards a declared member_runtime_end stream feature on both routes', async () => {
+      const { AgentRuntimeService } = await import('@/server/services/agentRuntime');
+      const caller = aiAgentRouter.createCaller(createTestContext());
+      const createOperationCalls = () =>
+        vi
+          .mocked(AgentRuntimeService)
+          .mock.results.flatMap((r) => (r.value as any).createOperation.mock.calls)
+          .map(([params]) => params.acceptsMemberRuntimeEnd);
+
+      vi.mocked(AgentRuntimeService).mockClear();
+      await caller.execAgent({
+        agentId: testAgentId,
+        prompt: 'single',
+        streamFeatures: ['member_runtime_end'],
+      });
+      await caller.execAgents({
+        tasks: [{ agentId: testAgentId, prompt: 'batch', streamFeatures: ['member_runtime_end'] }],
+      });
+      expect(createOperationCalls()).toEqual([true, true]);
+
+      vi.mocked(AgentRuntimeService).mockClear();
+      await caller.execAgents({ tasks: [{ agentId: testAgentId, prompt: 'undeclared' }] });
+      expect(createOperationCalls()).toEqual([undefined]);
+    });
+
     it('should create a new topic when topicId is not provided', async () => {
       const caller = aiAgentRouter.createCaller(createTestContext());
 
