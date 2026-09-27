@@ -1,5 +1,6 @@
 import type { ListWorkspaceMembersParams } from '@lobechat/builtin-tool-task';
 import {
+  MISSING_TASK_NAME_ERROR,
   normalizeListTasksParams,
   normalizeListWorkspaceMembersParams,
   selectAssignableMembers,
@@ -201,6 +202,9 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       assigneeUserId: rawArgs.assigneeUserId?.trim() || undefined,
       parentIdentifier: rawArgs.parentIdentifier?.trim() || undefined,
     };
+    // `name` is required by the manifest but nothing enforced it: nameless
+    // tasks listed as "(unnamed)" and the receipt printed `"null"`.
+    if (!args.name?.trim()) return { content: MISSING_TASK_NAME_ERROR, success: false };
     let parentLabel: string | undefined;
 
     // Pre-resolve parent identifier so we can surface a tool-friendly error

@@ -1,4 +1,8 @@
-import { normalizeListTasksParams, UNFINISHED_TASK_STATUSES } from '@lobechat/builtin-tool-task';
+import {
+  MISSING_TASK_NAME_ERROR,
+  normalizeListTasksParams,
+  UNFINISHED_TASK_STATUSES,
+} from '@lobechat/builtin-tool-task';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createTaskRuntime, taskRuntime } from '../task';
@@ -252,6 +256,24 @@ describe('createTaskRuntime', () => {
         }),
       );
     });
+
+    it.each([undefined, '', '   '])(
+      'refuses to create a task without a name (%j) instead of storing an unnamed row',
+      async (name) => {
+        const deps = makeDeps();
+        const runtime = createTaskRuntime({
+          agentModel: deps.agentModel as any,
+          taskCaller: deps.taskCaller,
+          taskModel: deps.taskModel as any,
+          taskService: deps.taskService as any,
+        });
+
+        const result = await runtime.createTask({ instruction: 'Do something', name } as any);
+
+        expect(result).toMatchObject({ content: MISSING_TASK_NAME_ERROR, success: false });
+        expect(deps.taskService.createTask).not.toHaveBeenCalled();
+      },
+    );
 
     it('embeds a workspace-scoped link when the task is in a workspace', async () => {
       const deps = makeDeps();

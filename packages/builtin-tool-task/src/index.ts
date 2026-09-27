@@ -1,4 +1,4 @@
-export { TASK_STATUSES, UNFINISHED_TASK_STATUSES } from './constants';
+export { MISSING_TASK_NAME_ERROR, TASK_STATUSES, UNFINISHED_TASK_STATUSES } from './constants';
 export {
   DEFAULT_LIST_TASK_LIMIT,
   normalizeListTasksParams,
