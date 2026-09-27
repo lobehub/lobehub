@@ -1,8 +1,6 @@
-import { ModelProvider } from 'model-bank/modelProvider';
-
 import { asrService } from '@/services/asr';
 import { getUserStoreState } from '@/store/user';
-import { settingsSelectors } from '@/store/user/selectors';
+import { systemAgentSelectors } from '@/store/user/selectors';
 
 /**
  * Turn an uploaded voice recording into the text of its turn.
@@ -12,11 +10,10 @@ import { settingsSelectors } from '@/store/user/selectors';
  * persisted as the user message content and what the external CLI receives.
  */
 export const transcribeVoiceMessage = async (fileId: string, signal?: AbortSignal) => {
-  const { openAI } = settingsSelectors.currentTTS(getUserStoreState());
-  const { text } = await asrService.transcribeFile(
-    { fileId, model: openAI.sttModel, provider: ModelProvider.OpenAI },
-    signal,
-  );
+  const { model, provider } = systemAgentSelectors.asr(getUserStoreState());
+  if (!model || !provider) throw new Error('No speech-to-text model is configured');
+
+  const { text } = await asrService.transcribeFile({ fileId, model, provider }, signal);
 
   const transcript = text.trim();
   if (!transcript) throw new Error('Voice message transcript is empty');

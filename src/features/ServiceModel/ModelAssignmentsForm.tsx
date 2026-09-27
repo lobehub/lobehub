@@ -19,11 +19,12 @@ import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 import type { SystemAgentItem, UserServiceModelConfigKey } from '@/types/user/settings';
 
+import AsrModelSelect from './AsrModelSelect';
 import { serviceModelFormStyles as styles } from './styles';
 
 type ModelAssignmentItemKey = Exclude<
   UserServiceModelConfigKey,
-  'onboardingTaskRecommender' | 'onboardingUnderstanding'
+  'asr' | 'onboardingTaskRecommender' | 'onboardingUnderstanding'
 >;
 
 interface SystemAgentModelItem {
@@ -91,7 +92,7 @@ const ModelAssignmentsForm = memo(() => {
 
   const groupOfKey = (key: UserServiceModelConfigKey): SavingGroup => {
     if (MEMORY_MODEL_ITEMS.some((item) => item.key === key)) return 'memory';
-    if (OPTIONAL_FEATURE_ITEMS.some((item) => item.key === key)) return 'optional';
+    if (key === 'asr' || OPTIONAL_FEATURE_ITEMS.some((item) => item.key === key)) return 'optional';
     return 'assignments';
   };
 
@@ -294,6 +295,20 @@ const ModelAssignmentsForm = memo(() => {
     } satisfies FormItemProps;
   });
 
+  const asrItem: FormItemProps = {
+    children: (
+      <Tooltip title={reason}>
+        <AsrModelSelect
+          disabled={!canManageServiceModel}
+          value={systemAgentSettings.asr}
+          onChange={(value) => updateSystemAgentModel('asr', value)}
+        />
+      </Tooltip>
+    ),
+    desc: t('systemAgent.asr.modelDesc'),
+    label: t('systemAgent.asr.title'),
+  };
+
   const renderSaveHint = (group: SavingGroup) =>
     savingGroup === group && (
       <AutoSaveHint lastUpdatedTime={lastSavedAt} saveStatus={saveStatus} onRetry={retry} />
@@ -310,7 +325,7 @@ const ModelAssignmentsForm = memo(() => {
   };
 
   const optionalFeatures: FormGroupItemType = {
-    children: optionalFeatureItems,
+    children: [...optionalFeatureItems, asrItem],
     extra: renderSaveHint('optional'),
     title: (
       <SettingsSearchAnchor id={'service-model-optional-features'}>

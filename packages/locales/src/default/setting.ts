@@ -1677,6 +1677,11 @@ When I am ___, I need ___
   'systemAgent.agentMeta.modelDesc':
     'Model used to generate names, descriptions, avatars, and tags',
   'systemAgent.agentMeta.title': 'Profile Generation',
+  'systemAgent.asr.modelDesc':
+    'Transcribes voice messages to Claude Code and other external agents, which only accept text. Voice messages to them stay hidden until a model is set.',
+  'systemAgent.asr.modelPlaceholder': 'Model ID, e.g. whisper-1',
+  'systemAgent.asr.providerPlaceholder': 'Provider',
+  'systemAgent.asr.title': 'Voice Message Transcription',
   'systemAgent.expertise.modelDesc':
     'Model used to draft expertise domains and extract reusable experience from conversations.',
   'systemAgent.expertise.title': 'Agent Self-Evolution',

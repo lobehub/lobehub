@@ -185,26 +185,43 @@ describe('heterogeneous agents', () => {
       },
     } as any);
 
-  it('allows voice messages without an audio-capable model because they are transcribed', () => {
+  const setAsr = (asr: { model: string; provider: string }) =>
+    useUserStore.setState({ settings: { systemAgent: { asr } }, workspaceUserPreference: {} } as any);
+
+  it('allows voice messages without an audio-capable model once a STT model is configured', () => {
     useAiInfraStore.setState({ enabledAiModels: [textModel] });
-    useUserStore.setState({ workspaceUserPreference: {} });
 
     setAgent(false);
+    setAsr({ model: 'whisper-1', provider: 'openai' });
     expect(canSendVoiceMessage({ agentId })).toBe(false);
 
     setAgent(true);
     expect(canSendVoiceMessage({ agentId })).toBe(true);
   });
 
-  it('shows the recorder for a heterogeneous agent', () => {
+  it('stays unavailable while no STT model is configured', () => {
+    useAiInfraStore.setState({ enabledAiModels: [textModel] });
+    setAgent(true);
+    setAsr({ model: '', provider: '' });
+
+    expect(canSendVoiceMessage({ agentId })).toBe(false);
+  });
+
+  it('shows the recorder for a heterogeneous agent only after a STT model is configured', () => {
     act(() => {
       useAiInfraStore.setState({ enabledAiModels: [textModel] });
-      useUserStore.setState({ workspaceUserPreference: {} });
       setAgent(true);
+      setAsr({ model: '', provider: '' });
     });
 
     const { result } = renderHook(() => useCanSendVoiceMessage({ agentId }), {
       wrapper: ServerConfigWrapper,
+    });
+
+    expect(result.current).toBe(false);
+
+    act(() => {
+      setAsr({ model: 'whisper-1', provider: 'openai' });
     });
 
     expect(result.current).toBe(true);
