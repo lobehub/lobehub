@@ -161,6 +161,56 @@ describe('canSendVoiceMessage', () => {
   });
 });
 
+describe('heterogeneous agents', () => {
+  const agentId = 'hetero-voice-agent';
+  const textModel = {
+    abilities: {},
+    enabled: true,
+    id: 'text-only',
+    providerId: ModelProvider.Google,
+    type: 'chat',
+  } as const;
+
+  const setAgent = (heterogeneous: boolean) =>
+    useAgentStore.setState({
+      agentMap: {
+        [agentId]: {
+          ...(heterogeneous
+            ? { agencyConfig: { heterogeneousProvider: { type: 'claude-code' } } }
+            : {}),
+          chatConfig: {},
+          model: textModel.id,
+          provider: ModelProvider.Google,
+        },
+      },
+    } as any);
+
+  it('allows voice messages without an audio-capable model because they are transcribed', () => {
+    useAiInfraStore.setState({ enabledAiModels: [textModel] });
+    useUserStore.setState({ workspaceUserPreference: {} });
+
+    setAgent(false);
+    expect(canSendVoiceMessage({ agentId })).toBe(false);
+
+    setAgent(true);
+    expect(canSendVoiceMessage({ agentId })).toBe(true);
+  });
+
+  it('shows the recorder for a heterogeneous agent', () => {
+    act(() => {
+      useAiInfraStore.setState({ enabledAiModels: [textModel] });
+      useUserStore.setState({ workspaceUserPreference: {} });
+      setAgent(true);
+    });
+
+    const { result } = renderHook(() => useCanSendVoiceMessage({ agentId }), {
+      wrapper: ServerConfigWrapper,
+    });
+
+    expect(result.current).toBe(true);
+  });
+});
+
 describe('useCanSendVoiceMessage', () => {
   it('reacts to Agent mode when voice requires the multimodal fallback tool', () => {
     const agentId = 'fallback-voice-agent';
