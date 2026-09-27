@@ -28,10 +28,14 @@ const sessionStatusOf = (event: AgentStreamEvent): SessionStatus => {
 export class MirroredTerminalEchoGuard {
   private foreignTerminalAt: number | undefined;
   /**
-   * The session status another operation's `agent_runtime_end` would have left
-   * on this channel's DO, while no terminal of our own has arrived since.
+   * The session status another operation's `agent_runtime_end` REPLAYED BY THE
+   * CURRENT RESUME would have left on this channel's DO, while no terminal of
+   * our own has arrived since. Scoped to one resume on purpose: only a replay
+   * that still carries the member's terminal proves the buffer after it is
+   * intact — a terminal seen before a disconnect proves nothing once the DO may
+   * have hibernated away the owner's own terminal.
    */
-  private foreignTerminalStatus: SessionStatus | undefined;
+  private replayForeignStatus: SessionStatus | undefined;
 
   constructor(
     private readonly operationId: string,
@@ -45,14 +49,19 @@ export class MirroredTerminalEchoGuard {
       // The owner is demonstrably alive after the member ended.
       this.foreignTerminalAt = undefined;
       if (event.type === 'agent_runtime_end' || event.type === 'error') {
-        this.foreignTerminalStatus = undefined;
+        this.replayForeignStatus = undefined;
       }
       return;
     }
     if (event.type === 'agent_runtime_end') {
       this.foreignTerminalAt = this.now();
-      this.foreignTerminalStatus = sessionStatusOf(event);
+      this.replayForeignStatus = sessionStatusOf(event);
     }
+  }
+
+  /** A resume / (re)subscribe is starting: only what it replays counts from here. */
+  beginReplay(): void {
+    this.replayForeignStatus = undefined;
   }
 
   /**
@@ -60,12 +69,18 @@ export class MirroredTerminalEchoGuard {
    * terminal left on this DO. Such a gateway sets its status on ANY
    * `agent_runtime_end` and never resets it on later events, so a (re)subscribe
    * after a member ended reads the supervisor as finished while it still runs —
-   * even when supervisor events were replayed after the member's end. Only this
-   * op's own terminal clears it; a different status (a watchdog's `error`) still
-   * counts as the real end.
+   * even when supervisor events were replayed after the member's end.
+   *
+   * Only trusted when this resume replayed that member terminal and nothing was
+   * dropped (`gap`): the buffer only loses its oldest events, so the member's
+   * terminal still being there means any later owner terminal would be too.
+   * Without that provenance — an empty replay after hibernation, a gapped
+   * replay, a member terminal only seen before the disconnect — the DO's
+   * authoritative status wins. So does any other status (a watchdog's `error`).
    */
-  isStaleResumeStatus(status: SessionStatus | undefined): boolean {
-    return this.foreignTerminalStatus !== undefined && status === this.foreignTerminalStatus;
+  isStaleResumeStatus(status: SessionStatus | undefined, options?: { gap?: boolean }): boolean {
+    if (options?.gap) return false;
+    return this.replayForeignStatus !== undefined && status === this.replayForeignStatus;
   }
 
   /** Whether a session-ending signal arriving now is a mirrored terminal's echo. */

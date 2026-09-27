@@ -186,6 +186,11 @@ class OperationSubscriptionImpl implements OperationSubscription {
     this.end();
   }
 
+  /** @internal A (re)subscribe was sent: its replay starts now. */
+  beginReplay(): void {
+    this.terminalEchoGuard.beginReplay();
+  }
+
   /** @internal */
   handleMessage(message: MuxOperationMessage): void {
     if (!this._active) return;
@@ -255,7 +260,7 @@ class OperationSubscriptionImpl implements OperationSubscription {
           isTerminalStatus(message.status) &&
           // A status left by a mirrored member's terminal — see
           // `MirroredTerminalEchoGuard.isStaleResumeStatus`.
-          !this.terminalEchoGuard.isStaleResumeStatus(message.status)
+          !this.terminalEchoGuard.isStaleResumeStatus(message.status, { gap: message.gap })
         ) {
           this.finish({ source: 'resume_status', status: message.status });
         }
@@ -885,6 +890,7 @@ export class GatewayMuxClient {
       type: 'subscribe',
     });
     if (!sent) return;
+    subscription.beginReplay();
     subscription.notifyStatus('connected');
     subscription.emit('connected');
   }

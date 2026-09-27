@@ -253,6 +253,7 @@ export class AgentStreamClient extends TypedEmitter {
           // gateway will hand back the real session status. Legacy gateways
           // ignore the flag and just replay — we then rely on live events, never
           // guessing completion from silence.
+          this.terminalEchoGuard.beginReplay();
           this.sendMessage({ lastEventId: this.lastEventId, type: 'resume', wantStatus: true });
           this.emit('connected');
           break;

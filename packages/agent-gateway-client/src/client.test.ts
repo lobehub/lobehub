@@ -565,6 +565,29 @@ describe('AgentStreamClient', () => {
         expect(onComplete).toHaveBeenCalledWith({ source: 'resume_status', status: 'error' });
       });
 
+      // Codex P1 on #20102 (3rd pass): a member terminal seen before the
+      // disconnect proves nothing about the resumed DO — it may have hibernated
+      // away the supervisor's own terminal while keeping `completed`.
+      it('trusts the status after an empty replay, even with a member terminal seen before', async () => {
+        const client = createClient({ resumeOnConnect: true });
+        const onComplete = vi.fn();
+        client.on('session_complete', onComplete);
+
+        const ws = await connectAndAuthResume(client);
+        ws.simulateMessage({ status: 'running', type: 'resume_complete' });
+        replay(ws, 'evt-1', 'op-member-456', 'agent_runtime_end', { reason: 'done' });
+
+        ws.simulateClose();
+        await vi.advanceTimersByTimeAsync(1000); // reconnect delay
+        await vi.advanceTimersByTimeAsync(1);
+        const ws2 = getLatestWs();
+        ws2.simulateMessage({ type: 'auth_success' });
+        // Hibernated buffer: nothing after evt-1 is replayed.
+        ws2.simulateMessage({ status: 'completed', type: 'resume_complete' });
+
+        expect(onComplete).toHaveBeenCalledWith({ source: 'resume_status', status: 'completed' });
+      });
+
       it('completes once the supervisor terminal was replayed after the member', async () => {
         const client = createClient({ resumeOnConnect: true });
         const onComplete = vi.fn();

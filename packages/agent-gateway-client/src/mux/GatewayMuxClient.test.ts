@@ -688,6 +688,78 @@ describe('GatewayMuxClient', () => {
       expect(sub.active).toBe(false);
     });
 
+    // Codex P1 on #20102 (3rd pass): without the member terminal in THIS
+    // replay, or with part of the replay dropped, the DO's status wins.
+    it('trusts a gapped resume status even after a replayed member terminal', async () => {
+      const { mux } = createMux();
+      const ws = await connectAndReady(mux);
+      const sub = mux.subscribe('op-1');
+      const onComplete = vi.fn();
+      sub.on('session_complete', onComplete);
+
+      ws.simulateMessage({
+        event: {
+          data: { reason: 'done' },
+          operationId: 'op-member',
+          stepIndex: 0,
+          timestamp: 1,
+          type: 'agent_runtime_end',
+        } as any,
+        id: '1',
+        operationId: 'op-1',
+        type: 'agent_event',
+      });
+      ws.simulateMessage({
+        gap: true,
+        operationId: 'op-1',
+        status: 'completed',
+        type: 'resume_complete',
+      });
+
+      expect(onComplete).toHaveBeenCalledWith({ source: 'resume_status', status: 'completed' });
+    });
+
+    it('trusts the resubscribe status when the member terminal was only seen before the reconnect', async () => {
+      const { mux } = createMux();
+      const sub = mux.subscribe('op-1');
+      const ws = await connectAndReady(mux);
+      const onComplete = vi.fn();
+      sub.on('session_complete', onComplete);
+
+      ws.simulateMessage({
+        gap: false,
+        operationId: 'op-1',
+        status: 'running',
+        type: 'resume_complete',
+      });
+      ws.simulateMessage({
+        event: {
+          data: { reason: 'done' },
+          operationId: 'op-member',
+          stepIndex: 0,
+          timestamp: 1,
+          type: 'agent_runtime_end',
+        } as any,
+        id: '1',
+        operationId: 'op-1',
+        type: 'agent_event',
+      });
+
+      ws.simulateClose();
+      await vi.advanceTimersByTimeAsync(500);
+      const ws2 = await settle();
+      ws2.simulateMessage(READY);
+      // Hibernated DO: empty replay, authoritative `completed`.
+      ws2.simulateMessage({
+        gap: false,
+        operationId: 'op-1',
+        status: 'completed',
+        type: 'resume_complete',
+      });
+
+      expect(onComplete).toHaveBeenCalledWith({ source: 'resume_status', status: 'completed' });
+    });
+
     it('subscribe_failed emits auth_failed and ends the subscription', async () => {
       const { mux } = createMux();
       const ws = await connectAndReady(mux);
