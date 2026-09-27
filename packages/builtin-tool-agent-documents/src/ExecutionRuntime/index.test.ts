@@ -38,7 +38,20 @@ describe('AgentDocumentsExecutionRuntime', () => {
       expect(result.content).toContain('"id":"agent-doc-49"');
       expect(result.content).not.toContain('"id":"agent-doc-50"');
       expect(result.content).toContain(
-        'Showing documents 1-50 of 120. Call listDocuments again with offset=50 for the next page',
+        'Showing documents 1-50 of 120. For the next page call listDocuments with {"limit":50,"offset":50,"scope":"agent","sourceType":"all"}.',
+      );
+    });
+
+    it('keeps the active filters in the next-page arguments', async () => {
+      const runtime = createRuntime({ listTopicDocuments: vi.fn().mockResolvedValue(docs) });
+
+      const result = await runtime.listDocuments(
+        { limit: 20, parentId: 'folder-1', scope: 'currentTopic', sourceType: 'web' },
+        { agentId: 'agent-1', topicId: 'topic-1' },
+      );
+
+      expect(result.content).toContain(
+        'For the next page call listDocuments with {"limit":20,"offset":20,"parentId":"folder-1","scope":"currentTopic","sourceType":"web"}.',
       );
     });
 

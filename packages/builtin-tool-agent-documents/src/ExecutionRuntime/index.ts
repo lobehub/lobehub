@@ -360,9 +360,18 @@ export class AgentDocumentsExecutionRuntime {
     );
 
     const nextOffset = offset + page.length;
+    // Page two must read the same filtered set, so the continuation repeats
+    // every active filter instead of just the offset.
+    const nextArgs = JSON.stringify({
+      limit,
+      offset: nextOffset,
+      ...(parentId ? { parentId } : {}),
+      scope,
+      sourceType,
+    });
     const pagingNote =
       nextOffset < docs.length
-        ? `\n\nShowing documents ${offset + 1}-${nextOffset} of ${docs.length}. Call listDocuments again with offset=${nextOffset} for the next page, or narrow the listing with parentId / sourceType.`
+        ? `\n\nShowing documents ${offset + 1}-${nextOffset} of ${docs.length}. For the next page call listDocuments with ${nextArgs}.`
         : '';
 
     return {
