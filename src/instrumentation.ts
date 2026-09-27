@@ -42,6 +42,27 @@ export async function register() {
     });
   }
 
+  // Re-arm heartbeat ticks lost to a restart. In local queue mode the
+  // LocalTaskScheduler holds pending ticks in in-memory setTimeout timers,
+  // so a restart silently stalls every heartbeat loop; QStash deployments
+  // persist ticks server-side and are skipped inside the recovery module.
+  // Dynamic import: the recovery module pulls node-only DB code and this
+  // file is compiled for every Next runtime — same reason every other hook
+  // below defers its imports.
+  if (
+    process.env.NEXT_RUNTIME === 'nodejs' &&
+    process.env.DATABASE_URL &&
+    !process.env.VERCEL_ENV
+  ) {
+    void (async () => {
+      const { scheduleHeartbeatRecoveryOnce } =
+        await import('@/server/services/taskRunner/heartbeatRecovery');
+      await scheduleHeartbeatRecoveryOnce();
+    })().catch((err) => {
+      console.error('[Instrumentation] Failed to rehydrate heartbeat tasks:', err);
+    });
+  }
+
   // Note: messenger system bot connections (Discord/Telegram) are managed
   // entirely from dc-center's System Bots admin — save / enable / forceReconnect
   // mutations call MessageGateway directly. The main app's only role here is
