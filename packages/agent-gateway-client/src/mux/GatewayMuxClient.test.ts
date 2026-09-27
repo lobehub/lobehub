@@ -645,6 +645,49 @@ describe('GatewayMuxClient', () => {
       expect(sub.active).toBe(false);
     });
 
+    // Codex P1 on #20102: the resubscribe reply reports the status a member's
+    // mirrored terminal left on the supervisor's DO.
+    it('keeps a resubscribed supervisor alive on the status a replayed member terminal left (G-02)', async () => {
+      const { mux } = createMux();
+      const ws = await connectAndReady(mux);
+      const sub = mux.subscribe('op-1');
+      const onComplete = vi.fn();
+      sub.on('session_complete', onComplete);
+
+      ws.simulateMessage({
+        event: {
+          data: { reason: 'done' },
+          operationId: 'op-member',
+          stepIndex: 0,
+          timestamp: 1,
+          type: 'agent_runtime_end',
+        } as any,
+        id: '1',
+        operationId: 'op-1',
+        type: 'agent_event',
+      });
+      ws.simulateMessage(agentEvent('op-1', '2', 'step_start'));
+      ws.simulateMessage({
+        gap: false,
+        operationId: 'op-1',
+        status: 'completed',
+        type: 'resume_complete',
+      });
+
+      expect(onComplete).not.toHaveBeenCalled();
+      expect(sub.active).toBe(true);
+
+      // A status the member's terminal cannot explain still ends it.
+      ws.simulateMessage({
+        gap: false,
+        operationId: 'op-1',
+        status: 'error',
+        type: 'resume_complete',
+      });
+      expect(onComplete).toHaveBeenCalledWith({ source: 'resume_status', status: 'error' });
+      expect(sub.active).toBe(false);
+    });
+
     it('subscribe_failed emits auth_failed and ends the subscription', async () => {
       const { mux } = createMux();
       const ws = await connectAndReady(mux);

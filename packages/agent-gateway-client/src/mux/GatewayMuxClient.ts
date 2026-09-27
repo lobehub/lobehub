@@ -250,7 +250,13 @@ class OperationSubscriptionImpl implements OperationSubscription {
         // `pending` = the op DO has not seen `init` yet; the hub replays later.
         // Non-terminal status = the run is alive, keep streaming. Never guess
         // completion from silence (see v1 AgentStreamClient).
-        if (!message.pending && isTerminalStatus(message.status)) {
+        if (
+          !message.pending &&
+          isTerminalStatus(message.status) &&
+          // A status left by a mirrored member's terminal — see
+          // `MirroredTerminalEchoGuard.isStaleResumeStatus`.
+          !this.terminalEchoGuard.isStaleResumeStatus(message.status)
+        ) {
           this.finish({ source: 'resume_status', status: message.status });
         }
         break;

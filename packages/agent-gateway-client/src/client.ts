@@ -333,9 +333,11 @@ export class AgentStreamClient extends TypedEmitter {
           }
 
           const terminal =
-            message.status === 'completed' ||
-            message.status === 'error' ||
-            message.status === 'interrupted';
+            (message.status === 'completed' ||
+              message.status === 'error' ||
+              message.status === 'interrupted') &&
+            // A status left by a mirrored member's terminal, not this op's end.
+            !this.terminalEchoGuard.isStaleResumeStatus(message.status);
 
           if (terminal) {
             this.sessionEnded = true;
