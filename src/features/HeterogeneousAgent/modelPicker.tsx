@@ -1,7 +1,9 @@
 import type { ServerDefaultHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
+import { getKimiModelCompatibility } from '@lobechat/heterogeneous-agents';
 import { Flexbox, Tooltip } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import type { LobeDefaultAiModelListItem } from 'model-bank';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ModelItemRender, TAG_CLASSNAME } from '@/components/ModelSelect';
@@ -28,6 +30,21 @@ const CompatibilityHint = ({
         {t(`heterogeneousStatus.apiMode.compatibility.${status}`)}
       </span>
     </Tooltip>
+  );
+};
+
+export const renderKimiModelOption = (
+  model: Parameters<typeof getKimiModelCompatibility>[0],
+  label: ReactNode,
+) => {
+  const status = getKimiModelCompatibility(model);
+  if (status === 'toolsUnsupported') return label;
+
+  return (
+    <Flexbox horizontal align="center" gap={12} justify="space-between">
+      {label}
+      <CompatibilityHint status={status} />
+    </Flexbox>
   );
 };
 

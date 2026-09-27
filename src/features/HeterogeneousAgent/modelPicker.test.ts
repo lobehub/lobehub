@@ -1,16 +1,40 @@
+import { isKimiModelCandidate } from '@lobechat/heterogeneous-agents';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { LobeDefaultAiModelListItem } from 'model-bank';
+import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
+
+import ModelSelect from '@/features/ModelSelect';
 
 import {
   buildServerDefaultModelOptions,
   compactModelTriggerText,
+  renderKimiModelOption,
   resolveServerDefaultAgentModels,
   resolveServerDefaultModelMeta,
 } from './modelPicker';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
+}));
+
+vi.mock('@/store/aiInfra', () => ({
+  useAiInfraStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      builtinAiModelList: [],
+      enabledChatModelList: [
+        {
+          id: 'custom',
+          children: [
+            { id: 'with-tools', abilities: { functionCall: true } },
+            { id: 'unknown-tools', abilities: {} },
+            { id: 'no-tools', abilities: { functionCall: false } },
+          ],
+        },
+      ],
+    }),
 }));
 
 const catalogItem = (partial: {
@@ -22,6 +46,36 @@ const catalogItem = (partial: {
     abilities: {},
     ...partial,
   }) as LobeDefaultAiModelListItem;
+
+describe('Kimi custom-provider model options', () => {
+  it('shows distinct compatibility hints in the real picker and excludes unsupported models', async () => {
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      createElement(ModelSelect, {
+        modelFilter: isKimiModelCandidate,
+        modelOptionRender: renderKimiModelOption,
+        onChange,
+        value: { model: 'with-tools', provider: 'custom' },
+      }),
+    );
+
+    await user.click(screen.getByRole('combobox'));
+    const supported = await screen.findByRole('option', { name: /with-tools/ });
+    const unknown = screen.getByRole('option', { name: /unknown-tools/ });
+    expect(
+      within(supported).getByText('heterogeneousStatus.apiMode.compatibility.untested'),
+    ).toBeInTheDocument();
+    expect(
+      within(unknown).getByText('heterogeneousStatus.apiMode.compatibility.toolsUnknown'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /no-tools/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox')).not.toHaveTextContent('compatibility');
+
+    await user.click(unknown);
+    expect(onChange).toHaveBeenCalledWith({ model: 'unknown-tools', provider: 'custom' });
+  });
+});
 
 describe('resolveServerDefaultAgentModels', () => {
   it('returns an empty list when an older server omits the requested agent entry', () => {

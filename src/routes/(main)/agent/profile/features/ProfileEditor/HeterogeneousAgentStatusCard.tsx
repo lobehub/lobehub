@@ -29,6 +29,7 @@ import {
   buildServerDefaultModelOptions,
   MODEL_PICKER_STYLE,
   modelPickerStyles,
+  renderKimiModelOption,
   type ServerDefaultModel,
 } from '@/features/HeterogeneousAgent/modelPicker';
 import ModelSelect from '@/features/ModelSelect';
@@ -830,6 +831,9 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
                 placeholder={t('heterogeneousStatus.apiMode.modelPlaceholder')}
                 popupWidth={360}
                 providerIds={[providerApiConfig.providerId]}
+                modelOptionRender={
+                  provider.type === 'kimi-code' ? renderKimiModelOption : undefined
+                }
                 value={{
                   model: providerApiConfig.model,
                   provider: providerApiConfig.providerId,

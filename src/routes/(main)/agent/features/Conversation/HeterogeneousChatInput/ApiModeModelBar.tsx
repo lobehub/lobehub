@@ -17,6 +17,7 @@ import {
   COMPACT_MODEL_PICKER_STYLE,
   compactModelTriggerText,
   modelPickerStyles,
+  renderKimiModelOption,
   resolveServerDefaultAgentModels,
 } from '@/features/HeterogeneousAgent/modelPicker';
 import ModelSelect from '@/features/ModelSelect';
@@ -128,6 +129,9 @@ const ApiModeModelBar = memo<ApiModeModelBarProps>(({ agentId }) => {
       size="small"
       style={COMPACT_MODEL_PICKER_STYLE}
       variant="borderless"
+      modelOptionRender={
+        heterogeneousProvider.type === 'kimi-code' ? renderKimiModelOption : undefined
+      }
       value={
         effectiveProviderApiConfig
           ? {

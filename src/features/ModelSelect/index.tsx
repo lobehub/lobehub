@@ -96,6 +96,8 @@ interface ModelSelectProps extends Pick<
   initialWidth?: boolean;
   /** Apply an agent's capability filter to available choices. */
   modelFilter?: (model: EnabledProviderWithModels['children'][number]) => boolean;
+  /** Decorate available options without changing the closed trigger or stale-model remedies. */
+  modelOptionRender?: (model: ModelOption, label: ReactNode) => ReactNode;
   modelType?: 'chat' | 'embedding';
   onChange?: (props: { model: string; provider: string }) => void;
   /** Fired when the selection is cleared via `allowClear`. */
@@ -128,6 +130,7 @@ const ModelSelect = memo<ModelSelectProps>(
     popupWidth,
     modelType = 'chat',
     modelFilter,
+    modelOptionRender,
     providerIds,
   }) => {
     const { t } = useTranslation('components');
@@ -391,13 +394,14 @@ const ModelSelect = memo<ModelSelectProps>(
             const stale = option as unknown as { __stale?: boolean; popupLabel?: ReactNode };
             if (stale.__stale) return stale.popupLabel ?? option.label;
 
-            return (
+            const label = (
               <ModelItemRender
                 {...(option as ModelOption)}
                 {...(option as ModelOption).abilities}
                 showInfoTag={false}
               />
             );
+            return modelOptionRender ? modelOptionRender(option as ModelOption, label) : label;
           }}
           style={{
             minWidth: 200,
