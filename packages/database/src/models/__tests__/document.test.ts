@@ -923,6 +923,77 @@ describe('DocumentModel', () => {
       expect(found?.id).toBe('document-tie-a');
     });
 
+    describe('file-backed agent-document placeholder', () => {
+      const createUploadedMarkdown = async () => {
+        const { id } = await fileModel.create({
+          fileType: 'text/markdown',
+          name: 'product-spec.md',
+          size: 329_028,
+          url: 'files/product-spec.md',
+        });
+        const file = await fileModel.findById(id);
+        if (!file) throw new Error('File not found after creation');
+        return file;
+      };
+
+      // Shape `AgentDocumentsService.importFile` writes: empty content, the file's own MIME type.
+      const insertPlaceholder = (fileId: string, url: string) =>
+        documentModel.create({
+          content: '',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          fileId,
+          fileType: 'text/markdown',
+          filename: 'product-spec.md',
+          source: url,
+          sourceType: 'file',
+          title: 'product-spec.md',
+          totalCharCount: 0,
+          totalLineCount: 0,
+        });
+
+      it('should not treat the placeholder as a parse result', async () => {
+        const file = await createUploadedMarkdown();
+        await insertPlaceholder(file.id, file.url);
+
+        await expect(documentModel.findByFileId(file.id)).resolves.toBeUndefined();
+      });
+
+      it('should return the parse cache written after the placeholder', async () => {
+        const file = await createUploadedMarkdown();
+        await insertPlaceholder(file.id, file.url);
+        const { id: parsedId } = await documentModel.create({
+          content: '# Product Spec',
+          createdAt: new Date('2026-01-02T00:00:00.000Z'),
+          fileId: file.id,
+          fileType: 'custom/document',
+          source: file.url,
+          sourceType: 'file',
+          totalCharCount: 14,
+          totalLineCount: 1,
+        });
+
+        const found = await documentModel.findByFileId(file.id);
+        expect(found?.id).toBe(parsedId);
+        expect(found?.content).toBe('# Product Spec');
+      });
+
+      it('should still return a parse cache of an empty file', async () => {
+        const file = await createUploadedMarkdown();
+        const { id: parsedId } = await documentModel.create({
+          content: '',
+          fileId: file.id,
+          fileType: 'custom/document',
+          source: file.url,
+          sourceType: 'file',
+          totalCharCount: 0,
+          totalLineCount: 1,
+        });
+
+        const found = await documentModel.findByFileId(file.id);
+        expect(found?.id).toBe(parsedId);
+      });
+    });
+
     it('should handle different file types', async () => {
       const { id: pdfFileId } = await fileModel.create({
         fileType: 'application/pdf',

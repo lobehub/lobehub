@@ -82,6 +82,7 @@ import {
 } from '../utils/agentKnowledgeMounts';
 import { rehomeAgentLabelsForRecipient } from '../utils/agentLabelsOwnership';
 import { rehomeAgentQuotaBindingsForRecipient } from '../utils/agentQuotaBindings';
+import { notFileBackedPlaceholder } from '../utils/fileBackedPlaceholder';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { resolveGroupMembershipType } from '../utils/groupMembership';
 import { normalizeInboxAgentMeta } from '../utils/inboxAgent';
@@ -794,7 +795,11 @@ export class AgentModel {
         // A file can own several documents; take the oldest, like `DocumentModel.findByFileId`
         // (which `readAttachment` pages through), so the preview and its continuation agree.
         orderBy: [asc(documents.createdAt), asc(documents.id)],
-        where: and(this.documentsOwnership(), inArray(documents.fileId, enabledFileIds)),
+        where: and(
+          this.documentsOwnership(),
+          inArray(documents.fileId, enabledFileIds),
+          notFileBackedPlaceholder(),
+        ),
       });
 
       const documentMap = new Map<string | null, (typeof documentsData)[number]>();
