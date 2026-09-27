@@ -119,6 +119,16 @@ describe('buildCoreManifest', () => {
     await expect(buildCoreManifest(options({ shellAbi: 'dev' }))).rejects.toThrow(/shellAbi/);
   });
 
+  it('leaves .DS_Store out of the tree since electron-builder does not package it', async () => {
+    await setup();
+    await writeFile(path.join(root, 'dist/renderer/.DS_Store'), 'finder');
+    await writeFile(path.join(root, '.DS_Store'), 'finder');
+
+    const manifest = await buildCoreManifest(options());
+
+    expect(manifest.tree.map((file) => file.path)).toEqual(Object.keys(files));
+  });
+
   it('rejects a non-numeric rollout', () => {
     const tree = [{ path: 'dist/main/index.js', sha256: 'b'.repeat(64), size: 1 }];
     expect(() =>

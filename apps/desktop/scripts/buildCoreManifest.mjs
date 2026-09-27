@@ -33,7 +33,9 @@ const assertManifest = (manifest) => {
 
 export const readCoreTree = (coreDir) => {
   const { objects, tree: allFiles } = readRendererTree(coreDir);
-  const tree = allFiles.filter((file) => file.path !== 'manifest.json');
+  const tree = allFiles.filter(
+    (file) => file.path !== 'manifest.json' && path.posix.basename(file.path) !== '.DS_Store',
+  );
   const referenced = new Set(tree.map((file) => file.sha256));
   for (const sha256 of objects.keys()) if (!referenced.has(sha256)) objects.delete(sha256);
   return { objects, tree };

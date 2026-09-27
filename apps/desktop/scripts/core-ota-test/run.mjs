@@ -69,9 +69,8 @@ const steps = {
   },
 
   build() {
-    const { privateKey, publicKey } = keys();
+    const { publicKey } = keys();
     const env = {
-      RENDERER_OTA_PRIVATE_KEY: privateKey,
       RENDERER_OTA_PUBLIC_KEY: publicKey,
       UPDATE_CHANNEL: CHANNEL,
       UPDATE_SERVER_URL: `http://127.0.0.1:${PORT}/${CHANNEL}`,
@@ -134,6 +133,13 @@ const steps = {
       `<html><body><script src="/assets/${asset}"></script><script>throw new Error("boot failure e2e")</script></body></html>`,
     );
     publish('v4', { previous: 'v3', seq: 3, version: `${APP_VERSION}-core.3` });
+  },
+
+  v5() {
+    rmSync(coreDir('v5'), { force: true, recursive: true });
+    cpSync(coreDir('v3'), coreDir('v5'), { recursive: true });
+    appendFileSync(path.join(coreDir('v5'), 'dist/main/index.js'), '\nprocess.exit(1);\n');
+    publish('v5', { previous: 'v4', seq: 4, version: `${APP_VERSION}-core.4` });
   },
 
   serve() {
