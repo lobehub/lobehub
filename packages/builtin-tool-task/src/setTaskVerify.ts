@@ -23,12 +23,12 @@ export const normalizeSetTaskVerifyParams = <
     const value = literal(params.enabled).toLowerCase();
     if (value === 'true') normalized.enabled = true;
     else if (value === 'false') normalized.enabled = false;
-    else if (value === 'null' || value === '') normalized.enabled = null;
+    else if (value === 'null') normalized.enabled = null;
   }
 
   if (typeof params.maxIterations === 'string') {
     const value = literal(params.maxIterations);
-    if (value === 'null' || value === '') normalized.maxIterations = null;
+    if (value === 'null') normalized.maxIterations = null;
     else if (/^\d+$/.test(value)) normalized.maxIterations = Number(value);
   }
 

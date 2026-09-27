@@ -28,5 +28,11 @@ describe('normalizeSetTaskVerifyParams', () => {
       maxIterations: 'two',
     });
     expect(normalizeSetTaskVerifyParams({ identifier: 'T-1' })).toEqual({ identifier: 'T-1' });
+    // Clearing is reserved for an explicit null; an empty string must still be
+    // rejected by the schema instead of silently wiping the setting.
+    expect(normalizeSetTaskVerifyParams({ enabled: '', maxIterations: ' ' })).toEqual({
+      enabled: '',
+      maxIterations: ' ',
+    });
   });
 });
