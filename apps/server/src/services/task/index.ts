@@ -55,6 +55,8 @@ const TASK_DETAIL_DIRECT_TOPIC_LIMIT = 100;
  */
 const TASK_DETAIL_ACTIVITY_LIMIT = 200;
 const TASK_DETAIL_DESCENDANT_TOPIC_LIMIT = 300;
+/** How long after a run starts a task may have no recorded operation yet. */
+const TASK_RUN_STARTING_GRACE_MS = 2 * 60 * 1000;
 
 type DirectTaskTopicActivityRow = Awaited<ReturnType<TaskTopicModel['findWithHandoff']>>[number];
 type DescendantTaskTopicActivityRow = Awaited<
@@ -362,6 +364,24 @@ export class TaskService {
     const task = await this.resolveOrThrow(idOrIdentifier);
 
     const runningTopics = await this.taskTopicModel.findRunningByTaskIds([task.id]);
+
+    // The runner marks the task `running` before it dispatches the agent and
+    // records the topic / operation only after dispatch returns. A delete in
+    // that window finds nothing to interrupt and would orphan the run it is
+    // about to start. Past the grace window a missing operation means the
+    // start died, and deletion goes ahead.
+    const startedAt = task.startedAt ? new Date(task.startedAt).getTime() : 0;
+    const isStarting =
+      task.status === 'running' &&
+      Date.now() - startedAt < TASK_RUN_STARTING_GRACE_MS &&
+      (runningTopics.length === 0 || runningTopics.some((topic) => !topic.operationId));
+    if (isStarting) {
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: 'This task is still starting its run. Try deleting it again in a moment.',
+      });
+    }
+
     const toInterrupt = runningTopics.filter(
       (topic) => topic.operationId && topic.operationId !== options.keepOperationId,
     );

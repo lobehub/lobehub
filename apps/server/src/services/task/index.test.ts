@@ -1514,6 +1514,35 @@ describe('TaskService', () => {
       expect(mockTaskModel.delete).not.toHaveBeenCalled();
     });
 
+    it('refuses to delete a task whose run is still starting', async () => {
+      mockTaskModel.resolve.mockResolvedValue({
+        id: 'task-starting',
+        identifier: 'T-4',
+        startedAt: new Date(),
+        status: 'running',
+      });
+      mockTaskTopicModel.findRunningByTaskIds.mockResolvedValue([]);
+
+      await expect(new TaskService(db, userId).deleteTask('T-4')).rejects.toMatchObject({
+        code: 'CONFLICT',
+      });
+      expect(mockTaskModel.delete).not.toHaveBeenCalled();
+    });
+
+    it('deletes a running task whose start died long ago', async () => {
+      mockTaskModel.resolve.mockResolvedValue({
+        id: 'task-stale',
+        identifier: 'T-5',
+        startedAt: new Date(Date.now() - 60 * 60 * 1000),
+        status: 'running',
+      });
+      mockTaskTopicModel.findRunningByTaskIds.mockResolvedValue([]);
+
+      await new TaskService(db, userId).deleteTask('T-5');
+
+      expect(mockTaskModel.delete).toHaveBeenCalledWith('task-stale');
+    });
+
     it("does not interrupt the caller's own run", async () => {
       mockTaskModel.resolve.mockResolvedValue({ id: 'task-self', identifier: 'T-3' });
       mockTaskTopicModel.findRunningByTaskIds.mockResolvedValue([
