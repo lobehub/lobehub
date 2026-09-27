@@ -428,7 +428,11 @@ describe('agentManagementRuntime', () => {
       mockGetMcpManifest.mockResolvedValue(manifest);
 
       const runtime = createRuntime();
-      const result = await runtime.installPlugin({ agentId: 'agent-1', identifier: 'plugin-b' });
+      const result = await runtime.installPlugin({
+        agentId: 'agent-1',
+        identifier: 'plugin-b',
+        source: 'market',
+      });
 
       expect(result.success).toBe(true);
       expect(result.content).toContain('next run');
@@ -456,7 +460,8 @@ describe('agentManagementRuntime', () => {
       const result = await createRuntime().installPlugin({
         agentId: 'agent-1',
         identifier: 'adkit',
-      } as never);
+        source: 'market',
+      });
 
       expect(result.success).toBe(false);
       expect(result.error).toMatchObject({ type: 'PluginHasNoTools' });
@@ -471,11 +476,27 @@ describe('agentManagementRuntime', () => {
       const result = await createRuntime().installPlugin({
         agentId: 'agent-1',
         identifier: 'adkit-ads-mcp',
-      } as never);
+        source: 'market',
+      });
 
       expect(result.success).toBe(false);
       expect(result.error).toMatchObject({ type: 'PluginNotFound' });
       expect(mockCreatePlugin).not.toHaveBeenCalled();
+      expect(mockUpdateConfig).not.toHaveBeenCalled();
+    });
+
+    it('refuses an official integration that is not connected', async () => {
+      mockGetAgentConfigById.mockResolvedValue({ id: 'agent-1', plugins: [] });
+      mockFindById.mockResolvedValue(undefined);
+
+      const result = await createRuntime().installPlugin({
+        agentId: 'agent-1',
+        identifier: 'gmail',
+        source: 'official',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ type: 'PluginNotConnected' });
       expect(mockUpdateConfig).not.toHaveBeenCalled();
     });
 
@@ -485,7 +506,8 @@ describe('agentManagementRuntime', () => {
       const result = await createRuntime().installPlugin({
         agentId: 'agent-1',
         identifier: 'lobe-web-browsing',
-      } as never);
+        source: 'official',
+      });
 
       expect(result.success).toBe(true);
       expect(result.content).not.toContain('next run');

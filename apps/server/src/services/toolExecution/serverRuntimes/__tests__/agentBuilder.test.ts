@@ -225,7 +225,9 @@ describe('agentBuilderRuntime', () => {
     // user's connector is `tg-mcp`, so the agent pinned an id that loads nothing.
     it('refuses to enable an id that resolves to nothing and suggests the near match', async () => {
       mockGetAgentConfigById.mockResolvedValue({ id: 'agent-1', plugins: ['lobe-message'] });
-      mockResolveConnectors.mockResolvedValue([{ identifier: 'tg-mcp' }]);
+      mockResolveConnectors.mockResolvedValue([
+        { identifier: 'tg-mcp', isEnabled: true, status: 'connected' },
+      ]);
 
       const runtime = createRuntime();
       const result = await runtime.updateConfig(
@@ -246,7 +248,9 @@ describe('agentBuilderRuntime', () => {
 
     it('enables a user connector by its exact identifier', async () => {
       mockGetAgentConfigById.mockResolvedValue({ id: 'agent-1', plugins: [] });
-      mockResolveConnectors.mockResolvedValue([{ identifier: 'tg-mcp' }]);
+      mockResolveConnectors.mockResolvedValue([
+        { identifier: 'tg-mcp', isEnabled: true, status: 'connected' },
+      ]);
 
       const result = await createRuntime().updateConfig(
         { togglePlugin: { enabled: true, pluginId: 'tg-mcp' } },
@@ -257,6 +261,35 @@ describe('agentBuilderRuntime', () => {
       expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', {
         plugins: [{ identifier: 'tg-mcp', mode: 'pinned' }],
       });
+    });
+
+    it('refuses a connector that exists but is not connected', async () => {
+      mockGetAgentConfigById.mockResolvedValue({ id: 'agent-1', plugins: [] });
+      mockResolveConnectors.mockResolvedValue([
+        { identifier: 'gmail', isEnabled: true, status: 'disconnected' },
+      ]);
+
+      const result = await createRuntime().updateConfig(
+        { togglePlugin: { enabled: true, pluginId: 'gmail' } },
+        { editingAgentId: 'agent-1', toolManifestMap: {} },
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ type: 'PluginNotConnected' });
+      expect(mockUpdateConfig).not.toHaveBeenCalled();
+    });
+
+    it('refuses an official catalog integration the user never connected', async () => {
+      mockGetAgentConfigById.mockResolvedValue({ id: 'agent-1', plugins: [] });
+
+      const result = await createRuntime().updateConfig(
+        { togglePlugin: { enabled: true, pluginId: 'gmail' } },
+        { editingAgentId: 'agent-1', toolManifestMap: {} },
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ type: 'PluginNotConnected' });
+      expect(mockUpdateConfig).not.toHaveBeenCalled();
     });
 
     it('still disables an id that no longer resolves, so stale entries can be removed', async () => {
@@ -432,6 +465,27 @@ describe('agentBuilderRuntime', () => {
       expect(result.error).toMatchObject({ type: 'PluginNotFound' });
       expect(mockCreatePlugin).not.toHaveBeenCalled();
       expect(mockUpdateConfig).not.toHaveBeenCalled();
+    });
+
+    it('installs the marketplace plugin even when a same-named connector exists', async () => {
+      const manifest = { api: [{ name: 'send' }], identifier: 'gmail' };
+      mockGetAgentConfigById.mockResolvedValue({ id: 'agent-1', plugins: [] });
+      mockResolveConnectors.mockResolvedValue([
+        { identifier: 'gmail', isEnabled: false, status: 'disconnected' },
+      ]);
+      mockGetMcpManifest.mockResolvedValue(manifest);
+
+      const result = await createRuntime().installPlugin(
+        { identifier: 'gmail', source: 'market' },
+        { editingAgentId: 'agent-1', toolManifestMap: {} },
+      );
+
+      expect(result.success).toBe(true);
+      expect(mockCreatePlugin).toHaveBeenCalledWith({
+        identifier: 'gmail',
+        manifest,
+        type: 'plugin',
+      });
     });
 
     it('installs a marketplace plugin with its manifest and says it loads next run', async () => {

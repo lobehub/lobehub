@@ -251,7 +251,7 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
 
       installPlugin: async (params: InstallPluginParams): Promise<ToolExecutionResult> => {
         try {
-          const { agentId, identifier } = params;
+          const { agentId, identifier, source } = params;
           const agent = await agentModel.getAgentConfigById(agentId);
           if (!agent) {
             return { content: `Agent "${agentId}" not found.`, success: false };
@@ -264,7 +264,7 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
           const { installedNow, resolution } = await resolveOrInstallMarketPlugin(
             identifier,
             { connectorModel, discoverService, pluginModel },
-            { agentId },
+            { agentId, source },
           );
           if (resolution.status !== 'loadable')
             return unresolvablePluginResult(identifier, resolution);

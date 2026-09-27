@@ -362,7 +362,7 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
           const { installedNow, resolution } = await resolveOrInstallMarketPlugin(
             identifier,
             { connectorModel, discoverService, pluginModel },
-            { agentId },
+            { agentId, source: 'market' },
           );
           if (resolution.status !== 'loadable')
             return unresolvablePluginResult(identifier, resolution);
