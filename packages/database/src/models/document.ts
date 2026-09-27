@@ -429,6 +429,29 @@ export class DocumentModel {
   };
 
   /**
+   * Mirror a file's placement / name onto the document row(s) backed by it
+   * (`documents.file_id = fileId`). The knowledge-base tree is rendered from
+   * `documents.parent_id`, so moving only the `files` row leaves the item under
+   * its old folder. Counterpart of the document → file sync in
+   * `DocumentService.updateDocument`.
+   */
+  syncFromFile = async (fileId: string, value: { name?: string; parentId?: string | null }) => {
+    const patch: Partial<DocumentItem> = {};
+    if (value.name !== undefined) {
+      patch.title = value.name;
+      patch.filename = value.name;
+    }
+    if (value.parentId !== undefined) patch.parentId = value.parentId;
+    if (Object.keys(patch).length === 0) return [];
+
+    return this.db
+      .update(documents)
+      .set({ ...patch, updatedAt: nextDocumentUpdatedAt() })
+      .where(and(this.readScope(), eq(documents.fileId, fileId)))
+      .returning({ id: documents.id });
+  };
+
+  /**
    * Publish one private document into the workspace. Convenience wrapper
    * around `setVisibility(rootId, 'public')`; kept as a named method for the
    * TRPC `publishDocumentToWorkspace` procedure and existing callers.
