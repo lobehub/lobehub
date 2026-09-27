@@ -3032,6 +3032,37 @@ describe('TaskModel', () => {
       expect((await model.findById(root.id))!.status).toBe('completed');
     });
 
+    it('should drop the run location when the copy crosses into another scope', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const agentId = await createAgent('copy-execution-agent');
+      const root = await model.create({
+        assigneeAgentId: agentId,
+        config: {
+          execution: toTaskExecutionConfigPatch({
+            boundDeviceId: 'device-of-the-copier',
+            repos: ['lobehub/lobehub'],
+            workingDirectory: '/Users/copier/code/lobehub',
+            workingDirectoryConfig: { path: '/Users/copier/code/lobehub', repoType: 'git' },
+          }),
+          review: { enabled: true },
+        },
+        instruction: 'Root',
+        name: 'Pinned task',
+      });
+
+      const { rootId } = await model.copyToWorkspace(root.id, wsId, userId);
+      const cloned = await new TaskModel(serverDB, userId, wsId).findById(rootId);
+
+      // The pin named a machine and a path in the SOURCE scope, and the repos
+      // were resolved by an assignee the clone does not have — none of it can be
+      // resolved by the destination's runs. The first assignment there cannot
+      // clean up after the fact either (it has no previous assignee to diff
+      // against), so the copy itself must not carry the selection over.
+      expect(readTaskExecutionConfig(cloned!.config as Record<string, unknown>)).toBeUndefined();
+      // …while the rest of the config still copies.
+      expect((cloned!.config as Record<string, any>).review.enabled).toBe(true);
+    });
+
     it('should clone a workspace task into the personal scope (null target)', async () => {
       const wsModel = new TaskModel(serverDB, userId, wsId);
       const root = await wsModel.create({ instruction: 'WS Root' });

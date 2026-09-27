@@ -16,6 +16,7 @@ import {
   clearTaskReposSelection,
   readTaskExecutionConfig,
   toTaskExecutionConfigPatch,
+  withoutTaskExecutionSelection,
 } from '@lobechat/types';
 import {
   and,
@@ -2418,7 +2419,14 @@ export class TaskModel {
             assigneeAgentId: null,
             assigneeUserId: null,
             automationMode: original.automationMode,
-            config: original.config ?? {},
+            // The run location is dropped the way the other cross-scope refs
+            // are: a pinned machine, a path on it and a repo set all name
+            // something in the scope this task came from, and the clone's first
+            // assignment cannot clean them up later (it has no previous assignee
+            // to diff against — see `updateWithLog`).
+            config: withoutTaskExecutionSelection(
+              original.config as null | Record<string, unknown>,
+            ),
             context: {
               ...(original.context as Record<string, unknown>),
               duplicatedFrom: original.id,

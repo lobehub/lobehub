@@ -204,6 +204,29 @@ export const applyTaskTargetSelection = (
     : clearTaskDirectorySelection({ ...execution, boundDeviceId: deviceId });
 
 /**
+ * Drop the whole selection when a task's config moves into another scope.
+ *
+ * Every axis names something that only resolves where the task was set up: the
+ * machine belongs to the copier (or to the source workspace's pool), the path
+ * lives on that machine, and `repos` are resolved by the assignee agent a
+ * cross-scope copy does not carry over either. Dropping the selection restores
+ * plain inheritance, the only state a run in the destination can act on — the
+ * first assignment there cannot clean up after the fact, because it has no
+ * previous assignee to diff against (see `TaskModel.updateWithLog`).
+ *
+ * Returns the SAME config when there is nothing to drop, so a caller can tell
+ * "nothing to do" without comparing jsonb.
+ */
+export const withoutTaskExecutionSelection = (
+  config: null | Record<string, unknown> | undefined,
+): Record<string, unknown> => {
+  if (!config || config.execution === undefined) return config ?? {};
+
+  const { execution: _dropped, ...rest } = config;
+  return rest;
+};
+
+/**
  * The persisted shape of an execution selection.
  *
  * Every axis is written explicitly and a cleared axis becomes `null`, because

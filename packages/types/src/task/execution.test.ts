@@ -9,6 +9,7 @@ import {
   hasTaskExecutionSelection,
   readTaskExecutionConfig,
   toTaskExecutionConfigPatch,
+  withoutTaskExecutionSelection,
 } from './execution';
 
 describe('readTaskExecutionConfig', () => {
@@ -212,5 +213,35 @@ describe('clearTaskReposSelection', () => {
 
     expect(clearTaskReposSelection(pin)).toBe(pin);
     expect(clearTaskReposSelection(undefined)).toBeUndefined();
+  });
+});
+
+describe('withoutTaskExecutionSelection', () => {
+  it('drops the whole selection, keeping the rest of the config', () => {
+    // A cross-scope copy restarts from inheritance: the machine, the path on it
+    // and the assignee-resolved repos all belong to the scope the task came
+    // from, and the clone's first assignment cannot clear them later.
+    expect(
+      withoutTaskExecutionSelection({
+        execution: {
+          boundDeviceId: 'device-a',
+          repos: ['lobehub/lobehub'],
+          workingDirectory: '/Users/me/Code/lobehub',
+        },
+        model: 'gpt-4',
+        review: { enabled: true },
+      }),
+    ).toEqual({ model: 'gpt-4', review: { enabled: true } });
+  });
+
+  it('returns the input unchanged when there is nothing to drop', () => {
+    const config = { model: 'gpt-4' };
+
+    expect(withoutTaskExecutionSelection(config)).toBe(config);
+  });
+
+  it('degrades absent config to an empty one', () => {
+    expect(withoutTaskExecutionSelection(undefined)).toEqual({});
+    expect(withoutTaskExecutionSelection(null)).toEqual({});
   });
 });
