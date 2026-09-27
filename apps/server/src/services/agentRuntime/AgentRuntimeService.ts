@@ -57,6 +57,7 @@ import { MessageModel } from '@/database/models/message';
 import { UserModel } from '@/database/models/user';
 import { type LobeChatDatabase } from '@/database/type';
 import { appEnv } from '@/envs/app';
+import { isDeviceCapablePlan, isDeviceLockedPlan } from '@/helpers/executionTarget';
 import { type AgentRuntimeCoordinatorOptions } from '@/server/modules/AgentRuntime';
 import { AgentRuntimeCoordinator, createStreamEventManager } from '@/server/modules/AgentRuntime';
 import { runMayUseDevice } from '@/server/modules/AgentRuntime/executors/resolveRunActiveDeviceId';
@@ -2108,7 +2109,21 @@ export class AgentRuntimeService {
         // id through the same gate, so binding one here for a forbidden run buys
         // nothing and puts the device's working directory and system info into
         // the prompt variables (`serverCallLlmContextBuilder`).
-        if (!currentState.binding?.device?.id && runMayUseDevice(currentState)) {
+        //
+        // A run whose plan still leaves the device open (unrouted, not locked)
+        // keeps the remote-device picker for its whole lifetime, so it must keep
+        // following it: re-read on every step and let the latest activation win.
+        // Binding only once made every later `activateDevice` report success
+        // while local tools stayed on the first device.
+        const executionPlan = currentState.plan?.execution;
+        const deviceStillSelectable =
+          !!executionPlan &&
+          isDeviceCapablePlan(executionPlan) &&
+          !isDeviceLockedPlan(executionPlan);
+        if (
+          (!currentState.binding?.device?.id || deviceStillSelectable) &&
+          runMayUseDevice(currentState)
+        ) {
           // Interventions and async resumes can change tool rows after the
           // entry snapshot. Those paths still need a fresh device read.
           const canReuseEntryMessages =
@@ -2121,7 +2136,7 @@ export class AgentRuntimeService {
             currentState,
             canReuseEntryMessages ? stepEntryMessages : undefined,
           );
-          if (deviceContext) {
+          if (deviceContext && deviceContext.activeDeviceId !== currentState.binding?.device?.id) {
             currentState.binding = {
               ...currentState.binding,
               device: {

@@ -1095,6 +1095,62 @@ describe('AgentRuntimeService', () => {
       expect(step.mock.calls[0][0].binding?.device).toBeUndefined();
     });
 
+    describe('activateDevice after a device is already bound', () => {
+      const activation = (id: string, deviceId: string): UIChatMessage =>
+        ({
+          content: `Device "${deviceId}" activated successfully.`,
+          createdAt: 3,
+          id,
+          pluginState: { metadata: { activeDeviceId: deviceId } },
+          role: 'tool',
+          updatedAt: 3,
+        }) as UIChatMessage;
+
+      const runStep = async (execution: Record<string, unknown>) => {
+        const state = {
+          ...mockState,
+          binding: { device: { id: 'device-a' } },
+          messages: [],
+          origin: { agentId: 'agent-1', topicId: 'topic-1' },
+          plan: { execution },
+        };
+        mockCoordinator.loadAgentState.mockResolvedValue(state);
+        // The model activated device-a first, then device-b.
+        (service as any).messageModel.query.mockResolvedValue([
+          ...buildPersistedToolChain('answer'),
+          activation('activate-a', 'device-a'),
+          activation('activate-b', 'device-b'),
+        ]);
+        vi.spyOn((service as any).messageService, 'prepareUiMessages').mockResolvedValue([]);
+        const step = vi.fn().mockImplementation(async (input) => ({
+          events: [],
+          newState: { ...input, stepCount: 2 },
+          nextContext: mockParams.context,
+        }));
+        vi.spyOn(service as any, 'createAgentRuntime').mockResolvedValue({ runtime: { step } });
+
+        const result = await service.executeStep(mockParams);
+        expect(result.success).toBe(true);
+        return step.mock.calls[0][0].binding?.device?.id;
+      };
+
+      it('follows the latest activation while the plan leaves the device open', async () => {
+        const deviceId = await runStep({
+          kind: 'device-unrouted',
+          reason: 'ambiguous-online-devices',
+          target: 'auto',
+        });
+
+        expect(deviceId).toBe('device-b');
+      });
+
+      it('keeps a locked run on its device even if history names another one', async () => {
+        const deviceId = await runStep({ deviceId: 'device-a', kind: 'device', target: 'device' });
+
+        expect(deviceId).toBe('device-a');
+      });
+    });
+
     it('shares one DB read while UI preparation is still pending', async () => {
       const state = {
         ...mockState,
