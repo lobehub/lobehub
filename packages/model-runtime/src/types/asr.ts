@@ -32,6 +32,8 @@ export interface ASRPayload {
 
 export interface ASROptions {
   headers?: Record<string, any>;
+  /** Metadata passed to hooks (billing, tracing, route attempts), e.g. `trigger`. */
+  metadata?: Record<string, unknown>;
   signal?: AbortSignal;
   /**
    * userId for the request

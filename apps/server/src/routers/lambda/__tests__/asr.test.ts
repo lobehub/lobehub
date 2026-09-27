@@ -56,6 +56,19 @@ describe('asrRouter.transcribe', () => {
     expect(await payload.file.text()).toBe('audio-bytes');
   });
 
+  it('tags the request with the ASR trigger for route attempts and hooks', async () => {
+    await caller.transcribe({
+      audioBase64: Buffer.from('audio-bytes').toString('base64'),
+      model: 'gemini-3.5-transcribe',
+      provider: 'lobehub',
+    });
+
+    expect(transcribeMock.mock.calls[0][1]).toEqual({
+      metadata: { trigger: 'asr' },
+      user: 'u1',
+    });
+  });
+
   it('resolves a fileId by downloading the bytes from storage', async () => {
     findByIdMock.mockResolvedValue({
       fileType: 'audio/mp4',
