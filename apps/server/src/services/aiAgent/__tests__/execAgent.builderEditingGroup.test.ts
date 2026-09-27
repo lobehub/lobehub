@@ -197,8 +197,8 @@ vi.mock('model-bank', async (importOriginal) => {
  * `topics.metadata.editingGroupId`, but only a request sent from the group's
  * builder panel (scope `group_agent_builder`) names that group. Continuing the
  * same topic from any other surface arrives with scope `main`, and the run lost
- * its target: every member tool answered "No active group found" (vent
- * msg_JWXjYdF7HbDdoIZo2P, op origin `{ scope: 'main' }` with no group).
+ * its target: every member tool answered "No active group found" (op origin
+ * `{ scope: 'main' }` with no group).
  */
 describe('AiAgentService.execAgent - group builder editing target', () => {
   let service: AiAgentService;
