@@ -403,6 +403,13 @@ export interface ExecGroupMemberResult {
 }
 
 export interface OperationCreationParams {
+  /**
+   * The client starting this run handles `member_runtime_end` (declared via
+   * `aiAgent.execAgent`'s `streamFeatures`). Persisted on the op's metadata so
+   * the Gateway stream notifier renames the group member terminals it mirrors
+   * onto this op's channel only for a client that recognizes the new event.
+   */
+  acceptsMemberRuntimeEnd?: boolean;
   activeDeviceId?: string;
   /**
    * Principal pool the routed `activeDeviceId` lives in. `personal` when a

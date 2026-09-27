@@ -2,6 +2,16 @@ import type { UIChatMessage } from '@lobechat/types';
 
 // ─── Agent Stream Event (mirrors server StreamEvent) ───
 
+/**
+ * Stream features a client declares when it starts a run
+ * (`aiAgent.execAgent`'s `streamFeatures`), so the server only sends event
+ * shapes that client understands.
+ *
+ * - `member_runtime_end`: a mirrored group member's terminal arrives on the
+ *   supervisor's channel as `member_runtime_end` instead of `agent_runtime_end`.
+ */
+export type AgentStreamClientFeature = 'member_runtime_end';
+
 export type AgentStreamEventType =
   | 'agent_runtime_init'
   | 'agent_runtime_end'

@@ -1012,6 +1012,13 @@ const StartExecutionSchema = z.object({
 const ExecAgentSchema = z
   .object({
     includeFinalState: z.boolean().optional(),
+    /**
+     * Gateway stream features the calling client handles. `member_runtime_end`:
+     * a group member's terminal arrives on the supervisor's channel under that
+     * name instead of `agent_runtime_end`. Free-form strings so an older server
+     * ignores features it does not know rather than rejecting the run.
+     */
+    streamFeatures: z.array(z.string()).optional(),
     /** The agent ID to run (either agentId or slug is required) */
     agentId: z.string().optional(),
     /** Application context for message storage */
@@ -2411,6 +2418,7 @@ export const aiAgentRouter = router({
       }
 
       const result = await ctx.aiAgentService.execAgent({
+        acceptsMemberRuntimeEnd: input.streamFeatures?.includes('member_runtime_end'),
         agentId,
         appContext,
         autoStart,

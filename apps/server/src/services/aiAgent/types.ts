@@ -74,6 +74,12 @@ export interface ExecRunContext {
  * This extends the public ExecAgentParams with server-side only options
  */
 export interface InternalExecAgentParams extends ExecAgentParams {
+  /**
+   * The calling client handles `member_runtime_end`, derived from the
+   * `streamFeatures` it declared on `aiAgent.execAgent`. See
+   * `OperationCreationParams.acceptsMemberRuntimeEnd`.
+   */
+  acceptsMemberRuntimeEnd?: boolean;
   /** Additional plugin IDs to inject (e.g., task tool during task execution) */
   additionalPluginIds?: string[];
   /**

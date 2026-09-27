@@ -152,6 +152,7 @@ vi.mock('@/database/models/userMemory/persona', () => ({
 vi.mock('@/server/services/agentRuntime', () => ({
   AgentRuntimeService: vi.fn().mockImplementation(function () {
     return {
+      acceptsMemberRuntimeEnd: vi.fn().mockResolvedValue(false),
       completeGroupActionMember: mockCompleteGroupActionMember,
       createOperation: mockCreateOperation,
       ensureInterventionContinuationStarted: mockEnsureInterventionContinuationStarted,

@@ -25,6 +25,8 @@ export interface StartOperationDeps {
 }
 
 export interface StartOperationInput {
+  /** See {@link InternalExecAgentParams.acceptsMemberRuntimeEnd}. */
+  acceptsMemberRuntimeEnd?: boolean;
   approvalClaim: ApprovalClaimState;
   approvalSourceOperationId?: string;
   approvalSourceToolMessageIds: string[];
@@ -93,6 +95,7 @@ export const startOperation = async (
     userMessageId,
   } = ctx;
   const {
+    acceptsMemberRuntimeEnd,
     approvalClaim,
     approvalSourceOperationId,
     approvalSourceToolMessageIds,
@@ -145,7 +148,16 @@ export const startOperation = async (
   // Wrap in try-catch to handle operation startup failures (e.g., QStash unavailable)
   // If createOperation fails, we still have valid messages that need error info
   try {
+    // An approval continuation is a new operation for the same client: carry the
+    // parked operation's `member_runtime_end` declaration over (it is read here,
+    // before the parked operation is retired below).
+    const memberRuntimeEndAccepted =
+      acceptsMemberRuntimeEnd ??
+      (approvalSourceOperationId
+        ? await deps.agentRuntimeService.acceptsMemberRuntimeEnd(approvalSourceOperationId)
+        : undefined);
     const result = await deps.agentRuntimeService.createOperation({
+      acceptsMemberRuntimeEnd: memberRuntimeEndAccepted,
       includeFinalState: input.includeFinalState,
       activeDeviceId: discovery.activeDeviceId,
       activeDeviceScope: discovery.activeDeviceScope,

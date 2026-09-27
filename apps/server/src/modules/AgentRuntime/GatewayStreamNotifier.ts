@@ -88,6 +88,9 @@ const projectGatewayEventData = (data: unknown, eventType: unknown): unknown => 
  * handler still retires that member's column on it, while the DO, which only
  * reacts to `agent_runtime_end`, keeps the supervisor session open. The
  * member's own channel still receives the real terminal.
+ *
+ * Only applied when the mirror target's client declared it handles the new
+ * event (`acceptsMemberRuntimeEnd`) — see `GatewayStreamNotifier.mirrorPush`.
  */
 export const toMirroredEvent = (event: Record<string, unknown>): Record<string, unknown> =>
   event.type === 'agent_runtime_end' ? { ...event, type: 'member_runtime_end' } : event;
@@ -155,6 +158,13 @@ export interface GatewayStreamNotifierOptions {
    * over — otherwise an unawaited push can be lost with the invocation.
    */
   deferPushes?: boolean;
+  /**
+   * Whether the client that started `operationId` handles `member_runtime_end`
+   * (from persisted op metadata). Lets a queue worker that never ran the
+   * supervisor's init still rename the member terminals it mirrors. Omitted ⇒
+   * in-process knowledge only; unknown ⇒ the verbatim `agent_runtime_end`.
+   */
+  resolveAcceptsMemberRuntimeEnd?: (operationId: string) => Promise<boolean>;
 }
 
 export class GatewayStreamNotifier implements IStreamEventManager {
@@ -205,6 +215,15 @@ export class GatewayStreamNotifier implements IStreamEventManager {
   private mirrorResolved = new Set<string>();
   /** In-flight resolutions, deduped per op so concurrent events share one read. */
   private mirrorResolving = new Map<string, Promise<string | undefined>>();
+
+  /**
+   * `mirror target op → whether its client handles member_runtime_end`. Set from
+   * the target's own init (fast path) or resolved once from persisted metadata
+   * (queue path). A client released before the rename only retires a member
+   * column on `agent_runtime_end`, so it keeps getting that. Cleared at the
+   * target's `publishAgentRuntimeEnd`.
+   */
+  private memberEndTargets = new Map<string, Promise<boolean>>();
 
   /**
    * `operationId → visitor redaction policy` for confirmed shared-agent visitor
@@ -298,6 +317,9 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     if (typeof mirrorTo === 'string' && mirrorTo && mirrorTo !== operationId) {
       this.mirrorTargets.set(operationId, mirrorTo);
       log('mirror registered: %s → %s', operationId, mirrorTo);
+    }
+    if (initialState?.acceptsMemberRuntimeEnd === true) {
+      this.memberEndTargets.set(operationId, Promise.resolve(true));
     }
 
     // Ordering barrier: a subscriber connects immediately after execAgent
@@ -448,6 +470,7 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     this.mirrorTargets.delete(operationId);
     this.mirrorResolved.delete(operationId);
     this.mirrorResolving.delete(operationId);
+    this.memberEndTargets.delete(operationId);
     this.shareVisitorOps.delete(operationId);
     this.shareVisitorResolved.delete(operationId);
     this.shareVisitorResolving.delete(operationId);
@@ -617,11 +640,25 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     }
   }
 
-  private mirrorPush(mirrorTo: string, event: Record<string, unknown>): Promise<void> {
+  private async mirrorPush(mirrorTo: string, event: Record<string, unknown>): Promise<void> {
+    const mirrored =
+      event.type === 'agent_runtime_end' && (await this.acceptsMemberRuntimeEnd(mirrorTo))
+        ? toMirroredEvent(event)
+        : event;
     return this.httpPost('/api/operations/push-event', {
-      event: toMirroredEvent(event),
+      event: mirrored,
       operationId: mirrorTo,
     });
+  }
+
+  private acceptsMemberRuntimeEnd(target: string): Promise<boolean> {
+    let accepted = this.memberEndTargets.get(target);
+    if (!accepted) {
+      const resolve = this.options.resolveAcceptsMemberRuntimeEnd;
+      accepted = resolve ? resolve(target).catch(() => false) : Promise.resolve(false);
+      this.memberEndTargets.set(target, accepted);
+    }
+    return accepted;
   }
 
   /**

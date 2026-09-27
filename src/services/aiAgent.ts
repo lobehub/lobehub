@@ -1,3 +1,4 @@
+import type { AgentStreamClientFeature } from '@lobechat/agent-gateway-client';
 import type {
   ExecAgentAppContext,
   ExecAgentResult,
@@ -10,6 +11,9 @@ import type {
 import { lambdaClient } from '@/libs/trpc/client';
 
 export type { ExecAgentResult, ScheduleAgentRunParams, ScheduleAgentRunResult };
+
+/** Gateway stream features every run started from this client handles. */
+const STREAM_FEATURES: AgentStreamClientFeature[] = ['member_runtime_end'];
 
 /**
  * Resume instruction for an operation that hit `human_approve_required`. When
@@ -257,7 +261,10 @@ class AiAgentService {
     params: ExecAgentTaskParams,
     options?: { signal?: AbortSignal },
   ): Promise<ExecAgentResult> {
-    return await lambdaClient.aiAgent.execAgent.mutate(params, options);
+    return await lambdaClient.aiAgent.execAgent.mutate(
+      { ...params, streamFeatures: STREAM_FEATURES },
+      options,
+    );
   }
 
   /**

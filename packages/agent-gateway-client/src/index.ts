@@ -51,6 +51,7 @@ export type {
   AgentInterventionRequestData,
   AgentInterventionResponseData,
   AgentStreamClientEvents,
+  AgentStreamClientFeature,
   AgentStreamClientOptions,
   AgentStreamEvent,
   AgentStreamEventType,
