@@ -332,20 +332,28 @@ const formatSubAgentCreditErrorReason = (error: unknown): string | undefined => 
   if (!creditType) return;
 
   const budgetType = body?.budget?.budgetTypeAtError;
+  // InsufficientBudgetForModel means the allowance still has credits, just not
+  // enough for this model's estimated cost — a cheaper model may still fit, so
+  // the no-retry claim only holds for the same model (bot/replyTemplate gives
+  // the same "switch to a less expensive model" advice).
+  const modelCostShortfall = creditType === ChatErrorType.InsufficientBudgetForModel;
+  const shortfall = modelCostShortfall ? "can't cover this model's estimated cost" : 'are used up';
   const limit =
     budgetType === 'workspace'
-      ? "the workspace's shared LobeHub credits are used up; a workspace admin has to add credits"
+      ? `the workspace's shared LobeHub credits ${shortfall}; a workspace admin has to add credits`
       : budgetType === 'workspace_member'
-        ? "this member's workspace credit allowance is used up; a workspace admin has to raise it"
-        : creditType === ChatErrorType.InsufficientBudgetForModel
+        ? `this member's workspace credit allowance ${modelCostShortfall ? shortfall : 'is used up'}; a workspace admin has to raise it`
+        : modelCostShortfall
           ? "the account's LobeHub credits are too low for this model; the account owner has to top up or upgrade"
           : "the account's LobeHub plan limit was reached or the plan does not cover this model; the account owner has to upgrade the plan";
 
-  return (
-    `stopped by a LobeHub billing limit (${creditType}): ${limit}. ` +
-    'This limit is shared by every sub-agent and by this conversation, so retrying or dispatching more sub-agents will not get past it. ' +
-    'Finish with what you already have and tell the user about the limit.'
-  );
+  const advice = modelCostShortfall
+    ? 'This limit is shared by every sub-agent and by this conversation, so retrying or dispatching more sub-agents on the same model will not get past it; a sub-agent that runs on a less expensive model may still fit. ' +
+      'Otherwise finish with what you already have and tell the user about the limit.'
+    : 'This limit is shared by every sub-agent and by this conversation, so retrying or dispatching more sub-agents will not get past it. ' +
+      'Finish with what you already have and tell the user about the limit.';
+
+  return `stopped by a LobeHub billing limit (${creditType}): ${limit}. ${advice}`;
 };
 
 /**
