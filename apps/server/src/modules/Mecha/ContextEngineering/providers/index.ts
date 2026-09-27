@@ -343,7 +343,12 @@ export const createServerContextFactProviders = ({
         serverDB: db,
         topicId: ctx.topicId ?? state.origin?.topicId,
         userId,
-        workspaceId: ctx.workspaceId,
+        // The run's workspace, the same one every other fact here is scoped to.
+        // Reading the raw context instead looked the topic up in the personal
+        // scope on any path that does not carry the id, found nothing, and
+        // described a disposable sandbox to a run that had a persistent one —
+        // so the model was told its files would not survive and worked in /tmp.
+        workspaceId,
       });
 
       return claim ? { cwd, mode, workingDir } : undefined;
