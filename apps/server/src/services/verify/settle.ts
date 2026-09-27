@@ -77,21 +77,23 @@ const MAX_REASON_CHARS = 300;
 export const describeVerifyFailure = (
   results: Pick<
     VerifyCheckResultItem,
-    'checkItemTitle' | 'status' | 'suggestion' | 'toulmin' | 'verdict'
+    'checkItemTitle' | 'required' | 'status' | 'suggestion' | 'toulmin' | 'verdict'
   >[],
   reviewFeedback?: string,
 ): string => {
-  const reasons = results
-    .filter(
-      (r) =>
-        r.status !== 'errored' &&
-        (r.status === 'failed' || r.verdict === 'failed' || r.verdict === 'uncertain'),
-    )
-    .map((r) => {
-      const why = (r.toulmin?.reasoning || r.suggestion || '').replaceAll(/\s+/g, ' ').trim();
-      const clipped = why.length > MAX_REASON_CHARS ? `${why.slice(0, MAX_REASON_CHARS)}…` : why;
-      return `- ${r.checkItemTitle || 'Untitled check'}${clipped ? `: ${clipped}` : ''}`;
-    });
+  const failed = results.filter(
+    (r) =>
+      r.status !== 'errored' &&
+      (r.status === 'failed' || r.verdict === 'failed' || r.verdict === 'uncertain'),
+  );
+  // Only required checks gate the run; an optional failure listed first would
+  // otherwise take a slot from the check that actually rejected the delivery.
+  const gating = failed.filter((r) => r.required);
+  const reasons = (gating.length > 0 ? gating : failed).map((r) => {
+    const why = (r.toulmin?.reasoning || r.suggestion || '').replaceAll(/\s+/g, ' ').trim();
+    const clipped = why.length > MAX_REASON_CHARS ? `${why.slice(0, MAX_REASON_CHARS)}…` : why;
+    return `- ${r.checkItemTitle || 'Untitled check'}${clipped ? `: ${clipped}` : ''}`;
+  });
 
   const lines = ['Delivery did not pass verification.'];
   if (reviewFeedback?.trim()) lines.push(`Acceptance review: ${reviewFeedback.trim()}`);
@@ -259,7 +261,14 @@ export const driveTaskFromVerify = async (
       const errorMessage =
         outcome === 'failed'
           ? describeVerifyFailure(
-              await new VerifyCheckResultModel(db, userId, workspaceId).listByRun(run.id),
+              // The run is already claimed, so a failed lookup must not cost the
+              // creator its callback — fall back to the bare verdict.
+              await new VerifyCheckResultModel(db, userId, workspaceId)
+                .listByRun(run.id)
+                .catch((error) => {
+                  log('verify-settle failure details unavailable for %s: %O', run.id, error);
+                  return [];
+                }),
               goalReview?.status === 'rejected' ? goalReview.feedback : undefined,
             )
           : outcome === 'errored' || outcome === 'review_errored'

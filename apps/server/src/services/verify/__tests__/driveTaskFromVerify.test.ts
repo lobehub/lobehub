@@ -169,7 +169,16 @@ describe('driveTaskFromVerify', () => {
     runFindByOperation.mockResolvedValue({ id: 'run-1', status: 'failed' });
     checkResultsListByRun.mockResolvedValueOnce([
       {
+        checkItemTitle: 'Optional style polish',
+        required: false,
+        status: 'failed',
+        suggestion: 'Tighten the intro.',
+        toulmin: null,
+        verdict: 'failed',
+      },
+      {
         checkItemTitle: 'Each chapter has at least 2500 characters',
+        required: true,
         status: 'failed',
         suggestion: null,
         toulmin: { reasoning: 'Chapters 1-5 are 2030-2353 characters, all below 2500.' },
@@ -177,6 +186,7 @@ describe('driveTaskFromVerify', () => {
       },
       {
         checkItemTitle: 'Report is in Markdown',
+        required: true,
         status: 'passed',
         suggestion: null,
         toulmin: { reasoning: 'It is.' },
@@ -184,6 +194,7 @@ describe('driveTaskFromVerify', () => {
       },
       {
         checkItemTitle: 'Sources are cited',
+        required: true,
         status: 'errored',
         suggestion: null,
         toulmin: null,
@@ -201,6 +212,15 @@ describe('driveTaskFromVerify', () => {
         '- Each chapter has at least 2500 characters: Chapters 1-5 are 2030-2353 characters, all below 2500.',
       ].join('\n'),
     );
+  });
+
+  it('still sends the bare verdict when the failure details cannot be read', async () => {
+    runFindByOperation.mockResolvedValue({ id: 'run-1', status: 'failed' });
+    checkResultsListByRun.mockRejectedValueOnce(new Error('connection reset'));
+
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+
+    expect(deliverMock.mock.calls[0][0].errorMessage).toBe('Delivery did not pass verification.');
   });
 
   it('parks an undecidable Goal delivery on a person instead of another attempt', async () => {
