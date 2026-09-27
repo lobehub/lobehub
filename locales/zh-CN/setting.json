@@ -1422,7 +1422,7 @@
   "systemAgent.agentMeta.label": "模型",
   "systemAgent.agentMeta.modelDesc": "用于生成名称、描述、头像和标签的模型",
   "systemAgent.agentMeta.title": "档案信息生成",
-  "systemAgent.asr.modelDesc": "把发给 Claude Code 等外部 Agent 的语音消息转成文字（它们只接受文本）。未设置模型时，这些 Agent 不显示语音消息入口。",
+  "systemAgent.asr.modelDesc": "把发给 Claude Code 等外部 Agent 的语音消息转成文字（它们只接受文本）。未设置模型或其服务商未启用时，这些 Agent 不显示语音消息入口。",
   "systemAgent.asr.placeholder": "选择语音转写模型",
   "systemAgent.asr.title": "语音消息转写",
   "systemAgent.customPrompt.addPrompt": "添加自定义提示",

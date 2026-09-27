@@ -186,10 +186,22 @@ describe('heterogeneous agents', () => {
     } as any);
 
   const setAsr = (asr: { model: string; provider: string }) =>
-    useUserStore.setState({ settings: { systemAgent: { asr } }, workspaceUserPreference: {} } as any);
+    useUserStore.setState({
+      settings: { systemAgent: { asr } },
+      workspaceUserPreference: {},
+    } as any);
 
-  it('allows voice messages without an audio-capable model once a STT model is configured', () => {
-    useAiInfraStore.setState({ enabledAiModels: [textModel] });
+  const openaiProvider = { id: 'openai', name: 'OpenAI', source: 'builtin' } as const;
+  const setEnabledProviders = (providers: (typeof openaiProvider)[]) =>
+    useAiInfraStore.setState({
+      enabledAiModels: [textModel],
+      enabledAiProviders: providers,
+    } as any);
+  const clearUserAsr = () =>
+    useUserStore.setState({ settings: {}, workspaceUserPreference: {} } as any);
+
+  it('allows voice messages without an audio-capable model once the STT provider is enabled', () => {
+    setEnabledProviders([openaiProvider]);
 
     setAgent(false);
     setAsr({ model: 'whisper-1', provider: 'openai' });
@@ -199,19 +211,30 @@ describe('heterogeneous agents', () => {
     expect(canSendVoiceMessage({ agentId })).toBe(true);
   });
 
-  it('stays unavailable while no STT model is configured', () => {
-    useAiInfraStore.setState({ enabledAiModels: [textModel] });
+  it('uses the default STT model only when its provider is enabled', () => {
+    setAgent(true);
+    clearUserAsr();
+
+    setEnabledProviders([]);
+    expect(canSendVoiceMessage({ agentId })).toBe(false);
+
+    setEnabledProviders([openaiProvider]);
+    expect(canSendVoiceMessage({ agentId })).toBe(true);
+  });
+
+  it('stays unavailable after the STT model is cleared', () => {
+    setEnabledProviders([openaiProvider]);
     setAgent(true);
     setAsr({ model: '', provider: '' });
 
     expect(canSendVoiceMessage({ agentId })).toBe(false);
   });
 
-  it('shows the recorder for a heterogeneous agent only after a STT model is configured', () => {
+  it('shows the recorder for a heterogeneous agent only once the STT provider is enabled', () => {
     act(() => {
-      useAiInfraStore.setState({ enabledAiModels: [textModel] });
+      setEnabledProviders([]);
       setAgent(true);
-      setAsr({ model: '', provider: '' });
+      setAsr({ model: 'whisper-1', provider: 'openai' });
     });
 
     const { result } = renderHook(() => useCanSendVoiceMessage({ agentId }), {
@@ -221,7 +244,7 @@ describe('heterogeneous agents', () => {
     expect(result.current).toBe(false);
 
     act(() => {
-      setAsr({ model: 'whisper-1', provider: 'openai' });
+      setEnabledProviders([openaiProvider]);
     });
 
     expect(result.current).toBe(true);

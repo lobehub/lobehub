@@ -1678,7 +1678,7 @@ When I am ___, I need ___
     'Model used to generate names, descriptions, avatars, and tags',
   'systemAgent.agentMeta.title': 'Profile Generation',
   'systemAgent.asr.modelDesc':
-    'Transcribes voice messages to Claude Code and other external agents, which only accept text. Voice messages to them stay hidden until a model is set.',
+    'Transcribes voice messages to Claude Code and other external agents, which only accept text. Voice input for those agents stays hidden while no model is set or its provider is not enabled.',
   'systemAgent.asr.placeholder': 'Select a speech-to-text model',
   'systemAgent.asr.title': 'Voice Message Transcription',
   'systemAgent.expertise.modelDesc':

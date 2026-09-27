@@ -1,3 +1,4 @@
+import { DEFAULT_ASR_MODEL, DEFAULT_ASR_PROVIDER } from '@lobechat/business-const';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { asrService } from '@/services/asr';
@@ -39,7 +40,20 @@ describe('transcribeVoiceMessage', () => {
     );
   });
 
-  it('refuses to transcribe when no STT model is configured', async () => {
+  it('falls back to the default STT model when none is chosen', async () => {
+    const transcribeFile = vi
+      .spyOn(asrService, 'transcribeFile')
+      .mockResolvedValue({ text: 'hello' });
+
+    await expect(transcribeVoiceMessage('file-1')).resolves.toBe('hello');
+    expect(transcribeFile).toHaveBeenCalledWith(
+      { fileId: 'file-1', model: DEFAULT_ASR_MODEL, provider: DEFAULT_ASR_PROVIDER },
+      undefined,
+    );
+  });
+
+  it('refuses to transcribe after the STT model is cleared', async () => {
+    setAsr({ model: '', provider: '' });
     const transcribeFile = vi.spyOn(asrService, 'transcribeFile');
 
     await expect(transcribeVoiceMessage('file-1')).rejects.toThrow(

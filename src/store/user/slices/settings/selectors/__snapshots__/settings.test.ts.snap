@@ -51,8 +51,8 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
     "provider": "deepseek",
   },
   "asr": {
-    "model": "",
-    "provider": "",
+    "model": "gpt-4o-mini-transcribe",
+    "provider": "openai",
   },
   "enableAutoReply": true,
   "expertise": {

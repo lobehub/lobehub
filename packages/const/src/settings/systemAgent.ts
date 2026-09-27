@@ -1,4 +1,6 @@
 import {
+  DEFAULT_ASR_MODEL,
+  DEFAULT_ASR_PROVIDER,
   DEFAULT_EMBEDDING_PROVIDER,
   DEFAULT_MINI_PROVIDER,
   DEFAULT_PROVIDER,
@@ -48,12 +50,12 @@ export const DEFAULT_TOPIC_AUTO_SUMMARY_SYSTEM_AGENT_ITEM: SystemAgentItem = {
   enabled: false,
 };
 
-// No speech-to-text model ships by default: ASR needs a provider that implements
-// transcription, so it stays unconfigured until the user or the deployment picks one
-// (e.g. `SYSTEM_AGENT=asr=openai/whisper-1`).
+// Speech-to-text is only usable where the provider implements transcription, so the default
+// counts only once that provider is enabled (see the voice-message capability check).
+// Deployments can repoint it with `SYSTEM_AGENT=asr=<provider>/<model>`.
 export const DEFAULT_ASR_SYSTEM_AGENT_ITEM: SystemAgentItem = {
-  model: '',
-  provider: '',
+  model: DEFAULT_ASR_MODEL,
+  provider: DEFAULT_ASR_PROVIDER,
 };
 
 export const DEFAULT_USER_MEMORY_EMBEDDING_SYSTEM_AGENT_ITEM: SystemAgentItem = {
