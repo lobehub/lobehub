@@ -76,7 +76,9 @@ return 'accepted'
  * Redis-backed ledger. Consecutive steps of one server run may execute on
  * different instances, so a per-process count cannot hold the per-run cap.
  * Falls back to an in-memory ledger when Redis errors, so a vent never fails
- * the tool call.
+ * the tool call. Accepted admissions are mirrored into that fallback; a vent
+ * admitted only by the fallback is not replayed into Redis once it recovers,
+ * which can let at most one extra vent through a flapping Redis.
  */
 export const createRedisVentLedger = (
   redis: VentRedisClient,
@@ -92,8 +94,11 @@ export const createRedisVentLedger = (
         params.limit,
         VENT_LEDGER_TTL_SECONDS,
       );
-      if (result === 'accepted' || result === 'duplicate' || result === 'rate_limited')
+      if (result === 'accepted' || result === 'duplicate' || result === 'rate_limited') {
+        // Mirror admissions so a Redis outage later in the run still sees them.
+        if (result === 'accepted') await fallback.admit(params);
         return result;
+      }
     } catch (error) {
       console.error('[vent] Redis ledger failed, falling back to memory:', error);
     }

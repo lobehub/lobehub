@@ -147,6 +147,29 @@ describe('vent ledger across instances', () => {
     errorSpy.mockRestore();
   });
 
+  it('keeps the cap when Redis fails after admitting the first vent', async () => {
+    const redis = createFakeRedis();
+    let redisDown = false;
+    const service = createVentService({
+      ledger: createRedisVentLedger({
+        eval: (...args) => (redisDown ? Promise.reject(new Error('down')) : redis.eval(...args)),
+      }),
+      nextToolCallId: () => 'tool-1',
+    });
+    const input = baseInput({ operationId: 'op-1' });
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    expect((await service.recordVent(input)).recorded).toBe(true);
+    redisDown = true;
+    const second = await service.recordVent({
+      ...input,
+      input: { ...input.input, summary: 'A different complaint.' },
+    });
+
+    expect(second).toEqual({ recorded: false, reason: 'rate_limited' });
+    errorSpy.mockRestore();
+  });
+
   it('rejects an empty report before it reaches the ledger', async () => {
     const redis = createFakeRedis();
     const service = createVentService({
