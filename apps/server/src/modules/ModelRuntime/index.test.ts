@@ -41,16 +41,12 @@ const loadModels = vi.hoisted(() => vi.fn());
 const isLobeHubModelAvailable = vi.hoisted(() => vi.fn(async () => true));
 const businessAccessPolicy = vi.hoisted(() => ({
   enabled: true,
-  modelPolicy: 'profile-candidate' as 'profile-attested' | 'profile-candidate',
 }));
 
 vi.mock('@lobechat/business-const', async (importOriginal) => ({
   ...(await importOriginal<typeof BusinessConst>()),
   get ENABLE_BUSINESS_FEATURES() {
     return businessAccessPolicy.enabled;
-  },
-  get SERVER_DEFAULT_KIMI_MODEL_POLICY() {
-    return businessAccessPolicy.modelPolicy;
   },
 }));
 
@@ -152,8 +148,7 @@ describe('resolveServerModel', () => {
 });
 
 describe('getServerDefaultHeterogeneousModels', () => {
-  it('preserves attested discovery and execution unless the deployment opts into candidates', async () => {
-    businessAccessPolicy.modelPolicy = 'profile-attested';
+  it('discovers and resolves new tool-capable models without a deployment opt-in', async () => {
     getServerGlobalConfig.mockResolvedValue({
       aiProvider: {
         lobehub: {
@@ -170,23 +165,12 @@ describe('getServerDefaultHeterogeneousModels', () => {
         },
       },
     });
-    try {
-      expect(
-        (await getServerDefaultHeterogeneousModels())['kimi-code'].map(({ model }) => model),
-      ).toEqual(['kimi-k3']);
-      await expect(
-        resolveServerDefaultHeterogeneousModel('kimi-code', 'deployment-new-model'),
-      ).rejects.toThrow('not compatible');
-      businessAccessPolicy.modelPolicy = 'profile-candidate';
-      expect(
-        (await getServerDefaultHeterogeneousModels())['kimi-code'].map(({ model }) => model),
-      ).toEqual(['deployment-new-model', 'kimi-k3']);
-      await expect(
-        resolveServerDefaultHeterogeneousModel('kimi-code', 'deployment-new-model'),
-      ).resolves.toMatchObject({ model: 'deployment-new-model' });
-    } finally {
-      businessAccessPolicy.modelPolicy = 'profile-candidate';
-    }
+    expect(
+      (await getServerDefaultHeterogeneousModels())['kimi-code'].map(({ model }) => model),
+    ).toEqual(['deployment-new-model', 'kimi-k3']);
+    await expect(
+      resolveServerDefaultHeterogeneousModel('kimi-code', 'deployment-new-model'),
+    ).resolves.toMatchObject({ model: 'deployment-new-model' });
   });
   it('preserves configured server models in deployments without business access policies', async () => {
     businessAccessPolicy.enabled = false;
@@ -208,7 +192,7 @@ describe('getServerDefaultHeterogeneousModels', () => {
     });
     try {
       expect((await getServerDefaultHeterogeneousModels())['kimi-code']).toEqual([
-        { model: 'local-deployment-model', compatibility: 'untested' },
+        { model: 'local-deployment-model' },
       ]);
       await expect(
         resolveServerDefaultHeterogeneousModel('kimi-code', 'local-deployment-model'),
@@ -306,9 +290,7 @@ describe('getServerDefaultHeterogeneousModels', () => {
       'claude-code': [{ model: 'claude-sonnet-4-6' }],
       'codex': [{ model: 'gpt-5.4' }],
       'grok-build': [{ model: 'claude-sonnet-4-6' }],
-      'kimi-code': ['claude-sonnet-4-6', 'gpt-5.4', 'gpt-4o', 'gemini-3.1-pro-preview'].map(
-        (model) => ({ model, compatibility: 'toolsUnknown' }),
-      ),
+      'kimi-code': [{ model: 'claude-sonnet-4-6' }],
       'pi': [{ model: 'claude-sonnet-4-6' }],
       'trae': [{ model: 'claude-sonnet-4-6' }],
     });
@@ -348,10 +330,7 @@ describe('getServerDefaultHeterogeneousModels', () => {
       'claude-code': [{ model: 'claude-sonnet-4-6' }],
       'codex': [{ model: 'gpt-5.4' }],
       'grok-build': [{ model: 'claude-sonnet-4-6' }],
-      'kimi-code': ['claude-sonnet-4-6', 'gpt-5.4'].map((model) => ({
-        model,
-        compatibility: 'toolsUnknown',
-      })),
+      'kimi-code': [{ model: 'claude-sonnet-4-6' }],
       'pi': [{ model: 'claude-sonnet-4-6' }],
       'trae': [{ model: 'claude-sonnet-4-6' }],
     });
@@ -413,14 +392,11 @@ describe('getServerDefaultHeterogeneousModels', () => {
         { model: 'gemini-3.1-pro-preview' },
       ],
       'kimi-code': [
-        ...[
-          'kimi-k2.6',
-          'deepseek-v4-flash',
-          'deepseek-v4-pro',
-          'glm-5.2',
-          'gemini-3.1-pro-preview',
-        ].map((model) => ({ model, compatibility: 'untested' })),
-        { model: 'no-tools-model', compatibility: 'toolsUnknown' },
+        { model: 'kimi-k2.6' },
+        { model: 'deepseek-v4-flash' },
+        { model: 'deepseek-v4-pro' },
+        { model: 'glm-5.2' },
+        { model: 'gemini-3.1-pro-preview' },
       ],
       'pi': [
         { model: 'kimi-k2.6' },
@@ -439,8 +415,8 @@ describe('getServerDefaultHeterogeneousModels', () => {
     });
   });
 
-  it('offers old failed matrix cells as untested candidates, without claiming compatibility', async () => {
-    const failedKimiModels = [
+  it('offers tool-capable GPT and Gemini models to Kimi without a profile allowlist', async () => {
+    const toolCapableModels = [
       'gpt-5.6-sol',
       'gpt-5.6-terra',
       'gpt-5.6-luna',
@@ -455,7 +431,7 @@ describe('getServerDefaultHeterogeneousModels', () => {
       aiProvider: {
         lobehub: {
           enabled: true,
-          serverModelLists: failedKimiModels.map((id) => ({
+          serverModelLists: toolCapableModels.map((id) => ({
             abilities: { functionCall: true },
             enabled: true,
             id,
@@ -467,13 +443,11 @@ describe('getServerDefaultHeterogeneousModels', () => {
 
     const models = await getServerDefaultHeterogeneousModels();
 
-    expect(models['kimi-code']).toEqual(
-      failedKimiModels.map((model) => ({ model, compatibility: 'untested' })),
-    );
-    expect(models['claude-code']).toEqual(failedKimiModels.map((model) => ({ model })));
+    expect(models['kimi-code']).toEqual(toolCapableModels.map((model) => ({ model })));
+    expect(models['claude-code']).toEqual(toolCapableModels.map((model) => ({ model })));
   });
 
-  it('honors explicit deployment exclusions and negative tool metadata', async () => {
+  it('uses tool capabilities rather than legacy deployment profile metadata for Kimi', async () => {
     getServerGlobalConfig.mockResolvedValue({
       aiProvider: {
         lobehub: {
@@ -510,7 +484,7 @@ describe('getServerDefaultHeterogeneousModels', () => {
     });
 
     await expect(getServerDefaultHeterogeneousModels()).resolves.toMatchObject({
-      'kimi-code': [{ model: 'private-kimi-model' }],
+      'kimi-code': [{ model: 'private-kimi-model' }, { model: 'kimi-k3' }],
     });
   });
 
@@ -537,7 +511,7 @@ describe('getServerDefaultHeterogeneousModels', () => {
       'claude-code': [{ model: 'kimi-k3' }],
       'codex': [],
       'grok-build': [{ model: 'kimi-k3' }],
-      'kimi-code': [{ model: 'kimi-k3', compatibility: 'untested' }],
+      'kimi-code': [{ model: 'kimi-k3' }],
       'pi': [{ model: 'kimi-k3' }],
       'trae': [{ model: 'kimi-k3' }],
     });
@@ -560,10 +534,7 @@ describe('getServerDefaultHeterogeneousModels', () => {
       'claude-code': [{ model: 'claude-sonnet-4-6' }],
       'codex': [],
       'grok-build': [{ model: 'claude-sonnet-4-6' }],
-      'kimi-code': ['claude-sonnet-4-6', 'kimi-k2.6'].map((model) => ({
-        model,
-        compatibility: 'toolsUnknown',
-      })),
+      'kimi-code': [{ model: 'claude-sonnet-4-6' }],
       'pi': [{ model: 'claude-sonnet-4-6' }],
       'trae': [{ model: 'claude-sonnet-4-6' }],
     });
@@ -571,6 +542,37 @@ describe('getServerDefaultHeterogeneousModels', () => {
 });
 
 describe('resolveServerDefaultHeterogeneousModel', () => {
+  it.each([
+    { abilities: { functionCall: true }, id: 'new-tool-model', supported: true },
+    { id: 'kimi-k3', supported: false },
+    { abilities: { functionCall: false }, id: 'deepseek-v4-pro', supported: false },
+    { abilities: { functionCall: true }, enabled: false, id: 'disabled-model', supported: false },
+    { abilities: { functionCall: true }, id: 'hidden-model', supported: false, visible: false },
+    { abilities: { functionCall: true }, id: 'image-model', supported: false, type: 'image' },
+  ])(
+    'uses the same tool-capable policy for Kimi discovery and resolution: $id',
+    async ({ supported, ...model }) => {
+      getServerGlobalConfig.mockResolvedValue({
+        aiProvider: {
+          lobehub: {
+            enabled: true,
+            serverModelLists: [{ enabled: true, type: 'chat', ...model }],
+          },
+        },
+      });
+
+      const models = await getServerDefaultHeterogeneousModels();
+      expect(models['kimi-code']).toEqual(supported ? [{ model: model.id }] : []);
+
+      const resolution = resolveServerDefaultHeterogeneousModel('kimi-code', model.id);
+      if (supported) {
+        await expect(resolution).resolves.toMatchObject({ model: model.id, provider: 'lobehub' });
+      } else {
+        await expect(resolution).rejects.toThrow(/not available|not compatible/);
+      }
+    },
+  );
+
   it('accepts only protocol-compatible models from the LobeHub relay provider', async () => {
     getServerGlobalConfig.mockResolvedValue({
       aiProvider: {
@@ -606,9 +608,9 @@ describe('resolveServerDefaultHeterogeneousModel', () => {
     await expect(resolveServerDefaultHeterogeneousModel('claude-code', 'gpt-5.4')).rejects.toThrow(
       'not compatible with this heterogeneous agent',
     );
-    await expect(
-      resolveServerDefaultHeterogeneousModel('kimi-code', 'gpt-5.4'),
-    ).resolves.toMatchObject({ model: 'gpt-5.4' });
+    await expect(resolveServerDefaultHeterogeneousModel('kimi-code', 'gpt-5.4')).rejects.toThrow(
+      'not compatible with this heterogeneous agent',
+    );
     await expect(resolveServerDefaultHeterogeneousModel('codex', 'gpt-4o')).rejects.toThrow(
       'not compatible with this heterogeneous agent',
     );
@@ -640,7 +642,7 @@ describe('resolveServerDefaultHeterogeneousModel', () => {
     });
   });
 
-  it('accepts an explicitly attested third-party relay model for Kimi', async () => {
+  it('accepts a tool-capable third-party relay model for Kimi without attestation', async () => {
     getServerGlobalConfig.mockResolvedValue({
       aiProvider: {
         lobehub: {
@@ -648,9 +650,6 @@ describe('resolveServerDefaultHeterogeneousModel', () => {
           serverModelLists: [
             {
               abilities: { functionCall: true },
-              agentCompatibility: {
-                serverDefaultHeterogeneousProfiles: ['kimi-code/anthropic-v1'],
-              },
               enabled: true,
               id: 'kimi-k2.6',
               maxOutput: 65_536,

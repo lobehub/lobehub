@@ -1,13 +1,8 @@
 import { type GoogleGenAIOptions } from '@google/genai';
-import {
-  ENABLE_BUSINESS_FEATURES,
-  SERVER_DEFAULT_KIMI_MODEL_POLICY,
-} from '@lobechat/business-const';
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { isLobeHubModelAvailable } from '@lobechat/business-model-bank/model-config';
 import type { ServerDefaultHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import {
-  getKimiModelCompatibility,
-  isKimiServerDefaultModelSupported,
   SERVER_DEFAULT_HETEROGENEOUS_AGENT_CONFIG,
   SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES,
 } from '@lobechat/heterogeneous-agents';
@@ -540,7 +535,6 @@ export const initModelRuntimeFromDB = async (
 };
 
 export interface ServerDefaultHeterogeneousModelReference {
-  compatibility?: 'untested' | 'toolsUnknown';
   model: string;
 }
 
@@ -577,17 +571,15 @@ const isServerDefaultModelAvailable = (model: string, access: ServerDefaultModel
  * `lobehub/${catalogId}`. The operation token remains the source of truth and
  * the request must match that selection.
  *
- * Legacy agent policies accept any tool-capable chat model; the
+ * Tool-capable agent policies accept any tool-capable chat model; the
  * `parseClaudeModelId` arm keeps Claude ids eligible in deployments whose
- * catalog omits `abilities`. Kimi keeps profile attestations by default; a
- * deployment can opt into capability candidates through its business slot.
- * Candidates do not claim CLI verification. Codex retains its narrower policy: it
+ * catalog omits `abilities`. Codex retains its narrower policy: it
  * accepts native Responses models plus an explicit set of tool-capable relay
  * models configured through its custom model-catalog path.
  */
 const supportsServerDefaultHeterogeneousAgent = (
   agentType: ServerDefaultHeterogeneousAgentType,
-  model: Pick<AiFullModelCard, 'abilities' | 'agentCompatibility' | 'id' | 'visible'>,
+  model: Pick<AiFullModelCard, 'abilities' | 'id' | 'visible'>,
 ) => {
   if (!isAiModelVisible(model)) return false;
 
@@ -595,9 +587,6 @@ const supportsServerDefaultHeterogeneousAgent = (
   const { modelPolicy } = config;
   if (modelPolicy === 'tool-capable') {
     return parseClaudeModelId(model.id) !== undefined || model.abilities?.functionCall === true;
-  }
-  if (modelPolicy === 'profile-attested') {
-    return isKimiServerDefaultModelSupported(model, SERVER_DEFAULT_KIMI_MODEL_POLICY);
   }
 
   return (
@@ -652,14 +641,7 @@ export const getServerDefaultHeterogeneousModels = async (
     if (!(await isServerDefaultModelAvailable(model.id, access))) continue;
     for (const agentType of SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES) {
       if (supportsServerDefaultHeterogeneousAgent(agentType, model)) {
-        const compatibility =
-          agentType === 'kimi-code' ? getKimiModelCompatibility(model, true) : undefined;
-        models[agentType].push({
-          ...(compatibility === 'untested' || compatibility === 'toolsUnknown'
-            ? { compatibility }
-            : {}),
-          model: model.id,
-        });
+        models[agentType].push({ model: model.id });
       }
     }
   }
