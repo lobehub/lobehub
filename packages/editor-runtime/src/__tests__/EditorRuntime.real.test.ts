@@ -279,6 +279,40 @@ describe('EditorRuntime - Real Cases', () => {
       expect(editor.getDocument('markdown') as unknown as string).toContain('- a\n');
     });
 
+    it('skips the rest of a split modify once one of its steps fails', async () => {
+      const item = idOf('li', 'b');
+      const result = await runtime.modifyNodes({
+        operations: [
+          {
+            action: 'modify',
+            litexml: ['<p id="zzzz">stale</p>', `<li id="${item}"><span>b2</span></li>`],
+          },
+        ],
+      });
+
+      // The non-list fragment fails first; the list fragment must not be
+      // written behind an operation reported as not applied.
+      expect(result.results[0]).toMatchObject({ success: false });
+      expect(result.results[0].partiallyApplied).toBeUndefined();
+      expect(editor.getDocument('markdown') as unknown as string).not.toContain('b2');
+    });
+
+    it('reports a split modify that fails after its first step as partially applied', async () => {
+      const intro = idOf('p', 'intro');
+      const result = await runtime.modifyNodes({
+        operations: [
+          {
+            action: 'modify',
+            litexml: [`<p id="${intro}">intro2</p>`, '<li id="zzzz"><span>x</span></li>'],
+          },
+        ],
+      });
+
+      expect(result.results[0]).toMatchObject({ partiallyApplied: true, success: false });
+      expect(result.results[0].error).toContain('"zzzz" not found');
+      expect(editor.getDocument('markdown') as unknown as string).toContain('intro2');
+    });
+
     it('reports an empty insert as failed even when merged with a real one', async () => {
       const anchor = idOf('p', 'intro');
       const result = await runtime.modifyNodes({

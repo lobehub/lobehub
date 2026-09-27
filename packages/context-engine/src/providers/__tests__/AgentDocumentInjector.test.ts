@@ -228,7 +228,7 @@ describe('AgentDocumentInjector', () => {
 
     // The index is rebuilt every step, so a doc the agent created earlier in the
     // same run showed up as if it already existed and was read as "overwritten".
-    it('marks docs created during the current run in the progressive index', async () => {
+    it('marks docs created after the latest user message in the progressive index', async () => {
       const runStartedAt = new Date('2026-09-23T22:57:30.000Z').getTime();
       const provider = new AgentDocumentContextInjector({
         documents: [
@@ -265,16 +265,16 @@ describe('AgentDocumentInjector', () => {
       expect(result.messages[0].content).toMatchInlineSnapshot(`
         "<agent_documents_index>
         User-created docs, when present, are listed below — use readDocument(id) for full content.
-        Docs marked (created this run) (or counted that way in a folder row) did not exist before this run — you created them, so creating them did not overwrite an existing doc.
+        Docs marked (new since last user message) (or counted that way in a folder row) were created after the user's latest message — by you or elsewhere (another topic, or the user). A marked doc you created was new; creating it did not overwrite an existing doc.
 
-        TITLE                         ID        SIZE   UPDATED
-        FASE G-2C (created this run)  ce2c4f3a  empty  2026-09-23
-        FASE G-2B                     452eea73  empty  2026-09-21
+        TITLE                                    ID        SIZE   UPDATED
+        FASE G-2C (new since last user message)  ce2c4f3a  empty  2026-09-23
+        FASE G-2B                                452eea73  empty  2026-09-21
         </agent_documents_index>"
       `);
     });
 
-    it('counts docs created during the current run inside collapsed folders', async () => {
+    it('counts docs created after the latest user message inside collapsed folders', async () => {
       const runStartedAt = new Date('2026-09-23T22:57:30.000Z').getTime();
       const inFolder = (id: string, createdAt: string) => ({
         createdAt: new Date(createdAt),
@@ -300,8 +300,40 @@ describe('AgentDocumentInjector', () => {
       );
       const content = result.messages[0].content as string;
 
-      expect(content).toContain('did not exist before this run');
-      expect(content).toMatch(/📁 Reports\s+folder-1\s+2 docs \(1 created this run\)/);
+      expect(content).toContain("were created after the user's latest message");
+      expect(content).toMatch(/📁 Reports\s+folder-1\s+2 docs \(1 new since last user message\)/);
+    });
+
+    // The document query is agent-scoped, so a doc created after the latest
+    // user message may come from another topic or tab: the marker must state the
+    // known timestamp fact instead of claiming the current run created it.
+    it('does not attribute docs created after the latest user message to the current run', async () => {
+      const lastUserMessageAt = new Date('2026-09-23T22:57:30.000Z').getTime();
+      const provider = new AgentDocumentContextInjector({
+        documents: [
+          {
+            createdAt: new Date('2026-09-23T22:58:10.000Z'),
+            filename: 'other-topic.md',
+            id: 'other-1',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            policyLoad: 'progressive',
+            title: 'Created in another topic',
+            updatedAt: new Date('2026-09-23T22:58:10.000Z'),
+          },
+        ],
+      });
+
+      const result = await provider.process(
+        createContext([
+          { content: 'go', createdAt: lastUserMessageAt, id: 'user-1', role: 'user' },
+        ]),
+      );
+      const content = result.messages[0].content as string;
+
+      expect(content).not.toContain('this run');
+      expect(content).not.toContain('you created them');
+      expect(content).toContain('Created in another topic (new since last user message)');
     });
 
     // https://github.com/lobehub/lobehub/issues/15624 — relative times ("15m ago")

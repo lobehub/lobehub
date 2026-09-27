@@ -60,9 +60,12 @@ export interface AgentDocumentFilterContext {
   currentTime?: Date;
   currentUserMessage?: string;
   /**
-   * When the current run started. Documents created at or after it are marked in
-   * the progressive index; the index is rebuilt every step, so without a marker a
-   * document the agent just created looks like one that already existed.
+   * When the current run started (the latest user message by default). Documents
+   * created at or after it are marked in the progressive index; the index is
+   * rebuilt every step, so without a marker a document the agent just created
+   * looks like one that already existed. Documents are listed per agent, not per
+   * topic or run, so the marker only states the timestamp fact: a marked doc may
+   * also come from another topic or tab.
    */
   runStartedAt?: Date | number | string;
   truncateContent?: (content: string, maxTokens: number) => string;
@@ -75,8 +78,8 @@ const toTime = (value: Date | number | string | undefined): number | undefined =
 };
 
 /**
- * Anchor the run to the latest user message: everything the agent did after it
- * belongs to the current run. An explicit `runStartedAt` wins.
+ * Anchor the run to the latest user message: documents created after it are
+ * marked as new. An explicit `runStartedAt` wins.
  */
 export function withRunStartedAt<T extends AgentDocumentFilterContext>(
   context: T,
@@ -195,13 +198,13 @@ function truncate(s: string, max: number): string {
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;
 }
 
-const CREATED_THIS_RUN_MARK = '(created this run)';
+const NEW_SINCE_USER_MESSAGE_MARK = '(new since last user message)';
 
 /** Collapsed folders hide their rows, so the folder summary carries the count instead. */
-const withCreatedThisRunCount = (summary: string, count: number) =>
-  count > 0 ? `${summary} (${count} created this run)` : summary;
+const withNewSinceUserMessageCount = (summary: string, count: number) =>
+  count > 0 ? `${summary} (${count} new since last user message)` : summary;
 
-function isCreatedThisRun(doc: AgentContextDocument, context: AgentDocumentFilterContext) {
+function isNewSinceUserMessage(doc: AgentContextDocument, context: AgentDocumentFilterContext) {
   const runStartedAt = toTime(context.runStartedAt);
   const createdAt = toTime(doc.createdAt);
   return runStartedAt !== undefined && createdAt !== undefined && createdAt >= runStartedAt;
@@ -222,7 +225,7 @@ function buildIndexTable(
     return {
       id: d.id ?? '',
       size: formatSize(d),
-      title: isCreatedThisRun(d, context) ? `${title} ${CREATED_THIS_RUN_MARK}` : title,
+      title: isNewSinceUserMessage(d, context) ? `${title} ${NEW_SINCE_USER_MESSAGE_MARK}` : title,
       updated: formatUpdatedDate(d.updatedAt),
     };
   });
@@ -326,9 +329,9 @@ function buildFolderTable(folders: FolderGroup[], context: AgentDocumentFilterCo
   const rows = folders
     .map((f) => ({
       id: f.parentId,
-      summary: withCreatedThisRunCount(
+      summary: withNewSinceUserMessageCount(
         formatFolderSummary(f.docs),
-        f.docs.filter((doc) => isCreatedThisRun(doc, context)).length,
+        f.docs.filter((doc) => isNewSinceUserMessage(doc, context)).length,
       ),
       time: newestTime(f.docs),
       title: `${FOLDER_ICON} ${truncate(f.title, TITLE_MAX_WIDTH)}`,
@@ -410,9 +413,9 @@ export function combineDocuments(
         `Web-crawled docs are available but omitted here — call listDocuments(sourceType='web') to discover them.`,
       );
     }
-    if (userDocs.some((doc) => isCreatedThisRun(doc, context))) {
+    if (userDocs.some((doc) => isNewSinceUserMessage(doc, context))) {
       headerLines.push(
-        `Docs marked ${CREATED_THIS_RUN_MARK} (or counted that way in a folder row) did not exist before this run — you created them, so creating them did not overwrite an existing doc.`,
+        `Docs marked ${NEW_SINCE_USER_MESSAGE_MARK} (or counted that way in a folder row) were created after the user's latest message — by you or elsewhere (another topic, or the user). A marked doc you created was new; creating it did not overwrite an existing doc.`,
       );
     }
     if (folders.length > 0) {
