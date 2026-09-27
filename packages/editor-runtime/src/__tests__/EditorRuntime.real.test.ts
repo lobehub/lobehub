@@ -257,6 +257,28 @@ describe('EditorRuntime - Real Cases', () => {
       expect(editor.getDocument('markdown') as unknown as string).toContain('- b2');
     });
 
+    it('rejects a multi-fragment modify that replaces a list and an item inside it', async () => {
+      const item = idOf('li', 'b');
+      const list = liteXML().match(/<ul id="\w+">[\s\S]*?<\/ul>/)![0];
+      const result = await runtime.modifyNodes({
+        operations: [
+          {
+            action: 'modify',
+            litexml: [
+              list.replace('>a</span>', '>a2</span>'),
+              `<li id="${item}"><span>b2</span></li>`,
+            ],
+          },
+        ],
+      });
+
+      // Replacing the list re-keys its items, so the item fragment would be
+      // dropped while the list change made the whole step look applied.
+      expect(result.results[0]).toMatchObject({ success: false });
+      expect(result.results[0].error).toContain(`encloses node "${item}"`);
+      expect(editor.getDocument('markdown') as unknown as string).toContain('- a\n');
+    });
+
     it('reports an empty insert as failed even when merged with a real one', async () => {
       const anchor = idOf('p', 'intro');
       const result = await runtime.modifyNodes({

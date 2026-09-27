@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   describeLiteXMLEditStep,
+  findLiteXMLEditStepProblem,
   indexLiteXMLDocument,
   planLiteXMLEditSteps,
   touchesList,
@@ -134,5 +135,51 @@ describe('liteXMLEditPlan', () => {
       { action: 'modify', litexml: ['<span id="s">x2</span>'] },
     ]);
     expect(steps.map((step) => touchesList(step.operation, nested))).toEqual([false, true]);
+  });
+
+  it('rejects a modify whose fragments target a node and one enclosed by it', () => {
+    const operation = {
+      action: 'modify' as const,
+      litexml: [
+        '<ul id="l"><li id="x"><span>x2</span></li></ul>',
+        '<li id="x"><span>x3</span></li>',
+      ],
+    };
+
+    expect(findLiteXMLEditStepProblem(operation, nested)).toContain('node "l" encloses node "x"');
+    expect(
+      findLiteXMLEditStepProblem(
+        { action: 'modify', litexml: ['<span id="s">x2</span>', '<ul id="l"></ul>'] },
+        nested,
+      ),
+    ).toContain('node "l" encloses node "s"');
+    expect(
+      findLiteXMLEditStepProblem(
+        { action: 'modify', litexml: ['<p id="y">1</p>', '<p id="y">2</p>'] },
+        flat,
+      ),
+    ).toContain('more than one fragment');
+    expect(
+      findLiteXMLEditStepProblem(
+        { action: 'modify', litexml: ['<p id="x">1</p>', '<p id="y">2</p>'] },
+        flat,
+      ),
+    ).toBeUndefined();
+  });
+
+  it('keeps a mixed modify with overlapping targets whole so it fails before any part applies', () => {
+    const quoted = indexLiteXMLDocument(
+      '<root><blockquote id="q"><ul id="l"><li id="x">x</li></ul></blockquote></root>',
+    );
+    const operation = {
+      action: 'modify' as const,
+      litexml: ['<blockquote id="q"><p>q</p></blockquote>', '<li id="x">x2</li>'],
+    };
+    const steps = planLiteXMLEditSteps([operation], quoted);
+
+    expect(steps.map((step) => step.operation)).toEqual([operation]);
+    expect(findLiteXMLEditStepProblem(steps[0].operation, quoted)).toContain(
+      'node "q" encloses node "x"',
+    );
   });
 });

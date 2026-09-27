@@ -160,14 +160,37 @@ const affectsAnchor = (
 };
 
 /**
+ * A pair of targets in one `modify` where the first is the second or encloses
+ * it. Replacing the outer node re-keys or drops the inner one, so the inner
+ * fragment would be lost while the outer change makes the step look applied.
+ */
+const findOverlappingModifyTargets = (
+  operation: ModifyOperation,
+  document: LiteXMLDocumentIndex,
+): [outer: string, inner: string] | undefined => {
+  if (operation.action !== 'modify') return undefined;
+
+  const targets = getReferencedIds(operation).filter((id): id is string => id !== undefined);
+  for (const [position, inner] of targets.entries()) {
+    const scope = new Set([inner, ...(document.ancestorIds.get(inner) ?? [])]);
+    const outer = targets.find((id, other) => other !== position && scope.has(id));
+    if (outer) return [outer, inner];
+  }
+
+  return undefined;
+};
+
+/**
  * A `modify` whose fragments mix list and non-list nodes is split into one step
- * per kind, so only the list fragments skip the review diff.
+ * per kind, so only the list fragments skip the review diff. One with
+ * overlapping targets stays whole so it is rejected before any part applies.
  */
 const splitModifyByList = (
   operation: Extract<ModifyOperation, { action: 'modify' }>,
   document: LiteXMLDocumentIndex,
 ): ModifyOperation[] => {
   if (!Array.isArray(operation.litexml)) return [operation];
+  if (findOverlappingModifyTargets(operation, document)) return [operation];
 
   const list = operation.litexml.filter((litexml) => fragmentTouchesList(litexml, document));
   const other = operation.litexml.filter((litexml) => !fragmentTouchesList(litexml, document));
@@ -276,6 +299,14 @@ export const findLiteXMLEditStepProblem = (
   const missingIds = (referencedIds as string[]).filter((id) => !document.ids.has(id));
   if (missingIds.length > 0) {
     return `node ${missingIds.map((id) => `"${id}"`).join(', ')} not found in the document`;
+  }
+
+  const overlap = findOverlappingModifyTargets(operation, document);
+  if (overlap) {
+    const [outer, inner] = overlap;
+    return outer === inner
+      ? `node "${outer}" is targeted by more than one fragment; send one fragment per node`
+      : `node "${outer}" encloses node "${inner}", so replacing it would discard the edit to "${inner}"; put the change to "${inner}" inside the "${outer}" fragment instead`;
   }
 
   return undefined;
