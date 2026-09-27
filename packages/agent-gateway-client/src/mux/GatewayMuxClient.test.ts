@@ -621,6 +621,30 @@ describe('GatewayMuxClient', () => {
       expect(sub.active).toBe(false);
     });
 
+    it('ignores the session end echoed after a mirrored member terminal (G-02)', async () => {
+      const { mux } = createMux();
+      const ws = await connectAndReady(mux);
+      const sub = mux.subscribe('op-1');
+      const onComplete = vi.fn();
+      sub.on('session_complete', onComplete);
+
+      ws.simulateMessage(agentEvent('op-1', '1', 'agent_runtime_end', 'op-member'));
+      ws.simulateMessage({
+        id: '2',
+        operationId: 'op-1',
+        status: 'completed',
+        type: 'status_change',
+      });
+      ws.simulateMessage({ operationId: 'op-1', type: 'session_complete' } as any);
+
+      expect(onComplete).not.toHaveBeenCalled();
+      expect(sub.active).toBe(true);
+
+      ws.simulateMessage(agentEvent('op-1', '3', 'agent_runtime_end'));
+      expect(onComplete).toHaveBeenCalledOnce();
+      expect(sub.active).toBe(false);
+    });
+
     it('subscribe_failed emits auth_failed and ends the subscription', async () => {
       const { mux } = createMux();
       const ws = await connectAndReady(mux);

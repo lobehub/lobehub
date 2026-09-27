@@ -370,6 +370,49 @@ describe('AgentStreamClient', () => {
       expect(client.connectionStatus).toBe('disconnected');
     });
 
+    it('ignores the session_complete echo of a mirrored member terminal (G-02)', async () => {
+      // A gateway that ends a session on ANY agent_runtime_end answers a
+      // member's mirrored terminal with session_complete for the supervisor.
+      // That is the member's echo, not the supervisor's end.
+      const client = createClient(); // operationId: 'op-123'
+      const onComplete = vi.fn();
+      client.on('session_complete', onComplete);
+
+      const ws = await connectAndAuth(client);
+      ws.simulateMessage({
+        event: {
+          data: { reason: 'done' },
+          operationId: 'op-member-456',
+          stepIndex: 0,
+          timestamp: 1,
+          type: 'agent_runtime_end',
+        },
+        type: 'agent_event',
+      });
+      ws.simulateMessage({ type: 'session_complete' });
+
+      expect(onComplete).not.toHaveBeenCalled();
+      expect(client.connectionStatus).toBe('connected');
+
+      // The supervisor keeps streaming and still ends on its own terminal.
+      const events: any[] = [];
+      client.on('agent_event', (e) => events.push(e));
+      ws.simulateMessage({
+        event: {
+          data: { chunkType: 'text', content: 'SUP DONE' },
+          operationId: 'op-123',
+          stepIndex: 2,
+          timestamp: 2,
+          type: 'stream_chunk',
+        },
+        type: 'agent_event',
+      });
+      expect(events).toHaveLength(1);
+      ws.simulateMessage({ type: 'session_complete' });
+      expect(onComplete).toHaveBeenCalledOnce();
+      expect(client.connectionStatus).toBe('disconnected');
+    });
+
     it('should emit session_complete and disconnect', async () => {
       const client = createClient();
       const onComplete = vi.fn();

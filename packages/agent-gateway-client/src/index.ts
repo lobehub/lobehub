@@ -1,6 +1,10 @@
 export { AgentStreamClient } from './client';
 export { sanitizeAgentInterventionRequestForReview } from './intervention';
 export {
+  MIRRORED_TERMINAL_ECHO_WINDOW_MS,
+  MirroredTerminalEchoGuard,
+} from './mirroredTerminalEcho';
+export {
   createOperationClient,
   type OperationClient,
   type OperationClientEvents,
