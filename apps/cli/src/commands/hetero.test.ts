@@ -1542,6 +1542,77 @@ describe('hetero exec command', () => {
       );
     });
 
+    it('does not fall back to a fresh run once the server has refused this run output', async () => {
+      // The ingester is shared across attempts and a refusal is permanent: a
+      // fallback run would stream into a dead pipe, and the one-shot abort that
+      // stopped attempt 1 could not stop it again.
+      mockHeteroIngestMutate.mockResolvedValue({ accepted: false, reason: 'stale-operation' });
+
+      let markKilled!: () => void;
+      const killed = new Promise<void>((resolve) => {
+        markKilled = resolve;
+      });
+      const stderr = new PassThrough();
+      stderr.end();
+      const events = [
+        {
+          data: { chunkType: 'text', content: 'working' },
+          operationId: 'op-refused',
+          stepIndex: 0,
+          timestamp: 1,
+          type: 'stream_chunk',
+        },
+        {
+          data: { message: 'No conversation found with session ID cc-stale' },
+          operationId: 'op-refused',
+          stepIndex: 0,
+          timestamp: 2,
+          type: 'error',
+        },
+      ];
+      mockSpawnAgent.mockReturnValueOnce(
+        Promise.resolve({
+          events: {
+            [Symbol.asyncIterator]() {
+              let i = 0;
+              return {
+                async next() {
+                  if (i < events.length) return { done: false, value: events[i++] };
+                  await killed;
+                  return { done: true, value: undefined };
+                },
+              };
+            },
+          } as AsyncIterable<any>,
+          exit: killed.then(() => ({ code: null, signal: 'SIGTERM' as NodeJS.Signals })),
+          kill: vi.fn(() => markKilled()),
+          pid: 12_345,
+          stderr,
+        }),
+      );
+      mockSpawnAgent.mockReturnValue(createFakeHandle({ exitCode: 0 }));
+
+      await runCmd([
+        'hetero',
+        'exec',
+        '--type',
+        'claude-code',
+        '--prompt',
+        'continue',
+        '--resume',
+        'cc-stale',
+        '--operation-id',
+        'op-refused',
+        '--topic',
+        'topic-refused',
+      ]);
+
+      expect(mockSpawnAgent).toHaveBeenCalledTimes(1);
+      expect(mockHeteroFinishMutate).toHaveBeenCalledWith(
+        expect.objectContaining({ result: 'error' }),
+      );
+    });
+
     it('does not consume the recovery prompt when native resume succeeds', async () => {
       const dir = await mkdtemp(`${tmpdir()}/hetero-resume-primary-`);
       const file = path.join(dir, 'input.json');

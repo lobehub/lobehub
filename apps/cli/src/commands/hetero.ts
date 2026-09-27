@@ -881,7 +881,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
         return {
           cancelled: !ingestLoss,
           code: null,
-          ingestError: false,
+          ingestError: ingestLoss !== undefined,
           resumeNotFound: false,
           sawTerminalError: false,
           sessionId: undefined,
@@ -945,7 +945,6 @@ const exec = async (options: ExecOptions): Promise<void> => {
     let sawTerminalError = false;
     let terminalErrorMessage: string | undefined;
     let terminalErrorData: Record<string, unknown> | undefined;
-    const ingestError = false;
     try {
       for await (const event of handle.events) {
         if (interceptResumeErrors && event.type === 'error') {
@@ -1046,7 +1045,11 @@ const exec = async (options: ExecOptions): Promise<void> => {
     return {
       cancelled: interrupted,
       code,
-      ingestError,
+      // The shared ingester is permanently failed once the server refused a
+      // batch, so the caller must neither retry this run (every event of a
+      // retry would be dropped, with no second abort to stop it) nor report it
+      // as anything but failed.
+      ingestError: ingestLoss !== undefined,
       resumeNotFound,
       sawTerminalError,
       sessionId: handle.sessionId,
@@ -1123,7 +1126,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
   // fresh session.  The server's `heteroSessionId` is updated with the new id,
   // breaking the stale-session loop.
   let result = first;
-  if (!first.cancelled && first.resumeNotFound) {
+  if (!first.cancelled && !first.ingestError && first.resumeNotFound) {
     log.info('Resume failed (session not found or context overflow) — retrying without --resume');
     result = await runOneAgent(
       {
