@@ -1234,5 +1234,29 @@ describe('HookDispatcher', () => {
       const called = mockPublishJSON.mock.calls[0][0];
       expect(called.url).toBe('https://lobe.example.com/api/x');
     });
+
+    it('resolves qstash publish-failure fallback fetches against the direct base', async () => {
+      // Deployments set INTERNAL_APP_URL because the server cannot reach its own
+      // public address — the fallback must not depend on that address working.
+      mockPublishJSON.mockRejectedValue(new Error('qstash down'));
+
+      await deliverWebhook({ delivery: 'qstash', url: '/api/x' }, {});
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://127.0.0.1:3210/api/x',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    it('resolves missing-token fallback fetches against the direct base', async () => {
+      delete process.env.QSTASH_TOKEN;
+
+      await deliverWebhook({ delivery: 'qstash', url: '/api/x' }, {});
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://127.0.0.1:3210/api/x',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
   });
 });

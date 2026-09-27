@@ -8,12 +8,16 @@ import type { VerifyRunItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 import { createAgentStateManager } from '@/server/modules/AgentRuntime';
 
+import { createVerifierAgentRunner } from './agentVerifier';
 import { recordHeterogeneousDeliverableEvidence } from './evidenceSubmission';
+import { VerifyExecutorService } from './executor';
+import { resolveVerifyModelConfig } from './modelConfig';
 import { settleFailedRepair } from './repairTerminal';
 import { planItemToPendingResult } from './resultSnapshot';
 import { finalizeVerifyRun } from './settle';
 import { VERIFY_ABANDONED_MS, VERIFY_ROLLUP_GRACE_MS } from './staleness';
 import { VerifyStatusService } from './statusService';
+import { resolveTaskAcceptance } from './taskAcceptance';
 
 const log = debug('lobe-server:verify-sweep');
 
@@ -92,12 +96,19 @@ export const sweepStuckVerifyRuns = async (
   const pageSize = options?.pageSize ?? SWEEP_PAGE_SIZE;
   const staleBefore = new Date(now.getTime() - VERIFY_ROLLUP_GRACE_MS);
   const abandonedBound = new Date(now.getTime() - VERIFY_ABANDONED_MS);
-  const outcome: VerifySweepOutcome = { abandoned: [], settled: [], evidenceRecovered: [], skipped: 0 };
+  const outcome: VerifySweepOutcome = {
+    abandoned: [],
+    settled: [],
+    evidenceRecovered: [],
+    skipped: 0,
+  };
 
   const scan = async (
     find: typeof VerifyRunModel.findStuckVerifying,
     olderThan: Date,
-    recover: (run: VerifyRunItem) => Promise<'abandoned' | 'settled' | 'evidenceRecovered' | 'skipped'>,
+    recover: (
+      run: VerifyRunItem,
+    ) => Promise<'abandoned' | 'settled' | 'evidenceRecovered' | 'skipped'>,
   ) => {
     // Walk the whole stranded set, not just its oldest page: rows the sweep
     // leaves alone keep their timestamp, so a single fixed-size read would
@@ -133,9 +144,7 @@ export const sweepStuckVerifyRuns = async (
     }
   };
 
-  await scan(VerifyRunModel.findStuckVerifying, staleBefore, (run) =>
-    recoverRun(db, run, now),
-  );
+  await scan(VerifyRunModel.findStuckVerifying, staleBefore, (run) => recoverRun(db, run, now));
   await scan(VerifyRunModel.findStuckCollectingEvidence, abandonedBound, (run) =>
     recoverEvidenceRun(db, run, now),
   );
@@ -181,30 +190,44 @@ const recoverEvidenceRun = async (
   const resultModel = new VerifyCheckResultModel(db, run.userId, workspaceId);
   const submitted = await resultModel.listByRun(run.id);
 
-  // Real evidence exists — a judge pass is the honest ending.
-  if (submitted.length > 0) {
-    return enterJudging(db, run, operationId, run.userId, workspaceId, now, 'settled');
-  }
-
-  // No evidence yet: a live evidence turn may still submit, so only proceed
-  // when its child operation can no longer produce an `onComplete`.
+  // The evidence hook's terminal callback follows the evidence child op, so a
+  // run with any submitted rows is only judged once that child can no longer
+  // produce an `onComplete` — the same live guard the no-evidence path applies
+  // below. Ordering matters: the claim inside `enterJudging` would otherwise
+  // steal the ending from a collector that is still running with partial rows.
   const operationModel = new AgentOperationModel(db, run.userId, workspaceId);
   const children = await operationModel.listOperationTree(operationId);
   const evidenceOp = children.find(
     (op) => op.id !== operationId && op.parentOperationId === operationId,
   );
-  if (evidenceOp && LIVE_OPERATION_STATUSES.has(evidenceOp.status)) return 'skipped';
+  const evidenceOpLive = Boolean(evidenceOp && LIVE_OPERATION_STATUSES.has(evidenceOp.status));
+
+  // Real evidence exists and the collector is gone — a judge pass is the honest
+  // ending. Re-running the executor judges what was submitted (the structural
+  // gate marks uncovered items `uncertain`) instead of inventing verdicts.
+  if (submitted.length > 0) {
+    if (evidenceOpLive) return 'skipped';
+    return enterJudging(db, run, operationId, run.userId, workspaceId, now, 'settled');
+  }
+
+  // No evidence yet: a live evidence turn may still submit, so only proceed
+  // when its child operation can no longer produce an `onComplete`.
+  if (evidenceOpLive) return 'skipped';
 
   // The evidence hook's webhook body carries the deliverable the turn was
-  // given — read it back from the persisted agent state.
-  const deliverable = await loadEvidenceHookDeliverable(operationId, run.userId);
+  // given — read it back from the persisted agent state. The hooks persist onto
+  // the evidence child op's runtime state (the continuation run), not the
+  // builder's, so the child's id is the state key.
+  const deliverable = evidenceOp
+    ? await loadEvidenceHookDeliverable(evidenceOp.id, run.userId)
+    : null;
   const builderOp = children.find((op) => op.id === operationId);
   if (!deliverable || !builderOp) {
     // Nothing to backfill from (no surviving state, or the builder operation
-    // itself is gone). The evidence op is dead, so entering judging leaves the
-    // pending rows for `recompute` to close as `errored` — the same ending the
-    // plain sweep gives a `verifying` run whose verifier died.
-    return enterJudging(db, run, operationId, run.userId, workspaceId, now, 'abandoned');
+    // itself is gone). The evidence op is dead, so closing the outstanding rows
+    // as `errored` is the same ending the plain sweep gives a `verifying` run
+    // whose verifier died.
+    return closeOutstandingAsErrored(db, run, operationId, now, 'abandoned');
   }
 
   await recordHeterogeneousDeliverableEvidence({
@@ -247,7 +270,70 @@ const loadEvidenceHookDeliverable = async (
   }
 };
 
-/** Claim the run into `verifying` and run the shared finalizer. */
+/**
+ * Close every outstanding required check as `errored`, roll the run up, and run
+ * the finalizer — the same ending the plain sweep gives a `verifying` run whose
+ * verifier died mid-flight (see {@link recoverRun}'s outstanding branch). Used
+ * when the sweep owns a stranded run but holds nothing to judge with.
+ */
+const closeOutstandingAsErrored = async (
+  db: LobeChatDatabase,
+  run: VerifyRunItem,
+  operationId: string,
+  now: Date,
+  action: 'abandoned' | 'settled' | 'evidenceRecovered',
+): Promise<'abandoned' | 'settled' | 'evidenceRecovered' | 'skipped'> => {
+  const statusService = new VerifyStatusService(db, run.userId, run.workspaceId ?? undefined);
+  if (
+    !(await statusService.claimVerifying(
+      operationId,
+      new Date(now.getTime() - VERIFY_ROLLUP_GRACE_MS),
+    ))
+  )
+    return 'skipped';
+
+  const workspaceId = run.workspaceId ?? undefined;
+  const plan = (run.plan ?? []) as VerifyCheckItem[];
+  const resultModel = new VerifyCheckResultModel(db, run.userId, workspaceId);
+
+  await Promise.all(
+    plan
+      .filter((item) => item.required)
+      .map((item) =>
+        // Upsert, not update: an item with no row at all must still land as
+        // `errored`, and a pending row (evidence uploaded mid-run) is closed too.
+        resultModel.upsertByCheckItem({
+          ...planItemToPendingResult(run.id, operationId, item),
+          // Re-asserted after the spread: the upsert key is required, and the
+          // snapshot's own fields are optional-nullable.
+          checkItemId: item.id,
+          verifyRunId: run.id,
+          completedAt: now,
+          status: 'errored',
+          suggestion: 'Rerun verification for this delivery.',
+          toulmin: {
+            limitation: 'Evidence collection was interrupted before this check was judged.',
+          },
+        }),
+      ),
+  );
+
+  await statusService.recompute(operationId);
+  await finalizeVerifyRun(db, run.userId, operationId, {}, workspaceId);
+
+  log('recovered run %s (op %s) as %s', run.id, operationId, action);
+  return action;
+};
+
+/**
+ * Claim the run into `verifying` and run a real judge pass, then the shared
+ * finalizer — the mirror of the lifecycle's normal completion path (resolve the
+ * deliverable and model config, run the executor, finalize). Only claiming and
+ * finalizing would leave the pending rows untouched: `recompute` reads them as
+ * `verifying`, `maybeAutoRepair` waits for terminal rows, and `finalizeVerifyRun`
+ * early-returns — the run would strand again and the next sweep would close it
+ * `errored`, so the recovery would recover nothing.
+ */
 const enterJudging = async (
   db: LobeChatDatabase,
   run: VerifyRunItem,
@@ -258,11 +344,63 @@ const enterJudging = async (
   action: 'abandoned' | 'settled' | 'evidenceRecovered',
 ): Promise<'abandoned' | 'settled' | 'evidenceRecovered' | 'skipped'> => {
   const statusService = new VerifyStatusService(db, userId, workspaceId);
-  if (!(await statusService.claimVerifying(operationId, new Date(now.getTime() - VERIFY_ROLLUP_GRACE_MS))))
+  if (
+    !(await statusService.claimVerifying(
+      operationId,
+      new Date(now.getTime() - VERIFY_ROLLUP_GRACE_MS),
+    ))
+  )
     return 'skipped';
 
-  // No report context — the sweep holds no deliverable. The task is still
-  // driven, which is the whole point: the goal has been waiting on this verdict.
+  const op = await new AgentOperationModel(db, userId, workspaceId).findById(operationId);
+  if (!op) {
+    // The operation row is gone — nothing to resolve a verifier against. Close
+    // the outstanding checks as `errored` in the same tick instead of leaving
+    // them for the next sweep to find.
+    return closeOutstandingAsErrored(db, run, operationId, now, action);
+  }
+
+  const resolvedAcceptance = op.taskId
+    ? await resolveTaskAcceptance(db, userId, op.taskId, workspaceId)
+    : undefined;
+  const verifierAgentId = resolvedAcceptance?.config.verifierAgentId ?? undefined;
+
+  // No deliverable context — inline (LLM) checks are judged on submitted
+  // evidence alone, and checks needing the deliverable text degrade to the
+  // errored-rows ending below. The task is still driven: the goal has been
+  // waiting on this verdict.
+  const goal = run.goal ?? '';
+
+  const modelConfig = await resolveVerifyModelConfig(
+    db,
+    userId,
+    {
+      parentModel: op.model,
+      parentProvider: op.provider,
+      verifierAgentId,
+    },
+    workspaceId,
+  );
+
+  const executor = new VerifyExecutorService(db, userId, workspaceId);
+  await executor.execute({
+    deliverable: '',
+    goal,
+    modelConfig,
+    operationId,
+    runVerifierAgent: createVerifierAgentRunner({
+      db,
+      deliverable: '',
+      model: modelConfig.model,
+      provider: modelConfig.provider,
+      taskId: op.taskId,
+      topicId: op.topicId,
+      userId,
+      verifierAgentId,
+      workspaceId,
+    }),
+  });
+
   await finalizeVerifyRun(db, userId, operationId, {}, workspaceId);
 
   log('recovered run %s (op %s) as %s', run.id, operationId, action);

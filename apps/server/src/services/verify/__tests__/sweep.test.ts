@@ -7,12 +7,16 @@ import { sweepStuckVerifyRuns } from '../sweep';
 const {
   settleFailedRepair,
   claimVerifying,
+  createVerifierAgentRunner,
+  executorExecute,
   findStuckVerifying,
   findStuckCollectingEvidence,
   listOperationTree,
   loadAgentState,
   operationFindById,
   recordHeterogeneousDeliverableEvidence,
+  resolveTaskAcceptance,
+  resolveVerifyModelConfig,
   recompute,
   resultListByRun,
   upsertByCheckItem,
@@ -20,6 +24,8 @@ const {
 } = vi.hoisted(() => ({
   settleFailedRepair: vi.fn(),
   claimVerifying: vi.fn(),
+  createVerifierAgentRunner: vi.fn(),
+  executorExecute: vi.fn(),
   finalizeVerifyRun: vi.fn(),
   findStuckVerifying: vi.fn(),
   findStuckCollectingEvidence: vi.fn(),
@@ -27,6 +33,8 @@ const {
   loadAgentState: vi.fn(),
   operationFindById: vi.fn(),
   recordHeterogeneousDeliverableEvidence: vi.fn(),
+  resolveTaskAcceptance: vi.fn(),
+  resolveVerifyModelConfig: vi.fn(),
   recompute: vi.fn(),
   resultListByRun: vi.fn(),
   upsertByCheckItem: vi.fn(),
@@ -58,6 +66,14 @@ vi.mock('../statusService', () => ({
 vi.mock('../repairTerminal', () => ({ settleFailedRepair }));
 vi.mock('../settle', () => ({ finalizeVerifyRun }));
 vi.mock('../evidenceSubmission', () => ({ recordHeterogeneousDeliverableEvidence }));
+vi.mock('../executor', () => ({
+  VerifyExecutorService: vi.fn(function () {
+    return { execute: executorExecute };
+  }),
+}));
+vi.mock('../modelConfig', () => ({ resolveVerifyModelConfig }));
+vi.mock('../taskAcceptance', () => ({ resolveTaskAcceptance }));
+vi.mock('../agentVerifier', () => ({ createVerifierAgentRunner }));
 vi.mock('@/server/modules/AgentRuntime', () => ({
   createAgentStateManager: () => ({ loadAgentState }),
 }));
@@ -87,6 +103,8 @@ beforeEach(() => {
   [
     settleFailedRepair,
     claimVerifying,
+    createVerifierAgentRunner,
+    executorExecute,
     finalizeVerifyRun,
     findStuckVerifying,
     findStuckCollectingEvidence,
@@ -94,6 +112,8 @@ beforeEach(() => {
     loadAgentState,
     operationFindById,
     recordHeterogeneousDeliverableEvidence,
+    resolveTaskAcceptance,
+    resolveVerifyModelConfig,
     recompute,
     resultListByRun,
     upsertByCheckItem,
@@ -102,10 +122,19 @@ beforeEach(() => {
   findStuckCollectingEvidence.mockResolvedValue([]);
   resultListByRun.mockResolvedValue([]);
   claimVerifying.mockResolvedValue(true);
+  executorExecute.mockResolvedValue(undefined);
+  resolveVerifyModelConfig.mockResolvedValue({ model: 'gpt-4o', provider: 'openai' });
+  createVerifierAgentRunner.mockReturnValue(async () => null);
+  operationFindById.mockResolvedValue({
+    id: 'op-1',
+    model: 'claude-code',
+    provider: 'heterogeneous',
+    status: 'done',
+    taskId: null,
+  });
 });
 
 describe('sweepStuckVerifyRuns', () => {
-
   it('recomputes a run whose checks all landed but whose rollup was lost', async () => {
     // The exact state a killed post-response judge leaves behind: every verdict
     // is on disk, only `verify_runs.status` never caught up.
@@ -365,7 +394,10 @@ describe('sweepStuckVerifyRuns — collecting_evidence', () => {
           {
             id: 'acceptance-evidence-on-complete',
             type: 'onComplete',
-            webhook: { url: '/api/workflows/verify/on-evidence-complete', body: { deliverable: 'final patch text' } },
+            webhook: {
+              url: '/api/workflows/verify/on-evidence-complete',
+              body: { deliverable: 'final patch text' },
+            },
           },
         ],
       },
@@ -378,7 +410,44 @@ describe('sweepStuckVerifyRuns — collecting_evidence', () => {
     );
     expect(upsertByCheckItem).not.toHaveBeenCalled();
     expect(outcome.evidenceRecovered).toEqual(['ev-run-1']);
+    // The sweep runs a real judge pass — the mirror of the lifecycle's normal
+    // completion path — not just the finalizer.
+    expect(executorExecute).toHaveBeenCalledWith(
+      expect.objectContaining({ goal: '', operationId: 'op-1' }),
+    );
     expect(finalizeVerifyRun).toHaveBeenCalledWith(db, 'u1', 'op-1', {}, undefined);
+  });
+
+  it('reads the evidence hook state from the evidence child operation', async () => {
+    // `execAgent` persists the evidence hooks onto the continuation run's own
+    // runtime state — the builder's state key holds none.
+    singleEvidencePage([evidenceRun()]);
+    loadAgentState.mockImplementation(async (operationId: string) =>
+      operationId === 'op-1-evidence'
+        ? {
+            host: {
+              hooks: [
+                {
+                  id: 'acceptance-evidence-on-complete',
+                  type: 'onComplete',
+                  webhook: {
+                    url: '/api/workflows/verify/on-evidence-complete',
+                    body: { deliverable: 'child state text' },
+                  },
+                },
+              ],
+            },
+          }
+        : null,
+    );
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(loadAgentState).toHaveBeenCalledWith('op-1-evidence');
+    expect(recordHeterogeneousDeliverableEvidence).toHaveBeenCalledWith(
+      expect.objectContaining({ deliverable: 'child state text' }),
+    );
+    expect(outcome.evidenceRecovered).toEqual(['ev-run-1']);
   });
 
   it('skips a run whose evidence turn is still live', async () => {
@@ -395,6 +464,23 @@ describe('sweepStuckVerifyRuns — collecting_evidence', () => {
     expect(claimVerifying).not.toHaveBeenCalled();
   });
 
+  it('skips a run with partial evidence whose collector is still live', async () => {
+    // The claim inside the partial-evidence branch must not steal the ending
+    // from a collector that can still submit the rest of the plan.
+    singleEvidencePage([evidenceRun()]);
+    resultListByRun.mockResolvedValue([{ checkItemId: 'c1', status: 'pending', verdict: null }]);
+    listOperationTree.mockResolvedValue([
+      { id: 'op-1', parentOperationId: null, status: 'done' },
+      { id: 'op-1-evidence', parentOperationId: 'op-1', status: 'waiting_for_async_tool' },
+    ]);
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(outcome.skipped).toBe(1);
+    expect(claimVerifying).not.toHaveBeenCalled();
+    expect(executorExecute).not.toHaveBeenCalled();
+  });
+
   it('judges instead of backfilling when evidence rows already exist', async () => {
     singleEvidencePage([evidenceRun()]);
     resultListByRun.mockResolvedValue([{ checkItemId: 'c1', status: 'pending', verdict: null }]);
@@ -402,26 +488,43 @@ describe('sweepStuckVerifyRuns — collecting_evidence', () => {
     const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
 
     expect(recordHeterogeneousDeliverableEvidence).not.toHaveBeenCalled();
+    expect(executorExecute).toHaveBeenCalledWith(expect.objectContaining({ operationId: 'op-1' }));
     expect(outcome.settled).toEqual(['ev-run-1']);
   });
 
-  it('degrades to the errored-rows ending when the agent state is gone', async () => {
+  it('closes the outstanding checks as errored when the agent state is gone', async () => {
     singleEvidencePage([evidenceRun()]);
     loadAgentState.mockResolvedValue(null);
 
     const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
 
     expect(recordHeterogeneousDeliverableEvidence).not.toHaveBeenCalled();
+    expect(upsertByCheckItem).toHaveBeenCalledWith(
+      expect.objectContaining({ checkItemId: 'c1', status: 'errored', verifyRunId: 'ev-run-1' }),
+    );
+    expect(recompute).toHaveBeenCalledWith('op-1');
     expect(outcome.abandoned).toEqual(['ev-run-1']);
   });
 
-  it('degrades to the errored-rows ending when Redis is unreachable', async () => {
+  it('closes the outstanding checks as errored when Redis is unreachable', async () => {
     singleEvidencePage([evidenceRun()]);
     loadAgentState.mockRejectedValue(new Error('Redis is required'));
 
     const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
 
-    expect(outcome.abandoned).toEqual(['ev-run-1']);
+    expect(upsertByCheckItem).toHaveBeenCalledWith(expect.objectContaining({ status: 'errored' }));
     expect(finalizeVerifyRun).toHaveBeenCalled();
+    expect(outcome.abandoned).toEqual(['ev-run-1']);
+  });
+
+  it('closes the outstanding checks as errored when the operation row is gone', async () => {
+    singleEvidencePage([evidenceRun()]);
+    operationFindById.mockResolvedValue(null);
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(executorExecute).not.toHaveBeenCalled();
+    expect(upsertByCheckItem).toHaveBeenCalledWith(expect.objectContaining({ status: 'errored' }));
+    expect(outcome.abandoned).toEqual(['ev-run-1']);
   });
 });
