@@ -907,6 +907,30 @@ describe('AbandonOperationService', () => {
     expect(result.assistantMessageUpdated).toBe(true);
   });
 
+  it('writes no fallback row once a newer run has taken over the conversation', async () => {
+    // The tail now belongs to the newer turn; grafting this run's error under
+    // it would corrupt the branch the user is working on.
+    latestSpineMessageIdMock.mockResolvedValue('msg_newer_turn');
+    const coord = buildCoordinator({
+      loadAgentState: vi.fn().mockResolvedValue(
+        stateWith({
+          metadata: {},
+          origin: { agentId: 'agt_x', topicId: 'tpc_x', userId: 'user_x' },
+        }),
+      ),
+    });
+
+    const result = await new AbandonOperationService(
+      buildDb({ operationRow: { id: 'op_newer' } }),
+      { coordinator: coord as any, snapshotStore: buildPartiallessStore() as any },
+    ).finalizeAbandoned('op_no_placeholder', 'stale_lease');
+
+    expect(messageCreateMock).not.toHaveBeenCalled();
+    expect(result.assistantMessageUpdated).toBe(false);
+    // The durable row still settles, so the run is not left running.
+    expect(settleRunningMock).toHaveBeenCalledWith('op_no_placeholder', 'error');
+  });
+
   it('marks the existing placeholder rather than creating a row when the step made one', async () => {
     latestSpineMessageIdMock.mockResolvedValue('msg_tail');
     const coord = buildCoordinator({

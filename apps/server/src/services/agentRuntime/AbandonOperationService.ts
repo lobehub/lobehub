@@ -4,7 +4,7 @@ import { ABANDONED_OPERATION_ERROR_PREFIX } from '@lobechat/const/goal';
 import type { ChatMessageError } from '@lobechat/types';
 import { AgentRuntimeErrorType } from '@lobechat/types';
 import debug from 'debug';
-import { and, desc, eq, gte, lte, or } from 'drizzle-orm';
+import { and, desc, eq, gt, gte, isNull, lte, ne, or, sql } from 'drizzle-orm';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
@@ -190,7 +190,7 @@ export class AbandonOperationService {
           // failure belongs on exactly that row.
           await messageModel.update(metadata.assistantMessageId, { error });
           result.assistantMessageUpdated = true;
-        } else if (origin.topicId) {
+        } else if (origin.topicId && !(await this.topicMovedOn(operationId, origin))) {
           // No placeholder: the step was killed before its first token, which
           // is the usual shape when the host is recycled mid-LLM-call. The
           // turn would otherwise carry no error anywhere, and the client keys
@@ -483,6 +483,57 @@ export class AbandonOperationService {
     } catch (e) {
       log('[%s] tail message lookup failed (non-fatal): %O', params.topicId, e);
       return undefined;
+    }
+  }
+
+  /**
+   * Whether a newer run has started on this conversation since the abandoned
+   * one, which means the spine tail now belongs to that run, not to this one.
+   *
+   * The fallback failure row is anchored to the tail, so writing it after the
+   * user has moved on would graft this run's error under the newer turn — and
+   * an interactive start overwrites `runningOperation` rather than waiting, so
+   * the topic marker alone cannot tell (a newer run that already finished has
+   * cleared it too). The durable operation rows can: any top-level operation
+   * on the same topic/thread created after this one. The abandoned run's own
+   * sub-agent children are excluded, since they extend its turn.
+   *
+   * Fails closed: on a lookup error the row is not written, because a missing
+   * error bubble is recoverable (the durable row still settles) and a failure
+   * grafted onto the active branch is not.
+   */
+  private async topicMovedOn(
+    operationId: string,
+    origin: { threadId?: string; topicId?: string; userId?: string },
+  ): Promise<boolean> {
+    if (!origin.topicId || !origin.userId) return true;
+    try {
+      const newer = await (this.db as any).query?.agentOperations?.findFirst({
+        columns: { id: true },
+        where: and(
+          eq(agentOperations.topicId, origin.topicId),
+          eq(agentOperations.userId, origin.userId),
+          origin.threadId
+            ? eq(agentOperations.threadId, origin.threadId)
+            : isNull(agentOperations.threadId),
+          ne(agentOperations.id, operationId),
+          or(
+            isNull(agentOperations.parentOperationId),
+            ne(agentOperations.parentOperationId, operationId),
+          ),
+          // Own alias on purpose: the relational query aliases the outer table,
+          // and interpolated columns in the subquery would resolve against that
+          // alias and compare each row with itself.
+          gt(
+            agentOperations.createdAt,
+            sql`(select self.created_at from agent_operations self where self.id = ${operationId})`,
+          ),
+        ),
+      });
+      return Boolean(newer);
+    } catch (e) {
+      log('[%s] newer-run lookup failed, not writing a fallback row: %O', operationId, e);
+      return true;
     }
   }
 
