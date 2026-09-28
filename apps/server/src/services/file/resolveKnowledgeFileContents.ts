@@ -1,5 +1,5 @@
 import type { LobeChatDatabase } from '@lobechat/database';
-import type { FileContent } from '@lobechat/prompts';
+import { type FileContent, isOversizedFileContent } from '@lobechat/prompts';
 import debug from 'debug';
 
 import { readOriginalCharCount } from '@/database/utils/parsedDocument';
@@ -7,7 +7,7 @@ import { DocumentService } from '@/server/services/document';
 
 const log = debug('lobe-server:resolveKnowledgeFileContents');
 
-interface KnowledgeFileItem {
+export interface KnowledgeFileItem {
   content?: string | null;
   enabled?: boolean | null;
   fileType?: string | null;
@@ -15,6 +15,27 @@ interface KnowledgeFileItem {
   name?: string | null;
   originalCharCount?: number;
 }
+
+const isMediaFileType = (fileType?: string | null): boolean => {
+  const type = fileType || '';
+  return type.startsWith('image') || type.startsWith('video') || type.startsWith('audio');
+};
+
+/**
+ * Whether the text this resolver sends for a knowledge file may be cut to a preview.
+ *
+ * Tool discovery runs before the context builder, so a file that is resolved on demand
+ * still has no content there and its length is unknown. Treating it as possibly
+ * oversized keeps `readAttachment` in the tool set on the turn that parses it; otherwise
+ * the model would get a truncated preview with no way to read the rest.
+ */
+export const mayBeOversizedKnowledgeFile = (file: KnowledgeFileItem): boolean => {
+  if (file.enabled !== true) return false;
+  if (typeof file.content === 'string') {
+    return isOversizedFileContent(file.content.length, file.originalCharCount);
+  }
+  return !!file.id && !isMediaFileType(file.fileType);
+};
 
 interface ResolveKnowledgeArgs {
   db: LobeChatDatabase;
@@ -61,11 +82,7 @@ export const resolveKnowledgeFileContents = async ({
         filename: file.name ?? '',
         originalChars: file.originalCharCount,
       };
-      const fileType = file.fileType || '';
-      const isMedia =
-        fileType.startsWith('image') ||
-        fileType.startsWith('video') ||
-        fileType.startsWith('audio');
+      const isMedia = isMediaFileType(file.fileType);
       // A cached parse passes through even when it is empty; media files have
       // no text to extract (the attachment path skips them the same way); and
       // without a file id or a user id there is no document scope to parse

@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { resolveKnowledgeFileContents } from './resolveKnowledgeFileContents';
+import {
+  mayBeOversizedKnowledgeFile,
+  resolveKnowledgeFileContents,
+} from './resolveKnowledgeFileContents';
 
 const { mockParseFile, MockDocumentService } = vi.hoisted(() => {
   const mockParseFile = vi.fn();
@@ -196,5 +199,42 @@ describe('resolveKnowledgeFileContents', () => {
       { content: '', fileId: 'f3', filename: 'c.wav' },
     ]);
     expect(mockParseFile).not.toHaveBeenCalled();
+  });
+});
+
+describe('mayBeOversizedKnowledgeFile', () => {
+  it('keeps cached documents on the inline-limit rule', () => {
+    expect(mayBeOversizedKnowledgeFile({ content: 'short', enabled: true, id: 'f1' })).toBe(false);
+    expect(
+      mayBeOversizedKnowledgeFile({ content: 'x'.repeat(100_001), enabled: true, id: 'f1' }),
+    ).toBe(true);
+    expect(
+      mayBeOversizedKnowledgeFile({
+        content: 'head',
+        enabled: true,
+        id: 'f1',
+        originalCharCount: 120_000,
+      }),
+    ).toBe(true);
+  });
+
+  it('treats an unparsed document as possibly oversized', () => {
+    expect(mayBeOversizedKnowledgeFile({ content: null, enabled: true, id: 'f2' })).toBe(true);
+    expect(
+      mayBeOversizedKnowledgeFile({ enabled: true, fileType: 'application/pdf', id: 'f2' }),
+    ).toBe(true);
+  });
+
+  it('ignores disabled, id-less and media files', () => {
+    expect(mayBeOversizedKnowledgeFile({ content: null, enabled: false, id: 'f3' })).toBe(false);
+    expect(mayBeOversizedKnowledgeFile({ content: null, enabled: true })).toBe(false);
+    expect(
+      mayBeOversizedKnowledgeFile({
+        content: null,
+        enabled: true,
+        fileType: 'image/png',
+        id: 'f4',
+      }),
+    ).toBe(false);
   });
 });

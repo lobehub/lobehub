@@ -24,7 +24,7 @@ import {
   resolveDiscoveryPool,
   resolveInvocationToolIds,
 } from '@lobechat/mecha';
-import { FILE_INLINE_MAX_CHARS, isOversizedFileContent } from '@lobechat/prompts';
+import { FILE_INLINE_MAX_CHARS } from '@lobechat/prompts';
 import type {
   ChatTopicBotContext,
   FrozenCredentialFacts,
@@ -79,6 +79,7 @@ import {
 } from '@/server/services/connector/refresh';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
+import { mayBeOversizedKnowledgeFile } from '@/server/services/file/resolveKnowledgeFileContents';
 import type { MarketService } from '@/server/services/market';
 import {
   buildConnectorOwnershipPrompt,
@@ -516,11 +517,9 @@ export const discoverTools = async (
    * custom / exclusive tool turns and share visitors fall back to a plain preview.
    */
   async function readHasOversizedFiles(): Promise<boolean> {
-    const hasOversizedAgentFile = agentConfig.files?.some(
-      (file: { content?: string | null; enabled?: boolean | null; originalCharCount?: number }) =>
-        file.enabled === true &&
-        isOversizedFileContent(file.content?.length ?? 0, file.originalCharCount),
-    );
+    // An unparsed file is resolved on demand by the context builder, so its length is not
+    // known yet; `mayBeOversizedKnowledgeFile` keeps the tool available for that turn.
+    const hasOversizedAgentFile = agentConfig.files?.some(mayBeOversizedKnowledgeFile);
     if (hasOversizedAgentFile) return true;
     if (!topicId && !attachedFileIds?.length) return false;
 
