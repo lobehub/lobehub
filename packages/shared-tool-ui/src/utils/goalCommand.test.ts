@@ -50,6 +50,16 @@ describe('getGoalCommand', () => {
   it('ignores other commands', () => {
     expect(getGoalCommand('lh goal show goal_1')).toBeUndefined();
     expect(getGoalCommand('echo lh goal-create')).toBeUndefined();
+    // Only a command in command position ran; as an argument it is just text.
+    expect(getGoalCommand('echo lh goal create "demo"')).toBeUndefined();
+    expect(getGoalCommand('grep -r "lh goal plan" .')).toBeUndefined();
+  });
+
+  it('still reads lh behind separators, env assignments and a path', () => {
+    expect(getGoalCommand('cd /tmp && lh goal create "A"')).toMatchObject({ title: 'A' });
+    expect(getGoalCommand('true; lh goal plan goal_1')).toMatchObject({ goalId: 'goal_1' });
+    expect(getGoalCommand('LOBEHUB_X=1 lh goal create "B"')).toMatchObject({ title: 'B' });
+    expect(getGoalCommand('~/.local/bin/lh goal create "C"')).toMatchObject({ title: 'C' });
     expect(getGoalCommand('')).toBeUndefined();
     expect(getGoalCommand()).toBeUndefined();
   });

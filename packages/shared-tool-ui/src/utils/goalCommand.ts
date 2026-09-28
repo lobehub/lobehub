@@ -15,7 +15,11 @@ export type GoalCommand =
     }
   | { goalId?: string; kind: 'plan' };
 
-const LH_GOAL_PATTERN = /(?:^|[\s&(;|])lh\s+goal\s+(create|plan)(?=\s|$)([\s\S]*)$/;
+// `lh` must be in command position — the start of the command, or right after
+// a separator (`&&`, `||`, `;`, `|`, `(`, newline), optionally behind env
+// assignments or a path. As a mere argument (`echo lh goal create x`) it never ran.
+const LH_GOAL_PATTERN =
+  /(?:^|[;&|(\n])\s*(?:[A-Za-z_]\w*=\S*\s+)*(?:\S*\/)?lh\s+goal\s+(create|plan)(?=\s|$)([\s\S]*)$/;
 const FIRST_POSITIONAL_PATTERN = /^\s+(?:"((?:[^"\\]|\\.)*)"|'([^']*)'|([^\s"'-]\S*))/;
 
 export const getGoalCommand = (command?: string): GoalCommand | undefined => {
