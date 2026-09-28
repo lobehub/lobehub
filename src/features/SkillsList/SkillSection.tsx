@@ -1,9 +1,9 @@
-import { Accordion, AccordionItem, Center, Flexbox, Text } from '@lobehub/ui';
+import { Center, Flexbox } from '@lobehub/ui';
+import { Accordion, Spin, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, type ReactNode, useState } from 'react';
 
 import AsyncError from '@/components/AsyncError';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 
 export interface SkillSectionHeader {
   /** Wrap the section in a collapsible Accordion. Defaults to true. */
@@ -92,7 +92,7 @@ const Body = memo<BodyProps>(({ children, emptyText, error, isEmpty, isLoading, 
   if (isLoading) {
     return (
       <Center paddingBlock={12}>
-        <NeuralNetworkLoading size={24} />
+        <Spin size="middle" />
       </Center>
     );
   }
@@ -142,19 +142,15 @@ const SkillSection = memo<SkillSectionProps>(
 
     return (
       <Accordion
-        expandedKeys={expanded ? [ITEM_KEY] : []}
         gap={4}
-        onExpandedChange={(keys) => setExpanded(keys.length > 0)}
-      >
-        <AccordionItem
-          itemKey={ITEM_KEY}
-          paddingBlock={2}
-          paddingInline={4}
-          title={<HeaderRow count={count} title={title} />}
-        >
-          {body}
-        </AccordionItem>
-      </Accordion>
+        indicatorPlacement="inline"
+        styles={{ trigger: { paddingBlock: 2, paddingInline: 4 } }}
+        value={expanded ? [ITEM_KEY] : []}
+        items={[
+          { key: ITEM_KEY, title: <HeaderRow count={count} title={title} />, children: body },
+        ]}
+        onValueChange={(keys) => setExpanded(keys.length > 0)}
+      />
     );
   },
 );

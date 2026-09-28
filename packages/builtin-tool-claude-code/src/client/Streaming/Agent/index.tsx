@@ -1,7 +1,8 @@
 'use client';
 
 import type { BuiltinStreamingProps } from '@lobechat/types';
-import { Button, Flexbox, Markdown, Text } from '@lobehub/ui';
+import { Flexbox, Markdown } from '@lobehub/ui';
+import { Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { ListTree } from 'lucide-react';
 import { memo, useCallback } from 'react';

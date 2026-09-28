@@ -1,6 +1,5 @@
-import { type ActionIconProps } from '@lobehub/ui';
-import { ActionIcon, DropdownMenu } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { DropdownMenu } from '@lobehub/ui';
+import { ActionIcon, type ActionIconProps, confirmModal } from '@lobehub/ui/base-ui';
 import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { type KeyboardEvent, type MouseEvent } from 'react';
 import { memo } from 'react';

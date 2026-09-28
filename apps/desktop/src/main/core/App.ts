@@ -4,11 +4,13 @@ import path from 'node:path';
 import type { DesktopBootProfilePayload } from '@lobechat/electron-client-ipc';
 import type { ElectronIPCEventHandler } from '@lobechat/electron-server-ipc';
 import { ElectronIPCServer } from '@lobechat/electron-server-ipc';
+import { enableManagedProcesses, shutdownManagedProcesses } from '@lobechat/utils/managedProcess';
 import { app, ipcMain, nativeTheme, protocol } from 'electron';
 
 import { name } from '@/../../package.json';
 import { binDir, buildDir } from '@/const/dir';
 import { isDev } from '@/const/env';
+import { shellInfo } from '@/const/shell';
 import type { IControlModule } from '@/controllers';
 import AuthCtr from '@/controllers/AuthCtr';
 import RemoteServerConfigCtr from '@/controllers/RemoteServerConfigCtr';
@@ -33,11 +35,11 @@ import { refreshShellPath } from '@/utils/shellPath';
 import { BrowserManager } from './browser/BrowserManager';
 import { backendProxyProtocolManager } from './infrastructure/BackendProxyProtocolManager';
 import { BinaryManager } from './infrastructure/BinaryManager';
+import { CoreUpdateManager } from './infrastructure/coreOta/CoreUpdateManager';
 import { I18nManager } from './infrastructure/I18nManager';
 import { IoCContainer } from './infrastructure/IoCContainer';
 import { LocalFileProtocolManager } from './infrastructure/LocalFileProtocolManager';
 import { ProtocolManager } from './infrastructure/ProtocolManager';
-import { RendererUpdateManager } from './infrastructure/rendererOta/RendererUpdateManager';
 import { RendererUrlManager } from './infrastructure/RendererUrlManager';
 import { StaticFileServerManager } from './infrastructure/StaticFileServerManager';
 import { StoreManager } from './infrastructure/StoreManager';
@@ -68,7 +70,7 @@ export class App {
   staticFileServerManager: StaticFileServerManager;
   protocolManager: ProtocolManager;
   rendererUrlManager: RendererUrlManager;
-  rendererUpdateManager: RendererUpdateManager;
+  coreUpdateManager: CoreUpdateManager;
   localFileProtocolManager: LocalFileProtocolManager;
   binaryManager: BinaryManager;
   screenCaptureManager: ScreenCaptureManager;
@@ -90,6 +92,7 @@ export class App {
   }
 
   constructor() {
+    enableManagedProcesses();
     logger.info('----------------------------------------------');
     // Log system information
     logger.info(`  OS: ${os.platform()} (${os.arch()})`);
@@ -98,6 +101,8 @@ export class App {
     logger.info(`PATH: ${app.getAppPath()}`);
     logger.info(` lng: ${app.getLocale()}`);
     logger.info(` res: ${binDir}`);
+    logger.info(`core: ${shellInfo?.source} ${shellInfo?.coreDir} abi=${shellInfo?.abi}`);
+    for (const line of shellInfo?.log ?? []) logger.info(`shell: ${line}`);
     logger.info('----------------------------------------------');
     logger.info('Starting LobeHub...');
 
@@ -157,13 +162,14 @@ export class App {
     this.binaryManager = new BinaryManager(this);
     this.screenCaptureManager = new ScreenCaptureManager(this);
 
-    // Resolve the renderer OTA pointer and set the app:// serving root before
-    // any window starts loading.
-    this.rendererUpdateManager = new RendererUpdateManager(this);
-    this.rendererUpdateManager.initialize();
+    this.coreUpdateManager = new CoreUpdateManager(this);
+    this.coreUpdateManager.initialize();
     app.on('web-contents-created', (_event, webContents) => {
       webContents.on('render-process-gone', () => {
-        this.rendererUpdateManager.handleRendererCrash();
+        this.coreUpdateManager.handleRendererCrash();
+      });
+      webContents.on('will-prevent-unload', () => {
+        this.coreUpdateManager.handleUnloadPrevented();
       });
     });
 
@@ -183,6 +189,8 @@ export class App {
 
     // Unified handling of before-quit event
     app.on('before-quit', this.handleBeforeQuit);
+    process.on('SIGTERM', () => app.quit());
+    process.on('SIGINT', () => app.quit());
 
     // Initialize theme mode from store
     this.initializeThemeMode();
@@ -341,7 +349,7 @@ export class App {
 
     // Initialize updater manager
     await this.updaterManager.initialize();
-    this.rendererUpdateManager.startScheduledChecks();
+    this.coreUpdateManager.startScheduledChecks();
     this.screenCaptureManager.prewarmPermissionCheck();
 
     logger.info('Post-first-frame initialization completed');
@@ -450,6 +458,7 @@ export class App {
     // https://github.com/electron/electron/issues/46538#issuecomment-2808806722
     app.commandLine.appendSwitch('gtk-version', '3');
 
+    app.commandLine.appendSwitch('enable-precise-memory-info');
     app.commandLine.appendSwitch('enable-features', this.chromeFlags.join(','));
 
     logger.debug('Waiting for app to be ready');
@@ -594,8 +603,23 @@ export class App {
     });
   }
 
-  // Add before-quit handler function
-  private handleBeforeQuit = () => {
+  private quitReady = false;
+  private quitCleanup?: Promise<void>;
+
+  private handleBeforeQuit = (event: Electron.Event) => {
+    if (this.quitReady) return;
+    event.preventDefault();
+    this.isQuiting = true;
+    this.quitCleanup ??= shutdownManagedProcesses()
+      .catch((error) => logger.error('Process shutdown failed:', error))
+      .then(() => {
+        this.destroyOnQuit();
+        this.quitReady = true;
+        app.quit();
+      });
+  };
+
+  private destroyOnQuit = () => {
     logger.info('Application is preparing to quit');
     this.isQuiting = true;
 

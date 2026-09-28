@@ -1,5 +1,5 @@
 import { type MenuProps } from '@lobehub/ui';
-import { Icon, Tooltip } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
 import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { CopyPlus, EyeOffIcon, PanelTop, Pencil, Trash2, UsersIcon } from 'lucide-react';
 import { useCallback } from 'react';
@@ -13,12 +13,10 @@ import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { usePermission } from '@/hooks/usePermission';
-import { useResourceManageable } from '@/hooks/useResourceManageable';
 import { useElectronStore } from '@/store/electron';
 import { pageSelectors, usePageStore } from '@/store/page';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
-import { isForbiddenError } from '@/utils/forbiddenError';
 
 interface ActionProps {
   pageId: string;
@@ -55,12 +53,8 @@ export const useDropdownMenu = ({
   const canPublish = Boolean(activeWorkspaceId && isOwnPage && isPrivate && canEditPage);
   const canMakePrivate = Boolean(activeWorkspaceId && isOwnPage && isPublic && canEditPage);
 
-  // Row-level ownership: only the creator or a workspace owner may delete a
-  // shared page — mirrors the server-side enforcement.
-  const canManage = useResourceManageable(document?.userId);
-
   const handleDelete = useCallback(() => {
-    if (!canEditPage || !canManage) return;
+    if (!canEditPage) return;
 
     confirmModal({
       cancelText: t('cancel'),
@@ -73,16 +67,12 @@ export const useDropdownMenu = ({
           toast.success(t('pageEditor.deleteSuccess', { ns: 'file' }));
         } catch (error) {
           console.error('Failed to delete page:', error);
-          toast.error(
-            isForbiddenError(error)
-              ? t('manageOnlyCreator')
-              : t('pageEditor.deleteError', { ns: 'file' }),
-          );
+          toast.error(t('pageEditor.deleteError', { ns: 'file' }));
         }
       },
       title: t('pageEditor.deleteConfirm.title', { ns: 'file' }),
     });
-  }, [canEditPage, canManage, pageId, removePage, t]);
+  }, [canEditPage, pageId, removePage, t]);
 
   const handleDuplicate = useCallback(async () => {
     if (!canCreatePage) return;
@@ -201,16 +191,10 @@ export const useDropdownMenu = ({
         { type: 'divider' },
         {
           danger: true,
-          disabled: !canEditPage || !canManage,
+          disabled: !canEditPage,
           icon: <Icon icon={Trash2} />,
           key: 'delete',
-          label: canManage ? (
-            t('delete')
-          ) : (
-            <Tooltip title={t('manageOnlyCreator')}>
-              <span>{t('delete')}</span>
-            </Tooltip>
-          ),
+          label: t('delete'),
           onClick: handleDelete,
         },
       ].filter(Boolean) as MenuProps['items'],
@@ -223,7 +207,6 @@ export const useDropdownMenu = ({
       handleMakePrivate,
       canCreatePage,
       canEditPage,
-      canManage,
       canPublish,
       canMakePrivate,
       activeWorkspaceSlug,

@@ -5,12 +5,11 @@ import type { HeterogeneousAgentBroadcastEvents } from './heterogeneousAgent';
 import type { NavigationBroadcastEvents } from './navigation';
 import type { ProtocolBroadcastEvents } from './protocol';
 import type { RemoteServerBroadcastEvents } from './remoteServer';
-import type { RendererOtaBroadcastEvents } from './rendererOta';
 import type { ScreenCaptureBroadcastEvents } from './screenCapture';
 import type { SystemBroadcastEvents } from './system';
 import type { TerminalBroadcastEvents } from './terminal';
 import type { TopicPopupBroadcastEvents } from './topicPopup';
-import type { AutoUpdateBroadcastEvents } from './update';
+import type { UpdateBroadcastEvents } from './update';
 import type { ZoomBroadcastEvents } from './zoom';
 
 /**
@@ -20,13 +19,12 @@ import type { ZoomBroadcastEvents } from './zoom';
 export interface MainBroadcastEvents
   extends
     ACPBroadcastEvents,
-    AutoUpdateBroadcastEvents,
+    UpdateBroadcastEvents,
     BrowserSidebarBroadcastEvents,
     GatewayConnectionBroadcastEvents,
     HeterogeneousAgentBroadcastEvents,
     NavigationBroadcastEvents,
     RemoteServerBroadcastEvents,
-    RendererOtaBroadcastEvents,
     ScreenCaptureBroadcastEvents,
     SystemBroadcastEvents,
     TerminalBroadcastEvents,
@@ -53,6 +51,5 @@ export type {
   AuthorizationProgress,
   MarketAuthorizationParams,
 } from './remoteServer';
-export type { RendererOtaUpdateInfo } from './rendererOta';
 export type { OverlayDispatchMessagePayload } from './screenCapture';
 export type { OpenSettingsWindowOptions } from './windows';

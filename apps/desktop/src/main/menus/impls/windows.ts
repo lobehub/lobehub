@@ -211,6 +211,12 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
           { type: 'separator' },
           {
             click: () => {
+              this.app.browserManager.retrieveByIdentifier('processExplorer').show();
+            },
+            label: t('help.processExplorer'),
+          },
+          {
+            click: () => {
               const heteroAgentPath = path.join(this.app.appStoragePath, HETERO_AGENT_DIR);
               console.info(`[Menu] Opening HeteroAgent directory: ${heteroAgentPath}`);
               shell.openPath(heteroAgentPath).catch((err) => {

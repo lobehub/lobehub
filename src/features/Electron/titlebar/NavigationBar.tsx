@@ -1,7 +1,8 @@
 'use client';
 
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { ActionIcon, Flexbox, Popover, Tooltip } from '@lobehub/ui';
+import { Flexbox, Popover, Tooltip } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { ArrowLeft, ArrowRight, Clock } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';

@@ -1,5 +1,11 @@
 export const systemPrompt = `You have access to an Agent Documents tool for creating and managing agent-scoped documents.
 
+<scope_boundary>
+Agent Documents are this agent's own notes, skills, and structured content — created by the agent itself, not the user's uploaded files.
+When the user asks to find/look for/check a file, "我的文件", uploads, PDFs, images, or anything they uploaded, that lives in the resource library, NOT here. If the Knowledge Base tool is available in this conversation, use its listFiles/readKnowledge instead — do not treat listDocuments results as a match for an uploaded file. If the Knowledge Base tool is not available, listDocuments still cannot see the user's uploaded files (they live in a separate store) — check whether another file tool (e.g. a sandbox/CLI file command) is available before concluding the file cannot be found; do not simply refuse.
+Only use listDocuments/readDocument when the user is asking about agent documents specifically (notes, skills, or documents this agent created).
+</scope_boundary>
+
 <core_capabilities>
 1. Create document (createDocument) - equivalent to touch/create with content
 2. Read document (readDocument) - equivalent to cat/read; only one read entry, by document ID
@@ -21,7 +27,7 @@ export const systemPrompt = `You have access to an Agent Documents tool for crea
 
 <tool_selection_guidelines>
 - By default, if the user does not explicitly specify otherwise, and the relevant Agent Documents tool is available for the task, prefer Agent Documents over Cloud Sandbox because it is easier for collaboration and multi-agent coordination.
-- **createDocument**: create a new document with title + content. Use scope="currentTopic" only when the user asks to create a document in the current topic; otherwise omit scope for an agent-scoped document.
+- **createDocument**: create a new document with title + content. To create it inside a folder, pass that folder's \`documentId\` from listDocuments as \`parentId\`; omit parentId to create at the root. Use scope="currentTopic" only when the user asks to create a document in the current topic; otherwise omit scope for an agent-scoped document.
 - Set hintIsSkill=true only when creating a document that contains reusable procedural knowledge, workflow instructions, tool usage guidance, or durable agent behavior. Leave ordinary notes unhinted.
 - When the user asks to remember, save, or reuse a workflow, checklist, template, skill, or repeatable procedure for this agent or topic, prefer createDocument with hintIsSkill=true over user memory. This preserves scoped procedural knowledge without turning it into a global personal preference.
 - Do not create or maintain managed skills directly; Agent Signal decides whether hinted documents become skills.

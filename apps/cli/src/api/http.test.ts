@@ -1,18 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as RefreshModule from '../auth/refresh';
+
 const mockGetValidToken = vi.hoisted(() => vi.fn());
 const mockResolveServerUrl = vi.hoisted(() => vi.fn(() => 'https://app.lobehub.com'));
 
-vi.mock('../auth/refresh', () => ({
+vi.mock('../auth/refresh', async (importOriginal) => ({
+  ...(await importOriginal<typeof RefreshModule>()),
   getValidToken: mockGetValidToken,
 }));
 
 vi.mock('../settings', () => ({
+  loadActiveWorkspace: () => undefined,
   resolveServerUrl: mockResolveServerUrl,
-}));
-
-vi.mock('../utils/logger', () => ({
-  log: { error: vi.fn() },
 }));
 
 describe('api/http auth helpers', () => {
@@ -56,6 +56,7 @@ describe('api/http auth helpers', () => {
     process.env.LOBEHUB_WORKSPACE_ID = 'workspace-1';
     mockGetValidToken.mockResolvedValue({
       credentials: { accessToken: 'stored-jwt' },
+      status: 'ok',
     });
 
     const { getAuthInfo } = await import('./http');

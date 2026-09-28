@@ -12,6 +12,29 @@ const createMockService = (overrides?: Partial<SkillRuntimeService>): SkillRunti
 });
 
 describe('SkillsExecutionRuntime', () => {
+  describe.each(['runCommand', 'execScript'] as const)('%s sandbox recreation', (api) => {
+    it.each([true, false])('reports workspace loss when command success is %s', async (success) => {
+      const commandResult = {
+        exitCode: success ? 0 : 1,
+        output: 'command output',
+        sessionExpiredAndRecreated: true,
+        stderr: success ? undefined : 'missing input file',
+        success,
+      } satisfies CommandResult;
+      const runtime = new SkillsExecutionRuntime({
+        service: createMockService({ [api]: vi.fn().mockResolvedValue(commandResult) }),
+      });
+
+      const result = await runtime[api]({ command: 'cat /tmp/input', description: 'Read input' });
+
+      expect(result.content).toContain('sandbox session expired and was recreated');
+      expect(result.content).toContain('Inform the user and ask before regenerating previous work');
+      expect(result.content).toContain('command output');
+      expect(result.state).toMatchObject({ sessionExpiredAndRecreated: true, success });
+      expect(result.success).toBe(success);
+    });
+  });
+
   describe('execScript', () => {
     const args = { command: 'echo hello', description: 'test command' };
 
@@ -82,7 +105,7 @@ describe('SkillsExecutionRuntime', () => {
 
         const result = await runtime.execScript(args);
 
-        expect(result.content).toBe('Command completed successfully.');
+        expect(result.content).toBe('Command completed successfully.\n\n(no output)');
       });
 
       it('should return success: false when execScript throws', async () => {

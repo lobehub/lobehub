@@ -326,6 +326,21 @@ describe('WechatApiClient', () => {
       expect(decoded).toBe(step1Body.aeskey);
     });
 
+    it('reports the getuploadurl body when iLink answers ret 0 without an upload_param', async () => {
+      // Regression: a bare "empty upload_param" reached the agent's tool result
+      // with nothing to diagnose; the errcode/errmsg iLink sent were dropped.
+      mockFetch.mockResolvedValueOnce(
+        jsonResponse({ errcode: -1, errmsg: 'invalid to_user_id', ret: 0 }),
+      );
+
+      await expect(
+        client.uploadCdnMedia('user_1@im.wechat', WechatUploadMediaType.FILE, Buffer.from('x')),
+      ).rejects.toThrow(
+        'getuploadurl returned empty upload_param: {"errcode":-1,"errmsg":"invalid to_user_id","ret":0}',
+      );
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
     it('gives the CDN byte transfer a longer budget than the JSON call', async () => {
       // Regression: both legs shared one 15s timeout. Next to the CDN a 2MB
       // upload finishes in under a second, so local testing never hit it — but

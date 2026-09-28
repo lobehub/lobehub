@@ -12,6 +12,7 @@ import MessagesRoutes from './messages.route';
 import ModelsRoutes from './models.route';
 import OpenAIRoutes from './openai.route';
 import PermissionsRoutes from './permissions.route';
+import { PluginsRoutes } from './plugins.route';
 import ProvidersRoutes from './providers.route';
 import ResponsesRoutes from './responses.route';
 import RolesRoutes from './roles.route';
@@ -26,6 +27,7 @@ export default {
   'api-keys': ApiKeysRoutes,
   'chat': ChatRoutes,
   'eval': EvalRoutes,
+  'plugins': PluginsRoutes,
   'files': FileRoutes,
   'knowledge-bases': KnowledgeBasesRoutes,
   'mcp-servers': McpServersRoutes,

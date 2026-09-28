@@ -2,7 +2,6 @@
  * @vitest-environment happy-dom
  */
 import { render } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import TopicCreatorAvatar from './index';
@@ -11,10 +10,6 @@ const useAuthorInfoMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/business/client/hooks/useAuthorInfo', () => ({
   useAuthorInfo: useAuthorInfoMock,
-}));
-
-vi.mock('@lobehub/ui', () => ({
-  Tooltip: ({ children }: { children?: ReactNode }) => <>{children}</>,
 }));
 
 // The identity-preserving wrapper owns the initials/background fallback; this

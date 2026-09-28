@@ -12,30 +12,38 @@ import { cleanupTestUser, createTestUser } from './setup';
 // Mock getServerDB to return our test database instance
 let testDB: LobeChatDatabase;
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => testDB),
+  getServerDB: vi.fn(function () {
+    return testDB;
+  }),
 }));
 
 // Mock AiAgentService - controls task execution behavior
 const mockExecGroupSubAgentTask = vi.fn();
 const mockInterruptTask = vi.fn();
 vi.mock('@/server/services/aiAgent', () => ({
-  AiAgentService: vi.fn().mockImplementation(() => ({
-    execSubAgent: mockExecGroupSubAgentTask,
-    interruptTask: mockInterruptTask,
-  })),
+  AiAgentService: vi.fn().mockImplementation(function () {
+    return {
+      execSubAgent: mockExecGroupSubAgentTask,
+      interruptTask: mockInterruptTask,
+    };
+  }),
 }));
 
 // Mock AgentRuntimeService - controls operation status
 const mockGetOperationStatus = vi.fn();
 vi.mock('@/server/services/agentRuntime', () => ({
-  AgentRuntimeService: vi.fn().mockImplementation(() => ({
-    getOperationStatus: mockGetOperationStatus,
-  })),
+  AgentRuntimeService: vi.fn().mockImplementation(function () {
+    return {
+      getOperationStatus: mockGetOperationStatus,
+    };
+  }),
 }));
 
 // Mock AiChatService
 vi.mock('@/server/services/aiChat', () => ({
-  AiChatService: vi.fn().mockImplementation(() => ({})),
+  AiChatService: vi.fn().mockImplementation(function () {
+    return {};
+  }),
 }));
 
 describe('Agent Task Integration', () => {
@@ -413,7 +421,7 @@ describe('Agent Task Integration', () => {
 
       // Mock service to return different results for each call
       let callCount = 0;
-      mockExecGroupSubAgentTask.mockImplementation(() => {
+      mockExecGroupSubAgentTask.mockImplementation(function () {
         callCount++;
         if (callCount === 1) {
           return Promise.resolve({

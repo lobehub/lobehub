@@ -1,13 +1,13 @@
 'use client';
 
 import { ThreadStatus } from '@lobechat/types';
-import { Avatar, Block, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Block, Flexbox, Icon } from '@lobehub/ui';
+import { Avatar, Spin, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { Footprints, ListChecksIcon, Wrench, XIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { DEFAULT_AVATAR } from '@/const/meta';
 
 import { formatDuration, formatElapsedTime, isProcessingStatus } from '../../Tasks/shared';
@@ -50,7 +50,7 @@ const TaskStatusIndicator = memo<{ status?: ThreadStatus }>(({ status }) => {
   } else if (isError) {
     icon = <Icon color={cssVar.colorError} icon={XIcon} />;
   } else if (isProcessing || isInitializing) {
-    icon = <NeuralNetworkLoading size={16} />;
+    icon = <Spin size="small" variant="network" />;
   } else {
     return null;
   }

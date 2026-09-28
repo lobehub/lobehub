@@ -2,10 +2,13 @@
 
 import { Flexbox, FormGroup, Grid } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
+import type { ComponentType } from 'react';
+
+import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
 
 import SkeletonBar from './Bar';
 
-export type SurfaceSkeletonVariant = 'editor' | 'form' | 'grid' | 'list';
+export type SurfaceSkeletonVariant = 'detail' | 'editor' | 'form' | 'grid' | 'list';
 
 interface SurfaceSkeletonProps {
   header?: boolean;
@@ -106,6 +109,32 @@ const GridSkeleton = () => (
   </Grid>
 );
 
+const DetailSkeleton = () => (
+  <Flexbox align={'center'} padding={'32px 24px'}>
+    <Flexbox gap={24} width={'min(960px, 100%)'}>
+      <Flexbox horizontal align={'center'} gap={16}>
+        <SkeletonBar height={64} radius={'50%'} width={64} />
+        <Flexbox flex={1} gap={8}>
+          <SkeletonBar height={22} width={'32%'} />
+          <SkeletonBar height={14} width={'48%'} />
+        </Flexbox>
+        <SkeletonBar height={36} radius={18} width={104} />
+      </Flexbox>
+      <Flexbox horizontal gap={8}>
+        <SkeletonBar height={22} radius={11} width={72} />
+        <SkeletonBar height={22} radius={11} width={96} />
+        <SkeletonBar height={22} radius={11} width={64} />
+      </Flexbox>
+      <Flexbox gap={12}>
+        <SkeletonBar height={14} width={'94%'} />
+        <SkeletonBar height={14} width={'88%'} />
+        <SkeletonBar height={14} width={'62%'} />
+        <SkeletonBar height={180} radius={cssVar.borderRadiusLG} />
+      </Flexbox>
+    </Flexbox>
+  </Flexbox>
+);
+
 const EditorSkeleton = () => (
   <Flexbox align={'center'} flex={1} padding={'32px 24px'}>
     <Flexbox
@@ -131,8 +160,24 @@ const SurfaceSkeleton = ({ header = true, variant = 'list' }: SurfaceSkeletonPro
       {variant === 'form' && <FormSkeleton />}
       {variant === 'grid' && <GridSkeleton />}
       {variant === 'editor' && <EditorSkeleton />}
+      {variant === 'detail' && <DetailSkeleton />}
     </Flexbox>
   </Flexbox>
 );
+
+const surfaceSkeletonCache = new Map<string, ComponentType<RouteSkeletonProps>>();
+
+export const createSurfaceSkeleton = (variant: SurfaceSkeletonVariant, header = true) => {
+  const key = `${variant}:${header}`;
+  const cached = surfaceSkeletonCache.get(key);
+  if (cached) return cached;
+
+  const Component = ({ chrome = 'page' }: RouteSkeletonProps) => (
+    <SurfaceSkeleton header={header && chrome !== 'body'} variant={variant} />
+  );
+  Component.displayName = `SurfaceSkeleton(${key})`;
+  surfaceSkeletonCache.set(key, Component);
+  return Component;
+};
 
 export default SurfaceSkeleton;

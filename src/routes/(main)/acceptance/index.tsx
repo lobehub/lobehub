@@ -1,3 +1,3 @@
 'use client';
 
-export { AcceptanceWorkspace as default } from '@/features/Verify';
+export { AcceptanceWorkspace as default } from '@/features/Acceptance';

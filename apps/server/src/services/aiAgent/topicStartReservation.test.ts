@@ -55,6 +55,7 @@ describe('acquireTopicStartReservation', () => {
 
     expect(tryReserveTaskCallback).toHaveBeenCalledWith('topic-1', 'new-start', {
       allowRunningOperationId: undefined,
+      allowSameReservationReentry: undefined,
       ignoreRunningOperation: undefined,
       replacesOperationId: 'old-operation',
     });
@@ -75,6 +76,7 @@ describe('acquireTopicStartReservation', () => {
 
     expect(tryReserveTaskCallback).toHaveBeenCalledWith('topic-1', 'child-operation', {
       allowRunningOperationId: 'parent-operation',
+      allowSameReservationReentry: undefined,
       ignoreRunningOperation: undefined,
       replacesOperationId: undefined,
     });
@@ -93,6 +95,27 @@ describe('acquireTopicStartReservation', () => {
 
     expect(tryReserveTaskCallback).toHaveBeenCalledWith('topic-1', 'composer-send', {
       allowRunningOperationId: undefined,
+      allowSameReservationReentry: undefined,
+      ignoreRunningOperation: true,
+      replacesOperationId: undefined,
+    });
+  });
+
+  it('forwards the non-reentrant intervention initializer fence', async () => {
+    const tryReserveTaskCallback = vi.fn().mockResolvedValue(true);
+    const topicModel = { tryReserveTaskCallback } as unknown as TopicModel;
+
+    await acquireTopicStartReservation({
+      allowSameReservationReentry: false,
+      ignoreRunningOperation: true,
+      reservationId: 'op-intervention',
+      topicId: 'topic-1',
+      topicModel,
+    });
+
+    expect(tryReserveTaskCallback).toHaveBeenCalledWith('topic-1', 'op-intervention', {
+      allowRunningOperationId: undefined,
+      allowSameReservationReentry: false,
       ignoreRunningOperation: true,
       replacesOperationId: undefined,
     });

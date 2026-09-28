@@ -3,6 +3,7 @@ import { Flexbox } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { memo } from 'react';
 
+import { useDeferredMount } from '@/hooks/useDeferredMount';
 import { electronStylish } from '@/styles/electron';
 import { getPlatform } from '@/utils/platform';
 
@@ -19,6 +20,7 @@ const platform = getPlatform();
 
 const TitleBar = memo(() => {
   useWatchThemeUpdate();
+  const tabBarMounted = useDeferredMount();
 
   const { padding, showCustomWinControl } = getTitleBarLayoutConfig(platform);
 
@@ -33,7 +35,7 @@ const TitleBar = memo(() => {
       width={'100%'}
     >
       <NavigationBar />
-      <TabBar />
+      {tabBarMounted && <TabBar />}
 
       <Flexbox horizontal align={'center'} gap={4}>
         <Flexbox horizontal className={electronStylish.nodrag} gap={8}>

@@ -7,7 +7,11 @@ import type * as PermissionCheck from '../middleware/permission-check';
 // better-auth graph (via `requireAuth`) at import time; this test is only about
 // which gates the route itself declares.
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: vi.fn() }));
-vi.mock('@/database/models/rbac', () => ({ RbacModel: class {} }));
+vi.mock('@/database/models/rbac', () => ({
+  RbacModel: class {
+    hasAnyPermission = async () => true;
+  },
+}));
 vi.mock('../middleware/auth', () => ({
   requireAuth: async (_c: any, next: any) => next(),
 }));
@@ -57,7 +61,7 @@ describe('POST /eval/runs API-key scopes', () => {
   });
 
   it('accepts a key holding the full agent-run trio', async () => {
-    const res = await requestAs(['agent:write', 'chat:write', 'model:invoke']);
+    const res = await requestAs(['eval:write', 'chat:write', 'model:invoke']);
 
     expect(res.status).toBe(200);
   });

@@ -5,7 +5,7 @@ It's the only layer that reaches states that exist only at runtime (in-progress,
 error / empty), that verifies a **journey** stitches step-to-step, and that produces
 **numbers** — CLS, LCP, INP, long-tasks — which no screenshot or code read can give.
 
-This layer runs on the **agent-testing** framework. Read that skill first; L3 assumes its
+This layer runs on the **acceptance** framework. Read that skill first; L3 assumes its
 **Step 0 (env + auth)** is already green. Everything below is CDP-based, so it also works
 headless in cloud under `xvfb-run`.
 
@@ -15,13 +15,13 @@ Part of the **ux-audit** skill — see [`../SKILL.md`](../SKILL.md).
 
 Connect to the running app (Electron or web) and use:
 
-| Command                                          | Use in an audit                                                                |
-| ------------------------------------------------ | ------------------------------------------------------------------------------ |
-| `agent-browser --cdp 9222 snapshot -i`           | accessibility/DOM tree + interactive elements (find controls, assert presence) |
-| `agent-browser --cdp 9222 screenshot`            | render evidence at each step (feeds L2 checks)                                 |
-| `agent-browser --cdp 9222 eval "<js>"`           | **instrument** — inject web-vitals, read state, force conditions               |
-| `type` / `click` (see agent-testing `surfaces/`) | drive the journey                                                              |
-| `scripts/record-gif.sh`                          | time-based evidence (streaming, a layout jump)                                 |
+| Command                                       | Use in an audit                                                                |
+| --------------------------------------------- | ------------------------------------------------------------------------------ |
+| `agent-browser --cdp 9222 snapshot -i`        | accessibility/DOM tree + interactive elements (find controls, assert presence) |
+| `agent-browser --cdp 9222 screenshot`         | render evidence at each step (feeds L2 checks)                                 |
+| `agent-browser --cdp 9222 eval "<js>"`        | **instrument** — inject web-vitals, read state, force conditions               |
+| `type` / `click` (see acceptance `surfaces/`) | drive the journey                                                              |
+| `scripts/record-gif.sh`                       | time-based evidence (streaming, a layout jump)                                 |
 
 > **Constraint:** resizing the Electron window triggers a full SPA reload — do **responsive
 > / multi-viewport** sweeps against **web Chrome over CDP**, not by resizing Electron.
@@ -83,7 +83,7 @@ that shifted.
 
 ## Honest limits
 
-- Needs a running env + green auth (agent-testing Step 0); slower and more **flaky** than
+- Needs a running env + green auth (`.agents/acceptance/PROCESS.md` Step 2); slower and more **flaky** than
   L1/L2 — re-run a failed step before trusting it.
 - Not every state is easy to force (some error paths need route-level mocking / fixtures).
 - Screenshots captured here still need an L2 vision pass (Read the image before citing).

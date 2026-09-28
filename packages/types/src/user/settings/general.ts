@@ -21,6 +21,12 @@ export interface UserGeneralConfig {
    * @default true
    */
   enableMessageLinkIcon?: boolean;
+  /**
+   * Whether a turn's tool workflow starts expanded while the agent is still
+   * running. Off keeps the running turn to a single live headline row.
+   * @default false
+   */
+  expandWorkflowWhileStreaming?: boolean;
   fontSize: number;
   highlighterTheme?: HighlighterProps['theme'];
   isDevMode: boolean;

@@ -5,6 +5,7 @@ import TaskAcceptance from './TaskAcceptance';
 import TaskActivities from './TaskActivities';
 import TaskArtifacts from './TaskArtifacts';
 import TaskDetailAssignee from './TaskDetailAssignee';
+import { taskDetailLayoutStyles as styles } from './taskDetailLayoutStyles';
 import TaskDetailRunPauseAction from './TaskDetailRunPauseAction';
 import TaskDetailTitleInput from './TaskDetailTitleInput';
 import TaskInstruction from './TaskInstruction';
@@ -21,29 +22,21 @@ import TaskSubtasks from './TaskSubtasks';
  */
 const TaskDetailSections = memo(() => {
   return (
-    <>
-      <Flexbox gap={4} style={{ paddingBlock: '24px 36px' }}>
-        <TaskDetailTitleInput />
-        {/* Everything here wraps rather than compresses: this block also renders
-            inside the chat-side Portal and beside the task-agent panel, where the
-            column can get far narrower than the viewport. Without wrapping, the
-            assignee chip is the item that gives — it shrinks until its label
-            breaks one character per line. */}
-        <Flexbox horizontal align={'flex-start'} gap={16} justify={'space-between'} wrap={'wrap'}>
-          {/* `minWidth` is what makes the row actually wrap: a `flex: 1` column
-              with `min-width: 0` shrinks to a sliver instead, and the properties
-              panel keeps its place while the assignee chip overflows. */}
-          <Flexbox align={'flex-start'} flex={1} gap={16} style={{ minWidth: 240 }}>
-            <TaskParentBar />
-            <Flexbox horizontal align={'center'} gap={8} style={{ maxWidth: '100%' }} wrap={'wrap'}>
-              <TaskDetailAssignee />
-              <TaskModelConfig />
-            </Flexbox>
+    <div className={styles.root}>
+      <div className={styles.header}>
+        <Flexbox className={styles.main} gap={12}>
+          <TaskParentBar />
+          <TaskDetailTitleInput />
+          <Flexbox horizontal align={'center'} gap={8} style={{ maxWidth: '100%' }} wrap={'wrap'}>
             <TaskDetailRunPauseAction />
+            <TaskDetailAssignee />
+            <TaskModelConfig />
           </Flexbox>
-          <TaskProperties />
         </Flexbox>
-      </Flexbox>
+        <div className={styles.side}>
+          <TaskProperties />
+        </div>
+      </div>
       <Flexbox gap={24} style={{ paddingBottom: 120 }}>
         <TaskInstruction />
         <TaskAcceptance />
@@ -51,7 +44,7 @@ const TaskDetailSections = memo(() => {
         <TaskArtifacts />
         <TaskActivities />
       </Flexbox>
-    </>
+    </div>
   );
 });
 

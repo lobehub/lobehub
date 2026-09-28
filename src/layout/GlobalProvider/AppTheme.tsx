@@ -4,13 +4,13 @@ import 'antd/dist/reset.css';
 
 import { type NeutralColors, type PrimaryColors } from '@lobehub/ui';
 import { ConfigProvider, FontLoader, ThemeProvider } from '@lobehub/ui';
-import { createStaticStyles, cx, useTheme } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import * as m from 'motion/react-m';
 import { type ReactNode } from 'react';
-import { memo, useEffect, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 
-import AntdStaticMethods from '@/components/AntdStaticMethods';
 import Link from '@/components/Link';
+import { genFontFamily, genFontFamilyCode } from '@/const/font';
 import { LOBE_THEME_NEUTRAL_COLOR, LOBE_THEME_PRIMARY_COLOR } from '@/const/theme';
 import { useIsDark } from '@/hooks/useIsDark';
 import { getUILocaleAndResources } from '@/libs/getUILocaleAndResources';
@@ -20,7 +20,7 @@ import Image from '@/libs/next/Image';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
-import { userGeneralSettingsSelectors } from '@/store/user/selectors';
+import { preferenceSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
 import { GlobalStyle } from '@/styles';
 import { setCookie } from '@/utils/client/cookie';
 
@@ -28,7 +28,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   app: css`
     position: relative;
 
-    overscroll-behavior: none;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -99,7 +98,6 @@ const AppTheme = memo<AppThemeProps>(
     customFontFamily,
   }) => {
     const language = useGlobalStore(systemStatusSelectors.language);
-    const antdTheme = useTheme();
     const isDark = useIsDark();
 
     const [primaryColor, neutralColor, animationMode] = useUserStore((s) => [
@@ -107,6 +105,27 @@ const AppTheme = memo<AppThemeProps>(
       userGeneralSettingsSelectors.neutralColor(s),
       userGeneralSettingsSelectors.animationMode(s),
     ]);
+    const [userFontFamily, userFontFamilyCode] = useUserStore((s) => [
+      preferenceSelectors.fontFamily(s),
+      preferenceSelectors.terminalFontFamily(s),
+    ]);
+    const fontFamily = useMemo(
+      () =>
+        genFontFamily({
+          customFontFamily,
+          locale: resolveUILocale(language).normalizedLocale,
+          userFontFamily,
+        }),
+      [customFontFamily, language, userFontFamily],
+    );
+    const fontFamilyCode = useMemo(
+      () =>
+        genFontFamilyCode({
+          locale: resolveUILocale(language).normalizedLocale,
+          userFontFamily: userFontFamilyCode,
+        }),
+      [language, userFontFamilyCode],
+    );
     const [uiResources, setUIResources] = useState<UILocaleResources>();
     const [uiLocale, setUILocale] = useState(() => resolveUILocale(language).uiLocale);
 
@@ -139,43 +158,41 @@ const AppTheme = memo<AppThemeProps>(
     const currentAppearence = isDark ? 'dark' : 'light';
 
     return (
-      <ThemeProvider
-        appearance={currentAppearence}
-        className={cx(styles.app, styles.scrollbar, styles.scrollbarPolyfill)}
-        defaultAppearance={currentAppearence}
-        defaultThemeMode={currentAppearence}
-        customTheme={{
-          neutralColor: neutralColor ?? defaultNeutralColor,
-          primaryColor: primaryColor ?? defaultPrimaryColor,
-        }}
-        theme={{
-          cssVar: { key: 'lobe-vars' },
-          token: {
-            fontFamily: customFontFamily
-              ? `${customFontFamily},${antdTheme.fontFamily}`
-              : undefined,
-            motion: animationMode !== 'disabled',
-            motionUnit: animationMode === 'agile' ? 0.05 : 0.1,
-          },
+      <ConfigProvider
+        locale={uiLocale}
+        motion={m}
+        resources={uiResources}
+        config={{
+          aAs: Link,
+          imgAs: Image,
+          imgUnoptimized: true,
+          proxy: globalCDN ? 'unpkg' : undefined,
         }}
       >
-        {!!customFontURL && <FontLoader url={customFontURL} />}
-        <GlobalStyle />
-        <AntdStaticMethods />
-        <ConfigProvider
-          locale={uiLocale}
-          motion={m}
-          resources={uiResources}
-          config={{
-            aAs: Link,
-            imgAs: Image,
-            imgUnoptimized: true,
-            proxy: globalCDN ? 'unpkg' : undefined,
+        <ThemeProvider
+          appearance={currentAppearence}
+          className={cx(styles.app, styles.scrollbar, styles.scrollbarPolyfill)}
+          defaultAppearance={currentAppearence}
+          defaultThemeMode={currentAppearence}
+          customTheme={{
+            neutralColor: neutralColor ?? defaultNeutralColor,
+            primaryColor: primaryColor ?? defaultPrimaryColor,
+          }}
+          theme={{
+            cssVar: { key: 'lobe-vars' },
+            token: {
+              fontFamily,
+              fontFamilyCode,
+              motion: animationMode !== 'disabled',
+              motionUnit: animationMode === 'agile' ? 0.05 : 0.1,
+            },
           }}
         >
+          {!!customFontURL && <FontLoader url={customFontURL} />}
+          <GlobalStyle />
           {children}
-        </ConfigProvider>
-      </ThemeProvider>
+        </ThemeProvider>
+      </ConfigProvider>
     );
   },
 );

@@ -7,6 +7,7 @@ import pc from 'picocolors';
 import { getTrpcClient } from '../api/client';
 import { resolveLocalDeviceId } from '../utils/device';
 import { log } from '../utils/logger';
+import { resolveAppUrlBuilder } from './task/url';
 
 const JSON_VERSION = 'v1' as const;
 
@@ -42,6 +43,21 @@ const outputJsonSuccess = (data: unknown) => {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
+
+const getCreatedId = (value: unknown) => {
+  if (!isRecord(value)) return undefined;
+  if (typeof value.id === 'string') return value.id;
+  return isRecord(value.data) && typeof value.data.id === 'string' ? value.data.id : undefined;
+};
+
+const withResourceUrl = (
+  buildUrl: (pathname: string) => string,
+  data: unknown,
+  pathname: string,
+) => ({
+  ...(isRecord(data) ? data : { data }),
+  url: buildUrl(pathname),
+});
 
 const toJsonError = (error: unknown): JsonError => {
   if (error instanceof Error) {
@@ -151,6 +167,9 @@ const executeCommand = async (
 
     if (successMessage) {
       console.log(`${pc.green('OK')} ${successMessage}`);
+      if (isRecord(data) && typeof data.url === 'string') {
+        console.log(`${pc.bold('url')}: ${data.url}`);
+      }
       return;
     }
 
@@ -215,13 +234,18 @@ export function registerEvalCommand(program: Command) {
           options,
           async () => {
             const client = await getTrpcClient();
+            const buildUrl = await resolveAppUrlBuilder(client);
             const input: Record<string, any> = {
               identifier: options.identifier,
               name: options.name,
             };
             if (options.description) input.description = options.description;
             if (options.referenceUrl) input.referenceUrl = options.referenceUrl;
-            return client.agentEval.createBenchmark.mutate(input as any);
+            const result = await client.agentEval.createBenchmark.mutate(input as any);
+            const id = getCreatedId(result);
+            return id
+              ? withResourceUrl(buildUrl, result, `/eval/bench/${encodeURIComponent(id)}`)
+              : result;
           },
           `Created benchmark ${pc.bold(options.name)}`,
         ),
@@ -323,6 +347,7 @@ export function registerEvalCommand(program: Command) {
           options,
           async () => {
             const client = await getTrpcClient();
+            const buildUrl = await resolveAppUrlBuilder(client);
             const input: Record<string, any> = {
               benchmarkIds: options.benchmarkIds
                 .split(',')
@@ -332,7 +357,11 @@ export function registerEvalCommand(program: Command) {
             };
             if (options.id) input.id = options.id;
             if (options.description) input.description = options.description;
-            return client.agentEval.createExperiment.mutate(input as any);
+            const result = await client.agentEval.createExperiment.mutate(input as any);
+            const id = getCreatedId(result);
+            return id
+              ? withResourceUrl(buildUrl, result, `/eval/experiments/${encodeURIComponent(id)}`)
+              : result;
           },
           `Created experiment ${pc.bold(options.name)}`,
         ),
@@ -455,6 +484,7 @@ export function registerEvalCommand(program: Command) {
           options,
           async () => {
             const client = await getTrpcClient();
+            const buildUrl = await resolveAppUrlBuilder(client);
             const input: Record<string, any> = {
               benchmarkId: options.benchmarkId,
               identifier: options.identifier,
@@ -464,7 +494,15 @@ export function registerEvalCommand(program: Command) {
             if (options.evalMode) input.evalMode = options.evalMode;
             if (options.evalConfig) input.evalConfig = options.evalConfig;
             if (options.metadata) input.metadata = options.metadata;
-            return client.agentEval.createDataset.mutate(input as any);
+            const result = await client.agentEval.createDataset.mutate(input as any);
+            const id = getCreatedId(result);
+            return id
+              ? withResourceUrl(
+                  buildUrl,
+                  result,
+                  `/eval/bench/${encodeURIComponent(options.benchmarkId)}/datasets/${encodeURIComponent(id)}`,
+                )
+              : result;
           },
           `Created dataset ${pc.bold(options.name)}`,
         ),
@@ -775,6 +813,7 @@ export function registerEvalCommand(program: Command) {
             }
 
             const client = await getTrpcClient();
+            const buildUrl = await resolveAppUrlBuilder(client);
             const input: Record<string, any> = { datasetId: options.datasetId };
             if (options.agentId) input.targetAgentId = options.agentId;
             if (options.name) input.name = options.name;
@@ -802,10 +841,20 @@ export function registerEvalCommand(program: Command) {
                 mode: 'exclude',
               };
             if (Object.keys(config).length > 0) input.config = config;
-            if (options.external) {
-              return client.agentEvalExternal.runCreate.mutate(input as any);
-            }
-            return client.agentEval.createRun.mutate(input as any);
+            const dataset = options.external
+              ? await client.agentEvalExternal.datasetGet.query({ datasetId: options.datasetId })
+              : await client.agentEval.getDataset.query({ id: options.datasetId });
+            const result = options.external
+              ? await client.agentEvalExternal.runCreate.mutate(input as any)
+              : await client.agentEval.createRun.mutate(input as any);
+            const id = getCreatedId(result);
+            return id
+              ? withResourceUrl(
+                  buildUrl,
+                  result,
+                  `/eval/bench/${encodeURIComponent(dataset.benchmarkId)}/runs/${encodeURIComponent(id)}`,
+                )
+              : result;
           },
           'Created evaluation run',
         ),

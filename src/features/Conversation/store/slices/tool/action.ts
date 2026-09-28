@@ -1,3 +1,4 @@
+import type { AgentInterventionSourceAction } from '@/services/aiAgent';
 import { useChatStore } from '@/store/chat';
 import { type StoreSetter } from '@/store/types';
 
@@ -24,7 +25,11 @@ export class ToolActionImpl {
     this.#get = get;
   }
 
-  approveToolCall = async (toolMessageId: string, assistantGroupId: string): Promise<void> => {
+  approveToolCall = async (
+    toolMessageId: string,
+    assistantGroupId: string,
+    options?: { editedArguments?: Record<string, unknown>; rememberToolKey?: string },
+  ): Promise<void> => {
     const { hooks, context, waitForPendingArgsUpdate } = this.#get();
 
     // Wait for any pending args update to complete before approval
@@ -38,7 +43,21 @@ export class ToolActionImpl {
 
     // Delegate to global ChatStore with context for correct conversation scope
     const chatStore = useChatStore.getState();
-    await chatStore.approveToolCalling(toolMessageId, assistantGroupId, context);
+    const toolCallId = dataSelectors.getDbMessageById(toolMessageId)(this.#get())?.tool_call_id;
+    const editedArguments = options?.editedArguments;
+    const chatOptions =
+      editedArguments && toolCallId
+        ? {
+            ...options,
+            onLegacyEditFallback: () =>
+              this.#get().updatePluginArguments(toolCallId, editedArguments, true),
+          }
+        : options;
+    if (chatOptions) {
+      await chatStore.approveToolCalling(toolMessageId, assistantGroupId, context, chatOptions);
+    } else {
+      await chatStore.approveToolCalling(toolMessageId, assistantGroupId, context);
+    }
 
     // ===== Hook: onToolCallComplete =====
     if (hooks.onToolCallComplete) {
@@ -112,10 +131,13 @@ export class ToolActionImpl {
     }
   };
 
-  cancelToolInteraction = async (toolMessageId: string): Promise<void> => {
+  cancelToolInteraction = async (
+    toolMessageId: string,
+    options?: { onLegacyFallback?: () => Promise<void> },
+  ): Promise<void> => {
     const { context } = this.#get();
     const chatStore = useChatStore.getState();
-    await chatStore.cancelToolInteraction(toolMessageId, context);
+    await chatStore.cancelToolInteraction(toolMessageId, context, options);
   };
 
   rejectAndContinueToolCall = async (toolMessageId: string, reason?: string): Promise<void> => {
@@ -168,17 +190,31 @@ export class ToolActionImpl {
     await chatStore.rejectToolCalling(toolMessageId, reason, context);
   };
 
-  skipToolInteraction = async (toolMessageId: string, reason?: string): Promise<void> => {
+  skipToolInteraction = async (
+    toolMessageId: string,
+    reason?: string,
+    options?: { onLegacyFallback?: () => Promise<void> },
+  ): Promise<void> => {
     const { context } = this.#get();
     const chatStore = useChatStore.getState();
-    await chatStore.skipToolInteraction(toolMessageId, reason, context);
+    await chatStore.skipToolInteraction(toolMessageId, reason, context, options);
   };
 
   submitToolInteraction = async (
     toolMessageId: string,
     response: Record<string, unknown>,
     options?: {
+      agentInterventionAction?: Extract<
+        AgentInterventionSourceAction,
+        { type: 'submit_answers' | 'submit_custom' }
+      >;
       createUserMessage?: boolean;
+      prepareLegacyFallback?: () => Promise<{
+        createUserMessage?: boolean;
+        pluginState?: Record<string, unknown>;
+        response: Record<string, unknown>;
+        toolResultContent?: string;
+      }>;
       pluginState?: Record<string, unknown>;
       toolResultContent?: string;
     },

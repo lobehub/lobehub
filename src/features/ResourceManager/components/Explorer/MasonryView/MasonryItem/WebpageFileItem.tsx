@@ -87,46 +87,6 @@ const hostnameOf = (url?: string): string | null => {
 };
 
 /**
- * Strip clipping noise down to readable excerpt text: YAML frontmatter,
- * markdown images/links (including the `(<url>)` angle-bracket form and
- * empty-text link shells), html tags and markdown punctuation.
- *
- * The output is a plain-text excerpt: after tag stripping every remaining
- * angle bracket is dropped too, so no `<script`-style fragment can survive
- * (js/incomplete-multi-character-sanitization).
- */
-export const excerptOf = (content?: string | null): string => {
-  let text = (content ?? '')
-    .replace(/^\s*---[\s\S]*?---\s*/, '')
-    .replaceAll(/!\[[^\]]*\]\([^)]*\)/g, '')
-    .replaceAll(/\[([^\]]*)\]\([^)]*\)/g, '$1');
-
-  // strip html tags to a fixpoint — a single pass can splice a new tag
-  // together (e.g. `<scr<b>ipt`), which is exactly what CodeQL flags
-  let previous: string;
-  do {
-    previous = text;
-    text = text.replaceAll(/<\/?[a-z][^>]*>/gi, '');
-  } while (text !== previous);
-
-  return (
-    text
-      // markdown table rulers (|:---|---|) survive as long dash runs once the
-      // pipes are stripped — drop them together with any leftover link shells
-      .replaceAll(/:?-{3,}:?/g, ' ')
-      .replaceAll(/\[\s*\]/g, '')
-      // plain-text excerpt: no angle brackets survive at all
-      .replaceAll(/[#*<>`_\\|]/g, '')
-      .replaceAll(/\(\s*\)/g, '')
-      // nested-link leftovers surface as stray bracket runs like `(]`
-      .replaceAll(/[()[\]]{2,}/g, ' ')
-      .replaceAll(/\s+/g, ' ')
-      .trim()
-      .slice(0, 240)
-  );
-};
-
-/**
  * Clippings without a real page title store the URL in `name`. A raw URL as a
  * bold card title reads broken — fall back to the last path segment (the
  * document name, e.g. `SKILL.md`) or the hostname; the full source stays on
@@ -146,7 +106,7 @@ export const displayTitle = (name: string): string => {
 };
 
 interface WebpageFileItemProps {
-  content?: string | null;
+  contentPreview?: string | null;
   name: string;
   url?: string;
 }
@@ -155,16 +115,15 @@ interface WebpageFileItemProps {
  * Masonry card for web clippings — a Cubox-style reading card: excerpt sheet
  * on top, title and source domain below, with a direct link to the original.
  */
-const WebpageFileItem = memo<WebpageFileItemProps>(({ content, name, url }) => {
+const WebpageFileItem = memo<WebpageFileItemProps>(({ contentPreview, name, url }) => {
   const hostname = hostnameOf(url);
-  const excerpt = excerptOf(content);
   const title = displayTitle(name);
 
   return (
     <>
-      {excerpt && (
+      {contentPreview && (
         <div className={styles.excerptWrapper}>
-          <div className={styles.excerpt}>{excerpt}</div>
+          <div className={styles.excerpt}>{contentPreview}</div>
         </div>
       )}
       <Flexbox className={styles.info} gap={8}>

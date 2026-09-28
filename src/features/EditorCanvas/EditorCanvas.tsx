@@ -1,7 +1,7 @@
 'use client';
 
 import { type IEditor, type SlashOptions } from '@lobehub/editor';
-import { type ChatInputActionsProps, type Editor } from '@lobehub/editor/react';
+import type { ChatInputActionsProps, Editor, EditorProps } from '@lobehub/editor/react';
 import { type CSSProperties } from 'react';
 import { memo } from 'react';
 
@@ -43,11 +43,26 @@ export interface EditorCanvasProps {
   autoSave?: boolean;
 
   /**
+   * Keep the caret out of Lexical's root node around block images by pushing
+   * an empty paragraph next to the image (otherwise a horizontal root-level
+   * caret shows above / below it). Off by default; comment editors opt in.
+   */
+  blockImageCaretGuard?: boolean;
+
+  /**
+   * Class name applied to the editor wrapper, e.g. to restyle inline chips.
+   */
+  className?: string;
+
+  /**
    * Reload an already-mounted editor when an authoritative external content
    * revision changes. Keep this stable for local autosave echoes and unchanged
    * refetches so unsaved input is never replaced by prop identity churn.
    */
   contentRevision?: number;
+
+  /** Styles applied to the editable content instead of the outer data-mode wrapper. */
+  contentStyle?: CSSProperties;
 
   disabled?: boolean;
 
@@ -91,6 +106,12 @@ export interface EditorCanvasProps {
    */
   floatingToolbar?: boolean;
 
+  /** Resolve the portal host used by slash and mention menus. */
+  getPopupContainer?: EditorProps['getPopupContainer'];
+
+  /** Structured @mention configuration forwarded to the editor. */
+  mentionOption?: EditorProps['mentionOption'];
+
   /**
    * Content change handler
    */
@@ -117,6 +138,15 @@ export interface EditorCanvasProps {
    * Use this when you need complete control over plugins.
    */
   plugins?: EditorPlugins;
+
+  /**
+   * Selection actions that stay available while the editor is NOT editable
+   * (locked or view-only page). They render in a floating toolbar of their
+   * own with no formatting controls, so a reader can still act on a selection
+   * — comment on it, ask about it — without being offered edits that would
+   * never save. Ignored while editable; use `toolbarExtraItems` there.
+   */
+  readonlySelectionItems?: ChatInputActionsProps['items'];
 
   /**
    * Slash menu items

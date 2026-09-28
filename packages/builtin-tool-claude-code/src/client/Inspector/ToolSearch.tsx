@@ -79,14 +79,8 @@ export const ToolSearchInspector = memo<BuiltinInspectorProps<ToolSearchArgs>>(
 
     if (parsed?.names) {
       return (
-        <div
-          className={cx(
-            inspectorTextStyles.root,
-            styles.baseline,
-            isShiny && shinyTextStyles.shinyText,
-          )}
-        >
-          <span>{label}:</span>
+        <div className={cx(inspectorTextStyles.root, styles.baseline)}>
+          <span className={cx(isShiny && shinyTextStyles.shinyText)}>{label}:</span>
           <span className={styles.tagsList}>
             {parsed.names.map((name, index) => (
               <span className={styles.tag} key={`${index}-${name}`}>
@@ -99,8 +93,8 @@ export const ToolSearchInspector = memo<BuiltinInspectorProps<ToolSearchArgs>>(
     }
 
     return (
-      <div className={cx(inspectorTextStyles.root, isShiny && shinyTextStyles.shinyText)}>
-        <span>{label}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={cx(isShiny && shinyTextStyles.shinyText)}>{label}</span>
         {parsed && (
           <>
             <span>: </span>

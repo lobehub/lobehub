@@ -5,15 +5,6 @@ import type { App } from '@/core/App';
 
 import ZoomService, { ZOOM_FACTOR_MAX, ZOOM_FACTOR_MIN } from '../zoomSrv';
 
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
-}));
-
 interface MockWebContents {
   destroyed: boolean;
   factor: number;

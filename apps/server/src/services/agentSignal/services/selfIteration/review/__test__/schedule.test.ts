@@ -23,10 +23,12 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/database/models/agentSignal/nightlyReview', () => ({
-  AgentSignalNightlyReviewModel: mocks.modelConstructor.mockImplementation(() => ({
-    listActiveAgentTargets: mocks.listActiveAgentTargets,
-    listEligibleUsers: mocks.listEligibleUsers,
-  })),
+  AgentSignalNightlyReviewModel: mocks.modelConstructor.mockImplementation(function () {
+    return {
+      listActiveAgentTargets: mocks.listActiveAgentTargets,
+      listEligibleUsers: mocks.listEligibleUsers,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/agentSignal/emitter', () => ({

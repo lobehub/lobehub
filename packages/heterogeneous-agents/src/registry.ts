@@ -13,6 +13,8 @@ import {
   CodexAdapter,
   CursorAcpAdapter,
   CursorAdapter,
+  DroidAcpAdapter,
+  DevinAcpAdapter,
   GrokBuildAdapter,
   KimiCodeAdapter,
   OpenCodeAdapter,
@@ -43,6 +45,12 @@ const localAgentRegistry = {
   'cursor': {
     createAdapter: () => new CursorAdapter(),
   },
+  'droid': {
+    createAdapter: () => new DroidAcpAdapter(),
+  },
+  'devin': {
+    createAdapter: () => new DevinAcpAdapter(),
+  },
   'grok-build': {
     createAdapter: () => new GrokBuildAdapter(),
   },
@@ -70,6 +78,9 @@ const runtimeAdapterRegistry = {
   },
   'cursor-acp': {
     createAdapter: () => new CursorAcpAdapter(),
+  },
+  'droid-acp': {
+    createAdapter: () => new DroidAcpAdapter(),
   },
 } satisfies Record<string, AgentRegistryEntry>;
 

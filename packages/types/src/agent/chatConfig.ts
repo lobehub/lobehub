@@ -84,6 +84,13 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    */
   enableReasoningEffort?: boolean;
   /**
+   * Whether stale tool results (overwritten file reads, outdated browser
+   * snapshots, old command output) are replaced with short placeholders in the
+   * model context to save tokens.
+   * Treat undefined as `true` — trimming is the default.
+   */
+  enableStaleToolResultTrim?: boolean;
+  /**
    * Whether to enable streaming output
    */
   enableStreaming?: boolean;
@@ -94,9 +101,11 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
   gpt5_2ReasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
   gpt5_6ReasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   gpt5ReasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
+  gpt6ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   grok4_3ReasoningEffort?: 'none' | 'low' | 'medium' | 'high';
   grok4_5ReasoningEffort?: 'low' | 'medium' | 'high';
   grok4_6ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
+  grok4_7ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
   grok4_20ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
   /**
    * Number of historical messages
@@ -131,6 +140,11 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    * (provider support required, e.g. Qwen preserve_thinking)
    */
   preserveThinking?: boolean;
+  /**
+   * Qwen3.8 Max hybrid thinking depth. `none` disables thinking; otherwise sets
+   * `reasoning_effort` to low / medium / xhigh (API default).
+   */
+  qwen38ReasoningEffort?: 'none' | 'low' | 'medium' | 'xhigh';
   reasoningBudgetToken?: number;
   /**
    * Reasoning budget token for models with 32k max (GLM-5/GLM-4.7)
@@ -230,6 +244,7 @@ export const AgentChatConfigSchema = z
     codexMaxReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
     deepseekV4GAReasoningEffort: z.enum(['none', 'low', 'high', 'max']).optional(),
     deepseekV4ReasoningEffort: z.enum(['none', 'high', 'max']).optional(),
+    qwen38ReasoningEffort: z.enum(['none', 'low', 'medium', 'xhigh']).optional(),
     compressionModelId: z.string().optional(),
     disableContextCaching: z.boolean().optional(),
     disableGatewayMode: z.boolean().optional(),
@@ -246,17 +261,20 @@ export const AgentChatConfigSchema = z
     enableReasoning: z.boolean().optional(),
     enableReasoningEffort: z.boolean().optional(),
     enableStreaming: z.boolean().optional(),
+    enableStaleToolResultTrim: z.boolean().optional(),
     gpt5ReasoningEffort: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
     gpt5_1ReasoningEffort: z.enum(['none', 'low', 'medium', 'high']).optional(),
     gpt5_2ProReasoningEffort: z.enum(['medium', 'high', 'xhigh']).optional(),
     gpt5_2ReasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh']).optional(),
     gpt5_6ReasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
+    gpt6ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
     glm5_2ReasoningEffort: z.enum(['high', 'max']).optional(),
     glm5_3ReasoningEffort: z.enum(['low', 'high', 'max']).optional(),
     grok4_20ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
     grok4_3ReasoningEffort: z.enum(['none', 'low', 'medium', 'high']).optional(),
     grok4_5ReasoningEffort: z.enum(['low', 'medium', 'high']).optional(),
     grok4_6ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
+    grok4_7ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
     hy3ReasoningEffort: z.enum(['no_think', 'low', 'high']).optional(),
     kimiK3ReasoningEffort: z.enum(['low', 'high', 'max']).optional(),
     ring2_6ReasoningEffort: z.enum(['high', 'xhigh']).optional(),

@@ -18,9 +18,11 @@ const aiInfraMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/database/repositories/aiInfra', () => {
-  const AiInfraRepos = vi.fn().mockImplementation(() => ({
-    getAiProviderRuntimeState: aiInfraMocks.getAiProviderRuntimeState,
-  })) as unknown as typeof AiInfraReposModule.AiInfraRepos;
+  const AiInfraRepos = vi.fn().mockImplementation(function () {
+    return {
+      getAiProviderRuntimeState: aiInfraMocks.getAiProviderRuntimeState,
+    };
+  }) as unknown as typeof AiInfraReposModule.AiInfraRepos;
 
   (AiInfraRepos as any).tryMatchingModelFrom = aiInfraMocks.tryMatchingModelFrom;
   (AiInfraRepos as any).tryMatchingProviderFrom = aiInfraMocks.tryMatchingProviderFrom;
@@ -64,9 +66,11 @@ const structuredResult = {
 const toolCall = vi.fn().mockResolvedValue(structuredResult);
 
 vi.mock('@lobechat/memory-user-memory', () => ({
-  UserPersonaExtractor: vi.fn().mockImplementation(() => ({
-    toolCall,
-  })),
+  UserPersonaExtractor: vi.fn().mockImplementation(function () {
+    return {
+      toolCall,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/memory/userMemory/extract', () => ({

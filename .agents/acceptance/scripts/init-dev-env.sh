@@ -10,6 +10,8 @@
 # Existing local config always wins.
 #
 # Usage:
+#   init-dev-env.sh [--env-file <file>] <command>
+#   --env-file is accepted only by env and seed-user for isolated harnesses.
 #   init-dev-env.sh env              # print shell exports
 #   init-dev-env.sh write [file]     # write a source-able env file
 #   init-dev-env.sh setup-db         # start local Postgres/Redis and run migrations
@@ -33,6 +35,26 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 ROOT_ENV_FILE="$REPO_ROOT/.env"
+EXPLICIT_ENV_FILE=""
+
+if [[ "${1:-}" == "--env-file" ]]; then
+  if [[ -z "${2:-}" || ! -f "$2" ]]; then
+    printf 'ERROR: --env-file requires an existing file.\n' >&2
+    exit 2
+  fi
+
+  EXPLICIT_ENV_FILE="$(cd "$(dirname "$2")" && pwd -P)/$(basename "$2")"
+  if [[ -e "$ROOT_ENV_FILE" && "$EXPLICIT_ENV_FILE" -ef "$ROOT_ENV_FILE" ]]; then
+    printf 'ERROR: --env-file cannot point to the repository root .env.\n' >&2
+    exit 2
+  fi
+
+  set -a
+  # shellcheck disable=SC1090
+  source "$EXPLICIT_ENV_FILE"
+  set +a
+  shift 2
+fi
 
 # Resolve the workspace root the SAME way test-env.sh does, so both scripts
 # read/write the ports file (and other .records artifacts) at the same path.
@@ -159,7 +181,7 @@ _qstash_reachable() {
 }
 
 guard_no_root_env() {
-  if [[ -f "$ROOT_ENV_FILE" ]]; then
+  if [[ -f "$ROOT_ENV_FILE" && -z "$EXPLICIT_ENV_FILE" ]]; then
     bad "root .env exists: $ROOT_ENV_FILE"
     note "Use the existing local configuration instead of init-dev-env.sh."
     note "Start normally from repo root, e.g. pnpm run dev:next or bun run dev."
@@ -168,12 +190,14 @@ guard_no_root_env() {
 }
 
 apply_env() {
+  export AGENT_GATEWAY_SERVICE_TOKEN="${AGENT_GATEWAY_SERVICE_TOKEN:-agent-testing-local-gateway-service-token}"
   export AGENT_RUNTIME_MODE="${AGENT_RUNTIME_MODE:-queue}"
   export APP_URL="${APP_URL:-http://localhost:${SERVER_PORT}}"
   export AUTH_EMAIL_VERIFICATION="${AUTH_EMAIL_VERIFICATION:-0}"
   export AUTH_SECRET="${AUTH_SECRET:-agent-testing-local-auth-secret-32chars}"
   export DATABASE_DRIVER="${DATABASE_DRIVER:-node}"
   export DATABASE_URL
+  export DEVICE_GATEWAY_SERVICE_TOKEN="${DEVICE_GATEWAY_SERVICE_TOKEN:-agent-testing-local-device-gateway-token}"
   export FEATURE_FLAGS="${FEATURE_FLAGS:--agent_self_iteration}"
   export KEY_VAULTS_SECRET="${KEY_VAULTS_SECRET:-r2gbBPKyJ8ZRKCLKt+I3DImfcL+wGxaQyRC56xtm9Uk=}"
   export NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION="${NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION:-0}"
@@ -212,12 +236,14 @@ apply_env() {
 
 env_keys() {
   printf '%s\n' \
+    AGENT_GATEWAY_SERVICE_TOKEN \
     APP_URL \
     AGENT_RUNTIME_MODE \
     AUTH_EMAIL_VERIFICATION \
     AUTH_SECRET \
     DATABASE_DRIVER \
     DATABASE_URL \
+    DEVICE_GATEWAY_SERVICE_TOKEN \
     FEATURE_FLAGS \
     KEY_VAULTS_SECRET \
     NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION \
@@ -784,6 +810,11 @@ usage() {
 }
 
 COMMAND="${1:-status}"
+
+if [[ -n "$EXPLICIT_ENV_FILE" && "$COMMAND" != "env" && "$COMMAND" != "seed-user" ]]; then
+  bad "--env-file is supported only by env and seed-user"
+  exit 2
+fi
 
 case "$COMMAND" in
   help|-h|--help) usage; exit 0 ;;

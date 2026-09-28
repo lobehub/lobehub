@@ -3,23 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Search from './Search';
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
-}));
-
-vi.mock('@lobehub/ui', () => ({
-  SearchBar: ({ onInputChange, value, ...props }: any) => (
-    <input
-      {...props}
-      data-testid="search-input"
-      value={value}
-      onChange={(event) => onInputChange(event.target.value)}
-    />
-  ),
-}));
-
 describe('ModelList Search', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -31,7 +14,7 @@ describe('ModelList Search', () => {
 
     render(<Search value="abc" onChange={onChange} />);
 
-    fireEvent.change(screen.getByTestId('search-input'), { target: { value: '' } });
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: '' } });
 
     expect(onChange).toHaveBeenCalledWith('');
   });
@@ -40,7 +23,7 @@ describe('ModelList Search', () => {
     const onChange = vi.fn();
     const { rerender } = render(<Search value="abc" onChange={onChange} />);
 
-    fireEvent.change(screen.getByTestId('search-input'), { target: { value: 'abcd' } });
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'abcd' } });
 
     rerender(<Search value="" onChange={onChange} />);
 

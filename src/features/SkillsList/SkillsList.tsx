@@ -1,13 +1,7 @@
 import { EMPTY_ARRAY } from '@lobechat/const';
 import type { SFSymbol } from '@lobechat/electron-client-ipc';
-import {
-  ContextMenuTrigger,
-  Flexbox,
-  type GenericItemType,
-  Icon,
-  Text,
-  Tooltip,
-} from '@lobehub/ui';
+import { ContextMenuTrigger, Flexbox, type GenericItemType, Icon, Tooltip } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cx } from 'antd-style';
 import { ChevronRightIcon, FileIcon, FolderIcon, type LucideIcon } from 'lucide-react';

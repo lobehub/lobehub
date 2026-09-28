@@ -1,7 +1,8 @@
 'use client';
 
 import type { MenuProps } from '@lobehub/ui';
-import { Accordion, ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { AccordionRoot, ActionIcon } from '@lobehub/ui/base-ui';
 import { EyeOffIcon, MoreHorizontalIcon, SlidersHorizontalIcon } from 'lucide-react';
 import type { Key, ReactElement } from 'react';
 import { memo, useCallback, useMemo } from 'react';
@@ -175,7 +176,7 @@ const Body = memo(() => {
             icon={navItem.icon}
             title={navItem.title}
             actions={
-              <DropdownMenu items={getContextMenuItems(key)} nativeButton={false}>
+              <DropdownMenu items={getContextMenuItems(key)}>
                 <ActionIcon icon={MoreHorizontalIcon} size={'small'} style={{ flex: 'none' }} />
               </DropdownMenu>
             }
@@ -211,14 +212,15 @@ const Body = memo(() => {
         const accordionKeys = accGroup.map((item) => item.key);
 
         elements.push(
-          <Accordion
-            expandedKeys={sidebarExpandedKeys}
-            gap={8}
+          <AccordionRoot
+            indicatorPlacement="inline"
             key={`acc-${elements.length}`}
-            onExpandedChange={(keys) => handleAccordionExpandedChange(accordionKeys, keys)}
+            style={{ gap: 8 }}
+            value={sidebarExpandedKeys}
+            onValueChange={(keys) => handleAccordionExpandedChange(accordionKeys, keys as string[])}
           >
             {accGroup.map((item) => item.element)}
-          </Accordion>,
+          </AccordionRoot>,
         );
         accGroup = [];
       }

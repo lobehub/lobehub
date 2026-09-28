@@ -11,17 +11,9 @@ const messageLoadingMock = vi.hoisted(() => vi.fn());
 const messageDestroyMock = vi.hoisted(() => vi.fn());
 const messageErrorMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  toast: {
-    error: messageErrorMock,
-    loading: messageLoadingMock,
-  },
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  toast: { error: messageErrorMock, loading: messageLoadingMock },
 }));
 
 vi.mock('react-router', async () => {
@@ -95,7 +87,7 @@ describe('UnsavedChangesGuard', () => {
     await waitFor(() => {
       expect(onAutoSave).toHaveBeenCalledTimes(1);
       expect(messageErrorMock).toHaveBeenCalledWith(
-        expect.objectContaining({ description: 'networkError' }),
+        expect.objectContaining({ description: 'pageEditor.saveFailed' }),
       );
       expect(blocker.reset).toHaveBeenCalledTimes(1);
       expect(blocker.proceed).not.toHaveBeenCalled();

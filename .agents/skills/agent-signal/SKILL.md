@@ -1,6 +1,6 @@
 ---
 name: agent-signal
-description: 'Build or extend LobeHub Agent Signal pipelines. Use for signal sources, signal/action types, policies, middleware, workflow handoff, dedupe, scope behavior, or observability.'
+description: 'Use for Agent Signal sources, actions, policies, middleware, workflow handoff and deduplication.'
 ---
 
 # Agent Signal

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { TRACING_SCENARIOS, VERIFY_INSTRUCTION_FILE_TYPE } from '@lobechat/const';
-import { isProgrammaticTestCheck } from '@lobechat/const/verify';
+import { HOLISTIC_CHECK_TITLE, isProgrammaticTestCheck } from '@lobechat/const/verify';
 import type { TracingOptions } from '@lobechat/llm-generation-tracing';
 import {
   chainVerifyPlan,
@@ -9,6 +9,7 @@ import {
   VERIFY_PLAN_PROMPT_VERSION,
 } from '@lobechat/prompts';
 import type { RequiredEvidenceSpec, VerifyCheckItem } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
 import { DocumentModel } from '@/database/models/document';
@@ -89,7 +90,7 @@ const buildHolisticAgentItem = (requirement?: string, goal?: string): VerifyChec
     // rather than the operation-level auto-repair loop.
     onFail: 'manual',
     required: true,
-    title: 'Task delivery acceptance',
+    title: HOLISTIC_CHECK_TITLE,
     verifierConfig: {},
     verifierType: 'agent',
   };
@@ -123,6 +124,7 @@ const criterionToCheckItem = (
   onFail: criterion.onFail,
   required: criterion.required,
   sourceCriterionId: criterion.id,
+  definition: criterion.definition ?? undefined,
   sourceRubricId,
   title: criterion.title,
   verifierConfig: (criterion.verifierConfig as Record<string, unknown>) ?? {},
@@ -185,6 +187,7 @@ export class VerifyPlanGeneratorService {
         thinking: { type: 'disabled' },
       },
       {
+        metadata: { trigger: RequestTrigger.Verify },
         tracing: {
           promptVersion: VERIFY_PLAN_PROMPT_VERSION,
           scenario: TRACING_SCENARIOS.VerifyPlanGen,
@@ -341,6 +344,7 @@ export class VerifyPlanGeneratorService {
         thinking: { type: 'disabled' },
       },
       {
+        metadata: { trigger: RequestTrigger.Verify },
         tracing: {
           promptVersion: VERIFY_PLAN_PROMPT_VERSION,
           scenario: TRACING_SCENARIOS.VerifyPlanGen,

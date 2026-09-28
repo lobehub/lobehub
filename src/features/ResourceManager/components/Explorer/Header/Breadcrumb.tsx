@@ -1,4 +1,5 @@
-import { Flexbox, Skeleton } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Skeleton } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -117,7 +118,7 @@ const Breadcrumb = memo<BreadcrumbProps>(({ category, fileName }) => {
         {knowledgeBaseName ? (
           knowledgeBaseName
         ) : (
-          <Skeleton.Button active size="small" style={{ height: 14, minWidth: 80, width: 80 }} />
+          <Skeleton style={{ height: 14, minWidth: 80, width: 80 }} />
         )}
       </span>
 

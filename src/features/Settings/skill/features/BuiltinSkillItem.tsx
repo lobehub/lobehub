@@ -1,7 +1,7 @@
 'use client';
 
-import { Avatar, DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
-import { Button, confirmModal } from '@lobehub/ui/base-ui';
+import { DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
+import { Avatar, Button, confirmModal } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { MoreHorizontalIcon, Plus, Trash2 } from 'lucide-react';
 import { memo } from 'react';

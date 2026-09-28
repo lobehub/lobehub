@@ -53,14 +53,10 @@ export const AskUserQuestionInspector = memo<BuiltinInspectorProps<AskUserQuesti
     }
 
     return (
-      <div
-        data-testid="ask-user-question-inspector"
-        className={cx(
-          inspectorTextStyles.root,
-          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-        )}
-      >
-        <span>{label}</span>
+      <div className={inspectorTextStyles.root} data-testid="ask-user-question-inspector">
+        <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+          {label}
+        </span>
         {summary && <span className={styles.chip}>{summary}</span>}
       </div>
     );

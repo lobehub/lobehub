@@ -1,7 +1,7 @@
 'use client';
 
-import { Center, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Center, Flexbox, Icon } from '@lobehub/ui';
+import { Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { RotateCwIcon, TriangleAlertIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { normalizeAsyncError } from '@/libs/swr/normalizeError';
 
 /**
- * The error counterpart to the loading family (`NeuralNetworkLoading`,
+ * The error counterpart to the loading family (`Spin`,
  * `SkeletonLoading`, …). One reusable component, several `variant`s so different
  * surfaces express failure differently without each re-implementing the
  * icon + reason + retry plumbing. Pick the variant by where the failure lives;

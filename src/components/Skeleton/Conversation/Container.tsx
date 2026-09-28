@@ -25,7 +25,7 @@ const ConversationSkeletonContainer = ({
   const wideScreen = useGlobalStore(systemStatusSelectors.wideScreen);
 
   return (
-    <Flexbox flex={flex} height={height} style={{ minHeight: 0 }} width={'100%'}>
+    <Flexbox aria-busy flex={flex} height={height} style={{ minHeight: 0 }} width={'100%'}>
       <Flexbox
         className={cx(styles.container, className)}
         flex={flex}

@@ -35,7 +35,17 @@ export class ServerOperationStore implements OperationStore {
   async clearRunningMark(): Promise<void> {
     if (!this.topicId || !this.userId) return;
     try {
-      const topicModel = new TopicModel(this.serverDB, this.userId, this.workspaceId);
+      // Agent-share visitor runs execute under the CREATOR's userId on a topic
+      // whose `senderId` is the visitor. The default topic scope hides those
+      // rows, so without the opt-in `findById` returned nothing here, the
+      // early return below treated it as "already cleared", and every visitor
+      // topic kept its `runningOperation` marker forever — each later open
+      // reconnected to a finished run and froze the visitor's message list.
+      // Widening is safe: the compare-and-clear below still requires the mark
+      // to name this very operation.
+      const topicModel = new TopicModel(this.serverDB, this.userId, this.workspaceId, undefined, {
+        includeShareVisitor: true,
+      });
       const topic = await topicModel.findById(this.topicId);
       const marker = topic?.metadata?.runningOperation;
       const markedOperationId = marker?.operationId;
@@ -45,7 +55,25 @@ export class ServerOperationStore implements OperationStore {
       // No mark (already cleared) or someone else's mark — nothing of ours to drop.
       if (!markedOperationId || (markedOperationId !== this.operationId && !isChild)) return;
 
-      await topicModel.takeRunningOperation(this.topicId, this.operationId!);
+      // Settle rather than merely take: this clears the mark AND writes the
+      // topic's terminal status in one transaction, under the same row lock.
+      //
+      // Taking it alone left `topics.status` on 'running' with the mark — the
+      // only thing a later `settleRunningOperation` can match on — already
+      // gone, so no server path could ever correct it. `finish` runs this
+      // BEFORE publishing `execution_complete`, and the client only learns the
+      // run ended from that event, so its own settle always arrived to a
+      // cleared mark and returned 'missing'. The topic then depended entirely
+      // on a fire-and-forget `markTopicUnread`, and when that did not land the
+      // sidebar spun forever. Observed as topics stuck 'running' whose
+      // `metadata.runningOperation` was present-and-JSON-null with their
+      // operation rows already terminal.
+      //
+      // 'unread' is what the server can honestly assert: the run finished and
+      // nothing here proves the user watched it. Only the client knows that, so
+      // it corrects to 'active' on its own — with a mark-independent write,
+      // since by then this call has legitimately consumed the mark.
+      await topicModel.settleRunningOperation(this.topicId, this.operationId!, 'unread');
     } catch {
       // best-effort — swallow
     }

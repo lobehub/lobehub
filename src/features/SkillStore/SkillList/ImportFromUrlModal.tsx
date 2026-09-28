@@ -100,6 +100,5 @@ export const openImportFromUrlModal = (): ModalInstance =>
     content: <ImportFromUrlContent />,
     footer: null,
     maskClosable: true,
-    styles: { header: { display: 'none' } },
     width: 480,
   });

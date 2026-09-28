@@ -1,7 +1,7 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Text } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { cssVar, cx } from 'antd-style';
 import { memo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
@@ -25,8 +25,10 @@ export const AnalyzeMediaInspector = memo<
 
   if (isArgumentsStreaming && !question) {
     return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-agent.apiName.analyzeMedia')}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-agent.apiName.analyzeMedia')}
+        </span>
       </div>
     );
   }

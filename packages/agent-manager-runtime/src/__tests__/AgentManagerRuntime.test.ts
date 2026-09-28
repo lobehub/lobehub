@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getAgentStoreState } from '@/store/agent';
+import { composioStoreSelectors, lobehubSkillStoreSelectors } from '@/store/tool/selectors';
+import { ComposioServerStatus } from '@/store/tool/slices/composioStore/types';
+import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 
 import { AgentManagerRuntime } from '../AgentManagerRuntime';
 import type { IAgentService, IDiscoverService } from '../types';
@@ -142,6 +145,9 @@ describe('AgentManagerRuntime', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(composioStoreSelectors.getServers).mockReturnValue([]);
+    vi.mocked(lobehubSkillStoreSelectors.getServers).mockReturnValue([]);
+    Reflect.deleteProperty(window, 'global_serverConfigStore');
     runtime = new AgentManagerRuntime({
       agentService: mockAgentService,
       discoverService: mockDiscoverService,
@@ -780,6 +786,51 @@ describe('AgentManagerRuntime', () => {
   });
 
   describe('installPlugin', () => {
+    /** @example An unqualified GitHub install selects the canonical LobeHub owner. */
+    it('routes colliding official connector identifiers to LobeHub', async () => {
+      // ROOT CAUSE:
+      //
+      // Official connector installation used to check the Composio catalog first.
+      // Because GitHub existed in both catalogs, the agent builder opened Composio
+      // even though the generic connector catalog assigns GitHub to LobeHub.
+      //
+      // We fixed this by resolving the shared catalog owner before dispatching
+      // to either authorization runtime.
+      window.global_serverConfigStore = {
+        getState: () => ({
+          serverConfig: { enableComposio: true, enableLobehubSkill: true },
+        }),
+      } as unknown as NonNullable<typeof window.global_serverConfigStore>;
+      vi.mocked(composioStoreSelectors.getServers).mockReturnValue([
+        {
+          appSlug: 'GITHUB',
+          authConfigId: 'auth-config-id',
+          connectedAccountId: 'connected-account-id',
+          createdAt: 1,
+          identifier: 'github',
+          label: 'GitHub',
+          status: ComposioServerStatus.ACTIVE,
+        },
+      ]);
+      vi.mocked(lobehubSkillStoreSelectors.getServers).mockReturnValue([
+        {
+          identifier: 'github',
+          isConnected: true,
+          name: 'GitHub',
+          status: LobehubSkillStatus.CONNECTED,
+        },
+      ]);
+
+      const result = await runtime.installPlugin('agent-id', {
+        identifier: 'github',
+        source: 'official',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('Successfully enabled LobehubSkill provider');
+      expect(result.state).toMatchObject({ isLobehubSkill: true, pluginId: 'github' });
+    });
+
     it('should install builtin tool', async () => {
       const result = await runtime.installPlugin('agent-id', {
         identifier: 'lobe-web-browsing',

@@ -12,6 +12,14 @@ export const isSafeRedirectPath = (url: string): boolean =>
   url.startsWith('/') && !url.startsWith('//') && !url.includes('\\');
 
 /**
+ * Better Auth resolves relative callbacks against its server base URL, but auth pages can run on a
+ * different origin. Bind safe web paths to the browser's current origin before sending them to the
+ * server, while preserving explicit absolute URLs and mobile schemes.
+ */
+export const toAbsoluteAuthCallbackUrl = (callbackUrl: string, origin: string): string =>
+  isSafeRedirectPath(callbackUrl) ? new URL(callbackUrl, origin).toString() : callbackUrl;
+
+/**
  * Auth detours can produce same-origin absolute callback URLs (e.g. the
  * protected-route proxy builds `APP_URL + pathname + search`) — normalize
  * them to relative paths instead of dropping them as unsafe.

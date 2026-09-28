@@ -1,8 +1,9 @@
 // @vitest-environment node
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { documents, users, workspaces } from '../../schemas';
+import { documents, files, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { DocumentModel } from '../document';
 
@@ -26,6 +27,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await serverDB.delete(documents);
+  await serverDB.delete(files);
   await serverDB.delete(workspaces);
   await serverDB.delete(users);
 });
@@ -539,5 +541,130 @@ describe('DocumentModel.update — independent parent visibility', () => {
     await callerA.update(doc.id, { visibility: 'public' } as never);
     const reread = await callerA.findById(doc.id);
     expect(reread?.visibility).toBe('private');
+  });
+});
+
+describe('DocumentModel.setVisibility — the library mirror file follows', () => {
+  /**
+   * A page filed into a library is two rows: the document and a paired `files`
+   * row stamped with the library's visibility at creation. The library lists
+   * through the file's column and opens through the document's, so the two
+   * have to move together.
+   */
+  const insertMirroredPage = async (visibility: 'private' | 'public') => {
+    const [file] = await serverDB
+      .insert(files)
+      .values({
+        fileType: 'text/markdown',
+        name: 'library-page.md',
+        size: 10,
+        url: 'internal://document/placeholder',
+        userId: userA,
+        visibility,
+        workspaceId,
+      })
+      .returning();
+
+    const [doc] = await serverDB
+      .insert(documents)
+      .values({
+        fileId: file.id,
+        fileType: 'text/markdown',
+        source: 'document',
+        sourceType: 'api',
+        title: 'library page',
+        totalCharCount: 0,
+        totalLineCount: 0,
+        userId: userA,
+        visibility,
+        workspaceId,
+      })
+      .returning();
+
+    return { docId: doc.id, fileId: file.id };
+  };
+
+  const readFileVisibility = async (fileId: string) =>
+    (await serverDB.query.files.findFirst({ where: eq(files.id, fileId) }))?.visibility;
+
+  it('takes the mirror file private with the page', async () => {
+    // Regression: only the document was flipped, so the library kept listing a
+    // private page's title to every member through the still-public file row.
+    const { docId, fileId } = await insertMirroredPage('public');
+    const callerA = new DocumentModel(serverDB, userA, workspaceId);
+
+    await callerA.setVisibility(docId, 'private');
+
+    expect(await readFileVisibility(fileId)).toBe('private');
+  });
+
+  it('takes the mirror file public when the page is published', async () => {
+    const { docId, fileId } = await insertMirroredPage('private');
+    const callerA = new DocumentModel(serverDB, userA, workspaceId);
+
+    await callerA.publishToWorkspace(docId);
+
+    expect(await readFileVisibility(fileId)).toBe('public');
+  });
+
+  it('leaves another user’s file alone when the write is rejected', async () => {
+    const { docId, fileId } = await insertMirroredPage('public');
+    const callerB = new DocumentModel(serverDB, userB, workspaceId);
+
+    await expect(callerB.setVisibility(docId, 'private')).rejects.toThrow(/not found/i);
+    expect(await readFileVisibility(fileId)).toBe('public');
+  });
+
+  it('leaves the uploader’s file alone when another member’s page points at it', async () => {
+    // Regression: `fileId` is a plain foreign key, so parsing another member's
+    // shared file yields a caller-owned document that keeps the original
+    // `fileId`. The workspace scope alone matched every member's file, so
+    // taking that derived page private hid the uploader's original from the
+    // whole workspace.
+    const [uploaderFile] = await serverDB
+      .insert(files)
+      .values({
+        fileType: 'text/markdown',
+        name: 'uploaded-by-a.md',
+        size: 10,
+        url: 'internal://document/placeholder',
+        userId: userA,
+        visibility: 'public',
+        workspaceId,
+      })
+      .returning();
+
+    const [derived] = await serverDB
+      .insert(documents)
+      .values({
+        fileId: uploaderFile.id,
+        fileType: 'text/markdown',
+        source: 'document',
+        sourceType: 'api',
+        title: 'parsed by b',
+        totalCharCount: 0,
+        totalLineCount: 0,
+        userId: userB,
+        visibility: 'public',
+        workspaceId,
+      })
+      .returning();
+
+    const callerB = new DocumentModel(serverDB, userB, workspaceId);
+
+    await expect(callerB.setVisibility(derived.id, 'private')).resolves.toMatchObject({
+      documentIds: [derived.id],
+    });
+
+    expect(await readFileVisibility(uploaderFile.id)).toBe('public');
+  });
+
+  it('is a no-op for a page with no mirror file', async () => {
+    await insertDocument({ id: 'no-mirror', userId: userA, visibility: 'private', workspaceId });
+    const callerA = new DocumentModel(serverDB, userA, workspaceId);
+
+    await expect(callerA.setVisibility('no-mirror', 'public')).resolves.toMatchObject({
+      documentIds: ['no-mirror'],
+    });
   });
 });

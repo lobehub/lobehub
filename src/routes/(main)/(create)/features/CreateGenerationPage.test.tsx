@@ -5,17 +5,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import CreateGenerationPage from './CreateGenerationPage';
 
-vi.mock('@lobehub/ui', () => ({
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-}));
-
-vi.mock('motion/react', () => ({
-  AnimatePresence: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  m: {
-    div: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  },
-}));
-
 vi.mock('@/features/NavHeader', () => ({
   default: () => <div data-testid="nav-header" />,
 }));

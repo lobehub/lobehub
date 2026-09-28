@@ -13,7 +13,7 @@ tags:
 
 # Web Search
 
-LobeHub's web search integration lets Agents access current information from the internet — real-time news, prices, documentation, and facts beyond their training cutoff. When web search is active, the Agent retrieves up-to-date answers and cites the sources it used.
+With Web Search, Agents can look up current news, prices, documentation, and other information beyond their training data. When an Agent searches, it cites the sources used in its answer.
 
 ## What Web Search Enables
 
@@ -29,13 +29,13 @@ With web search enabled, Agents can:
 
 When you ask a question that requires current information:
 
-1. The AI generates optimized search queries from your question
+1. The Agent turns your question into search queries
 2. Searches are performed across the internet
 3. Relevant sources are retrieved and analyzed
-4. The AI synthesizes findings into a response
+4. The Agent summarizes its findings in a response
 5. The response includes source citations
 
-This happens automatically when the AI determines web search would be helpful, or on-demand when you explicitly request it.
+When Web Search is enabled, the Agent can search as needed or respond to an explicit search request. Search execution still requires available services and permissions.
 
 ## Search Grounding Display
 
@@ -50,9 +50,33 @@ Expand the grounding card to see exactly where the information came from and eva
 
 ## Enabling Web Search
 
-Web search ships as a native built-in tool (`lobe-web-browsing`) — there's nothing to install. Turn it on per Agent with one click:
+Enable Web Search below the Agent chat input. This does not require Agent settings or a Skill package.
 
-Open the Agent's **Profile**, click **+ Add Skill**, and enable **Web Search**. That's it — the Agent can now search the web automatically when a question needs current information, or on your explicit request.
+1. Click **+** below the Agent chat input.
+2. Enable **Web Search**.
+3. Select **Smart Search** or **Provider Search** from the search options.
+4. Enter your question. For current information, specify the scope and time range.
+
+### Two Search Options
+
+| Mode | Description |
+| --- | --- |
+| **Smart Search** | The LobeHub-optimized search service, designed for better retrieval results. |
+| **Provider Search** | Provider-side search. The interface warns that this option can cause unexpected behavior and is not recommended. |
+
+**Off** is the disabled state, not a third search mode. Select **Off** to disable Web Search.
+
+If search does not run, check whether Web Search is enabled. Also check search-tool permissions and search service settings.
+
+### Web Search, Browser Tools, and In-App Search
+
+| Capability | Purpose | Boundary |
+| --- | --- | --- |
+| **Web search** | Find internet information through a search provider and read accessible source pages | Does not operate your signed-in browser |
+| **Browser tools** | Open pages, click controls, fill forms, or interact with dynamic pages | Require a browser tool, execution environment, and permissions. Web Search does not grant these |
+| **LobeHub in-app search** | Find Agents, Topics, pages, and other LobeHub content | Searches accessible in-app content, not the internet |
+
+To search files or knowledge bases, use their own search tools and check access permissions. A Skill can guide research steps, but the search tools still need to be enabled separately.
 
 <Callout type={'info'}>
   Built-in Web Search does not need a marketplace plugin or MCP install on the client. **Self-hosted
@@ -63,17 +87,17 @@ Open the Agent's **Profile**, click **+ Add Skill**, and enable **Web Search**. 
 
 ### Optional: MCP-Based Search Tools
 
-If you want a specific search backend (Brave Search, Google Search, DuckDuckGo, etc.) or more control over the search implementation, you can alternatively connect a search MCP server in your MCP settings. This is optional — most use cases are already covered by the built-in Web Search Skill above.
+For a specific search backend, connect a search MCP server in **Settings → Connectors**. Examples include Brave Search, Google Search, and DuckDuckGo. This optional connection is separate from built-in web search. It requires service authorization, Agent enablement, and tool policy approval. See [MCP Marketplace](/docs/usage/community/mcp-market).
 
 ## Using Web Search
 
 ### Automatic Search
 
-Web search activates automatically for questions that clearly require current data:
+When Web Search is enabled, questions about current information can prompt a search. Not every message requires a search:
 
 ```
 "What's the current price of Bitcoin?"
-"Who won the World Cup in 2024?"
+"Who won the most recent World Cup?"
 "What are the latest developments in AI?"
 ```
 
@@ -101,7 +125,7 @@ Each search builds on the conversation context. Chain searches to go deeper:
 
 ### Optimized Queries
 
-The AI generates optimized search queries tailored to your question, including adding time context, using precise terminology, and breaking complex questions into multiple targeted searches.
+The Agent can add dates, choose precise terms, or split a complex question into several searches.
 
 ### Source Selection
 
@@ -144,7 +168,7 @@ The AI synthesizes findings from multiple sources into a coherent response, noti
 
 ## Understanding Citations
 
-Every web search response includes citations. Check them:
+Web search responses can include citations. Check them:
 
 - **Source title** — The page or article name
 - **Domain** — The website hosting the information
@@ -167,19 +191,19 @@ Every web search response includes citations. Check them:
   </Accordion>
 
   <Accordion title="Click Through to Originals">
-    Always expand the grounding card and click through to verify critical information yourself.
+    Expand the grounding card and open the original sources to verify critical information.
   </Accordion>
 </AccordionGroup>
 
 ## Tips for Better Results
 
-**Be specific** — "What are the latest LLM releases in November 2024?" gets far better results than "Tell me about AI".
+**Be specific** — "What are the latest LLM releases in November 2024?" gives the Agent a clearer search scope than "Tell me about AI".
 
 **Include time context** — Add "recent", "latest", "current", or specific dates to get timely results.
 
 **Ask for comparisons** — "Compare X and Y" or "What are the pros and cons of Z" triggers useful multi-source searches.
 
-**Review the citations** — Always expand the grounding card to see what sources were consulted and judge their quality.
+**Review the citations** — You can expand the grounding card to see which sources were consulted and judge their quality.
 
 **Use follow-ups** — Chain questions to go from broad overview to specific details.
 
@@ -215,7 +239,7 @@ Search queries are sent to your configured search provider. Source websites may 
 </Tabs>
 
 <Callout type={'info'}>
-  Client-side, the built-in Web Search Skill needs no plugin or MCP install. Self-hosted servers
+  Client-side, built-in web search needs no Skill package or MCP install. Self-hosted servers
   still require search-provider env setup ([Online Search](/docs/self-hosting/advanced/online-search)).
   Optional MCP search backends may need their own API key or subscription.
 </Callout>

@@ -31,6 +31,20 @@ export class UserSettingsActionImpl {
   readonly #get: () => UserStore;
   readonly #set: Setter;
 
+  /**
+   * Top-level settings columns touched by a `setSettings` call whose server
+   * write has not succeeded yet. A later call aborts the in-flight one via
+   * `internal_createSignal`, so these columns must ride along on the next
+   * payload or the aborted change would silently never persist.
+   */
+  readonly #pendingSettingKeys = new Set<string>();
+  /**
+   * Tail of the in-flight `updateToolChannels` writes. Each write waits for the
+   * previous one so rapid toggles/reorders land in call order — parallel
+   * requests could commit out of order and leave an older list in the DB.
+   */
+  #toolChannelsWrite: Promise<unknown> = Promise.resolve();
+
   constructor(set: Setter, get: () => UserStore, _api?: unknown) {
     void _api;
     this.#set = set;
@@ -42,13 +56,21 @@ export class UserSettingsActionImpl {
 
     if (currentAllowList.includes(toolKey)) return;
 
-    await this.#get().setSettings({
-      tool: {
-        humanIntervention: {
-          allowList: [...currentAllowList, toolKey],
-        },
+    // Optimistic local update, then a server-side merge write. The server
+    // unions against the DB row, so this tab's possibly-stale snapshot cannot
+    // clobber sibling `tool` keys changed from other tabs (see setSettings).
+    this.#set(
+      {
+        settings: merge(this.#get().settings, {
+          tool: { humanIntervention: { allowList: [...currentAllowList, toolKey] } },
+        }),
       },
-    });
+      false,
+      'optimistic_addToolToAllowList',
+    );
+
+    await userService.updateToolIntervention({ appendAllowList: [toolKey] });
+    await this.#get().refreshUserState();
   };
 
   importAppSettings = async (importAppSettings: UserSettings): Promise<void> => {
@@ -91,7 +113,11 @@ export class UserSettingsActionImpl {
 
     const nextSettings = merge(prevSetting, settings);
 
-    if (isEqual(prevSetting, nextSettings)) return;
+    // A failed write leaves its optimistic value in local state and its columns
+    // in `#pendingSettingKeys`. Retrying the same change then diffs as "no
+    // change", so only skip when nothing is still waiting to be persisted —
+    // otherwise a retry would resolve without a request and look saved.
+    if (isEqual(prevSetting, nextSettings) && this.#pendingSettingKeys.size === 0) return;
 
     const diffs = difference(nextSettings, defaultSettings);
     const isEmptyObjectDiff = (value: unknown): boolean =>
@@ -188,8 +214,27 @@ export class UserSettingsActionImpl {
 
     this.#set({ settings: diffs }, false, 'optimistic_updateSettings');
 
+    // Only send the top-level columns this call actually touched. The server
+    // replaces whole jsonb columns, and this tab's settings may be hours stale
+    // (user state is fetched once per tab) — sending every diffed column would
+    // rewrite untouched ones with stale values. E.g. the hourly market token
+    // refresh calling setSettings({ market }) used to carry a stale `tool`
+    // column and revert approvalMode changed from another tab.
+    //
+    // `internal_createSignal` aborts any in-flight settings write, so a column
+    // touched by an aborted call would be lost if the next call didn't resend
+    // it. `#pendingSettingKeys` keeps every touched-but-not-yet-persisted
+    // column in the payload until a write for it succeeds; the optimistic
+    // local state already carries the aborted call's values.
+    for (const key of Object.keys(changedFields)) this.#pendingSettingKeys.add(key);
+    const payloadKeys = new Set(this.#pendingSettingKeys);
+    const payload = Object.fromEntries(
+      Object.entries(diffs).filter(([key]) => payloadKeys.has(key)),
+    ) as PartialDeep<UserSettings>;
+
     const abortController = this.#get().internal_createSignal();
-    await userService.updateUserSettings(diffs, abortController.signal);
+    await userService.updateUserSettings(payload, abortController.signal);
+    for (const key of payloadKeys) this.#pendingSettingKeys.delete(key);
     await this.#get().refreshUserState();
   };
 
@@ -222,15 +267,50 @@ export class UserSettingsActionImpl {
   };
 
   updateHumanIntervention = async (config: {
-    allowList?: string[];
     approvalMode?: 'auto-run' | 'allow-list' | 'manual';
   }): Promise<void> => {
-    const current = this.#get().settings.tool?.humanIntervention || {};
-    await this.#get().setSettings({
-      tool: {
-        humanIntervention: { ...current, ...config },
+    // Optimistic local update, then a server-side merge write. Routing this
+    // through setSettings would replace the whole `tool` column with this
+    // tab's snapshot — with several tabs open that reverts changes made
+    // elsewhere (the reported "approve mode flips back to manual" bug).
+    this.#set(
+      {
+        settings: merge(this.#get().settings, { tool: { humanIntervention: config } }),
       },
-    });
+      false,
+      'optimistic_updateHumanIntervention',
+    );
+
+    await userService.updateToolIntervention(config);
+    await this.#get().refreshUserState();
+  };
+
+  updateToolChannels = async (channels: {
+    crawlerImpls?: string[];
+    searchProviders?: string[];
+  }): Promise<void> => {
+    // Optimistic local update, then a server-side patch of only these keys —
+    // setSettings would replace the whole `tool` column with this tab's
+    // snapshot and revert sibling keys changed elsewhere (see
+    // updateHumanIntervention). `merge` replaces arrays wholesale, so the new
+    // ordered lists are stored as-is.
+    this.#set(
+      { settings: merge(this.#get().settings, { tool: channels }) },
+      false,
+      'optimistic_updateToolChannels',
+    );
+
+    // A failed earlier write must not block later ones; its caller still
+    // receives the rejection through its own `write` promise.
+    const write = this.#toolChannelsWrite
+      .catch(() => {})
+      .then(() => userService.updateToolChannels(channels));
+    this.#toolChannelsWrite = write;
+
+    await write;
+    // Only the latest write refreshes: an intermediate refresh would pull a
+    // list that a queued write is about to replace.
+    if (this.#toolChannelsWrite === write) await this.#get().refreshUserState();
   };
 
   updateKeyVaults = async (keyVaults: Partial<UserKeyVaults>): Promise<void> => {

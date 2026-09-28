@@ -1,4 +1,5 @@
 import type {
+  CompletionSoundSettings,
   DataSyncConfig,
   ImessageBridgeConfig,
   NetworkProxySettings,
@@ -9,6 +10,10 @@ import type { HeteroSessionDirPref } from '@lobechat/types';
 
 export interface ElectronMainStore {
   appTrayVisible: boolean;
+  completionSound?: Partial<Omit<CompletionSoundSettings, 'systemSoundDisabled'>> & {
+    directory?: string;
+    files?: { file: string; mime: string }[];
+  };
   dataSyncConfig: DataSyncConfig;
   /**
    * Explicit completion state for the multi-step desktop onboarding flow.
@@ -24,6 +29,12 @@ export interface ElectronMainStore {
   };
   gatewayDeviceId: string;
   gatewayEnabled: boolean;
+  /**
+   * Keep the computer from idle-sleeping while the device gateway connection
+   * is enabled, so the device stays reachable from other clients. The display
+   * can still sleep.
+   */
+  gatewayKeepAwake: boolean;
   gatewayUrl: string;
   /**
    * Workspaces this machine's personal gateway connection has been shared into

@@ -2,7 +2,8 @@
 
 import type { EditFileState } from '@lobechat/tool-runtime';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Icon, Text } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Minus, Plus } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -44,14 +45,16 @@ export const EditLocalFileInspector = memo<EditLocalFileInspectorProps>(
     if (isArgumentsStreaming) {
       if (!filePath)
         return (
-          <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-            <span>{t(translationKey as any)}</span>
+          <div className={inspectorTextStyles.root}>
+            <span className={shinyTextStyles.shinyText}>{t(translationKey as any)}</span>
           </div>
         );
 
       return (
-        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-          <span style={{ marginInlineEnd: 6 }}>{t(translationKey as any)}:</span>
+        <div className={inspectorTextStyles.root}>
+          <span className={shinyTextStyles.shinyText} style={{ marginInlineEnd: 6 }}>
+            {t(translationKey as any)}:
+          </span>
           <FilePathDisplay filePath={filePath} />
         </div>
       );
@@ -79,8 +82,10 @@ export const EditLocalFileInspector = memo<EditLocalFileInspectorProps>(
     }
 
     return (
-      <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
-        <span style={{ marginInlineEnd: 6 }}>{t(translationKey as any)}:</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={cx(isLoading && shinyTextStyles.shinyText)} style={{ marginInlineEnd: 6 }}>
+          {t(translationKey as any)}:
+        </span>
         <FilePathDisplay filePath={filePath} />
         {!isLoading && statsParts.length > 0 && (
           <>

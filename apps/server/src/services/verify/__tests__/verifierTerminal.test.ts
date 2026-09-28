@@ -17,18 +17,24 @@ const {
 }));
 
 vi.mock('@/database/models/verifyRun', () => ({
-  VerifyRunModel: vi.fn().mockImplementation(() => ({
-    findByOperation: findRunByOperationMock,
-  })),
+  VerifyRunModel: vi.fn().mockImplementation(function () {
+    return {
+      findByOperation: findRunByOperationMock,
+    };
+  }),
 }));
 vi.mock('@/database/models/verifyCheckResult', () => ({
-  VerifyCheckResultModel: vi.fn().mockImplementation(() => ({
-    listByRun: listResultsByRunMock,
-    updateByCheckItem: updateByCheckItemMock,
-  })),
+  VerifyCheckResultModel: vi.fn().mockImplementation(function () {
+    return {
+      listByRun: listResultsByRunMock,
+      updateByCheckItem: updateByCheckItemMock,
+    };
+  }),
 }));
 vi.mock('../statusService', () => ({
-  VerifyStatusService: vi.fn().mockImplementation(() => ({ recompute: recomputeMock })),
+  VerifyStatusService: vi.fn().mockImplementation(function () {
+    return { recompute: recomputeMock };
+  }),
 }));
 vi.mock('../settle', () => ({
   finalizeVerifyRun: finalizeVerifyRunMock,

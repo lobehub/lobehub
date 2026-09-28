@@ -1,0 +1,83 @@
+---
+title: Migrate from pg_search on Neon
+description: Choose pg_like or Elasticsearch when Neon retires pg_search for a self-hosted deployment.
+tags:
+  - pg_search
+  - pg_like
+  - Elasticsearch
+  - Migration
+  - Self-hosting
+---
+
+# Migrate from pg\_search on Neon
+
+According to [Neon's `pg_search` notice](https://neon.com/docs/extensions/pg_search), Neon no longer offers the extension to new projects. If Neon has notified you that `pg_search` will also be retired from an existing project, complete this guide before the deadline in that notice. Timelines can differ between projects, so use the notice sent for your project. This migration changes only the search backend; source data such as chat history remains in the existing PostgreSQL database.
+
+This guide is for an existing LobeHub instance that has already applied the historical database migrations. For a new database, first read the database limitations in [Full-Text Search](/docs/self-hosting/advanced/full-text-search).
+
+## 1. Check whether you need to migrate
+
+| Current setup                                                                  | Action                                                                   |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| Neon or another database provider has told you that it will retire `pg_search` | Continue to the next step                                                |
+| PostgreSQL still supports `pg_search`                                          | Keep the current provider; no migration is required                      |
+| `FTS_SEARCH_PROVIDER=pg_like` or `elasticsearch` is already set                | No migration is required because search no longer depends on `pg_search` |
+
+<Callout type="info">
+  Docker and Vercel describe how the LobeHub application is deployed; they do not determine whether the database supports `pg_search`. A Docker deployment can still use Neon, and a deployment built on GitHub and uploaded to Vercel can still change its search backend. Check the database referenced by `DATABASE_URL`.
+</Callout>
+
+The official Docker Compose setup uses a ParadeDB database that supports `pg_search`. If you use that bundled database and have not been asked to retire the extension, keep the default configuration and do not migrate.
+
+## 2. Choose a migration path
+
+| Path                    | Best fit                                                                                              | Additional services                        |
+| ----------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `pg_like` (recommended) | Personal and small self-hosted deployments, including Vercel or Docker applications connected to Neon | None                                       |
+| Elasticsearch           | Larger datasets that need BM25 search quality and can operate a persistent sync job                   | Elasticsearch and a continuous sync worker |
+
+Most personal deployments should use `pg_like`. It searches the existing PostgreSQL data directly, so there is no data copy, search-index build, or sync job.
+
+Elastic Cloud and Docker Elasticsearch are the same search backend in different locations. Both require an initial import and a continuously running sync worker, so they use the same migration flow.
+
+<Callout type="warning">
+  The current LobeHub Elasticsearch sync worker is a persistent process and cannot run as-is inside a Vercel-only deployment. Choose `pg_like` unless you also operate a persistent server for that worker.
+</Callout>
+
+## 3. Migrate to pg\_like (recommended)
+
+1. **Upgrade and back up.** Upgrade LobeHub to a version that includes `pg_like`, then create a backup using your database provider's normal process.
+
+2. **Select the backend and redeploy.** Add this environment variable:
+
+   ```bash
+   FTS_SEARCH_PROVIDER=pg_like
+   ```
+
+   - **Vercel:** add the variable under the project's Environment Variables, then redeploy Production. This also applies when GitHub builds the application before it is uploaded to Vercel.
+
+   - **Docker Compose:** add the variable to `.env`, then recreate the LobeHub container:
+
+     ```bash
+     docker compose up -d --force-recreate lobe
+     ```
+
+   - **Other platforms:** add the variable to the application's runtime environment, then redeploy through the existing release workflow.
+
+3. **Verify search.** Search for an existing topic or message. Then send a new message with a distinctive keyword and search for it. The migration is complete when both results appear.
+
+`pg_like` does not import or synchronize data. After verification, LobeHub search no longer calls the `pg_search` extension even if the database provider removes it later.
+
+To roll back while the database still supports `pg_search`, restore `FTS_SEARCH_PROVIDER=pg_search` and redeploy. Do not run `DROP EXTENSION ... CASCADE` manually. Follow the database provider's notice or use the LobeHub cleanup tooling when old extension objects need to be removed.
+
+## 4. Migrate to Elasticsearch (advanced)
+
+Choose Elasticsearch only when the dataset or search-quality requirements exceed `pg_like` and you can keep a sync worker running continuously.
+
+1. **Choose where Elasticsearch runs.** Docker users can enable the single-node service in the official Compose file, or use an external service such as Elastic Cloud.
+2. **Import and synchronize.** Follow [Full-Text Search: Run Elasticsearch with Docker Compose](/docs/self-hosting/advanced/full-text-search#run-elasticsearch-with-docker-compose) to import existing data and start the continuous sync worker. For Elastic Cloud, omit the bundled Elasticsearch node and set `ES_URL` and `ES_API_KEY`; the remaining steps are the same.
+3. **Switch and verify.** After the incremental queue reaches zero, set `FTS_SEARCH_PROVIDER=elasticsearch`, redeploy the application, then search for both an existing message and a new message.
+
+If LobeHub runs on Vercel, the current migration and sync worker must run on a persistent host outside Vercel. Whether Elasticsearch itself runs in Elastic Cloud or Docker does not change that requirement.
+
+See [Full-Text Search](/docs/self-hosting/advanced/full-text-search) for configuration, resource requirements, and recovery guidance.

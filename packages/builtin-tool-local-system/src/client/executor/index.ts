@@ -63,9 +63,15 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
       // `ctx.workingDirectory` is undefined whenever the agent has none
       // configured — so an off-contract `cwd` must be dropped here rather than
       // mistaken for a server-injected one.
-      const output = await this.runtime.executeToolCall(apiName, params, {
-        workingDirectory: ctx?.workingDirectory,
-      });
+      const output = await this.runtime.executeToolCall(
+        apiName,
+        apiName === 'runCommand'
+          ? { ...params, topicId: ctx?.topicId ?? undefined, agentId: ctx?.agentId }
+          : params,
+        {
+          workingDirectory: ctx?.workingDirectory,
+        },
+      );
       // apiEnum and the runtime dispatch cover the same tool set, so a null
       // (unknown tool) here is a programming error, not a user-facing state.
       if (!output) return this.errorResult(new Error(`Unknown local-system API: ${apiName}`));

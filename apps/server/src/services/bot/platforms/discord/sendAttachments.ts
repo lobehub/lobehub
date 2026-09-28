@@ -1,7 +1,8 @@
 import type { RawFile } from '@discordjs/rest';
 import debug from 'debug';
 
-import { loadAttachmentBuffer } from '../loadAttachmentBuffer';
+import type { AttachmentFailure } from '../attachmentDelivery';
+import { loadAttachmentBufferWithDetail } from '../loadAttachmentBuffer';
 import type { BotMessageAttachment } from '../types';
 
 const log = debug('bot-platform:discord:send-attachments');
@@ -76,28 +77,46 @@ const defaultExtForType = (type: BotMessageAttachment['type']): string => {
   }
 };
 
+export interface MaterializedDiscordAttachments {
+  /** Attachments whose bytes could not be materialized, with why. */
+  failures: AttachmentFailure[];
+  files: RawFile[];
+}
+
 /**
  * Convert JSON-safe `BotMessageAttachment[]` into `@discordjs/rest`-shaped
  * `RawFile[]` ready to ride along a `rest.post(channelMessages)` call. Each
- * item that fails to materialize is logged and skipped; the rest still ship.
+ * item that fails to materialize is skipped so the rest still ship, and
+ * reported back so the caller can tell the user which ones never landed.
  */
 export const materializeAttachmentsForDiscord = async (
   attachments: BotMessageAttachment[],
-): Promise<RawFile[]> => {
-  const out: RawFile[] = [];
+): Promise<MaterializedDiscordAttachments> => {
+  const files: RawFile[] = [];
+  const failures: AttachmentFailure[] = [];
   for (const [index, att] of attachments.entries()) {
-    const buffer = await loadAttachmentBuffer(att);
-    if (!buffer) {
-      log('materializeAttachmentsForDiscord: skipping attachment "%s"', att.name ?? '(unnamed)');
+    const loaded = await loadAttachmentBufferWithDetail(att);
+    if (!loaded.buffer) {
+      log(
+        'materializeAttachmentsForDiscord: skipping attachment "%s": %s',
+        att.name ?? '(unnamed)',
+        loaded.error,
+      );
+      failures.push({
+        detail: loaded.error,
+        name: att.name,
+        reason: 'source-unavailable',
+        type: att.type,
+      });
       continue;
     }
-    out.push({
+    files.push({
       contentType: att.mimeType,
-      data: buffer,
+      data: loaded.buffer,
       name: resolveFilename(att, index),
     });
   }
-  return out;
+  return { failures, files };
 };
 
 /**

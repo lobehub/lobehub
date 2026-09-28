@@ -1,0 +1,354 @@
+'use client';
+
+import type { DocumentCommentAnchorItem } from '@lobechat/types';
+import type { IEditor } from '@lobehub/editor';
+import { debounce } from 'es-toolkit/compat';
+import type { Dispatch, SetStateAction } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+import { usePageEditorStore } from '../../store';
+import { focusCommentCard, scrollAnchorIntoView } from './commentLocator';
+import { clearCommentHighlights, paintCommentHighlights } from './highlights';
+import type { AnchorResolveCache } from './resolveAnchors';
+import { EMPTY_ANCHOR_RESOLVE_CACHE, resolveAnchors } from './resolveAnchors';
+import type { AnchorMatch, FlattenedText } from './textAnchor';
+import {
+  buildAnchorRange,
+  EMPTY_FLATTENED_TEXT,
+  flattenEditorText,
+  locateAnchor,
+  offsetFromClientPoint,
+} from './textAnchor';
+
+const EMPTY_MATCHES: ReadonlyMap<string, AnchorMatch> = new Map();
+
+/** Re-resolving on every keystroke is wasted work; the body settles far faster than a reader reacts. */
+const BODY_SETTLE_DELAY = 200;
+const BODY_SETTLE_MAX_WAIT = 1000;
+
+/**
+ * The body element plus a revision that ticks whenever its text changes.
+ *
+ * Anchors are resolved against the rendered DOM, so every content edit
+ * invalidates both the flattened text and the painted ranges (Lexical swaps
+ * text nodes wholesale rather than mutating them in place).
+ */
+const useEditorBody = (editor?: IEditor) => {
+  const [element, setElement] = useState<HTMLElement | null>(null);
+  const [revision, setRevision] = useState(0);
+
+  useEffect(() => {
+    if (!editor) {
+      setElement(null);
+      return;
+    }
+
+    let disposed = false;
+    let unregisterUpdates: (() => void) | undefined;
+    let unregisterRoot: (() => void) | undefined;
+
+    const bump = debounce(
+      () => {
+        if (!disposed) setRevision((current) => current + 1);
+      },
+      BODY_SETTLE_DELAY,
+      { maxWait: BODY_SETTLE_MAX_WAIT },
+    );
+
+    const attach = () => {
+      if (disposed) return;
+      const lexical = editor.getLexicalEditor?.();
+      if (!lexical) return;
+
+      // A document switch rebuilds the Lexical editor under the same kernel,
+      // so drop the previous registrations before taking new ones.
+      unregisterRoot?.();
+      unregisterUpdates?.();
+
+      setElement(editor.getRootElement?.() ?? null);
+      unregisterRoot = lexical.registerRootListener((root) => {
+        if (!disposed) setElement(root ?? null);
+      });
+      unregisterUpdates = lexical.registerUpdateListener(({ dirtyElements, dirtyLeaves }) => {
+        // Caret moves don't change the text, so they can't move an anchor.
+        if (dirtyElements.size === 0 && dirtyLeaves.size === 0) return;
+        bump();
+      });
+      // The document may already be hydrated by the time we attach.
+      bump();
+    };
+
+    // The comment list mounts beside the body, but the body itself only mounts
+    // once its content request resolves — a cold document shows a skeleton
+    // first. Wait for the kernel's own signal instead of polling for a bounded
+    // window and giving up forever on a slow load.
+    editor.on('initialized', attach);
+    attach();
+
+    return () => {
+      disposed = true;
+      editor.off('initialized', attach);
+      bump.cancel();
+      unregisterUpdates?.();
+      unregisterRoot?.();
+    };
+  }, [editor]);
+
+  return { element, revision };
+};
+
+const sameRootIds = (left: ReadonlySet<string>, right: ReadonlySet<string>) =>
+  left.size === right.size && [...left].every((id) => right.has(id));
+
+/**
+ * A stable string for "did the anchor set actually change" `useMemo`/effect
+ * deps. A hand-joined string (even with a delimiter) risks two different
+ * anchor sets colliding into the same string, since a quote is arbitrary
+ * user content; JSON.stringify's array structure and escaping rule that out.
+ */
+export const buildAnchorSignature = (anchors: readonly DocumentCommentAnchorItem[]): string =>
+  JSON.stringify(
+    anchors.map(({ id, selectionAnchor }) => [id, selectionAnchor.start, selectionAnchor.quote]),
+  );
+
+export interface DocumentCommentAnchorsValue {
+  /**
+   * The thread whose run is emphasised in the body right now. A hover wins
+   * while it lasts; underneath it the last deliberately picked thread stays
+   * emphasised, so arriving at a quote does not immediately lose it again.
+   */
+  activeRootId: string | null;
+  /** The rendered body, for surfaces that position themselves against it. */
+  bodyElement: HTMLElement | null;
+  /** Where a thread's quote sits in the flattened body text; `null` when orphaned. */
+  getAnchorMatch: (rootCommentId: string) => AnchorMatch | null;
+  /** A live DOM range over a thread's quote; `null` when orphaned or not yet resolved. */
+  getAnchorRange: (rootCommentId: string) => Range | null;
+  /** Where the selection being composed sits in the flattened body text; `null` when unresolved. */
+  getPendingAnchorMatch: () => AnchorMatch | null;
+  /** A live DOM range over the selection being composed, if any. */
+  getPendingAnchorRange: () => Range | null;
+  /** Scroll the body to a thread's anchor and select it. No-op for an orphaned anchor. */
+  locateInBody: (rootCommentId: string) => void;
+  /** Threads whose quoted run no longer exists in the body. */
+  orphanedRootIds: ReadonlySet<string>;
+  /** Ticks on every body-click pick, even a repeat pick of the same thread. */
+  pickTick: number;
+  /**
+   * Ticks every time anchors are re-resolved against the body. Anything that
+   * measured a range (card positions) is stale once this changes.
+   */
+  resolvedAt: number;
+  /** The thread the reader last deliberately picked, from either side. */
+  selectedRootId: string | null;
+  /** Pick a thread (or clear the pick with `null`). */
+  selectRoot: (rootCommentId: string | null) => void;
+  /** Transient emphasis while the pointer is over a card. */
+  setHoveredRootId: Dispatch<SetStateAction<string | null>>;
+}
+
+export interface DocumentCommentAnchorsOptions {
+  /**
+   * Whether a gutter exists for this document (it may currently be closed —
+   * a click still opens it). A run picked in the body must not scroll the
+   * body when it does: at click time the gutter's own card may not be
+   * mounted yet, so the DOM alone can't say whether one is coming.
+   */
+  hasGutter?: boolean;
+  /**
+   * A run was picked in the body but its card is not mounted — the thread is
+   * on a page the list has not loaded yet. The caller brings it into view
+   * (the same pinning a notification deep link uses).
+   */
+  onPickUnloaded?: (rootCommentId: string) => void;
+}
+
+/**
+ * Resolve every anchored thread against the live body, paint the highlights,
+ * and wire the two-way jump between a run and its comment card.
+ *
+ * `anchors` is the document's complete anchor set, not the loaded thread
+ * pages: highlights must exist for every anchored run so a comment further
+ * down the list is still discoverable from the body.
+ *
+ * Nothing here writes back to the server: an anchor's stored offsets are a
+ * capture-time snapshot, and re-location is a pure read of the current DOM. A
+ * thread whose quote is gone is reported as orphaned rather than silently
+ * re-pointed at a different run.
+ */
+export const useDocumentCommentAnchors = (
+  anchors: readonly DocumentCommentAnchorItem[],
+  { hasGutter, onPickUnloaded }: DocumentCommentAnchorsOptions = {},
+): DocumentCommentAnchorsValue => {
+  const editor = usePageEditorStore((s) => s.editor);
+  // A quote captured before a document switch belongs to the previous body;
+  // painting it here would highlight whatever text happens to match.
+  const pendingAnchor = usePageEditorStore((s) =>
+    s.pendingCommentAnchor?.documentId && s.pendingCommentAnchor.documentId === s.documentId
+      ? s.pendingCommentAnchor.anchor
+      : undefined,
+  );
+  const { element, revision } = useEditorBody(editor);
+
+  const [hoveredRootId, setHoveredRootId] = useState<string | null>(null);
+  const [selectedRootId, setSelectedRootId] = useState<string | null>(null);
+  // `selectedRootId` alone can't signal a repeated pick of the same run: React
+  // bails out of the state update, so a listener keyed on it never re-fires.
+  // This ticks on every body-click pick regardless of whether the id changed.
+  const [pickTick, setPickTick] = useState(0);
+  const activeRootId = hoveredRootId ?? selectedRootId;
+  const [orphanedRootIds, setOrphanedRootIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [resolvedAt, setResolvedAt] = useState(0);
+
+  const flatRef = useRef<FlattenedText>(EMPTY_FLATTENED_TEXT);
+  const matchesRef = useRef<ReadonlyMap<string, AnchorMatch>>(EMPTY_MATCHES);
+  const pendingMatchRef = useRef<AnchorMatch | null>(null);
+  // See `resolveAnchors`: results are reused while the body text is unchanged,
+  // so a formatting-only update never re-scans for orphaned quotes.
+  const resolveCacheRef = useRef<AnchorResolveCache>(EMPTY_ANCHOR_RESOLVE_CACHE);
+  // `anchors` is rebuilt from SWR data on every render, so it can't be an
+  // effect dependency — the resolve below writes state and would re-run itself
+  // forever. The signature is the content that actually matters, as a string.
+  const anchorsRef = useRef(anchors);
+  anchorsRef.current = anchors;
+  const onPickUnloadedRef = useRef(onPickUnloaded);
+  onPickUnloadedRef.current = onPickUnloaded;
+  const hasGutterRef = useRef(hasGutter);
+  hasGutterRef.current = hasGutter;
+
+  const anchorSignature = useMemo(() => buildAnchorSignature(anchors), [anchors]);
+  const hasPendingAnchor = Boolean(pendingAnchor);
+
+  useEffect(() => {
+    const entries = anchorsRef.current;
+
+    // Most documents carry no anchors at all; skip the body walk entirely for them.
+    const flat =
+      entries.length > 0 || hasPendingAnchor ? flattenEditorText(element) : EMPTY_FLATTENED_TEXT;
+    const { cache, matches, orphaned } = resolveAnchors(flat, entries, resolveCacheRef.current);
+
+    resolveCacheRef.current = cache;
+    flatRef.current = flat;
+    matchesRef.current = matches;
+    setOrphanedRootIds((current) => (sameRootIds(current, orphaned) ? current : orphaned));
+    setResolvedAt((current) => current + 1);
+  }, [anchorSignature, element, hasPendingAnchor, revision]);
+
+  // The pending selection is re-located on the same schedule as the stored
+  // anchors, so the composer beside it and its highlight never disagree.
+  useEffect(() => {
+    pendingMatchRef.current = pendingAnchor ? locateAnchor(flatRef.current, pendingAnchor) : null;
+    paintCommentHighlights({
+      activeRootId,
+      flat: flatRef.current,
+      matches: matchesRef.current,
+      pending: pendingMatchRef.current,
+    });
+  }, [activeRootId, pendingAnchor, resolvedAt]);
+
+  useEffect(() => () => clearCommentHighlights(), []);
+
+  const getAnchorMatch = useCallback(
+    (rootCommentId: string) => matchesRef.current.get(rootCommentId) ?? null,
+    [],
+  );
+
+  const getAnchorRange = useCallback((rootCommentId: string) => {
+    const match = matchesRef.current.get(rootCommentId);
+    return match ? buildAnchorRange(flatRef.current, match) : null;
+  }, []);
+
+  const getPendingAnchorRange = useCallback(() => {
+    const match = pendingMatchRef.current;
+    return match ? buildAnchorRange(flatRef.current, match) : null;
+  }, []);
+
+  const getPendingAnchorMatch = useCallback(() => pendingMatchRef.current, []);
+
+  const locateInBody = useCallback((rootCommentId: string) => {
+    const match = matchesRef.current.get(rootCommentId);
+    if (!match) return;
+    const range = buildAnchorRange(flatRef.current, match);
+    if (!range) return;
+    scrollAnchorIntoView(range);
+    // Jumping to a quote is a deliberate pick, so the run stays emphasised
+    // until another thread is picked or the reader clicks elsewhere in the
+    // body. A timed flash would drop it seconds after they arrive.
+    setSelectedRootId(rootCommentId);
+    // Ticks even on a repeat of the same id, for the same reason as the body
+    // click below: a re-pick of an already-selected thread must still reopen
+    // a panel the reader closed in between.
+    setPickTick((tick) => tick + 1);
+  }, []);
+
+  // Clicking a run selects its thread. Its card sits beside the text, so the
+  // pick is answered in place — the card is emphasised and, in the gutter,
+  // pulled level with the run — and the viewport never moves. That is also why
+  // no "is the reader typing?" guard is needed: selecting interrupts nothing.
+  useEffect(() => {
+    if (!element) return;
+
+    const handleClick = (event: MouseEvent) => {
+      if (matchesRef.current.size === 0) return;
+      // A drag that ends inside a run is a text selection, not a pick.
+      const selection = element.ownerDocument.defaultView?.getSelection();
+      if (selection && !selection.isCollapsed) return;
+
+      const offset = offsetFromClientPoint(element, flatRef.current, event.clientX, event.clientY);
+      if (offset === null) return;
+
+      // Nested anchors are legal; the tightest one is the one being pointed at.
+      let hitId: string | null = null;
+      let hitLength = Number.POSITIVE_INFINITY;
+      for (const [rootId, match] of matchesRef.current) {
+        const length = match.end - match.start;
+        if (offset >= match.start && offset < match.end && length < hitLength) {
+          hitId = rootId;
+          hitLength = length;
+        }
+      }
+      setSelectedRootId(hitId);
+      if (!hitId) return;
+      setPickTick((tick) => tick + 1);
+
+      // The card may sit on a thread page the list has not loaded yet — the
+      // highlight exists because anchors are fetched for the whole document.
+      if (!focusCommentCard(hitId, { hasGutter: hasGutterRef.current, scroll: false }))
+        onPickUnloadedRef.current?.(hitId);
+    };
+
+    element.addEventListener('click', handleClick);
+    return () => element.removeEventListener('click', handleClick);
+  }, [element]);
+
+  return useMemo(
+    () => ({
+      activeRootId,
+      bodyElement: element,
+      getAnchorMatch,
+      getAnchorRange,
+      getPendingAnchorMatch,
+      getPendingAnchorRange,
+      locateInBody,
+      orphanedRootIds,
+      pickTick,
+      resolvedAt,
+      selectedRootId,
+      selectRoot: setSelectedRootId,
+      setHoveredRootId,
+    }),
+    [
+      activeRootId,
+      element,
+      getAnchorMatch,
+      getAnchorRange,
+      getPendingAnchorMatch,
+      getPendingAnchorRange,
+      locateInBody,
+      orphanedRootIds,
+      pickTick,
+      resolvedAt,
+      selectedRootId,
+    ],
+  );
+};

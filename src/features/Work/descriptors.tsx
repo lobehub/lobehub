@@ -43,7 +43,7 @@ const PROVIDER_ICONS: Record<WorkSkillProvider, WorkIcon> = {
  */
 export type WorkOpenTarget =
   | { agentDocumentId?: string; documentId: string; kind: 'document' }
-  | { identifier: string; kind: 'task' }
+  | { identifier: string; kind: 'task'; name?: string | null }
   | { kind: 'external'; url: string }
   /**
    * In-app preview of a cloud-persisted file (the FilePreview chat portal).
@@ -243,7 +243,7 @@ export const WORK_TYPE_DESCRIPTORS: {
     // nullable on the base type, so drop the affordance when both are missing.
     getOpenTarget: (item) => {
       const identifier = item.task.identifier ?? item.resourceId;
-      return identifier ? { identifier, kind: 'task' } : null;
+      return identifier ? { identifier, kind: 'task', name: item.task.name } : null;
     },
     getTitle: (item) => item.task.name,
   },

@@ -12,6 +12,7 @@ import {
   userMemories,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { notShareVisitorMessage } from '../../utils/shareVisitor';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
 const parseAggregateTimestamp = (value: Date | string) =>
@@ -294,6 +295,10 @@ export class AgentSignalReviewContextModel {
           eq(effectiveAgentId, options.agentId),
           gte(messages.createdAt, options.windowStart),
           lte(messages.createdAt, options.windowEnd),
+          // Share-visitor traffic bills to the creator but is not the
+          // creator's own activity — it must never feed self-learning/expertise
+          // context. See `notShareVisitorMessage` for the shared predicate rule.
+          notShareVisitorMessage(),
         ),
       )
       .groupBy(topics.id, topics.title, topics.historySummary, topics.description, topics.content)
@@ -356,6 +361,8 @@ export class AgentSignalReviewContextModel {
           gte(messages.createdAt, options.windowStart),
           lte(messages.createdAt, options.windowEnd),
           eq(messages.topicId, options.topicId),
+          // See `listTopicActivity` above / `notShareVisitorMessage` for the rule.
+          notShareVisitorMessage(),
         ),
       )
       .groupBy(topics.id, topics.title, topics.historySummary, topics.description, topics.content)

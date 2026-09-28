@@ -2,8 +2,7 @@
  * @vitest-environment happy-dom
  */
 import { act, render, renderHook, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useMenu } from './useMenu';
 
@@ -33,21 +32,20 @@ vi.mock('@/features/Conversation/useAgentContext', () => ({
   useAgentContext: () => ({ agentId: 'agent-1', topicId: 'topic-1' }),
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  Block: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Icon: () => null,
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-}));
+vi.mock('antd', async (importOriginal) => {
+  const actual = await importOriginal<{ App: Record<string, unknown> } & Record<string, unknown>>();
 
-vi.mock('antd', () => ({
-  App: {
-    useApp: () => ({
-      message: { success: messageSuccessMock },
-      modal: { confirm: modalConfirmMock },
-    }),
-  },
-}));
+  return {
+    ...actual,
+    App: {
+      ...actual.App,
+      useApp: () => ({
+        message: { success: messageSuccessMock },
+        modal: { confirm: modalConfirmMock },
+      }),
+    },
+  };
+});
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -117,6 +115,32 @@ const isActionItem = (
 } => !!item && typeof item === 'object' && 'key' in item;
 
 describe('Conversation header action menu', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    Reflect.deleteProperty(document, 'execCommand');
+  });
+
+  it('copies the displayed topic ID without the Clipboard API', async () => {
+    useLocationMock.mockReturnValue({ pathname: '/agent/agent-1' });
+    vi.spyOn(navigator, 'clipboard', 'get').mockReturnValue(undefined as never);
+    let copiedText: string | undefined;
+    const copy = vi.fn(() => {
+      copiedText = (document.activeElement as HTMLTextAreaElement).value;
+      return true;
+    });
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: copy });
+    const { result } = renderHook(() => useMenu());
+    const item = result.current
+      .menuItems()
+      .find((item) => isActionItem(item) && item.key === 'copySessionId');
+    if (!isActionItem(item)) throw new Error('Expected copy action');
+
+    await item.onClick?.();
+
+    expect(copy).toHaveBeenCalledWith('copy');
+    expect(copiedText).toBe('topic-1');
+    expect(document.querySelector('textarea')).toBeNull();
+  });
   it('includes the desktop popup-window action for the active topic', () => {
     useLocationMock.mockReturnValue({ pathname: '/agent/agent-1' });
 

@@ -1,5 +1,6 @@
 'use client';
 
+import { isMaskedBotCredential } from '@lobechat/const';
 import { Button, toast } from '@lobehub/ui/base-ui';
 import { Form as AntdForm } from 'antd';
 import { Download } from 'lucide-react';
@@ -25,7 +26,9 @@ const CredentialExtras = memo<PlatformCredentialExtrasProps>(({ disabled }) => {
     if (disabled) return;
 
     const token = channelAccessToken?.trim();
-    if (!token) {
+    // A masked token is the server telling us it will not hand the secret back,
+    // not a token — spending it here just fails authentication at LINE.
+    if (!token || isMaskedBotCredential(token)) {
       toast.warning(t('channel.line.fetchBotInfoMissingToken'));
       return;
     }
@@ -51,12 +54,14 @@ const CredentialExtras = memo<PlatformCredentialExtrasProps>(({ disabled }) => {
 
   return (
     <Button
-      disabled={disabled || !channelAccessToken?.trim()}
       icon={<Download size={14} />}
       loading={loading}
       size="small"
       style={{ alignSelf: 'flex-start', marginBlockStart: 4 }}
       type="default"
+      disabled={
+        disabled || !channelAccessToken?.trim() || isMaskedBotCredential(channelAccessToken)
+      }
       onClick={handleFetch}
     >
       {t('channel.line.fetchBotInfo')}

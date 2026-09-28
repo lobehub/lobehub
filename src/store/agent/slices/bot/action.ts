@@ -36,6 +36,8 @@ export class BotSliceActionImpl {
     agentId: string;
     applicationId: string;
     credentials: Record<string, string>;
+    /** Defaults to enabled server-side; pass false to land an unusable draft. */
+    enabled?: boolean;
     platform: string;
     settings?: Record<string, unknown>;
   }) => {
@@ -57,6 +59,23 @@ export class BotSliceActionImpl {
 
   lineFetchBotInfo = async (channelAccessToken: string) => {
     return agentBotProviderService.lineFetchBotInfo(channelAccessToken);
+  };
+
+  feishuFetchOwnerId = async (params: {
+    appId: string;
+    appSecret: string;
+    platform: 'feishu' | 'lark';
+  }) => {
+    return agentBotProviderService.feishuFetchOwnerId(params);
+  };
+
+  /**
+   * Channel configs with their credentials in the clear, for an export file the
+   * user can import elsewhere. The cached provider list is masked, so this has
+   * to go back to the server rather than reuse it.
+   */
+  exportBotProviders = async (agentId: string) => {
+    return agentBotProviderService.exportByAgentId(agentId);
   };
 
   deleteAllBotProviders = async (agentId: string) => {

@@ -35,7 +35,7 @@ faithful trace you can get, because it captures the **exact** spawn args, env
 keys, cwd, `--resume`/`--mcp-config` flags, model, and stdin that the app used —
 things a hand-rolled `claude -p` / `codex exec` repro will not reproduce. Reach
 for this before reproducing manually. The recorder lives in
-`apps/desktop/src/main/controllers/HeterogeneousAgentCtr.ts`
+`apps/desktop/src/main/controllers/HeterogeneousAgentImpl.ts`
 (`createCliTraceSession`, `shouldTraceCliOutput`, `resolveTraceRootDir`).
 
 When it records:
@@ -290,7 +290,7 @@ When the bug comes from a real trace, distill it into the closest existing test 
 3. Add or update the narrowest failing test near the broken layer.
 4. Fix the smallest layer that can explain the symptom.
 5. Re-run focused tests.
-6. Only then do an Electron smoke test with the `agent-testing` skill if UI confirmation is still needed.
+6. Only then do an Electron smoke test with the `acceptance` skill if UI confirmation is still needed.
 
 Do not start with a broad Electron repro if a raw trace or adapter test can prove the fault zone faster.
 

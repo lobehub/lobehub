@@ -31,6 +31,18 @@ describe('buildDeepSeekAnthropicPayload — completion budget', () => {
     ).rejects.toBeInstanceOf(ContextExceededPreFlightError);
   });
 
+  it('checks the context window when max_tokens is explicitly supplied', async () => {
+    const huge = 'lorem ipsum dolor '.repeat(560_000);
+
+    await expect(
+      buildDeepSeekAnthropicPayload({
+        max_tokens: 2048,
+        messages: [{ content: huge, role: 'user' }],
+        model: 'deepseek-v4-pro',
+      } as any),
+    ).rejects.toBeInstanceOf(ContextExceededPreFlightError);
+  });
+
   // A normal small prompt must still produce a usable payload (no regression /
   // no spurious pre-flight throw for the common case).
   it('produces a payload with a positive max_tokens for a small prompt', async () => {

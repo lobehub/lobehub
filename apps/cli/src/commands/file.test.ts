@@ -32,11 +32,6 @@ const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
 }));
 
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
-vi.mock('../utils/logger', () => ({
-  log: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
-  setVerbose: vi.fn(),
-}));
-
 describe('file command', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
   let consoleSpy: ReturnType<typeof vi.spyOn>;
@@ -236,11 +231,14 @@ describe('file command', () => {
         expect(mockTrpcClient.upload.createS3PreSignedUrl.mutate).toHaveBeenCalled();
         expect(fetchSpy).toHaveBeenCalledWith(
           'https://s3/presigned',
-          expect.objectContaining({ method: 'PUT' }),
+          expect.objectContaining({
+            headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+            method: 'PUT',
+          }),
         );
         expect(mockTrpcClient.file.createFile.mutate).toHaveBeenCalledWith(
           expect.objectContaining({
-            fileType: 'text/plain',
+            fileType: 'text/plain; charset=utf-8',
             name: path.basename(tmpFile),
             url: expect.stringContaining('.txt'),
           }),
@@ -268,7 +266,14 @@ describe('file command', () => {
         await program.parseAsync(['node', 'test', 'file', 'upload', '--file', tmpFile]);
 
         expect(mockTrpcClient.file.createFile.mutate).toHaveBeenCalledWith(
-          expect.objectContaining({ fileType: 'application/json' }),
+          expect.objectContaining({ fileType: 'application/json; charset=utf-8' }),
+        );
+        expect(fetchSpy).toHaveBeenCalledWith(
+          'https://s3/presigned',
+          expect.objectContaining({
+            headers: { 'Content-Type': 'application/json; charset=utf-8' },
+            method: 'PUT',
+          }),
         );
       } finally {
         fetchSpy.mockRestore();

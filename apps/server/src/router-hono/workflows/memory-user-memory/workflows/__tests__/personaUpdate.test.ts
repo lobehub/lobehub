@@ -17,7 +17,9 @@ vi.mock('@/database/server', () => ({
 
 vi.mock('@/server/services/memory/userMemory/persona/service', () => ({
   buildUserPersonaJobInput: mocks.buildUserPersonaJobInput,
-  UserPersonaService: vi.fn(() => ({ composeWriting: mocks.composeWriting })),
+  UserPersonaService: vi.fn(function () {
+    return { composeWriting: mocks.composeWriting };
+  }),
 }));
 
 vi.mock('../runGuard', () => ({

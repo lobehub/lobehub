@@ -75,6 +75,35 @@ describe('resolveHomePreset', () => {
   it('tells the presets apart by the portrait alone', () => {
     expect(resolveHomePreset({ hiddenWidgets: [], showPortrait: false })).toBeUndefined();
   });
+
+  // The usage widget is a business slot: where it doesn't exist, its key must
+  // not count, or shipping it would silently break every stored preset.
+  describe('usage availability', () => {
+    const legacyMinimal = HOME_WIDGET_KEYS.filter((key) => key !== 'usage');
+
+    it('keeps a pre-usage minimal selection minimal where the slot is empty', () => {
+      expect(resolveHomePreset({ hiddenWidgets: [...legacyMinimal], showPortrait: false })).toBe(
+        'minimal',
+      );
+    });
+
+    it('keeps an empty hidden set full where the slot is empty', () => {
+      expect(resolveHomePreset({ hiddenWidgets: [], showPortrait: true }, false)).toBe('full');
+    });
+
+    it('requires the usage switch too once the slot is active', () => {
+      expect(
+        resolveHomePreset({ hiddenWidgets: [...legacyMinimal], showPortrait: false }, true),
+      ).toBeUndefined();
+      expect(
+        resolveHomePreset({ hiddenWidgets: [...HOME_WIDGET_KEYS], showPortrait: false }, true),
+      ).toBe('minimal');
+    });
+
+    it('counts a visible usage widget toward full once the slot is active', () => {
+      expect(resolveHomePreset({ hiddenWidgets: [], showPortrait: true }, true)).toBe('full');
+    });
+  });
 });
 
 describe('isHomeMinimalLayout', () => {
@@ -88,6 +117,17 @@ describe('isHomeMinimalLayout', () => {
     expect(isHomeMinimalLayout({ hiddenWidgets: [...HOME_WIDGET_KEYS], showPortrait: true })).toBe(
       false,
     );
+  });
+
+  it('ignores the usage key where its slot is empty, but demands it where active', () => {
+    const legacyAllHidden = HOME_WIDGET_KEYS.filter((key) => key !== 'usage');
+
+    expect(isHomeMinimalLayout({ hiddenWidgets: [...legacyAllHidden], showPortrait: false })).toBe(
+      true,
+    );
+    expect(
+      isHomeMinimalLayout({ hiddenWidgets: [...legacyAllHidden], showPortrait: false }, true),
+    ).toBe(false);
   });
 
   it('keeps the dashboard while one section still has something to stack', () => {
@@ -115,7 +155,7 @@ describe('HOME_WIDGET_GROUPS', () => {
   it.each([
     ['agent', ['unread', 'needsYou', 'running', 'recents']],
     ['task', ['tasks', 'scheduledTasks']],
-    ['rail', ['goals', 'news', 'suggestions']],
+    ['rail', ['goals', 'news', 'usage', 'suggestions']],
   ])('groups %s by where those sections render on Home', (key, widgets) => {
     expect(HOME_WIDGET_GROUPS.find((group) => group.key === key)?.widgets).toEqual(widgets);
   });

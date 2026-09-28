@@ -1,6 +1,7 @@
 'use client';
 
-import { Flexbox, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { memo, type ReactNode } from 'react';
 
 export interface SettingRowProps {

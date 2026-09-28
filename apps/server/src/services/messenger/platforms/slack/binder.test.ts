@@ -56,19 +56,18 @@ beforeEach(() => {
   updateEphemeralButtonGrid = vi.fn().mockResolvedValue(undefined);
   getUserInfo = vi.fn().mockResolvedValue({ profile: { email: 'alice@acme.com' } });
 
-  vi.mocked(SlackApi).mockImplementation(
-    () =>
-      ({
-        getUserInfo,
-        postEphemeral,
-        postEphemeralWithButtonGrid,
-        postMessage,
-        postMessageWithButtonAndLink,
-        postMessageWithButtonGrid,
-        updateEphemeralButtonGrid,
-        updateMessageWithButtonGrid,
-      }) as any,
-  );
+  vi.mocked(SlackApi).mockImplementation(function () {
+    return {
+      getUserInfo,
+      postEphemeral,
+      postEphemeralWithButtonGrid,
+      postMessage,
+      postMessageWithButtonAndLink,
+      postMessageWithButtonGrid,
+      updateEphemeralButtonGrid,
+      updateMessageWithButtonGrid,
+    } as any;
+  });
 
   vi.mocked(issueLinkToken).mockResolvedValue('rand-token-1');
 });

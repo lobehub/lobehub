@@ -226,6 +226,116 @@ describe('AgentDocumentInjector', () => {
       expect(result.messages[0].content).not.toContain('Full content that should NOT appear');
     });
 
+    // The index is rebuilt every step, so a doc the agent created earlier in the
+    // same run showed up as if it already existed and was read as "overwritten".
+    it('marks docs created after the latest user message in the progressive index', async () => {
+      const runStartedAt = new Date('2026-09-23T22:57:30.000Z').getTime();
+      const provider = new AgentDocumentContextInjector({
+        documents: [
+          {
+            createdAt: new Date('2026-09-23T22:57:58.000Z'),
+            filename: 'fase-g-2c.md',
+            id: 'ce2c4f3a',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            policyLoad: 'progressive',
+            title: 'FASE G-2C',
+            updatedAt: new Date('2026-09-23T22:57:58.000Z'),
+          },
+          {
+            createdAt: new Date('2026-09-21T23:12:00.000Z'),
+            filename: 'fase-g-2b.md',
+            id: '452eea73',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            policyLoad: 'progressive',
+            title: 'FASE G-2B',
+            updatedAt: new Date('2026-09-21T23:12:00.000Z'),
+          },
+        ],
+      });
+
+      const context = createContext([
+        { content: 'earlier', createdAt: runStartedAt - 3_600_000, id: 'user-0', role: 'user' },
+        { content: 'ok', createdAt: runStartedAt - 3_500_000, id: 'a-0', role: 'assistant' },
+        { content: 'Write the G-2C report', createdAt: runStartedAt, id: 'user-1', role: 'user' },
+      ]);
+      const result = await provider.process(context);
+
+      expect(result.messages[0].content).toMatchInlineSnapshot(`
+        "<agent_documents_index>
+        User-created docs, when present, are listed below — use readDocument(id) for full content.
+        Docs marked (new since last user message) (or counted that way in a folder row) were created after the user's latest message — by you or elsewhere (another topic, or the user). A marked doc you created was new; creating it did not overwrite an existing doc.
+
+        TITLE                                    ID        SIZE   UPDATED
+        FASE G-2C (new since last user message)  ce2c4f3a  empty  2026-09-23
+        FASE G-2B                                452eea73  empty  2026-09-21
+        </agent_documents_index>"
+      `);
+    });
+
+    it('counts docs created after the latest user message inside collapsed folders', async () => {
+      const runStartedAt = new Date('2026-09-23T22:57:30.000Z').getTime();
+      const inFolder = (id: string, createdAt: string) => ({
+        createdAt: new Date(createdAt),
+        filename: `${id}.md`,
+        folderTitle: 'Reports',
+        id,
+        loadPosition: 'before-first-user' as const,
+        loadRules: { rule: 'always' as const },
+        parentId: 'folder-1',
+        policyLoad: 'progressive' as const,
+        title: id,
+        updatedAt: new Date(createdAt),
+      });
+      const provider = new AgentDocumentContextInjector({
+        documents: [
+          inFolder('new-report', '2026-09-23T22:57:58.000Z'),
+          inFolder('old-report', '2026-09-21T23:12:00.000Z'),
+        ],
+      });
+
+      const result = await provider.process(
+        createContext([{ content: 'go', createdAt: runStartedAt, id: 'user-1', role: 'user' }]),
+      );
+      const content = result.messages[0].content as string;
+
+      expect(content).toContain("were created after the user's latest message");
+      expect(content).toMatch(/📁 Reports\s+folder-1\s+2 docs \(1 new since last user message\)/);
+    });
+
+    // The document query is agent-scoped, so a doc created after the latest
+    // user message may come from another topic or tab: the marker must state the
+    // known timestamp fact instead of claiming the current run created it.
+    it('does not attribute docs created after the latest user message to the current run', async () => {
+      const lastUserMessageAt = new Date('2026-09-23T22:57:30.000Z').getTime();
+      const provider = new AgentDocumentContextInjector({
+        documents: [
+          {
+            createdAt: new Date('2026-09-23T22:58:10.000Z'),
+            filename: 'other-topic.md',
+            id: 'other-1',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            policyLoad: 'progressive',
+            title: 'Created in another topic',
+            updatedAt: new Date('2026-09-23T22:58:10.000Z'),
+          },
+        ],
+      });
+
+      const result = await provider.process(
+        createContext([
+          { content: 'go', createdAt: lastUserMessageAt, id: 'user-1', role: 'user' },
+        ]),
+      );
+      const content = result.messages[0].content as string;
+
+      expect(content).not.toContain('this run');
+      expect(content).not.toContain('you created them');
+      expect(content).toContain('Created in another topic (new since last user message)');
+    });
+
     // https://github.com/lobehub/lobehub/issues/15624 — relative times ("15m ago")
     // in the index changed the prompt prefix every minute and broke provider-side
     // prompt caching. The index must stay byte-identical as wall-clock time passes.

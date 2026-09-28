@@ -11,6 +11,7 @@ const {
   mockGetAccessLevel,
   mockGetAgentConfigById,
   mockGetGroupAgentsWithMeta,
+  mockGetResourceConfigAccess,
   mockRemoveAgentsFromGroup,
   mockSetAccessLevel,
   mockUpdateAgent,
@@ -23,6 +24,7 @@ const {
   mockGetAccessLevel: vi.fn(),
   mockGetAgentConfigById: vi.fn(),
   mockGetGroupAgentsWithMeta: vi.fn(),
+  mockGetResourceConfigAccess: vi.fn(),
   mockRemoveAgentsFromGroup: vi.fn(),
   mockSetAccessLevel: vi.fn(),
   mockUpdateAgent: vi.fn(),
@@ -30,42 +32,56 @@ const {
 }));
 
 vi.mock('@/database/models/agent', () => ({
-  AgentModel: vi.fn(() => ({
-    batchCreate: mockBatchCreate,
-    getAgentConfigById: mockGetAgentConfigById,
-    queryAgents: vi.fn(async () => []),
-    update: mockUpdateAgent,
-    updateConfig: vi.fn(),
-  })),
+  AgentModel: vi.fn(function () {
+    return {
+      batchCreate: mockBatchCreate,
+      getAgentConfigById: mockGetAgentConfigById,
+      queryAgents: vi.fn(async () => []),
+      update: mockUpdateAgent,
+      updateConfig: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/chatGroup', () => ({
-  ChatGroupModel: vi.fn(() => ({
-    addAgentsToGroup: mockAddAgentsToGroup,
-    findById: mockFindById,
-    getGroupAgentsWithMeta: mockGetGroupAgentsWithMeta,
-    removeAgentsFromGroup: mockRemoveAgentsFromGroup,
-    update: mockUpdateGroup,
-  })),
+  ChatGroupModel: vi.fn(function () {
+    return {
+      addAgentsToGroup: mockAddAgentsToGroup,
+      findById: mockFindById,
+      getGroupAgentsWithMeta: mockGetGroupAgentsWithMeta,
+      removeAgentsFromGroup: mockRemoveAgentsFromGroup,
+      update: mockUpdateGroup,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/resourcePermission', () => ({
-  ResourcePermissionModel: vi.fn(() => ({
-    getAccessLevel: mockGetAccessLevel,
-    setAccessLevel: mockSetAccessLevel,
-  })),
+  ResourcePermissionModel: vi.fn(function () {
+    return {
+      getAccessLevel: mockGetAccessLevel,
+      setAccessLevel: mockSetAccessLevel,
+    };
+  }),
 }));
 
 vi.mock('@/database/repositories/agentGroup', () => ({
-  AgentGroupRepository: vi.fn(() => ({ createGroupWithSupervisor: vi.fn() })),
+  AgentGroupRepository: vi.fn(function () {
+    return { createGroupWithSupervisor: vi.fn() };
+  }),
 }));
 
 vi.mock('@/server/services/agentGroup', () => ({
-  AgentGroupService: vi.fn(() => ({ normalizeGroupConfig: (config: unknown) => config })),
+  AgentGroupService: vi.fn(function () {
+    return { normalizeGroupConfig: (config: unknown) => config };
+  }),
 }));
 
 vi.mock('@/server/services/resourcePermission', () => ({
   assertCanPerformResourceAction: vi.fn(async () => undefined),
+}));
+
+vi.mock('@/server/routers/lambda/_helpers/resourceConfigGuard', () => ({
+  getResourceConfigAccess: mockGetResourceConfigAccess,
 }));
 
 vi.mock('../agentBuilder', () => ({
@@ -92,6 +108,7 @@ describe('groupAgentBuilderRuntime', () => {
     mockGetGroupAgentsWithMeta.mockResolvedValue([
       { agentId: 'agt_sup', description: null, role: 'supervisor', title: 'Supervisor' },
     ]);
+    mockGetResourceConfigAccess.mockResolvedValue('full');
   });
 
   // The bug: gateway mode executes every builtin tool server-side, and a missing
@@ -285,6 +302,66 @@ describe('groupAgentBuilderRuntime', () => {
         state: { newPrompt: 'shared context', previousPrompt: 'old', success: true },
         success: true,
       });
+    });
+  });
+  // An explicit `groupId` comes straight from the tool arguments, and the model
+  // predicates admit any public workspace row. Prompts are edit-level config
+  // (`resourceConfigGuard`), so a view/use member must not read them here.
+  describe('config access on an explicitly targeted group', () => {
+    const explicit = { agentId: 'agt_sup', groupId: 'cg_other' };
+
+    beforeEach(() => {
+      mockGetAgentConfigById.mockResolvedValue({ model: 'gpt-x', systemRole: 'secret prompt' });
+    });
+
+    it('returns the system prompt only with full config access', async () => {
+      const result = await createRuntime('ws_1').getAgentInfo(explicit, groupCtx);
+
+      expect(mockGetResourceConfigAccess).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: 'user-1', workspaceId: 'ws_1' }),
+        'agent',
+        'agt_sup',
+      );
+      expect(result.state).toMatchObject({ systemRole: 'secret prompt' });
+    });
+
+    it('omits the system prompt for view/use access', async () => {
+      mockGetResourceConfigAccess.mockImplementation(async (_ctx, type) =>
+        type === 'agent' ? 'profile' : 'full',
+      );
+
+      const result = await createRuntime('ws_1').getAgentInfo(explicit, groupCtx);
+
+      expect(result.success).toBe(true);
+      expect(result.content).not.toContain('secret prompt');
+      expect(result.state).toMatchObject({ model: 'gpt-x', title: 'Supervisor' });
+      expect((result.state as { systemRole?: string }).systemRole).toBeUndefined();
+    });
+
+    it('hides a group the caller has no access to', async () => {
+      mockGetResourceConfigAccess.mockResolvedValue('none');
+
+      const result = await createRuntime('ws_1').getAgentInfo(explicit, groupCtx);
+
+      expect(result).toMatchObject({ error: { type: 'GroupNotFound' }, success: false });
+      expect(mockGetGroupAgentsWithMeta).not.toHaveBeenCalled();
+      expect(mockGetAgentConfigById).not.toHaveBeenCalled();
+    });
+
+    it('refuses to read or rewrite a member prompt without full config access', async () => {
+      mockGetResourceConfigAccess.mockImplementation(async (_ctx, type) =>
+        type === 'agent' ? 'profile' : 'full',
+      );
+
+      const result = await createRuntime('ws_1').updateAgentPrompt(
+        { ...explicit, prompt: 'overwrite' },
+        groupCtx,
+      );
+
+      expect(result).toMatchObject({ error: { type: 'Forbidden' }, success: false });
+      expect(result.content).not.toContain('secret prompt');
+      expect(mockGetAgentConfigById).not.toHaveBeenCalled();
+      expect(mockUpdateAgent).not.toHaveBeenCalled();
     });
   });
 });

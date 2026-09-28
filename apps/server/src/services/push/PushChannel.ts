@@ -47,9 +47,23 @@ export class PushChannel {
       return { failedReason: 'no_tokens', status: 'failed' };
     }
 
-    // Build messages, keeping the order so we can map tickets back to tokens by index
-    const validTokens = tokens.filter((t) => Expo.isExpoPushToken(t.expoToken));
+    // Build messages, keeping the order so we can map tickets back to tokens by index.
+    // Filtering by the stable row deviceId (not the mutable Expo token) lets
+    // callers de-duplicate a system-specific delivery without weakening
+    // fallback for the user's other devices.
+    const excludedDeviceIds = new Set(ctx.pushPresentation?.excludeDeviceIds);
+    const validTokens = tokens.filter(
+      (t) => !excludedDeviceIds.has(t.deviceId) && Expo.isExpoPushToken(t.expoToken),
+    );
     if (validTokens.length === 0) {
+      if (tokens.every((token) => excludedDeviceIds.has(token.deviceId))) {
+        log('All devices excluded from ordinary push for userId=%s', ctx.userId);
+        // The caller excluded these devices only after another system surface
+        // accepted delivery, so this is a satisfied channel, not a retryable
+        // ordinary-push failure.
+        return { status: 'delivered' };
+      }
+
       log('All tokens malformed for userId=%s', ctx.userId);
       return { failedReason: 'invalid_tokens', status: 'failed' };
     }
@@ -84,18 +98,19 @@ export class PushChannel {
 
         tickets.forEach((ticket, i) => {
           const expoToken = chunk[i].to as string;
+          const deviceId = validTokens[cursor + i]?.deviceId;
 
           if (ticket.status === 'ok') {
             ticketRecords.push({ expoToken, ticketId: ticket.id });
           } else {
             // Per-message error at send time — receipt phase won't see this one.
-            // Common cases: bad token format that slipped past isExpoPushToken,
-            // payload too big. Logged but not enough to fail the whole delivery.
+            // Provider messages are intentionally omitted: they are opaque and
+            // may echo the Expo token. Keep diagnostics categorical and scoped
+            // to our own stable device id.
             log(
-              'Send-time error for token=%s: %s (%s)',
-              expoToken,
-              ticket.message,
-              ticket.details?.error,
+              'Send-time error for deviceId=%s category=%s',
+              deviceId,
+              ticket.details?.error ?? 'unknown',
             );
           }
         });

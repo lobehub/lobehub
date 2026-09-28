@@ -132,7 +132,7 @@ const shouldSkipIntegration = (error: unknown) =>
 afterEach(() => {
   vi.clearAllMocks();
   vi.resetModules();
-  vi.unmock('ioredis');
+  vi.doUnmock('ioredis');
 });
 
 describe('integrated', (test) => {
@@ -143,7 +143,7 @@ describe('integrated', (test) => {
   }
 
   it('set -> get -> del roundtrip', async () => {
-    vi.unmock('ioredis');
+    vi.doUnmock('ioredis');
     vi.resetModules();
 
     const IoRedisRedisProvider = await loadRedisProvider();

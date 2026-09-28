@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { StreamProtocolChunk } from './protocol';
 import {
   ABORT_CHUNK,
   convertIterableToStream,
@@ -11,6 +12,8 @@ import {
   FIRST_CHUNK_ERROR_KEY,
   readableFromAsyncIterable,
 } from './protocol';
+
+afterEach(() => vi.restoreAllMocks());
 
 describe('createSSEDataExtractor', () => {
   // Helper function to convert string to Uint8Array
@@ -197,6 +200,39 @@ describe('createTokenSpeedCalculator', async () => {
     expect(speedChunk.type).toBe('speed');
     expect(speedChunk.data.tps).not.toBeNaN();
     expect(speedChunk.data.ttft).not.toBeNaN();
+  });
+
+  it('measures effective output and excludes trailing usage delivery from generation speed', async () => {
+    let now = 1000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const transformer = createTokenSpeedCalculator((chunk) => chunk, { inputStartAt: 1000 });
+    const writer = transformer.writable.getWriter();
+    const reader = transformer.readable.getReader();
+    const results: StreamProtocolChunk[] = [];
+    const readResult = (async () => {
+      while (true) {
+        const result = await reader.read();
+        if (result.done) return;
+        results.push(result.value);
+      }
+    })();
+
+    for (const [at, chunk] of [
+      [1100, { data: '', type: 'text' }],
+      [1200, { data: 'reason', type: 'reasoning' }],
+      [2200, { data: 'answer', type: 'text' }],
+      [3200, { data: { totalOutputTokens: 100 }, type: 'usage' }],
+    ] as const) {
+      now = at;
+      await writer.write(chunk);
+    }
+    await writer.close();
+    await readResult;
+
+    expect(results.at(-1)).toMatchObject({
+      data: { duration: 1000, latency: 2200, tps: 100, ttft: 200 },
+      type: 'speed',
+    });
   });
 
   it('should not calculate token speed if no usage', async () => {

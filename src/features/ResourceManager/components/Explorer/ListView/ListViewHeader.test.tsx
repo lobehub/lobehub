@@ -9,23 +9,6 @@ const selectionMocks = vi.hoisted(() => ({
   handleSelectAllResources: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui', async () => {
-  const actual = await vi.importActual<Record<string, unknown>>('@lobehub/ui');
-
-  return {
-    ...actual,
-    Checkbox: ({ onChange }: { onChange?: (checked: boolean) => void }) => (
-      <button role="checkbox" type="button" onClick={() => onChange?.(true)} />
-    ),
-  };
-});
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
-}));
-
 vi.mock('@/store/global', () => ({
   useGlobalStore: (
     selector: (state: {

@@ -14,9 +14,6 @@ import { agentRuntimeClient } from '@/services/agentRuntime';
 import { useChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
-// Keep zustand mock as it's needed globally for store reset between tests
-vi.mock('zustand/traditional');
-
 vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: {
     aiAgent: { execGroupAgent: { mutate: vi.fn() } },

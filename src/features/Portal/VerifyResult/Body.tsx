@@ -1,6 +1,7 @@
 import type { VerifierType } from '@lobechat/types';
-import { Flexbox, Markdown, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { formatDuration as formatDurationMs } from '@lobechat/utils';
+import { Flexbox, Markdown } from '@lobehub/ui';
+import { Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ListTree } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -12,7 +13,7 @@ import {
   useVerifyInstruction,
   useVerifyResults,
   useVerifyState,
-} from '@/features/Verify/hooks';
+} from '@/features/Acceptance/hooks';
 import { verifyService } from '@/services/verify';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors, threadSelectors } from '@/store/chat/selectors';
@@ -87,7 +88,8 @@ const formatDuration = (started?: Date | string | null, completed?: Date | strin
   if (!started || !completed) return null;
   const ms = +new Date(completed) - +new Date(started);
   if (!Number.isFinite(ms) || ms <= 0) return null;
-  return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
+  if (ms < 1000) return `${ms}ms`;
+  return ms < 60_000 ? `${(ms / 1000).toFixed(1)}s` : formatDurationMs(ms);
 };
 
 const Field = memo<{ children: ReactNode; label: string }>(({ label, children }) => {

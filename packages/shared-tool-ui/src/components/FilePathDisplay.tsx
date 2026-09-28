@@ -1,6 +1,7 @@
 'use client';
 
-import { Icon, MaterialFileTypeIcon, Text } from '@lobehub/ui';
+import { Icon, MaterialFileTypeIcon } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ImageIcon } from 'lucide-react';
 import path from 'path-browserify-esm';

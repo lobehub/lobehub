@@ -14,15 +14,19 @@ import { cleanupDB, serverDB, userId } from './_setup';
 // Mock AiAgentService — created inside executeTrajectoryCore
 const mockExecAgent = vi.fn();
 vi.mock('@/server/services/aiAgent', () => ({
-  AiAgentService: vi.fn().mockImplementation(() => ({
-    execAgent: mockExecAgent,
-  })),
+  AiAgentService: vi.fn().mockImplementation(function () {
+    return {
+      execAgent: mockExecAgent,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/agentRuntime/AgentRuntimeService', () => ({
-  AgentRuntimeService: vi.fn().mockImplementation(() => ({
-    interruptOperation: vi.fn().mockResolvedValue(true),
-  })),
+  AgentRuntimeService: vi.fn().mockImplementation(function () {
+    return {
+      interruptOperation: vi.fn().mockResolvedValue(true),
+    };
+  }),
 }));
 
 beforeEach(async () => {

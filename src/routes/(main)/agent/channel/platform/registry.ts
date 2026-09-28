@@ -1,8 +1,14 @@
 import type { ComponentType } from 'react';
 
+import { FeishuUserIdExtras } from '@/features/AgentSetting/AgentChannel/feishu/UserIdExtras';
+
 import ImessageCredentialExtras from './imessage/CredentialExtras';
 import LineCredentialExtras from './line/CredentialExtras';
-import type { PlatformCredentialBodyProps, PlatformCredentialExtrasProps } from './types';
+import type {
+  PlatformCredentialBodyProps,
+  PlatformCredentialExtrasProps,
+  PlatformSettingsFieldExtrasProps,
+} from './types';
 import WechatCredentialBody from './wechat/CredentialBody';
 
 export const platformCredentialBodyMap: Record<
@@ -25,4 +31,22 @@ export const platformCredentialExtrasMap: Record<
 > = {
   imessage: ImessageCredentialExtras,
   line: LineCredentialExtras,
+};
+
+/**
+ * Components rendered directly under a single Advanced-Settings field, keyed
+ * by `<platformId>:<fieldKey>`. Use this when a helper acts on one specific
+ * setting rather than on the credential block — Feishu's "fetch my Open ID
+ * from the app info" button has to sit next to `settings.userId`, which
+ * `platformCredentialExtrasMap` renders too far from.
+ *
+ * Feishu and Lark share one schema but address different API domains, so both
+ * ids are registered against the same component.
+ */
+export const platformSettingsFieldExtrasMap: Record<
+  string,
+  ComponentType<PlatformSettingsFieldExtrasProps>
+> = {
+  'feishu:userId': FeishuUserIdExtras,
+  'lark:userId': FeishuUserIdExtras,
 };

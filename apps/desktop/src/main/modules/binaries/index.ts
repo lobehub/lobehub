@@ -6,7 +6,11 @@
  */
 
 export { browserAutomationBinaries } from './agentBrowserBinaries';
-export { cliAgentBinaries, detectHeterogeneousCliCommand } from './cliAgentBinaries';
+export {
+  cliAgentBinaries,
+  detectHeterogeneousCliCommand,
+  invalidateLoginShellPathCache,
+} from './cliAgentBinaries';
 export { astSearchBinaries, contentSearchBinaries } from './contentSearchBinaries';
 export { fileSearchBinaries } from './fileSearchBinaries';
 export { runtimeEnvironmentBinaries } from './runtimeEnvironmentBinaries';

@@ -1,12 +1,8 @@
 import { renderHook } from '@testing-library/react';
 import { EyeIcon, LockIcon, PlayIcon } from 'lucide-react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { useAccessLevelOptions } from './useAccessLevelOptions';
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
 
 describe('useAccessLevelOptions', () => {
   it('uses access and lock icons for knowledge-base visibility levels', () => {

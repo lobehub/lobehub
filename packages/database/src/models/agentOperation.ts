@@ -1,7 +1,9 @@
-import type {
-  AgentOperationCompletionReason,
-  AgentOperationStatus,
-  VerifyRunStatus,
+import {
+  type AgentOperationCompletionReason,
+  type AgentOperationStatus,
+  isServerDefaultHeterogeneousRelayInvocation,
+  type ServerDefaultHeterogeneousRelayInvocation,
+  type VerifyRunStatus,
 } from '@lobechat/types';
 import { and, eq, gte, inArray, isNotNull, or, sql } from 'drizzle-orm';
 
@@ -15,6 +17,7 @@ import type {
 } from '../schemas/agentOperations';
 import { agentOperations } from '../schemas/agentOperations';
 import type { LobeChatDatabase } from '../type';
+import { notShareVisitorTopicRef } from '../utils/shareVisitor';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
 /**
@@ -46,6 +49,51 @@ export interface RecordOperationStartParams {
   topicId?: string | null;
   trigger?: string;
 }
+
+export interface AgentInterventionDispatchMarker {
+  deduplicationId: string;
+  messageId: string;
+  resolutionRequestId: string;
+  scheduledAt: string;
+  state: 'scheduled';
+}
+
+export interface AgentInterventionPreparationMarker {
+  deduplicationId: string;
+  resolutionRequestId: string;
+  state: 'ready';
+  stepIndex: number;
+}
+
+/** Why `heteroIngest` refused a batch — see {@link HeteroIngestRejectionMarker}. */
+export type HeteroIngestRejectionReason = 'operation-not-running' | 'stale-operation';
+
+/**
+ * Stamped the first time `heteroIngest` refuses a batch for this operation.
+ *
+ * Both refusal paths (the op row is no longer `running`, or the topic's
+ * `runningOperation` marker no longer names this op) mean the producer's
+ * remaining output is being discarded while its CLI keeps running happily. The
+ * marker is what carries that fact across to `heteroFinish`, which would
+ * otherwise settle the producer's `success` receipt as a clean turn and leave
+ * the user staring at an assistant placeholder that never fills in.
+ */
+export interface HeteroIngestRejectionMarker {
+  at: string;
+  /** Events discarded with the refusal that stamped this marker. */
+  droppedEvents: number;
+  reason: HeteroIngestRejectionReason;
+}
+
+const sameServerDefaultRelayInvocation = (
+  left: ServerDefaultHeterogeneousRelayInvocation,
+  right: ServerDefaultHeterogeneousRelayInvocation,
+): boolean =>
+  left.agentType === right.agentType &&
+  left.ingress === right.ingress &&
+  left.model === right.model &&
+  left.operationId === right.operationId &&
+  left.provider === right.provider;
 
 /** Terminal usage summed across every child operation of one parent. All-zero when it has none. */
 export interface ChildUsageRollup {
@@ -208,6 +256,96 @@ export class AgentOperationModel {
     return Boolean(row);
   }
 
+  /**
+   * Persist provider enqueue acknowledgement without replacing other runtime
+   * metadata. The provenance request id is checked in SQL so a stale/colliding
+   * operation can never be marked scheduled by another intervention.
+   */
+  async recordAgentInterventionDispatch(
+    operationId: string,
+    marker: AgentInterventionDispatchMarker,
+  ): Promise<boolean> {
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({
+        metadata: sql`coalesce(${agentOperations.metadata}, '{}'::jsonb) || ${JSON.stringify({ agentInterventionDispatch: marker })}::jsonb`,
+      })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          this.ownership(),
+          sql`${agentOperations.metadata}->'agentInterventionContinuation'->>'resolutionRequestId' = ${marker.resolutionRequestId}`,
+        ),
+      )
+      .returning({ id: agentOperations.id });
+    return Boolean(row);
+  }
+
+  /**
+   * Persist the crash-recovery boundary after runtime state and serialized
+   * hooks are complete, but before the first queue publish. A missing runtime
+   * state with this marker is therefore ambiguous (it may already have run)
+   * and must never be rebuilt from scratch.
+   */
+  async recordAgentInterventionPreparation(
+    operationId: string,
+    marker: AgentInterventionPreparationMarker,
+  ): Promise<boolean> {
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({
+        metadata: sql`coalesce(${agentOperations.metadata}, '{}'::jsonb) || ${JSON.stringify({ agentInterventionPreparation: marker })}::jsonb`,
+      })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          this.ownership(),
+          sql`${agentOperations.metadata}->'agentInterventionContinuation'->>'resolutionRequestId' = ${marker.resolutionRequestId}`,
+        ),
+      )
+      .returning({ id: agentOperations.id });
+    return Boolean(row);
+  }
+
+  /**
+   * Record the first official-relay acceptance for a server-default operation.
+   * Matching retries reuse the original timestamp; a conflicting selection or
+   * terminal operation fails closed.
+   */
+  async recordServerDefaultRelayInvocation(
+    operationId: string,
+    invocation: ServerDefaultHeterogeneousRelayInvocation,
+  ): Promise<ServerDefaultHeterogeneousRelayInvocation | null> {
+    if (operationId !== invocation.operationId) return null;
+
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({
+        metadata: sql`coalesce(${agentOperations.metadata}, '{}'::jsonb) || ${JSON.stringify({ serverDefaultRelayInvocation: invocation })}::jsonb`,
+      })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          eq(agentOperations.status, 'running'),
+          eq(agentOperations.model, invocation.model),
+          eq(agentOperations.provider, invocation.provider),
+          this.ownership(),
+          sql`${agentOperations.metadata}->>'serverDefaultHeterogeneous' = 'true'`,
+          sql`${agentOperations.metadata}->>'agentType' = ${invocation.agentType}`,
+          sql`NOT COALESCE(jsonb_exists(${agentOperations.metadata}, 'serverDefaultRelayInvocation'), false)`,
+        ),
+      )
+      .returning({ metadata: agentOperations.metadata });
+
+    if (row) return invocation;
+
+    const existing = (await this.findById(operationId))?.metadata?.serverDefaultRelayInvocation;
+    return isServerDefaultHeterogeneousRelayInvocation(existing) &&
+      sameServerDefaultRelayInvocation(existing, invocation)
+      ? existing
+      : null;
+  }
+
   /** Idempotently settle a running operation without rewriting an existing terminal outcome. */
   async settleRunning(
     operationId: string,
@@ -225,6 +363,33 @@ export class AgentOperationModel {
           eq(agentOperations.id, operationId),
           eq(agentOperations.status, 'running'),
           this.ownership(),
+        ),
+      )
+      .returning({ id: agentOperations.id });
+    return Boolean(row);
+  }
+
+  /**
+   * Record that ingest discarded a batch for this operation, first refusal wins.
+   *
+   * Deliberately NOT gated on `status = 'running'`: a terminal row is itself one
+   * of the refusal reasons. The `?` guard keeps the first (and most informative)
+   * refusal instead of letting the run's remaining batches overwrite it.
+   */
+  async recordHeteroIngestRejection(
+    operationId: string,
+    marker: HeteroIngestRejectionMarker,
+  ): Promise<boolean> {
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({
+        metadata: sql`coalesce(${agentOperations.metadata}, '{}'::jsonb) || ${JSON.stringify({ heteroIngestRejection: marker })}::jsonb`,
+      })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          this.ownership(),
+          sql`NOT (coalesce(${agentOperations.metadata}, '{}'::jsonb) ? 'heteroIngestRejection')`,
         ),
       )
       .returning({ id: agentOperations.id });
@@ -249,22 +414,153 @@ export class AgentOperationModel {
   }
 
   /**
+   * Whether this operation is still running AND owns the given topic.
+   *
+   * The row — not `topic.metadata.runningOperation` — is the authority on
+   * liveness: the marker is a best-effort rendering pointer that any client can
+   * clear (a transport-level completion settles it while the producer keeps
+   * going), whereas the row only leaves `running` through a terminal path.
+   * Pairing it with `topicId` is what makes the answer safe to act on: it proves
+   * the caller is about to write to the topic this operation actually belongs
+   * to, not one it was handed.
+   */
+  async isRunningOnTopic(operationId: string, topicId: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ id: agentOperations.id })
+      .from(agentOperations)
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          eq(agentOperations.status, 'running'),
+          eq(agentOperations.topicId, topicId),
+          this.ownership(),
+        ),
+      )
+      .limit(1);
+
+    return Boolean(row);
+  }
+
+  /**
    * Atomically retire an operation whose liveness lease has expired. A concurrent
    * heartbeat wins by moving updatedAt past staleBefore, preventing false recovery.
    */
-  async settleStaleRunning(operationId: string, staleBefore: Date): Promise<boolean> {
+  async settleStaleRunning(
+    operationId: string,
+    staleBefore: Date,
+    latestTotalCost?: number,
+  ): Promise<boolean> {
+    const totalCost =
+      latestTotalCost !== undefined && Number.isFinite(latestTotalCost)
+        ? Math.max(0, latestTotalCost)
+        : undefined;
     const [row] = await this.db
       .update(agentOperations)
       .set({
         completedAt: new Date(),
         completionReason: 'lease_expired',
         status: 'abandoned',
+        ...(totalCost === undefined
+          ? {}
+          : {
+              totalCost: sql`greatest(coalesce(${agentOperations.totalCost}, 0), ${totalCost})`,
+            }),
       })
       .where(
         and(
           eq(agentOperations.id, operationId),
           eq(agentOperations.status, 'running'),
           sql`${agentOperations.updatedAt} < ${staleBefore}`,
+          this.ownership(),
+        ),
+      )
+      .returning({ id: agentOperations.id });
+
+    return Boolean(row);
+  }
+
+  /**
+   * Atomically claim the next redrive attempt for an operation whose liveness
+   * lease has expired, so a stale step can be re-queued instead of stranding.
+   *
+   * The claim is the concurrency control for the whole reaper: the same
+   * predicate that selects a candidate also consumes it, so two overlapping
+   * sweeps (or two instances of one sweep) can never both re-queue the same
+   * step. Three guards ride in the WHERE clause rather than in the caller:
+   * - `status = 'running'` — a terminal op is nobody's business anymore.
+   * - `updatedAt < staleBefore` — a heartbeat that landed between the SELECT
+   *   and this UPDATE means the step is alive after all, and wins the race.
+   * - attempt budget — a step that dies deterministically (poison payload,
+   *   OOM) must stop costing LLM calls; when this predicate fails the caller
+   *   falls back to abandoning the op with a user-visible error.
+   *
+   * Writing `metadata` also bumps `updatedAt` via `$onUpdate`, which re-arms
+   * the lease: the redriven step gets a fresh stall window before the next
+   * sweep can look at it again, and no extra bookkeeping is needed to keep
+   * ticks from piling redrives onto an operation that is busy recovering.
+   *
+   * @returns the 1-based attempt number just claimed, or `null` when this
+   *   operation is not (or no longer) eligible.
+   */
+  async claimStaleRedrive(
+    operationId: string,
+    staleBefore: Date,
+    maxAttempts: number,
+  ): Promise<number | null> {
+    // `jsonb_build_object` and the bare comparison below both take `any`, so
+    // every parameter feeding them needs an explicit cast — Postgres cannot
+    // infer a placeholder's type from an `any` argument (42P18).
+    const attempts = sql`coalesce((${agentOperations.metadata} #>> '{staleRedrive,attempts}')::int, 0)`;
+
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({
+        metadata: sql`coalesce(${agentOperations.metadata}, '{}'::jsonb) || jsonb_build_object('staleRedrive', jsonb_build_object('attempts', ${attempts} + 1, 'lastAttemptAt', ${new Date().toISOString()}::text))`,
+      })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          eq(agentOperations.status, 'running'),
+          sql`${agentOperations.updatedAt} < ${staleBefore}`,
+          sql`${attempts} < ${maxAttempts}::int`,
+          this.ownership(),
+        ),
+      )
+      .returning({ metadata: agentOperations.metadata });
+
+    if (!row) return null;
+
+    const claimed = (row.metadata as { staleRedrive?: { attempts?: number } } | null)?.staleRedrive
+      ?.attempts;
+
+    return typeof claimed === 'number' ? claimed : null;
+  }
+
+  /**
+   * Give back an attempt claimed by {@link claimStaleRedrive} when the redrive
+   * it was claimed for never actually went out.
+   *
+   * The budget exists to bound LLM spend on a step that dies deterministically,
+   * so a delivery that failed to publish must not consume it — otherwise a
+   * brief queue outage walks an otherwise healthy operation to its attempt
+   * limit and retires it without a single recovery ever having been attempted.
+   *
+   * The claimed attempt number is checked in SQL so this can only ever undo
+   * *its own* increment: a concurrent sweep that claimed the next attempt in
+   * between moves the counter past `attempt` and this becomes a no-op.
+   * `updatedAt` is deliberately left where the claim moved it, so the release
+   * shortens no stall window — the next sweep still waits out a full lease.
+   */
+  async releaseStaleRedrive(operationId: string, attempt: number): Promise<boolean> {
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({
+        metadata: sql`jsonb_set(coalesce(${agentOperations.metadata}, '{}'::jsonb), '{staleRedrive,attempts}', to_jsonb(${attempt - 1}::int))`,
+      })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          sql`(${agentOperations.metadata} #>> '{staleRedrive,attempts}')::int = ${attempt}::int`,
           this.ownership(),
         ),
       )
@@ -317,6 +613,14 @@ export class AgentOperationModel {
     };
   }
 
+  /**
+   * Raw ownership-scoped lookup. Agent-share visitor runs execute under the
+   * CREATOR's identity, so this DOES return their operations — required by the
+   * agent runtime (execution, intervention, completion, verify, abandon), which
+   * has to resolve the operation it is currently driving no matter who started
+   * it. Creator-facing read entry points must use
+   * {@link AgentOperationModel.findOwnOperationById} instead.
+   */
   async findById(operationId: string) {
     const [row] = await this.db
       .select()
@@ -324,6 +628,95 @@ export class AgentOperationModel {
       .where(and(eq(agentOperations.id, operationId), this.ownership()))
       .limit(1);
     return row ?? null;
+  }
+
+  /** Batch lookup for callers that would otherwise issue one query per id. */
+  async findByIds(operationIds: string[]) {
+    if (operationIds.length === 0) return [];
+    return this.db
+      .select()
+      .from(agentOperations)
+      .where(and(inArray(agentOperations.id, operationIds), this.ownership()));
+  }
+
+  /**
+   * Creator-facing twin of {@link AgentOperationModel.findById}: excludes
+   * operations recorded inside an agent-share visitor topic, so a creator
+   * handed a raw visitor operation id gets nothing back instead of reading a
+   * visitor conversation's trajectory (e.g. via a pre-signed trace URL).
+   *
+   * Mirrors `TopicModel.findById` / `TopicModel.findOwnTopicById`.
+   */
+  async findOwnOperationById(operationId: string) {
+    const [row] = await this.db
+      .select()
+      .from(agentOperations)
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          this.ownership(),
+          notShareVisitorTopicRef(agentOperations.topicId),
+        ),
+      )
+      .limit(1);
+    return row ?? null;
+  }
+
+  /** Match a server-minted turn identity when a diagnostic dispatch receipt was lost. */
+  async findByTopicSourceMessage(topicId: string, sourceMessageId: string) {
+    const [operation] = await this.db
+      .select()
+      .from(agentOperations)
+      .where(
+        and(
+          this.ownership(),
+          eq(agentOperations.topicId, topicId),
+          sql`${agentOperations.appContext}->>'sourceMessageId' = ${sourceMessageId}`,
+        ),
+      )
+      .limit(1);
+    return operation;
+  }
+
+  /**
+   * Operations recorded for one topic, newest first — the lookup that turns a
+   * topic id (what a user actually has on hand) into the operation ids their
+   * traces are keyed by. `traceS3Key` rides along so callers can tell "no
+   * snapshot was recorded" apart from "snapshot exists but the fetch failed".
+   *
+   * Creator-facing only (the trace panel). Agent-share visitor runs execute
+   * under the CREATOR's identity, so their operation rows pass `ownership()`;
+   * without the visitor guard a creator could read a visitor conversation's
+   * full trajectory snapshot from a raw topic id.
+   */
+  async listByTopic(topicId: string, limit = 20) {
+    return this.db
+      .select({
+        agentId: agentOperations.agentId,
+        appContext: agentOperations.appContext,
+        createdAt: agentOperations.createdAt,
+        id: agentOperations.id,
+        model: agentOperations.model,
+        parentOperationId: agentOperations.parentOperationId,
+        provider: agentOperations.provider,
+        startedAt: agentOperations.startedAt,
+        status: agentOperations.status,
+        stepCount: agentOperations.stepCount,
+        totalCost: agentOperations.totalCost,
+        totalTokens: agentOperations.totalTokens,
+        traceS3Key: agentOperations.traceS3Key,
+        trigger: agentOperations.trigger,
+      })
+      .from(agentOperations)
+      .where(
+        and(
+          eq(agentOperations.topicId, topicId),
+          this.ownership(),
+          notShareVisitorTopicRef(agentOperations.topicId),
+        ),
+      )
+      .orderBy(sql`${agentOperations.createdAt} desc`)
+      .limit(limit);
   }
 
   /**

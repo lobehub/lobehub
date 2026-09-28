@@ -7,6 +7,7 @@ export const HOME_INBOX_WIDGET_KEYS = [
   'unread',
   'running',
   'news',
+  'usage',
   'suggestions',
 ] as const;
 
@@ -39,7 +40,7 @@ export type HomeWidgetKey = (typeof HOME_WIDGET_KEYS)[number];
 export const HOME_WIDGET_GROUPS = [
   { key: 'agent', widgets: ['unread', 'needsYou', 'running', 'recents'] },
   { key: 'task', widgets: ['tasks', 'scheduledTasks'] },
-  { key: 'rail', widgets: ['goals', 'news', 'suggestions'] },
+  { key: 'rail', widgets: ['goals', 'news', 'usage', 'suggestions'] },
 ] as const satisfies ReadonlyArray<{ key: string; widgets: readonly HomeWidgetKey[] }>;
 
 export type HomeWidgetGroupKey = (typeof HOME_WIDGET_GROUPS)[number]['key'];
@@ -83,6 +84,16 @@ interface HomeVisibilityState {
 }
 
 /**
+ * `usage` is a business-slot widget (`useHomeUsageWidgetActive`): deployments
+ * without it must not count the key anywhere — not in the customize panel, not
+ * in preset/minimal math, not in "can the rail host anything". Otherwise a key
+ * the viewer can neither see nor toggle breaks their stored minimal/full
+ * preset the day it ships.
+ */
+export const effectiveHomeWidgetKeys = (usageActive: boolean): readonly HomeWidgetKey[] =>
+  usageActive ? HOME_WIDGET_KEYS : HOME_WIDGET_KEYS.filter((key) => key !== 'usage');
+
+/**
  * `scheduledTasks` rides on `tasks`: the two are one task overview split in
  * half, so switching the main list off must not leave the other half standing
  * under a different heading. It also keeps settings saved before this key
@@ -93,19 +104,26 @@ interface HomeVisibilityState {
 export const isHomeWidgetHidden = (key: HomeWidgetKey, hiddenWidgets: string[]): boolean =>
   hiddenWidgets.includes(key) || (key === 'scheduledTasks' && hiddenWidgets.includes('tasks'));
 
-const hiddenKeySet = ({ hiddenWidgets }: HomeVisibilityState): Set<string> =>
-  new Set(HOME_WIDGET_KEYS.filter((key) => isHomeWidgetHidden(key, hiddenWidgets)));
+const hiddenKeySet = ({ hiddenWidgets }: HomeVisibilityState, usageActive: boolean): Set<string> =>
+  new Set(
+    effectiveHomeWidgetKeys(usageActive).filter((key) => isHomeWidgetHidden(key, hiddenWidgets)),
+  );
 
-export const resolveHomePreset = (state: HomeVisibilityState): HomePresetKey | undefined => {
-  const hidden = hiddenKeySet(state);
+export const resolveHomePreset = (
+  state: HomeVisibilityState,
+  usageActive = false,
+): HomePresetKey | undefined => {
+  const hidden = hiddenKeySet(state, usageActive);
+  const available = new Set<string>(effectiveHomeWidgetKeys(usageActive));
 
   return HOME_PRESET_KEYS.find((key) => {
     const preset = HOME_PRESETS[key];
+    const presetHidden = preset.hiddenWidgets.filter((widget) => available.has(widget));
 
     return (
       preset.showPortrait === state.showPortrait &&
-      preset.hiddenWidgets.length === hidden.size &&
-      preset.hiddenWidgets.every((widget) => hidden.has(widget))
+      presetHidden.length === hidden.size &&
+      presetHidden.every((widget) => hidden.has(widget))
     );
   });
 };
@@ -113,9 +131,9 @@ export const resolveHomePreset = (state: HomeVisibilityState): HomePresetKey | u
 // Nothing is left to stack under the composer, so the page stops being a
 // dashboard: the greeting and the composer become one centered block. Derived
 // from the switches rather than stored, so it can never disagree with them.
-export const isHomeMinimalLayout = (state: HomeVisibilityState): boolean =>
+export const isHomeMinimalLayout = (state: HomeVisibilityState, usageActive = false): boolean =>
   !state.showPortrait &&
-  HOME_WIDGET_KEYS.every((key) => isHomeWidgetHidden(key, state.hiddenWidgets));
+  effectiveHomeWidgetKeys(usageActive).every((key) => isHomeWidgetHidden(key, state.hiddenWidgets));
 
 // An error banner covers every widget whose content it reports on, not just the
 // one it is named after: the topic feed powers unread AND running, and the briefs

@@ -3,6 +3,7 @@ import { lazy } from 'react';
 
 import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layout';
 import { GroupProfileRouteSkeleton } from '@/components/Skeleton/Profile';
+import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import { routeMeta } from '@/spa/router/routeMeta';
 
 const GroupDynamicMeta = lazy(() => import('@/features/RouteMeta/GroupDynamicMeta'));
@@ -34,5 +35,6 @@ export const groupProfileRouteMeta = routeMeta({
 export const groupPermissionRouteMeta = routeMeta({
   DynamicMeta: GroupPermissionDynamicMeta,
   icon: UsersIcon,
+  Skeleton: createSurfaceSkeleton('form'),
   titleKey: 'navigation.permission',
 });

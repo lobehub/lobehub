@@ -25,29 +25,14 @@ vi.mock('@lobechat/const', () => ({
   isDesktop: true,
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  Flexbox: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-  Icon: () => null,
-  Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
-}));
-
-vi.mock('@lobehub/ui/icons', () => ({
-  GroupBotSquareIcon: () => null,
-}));
-
-vi.mock('antd', () => ({
+vi.mock('antd', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   App: {
     useApp: () => ({
       message: { error: messageErrorMock },
       notification: { error: vi.fn() },
     }),
   },
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
 }));
 
 vi.mock('react-router', () => ({

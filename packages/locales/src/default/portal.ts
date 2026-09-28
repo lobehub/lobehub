@@ -1,4 +1,5 @@
 export default {
+  'FilePreview.actions.download': 'Download source file',
   'FilePreview.tabs.chunk': 'Chunk',
   'FilePreview.tabs.file': 'File',
   'Plugins': 'Skills',
@@ -13,8 +14,12 @@ export default {
   'artifacts.deploy.confirm.title': 'Before you publish this artifact',
   'artifacts.deploy.failed': 'Deployment failed',
   'artifacts.deploy.history': 'Revision history',
+  'artifacts.deploy.highestPlanCapacityLimitReached':
+    'Current self-service deployment capacity has been reached. Manage published projects or reduce deployment usage.',
   'artifacts.deploy.highestPlanLimitReached':
     'Public deployment limit reached ({{used}} / {{limit}}). Unpublish a project to free a slot.',
+  'artifacts.deploy.highestPlanSizeLimitReached':
+    'This site is {{actual}}, above the {{limit}} self-service limit. Reduce its assets before publishing.',
   'artifacts.deploy.limitReached':
     'Public deployment limit reached ({{used}} / {{limit}}). Unpublish a project or upgrade your plan.',
   'artifacts.deploy.open': 'Open deployment',
@@ -23,6 +28,8 @@ export default {
   'artifacts.deploy.publishNewVersion': 'Publish this version',
   'artifacts.deploy.quotaUnavailable':
     'Deployment quota validation is temporarily unavailable. Try again later.',
+  'artifacts.deploy.serviceOverloaded':
+    'Artifact hosting is temporarily overloaded. Try publishing again shortly.',
   'artifacts.deploy.success': 'Published',
   'artifacts.deploy.writeInProgress':
     'Another deployment change is in progress. Try again shortly.',
@@ -31,12 +38,24 @@ export default {
   'artifacts.svg.copySuccess': 'Image copied successfully',
   'artifacts.svg.download.png': 'Download as PNG',
   'artifacts.svg.download.svg': 'Download as SVG',
+  'document.saveConflict': 'This document was updated elsewhere. Refreshing to the latest version.',
   'document.todos.allCompleted': 'All tasks completed',
   'document.todos.title': 'Tasks',
   'emptyArtifactList': 'No Artifacts yet. Use Skills in the conversation, then come back here.',
   'emptyKnowledgeList': 'This list is empty.',
   'files': 'Files',
   'messageDetail': 'Message Details',
+  'moreMenu.copyId': 'Copy ID',
+  'moreMenu.copyIdSuccess': 'ID copied',
+  'moreMenu.copyLink': 'Copy link',
+  'moreMenu.copyLinkSuccess': 'Link copied',
+  'moreMenu.copyPath': 'Copy path',
+  'moreMenu.copyPathSuccess': 'Path copied',
+  'moreMenu.delete': 'Delete',
+  'moreMenu.openInPage': 'Open in page',
+  'moreMenu.refresh': 'Refresh',
+  'moreMenu.rename': 'Rename',
+  'moreMenu.trigger': 'More actions',
   'notebook.confirmDelete': 'Delete this Page?',
   'notebook.delete': 'Delete',
   'notebook.empty': 'No pages yet. Pages linked to this Topic will show up here.',

@@ -1,3 +1,3 @@
 'use client';
 
-export { AcceptanceEmptyDetail as default } from '@/features/Verify';
+export { AcceptanceEmptyDetail as default } from '@/features/Acceptance';

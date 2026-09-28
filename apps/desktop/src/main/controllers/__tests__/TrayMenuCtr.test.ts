@@ -20,14 +20,6 @@ vi.mock('electron', () => ({
   },
 }));
 
-// Mock logger
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-  }),
-}));
-
 // Save the original platform to restore after all tests complete
 const originalPlatform = process.platform;
 

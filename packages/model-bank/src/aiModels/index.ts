@@ -38,6 +38,7 @@ import { default as jina } from './jina';
 import { default as kimicodingplan } from './kimiCodingPlan';
 import { default as lmstudio } from './lmstudio';
 import { default as longcat } from './longcat';
+import { default as meta } from './meta';
 import { default as minimax } from './minimax';
 import { default as minimaxcodingplan } from './minimaxCodingPlan';
 import { default as mistral } from './mistral';
@@ -70,6 +71,7 @@ import { default as supergrok } from './superGrok';
 import { default as taichu } from './taichu';
 import { default as tencentcloud } from './tencentcloud';
 import { default as togetherai } from './togetherai';
+import { default as unsloth } from './unsloth';
 import { default as upstage } from './upstage';
 import { default as v0 } from './v0';
 import { default as vercelaigateway } from './vercelaigateway';
@@ -148,6 +150,7 @@ const staticModelMap: ModelsMap = {
   kimicodingplan,
   lmstudio,
   longcat,
+  meta,
   minimax,
   minimaxcodingplan,
   mistral,
@@ -180,6 +183,7 @@ const staticModelMap: ModelsMap = {
   taichu,
   tencentcloud,
   togetherai,
+  unsloth,
   upstage,
   v0,
   vercelaigateway,
@@ -264,6 +268,7 @@ export { default as jina } from './jina';
 export { default as kimicodingplan } from './kimiCodingPlan';
 export { default as lmstudio } from './lmstudio';
 export { default as longcat } from './longcat';
+export { default as meta } from './meta';
 export { default as minimax } from './minimax';
 export { default as minimaxcodingplan } from './minimaxCodingPlan';
 export { default as mistral } from './mistral';
@@ -296,6 +301,7 @@ export { default as supergrok } from './superGrok';
 export { default as taichu } from './taichu';
 export { default as tencentcloud } from './tencentcloud';
 export { default as togetherai } from './togetherai';
+export { default as unsloth } from './unsloth';
 export { default as upstage } from './upstage';
 export { default as v0 } from './v0';
 export { default as vercelaigateway } from './vercelaigateway';

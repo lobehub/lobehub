@@ -1,11 +1,10 @@
 'use client';
 
 import { type UserCredSummary } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
+import { Empty, Flexbox } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { useMutation } from '@tanstack/react-query';
 import { TRPCClientError } from '@trpc/client';
-import { Empty } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { LogIn } from 'lucide-react';
 import { type FC } from 'react';
@@ -16,9 +15,10 @@ import ListSkeleton from '@/components/ListSkeleton';
 import { usePermission } from '@/hooks/usePermission';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 
+import { credsApiForRow, isActionableCredRow } from './credAccess';
 import CredItem from './CredItem';
 import { createEditCredModal } from './EditCredModal';
-import { useCredsApi } from './useCredsApi';
+import { defaultCredsApi, useCredsApi } from './useCredsApi';
 import { createViewCredModal } from './ViewCredModal';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -44,36 +44,46 @@ const styles = createStaticStyles(({ css }) => ({
 
 const CredsList: FC = () => {
   const { t } = useTranslation('setting');
-  const { isAuthenticated, isLoading: isAuthLoading, signIn } = useMarketAuth();
+  const { isAuthenticated, isLoading: isAuthLoading, session, signIn } = useMarketAuth();
   const { allowed: canManageCredentials } = usePermission('manage_provider_key');
   const credsApi = useCredsApi();
+  const myAccountId = session?.userInfo?.accountId;
 
   const { data, error, isLoading, refetch } = credsApi.query.list.useQuery(undefined, {
     enabled: isAuthenticated,
   });
 
+  const credentials = data?.data ?? [];
+
+  // See credAccess.ts for the ownership/routing rules this applies.
+  const isActionable = (cred: UserCredSummary) => isActionableCredRow(cred, myAccountId);
+  const apiFor = (cred: UserCredSummary) =>
+    credsApiForRow(cred, myAccountId, credsApi, defaultCredsApi);
+
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
       if (!canManageCredentials) return;
-      await credsApi.client.delete.mutate({ id });
+      const cred = credentials.find((c) => c.id === id);
+      if (!cred || !isActionable(cred)) return;
+      await apiFor(cred).client.delete.mutate({ id });
     },
     onSuccess: () => {
       refetch();
     },
   });
 
-  const credentials = data?.data ?? [];
-
   const handleEdit = (cred: UserCredSummary) => {
+    if (!isActionable(cred)) return;
     createEditCredModal({
       cred,
-      credsApi,
+      credsApi: apiFor(cred),
       onSuccess: () => refetch(),
     });
   };
 
   const handleView = (cred: UserCredSummary) => {
-    createViewCredModal({ cred, credsApi });
+    if (!isActionable(cred)) return;
+    createViewCredModal({ cred, credsApi: apiFor(cred) });
   };
 
   if (isAuthLoading) {
@@ -113,18 +123,23 @@ const CredsList: FC = () => {
         onRetry={() => refetch()}
       >
         <Flexbox gap={0}>
-          {credentials.map((cred) => (
-            <CredItem
-              cred={cred}
-              key={cred.id}
-              onDelete={(id) => deleteMutation.mutate(id)}
-              onView={handleView}
-              onEdit={(cred) => {
-                if (!canManageCredentials) return;
-                handleEdit(cred);
-              }}
-            />
-          ))}
+          {credentials.map((cred) => {
+            // Another member's shared row: no endpoint this UI can reach for
+            // it (see the isActionable doc comment above) — omit the action
+            // handlers entirely so CredItem renders the row with no "..."
+            // menu / view button, instead of a menu whose actions silently
+            // no-op.
+            const actionable = isActionable(cred);
+            return (
+              <CredItem
+                cred={cred}
+                key={cred.id}
+                onDelete={actionable ? (id) => deleteMutation.mutate(id) : undefined}
+                onEdit={actionable && canManageCredentials ? (cred) => handleEdit(cred) : undefined}
+                onView={actionable ? handleView : undefined}
+              />
+            );
+          })}
         </Flexbox>
       </AsyncBoundary>
     </div>

@@ -1,6 +1,5 @@
 import { type BarChartProps } from '@lobehub/charts';
-import { Skeleton } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
+import { Skeleton, Tabs } from '@lobehub/ui/base-ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -130,7 +129,7 @@ const UsageTrends = memo<UsageChartProps>(({ isLoading, data, groupBy, resolveUs
         />
       }
     >
-      {isLoading ? <Skeleton.Block height={280} /> : charts}
+      {isLoading ? <Skeleton height={280} /> : charts}
     </StatsFormGroup>
   );
 });

@@ -1,3 +1,4 @@
+import assetLinks from '@/../public/.well-known/assetlinks.json';
 import { appEnv } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
 import { getRedisConfig } from '@/envs/redis';
@@ -5,6 +6,8 @@ import { initializeRedis, isRedisEnabled } from '@/libs/redis';
 import { isDev } from '@/utils/env';
 
 const APPLE_TRUSTED_ORIGIN = 'https://appleid.apple.com';
+const ANDROID_APP_NAMESPACE = 'android_app';
+const ANDROID_PASSKEY_RELATION = 'delegate_permission/common.get_login_creds';
 const MOBILE_APP_SCHEME = 'com.lobehub.app://';
 const EXPO_DEV_SCHEME = 'exp://*/*';
 
@@ -29,23 +32,65 @@ export const normalizeOrigin = (url?: string) => {
   }
 };
 
+const parseTrustedOrigins = (value?: string) =>
+  value
+    ?.split(',')
+    .map((item) => normalizeOrigin(item.trim()))
+    .filter((origin): origin is string => Boolean(origin));
+
+const mergeOrigins = (...originGroups: Array<string[] | undefined>) => {
+  const mergedOrigins = new Set(originGroups.flatMap((origins) => origins ?? []));
+
+  return mergedOrigins.size > 0 ? Array.from(mergedOrigins) : undefined;
+};
+
+const fingerprintToAndroidOrigin = (fingerprint: string) => {
+  const hex = fingerprint.replaceAll(':', '');
+  if (!/^[\dA-F]{64}$/i.test(hex)) return undefined;
+
+  return `android:apk-key-hash:${Buffer.from(hex, 'hex').toString('base64url')}`;
+};
+
+const getAndroidPasskeyOrigins = () =>
+  assetLinks.flatMap(({ relation, target }) => {
+    if (
+      target.namespace !== ANDROID_APP_NAMESPACE ||
+      !relation.includes(ANDROID_PASSKEY_RELATION)
+    ) {
+      return [];
+    }
+
+    return target.sha256_cert_fingerprints
+      .map(fingerprintToAndroidOrigin)
+      .filter((origin): origin is string => Boolean(origin));
+  });
+
 /**
- * Build trusted origins with env override and Vercel-aware defaults.
+ * Build the exact WebAuthn origins accepted by the passkey plugin.
+ *
+ * Android Credential Manager derives its origin from the APK signing certificate. The public
+ * Digital Asset Links file is already the source of truth for certificates authorized to use
+ * LobeHub credentials, so keep Better Auth's allowlist in sync with it instead of duplicating
+ * hashes in deployment configuration.
+ */
+export const getPasskeyOrigins = () => {
+  const webOrigin = normalizeOrigin(appEnv.APP_URL);
+  if (!webOrigin) return undefined;
+
+  return mergeOrigins([webOrigin], getAndroidPasskeyOrigins());
+};
+
+/**
+ * Build trusted origins with Vercel-aware defaults and optional additions.
+ * AUTH_TRUSTED_ORIGINS keeps its replacement semantics, while
+ * AUTH_ADDITIONAL_TRUSTED_ORIGINS is merged into either the override or the defaults.
  */
 export const getTrustedOrigins = (enabledSSOProviders: string[]) => {
-  if (authEnv.AUTH_TRUSTED_ORIGINS) {
-    const originsFromEnv = authEnv.AUTH_TRUSTED_ORIGINS.split(',')
-      .map((item) => {
-        const trimmed = item.trim();
-        // Handle custom schemes directly
-        if (trimmed.includes('://') && !trimmed.startsWith('http')) {
-          return trimmed;
-        }
-        return normalizeOrigin(trimmed);
-      })
-      .filter(Boolean) as string[];
+  const additionalOrigins = parseTrustedOrigins(authEnv.AUTH_ADDITIONAL_TRUSTED_ORIGINS);
+  const originsFromEnv = parseTrustedOrigins(authEnv.AUTH_TRUSTED_ORIGINS);
 
-    if (originsFromEnv.length > 0) return Array.from(new Set(originsFromEnv));
+  if (originsFromEnv?.length) {
+    return mergeOrigins(originsFromEnv, additionalOrigins);
   }
 
   const defaults = [
@@ -57,14 +102,11 @@ export const getTrustedOrigins = (enabledSSOProviders: string[]) => {
     ...(isDev ? [EXPO_DEV_SCHEME] : []),
   ].filter(Boolean) as string[];
 
-  const baseTrustedOrigins = defaults.length > 0 ? Array.from(new Set(defaults)) : undefined;
+  const providerOrigins = enabledSSOProviders.includes('apple')
+    ? [APPLE_TRUSTED_ORIGIN]
+    : undefined;
 
-  if (!enabledSSOProviders.includes('apple')) return baseTrustedOrigins;
-
-  const mergedOrigins = new Set(baseTrustedOrigins || []);
-  mergedOrigins.add(APPLE_TRUSTED_ORIGIN);
-
-  return Array.from(mergedOrigins);
+  return mergeOrigins(defaults, providerOrigins, additionalOrigins);
 };
 
 /**

@@ -2,8 +2,8 @@
 
 import { DEFAULT_AVATAR } from '@lobechat/const';
 import { agentDisplayName, type SidebarAgentItem } from '@lobechat/types';
-import { Avatar, Center, Empty, Flexbox, Icon, SearchBar, Text, Tooltip } from '@lobehub/ui';
-import { Button, DropdownMenu, Segmented, toast } from '@lobehub/ui/base-ui';
+import { Center, Empty, Flexbox, Icon, SearchBar, Tooltip } from '@lobehub/ui';
+import { Avatar, Button, DropdownMenu, Segmented, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';

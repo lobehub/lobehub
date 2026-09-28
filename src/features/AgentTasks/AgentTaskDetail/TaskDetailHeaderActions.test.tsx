@@ -35,32 +35,27 @@ const mocks = vi.hoisted(() => ({
   updateTaskVisibility: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  ActionIcon: ({ title }: { title?: string }) => <button type="button">{title}</button>,
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   DropdownMenu: ({ children, items }: { children?: ReactNode; items: MenuItem[] }) => {
     mocks.dropdownItems = items;
     return <>{children}</>;
   },
-  Icon: () => <span />,
   copyToClipboard: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   confirmModal: (opts: unknown) => mocks.confirmModal(opts),
 }));
 
-vi.mock('antd', () => ({
+vi.mock('antd', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   App: {
     useApp: () => ({
       message: { success: mocks.messageSuccess },
     }),
   },
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
 }));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
@@ -99,10 +94,6 @@ vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
 
 vi.mock('@/hooks/useAppOrigin', () => ({
   useAppOrigin: () => 'https://example.com',
-}));
-
-vi.mock('@/hooks/usePermission', () => ({
-  usePermission: () => ({ allowed: true }),
 }));
 
 vi.mock('@/store/task', () => ({

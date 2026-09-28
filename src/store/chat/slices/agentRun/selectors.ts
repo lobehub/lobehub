@@ -58,6 +58,15 @@ const isSendMessageLoadingForTopic = (topicKey: string) => (s: ChatStoreState) =
   });
 };
 
+const gatewayFeed = (s: ChatStoreState) => s.gatewayFeed;
+
+const gatewayFeedEntry = (operationId: string) => (s: ChatStoreState) => s.gatewayFeed[operationId];
+
+export const gatewayFeedSelectors = {
+  gatewayFeed,
+  gatewayFeedEntry,
+};
+
 export const agentRunSelectors = {
   isCurrentSendMessageError,
   isCurrentSendMessageLoading,

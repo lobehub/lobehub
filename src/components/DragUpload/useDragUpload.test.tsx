@@ -12,9 +12,10 @@ import { getContainer, useDragUpload } from './useDragUpload';
 // Mock the hooks and components
 vi.mock('@/hooks/useMediaUploadAbility');
 vi.mock('@/store/agent');
-vi.mock('@lobehub/ui/base-ui', () => {
-  return { toast: { warning: vi.fn() } };
-});
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ...(await import('~base-ui-stubs')).baseUiStubs,
+}));
 
 describe('useDragUpload', () => {
   let mockOnUploadFiles: Mock;

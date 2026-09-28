@@ -1,4 +1,14 @@
-import { AccordionItem, ActionIcon, Text, Tooltip } from '@lobehub/ui';
+import { Tooltip } from '@lobehub/ui';
+import {
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
+  accordionStyles,
+  AccordionTrigger,
+  ActionIcon,
+  Text,
+} from '@lobehub/ui/base-ui';
+import { cx } from 'antd-style';
 import { PlusIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -36,18 +46,26 @@ const SidebarBody = memo<{ itemKey: string }>(({ itemKey }) => {
   );
 
   return (
-    <AccordionItem
-      action={canCreate ? createButton : <Tooltip title={reason}>{createButton}</Tooltip>}
-      itemKey={itemKey}
-      paddingBlock={4}
-      paddingInline={'8px 4px'}
-      title={
-        <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-          {t('library.title')}
-        </Text>
-      }
-    >
-      <LibraryList />
+    <AccordionItem value={itemKey}>
+      <AccordionHeader>
+        <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
+          <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
+            {t('library.title')}
+          </Text>
+        </AccordionTrigger>
+        <div
+          className={cx(
+            'accordion-action',
+            accordionStyles.action,
+            accordionStyles.actionBorderless,
+          )}
+        >
+          {canCreate ? createButton : <Tooltip title={reason}>{createButton}</Tooltip>}
+        </div>
+      </AccordionHeader>
+      <AccordionPanel>
+        <LibraryList />
+      </AccordionPanel>
     </AccordionItem>
   );
 });

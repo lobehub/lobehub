@@ -5,6 +5,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PageAgentIdentifier } from '../../types';
 import { PageAgentExecutor } from './index';
 
+const { getDocumentStoreState, invalidateDocumentMutation } = vi.hoisted(() => ({
+  getDocumentStoreState: vi.fn(),
+  invalidateDocumentMutation: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('@/services/document/invalidation', () => ({ invalidateDocumentMutation }));
+vi.mock('@/store/document', () => ({ getDocumentStoreState }));
+
 describe('PageAgentExecutor', () => {
   let executor: PageAgentExecutor;
   let mockRuntime: EditorRuntime;
@@ -12,8 +20,9 @@ describe('PageAgentExecutor', () => {
 
   beforeEach(() => {
     // Create mock runtime with all methods
+    invalidateDocumentMutation.mockClear();
+    getDocumentStoreState.mockClear();
     mockRuntime = {
-      applyServerSnapshot: vi.fn(),
       editTitle: vi.fn(),
       getCurrentDocId: vi.fn(() => 'doc-123'),
       getDebugSnapshot: vi.fn(() => ({})),
@@ -304,8 +313,9 @@ describe('PageAgentExecutor', () => {
   });
 
   describe('onAfterCall', () => {
-    it('should ignore read-only getPageContent state without a document snapshot', async () => {
+    it('ignores read-only getPageContent even though its state carries the documentId', async () => {
       await executor.onAfterCall({
+        apiName: 'getPageContent',
         result: {
           state: {
             documentId: 'doc-123',
@@ -317,25 +327,32 @@ describe('PageAgentExecutor', () => {
         },
       } as any);
 
-      expect(mockRuntime.applyServerSnapshot).not.toHaveBeenCalled();
+      expect(invalidateDocumentMutation).not.toHaveBeenCalled();
     });
 
-    it('should apply server snapshots when a mutating tool returns document content', async () => {
-      await executor.onAfterCall({
-        result: {
-          state: {
-            documentContent: '# Updated',
-            documentId: 'doc-123',
+    it.each(['initPage', 'editTitle', 'modifyNodes', 'replaceText'])(
+      'revalidates the written document after %s instead of pushing the snapshot into the editor',
+      async (apiName) => {
+        await executor.onAfterCall({
+          apiName,
+          result: {
+            state: { documentContent: '# Updated', documentId: 'doc-123' },
+            success: true,
           },
-          success: true,
-        },
+        } as any);
+
+        expect(invalidateDocumentMutation).toHaveBeenCalledWith({ documentId: 'doc-123' });
+        expect(getDocumentStoreState).not.toHaveBeenCalled();
+      },
+    );
+
+    it('skips failed calls', async () => {
+      await executor.onAfterCall({
+        apiName: 'modifyNodes',
+        result: { state: { documentId: 'doc-123' }, success: false },
       } as any);
 
-      expect(mockRuntime.applyServerSnapshot).toHaveBeenCalledWith({
-        content: '# Updated',
-        editorData: undefined,
-        title: undefined,
-      });
+      expect(invalidateDocumentMutation).not.toHaveBeenCalled();
     });
   });
 

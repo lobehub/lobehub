@@ -4,6 +4,7 @@ import {
   EXPERTISE_DOMAIN_DRAFT_JSON_SCHEMA,
   EXPERTISE_DOMAIN_DRAFT_PROMPT_VERSION,
 } from '@lobechat/prompts';
+import { RequestTrigger } from '@lobechat/types';
 import { z } from 'zod';
 
 import { ExpertiseModel } from '@/database/models/expertise';
@@ -97,7 +98,7 @@ export class ExpertiseDomainService {
           schema: EXPERTISE_DOMAIN_DRAFT_JSON_SCHEMA,
         },
         {
-          metadata: { trigger: 'expertise_domain_draft' },
+          metadata: { trigger: RequestTrigger.Expertise },
           tracing: {
             agentId: input.agentId,
             promptVersion: EXPERTISE_DOMAIN_DRAFT_PROMPT_VERSION,
@@ -112,9 +113,9 @@ export class ExpertiseDomainService {
   /** Persists a reviewed draft as the chosen anchor. The user has seen and possibly edited every field by now. */
   create = async (input: DomainDraft & { agentId: string; brief: string }) =>
     new ExpertiseModel(this.db, this.userId, this.workspaceId).createDomain({
-      agentId: input.agentId,
       brief: input.brief,
       canonEntries: input.canonEntries,
+      carrier: { id: input.agentId, type: 'agent' },
       domainFilter: input.domainFilter,
       layerCanonRef: input.layerCanonRef ?? undefined,
       layers: input.layers.map((l) => ({

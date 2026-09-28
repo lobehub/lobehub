@@ -1,6 +1,7 @@
 'use client';
 
-import { Block, Empty, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { Block, Empty, Flexbox, Icon } from '@lobehub/ui';
+import { Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { MessagesSquare } from 'lucide-react';
 import { memo } from 'react';

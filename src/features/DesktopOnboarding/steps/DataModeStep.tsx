@@ -1,7 +1,7 @@
 'use client';
 
-import { Block, Empty, Flexbox, Text } from '@lobehub/ui';
-import { Button, Checkbox } from '@lobehub/ui/base-ui';
+import { Block, Empty, Flexbox } from '@lobehub/ui';
+import { Button, Checkbox, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { HeartHandshake, Undo2Icon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
@@ -70,7 +70,7 @@ const DataModeStep = memo<DataModeStepProps>(({ onBack, onNext }) => {
           <Empty
             description={t('screen4.share.description')}
             icon={HeartHandshake}
-            padding={0}
+            style={{ padding: 0 }}
             title={t('screen4.share.title')}
             type={'page'}
             descriptionProps={{

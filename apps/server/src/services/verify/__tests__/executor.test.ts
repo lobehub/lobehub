@@ -22,38 +22,56 @@ vi.mock('@lobechat/model-runtime', () => ({
   getModelPropertyWithFallback: vi.fn(async () => ({ vision: false })),
 }));
 vi.mock('@/database/models/aiModel', () => ({
-  AiModelModel: vi.fn(() => ({ findByIdAndProvider: mocks.aiModelFind })),
+  AiModelModel: vi.fn(function () {
+    return { findByIdAndProvider: mocks.aiModelFind };
+  }),
 }));
 vi.mock('@/database/models/document', () => ({
-  DocumentModel: vi.fn(() => ({ findById: vi.fn(), findByIds: mocks.documentFindByIds })),
+  DocumentModel: vi.fn(function () {
+    return { findById: vi.fn(), findByIds: mocks.documentFindByIds };
+  }),
 }));
 vi.mock('@/database/models/file', () => ({
-  FileModel: vi.fn(() => ({ findById: mocks.fileFindById })),
+  FileModel: vi.fn(function () {
+    return { findById: mocks.fileFindById };
+  }),
 }));
 vi.mock('@/database/models/verifyEvidence', () => ({
-  VerifyEvidenceModel: vi.fn(() => ({ listByRun: mocks.evidenceListByRun })),
+  VerifyEvidenceModel: vi.fn(function () {
+    return { listByRun: mocks.evidenceListByRun };
+  }),
 }));
 vi.mock('@/database/models/verifyCheckResult', () => ({
-  VerifyCheckResultModel: vi.fn(() => ({
-    createMany: mocks.resultCreateMany,
-    listByRun: mocks.resultListByRun,
-    updateByCheckItem: mocks.resultUpdateByCheckItem,
-  })),
+  VerifyCheckResultModel: vi.fn(function () {
+    return {
+      createMany: mocks.resultCreateMany,
+      listByRun: mocks.resultListByRun,
+      updateByCheckItem: mocks.resultUpdateByCheckItem,
+    };
+  }),
 }));
 vi.mock('@/database/models/verifyRun', () => ({
-  VerifyRunModel: vi.fn(() => ({ ensureForOperation: mocks.runEnsureForOperation })),
+  VerifyRunModel: vi.fn(function () {
+    return { ensureForOperation: mocks.runEnsureForOperation };
+  }),
 }));
 vi.mock('@/server/services/aiGeneration', () => ({
-  AiGenerationService: vi.fn(() => ({ generateObject: mocks.aiGenerateObject })),
+  AiGenerationService: vi.fn(function () {
+    return { generateObject: mocks.aiGenerateObject };
+  }),
 }));
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn(() => ({ getFileAccessUrl: mocks.fileAccessUrl })),
+  FileService: vi.fn(function () {
+    return { getFileAccessUrl: mocks.fileAccessUrl };
+  }),
 }));
 vi.mock('../statusService', () => ({
-  VerifyStatusService: vi.fn(() => ({
-    markVerifying: mocks.statusMarkVerifying,
-    recompute: mocks.statusRecompute,
-  })),
+  VerifyStatusService: vi.fn(function () {
+    return {
+      markVerifying: mocks.statusMarkVerifying,
+      recompute: mocks.statusRecompute,
+    };
+  }),
 }));
 
 describe('VerifyExecutorService', () => {

@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App as AppCore } from '../../App';
@@ -17,15 +18,6 @@ const { mockScreen } = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({
   screen: mockScreen,
-}));
-
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
 }));
 
 describe('WindowStateManager', () => {
@@ -163,8 +155,8 @@ describe('WindowStateManager', () => {
 
   describe('createCloseHandler', () => {
     let mockBrowserWindow: any;
-    let onCleanup: ReturnType<typeof vi.fn>;
-    let onHide: ReturnType<typeof vi.fn>;
+    let onCleanup: Mock<() => void>;
+    let onHide: Mock<() => void>;
 
     beforeEach(() => {
       mockBrowserWindow = {

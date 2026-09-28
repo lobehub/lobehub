@@ -1,4 +1,5 @@
-import { Avatar, Center, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Center, Flexbox, Icon } from '@lobehub/ui';
+import { Avatar, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { InboxIcon } from 'lucide-react';

@@ -11,19 +11,19 @@ import {
 describe('estimateChatCost', () => {
   describe('estimateChatOutputTokens', () => {
     it('applies the output ratio below the cap', () => {
-      expect(estimateChatOutputTokens(4000)).toBe(2000);
-      expect(estimateChatOutputTokens(1000)).toBe(500);
+      expect(estimateChatOutputTokens(4000)).toBe(400);
+      expect(estimateChatOutputTokens(1000)).toBe(100);
     });
 
     it('uses 8192 as the fallback cap for large inputs', () => {
-      expect(estimateChatOutputTokens(20_000)).toBe(8192);
+      expect(estimateChatOutputTokens(100_000)).toBe(8192);
       expect(estimateChatOutputTokens(1_000_000)).toBe(8192);
     });
 
     it('uses the effective request or model cap when provided', () => {
-      expect(estimateChatOutputTokens(40_000, 32_000)).toBe(20_000);
-      expect(estimateChatOutputTokens(40_000, 12_000)).toBe(12_000);
-      expect(estimateChatOutputTokens(40_000, 4096)).toBe(4096);
+      expect(estimateChatOutputTokens(400_000, 32_000)).toBe(32_000);
+      expect(estimateChatOutputTokens(400_000, 12_000)).toBe(12_000);
+      expect(estimateChatOutputTokens(400_000, 4096)).toBe(4096);
     });
   });
 
@@ -207,7 +207,7 @@ describe('estimateChatCost', () => {
 
       const estimate = estimateChatCostFromTokens(pricing, {
         maxOutputTokens: 12_000,
-        textTokens: 40_000,
+        textTokens: 200_000,
       });
 
       expect(estimate?.estimatedOutputTokens).toBe(12_000);
@@ -288,7 +288,7 @@ describe('estimateChatCost', () => {
 
       const estimate = estimateChatCostFromMessages(
         pricing,
-        [{ content: 'hello world', role: 'user' }],
+        [{ content: 'hello world '.repeat(100), role: 'user' }],
         { maxOutputTokens: 1 },
       );
 

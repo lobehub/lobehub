@@ -1,3 +1,4 @@
+import * as managedProcess from '@lobechat/utils/managedProcess';
 import { app as electronApp, ipcMain } from 'electron';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -25,6 +26,7 @@ vi.mock('electron', () => ({
       setIcon: vi.fn(),
     },
     exit: vi.fn(),
+    quit: vi.fn(),
   },
   ipcMain: {
     handle: vi.fn(),
@@ -49,16 +51,6 @@ vi.mock('electron', () => ({
 
 vi.mock('fs-extra', () => ({
   pathExistsSync: (...args: any[]) => mockPathExistsSync(...args),
-}));
-
-// Mock logger
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  }),
 }));
 
 // Mock common/routes
@@ -97,73 +89,93 @@ vi.mock('@/const/dir', () => ({
 }));
 
 vi.mock('@lobechat/electron-server-ipc', () => ({
-  ElectronIPCServer: vi.fn().mockImplementation(() => ({
-    start: vi.fn().mockResolvedValue(undefined),
-  })),
+  ElectronIPCServer: vi.fn(function () {
+    return {
+      start: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
 }));
 
 // Mock all infrastructure managers
 vi.mock('../infrastructure/I18nManager', () => ({
-  I18nManager: vi.fn().mockImplementation(() => ({
-    init: vi.fn().mockResolvedValue(undefined),
-  })),
+  I18nManager: vi.fn(function () {
+    return {
+      init: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
 }));
 
 vi.mock('../infrastructure/StoreManager', () => ({
-  StoreManager: vi.fn().mockImplementation(() => ({
-    get: vi.fn((_key, defaultValue) => {
-      if (_key === 'storagePath') return '/mock/storage/path';
-      return defaultValue;
-    }),
-    set: vi.fn(),
-  })),
+  StoreManager: vi.fn(function () {
+    return {
+      get: vi.fn((_key, defaultValue) => {
+        if (_key === 'storagePath') return '/mock/storage/path';
+        return defaultValue;
+      }),
+      set: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('../infrastructure/StaticFileServerManager', () => ({
-  StaticFileServerManager: vi.fn().mockImplementation(() => ({
-    initialize: vi.fn().mockResolvedValue(undefined),
-    destroy: vi.fn(),
-  })),
+  StaticFileServerManager: vi.fn(function () {
+    return {
+      initialize: vi.fn().mockResolvedValue(undefined),
+      destroy: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('../infrastructure/UpdaterManager', () => ({
-  UpdaterManager: vi.fn().mockImplementation(() => ({
-    initialize: vi.fn().mockResolvedValue(undefined),
-  })),
+  UpdaterManager: vi.fn(function () {
+    return {
+      initialize: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
 }));
 
 vi.mock('../infrastructure/ProtocolManager', () => ({
-  ProtocolManager: vi.fn().mockImplementation(() => ({
-    initialize: vi.fn(),
-    processPendingUrls: vi.fn().mockResolvedValue(undefined),
-  })),
+  ProtocolManager: vi.fn(function () {
+    return {
+      initialize: vi.fn(),
+      processPendingUrls: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
 }));
 
 vi.mock('../browser/BrowserManager', () => ({
-  BrowserManager: vi.fn().mockImplementation(() => ({
-    initializeBrowsers: vi.fn(),
-    getIdentifierByWebContents: vi.fn(),
-    waitForMainWindowFirstFrame: vi.fn(() => new Promise(() => {})),
-  })),
+  BrowserManager: vi.fn(function () {
+    return {
+      initializeBrowsers: vi.fn(),
+      getIdentifierByWebContents: vi.fn(),
+      waitForMainWindowFirstFrame: vi.fn(() => new Promise(() => {})),
+    };
+  }),
 }));
 
 vi.mock('../ui/MenuManager', () => ({
-  MenuManager: vi.fn().mockImplementation(() => ({
-    initialize: vi.fn(),
-  })),
+  MenuManager: vi.fn(function () {
+    return {
+      initialize: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('../ui/ShortcutManager', () => ({
-  ShortcutManager: vi.fn().mockImplementation(() => ({
-    initialize: vi.fn(),
-  })),
+  ShortcutManager: vi.fn(function () {
+    return {
+      initialize: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('../ui/TrayManager', () => ({
-  TrayManager: vi.fn().mockImplementation(() => ({
-    initializeTrays: vi.fn(),
-    destroyAll: vi.fn(),
-  })),
+  TrayManager: vi.fn(function () {
+    return {
+      initializeTrays: vi.fn(),
+      destroyAll: vi.fn(),
+    };
+  }),
 }));
 
 // Mock controllers and services
@@ -196,17 +208,51 @@ describe('App', () => {
   });
 
   describe('service lifecycle', () => {
-    it('destroys registered services before quitting', () => {
+    it('enables precise renderer heap metrics before Chromium is ready', async () => {
+      appInstance = new App();
+
+      await appInstance.bootstrap();
+
+      expect(electronApp.commandLine.appendSwitch).toHaveBeenCalledWith(
+        'enable-precise-memory-info',
+      );
+      const appendSwitch = vi.mocked(electronApp.commandLine.appendSwitch);
+      const preciseCall = appendSwitch.mock.calls.findIndex(
+        ([name]) => name === 'enable-precise-memory-info',
+      );
+      expect(appendSwitch.mock.invocationCallOrder[preciseCall]).toBeLessThan(
+        vi.mocked(electronApp.whenReady).mock.invocationCallOrder[0],
+      );
+    });
+
+    it('waits for managed processes before destroying services and completing quit', async () => {
+      let finish!: () => void;
+      vi.spyOn(managedProcess, 'shutdownManagedProcesses').mockReturnValue(
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+      );
       appInstance = new App();
       const databaseService = appInstance.getService(LocalDatabaseService);
       const destroy = vi.spyOn(databaseService, 'destroy');
       const beforeQuitHandler = vi
         .mocked(electronApp.on)
-        .mock.calls.findLast(([event]) => (event as string) === 'before-quit')?.[1] as () => void;
+        .mock.calls.findLast(([event]) => (event as string) === 'before-quit')?.[1] as (event: {
+        preventDefault: () => void;
+      }) => void;
 
-      beforeQuitHandler();
-
-      expect(destroy).toHaveBeenCalledOnce();
+      const event = { preventDefault: vi.fn() };
+      beforeQuitHandler(event);
+      beforeQuitHandler(event);
+      expect(event.preventDefault).toHaveBeenCalledTimes(2);
+      expect(destroy).not.toHaveBeenCalled();
+      expect(managedProcess.shutdownManagedProcesses).toHaveBeenCalledOnce();
+      finish();
+      await vi.waitFor(() => expect(destroy).toHaveBeenCalledOnce());
+      expect(electronApp.quit).toHaveBeenCalledOnce();
+      event.preventDefault.mockClear();
+      beforeQuitHandler(event);
+      expect(event.preventDefault).not.toHaveBeenCalled();
     });
 
     it('prewarms the local database after browser initialization yields to the event loop', async () => {
