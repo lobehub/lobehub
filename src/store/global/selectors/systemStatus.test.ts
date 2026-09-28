@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { merge } from '@/utils/merge';
 
@@ -17,12 +17,6 @@ import {
   SIDEBAR_SPACER_ID,
   systemStatusSelectors,
 } from './systemStatus';
-
-// Mock version constants
-vi.mock('@/const/version', () => ({
-  isServerMode: false,
-  isUsePgliteDB: true,
-}));
 
 describe('systemStatusSelectors', () => {
   describe('sessionGroupKeys', () => {
