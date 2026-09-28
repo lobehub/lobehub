@@ -206,7 +206,13 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave, secti
     return (
       /* Said plainly because the shape cannot enforce it: a text field cannot
          tell a region from a token. */
-      <TabPane desc={t('environments.form.envHint')}>
+      <TabPane
+        desc={
+          <>
+            {t('environments.form.envHint')} {t('environments.form.appliesOnBuild')}
+          </>
+        }
+      >
         <EnvironmentVariables
           entries={Object.entries(configuration.env ?? {})}
           onSave={(entries) => saveConfiguration({ env: Object.fromEntries(entries) })}
@@ -242,12 +248,17 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave, secti
         icon={FolderGit2Icon}
         title={t('environments.form.sources')}
         notice={
-          /* On the first section the execution plane does not act on, and
-             worded for all of them. An instance's own directory does persist —
-             that part was verified end to end — so a panel-wide "none of this
-             works yet" would call a working feature broken. */
-          <Text fontSize={12} type={'warning'}>
-            {t('environments.form.pending')}
+          /* When an edit here reaches an instance, which is the question this
+             panel otherwise leaves open: the repository is cloned and the
+             setup command run once, while an instance is built. So changing
+             either does nothing to an instance that already exists until it is
+             rebuilt — the same rule its checkout and its installed packages
+             already follow. Repeated on the setup section and the variables
+             tab, which are governed by it too, and nowhere else: the
+             maintenance command and the network switch are read on every run
+             and need no rebuild at all. */
+          <Text fontSize={12} type={'secondary'}>
+            {t('environments.form.appliesOnBuild')}
           </Text>
         }
       >
@@ -315,7 +326,18 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave, secti
         )}
       </PanelSection>
 
-      <PanelSection icon={TerminalIcon} title={t('environments.form.setup')}>
+      <PanelSection
+        icon={TerminalIcon}
+        title={t('environments.form.setup')}
+        notice={
+          /* The setup command's half of it. The maintenance command below is
+             the opposite and says so itself — it runs every time work resumes,
+             which is the whole reason the two are separate fields. */
+          <Text fontSize={12} type={'secondary'}>
+            {t('environments.form.appliesOnBuild')}
+          </Text>
+        }
+      >
         <InlineField
           multiline
           desc={t('environments.form.bootstrapHint')}

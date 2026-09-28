@@ -4065,8 +4065,8 @@ When I am ___, I need ___
   'environments.sessions.reason.build_gone': 'Build interrupted',
   'environments.form.desc':
     'What an instance is built from — where the code comes from and what makes it usable.',
-  'environments.form.pending':
-    'Recorded, not run yet: nothing clones these sources or executes this setup. An instance still keeps its own directory between sessions.',
+  'environments.form.appliesOnBuild':
+    'Applied when an instance is built. An instance that already exists keeps what it was built with until you rebuild it.',
   'environments.refresh': 'Refresh',
   'environments.emptyPublished': 'Nothing published to this workspace yet',
   'environments.visibility.tabs.workspace': 'Workspace',
