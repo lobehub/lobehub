@@ -1,6 +1,6 @@
 // @vitest-environment node
 import type { LobeChatDatabase } from '@lobechat/database';
-import { documents, files } from '@lobechat/database/schemas';
+import { agentDocuments, agents, documents, files } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -137,6 +137,49 @@ describe('fileRouter.updateFile integration', () => {
     expect(renamed.title).toBe('final.pdf');
     expect(renamed.filename).toBe('final.pdf');
     expect(renamed.parentId).toBe(folder.id);
+  });
+
+  it('leaves an agent-document binding of the same file in its agent folder', async () => {
+    // AgentDocumentsService.importFile keeps the resource fileId but gives the agent copy
+    // its own collision-safe filename and agent-folder parent.
+    const kbFolder = await createFolder(db, userId, 'nf5bak');
+    const newKbFolder = await createFolder(db, userId, 'archive');
+    const agentFolder = await createFolder(db, userId, 'agent-notes');
+    const { document: mirror, file } = await createFileWithDocument(
+      db,
+      userId,
+      'spec.pdf',
+      kbFolder.id,
+    );
+    const [agentCopy] = await db
+      .insert(documents)
+      .values({
+        fileId: file.id,
+        fileType: 'application/pdf',
+        filename: 'spec-2.pdf',
+        parentId: agentFolder.id,
+        source: 'agent-document://spec-2.pdf',
+        sourceType: 'file',
+        title: 'spec-2.pdf',
+        totalCharCount: 0,
+        totalLineCount: 0,
+        userId,
+      })
+      .returning();
+    const [agent] = await db.insert(agents).values({ userId }).returning();
+    await db.insert(agentDocuments).values({ agentId: agent.id, documentId: agentCopy.id, userId });
+
+    await fileRouter
+      .createCaller(context(userId))
+      .updateFile({ id: file.id, name: 'spec-final.pdf', parentId: newKbFolder.id });
+
+    const movedMirror = await readDocument(db, mirror.id);
+    expect(movedMirror.parentId).toBe(newKbFolder.id);
+    expect(movedMirror.filename).toBe('spec-final.pdf');
+    const untouched = await readDocument(db, agentCopy.id);
+    expect(untouched.parentId).toBe(agentFolder.id);
+    expect(untouched.filename).toBe('spec-2.pdf');
+    expect(untouched.title).toBe('spec-2.pdf');
   });
 
   it("does not touch another user's document that references the same file", async () => {

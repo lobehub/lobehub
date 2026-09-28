@@ -15,6 +15,7 @@ import {
   inArray,
   isNull,
   ne,
+  notExists,
   notInArray,
   or,
   sum,
@@ -22,6 +23,7 @@ import {
 
 import type { DocumentItem, NewDocument } from '../schemas';
 import {
+  agentDocuments,
   DOCUMENT_FOLDER_TYPE,
   documentCommentMentions,
   documentComments,
@@ -447,7 +449,20 @@ export class DocumentModel {
     return this.db
       .update(documents)
       .set({ ...patch, updatedAt: nextDocumentUpdatedAt() })
-      .where(and(this.readScope(), eq(documents.fileId, fileId)))
+      .where(
+        and(
+          this.readScope(),
+          eq(documents.fileId, fileId),
+          // A file imported into an agent's document tree keeps its own VFS filename and
+          // agent-folder parent; only knowledge-base mirror / parse rows follow the file.
+          notExists(
+            this.db
+              .select({ id: agentDocuments.id })
+              .from(agentDocuments)
+              .where(eq(agentDocuments.documentId, documents.id)),
+          ),
+        ),
+      )
       .returning({ id: documents.id });
   };
 
