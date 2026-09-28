@@ -82,7 +82,7 @@ export const LAB_FEATURES: LabFeatureItem[] = [
     flag: 'enableGoals',
     i18nKey: 'goals',
     searchKeywords: ['goal', 'goals', 'objective'],
-    stage: 'alpha',
+    stage: 'beta',
   },
   {
     flag: 'enableDeviceTunnel',
