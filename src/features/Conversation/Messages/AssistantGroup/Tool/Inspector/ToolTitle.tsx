@@ -1,3 +1,4 @@
+import { getGoalCommand } from '@lobechat/shared-tool-ui/goal-command';
 import { Icon } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -95,6 +96,27 @@ const ToolTitle = memo<ToolTitleProps>(
       !!keyword &&
       isCJK(keyword) &&
       keyword === extractToolKeyword({ description: effectiveArgs?.description });
+
+    // `/goal` in a CLI agent conversation creates and plans the goal through
+    // `lh` — that step reads as the goal step, not "执行命令 <description>".
+    const goalCommand = useMemo(
+      () =>
+        typeof effectiveArgs?.command === 'string'
+          ? getGoalCommand(effectiveArgs.command)
+          : undefined,
+      [effectiveArgs],
+    );
+    if (goalCommand) {
+      const goalTitle = goalCommand.kind === 'create' ? goalCommand.title : undefined;
+      return (
+        <div className={cx(styles.root, isAborted && styles.aborted)}>
+          <span className={cx(styles.label, isLoading && shinyTextStyles.shinyText)}>
+            {t(`builtins.goalCommand.${goalCommand.kind}.${isLoading ? 'loading' : 'completed'}`)}
+          </span>
+          {goalTitle && <span className={styles.standalone}>{goalTitle}</span>}
+        </div>
+      );
+    }
 
     return (
       <div className={cx(styles.root, isAborted && styles.aborted)}>

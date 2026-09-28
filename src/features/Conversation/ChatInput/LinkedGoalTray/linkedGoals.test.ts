@@ -41,6 +41,35 @@ describe('selectLinkedGoals', () => {
     expect(result.map((item) => item.goal.id)).toEqual(['goal-cli']);
   });
 
+  it('keeps a goal a CLI agent created from this conversation even though its turn has a card', () => {
+    const cliTurn = {
+      children: [
+        {
+          content: '',
+          id: 'block-cli',
+          tools: [
+            {
+              apiName: 'Bash',
+              arguments: JSON.stringify({ command: 'lh goal create "Fog" --conversation --json' }),
+              id: 'call-cli',
+              identifier: 'claude-code',
+              result: { content: JSON.stringify({ goal: { id: 'goal-cli' } }), id: 'tool-cli' },
+              type: 'default',
+            },
+          ],
+        },
+      ],
+      content: '',
+      createdAt: 0,
+      id: 'msg-cli',
+      role: 'assistantGroup',
+    } as unknown as UIChatMessage;
+
+    expect(selectLinkedGoals([goal('goal-cli')], [cliTurn]).map((item) => item.goal.id)).toEqual([
+      'goal-cli',
+    ]);
+  });
+
   it('caps the tray at a few goals', () => {
     const goals = Array.from({ length: MAX_LINKED_GOALS + 2 }, (_, i) => goal(`goal-${i}`));
 

@@ -1,11 +1,11 @@
 import type { GoalStatus } from '@lobechat/const/goal';
-import type { GoalNodeStatus } from '@lobechat/types';
 
 export type GoalTaskPhase =
   | 'achieved'
   | 'canceled'
   | 'error'
   | 'paused'
+  | 'planning'
   | 'repairing'
   | 'review'
   | 'running'
@@ -21,9 +21,17 @@ interface GoalTaskProgressInput {
   taskTotal?: number;
 }
 
-const resolvePhase = (status?: GoalStatus, pendingDecisions = 0): GoalTaskPhase => {
+const resolvePhase = (status?: GoalStatus, pendingDecisions = 0, taskTotal = 0): GoalTaskPhase => {
   if (pendingDecisions > 0) return 'waiting';
   switch (status) {
+    // A goal adopted from a conversation turns `running` the moment it is
+    // created, before its first plan lands any Task — both read as planning.
+    case 'planning': {
+      return 'planning';
+    }
+    case 'running': {
+      return taskTotal > 0 ? 'running' : 'planning';
+    }
     case 'achieved': {
       return 'achieved';
     }
@@ -59,70 +67,8 @@ export const getGoalTaskProgress = (input: GoalTaskProgressInput) => {
 
   return {
     passed,
-    phase: resolvePhase(input.status, input.pendingDecisions),
+    phase: resolvePhase(input.status, input.pendingDecisions, input.taskTotal),
     progress: total > 0 ? Math.round((passed / total) * 100) : 0,
     total,
   };
-};
-
-export type GoalStepState = 'active' | 'done' | 'pending';
-
-export interface GoalStep {
-  status: GoalNodeStatus;
-  title: string;
-}
-
-const CLOSED_NODE_STATUSES = new Set<GoalNodeStatus>(['rejected', 'resolved', 'retired']);
-
-export const toGoalStepState = (status: GoalNodeStatus): GoalStepState => {
-  if (CLOSED_NODE_STATUSES.has(status)) return 'done';
-  if (status === 'active') return 'active';
-  return 'pending';
-};
-
-/** A chat card can show at most this many step segments before they stop reading as steps. */
-export const MAX_GOAL_STEP_SEGMENTS = 12;
-
-/**
- * One track segment per Task so the card reads as a plan of steps instead of one
- * anonymous bar. Graphs longer than the segment cap are sliced evenly; a slice
- * keeps the least advanced state it contains (pending < active < done), so the
- * fill still advances left to right and never overstates progress.
- */
-export const buildGoalStepSegments = (statuses: GoalNodeStatus[]): GoalStepState[] => {
-  const states = statuses.map(toGoalStepState);
-  if (states.length <= MAX_GOAL_STEP_SEGMENTS) return states;
-
-  const perSegment = Math.ceil(states.length / MAX_GOAL_STEP_SEGMENTS);
-  const segments: GoalStepState[] = [];
-  for (let start = 0; start < states.length; start += perSegment) {
-    const slice = states.slice(start, start + perSegment);
-    segments.push(
-      slice.includes('pending') ? 'pending' : slice.includes('active') ? 'active' : 'done',
-    );
-  }
-  return segments;
-};
-
-export interface GoalStepPointer {
-  kind: 'current' | 'next';
-  title: string;
-}
-
-/**
- * The step the card should point at: the first active Task while one runs, else
- * the first not-yet-closed Task as what's up next. Terminal phases have no
- * pointer — the phase word already says the outcome.
- */
-export const getGoalStepPointer = (
-  steps: GoalStep[],
-  phase: GoalTaskPhase,
-): GoalStepPointer | undefined => {
-  if (['achieved', 'canceled', 'error'].includes(phase)) return undefined;
-
-  const active = steps.find((step) => step.status === 'active');
-  if (active) return { kind: 'current', title: active.title };
-
-  const next = steps.find((step) => !CLOSED_NODE_STATUSES.has(step.status));
-  return next ? { kind: 'next', title: next.title } : undefined;
 };

@@ -14,6 +14,50 @@ const blk = (p: Partial<AssistantContentBlock> & { id: string }): AssistantConte
   ({ content: '', ...p }) as AssistantContentBlock;
 
 describe('tool display names', () => {
+  it('reads a running lh goal step as the goal step, not a raw command', () => {
+    const goalCall = (command: string, result?: { content: string; error?: unknown }) =>
+      blk({
+        id: 'goal',
+        tools: [
+          {
+            apiName: 'Bash',
+            arguments: JSON.stringify({ command, description: 'Create LobeHub goal' }),
+            id: 'toolu_goal',
+            identifier: 'claude-code',
+            result,
+          } as any,
+        ],
+      });
+
+    // The plugin namespace is not loaded here, so labels resolve to their keys.
+    expect(
+      getWorkflowStreamingHeadlineState([
+        goalCall('lh goal create "Fog report" --conversation --json'),
+      ]),
+    ).toMatchObject({
+      fallbackTool: 'builtins.goalCommand.create.loading Fog report',
+      kind: 'tool',
+    });
+    expect(
+      getWorkflowStreamingHeadlineState([
+        goalCall('lh goal create "Fog report" --conversation --json', { content: '{}' }),
+      ]),
+    ).toMatchObject({ fallbackTool: 'builtins.goalCommand.create.completed Fog report' });
+    expect(
+      getWorkflowStreamingHeadlineState([
+        goalCall('lh goal create "Fog report" --conversation --json', {
+          content: 'Error: An operation-bound token is required',
+          error: { message: 'exit 1' },
+        }),
+      ]),
+    ).toMatchObject({ fallbackTool: 'builtins.goalCommand.create.failed Fog report' });
+    expect(
+      getWorkflowStreamingHeadlineState([
+        goalCall('lh goal plan goal_1 --token t --file plan.json --json'),
+      ]),
+    ).toMatchObject({ fallbackTool: 'builtins.goalCommand.plan.loading' });
+  });
+
   it('uses friendly labels for Codex tool api names', () => {
     expect(getToolDisplayName('command_execution')).toBe('Ran a command');
     expect(getToolDisplayName('file_change')).toBe('Edited a file');

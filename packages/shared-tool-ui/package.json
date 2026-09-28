@@ -6,6 +6,7 @@
     ".": "./src/index.ts",
     "./ask-user": "./src/AskUserQuestion/index.ts",
     "./components": "./src/components/index.ts",
+    "./goal-command": "./src/utils/goalCommand.ts",
     "./inspectors": "./src/Inspector/index.ts",
     "./inspectors/github-labels": "./src/Inspector/GitHub/labels.ts",
     "./inspectors/linear-labels": "./src/Inspector/Linear/labels.ts",
