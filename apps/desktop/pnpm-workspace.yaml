@@ -22,7 +22,7 @@ packages:
   - '../../packages/tool-runtime'
   - '../../packages/prompts'
   - '../../packages/ssrf-safe-fetch'
-  - 'stubs/business-const'
+  - '../../packages/business/const'
   - '../../packages/types'
   - '../../packages/model-bank'
   - '../../packages/utils'
