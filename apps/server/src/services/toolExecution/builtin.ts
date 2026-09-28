@@ -182,8 +182,9 @@ export class BuiltinToolsExecutor implements IToolExecutor {
     // this executor runs whatever call reaches it, so a resume path, recovery
     // hint, or future tool-discovery route that bypasses assembly must still
     // clear the FULL gate here: master default-deny allowlist, the owner's
-    // `toolGrants` picker, humanIntervention policy (re-read from the
-    // unstripped manifest), and the per-API data-tool rules. Non-builtin
+    // `toolGrants` picker, and the per-API data-tool rules. `humanIntervention`
+    // is not a block reason: the visitor approves granted tools like any
+    // other run, so the approval itself already happened upstream. Non-builtin
     // identifiers pass through (governed by the share's `toolGrants` at
     // assembly). Fail closed: block, never throw open.
     if (

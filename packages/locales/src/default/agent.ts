@@ -509,7 +509,7 @@ export default {
   'share.settings.tools.desc':
     'Only the tools you tick here can be called during a visitor run. Tools that could reach your device or local files are never offered.',
   'share.settings.tools.apiNotAvailableToVisitors':
-    'This action can never be used in a shared run — it either needs your approval or is otherwise off-limits to visitors.',
+    'This action can never be used in a shared run — it is off-limits to visitors.',
   'share.settings.tools.apiWritesOwnerData':
     'Visitors can never write to your memory — this action stays off in shared runs.',
   'share.settings.tools.availableGroup': 'Not granted · {{count}}',

@@ -408,7 +408,7 @@
   "share.settings.tabs.stats": "统计",
   "share.settings.title": "分享助手",
   "share.settings.tools.apiGrantedCount": "已开放 {{granted}}/{{total}} 个接口",
-  "share.settings.tools.apiNotAvailableToVisitors": "该操作无法在分享运行中使用：它要么需要你本人确认，要么本就不对访客开放。",
+  "share.settings.tools.apiNotAvailableToVisitors": "该操作无法在分享运行中使用：它不对访客开放。",
   "share.settings.tools.apiWritesOwnerData": "访客不能写入你的记忆，该操作在分享运行中始终关闭。",
   "share.settings.tools.availableGroup": "未开放 · {{count}}",
   "share.settings.tools.configureApis": "选择访客可调用的接口",

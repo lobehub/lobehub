@@ -38,6 +38,7 @@ import {
 import {
   type AgentInterventionReviewStatus,
   type AgentInterventionRuntimeAction,
+  type AgentInterventionShareVisitorScope,
   type AgentInterventionSourceAction,
   getAgentInterventionReview,
   getAgentInterventionReviewBySource,
@@ -92,6 +93,7 @@ import {
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { MAX_CLIENT_OPERATION_SNAPSHOT } from '@/server/services/agentRuntime/foregroundOperation';
 import { AiAgentService } from '@/server/services/aiAgent';
+import type { AgentShareGate } from '@/server/services/aiAgent/shareGate';
 import { AiChatService } from '@/server/services/aiChat';
 import { getFileProxyUrl } from '@/server/services/file';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
@@ -107,9 +109,21 @@ type ClaimedAgentInterventionResolution = Extract<
   { state: 'claimed' }
 >;
 
-interface AgentInterventionDispatchContext {
+export interface AgentInterventionDispatchContext {
+  /**
+   * Creator-scoped service for a share run, caller-scoped otherwise. The
+   * continuation always executes as the run owner.
+   */
   aiAgentService: AiAgentService;
   serverDB: LobeChatDatabase;
+  /**
+   * Present when a share VISITOR resolved an intervention on their own share
+   * run (`shareChat.resolveIntervention`). Rebuilt from the live share row by
+   * the caller — never from the parked run's state — so the continuation is
+   * gated by the share's CURRENT config exactly like a fresh visitor turn.
+   */
+  shareGate?: AgentShareGate;
+  /** The resolving actor: the owner/member, or the share visitor. */
   userId: string;
   workspaceId?: string | null;
 }
@@ -482,6 +496,11 @@ const repairRuntimeActionContinuationAnchor = async (
  * The owner's persisted allow list is merged in either way: an "Approve, and
  * don't ask again" answer writes the tool key there before this dispatch, and
  * the snapshot in the parked run predates it.
+ *
+ * A share visitor's continuation uses neither owner fallback: the parked run
+ * carries the VISITOR's approval mode, a visitor can never "remember" into
+ * the owner's allow list, and the owner's own preferences must not decide
+ * what runs unattended in someone else's conversation.
  */
 const resolveContinuationUserInterventionConfig = async (
   resolution: ClaimedAgentInterventionResolution,
@@ -502,6 +521,7 @@ const resolveContinuationUserInterventionConfig = async (
   const persistedAllowList = intervention?.allowList ?? [];
 
   const inherited = sourceState ? selectUserInterventionConfig(sourceState) : undefined;
+  if (ctx.shareGate) return inherited ?? { approvalMode: 'manual' };
   if (inherited) {
     const inheritedAllowList = inherited.allowList ?? [];
     const remembered = persistedAllowList.filter((key) => !inheritedAllowList.includes(key));
@@ -522,7 +542,7 @@ const resolveContinuationUserInterventionConfig = async (
  * bridge. Both paths arrive here only after Cloud has won the same durable
  * first-winner claim.
  */
-const dispatchClaimedAgentIntervention = async (
+export const dispatchClaimedAgentIntervention = async (
   resolution: ClaimedAgentInterventionResolution,
   ctx: AgentInterventionDispatchContext,
 ): Promise<{ execution?: ExecAgentResult; status: AgentInterventionReviewStatus }> => {
@@ -576,7 +596,7 @@ const dispatchClaimedAgentIntervention = async (
        * run's trigger. Without an explicit trigger every LLM call in the
        * continuation lands in route attempt logs with an unknown source.
        */
-      const continuationTrigger = RequestTrigger.Chat;
+      const continuationTrigger = ctx.shareGate ? RequestTrigger.AgentShare : RequestTrigger.Chat;
       const continuation = continuationRuntimeAction(runtimeAction);
       const userInterventionConfig = continuation
         ? await resolveContinuationUserInterventionConfig(resolution, continuation.operationId, ctx)
@@ -623,6 +643,7 @@ const dispatchClaimedAgentIntervention = async (
                 pluginState: customResult.pluginState,
                 toolCallId: runtimeAction.toolCallId,
               },
+              shareGate: ctx.shareGate,
               topicStartReservationId: deterministicContinuationOperationId,
               trigger: continuationTrigger,
               userInterventionConfig,
@@ -653,6 +674,7 @@ const dispatchClaimedAgentIntervention = async (
             ...(runtimeAction.decisions.length === 1
               ? { resumeApproval: singleDecision }
               : { resumeApprovals: runtimeAction.decisions }),
+            shareGate: ctx.shareGate,
             topicStartReservationId: deterministicContinuationOperationId,
             trigger: continuationTrigger,
             userInterventionConfig,
@@ -678,6 +700,7 @@ const dispatchClaimedAgentIntervention = async (
               rejectionReason: runtimeAction.rejectionReason,
               toolCallId: runtimeAction.toolCallId,
             },
+            shareGate: ctx.shareGate,
             topicStartReservationId: deterministicContinuationOperationId,
             trigger: continuationTrigger,
             userInterventionConfig,
@@ -1009,6 +1032,113 @@ const StartExecutionSchema = z.object({
 /**
  * Schema for execAgent - execute a single Agent
  */
+/** One human decision on a pending `role='tool'` message. */
+export const ResumeApprovalDecisionSchema = z.object({
+  decision: z.enum(['approved', 'rejected', 'rejected_continue']),
+  /** ID of the pending `role='tool'` message this decision targets. */
+  parentMessageId: z.string(),
+  /** Optional user-supplied rejection reason (only meaningful for rejected variants). */
+  rejectionReason: z.string().optional(),
+  /** tool_call_id of the pending tool call being approved/rejected. */
+  toolCallId: z.string(),
+});
+
+/** A human-provided result for a pending `humanIntervention: 'always'` tool. */
+export const ResumeToolResultSchema = z.object({
+  /** The human-provided tool result (the answer text). */
+  content: z.string(),
+  /** ID of the pending `role='tool'` message this result targets. */
+  parentMessageId: z.string(),
+  /** Optional plugin state to persist on the tool message. */
+  pluginState: z.record(z.string(), z.unknown()).optional(),
+  /** Whether the form was submitted or explicitly skipped. */
+  outcome: z.enum(['submitted', 'skipped']).optional().default('submitted'),
+  /** Optional skip reason, persisted only when outcome is skipped. */
+  rejectionReason: z.string().optional(),
+  /** tool_call_id of the pending tool call being answered. */
+  toolCallId: z.string(),
+});
+
+/**
+ * Cross-field rules for an intervention resume payload, shared by every
+ * execAgent entry point that accepts one (owner and share visitor).
+ */
+export const validateResumePayload = (
+  data: {
+    parentMessageId?: string;
+    resumeApproval?: z.infer<typeof ResumeApprovalDecisionSchema>;
+    resumeApprovals?: z.infer<typeof ResumeApprovalDecisionSchema>[];
+    resumeToolResult?: z.infer<typeof ResumeToolResultSchema>;
+  },
+  ctx: z.RefinementCtx,
+) => {
+  const resumePayloadCount = [
+    data.resumeApproval,
+    data.resumeApprovals,
+    data.resumeToolResult,
+  ].filter(Boolean).length;
+  if (resumePayloadCount > 1) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'Only one of resumeApproval, resumeApprovals, or resumeToolResult is allowed',
+      path: ['resumeApproval'],
+    });
+  }
+
+  if (resumePayloadCount > 0 && !data.parentMessageId) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'parentMessageId is required for an intervention resume',
+      path: ['parentMessageId'],
+    });
+  }
+
+  if (
+    data.resumeApproval &&
+    data.parentMessageId &&
+    data.resumeApproval.parentMessageId !== data.parentMessageId
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'resumeApproval must target parentMessageId',
+      path: ['resumeApproval', 'parentMessageId'],
+    });
+  }
+  if (
+    data.resumeToolResult &&
+    data.parentMessageId &&
+    data.resumeToolResult.parentMessageId !== data.parentMessageId
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'resumeToolResult must target parentMessageId',
+      path: ['resumeToolResult', 'parentMessageId'],
+    });
+  }
+
+  if (data.resumeApprovals) {
+    const messageIds = data.resumeApprovals.map(({ parentMessageId }) => parentMessageId);
+    const toolCallIds = data.resumeApprovals.map(({ toolCallId }) => toolCallId);
+    if (
+      new Set(messageIds).size !== messageIds.length ||
+      new Set(toolCallIds).size !== toolCallIds.length
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'resumeApprovals cannot contain duplicate targets',
+        path: ['resumeApprovals'],
+      });
+    }
+    if (data.parentMessageId && !messageIds.includes(data.parentMessageId)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'parentMessageId must be one of the resumeApprovals targets',
+        path: ['parentMessageId'],
+      });
+    }
+  }
+};
+
 const ExecAgentSchema = z
   .object({
     includeFinalState: z.boolean().optional(),
@@ -1104,17 +1234,7 @@ const ExecAgentSchema = z
      * (`rejected`), or surfaces the rejection as user feedback so the LLM
      * can continue (`rejected_continue`).
      */
-    resumeApproval: z
-      .object({
-        decision: z.enum(['approved', 'rejected', 'rejected_continue']),
-        /** ID of the pending `role='tool'` message this decision targets. */
-        parentMessageId: z.string(),
-        /** Optional user-supplied rejection reason (only meaningful for rejected variants). */
-        rejectionReason: z.string().optional(),
-        /** tool_call_id of the pending tool call being approved/rejected. */
-        toolCallId: z.string(),
-      })
-      .optional(),
+    resumeApproval: ResumeApprovalDecisionSchema.optional(),
     /**
      * Batch form of `resumeApproval` — one entry per pending tool the user
      * resolved in a single action ("approve all" on a parallel tool batch).
@@ -1126,20 +1246,7 @@ const ExecAgentSchema = z
      * empty rows, which forks the parent chain and shows the model blank
      * results. Mutually exclusive with `resumeApproval`.
      */
-    resumeApprovals: z
-      .array(
-        z.object({
-          decision: z.enum(['approved', 'rejected', 'rejected_continue']),
-          /** ID of the pending `role='tool'` message this decision targets. */
-          parentMessageId: z.string(),
-          /** Optional user-supplied rejection reason (only meaningful for rejected variants). */
-          rejectionReason: z.string().optional(),
-          /** tool_call_id of the pending tool call being approved/rejected. */
-          toolCallId: z.string(),
-        }),
-      )
-      .min(1)
-      .optional(),
+    resumeApprovals: z.array(ResumeApprovalDecisionSchema).min(1).optional(),
     /**
      * Resume a previous op paused on a `humanIntervention: 'always'` tool (e.g.
      * lobe-agent `askUserQuestion`). When set, the new op writes the
@@ -1148,22 +1255,7 @@ const ExecAgentSchema = z
      * overwrites the answer with a fresh "pending" placeholder. Mutually
      * exclusive with `resumeApproval`.
      */
-    resumeToolResult: z
-      .object({
-        /** The human-provided tool result (the answer text). */
-        content: z.string(),
-        /** ID of the pending `role='tool'` message this result targets. */
-        parentMessageId: z.string(),
-        /** Optional plugin state to persist on the tool message. */
-        pluginState: z.record(z.string(), z.unknown()).optional(),
-        /** Whether the form was submitted or explicitly skipped. */
-        outcome: z.enum(['submitted', 'skipped']).optional().default('submitted'),
-        /** Optional skip reason, persisted only when outcome is skipped. */
-        rejectionReason: z.string().optional(),
-        /** tool_call_id of the pending tool call being answered. */
-        toolCallId: z.string(),
-      })
-      .optional(),
+    resumeToolResult: ResumeToolResultSchema.optional(),
     /**
      * Tool identifiers the user @-mentioned in this message. Enabled for this
      * run in addition to the agent's pinned plugins, so a mentioned tool that
@@ -1210,73 +1302,173 @@ const ExecAgentSchema = z
   .refine((data) => data.agentId || data.slug, {
     message: 'Either agentId or slug must be provided',
   })
-  .superRefine((data, ctx) => {
-    const resumePayloadCount = [
-      data.resumeApproval,
-      data.resumeApprovals,
-      data.resumeToolResult,
-    ].filter(Boolean).length;
-    if (resumePayloadCount > 1) {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'Only one of resumeApproval, resumeApprovals, or resumeToolResult is allowed',
-        path: ['resumeApproval'],
-      });
-    }
+  .superRefine(validateResumePayload);
 
-    if (resumePayloadCount > 0 && !data.parentMessageId) {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'parentMessageId is required for an intervention resume',
-        path: ['parentMessageId'],
-      });
-    }
+type ExecAgentInput = z.infer<typeof ExecAgentSchema>;
 
-    if (
-      data.resumeApproval &&
-      data.parentMessageId &&
-      data.resumeApproval.parentMessageId !== data.parentMessageId
-    ) {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'resumeApproval must target parentMessageId',
-        path: ['resumeApproval', 'parentMessageId'],
-      });
-    }
-    if (
-      data.resumeToolResult &&
-      data.parentMessageId &&
-      data.resumeToolResult.parentMessageId !== data.parentMessageId
-    ) {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'resumeToolResult must target parentMessageId',
-        path: ['resumeToolResult', 'parentMessageId'],
-      });
-    }
+/**
+ * Cross-version bridge: older Web clients call execAgent directly with resume
+ * payloads and know nothing about the v2 source endpoint. Recover the
+ * authoritative operation/batch from the tool rows and claim the same generic
+ * intervention before the legacy message CAS can run.
+ *
+ * Shared by the owner `execAgent` and the share-visitor `shareChat.execAgent`
+ * resume paths; `shareVisitor` scopes the claim to the visitor's own share run.
+ * Resolves `undefined` when no durable generic row exists (OSS, or a pre-v2
+ * row), so the caller continues with the legacy message-row resume.
+ */
+export const bridgeLegacyResumeToSourceIntervention = async (
+  params: {
+    messageModel: MessageModel;
+    parentMessageId?: string;
+    resumeApproval?: ExecAgentInput['resumeApproval'];
+    resumeApprovals?: ExecAgentInput['resumeApprovals'];
+    resumeToolResult?: ExecAgentInput['resumeToolResult'];
+    shareVisitor?: AgentInterventionShareVisitorScope;
+  },
+  ctx: AgentInterventionDispatchContext,
+): Promise<ExecAgentResult | undefined> => {
+  const {
+    messageModel,
+    parentMessageId,
+    resumeApproval,
+    resumeApprovals,
+    resumeToolResult,
+    shareVisitor,
+  } = params;
 
-    if (data.resumeApprovals) {
-      const messageIds = data.resumeApprovals.map(({ parentMessageId }) => parentMessageId);
-      const toolCallIds = data.resumeApprovals.map(({ toolCallId }) => toolCallId);
-      if (
-        new Set(messageIds).size !== messageIds.length ||
-        new Set(toolCallIds).size !== toolCallIds.length
+  const legacyResumeTargets = [
+    ...(resumeApprovals ?? []),
+    ...(resumeApproval ? [resumeApproval] : []),
+    ...(resumeToolResult
+      ? [
+          {
+            decision: 'approved' as const,
+            parentMessageId: resumeToolResult.parentMessageId,
+            toolCallId: resumeToolResult.toolCallId,
+          },
+        ]
+      : []),
+  ];
+  if (legacyResumeTargets.length > 0) {
+    const plugins = await pMap(
+      legacyResumeTargets,
+      ({ parentMessageId }) => messageModel.findMessagePlugin(parentMessageId),
+      { concurrency: 5 },
+    );
+    const firstIntervention = plugins[0]?.intervention;
+    const hasGenericSource = Boolean(
+      firstIntervention?.operationId &&
+      firstIntervention.batchId &&
+      plugins.every(
+        (plugin) =>
+          plugin?.intervention?.operationId === firstIntervention.operationId &&
+          plugin?.intervention?.batchId === firstIntervention.batchId,
+      ),
+    );
+
+    if (hasGenericSource) {
+      let sourceAction: AgentInterventionSourceAction | undefined;
+      if (resumeToolResult) {
+        if (resumeToolResult.outcome === 'skipped') {
+          sourceAction = { type: 'skip_interaction' };
+        } else {
+          const pluginState = resumeToolResult.pluginState as
+            | {
+                askUserAnswers?: Record<string, unknown>;
+                selectedAgentIds?: unknown;
+              }
+            | undefined;
+          const answers = pluginState?.askUserAnswers;
+          if (
+            answers &&
+            Object.keys(answers).length > 0 &&
+            Object.values(answers).every(
+              (answer) =>
+                typeof answer === 'string' ||
+                (Array.isArray(answer) && answer.every((item) => typeof item === 'string')),
+            )
+          ) {
+            sourceAction = {
+              result: answers as Record<string, string | string[]>,
+              type: 'submit_answers',
+            };
+          } else if (
+            plugins[0]?.identifier === 'lobe-web-onboarding' &&
+            plugins[0]?.apiName === 'showAgentMarketplace' &&
+            Array.isArray(pluginState?.selectedAgentIds) &&
+            pluginState.selectedAgentIds.every((id) => typeof id === 'string')
+          ) {
+            sourceAction = {
+              result: {
+                kind: 'agent_marketplace',
+                selectedTemplateIds: pluginState.selectedAgentIds as string[],
+              },
+              type: 'submit_custom',
+            };
+          }
+        }
+      } else if (legacyResumeTargets.every(({ decision }) => decision === 'approved')) {
+        // The legacy resume envelope has neither staged edits nor remember
+        // intent. Cloud therefore compares the durable revision with the
+        // authoritative message arguments and rejects a pre-mutated old
+        // edit as stale with a refresh-required conflict; it must never
+        // reinterpret already-written client state as an atomic edit.
+        // Old clients may also have changed their personal allow-list
+        // before this call, which remains a rollout-only non-atomic edge.
+        // Current Web sends both edits and remember through the source
+        // endpoint before any side effect.
+        sourceAction = { scope: 'once', type: 'approve_tool' };
+      } else if (
+        legacyResumeTargets.every(
+          ({ decision }) => decision === 'rejected' || decision === 'rejected_continue',
+        )
       ) {
-        ctx.addIssue({
-          code: 'custom',
-          message: 'resumeApprovals cannot contain duplicate targets',
-          path: ['resumeApprovals'],
-        });
+        const reasons = [
+          ...new Set(
+            legacyResumeTargets
+              .map(({ rejectionReason }) => rejectionReason)
+              .filter((reason): reason is string => Boolean(reason)),
+          ),
+        ];
+        sourceAction = {
+          ...(reasons.length === 1 && { reason: reasons[0] }),
+          type: 'reject_continue',
+        };
       }
-      if (data.parentMessageId && !messageIds.includes(data.parentMessageId)) {
-        ctx.addIssue({
-          code: 'custom',
-          message: 'parentMessageId must be one of the resumeApprovals targets',
-          path: ['parentMessageId'],
-        });
+
+      if (!sourceAction) {
+        throw new Error('Unsupported legacy intervention payload for a durable generic row');
+      }
+
+      const sourceResolution = await resolveAgentInterventionBySource({
+        action: sourceAction,
+        actorUserId: ctx.userId,
+        batchId: firstIntervention!.batchId!,
+        operationId: firstIntervention!.operationId!,
+        resolutionRequestId: randomUUID(),
+        targets: legacyResumeTargets.map(({ parentMessageId, toolCallId }) => ({
+          toolCallId,
+          toolMessageId: parentMessageId,
+        })),
+        ...(shareVisitor && { shareVisitor }),
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+      if (sourceResolution.handled) {
+        if (sourceResolution.state === 'already_resolved') {
+          throw new HumanApprovalAlreadyResolvedError(parentMessageId ?? 'intervention');
+        }
+        const dispatch = await dispatchClaimedAgentIntervention(sourceResolution, ctx);
+        if (!dispatch.execution) {
+          throw new Error('Durable intervention resume did not create an operation');
+        }
+        return toClientExecAgentResult(dispatch.execution);
       }
     }
-  });
+  }
+
+  return undefined;
+};
 
 /**
  * Schema for execGroupAgent - execute Supervisor Agent in Group chat
@@ -2277,138 +2469,17 @@ export const aiAgentRouter = router({
         workspaceId: ctx.workspaceId,
       });
 
-      // Cross-version bridge: older Web clients call execAgent directly with
-      // resume payloads and know nothing about the v2 source endpoint. Recover
-      // the authoritative operation/batch from the tool rows and claim the
-      // same generic intervention before the legacy message CAS can run.
-      const legacyResumeTargets = [
-        ...(resumeApprovals ?? []),
-        ...(resumeApproval ? [resumeApproval] : []),
-        ...(resumeToolResult
-          ? [
-              {
-                decision: 'approved' as const,
-                parentMessageId: resumeToolResult.parentMessageId,
-                toolCallId: resumeToolResult.toolCallId,
-              },
-            ]
-          : []),
-      ];
-      if (legacyResumeTargets.length > 0) {
-        const plugins = await Promise.all(
-          legacyResumeTargets.map(({ parentMessageId }) =>
-            ctx.messageModel.findMessagePlugin(parentMessageId),
-          ),
-        );
-        const firstIntervention = plugins[0]?.intervention;
-        const hasGenericSource = Boolean(
-          firstIntervention?.operationId &&
-          firstIntervention.batchId &&
-          plugins.every(
-            (plugin) =>
-              plugin?.intervention?.operationId === firstIntervention.operationId &&
-              plugin?.intervention?.batchId === firstIntervention.batchId,
-          ),
-        );
-
-        if (hasGenericSource) {
-          let sourceAction: AgentInterventionSourceAction | undefined;
-          if (resumeToolResult) {
-            if (resumeToolResult.outcome === 'skipped') {
-              sourceAction = { type: 'skip_interaction' };
-            } else {
-              const pluginState = resumeToolResult.pluginState as
-                | {
-                    askUserAnswers?: Record<string, unknown>;
-                    selectedAgentIds?: unknown;
-                  }
-                | undefined;
-              const answers = pluginState?.askUserAnswers;
-              if (
-                answers &&
-                Object.keys(answers).length > 0 &&
-                Object.values(answers).every(
-                  (answer) =>
-                    typeof answer === 'string' ||
-                    (Array.isArray(answer) && answer.every((item) => typeof item === 'string')),
-                )
-              ) {
-                sourceAction = {
-                  result: answers as Record<string, string | string[]>,
-                  type: 'submit_answers',
-                };
-              } else if (
-                plugins[0]?.identifier === 'lobe-web-onboarding' &&
-                plugins[0]?.apiName === 'showAgentMarketplace' &&
-                Array.isArray(pluginState?.selectedAgentIds) &&
-                pluginState.selectedAgentIds.every((id) => typeof id === 'string')
-              ) {
-                sourceAction = {
-                  result: {
-                    kind: 'agent_marketplace',
-                    selectedTemplateIds: pluginState.selectedAgentIds as string[],
-                  },
-                  type: 'submit_custom',
-                };
-              }
-            }
-          } else if (legacyResumeTargets.every(({ decision }) => decision === 'approved')) {
-            // The legacy resume envelope has neither staged edits nor remember
-            // intent. Cloud therefore compares the durable revision with the
-            // authoritative message arguments and rejects a pre-mutated old
-            // edit as stale with a refresh-required conflict; it must never
-            // reinterpret already-written client state as an atomic edit.
-            // Old clients may also have changed their personal allow-list
-            // before this call, which remains a rollout-only non-atomic edge.
-            // Current Web sends both edits and remember through the source
-            // endpoint before any side effect.
-            sourceAction = { scope: 'once', type: 'approve_tool' };
-          } else if (
-            legacyResumeTargets.every(
-              ({ decision }) => decision === 'rejected' || decision === 'rejected_continue',
-            )
-          ) {
-            const reasons = [
-              ...new Set(
-                legacyResumeTargets
-                  .map(({ rejectionReason }) => rejectionReason)
-                  .filter((reason): reason is string => Boolean(reason)),
-              ),
-            ];
-            sourceAction = {
-              ...(reasons.length === 1 && { reason: reasons[0] }),
-              type: 'reject_continue',
-            };
-          }
-
-          if (!sourceAction) {
-            throw new Error('Unsupported legacy intervention payload for a durable generic row');
-          }
-
-          const sourceResolution = await resolveAgentInterventionBySource({
-            action: sourceAction,
-            actorUserId: ctx.userId,
-            batchId: firstIntervention!.batchId!,
-            operationId: firstIntervention!.operationId!,
-            resolutionRequestId: randomUUID(),
-            targets: legacyResumeTargets.map(({ parentMessageId, toolCallId }) => ({
-              toolCallId,
-              toolMessageId: parentMessageId,
-            })),
-            workspaceId: ctx.workspaceId ?? undefined,
-          });
-          if (sourceResolution.handled) {
-            if (sourceResolution.state === 'already_resolved') {
-              throw new HumanApprovalAlreadyResolvedError(parentMessageId ?? 'intervention');
-            }
-            const dispatch = await dispatchClaimedAgentIntervention(sourceResolution, ctx);
-            if (!dispatch.execution) {
-              throw new Error('Durable intervention resume did not create an operation');
-            }
-            return toClientExecAgentResult(dispatch.execution);
-          }
-        }
-      }
+      const bridged = await bridgeLegacyResumeToSourceIntervention(
+        {
+          messageModel: ctx.messageModel,
+          parentMessageId,
+          resumeApproval,
+          resumeApprovals,
+          resumeToolResult,
+        },
+        ctx,
+      );
+      if (bridged) return bridged;
 
       const result = await ctx.aiAgentService.execAgent({
         agentId,

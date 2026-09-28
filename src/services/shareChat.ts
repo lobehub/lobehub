@@ -1,6 +1,12 @@
-import type { ExecAgentResult, UIChatMessage } from '@lobechat/types';
+import type { ExecAgentResult, UIChatMessage, UserInterventionConfig } from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
+import type {
+  ResolveAgentInterventionBySourceParams,
+  ResolveAgentInterventionBySourceResult,
+  ResumeApprovalParam,
+  ResumeToolResultParam,
+} from '@/services/aiAgent';
 
 export interface ShareChatExecParams {
   /** Client-minted ids for the rows this run creates (fresh sends only). */
@@ -11,12 +17,25 @@ export interface ShareChatExecParams {
    * ids of anyone else's files are rejected rather than leaked.
    */
   fileIds?: string[];
+  /** Resumes only: the pending tool message (or assistant) the resume continues from. */
+  parentMessageId?: string;
   prompt: string;
+  /** Resume a run parked on a single tool approval (legacy, non-durable path). */
+  resumeApproval?: ResumeApprovalParam;
+  /** Batch form of `resumeApproval`. */
+  resumeApprovals?: ResumeApprovalParam[];
+  /** Resume a run parked on a client tool call with its result (e.g. askUserQuestion). */
+  resumeToolResult?: ResumeToolResultParam;
   shareId: string;
   /** The prompt was queued behind a running turn and renders as its continuation. */
   steer?: boolean;
   /** Absent → the server creates a new visitor topic (counted against the topic cap). */
   topicId?: string | null;
+  /**
+   * The visitor's own approval mode. Tools granted by the share run their
+   * normal `humanIntervention` policy, with the visitor as the approver.
+   */
+  userInterventionConfig?: UserInterventionConfig;
 }
 
 /**
@@ -87,6 +106,43 @@ class ShareChatService {
     options?: { signal?: AbortSignal },
   ): Promise<ExecAgentResult> {
     return await lambdaClient.shareChat.execAgent.mutate(params, options);
+  }
+
+  /**
+   * Answer a pending intervention of the visitor's own share run through the
+   * durable first-winner path — the visitor counterpart of
+   * `aiAgentService.resolveAgentInterventionBySource`. `handled: false` means
+   * the deployment has no durable store; resume through `execAgentTask`.
+   */
+  async resolveInterventionBySource(
+    shareId: string,
+    topicId: string,
+    params: ResolveAgentInterventionBySourceParams,
+  ): Promise<ResolveAgentInterventionBySourceResult> {
+    const result = await lambdaClient.shareChat.resolveInterventionBySource.mutate({
+      ...params,
+      shareId,
+      topicId,
+    });
+
+    if (!result.success) return { handled: false };
+
+    return {
+      execution: 'execution' in result ? result.execution : undefined,
+      handled: true,
+      state: result.state,
+    };
+  }
+
+  /**
+   * Stop the visitor's own run parked on a pending approval — the visitor
+   * counterpart of `aiAgentService.stopPendingApproval`.
+   */
+  async stopPendingApproval(
+    shareId: string,
+    params: { batchId: string; operationId: string; toolMessageIds: string[]; topicId: string },
+  ) {
+    return await lambdaClient.shareChat.stopPendingApproval.mutate({ ...params, shareId });
   }
 
   async getTopics(shareId: string) {

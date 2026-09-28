@@ -27,6 +27,7 @@ import {
   aiAgentService,
   type ResolveAgentInterventionBySourceResult,
 } from '@/services/aiAgent';
+import { shareChatService } from '@/services/shareChat';
 import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { displayMessageSelectors, topicSelectors } from '@/store/chat/selectors';
@@ -182,13 +183,25 @@ export class ConversationControlActionImpl {
       this.#interventionResolutionRequestIds.get(resolutionKey) ?? globalThis.crypto.randomUUID();
     this.#interventionResolutionRequestIds.set(resolutionKey, resolutionRequestId);
 
-    const result = await aiAgentService.resolveAgentInterventionBySource({
+    const sourceParams = {
       action: params.action,
       batchId: first.batchId,
       operationId: first.operationId,
       resolutionRequestId,
       targets: sourceTargets,
-    });
+    };
+    // A share visitor answers their own share run through the share-authorized
+    // mirror; the owner-scoped endpoint would reject them.
+    const agentShareId = params.context?.agentShareId;
+    const result = agentShareId
+      ? params.context?.topicId
+        ? await shareChatService.resolveInterventionBySource(
+            agentShareId,
+            params.context.topicId,
+            sourceParams,
+          )
+        : ({ handled: false } as const)
+      : await aiAgentService.resolveAgentInterventionBySource(sourceParams);
     if (result.handled) {
       this.#interventionResolutionRequestIds.delete(resolutionKey);
       if (result.state === 'claimed' && params.context) {
@@ -233,6 +246,10 @@ export class ConversationControlActionImpl {
    * Gateway backend.
    */
   #shouldUseGatewayResume = async (context: ConversationContext): Promise<boolean> => {
+    // A share run only ever executes on the server through the share gateway;
+    // the visitor has no local runtime nor access to the owner's agent config.
+    if (context.agentShareId) return true;
+
     const agentId = context.agentId;
     if (!agentId) return false;
 
@@ -549,7 +566,9 @@ export class ConversationControlActionImpl {
   };
 
   #writeTopicStatus = (context: ConversationContext, status: ChatTopicStatus): void => {
-    if (!context.topicId) return;
+    // A share visitor's topic belongs to the creator; the owner-scoped topic
+    // write would be rejected, and the share page has no topic status UI.
+    if (!context.topicId || context.agentShareId) return;
 
     const topicScope =
       context.scope === 'group' || context.scope === 'group_agent' ? context.scope : undefined;
@@ -1010,12 +1029,10 @@ export class ConversationControlActionImpl {
       if (this.#discardAlreadyResolvedSource(sourceResolution)) return;
 
       if (!sourceResolution.handled) {
-        await aiAgentService.stopPendingApproval({
-          batchId,
-          operationId,
-          toolMessageIds: addressable,
-          topicId,
-        });
+        const stopParams = { batchId, operationId, toolMessageIds: addressable, topicId };
+        await (effectiveContext.agentShareId
+          ? shareChatService.stopPendingApproval(effectiveContext.agentShareId, stopParams)
+          : aiAgentService.stopPendingApproval(stopParams));
       }
       // Settle the cards locally. A group member's stop ends no stream this
       // client still listens on, so no refetch would ever land the aborted rows
