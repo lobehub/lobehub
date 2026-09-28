@@ -236,8 +236,19 @@ export class LobeAzureOpenAI extends BaseAzureOpenAI {
     try {
       return await super.transcribe(payload, options);
     } catch (error) {
-      throw this.attachDeploymentId(error, this.getMappedModelId(payload.model));
+      const payloadError = this.attachDeploymentId(error, this.getMappedModelId(payload.model));
+
+      // `handleError` reports `this.baseURL` (`/openai/v1`), but transcription went to the
+      // deployments path — report the endpoint that was actually called.
+      throw payloadError && typeof payloadError === 'object'
+        ? { ...payloadError, endpoint: maskSensitiveUrl(this.transcriptionBaseURL) }
+        : payloadError;
     }
+  }
+
+  /** `this.baseURL` is normalized to `.../openai/v1`; deployments live under `.../openai`. */
+  private get transcriptionBaseURL() {
+    return this.baseURL.replace(/\/v1$/, '');
   }
 
   /**
@@ -249,8 +260,7 @@ export class LobeAzureOpenAI extends BaseAzureOpenAI {
     this.transcriptionClient ??= new AzureOpenAI({
       apiKey: this._options.apiKey,
       apiVersion: AZURE_TRANSCRIPTION_API_VERSION,
-      // `this.baseURL` is normalized to `.../openai/v1`; deployments live under `.../openai`.
-      baseURL: this.baseURL.replace(/\/v1$/, ''),
+      baseURL: this.transcriptionBaseURL,
       defaultHeaders: this._options.defaultHeaders,
       fetch: this._options.fetch,
     });

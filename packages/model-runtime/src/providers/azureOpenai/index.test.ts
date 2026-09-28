@@ -603,7 +603,7 @@ describe('LobeAzureOpenAI', () => {
       expect(runtime.client.baseURL).toBe('https://test.cognitiveservices.azure.com/openai/v1');
     });
 
-    it('should attach the deployment id to DeploymentNotFound errors', async () => {
+    it('should attach the deployment id and deployments endpoint to DeploymentNotFound errors', async () => {
       const fetch = vi
         .fn()
         .mockResolvedValue(
@@ -621,6 +621,8 @@ describe('LobeAzureOpenAI', () => {
           code: 'DeploymentNotFound',
           deployId: 'prod-transcribe',
         }),
+        // Transcription bypasses the `/openai/v1` baseURL, so the error must not report it.
+        endpoint: 'https://***.cognitiveservices.azure.com/openai',
         provider: 'azure',
       });
     });
