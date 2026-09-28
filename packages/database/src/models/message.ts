@@ -5592,7 +5592,11 @@ export class MessageModel {
    */
   purgeMessages = async (ids: string[]) => {
     if (ids.length === 0) return;
-    return this.db.delete(messages).where(and(this.trashScope(), inArray(messages.id, ids)));
+    // Only rows still stamped: a restore that commits between the purge's
+    // registry read and this delete must win.
+    return this.db
+      .delete(messages)
+      .where(and(this.trashScope(), inArray(messages.id, ids), isTrashed(messages.isDeleted)));
   };
 
   /**

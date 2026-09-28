@@ -224,6 +224,20 @@ describe('TrashService', () => {
       expect(await serverDB.select().from(topics).where(eq(topics.id, topic.id))).toHaveLength(0);
       expect(await serverDB.select().from(trashItems)).toHaveLength(0);
     });
+
+    it('a purge that lands after a concurrent restore leaves the restored agent and its session alone', async () => {
+      const session = await sessionModel.create({ config: { title: 'Legacy' }, type: 'agent' });
+      const agent = (await sessionModel.findByIdOrSlug(session.id))!.agent;
+      const root = await service.trashAgent(agent.id);
+      // restore commits between the purge's registry read and its delete
+      await agentModel.restore([agent.id]);
+
+      await service.purge([root!.id]);
+      expect(await agentModel.existsById(agent.id)).toBe(true);
+      expect(
+        await serverDB.select().from(sessions).where(eq(sessions.id, session.id)),
+      ).toHaveLength(1);
+    });
   });
 
   describe('messages', () => {
@@ -290,6 +304,15 @@ describe('TrashService', () => {
       await service.purge([msgRoot.id]);
       expect(await serverDB.select().from(messages).where(eq(messages.id, a1.id))).toHaveLength(0);
       expect((await service.list()).items.map((i) => i.id)).toEqual([topicRoot.id]);
+    });
+
+    it('a purge that lands after a concurrent restore leaves the restored message alone', async () => {
+      const { a1 } = await seedChain();
+      const [msgRoot] = await service.trashMessages([a1.id]);
+      await messageModel.restoreMessages([{ id: a1.id }]);
+
+      await service.purge([msgRoot.id]);
+      expect(await messageModel.findById(a1.id)).toBeTruthy();
     });
 
     it('takes tool companions along as children of the assistant turn', async () => {
