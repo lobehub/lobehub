@@ -1,11 +1,20 @@
+import type { GoalReportMetadata } from './goalReport';
 import type { TaskStatus } from './task';
 
-export type WorkType = 'document' | 'external' | 'file' | 'task';
+/**
+ * `goal_report` is the wrap-up report of a Goal: one Work per goal, a new
+ * version per acceptance result. It is read through the goal graph, not the
+ * generic Work lists.
+ */
+export type WorkType = 'document' | 'external' | 'file' | 'goal_report' | 'task';
+/** Work types the generic Work lists return; a `goal_report` is read through its goal. */
+export type ListedWorkType = Exclude<WorkType, 'goal_report'>;
 export type LinearWorkResourceType = 'linear_document' | 'linear_issue';
 export type GithubWorkResourceType = 'github_issue' | 'github_pull_request';
 /** Every resource type backed by the unified `external` Work type. */
 export type ExternalWorkResourceType = GithubWorkResourceType | LinearWorkResourceType;
-export type WorkResourceType = 'document' | ExternalWorkResourceType | 'file' | 'task';
+export type WorkResourceType =
+  'document' | ExternalWorkResourceType | 'file' | 'goal_report' | 'task';
 export type WorkVisibility = 'private' | 'public';
 /**
  * How a version changed the Work. Not derivable from `version === 1`: updating
@@ -75,6 +84,8 @@ export interface WorkVersionMetadata {
   fileSize?: number;
   /** `file` Work — durable, fetchable URL of the persisted file. */
   fileUrl?: string;
+  /** `goal_report` Work — the structured storyline; the full report is the version's `content`. */
+  goalReport?: GoalReportMetadata;
   /** `file` Work — lines added by this version's edit (0 when the source tool reports none). */
   linesAdded?: number;
   /** `file` Work — lines deleted by this version's edit (0 when the source tool reports none). */

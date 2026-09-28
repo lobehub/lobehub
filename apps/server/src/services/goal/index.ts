@@ -69,6 +69,9 @@ import {
   resolveTaskMaxSteps,
   VERIFY_SETTLE_GRACE_MS,
 } from './recoveryPolicy';
+import { isGoalReportNode, withoutGoalReport } from './report';
+import { GoalReportService } from './reportService';
+import { GoalReportStore } from './reportStore';
 import { GoalSupervisorService } from './supervisor';
 import { claimGoalTask } from './taskClaim';
 import { TaskRecoveryCoordinator } from './taskRecoveryCoordinator';
@@ -80,6 +83,16 @@ import {
 } from './traceObservation';
 
 const TASK_NODE_CLAIM_TTL_MS = 5 * 60 * 1000;
+/**
+ * Tick outcomes after which the Goal-level acceptance may have just ended: the
+ * Goal was achieved, failed or canceled, or parked on a gate (an acceptance
+ * whose attempts ran out opens one). Every other outcome skips the check.
+ */
+const REPORT_CHECK_OUTCOMES = new Set<GoalTickResult['outcome']>([
+  'achieved',
+  'failed',
+  'waiting_human',
+]);
 const TASK_DESCRIPTION_MAX_LENGTH = 255;
 /** Advisory-lock namespace for goal dispatch. `0x676f_6469` is ASCII `godi`. */
 const GOAL_DISPATCH_LOCK_NAMESPACE = 0x67_6f_64_69;
@@ -671,14 +684,15 @@ export class GoalService {
 
   graph = async (goalId: string) => {
     const graph = await this.requireGraph(goalId);
-    const [runHeartbeats, deliveredAt, acceptances, assignees, spend] = await Promise.all([
+    const [runHeartbeats, deliveredAt, acceptances, assignees, spend, report] = await Promise.all([
       this.collectRunHeartbeats(graph),
       this.collectDeliveredAt(graph),
       this.collectAcceptances(graph),
       this.collectAssignees(graph),
       this.resolveSpend(graph),
+      new GoalReportStore(this.db, this.userId, this.workspaceId).state(graph),
     ]);
-    return { ...graph, acceptances, assignees, deliveredAt, runHeartbeats, spend };
+    return { ...graph, acceptances, assignees, deliveredAt, report, runHeartbeats, spend };
   };
 
   /**
@@ -1207,7 +1221,11 @@ export class GoalService {
     const graph = await this.requireGraph(goalId);
 
     const unfinishedNodes = graph.nodes.filter(
-      (node) => node.kind === 'task' && node.taskId && !TERMINAL_NODE_STATUSES.has(node.status),
+      (node) =>
+        node.kind === 'task' &&
+        !isGoalReportNode(node) &&
+        node.taskId &&
+        !TERMINAL_NODE_STATUSES.has(node.status),
     );
     const unfinishedNodeIds = new Set(unfinishedNodes.map((node) => node.id));
     const unfinishedTaskIds = unfinishedNodes.flatMap((node) => (node.taskId ? [node.taskId] : []));
@@ -1366,7 +1384,10 @@ export class GoalService {
     if (
       stoppedByExploration &&
       before.nodes.filter(
-        (node) => node.kind === 'task' && node.title !== GOAL_ACCEPTANCE_TASK_TITLE,
+        (node) =>
+          node.kind === 'task' &&
+          node.title !== GOAL_ACCEPTANCE_TASK_TITLE &&
+          !isGoalReportNode(node),
       ).length >= (goal.config?.exploration?.maxExperiments ?? 0)
     )
       return goal;
@@ -1452,8 +1473,30 @@ export class GoalService {
    * runtime's event array.
    */
   tick = async (goalId: string, options?: GoalTickOptions): Promise<GoalTickResult> => {
+    const result = await this.tickOnce(goalId, options);
+    if (REPORT_CHECK_OUTCOMES.has(result.outcome)) await this.dispatchGoalReport(goalId);
+    return result;
+  };
+
+  /**
+   * The wrap-up branch. Runs after the move rather than as one: it only fires
+   * once the Goal-level acceptance has ended, and whatever happens to it — a
+   * dispatch that throws, a run that fails or times out — must not change the
+   * outcome the coordinator just reported or the Goal's status.
+   */
+  private dispatchGoalReport = async (goalId: string) => {
+    try {
+      await new GoalReportService(this.db, this.userId, this.workspaceId).dispatchIfDue(goalId);
+    } catch (error) {
+      console.error('[GoalService] wrap-up report dispatch failed:', error);
+    }
+  };
+
+  private tickOnce = async (goalId: string, options?: GoalTickOptions): Promise<GoalTickResult> => {
     const at = Date.now();
-    const graph = await this.requireGraph(goalId);
+    // The coordinator never sees the wrap-up report node: it runs after the
+    // Goal-level acceptance and does not take part in the Goal's status.
+    const graph = withoutGoalReport(await this.requireGraph(goalId));
     if (graph.goal.config?.manager) {
       // The system's own planner leads whenever the Goal has one: a main Agent is
       // the fallback for problems that planner cannot express, not a replacement

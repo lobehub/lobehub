@@ -1,3 +1,4 @@
+import type { GoalReportDispatch, GoalReportState } from './goalReport';
 import type { InitialGoalOverviewContext } from './stepContext';
 import type { AcceptanceStatus } from './verify';
 import type { WorkType } from './work';
@@ -282,6 +283,8 @@ export interface GoalConfig {
   /** Retained after release to distinguish lease-aware retries from legacy planners. */
   planningProtocol?: 'lease-v1';
   recovery?: GoalRecoveryPolicy;
+  /** Coordinator-owned receipt of the latest wrap-up report dispatch. */
+  report?: GoalReportDispatch;
   schedule?: GoalSchedulePolicy;
   supervision?: GoalSupervisionPolicy;
   /** Durable supervisor topic and bounded incident ledger. */
@@ -295,7 +298,7 @@ export interface GoalConfig {
 }
 
 /** Creation accepts planning options, never a runtime receipt. */
-export type GoalCreateConfig = Omit<GoalConfig, 'managerState' | 'supervisorState'>;
+export type GoalCreateConfig = Omit<GoalConfig, 'managerState' | 'report' | 'supervisorState'>;
 
 /**
  * The goal entity as exposed to clients — a mirror of the `goals` table row.
@@ -517,6 +520,12 @@ export interface GoalGraphSnapshot {
   events: GoalGraphEvent[];
   goal: GoalItem;
   nodes: GoalGraphNode[];
+  /**
+   * The wrap-up report: whether it is being written, done or failed, and the
+   * newest submitted version. Absent until the Goal-level acceptance has ended
+   * and a wrap-up was dispatched.
+   */
+  report?: GoalReportState;
   /**
    * Live heartbeat per active task node id: the `agent_operations.updatedAt`
    * of the run behind it. The runtime refreshes that lease every ~90s, while

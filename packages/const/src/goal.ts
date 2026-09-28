@@ -95,3 +95,12 @@ export const VERIFICATION_UNJUDGEABLE_ERROR =
  */
 export const ACCEPTANCE_REVIEW_ERRORED_ERROR =
   'Acceptance review could not run; the delivery passed its verifiers but was never reviewed.';
+
+/**
+ * Fixed title of the wrap-up Task the coordinator dispatches once the
+ * Goal-level acceptance has ended (passed, failed / exhausted, or the Goal was
+ * failed / canceled). It writes the Goal report storyline. Stored in English as
+ * data; clients recognize it by this title. It never takes part in deciding the
+ * Goal's status — the coordinator ignores it when choosing its next move.
+ */
+export const GOAL_REPORT_TASK_TITLE = 'Write the Goal report';

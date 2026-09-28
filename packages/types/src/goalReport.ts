@@ -1,0 +1,101 @@
+import { z } from 'zod';
+
+/**
+ * The structured storyline of a finished Goal, written by the wrap-up agent
+ * once the Goal-level acceptance has ended.
+ *
+ * Only narrative and references live here. Whether a criterion passed and what
+ * a person decided are NOT copied in: the page reads those from the verify
+ * records and `goal_node_decisions`, so the report can never disagree with them.
+ */
+const idList = z.array(z.string().trim().min(1)).max(200);
+
+export const goalReportDetourKinds = ['dead_end', 'superseded', 'retry'] as const;
+export type GoalReportDetourKind = (typeof goalReportDetourKinds)[number];
+
+export const GoalReportDetourSchema = z
+  .object({
+    kind: z.enum(goalReportDetourKinds),
+    lesson: z.string().trim().min(1).max(2000),
+    nodeIds: idList.min(1),
+    reason: z.string().trim().min(1).max(2000),
+    title: z.string().trim().min(1).max(200),
+  })
+  .strict();
+export type GoalReportDetour = z.infer<typeof GoalReportDetourSchema>;
+
+export const GoalReportChapterSchema = z
+  .object({
+    detours: z.array(GoalReportDetourSchema).max(20).default([]),
+    findingIds: idList.default([]),
+    narrative: z.string().trim().min(1).max(8000),
+    nodeIds: idList.default([]),
+    title: z.string().trim().min(1).max(200),
+    workVersionIds: idList.default([]),
+  })
+  .strict();
+export type GoalReportChapter = z.infer<typeof GoalReportChapterSchema>;
+
+export const GoalReportNextStepSchema = z
+  .object({
+    nodeIds: idList.optional(),
+    reason: z.string().trim().min(1).max(2000),
+    title: z.string().trim().min(1).max(200),
+  })
+  .strict();
+export type GoalReportNextStep = z.infer<typeof GoalReportNextStepSchema>;
+
+export const GoalReportMetadataSchema = z
+  .object({
+    chapters: z.array(GoalReportChapterSchema).min(1).max(30),
+    deliverableWorkId: z.string().trim().min(1).optional(),
+    /** The newest `goal_events.id` the report was written against. */
+    graphCursor: z.string().trim().min(1),
+    headline: z.string().trim().min(1).max(500),
+    nextSteps: z.array(GoalReportNextStepSchema).max(20).default([]),
+  })
+  .strict();
+export type GoalReportMetadata = z.infer<typeof GoalReportMetadataSchema>;
+
+/**
+ * Where the Goal's wrap-up stands, as the page needs it:
+ *
+ * - `running`   — a report run is in flight for the latest acceptance result.
+ * - `completed` — a report version was submitted for the latest acceptance result.
+ * - `failed`    — the run ended, failed or timed out without a report. The Goal's
+ *                 own status is unaffected; the page falls back to its derived view.
+ */
+export type GoalReportStatus = 'completed' | 'failed' | 'running';
+
+/** Which acceptance result a wrap-up run was dispatched for. */
+export type GoalReportTrigger = 'accepted' | 'acceptance_failed' | 'goal_canceled' | 'goal_failed';
+
+/** Coordinator-owned receipt of the latest wrap-up dispatch, kept on `goal.config.report`. */
+export interface GoalReportDispatch {
+  /** Stable identity of the acceptance result; one dispatch per key. */
+  acceptanceKey: string;
+  dispatchedAt: string;
+  /** Why the run could not be started, when it could not. */
+  error?: string;
+  nodeId: string;
+  operationId?: string;
+  taskId?: string;
+  trigger: GoalReportTrigger;
+}
+
+export interface GoalReportVersion {
+  content: string | null;
+  createdAt: Date;
+  metadata: GoalReportMetadata;
+  version: number;
+  workId: string;
+  workVersionId: string;
+}
+
+/** The wrap-up state a goal graph read carries. */
+export interface GoalReportState {
+  dispatch: GoalReportDispatch;
+  /** Newest report version, whichever acceptance result it was written for. */
+  latest?: GoalReportVersion;
+  status: GoalReportStatus;
+}
