@@ -5,17 +5,6 @@ export {
   GrokBuildAdapter,
   QoderAdapter,
 } from './adapters';
-export {
-  buildClaudeCodeDirectEnv,
-  type BuildClaudeCodeDirectEnvInput,
-  type BuildClaudeCodeDirectEnvResult,
-  CLAUDE_CODE_API_LOCAL_ONLY_ERROR,
-  HETEROGENEOUS_PROVIDER_BINDING_LOCAL_ONLY_ERROR,
-  HETEROGENEOUS_PROVIDER_BINDING_PERSONAL_ONLY_ERROR,
-  normalizeAnthropicSdkBaseURL,
-  sanitizeClaudeCodeDirectArgs,
-  sanitizeClaudeCodeDirectEnv,
-} from './claudeCodeDirectEnv';
 export type {
   HeterogeneousAgentCliError,
   HeterogeneousAgentDescriptor,
@@ -110,11 +99,14 @@ export type {
   ServerDefaultHeterogeneousTokenHeader,
 } from './providerBinding';
 export {
+  CLAUDE_CODE_API_LOCAL_ONLY_ERROR,
   formatHeterogeneousProviderBindingError,
   getHeterogeneousProviderBindingCapability,
   getProviderInferenceProtocols,
   getServerDefaultHeterogeneousAgentConfig,
   HETEROGENEOUS_PROVIDER_BINDING_AGENT_TYPES,
+  HETEROGENEOUS_PROVIDER_BINDING_LOCAL_ONLY_ERROR,
+  HETEROGENEOUS_PROVIDER_BINDING_PERSONAL_ONLY_ERROR,
   isHeterogeneousProviderBindingSupported,
   isServerDefaultHeterogeneousAgentType,
   resolveHeterogeneousProviderBinding,

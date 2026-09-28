@@ -1,4 +1,4 @@
-import type { QuotaLimitReading } from './types';
+import type { QuotaLimitReading } from '../quota/types';
 
 /**
  * Shape of a single entry in the `/api/oauth/usage` `limits[]` array. This is

@@ -6,5 +6,4 @@ export * from './loadBalancer';
 export * from './readings';
 export * from './snapshot';
 export * from './types';
-export * from './usageApi';
 export * from './windows';

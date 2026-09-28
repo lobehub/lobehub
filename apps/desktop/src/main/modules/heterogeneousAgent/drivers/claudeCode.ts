@@ -1,9 +1,9 @@
 import {
   buildClaudeCodeDirectEnv,
+  CLAUDE_CODE_BASE_ARGS,
   sanitizeClaudeCodeDirectArgs,
   sanitizeClaudeCodeDirectEnv,
-} from '@lobechat/heterogeneous-agents';
-import { CLAUDE_CODE_BASE_ARGS } from '@lobechat/heterogeneous-agents/spawn';
+} from '@lobechat/heterogeneous-agents/spawn';
 import { formatServerDefaultHeterogeneousModel } from '@lobechat/types';
 
 import type { HeterogeneousAgentBuildPlanParams, HeterogeneousAgentDriver } from '../types';
