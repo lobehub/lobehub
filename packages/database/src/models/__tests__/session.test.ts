@@ -831,6 +831,43 @@ describe('SessionModel', () => {
       ).toHaveLength(0);
     });
 
+    it('keeps a legacy group session with live members reachable, minus the trashed member', async () => {
+      await serverDB.insert(sessions).values({ id: 'group-shell', type: 'group', userId });
+      await serverDB.insert(agents).values([
+        { deletedAt: new Date(), id: 'trashed-member', isDeleted: true, userId },
+        { id: 'live-member', userId },
+      ]);
+      await serverDB.insert(agentsToSessions).values([
+        { agentId: 'trashed-member', sessionId: 'group-shell', userId },
+        { agentId: 'live-member', sessionId: 'group-shell', userId },
+      ]);
+
+      const [group] = await sessionModel.query();
+      expect(group.id).toBe('group-shell');
+      expect(group.agentsToSessions.map((l: any) => l.agent.id)).toEqual(['live-member']);
+      expect((await sessionModel.findByIdOrSlug('group-shell'))?.agent.id).toBe('live-member');
+      expect(await sessionModel.count()).toBe(1);
+
+      // still write-protected: hard-deleting it would cascade the trashed member's link away
+      await sessionModel.delete('group-shell');
+      expect(
+        await serverDB.select().from(sessions).where(eq(sessions.id, 'group-shell')),
+      ).toHaveLength(1);
+    });
+
+    it('hides a legacy group session once every member is trashed', async () => {
+      await serverDB.insert(sessions).values({ id: 'group-shell', type: 'group', userId });
+      await serverDB
+        .insert(agents)
+        .values({ deletedAt: new Date(), id: 'trashed-member', isDeleted: true, userId });
+      await serverDB
+        .insert(agentsToSessions)
+        .values({ agentId: 'trashed-member', sessionId: 'group-shell', userId });
+
+      expect(await sessionModel.query()).toEqual([]);
+      expect(await sessionModel.findByIdOrSlug('group-shell')).toBeUndefined();
+    });
+
     it('deleteAll leaves the hidden shell in place', async () => {
       await seedTrashedShell();
       await sessionModel.deleteAll();

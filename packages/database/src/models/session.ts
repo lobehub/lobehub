@@ -5,7 +5,7 @@ import type {
   LobeAgentSession,
   LobeGroupSession,
 } from '@lobechat/types';
-import { and, asc, count, desc, eq, inArray, not, notExists, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, exists, inArray, not, notExists, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
 import { merge } from '@/utils/merge';
@@ -18,7 +18,7 @@ import { sanitizeBm25Query } from '../utils/bm25';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
 import { inJsonStringArray } from '../utils/inJsonStringArray';
-import { isTrashed } from '../utils/softDelete';
+import { isTrashed, notTrashed } from '../utils/softDelete';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 /**
@@ -50,13 +50,14 @@ export class SessionModel {
 
   /**
    * Sessions carry no recycle-bin flag of their own (the agent is the
-   * restorable unit), so every read *and* write goes through the linked
-   * agent's flag: a shell whose agent sits in the bin is invisible here —
-   * not listed, not resolvable by id / slug, not updatable, not
-   * hard-deletable through this model — until the agent is restored (or the
-   * agent purge drops the shell with it).
+   * restorable unit), so the gate goes through the linked agents' flags.
+   *
+   * Write gate: a shell with *any* trashed agent linked is not updatable in
+   * bulk, not hard-deletable through this model — deleting it would cascade
+   * away the topics the agent's restore needs — until the agent is restored
+   * (or the agent purge drops the shell with it).
    */
-  private agentNotTrashed = () =>
+  private noTrashedAgent = () =>
     notExists(
       this.db
         .select({ id: agentsToSessions.agentId })
@@ -65,7 +66,33 @@ export class SessionModel {
         .where(and(eq(agentsToSessions.sessionId, sessions.id), isTrashed(agents.isDeleted))),
     );
 
-  private ownership = () => and(this.scope(), this.agentNotTrashed());
+  /**
+   * Read gate: a single-agent shell whose agent sits in the bin is invisible
+   * (not listed, not resolvable by id / slug, not updatable). A legacy
+   * `type === 'group'` shell stays reachable while any member is live; reads
+   * that join agents drop the trashed members via {@link liveAgentRow}.
+   */
+  private visible = () =>
+    or(
+      this.noTrashedAgent(),
+      and(
+        eq(sessions.type, 'group'),
+        exists(
+          this.db
+            .select({ id: agentsToSessions.agentId })
+            .from(agentsToSessions)
+            .innerJoin(agents, eq(agentsToSessions.agentId, agents.id))
+            .where(and(eq(agentsToSessions.sessionId, sessions.id), notTrashed(agents.isDeleted))),
+        ),
+      ),
+    );
+
+  /** For reads left-joining `agents`: drop rows of trashed members (null agent = no link, kept). */
+  private liveAgentRow = () => notTrashed(agents.isDeleted);
+
+  private ownership = () => and(this.scope(), this.visible());
+
+  private writeOwnership = () => and(this.scope(), this.noTrashedAgent());
 
   private agentsOwnership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agents);
@@ -91,7 +118,7 @@ export class SessionModel {
       .leftJoin(agentsToSessions, eq(sessions.id, agentsToSessions.sessionId))
       .leftJoin(agents, eq(agentsToSessions.agentId, agents.id))
       .leftJoin(sessionGroups, eq(sessions.groupId, sessionGroups.id))
-      .where(and(this.ownership(), not(eq(sessions.slug, INBOX_SESSION_ID))))
+      .where(and(this.ownership(), this.liveAgentRow(), not(eq(sessions.slug, INBOX_SESSION_ID))))
       .orderBy(desc(sessions.updatedAt))
       .limit(pageSize)
       .offset(offset);
@@ -158,7 +185,13 @@ export class SessionModel {
         session: sessions,
       })
       .from(sessions)
-      .where(and(or(eq(sessions.id, idOrSlug), eq(sessions.slug, idOrSlug)), this.ownership()))
+      .where(
+        and(
+          or(eq(sessions.id, idOrSlug), eq(sessions.slug, idOrSlug)),
+          this.ownership(),
+          this.liveAgentRow(),
+        ),
+      )
       .leftJoin(agentsToSessions, eq(sessions.id, agentsToSessions.sessionId))
       .leftJoin(agents, eq(agentsToSessions.agentId, agents.id))
       .leftJoin(sessionGroups, eq(sessions.groupId, sessionGroups.id))
@@ -412,7 +445,7 @@ export class SessionModel {
       const [target] = await trx
         .select({ id: sessions.id })
         .from(sessions)
-        .where(and(eq(sessions.id, id), this.ownership()))
+        .where(and(eq(sessions.id, id), this.writeOwnership()))
         .limit(1);
       if (!target) return { orphanedAgentIds: [] as string[], result: { count: 0 } };
 
@@ -430,7 +463,9 @@ export class SessionModel {
         .where(and(eq(agentsToSessions.sessionId, id), this.agentsToSessionsOwnership()));
 
       // Delete the session (this will cascade delete messages, topics, etc.)
-      const result = await trx.delete(sessions).where(and(eq(sessions.id, id), this.ownership()));
+      const result = await trx
+        .delete(sessions)
+        .where(and(eq(sessions.id, id), this.writeOwnership()));
 
       // Delete orphaned agents
       const orphanedAgentIds = await this.clearOrphanAgent(agentIds, trx);
@@ -451,7 +486,7 @@ export class SessionModel {
       const visible = await trx
         .select({ id: sessions.id })
         .from(sessions)
-        .where(and(inArray(sessions.id, ids), this.ownership()));
+        .where(and(inArray(sessions.id, ids), this.writeOwnership()));
       ids = visible.map((row) => row.id);
       if (ids.length === 0) return { orphanedAgentIds: [] as string[], result: { count: 0 } };
 
@@ -471,7 +506,7 @@ export class SessionModel {
       // Delete the sessions
       const result = await trx
         .delete(sessions)
-        .where(and(inArray(sessions.id, ids), this.ownership()));
+        .where(and(inArray(sessions.id, ids), this.writeOwnership()));
 
       // Delete orphaned agents
       const orphanedAgentIds = await this.clearOrphanAgent(agentIds, trx);
@@ -487,7 +522,10 @@ export class SessionModel {
     return this.db.transaction(async (trx) => {
       // Shells of trashed agents stay (their agent is still restorable); only
       // visible shells and their links go.
-      const visible = await trx.select({ id: sessions.id }).from(sessions).where(this.ownership());
+      const visible = await trx
+        .select({ id: sessions.id })
+        .from(sessions)
+        .where(this.writeOwnership());
       const ids = visible.map((row) => row.id);
       if (ids.length === 0) return { count: 0 };
       await trx
