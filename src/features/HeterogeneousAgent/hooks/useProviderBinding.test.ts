@@ -3,17 +3,24 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AiInfraStore } from '@/store/aiInfra/store';
 
-import { useProviderBindingCompatibleProviders } from './useProviderBinding';
+import {
+  useProviderBindingCompatibleProviders,
+  useProviderBindingValidation,
+} from './useProviderBinding';
 
 type ProviderState = Pick<
   AiInfraStore,
-  'enabledAiModels' | 'enabledAiProviders' | 'providerBindingAgentTypes'
+  | 'enabledAiModels'
+  | 'enabledAiProviders'
+  | 'isInitAiProviderRuntimeState'
+  | 'providerBindingAgentTypes'
 >;
 
 const { state } = vi.hoisted(() => ({
   state: {
     enabledAiModels: [],
     enabledAiProviders: [],
+    isInitAiProviderRuntimeState: true,
     providerBindingAgentTypes: {},
   } as ProviderState,
 }));
@@ -89,5 +96,63 @@ describe('useProviderBindingCompatibleProviders', () => {
     expect(result.current.providers).toEqual([]);
     rerender({ providerId: 'disabled' });
     expect(result.current.providers).toEqual([]);
+  });
+});
+
+describe('useProviderBindingValidation', () => {
+  beforeEach(() => {
+    state.enabledAiProviders = [{ id: 'bound', source: 'custom' }];
+    state.providerBindingAgentTypes = { bound: ['kimi-code', 'claude-code'] };
+    state.enabledAiModels = [
+      { abilities: { functionCall: true }, id: 'tools', providerId: 'bound', type: 'chat' },
+      { abilities: { functionCall: false }, id: 'no-tools', providerId: 'bound', type: 'chat' },
+    ];
+  });
+
+  it.each(['no-tools', 'missing'])(
+    'does not block Kimi for unused secondary model %s',
+    (smallFastModel) => {
+      const { result } = renderHook(() =>
+        useProviderBindingValidation('kimi-code', {
+          model: 'tools',
+          providerId: 'bound',
+          smallFastModel,
+        }),
+      );
+
+      expect(result.current).toEqual({ error: undefined, isReady: true });
+    },
+  );
+
+  it('still blocks a Kimi primary model without tool support', () => {
+    const { result } = renderHook(() =>
+      useProviderBindingValidation('kimi-code', {
+        model: 'no-tools',
+        providerId: 'bound',
+        smallFastModel: 'tools',
+      }),
+    );
+
+    expect(result.current.error).toEqual({
+      code: 'modelUnavailable',
+      model: 'no-tools',
+      providerId: 'bound',
+    });
+  });
+
+  it('still blocks Claude Code when its secondary model is unavailable', () => {
+    const { result } = renderHook(() =>
+      useProviderBindingValidation('claude-code', {
+        model: 'tools',
+        providerId: 'bound',
+        smallFastModel: 'missing',
+      }),
+    );
+
+    expect(result.current.error).toEqual({
+      code: 'modelUnavailable',
+      model: 'missing',
+      providerId: 'bound',
+    });
   });
 });

@@ -48,9 +48,11 @@ export const useProviderBindingValidation = (
   } else if (!bindingAgentTypes[apiConfig.providerId]?.includes(agentType!)) {
     error = { agentType: agentType!, code: 'protocolMismatch', providerId: apiConfig.providerId };
   } else {
-    const boundModels = [apiConfig.model, apiConfig.smallFastModel].filter(
-      (model): model is string => !!model,
-    );
+    // Kimi only consumes the primary model; legacy secondary values must not block it.
+    const boundModels = [
+      apiConfig.model,
+      agentType === 'kimi-code' ? undefined : apiConfig.smallFastModel,
+    ].filter((model): model is string => !!model);
     const unavailableModel = boundModels.find(
       (boundModel) =>
         !enabledModels.some(

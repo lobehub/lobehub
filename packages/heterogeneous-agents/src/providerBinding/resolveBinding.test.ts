@@ -17,29 +17,64 @@ const runtime = (
 });
 
 describe('heterogeneous provider binding protocol resolver', () => {
-  it('rejects an explicitly tool-less Kimi model on both primary and background bindings', () => {
-    for (const apiConfig of [
-      { model: 'no-tools', providerId: 'openai' },
-      { model: 'tools', providerId: 'openai', smallFastModel: 'no-tools' },
-    ]) {
-      const result = resolveHeterogeneousProviderBinding({
-        agentType: 'kimi-code',
-        apiConfig,
-        enabledModels: [
-          {
-            abilities: { functionCall: false },
-            id: 'no-tools',
-            providerId: 'openai',
-            type: 'chat',
-          },
-          { abilities: { functionCall: true }, id: 'tools', providerId: 'openai', type: 'chat' },
-        ],
-        providerEnabled: true,
-        runtimeConfig: runtime('openai'),
-      });
-      expect(result.error).toMatchObject({ code: 'modelUnavailable', model: 'no-tools' });
-    }
+  it.each([
+    { model: 'no-tools', providerId: 'openai' },
+    { model: 'no-tools', providerId: 'openai', smallFastModel: 'tools' },
+  ])('rejects a tool-less Kimi primary model regardless of the secondary model', (apiConfig) => {
+    const result = resolveHeterogeneousProviderBinding({
+      agentType: 'kimi-code',
+      apiConfig,
+      enabledModels: [
+        {
+          abilities: { functionCall: false },
+          id: 'no-tools',
+          providerId: 'openai',
+          type: 'chat',
+        },
+        { abilities: { functionCall: true }, id: 'tools', providerId: 'openai', type: 'chat' },
+      ],
+      providerEnabled: true,
+      runtimeConfig: runtime('openai'),
+    });
+    expect(result.error).toMatchObject({ code: 'modelUnavailable', model: 'no-tools' });
   });
+
+  it.each(['no-tools', 'missing'])('ignores Kimi’s unused secondary model %s', (smallFastModel) => {
+    const result = resolveHeterogeneousProviderBinding({
+      agentType: 'kimi-code',
+      apiConfig: { model: 'tools', providerId: 'openai', smallFastModel },
+      enabledModels: [
+        { abilities: { functionCall: true }, id: 'tools', providerId: 'openai', type: 'chat' },
+        { abilities: { functionCall: false }, id: 'no-tools', providerId: 'openai', type: 'chat' },
+      ],
+      providerEnabled: true,
+      runtimeConfig: runtime('openai'),
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.resolution).toMatchObject({
+      apiConfig: { model: 'tools', providerId: 'openai' },
+      modelMetadata: { id: 'tools', providerId: 'openai' },
+      protocol: 'openai-chat-completions',
+    });
+  });
+
+  it('still rejects an unavailable Claude Code secondary model', () => {
+    const result = resolveHeterogeneousProviderBinding({
+      agentType: 'claude-code',
+      apiConfig: { model: 'primary', providerId: 'anthropic', smallFastModel: 'missing' },
+      enabledModels: [{ abilities: {}, id: 'primary', providerId: 'anthropic', type: 'chat' }],
+      providerEnabled: true,
+      runtimeConfig: runtime('anthropic'),
+    });
+
+    expect(result.error).toEqual({
+      code: 'modelUnavailable',
+      model: 'missing',
+      providerId: 'anthropic',
+    });
+  });
+
   it('maps Anthropic and Google providers to their canonical protocols', () => {
     expect(getProviderInferenceProtocols('anthropic', runtime('anthropic'))).toEqual([
       'anthropic-messages',
