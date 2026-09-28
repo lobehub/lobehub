@@ -12,7 +12,6 @@ describe('resolveOperationActivity', () => {
       'createToolMessage',
       'pluginApi',
       'builtinToolSearch',
-      'builtinToolInterpreter',
       'builtinToolPageAgent',
     ];
     for (const type of toolOps) {
