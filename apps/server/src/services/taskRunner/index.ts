@@ -304,11 +304,16 @@ export class TaskRunnerService {
         const topicId = result.topicId;
         // Record the run under the task's row lock (see TaskService.deleteTask).
         // If the task was deleted while this run was being dispatched, nobody
-        // is left to stop it — stop it here instead of orphaning it.
+        // is left to stop it — stop it here instead of orphaning it. The same
+        // holds for a claim withdrawn mid-startup: closing or restarting a goal
+        // puts a claimed Task with no recorded run back to `backlog` under this
+        // lock, and a run recorded over it would keep spending unseen.
         const recorded = await this.db.transaction(async (tx) => {
           const taskModel = new TaskModel(tx, this.userId, this.workspaceId);
           const taskTopicModel = new TaskTopicModel(tx, this.userId, this.workspaceId);
-          if (!(await taskModel.lockForUpdate(task.id))) return false;
+          if (!(await taskModel.lockForUpdate(task.id))) return 'deleted' as const;
+          if ((await taskModel.findById(task.id))?.status === 'backlog')
+            return 'withdrawn' as const;
           if (continueTopicId) {
             await taskTopicModel.updateStatus(task.id, continueTopicId, 'running');
             await taskTopicModel.updateOperationId(task.id, continueTopicId, result.operationId);
@@ -322,9 +327,9 @@ export class TaskRunnerService {
               trigger,
             });
           }
-          return true;
+          return 'recorded' as const;
         });
-        if (!recorded) {
+        if (recorded !== 'recorded') {
           const stop = await aiAgentService
             .interruptTask({ operationId: result.operationId })
             .catch((error) => {
@@ -336,8 +341,8 @@ export class TaskRunnerService {
           throw new TRPCError({
             code: stopped ? 'NOT_FOUND' : 'INTERNAL_SERVER_ERROR',
             message: stopped
-              ? 'The task was deleted while its run was starting; the run was stopped.'
-              : `The task was deleted while its run was starting, and stopping that run (operation ${result.operationId}) could not be confirmed.`,
+              ? `The task was ${recorded === 'deleted' ? 'deleted' : 'withdrawn'} while its run was starting; the run was stopped.`
+              : `The task was ${recorded === 'deleted' ? 'deleted' : 'withdrawn'} while its run was starting, and stopping that run (operation ${result.operationId}) could not be confirmed.`,
           });
         }
       }
