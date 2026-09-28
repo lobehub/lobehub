@@ -29,7 +29,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 import { FileService } from '@/server/services/file';
 
-import { coverageGaps, readRequiredEvidence } from './evidenceCoverage';
+import { runEvidenceGaps } from './evidenceCoverage';
 import { planEvidenceVerification } from './evidencePlanner';
 import { resolveModelReadableFrameUrl } from './modelFrames';
 import { planItemToPendingResult } from './resultSnapshot';
@@ -266,13 +266,7 @@ export class VerifyExecutorService {
   ): Promise<Set<string>> {
     const gapIds = new Set<string>();
     for (const item of items) {
-      // Deliverable/task-artifact evidence is resolved by the verifier agent
-      // from the operation's associated documents/files. Only run evidence is
-      // expected to have been explicitly captured into verify_evidence rows.
-      const required = readRequiredEvidence(item.verifierConfig)?.filter(
-        (spec) => !spec.scope || spec.scope === 'run_evidence',
-      );
-      const gaps = coverageGaps(required, evidenceByItem.get(item.id) ?? []);
+      const gaps = runEvidenceGaps(item.verifierConfig, evidenceByItem.get(item.id) ?? []);
       if (gaps.length === 0) continue;
 
       gapIds.add(item.id);

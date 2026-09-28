@@ -1,4 +1,5 @@
 import { isHeterogeneousAgentModelId } from '@lobechat/const';
+import type { VerifyEvidenceType } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -9,6 +10,7 @@ import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { createVerifierAgentRunner } from './agentVerifier';
+import { runEvidenceGaps } from './evidenceCoverage';
 import {
   recordHeterogeneousDeliverableEvidence,
   startEvidenceSubmission,
@@ -143,25 +145,21 @@ const executeVerifyLifecycle = async (
       const inRunEvidence = await new VerifyEvidenceModel(db, userId, workspaceId).listByRun(
         run.id,
       );
-      const byCheckItem = new Map<string, Set<string>>();
+      const byCheckItem = new Map<string, { type: VerifyEvidenceType }[]>();
       for (const row of inRunEvidence) {
-        const types = byCheckItem.get(row.checkItemId) ?? new Set<string>();
-        types.add(row.type);
-        byCheckItem.set(row.checkItemId, types);
+        const rows = byCheckItem.get(row.checkItemId) ?? [];
+        rows.push(row);
+        byCheckItem.set(row.checkItemId, rows);
       }
 
+      // A criterion that names the artifacts it needs is only covered once each
+      // declared run-evidence type is present — the same rule the structural
+      // gate applies, so the handoff never asks for what the gate ignores.
       const uncovered = plan.filter((item) => {
         if (item.required === false) return false;
         const captured = byCheckItem.get(item.id);
-        if (!captured?.size) return true;
-
-        // A criterion that names the artifacts it needs is only covered once
-        // each declared type is present.
-        const declared = (item.verifierConfig as { requiredEvidence?: { type: string }[] })
-          ?.requiredEvidence;
-        return Array.isArray(declared)
-          ? declared.some((required) => !captured.has(required.type))
-          : false;
+        if (!captured?.length) return true;
+        return runEvidenceGaps(item.verifierConfig, captured).length > 0;
       });
 
       if (inRunEvidence.length > 0 && uncovered.length === 0) {
