@@ -11,7 +11,7 @@ import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
-import { outputJson, printTable, truncate } from '../utils/format';
+import { confirm, outputJson, printTable, truncate } from '../utils/format';
 import { log } from '../utils/logger';
 import { resolveAppUrlBuilder } from './task/url';
 
@@ -526,6 +526,20 @@ export function registerGoalCommand(program: Command) {
         log.info(result.message);
       });
   }
+
+  goal
+    .command('delete <id>')
+    .description('Delete a goal and its graph')
+    .option('--yes', 'Skip confirmation prompt')
+    .action(async (id: string, options: { yes?: boolean }) => {
+      if (!options.yes && !(await confirm(`Delete goal ${id}? This cannot be undone.`))) {
+        console.log('Cancelled.');
+        return;
+      }
+      const client = await getTrpcClient();
+      const result = await client.goal.delete.mutate({ id });
+      log.info(result.message);
+    });
 
   goal
     .command('set-budget <id>')
