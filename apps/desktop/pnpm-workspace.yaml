@@ -63,11 +63,11 @@ overrides:
   vitest: 5.0.0
   'zod@^4': 4.5.4
 minimumReleaseAgeExclude:
-  - '@auv-js/api-client@0.0.16'
-  - '@auv-js/cli-darwin-arm64@0.0.16'
-  - '@auv-js/cli-darwin-x64@0.0.16'
-  - '@auv-js/cli-linux-arm64-gnu@0.0.16'
-  - '@auv-js/cli-linux-x64-gnu@0.0.16'
-  - '@auv-js/cli-win32-x64-msvc@0.0.16'
-  - '@auv-js/cli@0.0.16'
-  - '@auv-js/sdk@0.0.16'
+  - '@auv-js/api-client@0.0.22'
+  - '@auv-js/cli-darwin-arm64@0.0.22'
+  - '@auv-js/cli-darwin-x64@0.0.22'
+  - '@auv-js/cli-linux-arm64-gnu@0.0.22'
+  - '@auv-js/cli-linux-x64-gnu@0.0.22'
+  - '@auv-js/cli-win32-x64-msvc@0.0.22'
+  - '@auv-js/cli@0.0.22'
+  - '@auv-js/sdk@0.0.22'
