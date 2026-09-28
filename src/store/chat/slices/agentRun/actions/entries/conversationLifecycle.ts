@@ -836,7 +836,7 @@ export class ConversationLifecycleActionImpl {
     )?.metadata.serverOperationId;
 
     // What this client believes about the conversation's server runs. The
-    // server keeps it only when the send has to stop a run left live (LOBE-14448).
+    // server keeps it only when the send has to stop a run left live.
     const clientOperations = serverRuntimeOperations
       .filter((operation) => operation.metadata.serverOperationId)
       .slice(-MAX_CLIENT_OPERATION_SNAPSHOT)

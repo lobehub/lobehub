@@ -616,7 +616,8 @@ export class AiAgentService {
    * or to queue the send until the run yields. When it misses one, nothing else
    * stops that run: `startOperation` overwrites the marker, and both runs keep
    * reading the same topic, interleave writes, and invalidate each other's
-   * prompt cache (LOBE-14448 — one topic spent ~$900 in two hours this way).
+   * prompt cache, multiplying the conversation's cost for as long as the old
+   * run lives.
    *
    * Runs inside the topic-start reservation so two fast sends cannot both read
    * the same stale holder. Only a `running` foreground run is retired; these
@@ -645,10 +646,17 @@ export class AiAgentService {
     if (holder?.status !== 'running') return;
     if (!isForegroundOperationTrigger(holder.trigger)) return;
 
-    // Read before interrupting: afterwards the sentinel is always set.
-    const kind: SupersedeKind = (await this.agentRuntimeService.isOperationInterrupted(holderId))
-      ? 'already_stopping'
-      : 'client_missed';
+    // Read before interrupting: afterwards the sentinel is always set. The
+    // read is diagnostic only, so a failure must not fail the send.
+    let kind: SupersedeKind;
+    try {
+      kind = (await this.agentRuntimeService.isOperationInterrupted(holderId))
+        ? 'already_stopping'
+        : 'client_missed';
+    } catch (error) {
+      console.error('[execAgent] failed to read interrupt state of %s:', holderId, error);
+      kind = 'unknown';
+    }
 
     log(
       'execAgent: superseding running foreground operation %s on topic %s (%s)',
@@ -656,7 +664,13 @@ export class AiAgentService {
       topicId,
       kind,
     );
-    await this.interruptTask({ operationId: holderId, topicId });
+    const interrupted = await this.interruptTask({ operationId: holderId, topicId });
+    // Unconfirmed only when the run has no runtime state left but its row has
+    // not settled yet: nothing executes its next step, so the send proceeds
+    // rather than failing on a run that cannot spend any more.
+    if (!interrupted.success) {
+      console.warn('[execAgent] supersede of %s was not confirmed', holderId, { topicId });
+    }
     return { holderId, kind };
   }
 

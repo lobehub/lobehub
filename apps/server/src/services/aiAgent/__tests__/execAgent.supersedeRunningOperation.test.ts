@@ -200,7 +200,7 @@ const topicWithMarker = (operationId: string) => ({
 });
 
 /**
- * LOBE-14448: a composer send that starts a new run on a topic must retire the
+ * Regression: a composer send that starts a new run on a topic must retire the
  * foreground run still holding `runningOperation`. The client picks only one
  * op as `replacesOperationId`; when it picks an older, already-stopping op, the
  * live marker holder used to keep running next to the new run. Both then read
@@ -383,6 +383,43 @@ describe('AiAgentService.execAgent - supersede running foreground operation', ()
 
     expect(result.success).toBe(true);
     error.mockRestore();
+  });
+
+  it('still supersedes when the interrupt state cannot be read', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockIsOperationInterrupted.mockRejectedValue(new Error('redis down'));
+
+    const result = await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      interactiveStart: true,
+      prompt: 'please hurry',
+    });
+
+    expect(result.success).toBe(true);
+    expect(interruptTask).toHaveBeenCalledWith({ operationId: 'op-live', topicId: 'topic-1' });
+    expect(mockMergeMetadata).toHaveBeenCalledWith(result.operationId, {
+      supersede: expect.objectContaining({ kind: 'unknown' }),
+    });
+    error.mockRestore();
+  });
+
+  it('starts the new run and warns when the supersede is not confirmed', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    interruptTask.mockResolvedValue({ success: false });
+
+    const result = await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      interactiveStart: true,
+      prompt: 'please hurry',
+    });
+
+    expect(result.success).toBe(true);
+    expect(warn).toHaveBeenCalledWith('[execAgent] supersede of %s was not confirmed', 'op-live', {
+      topicId: 'topic-1',
+    });
+    warn.mockRestore();
   });
 
   it('records nothing when no run was superseded', async () => {

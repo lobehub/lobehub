@@ -49,8 +49,13 @@ const candidate = (id = 'op_x') => ({
   workspaceId: null,
 });
 
-const buildCoordinator = (state: any, history: any[] = []) => ({
+const buildCoordinator = (
+  state: any,
+  history: any[] = [],
+  isInterrupted: (id: string) => boolean = () => false,
+) => ({
   getExecutionHistory: vi.fn().mockResolvedValue(history),
+  isInterrupted: vi.fn(async (id: string) => isInterrupted(id)),
   loadAgentState: vi.fn().mockResolvedValue(state),
 });
 const buildQueue = () => ({ scheduleMessage: vi.fn().mockResolvedValue('msg_1') });
@@ -284,8 +289,23 @@ describe('StaleOperationReaper', () => {
     expect(result.concurrentForegroundTopics).toBe(1);
     expect(warn).toHaveBeenCalledWith(
       '[StaleOperationReaper] concurrent foreground operations on one topic',
-      overlap,
+      { ...overlap, unstoppedOperationIds: ['op_a'] },
     );
+    warn.mockRestore();
+  });
+
+  it('ignores an overlap whose older runs were already asked to stop', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const overlap = { operationIds: ['op_a', 'op_b'], topicId: 'tpc_x' };
+    const reaper = new StaleOperationReaper(buildDb([], [overlap]), {
+      coordinator: buildCoordinator(null, [], (id) => id === 'op_a') as any,
+      queueService: buildQueue() as any,
+    });
+
+    const result = await reaper.sweep();
+
+    expect(result.concurrentForegroundTopics).toBe(0);
+    expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
   });
 

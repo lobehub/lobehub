@@ -31,10 +31,12 @@ export const isForegroundOperationTrigger = (trigger: string | null | undefined)
  * - `already_stopping`: the client had already interrupted it (Stop / Send now)
  *   and it is finishing its current step — the expected overlap.
  * - `client_missed`: nothing had asked it to stop. The client neither cancelled
- *   nor replaced a run that was still live, which is the bug class behind
- *   LOBE-14448; the server-side supersede is the only thing that stopped it.
+ *   nor replaced a run that was still live; the server-side supersede is the
+ *   only thing that stopped it.
+ * - `unknown`: the interrupt sentinel could not be read, so the overlap was
+ *   superseded without classifying it.
  */
-export type SupersedeKind = 'already_stopping' | 'client_missed';
+export type SupersedeKind = 'already_stopping' | 'client_missed' | 'unknown';
 
 /** One server run the client tracked on this conversation when it sent. */
 export interface ClientOperationSnapshotItem {

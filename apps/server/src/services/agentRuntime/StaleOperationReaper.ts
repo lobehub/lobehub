@@ -53,9 +53,11 @@ export interface ReapStaleOperationsResult {
   /** Candidates whose lease was refreshed between select and claim. */
   alive: number;
   /**
-   * Topics with two or more foreground runs `running` at once. Composer sends
-   * supersede the previous run, so any overlap here means a start path slipped
-   * past that and both runs are spending on the same conversation (LOBE-14448).
+   * Topics with two or more foreground runs `running` at once where an older
+   * run was never asked to stop. Composer sends supersede the previous run, so
+   * such an overlap means a start path slipped past that and both runs are
+   * spending on the same conversation. An older run that already carries the
+   * interrupt sentinel is only finishing its current step and is not counted.
    * Detection only: nothing is interrupted.
    */
   concurrentForegroundTopics: number;
@@ -184,11 +186,24 @@ export class StaleOperationReaper {
       .having(sql`count(*) > 1`)
       .limit(CONCURRENT_FOREGROUND_REPORT_LIMIT);
 
+    let reported = 0;
     for (const row of rows) {
-      console.warn('[StaleOperationReaper] concurrent foreground operations on one topic', row);
+      // The newest run is the one that should survive; an older run with the
+      // sentinel set was stopped (Stop / Send now / supersede) and exits at its
+      // next step boundary, which can be minutes into a long LLM call.
+      const older = row.operationIds.slice(0, -1);
+      const interrupted = await Promise.all(older.map((id) => this.coordinator.isInterrupted(id)));
+      const unstopped = older.filter((_, index) => !interrupted[index]);
+      if (unstopped.length === 0) continue;
+
+      reported += 1;
+      console.warn('[StaleOperationReaper] concurrent foreground operations on one topic', {
+        ...row,
+        unstoppedOperationIds: unstopped,
+      });
     }
 
-    return rows.length;
+    return reported;
   }
 
   /**
