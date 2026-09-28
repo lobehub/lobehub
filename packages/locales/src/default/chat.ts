@@ -2012,6 +2012,14 @@ export default {
     'The complete task tree and latest runs for this goal.',
   'goalDetail.instruction': 'Goal instruction',
   'goalDetail.latestRuns': 'Recent executions',
+  'goalDetail.closeConfirm.achieved.content':
+    'Runs still in progress will be stopped and no new tasks will start. You can reopen the goal from this menu.',
+  'goalDetail.closeConfirm.achieved.ok': 'Mark achieved',
+  'goalDetail.closeConfirm.achieved.title': 'Mark this goal as achieved?',
+  'goalDetail.closeConfirm.canceled.content':
+    'Runs still in progress will be stopped and no new tasks will start. You can reopen the goal from this menu.',
+  'goalDetail.closeConfirm.canceled.ok': 'Cancel goal',
+  'goalDetail.closeConfirm.canceled.title': 'Cancel this goal?',
   'goalDetail.deleteConfirm.content':
     'This goal and its task plan will be permanently deleted. Conversation history is retained.',
   'goalDetail.deleteConfirm.ok': 'Delete goal',
@@ -2305,6 +2313,7 @@ export default {
   'goalProcess.kind.finding': 'Finding',
   'goalProcess.kind.decision': 'Decision',
   'goalProcess.node.running': 'Running',
+  'goalProcess.node.stopped': 'Stopped',
   'goalProcess.node.done': 'Done',
   'goalProcess.node.waiting': 'Waiting',
   'goalProcess.node.terminalAcceptance': 'Complete full goal acceptance',

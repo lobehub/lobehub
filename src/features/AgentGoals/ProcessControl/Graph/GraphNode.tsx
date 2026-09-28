@@ -232,6 +232,13 @@ const useStateChip = (data: GraphNodeData): StateChip | null => {
   // Running renders the same animated ring the frontier and home surfaces use.
   if (running)
     return { color: TASK_STATUS_VISUALS.running.color, text: t('goalProcess.node.running') };
+  // The goal ended under this run: it was stopped, not still going.
+  if (view.halted)
+    return {
+      color: TASK_STATUS_VISUALS.canceled.color,
+      icon: TASK_STATUS_VISUALS.canceled.icon,
+      text: t('goalProcess.node.stopped'),
+    };
   if (node.kind === 'task' && node.status === 'resolved')
     return {
       color: TASK_STATUS_VISUALS.completed.color,

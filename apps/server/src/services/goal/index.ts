@@ -1649,6 +1649,47 @@ export class GoalService {
     return goal ?? graph.goal;
   };
 
+  /**
+   * A person ends the goal themselves — declaring it achieved or dropping it.
+   *
+   * The terminal status alone already stops the coordinator from dispatching,
+   * but runs still in flight would keep spending on a goal nobody wants moved
+   * any more, so they are interrupted the same way `restart` interrupts them.
+   * Reopening goes through `resume`, which accepts any status.
+   */
+  close = async (goalId: string, to: 'achieved' | 'canceled') => {
+    const graph = await this.requireGraph(goalId);
+    const unfinishedTaskIds = graph.nodes.flatMap((node) =>
+      node.kind === 'task' && node.taskId && !TERMINAL_NODE_STATUSES.has(node.status)
+        ? [node.taskId]
+        : [],
+    );
+    if (unfinishedTaskIds.length > 0) {
+      const runningTopics = await this.taskTopicModel.findRunningByTaskIds(unfinishedTaskIds);
+      for (const topic of runningTopics) {
+        if (topic.topicId) await this.taskService.cancelTopic(topic.topicId);
+      }
+      // An interrupted Task goes back to `backlog`, as in `restart`: left
+      // `paused` it would read as parked on a person, and a reopened goal would
+      // wait on it instead of running it again. Compare-and-swap for the same
+      // reason as there — never yank a row a concurrent tick just moved.
+      const interrupted = [...new Set(runningTopics.map((topic) => topic.taskId))];
+      for (const task of interrupted.length > 0
+        ? await this.taskModel.findByIds(interrupted)
+        : []) {
+        if (task.status === 'completed') continue;
+        await this.taskModel.updateStatusIfCurrent(task.id, task.status, 'backlog', {
+          error: null,
+        });
+      }
+    }
+    await this.setPauseReason(goalId, undefined);
+    const reason = to === 'achieved' ? 'marked achieved by user' : 'canceled by user';
+    const goal = await this.transitionStatus(graph.goal, to, reason, 'user');
+    if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+    return goal;
+  };
+
   decide = async (goalId: string, decisionId: string, optionId: string, resolution?: string) => {
     const graph = await this.requireGraph(goalId);
     const decision = graph.decisions.find((item) => item.id === decisionId);

@@ -304,6 +304,25 @@ describe('buildGoalGraphView', () => {
     expect(view.byId.w1.startedAt).toEqual(at(115));
   });
 
+  it.each(['canceled', 'achieved', 'failed'] as const)(
+    'stops calling a task running once its goal is %s',
+    (status) => {
+      const view = buildGoalGraphView(
+        snapshot({
+          events: [event('w1', 'activated', 115)],
+          goal: goal({ status, updatedAt: at(118) }),
+          nodes: [node('w1', { status: 'active', taskId: 'task-1', updatedAt: at(115) })],
+        }),
+        NOW,
+      );
+
+      expect(view.frontier[0]).toMatchObject({ kind: 'ready' });
+      expect(isRunningNode(view.byId.w1)).toBe(false);
+      expect(view.byId.w1.startedAt).toBeUndefined();
+      expect(view.byId.w1.attempts.at(-1)).toMatchObject({ endedAt: at(118), outcome: 'retired' });
+    },
+  );
+
   it('closes the parked attempt of a Task waiting at a gate', () => {
     // The gate is written as an `updated` event, which is not an attempt
     // boundary — without the node-state fallback the parked Task kept

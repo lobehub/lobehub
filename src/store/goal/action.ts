@@ -135,6 +135,11 @@ export class GoalActionImpl {
     await this.refreshGoalGraph(goalId);
   };
 
+  closeGoal = async (goalId: string, status: 'achieved' | 'canceled'): Promise<void> => {
+    await goalService.close(goalId, status);
+    await this.refreshGoalGraph(goalId);
+  };
+
   refreshGoalGraph = async (goalId: string): Promise<void> => {
     await mutate(goalKeys.graph(goalId));
   };
