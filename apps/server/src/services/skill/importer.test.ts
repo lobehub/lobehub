@@ -1052,6 +1052,38 @@ description: A nested skill
       expect(untouched?.content).toBe('# My own notes');
     });
 
+    it('rejects a market import whose identifier is taken by a user skill instead of overwriting it', async () => {
+      const url = 'https://market.lobehub.com/api/v1/skills/openclaw-skills-memory-setup/download';
+      const userSkill = await importer.createUserSkill({
+        content: '# My own notes',
+        description: 'Personal skill',
+        identifier: 'openclaw-skills-memory-setup',
+        name: 'my-notes',
+      });
+      mockSsrfSafeFetch.mockResolvedValue({
+        arrayBuffer: async () => new ArrayBuffer(0),
+        ok: true,
+        status: 200,
+      });
+      mockParserInstance.parseZipPackage.mockResolvedValueOnce({
+        content: '# Memory Setup Skill',
+        manifest: { name: 'memory-setup', description: 'Configure persistent memory' },
+        resources: new Map(),
+      });
+
+      const error = await importer
+        .importFromUrl({ url }, { identifier: 'openclaw-skills-memory-setup', source: 'market' })
+        .catch((e) => e);
+
+      expect(error).toBeInstanceOf(SkillImportError);
+      expect(error.code).toBe('CONFLICT');
+      const untouched = await db.query.agentSkills.findFirst({
+        where: eq(agentSkills.id, userSkill.id),
+      });
+      expect(untouched?.name).toBe('my-notes');
+      expect(untouched?.content).toBe('# My own notes');
+    });
+
     it('rejects a different skill with an installed name as a CONFLICT naming the installed one', async () => {
       mockSsrfSafeFetch.mockResolvedValue({
         arrayBuffer: async () => new ArrayBuffer(0),

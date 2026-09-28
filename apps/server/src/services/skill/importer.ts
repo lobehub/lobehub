@@ -422,6 +422,16 @@ export class SkillImporter {
     // 5. Check for existing skill
     let existing = await this.skillModel.findByIdentifier(identifier);
 
+    // A user may have authored a skill under this very identifier. Only treat
+    // the row as this import when it came from the market or from this same
+    // URL; otherwise updating it would overwrite the user's own skill.
+    if (existing && existing.source !== 'market' && existing.manifest?.sourceUrl !== input.url) {
+      throw new SkillImportError(
+        `A skill with identifier "${identifier}" is already installed from another source (name: ${existing.name}). Delete it before importing this one.`,
+        'CONFLICT',
+      );
+    }
+
     // Older agent-tool imports keyed market skills by the URL-derived
     // identifier. Look that row up too, so a skill whose manifest name changed
     // since then is still updated in place rather than installed twice. Only
