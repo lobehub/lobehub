@@ -190,6 +190,35 @@ describe('HeteroSessionImporterRepo.importSessions', () => {
     expect(rows).toHaveLength(1);
   });
 
+  it('rejects incremental syncs while the imported topic is trashed', async () => {
+    const repo = new HeteroSessionImporterRepo(serverDB, userId);
+    const [first] = await repo.importSessions({ agentId, sessions: [basePayload()] });
+    await serverDB
+      .update(topics)
+      .set({ deletedAt: new Date('2026-09-10T00:00:00Z'), isDeleted: true })
+      .where(eq(topics.id, first.topicId));
+
+    const grown = basePayload();
+    grown.workingDirectory = '/repo/after-trash';
+    grown.messages.push({
+      clientId: 'cc-s1-a2',
+      content: 'must not be imported while trashed',
+      createdAt: '2026-07-01T00:00:03.000Z',
+      parentClientId: 'cc-s1-r1',
+      provider: 'claude-code',
+      role: 'assistant',
+    });
+
+    await expect(repo.importSessions({ agentId, sessions: [grown] })).rejects.toThrow(
+      'restore it before syncing',
+    );
+
+    const [topic] = await serverDB.select().from(topics).where(eq(topics.id, first.topicId));
+    expect(topic.metadata).not.toMatchObject({ workingDirectory: '/repo/after-trash' });
+    const rows = await serverDB.select().from(messages).where(eq(messages.topicId, first.topicId));
+    expect(rows).toHaveLength(3);
+  });
+
   it('imports incrementally: a grown transcript only inserts the new tail', async () => {
     const repo = new HeteroSessionImporterRepo(serverDB, userId);
     const [first] = await repo.importSessions({ agentId, sessions: [basePayload()] });

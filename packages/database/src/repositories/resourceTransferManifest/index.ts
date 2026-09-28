@@ -108,7 +108,7 @@ export const buildMemberTransferManifest = async (
           .select({ groupOwnerId: chatGroups.userId })
           .from(chatGroupsAgents)
           .innerJoin(chatGroups, eq(chatGroupsAgents.chatGroupId, chatGroups.id))
-          .where(and(eq(chatGroupsAgents.agentId, agent.id), notTrashed(chatGroups.isDeleted)));
+          .where(eq(chatGroupsAgents.agentId, agent.id));
         groupsToLeave = groupLinks.filter((link) => link.groupOwnerId !== recipientId).length;
       }
       break;
@@ -241,7 +241,7 @@ export const buildMemberTransferManifest = async (
       .select({ projectOwnerId: projects.userId })
       .from(projectAgents)
       .innerJoin(projects, eq(projectAgents.projectId, projects.id))
-      .where(and(inArray(projectAgents.agentId, privateAgentIds), notTrashed(projects.isDeleted)));
+      .where(inArray(projectAgents.agentId, privateAgentIds));
     projectsToLeave = projectLinks.filter((link) => link.projectOwnerId !== recipientId).length;
   }
 

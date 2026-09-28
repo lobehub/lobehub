@@ -122,9 +122,15 @@ export class HeteroSessionImporterRepo {
 
       // 1. find or create the topic by clientId within the active scope
       const [existingTopic] = await tx
-        .select({ id: topics.id, metadata: topics.metadata })
+        .select({ id: topics.id, isDeleted: topics.isDeleted, metadata: topics.metadata })
         .from(topics)
         .where(and(eq(topics.clientId, session.topicClientId), this.identityScopeWhere(topics)));
+
+      if (existingTopic?.isDeleted === true) {
+        throw new Error(
+          `session ${session.sessionId} is already imported into a trashed topic; restore it before syncing`,
+        );
+      }
 
       // the (clientId, userId) unique index makes one session = one topic per
       // user GLOBALLY — if it exists outside the active scope, appending there
