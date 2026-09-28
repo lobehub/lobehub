@@ -1,4 +1,4 @@
-import { getGoalCommand } from '@lobechat/shared-tool-ui/goal-command';
+import { getGoalCommand, isGoalCommandFailed } from '@lobechat/shared-tool-ui/goal-command';
 import { Icon } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -112,9 +112,7 @@ const ToolTitle = memo<ToolTitleProps>(
       const goalTitle = goalCommand.kind === 'create' ? goalCommand.title : undefined;
       // Same rule as the expanded GoalCommandInspector, so the collapsed row
       // never says "Goal created" next to a failed status.
-      const failed =
-        !isLoading &&
-        (!!result?.error || (result?.state?.success === false && result?.state?.exitCode !== 0));
+      const failed = !isLoading && isGoalCommandFailed(result);
       const status = isLoading ? 'loading' : failed ? 'failed' : 'completed';
       return (
         <div className={cx(styles.root, isAborted && styles.aborted)}>

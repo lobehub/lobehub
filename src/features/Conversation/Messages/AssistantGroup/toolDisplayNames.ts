@@ -2,7 +2,7 @@ import {
   formatBrowserMcpShortLabel,
   formatLinearMcpShortLabel,
 } from '@lobechat/builtin-tool-claude-code/client/labels';
-import { getGoalCommand } from '@lobechat/shared-tool-ui/goal-command';
+import { getGoalCommand, isGoalCommandFailed } from '@lobechat/shared-tool-ui/goal-command';
 import type { ChatToolPayloadWithResult } from '@lobechat/types';
 import { formatDuration } from '@lobechat/utils';
 import { t } from 'i18next';
@@ -165,7 +165,7 @@ const getGoalCommandHeadlineLine = (tool: ChatToolPayloadWithResult): string => 
   const status =
     tool.result == null || tool.result.content === LOADING_FLAT
       ? 'loading'
-      : tool.result.error
+      : isGoalCommandFailed(tool.result)
         ? 'failed'
         : 'completed';
   const label = t(`builtins.goalCommand.${goalCommand.kind}.${status}`, { ns: 'plugin' });

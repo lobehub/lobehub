@@ -69,3 +69,14 @@ export const getCreatedGoal = (
 
   return goalId ? { goalId } : undefined;
 };
+
+/**
+ * Whether a settled `lh goal` step failed. A shell step reports failure either
+ * as a tool error or only through its run state (`success: false` with a
+ * nonzero exit code); every surface that labels the step must read both.
+ */
+export const isGoalCommandFailed = (result?: {
+  error?: unknown;
+  state?: { exitCode?: number; success?: boolean } | null;
+}): boolean =>
+  !!result?.error || (result?.state?.success === false && result?.state?.exitCode !== 0);

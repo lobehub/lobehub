@@ -15,7 +15,10 @@ const blk = (p: Partial<AssistantContentBlock> & { id: string }): AssistantConte
 
 describe('tool display names', () => {
   it('reads a running lh goal step as the goal step, not a raw command', () => {
-    const goalCall = (command: string, result?: { content: string; error?: unknown }) =>
+    const goalCall = (
+      command: string,
+      result?: { content: string; error?: unknown; state?: unknown },
+    ) =>
       blk({
         id: 'goal',
         tools: [
@@ -48,6 +51,16 @@ describe('tool display names', () => {
         goalCall('lh goal create "Fog report" --conversation --json', {
           content: 'Error: An operation-bound token is required',
           error: { message: 'exit 1' },
+        }),
+      ]),
+    ).toMatchObject({ fallbackTool: 'builtins.goalCommand.create.failed Fog report' });
+    // A shell step can report failure only through its run state; the headline
+    // used to read "completed" then.
+    expect(
+      getWorkflowStreamingHeadlineState([
+        goalCall('lh goal create "Fog report" --conversation --json', {
+          content: 'error: unknown option',
+          state: { exitCode: 1, success: false },
         }),
       ]),
     ).toMatchObject({ fallbackTool: 'builtins.goalCommand.create.failed Fog report' });

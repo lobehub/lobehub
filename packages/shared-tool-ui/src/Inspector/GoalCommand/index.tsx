@@ -8,7 +8,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { inspectorTextStyles, shinyTextStyles } from '../../styles';
-import type { GoalCommand } from '../../utils/goalCommand';
+import { type GoalCommand, isGoalCommandFailed } from '../../utils/goalCommand';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   chip: css`
@@ -56,9 +56,7 @@ export const GoalCommandInspector = memo<GoalCommandInspectorProps>(
     const { t } = useTranslation('plugin');
 
     const inFlight = !!(isArgumentsStreaming || isLoading);
-    const failed =
-      !inFlight &&
-      (!!result?.error || (pluginState?.success === false && pluginState?.exitCode !== 0));
+    const failed = !inFlight && isGoalCommandFailed({ error: result?.error, state: pluginState });
     const status = inFlight ? 'loading' : failed ? 'failed' : 'completed';
     const title = goalCommand.kind === 'create' ? goalCommand.title : undefined;
 
