@@ -1,9 +1,9 @@
 import { agentDisplayName } from '@lobechat/types';
-import { Flexbox, Icon, Markdown } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
 import { Avatar, Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { lazy, memo, Suspense, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import BriefCardArtifacts from '@/features/DailyBrief/BriefCardArtifacts';
@@ -12,6 +12,8 @@ import { type BriefItem } from '@/features/DailyBrief/types';
 import { homeType } from '@/features/Home/components/homeType';
 import Time from '@/features/Home/components/Time';
 import { useBriefStore } from '@/store/brief';
+
+const Markdown = lazy(() => import('@lobehub/ui/es/Markdown/index'));
 
 const AVATAR_SIZE = 20;
 const ROW_GAP = 10;
@@ -143,9 +145,11 @@ const NewsItem = memo<NewsItemProps>(({ bare, brief, showTime }) => {
       {expanded && (brief.summary || brief.artifacts) && (
         <Flexbox className={bare ? styles.bareBody : styles.body} gap={8}>
           {brief.summary && (
-            <Markdown style={{ overflow: 'unset' }} variant={'chat'}>
-              {brief.summary}
-            </Markdown>
+            <Suspense fallback={null}>
+              <Markdown style={{ overflow: 'unset' }} variant={'chat'}>
+                {brief.summary}
+              </Markdown>
+            </Suspense>
           )}
           <BriefCardArtifacts artifacts={brief.artifacts} />
         </Flexbox>

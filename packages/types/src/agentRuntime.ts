@@ -1,3 +1,5 @@
+import type { AgentShareToolGrant } from './agent/share';
+
 /** Request-scoped pricing inputs resolved before model execution. */
 export interface ModelPricingContext {
   plan: string;
@@ -11,26 +13,175 @@ export interface RouterRuntimeRequestContext {
 }
 
 export enum RequestTrigger {
+  /** Agent profile autocomplete: title, description, tags and avatar emoji. */
+  AgentMeta = 'agent_meta',
+  AgentShare = 'agent_share',
   AgentSignal = 'agent_signal',
   Api = 'api',
+  /** Speech-to-text transcription, e.g. voice messages and `lh generate asr`. */
+  Asr = 'asr',
   Bot = 'bot',
+  /** Agent builder suggestion chips. */
+  BuilderSuggestion = 'builder_suggestion',
   Chat = 'chat',
   Cli = 'cli',
+  /** Context compression summary that replaces older messages in a conversation. */
+  ContextCompression = 'context_compression',
   Cron = 'cron',
   Eval = 'eval',
+  /** Agent self-evolution: expertise ingestion, domain drafts and consolidation. */
+  Expertise = 'expertise',
   FileEmbedding = 'file_embedding',
+  /** Follow-up suggestions generated after an assistant reply. */
+  FollowUp = 'follow_up',
+  /** Image / video generation topic title summaries. */
+  GenerationTopicTitle = 'generation_topic_title',
+  /** Goal planning: exploration, acceptance criteria drafts and decomposition. */
+  Goal = 'goal',
+  /** Rolling history summary stored on a topic. */
+  HistorySummary = 'history_summary',
   Image = 'image',
+  /** Chat input inline completion suggestions while the user is typing. */
+  InputCompletion = 'input_completion',
   Memory = 'memory',
   MultimodalAnalysis = 'multimodal_analysis',
   Notify = 'notify',
   Onboarding = 'onboarding',
   Openapi = 'openapi',
+  /** Rewrite of an image / video generation prompt. */
+  PromptRewrite = 'prompt_rewrite',
+  /** Connectivity check from the provider settings page. */
+  ProviderCheck = 'provider_check',
   /** A run the user deferred to a future time (`topic.metadata.scheduledRun`). */
   Scheduled = 'scheduled',
+  /** A provider event on a pull request (CI failure, review) woke the agent that opened it. */
+  Scm = 'scm',
   SemanticSearch = 'semantic_search',
   SignupEmailLLMReview = 'signup_email_llm_review',
+  /** Task runs and their auxiliary calls (briefs, handoff, intent, instructions). */
+  Task = 'task',
+  /** Thread (sub-topic) title summaries. */
+  ThreadTitle = 'thread_title',
+  /**
+   * @deprecated Legacy bucket for every title summary. New requests use
+   * {@link RequestTrigger.TopicTitle}, {@link RequestTrigger.ThreadTitle} or
+   * {@link RequestTrigger.GenerationTopicTitle}; kept so historical logs still resolve a label.
+   */
   Topic = 'topic',
+  /** Server-side topic auto summary (description + rolling summary). */
+  TopicSummary = 'topic_summary',
+  /** Chat topic title summaries, both client and server generated. */
+  TopicTitle = 'topic_title',
+  /** Translation of a chat message or a generation prompt, including language detection. */
+  Translate = 'translate',
+  /** Acceptance verification: plan generation, judging, review prediction and reports. */
+  Verify = 'verify',
   Video = 'video',
+}
+
+/**
+ * Everything one shared-agent visitor run carries: WHO the run belongs to
+ * (`agentId` / `shareId` / `visitorUserId`), WHAT the visitor is allowed to
+ * reach (`allowReadMemory` / `toolGrants` / `knowledgeBaseIds`), and HOW
+ * much of the run is shown back to them (`showErrorDetails` / `showModelInfo`).
+ *
+ * Single source of truth for the runtime-side share marker: it is stamped once
+ * at operation creation onto `state.metadata.agentShareVisitor` and read back
+ * by every later step, so no step has to re-read the share row.
+ *
+ * SECURITY: never derived from request headers or any other client input — its
+ * fields decide both permission and billing, so a client could otherwise forge
+ * another user's run. It is always built server-side from the already-resolved
+ * share gate.
+ *
+ * Never hand this object to a billing point as a whole — the permission fields
+ * have no place in spend metadata. Project it with
+ * {@link toAgentShareVisitorIds} instead.
+ */
+export interface AgentShareVisitorContext {
+  /** The shared agent (`agents.id`) this run executes. */
+  agentId: string;
+  /**
+   * Mirrors `shareConfig.allowReadMemory` so the memory tool's dispatch-time
+   * gate (`isShareBlockedDataToolCall`) can be re-applied at
+   * `BuiltinToolsExecutor.execute`, the actual unbypassable chokepoint.
+   */
+  allowReadMemory?: boolean;
+  /**
+   * The agent's OWN persisted knowledge-base assignment, never derived from
+   * visitor input, so `isShareBlockedDataToolCall` can id-scope
+   * `viewKnowledgeBase`'s `id` argument. Always empty today (a share grants no
+   * knowledge-base access).
+   */
+  knowledgeBaseIds?: string[];
+  /**
+   * The `agentShares.id` this run was authorized against — the revocation
+   * token re-checked at every step boundary (see
+   * `AgentShareModel.isRunStillAuthorized`).
+   */
+  shareId: string;
+  /** `AgentShareConfig.showErrorDetails` — gates visitor-facing error redaction. */
+  showErrorDetails?: boolean;
+  /** `AgentShareConfig.showModelInfo` — gates visitor-facing model/provider/usage redaction. */
+  showModelInfo?: boolean;
+  /**
+   * Mirrors `shareConfig.skillGrants` so the skill runtime can enforce the same
+   * per-skill allowlist the operation's skill pool was built from. Absent or
+   * empty grants no skill. Carried separately from {@link toolGrants} because a
+   * skill grant also governs the no-tool pinned-content path.
+   */
+  skillGrants?: string[];
+  /**
+   * Mirrors `shareConfig.toolGrants` so tool runtimes that resolve their
+   * target outside `toolManifestMap` (e.g. `activateSkill`,
+   * `lobe-topic-reference`) can apply the same allowlist the assembled tool set
+   * already enforces.
+   */
+  toolGrants?: AgentShareToolGrant[];
+  /** The visitor's user id, under which the run's spend is attributed. */
+  visitorUserId: string;
+}
+
+/**
+ * The billing-safe projection of {@link AgentShareVisitorContext}: only the ids
+ * needed to attribute a charge, with every permission / redaction field
+ * dropped. This is the ONLY shape allowed to reach spend metadata.
+ */
+export type AgentShareVisitorIds = Pick<
+  AgentShareVisitorContext,
+  'agentId' | 'shareId' | 'visitorUserId'
+>;
+
+/**
+ * Project a runtime share marker down to its billing-safe ids. The single
+ * allowed way to move an {@link AgentShareVisitorContext} into a
+ * {@link SpendOrigin} — never spread the context itself, which also carries
+ * permissions that have no place in billing metadata.
+ */
+export const toAgentShareVisitorIds = (ctx: AgentShareVisitorContext): AgentShareVisitorIds => ({
+  agentId: ctx.agentId,
+  shareId: ctx.shareId,
+  visitorUserId: ctx.visitorUserId,
+});
+
+/**
+ * Origin attribution carried alongside a request so a billing point that runs
+ * outside the originating request (async task, webhook, settle-time charge) can
+ * stamp the same origin the synchronous LLM path stamps.
+ *
+ * Always a plain projection: only the ids needed for attribution travel here,
+ * never the originating runtime object, which also carries permissions that
+ * have no place in billing metadata.
+ */
+export interface SpendOrigin {
+  /**
+   * Present only for a shared-agent visitor run. The JSON key `agentShare` is
+   * persisted into spend-log / budget-reservation metadata and queried by
+   * `SpendLogModel` — do NOT rename it.
+   */
+  agentShare?: AgentShareVisitorIds;
+  /** Request source, see {@link RequestTrigger}. */
+  trigger?: string;
 }
 
 // ******* Runtime Biz Error ******* //
@@ -91,6 +242,8 @@ export const AgentRuntimeErrorType = {
   ProviderServiceUnavailable: 'ProviderServiceUnavailable',
   /** Network timeout / connection drop talking to the provider. */
   ProviderNetworkError: 'ProviderNetworkError',
+  /** Provider timed out while downloading a remote image or file URL. */
+  RemoteMediaDownloadTimeout: 'RemoteMediaDownloadTimeout',
   /** Proxy/router has no channel for the requested model (key pool exhausted, no upstream). */
   NoAvailableChannel: 'NoAvailableChannel',
   /** Upstream content-moderation / safety filter rejected the input or output. */
@@ -99,6 +252,14 @@ export const AgentRuntimeErrorType = {
   CapabilityNotSupported: 'CapabilityNotSupported',
   /** Provider rejected the request as malformed (bad JSON, schema validation, etc.). */
   InvalidRequestFormat: 'InvalidRequestFormat',
+  /** Upstream rejected the serialized request body as too large (HTTP 413). */
+  RequestBodyTooLarge: 'RequestBodyTooLarge',
+  /**
+   * Upstream rejected the request for carrying more images than the channel allows
+   * (e.g. Azure OpenAI caps each request at 50). The limit is per channel, so another
+   * route for the same model may still accept the request.
+   */
+  ExceededImageLimit: 'ExceededImageLimit',
   /**
    * Upstream proxy / gateway layer failed (openresty, litellm, HTML 5xx,
    * Cloudflare 525) — distinct from the provider's own service. Split out of

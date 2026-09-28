@@ -58,6 +58,16 @@ export interface LarkMessageBody {
   mentions?: LarkMention[];
   message_id: string;
   message_type: string;
+  /**
+   * ID of the message this one replies to (the quoted message). Feishu only
+   * sends the ID — the quoted content and attachments have to be fetched via
+   * `GET /im/v1/messages/:message_id`.
+   */
+  parent_id?: string;
+  /** Root message ID of the reply chain / topic thread, when applicable. */
+  root_id?: string;
+  /** Topic thread ID, when the message lives in a thread. */
+  thread_id?: string;
 }
 
 export interface LarkMention {

@@ -1,7 +1,7 @@
 'use client';
 
 import type { FormGroupItemType, FormItemProps } from '@lobehub/ui';
-import { Flexbox, Form, InputNumber, Skeleton, TextArea, Tooltip } from '@lobehub/ui';
+import { Flexbox, Form, InputNumber, TextArea, Tooltip } from '@lobehub/ui';
 import { Switch } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { memo, useEffect, useState } from 'react';
@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
+import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import ModelSelect from '@/features/ModelSelect';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
@@ -22,7 +23,7 @@ import { serviceModelFormStyles as styles } from './styles';
 
 type ModelAssignmentItemKey = Exclude<
   UserServiceModelConfigKey,
-  'onboardingTaskRecommender' | 'onboardingUnderstanding'
+  'asr' | 'onboardingTaskRecommender' | 'onboardingUnderstanding'
 >;
 
 interface SystemAgentModelItem {
@@ -90,7 +91,7 @@ const ModelAssignmentsForm = memo(() => {
 
   const groupOfKey = (key: UserServiceModelConfigKey): SavingGroup => {
     if (MEMORY_MODEL_ITEMS.some((item) => item.key === key)) return 'memory';
-    if (OPTIONAL_FEATURE_ITEMS.some((item) => item.key === key)) return 'optional';
+    if (key === 'asr' || OPTIONAL_FEATURE_ITEMS.some((item) => item.key === key)) return 'optional';
     return 'assignments';
   };
 
@@ -104,7 +105,7 @@ const ModelAssignmentsForm = memo(() => {
           onRetry={() => refreshUserState()}
         />
       );
-    return <Skeleton active paragraph={{ rows: 8 }} title={false} />;
+    return <RouteLoading />;
   }
 
   const updateDefaultAgentModel = async ({
@@ -293,6 +294,35 @@ const ModelAssignmentsForm = memo(() => {
     } satisfies FormItemProps;
   });
 
+  const asrValue = systemAgentSettings.asr;
+  const asrItem: FormItemProps = {
+    children: (
+      <Tooltip title={reason}>
+        <Flexbox
+          align="center"
+          direction="horizontal"
+          gap={12}
+          style={{ width: 'min(100%, 448px)' }}
+        >
+          <ModelSelect
+            allowClear
+            disabled={!canManageServiceModel}
+            modelType={'asr'}
+            placeholder={t('systemAgent.asr.placeholder')}
+            showAbility={false}
+            style={{ minWidth: 0, width: '100%' }}
+            // Empty means unconfigured: render the placeholder rather than a blank selection.
+            value={asrValue.model && asrValue.provider ? asrValue : undefined}
+            onChange={(props) => updateSystemAgentModel('asr', props)}
+            onClear={() => updateSystemAgentModel('asr', { model: '', provider: '' })}
+          />
+        </Flexbox>
+      </Tooltip>
+    ),
+    desc: t('systemAgent.asr.modelDesc'),
+    label: t('systemAgent.asr.title'),
+  };
+
   const renderSaveHint = (group: SavingGroup) =>
     savingGroup === group && (
       <AutoSaveHint lastUpdatedTime={lastSavedAt} saveStatus={saveStatus} onRetry={retry} />
@@ -309,7 +339,7 @@ const ModelAssignmentsForm = memo(() => {
   };
 
   const optionalFeatures: FormGroupItemType = {
-    children: optionalFeatureItems,
+    children: [...optionalFeatureItems, asrItem],
     extra: renderSaveHint('optional'),
     title: (
       <SettingsSearchAnchor id={'service-model-optional-features'}>

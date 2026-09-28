@@ -1,9 +1,9 @@
 'use client';
 
-import { DraggablePanel } from '@lobehub/ui';
+import { DraggablePanel } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { type ReactNode } from 'react';
-import { memo, Suspense, useMemo, useRef } from 'react';
+import { Activity, memo, Suspense, useMemo, useRef } from 'react';
 
 import NavPanelUpgradeEntry from '@/business/client/features/NavPanelUpgradeEntry';
 import { isDesktop } from '@/const/version';
@@ -104,13 +104,16 @@ interface NavPanelDraggableProps {
     key: string;
     node: ReactNode;
   };
+  homeContent?: ReactNode;
 }
 
 const classNames = {
   content: draggableStyles.content,
 };
 
-export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent }) => {
+const hiddenLayerStyle = { display: 'none' };
+
+export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent, homeContent }) => {
   const [expand, togglePanel, isStatusInit] = useGlobalStore((s) => [
     systemStatusSelectors.showLeftPanel(s),
     s.toggleLeftPanel,
@@ -139,6 +142,7 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent }
   }
 
   const defaultSize = { height: '100%', width: defaultWidthRef.current };
+  const isHomeActive = activeContent.key === 'home';
 
   return (
     <DraggablePanel
@@ -156,9 +160,24 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent }
       onSizeDragging={handleSizeChange}
     >
       <div className={draggableStyles.inner}>
-        <div className={draggableStyles.layer} key={activeContent.key}>
-          {activeContent.node}
-        </div>
+        {/* Home stays mounted while a route-owned panel is active so its list
+            state survives the round trip. Activity keeps the fibers but not the
+            visibility, so the layer is force-hidden like HomeLayout does. */}
+        {homeContent && (
+          <Activity mode={isHomeActive ? 'visible' : 'hidden'} name="NavPanelHome">
+            <div
+              className={draggableStyles.layer}
+              style={isHomeActive ? undefined : hiddenLayerStyle}
+            >
+              {homeContent}
+            </div>
+          </Activity>
+        )}
+        {!isHomeActive && (
+          <div className={draggableStyles.layer} key={activeContent.key}>
+            {activeContent.node}
+          </div>
+        )}
       </div>
       <Suspense fallback={null}>
         <NavPanelUpgradeEntry />

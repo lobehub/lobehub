@@ -1,12 +1,13 @@
 'use client';
 
-import { Flexbox, Form, FormGroup, highlighterThemes, mermaidThemes, Skeleton } from '@lobehub/ui';
+import { Flexbox, Form, FormGroup, highlighterThemes, mermaidThemes } from '@lobehub/ui';
 import { Select, Switch, Tabs } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
+import { SettingsSectionSkeleton } from '@/components/Skeleton';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { useSaveState } from '@/hooks/useSaveState';
 import { useUserStore } from '@/store/user';
@@ -24,7 +25,7 @@ const ChatAppearance = memo(() => {
   const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
   const [savingKey, setSavingKey] = useState<string>();
 
-  if (!isUserStateInit) return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
+  if (!isUserStateInit) return <SettingsSectionSkeleton />;
 
   const handleChange = (key: string, value: any) => {
     setSavingKey(key);

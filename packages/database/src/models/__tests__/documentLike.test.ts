@@ -77,13 +77,15 @@ describe('DocumentLikeModel', () => {
   });
 
   it('likes idempotently, reports the document author, and stamps the workspace', async () => {
-    await expect(memberModel.like(documentId)).resolves.toEqual({
+    await expect(memberModel.like(documentId)).resolves.toMatchObject({
       created: true,
       documentAuthorUserId: authorId,
+      summary: { liked: true, total: 1 },
     });
-    await expect(memberModel.like(documentId)).resolves.toEqual({
+    await expect(memberModel.like(documentId)).resolves.toMatchObject({
       created: false,
       documentAuthorUserId: authorId,
+      summary: { liked: true, total: 1 },
     });
 
     const rows = await serverDB
@@ -126,13 +128,15 @@ describe('DocumentLikeModel', () => {
     await memberModel.like(documentId);
     await authorModel.like(documentId);
 
-    await expect(memberModel.unlike(documentId)).resolves.toEqual({
+    await expect(memberModel.unlike(documentId)).resolves.toMatchObject({
       documentAuthorUserId: authorId,
       removed: true,
+      summary: { liked: false, total: 1 },
     });
-    await expect(memberModel.unlike(documentId)).resolves.toEqual({
+    await expect(memberModel.unlike(documentId)).resolves.toMatchObject({
       documentAuthorUserId: authorId,
       removed: false,
+      summary: { liked: false, total: 1 },
     });
 
     const summary = await authorModel.summary(documentId);

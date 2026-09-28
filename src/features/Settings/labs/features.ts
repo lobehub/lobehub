@@ -13,15 +13,16 @@ export type LabStage = 'alpha' | 'beta';
  */
 type LabFeatureI18nKey =
   | 'agentGraphConfig'
-  | 'agentProviderBinding'
   | 'artifactDeployment'
   | 'claudeCodeSdk'
   | 'codexAppServer'
   | 'desktopSplitView'
+  | 'deviceTunnel'
   | 'evalCapture'
   | 'heteroSessionImport'
   | 'imessage'
   | 'inputMarkdown'
+  | 'integrations'
   | 'messageTextSelectionActions'
   | 'oauthApps'
   | 'projects'
@@ -84,6 +85,12 @@ export const LAB_FEATURES: LabFeatureItem[] = [
     stage: 'alpha',
   },
   {
+    flag: 'enableDeviceTunnel',
+    i18nKey: 'deviceTunnel',
+    searchKeywords: ['tunnel', 'port forwarding', 'dev server', 'localhost'],
+    stage: 'alpha',
+  },
+  {
     flag: 'enableProjects',
     i18nKey: 'projects',
     searchKeywords: ['project', 'workspace'],
@@ -94,6 +101,12 @@ export const LAB_FEATURES: LabFeatureItem[] = [
     i18nKey: 'oauthApps',
     searchKeywords: ['oauth', 'oauth apps'],
     stage: 'beta',
+  },
+  {
+    flag: 'enableIntegrations',
+    i18nKey: 'integrations',
+    searchKeywords: ['integrations', 'github', 'github app', 'pull request'],
+    stage: 'alpha',
   },
   {
     flag: 'enableArtifactDeployment',
@@ -113,13 +126,6 @@ export const LAB_FEATURES: LabFeatureItem[] = [
     flag: 'enableImessage',
     i18nKey: 'imessage',
     searchKeywords: ['imessage', 'bluebubbles'],
-    stage: 'alpha',
-  },
-  {
-    desktopOnly: true,
-    flag: 'enableAgentProviderBinding',
-    i18nKey: 'agentProviderBinding',
-    searchKeywords: ['agent provider binding', 'claude code api', 'codex api', 'api provider'],
     stage: 'alpha',
   },
   {

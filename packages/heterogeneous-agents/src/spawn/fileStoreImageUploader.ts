@@ -26,6 +26,7 @@ export interface FileStoreCreateFileInput {
  * runtime that spawned the CLI holds those credentials.
  */
 export interface FileStorePort {
+  abortS3Upload: (input: { pathname: string }) => Promise<unknown>;
   checkFileHash: (input: { hash: string }) => Promise<{ isExist?: boolean; url?: string }>;
   createFile: (input: FileStoreCreateFileInput) => Promise<{ id: string; url: string }>;
   createS3PreSignedUrl: (input: {
@@ -59,31 +60,43 @@ export const createFileStoreImageUploader =
     const existing = await port.checkFileHash({ hash });
 
     let pathname: string;
+    let reservedPathname: string | undefined;
     if (existing?.isExist && existing.url) {
       pathname = existing.url;
     } else {
       pathname = `files/${date}/${hash}.${ext}`;
-      const presigned = await port.createS3PreSignedUrl({ pathname, size: buffer.length });
-      const presignedUrl = typeof presigned === 'string' ? presigned : presigned.url;
-
-      const uploadRes = await fetch(presignedUrl, {
-        body: buffer,
-        headers: { 'Content-Type': mediaType },
-        method: 'PUT',
-      });
-      if (!uploadRes.ok) {
-        throw new Error(`Upload failed: ${uploadRes.status} ${uploadRes.statusText}`);
-      }
+      reservedPathname = pathname;
     }
 
-    const record = await port.createFile({
-      fileType: mediaType,
-      hash,
-      metadata: { date, dirname: '', filename: fileName, path: pathname },
-      name: fileName,
-      size: buffer.length,
-      url: pathname,
-    });
+    try {
+      if (reservedPathname) {
+        const presigned = await port.createS3PreSignedUrl({ pathname, size: buffer.length });
+        const presignedUrl = typeof presigned === 'string' ? presigned : presigned.url;
 
-    return { fileId: record.id, url: record.url };
+        const uploadRes = await fetch(presignedUrl, {
+          body: buffer,
+          headers: { 'Content-Type': mediaType },
+          method: 'PUT',
+        });
+        if (!uploadRes.ok) {
+          throw new Error(`Upload failed: ${uploadRes.status} ${uploadRes.statusText}`);
+        }
+      }
+
+      const record = await port.createFile({
+        fileType: mediaType,
+        hash,
+        metadata: { date, dirname: '', filename: fileName, path: pathname },
+        name: fileName,
+        size: buffer.length,
+        url: pathname,
+      });
+
+      return { fileId: record.id, url: record.url };
+    } catch (error) {
+      if (reservedPathname) {
+        await port.abortS3Upload({ pathname: reservedPathname }).catch(() => undefined);
+      }
+      throw error;
+    }
   };

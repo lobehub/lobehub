@@ -19,10 +19,10 @@ export default defineConfig({
       },
     },
   ],
+  // Resolve the root `paths` map (packages first, app src as fallback) so the
+  // app-level store/services graph imported by these tests loads correctly.
   resolve: {
-    alias: {
-      '@': path.resolve(repoRoot, 'src'),
-    },
+    tsconfigPaths: true,
   },
   test: {
     environment: 'happy-dom',

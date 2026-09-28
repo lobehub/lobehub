@@ -18,7 +18,7 @@ import { fetchImageFromUrl, GenerationService } from './index';
 const { mockSsrfSafeFetch } = vi.hoisted(() => ({ mockSsrfSafeFetch: vi.fn() }));
 vi.mock('@lobechat/ssrf-safe-fetch', () => ({ ssrfSafeFetch: mockSsrfSafeFetch }));
 
-global.fetch = vi.fn(() => {
+global.fetch = vi.fn(function () {
   throw new Error('raw global fetch must not be used for image URLs; use ssrfSafeFetch');
 }) as any;
 
@@ -47,12 +47,14 @@ describe('GenerationService', () => {
     mockFileService = {
       uploadMedia: vi.fn(),
     };
-    vi.mocked(FileService).mockImplementation(() => mockFileService);
+    vi.mocked(FileService).mockImplementation(function () {
+      return mockFileService;
+    });
     vi.mocked(nanoid).mockReturnValue('test-uuid');
     vi.mocked(getYYYYmmddHHMMss).mockReturnValue('20240101123000');
 
     // Setup mime.getExtension with consistent behavior
-    vi.mocked(mime.getExtension).mockImplementation((mimeType) => {
+    vi.mocked(mime.getExtension).mockImplementation(function (mimeType) {
       const extensions = {
         'image/png': 'png',
         'image/jpeg': 'jpg',
@@ -63,7 +65,7 @@ describe('GenerationService', () => {
     });
 
     // Setup inferFileExtensionFromImageUrl with consistent behavior
-    vi.mocked(inferFileExtensionFromImageUrl).mockImplementation((url) => {
+    vi.mocked(inferFileExtensionFromImageUrl).mockImplementation(function (url) {
       if (url.includes('.jpg')) return 'jpg';
       if (url.includes('.gif')) return 'gif';
       if (url.includes('image') && !url.includes('.')) return ''; // For error testing
@@ -214,12 +216,71 @@ describe('GenerationService', () => {
         });
       });
 
-      it('should throw error when network request fails', async () => {
-        mockSsrfSafeFetch.mockRejectedValueOnce(new Error('Network error'));
+      describe('transient failures', () => {
+        const okResponse = () => ({
+          ok: true,
+          status: 200,
+          headers: { get: vi.fn().mockReturnValue('image/jpeg') },
+          arrayBuffer: vi.fn().mockResolvedValue(Buffer.from('img').buffer),
+        });
 
-        await expect(fetchImageFromUrl('https://example.com/image.jpg')).rejects.toThrow(
-          'Network error',
-        );
+        beforeEach(() => {
+          vi.useFakeTimers();
+        });
+
+        afterEach(() => {
+          vi.useRealTimers();
+        });
+
+        it('should retry a reset connection and return the image', async () => {
+          mockSsrfSafeFetch
+            .mockRejectedValueOnce(
+              new Error('Fetch failed: Invalid response body while trying to fetch: aborted'),
+            )
+            .mockResolvedValueOnce(okResponse());
+
+          const promise = fetchImageFromUrl('https://example.com/image.jpg');
+          await vi.runAllTimersAsync();
+
+          await expect(promise).resolves.toMatchObject({ mimeType: 'image/jpeg' });
+          expect(mockSsrfSafeFetch).toHaveBeenCalledTimes(2);
+        });
+
+        it('should retry 5xx responses', async () => {
+          mockSsrfSafeFetch
+            .mockResolvedValueOnce({ ok: false, status: 503, statusText: 'Service Unavailable' })
+            .mockResolvedValueOnce(okResponse());
+
+          const promise = fetchImageFromUrl('https://example.com/image.jpg');
+          await vi.runAllTimersAsync();
+
+          await expect(promise).resolves.toMatchObject({ mimeType: 'image/jpeg' });
+          expect(mockSsrfSafeFetch).toHaveBeenCalledTimes(2);
+        });
+
+        it('should give up after all retries without reporting an abort', async () => {
+          mockSsrfSafeFetch.mockRejectedValue(new Error('Fetch failed: aborted'));
+
+          const promise = fetchImageFromUrl('https://example.com/image.jpg');
+          const assertion = expect(promise).rejects.toThrow(
+            'Failed to fetch image from https://example.com/image.jpg after 3 attempts: network error',
+          );
+          await vi.runAllTimersAsync();
+
+          await assertion;
+          expect(mockSsrfSafeFetch).toHaveBeenCalledTimes(3);
+        });
+
+        it('should not retry SSRF blocks', async () => {
+          mockSsrfSafeFetch.mockRejectedValueOnce(
+            new Error('SSRF blocked: 10.0.0.1 is not allowed'),
+          );
+
+          await expect(fetchImageFromUrl('https://example.com/image.jpg')).rejects.toThrow(
+            'SSRF blocked',
+          );
+          expect(mockSsrfSafeFetch).toHaveBeenCalledTimes(1);
+        });
       });
     });
 
@@ -330,9 +391,9 @@ describe('GenerationService', () => {
       // Reset and configure sha256 with stable implementation
       vi.mocked(sha256)
         .mockReset()
-        .mockImplementation(
-          (buffer: any) => `hash-${buffer.length}-${buffer.slice(0, 4).toString('hex')}`,
-        );
+        .mockImplementation(function (buffer: any) {
+          return `hash-${buffer.length}-${buffer.slice(0, 4).toString('hex')}`;
+        });
     });
 
     it('should transform base64 image successfully', async () => {

@@ -1,6 +1,16 @@
 import { type MenuProps } from '@lobehub/ui';
-import { AccordionItem, ContextMenuTrigger, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Text } from '@lobehub/ui/base-ui';
+import { ContextMenuTrigger, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import {
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
+  accordionStyles,
+  AccordionTrigger,
+  ActionIcon,
+  Spin,
+  Text,
+} from '@lobehub/ui/base-ui';
+import { cx } from 'antd-style';
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -14,7 +24,6 @@ import { memo, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { openCustomizeSidebarModal } from '@/features/HomeSidebar/Body/CustomizeSidebarModal';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useCacheScope } from '@/libs/swr/useCacheScope';
@@ -123,34 +132,39 @@ const Recents = memo<RecentsProps>(({ itemKey }) => {
   if (query && query.items.length === 0) return null;
 
   return (
-    <AccordionItem
-      itemKey={itemKey}
-      paddingBlock={4}
-      paddingInline={'8px 4px'}
-      action={
-        <DropdownMenu items={dropdownMenu}>
-          <ActionIcon icon={MoreHorizontalIcon} size={'small'} style={{ flex: 'none' }} />
-        </DropdownMenu>
-      }
-      headerWrapper={(header) => (
-        <ContextMenuTrigger items={dropdownMenu}>{header}</ContextMenuTrigger>
-      )}
-      title={
-        <Flexbox horizontal align="center" gap={4}>
-          <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-            {t('recents')}
-          </Text>
-          {syncStatus?.isValidating && query && <NeuralNetworkLoading size={14} />}
-        </Flexbox>
-      }
-    >
-      <Suspense fallback={<SkeletonList rows={3} />}>
-        <RecentsList
-          error={syncStatus?.error}
-          scope={scope}
-          onRetry={() => void refreshRecents(scope)}
-        />
-      </Suspense>
+    <AccordionItem value={itemKey}>
+      <ContextMenuTrigger items={dropdownMenu}>
+        <AccordionHeader>
+          <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
+            <Flexbox horizontal align="center" gap={4}>
+              <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
+                {t('recents')}
+              </Text>
+              {syncStatus?.isValidating && query && <Spin size="small" variant="network" />}
+            </Flexbox>
+          </AccordionTrigger>
+          <div
+            className={cx(
+              'accordion-action',
+              accordionStyles.action,
+              accordionStyles.actionBorderless,
+            )}
+          >
+            <DropdownMenu items={dropdownMenu}>
+              <ActionIcon icon={MoreHorizontalIcon} size={'small'} style={{ flex: 'none' }} />
+            </DropdownMenu>
+          </div>
+        </AccordionHeader>
+      </ContextMenuTrigger>
+      <AccordionPanel>
+        <Suspense fallback={<SkeletonList rows={3} />}>
+          <RecentsList
+            error={syncStatus?.error}
+            scope={scope}
+            onRetry={() => void refreshRecents(scope)}
+          />
+        </Suspense>
+      </AccordionPanel>
     </AccordionItem>
   );
 });

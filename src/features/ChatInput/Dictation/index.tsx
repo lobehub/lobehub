@@ -1,8 +1,9 @@
 'use client';
 
-import { Icon, Tooltip } from '@lobehub/ui';
+import { Tooltip } from '@lobehub/ui';
+import { Spin } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { LoaderCircle, Mic, RotateCcw, X } from 'lucide-react';
+import { Mic, RotateCcw, X } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { memo, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -38,48 +39,35 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorFillSecondary};
   `,
   listening: css`
-    color: ${cssVar.colorWhite};
-
-    background: ${cssVar.colorSuccess};
-    box-shadow: 0 0 0 3px ${cssVar.colorSuccessBg};
-
     transition:
       color 160ms ease,
       background 160ms ease,
-      box-shadow 160ms ease,
       transform 120ms ease;
-    animation: dictation-halo-breathe 1.6s ease-in-out infinite;
 
-    &:hover {
-      color: ${cssVar.colorWhite};
-      background: ${cssVar.colorSuccessHover};
-      box-shadow: 0 0 0 4px ${cssVar.colorSuccessBgHover};
+    && {
+      color: contrast-color(${cssVar.colorPrimary});
+      background: ${cssVar.colorPrimary};
     }
 
-    &:active {
+    &&:hover {
+      color: contrast-color(${cssVar.colorPrimaryHover});
+      background: ${cssVar.colorPrimaryHover};
+    }
+
+    &&:active {
       transform: scale(0.94);
-      background: ${cssVar.colorSuccessActive};
+      color: contrast-color(${cssVar.colorPrimaryActive});
+      background: ${cssVar.colorPrimaryActive};
     }
 
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorSuccess};
-      outline-offset: 3px;
-    }
-
-    @keyframes dictation-halo-breathe {
-      0%,
-      100% {
-        box-shadow: 0 0 0 3px ${cssVar.colorSuccessBg};
-      }
-
-      50% {
-        box-shadow: 0 0 0 6px ${cssVar.colorSuccessBgHover};
-      }
+    &&:focus-visible {
+      outline: 2px solid currentcolor;
+      outline-offset: -3px;
+      box-shadow: none;
     }
 
     @media (prefers-reduced-motion: reduce) {
       transition: none;
-      animation: none;
     }
   `,
   listeningStatus: css`
@@ -96,19 +84,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     white-space: nowrap;
 
     clip: rect(0, 0, 0, 0);
-  `,
-  spin: css`
-    animation: dictation-spin 1s linear infinite;
-
-    @keyframes dictation-spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      animation: none;
-    }
   `,
   status: css`
     overflow: hidden;
@@ -335,7 +310,7 @@ const Dictation = memo(() => {
             onKeyDown={(event) => handleKeyboardActivation(event, start)}
           />
         ) : status !== 'error' ? (
-          <Icon aria-hidden className={styles.spin} icon={LoaderCircle} size={18} />
+          <Spin aria-hidden size="small" />
         ) : null}
       </div>
       <ChatInputAction

@@ -1,6 +1,7 @@
-import type { DocumentCommentJson } from '@lobechat/types';
+import type { DocumentCommentJson, DocumentCommentSelectionAnchor } from '@lobechat/types';
+import { sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
-import { index, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { check, index, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 import { createdAt, timestamptz, updatedAt } from './_helpers';
 import { documents } from './file';
@@ -33,6 +34,19 @@ export const documentComments = pgTable(
       .notNull(),
     content: text('content').notNull(),
     editorData: jsonb('editor_data').$type<DocumentCommentJson>(),
+    /**
+     * Text-quote anchor into the document body for a comment created from a
+     * selection; NULL means the comment is about the whole document.
+     *
+     * A text selector rather than a structural one on purpose: the editor
+     * regenerates its Lexical node keys on every load, so persisted node ids
+     * would be dead after one refresh. The quoted text re-locates itself
+     * against the current body and doubles as the snapshot that keeps the
+     * comment readable once its run is edited away — same retention semantics
+     * as `topic_comments.anchor_preview`, and just as deliberately never
+     * rewritten after creation.
+     */
+    selectionAnchor: jsonb('selection_anchor').$type<DocumentCommentSelectionAnchor>(),
     /** Client-generated idempotency key for retried creates. */
     clientId: text('client_id').notNull(),
     /** Tombstone retained only while a deleted root still has replies. */
@@ -55,6 +69,12 @@ export const documentComments = pgTable(
     index('document_comments_document_id_created_at_id_idx').on(t.documentId, t.createdAt, t.id),
     index('document_comments_author_user_id_idx').on(t.authorUserId),
     index('document_comments_workspace_id_idx').on(t.workspaceId),
+    // A reply never carries its own anchor — the thread's anchor lives on the
+    // root row, so one anchored run maps to exactly one thread highlight.
+    check(
+      'document_comments_reply_has_no_anchor',
+      sql`${t.parentCommentId} IS NULL OR ${t.selectionAnchor} IS NULL`,
+    ),
   ],
 );
 

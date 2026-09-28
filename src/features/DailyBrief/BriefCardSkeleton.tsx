@@ -1,4 +1,5 @@
-import { Block, Flexbox, Skeleton } from '@lobehub/ui';
+import { Block, Flexbox } from '@lobehub/ui';
+import { Skeleton } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
@@ -20,24 +21,23 @@ const BriefCardSkeleton = memo(() => {
           style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}
         >
           <Skeleton.Avatar
-            active
             shape={'square'}
             size={28}
             style={{ borderRadius: cssVar.borderRadius, flex: 'none' }}
           />
-          <Skeleton.Button active style={{ height: 20, width: 200 }} />
-          <Skeleton.Button active style={{ height: 14, width: 72 }} />
+          <Skeleton height={20} width={200} />
+          <Skeleton height={14} width={72} />
         </Flexbox>
-        <Skeleton.Avatar active shape={'circle'} size={'small'} style={{ flex: 'none' }} />
+        <Skeleton.Avatar shape={'circle'} size={'small'} style={{ flex: 'none' }} />
       </Flexbox>
 
       <Divider dashed style={{ marginBlock: 0 }} />
 
-      <Skeleton.Paragraph active fontSize={14} rows={3} style={{ marginBottom: 0 }} />
+      <Skeleton.Text fontSize={14} rows={3} style={{ marginBottom: 0 }} />
 
       <Flexbox horizontal gap={8} style={{ alignSelf: 'flex-end' }}>
-        <Skeleton.Button active style={{ height: 32, width: 100 }} />
-        <Skeleton.Button active style={{ height: 32, width: 80 }} />
+        <Skeleton height={32} width={100} />
+        <Skeleton height={32} width={80} />
       </Flexbox>
     </Block>
   );

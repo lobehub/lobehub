@@ -3,6 +3,7 @@ export * from './audit';
 export * from './core';
 export * from './executors';
 export * from './groupOrchestration';
+export * from './loop';
 export * from './transport';
 export * from './types';
 export * from './utils';

@@ -6,7 +6,8 @@ import {
   type HeterogeneousAgentRuntimeStatus,
   useWatchBroadcast,
 } from '@lobechat/electron-client-ipc';
-import { Flexbox, Icon, Skeleton, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Skeleton } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ActivityIcon, CircleAlertIcon, RadioTowerIcon, TimerResetIcon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -21,10 +22,8 @@ import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 
-import { ClaudeCodeQuotaMenu, CodexQuotaMenu } from './QuotaMenu';
+import { ClaudeCodeQuotaMenu, CodexQuotaMenu, KimiCodeQuotaMenu } from './QuotaMenu';
 
 const styles = createStaticStyles(({ css }) => ({
   // Pinned to the same 28px row as the plain ControlBar so the composer footer
@@ -141,7 +140,6 @@ const HeteroControlBar = memo(() => {
 
   // All hooks must be called unconditionally (Rules of Hooks)
   const isLoading = useAgentStore(agentByIdSelectors.isAgentConfigLoadingById(agentId));
-  const enableAgentProviderBinding = useUserStore(labPreferSelectors.enableAgentProviderBinding);
   // Effective config = shared row + this member's device override,
   // so the quota badges gate on where THIS member's run actually executes.
   const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId);
@@ -157,7 +155,7 @@ const HeteroControlBar = memo(() => {
   // a Claude / Codex account. API mode bills the bound provider key instead,
   // so the remaining-quota chip in the corner would be stale or empty.
   const isSubscriptionAuth = (heteroProvider?.authMode ?? 'subscription') === 'subscription';
-  const shouldShowApiCredits = enableAgentProviderBinding && heteroProvider?.authMode === 'api';
+  const shouldShowApiCredits = heteroProvider?.authMode === 'api';
   // An explicit bound device (including web's device-upgraded "local" pick)
   // samples quota through the gateway; `auto` has no concrete device to ask
   // and the cloud sandbox has no sampler, so both stay quota-less.
@@ -165,6 +163,17 @@ const HeteroControlBar = memo(() => {
   const shouldShowClaudeQuota =
     isSubscriptionAuth &&
     heteroProvider?.type === 'claude-code' &&
+    (isLocalHeteroExecution || !!quotaDeviceId);
+  const shouldShowCodexQuota =
+    isSubscriptionAuth &&
+    heteroProvider?.type === 'codex' &&
+    (isLocalHeteroExecution || !!quotaDeviceId);
+  // Kimi Code carries no client-side auth mode: whether the login is a
+  // subscription is only knowable from the sampled snapshot, so gate exactly
+  // like Claude and let the snapshot's unavailable reason explain the rest.
+  const shouldShowKimiCodeQuota =
+    isSubscriptionAuth &&
+    heteroProvider?.type === 'kimi-code' &&
     (isLocalHeteroExecution || !!quotaDeviceId);
 
   if (isAccessLoading) return null;
@@ -193,11 +202,24 @@ const HeteroControlBar = memo(() => {
         <Flexbox horizontal align={'center'} className={styles.leftGroup} gap={4}>
           <WorkspaceControls alwaysShowWorkspace agentId={agentId} />
         </Flexbox>
-        {(shouldShowApiCredits || (shouldShowClaudeQuota && quotaDeviceId)) && (
+        {(shouldShowApiCredits ||
+          (shouldShowClaudeQuota && quotaDeviceId) ||
+          (shouldShowCodexQuota && quotaDeviceId) ||
+          (shouldShowKimiCodeQuota && quotaDeviceId)) && (
           <Flexbox horizontal align={'center'} className={styles.rightGroup} gap={4}>
             {shouldShowApiCredits && <ChatInputCredits />}
             {shouldShowClaudeQuota && quotaDeviceId && (
               <ClaudeCodeQuotaMenu deviceId={quotaDeviceId} env={heteroProvider?.env} />
+            )}
+            {shouldShowCodexQuota && quotaDeviceId && (
+              <CodexQuotaMenu
+                command={heteroProvider?.command}
+                deviceId={quotaDeviceId}
+                env={heteroProvider?.env}
+              />
+            )}
+            {shouldShowKimiCodeQuota && quotaDeviceId && (
+              <KimiCodeQuotaMenu deviceId={quotaDeviceId} env={heteroProvider?.env} />
             )}
           </Flexbox>
         )}
@@ -208,8 +230,8 @@ const HeteroControlBar = memo(() => {
   if (!agentId || isLoading) {
     return (
       <Flexbox horizontal align={'center'} className={styles.bar} gap={4} justify={'space-between'}>
-        <Skeleton.Button active size="small" style={{ height: 22, minWidth: 100, width: 100 }} />
-        <Skeleton.Button active size="small" style={{ height: 22, minWidth: 80, width: 80 }} />
+        <Skeleton style={{ height: 22, minWidth: 100, width: 100 }} />
+        <Skeleton style={{ height: 22, minWidth: 80, width: 80 }} />
       </Flexbox>
     );
   }
@@ -220,11 +242,6 @@ const HeteroControlBar = memo(() => {
       <span className={styles.fullAccessLabel}>{tChat('heteroAgent.fullAccess.label')}</span>
     </div>
   );
-  // Codex quota still needs the local CLI (spawned over IPC), so it stays
-  // desktop-local; the SDK runtime badge likewise reports this desktop's own
-  // in-process runtime, not a remote device's.
-  const shouldShowCodexQuota =
-    isSubscriptionAuth && heteroProvider?.type === 'codex' && isLocalHeteroExecution;
   const shouldShowSdkRuntime =
     heteroProvider?.type === 'claude-code' &&
     isLocalHeteroExecution &&
@@ -272,7 +289,14 @@ const HeteroControlBar = memo(() => {
       <Flexbox horizontal align={'center'} className={styles.rightGroup} gap={4}>
         {shouldShowApiCredits && <ChatInputCredits />}
         {shouldShowCodexQuota && (
-          <CodexQuotaMenu command={heteroProvider?.command} env={heteroProvider?.env} />
+          <CodexQuotaMenu
+            command={heteroProvider?.command}
+            deviceId={quotaDeviceId}
+            env={heteroProvider?.env}
+          />
+        )}
+        {shouldShowKimiCodeQuota && (
+          <KimiCodeQuotaMenu deviceId={quotaDeviceId} env={heteroProvider?.env} />
         )}
         {shouldShowClaudeQuota && (
           <ClaudeCodeQuotaMenu deviceId={quotaDeviceId} env={heteroProvider?.env} />

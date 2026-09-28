@@ -10,10 +10,6 @@ vi.mock('@/store/global', () => ({
     selector({ revealInFilesTab: mockRevealInFilesTab }),
 }));
 
-vi.mock('@/components/AntdStaticMethods', () => ({
-  message: { error: vi.fn(), success: vi.fn() },
-}));
-
 vi.mock('@lobehub/ui/base-ui', () => ({
   ActionIcon: ({ onClick, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button type="button" {...props} onClick={onClick} />

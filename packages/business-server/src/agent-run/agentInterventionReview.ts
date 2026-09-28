@@ -298,6 +298,11 @@ export interface ResolveAgentInterventionBySourceParams {
  */
 export interface AgentInterventionRuntimeAppContext {
   documentId?: string | null;
+  /**
+   * The agent a builder run edits. Without it an `agent_builder` continuation
+   * resumes with no target (the run is owned by the builder itself).
+   */
+  editingAgentId?: string;
   groupId?: string | null;
   scope?: MessageMapScope;
   sessionId?: string;

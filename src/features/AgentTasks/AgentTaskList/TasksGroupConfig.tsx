@@ -19,8 +19,17 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 
 import type { TaskGroupBy, TaskListViewOptions, TaskOrderBy } from './listViewOptions';
 
+/** A display control the active collection fixes, so it has nothing to change. */
+export type TaskListPinnedOption = 'ordering' | 'showSubTasks';
+
 interface TasksHeaderProps {
   options: TaskListViewOptions;
+  /**
+   * Controls the active collection overrides (see
+   * `PAGINATED_COLLECTION_PINNED_OPTIONS`). They are left out of the panel
+   * rather than rendered as switches that silently do nothing.
+   */
+  pinnedOptions?: readonly TaskListPinnedOption[];
   setOptions: (updater: (prev: TaskListViewOptions) => TaskListViewOptions) => void;
 }
 
@@ -35,8 +44,9 @@ const styles = createStaticStyles(({ css, cssVar }) => {
   };
 });
 
-const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
+const TasksGroupConfig = memo<TasksHeaderProps>(({ options, pinnedOptions, setOptions }) => {
   const [isViewConfigOpen, setIsViewConfigOpen] = useState(false);
+  const isPinned = (option: TaskListPinnedOption) => !!pinnedOptions?.includes(option);
   const { t } = useTranslation('chat');
   const viewMode = useGlobalStore(systemStatusSelectors.taskListViewMode);
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
@@ -128,32 +138,36 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
           } satisfies FormItemProps,
         ]
       : []),
-    {
-      children: (
-        <Flexbox horizontal align={'center'} gap={8}>
-          <ActionIcon
-            icon={options.orderDirection === 'asc' ? ArrowDownWideNarrow : ArrowUpNarrowWide}
-            size={'small'}
-            onClick={() => {
-              setOptions((prev) => ({
-                ...prev,
-                orderDirection: prev.orderDirection === 'asc' ? 'desc' : 'asc',
-              }));
-            }}
-          />
-          <Select
-            options={orderOptions}
-            size={'small'}
-            style={{ width: 112 }}
-            value={options.orderBy}
-            onChange={(value: TaskOrderBy) => {
-              setOptions((prev) => ({ ...prev, orderBy: value }));
-            }}
-          />
-        </Flexbox>
-      ),
-      label: t('taskList.form.ordering'),
-    },
+    ...(isPinned('ordering')
+      ? []
+      : [
+          {
+            children: (
+              <Flexbox horizontal align={'center'} gap={8}>
+                <ActionIcon
+                  icon={options.orderDirection === 'asc' ? ArrowDownWideNarrow : ArrowUpNarrowWide}
+                  size={'small'}
+                  onClick={() => {
+                    setOptions((prev) => ({
+                      ...prev,
+                      orderDirection: prev.orderDirection === 'asc' ? 'desc' : 'asc',
+                    }));
+                  }}
+                />
+                <Select
+                  options={orderOptions}
+                  size={'small'}
+                  style={{ width: 112 }}
+                  value={options.orderBy}
+                  onChange={(value: TaskOrderBy) => {
+                    setOptions((prev) => ({ ...prev, orderBy: value }));
+                  }}
+                />
+              </Flexbox>
+            ),
+            label: t('taskList.form.ordering'),
+          } satisfies FormItemProps,
+        ]),
     {
       children: (
         <Switch
@@ -168,22 +182,26 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
       label: t('taskList.form.orderCompletedByRecency'),
     },
     showCompletedFormItem,
-    {
-      children: (
-        <Switch
-          checked={options.showSubTasks}
-          size={'small'}
-          onChange={(checked) => {
-            setOptions((prev) => ({ ...prev, showSubTasks: checked }));
-          }}
-        />
-      ),
-      minWidth: undefined,
-      label: t('taskList.form.showSubTasks'),
-    },
+    ...(isPinned('showSubTasks')
+      ? []
+      : [
+          {
+            children: (
+              <Switch
+                checked={options.showSubTasks}
+                size={'small'}
+                onChange={(checked) => {
+                  setOptions((prev) => ({ ...prev, showSubTasks: checked }));
+                }}
+              />
+            ),
+            minWidth: undefined,
+            label: t('taskList.form.showSubTasks'),
+          } satisfies FormItemProps,
+        ]),
     // Only meaningful once sub-tasks are on the list — otherwise the toggle
     // would sit there controlling nothing.
-    ...(options.showSubTasks
+    ...(options.showSubTasks || isPinned('showSubTasks')
       ? [
           {
             children: (

@@ -37,7 +37,7 @@ export const setDesktopOnboardingCompleted = () => {
 /**
  * Whether the user has *ever* completed desktop onboarding on this install.
  * Backed by localStorage so it survives quit/relaunch — used to skip first-run
- * screens (Welcome / Permissions / DataMode) when a returning user is sent
+ * screens (Welcome / Permissions / KeepAwake / DataMode) when a returning user is sent
  * back to /desktop-onboarding (e.g. token refresh failed, sign-out).
  */
 export const getDesktopOnboardingEverCompleted = () => {

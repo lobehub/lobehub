@@ -3,7 +3,7 @@ import type { GoalGraphState, GoalTraceEdge, GoalTraceNode } from '../types';
 export const node = (id: string, overrides: Partial<GoalTraceNode> = {}): GoalTraceNode => ({
   createdAt: 1000,
   id,
-  kind: 'work',
+  kind: 'task',
   priority: 0,
   status: 'proposed',
   title: id,

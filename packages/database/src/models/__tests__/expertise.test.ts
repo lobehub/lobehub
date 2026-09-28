@@ -133,8 +133,8 @@ describe('ExpertiseModel', () => {
     const model = new ExpertiseModel(serverDB, userId);
 
     const domainId = await model.createDomain({
-      agentId: 'owned-agent',
       brief: 'Improve production incident diagnosis, excluding general design discussions.',
+      carrier: { id: 'owned-agent', type: 'agent' },
       domainFilter: 'Include production incident diagnosis and remediation.',
       outOfScope: 'Exclude general design discussions without an incident.',
       title: 'Production incident response',

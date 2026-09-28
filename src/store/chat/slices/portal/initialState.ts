@@ -16,6 +16,7 @@ export enum PortalViewType {
   Artifact = 'artifact',
   Document = 'document',
   FilePreview = 'filePreview',
+  Goal = 'goal',
   GoalMetric = 'goalMetric',
   GoalNode = 'goalNode',
   GroupThread = 'groupThread',
@@ -24,6 +25,7 @@ export enum PortalViewType {
   MessageDetail = 'messageDetail',
   Notebook = 'notebook',
   TaskDetail = 'taskDetail',
+  TaskResult = 'taskResult',
   Thread = 'thread',
   ToolUI = 'toolUI',
   Topic = 'topic',
@@ -67,6 +69,7 @@ export type GoalMetricKind =
 
 export type PortalViewData =
   | { type: PortalViewType.Home }
+  | { goalId: string; type: PortalViewType.Goal }
   | { goalId: string; metric: GoalMetricKind; type: PortalViewType.GoalMetric }
   | { goalId: string; nodeId: string; type: PortalViewType.GoalNode }
   | { acceptanceId: string; type: PortalViewType.Acceptance }
@@ -88,6 +91,7 @@ export type PortalViewData =
   | { topicId: string; type: PortalViewType.Topic }
   | { agentId: string; type: PortalViewType.GroupThread }
   | { taskId: string; type: PortalViewType.TaskDetail }
+  | { taskId: string; type: PortalViewType.TaskResult }
   | {
       focusCommentId?: string;
       initialReplyCount?: number;

@@ -1,9 +1,17 @@
 import type { LobeChatDatabase } from '@lobechat/database';
-import type { ChatAudioItem, ChatFileItem, ChatImageItem, ChatVideoItem } from '@lobechat/types';
+import type {
+  ChatAudioItem,
+  ChatFileItem,
+  ChatImageItem,
+  ChatVideoItem,
+  FileAccessScope,
+} from '@lobechat/types';
+import { ordinaryFileAccessScope } from '@lobechat/types';
 import { readAudioDurationMs } from '@lobechat/utils/audio';
 import debug from 'debug';
 
 import { FileModel } from '@/database/models/file';
+import { readOriginalCharCount } from '@/database/utils/parsedDocument';
 import { DocumentService } from '@/server/services/document';
 import { FileService, getFileProxyUrl } from '@/server/services/file';
 
@@ -25,6 +33,7 @@ export interface ResolvedAttachments {
 
 interface ResolveArgs {
   db: LobeChatDatabase;
+  fileAccessScope?: FileAccessScope;
   fileIds: string[];
   userId: string;
   workspaceId?: string;
@@ -60,6 +69,7 @@ const getAudioMetadata = (
  */
 export const resolveAttachmentsByFileIds = async ({
   db,
+  fileAccessScope = ordinaryFileAccessScope,
   fileIds,
   userId,
   workspaceId,
@@ -77,7 +87,7 @@ export const resolveAttachmentsByFileIds = async ({
   const dedupedFileIds = dedupe(fileIds);
   const fileModel = new FileModel(db, userId, workspaceId);
   const fileService = new FileService(db, userId, workspaceId);
-  const fileRecords = await fileModel.findByIds(dedupedFileIds);
+  const fileRecords = await fileModel.findByIds(dedupedFileIds, fileAccessScope);
   if (fileRecords.length === 0) {
     log('no file records found for fileIds=%O', dedupedFileIds);
     return result;
@@ -105,14 +115,16 @@ export const resolveAttachmentsByFileIds = async ({
         return { file, fileType, id, resolvedUrl };
       }
       let content: string | undefined;
+      let originalCharCount: number | undefined;
       let parseError: unknown;
       try {
-        const document = await documentService.parseFile(file.id);
+        const document = await documentService.parseFile(file.id, fileAccessScope);
         content = document.content ?? undefined;
+        originalCharCount = readOriginalCharCount(document.metadata);
       } catch (error) {
         parseError = error;
       }
-      return { content, file, fileType, id, parseError, resolvedUrl };
+      return { content, file, fileType, id, originalCharCount, parseError, resolvedUrl };
     }),
   );
 
@@ -151,6 +163,7 @@ export const resolveAttachmentsByFileIds = async ({
       fileType: fileType || 'application/octet-stream',
       id: file.id,
       name: file.name || 'file',
+      originalCharCount: entry.originalCharCount,
       size: file.size ?? 0,
       url: resolvedUrl,
     });

@@ -210,4 +210,12 @@ describe('sanitizeAgentInterventionRequestForReview', () => {
       sanitizeAgentInterventionRequestForReview(request({ interactionKind: undefined })),
     ).toBeUndefined();
   });
+
+  it('accepts Devin as a durable intervention provider', () => {
+    const sanitized = sanitizeAgentInterventionRequestForReview(
+      request({ identifier: 'devin', provider: 'devin' }),
+    );
+
+    expect(sanitized).toMatchObject({ identifier: 'devin', provider: 'devin' });
+  });
 });

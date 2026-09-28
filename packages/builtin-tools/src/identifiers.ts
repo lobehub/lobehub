@@ -9,11 +9,13 @@ import {
   agentSignalReviewManifest,
   agentSignalSkillManagementManifest,
 } from '@lobechat/builtin-tool-agent-signal';
+import { AttachmentsManifest } from '@lobechat/builtin-tool-attachments';
+import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { CalculatorManifest } from '@lobechat/builtin-tool-calculator/manifest';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { CredsManifest } from '@lobechat/builtin-tool-creds';
-import { GoalManifest } from '@lobechat/builtin-tool-goal';
+import { GoalManifest, GoalSupervisorManifest } from '@lobechat/builtin-tool-goal';
 import { GroupAgentBuilderManifest } from '@lobechat/builtin-tool-group-agent-builder';
 import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management';
 import { ImageGenerationManifest } from '@lobechat/builtin-tool-image-generation';
@@ -29,6 +31,7 @@ import { SkillsManifest } from '@lobechat/builtin-tool-skills';
 import { TopicReferenceManifest } from '@lobechat/builtin-tool-topic-reference';
 import { UserInteractionManifest } from '@lobechat/builtin-tool-user-interaction';
 import { VerifyToolManifest } from '@lobechat/builtin-tool-verify';
+import { VideoGenerationManifest } from '@lobechat/builtin-tool-video-generation';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { WebOnboardingManifest } from '@lobechat/builtin-tool-web-onboarding';
 
@@ -37,13 +40,17 @@ export const builtinToolIdentifiers: string[] = [
   AgentBuilderManifest.identifier,
   AgentDocumentsManifest.identifier,
   AgentManagementManifest.identifier,
+  AttachmentsManifest.identifier,
+  AuvManifest.identifier,
   CalculatorManifest.identifier,
   CloudSandboxManifest.identifier,
   CredsManifest.identifier,
   GroupAgentBuilderManifest.identifier,
   GroupManagementManifest.identifier,
   GoalManifest.identifier,
+  GoalSupervisorManifest.identifier,
   ImageGenerationManifest.identifier,
+  VideoGenerationManifest.identifier,
   KnowledgeBaseManifest.identifier,
   BrowserManifest.identifier,
   LocalSystemManifest.identifier,

@@ -30,6 +30,57 @@ const toQStashDelaySeconds = (delayMs: number): number | undefined => {
 };
 
 /**
+ * QStash rejects any single message above 10 MiB (`quota maxMessageSize
+ * exceeded`) with a 500, so an oversized body used to fail the publish, throw
+ * out of `executeStep` and kill the whole operation at a step boundary. The
+ * budget leaves headroom for the envelope QStash adds around the body.
+ */
+const QSTASH_MAX_BODY_BYTES = 10 * 1024 * 1024;
+const QSTASH_BODY_BUDGET_BYTES = 9 * 1024 * 1024;
+
+/**
+ * How much a single string may keep, tried in order until the WHOLE body
+ * measures under budget. One pass at a generous limit is not enough: a body
+ * can also be oversized through fragmentation — the MCP contract keeps every
+ * raw content block in `state`, so hundreds of blocks each shorter than the
+ * limit survive an untouched pass and still add up past the quota. Each rung
+ * re-clamps the original body, so the notices never nest.
+ */
+const OVERSIZED_STRING_KEEP_LADDER = [25_000, 4000, 512, 0];
+
+const byteLength = (value: unknown): number =>
+  Buffer.byteLength(JSON.stringify(value) ?? '', 'utf8');
+
+/**
+ * Shrink a too-large message body by clamping every string past `keep`,
+ * depth-first. Strings are the only thing that can run away here — tool
+ * results and error messages carrying raw command output — so clamping them
+ * recovers the body while keeping its shape intact for the worker that
+ * receives it.
+ */
+const clampOversizedStrings = (value: unknown, keep: number): unknown => {
+  if (typeof value === 'string') {
+    if (value.length <= keep) return value;
+    const omitted = value.length - keep;
+
+    return `${value.slice(0, keep)}\n\n[Truncated: ${omitted.toLocaleString()} characters omitted so the step could be scheduled. Original length: ${value.length.toLocaleString()} characters]`;
+  }
+
+  if (Array.isArray(value)) return value.map((entry) => clampOversizedStrings(entry, keep));
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, entry]) => [
+        key,
+        clampOversizedStrings(entry, keep),
+      ]),
+    );
+  }
+
+  return value;
+};
+
+/**
  * QStash queue service implementation
  */
 export class QStashQueueServiceImpl implements QueueServiceImpl {
@@ -82,7 +133,7 @@ export class QStashQueueServiceImpl implements QueueServiceImpl {
         retries,
         url: endpoint,
       };
-      const response = await qstashClient.publishJSON(request);
+      const response = await qstashClient.publishJSON(this.fitBodyToQuota(request, operationId));
 
       log(
         `[${operationId}] Scheduled step %d to %s with %dms delay (messageId: %s)`,
@@ -97,6 +148,46 @@ export class QStashQueueServiceImpl implements QueueServiceImpl {
       log('Failed to schedule step %d for operation %s: %O', stepIndex, operationId, error);
       throw error;
     }
+  }
+
+  /**
+   * Keep a step schedulable when its body outgrew the QStash message quota:
+   * clamp its strings rather than let the publish 500 and take the whole
+   * operation down. The step still runs — it just sees a truncated copy of
+   * whatever ran away. Clamping tightens until the body MEASURES under budget,
+   * so a body that is oversized through many mid-sized strings is handled too,
+   * not only one runaway blob.
+   */
+  private fitBodyToQuota<T extends { body: unknown }>(request: T, operationId: string): T {
+    const size = byteLength(request.body);
+    if (size <= QSTASH_BODY_BUDGET_BYTES) return request;
+
+    for (const keep of OVERSIZED_STRING_KEEP_LADDER) {
+      const body = clampOversizedStrings(request.body, keep);
+      const clampedBytes = byteLength(body);
+      if (clampedBytes > QSTASH_BODY_BUDGET_BYTES) continue;
+
+      console.warn(
+        JSON.stringify({
+          bytes: size,
+          clampedBytes,
+          event: 'agent.queue.oversized_message_clamped',
+          limitBytes: QSTASH_MAX_BODY_BYTES,
+          operationId,
+          stringKeep: keep,
+        }),
+      );
+
+      return { ...request, body };
+    }
+
+    // Unreachable through strings — the last rung drops every string to a
+    // notice. Getting here means the body is huge in its non-string structure,
+    // which no truncation can fix; fail with something diagnosable instead of
+    // an opaque `quota maxMessageSize exceeded` 500 from the provider.
+    throw new Error(
+      `QStash message for operation ${operationId} is ${size} bytes and cannot be reduced under the ${QSTASH_MAX_BODY_BYTES} byte quota`,
+    );
   }
 
   async scheduleBatchMessages(messages: QueueMessage[]): Promise<string[]> {

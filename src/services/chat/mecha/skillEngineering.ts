@@ -1,12 +1,13 @@
+import { isDesktop } from '@lobechat/const';
 import type { OperationSkillSet } from '@lobechat/context-engine';
-import { SkillEngine } from '@lobechat/context-engine';
+import { assembleSkillPool } from '@lobechat/mecha';
 import { resourcesTreePrompt } from '@lobechat/prompts';
 import type { SkillItem } from '@lobechat/types';
 import debug from 'debug';
 
-import { isBuiltinSkillAvailableInCurrentEnv } from '@/helpers/toolAvailability';
 import { agentSkillService } from '@/services/skill';
 import { getToolStoreState } from '@/store/tool';
+import { loadBuiltinSkills } from '@/store/tool/slices/builtin/loadBuiltinSkills';
 
 const log = debug('context-engine:resolveClientSkills');
 
@@ -36,24 +37,25 @@ const buildDbSkillContent = (detail: SkillItem): string | undefined => {
  * memory; DB content is fetched on demand (store cache first) and only for the
  * pinned skills, to avoid bulk network calls when auto mode exposes every skill.
  *
- * Uses isBuiltinSkillAvailableInCurrentEnv as the enableChecker to
- * filter platform-specific skills (e.g., agent-browser on desktop only).
+ * Platform-specific skills (e.g. agent-browser on desktop only) are filtered
+ * by the shared rule, which the desktop client satisfies by being the
+ * execution device itself.
  */
 export const resolveClientSkills = async (
   pluginIds?: string[],
   disabledIds?: string[],
+  skillActivateMode?: 'auto' | 'manual',
 ): Promise<OperationSkillSet> => {
   const toolState = getToolStoreState();
   const pinnedIds = new Set(pluginIds ?? []);
   const disabledIdSet = new Set(disabledIds ?? []);
 
-  // Builtin skills keep their full content in the store, so it is always cheap
-  // to carry along. Pinned skills are marked `activated` so SkillContextProvider
-  // injects their content directly; non-pinned ones stay in <available_skills>.
-  // Disabled skills are dropped from the candidate pool entirely — not just
-  // left unpinned — so a disabled skill is neither listed nor resolvable by
-  // name via `activateSkill`.
-  const builtinMetas = (toolState.builtinSkills || [])
+  // Pinned skills are marked `activated` so SkillContextProvider injects their
+  // content directly; non-pinned ones stay in <available_skills>. Disabled
+  // skills are dropped from the candidate pool entirely — not just left
+  // unpinned — so a disabled skill is neither listed nor resolvable by name via
+  // `activateSkill`.
+  const builtinMetas = (await loadBuiltinSkills())
     .filter((s) => !disabledIdSet.has(s.identifier))
     .map((s) => ({
       activated: pinnedIds.has(s.identifier) && !!s.content,
@@ -101,10 +103,16 @@ export const resolveClientSkills = async (
       }),
   );
 
-  const skillEngine = new SkillEngine({
-    enableChecker: (skill) => isBuiltinSkillAvailableInCurrentEnv(skill.identifier),
-    skills: [...builtinMetas, ...dbMetas],
-  });
-
-  return skillEngine.generate(pluginIds ?? []);
+  // Precedence, name dedupe and the device-only builtin gate are the shared
+  // rules; the browser scans no project directory and mounts no
+  // agent-document bundles, so it supplies two of the four sources.
+  return assembleSkillPool(
+    { builtin: builtinMetas, db: dbMetas },
+    {
+      // The desktop app is itself the execution device.
+      canExecuteOnDevice: isDesktop,
+      enabledPluginIds: pluginIds,
+      skillActivateMode,
+    },
+  );
 };

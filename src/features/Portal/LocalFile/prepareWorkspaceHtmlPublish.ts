@@ -1,19 +1,18 @@
+import {
+  type EscapedResourceRef,
+  type GatheredWorkspaceHtmlArtifact,
+  gatherWorkspaceHtmlArtifact,
+  isPathInsideWorkspace,
+  type PackedWorkspaceHtmlSite,
+  packWorkspaceHtmlDocument,
+  type WorkspaceHtmlArtifactPublisher,
+  type WorkspaceHtmlArtifactPublishResult,
+} from '@lobechat/html-artifact';
 import { toast } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 
-import {
-  type GatheredWorkspaceHtmlArtifact,
-  gatherWorkspaceHtmlArtifact,
-} from './gatherWorkspaceHtmlArtifact';
-import {
-  type PackedWorkspaceHtmlSite,
-  packWorkspaceHtmlDocument,
-} from './packWorkspaceHtmlDocument';
+import { readExternalAssetForPublish } from './readExternalAssetForPublish';
 import { readWorkspaceAsset } from './readWorkspaceAsset';
-import type {
-  WorkspaceHtmlArtifactPublisher,
-  WorkspaceHtmlArtifactPublishResult,
-} from './workspaceHtmlArtifact';
 
 export interface ReadyWorkspaceHtmlPublishPlan {
   gathered: GatheredWorkspaceHtmlArtifact;
@@ -46,12 +45,18 @@ export type WorkspaceHtmlPublishPlan =
       blocked: 'unreadable';
     }
   | {
+      blocked: 'outside-workspace';
+      escaped: EscapedResourceRef[];
+      gathered: GatheredWorkspaceHtmlArtifact;
+    }
+  | {
       blocked: 'unresolved';
       unresolvedHrefs: string[];
     }
   | ReadyWorkspaceHtmlPublishPlan;
 
-interface PrepareWorkspaceHtmlPublishInput {
+export interface PrepareWorkspaceHtmlPublishInput {
+  allowExternalReads?: boolean;
   content?: string;
   deviceId?: string;
   filePath: string;
@@ -60,6 +65,7 @@ interface PrepareWorkspaceHtmlPublishInput {
 }
 
 export const prepareWorkspaceHtmlPublish = async ({
+  allowExternalReads = false,
   content,
   deviceId,
   filePath,
@@ -79,10 +85,13 @@ export const prepareWorkspaceHtmlPublish = async ({
   }
 
   const gathered = await gatherWorkspaceHtmlArtifact({
+    allowExternalReads,
     htmlContent,
     htmlFilePath: filePath,
     readAsset: (absolutePath) =>
-      readWorkspaceAsset({
+      (allowExternalReads && !isPathInsideWorkspace(absolutePath, workingDirectory)
+        ? readExternalAssetForPublish
+        : readWorkspaceAsset)({
         deviceId,
         path: absolutePath,
         sandboxTopicId,
@@ -95,13 +104,20 @@ export const prepareWorkspaceHtmlPublish = async ({
     return { blocked: gathered.blocked, totalBytes: gathered.totalBytes };
   }
 
+  if (!allowExternalReads && gathered.escaped.length > 0) {
+    return { blocked: 'outside-workspace', escaped: gathered.escaped, gathered };
+  }
+
   const packed = packWorkspaceHtmlDocument({
     entryPath: gathered.entryPath,
     files: gathered.files,
   });
 
-  if (packed.unresolvedHrefs.length > 0) {
-    return { blocked: 'unresolved', unresolvedHrefs: packed.unresolvedHrefs };
+  const unexpectedUnresolved = packed.unresolvedHrefs.filter(
+    (href) => !gathered.missing.includes(href),
+  );
+  if (unexpectedUnresolved.length > 0) {
+    return { blocked: 'unresolved', unresolvedHrefs: unexpectedUnresolved };
   }
 
   return { gathered, packed };
@@ -119,6 +135,8 @@ export const notifyWorkspaceHtmlPublishBlocked = (
     toast.error(t('workingPanel.localFile.publish.unresolvedLocals', { ns: 'chat' }));
     return;
   }
+
+  if (plan.blocked === 'outside-workspace') return;
 
   toast.error(
     t(
@@ -145,6 +163,7 @@ export const publishPreparedWorkspaceHtml = async ({
   plan,
   publish,
   signal,
+  successMessage,
   topicId,
 }: {
   agentId?: string | null;
@@ -154,6 +173,7 @@ export const publishPreparedWorkspaceHtml = async ({
   plan: ReadyWorkspaceHtmlPublishPlan;
   publish: WorkspaceHtmlArtifactPublisher['publish'];
   signal?: AbortSignal;
+  successMessage?: string;
   topicId: string;
 }): Promise<WorkspaceHtmlArtifactPublishResult | undefined> => {
   try {
@@ -170,7 +190,7 @@ export const publishPreparedWorkspaceHtml = async ({
       topicId,
     });
 
-    toast.success(t('workingPanel.localFile.publish.success', { ns: 'chat' }));
+    toast.success(successMessage ?? t('workingPanel.localFile.publish.success', { ns: 'chat' }));
     return result;
   } catch (error) {
     if (!onError?.(error)) toast.error(workspaceHtmlPublishErrorMessage(error));

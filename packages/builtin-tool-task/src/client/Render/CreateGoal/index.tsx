@@ -20,7 +20,7 @@ import {
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useChatStore } from '@/store/chat';
 import { goalSelectors, useGoalStore } from '@/store/goal';
 
 import type { CreateGoalParams, CreateGoalState } from '../../../types';
@@ -125,7 +125,7 @@ const resolvePhase = (status: GoalStatus | undefined, pendingDecisions: number):
 const CreateGoalRender = memo<BuiltinRenderProps<CreateGoalParams, CreateGoalState>>(
   ({ args, pluginState }) => {
     const { t } = useTranslation('plugin');
-    const navigate = useWorkspaceAwareNavigate();
+    const openGoalPortal = useChatStore((s) => s.openGoal);
     const goalId = pluginState?.goalId;
     const [now, setNow] = useState(() => Date.now());
 
@@ -150,8 +150,9 @@ const CreateGoalRender = memo<BuiltinRenderProps<CreateGoalParams, CreateGoalSta
 
     if (!pluginState?.success || !goalId) return null;
 
-    const agentId = snapshot?.goal.agentId;
-    const openGoal = agentId ? () => navigate(`/agent/${agentId}/goal/${goalId}`) : undefined;
+    // The goal's progress opens beside the conversation that created it; the
+    // portal view links on to the full goal page.
+    const openGoal = () => openGoalPortal(goalId);
 
     return (
       <TaskResultCard
@@ -163,7 +164,7 @@ const CreateGoalRender = memo<BuiltinRenderProps<CreateGoalParams, CreateGoalSta
           horizontal
           align={'center'}
           gap={8}
-          style={openGoal ? { cursor: 'pointer' } : undefined}
+          style={{ cursor: 'pointer' }}
           onClick={openGoal}
         >
           <Icon

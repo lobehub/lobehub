@@ -4,7 +4,6 @@ import { type SkillResourceTreeNode } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
 import { Flexbox, Icon } from '@lobehub/ui';
 import { ActionIcon, Avatar } from '@lobehub/ui/base-ui';
-import { Skeleton } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { unzip } from 'fflate';
 import { DotIcon, ExternalLinkIcon } from 'lucide-react';
@@ -12,6 +11,7 @@ import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import PublishedTime from '@/components/PublishedTime';
+import { ArticleSkeleton } from '@/components/Skeleton';
 import ContentViewer from '@/features/AgentSkillDetail/ContentViewer';
 import FileTree from '@/features/FileTree';
 import { marketApiService } from '@/services/marketApi';
@@ -185,7 +185,7 @@ const MarketSkillDetail = memo<MarketSkillDetailProps>(({ identifier }) => {
   }, [installedResourceTree, zipTree, data?.resources]);
 
   if (isLoading || !data) {
-    return <Skeleton active paragraph={{ rows: 8 }} style={{ padding: 16 }} />;
+    return <ArticleSkeleton rows={8} style={{ padding: 16 }} />;
   }
 
   const { name, icon, version, description, homepage, github } = data;

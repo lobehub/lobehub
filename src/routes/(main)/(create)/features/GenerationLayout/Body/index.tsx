@@ -1,7 +1,7 @@
 'use client';
 
-import { Accordion, AccordionItem, Flexbox, Icon } from '@lobehub/ui';
-import { Tabs, Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Accordion, Tabs, Text } from '@lobehub/ui/base-ui';
 import { LayoutGrid, ListIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -64,67 +64,80 @@ const Body = memo<GenerationLayoutCommonProps>((props) => {
   if (activeWorkspaceId) {
     return (
       <Flexbox gap={1} paddingInline={4}>
-        <Accordion defaultExpandedKeys={[GroupKey.PrivateTopics, GroupKey.WorkspaceTopics]} gap={2}>
-          <AccordionItem
-            action={viewModeTabs}
-            itemKey={GroupKey.PrivateTopics}
-            paddingBlock={4}
-            paddingInline={'8px 4px'}
-            title={
-              <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-                {t('topic.privateTitle')}
-                {privateCount > 0 && ` ${privateCount}`}
-              </Text>
-            }
-          >
-            <List
-              namespace={namespace}
-              useStore={useStore}
-              viewModeStatusKey={viewModeStatusKey}
-              visibility="private"
-            />
-          </AccordionItem>
-          <AccordionItem
-            itemKey={GroupKey.WorkspaceTopics}
-            paddingBlock={4}
-            paddingInline={'8px 4px'}
-            title={
-              <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-                {t('topic.workspaceTitle')}
-                {workspaceCount > 0 && ` ${workspaceCount}`}
-              </Text>
-            }
-          >
-            <List
-              namespace={namespace}
-              useStore={useStore}
-              viewModeStatusKey={viewModeStatusKey}
-              visibility="public"
-            />
-          </AccordionItem>
-        </Accordion>
+        <Accordion
+          defaultValue={[GroupKey.PrivateTopics, GroupKey.WorkspaceTopics]}
+          gap={2}
+          indicatorPlacement="inline"
+          styles={{ trigger: { paddingBlock: 4, paddingInline: '8px 4px' } }}
+          items={[
+            {
+              action: viewModeTabs,
+              key: GroupKey.PrivateTopics,
+              title: (
+                <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
+                  {t('topic.privateTitle')}
+                  {privateCount > 0 && ` ${privateCount}`}
+                </Text>
+              ),
+              children: (
+                <List
+                  namespace={namespace}
+                  useStore={useStore}
+                  viewModeStatusKey={viewModeStatusKey}
+                  visibility="private"
+                />
+              ),
+            },
+            {
+              key: GroupKey.WorkspaceTopics,
+              title: (
+                <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
+                  {t('topic.workspaceTitle')}
+                  {workspaceCount > 0 && ` ${workspaceCount}`}
+                </Text>
+              ),
+              children: (
+                <List
+                  namespace={namespace}
+                  useStore={useStore}
+                  viewModeStatusKey={viewModeStatusKey}
+                  visibility="public"
+                />
+              ),
+            },
+          ]}
+        />
       </Flexbox>
     );
   }
 
   return (
     <Flexbox gap={1} paddingInline={4}>
-      <Accordion defaultExpandedKeys={[GroupKey.Topics]} gap={2}>
-        <AccordionItem
-          action={viewModeTabs}
-          itemKey={GroupKey.Topics}
-          paddingBlock={4}
-          paddingInline={'8px 4px'}
-          title={
-            <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-              {t('topic.title')}
-              {count > 0 && ` ${count}`}
-            </Text>
-          }
-        >
-          <List namespace={namespace} useStore={useStore} viewModeStatusKey={viewModeStatusKey} />
-        </AccordionItem>
-      </Accordion>
+      <Accordion
+        defaultValue={[GroupKey.Topics]}
+        gap={2}
+        indicatorPlacement="inline"
+        styles={{ trigger: { paddingBlock: 4, paddingInline: '8px 4px' } }}
+        items={[
+          {
+            action: viewModeTabs,
+            key: GroupKey.Topics,
+            title: (
+              <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
+                {t('topic.title')}
+                {count > 0 && ` ${count}`}
+              </Text>
+            ),
+            children: (
+              <List
+                namespace={namespace}
+                useStore={useStore}
+                viewModeStatusKey={viewModeStatusKey}
+              />
+            ),
+          },
+        ]}
+      />
     </Flexbox>
   );
 });

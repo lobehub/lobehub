@@ -6,19 +6,14 @@ import { Text } from '@lobehub/ui/base-ui';
 import { Breadcrumb as AntBreadcrumb } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
-import { memo, type ReactNode, useMemo } from 'react';
+import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useLocation } from 'react-router';
-import urlJoin from 'url-join';
+import { Link } from 'react-router';
 
-import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
-import {
-  buildPrefixedAgentRoutePath,
-  parseAgentPathname,
-} from '@/features/AgentSidebar/utils/agentPathname';
-import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
+
+import { useAgentRoutePath } from './useAgentRoutePath';
 
 const styles = createStaticStyles(({ css }) => ({
   breadcrumb: css`
@@ -54,8 +49,7 @@ interface AgentBreadcrumbProps {
  */
 const AgentBreadcrumb = memo<AgentBreadcrumbProps>(({ agentId, extraItems, title }) => {
   const { t } = useTranslation(['chat', 'common']);
-  const { pathname } = useLocation();
-  const activeWorkspaceSlug = useActiveWorkspaceSlug();
+  const buildAgentPath = useAgentRoutePath(agentId);
   const agentTitle = useAgentStore((s) =>
     agentDisplayName(agentSelectors.getAgentMetaById(agentId)(s)),
   );
@@ -64,11 +58,7 @@ const AgentBreadcrumb = memo<AgentBreadcrumbProps>(({ agentId, extraItems, title
   const displayTitle = isInbox
     ? agentTitle || t('inbox.title', { ns: 'chat' })
     : agentTitle || t('defaultSession', { ns: 'common' });
-  const agentRoute = useMemo(() => parseAgentPathname(pathname), [pathname]);
-  const agentHomePath = useMemo(() => {
-    const targetPath = buildWorkspaceAwarePath(urlJoin('/agent', agentId), activeWorkspaceSlug);
-    return buildPrefixedAgentRoutePath(targetPath, agentRoute, activeWorkspaceSlug);
-  }, [activeWorkspaceSlug, agentId, agentRoute]);
+  const agentHomePath = buildAgentPath();
 
   return (
     <AntBreadcrumb

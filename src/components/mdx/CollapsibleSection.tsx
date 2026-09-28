@@ -1,6 +1,6 @@
 'use client';
 
-import { Collapse } from '@lobehub/ui';
+import { Accordion } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { kebabCase } from 'es-toolkit';
 import { type FC, type ReactNode } from 'react';
@@ -31,17 +31,18 @@ const CollapsibleSection: FC<CollapsibleSectionProps> = ({ children, title = '' 
   const id = kebabCase(title);
 
   return (
-    <Collapse
+    <Accordion
       className={styles.collapse}
-      defaultActiveKey={[]}
-      expandIconPlacement={'end'}
+      defaultValue={[]}
       gap={8}
+      indicatorPlacement={'end'}
+      styles={{ content: { padding: '12px 16px' } }}
       variant={'outlined'}
       items={[
         {
           children,
           key: id || 'section',
-          label: <span className={styles.label}>{title}</span>,
+          title: <span className={styles.label}>{title}</span>,
         },
       ]}
     />

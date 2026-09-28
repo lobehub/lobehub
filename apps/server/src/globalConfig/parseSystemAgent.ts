@@ -9,7 +9,11 @@ const memoryServiceModelKeys = new Set([
   'userMemoryEmbedding',
   'userMemoryPersonaWriter',
 ]);
-const defaultModelAssignmentKeys = protectedKeys.filter((key) => !memoryServiceModelKeys.has(key));
+// `default=` names a chat model; a speech-to-text slot must be set explicitly.
+const nonChatModelKeys = new Set(['asr']);
+const defaultModelAssignmentKeys = protectedKeys.filter(
+  (key) => !memoryServiceModelKeys.has(key) && !nonChatModelKeys.has(key),
+);
 
 export const parseSystemAgent = (envString: string = ''): Partial<UserServiceModelConfig> => {
   if (!envString) return {};

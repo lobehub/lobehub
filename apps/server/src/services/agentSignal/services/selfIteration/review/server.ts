@@ -1,8 +1,12 @@
+import { createHash } from 'node:crypto';
+
 import type { AgentSignalRuntimeService } from '@lobechat/builtin-tool-agent-signal';
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import { tracer } from '@lobechat/observability-otel/modules/agent-signal';
 import { pickTrimmedString, toRecord } from '@lobechat/utils';
+import pMap from 'p-map';
 
+import { AgentModel } from '@/database/models/agent';
 import { AgentSignalNightlyReviewModel } from '@/database/models/agentSignal/nightlyReview';
 import { AgentSignalReviewContextModel } from '@/database/models/agentSignal/reviewContext';
 import { BriefModel } from '@/database/models/brief';
@@ -11,6 +15,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { AGENT_SIGNAL_DEFAULTS } from '@/server/services/agentSignal/constants';
 import { isAgentSignalEnabledForUser } from '@/server/services/agentSignal/featureGate';
 import { runMemoryActionAgent } from '@/server/services/agentSignal/policies/analyzeIntent/actions/userMemory';
+import { listAgentSignalReceipts } from '@/server/services/agentSignal/services/receiptService';
 import { redisSourceEventStore } from '@/server/services/agentSignal/store/adapters/redis/sourceEventStore';
 import { SkillManagementDocumentService } from '@/server/services/skillManagement';
 
@@ -28,7 +33,7 @@ import type {
 } from '../tools/shared';
 import { createMemoryService } from '../tools/shared';
 import type { EvidenceRef } from '../types';
-import { Risk, Scope } from '../types';
+import { buildNightlyReviewSourceId, Risk, Scope } from '../types';
 import type { createServerSelfReviewBriefWriter } from './brief';
 import { createBriefSelfReviewService } from './brief';
 import type { SelfReviewBriefTextTranslator } from './briefText';
@@ -50,6 +55,11 @@ import {
 } from './proposal';
 import { createSelfReviewProposalPreflightService } from './proposalPreflight';
 import { createSelfReviewProposalSnapshotService } from './proposalSnapshot';
+import {
+  groupRecurringReviewIdeas,
+  listNightlyReceiptLocalDates,
+  resolveReviewedLocalDate,
+} from './receiptActivity';
 
 interface ProposalBriefReader {
   listUnresolvedByAgentAndTrigger: (options: {
@@ -170,6 +180,7 @@ const getProposalActionSnapshotInput = (action: Record<string, unknown>) => {
 
   return {
     ...operationInput,
+    agentId: pickTrimmedString(operationInput.agentId) ?? pickTrimmedString(target.agentId),
     name: pickTrimmedString(operationInput.name) ?? pickTrimmedString(target.skillName),
     skillDocumentId:
       pickTrimmedString(operationInput.skillDocumentId) ??
@@ -236,7 +247,13 @@ const withCompleteProposalSnapshots = async ({
         };
       }
 
-      if (actionType !== 'create_skill' && actionType !== 'refine_skill') return rawAction;
+      if (
+        actionType !== 'create_skill' &&
+        actionType !== 'refine_skill' &&
+        actionType !== 'refine_prompt'
+      ) {
+        return rawAction;
+      }
 
       return {
         ...action,
@@ -457,13 +474,26 @@ export const createReviewRuntimePrimitives = (
   };
   const readSkillTargetSnapshot = (skillDocumentId: string) =>
     skillDocumentService.readSkillTargetSnapshot({ agentDocumentId: skillDocumentId, agentId });
+  const agentModel = new AgentModel(db, userId, workspaceId);
+  const readAgentPromptSnapshot = async (targetAgentId: string) => {
+    if (targetAgentId !== agentId) return;
+    const agent = await agentModel.getAgentConfigById(targetAgentId);
+    if (!agent) return;
+    return {
+      promptHash: createHash('sha256')
+        .update(agent.systemRole ?? '')
+        .digest('hex'),
+    };
+  };
 
   const proposalPreflight = createSelfReviewProposalPreflightService({
     isSkillNameAvailable,
+    readAgentPromptSnapshot,
     readSkillTargetSnapshot,
   });
   const proposalSnapshot = createSelfReviewProposalSnapshotService({
     isSkillNameAvailable,
+    readAgentPromptSnapshot,
     readSkillTargetSnapshot,
   });
 
@@ -855,7 +885,11 @@ export const createServerSelfReviewPolicyOptions = ({
         updatedAt: row.updatedAt.toISOString(),
       }));
     },
-    listReceiptActivity: async ({ agentId: targetAgentId }) =>
+    listReceiptActivity: async ({
+      agentId: targetAgentId,
+      localDate: reviewedLocalDate,
+      reviewWindowEnd,
+    }) =>
       tracer.startActiveSpan(
         'agent_signal.nightly_review.collector.list_receipt_activity',
         {
@@ -866,17 +900,55 @@ export const createServerSelfReviewPolicyOptions = ({
         },
         async (span): Promise<ReceiptActivityDigest> => {
           try {
+            const localDates = listNightlyReceiptLocalDates({
+              localDate: resolveReviewedLocalDate({
+                localDate: reviewedLocalDate,
+                reviewWindowEnd,
+              }),
+            });
+            const pages = await pMap(
+              localDates,
+              async (localDate) => ({
+                localDate,
+                receipts: (
+                  await listAgentSignalReceipts({
+                    agentId: targetAgentId,
+                    limit: 50,
+                    topicId: buildNightlyReviewSourceId({
+                      agentId: targetAgentId,
+                      localDate,
+                      userId,
+                    }),
+                    userId,
+                  })
+                ).receipts,
+              }),
+              { concurrency: 4 },
+            );
+            const receipts = pages.flatMap((page) => page.receipts);
             const digest: ReceiptActivityDigest = {
-              appliedCount: 0,
-              duplicateGroups: [],
-              failedCount: 0,
-              pendingProposalCount: 0,
-              recentReceipts: [],
-              reviewCount: 0,
+              appliedCount: receipts.filter(
+                (item) => item.status === 'applied' || item.status === 'updated',
+              ).length,
+              duplicateGroups: groupRecurringReviewIdeas(pages),
+              failedCount: receipts.filter((item) => item.status === 'failed').length,
+              pendingProposalCount: receipts.filter((item) => item.status === 'proposed').length,
+              recentReceipts: receipts.slice(0, 50).map((item) => ({
+                id: item.id,
+                kind: item.kind,
+                metadata: item.metadata as Record<string, unknown> | undefined,
+                status: item.status,
+                summary: item.detail,
+                targetId: item.target?.id,
+              })),
+              reviewCount: receipts.filter((item) => item.kind === 'review').length,
             };
 
-            span.setAttribute('agent.signal.nightly.receipt_pending_proposal_count', 0);
-            span.setAttribute('agent.signal.nightly.receipt_recent_count', 0);
+            span.setAttribute(
+              'agent.signal.nightly.receipt_pending_proposal_count',
+              digest.pendingProposalCount,
+            );
+            span.setAttribute('agent.signal.nightly.receipt_recent_count', receipts.length);
             span.setStatus({ code: SpanStatusCode.OK });
 
             return digest;

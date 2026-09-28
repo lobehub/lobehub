@@ -1,7 +1,7 @@
 'use client';
 
-import { Collapse, Empty, Flexbox, List, SearchBar, stopPropagation, Tooltip } from '@lobehub/ui';
-import { Avatar, Button, Checkbox, Switch, Text } from '@lobehub/ui/base-ui';
+import { Empty, Flexbox, List, SearchBar, stopPropagation, Tooltip } from '@lobehub/ui';
+import { Accordion, Avatar, Button, Checkbox, Switch, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { omit } from 'es-toolkit/compat';
 import { Users } from 'lucide-react';
@@ -358,10 +358,8 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
       );
     }, [visibleAgentSessions]);
 
-    const handlePanelChange = useCallback((key: string | string[]) => {
-      if (!key) return;
-
-      const nextKey = Array.isArray(key) ? key[0] : key;
+    const handlePanelChange = useCallback((keys: string[]) => {
+      const nextKey = keys[0];
 
       if (nextKey === 'templates' || nextKey === 'agents') {
         setActivePanel(nextKey);
@@ -557,13 +555,11 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
               onChange={handleSearchChange}
             />
             <Flexbox flex={1} style={{ overflowY: 'auto', padding: `0 ${cssVar.paddingSM}` }}>
-              <Collapse
-                accordion
-                collapsible
-                activeKey={activePanel}
-                expandIconPlacement="end"
+              <Accordion
                 gap={12}
-                size="small"
+                indicatorPlacement="end"
+                multiple={false}
+                value={[activePanel]}
                 variant="borderless"
                 items={[
                   {
@@ -594,7 +590,7 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
                         </Flexbox>
                       ),
                     key: 'templates',
-                    label: t('groupWizard.useTemplate'),
+                    title: t('groupWizard.useTemplate'),
                   },
                   {
                     children:
@@ -624,17 +620,13 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
                         </Flexbox>
                       ),
                     key: 'agents',
-                    label: t('groupWizard.existingMembers'),
+                    title: t('groupWizard.existingMembers'),
                   },
                 ]}
                 styles={{
-                  header: {
-                    color: cssVar.colorTextDescription,
-                    fontSize: cssVar.fontSize,
-                    padding: 0,
-                  },
+                  header: { color: cssVar.colorTextDescription, fontSize: cssVar.fontSize },
                 }}
-                onChange={handlePanelChange}
+                onValueChange={handlePanelChange}
               />
             </Flexbox>
           </Flexbox>

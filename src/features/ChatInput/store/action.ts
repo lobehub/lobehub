@@ -6,6 +6,7 @@ import { useUserStore } from '@/store/user';
 import { systemAgentSelectors, userProfileSelectors } from '@/store/user/selectors';
 
 import { removeDraft } from '../draftStorage';
+import { readDocument, writeDocument } from '../editorDocument';
 import { addInputHistory } from '../inputHistoryStorage';
 import { type PublicState, type State } from './initialState';
 import { initialState } from './initialState';
@@ -53,10 +54,10 @@ export const store: CreateStore = (publicState) => (set, get) => ({
   },
 
   getJSONState: () => {
-    return get().editor?.getDocument('json') as Record<string, any> | undefined;
+    return readDocument(get().editor, 'json') as Record<string, any> | undefined;
   },
   getMarkdownContent: () => {
-    return String(get().editor?.getDocument('markdown') || '').trimEnd();
+    return String(readDocument(get().editor, 'markdown') || '').trimEnd();
   },
   handleSendButton: () => {
     const editor = get().editor;
@@ -133,17 +134,17 @@ export const store: CreateStore = (publicState) => (set, get) => ({
   },
 
   setDocument: (type, content, options) => {
-    get().editor?.setDocument(type, content, options);
+    writeDocument(get().editor, type, content, options);
   },
 
   setExpand: (expand) => {
     const editor = get().editor;
-    const _savedEditorState = editor?.getDocument('json') as Record<string, any> | undefined;
+    const _savedEditorState = readDocument(editor, 'json') as Record<string, any> | undefined;
     set({ _savedEditorState, expand });
   },
 
   setJSONState: (content) => {
-    get().editor?.setDocument('json', content);
+    writeDocument(get().editor, 'json', content);
   },
 
   setShowTypoBar: (showTypoBar) => {

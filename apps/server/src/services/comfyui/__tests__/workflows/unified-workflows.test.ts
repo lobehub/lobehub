@@ -39,18 +39,22 @@ const TEST_PARAMETERS = {
 
 // Mock the utility functions globally
 vi.mock('../utils/promptSplitter', () => ({
-  splitPromptForDualCLIP: vi.fn((prompt: string) => ({
-    clipLPrompt: prompt,
-    t5xxlPrompt: prompt,
-  })),
+  splitPromptForDualCLIP: vi.fn(function (prompt: string) {
+    return {
+      clipLPrompt: prompt,
+      t5xxlPrompt: prompt,
+    };
+  }),
 }));
 
 vi.mock('../utils/weightDType', () => ({
-  selectOptimalWeightDtype: vi.fn(() => 'default'),
+  selectOptimalWeightDtype: vi.fn(function () {
+    return 'default';
+  }),
 }));
 
 vi.mock('../utils/modelResolver', () => ({
-  resolveModel: vi.fn((modelName: string) => {
+  resolveModel: vi.fn(function (modelName: string) {
     const cleanName = modelName.replace(/^comfyui\//, '');
 
     // Return mock configuration based on model name patterns

@@ -15,6 +15,7 @@ import {
   VERIFY_VERIFIER_TYPES,
 } from '@lobechat/prompts';
 import type { RequiredEvidenceSpec, VerifyCheckItem } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 import { z } from 'zod';
 
@@ -69,11 +70,17 @@ export interface GoalPlanDraft {
 
 const decompositionSchema = z.object({
   problemStatement: z.string().min(1),
-  works: z
+  tasks: z
     .array(
       z.object({
-        /** 0-based indices of earlier works this one consumes; drives `depends_on` edges. */
+        /** 0-based indices of earlier tasks this one consumes; drives `depends_on` edges. */
         dependsOn: z.array(z.number().int().nonnegative()).optional(),
+        /**
+         * Present only when the direction is a candidate answer under test; the
+         * coordinator then wraps its Task in an experiment container. Ordinary
+         * delivery steps carry `null` and attach straight to the problem.
+         */
+        hypothesis: z.string().max(280).nullable().optional(),
         instruction: z.string().min(1),
         title: z.string().min(1).max(80),
       }),
@@ -117,7 +124,7 @@ export class GoalCriteriaGeneratorService {
         thinking: { type: 'disabled' },
       },
       {
-        metadata: { trigger: 'goal_criteria_draft' },
+        metadata: { trigger: RequestTrigger.Goal },
         tracing: {
           promptVersion: GOAL_CRITERIA_DRAFT_PROMPT_VERSION,
           scenario: TRACING_SCENARIOS.GoalCriteriaGen,
@@ -140,10 +147,10 @@ export class GoalCriteriaGeneratorService {
   }
 
   /**
-   * Plan the opening exploration structure for a goal that has no work yet:
+   * Plan the opening exploration structure for a goal that has no tasks yet:
    * the core question plus 1–5 independent directions. Returns undefined on
    * any model/schema failure so the coordinator can fall back to a single
-   * work seeded from the raw requirement instead of stalling the goal.
+   * task seeded from the raw requirement instead of stalling the goal.
    */
   async decompose(params: { requirement: string }): Promise<GoalDecompositionDraft | undefined> {
     const modelConfig = await resolveGoalModelConfig(this.db, this.userId);
@@ -156,7 +163,7 @@ export class GoalCriteriaGeneratorService {
         thinking: { type: 'disabled' },
       },
       {
-        metadata: { trigger: 'goal_decompose' },
+        metadata: { trigger: RequestTrigger.Goal },
         tracing: {
           promptVersion: GOAL_DECOMPOSE_PROMPT_VERSION,
           scenario: TRACING_SCENARIOS.GoalDecompose,

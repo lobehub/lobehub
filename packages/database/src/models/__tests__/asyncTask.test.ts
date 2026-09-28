@@ -900,3 +900,55 @@ describe('AsyncTaskModel.findByInferenceId', () => {
     expect(result).toBeUndefined();
   });
 });
+
+describe('AsyncTaskModel.claimVideoCompletion', () => {
+  it('should atomically claim an active video task once and preserve metadata', async () => {
+    const [task] = await serverDB
+      .insert(asyncTasks)
+      .values({
+        metadata: { webhookToken: 'secret-token' },
+        status: AsyncTaskStatus.Processing,
+        type: AsyncTaskType.VideoGeneration,
+        userId,
+      })
+      .returning();
+
+    const firstClaim = await AsyncTaskModel.claimVideoCompletion(
+      serverDB,
+      task.id,
+      'webhook-event-1',
+    );
+    const duplicateClaim = await AsyncTaskModel.claimVideoCompletion(
+      serverDB,
+      task.id,
+      'webhook-event-2',
+    );
+
+    const claimedTask = await serverDB.query.asyncTasks.findFirst({
+      where: eq(asyncTasks.id, task.id),
+    });
+
+    expect(firstClaim).toBe(true);
+    expect(duplicateClaim).toBe(false);
+    expect(claimedTask?.metadata).toMatchObject({
+      completionEventId: 'webhook-event-1',
+      webhookToken: 'secret-token',
+    });
+    expect(
+      (claimedTask?.metadata as { completionClaimedAt?: string } | undefined)?.completionClaimedAt,
+    ).toBeTypeOf('string');
+  });
+
+  it('should not claim a terminal video task', async () => {
+    const [task] = await serverDB
+      .insert(asyncTasks)
+      .values({
+        status: AsyncTaskStatus.Success,
+        type: AsyncTaskType.VideoGeneration,
+        userId,
+      })
+      .returning();
+
+    await expect(AsyncTaskModel.claimVideoCompletion(serverDB, task.id)).resolves.toBe(false);
+  });
+});

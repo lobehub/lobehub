@@ -9,6 +9,7 @@ import { z } from 'zod';
 
 import { chargeAfterGenerate } from '@/business/server/image-generation/chargeAfterGenerate';
 import { chargeBeforeGenerate } from '@/business/server/image-generation/chargeBeforeGenerate';
+import { checkFileStorageUsage } from '@/business/server/trpc-middlewares/lambda';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
@@ -45,7 +46,13 @@ const imageProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
   });
 });
 
-const imageCreateProcedure = imageProcedure.use(withScopedPermission('file:upload'));
+// Generated images land in storage through `FileService`, which has no quota
+// gate of its own — blocking there would fail after the model call is already
+// paid for. Admit at submission instead: refuse to start when storage is
+// already full, and let an in-flight generation finish.
+const imageCreateProcedure = imageProcedure
+  .use(withScopedPermission('file:upload'))
+  .use(checkFileStorageUsage);
 
 const createImageInputSchema = z.object({
   generationTopicId: z.string(),
@@ -198,6 +205,7 @@ export const imageRouter = router({
         imageNum,
         model,
         provider,
+        spendOrigin: ctx.spendOrigin,
         userId,
         workspaceId: wsId,
       });
@@ -265,10 +273,19 @@ export const imageRouter = router({
               // Presence check (not truthiness): handles are opaque, so falsy
               // values like 0 or '' must still be stored verbatim.
               const prechargeItem = prechargeItems?.[index];
+              // The completion charge runs in the async router, which no longer
+              // sees this request; carry the origin attribution on the task so
+              // it can still be stamped on the spend log. Stored independently
+              // of `precharge` because paths without a billing handle (free /
+              // unpriced models) still charge at completion.
+              const taskMetadata = {
+                ...(prechargeItem === undefined ? {} : { precharge: prechargeItem }),
+                ...(ctx.spendOrigin ? { spendOrigin: ctx.spendOrigin } : {}),
+              };
               const [createdAsyncTask] = await tx
                 .insert(asyncTasks)
                 .values({
-                  metadata: prechargeItem === undefined ? undefined : { precharge: prechargeItem },
+                  metadata: Object.keys(taskMetadata).length === 0 ? undefined : taskMetadata,
                   status: AsyncTaskStatus.Pending,
                   type: AsyncTaskType.ImageGeneration,
                   userId,
@@ -365,6 +382,7 @@ export const imageRouter = router({
                 await chargeAfterGenerate({
                   isError: true,
                   metadata: {
+                    ...ctx.spendOrigin,
                     asyncTaskId,
                     generationBatchId: createdBatch.id,
                     modelId: model,

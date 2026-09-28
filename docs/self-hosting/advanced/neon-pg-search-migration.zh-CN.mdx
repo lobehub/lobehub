@@ -1,0 +1,83 @@
+---
+title: Neon pg_search 迁移指南
+description: Neon 停用 pg_search 后，为个人自部署选择 pg_like 或 Elasticsearch。
+tags:
+  - pg_search
+  - pg_like
+  - Elasticsearch
+  - 迁移
+  - 私有部署
+---
+
+# Neon pg\_search 迁移指南
+
+根据 [Neon 的 `pg_search` 公告](https://neon.com/docs/extensions/pg_search)，Neon 已停止为新项目提供该扩展。如果 Neon 通知你的现有项目也将停用 `pg_search`，请在通知中的截止日期前完成迁移；不同项目的时间可能不同，请以 Neon 发给你的通知为准。迁移只更换搜索后端，聊天记录等原始数据仍保存在原来的 PostgreSQL 数据库中。
+
+本文面向已经运行 LobeHub、并且已经完成历史数据库迁移的现有实例。新建数据库请先阅读[全文搜索](/zh/docs/self-hosting/advanced/full-text-search)中的数据库限制。
+
+## 1. 确认是否需要迁移
+
+| 当前情况                                                | 是否需要迁移                  |
+| --------------------------------------------------- | ----------------------- |
+| Neon 或其他数据库服务已通知将停用 `pg_search`                     | 需要，继续下一步                |
+| PostgreSQL 仍支持 `pg_search`                          | 不需要，可以继续使用              |
+| 已设置 `FTS_SEARCH_PROVIDER=pg_like` 或 `elasticsearch` | 不需要，当前搜索不依赖 `pg_search` |
+
+<Callout type="info">
+  Docker 和 Vercel 是 LobeHub 的部署方式，不决定数据库是否支持 `pg_search`。Docker 部署也可能连接 Neon；通过 GitHub 构建并上传到 Vercel 的部署也可以更换搜索后端。请以 `DATABASE_URL` 指向的数据库为准。
+</Callout>
+
+官方 Docker Compose 默认使用支持 `pg_search` 的 ParadeDB。如果你使用这套内置数据库，并且数据库服务没有要求停用扩展，可以保持默认配置，不需要迁移。
+
+## 2. 选择迁移方案
+
+| 方案            | 适合谁                                   | 额外服务                       |
+| ------------- | ------------------------------------- | -------------------------- |
+| `pg_like`（推荐） | 个人和小型自部署，包括 Vercel 或 Docker 应用连接 Neon | 无                          |
+| Elasticsearch | 数据量较大、需要 BM25 搜索质量，并且能维护常驻同步任务        | Elasticsearch 和持续同步 worker |
+
+大多数个人自部署应选择 `pg_like`。它直接搜索现有 PostgreSQL 数据，不需要复制数据、创建搜索索引或运行同步任务。
+
+Elastic Cloud 和 Docker Elasticsearch 是同一种搜索后端，只是 Elasticsearch 的运行位置不同。两者都需要先导入历史数据，并持续运行同步 worker；其余迁移步骤相同。
+
+<Callout type="warning">
+  当前 LobeHub 的 Elasticsearch 同步 worker 是常驻进程，纯 Vercel 部署无法直接运行它。除非你另外准备了常驻服务器，否则请选择 `pg_like`。
+</Callout>
+
+## 3. 迁移到 pg\_like（推荐）
+
+1. **升级并备份。** 将 LobeHub 升级到包含 `pg_like` 的版本，并按数据库服务的说明创建备份。
+
+2. **设置搜索后端并重新部署。** 添加下面的环境变量：
+
+   ```bash
+   FTS_SEARCH_PROVIDER=pg_like
+   ```
+
+   - **Vercel：** 在项目的 Environment Variables 中添加变量，然后重新部署 Production。使用 GitHub 构建后上传到 Vercel 的部署也执行这一步。
+
+   - **Docker Compose：** 在 `.env` 中添加变量，然后重新创建 LobeHub 容器：
+
+     ```bash
+     docker compose up -d --force-recreate lobe
+     ```
+
+   - **其他部署方式：** 在应用的运行环境中添加变量，再按原来的发布流程重新部署。
+
+3. **验证搜索。** 搜索一条已有的话题或消息，再发送一条包含独特关键词的新消息并搜索它。两项都能找到即迁移完成。
+
+`pg_like` 不需要导入或同步数据。确认搜索正常后，即使数据库随后移除 `pg_search`，LobeHub 搜索也不会再调用该扩展。
+
+如果需要回滚，并且数据库仍支持 `pg_search`，将环境变量改回 `FTS_SEARCH_PROVIDER=pg_search` 后重新部署即可。不要手动执行 `DROP EXTENSION ... CASCADE`；旧扩展和索引的清理由数据库服务通知或 LobeHub 提供的清理工具处理。
+
+## 4. 迁移到 Elasticsearch（高级）
+
+只有在 `pg_like` 无法满足数据量或搜索质量要求，并且你能持续运行同步 worker 时，才选择 Elasticsearch。
+
+1. **选择 Elasticsearch 的运行位置。** Docker 用户可以启用官方 Compose 中的单节点 Elasticsearch；也可以使用 Elastic Cloud 等外部服务。
+2. **导入并同步。** 按[全文搜索：使用 Docker Compose 运行 Elasticsearch](/zh/docs/self-hosting/advanced/full-text-search#使用-docker-compose-运行-elasticsearch)完成历史数据导入，并启动持续同步 worker。使用 Elastic Cloud 时不启动内置 Elasticsearch 节点，只需填写 `ES_URL` 和 `ES_API_KEY`；其余步骤相同。
+3. **切换并验证。** 等待增量队列归零后，将应用设置为 `FTS_SEARCH_PROVIDER=elasticsearch`，重新部署，再分别搜索已有消息和新消息。
+
+如果 LobeHub 部署在 Vercel，当前的迁移和同步 worker 必须运行在 Vercel 之外的常驻服务器上。Elasticsearch 服务本身在 Elastic Cloud 还是 Docker 中运行，不改变这一要求。
+
+更多配置、资源要求和故障恢复说明见[全文搜索](/zh/docs/self-hosting/advanced/full-text-search)。

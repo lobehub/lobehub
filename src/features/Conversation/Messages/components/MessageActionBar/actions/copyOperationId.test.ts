@@ -167,7 +167,7 @@ describe('copyOperationIdAction', () => {
   });
 
   it('is absent when the mapped operation has no AI-runtime ancestor', () => {
-    // messageOperationMap is last-write-wins: a later translate/tts operation
+    // messageOperationMap is last-write-wins: a later translate operation
     // can own the slot. Its id must not surface as the message's operation id.
     mocks.messageOperationMap = { 'message-1': 'op-translate' };
     mocks.operations = {

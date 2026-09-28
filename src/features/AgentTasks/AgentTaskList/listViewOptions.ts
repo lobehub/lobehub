@@ -1,3 +1,5 @@
+import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
+import type { TaskStatus } from '@lobechat/types';
 import { t } from 'i18next';
 
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
@@ -23,6 +25,21 @@ export const HIDDEN_WHEN_COMPLETED_STATUSES: ReadonlyArray<NonNullable<TaskGroup
   'completed',
   'canceled',
 ];
+
+/**
+ * Server-side counterpart of `hideCompleted`: the statuses a paginated list
+ * has to request so the cut happens before `limit` / `offset` instead of on
+ * the fetched page (which could otherwise come back empty while older
+ * unfinished tasks exist). `undefined` means no status narrowing.
+ */
+export const getVisibleTaskStatuses = (
+  options: Pick<TaskListViewOptions, 'hideCompleted'>,
+): TaskStatus[] | undefined =>
+  options.hideCompleted
+    ? TASK_STATUSES.filter((status) => !HIDDEN_COMPLETED_STATUS_SET.has(status))
+    : undefined;
+
+const HIDDEN_COMPLETED_STATUS_SET = new Set<string>(HIDDEN_WHEN_COMPLETED_STATUSES);
 
 export interface TaskGroupMeta {
   assigneeId?: string;

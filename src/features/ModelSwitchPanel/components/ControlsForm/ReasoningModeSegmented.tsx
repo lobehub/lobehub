@@ -1,5 +1,5 @@
 import { Segmented } from '@lobehub/ui/base-ui';
-import { MODEL_REASONING_PARAM_LEVELS } from 'model-bank';
+import { MODEL_REASONING_PARAM_LEVELS } from 'model-bank/aiModel';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

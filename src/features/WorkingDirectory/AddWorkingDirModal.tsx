@@ -1,20 +1,19 @@
 'use client';
 
 import { Flexbox, Input } from '@lobehub/ui';
-import {
-  Button,
-  createModal,
-  type ModalInstance,
-  Text,
-  useModalContext,
-} from '@lobehub/ui/base-ui';
-import { type InputRef } from 'antd';
+import type { ModalInstance } from '@lobehub/ui/base-ui';
+import { Button, createModal, Text, useModalContext } from '@lobehub/ui/base-ui';
+import type { InputRef } from 'antd';
 import { cssVar } from 'antd-style';
 import { t } from 'i18next';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { RemoteDirectoryBrowser } from './RemoteDirectoryBrowser';
+
 interface AddWorkingDirContentProps {
+  defaultPath?: string;
+  deviceId?: string;
   /**
    * Submit the entered path. Return an error message to show inline and keep the
    * modal open; return undefined on success (the modal closes). Lets the caller
@@ -24,26 +23,30 @@ interface AddWorkingDirContentProps {
   placeholder?: string;
 }
 
-const AddWorkingDirContent = memo<AddWorkingDirContentProps>(({ onSubmit, placeholder }) => {
+const AddWorkingDirContent = ({
+  defaultPath,
+  deviceId,
+  onSubmit,
+  placeholder,
+}: AddWorkingDirContentProps) => {
   const { t: tPlugin } = useTranslation('device');
   const { t: tCommon } = useTranslation('common');
   const { close } = useModalContext();
-  const [value, setValue] = useState('');
+  const [manual, setManual] = useState(!deviceId);
+  const [value, setValue] = useState(defaultPath ?? '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
   const inputRef = useRef<InputRef>(null);
 
   useEffect(() => {
     queueMicrotask(() => inputRef.current?.focus());
-  }, []);
+  }, [manual]);
 
-  const handleSubmit = useCallback(async () => {
+  const handleSubmit = async (path: string) => {
     if (loading) return;
-    const next = value.trim();
-    if (!next) {
-      close();
-      return;
-    }
+    const next = path.trim();
+    if (!next) return;
+    setError(undefined);
     setLoading(true);
     try {
       const message = await onSubmit(next);
@@ -52,22 +55,43 @@ const AddWorkingDirContent = memo<AddWorkingDirContentProps>(({ onSubmit, placeh
         return;
       }
       close();
+    } catch (cause) {
+      console.error('Failed to add working directory', cause);
+      setError(tPlugin('workingDirectory.addFolderFailed'));
     } finally {
       setLoading(false);
     }
-  }, [close, loading, onSubmit, value]);
+  };
+
+  if (!manual && deviceId) {
+    return (
+      <RemoteDirectoryBrowser
+        defaultPath={value.trim() || undefined}
+        deviceId={deviceId}
+        error={error}
+        loading={loading}
+        onCancel={close}
+        onSelect={handleSubmit}
+        onManual={(path) => {
+          setValue(path);
+          setError(undefined);
+          setManual(true);
+        }}
+      />
+    );
+  }
 
   return (
     <Flexbox gap={16}>
-      <Text style={{ marginTop: -8 }} type={'secondary'}>
-        {tPlugin('workingDirectory.addFolderDesc')}
-      </Text>
-      <Flexbox gap={6}>
+      <Text type={'secondary'}>{tPlugin('workingDirectory.addFolderDesc')}</Text>
+      <Flexbox gap={8}>
         <Input
+          aria-label={tPlugin('workingDirectory.current')}
+          disabled={loading}
           placeholder={placeholder || tPlugin('workingDirectory.placeholder')}
           ref={inputRef}
           value={value}
-          onPressEnter={handleSubmit}
+          onPressEnter={() => handleSubmit(value)}
           onChange={(e) => {
             setValue(e.target.value);
             setError(undefined);
@@ -75,34 +99,41 @@ const AddWorkingDirContent = memo<AddWorkingDirContentProps>(({ onSubmit, placeh
         />
         {error ? <Text style={{ color: cssVar.colorError, fontSize: 12 }}>{error}</Text> : null}
       </Flexbox>
-      <Flexbox horizontal gap={8} justify={'flex-end'}>
+      <Flexbox horizontal gap={8} justify={'flex-end'} wrap={'wrap'}>
+        {deviceId && (
+          <Button
+            disabled={loading}
+            onClick={() => {
+              setError(undefined);
+              setManual(false);
+            }}
+          >
+            {tPlugin('workingDirectory.browseFolders')}
+          </Button>
+        )}
         <Button disabled={loading} onClick={close}>
           {tCommon('cancel')}
         </Button>
-        <Button loading={loading} type={'primary'} onClick={handleSubmit}>
-          {tCommon('confirm')}
+        <Button
+          disabled={!value.trim()}
+          loading={loading}
+          type={'primary'}
+          onClick={() => handleSubmit(value)}
+        >
+          {tPlugin('workingDirectory.useFolder')}
         </Button>
       </Flexbox>
     </Flexbox>
   );
-});
+};
 
-AddWorkingDirContent.displayName = 'AddWorkingDirContent';
-
-/**
- * Manual absolute-path entry for the working directory. Used when the target
- * filesystem isn't browsable from here (web, or a remote device) — the browser
- * has no way to resolve an absolute path from its sandboxed folder picker.
- */
-export const openAddWorkingDirModal = (options: {
-  onSubmit: (path: string) => Promise<string | undefined>;
-  placeholder?: string;
-}): ModalInstance =>
+/** Browse a connected device, with manual entry available as a fallback. */
+export const openAddWorkingDirModal = (options: AddWorkingDirContentProps): ModalInstance =>
   createModal({
-    content: <AddWorkingDirContent placeholder={options.placeholder} onSubmit={options.onSubmit} />,
+    content: <AddWorkingDirContent {...options} />,
     footer: null,
     maskClosable: true,
     styles: { header: { borderBottom: 'none' } },
     title: t('workingDirectory.addFolderTitle', { ns: 'device' }),
-    width: 'min(90vw, 480px)',
+    width: 'min(90vw, 560px)',
   });

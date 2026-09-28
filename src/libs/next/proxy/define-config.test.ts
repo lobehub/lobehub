@@ -1,6 +1,8 @@
 /**
  * @vitest-environment node
  */
+import { readFile } from 'node:fs/promises';
+
 import { NextRequest } from 'next/server';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -109,5 +111,51 @@ describe('defineConfig Share SPA rewrite', () => {
     const rewrite = await run('http://localhost:3010/shared-workspace/settings?hl=en-US');
 
     expect(new URL(rewrite!).pathname).toMatch(/^\/spa\/[^/]+\/shared-workspace\/settings$/);
+  });
+});
+
+describe('Acceptance installation guide', () => {
+  it('serves the public Markdown asset without authentication or SPA rewrites', async () => {
+    const { auth } = await import('@/auth');
+    vi.mocked(auth.api.getSession).mockClear();
+    const response = await middleware(new NextRequest('http://localhost:3010/acceptance/skill.md'));
+
+    expect(response?.headers.get('x-middleware-next')).toBe('1');
+    expect(response?.headers.get('x-middleware-rewrite')).toBeNull();
+    expect(response?.headers.get('location')).toBeNull();
+    expect(auth.api.getSession).not.toHaveBeenCalled();
+
+    const guide = await readFile('public/acceptance/skill.md', 'utf8');
+    expect(guide).toContain('npm install -g @lobehub/cli');
+    expect(guide).toContain('lh login');
+    expect(guide).toContain('lh acceptance install');
+    expect(guide).toContain('.agents/skills/acceptance/SKILL.md');
+  });
+});
+
+describe('OIDC protocol endpoints', () => {
+  const callMiddleware = async (path: string) => {
+    const { auth } = await import('@/auth');
+    vi.mocked(auth.api.getSession).mockClear();
+    const response = await middleware(new NextRequest(`http://localhost:3010${path}`));
+    return { getSession: vi.mocked(auth.api.getSession), response };
+  };
+
+  it.each(['/oidc/.well-known/openid-configuration', '/oidc/jwks', '/oidc/me'])(
+    'serves %s without sending an unauthenticated client to sign-in',
+    async (path) => {
+      const { getSession, response } = await callMiddleware(path);
+
+      expect(getSession).not.toHaveBeenCalled();
+      expect(response?.headers.get('x-middleware-next')).toBe('1');
+      expect(response?.headers.get('location')).toBeNull();
+      expect(response?.headers.get('x-middleware-rewrite')).toBeNull();
+    },
+  );
+
+  it('still gates the authorization endpoint on a session', async () => {
+    const { getSession } = await callMiddleware('/oidc/auth?client_id=lca_1&response_type=code');
+
+    expect(getSession).toHaveBeenCalled();
   });
 });

@@ -6,6 +6,7 @@ export { CodexAppServerAdapter } from './codexAppServer';
 export { CursorAdapter } from './cursor';
 export { CursorAcpAdapter } from './cursorAcp';
 export { DroidAcpAdapter } from './droidAcp';
+export { DevinAcpAdapter } from './devinAcp';
 export { GrokBuildAdapter } from './grokBuild';
 export { KimiCodeAdapter } from './kimiCode';
 export { OpenCodeAdapter } from './opencode';

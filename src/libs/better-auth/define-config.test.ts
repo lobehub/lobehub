@@ -8,7 +8,10 @@ const mocks = vi.hoisted(() => {
     authHandler,
     betterAuth: vi.fn((options) => ({ ...options, handler: authHandler })),
     clearMismatchedOIDCSession: vi.fn(),
-    EnvHttpProxyAgent: vi.fn((options) => ({ options })),
+    EnvHttpProxyAgent: vi.fn(function (options) {
+      return { options };
+    }),
+    passkey: vi.fn(() => ({ id: 'passkey' })),
     serverDB: {},
     setGlobalDispatcher: vi.fn(),
   };
@@ -19,7 +22,7 @@ vi.mock('@better-auth/expo', () => ({
 }));
 
 vi.mock('@better-auth/passkey', () => ({
-  passkey: vi.fn(() => ({ id: 'passkey' })),
+  passkey: mocks.passkey,
 }));
 
 vi.mock('@lobechat/database', () => ({
@@ -95,6 +98,7 @@ vi.mock('@/libs/better-auth/sso', () => ({
 
 vi.mock('@/libs/better-auth/utils/config', () => ({
   createSecondaryStorage: vi.fn(() => ({ id: 'secondary-storage' })),
+  getPasskeyOrigins: vi.fn(() => ['https://example.com']),
   getTrustedOrigins: vi.fn(() => ['https://example.com']),
 }));
 
@@ -140,6 +144,20 @@ describe('defineConfig', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     process.env = originalEnv;
+  });
+
+  it('should configure passkeys with the approved origins', async () => {
+    const { defineConfig } = await import('./define-config');
+
+    defineConfig({ plugins: [] });
+
+    expect(mocks.passkey).toHaveBeenCalledWith(
+      expect.objectContaining({
+        origin: ['https://example.com'],
+        rpID: 'example.com',
+        rpName: 'LobeHub',
+      }),
+    );
   });
 
   it('should revoke existing sessions after password reset by default', async () => {

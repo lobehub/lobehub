@@ -5,6 +5,11 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
 
 import SkeletonBar from '@/components/Skeleton/Bar';
+import NavHeader from '@/features/NavHeader';
+import WideScreenContainer from '@/features/WideScreenContainer';
+import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
+
+import { taskDetailLayoutStyles as layout } from './taskDetailLayoutStyles';
 
 const styles = createStaticStyles(({ css }) => ({
   acceptance: css`
@@ -25,51 +30,47 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorBgContainer};
   `,
-  propertyCard: css`
-    flex: none;
-
-    width: 200px;
-    height: 108px;
-    padding-block: 8px;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
 }));
 
-const TaskDetailSkeleton = memo(() => (
-  <Flexbox aria-busy flex={1}>
-    <Flexbox gap={4} style={{ paddingBlock: '24px 44px' }}>
-      <Flexbox style={{ paddingBottom: 33, paddingTop: 5 }}>
-        <SkeletonBar height={24} width={'min(520px, 56%)'} />
-      </Flexbox>
-      <Flexbox horizontal align={'flex-start'} gap={16} justify={'space-between'} wrap={'wrap'}>
-        <Flexbox align={'flex-start'} flex={1} gap={16} style={{ minWidth: 240 }}>
-          <Flexbox horizontal gap={8} wrap={'wrap'}>
-            <Flexbox horizontal align={'center'} className={styles.control} gap={8} width={96}>
-              <SkeletonBar height={16} radius={'50%'} width={16} />
-              <SkeletonBar height={10} width={48} />
-            </Flexbox>
-            <Flexbox horizontal align={'center'} className={styles.control} gap={8} width={176}>
-              <SkeletonBar height={16} radius={'50%'} width={16} />
-              <SkeletonBar height={10} width={116} />
-            </Flexbox>
-          </Flexbox>
+const TaskDetailBodySkeleton = () => (
+  <Flexbox aria-busy className={layout.root} flex={1}>
+    <div className={layout.header}>
+      <Flexbox className={layout.main} gap={12}>
+        <Flexbox style={{ paddingBottom: 5, paddingTop: 5 }}>
+          <SkeletonBar height={24} width={'min(520px, 56%)'} />
+        </Flexbox>
+        <Flexbox horizontal gap={8} wrap={'wrap'}>
           <Flexbox horizontal align={'center'} className={styles.control} gap={8} width={76}>
             <SkeletonBar height={12} radius={3} width={12} />
             <SkeletonBar height={10} width={36} />
           </Flexbox>
+          <Flexbox horizontal align={'center'} className={styles.control} gap={8} width={96}>
+            <SkeletonBar height={16} radius={'50%'} width={16} />
+            <SkeletonBar height={10} width={48} />
+          </Flexbox>
+          <Flexbox horizontal align={'center'} className={styles.control} gap={8} width={176}>
+            <SkeletonBar height={16} radius={'50%'} width={16} />
+            <SkeletonBar height={10} width={116} />
+          </Flexbox>
         </Flexbox>
-        <Flexbox className={styles.propertyCard} gap={8}>
+      </Flexbox>
+      <div className={layout.side}>
+        <div className={layout.properties}>
           {Array.from({ length: 3 }).map((_, index) => (
-            <Flexbox horizontal align={'center'} gap={10} key={index}>
+            <Flexbox
+              horizontal
+              align={'center'}
+              className={layout.propertyItem}
+              gap={8}
+              key={index}
+            >
               <SkeletonBar height={16} radius={4} width={16} />
               <SkeletonBar height={14} width={index === 1 ? 80 : 68} />
             </Flexbox>
           ))}
-        </Flexbox>
-      </Flexbox>
-    </Flexbox>
+        </div>
+      </div>
+    </div>
 
     <Flexbox gap={24} style={{ paddingBottom: 120 }}>
       <Flexbox gap={12}>
@@ -98,7 +99,22 @@ const TaskDetailSkeleton = memo(() => (
       </Flexbox>
     </Flexbox>
   </Flexbox>
-));
+);
+
+const TaskDetailSkeleton = memo<RouteSkeletonProps>(({ chrome = 'page' }) =>
+  chrome === 'body' ? (
+    <TaskDetailBodySkeleton />
+  ) : (
+    <Flexbox flex={1} height={'100%'}>
+      <NavHeader />
+      <Flexbox flex={1} style={{ minHeight: 0, overflowY: 'auto' }}>
+        <WideScreenContainer>
+          <TaskDetailBodySkeleton />
+        </WideScreenContainer>
+      </Flexbox>
+    </Flexbox>
+  ),
+);
 
 TaskDetailSkeleton.displayName = 'TaskDetailSkeleton';
 

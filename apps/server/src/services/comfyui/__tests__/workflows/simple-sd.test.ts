@@ -12,13 +12,17 @@ import { buildSimpleSDWorkflow } from '@/server/services/comfyui/workflows/simpl
 
 // Setup basic mocks
 vi.mock('@lobechat/utils', () => ({
-  generateUniqueSeeds: vi.fn(() => ({ seed: 123456, noiseSeed: 654321 })),
+  generateUniqueSeeds: vi.fn(function () {
+    return { seed: 123456, noiseSeed: 654321 };
+  }),
 }));
 vi.mock('../utils/workflowUtils', () => ({
-  getWorkflowFilenamePrefix: vi.fn(() => 'simple-sd'),
+  getWorkflowFilenamePrefix: vi.fn(function () {
+    return 'simple-sd';
+  }),
 }));
 vi.mock('../utils/staticModelLookup', () => ({
-  getModelConfig: vi.fn((modelName: string) => {
+  getModelConfig: vi.fn(function (modelName: string) {
     // Mock model configuration mapping
     if (modelName.includes('sd3.5') || modelName.includes('sd35')) {
       return {
@@ -62,7 +66,7 @@ const createSDMockContext = () => ({
         'sdxl_vae_fp16fix.safetensors',
         'custom_sd_lobe_vae.safetensors',
       ]),
-    getOptimalComponent: vi.fn().mockImplementation((type: string, modelFamily: string) => {
+    getOptimalComponent: vi.fn().mockImplementation(function (type: string, modelFamily: string) {
       if (type === 'vae') {
         if (modelFamily === 'SDXL') {
           return Promise.resolve('sdxl_vae_fp16fix.safetensors');

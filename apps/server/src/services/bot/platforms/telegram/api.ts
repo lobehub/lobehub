@@ -150,43 +150,54 @@ export class TelegramApi {
     return { message_id: data.result.message_id };
   }
 
-  async editMessageText(chatId: string | number, messageId: number, text: string): Promise<void> {
-    log('editMessageText: chatId=%s, messageId=%s', chatId, messageId);
+  async editMessageText(chatId: string | number, messageId: number, text: string): Promise<void>;
+  async editMessageText(inlineMessageId: string, text: string): Promise<void>;
+  async editMessageText(
+    chatIdOrInlineId: string | number,
+    messageIdOrText: number | string,
+    maybeText?: string,
+  ): Promise<void> {
+    const inline = typeof messageIdOrText === 'string';
+    const text = inline ? messageIdOrText : maybeText!;
+    const location = inline
+      ? { inline_message_id: String(chatIdOrInlineId) }
+      : { chat_id: chatIdOrInlineId, message_id: messageIdOrText };
+
+    log('editMessageText: %O', location);
     if (!text.trim()) {
       throw new Error('Telegram API editMessageText skipped: text is empty');
     }
     try {
       await this.call('editMessageText', {
-        chat_id: chatId,
-        message_id: messageId,
+        ...location,
         parse_mode: 'HTML',
         text: this.truncateText(text),
       });
-    } catch (error: any) {
+    } catch (error) {
+      const message = (error as { message?: string } | null)?.message;
       // Telegram returns 400 when the new content is identical to the current message — safe to ignore
-      if (error?.message?.includes('message is not modified')) return;
+      if (message?.includes('message is not modified')) return;
       if (isParseEntitiesError(error)) {
-        log(
-          'editMessageText: HTML parse failed, retrying as plain text. chatId=%s, messageId=%s',
-          chatId,
-          messageId,
-        );
+        log('editMessageText: HTML parse failed, retrying as plain text');
         try {
           await this.call('editMessageText', {
-            chat_id: chatId,
-            message_id: messageId,
+            ...location,
             text: this.truncateText(stripHTML(text)),
           });
           return;
         } catch (retryError) {
           if (isEditUnavailable(retryError)) {
-            throw new TelegramEditUnavailableError((retryError as Error).message);
+            throw new TelegramEditUnavailableError(
+              retryError instanceof Error ? retryError.message : String(retryError),
+            );
           }
           throw retryError;
         }
       }
       if (isEditUnavailable(error)) {
-        throw new TelegramEditUnavailableError(error.message);
+        throw new TelegramEditUnavailableError(
+          error instanceof Error ? error.message : String(error),
+        );
       }
       throw error;
     }
@@ -658,6 +669,154 @@ export class TelegramApi {
   }): Promise<{ message_id: number }> {
     log('sendAudio: chatId=%s', params.chatId);
     return this.sendMedia('sendAudio', 'audio', params);
+  }
+
+  // ==================== Guest Mode ====================
+
+  /**
+   * Reply to a Guest Mode summon. The result is posted as an inline message
+   * in a chat the bot is not a member of. Returns `inline_message_id` for
+   * later edits.
+   */
+  async answerGuestQuery(
+    guestQueryId: string,
+    result: Record<string, unknown>,
+  ): Promise<{ inline_message_id: string }> {
+    log('answerGuestQuery: id=%s, type=%s', guestQueryId, result.type);
+    const data = await this.call('answerGuestQuery', {
+      guest_query_id: guestQueryId,
+      result,
+    });
+    const inlineMessageId = data.result?.inline_message_id;
+    if (typeof inlineMessageId !== 'string' || !inlineMessageId) {
+      throw new Error('Telegram API answerGuestQuery did not return inline_message_id');
+    }
+    return { inline_message_id: inlineMessageId };
+  }
+
+  /**
+   * Build an article result for `answerGuestQuery`. HTML parse failures
+   * retry as plain text so a malformed LLM snippet still delivers.
+   */
+  async answerGuestArticle(
+    guestQueryId: string,
+    text: string,
+    extra?: { replyMarkup?: unknown; title?: string },
+  ): Promise<{ inline_message_id: string }> {
+    const body = text.trim() ? this.truncateText(text) : '...';
+    const build = (useHtml: boolean, value: string): Record<string, unknown> => ({
+      id: 'guest-reply',
+      input_message_content: {
+        message_text: value,
+        parse_mode: useHtml ? 'HTML' : undefined,
+      },
+      reply_markup: extra?.replyMarkup,
+      title: extra?.title ?? 'LobeHub',
+      type: 'article',
+    });
+
+    try {
+      return await this.answerGuestQuery(guestQueryId, build(true, body));
+    } catch (error) {
+      if (!isParseEntitiesError(error)) throw error;
+      log('answerGuestArticle: HTML parse failed, retrying as plain text');
+      return this.answerGuestQuery(guestQueryId, build(false, this.truncateText(stripHTML(body))));
+    }
+  }
+
+  /**
+   * Update the caption of a guest inline media message. Telegram cannot convert
+   * a photo back into a text message, so later text-only Guest Mode edits go
+   * here once `editMessageMedia` has succeeded.
+   */
+  async editInlineMessageCaption(params: {
+    caption: string;
+    inlineMessageId: string;
+  }): Promise<void> {
+    log('editInlineMessageCaption');
+    const caption = this.truncateCaption(params.caption);
+
+    const send = (useHtml: boolean): Promise<unknown> => {
+      const captionForSend = useHtml ? caption : this.truncateCaption(stripHTML(caption));
+      return this.call('editMessageCaption', {
+        caption: captionForSend,
+        inline_message_id: params.inlineMessageId,
+        parse_mode: captionForSend && useHtml ? 'HTML' : undefined,
+      });
+    };
+
+    try {
+      await send(true);
+    } catch (error) {
+      const message = (error as { message?: string } | null)?.message;
+      if (message?.includes('message is not modified')) return;
+      if (isParseEntitiesError(error)) {
+        log('editInlineMessageCaption: HTML parse failed, retrying as plain text');
+        try {
+          await send(false);
+          return;
+        } catch (retryError) {
+          if (isEditUnavailable(retryError)) {
+            throw new TelegramEditUnavailableError(
+              retryError instanceof Error ? retryError.message : String(retryError),
+            );
+          }
+          throw retryError;
+        }
+      }
+      if (isEditUnavailable(error)) {
+        throw new TelegramEditUnavailableError(
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Replace a guest inline message with media. Used so Guest Mode can still
+   * deliver photos/files after the query was answered with a text placeholder.
+   */
+  async editInlineMessageMedia(params: {
+    caption?: string;
+    inlineMessageId: string;
+    mediaType: 'audio' | 'document' | 'photo' | 'video';
+    source: { url: string };
+  }): Promise<void> {
+    log('editInlineMessageMedia: type=%s', params.mediaType);
+    const caption = params.caption ? this.truncateCaption(params.caption) : undefined;
+
+    const send = (useHtml: boolean): Promise<unknown> => {
+      const captionForSend =
+        caption && !useHtml ? this.truncateCaption(stripHTML(caption)) : caption;
+      const media: Record<string, unknown> = {
+        caption: captionForSend,
+        media: params.source.url,
+        parse_mode: captionForSend && useHtml ? 'HTML' : undefined,
+        type: params.mediaType,
+      };
+
+      return this.call('editMessageMedia', {
+        inline_message_id: params.inlineMessageId,
+        media,
+      });
+    };
+
+    try {
+      await send(true);
+    } catch (error) {
+      const message = (error as { message?: string } | null)?.message;
+      if (message?.includes('message is not modified')) return;
+      if (!caption || !isParseEntitiesError(error)) throw error;
+      log('editInlineMessageMedia: caption HTML parse failed, retrying as plain text');
+      try {
+        await send(false);
+      } catch (retryError) {
+        const retryMessage = (retryError as { message?: string } | null)?.message;
+        if (retryMessage?.includes('message is not modified')) return;
+        throw retryError;
+      }
+    }
   }
 
   /**

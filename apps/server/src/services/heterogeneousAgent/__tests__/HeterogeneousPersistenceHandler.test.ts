@@ -56,6 +56,8 @@ interface FakeTopic {
 const createHarness = (params: {
   assistantAgentId?: string | null;
   assistantMessageId: string;
+  /** Stands in for the operation row: is this run still live on this topic? */
+  isOperationLiveOnTopic?: (operationId: string, topicId: string) => Promise<boolean>;
   operationId: string;
   topicAgentId?: string | null;
   topicId: string;
@@ -176,6 +178,7 @@ const createHarness = (params: {
   };
 
   const handler = new HeterogeneousPersistenceHandler({
+    isOperationLiveOnTopic: params.isOperationLiveOnTopic,
     messageModel: messageModel as any,
     threadModel: threadModel as any,
     topicModel: topicModel as any,
@@ -275,6 +278,112 @@ describe('HeterogeneousPersistenceHandler', () => {
           topicId: 'topic-1',
         }),
       ).rejects.toThrow(/no active runningOperation/);
+    });
+
+    it('keeps persisting when the marker is gone but the operation is still running', async () => {
+      // The marker is a rendering pointer any client can settle — a transport
+      // signal (a raw session_complete, or one multiplexed socket failing auth
+      // for every operation on the tab) clears it while the CLI keeps
+      // streaming. Refusing here discards the rest of a live run's output.
+      const isOperationLiveOnTopic = vi.fn(async () => true);
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        isOperationLiveOnTopic,
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+      h.topicModel.findById.mockResolvedValueOnce({
+        agentId: null,
+        id: 'topic-1',
+        metadata: {} as any,
+      });
+
+      await h.handler.ingest({
+        assistantMessageId: 'asst-1',
+        events: [buildEvent('stream_chunk', 0, { chunkType: 'text', content: 'kept' })],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      expect(isOperationLiveOnTopic).toHaveBeenCalledWith('op-1', 'topic-1');
+      expect(h.messageModel.update).toHaveBeenCalledWith('asst-1', { content: 'kept' });
+    });
+
+    it('recovers the assistant pointer from heteroCurrentMsgId when the marker is gone', async () => {
+      // Desktop / old-CLI callers forward no assistantMessageId, so once the
+      // marker is gone the operation-scoped `heteroCurrentMsgId` is the only
+      // pointer left to the turn in flight.
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        isOperationLiveOnTopic: async () => true,
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+      h.topicModel.findById.mockResolvedValueOnce({
+        agentId: null,
+        id: 'topic-1',
+        metadata: { heteroCurrentMsgId: { msgId: 'asst-1', operationId: 'op-1' } } as any,
+      });
+
+      await h.handler.ingest({
+        events: [buildEvent('stream_chunk', 0, { chunkType: 'text', content: 'kept' })],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      expect(h.messageModel.update).toHaveBeenCalledWith('asst-1', { content: 'kept' });
+    });
+
+    it('still refuses a marker-less batch once the operation row is terminal', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        isOperationLiveOnTopic: async () => false,
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+      h.topicModel.findById.mockResolvedValueOnce({
+        agentId: null,
+        id: 'topic-1',
+        metadata: {} as any,
+      });
+
+      await expect(
+        h.handler.ingest({
+          assistantMessageId: 'asst-1',
+          events: [buildEvent('stream_chunk', 0, { chunkType: 'text', content: 'x' })],
+          operationId: 'op-1',
+          topicId: 'topic-1',
+        }),
+      ).rejects.toThrow(/no active runningOperation/);
+    });
+
+    it('refuses a superseded batch even while its own operation row is alive', async () => {
+      // Liveness must NOT override ownership: a marker naming another run means
+      // the topic has moved on, and writing here would mutate a newer turn.
+      const isOperationLiveOnTopic = vi.fn(async () => true);
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        isOperationLiveOnTopic,
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+      h.topicModel.findById.mockResolvedValueOnce({
+        agentId: null,
+        id: 'topic-1',
+        metadata: {
+          runningOperation: { assistantMessageId: 'asst-other', operationId: 'op-OTHER' },
+        },
+      });
+
+      await expect(
+        h.handler.ingest({
+          assistantMessageId: 'asst-1',
+          events: [buildEvent('stream_chunk', 0, { chunkType: 'text', content: 'x' })],
+          operationId: 'op-1',
+          topicId: 'topic-1',
+        }),
+      ).rejects.toThrow(/current operation is op-OTHER/);
+      expect(isOperationLiveOnTopic).not.toHaveBeenCalled();
     });
 
     it('validates seeded assistant ids belong to the current topic', async () => {
@@ -1388,6 +1497,57 @@ describe('HeterogeneousPersistenceHandler', () => {
       expect(asst.content).toBe('final answer');
     });
 
+    /**
+     * @example A finish request on a stale replica preserves the final snapshot written elsewhere.
+     */
+    it('does not let a stale finish overwrite a newer assistant snapshot', async () => {
+      // ROOT CAUSE:
+      //
+      // A warm serverless replica can retain an older per-operation accumulator
+      // while another replica persists a newer text snapshot to the shared DB.
+      // Before the fix, heteroFinish flushed the stale accumulator and replaced
+      // the final answer with the preceding progress message.
+      //
+      // We fixed this by making heteroIngest the only content/reasoning writer;
+      // a successful finish now releases operation state without rewriting text.
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      await h.handler.ingest({
+        events: [
+          buildEvent('stream_chunk', 0, {
+            chunkType: 'text',
+            content: 'progress',
+            snapshotMode: 'replace',
+            snapshotSeq: 4,
+          }),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      // Simulate a newer snapshot committed by another Lambda replica.
+      h.messages.set('asst-1', {
+        ...h.messages.get('asst-1')!,
+        content: 'progress\n\nfinal answer',
+        metadata: { heteroTextSnapshotSeq: 5 },
+      });
+
+      await h.handler.finish({
+        operationId: 'op-1',
+        result: 'success',
+        topicId: 'topic-1',
+      });
+
+      expect(h.messages.get('asst-1')).toMatchObject({
+        content: 'progress\n\nfinal answer',
+        metadata: { heteroTextSnapshotSeq: 5 },
+      });
+    });
+
     it('writes error onto the assistant when terminal event is error', async () => {
       const h = createHarness({
         assistantMessageId: 'asst-1',
@@ -1540,7 +1700,9 @@ describe('HeterogeneousPersistenceHandler', () => {
         operationId: 'op-1',
         topicId: 'topic-1',
       });
-      h.messages.get('asst-1')!.content = '...';
+      // The CLI echoed the failure into the answer before reporting it — that
+      // echo is what `clearEchoedContent` drops.
+      h.messages.get('asst-1')!.content = "You've hit your session limit";
       h.topicModel.findById.mockResolvedValue({
         agentId: null,
         id: 'topic-1',
@@ -1574,6 +1736,44 @@ describe('HeterogeneousPersistenceHandler', () => {
         type: 'AgentRuntimeError',
       });
       expect(asst.content).toBe('');
+    });
+
+    it('finish() keeps real work when a quota error only marks an echo', async () => {
+      // Kimi Code can burn a full run and only then hit its weekly window. The
+      // finish error carries clearEchoedContent (every rate_limit does), but
+      // the streamed answer is not an echo of it and must survive.
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+      h.messages.get('asst-1')!.content = 'Refactored the adapter and ran the tests.';
+      h.topicModel.findById.mockResolvedValue({
+        agentId: null,
+        id: 'topic-1',
+        metadata: {},
+      });
+
+      await h.handler.finish({
+        assistantMessageId: 'asst-1',
+        error: {
+          body: {
+            agentType: 'kimi-code',
+            clearEchoedContent: true,
+            code: 'rate_limit',
+            details: { kind: 'usage_limit' },
+          },
+          message: "You've reached your weekly (7-day) usage limit.",
+          type: 'AgentRuntimeError',
+        },
+        operationId: 'op-1',
+        result: 'error',
+        topicId: 'topic-1',
+      });
+
+      const asst = h.messages.get('asst-1')!;
+      expect(asst.content).toBe('Refactored the adapter and ran the tests.');
+      expect(asst.error).toMatchObject({ body: { agentType: 'kimi-code', code: 'rate_limit' } });
     });
 
     it('finish() with no state stays a no-op for a stale operation (mismatched runningOperation)', async () => {

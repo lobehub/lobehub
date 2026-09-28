@@ -25,49 +25,59 @@ const {
 }));
 
 vi.mock('@/business/server/trpc-middlewares/rbacPermission', () => ({
-  withRbacPermission: vi.fn(() => (opts: any) => opts.next(opts)),
+  withRbacPermission: vi.fn(function () {
+    return (opts: any) => opts.next(opts);
+  }),
 }));
 
 // Simulates the real `cloudWorkspaceAuth`: strips `workspaceId` off the
 // context unless the caller is flagged as a workspace member.
 vi.mock('@/business/server/trpc-middlewares/workspaceAuth', () => ({
-  cloudWorkspaceAuth: vi.fn((opts: any) =>
-    opts.next({
+  cloudWorkspaceAuth: vi.fn(function (opts: any) {
+    return opts.next({
       ctx: {
         ...opts.ctx,
         workspaceId: opts.ctx.isWorkspaceMember ? opts.ctx.workspaceId : undefined,
       },
-    }),
-  ),
+    });
+  }),
 }));
 
 vi.mock('@/libs/trpc/lambda/middleware', () => ({
-  marketUserInfo: vi.fn((opts: any) =>
-    opts.next({
+  marketUserInfo: vi.fn(function (opts: any) {
+    return opts.next({
       ctx: {
         ...opts.ctx,
         marketUserInfo: { email: 'actor@example.com', name: 'Actor', userId: 'user-1' },
       },
-    }),
-  ),
-  requireMarketAuth: vi.fn((opts: any) => opts.next(opts)),
-  serverDatabase: vi.fn((opts: any) => opts.next(opts)),
+    });
+  }),
+  requireMarketAuth: vi.fn(function (opts: any) {
+    return opts.next(opts);
+  }),
+  serverDatabase: vi.fn(function (opts: any) {
+    return opts.next(opts);
+  }),
 }));
 
 vi.mock('@/server/services/market', () => ({
-  MarketService: vi.fn(() => ({
-    market: {
-      creds: {
-        list: mockPersonalCredsList,
-        publish: mockPersonalCredsPublish,
-        share: mockPersonalCredsShare,
-        unshare: mockPersonalCredsUnshare,
+  MarketService: vi.fn(function () {
+    return {
+      market: {
+        creds: {
+          list: mockPersonalCredsList,
+          publish: mockPersonalCredsPublish,
+          share: mockPersonalCredsShare,
+          unshare: mockPersonalCredsUnshare,
+        },
+        organizations: {
+          creds: vi.fn(function () {
+            return { list: mockOrgCredsList };
+          }),
+        },
       },
-      organizations: {
-        creds: vi.fn(() => ({ list: mockOrgCredsList })),
-      },
-    },
-  })),
+    };
+  }),
 }));
 
 describe('credsRouter is always personal-scoped', () => {
@@ -116,6 +126,38 @@ describe('credsRouter is always personal-scoped', () => {
     expect(mockPersonalCredsList).toHaveBeenCalledTimes(1);
     expect(mockOrgCredsList).not.toHaveBeenCalled();
     expect(result.data).toEqual([{ id: 2, key: 'PERSONAL_SECRET' }]);
+  });
+});
+
+describe('credsRouter listForContext follows the runtime scope', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('lists the workspace organization creds for a verified workspace member', async () => {
+    const { credsRouter } = await import('./creds');
+    const caller = credsRouter.createCaller({
+      isWorkspaceMember: true,
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    } as any);
+
+    const result = await caller.listForContext();
+
+    expect(mockOrgCredsList).toHaveBeenCalledTimes(1);
+    expect(mockPersonalCredsList).not.toHaveBeenCalled();
+    expect(result.data.map((c) => c.key)).toEqual(['ORG_SECRET']);
+  });
+
+  it('lists personal creds outside a workspace', async () => {
+    const { credsRouter } = await import('./creds');
+    const caller = credsRouter.createCaller({ isWorkspaceMember: false, userId: 'user-1' } as any);
+
+    const result = await caller.listForContext();
+
+    expect(mockPersonalCredsList).toHaveBeenCalledTimes(1);
+    expect(mockOrgCredsList).not.toHaveBeenCalled();
+    expect(result.data.map((c) => c.key)).toEqual(['PERSONAL_SECRET']);
   });
 });
 

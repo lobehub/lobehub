@@ -1,4 +1,9 @@
-import type { BriefArtifacts, BriefMetadata } from '@lobechat/types';
+import type {
+  BriefArtifacts,
+  BriefMetadata,
+  TaskActivityLogPayload,
+  TaskActivityLogType,
+} from '@lobechat/types';
 import { isNotNull, isNull } from 'drizzle-orm';
 import {
   foreignKey,
@@ -390,3 +395,61 @@ export const taskComments = pgTable(
 
 export type NewTaskComment = typeof taskComments.$inferInsert;
 export type TaskCommentItem = typeof taskComments.$inferSelect;
+
+// ── Task Activities ─────────────────────────────────────
+
+/**
+ * Append-only event log for a task's non-content changes.
+ *
+ * The task detail feed used to be assembled purely from rows that happen to
+ * exist (`tasks.created_at`, `task_topics`, `task_comments`), so a mutation
+ * that only rewrites a column on `tasks` — reassigning the task — left no
+ * trace at all. This table is the missing side: one row per change, carrying
+ * who made it and what the value moved between.
+ *
+ * `type` is deliberately plain `text` (see the db-migrations skill): adding a
+ * new event kind is a type-only change, not a migration.
+ */
+export const taskActivities = pgTable(
+  'task_activities',
+  {
+    // Rows are only ever read in bulk for one task — never addressed by id in a
+    // URL or an API — so they take a plain uuid like the other task child
+    // tables (`task_dependencies` / `task_documents` / `task_topics`) rather
+    // than a prefixed id.
+    id: uuid('id').defaultRandom().primaryKey().notNull(),
+    taskId: text('task_id')
+      .references(() => tasks.id, { onDelete: 'cascade' })
+      .notNull(),
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+
+    // Actor (user or agent, both nullable — an agent tool call has no user).
+    actorUserId: text('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+    actorAgentId: text('actor_agent_id').references(() => agents.id, { onDelete: 'set null' }),
+
+    // 'assignee_agent' | 'assignee_user'
+    type: text('type').$type<TaskActivityLogType>().notNull(),
+    // { fromId, toId } — null on either side means "unassigned".
+    payload: jsonb('payload').$type<TaskActivityLogPayload>(),
+
+    // Mirror of the parent task's visibility, same contract as the other
+    // task-child tables: lets ownership filter without joining back to `tasks`.
+    visibility: text('visibility', { enum: ['private', 'public'] })
+      .default('public')
+      .notNull(),
+
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('task_activities_task_id_idx').on(t.taskId),
+    index('task_activities_user_id_idx').on(t.userId),
+    index('task_activities_workspace_id_idx').on(t.workspaceId),
+    index('task_activities_workspace_visibility_idx').on(t.workspaceId, t.visibility, t.userId),
+  ],
+);
+
+export type NewTaskActivity = typeof taskActivities.$inferInsert;
+export type TaskActivityItem = typeof taskActivities.$inferSelect;

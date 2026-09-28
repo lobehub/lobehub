@@ -1,13 +1,14 @@
 'use client';
 
-import { type DropdownItem, DropdownMenu, Flexbox, Icon, type MenuInfo } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
+import { type DropdownItem, DropdownMenu, Icon, type MenuInfo } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { CheckIcon, ChevronDownIcon, LockIcon, UsersIcon } from 'lucide-react';
+import { CheckIcon, LockIcon, UsersIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import type { ResourceListVisibilityFilter } from '@/features/ResourceManager/store/initialState';
 
@@ -15,24 +16,23 @@ const OPTIONS: Array<{
   icon: typeof LockIcon;
   key: ResourceListVisibilityFilter;
   labelKey: string;
-  tooltipKey: string;
 }> = [
   {
     icon: LockIcon,
     key: 'private',
     labelKey: 'resources.visibility.private',
-    tooltipKey: 'resources.mode.privateHint',
   },
   {
     icon: UsersIcon,
     key: 'workspace',
     labelKey: 'resources.visibility.workspace',
-    tooltipKey: 'resources.mode.workspaceHint',
   },
 ];
 
 /**
- * Sidebar-header scope chip, mirroring the task list's visibility filter.
+ * Sidebar-header scope chip, mirroring the task list's visibility filter:
+ * collapsed it is a single icon for the active scope (🔒 private / 👥
+ * workspace); the dropdown lists both scopes with a check on the current one.
  *
  * Rendered only in team-workspace mode — personal mode has no notion of
  * visibility, so the toggle is meaningless there and is deliberately hidden.
@@ -87,20 +87,11 @@ const ResourceModeToggle = memo(() => {
 
   return (
     <DropdownMenu items={menuItems} open={open} onOpenChange={setOpen}>
-      <Button
-        size={'small'}
-        style={{ paddingInline: 6 }}
+      <ActionIcon
+        icon={current.icon}
+        size={DESKTOP_HEADER_ICON_SMALL_SIZE}
         title={`${t('resources.visibility.label')}: ${currentLabel}`}
-        type={'text'}
-      >
-        <Flexbox horizontal align={'center'} gap={4}>
-          <Icon color={cssVar.colorIcon} icon={current.icon} size={14} />
-          <Text ellipsis fontSize={12} style={{ maxWidth: 96 }} type={'secondary'}>
-            {currentLabel}
-          </Text>
-          <Icon color={cssVar.colorIcon} icon={ChevronDownIcon} size={12} />
-        </Flexbox>
-      </Button>
+      />
     </DropdownMenu>
   );
 });

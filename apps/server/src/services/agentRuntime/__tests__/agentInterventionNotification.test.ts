@@ -18,7 +18,7 @@ const binaryTool = {
 };
 
 const buildState = (overrides: Record<string, unknown> = {}) => ({
-  metadata: {
+  origin: {
     agentId: 'agent-1',
     scope: 'main',
     sessionId: 'session-1',

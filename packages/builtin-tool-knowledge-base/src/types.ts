@@ -44,20 +44,36 @@ export interface SearchKnowledgeBaseState {
   documents: KnowledgeBaseDocumentResult[];
   errors?: { bm25?: string; vector?: string };
   fileResults: FileSearchResult[];
+  /**
+   * How many hits `fileResults` held, pinned by the read-path projector before
+   * it drops the three lists. The collapsed chip shows only this number; the
+   * card hydrates the real hits when the row is expanded.
+   */
+  resultCount?: number;
   totalResults: number;
 }
 
 export interface ReadKnowledgeArgs {
   fileIds: string[];
+  /** Maximum number of lines to return per file (default 400, max 2000). Some providers send numbers as strings. */
+  limit?: number | string;
+  /** 1-based line number to start reading from (default 1). Some providers send numbers as strings. */
+  offset?: number | string;
 }
 
 export interface FileContentDetail {
+  /** 1-based inclusive end line of the returned window; `0` when empty. */
+  endLine?: number;
   error?: string;
   fileId: string;
   filename: string;
   preview?: string;
+  /** 1-based inclusive start line of the returned window. */
+  startLine?: number;
   totalCharCount?: number;
   totalLineCount?: number;
+  /** True when more lines follow `endLine` and another call with a higher `offset` is needed. */
+  truncated?: boolean;
 }
 
 export interface ReadKnowledgeState {

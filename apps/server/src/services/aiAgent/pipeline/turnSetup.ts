@@ -4,14 +4,26 @@ import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import type {
   ChatAudioItem,
   ChatFileItem,
+  ChatTopicMetadata,
   ChatVideoItem,
-  HeterogeneousTopicModel,
+  FileAccessScope,
+  HeterogeneousProviderConfig,
+  HeterogeneousTopicPin,
 } from '@lobechat/types';
-import { RequestTrigger, resolveHeterogeneousProviderTopicModel } from '@lobechat/types';
+import {
+  agentShareFileAccessScope,
+  ChatErrorType,
+  ordinaryFileAccessScope,
+  RequestTrigger,
+  resolveHeterogeneousProviderTopicModel,
+} from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
+import { AiModelModel } from '@/database/models/aiModel';
 import type { MessageModel } from '@/database/models/message';
 import type { TopicModel } from '@/database/models/topic';
+import { resolveModelExtendParamsForUser } from '@/server/modules/AgentRuntime/adapters/serverCallLlmContextHints';
 import type { AgentConfigWithId } from '@/server/services/agent';
 import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { shouldSuppressSignal } from '@/server/services/agentSignal/suppressSignal';
@@ -23,6 +35,8 @@ import { markdownToTxt } from '@/utils/markdownToTxt';
 import type { DeviceAccessReason } from '../deviceAccessPolicy';
 import { resolveDeviceAccessPolicy } from '../deviceAccessPolicy';
 import { ingestAttachment } from '../ingestAttachment';
+import type { AgentShareGate } from '../shareGate';
+import { reserveShareVisitorTopic, reserveShareVisitorTurn } from '../shareVisitorAbuseGuards';
 import type { InternalExecAgentParams } from '../types';
 
 const log = debug('lobe-server:ai-agent-service');
@@ -45,6 +59,75 @@ export interface RunAttachments {
 }
 
 /**
+ * Build the reasoning snapshot for a topic being created — see
+ * `ChatTopicMetadata.reasoningConfig` / `heteroEffort`. Returns undefined when
+ * there is nothing to pin (non-reasoning model, hetero agent without an effort)
+ * so the caller leaves metadata untouched. Never throws: a failed lookup just
+ * means the topic follows the user-level config until the user pins one.
+ */
+const resolveTopicReasoningSnapshot = async ({
+  deps,
+  heterogeneousProvider,
+  isHeteroTopic,
+  model,
+  provider,
+}: {
+  deps: Pick<TurnSetupDeps, 'db' | 'userId' | 'workspaceId'>;
+  heterogeneousProvider: HeterogeneousProviderConfig | undefined;
+  isHeteroTopic: boolean;
+  model: string;
+  provider: string;
+}): Promise<Pick<ChatTopicMetadata, 'heteroEffort' | 'reasoningConfig'> | undefined> => {
+  if (isHeteroTopic) {
+    const effort = heterogeneousProvider?.effort;
+    return effort === undefined ? undefined : { heteroEffort: effort };
+  }
+
+  try {
+    const aiModelModel = new AiModelModel(deps.db, deps.userId, deps.workspaceId);
+    const { modelHasReasoningExtendParams } = await resolveModelExtendParamsForUser({
+      aiModelModel,
+      model,
+      provider,
+    });
+    if (!modelHasReasoningExtendParams) return undefined;
+
+    const reasoningConfig = await aiModelModel.getModelReasoningConfig(model, provider);
+    return { reasoningConfig: reasoningConfig ?? {} };
+  } catch (error) {
+    log('execAgent: failed to snapshot topic reasoning config for %s: %O', model, error);
+    return undefined;
+  }
+};
+
+/** Snapshot only newly created topics, including callers that pre-create before setupTurn. */
+export const resolveNewTopicSnapshot = async (
+  deps: Pick<TurnSetupDeps, 'db' | 'userId' | 'workspaceId'>,
+  agentConfig: AgentConfigWithId,
+  overrides?: { model?: string; provider?: string },
+) => {
+  const model = overrides?.model ?? agentConfig.model!;
+  const provider = overrides?.provider ?? agentConfig.provider!;
+  const heterogeneousProvider = agentConfig.agencyConfig?.heterogeneousProvider;
+  const heteroType =
+    heterogeneousProvider?.type ?? (isHeterogeneousAgentModelId(model) ? model : undefined);
+  const heteroModel = heterogeneousProvider
+    ? resolveHeterogeneousProviderTopicModel(heterogeneousProvider)
+    : undefined;
+  return {
+    metadata: await resolveTopicReasoningSnapshot({
+      deps,
+      heterogeneousProvider,
+      isHeteroTopic: !!heteroType,
+      model,
+      provider,
+    }),
+    model: heteroModel?.model ?? (heteroType ? undefined : model),
+    provider: heteroModel?.provider ?? heteroType ?? provider,
+  };
+};
+
+/**
  * Resolve a run's attachments into the lists the message + context layers
  * consume. This is the single standard ingestion path shared by BOTH branches
  * of {@link AiAgentService.execAgent} — the heterogeneous-agent branch (which
@@ -64,10 +147,12 @@ const resolveRunAttachments = async (
   deps: TurnSetupDeps,
   {
     attachedFileIds,
+    fileAccessScope,
     files,
     throwIfAborted,
   }: {
     attachedFileIds?: string[];
+    fileAccessScope: FileAccessScope;
     files?: InternalExecAgentParams['files'];
     throwIfAborted: (stage: string) => Promise<void>;
   },
@@ -93,7 +178,7 @@ const resolveRunAttachments = async (
       await throwIfAborted('file upload');
 
       try {
-        const result = await ingestAttachment(file, fileService, deps.userId);
+        const result = await ingestAttachment(file, fileService, deps.userId, deps.workspaceId);
         fileIds.push(result.fileId);
 
         if (result.isImage) {
@@ -154,7 +239,13 @@ const resolveRunAttachments = async (
         });
       } catch (error) {
         log('execAgent: failed to ingest file %s: %O', file.name || file.url, error);
-        warnings.push(`File "${file.name || 'unknown'}" could not be uploaded and was skipped.`);
+        // A quota rejection is actionable, so name it rather than leaving the
+        // sender to guess why every attachment silently vanished.
+        warnings.push(
+          (error as { code?: string })?.code === 'FORBIDDEN'
+            ? `File "${file.name || 'unknown'}" was skipped: storage limit reached.`
+            : `File "${file.name || 'unknown'}" could not be uploaded and was skipped.`,
+        );
       }
     }
 
@@ -184,6 +275,7 @@ const resolveRunAttachments = async (
     try {
       const resolved = await resolveAttachmentsByFileIds({
         db: deps.db,
+        fileAccessScope,
         fileIds: attachedFileIds,
         userId: deps.userId,
         workspaceId: deps.workspaceId,
@@ -232,12 +324,14 @@ export interface TurnSetupInput {
   /** Spine anchor for a batch approval — overrides the assistant's parent. */
   batchApprovalAnchorId?: string;
   botContext?: InternalExecAgentParams['botContext'];
+  botSender?: InternalExecAgentParams['botSender'];
   clientIds?: InternalExecAgentParams['clientIds'];
   /** Stable assistant id for a generic intervention continuation. */
   continuationAssistantId?: string;
   conversationAgentId: string;
   createdThreadId?: string;
   cronJobId?: string;
+  externalOrigin?: InternalExecAgentParams['externalOrigin'];
   files?: InternalExecAgentParams['files'];
   modelOverride?: string;
   operationTaskId?: string;
@@ -249,6 +343,10 @@ export interface TurnSetupInput {
   /** Raw resume flag — a resume run must land on an existing topic. */
   resume?: boolean;
   runFromHistory: boolean;
+  /** Shared-agent visitor gate — set only by the shareChat router. */
+  shareGate?: AgentShareGate;
+  /** The prompt was queued behind a running turn; see `ExecAgentParams.steer`. */
+  steer?: boolean;
   throwIfExecutionAborted: (stage: string) => Promise<void>;
   title?: string;
   trigger?: string;
@@ -258,6 +356,8 @@ export interface TurnSetupResult {
   assistantMessageId: string;
   canUseDevice: boolean;
   deviceAccessReason: DeviceAccessReason;
+  /** The agent a builder run edits — from the request, else recovered from the builder topic. */
+  editingAgentId?: string;
   effectiveRequestedDeviceId?: string;
   heterogeneousProvider?: NonNullable<AgentConfigWithId['agencyConfig']>['heterogeneousProvider'];
   heteroType: HeterogeneousAgentType;
@@ -265,16 +365,28 @@ export interface TurnSetupResult {
   isHeteroAgent: boolean;
   /** Effective model/provider after the topic-pinned model is applied. */
   model: string;
-  pinnedHeterogeneousTopicModel?: HeterogeneousTopicModel;
+  /** Topic-pinned model + reasoning effort for a heterogeneous run (reused topics only). */
+  pinnedHeterogeneousTopicModel?: HeterogeneousTopicPin;
   provider: string;
+  /**
+   * The request's device, or — when it named none — the device a reused topic
+   * is bound to. Use this instead of the raw request value downstream.
+   */
+  requestedDeviceId?: string;
   requestTriggerMetadata: {
     agentDispatch?: { kind: 'callAgent'; visibility: 'internal' };
+    steer?: true;
     trigger?: RequestTrigger;
   };
   runAttachments: RunAttachments;
   /** Rows THIS turn persisted — the history loader must exclude them. */
   selfMessageIds: Set<string>;
   topicBoundDeviceId?: string | null;
+  /**
+   * The group a reused Group Agent Builder topic was opened on
+   * (`metadata.editingGroupId`), for runs whose request does not name it.
+   */
+  topicEditingGroupId?: string;
   topicId: string;
   userMessageId?: string;
 }
@@ -302,10 +414,12 @@ export const setupTurn = async (
     attachedFileIds,
     batchApprovalAnchorId,
     botContext,
+    botSender,
     clientIds,
     continuationAssistantId,
     conversationAgentId,
     createdThreadId,
+    externalOrigin,
     cronJobId,
     files,
     modelOverride,
@@ -317,21 +431,25 @@ export const setupTurn = async (
     resolvedAgentId,
     resume,
     runFromHistory,
+    shareGate,
+    steer,
     throwIfExecutionAborted,
     title,
     trigger,
   } = input;
 
   let topicId = appContext?.topicId;
+  let editingAgentId = appContext?.editingAgentId;
 
   const isFixedExecutionTargetSelection =
     !!deps.workspaceId && agentConfig.agencyConfig?.executionTargetSelectionPolicy === 'fixed';
   const isFixedDeviceTarget =
     isFixedExecutionTargetSelection && agentConfig.agencyConfig?.executionTarget === 'device';
-  const effectiveRequestedDeviceId = isFixedExecutionTargetSelection
-    ? undefined
-    : requestedDeviceId;
-  const topicBoundDeviceId = isFixedDeviceTarget
+  // `let`: a reused topic that already ran on a machine supplies the device
+  // when the request names none (see the reuse branch below).
+  let resolvedRequestedDeviceId = requestedDeviceId;
+  let effectiveRequestedDeviceId = isFixedExecutionTargetSelection ? undefined : requestedDeviceId;
+  let topicBoundDeviceId = isFixedDeviceTarget
     ? agentConfig.agencyConfig?.boundDeviceId
     : isFixedExecutionTargetSelection
       ? undefined
@@ -346,10 +464,21 @@ export const setupTurn = async (
   let model = agentConfig.model!;
   let provider = agentConfig.provider!;
   const heterogeneousProvider = agentConfig.agencyConfig?.heterogeneousProvider;
-  const heterogeneousTopicModelSnapshot = heterogeneousProvider
-    ? resolveHeterogeneousProviderTopicModel(heterogeneousProvider)
-    : undefined;
-  let pinnedHeterogeneousTopicModel: HeterogeneousTopicModel | undefined;
+  let pinnedHeterogeneousTopicModel: HeterogeneousTopicPin | undefined;
+  let topicEditingGroupId: string | undefined;
+
+  // Share-visitor fail-closed gate — reject a heterogeneous (Claude Code /
+  // Codex / …) agent BEFORE any topic/message row is written. Heterogeneous
+  // agents are not available for shared visitor runs. Checked here (using the
+  // agent-level config, before any topic-pinned model override) rather than
+  // at the later hetero-detection site (`isHeteroAgent`) so it runs ahead of
+  // ALL row creation, not just the message rows.
+  if (shareGate && (heterogeneousProvider?.type || isHeterogeneousAgentModelId(model))) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: ChatErrorType.ShareHeterogeneousAgentUnsupported,
+    });
+  }
 
   if (!topicId) {
     if (resume) {
@@ -365,7 +494,7 @@ export const setupTurn = async (
     // association exists only at run time: a topic written without it can
     // never be attributed afterwards, which is why it is stamped even though
     // nothing filters on it yet.
-    const { editingAgentId, editingGroupId } = appContext ?? {};
+    const { editingGroupId } = appContext ?? {};
     const metadata =
       cronJobId ||
       operationTaskId ||
@@ -392,37 +521,56 @@ export const setupTurn = async (
         : undefined;
 
     const fallbackTitleSource = markdownToTxt(prompt);
-    // Heterogeneous topics use the same snapshot rule as the client: persist
-    // the selected CLI model (including `default`) or user-provider API binding.
-    // Runtimes without a model selector, legacy rows, and Agent-scoped
-    // server-default API configs still pin only the runtime type.
-    const heteroSnapshotType =
-      heterogeneousProvider?.type ?? (isHeterogeneousAgentModelId(model) ? model : undefined);
+    const snapshot = await resolveNewTopicSnapshot(deps, agentConfig);
+    const metadataWithSnapshot: ChatTopicMetadata | undefined =
+      metadata || snapshot.metadata ? { ...metadata, ...snapshot.metadata } : undefined;
     // Second argument: the id the client already rendered this topic under
     // (sidebar row, message bucket). Absent → the model mints one as before.
-    const newTopic = await deps.topicModel.create(
-      {
-        agentId: resolvedAgentId,
-        // Persist the group association when running inside a group conversation.
-        // Without it the topic is created group-less and only shows under the
-        // member agent's topic list — never in the group sidebar (which queries
-        // `topics.groupId`), so the conversation silently "disappears" from the
-        // group. execGroupAgent normally pre-creates the topic, but any path
-        // that reaches execAgent without a topicId (e.g. the async/queue run)
-        // must carry the groupId through too (group topic sidebar + ownership fix).
-        groupId: appContext?.groupId,
-        metadata,
-        // Snapshot the effective model as the topic's pinned model (config).
-        model: heterogeneousTopicModelSnapshot?.model ?? (heteroSnapshotType ? undefined : model),
-        provider: heterogeneousTopicModelSnapshot?.provider ?? heteroSnapshotType ?? provider,
-        title:
-          title !== undefined
-            ? title
-            : fallbackTitleSource.slice(0, 50) + (fallbackTitleSource.length > 50 ? '...' : ''),
-        trigger,
-      },
-      clientIds?.topicId,
-    );
+    const newTopicParams = {
+      agentId: resolvedAgentId,
+      // Persist the group association when running inside a group conversation.
+      // Without it the topic is created group-less and only shows under the
+      // member agent's topic list — never in the group sidebar (which queries
+      // `topics.groupId`), so the conversation silently "disappears" from the
+      // group. execGroupAgent normally pre-creates the topic, but any path
+      // that reaches execAgent without a topicId (e.g. the async/queue run)
+      // must carry the groupId through too (group topic sidebar + ownership fix).
+      groupId: appContext?.groupId,
+      metadata: metadataWithSnapshot,
+      // Snapshot the effective model as the topic's pinned model (config).
+      model: snapshot.model,
+      provider: snapshot.provider,
+      // Share-visitor runs: the topic row belongs to the creator
+      // (`deps.userId`), but stamping the visitor's id here is what
+      // `TopicModel`'s creator-facing reads (`query`, `count`, `queryTopics`,
+      // `queryRecent`, `rank`) filter out via `notShareVisitorTopic()`, and
+      // what lets shareChat scope reads per visitor (`queryBySender` /
+      // `countBySender`).
+      senderId: shareGate?.visitorUserId,
+      title:
+        title !== undefined
+          ? title
+          : fallbackTitleSource.slice(0, 50) + (fallbackTitleSource.length > 50 ? '...' : ''),
+      trigger,
+    };
+    // Share-visitor runs must reserve the `maxTopicsPerVisitor` slot and
+    // insert the topic in ONE locked transaction — see
+    // `reserveShareVisitorTopic`'s JSDoc for the race this closes. Non-share
+    // runs (no per-visitor cap to enforce) keep the plain unlocked insert.
+    const newTopic = shareGate
+      ? await reserveShareVisitorTopic(
+          {
+            agentId: resolvedAgentId,
+            db: deps.db,
+            expectedShareId: shareGate.shareId,
+            ownerId: deps.userId,
+            visitorUserId: shareGate.visitorUserId,
+            workspaceId: deps.workspaceId,
+          },
+          newTopicParams,
+          clientIds?.topicId,
+        )
+      : await deps.topicModel.create(newTopicParams, clientIds?.topicId);
     topicId = newTopic.id;
     log(
       'execAgent: created new topic %s with trigger %s, groupId %s, cronJobId %s',
@@ -440,7 +588,24 @@ export const setupTurn = async (
     // The pinned model lives in the top-level `topics.model`/`provider` columns
     // (config source of truth), NOT in metadata.
     const existingTopic = await deps.topicModel.findById(topicId);
-    const pinnedModel = existingTopic?.model;
+    topicEditingGroupId = existingTopic?.metadata?.editingGroupId ?? undefined;
+
+    // Fail-closed guard: a non-share run must never operate on a share-visitor
+    // topic. `findById` is ownership-scoped but deliberately does NOT exclude
+    // visitor topics (see its JSDoc) — they carry the CREATOR's own userId for
+    // billing attribution, so `deps.userId`'s ownership check alone lets a
+    // creator-authenticated but non-share call (e.g. hitting `aiAgent.execAgent`
+    // directly with a leaked/guessed visitor topicId) load a visitor
+    // conversation as if it were their own. A share visitor's own run is
+    // authorized separately via `shareGate` — already re-validated upstream by
+    // `findVisitorTopicOrThrow` in `shareChat.ts` — and must keep working.
+    if (!shareGate && existingTopic?.senderId) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic not found' });
+    }
+
+    /** A group topic pins its owning agent; member runs keep their own model and effort. */
+    const canUseTopicPin = !existingTopic?.groupId || existingTopic.agentId === resolvedAgentId;
+    const pinnedModel = canUseTopicPin ? existingTopic?.model : undefined;
     if (pinnedModel) {
       model = modelOverride || pinnedModel;
       provider = providerOverride || existingTopic?.provider || provider;
@@ -451,6 +616,53 @@ export const setupTurn = async (
         provider,
         topicId,
       );
+    }
+    // The heterogeneous effort pin lives in metadata and is independent of the
+    // model pin (a runtime without a model selector can still pin an effort).
+    const pinnedHeteroEffort = canUseTopicPin ? existingTopic?.metadata?.heteroEffort : undefined;
+    if (pinnedHeteroEffort !== undefined) {
+      pinnedHeterogeneousTopicModel = {
+        ...pinnedHeterogeneousTopicModel,
+        effort: pinnedHeteroEffort,
+      };
+    }
+
+    // A conversation stays on the machine it already ran on: its cwd and CLI
+    // session live there, so the agent-level target (the default for NEW
+    // topics) must not move a later turn elsewhere. An explicit request device
+    // (the picker's in-process preset, a task/sub-agent override) and a fixed
+    // workspace target still win. `auto` opted into picking a fresh online
+    // device every run, so an earlier pick never pins it.
+    const topicPinnedDeviceId = canUseTopicPin ? existingTopic?.metadata?.boundDeviceId : undefined;
+    if (
+      !requestedDeviceId &&
+      topicPinnedDeviceId &&
+      !isFixedExecutionTargetSelection &&
+      agentConfig.agencyConfig?.executionTarget !== 'auto'
+    ) {
+      resolvedRequestedDeviceId = topicPinnedDeviceId;
+      effectiveRequestedDeviceId = topicPinnedDeviceId;
+      topicBoundDeviceId = topicPinnedDeviceId;
+      log('execAgent: routing topic %s to its bound device %s', topicId, topicPinnedDeviceId);
+    }
+
+    // Re-assert the share restriction after topic overrides are applied.
+    // Heterogeneous agents are not available for shared visitor runs.
+    if (shareGate && isHeterogeneousAgentModelId(model)) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: ChatErrorType.ShareHeterogeneousAgentUnsupported,
+      });
+    }
+
+    // A builder conversation edits exactly one agent, stamped on the topic when
+    // it was created. Continuations rebuilt from the durable operation (approval
+    // or askUserQuestion resumes) arrive without `editingAgentId`; recover it
+    // here so the run origin still carries the target instead of leaving the
+    // builder tools with nothing to write to.
+    if (appContext?.scope === 'agent_builder' && !editingAgentId) {
+      editingAgentId = existingTopic?.metadata?.editingAgentId ?? undefined;
+      log('execAgent: recovered editingAgentId=%s from topic %s', editingAgentId, topicId);
     }
   }
 
@@ -465,6 +677,7 @@ export const setupTurn = async (
   // chat) and stops the device list from leaking into the LLM context.
   const { canUseDevice, reason: deviceAccessReason } = resolveDeviceAccessPolicy({
     botContext,
+    shareVisitor: !!shareGate,
   });
   log(
     'execAgent: device access policy → canUseDevice=%s, reason=%s, hasBotContext=%s',
@@ -488,12 +701,21 @@ export const setupTurn = async (
     ...(appContext?.conversationAgentId && appContext.scope === 'sub_agent'
       ? { agentDispatch: { kind: 'callAgent' as const, visibility: 'internal' as const } }
       : undefined),
+    // Bot-channel turns are inserted under the OWNER's userId; keep the real
+    // platform author alongside so the UI can attribute the bubble correctly.
+    ...(botSender ? { botSender } : undefined),
+    // A provider event that injected this turn keeps its source on the row.
+    ...(externalOrigin ? { externalOrigin } : undefined),
+    // A follow-up queued behind a running turn renders as that turn's
+    // continuation; the client's optimistic row is replaced by this one.
+    ...(steer ? { steer: true as const } : undefined),
   };
 
   // Attachment ingestion: raw bot/IM `files` → S3, pre-uploaded
   // `attachedFileIds` → signed URLs + classification.
   const runAttachments = await resolveRunAttachments(deps, {
     attachedFileIds,
+    fileAccessScope: shareGate ? agentShareFileAccessScope(shareGate) : ordinaryFileAccessScope,
     files,
     throwIfAborted: throwIfExecutionAborted,
   });
@@ -538,26 +760,47 @@ export const setupTurn = async (
     return fallbackId;
   };
   const userMessageParentId = await resolveUserMessageParentId();
+  const userMessageParams = {
+    agentId: conversationAgentId,
+    content: prompt,
+    files: runAttachments.fileIds,
+    // Group reads filter on messages.groupId (MessageModel.query group
+    // branch), so a group turn must stamp groupId or the message never
+    // shows when the topic is reopened (group topic sidebar + ownership fix).
+    groupId: appContext?.groupId ?? undefined,
+    metadata: requestTriggerMetadata,
+    parentId: userMessageParentId,
+    role: 'user' as const,
+    threadId: appContext?.threadId ?? undefined,
+    topicId,
+  };
+  // Share-visitor runs must reserve the `maxTurnsPerTopic` slot and insert
+  // the user message in ONE locked transaction — see
+  // `reserveShareVisitorTurn`'s JSDoc for the race this closes (same class of
+  // count-then-act bug as the topic cap above). Harmless no-op on a topic
+  // this same call just created (count is 0). Non-share runs (no per-turn
+  // cap) keep the plain unlocked insert.
   const userMessageRecord = runFromHistory
     ? undefined
-    : await deps.messageModel.create(
-        {
-          agentId: conversationAgentId,
-          content: prompt,
-          files: runAttachments.fileIds,
-          // Group reads filter on messages.groupId (MessageModel.query group
-          // branch), so a group turn must stamp groupId or the message never
-          // shows when the topic is reopened (group topic sidebar + ownership fix).
-          groupId: appContext?.groupId ?? undefined,
-          metadata: requestTriggerMetadata,
-          parentId: userMessageParentId,
-          role: 'user',
-          threadId: appContext?.threadId ?? undefined,
-          topicId,
-        },
-        // The id the client's optimistic user row already renders under.
-        clientIds?.userMessageId,
-      );
+    : shareGate
+      ? await reserveShareVisitorTurn(
+          {
+            agentId: shareGate.agentId,
+            db: deps.db,
+            expectedShareId: shareGate.shareId,
+            ownerId: deps.userId,
+            topicId,
+            workspaceId: deps.workspaceId,
+          },
+          userMessageParams,
+          // The id the client's optimistic user row already renders under.
+          clientIds?.userMessageId,
+        )
+      : await deps.messageModel.create(
+          userMessageParams,
+          // The id the client's optimistic user row already renders under.
+          clientIds?.userMessageId,
+        );
   if (userMessageRecord) {
     selfMessageIds.add(userMessageRecord.id);
     log('execAgent: created user message %s', userMessageRecord.id);
@@ -634,9 +877,21 @@ export const setupTurn = async (
   // only applies to the server-side LLM pipeline, so it is intentionally NOT
   // enqueued for hetero runs (which hand off to an external CLI). Skip when this
   // invocation is itself an Agent Signal background run to avoid recursion.
+  //
+  // Share-visitor fail-closed gate — never enqueue this event for a
+  // share-visitor turn. `enqueueAgentSignalSourceEvent` is always called with
+  // `userId: deps.userId`, which is the share CREATOR (this service is
+  // instantiated with `share.ownerId` for every visitor run — see
+  // `shareChat.ts`), never `shareGate.visitorUserId`. The `agent.user.message`
+  // event it produces feeds policies that can reach the `userMemory` action
+  // and WRITE to the creator's memory. `allowReadMemory` only grants READING
+  // the creator's memory through the visible memory tool, so this gate must
+  // never be conditional on it: any share configuration would otherwise let a
+  // link visitor mutate the creator's account via this out-of-band channel.
   if (
     userMessageRecord &&
     !isHeteroAgent &&
+    !shareGate &&
     !shouldSuppressSignal({ appContext, slug: agentSlug ?? undefined })
   ) {
     void enqueueAgentSignalSourceEvent(
@@ -665,6 +920,7 @@ export const setupTurn = async (
     assistantMessageId: assistantMessageRecord.id,
     canUseDevice,
     deviceAccessReason,
+    editingAgentId,
     effectiveRequestedDeviceId,
     heteroType,
     heterogeneousProvider,
@@ -673,10 +929,12 @@ export const setupTurn = async (
     model,
     pinnedHeterogeneousTopicModel,
     provider,
+    requestedDeviceId: resolvedRequestedDeviceId,
     requestTriggerMetadata,
     runAttachments,
     selfMessageIds,
     topicBoundDeviceId,
+    topicEditingGroupId,
     topicId,
     userMessageId: userMessageRecord?.id,
   };

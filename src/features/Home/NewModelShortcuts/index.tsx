@@ -1,6 +1,5 @@
-import { ModelIcon } from '@lobehub/icons';
-import { Flexbox, Skeleton } from '@lobehub/ui';
-import { Avatar, Button, Text } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Avatar, Button, Skeleton, Text } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { useCallback, useState } from 'react';
@@ -10,6 +9,7 @@ import type { BusinessModelModeConfig } from '@/business/client/hooks/useBusines
 import { useBusinessModelModeConfig } from '@/business/client/hooks/useBusinessAgentMode';
 import type { HomeNewModelItem } from '@/business/client/hooks/useHomeNewModels';
 import { useHomeNewModels } from '@/business/client/hooks/useHomeNewModels';
+import { ModelIcon } from '@/components/LobeIcons';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { agentService } from '@/services/agent';
@@ -165,14 +165,11 @@ export const NewModelShortcuts = () => {
         <Text className={styles.label}>{t('starter.newLabel')}</Text>
         {isLoading
           ? defaultHomeNewModels.map((item, index) => (
-              <Skeleton.Button
-                active
+              <Skeleton
+                height={24}
                 key={getShortcutKey(item)}
-                style={{
-                  borderRadius: 8,
-                  height: 24,
-                  width: skeletonWidths[index] ?? 104,
-                }}
+                radius={8}
+                width={skeletonWidths[index] ?? 104}
               />
             ))
           : items.map((item) => {

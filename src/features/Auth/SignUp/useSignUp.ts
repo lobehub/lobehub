@@ -8,7 +8,7 @@ import type { BusinessSignupFomData } from '@/business/client/hooks/useBusinessS
 import { useBusinessSignup } from '@/business/client/hooks/useBusinessSignup';
 import type { AuthFetchOptions } from '@/features/Auth/utils/authFetchOptions';
 import { withCaptchaToken } from '@/features/Auth/utils/authFetchOptions';
-import { useAuthServerConfigStore } from '@/features/AuthShell';
+import { useAuthServerConfigStore } from '@/features/AuthShell/AuthServerConfigProvider';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
 import { signUp } from '@/libs/better-auth/auth-client';
 import { buildOnboardingRedirectUrl, toAbsoluteAuthCallbackUrl } from '@/utils/onboardingRedirect';

@@ -45,6 +45,41 @@ const zhipuChatModels: AIChatModelCard[] = [
       reasoning: true,
       search: true,
       structuredOutput: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_048_576,
+    description:
+      'GLM-5.3-Flash is the first natively multimodal GLM-5 model. It inherits the GLM-5.3 text contract with always-on thinking, adds image and video understanding, and lands coding quality close to the flagship at roughly one-tenth of the price.',
+    displayName: 'GLM-5.3-Flash',
+    enabled: true,
+    family: 'glm',
+    generation: 'glm-5.3',
+    id: 'glm-5.3-flash',
+    maxOutput: 131_072,
+    // List price; the 50% launch promo ends 2026-09-09, so it is intentionally not encoded here.
+    // https://docs.bigmodel.cn/cn/guide/models/vlm/glm-5.3-flash
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.23, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.8, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-08-26',
+    settings: {
+      extendParams: ['glm5_3ReasoningEffort', 'preserveThinking'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
     },
     contextWindowTokens: 1_048_576,
     description:

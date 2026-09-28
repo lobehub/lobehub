@@ -50,88 +50,110 @@ vi.mock('@/libs/trusted-client', () => ({
 }));
 
 vi.mock('@/database/models/message', () => ({
-  MessageModel: vi.fn().mockImplementation(() => ({
-    create: mockMessageCreate,
-    getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
-    getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
-    query: vi.fn().mockResolvedValue([]),
-    update: vi.fn().mockResolvedValue({}),
-  })),
+  MessageModel: vi.fn().mockImplementation(function () {
+    return {
+      create: mockMessageCreate,
+      getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
+      getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
+      query: vi.fn().mockResolvedValue([]),
+      update: vi.fn().mockResolvedValue({}),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/agent', () => ({
-  AgentModel: vi.fn().mockImplementation(() => ({
-    getAgentConfig: vi.fn(),
-    queryAgents: vi.fn().mockResolvedValue([]),
-  })),
+  AgentModel: vi.fn().mockImplementation(function () {
+    return {
+      getAgentConfig: vi.fn(),
+      queryAgents: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/device', () => ({
-  DeviceModel: vi.fn().mockImplementation(() => ({
-    findByDeviceId: mockFindByDeviceId,
-    findWorkspaceDeviceById: vi.fn().mockResolvedValue(undefined),
-    queryPersonal: vi.fn().mockResolvedValue([]),
-    queryWorkspaceDevices: vi.fn().mockResolvedValue([]),
-    queryWorkspaceHiddenDeviceIds: vi.fn().mockResolvedValue([]),
-    update: mockUpdateDevice,
-  })),
+  DeviceModel: vi.fn().mockImplementation(function () {
+    return {
+      findByDeviceId: mockFindByDeviceId,
+      findWorkspaceDeviceById: vi.fn().mockResolvedValue(undefined),
+      queryPersonal: vi.fn().mockResolvedValue([]),
+      queryWorkspaceDevices: vi.fn().mockResolvedValue([]),
+      queryWorkspaceHiddenDeviceIds: vi.fn().mockResolvedValue([]),
+      update: mockUpdateDevice,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/agent', () => ({
-  AgentService: vi.fn().mockImplementation(() => ({
-    getAgentConfig: mockGetAgentConfig,
-  })),
+  AgentService: vi.fn().mockImplementation(function () {
+    return {
+      getAgentConfig: mockGetAgentConfig,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/plugin', () => ({
-  PluginModel: vi.fn().mockImplementation(() => ({
-    query: mockPluginQuery,
-    queryAllByConnectorIds: vi.fn().mockResolvedValue([]),
-    queryByConnector: vi.fn().mockResolvedValue([]),
-    queryByConnectorIds: vi.fn().mockResolvedValue([]),
-  })),
+  PluginModel: vi.fn().mockImplementation(function () {
+    return {
+      query: mockPluginQuery,
+      queryAllByConnectorIds: vi.fn().mockResolvedValue([]),
+      queryByConnector: vi.fn().mockResolvedValue([]),
+      queryByConnectorIds: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn().mockImplementation(() => ({
-    create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
-    findById: mockTopicFindById,
-    releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
-    tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
-    updateMetadata: mockUpdateTopicMetadata,
-  })),
+  TopicModel: vi.fn().mockImplementation(function () {
+    return {
+      create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
+      findById: mockTopicFindById,
+      releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
+      tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
+      updateMetadata: mockUpdateTopicMetadata,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/thread', () => ({
-  ThreadModel: vi.fn().mockImplementation(() => ({
-    create: vi.fn(),
-    findById: vi.fn(),
-    update: vi.fn(),
-  })),
+  ThreadModel: vi.fn().mockImplementation(function () {
+    return {
+      create: vi.fn(),
+      findById: vi.fn(),
+      update: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/agentRuntime', () => ({
-  AgentRuntimeService: vi.fn().mockImplementation(() => ({
-    createOperation: mockCreateOperation,
-  })),
+  AgentRuntimeService: vi.fn().mockImplementation(function () {
+    return {
+      createOperation: mockCreateOperation,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/market', () => ({
-  MarketService: vi.fn().mockImplementation(() => ({
-    getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
-  })),
+  MarketService: vi.fn().mockImplementation(function () {
+    return {
+      getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/composio', () => ({
-  ComposioService: vi.fn().mockImplementation(() => ({
-    getComposioManifests: vi.fn().mockResolvedValue([]),
-  })),
+  ComposioService: vi.fn().mockImplementation(function () {
+    return {
+      getComposioManifests: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({
-    uploadFromUrl: vi.fn(),
-  })),
+  FileService: vi.fn().mockImplementation(function () {
+    return {
+      uploadFromUrl: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('@/server/modules/Mecha', () => {
@@ -234,8 +256,10 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
 
     // `workingDirectory` is the EFFECTIVE path the run executes in; the config
-    // keeps the SOURCE repo, which is what By-Project groups on.
+    // keeps the SOURCE repo, which is what By-Project groups on. The device is
+    // stamped with it so another device does not inherit this path.
     expect(mockUpdateTopicMetadata).toHaveBeenCalledWith('topic-1', {
+      boundDeviceId: DEVICE_ID,
       workingDirectory: WORKTREE_PATH,
       workingDirectoryConfig: {
         git: { activeWorktree: WORKTREE_PATH },
@@ -258,6 +282,7 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
 
     expect(mockUpdateTopicMetadata).toHaveBeenCalledWith('topic-1', {
+      boundDeviceId: DEVICE_ID,
       workingDirectory: '/repo/default',
       workingDirectoryConfig: { path: '/repo/default' },
     });
@@ -291,6 +316,97 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
       'topic-1',
       expect.objectContaining({ workingDirectory: expect.anything() }),
     );
+  });
+
+  it("does not give a topic bound to another device this device's directory", async () => {
+    mockTopicFindById.mockResolvedValue({
+      id: 'topic-1',
+      metadata: { boundDeviceId: 'other-device' },
+    });
+    mockGetAgentConfig.mockResolvedValue(
+      createAgentConfig({
+        boundDeviceId: DEVICE_ID,
+        executionTarget: 'device',
+        workingDirByDevice: { [DEVICE_ID]: { path: SOURCE_PATH } },
+      }),
+    );
+
+    // An explicit request device outranks the topic's own machine.
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      deviceId: DEVICE_ID,
+      prompt: 'Hello',
+    });
+
+    expect(mockUpdateTopicMetadata).not.toHaveBeenCalledWith(
+      'topic-1',
+      expect.objectContaining({ workingDirectory: expect.anything() }),
+    );
+  });
+
+  it('runs a reused topic on the device it is bound to, not the agent default', async () => {
+    // The topic ran on dev-2; the agent was switched to dev-1 afterwards. The
+    // next turn must stay on dev-2, where the topic's work lives.
+    mockQueryDeviceList.mockResolvedValue([
+      { deviceId: DEVICE_ID, hostname: 'My Mac', online: true, platform: 'darwin' },
+      { deviceId: 'dev-2', hostname: 'Other Mac', online: true, platform: 'darwin' },
+    ]);
+    mockTopicFindById.mockResolvedValue({ id: 'topic-1', metadata: { boundDeviceId: 'dev-2' } });
+    mockGetAgentConfig.mockResolvedValue(
+      createAgentConfig({
+        boundDeviceId: DEVICE_ID,
+        executionTarget: 'device',
+        workingDirByDevice: { [DEVICE_ID]: { path: SOURCE_PATH }, 'dev-2': { path: '/repo/two' } },
+      }),
+    );
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      prompt: 'Hello',
+    });
+
+    expect(mockUpdateTopicMetadata).toHaveBeenCalledWith('topic-1', {
+      workingDirectory: '/repo/two',
+      workingDirectoryConfig: { path: '/repo/two' },
+    });
+  });
+
+  it('stamps the run device on a topic that has a directory but no device yet', async () => {
+    mockTopicFindById.mockResolvedValue({
+      id: 'topic-1',
+      metadata: {
+        workingDirectory: SOURCE_PATH,
+        workingDirectoryConfig: { path: SOURCE_PATH },
+      },
+    });
+    mockGetAgentConfig.mockResolvedValue(
+      createAgentConfig({ boundDeviceId: DEVICE_ID, executionTarget: 'device' }),
+    );
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      prompt: 'Hello',
+    });
+
+    expect(mockUpdateTopicMetadata).toHaveBeenCalledWith('topic-1', { boundDeviceId: DEVICE_ID });
+  });
+
+  it('pins the topic to the run device even when no directory resolves there', async () => {
+    mockTopicFindById.mockResolvedValue({ id: 'topic-1', metadata: {} });
+    mockGetAgentConfig.mockResolvedValue(
+      createAgentConfig({ boundDeviceId: DEVICE_ID, executionTarget: 'device' }),
+    );
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      prompt: 'Hello',
+    });
+
+    expect(mockUpdateTopicMetadata).toHaveBeenCalledWith('topic-1', { boundDeviceId: DEVICE_ID });
   });
 
   it('leaves the topic unbound when neither the agent nor the device has a directory', async () => {

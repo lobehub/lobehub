@@ -1,6 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
+import { AccordionRoot } from '@lobehub/ui/base-ui';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -107,14 +108,16 @@ describe('Project topic group item', () => {
     commitAgentDefaultMock.mockResolvedValue(undefined);
 
     render(
-      <GroupItem
-        expanded
-        group={{
-          children: [],
-          id: 'project:/Users/me/project',
-          title: 'project',
-        }}
-      />,
+      <AccordionRoot>
+        <GroupItem
+          expanded
+          group={{
+            children: [],
+            id: 'project:/Users/me/project',
+            title: 'project',
+          }}
+        />
+      </AccordionRoot>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'actions.addNewTopicInProject:project' }));
@@ -130,14 +133,16 @@ describe('Project topic group item', () => {
     commitAgentDefaultMock.mockResolvedValue(undefined);
 
     render(
-      <GroupItem
-        expanded
-        group={{
-          children: [],
-          id: 'project:/Users/me/project',
-          title: 'project',
-        }}
-      />,
+      <AccordionRoot>
+        <GroupItem
+          expanded
+          group={{
+            children: [],
+            id: 'project:/Users/me/project',
+            title: 'project',
+          }}
+        />
+      </AccordionRoot>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'actions.addNewTopicInProject:project' }));
@@ -151,14 +156,16 @@ describe('Project topic group item', () => {
     agentStoreStateMock.activeAgentId = undefined;
 
     render(
-      <GroupItem
-        expanded
-        group={{
-          children: [],
-          id: 'project:/Users/me/project',
-          title: 'project',
-        }}
-      />,
+      <AccordionRoot>
+        <GroupItem
+          expanded
+          group={{
+            children: [],
+            id: 'project:/Users/me/project',
+            title: 'project',
+          }}
+        />
+      </AccordionRoot>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'actions.addNewTopicInProject:project' }));

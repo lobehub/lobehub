@@ -39,7 +39,7 @@ lh memory list preference # Only preferences
 Create a new identity memory entry.
 
 ```bash
-lh memory create [options]
+lh memory create [--type <type>] [--role <role>] [--relationship <rel>] [-d <desc>] [--labels <labels...>]
 ```
 
 | Option                     | Description              |
@@ -57,18 +57,18 @@ lh memory create [options]
 Edit a memory entry. Options vary by category:
 
 ```bash
-lh memory edit identity < id > [options]
-lh memory edit activity < id > [options]
-lh memory edit context < id > [options]
-lh memory edit experience < id > [options]
-lh memory edit preference < id > [options]
+lh memory edit identity <id> [--type <type>] [--role <role>] [--relationship <rel>] [-d <desc>] [--labels <labels...>]
+lh memory edit activity <id> [--narrative <text>] [--notes <text>] [--status <status>]
+lh memory edit context <id> [--title <title>] [--description <desc>] [--status <status>]
+lh memory edit experience <id> [--situation <text>] [--action <text>] [--key-learning <text>]
+lh memory edit preference <id> [--directives <text>] [--suggestions <text>]
 ```
 
 ### Category-specific Options
 
 **identity**:
 
-- `--type <type>`, `--role <role>`, `--relationship <rel>`
+- `--type <type>`, `--role <role>`, `--relationship <rel>`, `--description <desc>`, `--labels <labels...>`
 
 **activity**:
 
@@ -91,7 +91,7 @@ lh memory edit preference < id > [options]
 ## `lh memory delete <category> <id>`
 
 ```bash
-lh memory delete identity < id > [--yes]
+lh memory delete <category> <id> [--yes]
 ```
 
 ---
@@ -113,7 +113,7 @@ lh memory persona [--json [fields]]
 Trigger async memory extraction from chat history.
 
 ```bash
-lh memory extract [--from [--to < date > ] < date > ]
+lh memory extract [--from <date>] [--to <date>]
 ```
 
 | Option          | Description             |
@@ -130,7 +130,7 @@ Starts a background task that analyzes chat history and creates new memory entri
 Check the status of a memory extraction task.
 
 ```bash
-lh memory extract-status [--task-id [--json [fields]] < id > ]
+lh memory extract-status [--task-id <id>] [--json [fields]]
 ```
 
 | Option           | Description         |

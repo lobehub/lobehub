@@ -34,6 +34,14 @@ vi.mock('@/libs/swr', async () => {
   };
 });
 
+vi.mock('swr', async () => {
+  const actual = await vi.importActual('swr');
+  return {
+    ...(actual as any),
+    mutate: vi.fn(),
+  };
+});
+
 vi.stubGlobal(
   'fetch',
   vi.fn(() => Promise.resolve(new Response('mock'))),
@@ -80,6 +88,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   clearMessageListClientCacheState();
   useChatStore.setState(mockState, false);
+
+  // Vitest 5 no longer resets automock state in `vi.restoreAllMocks`, so a
+  // `mockResolvedValue` set with `vi.spyOn(messageService, …)` inside a test leaks
+  // into the following ones. Re-apply the factory defaults here.
+  (messageService.updateMessage as Mock).mockResolvedValue({ success: true, messages: [] } as any);
+  (messageService.removeMessage as Mock).mockResolvedValue({ success: true, messages: [] } as any);
 });
 
 afterEach(() => {
@@ -752,15 +766,6 @@ describe('chatMessage actions', () => {
   });
 
   describe('refreshMessages action', () => {
-    beforeEach(() => {
-      vi.mock('swr', async () => {
-        const actual = await vi.importActual('swr');
-        return {
-          ...(actual as any),
-          mutate: vi.fn(),
-        };
-      });
-    });
     afterEach(() => {
       // 在每个测试用例开始前恢复到实际的 SWR 实现
       vi.resetAllMocks();

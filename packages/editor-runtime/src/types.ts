@@ -63,6 +63,11 @@ export interface ReplaceTextArgs {
 export interface ModifyOperationResult {
   action: 'insert' | 'remove' | 'modify';
   error?: string;
+  /**
+   * The operation failed after part of it was already written to the page
+   * (a `modify` split into several steps), so it is neither applied nor untouched.
+   */
+  partiallyApplied?: boolean;
   success: boolean;
 }
 

@@ -2,6 +2,9 @@ import { createHash } from 'node:crypto';
 
 import { sql } from 'drizzle-orm';
 
+import { SEARCHABLE_TEXT_SQL_PATTERN } from '../../utils/searchableText';
+import type { FtsSearchDocumentEntity } from '../ftsSearchDocument';
+
 interface CaptureFunctionDefinition {
   body: string;
   identityArguments: string;
@@ -12,6 +15,8 @@ interface CaptureFunctionDefinition {
 
 interface CaptureTriggerDefinition {
   createSql: string;
+  /** Search entities whose Outbox rows this trigger can enqueue. */
+  entities: readonly FtsSearchDocumentEntity[];
   name: string;
   table: string;
 }
@@ -42,15 +47,53 @@ const ENQUEUE_FTS_SEARCH_SYNC_OUTBOX_BODY = `
 const CAPTURE_FTS_SEARCH_SYNC_CHANGE_BODY = `
     DECLARE
       field_name text;
+      search_source_changed boolean := false;
       old_row jsonb;
       new_row jsonb;
+      old_searchable boolean;
+      new_searchable boolean;
       priority smallint := CASE WHEN TG_OP = 'DELETE' THEN 0 ELSE 10 END;
+      priority_argument_start integer := 1;
       row_id text;
     BEGIN
-      IF TG_OP = 'UPDATE' AND TG_NARGS > 1 THEN
+      IF TG_ARGV[0] = 'messages' AND TG_OP <> 'DELETE' THEN
+        new_searchable := NEW.role <> 'tool' AND (
+          coalesce(NEW.content ~ ${SEARCHABLE_TEXT_SQL_PATTERN}, false) OR
+          coalesce(NEW.summary ~ ${SEARCHABLE_TEXT_SQL_PATTERN}, false)
+        );
+        IF TG_OP = 'INSERT' AND NOT new_searchable THEN
+          RETURN NEW;
+        END IF;
+        IF TG_OP = 'UPDATE' THEN
+          old_searchable := OLD.role <> 'tool' AND (
+            coalesce(OLD.content ~ ${SEARCHABLE_TEXT_SQL_PATTERN}, false) OR
+            coalesce(OLD.summary ~ ${SEARCHABLE_TEXT_SQL_PATTERN}, false)
+          );
+          IF NOT old_searchable AND NOT new_searchable THEN
+            RETURN NEW;
+          END IF;
+        END IF;
+      END IF;
+
+      IF TG_OP = 'UPDATE' THEN
         old_row := to_jsonb(OLD);
         new_row := to_jsonb(NEW);
-        FOREACH field_name IN ARRAY TG_ARGV[1:TG_NARGS - 1] LOOP
+
+        IF TG_ARGV[0] IN ('messages', 'topics') THEN
+          -- Search-source fields are listed by the trigger; updated_at is business recency only.
+          priority_argument_start := 2;
+          FOREACH field_name IN ARRAY string_to_array(TG_ARGV[1], ',') LOOP
+            IF old_row->field_name IS DISTINCT FROM new_row->field_name THEN
+              search_source_changed := true;
+              EXIT;
+            END IF;
+          END LOOP;
+          IF NOT search_source_changed THEN
+            RETURN NEW;
+          END IF;
+        END IF;
+
+        FOREACH field_name IN ARRAY TG_ARGV[priority_argument_start:TG_NARGS - 1] LOOP
           IF old_row->field_name IS DISTINCT FROM new_row->field_name THEN
             priority := 0;
           END IF;
@@ -189,15 +232,18 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
       FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change(
         'agents', 'user_id', 'visibility', 'workspace_id'
       )`,
+    entities: ['agents'],
     name: 'fts_search_sync_agents',
     table: 'agents',
   },
   {
     createSql: `CREATE TRIGGER fts_search_sync_topics
-      AFTER INSERT OR DELETE OR UPDATE OF agent_id, content, description, group_id, session_id, status, title, updated_at, user_id, workspace_id ON public.topics
+      AFTER INSERT OR DELETE OR UPDATE OF agent_id, content, description, group_id, session_id, status, title, user_id, workspace_id ON public.topics
       FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change(
-        'topics', 'user_id', 'workspace_id'
+        'topics', 'agent_id,content,description,group_id,session_id,status,title,user_id,workspace_id',
+        'user_id', 'workspace_id'
       )`,
+    entities: ['topics'],
     name: 'fts_search_sync_topics',
     table: 'topics',
   },
@@ -207,6 +253,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
       FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change(
         'files', 'user_id', 'visibility', 'workspace_id'
       )`,
+    entities: ['files'],
     name: 'fts_search_sync_files',
     table: 'files',
   },
@@ -216,6 +263,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
       FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change(
         'knowledgeBases', 'is_public', 'user_id', 'visibility', 'workspace_id'
       )`,
+    entities: ['knowledgeBases'],
     name: 'fts_search_sync_knowledge_bases',
     table: 'knowledge_bases',
   },
@@ -225,6 +273,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
       FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change(
         'chatGroups', 'user_id', 'visibility', 'workspace_id'
       )`,
+    entities: ['chatGroups'],
     name: 'fts_search_sync_chat_groups',
     table: 'chat_groups',
   },
@@ -234,15 +283,18 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
       FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change(
         'documents', 'user_id', 'visibility', 'workspace_id'
       )`,
+    entities: ['documents'],
     name: 'fts_search_sync_documents',
     table: 'documents',
   },
   {
     createSql: `CREATE TRIGGER fts_search_sync_messages
-      AFTER INSERT OR DELETE OR UPDATE OF agent_id, content, group_id, role, session_id, summary, thread_id, topic_id, updated_at, user_id, workspace_id ON public.messages
+      AFTER INSERT OR DELETE OR UPDATE OF agent_id, content, group_id, role, session_id, summary, thread_id, topic_id, user_id, workspace_id ON public.messages
       FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change(
-        'messages', 'user_id', 'workspace_id'
+        'messages', 'agent_id,content,group_id,role,session_id,summary,thread_id,topic_id,user_id,workspace_id',
+        'user_id', 'workspace_id'
       )`,
+    entities: ['messages'],
     name: 'fts_search_sync_messages',
     table: 'messages',
   },
@@ -252,6 +304,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
       FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change(
         'userMemories', 'user_id'
       )`,
+    entities: ['userMemories'],
     name: 'fts_search_sync_user_memories',
     table: 'user_memories',
   },
@@ -259,6 +312,13 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
     createSql: `CREATE TRIGGER fts_search_sync_user_memories_fanout
       AFTER INSERT OR DELETE OR UPDATE OF captured_at, details, memory_category, memory_layer, status, summary, tags, title, user_id ON public.user_memories
       FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_memory_fanout()`,
+    entities: [
+      'memoryContexts',
+      'memoryPreferences',
+      'memoryActivities',
+      'memoryIdentities',
+      'memoryExperiences',
+    ],
     name: 'fts_search_sync_user_memories_fanout',
     table: 'user_memories',
   },
@@ -268,6 +328,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
       FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change(
         'memoryContexts', 'user_id'
       )`,
+    entities: ['memoryContexts'],
     name: 'fts_search_sync_memory_contexts',
     table: 'user_memories_contexts',
   },
@@ -277,6 +338,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
       FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change(
         'memoryPreferences', 'user_id'
       )`,
+    entities: ['memoryPreferences'],
     name: 'fts_search_sync_memory_preferences',
     table: 'user_memories_preferences',
   },
@@ -286,6 +348,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
       FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change(
         'memoryActivities', 'user_id'
       )`,
+    entities: ['memoryActivities'],
     name: 'fts_search_sync_memory_activities',
     table: 'user_memories_activities',
   },
@@ -295,6 +358,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
       FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change(
         'memoryIdentities', 'user_id'
       )`,
+    entities: ['memoryIdentities'],
     name: 'fts_search_sync_memory_identities',
     table: 'user_memories_identities',
   },
@@ -304,6 +368,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
       FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change(
         'memoryExperiences', 'user_id'
       )`,
+    entities: ['memoryExperiences'],
     name: 'fts_search_sync_memory_experiences',
     table: 'user_memories_experiences',
   },
@@ -313,6 +378,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
       FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change(
         'personaDocuments', 'user_id'
       )`,
+    entities: ['personaDocuments'],
     name: 'fts_search_sync_persona_documents',
     table: 'user_memory_persona_documents',
   },
@@ -320,10 +386,24 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
     createSql: `CREATE TRIGGER fts_search_sync_knowledge_base_files
       AFTER INSERT OR DELETE OR UPDATE OF file_id, knowledge_base_id ON public.knowledge_base_files
       FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_knowledge_base_files()`,
+    entities: ['files', 'documents'],
     name: 'fts_search_sync_knowledge_base_files',
     table: 'knowledge_base_files',
   },
 ];
+
+export const getFtsSearchSyncCaptureSourceTables = (
+  entities: readonly FtsSearchDocumentEntity[],
+) => {
+  const selected = new Set(entities);
+  return [
+    ...new Set(
+      CAPTURE_TRIGGER_DEFINITIONS.filter(({ entities: capturedEntities }) =>
+        capturedEntities.some((entity) => selected.has(entity)),
+      ).map(({ table }) => table),
+    ),
+  ];
+};
 
 export const normalizeFtsSearchSyncCaptureDefinition = (definition: string) => {
   const compact = definition
@@ -343,34 +423,15 @@ export const normalizeFtsSearchSyncCaptureDefinition = (definition: string) => {
   });
 };
 
-/** Reconstructs the only earlier trigger revision installed before this feature ships. */
-const toPreviousCaptureTriggerDefinition = (definition: string) =>
-  definition.replace(/UPDATE OF ([\w, ]+) ON /, (_, columns: string) => {
-    const previousColumns = columns
-      .split(',')
-      .map((column) => column.trim())
-      .filter((column) => column !== 'updated_at')
-      .join(', ');
-    return `UPDATE OF ${previousColumns} ON `;
-  });
-
 const createCaptureTriggerStatement = ({ createSql }: CaptureTriggerDefinition) =>
   sql.raw(`${createSql};`);
 
 export const FTS_SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS = CAPTURE_TRIGGER_DEFINITIONS.map(
-  ({ createSql, name, table }) => {
-    const definition = normalizeFtsSearchSyncCaptureDefinition(createSql);
-    const previousDefinition = normalizeFtsSearchSyncCaptureDefinition(
-      toPreviousCaptureTriggerDefinition(createSql),
-    );
-
-    return {
-      definition,
-      name,
-      previousDefinitions: previousDefinition === definition ? [] : [previousDefinition],
-      table,
-    };
-  },
+  ({ createSql, name, table }) => ({
+    definition: normalizeFtsSearchSyncCaptureDefinition(createSql),
+    name,
+    table,
+  }),
 );
 
 export const FTS_SEARCH_SYNC_CAPTURE_TRIGGER_STATEMENTS = CAPTURE_TRIGGER_DEFINITIONS.map(

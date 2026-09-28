@@ -9,19 +9,34 @@ const mockGetFileContent = vi.fn();
 const mockDeleteFile = vi.fn();
 const mockImportData = vi.fn();
 const mockImportPgData = vi.fn();
+const mockAssertActiveOrLegacy = vi.fn();
+const mockReleaseBestEffort = vi.fn();
 
 vi.mock('@/database/repositories/dataImporter', () => ({
-  DataImporterRepos: vi.fn().mockImplementation(() => ({
-    importData: mockImportData,
-    importPgData: mockImportPgData,
-  })),
+  DataImporterRepos: vi.fn().mockImplementation(function () {
+    return {
+      importData: mockImportData,
+      importPgData: mockImportPgData,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({
-    getFileContent: mockGetFileContent,
-    deleteFile: mockDeleteFile,
-  })),
+  FileService: vi.fn().mockImplementation(function () {
+    return {
+      getFileContent: mockGetFileContent,
+      deleteFile: mockDeleteFile,
+    };
+  }),
+}));
+
+vi.mock('@/server/services/fileUpload', () => ({
+  FileUploadService: vi.fn().mockImplementation(function () {
+    return {
+      assertActiveOrLegacy: mockAssertActiveOrLegacy,
+      releaseBestEffort: mockReleaseBestEffort,
+    };
+  }),
 }));
 
 describe('importerRouter', () => {
@@ -51,6 +66,7 @@ describe('importerRouter', () => {
   };
 
   beforeEach(() => {
+    mockAssertActiveOrLegacy.mockResolvedValue(undefined);
     mockGetFileContent.mockResolvedValue(mockFileContent);
     mockImportData.mockResolvedValue(mockImportResult);
     mockImportPgData.mockResolvedValue(mockImportResult);
@@ -75,6 +91,16 @@ describe('importerRouter', () => {
       expect(mockGetFileContent).toHaveBeenCalledWith('test.json');
       expect(mockImportData).toHaveBeenCalledWith(JSON.parse(mockFileContent));
       expect(mockDeleteFile).toHaveBeenCalledWith('test.json');
+    });
+
+    it('releases a reserved temporary upload after importing it', async () => {
+      mockAssertActiveOrLegacy.mockResolvedValue({ id: 'upload-1', status: 'active' });
+      const caller = importerRouter.createCaller(ctx);
+
+      await caller.importByFile({ pathname: 'test.json' });
+
+      expect(mockReleaseBestEffort).toHaveBeenCalledWith('test.json');
+      expect(mockDeleteFile).not.toHaveBeenCalled();
     });
 
     it('should handle PG data import', async () => {

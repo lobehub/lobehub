@@ -317,7 +317,7 @@ export const runMemoryActionAgent = async (
   };
 
   // Async (queued execAgent) path: enqueue the run with the marker stamped onto
-  // appContext (it lands in state.metadata.agentSignal), then return immediately.
+  // appContext (it lands in state.origin.signal), then return immediately.
   // The durable receipt is projected on the completion path from the run's
   // finalState — no blocking executeSync.
   if (dispatch) {

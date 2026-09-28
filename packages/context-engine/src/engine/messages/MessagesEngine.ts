@@ -6,6 +6,7 @@ import { ContextEngine } from '../../pipeline';
 import {
   ActivationResultTrimProcessor,
   AgentCouncilFlattenProcessor,
+  cacheEconomicsForProvider,
   CompressedGroupRoleTransformProcessor,
   DisabledToolCallFilter,
   GroupMessageFlattenProcessor,
@@ -18,6 +19,7 @@ import {
   PlaceholderMessageFilterProcessor,
   PlaceholderVariablesProcessor,
   ReactionFeedbackProcessor,
+  StaleToolResultTrimProcessor,
   SupervisorRoleRestoreProcessor,
   TaskCallbackMessageProcessor,
   TaskMessageProcessor,
@@ -34,13 +36,16 @@ import {
   AgentDocumentMessageInjector,
   AgentDocumentSystemAppendInjector,
   AgentDocumentSystemReplaceInjector,
+  AgentIdentityInjector,
   AgentManagementContextInjector,
   BotPlatformContextInjector,
+  ConnectorOwnershipInjector,
   ContextSelectionsInjector,
   DiscordContextProvider,
   EvalContextSystemInjector,
   ExpertiseContextInjector,
   ForceFinishSummaryInjector,
+  GoalContextSyntheticInjector,
   GroupAgentBuilderContextInjector,
   GroupContextInjector,
   HistorySummaryProvider,
@@ -53,11 +58,14 @@ import {
   PageEditorContextInjector,
   PageSelectionsInjector,
   PlanInjector,
+  ProjectInstructionsInjector,
   RuntimeAdditionalContextProvider,
   selectActivatedSkills,
   SelectedSkillInjector,
   selectToolPromptManifests,
+  SKILL_STORE_TOOL_ID,
   SkillContextProvider,
+  SkillImportRouteInjector,
   SystemDateProvider,
   SystemRoleInjector,
   TaskManagerContextInjector,
@@ -66,6 +74,7 @@ import {
   ToolSystemRoleProvider,
   TopicReferenceContextInjector,
   UserMemoryInjector,
+  WorkspaceContextInjector,
 } from '../../providers';
 import { SelectedToolInjector } from '../../providers/SelectedToolInjector';
 import type { ContextProcessor } from '../../types';
@@ -73,6 +82,9 @@ import { ToolNameResolver } from '../tools';
 import type { MessagesEngineParams, MessagesEngineResult } from './types';
 
 const log = debug('context-engine:MessagesEngine');
+
+/** `AttachmentsIdentifier` from `@lobechat/builtin-tool-attachments`, inlined to avoid a package cycle */
+const ATTACHMENTS_TOOL_ID = 'lobe-attachments';
 
 /**
  * MessagesEngine - High-level message processing engine
@@ -149,9 +161,11 @@ export class MessagesEngine {
       modelKnowledgeCutoff,
       provider,
       systemRole,
+      agentIdentity,
       inputTemplate,
       enableAgentMode,
       enableHistoryCount,
+      enableStaleToolResultTrim,
       historyCount,
       forceFinish,
       historySummary,
@@ -168,8 +182,11 @@ export class MessagesEngine {
       messages,
       agentBuilderContext,
       botPlatformContext,
+      workspaceContext,
       discordContext,
+      connectorOwnershipNote,
       evalContext,
+      projectInstructions,
       onboardingContext,
       agentManagementContext,
       groupAgentBuilderContext,
@@ -234,6 +251,9 @@ export class MessagesEngine {
     // documentation is confirmed to be injected into the system prompt for this
     // request.
     const canUseFC = capabilities?.isCanUseFC || (() => true);
+    // Oversized file previews may only promise `readAttachment` when the model is actually sent that
+    // tool; custom / exclusive tool modes, share visitors and clients without it get a plain preview.
+    const canReadAttachment = toolIds.includes(ATTACHMENTS_TOOL_ID) && !!canUseFC(model, provider);
     const injectedActivatedSkills =
       isAgentMode && (skillsConfig?.enabledSkills?.length ?? 0) > 0
         ? selectActivatedSkills(skillsConfig?.enabledSkills)
@@ -242,6 +262,12 @@ export class MessagesEngine {
       (toolsConfig?.manifests?.length ?? 0) > 0 && !!canUseFC(model, provider)
         ? selectToolPromptManifests(toolsConfig?.manifests)
         : [];
+
+    // The skill-import route is only actionable when the Skill Store is reachable this
+    // run — either already enabled, or listed for the activator to turn on.
+    const isSkillStoreReachable =
+      (toolsConfig?.manifests ?? []).some((m) => m.identifier === SKILL_STORE_TOOL_ID) ||
+      (toolDiscoveryConfig?.availableTools ?? []).some((t) => t.identifier === SKILL_STORE_TOOL_ID);
 
     // Shared config for all agent document injectors
     const agentDocConfig = {
@@ -276,6 +302,24 @@ export class MessagesEngine {
       new AgentDocumentBeforeSystemInjector(agentDocConfig),
       // Agent's system role (creates the initial system message)
       new SystemRoleInjector({ systemRole }),
+      // Both sit directly after the persona because that is exactly where they
+      // used to be: the server concatenated them onto `agentConfig.systemRole`
+      // several pipeline stages before the engine ran. Moving them later would
+      // push them behind every other Phase 2 provider.
+      //
+      // Connector attribution precedes the project instructions because
+      // `discoverTools` runs before `prepareOperation` in the agent pipeline,
+      // so that is the order the appends produced. Reversing these two changes
+      // which block the model reads last.
+      new ConnectorOwnershipInjector({ note: connectorOwnershipNote }),
+      new ProjectInstructionsInjector({ instructions: projectInstructions }),
+      // Agent identity (name/title) — lets the model answer "who are you?"
+      // with the user-given name. Group chat establishes identity through
+      // GroupContextInjector instead, so it is suppressed there.
+      new AgentIdentityInjector({
+        enabled: !isGroupContextEnabled,
+        identity: agentIdentity,
+      }),
       // Eval context (appends envPrompt)
       new EvalContextSystemInjector({ enabled: !!evalContext?.envPrompt, evalContext }),
       // Bot platform context (formatting instructions for non-Markdown platforms)
@@ -295,6 +339,13 @@ export class MessagesEngine {
           video: capabilities?.isCanUseVideo?.(model, provider),
           vision: capabilities?.isCanUseVision?.(model, provider),
         },
+      }),
+      // Workspace context (app origin + workspace slug → correct in-app links).
+      // Sits with the other environment facts (date / model) after the
+      // persona-level injectors.
+      new WorkspaceContextInjector({
+        context: workspaceContext,
+        enabled: !!workspaceContext,
       }),
       // Skill context (available skills list + activated skill content).
       // Disabled in chat mode — pairs with the tools-engine gate so the LLM
@@ -348,6 +399,7 @@ export class MessagesEngine {
       new PlanInjector({ enabled: !!isPlanEnabled, plan: planTodo?.plan }),
       // Knowledge (agent files + knowledge bases)
       new KnowledgeInjector({
+        canReadAttachment,
         fileContents: knowledge?.fileContents,
         knowledgeBases: knowledge?.knowledgeBases,
       }),
@@ -392,6 +444,9 @@ export class MessagesEngine {
         activeTopicDocument: initialContext?.activeTopicDocument,
         enabled: hasActiveTopicDocument && !isPageEditorEnabled,
       }),
+      // LobeHub skill URLs in the current message → route them to the Skill Store
+      // instead of letting the model crawl the page and follow its CLI steps.
+      new SkillImportRouteInjector({ enabled: isSkillStoreReachable }),
       // Selected skills (ephemeral user-selected slash skills for this request)
       new SelectedSkillInjector({ enabled: hasSelectedSkills, selectedSkills }),
       // Selected tools (ephemeral user-selected @tool for this request)
@@ -437,6 +492,13 @@ export class MessagesEngine {
       // Inject high-churn runtime guidance at the tail to preserve stable prefix caching
       // =============================================
 
+      // Goal progress overview (goal detail page conversation) — a synthetic
+      // getGoalContext tool pair after the last user message: environment
+      // state arrives as machine-provided tool output, not as user words.
+      new GoalContextSyntheticInjector({
+        enabled: !!initialContext?.goalOverview,
+        overview: initialContext?.goalOverview,
+      }),
       // Onboarding synthetic state (fake getOnboardingState tool call pair to drive action loop)
       new OnboardingSyntheticStateInjector({
         enabled: !!onboardingContext?.phaseGuidance,
@@ -513,6 +575,18 @@ export class MessagesEngine {
         injectedManifests: injectedToolManifests,
         injectedSkills: injectedActivatedSkills,
       }),
+      // Stale tool-result trimming — replaces the bodies of superseded tool
+      // results (file reads later overwritten, stale browser snapshots, old
+      // command output) with short placeholders. Rules are monotone so the
+      // trimmed prefix stays byte-stable across requests and the prompt-cache
+      // prefix survives; savings land at the operation boundary where the
+      // cache is cold anyway. Same pipeline position constraints as
+      // ActivationResultTrimProcessor above. Cache economics (TTL, read/write
+      // prices) follow the active provider.
+      new StaleToolResultTrimProcessor({
+        economics: cacheEconomicsForProvider(provider),
+        enabled: enableStaleToolResultTrim !== false,
+      }),
       // Placeholder variables processing — MUST run AFTER all flatten / role
       // transform steps. AssistantGroup / Supervisor messages keep their real
       // content (including any `{{...}}` placeholders inside tool results)
@@ -533,6 +607,7 @@ export class MessagesEngine {
       new ReactionFeedbackProcessor({ enabled: true }),
       // Message content processing (image encoding, multimodal)
       new MessageContentProcessor({
+        canReadAttachment,
         fileContext: fileContext || { enabled: true, includeFileUrl: true },
         isCanUseAudio: capabilities?.isCanUseAudio || (() => false),
         isCanUseVideo: capabilities?.isCanUseVideo || (() => false),

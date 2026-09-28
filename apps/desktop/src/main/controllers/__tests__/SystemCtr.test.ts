@@ -175,6 +175,25 @@ describe('SystemController', () => {
         },
       });
     });
+
+    it('omits user folders that Electron cannot resolve instead of throwing', async () => {
+      const { app } = await import('electron');
+      const getPath = vi.mocked(app.getPath);
+      const original = getPath.getMockImplementation();
+      getPath.mockImplementation((name: string) => {
+        if (name === 'pictures') throw new Error("Failed to get 'pictures' path");
+        return `/mock/path/${name}`;
+      });
+
+      try {
+        const result = await invokeIpc('system.getAppState');
+
+        expect(result.userPath.pictures).toBeUndefined();
+        expect(result.userPath.home).toBe('/mock/path/home');
+      } finally {
+        getPath.mockImplementation(original!);
+      }
+    });
   });
 
   describe('desktop onboarding', () => {

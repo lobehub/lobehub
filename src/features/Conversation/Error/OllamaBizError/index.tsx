@@ -1,12 +1,11 @@
 import { type ChatMessageError } from '@lobechat/types';
-import { Skeleton } from '@lobehub/ui';
-import { type AlertProps } from '@lobehub/ui/base-ui';
+import { type AlertProps, Skeleton } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 
 import ErrorContent from '@/features/Conversation/ChatItem/components/ErrorContent';
 import dynamic from '@/libs/next/dynamic';
 
-const loading = () => <Skeleton active style={{ width: 300 }} />;
+const loading = () => <Skeleton style={{ width: 300 }} />;
 
 const SetupGuide = dynamic(() => import('../OllamaSetupGuide'), { loading, ssr: false });
 

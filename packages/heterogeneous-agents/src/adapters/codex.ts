@@ -14,6 +14,7 @@ import {
   CODEX_COMMAND_OUTPUT_MAX_LENGTH,
   truncateCodexCommandOutput,
 } from '../utils/codexCommandOutput';
+import { isCodexCapacityError } from '../utils/codexErrors';
 import { toCodexUsageData, toTurnUsageFromCumulative } from '../utils/codexUsage';
 
 const CODEX_IDENTIFIER = 'codex';
@@ -903,7 +904,9 @@ export class CodexAdapter implements AgentEventAdapter {
             docsUrl: CODEX_USAGE_SETTINGS_URL,
             rateLimitInfo,
           }
-        : {}),
+        : isCodexCapacityError(message)
+          ? { code: 'overloaded', details: { kind: 'server_overloaded' } }
+          : {}),
       message,
       stderr,
     };

@@ -1,0 +1,24 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "lobehub-auth",
+  "account_id": "d35842305b91be4b48e06ff9a9ad83f5",
+  "main": "./build/worker/index.js",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "./build/client",
+    "html_handling": "none",
+    "not_found_handling": "none",
+    "run_worker_first": true
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": { "invocation_logs": false }
+  },
+  "vars": {
+    "AUTH_API_BASE": "https://app.lobehub.com",
+    "AUTH_APP_HOME": "https://lobehub.com"
+  }
+}

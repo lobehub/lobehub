@@ -108,6 +108,13 @@ describe('Labs settings page', () => {
     expect(screen.getByText('features.oauthApps.title')).toBeDefined();
   });
 
+  it('renders Integrations as an alpha lab toggle', () => {
+    renderPage();
+
+    const integrations = screen.getByText('features.integrations.title');
+    expect(within(integrations).getByText('stage.alpha.label')).toBeDefined();
+  });
+
   it('renders the topic acceptance (tray) lab toggle', () => {
     renderPage();
 
@@ -126,6 +133,12 @@ describe('Labs settings page', () => {
     expect(screen.queryByText('features.inAppBrowser.title')).toBeNull();
   });
 
+  it('does not render the released agent provider binding as a lab toggle', () => {
+    renderPage();
+
+    expect(screen.queryByText('features.agentProviderBinding.title')).toBeNull();
+  });
+
   it('labels every experiment with a maturity stage tag', () => {
     renderPage();
 
@@ -139,9 +152,6 @@ describe('Labs settings page', () => {
 
   it('marks internal-testing experiments as alpha and usable ones as beta', () => {
     renderPage();
-
-    const agentProviderBinding = screen.getByText('features.agentProviderBinding.title');
-    expect(within(agentProviderBinding).getByText('stage.alpha.label')).toBeDefined();
 
     const claudeCodeSdk = screen.getByText('features.claudeCodeSdk.title');
     expect(within(claudeCodeSdk).getByText('stage.alpha.label')).toBeDefined();

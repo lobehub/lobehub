@@ -29,6 +29,31 @@ afterEach(async () => {
 });
 
 describe('AcceptanceModel', () => {
+  it('stores checklist groups without changing lifecycle or creating rounds, and rejects stale or foreign writes', async () => {
+    const model = new AcceptanceModel(serverDB, userId);
+    const acceptance = await model.create({
+      subjectType: 'topic',
+      subjectId: topicId,
+      status: 'accepted',
+      metadata: { title: 'Delivery', custom: 'keep' },
+    });
+    const groups = [{ title: 'Reassignment', checkItemIds: ['stable-check-id'] }];
+    const saved = await model.setCheckGroups(acceptance.id, groups, 0);
+    expect(saved).toEqual({ groups, version: 1 });
+    const current = await model.findById(acceptance.id);
+    expect(current?.status).toBe('accepted');
+    expect(current?.metadata).toEqual({ title: 'Delivery', custom: 'keep', checkGrouping: saved });
+    expect(await serverDB.select().from(verifyRuns)).toHaveLength(0);
+    await expect(model.setCheckGroups(acceptance.id, [], 0)).rejects.toThrow(
+      'Check grouping changed',
+    );
+    await expect(
+      new AcceptanceModel(serverDB, otherUserId).setCheckGroups(acceptance.id, [], 1),
+    ).rejects.toThrow('Acceptance not found');
+    expect((await model.findById(acceptance.id))?.metadata?.checkGrouping).toEqual(saved);
+    expect(await model.setCheckGroups(acceptance.id, [], 1)).toEqual({ groups: [], version: 2 });
+  });
+
   it('ensureForSubject creates once and converges on the same row', async () => {
     const model = new AcceptanceModel(serverDB, userId);
 
@@ -211,6 +236,25 @@ describe('AcceptanceModel', () => {
     ).resolves.toEqual([]);
     // Right id, wrong subject type.
     await expect(model.listStatusesBySubjects('task', [topicId])).resolves.toEqual([]);
+  });
+
+  it('filters flat and paged lists by project before applying limits', async () => {
+    const projectModel = new ProjectModel(serverDB, userId);
+    const alpha = await projectModel.create({ identifier: 'ALPHA', name: 'Alpha project' });
+    const beta = await projectModel.create({ identifier: 'BETA', name: 'Beta project' });
+    const model = new AcceptanceModel(serverDB, userId);
+
+    await model.create({ projectId: alpha.id, subjectId: 'alpha-1', subjectType: 'standalone' });
+    await model.create({ projectId: beta.id, subjectId: 'beta-1', subjectType: 'standalone' });
+    await model.create({ projectId: alpha.id, subjectId: 'alpha-2', subjectType: 'standalone' });
+
+    const alphaRows = await model.query({ projectId: alpha.id });
+    expect(alphaRows.map(({ subjectId }) => subjectId).sort()).toEqual(['alpha-1', 'alpha-2']);
+    expect(alphaRows.every(({ projectId }) => projectId === alpha.id)).toBe(true);
+    await expect(model.queryPage({ limit: 1, projectId: alpha.id })).resolves.toMatchObject({
+      items: [expect.objectContaining({ projectId: alpha.id })],
+      nextCursor: expect.any(String),
+    });
   });
 
   it('updateStatus stamps completedAt only on user-terminal statuses', async () => {

@@ -33,10 +33,10 @@ export const resolveBlockedTools =
   async (instruction, state) => {
     const { payload } = instruction as Extract<AgentInstruction, { type: 'resolve_blocked_tools' }>;
     const { operation, transports } = host;
-    const agentId = operation.agentId ?? state.metadata?.agentId;
-    const groupId = operation.groupId ?? state.metadata?.groupId;
-    const threadId = operation.threadId ?? state.metadata?.threadId;
-    const topicId = operation.topicId ?? state.metadata?.topicId;
+    const agentId = operation.agentId ?? state.origin?.agentId;
+    const groupId = operation.groupId ?? state.origin?.groupId;
+    const threadId = operation.threadId ?? state.origin?.threadId;
+    const topicId = operation.topicId ?? state.origin?.topicId;
     const events: AgentEvent[] = [];
     const newState = structuredClone(state);
     const blockedContent = payload.blockedContent ?? BLOCKED_TOOL_CONTENT;
@@ -48,6 +48,25 @@ export const resolveBlockedTools =
       throw new Error(
         `[resolve_blocked_tools] Missing agentId for tool messages (op=${operation.operationId})`,
       );
+    }
+
+    // Unresolvable names never made it into the parent assistant's `tools`,
+    // because resolution produced nothing to persist. Put them there before the
+    // rows exist: every step rebuilds `state.messages` from the DB, and
+    // conversation-flow only collects a tool row whose parent lists the call, so
+    // an unadvertised rejection is dropped on the way back in and the model
+    // never learns its tool name was wrong.
+    if (payload.unresolvedToolNames) {
+      try {
+        await transports.messages.update(payload.parentMessageId, {
+          tools: payload.toolsCalling,
+        });
+      } catch (error) {
+        await publishPersistError(host, error);
+        throw error;
+      }
+
+      newState.unresolvedToolFeedbackRounds = (state.unresolvedToolFeedbackRounds ?? 0) + 1;
     }
 
     for (const toolPayload of payload.toolsCalling) {
@@ -173,7 +192,7 @@ export const resolveAbortedTools =
 
     await transports.stream.publishEvent({
       data: {
-        finalState: newState,
+        ...(newState.host?.includeFinalState === true && { finalState: newState }),
         phase: 'execution_complete',
         reason: USER_ABORTED_REASON,
         reasonDetail: USER_ABORTED_REASON_DETAIL,

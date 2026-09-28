@@ -280,6 +280,15 @@ describe('StreamEventManager', () => {
         toolSourceMap: { x: 'plugin' },
         tools: [{ name: 'x' }],
         usage: { llm: { tokens: { total: 100 } } },
+        world: {
+          agent: { systemRole: 'you are a helpful agent' },
+          expertise: {
+            contentHash: 'hash',
+            domains: [{ id: 'product-design', lessonIds: ['lesson-1'] }],
+            renderedContext: '<expertise>heavy learned context</expertise>',
+            schemaVersion: 1,
+          },
+        },
       };
 
       mockRedis.xadd.mockResolvedValue('event-id-strip');
@@ -298,6 +307,12 @@ describe('StreamEventManager', () => {
 
       // Stripped: heavy / reconstructible fields gone
       expect(parsed.finalState.expertise).toBeUndefined();
+      // The expertise snapshot moved into `world`; the rest of the world, which
+      // the client renders from, must survive the strip.
+      expect(parsed.finalState.world.expertise).toBeUndefined();
+      expect(parsed.finalState.world.agent).toEqual({
+        systemRole: 'you are a helpful agent',
+      });
       expect(parsed.finalState.messages).toBeUndefined();
       expect(parsed.finalState.operationToolSet).toBeUndefined();
       expect(parsed.finalState.toolManifestMap).toBeUndefined();
@@ -315,6 +330,73 @@ describe('StreamEventManager', () => {
       // finalState passed as a param, so the error message survives.
       expect(parsed.reasonDetail).toBe('boom');
     });
+
+    // Reaching `world.expertise` means destructuring `world`; a run without an
+    // expertise snapshot — the common case — must still ship its world.
+    it('keeps the world snapshot when it carries no expertise', async () => {
+      const world = {
+        agent: { systemRole: 'you are a helpful agent' },
+        group: { agentMap: {} },
+        userTimezone: 'Asia/Shanghai',
+      };
+      mockRedis.xadd.mockResolvedValue('event-id-world');
+
+      await streamManager.publishAgentRuntimeEnd({
+        finalState: { cost: { total: 1 }, messages: [], status: 'done', stepCount: 1, world },
+        operationId: 'test-operation-id',
+        reason: 'done',
+        stepIndex: 1,
+      });
+
+      const dataArg = mockRedis.xadd.mock.calls[0]?.find(
+        (a: any) => typeof a === 'string' && a.startsWith('{'),
+      );
+
+      expect(JSON.parse(dataArg).finalState.world).toEqual(world);
+    });
+  });
+
+  it.each([undefined, 'execution_complete'])(
+    'omits finalState from persisted step_complete events (phase=%s)',
+    async (phase) => {
+      const finalState = { initialContext: { prompt: 'context' }, status: 'done' };
+      const data = { finalState, ...(phase && { phase, reason: 'done' }) };
+      mockRedis.xadd.mockResolvedValue('event-1');
+
+      await streamManager.publishStreamEvent('op-1', {
+        data,
+        stepIndex: 1,
+        type: 'step_complete',
+      });
+
+      const args = mockRedis.xadd.mock.calls[0];
+      const stored = JSON.parse(args[args.indexOf('data') + 1]);
+      expect(stored).toEqual(phase ? { phase, reason: 'done' } : {});
+      expect(data.finalState).toBe(finalState);
+    },
+  );
+
+  it('persists an opted-in state snapshot while omitting reconstructible message bodies', async () => {
+    const finalState = {
+      host: { includeFinalState: true },
+      initialContext: { prompt: 'context' },
+      messages: [{ content: 'large history' }],
+      status: 'done',
+    };
+    mockRedis.xadd.mockResolvedValue('event-1');
+    await streamManager.publishStreamEvent('op-1', {
+      data: { finalState, phase: 'execution_complete', reason: 'done' },
+      stepIndex: 1,
+      type: 'step_complete',
+    });
+    const args = mockRedis.xadd.mock.calls[0];
+    const stored = JSON.parse(args[args.indexOf('data') + 1]);
+    expect(stored.finalState).toEqual({
+      host: { includeFinalState: true },
+      initialContext: { prompt: 'context' },
+      status: 'done',
+    });
+    expect(finalState.messages).toHaveLength(1);
   });
 
   describe('readEventsOnce', () => {

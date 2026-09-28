@@ -6,6 +6,7 @@ import { Outlet } from 'react-router';
 
 import Footer from '@/features/Setting/Footer';
 import WideScreenContainer from '@/features/WideScreenContainer';
+import { RouteSkeletonChromeProvider } from '@/spa/router/routeSkeletonChrome';
 
 import { MAX_WIDTH, SCROLL_PARENT_ID } from '../../features/const';
 import Header from './Header';
@@ -35,7 +36,9 @@ const DesktopDiscoverDetailLayout = memo(() => {
             position: 'relative',
           }}
         >
-          <Outlet />
+          <RouteSkeletonChromeProvider>
+            <Outlet />
+          </RouteSkeletonChromeProvider>
           <div className={styles.spacer} />
           <Footer />
         </WideScreenContainer>

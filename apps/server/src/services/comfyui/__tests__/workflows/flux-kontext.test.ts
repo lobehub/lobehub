@@ -8,19 +8,27 @@ import { buildFluxKontextWorkflow } from '@/server/services/comfyui/workflows/fl
 
 // Setup basic mocks
 vi.mock('../utils/promptSplitter', () => ({
-  splitPromptForDualCLIP: vi.fn((prompt) => ({
-    clipLPrompt: prompt,
-    t5xxlPrompt: prompt,
-  })),
+  splitPromptForDualCLIP: vi.fn(function (prompt) {
+    return {
+      clipLPrompt: prompt,
+      t5xxlPrompt: prompt,
+    };
+  }),
 }));
 vi.mock('../utils/weightDType', () => ({
-  selectOptimalWeightDtype: vi.fn(() => 'default'),
+  selectOptimalWeightDtype: vi.fn(function () {
+    return 'default';
+  }),
 }));
 vi.mock('@lobechat/utils', () => ({
-  generateUniqueSeeds: vi.fn(() => ({ seed: 123456, noiseSeed: 654321 })),
+  generateUniqueSeeds: vi.fn(function () {
+    return { seed: 123456, noiseSeed: 654321 };
+  }),
 }));
 vi.mock('../utils/workflowUtils', () => ({
-  getWorkflowFilenamePrefix: vi.fn(() => 'kontext'),
+  getWorkflowFilenamePrefix: vi.fn(function () {
+    return 'kontext';
+  }),
 }));
 
 const { inputCalls } = setupAllMocks();

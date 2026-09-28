@@ -6,6 +6,7 @@ import debug from 'debug';
 import { DeviceModel } from '@/database/models/device';
 
 import { deviceGateway } from './index';
+import { filterAuthorizedDevicePresence } from './scopedDevicePresence';
 
 const log = debug('lobe-server:device-scope');
 
@@ -29,10 +30,20 @@ const log = debug('lobe-server:device-scope');
  * devices filter on `online` (both `listOnlineDevices` and the systemRole
  * snapshot already do).
  *
- * The **gateway is authoritative** for which devices are online (and enforces the
- * scope via the principal); the DB lookup is best-effort enrichment (aliases +
- * offline rows). A DB hiccup must NOT blank the device list / disable
- * auto-activation, so it degrades to gateway-only on failure.
+ * The **gateway is authoritative** for liveness, while the database is
+ * authoritative for workspace enrollment and visibility. Personal lookups may
+ * degrade to Gateway-only transient devices during auto-registration; workspace
+ * lookups fail closed when their registry query is unavailable.
+ *
+ * Use when:
+ * - Agent planning or a server runtime needs devices eligible in one principal
+ * - Device metadata must combine persistent registration with current presence
+ *
+ * Expects:
+ * - `workspaceId`, when present, has already passed an authorized workspace scope
+ *
+ * Returns:
+ * - Registered devices with scoped liveness, plus personal-only transient devices
  */
 export const getScopedOnlineDevices = async (
   serverDB: LobeChatDatabase,
@@ -42,30 +53,24 @@ export const getScopedOnlineDevices = async (
   const deviceModel = new DeviceModel(serverDB, userId, workspaceId);
   const scope: 'personal' | 'workspace' = workspaceId ? 'workspace' : 'personal';
 
-  const [rows, hiddenIds, online] = await Promise.all([
+  const [rows, online] = await Promise.all([
     (workspaceId ? deviceModel.queryWorkspaceDevices() : deviceModel.queryPersonal()).catch(
       (error) => {
-        log('DB device lookup failed (scope=%s); using gateway only: %O', scope, error);
+        log(
+          'DB device lookup failed (scope=%s); %s: %O',
+          scope,
+          workspaceId ? 'failing closed' : 'using gateway only',
+          error,
+        );
         return [] as Awaited<ReturnType<typeof deviceModel.queryPersonal>>;
       },
     ),
-    // Other members' PRIVATE workspace enrollments. The gateway pool is
-    // visibility-blind (every enrolled device connects under the same
-    // `workspace:<id>` principal), so these must be dropped from the transient
-    // "online but unregistered" fallback below or they'd leak into every
-    // member's agent runs. `null` (lookup failed) fails CLOSED: without the
-    // hidden set we can't tell a genuine ghost from someone's private device,
-    // so workspace-scope transients are suppressed entirely for that request.
-    workspaceId
-      ? deviceModel.queryWorkspaceHiddenDeviceIds().catch((error) => {
-          log('DB hidden-device lookup failed; suppressing transient devices: %O', error);
-          return null;
-        })
-      : Promise.resolve([] as string[]),
     deviceGateway.queryDeviceList(userId, workspaceId),
   ]);
 
-  const liveById = new Map(online.map((d) => [d.deviceId, d]));
+  const registeredDeviceIds = new Set(rows.map((device) => device.deviceId));
+  const authorizedOnline = filterAuthorizedDevicePresence(registeredDeviceIds, online, scope);
+  const liveById = new Map(authorizedOnline.map((d) => [d.deviceId, d]));
   const seen = new Set<string>();
   const fromDb = rows.map((row): DeviceAttachment => {
     seen.add(row.deviceId);
@@ -81,16 +86,14 @@ export const getScopedOnlineDevices = async (
       scope,
     };
   });
-  // Online in the gateway but not yet auto-registered in the DB (no alias yet).
-  // Excludes other members' private enrollments (`hiddenIds`); when the hidden
-  // lookup itself failed (`null`) no workspace transient is safe to show.
-  const hidden = new Set(hiddenIds ?? []);
-  const transient =
-    hiddenIds === null
-      ? []
-      : online
-          .filter((d) => !seen.has(d.deviceId) && !hidden.has(d.deviceId))
-          .map((d): DeviceAttachment => ({ ...d, friendlyName: null, scope }));
+  // Personal clients register immediately before opening their socket, but a
+  // short race can still expose the live connection first. Preserve that
+  // compatibility only for personal scope. Workspace rows are authorization:
+  // a Gateway-only connection may be a stale process that missed Unshare and
+  // must never become visible or executable again.
+  const transient = authorizedOnline
+    .filter((d) => !seen.has(d.deviceId))
+    .map((d): DeviceAttachment => ({ ...d, friendlyName: null, scope }));
 
   // Online first, then most recently active — the same order the settings list
   // and the run-target picker render, so "the first device" means the same

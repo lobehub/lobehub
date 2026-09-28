@@ -6,8 +6,9 @@ import { cx } from 'antd-style';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { FilePathDisplay } from '../../components/FilePathDisplay';
+import { FilePathDisplay, getFilePathDisplayInfo } from '../../components/FilePathDisplay';
 import { inspectorTextStyles, shinyTextStyles } from '../../styles';
+import { formatReadLineRange } from './formatLineRange';
 
 interface ReadFileArgs {
   endLine?: number;
@@ -20,9 +21,12 @@ interface ReadFileArgs {
   startLine?: number;
 }
 
-export const createReadLocalFileInspector = (translationKey: string) => {
+export const createReadLocalFileInspector = (
+  translationKey: string,
+  imageTranslationKey?: string,
+) => {
   const Inspector = memo<BuiltinInspectorProps<ReadFileArgs, ReadFileState>>(
-    ({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
+    ({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
       const { t } = useTranslation('plugin');
 
       const filePath =
@@ -32,34 +36,33 @@ export const createReadLocalFileInspector = (translationKey: string) => {
         partialArgs?.path ||
         partialArgs?.filePath ||
         partialArgs?.file_path ||
+        pluginState?.path ||
         '';
+      // File hints let streaming captures display as images; uploaded image state
+      // also identifies extensionless files. No screenshot provenance is inferred.
+      const isImage = getFilePathDisplayInfo(filePath).isImage || !!pluginState?.images?.length;
+      const label =
+        imageTranslationKey && isImage
+          ? `${imageTranslationKey}${isArgumentsStreaming || isLoading ? '.loading' : ''}`
+          : translationKey;
 
-      const lineRange = useMemo(() => {
-        const source = args || partialArgs;
-        const start = source?.startLine ?? source?.loc?.[0] ?? source?.offset;
-        const end =
-          source?.endLine ??
-          source?.loc?.[1] ??
-          (start !== undefined && source?.limit !== undefined
-            ? start + Math.max(source.limit - 1, 0)
-            : undefined);
-        if (start !== undefined && end !== undefined) return `L${start}-L${end}`;
-        if (start !== undefined) return `L${start}`;
-        return undefined;
-      }, [args, partialArgs]);
+      const lineRange = useMemo(
+        () => formatReadLineRange(args || partialArgs),
+        [args, partialArgs],
+      );
 
       if (isArgumentsStreaming) {
         if (!filePath)
           return (
             <div className={inspectorTextStyles.root}>
-              <span className={shinyTextStyles.shinyText}>{t(translationKey as any)}</span>
+              <span className={shinyTextStyles.shinyText}>{t(label as any)}</span>
             </div>
           );
 
         return (
           <div className={inspectorTextStyles.root}>
             <span className={shinyTextStyles.shinyText} style={{ marginInlineEnd: 6 }}>
-              {t(translationKey as any)}:
+              {t(label as any)}:
             </span>
             <FilePathDisplay filePath={filePath} />
           </div>
@@ -72,7 +75,7 @@ export const createReadLocalFileInspector = (translationKey: string) => {
             className={cx(isLoading && shinyTextStyles.shinyText)}
             style={{ marginInlineEnd: 6 }}
           >
-            {t(translationKey as any)}:
+            {t(label as any)}:
           </span>
           <FilePathDisplay filePath={filePath} />
           {lineRange && <span style={{ marginInlineStart: 4 }}>({lineRange})</span>}

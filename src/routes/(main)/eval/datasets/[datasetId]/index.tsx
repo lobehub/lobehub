@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { agentEvalService } from '@/services/agentEval';
@@ -210,6 +211,7 @@ const DatasetDetail = memo(() => {
       errorVariant={'page'}
       isEmpty={!dataset}
       isLoading={isLoading}
+      loading={<RouteLoading />}
       onRetry={() => mutate()}
     >
       {dataset && (
