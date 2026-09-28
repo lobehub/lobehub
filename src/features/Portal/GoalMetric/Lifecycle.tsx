@@ -289,11 +289,13 @@ const Actor = memo<{ event: GoalGraphEvent }>(({ event }) => {
   if (event.actorType === 'agent' && event.actorId) return <AgentActor agentId={event.actorId} />;
   if (event.actorType === 'user') return <UserActor userId={event.actorId} />;
 
-  // Automatic steps read as part of the sentence, not as someone acting — no
-  // glyph, no emphasis, so the people and agents stand out.
+  // Automatic steps name no actor: the event reads as the action alone, so
+  // the rows a person or agent drove stand out.
+  if (event.actorType === 'system') return null;
+
   return (
-    <Text fontSize={13} style={{ flex: 'none' }} type={'secondary'}>
-      {t(`goalProcess.actor.${event.actorType}` as const)}
+    <Text fontSize={13} style={{ flex: 'none' }} weight={500}>
+      {t('goalProcess.actor.agent')}
     </Text>
   );
 });

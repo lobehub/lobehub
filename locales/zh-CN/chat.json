@@ -587,7 +587,7 @@
   "goalProcess.activity.title": "活动",
   "goalProcess.actor.agent": "Agent",
   "goalProcess.actor.member": "成员",
-  "goalProcess.actor.system": "自动",
+  "goalProcess.actor.system": "系统",
   "goalProcess.actor.user": "你",
   "goalProcess.addTask.descriptionLabel": "任务说明（选填）",
   "goalProcess.addTask.descriptionPlaceholder": "要交付什么、有哪些约束、怎样判定完成",

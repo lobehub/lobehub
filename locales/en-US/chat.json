@@ -587,7 +587,7 @@
   "goalProcess.activity.title": "Activity",
   "goalProcess.actor.agent": "Agent",
   "goalProcess.actor.member": "Member",
-  "goalProcess.actor.system": "Auto",
+  "goalProcess.actor.system": "System",
   "goalProcess.actor.user": "You",
   "goalProcess.addTask.descriptionLabel": "Instruction (optional)",
   "goalProcess.addTask.descriptionPlaceholder": "Deliverable, constraints, and how the result will be judged",

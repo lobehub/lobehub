@@ -2145,7 +2145,7 @@ export default {
   'goalProcess.metrics.status': 'Status',
   'goalProcess.actor.agent': 'Agent',
   'goalProcess.actor.member': 'Member',
-  'goalProcess.actor.system': 'Auto',
+  'goalProcess.actor.system': 'System',
   'goalProcess.actor.user': 'You',
   'goalProcess.lifecycle.action.activated': 'started {{kind}}',
   'goalProcess.lifecycle.action.created': 'created {{kind}}',
