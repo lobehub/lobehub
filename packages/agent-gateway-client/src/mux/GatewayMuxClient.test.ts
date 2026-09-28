@@ -760,6 +760,31 @@ describe('GatewayMuxClient', () => {
       expect(onComplete).toHaveBeenCalledWith({ source: 'resume_status', status: 'completed' });
     });
 
+    // Codex P2 on #20102: echoes are counted by order, not by a time window.
+    it('reads late echoes as the member terminal and honors the next end (G-02)', async () => {
+      const { mux } = createMux();
+      const ws = await connectAndReady(mux);
+      const sub = mux.subscribe('op-1');
+      const onComplete = vi.fn();
+      sub.on('session_complete', onComplete);
+
+      ws.simulateMessage(agentEvent('op-1', '1', 'agent_runtime_end', 'op-member'));
+      await vi.advanceTimersByTimeAsync(30_000); // renderer suspended
+      ws.simulateMessage({
+        id: '2',
+        operationId: 'op-1',
+        status: 'completed',
+        type: 'status_change',
+      });
+      ws.simulateMessage({ operationId: 'op-1', type: 'session_complete' } as any);
+      expect(onComplete).not.toHaveBeenCalled();
+      expect(sub.active).toBe(true);
+
+      // Echoes spent: a watchdog's terminal status now ends the supervisor.
+      ws.simulateMessage({ id: '3', operationId: 'op-1', status: 'error', type: 'status_change' });
+      expect(onComplete).toHaveBeenCalledWith({ source: 'status_change', status: 'error' });
+    });
+
     it('subscribe_failed emits auth_failed and ends the subscription', async () => {
       const { mux } = createMux();
       const ws = await connectAndReady(mux);

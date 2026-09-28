@@ -1,13 +1,5 @@
 import type { AgentStreamEvent, SessionStatus } from './types';
 
-/**
- * How long after a mirrored member's `agent_runtime_end` a session-ending
- * signal is still read as that member's echo. The gateway emits the echo within
- * milliseconds of the member terminal; a genuine end of the owning session
- * (watchdog, explicit status update) arrives on its own, much later.
- */
-export const MIRRORED_TERMINAL_ECHO_WINDOW_MS = 5000;
-
 /** The status the gateway DO derives from an `agent_runtime_end` (see `AgentOperationDO.pushEvent`). */
 const sessionStatusOf = (event: AgentStreamEvent): SessionStatus => {
   const reason = (event.data as { reason?: string } | undefined)?.reason;
@@ -25,8 +17,21 @@ const sessionStatusOf = (event: AgentStreamEvent): SessionStatus => {
  * cut the supervisor stream short, cleared its running mark and dropped its
  * queued follow-ups.
  */
+/** A session-ending signal a gateway echoes for a mirrored member terminal. */
+export type MirroredTerminalEchoSignal = 'session_complete' | 'status_change';
+
 export class MirroredTerminalEchoGuard {
-  private foreignTerminalAt: number | undefined;
+  /**
+   * Echoes still owed for verbatim foreign terminals, per signal: such a gateway
+   * answers each one with exactly one `session_complete` (v1 and v2) and, on v2,
+   * one terminal `status_change`. Counted by message order, not wall-clock time:
+   * a suspended tab or renderer delivers the echo late but still in order. An
+   * owner event proves the owner alive and clears it; so does a new resume.
+   */
+  private pendingEchoes: Record<MirroredTerminalEchoSignal, number> = {
+    session_complete: 0,
+    status_change: 0,
+  };
   /**
    * The session status another operation's `agent_runtime_end` REPLAYED BY THE
    * CURRENT RESUME would have left on this channel's DO, while no terminal of
@@ -37,24 +42,22 @@ export class MirroredTerminalEchoGuard {
    */
   private replayForeignStatus: SessionStatus | undefined;
 
-  constructor(
-    private readonly operationId: string,
-    private readonly now: () => number = Date.now,
-  ) {}
+  constructor(private readonly operationId: string) {}
 
   /** Record an incoming agent event. */
   observe(event: AgentStreamEvent): void {
     const isOwn = !event.operationId || event.operationId === this.operationId;
     if (isOwn) {
       // The owner is demonstrably alive after the member ended.
-      this.foreignTerminalAt = undefined;
+      this.clearPendingEchoes();
       if (event.type === 'agent_runtime_end' || event.type === 'error') {
         this.replayForeignStatus = undefined;
       }
       return;
     }
     if (event.type === 'agent_runtime_end') {
-      this.foreignTerminalAt = this.now();
+      this.pendingEchoes.session_complete += 1;
+      this.pendingEchoes.status_change += 1;
       this.replayForeignStatus = sessionStatusOf(event);
     }
   }
@@ -62,6 +65,8 @@ export class MirroredTerminalEchoGuard {
   /** A resume / (re)subscribe is starting: only what it replays counts from here. */
   beginReplay(): void {
     this.replayForeignStatus = undefined;
+    // An echo not yet received on the old connection is not owed on this one.
+    this.clearPendingEchoes();
   }
 
   /**
@@ -83,11 +88,18 @@ export class MirroredTerminalEchoGuard {
     return this.replayForeignStatus !== undefined && status === this.replayForeignStatus;
   }
 
-  /** Whether a session-ending signal arriving now is a mirrored terminal's echo. */
-  isEcho(): boolean {
-    // Not one-shot: protocol v2 echoes a member terminal twice (the lifecycle
-    // `status_change` and the forwarded `session_complete`).
-    if (this.foreignTerminalAt === undefined) return false;
-    return this.now() - this.foreignTerminalAt <= MIRRORED_TERMINAL_ECHO_WINDOW_MS;
+  /**
+   * Whether a session-ending signal arriving now is a mirrored terminal's echo.
+   * Consumes one owed echo of that kind, so a genuine end arriving after the
+   * echoes (a watchdog's status, the owner's own session end) is honored.
+   */
+  consumeEcho(signal: MirroredTerminalEchoSignal): boolean {
+    if (this.pendingEchoes[signal] === 0) return false;
+    this.pendingEchoes[signal] -= 1;
+    return true;
+  }
+
+  private clearPendingEchoes(): void {
+    this.pendingEchoes = { session_complete: 0, status_change: 0 };
   }
 }

@@ -232,13 +232,14 @@ class OperationSubscriptionImpl implements OperationSubscription {
       case 'session_complete': {
         // A member's mirrored terminal echoed back as the end of this op — see
         // `MirroredTerminalEchoGuard`.
-        if (this.terminalEchoGuard.isEcho()) break;
+        if (this.terminalEchoGuard.consumeEcho('session_complete')) break;
         this.finish({ source: 'raw_session_complete' });
         break;
       }
 
       case 'status_change': {
-        if (isTerminalStatus(message.status) && this.terminalEchoGuard.isEcho()) break;
+        if (isTerminalStatus(message.status) && this.terminalEchoGuard.consumeEcho('status_change'))
+          break;
         this.listeners.emit('status_change', message.status);
         if (isTerminalStatus(message.status)) {
           this.finish({ source: 'status_change', status: message.status });

@@ -358,7 +358,7 @@ export class AgentStreamClient extends TypedEmitter {
         case 'session_complete': {
           // A member's mirrored terminal, echoed back as the end of THIS
           // session by gateways that end on any `agent_runtime_end`.
-          if (this.terminalEchoGuard.isEcho()) break;
+          if (this.terminalEchoGuard.consumeEcho('session_complete')) break;
           this.sessionEnded = true;
           // Flush any buffered resume events before disconnecting
           if (this.resumeMode) {

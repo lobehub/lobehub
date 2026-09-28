@@ -413,6 +413,33 @@ describe('AgentStreamClient', () => {
       expect(client.connectionStatus).toBe('disconnected');
     });
 
+    // Codex P2 on #20102: a suspended tab handles the queued echo late but in
+    // order; wall-clock time must not turn it into the supervisor's end.
+    it('still reads a late echo as the member terminal and honors the next end (G-02)', async () => {
+      const client = createClient(); // op-123
+      const onComplete = vi.fn();
+      client.on('session_complete', onComplete);
+
+      const ws = await connectAndAuth(client);
+      ws.simulateMessage({
+        event: {
+          data: { reason: 'done' },
+          operationId: 'op-member-456',
+          stepIndex: 0,
+          timestamp: 1,
+          type: 'agent_runtime_end',
+        },
+        type: 'agent_event',
+      });
+      await vi.advanceTimersByTimeAsync(30_000); // renderer suspended
+      ws.simulateMessage({ type: 'session_complete' });
+      expect(onComplete).not.toHaveBeenCalled();
+
+      // The echo is spent: a further session end is the supervisor's own.
+      ws.simulateMessage({ type: 'session_complete' });
+      expect(onComplete).toHaveBeenCalledOnce();
+    });
+
     it('should emit session_complete and disconnect', async () => {
       const client = createClient();
       const onComplete = vi.fn();
