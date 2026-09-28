@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isBareLinkLabel, parseInternalLink } from './internalLink';
+import { isBareLinkLabel, isEntityIdLabel, parseInternalLink } from './internalLink';
 
 describe('parseInternalLink', () => {
   it('parses official agent document links', () => {
@@ -86,6 +86,26 @@ describe('parseInternalLink', () => {
       acceptanceId: 'acceptance-3',
       pathname: '/acceptance/acceptance-3',
       type: 'acceptance',
+    });
+  });
+
+  it('parses goal links, global and agent-scoped, as dedicated entities', () => {
+    expect(parseInternalLink('https://app.lobehub.com/goal/goal_JekDW3il7s4H')).toEqual({
+      goalId: 'goal_JekDW3il7s4H',
+      pathname: '/goal/goal_JekDW3il7s4H',
+      type: 'goal',
+    });
+    expect(parseInternalLink('/agent/agt_1/goal/goal_abc')).toEqual({
+      agentId: 'agt_1',
+      goalId: 'goal_abc',
+      pathname: '/agent/agt_1/goal/goal_abc',
+      type: 'goal',
+    });
+    expect(parseInternalLink('/lobe-team/goal/goal_abc', undefined, ['lobe-team'])).toEqual({
+      goalId: 'goal_abc',
+      pathname: '/lobe-team/goal/goal_abc',
+      type: 'goal',
+      workspaceSlug: 'lobe-team',
     });
   });
 
@@ -180,6 +200,14 @@ describe('parseInternalLink', () => {
     expect(parseInternalLink('/favicon.ico')).toBeNull();
     expect(parseInternalLink('/manifest.webmanifest')).toBeNull();
     expect(parseInternalLink('/.well-known/assetlinks.json')).toBeNull();
+  });
+});
+
+describe('isEntityIdLabel', () => {
+  it('treats a goal id label as saying no more than the URL', () => {
+    const reference = parseInternalLink('/goal/goal_abc')!;
+    expect(isEntityIdLabel('goal_abc', reference)).toBe(true);
+    expect(isEntityIdLabel('the fix goal', reference)).toBe(false);
   });
 });
 

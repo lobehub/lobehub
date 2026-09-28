@@ -47,8 +47,8 @@ describe('detectClaudeHarness', () => {
 });
 
 describe('linkHarnessSkills', () => {
-  it('does nothing when no Claude harness is present', () => {
-    expect(linkHarnessSkills(root, 'acceptance')).toEqual({ kind: 'none' });
+  it('does nothing when no harness is present', () => {
+    expect(linkHarnessSkills(root, 'acceptance')).toEqual([{ kind: 'none' }]);
     expect(existsSync(path.join(root, '.claude'))).toBe(false);
   });
 
@@ -57,11 +57,13 @@ describe('linkHarnessSkills', () => {
 
     const result = linkHarnessSkills(root, 'acceptance');
 
-    expect(result).toEqual({
-      kind: 'linked',
-      link: path.join('.claude', 'skills'),
-      target: path.join('..', '.agents', 'skills'),
-    });
+    expect(result).toEqual([
+      {
+        kind: 'linked',
+        link: path.join('.claude', 'skills'),
+        target: path.join('..', '.agents', 'skills'),
+      },
+    ]);
     const link = path.join(root, '.claude', 'skills');
     expect(lstatSync(link).isSymbolicLink()).toBe(true);
     expect(readlinkSync(link)).toBe(path.join('..', '.agents', 'skills'));
@@ -71,10 +73,12 @@ describe('linkHarnessSkills', () => {
     mkdirSync(path.join(root, '.claude'), { recursive: true });
     symlinkSync(path.join('..', '.agents', 'skills'), path.join(root, '.claude', 'skills'), 'dir');
 
-    expect(linkHarnessSkills(root, 'acceptance')).toEqual({
-      kind: 'already',
-      link: path.join('.claude', 'skills'),
-    });
+    expect(linkHarnessSkills(root, 'acceptance')).toEqual([
+      {
+        kind: 'already',
+        link: path.join('.claude', 'skills'),
+      },
+    ]);
   });
 
   it('leaves a symlink pointing somewhere else alone', () => {
@@ -83,7 +87,7 @@ describe('linkHarnessSkills', () => {
 
     const result = linkHarnessSkills(root, 'acceptance');
 
-    expect(result.kind).toBe('skipped');
+    expect(result[0].kind).toBe('skipped');
     expect(readlinkSync(path.join(root, '.claude', 'skills'))).toBe(path.join('..', 'elsewhere'));
   });
 
@@ -92,12 +96,80 @@ describe('linkHarnessSkills', () => {
 
     const result = linkHarnessSkills(root, 'acceptance');
 
-    expect(result).toEqual({
-      kind: 'linked-single',
-      link: path.join('.claude', 'skills', 'acceptance'),
-      target: path.join('..', '..', '.agents', 'skills', 'acceptance'),
-    });
+    expect(result).toEqual([
+      {
+        kind: 'linked-single',
+        link: path.join('.claude', 'skills', 'acceptance'),
+        target: path.join('..', '..', '.agents', 'skills', 'acceptance'),
+      },
+    ]);
     expect(existsSync(path.join(root, '.claude', 'skills', 'my-own-skill'))).toBe(true);
+  });
+
+  it.each(['.cursor', '.codex', '.roo', '.windsurf'])(
+    'wires %s/skills when the harness dir exists',
+    (dir) => {
+      mkdirSync(path.join(root, dir), { recursive: true });
+
+      const result = linkHarnessSkills(root, 'acceptance');
+
+      expect(result).toEqual([
+        {
+          kind: 'linked',
+          link: path.join(dir, 'skills'),
+          target: path.join('..', '.agents', 'skills'),
+        },
+      ]);
+      expect(readlinkSync(path.join(root, dir, 'skills'))).toBe(
+        path.join('..', '.agents', 'skills'),
+      );
+    },
+  );
+
+  it('wires .opencode/skill (singular) for OpenCode', () => {
+    mkdirSync(path.join(root, '.opencode'), { recursive: true });
+
+    const result = linkHarnessSkills(root, 'acceptance');
+
+    expect(result).toEqual([
+      {
+        kind: 'linked',
+        link: path.join('.opencode', 'skill'),
+        target: path.join('..', '.agents', 'skills'),
+      },
+    ]);
+    expect(readlinkSync(path.join(root, '.opencode', 'skill'))).toBe(
+      path.join('..', '.agents', 'skills'),
+    );
+  });
+
+  it('detects GEMINI.md as a Gemini signal', () => {
+    writeFileSync(path.join(root, 'GEMINI.md'), '# project');
+
+    expect(linkHarnessSkills(root, 'acceptance')).toEqual([
+      {
+        kind: 'linked',
+        link: path.join('.gemini', 'skills'),
+        target: path.join('..', '.agents', 'skills'),
+      },
+    ]);
+  });
+
+  it('wires every detected harness in one pass', () => {
+    mkdirSync(path.join(root, '.claude'));
+    mkdirSync(path.join(root, '.cursor'));
+
+    const result = linkHarnessSkills(root, 'acceptance');
+
+    expect(result.map((r) => r.link).sort()).toEqual([
+      path.join('.claude', 'skills'),
+      path.join('.cursor', 'skills'),
+    ]);
+    for (const dir of ['.claude', '.cursor']) {
+      expect(readlinkSync(path.join(root, dir, 'skills'))).toBe(
+        path.join('..', '.agents', 'skills'),
+      );
+    }
   });
 });
 

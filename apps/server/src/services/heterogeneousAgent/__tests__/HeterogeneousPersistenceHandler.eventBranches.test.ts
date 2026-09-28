@@ -1104,6 +1104,50 @@ describe('HeterogeneousPersistenceHandler — event branch coverage', () => {
       );
     });
 
+    it('lets the user type their own answer to a heterogeneous question', async () => {
+      const h = createHarness({ topicAgentId: 'agent-test' });
+
+      await ingest(h, [
+        buildEvent('agent_intervention_request', 0, {
+          apiName: 'askUserQuestion',
+          arguments: JSON.stringify({
+            questions: [
+              {
+                header: 'Stack',
+                multiSelect: false,
+                options: [{ label: 'React' }, { label: 'Vue' }],
+                question: 'Which framework?',
+              },
+              {
+                header: 'Targets',
+                multiSelect: true,
+                options: [{ label: 'Web' }, { label: 'Desktop' }],
+                question: 'Which targets?',
+              },
+            ],
+          }),
+          deadline: 1_900_000_000_000,
+          identifier: 'claude-code',
+          interactionKind: 'question',
+          provider: 'claude-code',
+          toolCallId: 'claude-question-custom',
+        }),
+      ]);
+
+      // The shared AskUser form always offers "write your own", "type
+      // directly" and a supplement note; without these capabilities the claim
+      // rejects every typed answer as not matching the request.
+      const detail = notifyAgentInterventionRequired.mock.calls[0][0].items[0].detail;
+      expect(detail).toMatchObject({
+        answerPolicy: { allowFreeform: true, allowSupplement: true },
+        questions: [
+          { allowCustomAnswer: true, question: 'Which framework?' },
+          { allowCustomAnswer: true, question: 'Which targets?' },
+        ],
+        type: 'question',
+      });
+    });
+
     it('uses only the sanitized first question for a multi-question summary', async () => {
       const h = createHarness({ topicAgentId: 'agent-test' });
 

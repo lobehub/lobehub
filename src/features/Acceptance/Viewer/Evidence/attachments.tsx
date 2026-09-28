@@ -2,10 +2,9 @@
 
 import type { AcceptanceAttachment } from '@lobechat/types';
 import { Flexbox, Icon, Image } from '@lobehub/ui';
-import { Button, toast } from '@lobehub/ui/base-ui';
-import { Upload } from 'antd';
+import { Button, Spin, toast, Upload } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx, useResponsive } from 'antd-style';
-import { ImagePlus, Loader2, X } from 'lucide-react';
+import { ImagePlus, X } from 'lucide-react';
 import { type ClipboardEvent, memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,11 +16,6 @@ const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
 const styles = createStaticStyles(({ css }) => ({
   flushUpload: css`
     display: contents;
-
-    .ant-upload,
-    .ant-upload-select {
-      display: contents;
-    }
   `,
   remove: css`
     cursor: pointer;
@@ -228,7 +222,7 @@ export const AttachmentStrip = memo<AttachmentStripProps>(
         ))}
         {uploading && (
           <div className={cx(styles.thumb, styles.thumbLoading)}>
-            <Icon spin icon={Loader2} size={16} />
+            <Spin size="small" />
           </div>
         )}
       </Flexbox>
@@ -254,12 +248,7 @@ export const AttachmentUploadButton = memo<AttachmentUploadButtonProps>(({ disab
       accept={'image/*'}
       className={styles.flushUpload}
       disabled={disabled}
-      showUploadList={false}
-      beforeUpload={(file, fileList) => {
-        // beforeUpload fires per file — fire the batch once, on the first item.
-        if (file === fileList[0]) onFiles(fileList as unknown as File[]);
-        return false;
-      }}
+      onFiles={onFiles}
     >
       <Button
         disabled={disabled}

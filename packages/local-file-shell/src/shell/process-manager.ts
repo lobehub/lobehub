@@ -1,4 +1,5 @@
 import type { ChildProcess } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -92,8 +93,26 @@ export interface ShellProcess {
   startedAt?: number;
 }
 
+/**
+ * Not-found text for a shell id this process never issued. Shell ids travel
+ * through the model and the device gateway, so a lookup can land on a device
+ * process other than the one that started the command (the app restarted, or
+ * two device processes are connected for the same machine). Say so, so the
+ * model re-runs the command instead of debugging a command that may be fine.
+ */
+const shellNotFoundError = (shellId: string): string =>
+  `Shell ID ${shellId} not found in this device process. It may have been started by a different or restarted process; its output is not available here.`;
+
 export class ShellProcessManager {
   private nextShellId = 1;
+
+  /**
+   * Per-instance random prefix for shell ids. A bare counter restarts at 1 in
+   * every process, so `sh-3` from one device process named an unrelated
+   * command in another and getCommandOutput returned that command's output.
+   * The prefix makes an id from another process miss (not found) instead.
+   */
+  private readonly shellIdToken = randomBytes(3).toString('hex');
 
   private readonly outputRunDir: string;
 
@@ -111,7 +130,7 @@ export class ShellProcessManager {
   }
 
   createShellId(): string {
-    return `sh-${this.nextShellId++}`;
+    return `sh-${this.shellIdToken}-${this.nextShellId++}`;
   }
 
   createOutputFiles(shellId: string): ShellOutputFiles {
@@ -194,7 +213,7 @@ export class ShellProcessManager {
     const shellProcess = this.processes.get(shell_id);
     if (!shellProcess) {
       return {
-        error: `Shell ID ${shell_id} not found`,
+        error: shellNotFoundError(shell_id),
         output: '',
         running: false,
         stderr: '',
@@ -322,7 +341,7 @@ export class ShellProcessManager {
   kill(shell_id: string): KillCommandResult {
     const shellProcess = this.processes.get(shell_id);
     if (!shellProcess) {
-      return { error: `Shell ID ${shell_id} not found`, success: false };
+      return { error: shellNotFoundError(shell_id), success: false };
     }
 
     try {

@@ -8,7 +8,9 @@ import { useTranslation } from 'react-i18next';
 
 import { highlightTextStyles, inspectorTextStyles, shinyTextStyles } from '@/styles';
 
+import type { GenerateImageState } from '../../types';
 import { ImageGenerationApiName } from '../../types';
+import { getGenerateImageLabelTense } from './generateImageLabel';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   chip: css`
@@ -59,7 +61,6 @@ const compactId = (id: string) => (id.length > 14 ? `${id.slice(0, 7)}…${id.sl
 
 interface ImageGenerationInspectorArgs {
   generationId?: unknown;
-  imageNum?: unknown;
   model?: unknown;
   prompt?: unknown;
   provider?: unknown;
@@ -84,52 +85,45 @@ const apiMeta = {
   },
 };
 
-const ImageGenerationInspector = memo<BuiltinInspectorProps<ImageGenerationInspectorArgs, unknown>>(
-  ({ apiName, args, partialArgs, isArgumentsStreaming, isLoading }) => {
-    const { t } = useTranslation('plugin');
-    const currentArgs = { ...partialArgs, ...args };
-    const provider = stringValue(currentArgs.provider);
-    const model = stringValue(currentArgs.model);
-    const prompt = stringValue(currentArgs.prompt);
-    const generationId = stringValue(currentArgs.generationId);
-    const meta = apiMeta[apiName as ImageGenerationApiName] ?? apiMeta.generateImage;
-    const imageNum = typeof currentArgs.imageNum === 'number' ? currentArgs.imageNum : undefined;
-    const label = t(`builtins.lobe-image-generation.apiName.${apiName}`, {
-      defaultValue: meta.defaultLabel,
-    });
-    const Icon = meta.Icon;
+const ImageGenerationInspector = memo<
+  BuiltinInspectorProps<ImageGenerationInspectorArgs, Partial<GenerateImageState>>
+>(({ apiName, args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
+  const { t } = useTranslation('plugin');
+  const currentArgs = { ...partialArgs, ...args };
+  const provider = stringValue(currentArgs.provider);
+  const model = stringValue(currentArgs.model);
+  const prompt = stringValue(currentArgs.prompt);
+  const generationId = stringValue(currentArgs.generationId);
+  const meta = apiMeta[apiName as ImageGenerationApiName] ?? apiMeta.generateImage;
+  const isGenerateImage = apiName === ImageGenerationApiName.generateImage;
+  const isRunning = isArgumentsStreaming || isLoading;
+  // The canvas below carries model / count / status, so this row only names the
+  // action — and switches tense so old history doesn't read as still running.
+  const tense = getGenerateImageLabelTense(isRunning, pluginState);
+  const label = isGenerateImage
+    ? tense === 'neutral'
+      ? t('builtins.lobe-image-generation.apiName.generateImage')
+      : t(`builtins.lobe-image-generation.apiName.generateImage.${tense}`)
+    : t(`builtins.lobe-image-generation.apiName.${apiName}`, {
+        defaultValue: meta.defaultLabel,
+      });
+  const Icon = meta.Icon;
 
-    return (
-      <div className={cx(inspectorTextStyles.root, styles.root)}>
-        <Icon className={styles.icon} size={14} />
-        <span
-          className={cx(
-            styles.label,
-            (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-          )}
-        >
-          {label}
-        </span>
-        {apiName === ImageGenerationApiName.generateImage && prompt && (
-          <span className={cx(highlightTextStyles.primary, styles.prompt)}>{prompt}</span>
-        )}
-        {apiName === ImageGenerationApiName.generateImage && imageNum && imageNum > 1 && (
-          <span className={styles.chip}>
-            {t('builtins.lobe-image-generation.render.generatedCount', {
-              count: imageNum,
-              defaultValue: '{{count}} images',
-            })}
-          </span>
-        )}
-        {provider && <span className={styles.chip}>{provider}</span>}
-        {model && <span className={styles.chip}>{model}</span>}
-        {apiName === ImageGenerationApiName.getImageGenerationStatus && generationId && (
-          <span className={styles.chip}>{compactId(generationId)}</span>
-        )}
-      </div>
-    );
-  },
-);
+  return (
+    <div className={cx(inspectorTextStyles.root, styles.root)}>
+      <Icon className={styles.icon} size={14} />
+      <span className={cx(styles.label, isRunning && shinyTextStyles.shinyText)}>{label}</span>
+      {isGenerateImage && prompt && (
+        <span className={cx(highlightTextStyles.primary, styles.prompt)}>{prompt}</span>
+      )}
+      {!isGenerateImage && provider && <span className={styles.chip}>{provider}</span>}
+      {!isGenerateImage && model && <span className={styles.chip}>{model}</span>}
+      {apiName === ImageGenerationApiName.getImageGenerationStatus && generationId && (
+        <span className={styles.chip}>{compactId(generationId)}</span>
+      )}
+    </div>
+  );
+});
 
 ImageGenerationInspector.displayName = 'ImageGenerationInspector';
 

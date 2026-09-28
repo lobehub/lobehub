@@ -122,6 +122,26 @@ describe('subAgentCallback handler', () => {
     );
   });
 
+  it('forwards the abandon reason so the parent sees why the sub-agent failed', async () => {
+    mockCompleteSubAgentBridge.mockResolvedValue(true);
+    const { ctx } = buildContext({
+      body: {
+        ...validBody,
+        errorMessage: 'Operation abandoned: inactivity_watchdog',
+        reason: 'error',
+      },
+    });
+
+    await subAgentCallback(ctx);
+
+    expect(mockCompleteSubAgentBridge).toHaveBeenCalledWith(
+      expect.objectContaining({
+        errorMessage: 'Operation abandoned: inactivity_watchdog',
+        reason: 'error',
+      }),
+    );
+  });
+
   it('defaults reason to done and threadId to empty string when absent', async () => {
     mockCompleteSubAgentBridge.mockResolvedValue(false);
     const { ctx } = buildContext({

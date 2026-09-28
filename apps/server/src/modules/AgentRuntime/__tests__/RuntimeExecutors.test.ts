@@ -81,7 +81,7 @@ vi.mock('@lobechat/model-runtime', async () => {
   // retry path and these tests share a single class identity for instanceof.
   const { isEmptyModelCompletion, ModelEmptyError } =
     await import('../../../../../../packages/model-runtime/src/errors/modelEmptyCompletion');
-  const { ModelRefusalError } =
+  const { isModelRefusalFinishReason, ModelRefusalError } =
     await import('../../../../../../packages/model-runtime/src/errors/modelRefusal');
   // Same treatment: the reasoning-config merge is pure, and the replay gate
   // reads its output (e.g. the DeepSeek V4 thinking opt-out), so use the real
@@ -116,6 +116,7 @@ vi.mock('@lobechat/model-runtime', async () => {
     isDeepSeekV4FamilyModel: (model: string) =>
       typeof model === 'string' && model.toLowerCase().includes('deepseek-v4'),
     isEmptyModelCompletion,
+    isModelRefusalFinishReason,
     isKimiAlwaysPreserveThinkingModel: (model: string) =>
       /^kimi-k2\.(?:[7-9]|\d{2,})-code(?:$|-)/.test(model),
     ModelEmptyError,
@@ -5458,7 +5459,11 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         });
         return new Response(source.pipeThrough(createCallbacksTransformer(callbacks)));
       });
-      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({ chat: mockChat } as any);
+      const handleChatStreamError = vi.fn();
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+        chat: mockChat,
+        handleChatStreamError,
+      } as any);
 
       const executors = createRuntimeExecutors(ctx);
       const state = createMockState();
@@ -5483,6 +5488,8 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         await rejectionExpectation;
 
         expect(mockChat).toHaveBeenCalledTimes(6);
+        // Every attempt is its own `chat()` call, so each failed stream is reported once.
+        expect(handleChatStreamError).toHaveBeenCalledTimes(6);
 
         const retryEvents = mockStreamManager.publishStreamEvent.mock.calls.filter(
           ([, event]: [string, { type: string }]) => event.type === 'stream_retry',

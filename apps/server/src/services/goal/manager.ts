@@ -23,6 +23,7 @@ import { goals } from '@/database/schemas/goal';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiAgentService } from '@/server/services/aiAgent';
 
+import { DEFAULT_MANAGER_MAX_TURNS } from './recoveryPolicy';
 import { scheduleGoalAdvance } from './scheduler';
 import { recoveryEligibility } from './supervisor/policy';
 
@@ -479,7 +480,10 @@ export class GoalManagerService {
       const blocked = await this.uninvitedTurnBlocked(graph, unfinished, tasks);
       if (blocked) return null;
     }
-    if ((state?.turns ?? 0) >= (policy.maxTurns ?? 12) || (await this.budgetBlocked(graph))) {
+    if (
+      (state?.turns ?? 0) >= (policy.maxTurns ?? DEFAULT_MANAGER_MAX_TURNS) ||
+      (await this.budgetBlocked(graph))
+    ) {
       // An invited turn declines instead of pausing. The caller was about to open
       // a gate carrying the actual problem; pausing here would replace that
       // question with "the main Agent is out of turns" and lose it.
@@ -504,7 +508,8 @@ export class GoalManagerService {
       const current = await this.graph(db).getGraph(goal.id);
       if (!current || managerSnapshot(current) !== managerSnapshot(graph)) return;
       if (
-        (fresh.config?.managerState?.turns ?? 0) >= (fresh.config?.manager?.maxTurns ?? 12) ||
+        (fresh.config?.managerState?.turns ?? 0) >=
+          (fresh.config?.manager?.maxTurns ?? DEFAULT_MANAGER_MAX_TURNS) ||
         (await this.budgetBlocked(current, db))
       )
         return;

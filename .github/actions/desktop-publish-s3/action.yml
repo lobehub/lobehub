@@ -53,20 +53,58 @@ runs:
         echo ""
         echo "📋 Version: ${{ inputs.version }}, Channel: ${{ inputs.channel }}"
 
-    - name: Setup Node.js for renderer validation
-      id: setup
-      uses: actions/setup-node@v6
+    - name: Download r0 core releases
+      uses: actions/download-artifact@v7
       with:
-        node-version: ${{ env.NODE_VERSION }}
-        package-manager-cache: false
+        path: release/core-r0
+        pattern: core-r0-*
 
-    - name: Validate renderer OTA baseline before publishing
-      id: validate
+    - name: Merge r0 cores and compose shell.json
+      id: shell
       shell: bash
       env:
-        CHANNEL: ${{ inputs.channel }}
         VERSION: ${{ inputs.version }}
-      run: node apps/desktop/scripts/validateMainHash.mjs --base release "$CHANNEL" "$VERSION"
+      run: |
+        set -euo pipefail
+        ls release/core-r0
+        mkdir -p release/core-ota
+        SHELL_ABI=""
+        # Same-platform builds from different runners (mac arm64/x64) must produce identical trees.
+        for dir in release/core-r0/*/; do
+          for latest in "$dir"core/*/latest.json; do
+            platform=$(basename "$(dirname "$latest")")
+            [ "$(jq -r '.version' "$latest")" = "$VERSION" ] || { echo "::error::core version in $latest is not $VERSION"; exit 1; }
+            abi=$(jq -er '.shellAbi' "$latest")
+            [ -z "$SHELL_ABI" ] && SHELL_ABI="$abi"
+            [ "$abi" = "$SHELL_ABI" ] || { echo "::error::shellAbi differs across platforms ($latest)"; exit 1; }
+            if [ -f "release/core-ota/core/$platform/latest.json" ]; then
+              # A mismatch only costs delta efficiency for some clients (they fall back to objects/full pack); keep the first tree.
+              diff <(jq -S '.tree' "release/core-ota/core/$platform/latest.json") <(jq -S '.tree' "$latest") \
+                || echo "::warning::$platform core trees differ between runners; keeping the first"
+              continue
+            fi
+            mkdir -p release/core-ota/cas release/core-ota/core
+            if [ -d "$dir"cas ]; then cp -R "$dir"cas/. release/core-ota/cas/; fi
+            cp -R "$dir"core/"$platform" release/core-ota/core/
+          done
+        done
+        [ -n "$SHELL_ABI" ] || { echo "::error::no r0 core artifacts found"; exit 1; }
+        jq -n --arg shellAbi "$SHELL_ABI" --arg shellVersion "$VERSION" --arg publishedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+          '{shellAbi: $shellAbi, shellVersion: $shellVersion, publishedAt: $publishedAt}' > release/shell.json
+        cat release/shell.json
+
+    - name: Publish shell.json and r0 core
+      id: base
+      uses: ./.github/actions/desktop-publish-core-ota
+      with:
+        channel: ${{ inputs.channel }}
+        release-dir: release/core-ota
+        shell-json: release/shell.json
+        aws-access-key-id: ${{ inputs.aws-access-key-id }}
+        aws-secret-access-key: ${{ inputs.aws-secret-access-key }}
+        s3-bucket: ${{ inputs.s3-bucket }}
+        s3-region: ${{ inputs.s3-region }}
+        s3-endpoint: ${{ inputs.s3-endpoint }}
 
     - name: Upload to S3
       id: installers
@@ -157,71 +195,6 @@ runs:
         echo ""
         echo "📋 Files in s3://$S3_BUCKET/$CHANNEL/$VERSION/:"
         aws s3 ls "s3://$S3_BUCKET/$CHANNEL/$VERSION/" $ENDPOINT_ARG || true
-
-    - name: Publish renderer OTA base marker
-      id: base
-      shell: bash
-      env:
-        AWS_ACCESS_KEY_ID: ${{ inputs.aws-access-key-id }}
-        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws-secret-access-key }}
-        AWS_REGION: ${{ inputs.s3-region }}
-        S3_BUCKET: ${{ inputs.s3-bucket }}
-        S3_ENDPOINT: ${{ inputs.s3-endpoint }}
-        CHANNEL: ${{ inputs.channel }}
-        CLOUD_REF: ${{ inputs.cloud-ref }}
-        VERSION: ${{ inputs.version }}
-      run: |
-        set -euo pipefail
-
-        if [ -z "$S3_BUCKET" ]; then
-          echo "S3 bucket not configured, skipping renderer OTA marker"
-          echo "reason=upload-not-configured" >> "$GITHUB_OUTPUT"
-          exit 0
-        fi
-
-        ENDPOINT_ARG=""
-        if [ -n "$S3_ENDPOINT" ]; then
-          ENDPOINT_ARG="--endpoint-url $S3_ENDPOINT"
-        fi
-
-        MAIN_HASH=$(cat release/renderer-mainhash.txt)
-        if [[ ! "$MAIN_HASH" =~ ^[0-9a-f]{64}$ ]] || [[ ! "$CLOUD_REF" =~ ^[0-9a-f]{40}$ ]]; then
-          echo "Invalid renderer OTA base metadata"
-          exit 1
-        fi
-
-        echo "renderer OTA base mainHash: $MAIN_HASH"
-        jq -n \
-          --arg cloudRef "$CLOUD_REF" \
-          --arg mainHash "$MAIN_HASH" \
-          --arg version "$VERSION" \
-          '{ cloudRef: $cloudRef, mainHash: $mainHash, rendererProtocol: 2, version: $version }' \
-          > /tmp/renderer-ota-base.json
-
-        RENDERER_ROOT="release/renderer-ota/$CHANNEL/$VERSION/renderer/v2"
-        LATEST="$RENDERER_ROOT/latest.json"
-        SNAPSHOT="$RENDERER_ROOT/versions/r0.json"
-        if [ ! -d "$RENDERER_ROOT/packs" ] || [ ! -f "$LATEST" ] || [ ! -f "$SNAPSHOT" ]; then
-          echo "Renderer OTA r0 artifacts are incomplete"
-          exit 1
-        fi
-
-        S3_RENDERER_ROOT="s3://$S3_BUCKET/$CHANNEL/$VERSION/renderer/v2"
-        aws s3 sync "$RENDERER_ROOT/packs" "$S3_RENDERER_ROOT/packs" \
-          --size-only \
-          --content-type application/zip \
-          --cache-control public,max-age=31536000,immutable \
-          $ENDPOINT_ARG
-        aws s3 cp "$SNAPSHOT" "$S3_RENDERER_ROOT/versions/r0.json" \
-          --cache-control no-store $ENDPOINT_ARG
-        aws s3 cp "$LATEST" "$S3_RENDERER_ROOT/latest.json" \
-          --cache-control no-store $ENDPOINT_ARG
-        aws s3 cp release/renderer-mainhash-inputs.json "$S3_RENDERER_ROOT/mainhash-inputs.json" \
-          --cache-control no-store $ENDPOINT_ARG
-        aws s3 cp /tmp/renderer-ota-base.json "s3://$S3_BUCKET/$CHANNEL/base.json" \
-          --cache-control no-store $ENDPOINT_ARG
-        echo "Published renderer OTA r0 for $CHANNEL/$VERSION"
-        echo "published=true" >> "$GITHUB_OUTPUT"
 
     - name: Preserve release publication diagnostics
       if: always()

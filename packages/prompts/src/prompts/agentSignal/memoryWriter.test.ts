@@ -18,6 +18,16 @@ describe('agent signal memory writer prompt', () => {
 
   /**
    * @example
+   * Experience memory is retired; the writer must not be steered toward its API.
+   */
+  it('does not offer the retired experience write', () => {
+    expect(createAgentSignalMemoryWriterSystemRole({ memoryLanguage: 'en-US' })).not.toContain(
+      'addExperienceMemory',
+    );
+  });
+
+  /**
+   * @example
    * User prompt keeps routing context inspectable.
    */
   it('renders the user memory prompt with routing context blocks', () => {

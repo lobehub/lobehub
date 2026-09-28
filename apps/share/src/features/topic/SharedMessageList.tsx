@@ -54,7 +54,7 @@ const SharedMessageList = memo<SharedMessageListProps>((props) => {
         headerSlot={headerSlot}
         itemContent={itemContent}
         footerSlot={
-          <Flexbox align={'center'} paddingBlock={'16px 80px'} paddingInline={24}>
+          <Flexbox align={'center'} paddingBlock={24} paddingInline={24}>
             <Text fontSize={12} style={{ maxWidth: 480, textAlign: 'center' }} type={'secondary'}>
               {t('sharePageDisclaimer')}
             </Text>

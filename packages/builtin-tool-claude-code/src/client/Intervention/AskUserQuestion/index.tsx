@@ -40,6 +40,17 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     const msg = dataSelectors.getDbMessageById(messageId)(s);
     return (msg?.pluginState as { [DRAFT_PLUGIN_STATE_KEY]?: unknown })?.[DRAFT_PLUGIN_STATE_KEY];
   });
+  // The producer stamps its own ask-user deadline onto the durable tool row.
+  // Hand it to the form so the countdown tracks the clock that actually
+  // decides when the answer stops being deliverable, instead of restarting on
+  // every remount and outliving the blocked producer.
+  const deadlineAt = useConversationStore((s) => {
+    const msg = dataSelectors.getDbMessageById(messageId)(s);
+    const stored = (
+      msg?.pluginState as { heterogeneousIntervention?: { deadline?: unknown } } | undefined
+    )?.heterogeneousIntervention?.deadline;
+    return typeof stored === 'number' ? stored : undefined;
+  });
   const setInterventionDraft = useChatStore((s) => s.setInterventionDraft);
   const writeDraft = useCallback(
     (draft: AskUserDraft) => setInterventionDraft(messageId, draft),
@@ -49,6 +60,7 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
   const form = useAskUserForm({
     args,
     countdownMs: DEFAULT_COUNTDOWN_MS,
+    deadlineAt,
     disabled,
     onInteractionAction,
     persistedDraft,
@@ -67,6 +79,7 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     supplementEnter: t('claudeCode.askUserQuestion.supplement.enter'),
     supplementPlaceholder: t('claudeCode.askUserQuestion.supplement.placeholder'),
     timeExpired: t('claudeCode.askUserQuestion.timeExpired'),
+    timeExpiredNoAnswer: t('claudeCode.askUserQuestion.timeExpiredNoAnswer'),
     timeRemaining: (time: string) => t('claudeCode.askUserQuestion.timeRemaining', { time }),
   };
 

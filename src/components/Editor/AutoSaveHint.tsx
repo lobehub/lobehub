@@ -1,9 +1,9 @@
 'use client';
 
 import { Icon } from '@lobehub/ui';
-import { Tag } from '@lobehub/ui/base-ui';
+import { Spin, Tag } from '@lobehub/ui/base-ui';
 import dayjs from 'dayjs';
-import { CloudIcon, Loader2Icon, TriangleAlertIcon } from 'lucide-react';
+import { CloudIcon, TriangleAlertIcon } from 'lucide-react';
 import { type CSSProperties } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -30,7 +30,7 @@ const AutoSaveHint = memo<AutoSaveHintProps>(({ style, saveStatus, lastUpdatedTi
 
   if (saveStatus === 'saving')
     return (
-      <Tag icon={<Icon spin icon={Loader2Icon} />} style={style}>
+      <Tag icon={<Spin size="small" />} style={style}>
         {t('autoSave.saving')}
       </Tag>
     );

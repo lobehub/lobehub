@@ -1192,6 +1192,7 @@ export class GatewayService {
           { includeUndecryptable: true },
         );
 
+        let gatedOnPlatform = 0;
         for (const provider of providers) {
           const connectionMode = resolveConnectionMode(definition, provider.settings);
 
@@ -1218,6 +1219,7 @@ export class GatewayService {
 
           if (!allowed) {
             gated.set(provider.id, platform);
+            gatedOnPlatform++;
             await updateBotRuntimeStatus({
               applicationId: provider.applicationId,
               errorMessage: getBotFeatureBlockedMessage(
@@ -1227,16 +1229,20 @@ export class GatewayService {
               platform,
               status: BOT_RUNTIME_STATUSES.failed,
             });
-            log(
-              'Gateway sync: paid-gated %s:%s, excluded from desired set',
-              platform,
-              provider.applicationId,
-            );
             continue;
           }
 
           desired.set(provider.id, { connectionMode, platform, provider });
         }
+        // One line per platform, not per provider: a shared dev database holds
+        // hundreds of gated bots, and a line each drowned every other log in
+        // the sync. The per-id set still reaches the gated-disconnect step.
+        if (gatedOnPlatform > 0)
+          log(
+            'Gateway sync: %d paid-gated %s provider(s) excluded from desired set',
+            gatedOnPlatform,
+            platform,
+          );
       } catch (err) {
         desiredComplete = false;
         log('Gateway sync: error loading providers for platform %s: %O', platform, err);

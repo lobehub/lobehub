@@ -12,6 +12,7 @@ import { AgentRuntimeError } from '@lobechat/model-runtime/utils/createError';
 import {
   ChatErrorType,
   getDisabledPluginIds,
+  type RequestTrigger,
   type RuntimeAdditionalContextFragment,
   type RuntimeInitialContext,
   type RuntimeStepContext,
@@ -97,6 +98,11 @@ interface FetchAITaskResultParams extends FetchSSEOptions {
    */
   params: ChatStreamInputParams;
   trace?: TracePayload;
+  /**
+   * Request source recorded on spend / route-attempt logs. Required so every
+   * preset task names its own feature instead of being counted as `chat`.
+   */
+  trigger: RequestTrigger;
 }
 
 interface CreateAssistantMessageStream extends FetchSSEOptions {
@@ -437,6 +443,7 @@ class ChatService {
     onLoadingChange,
     abortController,
     trace,
+    trigger,
   }: FetchAITaskResultParams) => {
     const errorHandle = (error: Error, errorContent?: any) => {
       onLoadingChange?.(false);
@@ -459,6 +466,7 @@ class ChatService {
       await this.getChatCompletion(
         { ...params, messages: llmMessages },
         {
+          metadata: { trigger },
           onErrorHandle: (error) => {
             errorHandle(new Error(error.message), error);
           },

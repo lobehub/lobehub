@@ -172,6 +172,7 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
         return this.readFile({
           cwd,
           endLine: args.loc?.[1],
+          loc: args.loc,
           path: args.path,
           startLine: args.loc?.[0],
         });
@@ -341,9 +342,10 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
 
       case 'readLocalFile': {
         const loc: [number, number] | undefined =
-          params.startLine !== undefined || params.endLine !== undefined
-            ? [params.startLine ?? 0, params.endLine ?? 200]
-            : undefined;
+          params.loc ??
+          (params.startLine !== undefined || params.endLine !== undefined
+            ? [params.startLine ?? 0, params.endLine ?? (params.startLine ?? 0) + 1_000]
+            : undefined);
         return { cwd: params.cwd, fullContent: params.fullContent, loc, path: params.path };
       }
 
@@ -449,6 +451,11 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
 
       case 'getCommandOutput': {
         return {
+          // Surface raw.error so a failed lookup reaches the model as its real
+          // reason ("Shell ID … not found in this device process …") rather
+          // than "[UNKNOWN_EXEC_ERROR] Tool execution failed" — the generic text
+          // left the model unable to tell a lost session from a broken command.
+          error: raw.error ? { message: String(raw.error) } : undefined,
           result: {
             durationMs: raw.duration_ms,
             exitCode: raw.exit_code,
@@ -466,6 +473,7 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
 
       case 'killCommand': {
         return {
+          error: raw.error ? { message: String(raw.error) } : undefined,
           result: { error: raw.error, success: raw.success },
           success: raw.success,
         };
@@ -524,6 +532,10 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
             loc: raw.loc,
             totalCharCount: raw.totalCharCount,
             totalLineCount: raw.totalLineCount,
+            // The char-cap flag — ComputerRuntime suppresses the continuation
+            // hint on truncated reads so it never points past undelivered
+            // content.
+            truncated: raw.truncated,
           },
           success: true,
         };

@@ -4,10 +4,13 @@ import type { BuiltinRenderProps } from '@lobechat/types';
 import { memo, useMemo } from 'react';
 
 import type { ReadFileArgs } from './buildReadFileState';
-import { buildReadFileState } from './buildReadFileState';
+import { buildReadFileState, getFirstLineNumber } from './buildReadFileState';
 import { parseOpenCodeReadContent } from './parseReadContent';
 import ReadFileSkeleton from './ReadFileSkeleton';
 import ReadFileView from './ReadFileView';
+
+// Cloud-sandbox reuses this render; its files live in the sandbox, not on disk.
+const CLOUD_SANDBOX_IDENTIFIER = 'lobe-cloud-sandbox';
 
 const ReadFileQuery = memo<BuiltinRenderProps<ReadFileArgs, Partial<ReadFileState>, string>>(
   ({ args, content, identifier, messageId, pluginError, pluginState }) => {
@@ -25,13 +28,24 @@ const ReadFileQuery = memo<BuiltinRenderProps<ReadFileArgs, Partial<ReadFileStat
       [args, identifier, parsedContent, pluginError, pluginState],
     );
 
+    const firstLineNumber = useMemo(
+      () => getFirstLineNumber({ args, pluginState }),
+      [args, pluginState],
+    );
+
     if (loading) {
       return <ReadFileSkeleton />;
     }
 
     if (!readState) return null;
 
-    return <ReadFileView {...readState} />;
+    return (
+      <ReadFileView
+        {...readState}
+        firstLineNumber={firstLineNumber}
+        sandboxBacked={identifier === CLOUD_SANDBOX_IDENTIFIER}
+      />
+    );
   },
 );
 

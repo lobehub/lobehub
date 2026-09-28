@@ -1,13 +1,12 @@
 import type { WorkListItem } from '@lobechat/types';
 import { Center, Empty, Flexbox } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
+import { ActionIcon, Spin } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { ClipboardListIcon, HistoryIcon, ListIcon } from 'lucide-react';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { getAllWorkSummaries } from '@/features/Conversation/store/slices/data/workSummaries';
 import WorkSummaryCard from '@/features/Work/WorkSummaryCard';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
@@ -160,7 +159,7 @@ const WorksSection = memo<WorksSectionProps>(({ active = true }) => {
     if (isLoading) {
       return (
         <Center flex={1}>
-          <NeuralNetworkLoading size={24} />
+          <Spin size="middle" />
         </Center>
       );
     }

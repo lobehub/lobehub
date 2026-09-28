@@ -21,6 +21,7 @@ const { mockTrpcClient } = vi.hoisted(() => ({
       updateDocument: { mutate: vi.fn() },
     },
     notebook: {
+      associateDocument: { mutate: vi.fn() },
       createDocument: { mutate: vi.fn() },
       listDocuments: { query: vi.fn() },
     },
@@ -260,6 +261,10 @@ describe('doc command', () => {
           title: 'My Doc',
         }),
       );
+      // The server builds Lexical editor state from content; a `{ type: 'doc' }`
+      // placeholder made node ids change on every read.
+      const [params] = mockTrpcClient.document.createDocument.mutate.mock.calls[0];
+      expect(params).not.toHaveProperty('editorData');
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('new-doc'));
     });
 
@@ -387,6 +392,8 @@ describe('doc command', () => {
           expect.objectContaining({ content: 'content2', title: 'Doc 2' }),
         ]),
       });
+      const [{ documents }] = mockTrpcClient.document.createDocuments.mutate.mock.calls[0];
+      expect(documents.every((doc: object) => !('editorData' in doc))).toBe(true);
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Created 2'));
 
       vi.restoreAllMocks();
@@ -462,6 +469,8 @@ describe('doc command', () => {
           id: 'doc1',
         }),
       );
+      const [params] = mockTrpcClient.document.updateDocument.mutate.mock.calls[0];
+      expect(params).not.toHaveProperty('editorData');
     });
 
     it('should update file type', async () => {
@@ -567,48 +576,28 @@ describe('doc command', () => {
   // ── link-topic ────────────────────────────────────────
 
   describe('link-topic', () => {
-    it('should link a document to a topic', async () => {
+    it('attaches the existing document instead of creating a copy', async () => {
+      vi.stubEnv('LOBEHUB_OPERATION_ID', 'op-current');
+      vi.stubEnv('LOBEHUB_TOPIC_ID', 'topic_123');
       mockTrpcClient.document.getDocumentById.query.mockResolvedValue({
         content: 'doc content',
-        description: 'desc',
         id: 'doc1',
         title: 'My Doc',
       });
-      mockTrpcClient.notebook.createDocument.mutate.mockResolvedValue({ id: 'new-doc' });
+      mockTrpcClient.notebook.associateDocument.mutate.mockResolvedValue({
+        documentId: 'doc1',
+        topicId: 'topic_123',
+      });
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'doc', 'link-topic', 'doc1', 'topic_123']);
 
-      expect(mockTrpcClient.notebook.createDocument.mutate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          content: 'doc content',
-          title: 'My Doc',
-          topicId: 'topic_123',
-        }),
-      );
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Linked'));
-    });
-
-    it('carries the dispatched operation only for its own topic', async () => {
-      vi.stubEnv('LOBEHUB_OPERATION_ID', 'op-current');
-      vi.stubEnv('LOBEHUB_TOPIC_ID', 'topic_123');
-      mockTrpcClient.document.getDocumentById.query.mockResolvedValue({ title: 'Report' });
-      mockTrpcClient.notebook.createDocument.mutate.mockResolvedValue({ id: 'linked' });
-      await createProgram().parseAsync(['node', 'test', 'doc', 'link-topic', 'doc1', 'topic_123']);
-      expect(mockTrpcClient.notebook.createDocument.mutate).toHaveBeenLastCalledWith(
-        expect.objectContaining({ operationId: 'op-current' }),
-      );
-      await createProgram().parseAsync([
-        'node',
-        'test',
-        'doc',
-        'link-topic',
-        'doc1',
-        'other-topic',
-      ]);
-      expect(mockTrpcClient.notebook.createDocument.mutate).toHaveBeenLastCalledWith(
-        expect.not.objectContaining({ operationId: expect.any(String) }),
-      );
+      expect(mockTrpcClient.notebook.associateDocument.mutate).toHaveBeenCalledWith({
+        documentId: 'doc1',
+        topicId: 'topic_123',
+      });
+      expect(mockTrpcClient.notebook.createDocument.mutate).not.toHaveBeenCalled();
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('doc1'));
     });
 
     it('should error when document not found', async () => {
@@ -617,6 +606,7 @@ describe('doc command', () => {
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'doc', 'link-topic', 'bad-id', 'topic_123']);
 
+      expect(mockTrpcClient.notebook.associateDocument.mutate).not.toHaveBeenCalled();
       expect(log.error).toHaveBeenCalledWith(expect.stringContaining('not found'));
       expect(exitSpy).toHaveBeenCalledWith(1);
     });

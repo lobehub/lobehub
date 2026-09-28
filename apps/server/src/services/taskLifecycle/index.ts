@@ -27,7 +27,7 @@ import type {
   TaskSchedulerContext,
   TaskTopicHandoff,
 } from '@lobechat/types';
-import { ChatErrorType, DEFAULT_BRIEF_ACTIONS } from '@lobechat/types';
+import { ChatErrorType, DEFAULT_BRIEF_ACTIONS, RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
 import {
@@ -805,7 +805,7 @@ export class TaskLifecycleService {
           schema: { name: TASK_TOPIC_HANDOFF_SCHEMA_NAME, schema: TASK_TOPIC_HANDOFF_SCHEMA },
         },
         {
-          metadata: { trigger: 'task_handoff' },
+          metadata: { trigger: RequestTrigger.Task },
           tracing: {
             promptVersion: TASK_TOPIC_HANDOFF_PROMPT_VERSION,
             scenario: TRACING_SCENARIOS.TaskHandoff,
@@ -919,7 +919,7 @@ export class TaskLifecycleService {
             schema: { name: JUDGE_BRIEF_EMIT_SCHEMA_NAME, schema: JUDGE_BRIEF_EMIT_SCHEMA },
           },
           {
-            metadata: { trigger: 'task_brief_judge' },
+            metadata: { trigger: RequestTrigger.Task },
             tracing: {
               promptVersion: JUDGE_BRIEF_EMIT_PROMPT_VERSION,
               scenario: TRACING_SCENARIOS.TaskBriefJudge,
@@ -984,7 +984,7 @@ export class TaskLifecycleService {
           schema: { name: GENERATE_BRIEF_SCHEMA_NAME, schema: GENERATE_BRIEF_SCHEMA },
         },
         {
-          metadata: { trigger: 'task_brief' },
+          metadata: { trigger: RequestTrigger.Task },
           tracing: {
             promptVersion: GENERATE_BRIEF_PROMPT_VERSION,
             scenario: TRACING_SCENARIOS.TaskBrief,

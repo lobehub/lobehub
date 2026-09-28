@@ -41,6 +41,8 @@ import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis'
 import type { MessageRuntimeService } from '@/server/services/toolExecution/serverRuntimes/message/adapters/types';
 import { PlatformUnsupportedError } from '@/server/services/toolExecution/serverRuntimes/message/PlatformUnsupportedError';
 
+import type { AttachmentSendResult } from '../attachmentDelivery';
+import { attachmentDeliveryState, warnAttachmentFailures } from '../attachmentDelivery';
 import { consumeSendCredits, type WechatWindowRedis } from './contextWindow';
 import { sendWechatAttachments } from './sendAttachments';
 
@@ -99,12 +101,21 @@ export class WechatMessageService implements MessageRuntimeService {
     if (params.content) {
       await this.api.sendMessage(params.channelId, params.content, contextToken);
     }
+    let attachments: AttachmentSendResult | undefined;
     if (params.attachments?.length) {
-      await sendWechatAttachments(this.api, params.channelId, params.attachments, contextToken);
+      attachments = await sendWechatAttachments(
+        this.api,
+        params.channelId,
+        params.attachments,
+        contextToken,
+        { applicationId: this.applicationId },
+      );
+      warnAttachmentFailures('bot-platform:wechat:sendMessage', attachments.failures);
     }
     return {
       channelId: params.channelId,
       platform: 'wechat',
+      ...attachmentDeliveryState(attachments),
     };
   };
 

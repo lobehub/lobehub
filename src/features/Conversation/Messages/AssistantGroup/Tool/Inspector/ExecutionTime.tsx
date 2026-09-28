@@ -1,3 +1,4 @@
+import { formatDuration } from '@lobechat/utils';
 import { Text } from '@lobehub/ui/base-ui';
 import { memo, useEffect, useState } from 'react';
 
@@ -37,10 +38,7 @@ const formatElapsedTime = (ms: number): string => {
   const seconds = ms / 1000;
   if (seconds < 60) return `${seconds.toFixed(1)}s`;
 
-  const totalSeconds = Math.floor(seconds);
-  const minutes = Math.floor(totalSeconds / 60);
-  const remainingSeconds = totalSeconds % 60;
-  return `${minutes}min${remainingSeconds}s`;
+  return formatDuration(ms);
 };
 
 const ExecutionTime = memo<ExecutionTimeProps>(({ isExecuting, startTime, timerKey }) => {

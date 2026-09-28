@@ -18,6 +18,10 @@ import {
 import {
   type AuditSafePathsParams,
   type AuditSafePathsResult,
+  type CopyLocalFilesParams,
+  type CreateLocalDirectoryParams,
+  type CreateLocalEntryResult,
+  type CreateLocalFileParams,
   type EditLocalFileParams,
   type EditLocalFileResult,
   type GlobFilesParams,
@@ -26,9 +30,12 @@ import {
   type GrepContentResult,
   type HashLocalFileParams,
   type ListLocalFileParams,
+  type LocalCopyFilesResultItem,
   type LocalFilePreviewResult,
   type LocalFilePreviewUrlParams,
   type LocalFilePreviewUrlResult,
+  type LocalFileStats,
+  type LocalFileStatsParams,
   type LocalMoveFilesResultItem,
   type LocalReadFileParams,
   type LocalReadFileResult,
@@ -60,6 +67,9 @@ import {
   type WriteLocalFileParams,
 } from '@lobechat/electron-client-ipc';
 import {
+  copyLocalFiles,
+  createLocalDirectory,
+  createLocalFile,
   editLocalFile,
   expandTilde,
   listLocalFiles,
@@ -70,12 +80,16 @@ import {
   writeLocalFile,
 } from '@lobechat/local-file-shell/file';
 import type { FileResult, SearchOptions } from '@lobechat/local-file-shell/types';
+import { isUtf16Buffer, sniffBinaryBuffer } from '@lobechat/utils/isBinaryContent';
 import { resolveMimeType } from '@lobechat/utils/mimeType';
 import { dialog, shell } from 'electron';
 
 import ContentSearchService from '@/services/contentSearchSrv';
 import FileSearchService from '@/services/fileSearchSrv';
-import RemoteFileUploadService from '@/services/remoteFileUploadSrv';
+import RemoteFileUploadService, {
+  describeUploadFailure,
+  type UploadFailure,
+} from '@/services/remoteFileUploadSrv';
 import { createLogger } from '@/utils/logger';
 import { netFetch } from '@/utils/net-fetch';
 
@@ -83,6 +97,23 @@ import { ControllerModule, IpcMethod } from './index';
 
 // Create logger
 const logger = createLogger('controllers:LocalFileCtr');
+
+const formatUploadFailure = ({ kind, reason }: UploadFailure): string => {
+  switch (kind) {
+    case 'storage_quota': {
+      return `the user's LobeHub file storage is full (${reason}), so the model cannot view this image. Retrying will not help; the user needs to free up space in their file library or upgrade their plan`;
+    }
+    case 'network': {
+      return `network error while uploading (${reason}), already retried, so the model cannot view this image. It may work if the file is read again later`;
+    }
+    case 'auth': {
+      return `the desktop app is not signed in to LobeHub (${reason}), so the model cannot view this image`;
+    }
+    default: {
+      return `${reason}; the model cannot view this image`;
+    }
+  }
+};
 
 const SAFE_PATH_PREFIXES = ['/tmp', '/var/tmp'] as const;
 
@@ -130,6 +161,12 @@ const resolvePathWithScope = (inputPath: string, scope: string): string =>
 
 const isWithinSafePathPrefixes = (targetPath: string, prefixes: readonly string[]): boolean =>
   prefixes.some((prefix) => targetPath === prefix || targetPath.startsWith(`${prefix}${path.sep}`));
+
+/** Bytes sampled to decide whether a file is text before counting its lines. */
+const LOCAL_FILE_SNIFF_BYTES = 8 * 1024;
+
+/** Files above this size skip line counting so inserting a reference stays fast. */
+const LOCAL_FILE_LINE_COUNT_MAX_BYTES = 256 * 1024 * 1024;
 
 const resolveNearestExistingRealPath = async (targetPath: string): Promise<string | undefined> => {
   let currentPath = targetPath;
@@ -416,6 +453,55 @@ export default class LocalFileCtr extends ControllerModule {
     return hash.digest('hex');
   }
 
+  /**
+   * Size, MIME type, and line count of a local file, attached to `<localFile>` references so the
+   * model knows whether to read the file whole or in windows. Lines are counted by streaming, so
+   * memory stays flat; binary files, UTF-16 files and files above
+   * {@link LOCAL_FILE_LINE_COUNT_MAX_BYTES} skip it. UTF-16 is skipped because counting `0x0a` bytes
+   * also counts code units such as U+0A00-U+0AFF, so the number would be wrong rather than missing.
+   */
+  @IpcMethod()
+  async getLocalFileStats({ path: filePath }: LocalFileStatsParams): Promise<LocalFileStats> {
+    const fileStat = await stat(filePath);
+    if (!fileStat.isFile()) return { size: fileStat.size };
+
+    let head: Buffer | undefined;
+    let lineCount: number | undefined;
+    let lastByte: number | undefined;
+
+    for await (const chunk of createReadStream(filePath)) {
+      const buffer = chunk as Buffer;
+      if (!head) {
+        head = buffer.subarray(0, LOCAL_FILE_SNIFF_BYTES);
+        if (
+          sniffBinaryBuffer(head).isBinary ||
+          isUtf16Buffer(head) ||
+          fileStat.size > LOCAL_FILE_LINE_COUNT_MAX_BYTES
+        ) {
+          break;
+        }
+        lineCount = 0;
+      }
+      for (
+        let index = buffer.indexOf(0x0a);
+        index !== -1;
+        index = buffer.indexOf(0x0a, index + 1)
+      ) {
+        lineCount! += 1;
+      }
+      lastByte = buffer.at(-1);
+    }
+
+    // A final line without a trailing newline still counts as a line.
+    if (lineCount !== undefined && lastByte !== undefined && lastByte !== 0x0a) lineCount += 1;
+
+    const mimeType = await resolveMimeType(filePath, head ?? new Uint8Array()).catch(
+      () => undefined,
+    );
+
+    return { lineCount, mimeType: mimeType || undefined, size: fileStat.size };
+  }
+
   @IpcMethod()
   async readFile(params: LocalReadFileParams): Promise<LocalReadFileResult> {
     logger.debug('Starting to read file:', {
@@ -486,6 +572,13 @@ export default class LocalFileCtr extends ControllerModule {
         logger.warn('Image upload returned no record:', { filePath });
       } catch (error) {
         logger.warn('Image upload failed:', { error, filePath });
+
+        // Degrade with the real cause so the model can tell a full storage
+        // quota (retrying is pointless) apart from a transient network error.
+        return buildImageResult(
+          `[Image: ${filename}] (upload unavailable — ${formatUploadFailure(describeUploadFailure(error))})`,
+          { createdTime: fileStat.birthtime, modifiedTime: fileStat.mtime },
+        );
       }
 
       // Degrade: the placeholder tells the model an image exists that it
@@ -529,6 +622,37 @@ export default class LocalFileCtr extends ControllerModule {
   async handleWriteFile({ path: filePath, content, cwd }: WriteLocalFileParams) {
     logger.debug(`Writing file ${filePath}`, { contentLength: content?.length });
     return writeLocalFile({ content, cwd, path: filePath });
+  }
+
+  /** Create a new file. Fails instead of overwriting when the path is taken. */
+  @IpcMethod()
+  async handleCreateFile({
+    path: filePath,
+    content,
+    cwd,
+  }: CreateLocalFileParams): Promise<CreateLocalEntryResult> {
+    logger.debug(`Creating file ${filePath}`);
+    return createLocalFile({ content, cwd, path: filePath });
+  }
+
+  /** Create a new folder. Fails instead of reusing it when the path is taken. */
+  @IpcMethod()
+  async handleCreateDirectory({
+    path: dirPath,
+    cwd,
+  }: CreateLocalDirectoryParams): Promise<CreateLocalEntryResult> {
+    logger.debug(`Creating directory ${dirPath}`);
+    return createLocalDirectory({ cwd, path: dirPath });
+  }
+
+  /**
+   * Copy files/folders, or duplicate them in place when an item has no
+   * `targetPath`. Never overwrites; each item reports its own outcome.
+   */
+  @IpcMethod()
+  async handleCopyFiles({ items, cwd }: CopyLocalFilesParams): Promise<LocalCopyFilesResultItem[]> {
+    logger.debug('Starting batch file copy:', { itemsCount: items?.length });
+    return copyLocalFiles({ cwd, items });
   }
 
   @IpcMethod()

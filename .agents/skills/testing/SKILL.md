@@ -41,6 +41,7 @@ cd packages/database && TEST_SERVER_DB=1 bunx vitest run --silent='passed-only' 
 
 1. **Prefer `vi.spyOn` over `vi.mock`** - More targeted, easier to maintain. The root Vitest configs do not restore mocks automatically; restore spies in test cleanup with `vi.restoreAllMocks()`.
 2. **Test behavior, not implementation details**
+   - Keep native `node:test` CI checks under `.github/scripts/`, outside the app Vitest discovery paths. When mixing test runners, verify both the intended runner and the owning Vitest project's file discovery before pushing.
 3. **Regression tests for bug fixes** - Include a regression test that fails without the fix and passes with it; write the failing test first when the failure is easy to reproduce. **Skip** pure style/CSS fixes (selector, hover, mask, spacing, color) when the only practical assertion would be source-string matching on the stylesheet — that is not a regression test worth shipping.
 4. **No new component tests** - Only update existing React component tests. Complex logic should be extracted into hooks and tested there instead
 

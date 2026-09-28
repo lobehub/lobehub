@@ -13,6 +13,14 @@ class GatewayConnectionService {
     return ensureElectronIpc().gatewayConnection.getConnectionStatus();
   };
 
+  getKeepAwake = async () => {
+    return ensureElectronIpc().gatewayConnection.getKeepAwake();
+  };
+
+  setKeepAwake = async (enabled: boolean) => {
+    return ensureElectronIpc().gatewayConnection.setKeepAwake({ enabled });
+  };
+
   getDeviceInfo = async () => {
     return ensureElectronIpc().gatewayConnection.getDeviceInfo();
   };

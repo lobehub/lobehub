@@ -27,6 +27,11 @@ export interface ServerSubAgentRunParams {
   description: string;
   /** Detailed instruction/prompt for the sub-agent run. */
   instruction: string;
+  /**
+   * Continue this earlier `callSubAgent` sub-agent (its isolation thread id)
+   * instead of starting a new one. Only set by `callSubAgent`.
+   */
+  subAgentId?: string;
   /** Optional per-run timeout in milliseconds. */
   timeout?: number;
 }
@@ -229,6 +234,11 @@ export interface ToolExecutionContext {
    * a group chat turn; only GroupAgentBuilder tool methods read this.
    */
   editingGroupId?: string;
+  /**
+   * Tool ids offered to the model in this run (operation tool set plus step activations). Lets a
+   * runtime name a follow-up tool in its result only when the model can actually call it.
+   */
+  enabledToolIds?: string[];
   /**
    * Legacy agent invocation callback forwarded from RuntimeExecutorContext.
    * Kept for tool runtimes that still dispatch through exec_sub_agent style

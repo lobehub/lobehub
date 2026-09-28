@@ -298,6 +298,7 @@ export default {
   'resourceList.transferTo': 'Move to…',
   'resourceList.viewTransferred': 'View',
   'portal.openInPageEditor': 'Edit in Page',
+  'preview.tooLarge': 'This file is too large to preview. Download it to view its contents.',
   'preview.downloadFile': 'Download File',
   'preview.raw': 'Raw',
   'preview.render': 'Preview',

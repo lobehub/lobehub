@@ -29,9 +29,11 @@ import type {
 import {
   getBotReplyLocale,
   getStepReactionEmoji,
+  normalizeBotReactionMode,
   platformFromThreadId,
   platformRegistry,
   resolveBotProviderConfig,
+  shouldApplyReaction,
 } from './platforms';
 import { clearReactionState, getReactionState, saveReactionState } from './reactionState';
 import {
@@ -182,6 +184,7 @@ export class BotCallbackService {
     const entry = platformRegistry.getPlatform(platform);
     const canEdit = entry?.supportsMessageEdit !== false;
     const replyLocale = getBotReplyLocale(platform);
+    const reactionMode = normalizeBotReactionMode(settings.reactionMode);
 
     if (type === 'step') {
       if (canEdit && progressMessageId && settings.displayToolCalls === true) {
@@ -189,8 +192,12 @@ export class BotCallbackService {
       }
       // Swap the user-message reaction to match the current step type (tool
       // call vs. LLM reasoning). Runs regardless of `displayToolCalls` because
-      // the progress-message edit and the reaction are separate UX channels.
-      await this.swapStepReaction(body, client, platform);
+      // the progress-message edit and the reaction are separate UX channels —
+      // but only under the `full` reaction mode: every swap is a platform
+      // notification for users with message alerts on.
+      if (shouldApplyReaction(reactionMode, 'step')) {
+        await this.swapStepReaction(body, client, platform);
+      }
       // Only renew typing when more steps are expected. The final step
       // (shouldContinue=false) may arrive after the completion callback
       // via async delivery (QStash), which would restart typing after stop.
@@ -213,7 +220,13 @@ export class BotCallbackService {
         options?.deliveredChunkCount,
         options?.onChunkDelivered,
       );
-      await this.clearStepReaction(body, client, platform);
+      // Cleanup follows what was actually applied, not the current setting: a
+      // run that placed a reaction must still remove it after the bot is
+      // switched to `none` mid-run. The setting only decides whether to fall
+      // back to the legacy 👀 when nothing was tracked.
+      await this.clearStepReaction(body, client, platform, {
+        fallbackToReceived: shouldApplyReaction(reactionMode, 'clear'),
+      });
       // Clear the active thread tracker so the thread can accept new messages.
       // In queue mode, the bridge handler's finally block skips this cleanup
       // to keep the thread marked active while the agent runs on the job queue.
@@ -694,17 +707,21 @@ export class BotCallbackService {
   /**
    * Remove whatever emoji was last applied to the user message and clear the
    * tracking state. Falls back to the legacy `👀` when no state is recorded
-   * so pre-feature runs (or runs against a Redis-less setup) still clean up.
+   * so pre-feature runs (or runs against a Redis-less setup) still clean up,
+   * unless `fallbackToReceived` is off (reaction mode `none`).
    */
   private async clearStepReaction(
     body: BotCallbackBody,
     client: PlatformClient,
     platform: string,
+    { fallbackToReceived }: { fallbackToReceived: boolean },
   ): Promise<void> {
     const { userMessageId, applicationId, platformThreadId } = body;
     if (!userMessageId) return;
 
     const state = await getReactionState(platform, applicationId, userMessageId);
+    // Nothing tracked and reactions are off: there is nothing to remove.
+    if (!state && !fallbackToReceived) return;
     const emoji = state?.emoji ?? '👀';
 
     // Thread-starter messages may live in the parent channel (e.g. Discord),

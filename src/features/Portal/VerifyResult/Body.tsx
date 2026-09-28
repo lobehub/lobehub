@@ -1,4 +1,5 @@
 import type { VerifierType } from '@lobechat/types';
+import { formatDuration as formatDurationMs } from '@lobechat/utils';
 import { Flexbox, Markdown } from '@lobehub/ui';
 import { Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -87,7 +88,8 @@ const formatDuration = (started?: Date | string | null, completed?: Date | strin
   if (!started || !completed) return null;
   const ms = +new Date(completed) - +new Date(started);
   if (!Number.isFinite(ms) || ms <= 0) return null;
-  return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
+  if (ms < 1000) return `${ms}ms`;
+  return ms < 60_000 ? `${(ms / 1000).toFixed(1)}s` : formatDurationMs(ms);
 };
 
 const Field = memo<{ children: ReactNode; label: string }>(({ label, children }) => {

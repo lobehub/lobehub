@@ -1,11 +1,10 @@
 'use client';
 
 import { Center, Empty } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, Spin } from '@lobehub/ui/base-ui';
 import { createContext, type ReactNode, use } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { isTrpcErrorCode } from '@/utils/trpcError';
 
 import { useAcceptanceBundle } from './useAcceptanceBundle';
@@ -52,7 +51,7 @@ export const AcceptanceBundleGate = ({
   if (isLoading && !data) {
     return (
       <Center height={height}>
-        <NeuralNetworkLoading size={48} />
+        <Spin size="large" />
       </Center>
     );
   }

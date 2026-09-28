@@ -1,13 +1,15 @@
 'use client';
 
 import { Center, Flexbox } from '@lobehub/ui';
+import { Spin } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
+import AsyncError from '@/components/AsyncError';
 import { InlineHtmlPreview } from '@/components/HtmlPreview';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 
 import { useTextFileLoader } from '../../hooks/useTextFileLoader';
+import NotSupport from '../../NotSupport';
 
 const styles = createStaticStyles(({ css }) => ({
   page: css`
@@ -23,7 +25,15 @@ interface HTMLViewerProps {
 }
 
 const HTMLViewer = memo<HTMLViewerProps>(({ url }) => {
-  const { fileData, loading } = useTextFileLoader(url);
+  const { error, fileData, loading, tooLarge } = useTextFileLoader(url);
+
+  if (!loading && fileData === null)
+    return (
+      <Flexbox>
+        {error && <AsyncError error={error} variant={'block'} />}
+        <NotSupport tooLarge={tooLarge} url={url} />
+      </Flexbox>
+    );
 
   return (
     <Flexbox className={styles.page}>
@@ -31,7 +41,7 @@ const HTMLViewer = memo<HTMLViewerProps>(({ url }) => {
         <InlineHtmlPreview content={fileData} />
       ) : (
         <Center height={'100%'}>
-          <NeuralNetworkLoading size={36} />
+          <Spin size="large" />
         </Center>
       )}
     </Flexbox>

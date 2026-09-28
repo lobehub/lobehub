@@ -91,6 +91,7 @@ export class AgentStreamClient extends TypedEmitter {
     this.token = options.token;
     this.autoReconnect = options.autoReconnect ?? true;
     this.resumeOnConnect = options.resumeOnConnect ?? false;
+    this.lastEventId = options.lastEventId ?? '';
   }
 
   // ─── Public API ───
@@ -137,13 +138,6 @@ export class AgentStreamClient extends TypedEmitter {
     this.cleanup();
     this.setStatus('disconnected');
     this.emit('disconnected');
-  }
-
-  /**
-   * Send an interrupt command to stop the running agent.
-   */
-  sendInterrupt(): void {
-    this.sendMessage({ type: 'interrupt' });
   }
 
   /**

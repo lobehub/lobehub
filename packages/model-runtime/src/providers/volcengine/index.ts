@@ -130,4 +130,5 @@ export const LobeVolcengineAI = createOpenAICompatibleRuntime({
       } as any;
     },
   },
+  videoGenerationCapabilities: { completionModes: ['webhook'] },
 });

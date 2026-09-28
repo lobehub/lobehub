@@ -78,6 +78,7 @@ describe('TopicAutoSummaryService', () => {
     );
     expect(request.messages[1].content).toContain('Recent conversation:\nUSER: What is next?');
     expect(mocks.generateObject.mock.calls[0][1]).toEqual({
+      metadata: { trigger: 'topic_summary' },
       tracing: {
         promptVersion: 'v1',
         scenario: 'topic_auto_summary',

@@ -5,14 +5,21 @@ import type {
   OpenAIChatMessage,
   UserMessageContentPart,
 } from '@lobechat/model-runtime';
+import {
+  collectStatusCodes,
+  getErrorCodeSpec,
+  refineErrorCode,
+} from '@lobechat/model-runtime/errors';
 import type { CodexReasoningEffort } from '@lobechat/types';
 import {
+  AgentRuntimeErrorType,
   getCodexReasoningEffortLevels,
   isCodexServerDefaultCustomModel,
   RequestTrigger,
   SERVER_DEFAULT_HETEROGENEOUS_MODEL_ALIAS,
 } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
 import type { ServerDefaultHeterogeneousAgentType } from '@/server/modules/ModelRuntime';
 import {
@@ -942,13 +949,18 @@ export const invokeServerDefaultModel = async (params: {
     params.agentType,
     params.model,
   );
-  const { deploymentName, supportsAdaptiveThinking } = resolvedModel;
+  const { deploymentName, maxOutput, supportsAdaptiveThinking } = resolvedModel;
   const model = deploymentName ?? resolvedModel.model;
   const runtime = await initModelRuntimeFromServerConfig({
     actorUserId: params.userId,
     workspaceId: params.workspaceId,
   });
   const normalizedPayload = { ...params.payload };
+  // Kimi can use its context window as the output budget for an unknown model.
+  // Bound that budget by the selected deployment model, including for older clients.
+  if (params.agentType === 'kimi-code' && maxOutput !== undefined && maxOutput > 0) {
+    normalizedPayload.max_tokens = Math.min(normalizedPayload.max_tokens ?? maxOutput, maxOutput);
+  }
   if (
     params.agentType === 'claude-code' &&
     normalizedPayload.thinking?.type === 'adaptive' &&
@@ -1004,18 +1016,9 @@ const readMessage = (value: unknown): string | undefined => {
  * Describe a failed relay in terms its caller can act on.
  *
  * `runtime.chat` rejects with a plain `{ error, errorType, provider }` object
- * rather than an `Error`, and Hono's default handler cannot serialise that: an
- * uncaught one leaves the client a **500 with an empty body**. That is how an
- * Ark rejection ("The parameter `type` specified in the request are not valid:
- * invalid value adaptive") reached Claude Code — as `API Error: 500 status code
- * (no body)`, retried for a minute and a half because nothing in the response
- * said it could never succeed.
- *
- * The upstream's own status is deliberately not forwarded: `handleOpenAIError`
- * keeps the provider's error body and drops the status whenever there is one,
- * so any status here would be invented. 502 says what is actually known — the
- * request reached us, and the hop past us failed — and the message carries the
- * provider's own words, which is the part that was missing.
+ * rather than an `Error`. Keep its readable body, but do not turn known terminal
+ * failures into retryable 502s. Unclassified failures still use 502 because some
+ * adapters discard the original upstream status.
  */
 export const describeRelayFailure = (error: unknown) => {
   const payload = isRecord(error) ? error : undefined;
@@ -1026,6 +1029,38 @@ export const describeRelayFailure = (error: unknown) => {
     String(error);
   const provider = typeof payload?.provider === 'string' ? payload.provider : undefined;
   const errorType = payload?.errorType;
+  // Only provider wrappers use the SDK convention of a leading HTTP status.
+  const messageStatus =
+    errorType === AgentRuntimeErrorType.ProviderBizError ||
+    errorType === AgentRuntimeErrorType.UpstreamHttpError
+      ? Number(/^\s*([45]\d{2})\b/.exec(message)?.[1])
+      : undefined;
+  const httpStatus = [errorType, payload?.status, ...collectStatusCodes(error), messageStatus].find(
+    (value): value is number =>
+      typeof value === 'number' && Number.isInteger(value) && value >= 400 && value <= 599,
+  );
+  const refinedCode = refineErrorCode({
+    errorType: errorType === undefined ? undefined : String(errorType),
+    httpStatus,
+    message,
+    provider,
+  });
+  const spec = getErrorCodeSpec(refinedCode ?? String(errorType));
+  // Generic provider buckets defer to HTTP semantics; other categories keep their
+  // explicit retry policy even when marked as monitoring fallbacks.
+  const classified = spec && !(spec.isFallback && spec.category === 'provider');
+  const candidateStatus = httpStatus ?? (classified ? spec.httpStatus : 502);
+  // Runtime-only 470/471/472 codes are not public HTTP protocol statuses.
+  const status = (
+    [470, 471, 472].includes(candidateStatus)
+      ? classified && !spec.retryable
+        ? 400
+        : 502
+      : candidateStatus
+  ) as ContentfulStatusCode;
+  // Providers can reuse request-error phrases in transient responses. Let HTTP
+  // semantics win over those inferences, but retain explicit types and quota policy.
+  const inferredRequestError = refinedCode !== undefined && spec?.category === 'request';
 
   return {
     // Never empty. A blank message here would put the caller back where the
@@ -1036,6 +1071,10 @@ export const describeRelayFailure = (error: unknown) => {
         .filter(Boolean)
         .join(' ')
         .trim() || 'Model runtime failed without a message',
-    status: 502 as const,
+    retryable:
+      classified && !inferredRequestError
+        ? spec.retryable
+        : status >= 500 || [408, 409, 429].includes(status),
+    status,
   };
 };

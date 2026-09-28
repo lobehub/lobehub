@@ -21,7 +21,7 @@ const styles = createStaticStyles(({ css }) => ({
 interface AcceptanceTabsProps {
   active: AcceptanceTabKey;
   checkCount: number;
-  /** Open discussion threads on this delivery. */
+  /** Visible contributions: round notes, comments and replies, excluding status events. */
   discussionCount: number;
   flowCount?: number;
   onChange: (key: AcceptanceTabKey) => void;

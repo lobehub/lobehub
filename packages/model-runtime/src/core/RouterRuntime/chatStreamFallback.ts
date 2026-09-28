@@ -10,6 +10,7 @@ export interface ChatStreamFallbackAttempt {
 }
 
 interface CreateChatStreamFallbackResponseOptions {
+  onSettled?: () => void;
   shouldFallback: (result: RouteAttemptFinished) => Promise<boolean>;
   startAttempt: (index: number) => Promise<ChatStreamFallbackAttempt>;
   totalAttempts: number;
@@ -21,6 +22,7 @@ interface CreateChatStreamFallbackResponseOptions {
  * starting the next route without mixing output from two providers.
  */
 export const createChatStreamFallbackResponse = async ({
+  onSettled,
   shouldFallback,
   startAttempt,
   totalAttempts,
@@ -66,75 +68,87 @@ export const createChatStreamFallbackResponse = async ({
     new ReadableStream<Uint8Array>(
       {
         async cancel(reason) {
-          await active.reader?.cancel(reason);
-          await active.observation.commit();
+          try {
+            await active.reader?.cancel(reason);
+            await active.observation.commit();
+          } finally {
+            onSettled?.();
+          }
         },
         async pull(controller) {
-          while (true) {
-            if (!active.reader) {
-              const result = await active.observation.finished;
-              if (await shouldFallbackTerminalAttempt(result)) {
-                await activateNextAttempt();
-                continue;
-              }
-
-              await commitTerminalAttempt(result);
-              if (result.outcome === 'completed') controller.close();
-              else controller.error(result.error ?? new Error(`Chat attempt ${result.outcome}`));
-              return;
-            }
-
-            try {
-              const { done, value } = await active.reader.read();
-              if (!done) {
-                if (committed) {
-                  controller.enqueue(value);
-                  return;
+          try {
+            while (true) {
+              if (!active.reader) {
+                const result = await active.observation.finished;
+                if (await shouldFallbackTerminalAttempt(result)) {
+                  await activateNextAttempt();
+                  continue;
                 }
 
-                bufferedChunks.push(value);
-                if (active.observation.hasVisibleOutput()) {
-                  committed = true;
-                  await active.observation.commit();
-                  flushBufferedChunks(controller);
-                  return;
-                }
-                continue;
+                await commitTerminalAttempt(result);
+                if (result.outcome === 'completed') controller.close();
+                else controller.error(result.error ?? new Error(`Chat attempt ${result.outcome}`));
+                onSettled?.();
+                return;
               }
 
-              const result = await active.observation.finished;
-              if (await shouldFallbackTerminalAttempt(result)) {
-                await activateNextAttempt();
-                continue;
-              }
-
-              await commitTerminalAttempt(result);
-              if (result.outcome === 'completed') {
-                flushBufferedChunks(controller);
-                controller.close();
-              } else {
-                controller.error(result.error ?? new Error(`Chat attempt ${result.outcome}`));
-              }
-              return;
-            } catch (error) {
-              // A deferred consumer callback can reject before EOF. Cancelling
-              // first lets the observer reach a terminal state without waiting
-              // forever inside the current pull.
               try {
-                await active.reader.cancel(error);
-              } catch {
-                // The reader may already be errored and the observer terminal.
-              }
-              const result = await active.observation.finished;
-              if (await shouldFallbackTerminalAttempt(result)) {
-                await activateNextAttempt();
-                continue;
-              }
+                const { done, value } = await active.reader.read();
+                if (!done) {
+                  if (committed) {
+                    controller.enqueue(value);
+                    return;
+                  }
 
-              await commitTerminalAttempt(result);
-              controller.error(error);
-              return;
+                  bufferedChunks.push(value);
+                  if (active.observation.hasVisibleOutput()) {
+                    committed = true;
+                    await active.observation.commit();
+                    flushBufferedChunks(controller);
+                    return;
+                  }
+                  continue;
+                }
+
+                const result = await active.observation.finished;
+                if (await shouldFallbackTerminalAttempt(result)) {
+                  await activateNextAttempt();
+                  continue;
+                }
+
+                await commitTerminalAttempt(result);
+                if (result.outcome === 'completed') {
+                  flushBufferedChunks(controller);
+                  controller.close();
+                } else {
+                  controller.error(result.error ?? new Error(`Chat attempt ${result.outcome}`));
+                }
+                onSettled?.();
+                return;
+              } catch (error) {
+                // A deferred consumer callback can reject before EOF. Cancelling
+                // first lets the observer reach a terminal state without waiting
+                // forever inside the current pull.
+                try {
+                  await active.reader.cancel(error);
+                } catch {
+                  // The reader may already be errored and the observer terminal.
+                }
+                const result = await active.observation.finished;
+                if (await shouldFallbackTerminalAttempt(result)) {
+                  await activateNextAttempt();
+                  continue;
+                }
+
+                await commitTerminalAttempt(result);
+                controller.error(error);
+                onSettled?.();
+                return;
+              }
             }
+          } catch (error) {
+            onSettled?.();
+            throw error;
           }
         },
       },

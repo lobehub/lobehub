@@ -32,8 +32,8 @@ class AcceptanceEvidenceExecutionRuntime {
    * The builder now captures evidence inside the main Task run, so the plan
    * hangs off the operation the tool is called from. The post-run
    * evidence-submission turn is a *child* operation, and its plan still lives
-   * on the parent — hence the parent wins when there is one. Resolving only the
-   * parent (the original shape) made every in-run call fail NO_PARENT_OPERATION.
+   * on the parent. Repair operations have a parent AND their own round, so their
+   * own plan must win; otherwise repaired evidence overwrites the failed round.
    */
   private resolveRunOperationId = async () => {
     if (!this.operationId) return undefined;
@@ -43,7 +43,11 @@ class AcceptanceEvidenceExecutionRuntime {
       this.workspaceId,
     ).findById(this.operationId);
     if (!operation) return undefined;
-    return operation.parentOperationId ?? operation.id;
+    if (!operation.parentOperationId) return operation.id;
+    const ownRun = await new VerifyRunModel(this.db, this.userId, this.workspaceId).findByOperation(
+      operation.id,
+    );
+    return ownRun ? operation.id : operation.parentOperationId;
   };
 
   listCriteria = async () => {

@@ -1,8 +1,6 @@
 ---
 title: Cloud Sandbox
-description: >-
-  Agents execute code and process files in a secure cloud environment — run
-  Python/JS, generate docs, create charts. Real execution, not just snippets.
+description: Compare cloud sandbox and local execution, including file access, permissions, storage, and export, before running code or file tasks.
 tags:
   - LobeHub
   - Cloud Sandbox
@@ -13,93 +11,98 @@ tags:
 
 # Cloud Sandbox
 
-Cloud Sandbox lets Agents run code and process files in a secure, isolated cloud environment. Instead of only suggesting code, your Agent executes it — and returns real output, downloadable documents, and charts you can iterate on in real time. From data analysis to report generation, code debugging to file conversion, Cloud Sandbox turns your Agent into a true execution partner.
+Cloud Sandbox lets agents run code, commands, and file operations on a server. Local execution works with real project files on a connected computer. Before each task, check where it will run and which files it will use.
 
-## What Is Cloud Sandbox?
+This page focuses on cloud execution and compares it with local execution. See [Execution Devices](/docs/usage/agent/execution-devices) for connections, selection, and working directories.
 
-A securely isolated cloud execution environment. When you need actual results — not just code snippets — the Agent runs the code in the sandbox and returns the output. Your local machine stays untouched; all execution happens in the cloud.
+## Cloud Sandbox and Local Execution
+
+| Dimension | Cloud sandbox | Local execution / local sandbox |
+| --- | --- | --- |
+| Execution location | A server-side sandbox environment | A connected computer |
+| File access | Files present in or transferred to the sandbox | Real files that the device tools and process can access |
+| Permission boundary | Provider restrictions and LobeHub tool permissions | Tool, process, and operating-system permissions. The working directory does not restrict all file access |
+| Runtimes and dependencies | Depend on the provider and image. Check the required runtime and libraries | Depend on the computer. Check for missing dependencies before the task |
+| Package installation | Depends on the environment, installation permissions, and network access | Changes the device environment. Specify the installation location and approval first |
+| Network access | Depends on the provider and deployment | Depends on device networking, proxies, and permissions |
+| File persistence | Temporary storage. Save important files promptly | Follows device filesystem rules. File changes remain after the chat ends |
+| Results | Export the result to obtain a download link | Find the result at its device path. Use an available upload or export tool to share it |
+
+Operations within the cloud sandbox use sandbox files. Separate device tools and local execution can change or delete real files on your computer.
 
 ## What Cloud Sandbox Can Do
 
 ### Execute Code
 
-The Agent runs Python, JavaScript, and TypeScript in the sandbox and returns real execution output — not just code text. Common libraries (e.g., pandas, matplotlib for Python; lodash for JavaScript) are available. The Agent can install additional packages as needed.
+Where the necessary runtime is available, the agent can run Python, JavaScript, or TypeScript and return actual output. Examples include dataset statistics and code tests.
+
+Available languages, libraries, and system tools depend on the environment. Ask the agent to check required dependencies before it runs the task.
 
 ### Generate Files
 
-The Agent creates PDFs, Excel spreadsheets, Word documents, images, charts, and more — with download links. Download and use them directly in your workflow.
+With the necessary tools and dependencies, the agent can create PDFs, spreadsheets, Word documents, images, or charts. After creating a file, the agent needs to export it successfully so you can download it.
 
 ### Process Data
 
-The Agent reads, analyzes, and transforms data files. Upload CSV, JSON, or other formats — the Agent can clean, summarize, visualize, and export the results.
+The agent can clean, summarize, and convert CSV, JSON, and other data. After uploading a file in chat, check that the selected execution environment can read it before processing.
 
 ### Run Commands
 
-The Agent executes shell commands to install dependencies, manipulate files, and perform complex operations. Useful for multi-step workflows that combine scripts and system tools.
+The agent can run shell commands that combine scripts, file operations, and system tools. Available commands depend on the environment and permissions. Review command output and exit codes to check the result.
 
-## Enabling Cloud Sandbox
+## Enable Tools and Check Execution Location
 
-Cloud Sandbox is a built-in Skill. Enable it for your Agent before use.
+1. Open the tool or connector settings in the agent profile.
+2. Enable the cloud sandbox tool available in your version.
+3. Review the tool's approval settings.
+4. If the interface provides an execution device selector, check the selected location.
+5. Before file changes, ask the agent to report the actual execution location, working directory, and input paths.
 
-**From Agent Profile** — Go to the Agent Profile page, click **+ Add Skill**, and check **Cloud Sandbox**.
+In older versions, look for **+ Add Skill → Cloud Sandbox**, or the Skill icon below the chat input.
 
-**In a conversation** — Click the Skill icon below the chat input and check **Cloud Sandbox**.
+Self-hosted deployments also require a sandbox provider. See [Configuring Cloud Sandbox](/docs/self-hosting/environment-variables/cloud-sandbox) for configuration requirements.
 
 ## Using Cloud Sandbox
 
 ### Ask the Agent to Execute Code
 
-Describe the task; the Agent writes and runs the code:
-
-- "Write a Python script to calculate the average and standard deviation of this dataset."
-- "Implement a quicksort algorithm in JavaScript and run a test."
-- "Run this code and show me the output."
-- "Use pandas to analyze this CSV and show the top 5 rows by revenue."
+- “Calculate the average and standard deviation of this dataset in the cloud sandbox.”
+- “Run this JavaScript sorting algorithm and show the test results.”
+- “Read this CSV and show the top five rows by revenue.”
 
 ### Ask the Agent to Generate Documents
 
-Describe the content; the Agent generates the document and provides a download link:
-
-- "Generate a PDF report with the analysis of this data."
-- "Convert this content into a Word document."
-- "Create an Excel spreadsheet to organize this information."
-- "Make a bar chart from this sales data and export it as PNG."
+- “Generate a PDF with this analysis and export it for download.”
+- “Convert this content to Word and report the file location.”
+- “Create a bar chart from this sales data and export it as PNG.”
 
 ### Ask the Agent to Process Data
 
-Provide data or files; the Agent processes and returns results:
+- “Convert this JSON file to CSV and keep the original file.”
+- “Remove duplicate data rows and save the result as a new file.”
+- “Merge these CSV files on the id column and report the input and output paths.”
 
-- "Analyze this sales data and create a trend chart."
-- "Convert this JSON file to CSV format."
-- "Clean this dataset by removing duplicates."
-- "Merge these two CSV files on the 'id' column."
+A local environment with suitable tools can also perform these tasks. It uses the files and runtime environment on that device.
 
-## Use Cases
+## Save and Retrieve Results
 
-**Data analysis** — Upload a dataset, ask for summary statistics, visualizations, or trend analysis. Get charts and tables you can share in reports or presentations.
+**Cloud results**: Ask the agent to export the file and provide a download link. Open the link and save important files promptly.
 
-**Report automation** — Generate weekly reports, invoices, or summaries from structured data. The Agent produces PDFs or Excel files ready to send.
+**Local results**: Ask for the file path. To share the file, use an upload or export tool that can access the local device.
 
-**Code prototyping** — Test algorithms, validate logic, or debug snippets without leaving the conversation. See real output instead of guessing.
+**Further work**: The conversation can retain discussion context without retaining files or processes. Before more work, check that the original files and results remain accessible.
 
-**File conversion** — Convert between formats (JSON ↔ CSV, Markdown → PDF) or batch-process files. No need to write one-off scripts yourself.
+## Related Guides and Releases
 
-## Understanding the Environment
+- [June 8, 2026: connector tool permissions](/changelog/2026-06-08-connectors)
+- [Cloud sandbox configuration: providers, runtime requirements, and file export](/docs/self-hosting/environment-variables/cloud-sandbox)
 
-**Isolated execution** — The sandbox runs on a secure cloud server, completely separate from your local machine. Nothing the Agent does in the sandbox affects your local file system.
-
-**Session-based storage** — Files in the sandbox are temporary and tied to the current conversation. If the session ends or stays inactive for a long time, sandbox files may be cleared. Download files you need using the links the Agent provides.
-
-**Automatic export** — When the Agent generates files, they're automatically exported with download links. No extra steps — you get documents, charts, and data files directly from the execution.
-
-## Tips
-
-- **Be specific about format** — "Export as CSV" or "Save as PDF" helps the Agent choose the right output format.
-- **Iterate in the same conversation** — "Make the chart blue" or "Add a title to the report" — the Agent has context and can refine the output.
-- **Download important files promptly** — Session-based storage means files may not persist indefinitely. Grab what you need while the conversation is active.
+{/* Implementation reference: the user-provided documentation review checklist, reviewed September 10, 2026, records local sandbox support and cites v2.2.14. Repository changelogs do not specify the full local sandbox implementation. */}
 
 <Cards>
-  <Card href={'/docs/usage/agent/artifacts'} title={'Artifacts'} />
+  <Card href={'/docs/usage/agent/execution-devices'} title={'Execution Devices'} />
+
+  <Card href={'/docs/usage/agent/connectors#artifacts'} title={'Artifacts'} />
 
   <Card href={'/docs/usage/getting-started/resource'} title={'Resource Library'} />
 

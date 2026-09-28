@@ -101,6 +101,20 @@ describe('settings useCategory', () => {
     expect(getItemKeys()).not.toContain(SettingsTabs.OAuthApps);
   });
 
+  it('hides Integrations by default and shows it in the Account group once the Labs flag is on', () => {
+    expect(getItemKeys()).not.toContain(SettingsTabs.Integrations);
+
+    useUserStore.setState({
+      preference: {
+        ...initialUserStoreState.preference,
+        lab: { ...initialUserStoreState.preference.lab, enableIntegrations: true },
+      },
+    });
+    const { result } = renderHook(() => useCategory(), { wrapper: createWrapper(true) });
+    const accountGroup = result.current.find((group) => group.key === SettingsGroupKey.Account);
+    expect(accountGroup?.items.map((item) => item.key)).toContain(SettingsTabs.Integrations);
+  });
+
   it('shows OAuth Apps when the Labs preference is enabled', () => {
     useUserStore.setState({
       preference: {
