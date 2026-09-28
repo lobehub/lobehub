@@ -2,6 +2,7 @@ import type { LobeChatDatabase } from '@lobechat/database';
 import type { FileContent } from '@lobechat/prompts';
 import debug from 'debug';
 
+import { readOriginalCharCount } from '@/database/utils/parsedDocument';
 import { DocumentService } from '@/server/services/document';
 
 const log = debug('lobe-server:resolveKnowledgeFileContents');
@@ -12,6 +13,7 @@ interface KnowledgeFileItem {
   fileType?: string | null;
   id?: string;
   name?: string | null;
+  originalCharCount?: number;
 }
 
 interface ResolveKnowledgeArgs {
@@ -57,6 +59,7 @@ export const resolveKnowledgeFileContents = async ({
         content: file.content ?? '',
         fileId: file.id ?? '',
         filename: file.name ?? '',
+        originalChars: file.originalCharCount,
       };
       const fileType = file.fileType || '';
       const isMedia =
@@ -77,7 +80,11 @@ export const resolveKnowledgeFileContents = async ({
           parsePromises.set(file.id, parsePromise);
         }
         const document = await parsePromise;
-        return { ...base, content: document.content ?? '' };
+        return {
+          ...base,
+          content: document.content ?? '',
+          originalChars: readOriginalCharCount(document.metadata),
+        };
       } catch (error) {
         log('parseFile failed for %s (id=%s): %O', file.name, file.id, error);
         return {

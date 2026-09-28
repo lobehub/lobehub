@@ -38,6 +38,34 @@ describe('resolveKnowledgeFileContents', () => {
     expect(MockDocumentService).not.toHaveBeenCalled();
   });
 
+  it('carries the truncation count of a cached document', async () => {
+    const result = await resolveKnowledgeFileContents({
+      db,
+      files: [
+        { content: 'head', enabled: true, id: 'f1', name: 'big.md', originalCharCount: 120_000 },
+      ],
+      userId: 'u1',
+    });
+
+    expect(result).toEqual([
+      { content: 'head', fileId: 'f1', filename: 'big.md', originalChars: 120_000 },
+    ]);
+  });
+
+  it('reads the truncation count of an on-demand parse from the document metadata', async () => {
+    mockParseFile.mockResolvedValue({ content: 'head', metadata: { originalCharCount: 80_000 } });
+
+    const result = await resolveKnowledgeFileContents({
+      db,
+      files: [{ content: null, enabled: true, id: 'f2', name: 'big.docx' }],
+      userId: 'u1',
+    });
+
+    expect(result).toEqual([
+      { content: 'head', fileId: 'f2', filename: 'big.docx', originalChars: 80_000 },
+    ]);
+  });
+
   it('does not re-parse a cached empty document', async () => {
     const result = await resolveKnowledgeFileContents({
       db,
