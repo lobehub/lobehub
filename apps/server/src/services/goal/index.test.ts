@@ -1049,6 +1049,41 @@ describe('GoalService', () => {
     expect(resumed.goal.status).not.toBe('paused');
   });
 
+  it('closes a goal by hand, stops its live runs and stops the coordinator', async () => {
+    const cancelSpy = vi.spyOn(TaskService.prototype, 'cancelTopic').mockResolvedValue();
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ tasks: ['First', 'Second'], title: 'Closable' });
+    const created = await service.tick(graph.goal.id);
+    await new TaskModel(serverDB, userId).update(created.taskId!, { status: 'running' });
+    await serverDB.insert(topics).values({ id: 'tpc_close', userId });
+    await new TaskTopicModel(serverDB, userId).add(created.taskId!, 'tpc_close', { seq: 1 });
+    await new TaskTopicModel(serverDB, userId).updateStatus(
+      created.taskId!,
+      'tpc_close',
+      'running',
+    );
+
+    const closed = await service.close(graph.goal.id, 'canceled');
+
+    expect(closed.status).toBe('canceled');
+    expect(cancelSpy).toHaveBeenCalledWith('tpc_close');
+    // Back to backlog, not parked on a person, so a reopen runs it again.
+    expect((await new TaskModel(serverDB, userId).findById(created.taskId!))?.status).toBe(
+      'backlog',
+    );
+    expect(await service.tick(graph.goal.id)).toMatchObject({ outcome: 'failed' });
+    const [closeEvent] = await serverDB
+      .select()
+      .from(goalEvents)
+      .where(eq(goalEvents.reason, 'canceled by user'));
+    // Filed under the person, not the coordinator.
+    expect(closeEvent).toMatchObject({ actorId: userId, eventType: 'rejected' });
+
+    // A closed goal reopens through the ordinary resume.
+    expect((await service.resume(graph.goal.id)).status).toBe('running');
+    expect((await service.close(graph.goal.id, 'achieved')).status).toBe('achieved');
+  });
+
   it('restarts a split-role goal under a new executor without replacing its supervisor', async () => {
     vi.spyOn(TaskService.prototype, 'cancelTopic').mockResolvedValue();
     await serverDB.insert(agents).values([

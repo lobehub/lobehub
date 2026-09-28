@@ -105,6 +105,10 @@ class GoalService {
     return data ?? [];
   };
 
+  /** End the goal by hand and interrupt its live runs. Reopen with `resume`. */
+  close = async (id: string, status: 'achieved' | 'canceled') =>
+    lambdaClient.goal.close.mutate({ id, status });
+
   /** Resolve a pending decision gate. Does not resume a paused goal by itself. */
   decide = async (params: {
     decisionId: string;
