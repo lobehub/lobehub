@@ -75,3 +75,24 @@ export const edgeEmphasis = (
     : mainline.edgeIds.has(edge.id);
   return on ? 'mainline' : 'muted';
 };
+
+/** How a line is drawn: {@link MainlineEmphasis}, or part of a called-out detour. */
+export type EdgeTone = MainlineEmphasis | 'detour';
+
+/**
+ * The mainline keeps its own line. Any other line touching a card the host
+ * calls out — a chapter's detour — is part of that detour, and reads as one
+ * instead of stepping back with the rest of the off-mainline map.
+ */
+export const edgeTone = (
+  mainline: Mainline | undefined,
+  edge: Parameters<typeof edgeEmphasis>[1],
+  isMainlineCard: (id: string) => boolean,
+  highlightedIds: ReadonlySet<string> = new Set(),
+): EdgeTone => {
+  const emphasis = edgeEmphasis(mainline, edge, isMainlineCard);
+  if (emphasis === 'mainline') return emphasis;
+  if (highlightedIds.has(edge.sourceNodeId) || highlightedIds.has(edge.targetNodeId))
+    return 'detour';
+  return emphasis;
+};

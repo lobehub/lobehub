@@ -44,8 +44,8 @@ import ExperimentGroup, { type ExperimentGroupData } from './ExperimentGroup';
 import ExplorationEdge from './ExplorationEdge';
 import { explorationMap } from './explorationMap';
 import GraphNodeView, { GhostNodeView, type GraphNodeData } from './GraphNode';
-import { hideKinds, layoutGraph, NODE_WIDTH } from './layout';
-import { edgeEmphasis, isNodeDimmed, nodeEmphasis, resolveMainline } from './mainline';
+import { type GraphBridge, hideKinds, layoutGraph, NODE_WIDTH } from './layout';
+import { type EdgeTone, edgeTone, isNodeDimmed, nodeEmphasis, resolveMainline } from './mainline';
 import { type MeasuredSizes, mergeMeasuredSizes } from './measuredSizes';
 import { revealCenter } from './revealNode';
 import { useExplorationNavigation } from './useExplorationNavigation';
@@ -91,6 +91,14 @@ const styles = createStaticStyles(({ css }) => ({
     .react-flow__edge.goal-mainline .react-flow__edge-path {
       stroke: ${cssVar.colorPrimary};
       stroke-width: 2.5;
+    }
+
+    /* A chapter map's detours: the line into a stray card reads in the same
+       orange dash as the card's own frame. */
+    .react-flow__edge.goal-detour .react-flow__edge-path {
+      stroke: ${cssVar.colorWarning};
+      stroke-dasharray: 6 4;
+      stroke-width: 1.75;
     }
 
     .react-flow__edge.goal-muted:not(.goal-hot) {
@@ -214,6 +222,11 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface GraphProps {
+  /**
+   * Schematic links the host adds for a route through nodes it left off the
+   * map — a report chapter joining a detour to where it forked.
+   */
+  bridges?: GraphBridge[];
   /** Header actions after the legend — e.g. a host without fullscreen links out to the goal page. */
   extra?: ReactNode;
   /**
@@ -321,7 +334,10 @@ const GHOST_RANK_GAP = 56;
 const GHOST_HEIGHT = 88;
 
 const Canvas = memo<
-  Pick<GraphProps, 'graph' | 'highlightedIds' | 'onSelect' | 'planning' | 'selectedId'> & {
+  Pick<
+    GraphProps,
+    'bridges' | 'graph' | 'highlightedIds' | 'onSelect' | 'planning' | 'selectedId'
+  > & {
     className: string;
     fullscreen: boolean;
     hiddenKinds: ReadonlySet<GoalGraphNodeKind>;
@@ -335,6 +351,7 @@ const Canvas = memo<
   }
 >(
   ({
+    bridges: hostBridges,
     className,
     fullscreen,
     graph,
@@ -388,10 +405,14 @@ const Canvas = memo<
       : graph.nodes
           .map((item) => item.node)
           .filter((node) => view === 'all' || stageNodeIds(graph).has(node.id));
-    const { bridges, visibleIds } = useMemo(
-      () => hideKinds(baseNodes, graph.edges, hiddenKinds),
-      [baseNodes, graph.edges, hiddenKinds],
-    );
+    const { bridges, visibleIds } = useMemo(() => {
+      const hidden = hideKinds(baseNodes, graph.edges, hiddenKinds);
+      const shown = (hostBridges ?? []).filter(
+        (bridge) =>
+          hidden.visibleIds.has(bridge.sourceNodeId) && hidden.visibleIds.has(bridge.targetNodeId),
+      );
+      return { ...hidden, bridges: [...hidden.bridges, ...shown] };
+    }, [baseNodes, graph.edges, hiddenKinds, hostBridges]);
     // A card's height follows its content — a long title wraps to four lines —
     // so the per-kind estimate stacked the next rank into the cards above it.
     // The first pass lays out on the estimate; once React Flow has measured the
@@ -562,7 +583,12 @@ const Canvas = memo<
         width: 12,
       };
       const mainlineMarker = { ...marker, color: cssVar.colorPrimary };
+      const detourMarker = { ...marker, color: cssVar.colorWarning };
       const isMainlineCard = (id: string) => emphasisById.get(id) === 'mainline';
+      const toneOf = (edge: Parameters<typeof edgeTone>[1]) =>
+        edgeTone(mainline, edge, isMainlineCard, highlightedIds);
+      const markerOf = (tone: EdgeTone) =>
+        tone === 'mainline' ? mainlineMarker : tone === 'detour' ? detourMarker : marker;
       const lanes = new Map<string, number>();
       const direct = (hasExperiments ? map.edges : graph.edges)
         .filter((edge) => visibleIds.has(edge.sourceNodeId) && visibleIds.has(edge.targetNodeId))
@@ -572,13 +598,13 @@ const Canvas = memo<
           const lane = lanes.get(pair) ?? 0;
           lanes.set(pair, lane + 1);
           const hot = selectedId === edge.sourceNodeId || selectedId === edge.targetNodeId;
-          const emphasis = edgeEmphasis(mainline, edge, isMainlineCard);
+          const tone = toneOf(edge);
           return {
             className: cx(
               (edge.kind === 'depends_on' || ('projected' in edge && edge.projected === true)) &&
                 'goal-dep',
               hot && 'goal-hot',
-              emphasis && `goal-${emphasis}`,
+              tone && `goal-${tone}`,
             ),
             id: edge.id,
             label:
@@ -588,7 +614,7 @@ const Canvas = memo<
                   })
                 : edgeLabel(edge.kind),
             labelShowBg: true,
-            markerEnd: emphasis === 'mainline' ? mainlineMarker : marker,
+            markerEnd: markerOf(tone),
             source,
             target,
             type: hasExperiments ? 'exploration' : 'default',
@@ -596,16 +622,22 @@ const Canvas = memo<
           } satisfies FlowEdge;
         });
       // A bridge stands in for a chain through hidden nodes: dashed like other
-      // indirect relations, and unlabeled — any word would claim a relation the
-      // hidden hop may not have.
+      // indirect relations, and never named — any relation word would claim
+      // something the hidden hop may not have. Only how far it skips is said.
       const bridged = bridges.map((bridge) => {
         const hot = selectedId === bridge.sourceNodeId || selectedId === bridge.targetNodeId;
         const id = `bridge:${bridge.sourceNodeId}:${bridge.targetNodeId}`;
-        const emphasis = edgeEmphasis(mainline, { ...bridge, bridge: true, id }, isMainlineCard);
+        const tone = toneOf({ ...bridge, bridge: true, id });
         return {
-          className: cx('goal-dep', hot && 'goal-hot', emphasis && `goal-${emphasis}`),
+          className: cx('goal-dep', hot && 'goal-hot', tone && `goal-${tone}`),
           id,
-          markerEnd: emphasis === 'mainline' ? mainlineMarker : marker,
+          ...(bridge.hops
+            ? {
+                label: t('goalProcess.graph.bridgeHops', { count: bridge.hops }),
+                labelShowBg: true,
+              }
+            : {}),
+          markerEnd: markerOf(tone),
           source: bridge.sourceNodeId,
           target: bridge.targetNodeId,
           type: 'default',
@@ -623,6 +655,7 @@ const Canvas = memo<
       t,
       mainline,
       emphasisById,
+      highlightedIds,
     ]);
 
     const ghostFlowEdges: FlowEdge[] = useMemo(

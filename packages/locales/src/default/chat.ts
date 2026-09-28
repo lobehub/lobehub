@@ -2117,6 +2117,8 @@ export default {
   'goalProcess.graph.view.all': 'Full map',
   'goalProcess.graph.fullscreen': 'Fullscreen',
   'goalProcess.graph.exitFullscreen': 'Exit fullscreen',
+  'goalProcess.graph.bridgeHops_one': 'via {{count}} step not shown',
+  'goalProcess.graph.bridgeHops_other': 'via {{count}} steps not shown',
   'goalProcess.linked.open': 'Open goal progress',
   'goalProcess.portal.openPage': 'Open goal page',
   'goalProcess.portal.title': 'Goal',
@@ -2216,7 +2218,7 @@ export default {
   'goalProcess.result.story.detours_other': '{{count}} detours',
   'goalProcess.result.story.lesson': 'Lesson',
   'goalProcess.result.story.mapHint':
-    'This chapter’s main path and the detours off it. Detours are outlined in orange; click a node for its details.',
+    'This chapter’s main path and the detours off it. Detours and the lines into them are orange and dashed; the node a detour forked from is shown even when another chapter covers it. Click a node for its details.',
   'goalProcess.result.story.mapTitle': 'Local map',
   'goalProcess.result.story.pending': 'Organizing the exploration',
   'goalProcess.result.story.pendingHint':

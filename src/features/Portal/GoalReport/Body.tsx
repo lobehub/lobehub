@@ -5,8 +5,8 @@ import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
-import { scopeGraphView } from '@/features/AgentGoals/ProcessControl/goalGraphViewModel';
 import Graph from '@/features/AgentGoals/ProcessControl/Graph';
+import { chapterMap } from '@/features/AgentGoals/ProcessControl/Graph/chapterMap';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
@@ -91,9 +91,10 @@ export const ChapterBody = memo(() => {
   const chapter = useReportChapter(graph, story, view?.chapterIndex);
 
   // The map reuses the exploration graph narrowed to this chapter: its main
-  // path and the nodes it strayed onto, with the strays called out.
-  const scoped = useMemo(
-    () => (graph && chapter ? scopeGraphView(graph, new Set(chapter.mapNodeIds)) : undefined),
+  // path and the nodes it strayed onto, with the strays called out and joined
+  // back to where they forked.
+  const map = useMemo(
+    () => (graph && chapter ? chapterMap(graph, chapter.mapNodeIds) : undefined),
     [graph, chapter],
   );
   const highlightedIds = useMemo(() => new Set(chapter?.detourNodeIds ?? []), [chapter]);
@@ -101,7 +102,7 @@ export const ChapterBody = memo(() => {
   if (!view) return null;
   if (isLoading) return <Loading />;
   if (error && !story) return <AsyncError error={error} onRetry={() => void mutate()} />;
-  if (!chapter || !scoped)
+  if (!chapter || !map)
     return <Unavailable>{t('goalProcess.result.story.chapterMissing')}</Unavailable>;
 
   return (
@@ -125,9 +126,10 @@ export const ChapterBody = memo(() => {
       <Text fontSize={12} type={'secondary'}>
         {t('goalProcess.result.story.mapHint')}
       </Text>
-      {scoped.nodes.length > 0 && (
+      {map.graph.nodes.length > 0 && (
         <Graph
-          graph={scoped}
+          bridges={map.bridges}
+          graph={map.graph}
           highlightedIds={highlightedIds}
           key={`${view.goalId}:${view.chapterIndex}`}
           onSelect={(nodeId) => drillIntoGoalNode(view.goalId, nodeId)}
