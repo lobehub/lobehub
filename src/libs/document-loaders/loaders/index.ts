@@ -31,39 +31,39 @@ export class ChunkingLoader {
       switch (type) {
         case 'code': {
           const ext = filename.split('.').pop();
-          return await CodeLoader(txt, ext!);
+          return CodeLoader(txt, ext!);
         }
 
         case 'ppt': {
-          return await PPTXLoader(fileBlob);
+          return PPTXLoader(fileBlob);
         }
 
         case 'latex': {
-          return await LatexLoader(txt);
+          return LatexLoader(txt);
         }
 
         case 'pdf': {
-          return await PdfLoader(fileBlob);
+          return PdfLoader(fileBlob);
         }
 
         case 'markdown': {
-          return await MarkdownLoader(txt);
+          return MarkdownLoader(txt);
         }
 
         case 'doc': {
-          return await DocxLoader(fileBlob);
+          return DocxLoader(fileBlob);
         }
 
         case 'text': {
-          return await TextLoader(txt);
+          return TextLoader(txt);
         }
 
         case 'csv': {
-          return await CsVLoader(fileBlob);
+          return CsVLoader(fileBlob);
         }
 
         case 'epub': {
-          return await EPubLoader(content);
+          return EPubLoader(content);
         }
 
         case 'ipynb': {
