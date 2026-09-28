@@ -1194,9 +1194,20 @@ export class AgentModel {
    * Hard delete for the purge sweep. Same shape as {@link delete} (links →
    * sessions → agent) but keyed on `trashScope()` so trashed rows are reachable.
    */
-  purge = async (agentIds: string[]) => {
-    if (agentIds.length === 0) return;
+  purge = async (agentIds: string[]): Promise<string[]> => {
+    if (agentIds.length === 0) return [];
     return this.db.transaction(async (trx) => {
+      // Only agents still stamped, locked for the rest of the purge: a restore
+      // that commits between the purge's registry read and this point must
+      // win — its sessions and links included — not be hard-deleted as stale.
+      const stamped = await trx
+        .select({ id: agents.id })
+        .from(agents)
+        .where(and(inArray(agents.id, agentIds), this.trashScope(), isTrashed(agents.isDeleted)))
+        .for('update');
+      agentIds = stamped.map((row) => row.id);
+      if (agentIds.length === 0) return [];
+
       const links = await trx
         .select({ sessionId: agentsToSessions.sessionId })
         .from(agentsToSessions)
@@ -1212,6 +1223,7 @@ export class AgentModel {
           .where(and(inArray(sessions.id, sessionIds), this.sessionsOwnership()));
       }
       await trx.delete(agents).where(and(inArray(agents.id, agentIds), this.trashScope()));
+      return agentIds;
     });
   };
 

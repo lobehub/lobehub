@@ -80,7 +80,11 @@ export const softDeleteAgent = async (
 export const agentHandler: TrashHandler = {
   purge: async (ctx, root) => {
     // FK cascades take topics / messages / threads with the agent + session rows.
-    await new AgentModel(ctx.db, ctx.userId, ctx.workspaceId).purge([root.resourceId]);
+    const purged = await new AgentModel(ctx.db, ctx.userId, ctx.workspaceId).purge([
+      root.resourceId,
+    ]);
+    // Restored in the meantime: keep its sharing grants too.
+    if (purged.length === 0) return;
     if (ctx.workspaceId) {
       await new ResourcePermissionModel(ctx.db, ctx.workspaceId).removeAll(
         'agent',
