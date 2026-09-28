@@ -47,7 +47,7 @@ export const selectIslandGoalClarifications = (
 
 /** Goal clarification rounds the island should ask, oldest first. */
 export const usePendingGoalClarifications = (): GoalClarificationGroup[] => {
-  const enabled = useUserStore(labPreferSelectors.enableTopicAcceptance);
+  const enabled = useUserStore(labPreferSelectors.enableGoals);
   // The same gate the goal page puts on its answer controls.
   const { allowed: canAnswer } = usePermission('create_content');
   const useFetchPendingClarifications = useGoalStore((s) => s.useFetchPendingClarifications);
