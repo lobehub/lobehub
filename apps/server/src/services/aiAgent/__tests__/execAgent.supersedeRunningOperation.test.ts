@@ -220,7 +220,12 @@ describe('AiAgentService.execAgent - supersede running foreground operation', ()
     mockTryReserve.mockResolvedValue(true);
     mockReleaseReservation.mockResolvedValue(undefined);
     mockFindTopicById.mockResolvedValue(topicWithMarker('op-live'));
-    mockFindOperationById.mockResolvedValue({ id: 'op-live', status: 'running', trigger: 'chat' });
+    mockFindOperationById.mockImplementation(async (id: string) => ({
+      id,
+      status: 'running',
+      topicId: 'topic-1',
+      trigger: 'chat',
+    }));
     mockIsOperationInterrupted.mockResolvedValue(false);
     mockMergeMetadata.mockResolvedValue(true);
 
@@ -239,6 +244,44 @@ describe('AiAgentService.execAgent - supersede running foreground operation', ()
 
     expect(interruptTask).toHaveBeenCalledWith({ operationId: 'op-stopping', topicId: 'topic-1' });
     expect(interruptTask).toHaveBeenCalledWith({ operationId: 'op-live', topicId: 'topic-1' });
+  });
+
+  it('ignores a replaced operation that is not on this topic', async () => {
+    mockFindOperationById.mockImplementation(async (id: string) =>
+      id === 'op-foreign' ? null : { id, status: 'running', topicId: 'topic-1', trigger: 'chat' },
+    );
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      interactiveStart: true,
+      prompt: 'please hurry',
+      replacesOperationId: 'op-foreign',
+    });
+
+    expect(interruptTask).not.toHaveBeenCalledWith(
+      expect.objectContaining({ operationId: 'op-foreign' }),
+    );
+    expect(mockTryReserve).toHaveBeenCalledWith(
+      'topic-1',
+      expect.any(String),
+      expect.objectContaining({ replacesOperationId: undefined }),
+    );
+  });
+
+  it('refuses the send when a replaced device run does not confirm it exited', async () => {
+    interruptTask.mockResolvedValue({ deviceCancellationConfirmed: false, success: false });
+
+    await expect(
+      service.execAgent({
+        agentId: 'agent-1',
+        appContext: { topicId: 'topic-1' },
+        interactiveStart: true,
+        prompt: 'please hurry',
+        replacesOperationId: 'op-stopping',
+      }),
+    ).rejects.toThrow('Replaced heterogeneous agent process did not confirm termination');
+    expect(mockTryReserve).not.toHaveBeenCalled();
   });
 
   it('interrupts the live marker holder when the client sent no replacement', async () => {

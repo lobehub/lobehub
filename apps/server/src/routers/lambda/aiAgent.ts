@@ -2414,9 +2414,6 @@ export const aiAgentRouter = router({
         appContext,
         autoStart,
         clientIds: input.clientIds,
-        // `replacesOperationId` is recorded here but not forwarded as the
-        // replace target: doing so would change reservation handoff for every
-        // composer send, which is out of scope for this diagnostic.
         clientRunSnapshot: {
           operations: input.clientOperations ?? [],
           replacesOperationId: input.replacesOperationId,
@@ -2438,6 +2435,7 @@ export const aiAgentRouter = router({
         mentionedAgents,
         parentMessageId,
         prompt,
+        replacesOperationId: input.replacesOperationId,
         // When parentMessageId is provided, this is a regeneration/continue or a
         // human-approval resume — either way, skip user message creation.
         resume: !!parentMessageId,

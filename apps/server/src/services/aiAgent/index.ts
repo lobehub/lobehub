@@ -561,13 +561,17 @@ export class AiAgentService {
       return withCreatedThread(await this.execAgentWithApprovalRollback(params));
     }
 
+    const replacesOperationId = isInterventionThreadStart
+      ? undefined
+      : await this.resolveReplacedOperationId(params, topicId);
+
     // A replacement is allowed to take over the topic marker, but the device
     // process that owned the old marker may still hold a native Codex/CC writer.
     // Settle that physical run before reserving and dispatching the replacement;
     // otherwise two `lh hetero exec` wrappers can resume the same thread.
-    if (params.replacesOperationId && !isInterventionThreadStart) {
+    if (replacesOperationId) {
       const interruption = await this.interruptTask({
-        operationId: params.replacesOperationId,
+        operationId: replacesOperationId,
         topicId,
       });
       if (interruption.deviceCancellationConfirmed === false) {
@@ -576,7 +580,7 @@ export class AiAgentService {
     }
     const reserved = await acquireTopicStartReservation({
       allowSameReservationReentry: !params.approvalResolutionRequestId,
-      replacesOperationId: isInterventionThreadStart ? undefined : params.replacesOperationId,
+      replacesOperationId,
       allowRunningOperationId: params.topicStartOwnerOperationId,
       // A thread continuation shares the topic row but never owns/replaces its
       // main runningOperation anchor. It uses only the short initializer fence.
@@ -594,7 +598,7 @@ export class AiAgentService {
       const superseded =
         params.interactiveStart && !isInterventionThreadStart
           ? await this.supersedeRunningForegroundOperation(topicId, [
-              params.replacesOperationId,
+              replacesOperationId,
               params.topicStartOwnerOperationId,
             ])
           : undefined;
@@ -606,6 +610,22 @@ export class AiAgentService {
     } finally {
       await this.topicModel.releaseTaskCallbackReservation(topicId, reservationId);
     }
+  }
+
+  /**
+   * The run this start replaces. A composer send names it from client state, so
+   * it is honored only when it is one of this user's runs on the same topic;
+   * server-derived continuations are trusted as given.
+   */
+  private async resolveReplacedOperationId(
+    params: InternalExecAgentParams,
+    topicId: string,
+  ): Promise<string | undefined> {
+    const { replacesOperationId } = params;
+    if (!replacesOperationId || !params.interactiveStart) return replacesOperationId;
+
+    const replaced = await this.agentOperationModel.findById(replacesOperationId);
+    return replaced?.topicId === topicId ? replacesOperationId : undefined;
   }
 
   /**

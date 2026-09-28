@@ -16,6 +16,7 @@ import type * as ModelBankModule from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as InternalJwtModule from '@/libs/trpc/utils/internalJwt';
+import { AiAgentService } from '@/server/services/aiAgent';
 import {
   assertCanPerformResourceAction,
   getResourceMeta,
@@ -493,6 +494,24 @@ describe('AI Agent Router Integration Tests', () => {
       // Should have 1 assistant message with parentId pointing to the user message
       expect(assistantMessages).toHaveLength(1);
       expect(assistantMessages[0].parentId).toBe(userMsg.id);
+    });
+
+    it('forwards the replaced operation to the service', async () => {
+      const execAgent = vi
+        .spyOn(AiAgentService.prototype, 'execAgent')
+        .mockResolvedValue({ operationId: 'op-new', success: true } as any);
+      const caller = aiAgentRouter.createCaller(createTestContext());
+
+      await caller.execAgent({
+        agentId: testAgentId,
+        prompt: 'send now',
+        replacesOperationId: 'op-old',
+      });
+
+      expect(execAgent).toHaveBeenCalledWith(
+        expect.objectContaining({ interactiveStart: true, replacesOperationId: 'op-old' }),
+      );
+      execAgent.mockRestore();
     });
   });
 
