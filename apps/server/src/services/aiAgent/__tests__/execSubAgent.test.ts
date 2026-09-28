@@ -722,6 +722,17 @@ describe('AiAgentService.execSubAgent', () => {
       expect(result.error).toContain(error);
     });
 
+    // Models that can't omit the key invent ids like "new" or "exchange-rate-target";
+    // the error has to say how to start a fresh one instead.
+    it('tells the model how to start a new sub-agent when the id is unknown', async () => {
+      mockThreadModel.findById.mockResolvedValue(null);
+
+      const result = await service.execVirtualSubAgent({ ...followUp, threadId: 'new' });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('leave it empty to start a new sub-agent');
+    });
+
     it('adds the new run usage to the totals of earlier runs', async () => {
       mockThreadModel.findById.mockResolvedValue({
         agentId: 'agent-1',

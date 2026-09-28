@@ -19,6 +19,7 @@ import {
 import type { ISnapshotStore } from '@lobechat/agent-tracing';
 import { appendSubAgentReference, isCallSubAgentCall } from '@lobechat/builtin-tool-lobe-agent';
 import { dynamicInterventionAudits } from '@lobechat/builtin-tools/dynamicInterventionAudits';
+import { ABANDONED_OPERATION_ERROR_PREFIX } from '@lobechat/const/goal';
 import { parse } from '@lobechat/conversation-flow';
 import { getModelPropertyWithFallback } from '@lobechat/model-runtime';
 import {
@@ -163,6 +164,12 @@ const LEGACY_INTERRUPT_STATE_POLL_INTERVAL_MS = 30_000;
 const STEP_ABORT_POLL_MAX_BACKOFF = 8;
 const STEP_LOCK_HEARTBEAT_MS = 30_000;
 const DURABLE_LEASE_HEARTBEAT_EVERY_TICKS = 3;
+/**
+ * How long a `running` operation's durable lease may go unrefreshed, with its
+ * runtime state gone, before a stop request treats it as dead. Far above the
+ * heartbeat cadence (STEP_LOCK_HEARTBEAT_MS × DURABLE_LEASE_HEARTBEAT_EVERY_TICKS).
+ */
+const DEAD_OPERATION_LEASE_MS = 10 * 60 * 1000;
 const EVAL_TOOL_FORWARDING_HOOK_ID = 'eval-tool-forwarding';
 const INTERVENTION_LIFECYCLE_CHECKPOINT_KEY = '_agentInterventionLifecycle';
 
@@ -309,6 +316,15 @@ const formatSubAgentErrorReason = (error: unknown): string | undefined => {
   if (typeof message !== 'string') return undefined;
   const trimmed = message.trim();
   if (!trimmed) return undefined;
+  // "Operation abandoned: inactivity_watchdog" names an internal mechanism;
+  // the parent needs to know the child went silent and that its work survives.
+  if (trimmed.startsWith(ABANDONED_OPERATION_ERROR_PREFIX)) {
+    const cause = trimmed.slice(ABANDONED_OPERATION_ERROR_PREFIX.length).trim();
+    return (
+      `the sub-agent stopped making progress and the platform ended it (${cause || 'abandoned'}). ` +
+      'Anything it already did (searches, pages read, documents written) is kept in its thread.'
+    );
+  }
   // Keep the tool result compact — a runaway provider error body would otherwise
   // bloat the parent's LLM context.
   return trimmed.length > 300 ? `${trimmed.slice(0, 300)}…` : trimmed;
@@ -627,9 +643,26 @@ export class AgentRuntimeService {
       // Absence alone is not proof of exit (e.g. another in-memory worker owns
       // the run). Only an owned, durably terminal operation can acknowledge it.
       const operation = await this.agentOperationModel.findById(operationId);
-      return (
-        !!operation && ['done', 'error', 'interrupted', 'abandoned'].includes(operation.status)
-      );
+      if (!operation) return false;
+      if (['done', 'error', 'interrupted', 'abandoned'].includes(operation.status)) return true;
+
+      // A `running` row with no runtime state whose durable lease stopped
+      // refreshing long ago has nothing executing it: the step heartbeat moves
+      // `updatedAt` every few minutes while a step is live. Without this, the
+      // row stays `running` forever and every stop request on its task is
+      // refused as unconfirmed. Retire it atomically — a concurrent heartbeat
+      // moves `updatedAt` past the cutoff and wins, keeping a live run alive.
+      if (
+        operation.status === 'running' &&
+        operation.updatedAt &&
+        new Date(operation.updatedAt).getTime() < Date.now() - DEAD_OPERATION_LEASE_MS
+      ) {
+        return this.agentOperationModel.settleStaleRunning(
+          operationId,
+          new Date(Date.now() - DEAD_OPERATION_LEASE_MS),
+        );
+      }
+      return false;
     }
 
     if (state.status === 'done' || state.status === 'error' || state.status === 'interrupted') {
@@ -2024,8 +2057,17 @@ export class AgentRuntimeService {
           // not this one. Drop ours rather than render a list that predates it.
           currentState.operationCredentials = undefined;
           currentState.lastModified = new Date().toISOString();
+          // A resume op (e.g. approving a callSubAgent) seeds its assistant
+          // placeholder before running the tool; when that tool is deferred the
+          // op parks with the seed unclaimed. Fill it now — creating another
+          // assistant leaves the seed as an empty "…" sibling branch that hides
+          // the real answer.
+          const seededAssistantMessageId = currentState.pendingAssistantMessageId;
           currentContext = {
-            payload: { parentMessageId: resumeParentMessageId },
+            payload: {
+              ...(seededAssistantMessageId && { assistantMessageId: seededAssistantMessageId }),
+              parentMessageId: resumeParentMessageId,
+            },
             phase: 'user_input',
           } as AgentRuntimeContext;
           log(
@@ -3470,7 +3512,9 @@ export class AgentRuntimeService {
         );
       }
     }
-    const errorReason = failed ? formatSubAgentErrorReason(finalState?.error) : undefined;
+    const errorReason = failed
+      ? formatSubAgentErrorReason(finalState?.error ?? params.errorMessage)
+      : undefined;
     const resultContent = failed
       ? errorReason
         ? `Sub-agent did not complete (${reason}): ${errorReason}`
@@ -3485,7 +3529,9 @@ export class AgentRuntimeService {
 
     const backfill = await this.messageModel.updateToolMessage(toolMessageId, {
       content,
-      pluginError: failed ? formatErrorForMetadata(finalState?.error) : undefined,
+      pluginError: failed
+        ? formatErrorForMetadata(finalState?.error ?? params.errorMessage)
+        : undefined,
       pluginState: {
         model: finalState?.modelRuntimeConfig?.model,
         status: failed ? 'error' : 'completed',

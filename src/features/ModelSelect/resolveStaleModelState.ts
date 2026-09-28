@@ -24,7 +24,7 @@ export interface ResolveStaleModelStateContext {
   enabledList: EnabledProviderWithModels[];
   modelFilter?: (model: EnabledProviderWithModels['children'][number]) => boolean;
   modelRedirects?: Record<string, string>;
-  modelType: 'chat' | 'embedding';
+  modelType: 'asr' | 'chat' | 'embedding';
 }
 
 /**

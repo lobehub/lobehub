@@ -264,6 +264,7 @@ export class GatewayHttpClient {
   }
 
   async dispatchAgentRun(params: {
+    agentId?: string;
     agentType: string;
     assistantMessageId: string;
     /** Resolved `lh hetero exec` wrapper args. */

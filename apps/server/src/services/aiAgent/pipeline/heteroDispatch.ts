@@ -1033,6 +1033,7 @@ export const dispatchHeteroAgent = async (
         ? { error: 'DEVICE_NOT_FOUND', errorData: authorizationError, success: false }
         : await deviceGateway.dispatchAgentRun({
             ...heteroParams,
+            agentId: resolvedAgentId,
             args: heteroExecArgs,
             cwd: deviceCwd,
             deviceId: dispatchDeviceId,

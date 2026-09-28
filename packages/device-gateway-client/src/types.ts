@@ -245,6 +245,7 @@ export interface RpcResponseMessage {
 
 /** Server → Client: request the desktop to spawn `lh hetero exec`. */
 export interface AgentRunRequestMessage {
+  agentId?: string;
   agentType: string;
   /**
    * Resolved `lh hetero exec` wrapper args, e.g. `--model` / `--effort`.

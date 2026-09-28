@@ -14,6 +14,7 @@ import type { BuiltinToolContext, BuiltinToolResult, ToolAfterCallContext } from
 import { BaseExecutor } from '@lobechat/types';
 
 import { agentService } from '@/services/agent';
+import { chatGroupService } from '@/services/chatGroup';
 import { discoverService } from '@/services/discover';
 import { getChatGroupStoreState } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat';
@@ -134,6 +135,18 @@ const NO_GROUP_CONTEXT: BuiltinToolResult = {
   content: 'No active group found',
   error: { message: 'No active group found', type: 'NoGroupContext' },
   success: false,
+};
+
+/**
+ * Client mirror of the server's roster lookup for the inherited AgentBuilder
+ * APIs. The group created by `createGroup` is loaded into the store right away,
+ * but a group the store has not seen yet is fetched rather than guessed at.
+ */
+const getGroupRoster = async (groupId: string) => {
+  const cached = getChatGroupStoreState().groupMap?.[groupId];
+  if (cached?.supervisorAgentId) return cached;
+
+  return (await chatGroupService.getGroupDetail(groupId)) ?? undefined;
 };
 
 class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApiName> {
@@ -273,13 +286,34 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
     return agentManagerRuntime.searchMarketTools(params);
   };
 
+  // `ctx.agentId` is the builtin builder agent that owns this conversation, not
+  // the group's supervisor, so it is never a valid target here. Like the server
+  // runtime, resolve the group (a `createGroup` result wins) and act on its
+  // supervisor, or on a named member of that group.
   updateConfig = async (
     params: UpdateAgentConfigWithIdParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
-    // Use provided agentId or fall back to supervisor agent from context
+    const blocked = awaitingCreateGroup(ctx);
+    if (blocked) return blocked;
+
     const { agentId: paramAgentId, ...restParams } = params;
-    const agentId = paramAgentId ?? ctx.agentId;
+    const groupId = resolveActiveGroupId(ctx);
+    const group = groupId ? await getGroupRoster(groupId) : undefined;
+
+    if (paramAgentId) {
+      if (!groupId) return NO_GROUP_CONTEXT;
+
+      if (!group?.agents.some((member) => member.id === paramAgentId)) {
+        return {
+          content: `Agent "${paramAgentId}" is not a member of this group`,
+          error: { message: `Agent "${paramAgentId}" not found`, type: 'AgentNotFound' },
+          success: false,
+        };
+      }
+    }
+
+    const agentId = paramAgentId ?? group?.supervisorAgentId;
 
     if (!agentId) {
       return {
@@ -297,7 +331,11 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
     params: InstallPluginParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
-    const agentId = ctx.agentId;
+    const blocked = awaitingCreateGroup(ctx);
+    if (blocked) return blocked;
+
+    const groupId = resolveActiveGroupId(ctx);
+    const agentId = groupId ? (await getGroupRoster(groupId))?.supervisorAgentId : undefined;
 
     if (!agentId) {
       return {

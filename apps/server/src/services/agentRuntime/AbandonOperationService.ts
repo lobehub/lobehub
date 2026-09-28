@@ -35,6 +35,12 @@ interface AbandonOperationOptions {
  * `waiting_for_async_tool` forever (the orphaned-parent bug).
  */
 export interface AbandonedSubAgentResume {
+  /**
+   * Why the child was abandoned. The bridge otherwise reloads the child's
+   * coordinator state, which never received this error, and hands the parent a
+   * bare "Sub-agent did not complete (error)." with no cause.
+   */
+  errorMessage: string;
   parentOperationId: string;
   /**
    * When true, the parent op is a shared-agent visitor run (its metadata
@@ -245,6 +251,7 @@ export class AbandonOperationService {
             undefined;
           if (toolMessageId) {
             result.subAgentResume = {
+              errorMessage: message,
               parentOperationId,
               // Forward the visitor-run marker so an inline resume (local mode)
               // constructs its services with `includeShareVisitor: true`; the

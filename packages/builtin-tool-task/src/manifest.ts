@@ -36,7 +36,7 @@ export const TaskManifest: BuiltinToolManifest = {
           },
           parentIdentifier: {
             description:
-              'Identifier of the parent task (e.g. "TASK-1"). If provided, the new task becomes a subtask.',
+              'Identifier of the parent task (e.g. "T-1"). If provided, the new task becomes a subtask.',
             type: 'string',
           },
           priority: {
@@ -88,7 +88,7 @@ export const TaskManifest: BuiltinToolManifest = {
                 },
                 parentIdentifier: {
                   description:
-                    'Identifier of the parent task (e.g. "TASK-1"). If provided, the new task becomes a subtask.',
+                    'Identifier of the parent task (e.g. "T-1"). If provided, the new task becomes a subtask.',
                   type: 'string',
                 },
                 priority: {
@@ -131,7 +131,7 @@ export const TaskManifest: BuiltinToolManifest = {
           offset: { description: 'Pagination offset.', type: 'number' },
           parentIdentifier: {
             description:
-              'List subtasks of this parent (e.g. "TASK-1"). When omitted, no parent filter is applied unless listTasks is called without any filters, which defaults to top-level tasks.',
+              'List subtasks of this parent (e.g. "T-1"). When omitted, no parent filter is applied unless listTasks is called without any filters, which defaults to top-level tasks.',
             type: 'string',
           },
           priorities: {
@@ -180,7 +180,7 @@ export const TaskManifest: BuiltinToolManifest = {
         properties: {
           identifier: {
             description:
-              'The task identifier to view (e.g. "TASK-1"). If omitted, the current task is used only when a current task context exists.',
+              'The task identifier to view (e.g. "T-1"). If omitted, the current task is used only when a current task context exists.',
             type: 'string',
           },
         },
@@ -201,7 +201,7 @@ export const TaskManifest: BuiltinToolManifest = {
           },
           identifier: {
             description:
-              'The task identifier to comment on (e.g. "TASK-1"). If omitted, the current task is used only when a current task context exists.',
+              'The task identifier to comment on (e.g. "T-1"). If omitted, the current task is used only when a current task context exists.',
             type: 'string',
           },
         },
@@ -250,8 +250,7 @@ export const TaskManifest: BuiltinToolManifest = {
       parameters: {
         properties: {
           addDependencies: {
-            description:
-              'Identifiers of tasks this task should block on (e.g. ["TASK-2", "TASK-3"]).',
+            description: 'Identifiers of tasks this task should block on (e.g. ["T-2", "T-3"]).',
             items: { type: 'string' },
             type: 'array',
           },
@@ -284,7 +283,7 @@ export const TaskManifest: BuiltinToolManifest = {
           },
           parentIdentifier: {
             description:
-              'Set the parent task by identifier (e.g. "TASK-1"). Pass null to move this task to top level. Omit to keep the current parent.',
+              'Set the parent task by identifier (e.g. "T-1"). Pass null to move this task to top level. Omit to keep the current parent.',
             type: ['string', 'null'],
           },
           priority: {
@@ -317,7 +316,7 @@ export const TaskManifest: BuiltinToolManifest = {
             type: 'string',
           },
           identifier: {
-            description: 'The task identifier to run (e.g. "TASK-1").',
+            description: 'The task identifier to run (e.g. "T-1").',
             type: 'string',
           },
           prompt: {
@@ -337,8 +336,7 @@ export const TaskManifest: BuiltinToolManifest = {
       parameters: {
         properties: {
           identifiers: {
-            description:
-              'Identifiers of tasks to run, in execution order (e.g. ["TASK-1", "TASK-2"]).',
+            description: 'Identifiers of tasks to run, in execution order (e.g. ["T-1", "T-2"]).',
             items: { type: 'string' },
             type: 'array',
           },
@@ -365,7 +363,7 @@ export const TaskManifest: BuiltinToolManifest = {
             type: 'number',
           },
           identifier: {
-            description: 'The identifier of the task to configure (e.g. "TASK-1").',
+            description: 'The identifier of the task to configure (e.g. "T-1").',
             type: 'string',
           },
           maxExecutions: {
@@ -404,7 +402,7 @@ export const TaskManifest: BuiltinToolManifest = {
             type: ['boolean', 'null'],
           },
           identifier: {
-            description: 'The identifier of the task to configure (e.g. "TASK-1").',
+            description: 'The identifier of the task to configure (e.g. "T-1").',
             type: 'string',
           },
           maxIterations: {
@@ -454,7 +452,7 @@ export const TaskManifest: BuiltinToolManifest = {
           },
           identifier: {
             description:
-              'The task identifier (e.g. "TASK-1"). If omitted, the current task is used only when a current task context exists.',
+              'The task identifier (e.g. "T-1"). If omitted, the current task is used only when a current task context exists.',
             type: 'string',
           },
           status: {
@@ -475,7 +473,7 @@ export const TaskManifest: BuiltinToolManifest = {
       parameters: {
         properties: {
           identifier: {
-            description: 'The identifier of the task to delete (e.g. "TASK-1").',
+            description: 'The identifier of the task to delete (e.g. "T-1").',
             type: 'string',
           },
         },

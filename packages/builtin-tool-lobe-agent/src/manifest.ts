@@ -253,7 +253,7 @@ export const LobeAgentManifest: BuiltinToolManifest = {
           },
           subAgentId: {
             description:
-              'Optional. The id from the `<sub_agent id="..." />` tag at the end of an earlier callSubAgent result. Sends `instruction` as a new message to that same sub-agent, which keeps all of its previous work and history — use it to continue a sub-agent that stopped or failed, ask it to hand over what it has found so far, or follow up on its answer. Omit to start a new sub-agent.',
+              'Optional. The id from the `<sub_agent id="..." />` tag at the end of an earlier callSubAgent result. Sends `instruction` as a new message to that same sub-agent, which keeps all of its previous work and history — use it to continue a sub-agent that stopped or failed, ask it to hand over what it has found so far, or follow up on its answer. Leave empty (or omit) to start a new sub-agent; never invent an id.',
             type: 'string',
           },
           ...(isDesktop && {

@@ -32,9 +32,11 @@ import { findSubtaskParentId } from '@/store/task/slices/detail/reducer';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
+import { MISSING_TASK_NAME_ERROR } from '../../constants';
 import { normalizeListTasksParams } from '../../listTasks';
 import { selectAssignableMembers } from '../../listWorkspaceMembers';
 import { TaskIdentifier } from '../../manifest';
+import { normalizeSetTaskVerifyParams } from '../../setTaskVerify';
 import type {
   AddTaskCommentParams,
   CreateTaskParams,
@@ -217,6 +219,13 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       const parentIdentifier = params.parentIdentifier?.trim() || undefined;
       const assigneeAgentId = params.assigneeAgentId?.trim() || undefined;
       const assigneeUserId = params.assigneeUserId?.trim() || undefined;
+      if (!params.name?.trim()) {
+        return {
+          content: MISSING_TASK_NAME_ERROR,
+          error: { message: MISSING_TASK_NAME_ERROR, type: 'InvalidParams' },
+          success: false,
+        };
+      }
 
       // Executing agent and human owner are independent, coexisting sides (the
       // member owns the outcome, the agent executes) — a member owner does not
@@ -669,6 +678,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
   ): Promise<BuiltinToolResult> => {
     try {
       log('[TaskExecutor] setTaskVerify - params:', params);
+      params = normalizeSetTaskVerifyParams(params);
 
       const { identifier } = params;
 

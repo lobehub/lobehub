@@ -71,6 +71,14 @@ vi.mock('@/database/models/verifyRun', () => ({
     };
   }),
 }));
+const { checkResultsListByRun } = vi.hoisted(() => ({
+  checkResultsListByRun: vi.fn().mockResolvedValue([]),
+}));
+vi.mock('@/database/models/verifyCheckResult', () => ({
+  VerifyCheckResultModel: vi.fn(function () {
+    return { listByRun: checkResultsListByRun };
+  }),
+}));
 vi.mock('@/database/models/agentOperation', () => ({
   AgentOperationModel: vi.fn(function () {
     return { findById: opFindById };
@@ -152,6 +160,117 @@ describe('driveTaskFromVerify', () => {
    * the attempt budget ran out. This string has no recovery branch, so the Goal
    * stops on a person instead.
    */
+  /**
+   * Regression: a rejected delivery reached the dispatching agent as the bare
+   * "Delivery did not pass verification.", so it could not tell a real
+   * shortfall from a gate misfire and re-verified by hand.
+   */
+  it('tells the dispatcher which checks failed and why', async () => {
+    runFindByOperation.mockResolvedValue({ id: 'run-1', status: 'failed' });
+    checkResultsListByRun.mockResolvedValueOnce([
+      {
+        checkItemTitle: 'Optional style polish',
+        required: false,
+        status: 'failed',
+        suggestion: 'Tighten the intro.',
+        toulmin: null,
+        verdict: 'failed',
+      },
+      {
+        checkItemTitle: 'Each chapter has at least 2500 characters',
+        required: true,
+        status: 'failed',
+        suggestion: null,
+        toulmin: { reasoning: 'Chapters 1-5 are 2030-2353 characters, all below 2500.' },
+        verdict: 'failed',
+      },
+      {
+        checkItemTitle: 'Report is in Markdown',
+        required: true,
+        status: 'passed',
+        suggestion: null,
+        toulmin: { reasoning: 'It is.' },
+        verdict: 'passed',
+      },
+      {
+        checkItemTitle: 'Sources are cited',
+        required: true,
+        status: 'errored',
+        suggestion: null,
+        toulmin: null,
+        verdict: null,
+      },
+    ]);
+
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+
+    expect(checkResultsListByRun).toHaveBeenCalledWith('run-1');
+    expect(deliverMock.mock.calls[0][0].errorMessage).toBe(
+      [
+        'Delivery did not pass verification.',
+        'Failed checks:',
+        '- Each chapter has at least 2500 characters: Chapters 1-5 are 2030-2353 characters, all below 2500.',
+      ].join('\n'),
+    );
+  });
+
+  it('explains a failure from stored evidence when the verifier gave no reasoning', async () => {
+    runFindByOperation.mockResolvedValue({ id: 'run-1', status: 'failed' });
+    checkResultsListByRun.mockResolvedValueOnce([
+      {
+        checkItemTitle: 'Screenshot shows the saved report',
+        required: true,
+        status: 'failed',
+        suggestion: null,
+        toulmin: { evidence: 'The screenshot shows an empty editor.' },
+        verdict: 'failed',
+      },
+    ]);
+
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+
+    expect(deliverMock.mock.calls[0][0].errorMessage).toContain(
+      '- Screenshot shows the saved report: The screenshot shows an empty editor.',
+    );
+  });
+
+  it('lists no optional checks when the Acceptance review is what rejected the delivery', async () => {
+    runFindByOperation.mockResolvedValue({ acceptanceId: 'a-1', id: 'run-1', status: 'passed' });
+    vi.mocked(reviewGoalDelivery).mockResolvedValueOnce({
+      feedback: 'The table is missing the totals row.',
+      predictionIds: [],
+      status: 'rejected',
+    });
+    checkResultsListByRun.mockResolvedValueOnce([
+      {
+        checkItemTitle: 'Optional style polish',
+        required: false,
+        status: 'failed',
+        suggestion: 'Tighten the intro.',
+        toulmin: null,
+        verdict: 'failed',
+      },
+    ]);
+
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+
+    expect(deliverMock.mock.calls[0][0].errorMessage).toBe(
+      [
+        'Delivery did not pass verification.',
+        'Acceptance review: The table is missing the totals row.',
+      ].join('\n'),
+    );
+  });
+
+  it('still sends the bare verdict when the failure details cannot be read', async () => {
+    runFindByOperation.mockResolvedValue({ id: 'run-1', status: 'failed' });
+    checkResultsListByRun.mockRejectedValueOnce(new Error('connection reset'));
+
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+
+    expect(deliverMock.mock.calls[0][0].errorMessage).toBe('Delivery did not pass verification.');
+  });
+
   it('parks an undecidable Goal delivery on a person instead of another attempt', async () => {
     runFindByOperation.mockResolvedValue({
       id: 'run-1',

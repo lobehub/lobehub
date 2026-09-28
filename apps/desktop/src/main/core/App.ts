@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { DesktopBootProfilePayload } from '@lobechat/electron-client-ipc';
 import type { ElectronIPCEventHandler } from '@lobechat/electron-server-ipc';
 import { ElectronIPCServer } from '@lobechat/electron-server-ipc';
+import { enableManagedProcesses, shutdownManagedProcesses } from '@lobechat/utils/managedProcess';
 import { app, ipcMain, nativeTheme, protocol } from 'electron';
 
 import { name } from '@/../../package.json';
@@ -90,6 +91,7 @@ export class App {
   }
 
   constructor() {
+    enableManagedProcesses();
     logger.info('----------------------------------------------');
     // Log system information
     logger.info(`  OS: ${os.platform()} (${os.arch()})`);
@@ -183,6 +185,8 @@ export class App {
 
     // Unified handling of before-quit event
     app.on('before-quit', this.handleBeforeQuit);
+    process.on('SIGTERM', () => app.quit());
+    process.on('SIGINT', () => app.quit());
 
     // Initialize theme mode from store
     this.initializeThemeMode();
@@ -595,8 +599,23 @@ export class App {
     });
   }
 
-  // Add before-quit handler function
-  private handleBeforeQuit = () => {
+  private quitReady = false;
+  private quitCleanup?: Promise<void>;
+
+  private handleBeforeQuit = (event: Electron.Event) => {
+    if (this.quitReady) return;
+    event.preventDefault();
+    this.isQuiting = true;
+    this.quitCleanup ??= shutdownManagedProcesses()
+      .catch((error) => logger.error('Process shutdown failed:', error))
+      .then(() => {
+        this.destroyOnQuit();
+        this.quitReady = true;
+        app.quit();
+      });
+  };
+
+  private destroyOnQuit = () => {
     logger.info('Application is preparing to quit');
     this.isQuiting = true;
 

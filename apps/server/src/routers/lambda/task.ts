@@ -858,10 +858,9 @@ export const taskRouter = router({
 
   delete: taskProcedureWrite.input(idInput).mutation(async ({ input, ctx }) => {
     try {
-      const model = ctx.taskModel;
-      const task = await resolveOrThrow(model, input.id);
+      const task = await resolveOrThrow(ctx.taskModel, input.id);
       assertWorkspaceRowManageable(ctx, task.createdByUserId, 'task');
-      await model.delete(task.id);
+      await ctx.taskService.deleteTask(task.id);
       return { data: task, message: 'Task deleted', success: true };
     } catch (error) {
       if (error instanceof TRPCError) throw error;

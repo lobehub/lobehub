@@ -4297,6 +4297,34 @@ describe('LobeOpenAICompatibleFactory', () => {
   });
 
   describe('transcribe', () => {
+    it('should report token usage of token-billed transcription models', async () => {
+      vi.spyOn(instance['client'].audio.transcriptions, 'create').mockResolvedValue({
+        text: 'hello world',
+        usage: { input_tokens: 151, output_tokens: 0, total_tokens: 151 },
+      } as any);
+      const onUsage = vi.fn();
+
+      const file = new File([new Uint8Array([1, 2, 3])], 'speech.m4a', { type: 'audio/mp4' });
+      await instance.transcribe!({ file, model: 'gpt-4o-transcribe' }, { onUsage });
+
+      expect(onUsage).toHaveBeenCalledWith(
+        expect.objectContaining({ inputAudioTokens: 151, totalInputTokens: 151 }),
+      );
+    });
+
+    it('should not report usage for duration-billed transcription models', async () => {
+      vi.spyOn(instance['client'].audio.transcriptions, 'create').mockResolvedValue({
+        text: 'hello world',
+        usage: { seconds: 6, type: 'duration' },
+      } as any);
+      const onUsage = vi.fn();
+
+      const file = new File([new Uint8Array([1, 2, 3])], 'speech.m4a', { type: 'audio/mp4' });
+      await instance.transcribe!({ file, model: 'whisper-1' }, { onUsage });
+
+      expect(onUsage).not.toHaveBeenCalled();
+    });
+
     it('should transcribe audio and return the text', async () => {
       const transcribeMock = vi
         .spyOn(instance['client'].audio.transcriptions, 'create')

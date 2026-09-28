@@ -1,4 +1,8 @@
-import { normalizeListTasksParams, UNFINISHED_TASK_STATUSES } from '@lobechat/builtin-tool-task';
+import {
+  MISSING_TASK_NAME_ERROR,
+  normalizeListTasksParams,
+  UNFINISHED_TASK_STATUSES,
+} from '@lobechat/builtin-tool-task';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createTaskRuntime, taskRuntime } from '../task';
@@ -101,6 +105,51 @@ describe('taskRuntime.factory', () => {
 });
 
 describe('createTaskRuntime', () => {
+  describe('deleteTask', () => {
+    it('deletes through TaskService so a running execution is stopped first', async () => {
+      const taskModel = {
+        delete: vi.fn(),
+        resolve: vi.fn().mockResolvedValue({ id: 'task-2', identifier: 'T-2', name: 'Report' }),
+      };
+      const taskService = { deleteTask: vi.fn().mockResolvedValue({ id: 'task-2' }) };
+      const runtime = createTaskRuntime({
+        agentModel: { existsById: vi.fn() } as any,
+        operationId: 'op-caller',
+        taskCaller: {} as any,
+        taskModel: taskModel as any,
+        taskService: taskService as any,
+      });
+
+      const result = await runtime.deleteTask({ identifier: 'T-2' });
+
+      expect(result.success).toBe(true);
+      expect(taskService.deleteTask).toHaveBeenCalledWith('task-2', {
+        keepOperationId: 'op-caller',
+      });
+      expect(taskModel.delete).not.toHaveBeenCalled();
+    });
+
+    it('reports a failed stop instead of throwing', async () => {
+      const runtime = createTaskRuntime({
+        agentModel: { existsById: vi.fn() } as any,
+        taskCaller: {} as any,
+        taskModel: {
+          resolve: vi.fn().mockResolvedValue({ id: 'task-2', identifier: 'T-2' }),
+        } as any,
+        taskService: {
+          deleteTask: vi.fn().mockRejectedValue(new Error('Task interruption was not confirmed.')),
+        } as any,
+      });
+
+      const result = await runtime.deleteTask({ identifier: 'T-2' });
+
+      expect(result).toMatchObject({
+        content: 'Failed to delete task T-2: Task interruption was not confirmed.',
+        success: false,
+      });
+    });
+  });
+
   describe('task comments', () => {
     it('adds a comment to the current task with agent attribution', async () => {
       const taskCaller = {
@@ -252,6 +301,24 @@ describe('createTaskRuntime', () => {
         }),
       );
     });
+
+    it.each([undefined, '', '   '])(
+      'refuses to create a task without a name (%j) instead of storing an unnamed row',
+      async (name) => {
+        const deps = makeDeps();
+        const runtime = createTaskRuntime({
+          agentModel: deps.agentModel as any,
+          taskCaller: deps.taskCaller,
+          taskModel: deps.taskModel as any,
+          taskService: deps.taskService as any,
+        });
+
+        const result = await runtime.createTask({ instruction: 'Do something', name } as any);
+
+        expect(result).toMatchObject({ content: MISSING_TASK_NAME_ERROR, success: false });
+        expect(deps.taskService.createTask).not.toHaveBeenCalled();
+      },
+    );
 
     it('embeds a workspace-scoped link when the task is in a workspace', async () => {
       const deps = makeDeps();
@@ -955,6 +1022,30 @@ describe('createTaskRuntime', () => {
           enabled: true,
           requirement: 'The output must include a working demo.',
         },
+      });
+    });
+
+    it('accepts verify booleans and numbers a model sent as strings', async () => {
+      const taskCaller = { updateVerifyConfig: vi.fn().mockResolvedValue({}) };
+      const runtime = createTaskRuntime({
+        agentModel: { existsById: vi.fn() } as any,
+        taskCaller: taskCaller as any,
+        taskModel: {
+          resolve: vi.fn().mockResolvedValue({ id: 'task-1', identifier: 'T-1' }),
+        } as any,
+        taskService: {} as any,
+      });
+
+      const result = await runtime.setTaskVerify({
+        enabled: 'true' as any,
+        identifier: 'T-1',
+        maxIterations: '3' as any,
+      });
+
+      expect(result.success).toBe(true);
+      expect(taskCaller.updateVerifyConfig).toHaveBeenCalledWith({
+        id: 'task-1',
+        verify: { enabled: true, maxIterations: 3 },
       });
     });
 
