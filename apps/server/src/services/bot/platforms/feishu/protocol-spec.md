@@ -29,7 +29,7 @@
 
 ## 2. 认证
 
-### 2.1 获取 tenant_access_token（自建应用）
+### 2.1 获取 tenant\_access\_token（自建应用）
 
 **Method**
 
@@ -755,7 +755,7 @@ curl 'https://open.feishu.cn/open-apis/im/v1/messages/om_dc13264520392913993dd05
 | `reaction_type`            | `object` | 是   | 表情类型对象。           |
 | `reaction_type.emoji_type` | `string` | 是   | 表情标识（见下方列表）。 |
 
-**常用 emoji_type 值**
+**常用 emoji\_type 值**
 
 | 类别        | 常用值                                                                                |
 | ----------- | ------------------------------------------------------------------------------------- |
@@ -879,7 +879,7 @@ curl 'https://open.feishu.cn/open-apis/im/v1/messages/om_dc13264520392913993dd05
 | `231003` | 目标消息不存在或已撤回。                 |
 | `231007` | 权限不足（只能删除自己添加的表情回复）。 |
 | `231010` | 表情回复不属于该消息。                   |
-| `231011` | 无效的 reaction_id。                     |
+| `231011` | 无效的 reaction\_id。                    |
 
 **工程建议**
 
@@ -986,7 +986,7 @@ curl 'https://open.feishu.cn/open-apis/im/v1/chats/oc_84983ff6516d731e5b5f68d4ea
 
 | 错误码   | 含义               |
 | -------- | ------------------ |
-| `232006` | 无效的 chat_id。   |
+| `232006` | 无效的 chat\_id。  |
 | `232010` | 不同租户。         |
 | `232011` | 操作者不在群组中。 |
 | `232025` | 未启用机器人能力。 |
@@ -1071,9 +1071,9 @@ curl 'https://open.feishu.cn/open-apis/im/v1/chats/oc_84983ff6516d731e5b5f68d4ea
 
 | 字段             | 类型     | 说明                                                         |
 | ---------------- | -------- | ------------------------------------------------------------ |
-| `union_id`       | `string` | 用户 union_id（跨应用唯一）。                                |
-| `user_id`        | `string` | 用户 user_id（企业内唯一，即员工工号 ID）。                  |
-| `open_id`        | `string` | 用户 open_id（应用内唯一）。                                 |
+| `union_id`       | `string` | 用户 union\_id（跨应用唯一）。                               |
+| `user_id`        | `string` | 用户 user\_id（企业内唯一，即员工工号 ID）。                 |
+| `open_id`        | `string` | 用户 open\_id（应用内唯一）。                                |
 | `name`           | `string` | 用户姓名。                                                   |
 | `en_name`        | `string` | 英文名。                                                     |
 | `nickname`       | `string` | 别名。                                                       |
@@ -1151,16 +1151,16 @@ curl 'https://open.feishu.cn/open-apis/contact/v3/users/ou_7d8a6e6df7621556ce0d2
 
 ### 8.3 其他消息类型
 
-| msg_type      | content 字段                                    | 说明                         |
-| ------------- | ----------------------------------------------- | ---------------------------- |
-| `image`       | `{"image_key":"img_xxx"}`                       | 需先上传图片获取 image_key。 |
-| `file`        | `{"file_key":"file_xxx"}`                       | 需先上传文件获取 file_key。  |
-| `audio`       | `{"file_key":"file_xxx"}`                       | 需先上传音频获取 file_key。  |
-| `media`       | `{"file_key":"file_xxx","image_key":"img_xxx"}` | 视频，需上传视频和封面。     |
-| `sticker`     | `{"file_key":"file_xxx"}`                       | 表情包。                     |
-| `interactive` | `{...card_content...}`                          | 消息卡片 JSON。              |
-| `share_chat`  | `{"chat_id":"oc_xxx"}`                          | 分享群组。                   |
-| `share_user`  | `{"user_id":"ou_xxx"}`                          | 分享用户名片。               |
+| msg\_type     | content 字段                                    | 说明                          |
+| ------------- | ----------------------------------------------- | ----------------------------- |
+| `image`       | `{"image_key":"img_xxx"}`                       | 需先上传图片获取 image\_key。 |
+| `file`        | `{"file_key":"file_xxx"}`                       | 需先上传文件获取 file\_key。  |
+| `audio`       | `{"file_key":"file_xxx"}`                       | 需先上传音频获取 file\_key。  |
+| `media`       | `{"file_key":"file_xxx","image_key":"img_xxx"}` | 视频，需上传视频和封面。      |
+| `sticker`     | `{"file_key":"file_xxx"}`                       | 表情包。                      |
+| `interactive` | `{...card_content...}`                          | 消息卡片 JSON。               |
+| `share_chat`  | `{"chat_id":"oc_xxx"}`                          | 分享群组。                    |
+| `share_user`  | `{"user_id":"ou_xxx"}`                          | 分享用户名片。                |
 
 **工程建议**
 
@@ -1168,6 +1168,29 @@ curl 'https://open.feishu.cn/open-apis/contact/v3/users/ou_7d8a6e6df7621556ce0d2
 - 文本消息 `content` 最大 150 KB。
 - 卡片和富文本 `content` 最大 30 KB。
 - 当前 `LarkApiClient` 实现中仅使用 `text` 类型，且在客户端做了 4000 字符截断保护。
+
+## 8.4 云文档正文读取（docx /wiki）
+
+群里的智能纪要、会议纪要和方案文档以**链接**的形式出现（`text` 里的 URL、`post` 的 `a` 标签或 `interactive` 卡片按钮），消息体本身没有正文。`readDocument` 用应用自己的 `tenant_access_token` 走 Docs API 拉取纯文本。
+
+| 用途                   | 方法 / 路径                                        | 所需权限                                    |
+| ---------------------- | -------------------------------------------------- | ------------------------------------------- |
+| 读取文档纯文本         | `GET /docx/v1/documents/{document_id}/raw_content` | `docx:document:readonly` 或 `docx:document` |
+| 读取文档元信息（标题） | `GET /docx/v1/documents/{document_id}`             | 同上                                        |
+| wiki 链接解析为 docx   | `GET /wiki/v2/spaces/get_node?token={node_token}`  | `wiki:wiki:readonly` 或 `wiki:wiki`         |
+
+- `document_id` 即 URL `https://<tenant>.feishu.cn/docx/{token}` 中的 token；`/wiki/{token}` 是知识库节点，需要先 `get_node` 取 `obj_token`（仅 `obj_type = docx` 可读）。
+- 旧版 `/docs/` 文档、`/minutes/` 妙记、表格、多维表格不在 docx API 范围内，服务层会直接返回可执行的提示而不是调用接口。
+- 单应用限流 5 次 / 秒；`raw_content` 返回的是把标题、段落、表格单元格拍平后的纯文本，无块结构。
+- **可见性是独立于 scope 的**：文档分享到机器人所在的群不等于应用可读。`1770032` 时需要文档所有者把应用添加为协作者（文档「分享」→ 添加协作者 → 搜索应用名），或由知识库授权给应用。
+
+| 错误码    | 含义                              |
+| --------- | --------------------------------- |
+| `1770001` | 参数非法（token 格式不对）。      |
+| `1770002` | 文档不存在（或属于其他租户）。    |
+| `1770003` | 文档已删除。                      |
+| `1770032` | 应用对该文档没有阅读 / 编辑权限。 |
+| `1770033` | 纯文本超出大小限制。              |
 
 ## 9. 通用错误码速查
 
@@ -1195,8 +1218,8 @@ curl 'https://open.feishu.cn/open-apis/contact/v3/users/ou_7d8a6e6df7621556ce0d2
 | `231003` | 消息不存在或已被撤回。             |
 | `231007` | 只能删除自己添加的表情回复。       |
 | `231010` | 表情回复不属于该消息。             |
-| `231011` | 无效的 reaction_id。               |
-| `232006` | 无效的 chat_id。                   |
+| `231011` | 无效的 reaction\_id。              |
+| `232006` | 无效的 chat\_id。                  |
 | `232010` | 不同租户。                         |
 | `232011` | 操作者不在群组中。                 |
 | `232025` | 未启用机器人能力。                 |
@@ -1267,24 +1290,25 @@ curl 'https://open.feishu.cn/open-apis/contact/v3/users/ou_7d8a6e6df7621556ce0d2
 
 ### 11.3 服务适配器操作支持情况
 
-服务适配器支持 **9 / 17** 项 message tool 操作：
+服务适配器支持 **10 / 18** 项 message tool 操作：
 
-| 操作                | 支持 | 映射的飞书 API                                            |
-| ------------------- | ---- | --------------------------------------------------------- |
-| `sendMessage`       | Yes  | `POST /im/v1/messages`                                    |
-| `readMessages`      | Yes  | `GET /im/v1/messages`（会话历史）                         |
-| `editMessage`       | Yes  | `PUT /im/v1/messages/{message_id}`                        |
-| `deleteMessage`     | Yes  | `DELETE /im/v1/messages/{message_id}`                     |
-| `reactToMessage`    | Yes  | `POST /im/v1/messages/{message_id}/reactions`             |
-| `getChannelInfo`    | Yes  | `GET /im/v1/chats/{chat_id}`（getChatInfo）               |
-| `getMemberInfo`     | Yes  | `GET /contact/v3/users/{user_id}`（getUserInfo）          |
-| `replyToThread`     | Yes  | `POST /im/v1/messages/{message_id}/reply`（replyMessage） |
-| `searchMessages`    | No   | 飞书无全文搜索 API                                        |
-| `getReactions`      | No   | 未实现                                                    |
-| `pinMessage`        | No   | 未实现                                                    |
-| `unpinMessage`      | No   | 未实现                                                    |
-| `getPinnedMessages` | No   | 未实现                                                    |
-| `listChannels`      | No   | 未实现                                                    |
-| `createThread`      | No   | 未实现                                                    |
-| `listThreads`       | No   | 未实现                                                    |
-| `createPoll`        | No   | 飞书无投票 API                                            |
+| 操作                | 支持 | 映射的飞书 API                                                |
+| ------------------- | ---- | ------------------------------------------------------------- |
+| `sendMessage`       | Yes  | `POST /im/v1/messages`                                        |
+| `readMessages`      | Yes  | `GET /im/v1/messages`（会话历史）                             |
+| `readDocument`      | Yes  | `GET /docx/v1/documents/{id}/raw_content`（+ wiki get\_node） |
+| `editMessage`       | Yes  | `PUT /im/v1/messages/{message_id}`                            |
+| `deleteMessage`     | Yes  | `DELETE /im/v1/messages/{message_id}`                         |
+| `reactToMessage`    | Yes  | `POST /im/v1/messages/{message_id}/reactions`                 |
+| `getChannelInfo`    | Yes  | `GET /im/v1/chats/{chat_id}`（getChatInfo）                   |
+| `getMemberInfo`     | Yes  | `GET /contact/v3/users/{user_id}`（getUserInfo）              |
+| `replyToThread`     | Yes  | `POST /im/v1/messages/{message_id}/reply`（replyMessage）     |
+| `searchMessages`    | No   | 飞书无全文搜索 API                                            |
+| `getReactions`      | No   | 未实现                                                        |
+| `pinMessage`        | No   | 未实现                                                        |
+| `unpinMessage`      | No   | 未实现                                                        |
+| `getPinnedMessages` | No   | 未实现                                                        |
+| `listChannels`      | No   | 未实现                                                        |
+| `createThread`      | No   | 未实现                                                        |
+| `listThreads`       | No   | 未实现                                                        |
+| `createPoll`        | No   | 飞书无投票 API                                                |

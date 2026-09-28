@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
 import type {
+  BotChannelFilter,
   GroupBy,
   SortBy,
   StatusFilter,
@@ -10,6 +11,7 @@ import type {
 } from './types';
 
 interface TopicsViewState {
+  botChannels: BotChannelFilter[];
   groupBy: GroupBy;
   groupIds: string[];
   search: string;
@@ -27,6 +29,7 @@ interface TopicsViewActions {
   exitSelectMode: () => void;
   reset: () => void;
   selectAll: (ids: string[]) => void;
+  setBotChannels: (botChannels: BotChannelFilter[]) => void;
   setGroupBy: (groupBy: GroupBy) => void;
   setGroupIds: (groupIds: string[]) => void;
   setSearch: (search: string) => void;
@@ -35,11 +38,14 @@ interface TopicsViewActions {
   setTimeRange: (range: TimeRangeFilter) => void;
   setTriggers: (triggers: TriggerFilter[]) => void;
   setViewMode: (mode: ViewMode) => void;
+  toggleBotChannel: (botChannel: BotChannelFilter) => void;
   toggleSelected: (id: string) => void;
   toggleSelectMode: () => void;
+  toggleTrigger: (trigger: TriggerFilter) => void;
 }
 
 const initialState: TopicsViewState = {
+  botChannels: [],
   groupBy: 'byTime',
   groupIds: [],
   search: '',
@@ -58,6 +64,7 @@ export const useTopicsViewStore = create<TopicsViewState & TopicsViewActions>((s
   exitSelectMode: () => set({ selectMode: false, selectedIds: [] }),
   reset: () => set(initialState),
   selectAll: (ids) => set({ selectedIds: ids }),
+  setBotChannels: (botChannels) => set({ botChannels }),
   setGroupBy: (groupBy) => set({ groupBy }),
   setGroupIds: (groupIds) => set({ groupIds }),
   setSearch: (search) => set({ search }),
@@ -66,6 +73,24 @@ export const useTopicsViewStore = create<TopicsViewState & TopicsViewActions>((s
   setTimeRange: (timeRange) => set({ timeRange }),
   setTriggers: (triggers) => set({ triggers }),
   setViewMode: (viewMode) => set({ viewMode }),
+  toggleBotChannel: (botChannel) =>
+    set((state) => {
+      if (state.botChannels.includes(botChannel)) {
+        return { botChannels: state.botChannels.filter((item) => item !== botChannel) };
+      }
+
+      return { botChannels: [...state.botChannels, botChannel], triggers: ['bot'] };
+    }),
+  toggleTrigger: (trigger) =>
+    set((state) => {
+      const removing = state.triggers.includes(trigger);
+      return {
+        ...(removing && trigger === 'bot' ? { botChannels: [] } : {}),
+        triggers: removing
+          ? state.triggers.filter((item) => item !== trigger)
+          : [...state.triggers, trigger],
+      };
+    }),
   toggleSelectMode: () =>
     set((s) => ({ selectMode: !s.selectMode, selectedIds: s.selectMode ? [] : s.selectedIds })),
   toggleSelected: (id) =>

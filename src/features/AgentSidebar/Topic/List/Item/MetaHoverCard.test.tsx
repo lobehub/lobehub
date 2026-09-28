@@ -9,32 +9,9 @@ import MetaHoverCard from './MetaHoverCard';
 
 const fetchTopicLinkedPullRequestMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@lobehub/ui', () => ({
-  Icon: () => <span data-testid="meta-card-icon" />,
-}));
-
 vi.mock('@/store/chat', () => ({
   useChatStore: (selector: (state: unknown) => unknown) =>
     selector({ useFetchTopicLinkedPullRequest: fetchTopicLinkedPullRequestMock }),
-}));
-
-vi.mock('antd-style', () => ({
-  createStaticStyles: () => ({
-    card: 'card',
-    header: 'header',
-    headerTime: 'headerTime',
-    headerTitle: 'headerTitle',
-    prLink: 'prLink',
-    row: 'row',
-    rowIcon: 'rowIcon',
-    rowText: 'rowText',
-  }),
-  cssVar: {
-    colorError: '#f00',
-    colorSuccess: '#0f0',
-    colorTextTertiary: '#999',
-    colorWarning: '#fa0',
-  },
 }));
 
 vi.mock('react-i18next', () => ({

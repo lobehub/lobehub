@@ -9,28 +9,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import TopicCard from './TopicCard';
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
-vi.mock('@lobehub/ui/base-ui', () => ({
-  ActionIcon: ({ onClick }: { onClick?: () => void }) => (
-    <button type="button" onClick={onClick}>
-      action
-    </button>
-  ),
-  Avatar: () => <span>avatar</span>,
-  Tag: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-  confirmModal: vi.fn(),
-  toast: {
-    error: vi.fn(),
-    info: vi.fn(),
-    success: vi.fn(),
-    warning: vi.fn(),
-  },
-}));
-
 vi.mock('@/store/task', () => ({
   useTaskStore: (selector: (state: any) => unknown) =>
     selector({
@@ -40,10 +18,6 @@ vi.mock('@/store/task', () => ({
       openTopicDrawer: vi.fn(),
       taskDetailMap: {},
     }),
-}));
-
-vi.mock('@/hooks/usePermission', () => ({
-  usePermission: () => ({ allowed: true }),
 }));
 
 vi.mock('@/hooks/useActivityTime', () => ({

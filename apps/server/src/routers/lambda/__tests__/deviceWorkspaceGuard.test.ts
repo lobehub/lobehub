@@ -5,7 +5,12 @@ import type { DeviceModel } from '@/database/models/device';
 
 import { assertWorkspaceDeviceVisible, assertWorkspaceRootApproved } from '../deviceWorkspaceGuard';
 
-const mockModel = (row: { defaultCwd?: string | null; workingDirs?: { path: string }[] } | null) =>
+const mockModel = (
+  row: {
+    defaultCwd?: string | null;
+    workingDirs?: Array<{ path: string; git?: { activeWorktree?: string } }>;
+  } | null,
+) =>
   ({
     findByDeviceId: vi.fn().mockResolvedValue(row),
   }) as unknown as DeviceModel;
@@ -46,6 +51,15 @@ describe('assertWorkspaceRootApproved', () => {
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 
+  it('allows a root that matches a worktree activeWorktree', async () => {
+    const model = mockModel({
+      workingDirs: [{ path: '/Users/me/proj', git: { activeWorktree: '/Users/me/proj-feat-x' } }],
+    });
+    await expect(
+      assertWorkspaceRootApproved(model, 'dev-1', '/Users/me/proj-feat-x'),
+    ).resolves.toBeUndefined();
+  });
+
   it('rejects when the device has no approved roots at all', async () => {
     const model = mockModel({ workingDirs: [] });
     await expect(
@@ -70,23 +84,28 @@ describe('assertWorkspaceRootApproved', () => {
 });
 
 describe('assertWorkspaceDeviceVisible', () => {
-  const mockHiddenModel = (hiddenIds: string[]) =>
+  const mockWorkspaceModel = (row: object | undefined) =>
     ({
-      queryWorkspaceHiddenDeviceIds: vi.fn().mockResolvedValue(hiddenIds),
+      findWorkspaceDeviceById: vi.fn().mockResolvedValue(row),
     }) as unknown as DeviceModel;
 
+  /** @example A visible registered device remains addressable by workspace RPCs. */
   it('allows a device the caller can see', async () => {
-    const model = mockHiddenModel(['someone-elses-private']);
+    const model = mockWorkspaceModel({ deviceId: 'public-dev' });
     await expect(assertWorkspaceDeviceVisible(model, 'public-dev')).resolves.toBeUndefined();
   });
 
-  it('allows a transient device with no DB row (empty hidden set)', async () => {
-    const model = mockHiddenModel([]);
-    await expect(assertWorkspaceDeviceVisible(model, 'transient-dev')).resolves.toBeUndefined();
+  /** @example A Gateway-only ghost is not authorized after its workspace row is removed. */
+  it('rejects a transient device with no workspace registry row', async () => {
+    const model = mockWorkspaceModel(undefined);
+    await expect(assertWorkspaceDeviceVisible(model, 'transient-dev')).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
   });
 
+  /** @example Another member's private device is indistinguishable from an unknown device. */
   it("rejects another member's private device with NOT_FOUND", async () => {
-    const model = mockHiddenModel(['someone-elses-private']);
+    const model = mockWorkspaceModel(undefined);
     await expect(
       assertWorkspaceDeviceVisible(model, 'someone-elses-private'),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });

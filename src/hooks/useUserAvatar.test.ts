@@ -7,8 +7,6 @@ import { useUserStore } from '@/store/user';
 
 import { useUserAvatar } from './useUserAvatar';
 
-vi.mock('zustand/traditional');
-
 const mockConstEnv = vi.hoisted(() => ({ isDesktop: false }));
 
 vi.mock('@lobechat/const', async (importOriginal) => {

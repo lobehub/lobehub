@@ -67,6 +67,8 @@ export interface ProviderBindingPlan {
   /** Best-effort synchronous release for app shutdown. */
   cleanupSync?: () => void;
   env: Record<string, string>;
+  /** Environment variable that receives the per-prompt server operation token. */
+  operationTokenEnvKey?: string;
   profileFiles?: ProviderBindingFilePlan[];
   runFiles?: ProviderBindingFilePlan[];
 }

@@ -10,41 +10,6 @@ const mocks = vi.hoisted(() => ({
   updateSystemStatus: vi.fn(),
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
-}));
-
-vi.mock('@lobehub/ui', () => ({
-  Accordion: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  AccordionItem: ({
-    action,
-    children,
-    title,
-  }: {
-    action?: ReactNode;
-    children?: ReactNode;
-    title?: ReactNode;
-  }) => (
-    <section>
-      <header>
-        {title}
-        {action}
-      </header>
-      {children}
-    </section>
-  ),
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Icon: () => <span />,
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-}));
-
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
-  ...((await importOriginal()) as Record<string, unknown>),
-  Tabs: () => <div />,
-}));
-
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => mocks.activeWorkspaceId,
 }));

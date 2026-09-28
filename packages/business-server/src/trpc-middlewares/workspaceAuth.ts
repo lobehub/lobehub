@@ -5,7 +5,13 @@ import { trpc } from '@/libs/trpc/lambda/init';
 
 export type WorkspaceRole = 'admin' | 'member' | 'owner' | 'viewer';
 
-export const cloudWorkspaceAuth = trpc.middleware(async (opts) => opts.next());
+export const cloudWorkspaceAuth = trpc.middleware(async (opts) =>
+  opts.next({
+    ctx: {
+      workspaceSlug: undefined as string | undefined,
+    },
+  }),
+);
 
 export const lobeWorkspaceAuth = trpc.middleware(async (opts) => opts.next());
 
@@ -29,4 +35,4 @@ export const wsMemberProcedure = authedProcedure;
 export const wsOwnerProcedure = authedProcedure.use(requireWorkspaceId);
 export const wsAdminProcedure = authedProcedure.use(requireWorkspaceId);
 
-export const wsCompatProcedure = authedProcedure;
+export const wsCompatProcedure = authedProcedure.use(cloudWorkspaceAuth);

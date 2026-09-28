@@ -6,41 +6,49 @@ import { fireEvent, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Render from './index';
+import { InternalEntityPreview } from './InternalEntityPreview';
 
-let mockIsDesktop = false;
+const mockConst = vi.hoisted(() => ({
+  isDesktop: false,
+}));
 
 vi.mock('@lobechat/const', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
   get isDesktop() {
-    return mockIsDesktop;
+    return mockConst.isDesktop;
   },
+}));
+
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
+  ActionIcon: ({ icon: _icon, onClick, title, ...rest }: any) => (
+    <button {...rest} aria-label={title} type="button" onClick={onClick} />
+  ),
+}));
+
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  // Keep content mounted after dismissal to model the popover's exit animation.
+  Popover: ({ children, content, onOpenChange }: any) => (
+    <div onMouseEnter={() => onOpenChange?.(true)} onMouseLeave={() => onOpenChange?.(false)}>
+      {children}
+      {content}
+    </div>
+  ),
 }));
 
 // `enableMessageLinkIcon` is read via useUserStore(selector). We drive the
 // selector's return value through this module-level flag so each case can flip
 // the "Link Icon" setting on/off without a real store.
 let mockShowIcon = true;
-let mockEnableInAppBrowser = false;
 const mockOpenInBrowserTab = vi.fn();
 const mockNavigate = vi.fn();
 const mockOpenAcceptance = vi.fn();
 const mockOpenAgentDetail = vi.fn();
 const mockOpenDocument = vi.fn();
+const mockOpenGoal = vi.fn();
 const mockOpenTaskDetail = vi.fn();
 const mockOpenVerifyReport = vi.fn();
-
-vi.mock('@lobehub/ui/base-ui', () => ({
-  ActionIcon: (props: { onClick?: (e: unknown) => void; title?: string }) => (
-    <button
-      aria-label={props.title}
-      data-side-browser={(props as Record<string, unknown>)['data-side-browser']}
-      type="button"
-      onClick={props.onClick}
-    />
-  ),
-  Avatar: ({ alt }: { alt?: string }) => <span>{alt}</span>,
-  Text: ({ children }: { children?: unknown }) => <span>{children as never}</span>,
-}));
 
 vi.mock('@/business/client/hooks/useWorkspaces', () => ({
   useWorkspaces: () => [{ id: 'ws-1', slug: 'lobe-team' }],
@@ -50,11 +58,24 @@ vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => mockNavigate,
 }));
 
+// What the shared preview/title read answers for this case (null = unresolved).
+let mockEntityPreview: {
+  description?: string;
+  meta?: string;
+  secondaryMeta?: string;
+  title?: string;
+} | null = null;
+
 vi.mock('@/libs/swr', () => ({
-  useClientDataSWR: () => ({
-    data: [{ documentId: 'docs_doc1', id: 'agent-document-1' }],
-    mutate: vi.fn(),
-  }),
+  useClientDataSWR: (key: unknown) => {
+    if (key === null) return { data: undefined, mutate: vi.fn() };
+    if (Array.isArray(key) && key[0] === 'internal-entity-preview')
+      return { data: mockEntityPreview, mutate: vi.fn() };
+    return {
+      data: [{ documentId: 'docs_doc1', id: 'agent-document-1' }],
+      mutate: vi.fn(),
+    };
+  },
 }));
 
 vi.mock('@/services/agentDocument', () => ({
@@ -72,6 +93,7 @@ vi.mock('@/store/chat', () => ({
       openAcceptance: mockOpenAcceptance,
       openAgentDetail: mockOpenAgentDetail,
       openDocument: mockOpenDocument,
+      openGoal: mockOpenGoal,
       openTaskDetail: mockOpenTaskDetail,
       openVerifyReport: mockOpenVerifyReport,
     }),
@@ -82,9 +104,6 @@ vi.mock('@/store/user', () => ({
 }));
 
 vi.mock('@/store/user/selectors', () => ({
-  labPreferSelectors: {
-    enableInAppBrowser: () => mockEnableInAppBrowser,
-  },
   userGeneralSettingsSelectors: {
     enableMessageLinkIcon: () => mockShowIcon,
   },
@@ -104,8 +123,8 @@ const renderLink = (properties: Record<string, unknown>) =>
 
 afterEach(() => {
   mockShowIcon = true;
-  mockIsDesktop = false;
-  mockEnableInAppBrowser = false;
+  mockConst.isDesktop = false;
+  mockEntityPreview = null;
   vi.restoreAllMocks();
 });
 
@@ -185,6 +204,105 @@ describe('Link Render — message link icon toggle', () => {
 });
 
 describe('Link Render — internal entities', () => {
+  it('preserves preview details during dismissal and refreshes them when reopened', () => {
+    mockEntityPreview = {
+      description: 'Publish external workspace resources',
+      meta: '4/4 passed · 0 exceptions',
+      secondaryMeta: '3 verification rounds',
+      title: 'Workspace publishing',
+    };
+    const { container, getByText } = render(
+      <InternalEntityPreview
+        fallbackTitle="Acceptance"
+        reference={{
+          acceptanceId: 'acceptance-1',
+          pathname: '/acceptance/acceptance-1',
+          type: 'acceptance',
+        }}
+      >
+        <span>Preview trigger</span>
+      </InternalEntityPreview>,
+    );
+    fireEvent.mouseEnter(container.firstElementChild!);
+    expect(getByText('Publish external workspace resources')).toBeInTheDocument();
+
+    fireEvent.mouseLeave(container.firstElementChild!);
+    expect(getByText('Publish external workspace resources')).toBeInTheDocument();
+    expect(getByText('4/4 passed · 0 exceptions')).toBeInTheDocument();
+    expect(getByText('3 verification rounds')).toBeInTheDocument();
+
+    mockEntityPreview = { description: 'Updated requirement', title: 'Updated acceptance' };
+    fireEvent.mouseEnter(container.firstElementChild!);
+    expect(getByText('Updated requirement')).toBeInTheDocument();
+    expect(getByText('Updated acceptance')).toBeInTheDocument();
+  });
+
+  it('replaces a pasted URL label with the resolved entity title', () => {
+    // A raw acceptance URL says nothing about what it points to; once the
+    // entity resolves, the link reads as its title.
+    mockEntityPreview = { title: 'Gateway 消息队列重建' };
+
+    const { container } = renderLink({
+      linkHref: '/acceptance/acceptance-1',
+      linkKind: 'generic',
+      linkLabel: '/acceptance/acceptance-1',
+    });
+
+    const anchor = container.querySelector('a')!;
+    expect(anchor.textContent).toBe('Gateway 消息队列重建');
+    expect(anchor.getAttribute('href')).toBe('/acceptance/acceptance-1');
+  });
+
+  it('keeps the pasted URL while the title has not resolved', () => {
+    mockEntityPreview = null;
+
+    const { container } = renderLink({
+      linkHref: '/acceptance/acceptance-1',
+      linkKind: 'generic',
+      linkLabel: '/acceptance/acceptance-1',
+    });
+
+    expect(container.querySelector('a')!.textContent).toBe('/acceptance/acceptance-1');
+  });
+
+  it('never replaces authored link text with the entity title', () => {
+    mockEntityPreview = { title: 'Resolved title' };
+
+    const { container } = renderLink({
+      linkHref: '/acceptance/acceptance-1',
+      linkKind: 'generic',
+      linkLabel: 'Acceptance',
+    });
+
+    expect(container.querySelector('a')!.textContent).toBe('Acceptance');
+  });
+
+  it('keeps a URL-shaped authored label — bare means label === href, not "looks like a URL"', () => {
+    mockEntityPreview = { title: 'Resolved title' };
+
+    const { container } = renderLink({
+      linkHref: '/task/T-198',
+      linkKind: 'generic',
+      linkLabel: 'https://docs.example',
+    });
+
+    expect(container.querySelector('a')!.textContent).toBe('https://docs.example');
+  });
+
+  it('does not resolve titles for workspace-qualified links', () => {
+    // The ambient client reads the ACTIVE scope; /lobe-team/task/T-198 may
+    // name a different entity there, so the URL stays.
+    mockEntityPreview = { title: 'Wrong-scope title' };
+
+    const { container } = renderLink({
+      linkHref: '/lobe-team/task/T-198',
+      linkKind: 'generic',
+      linkLabel: '/lobe-team/task/T-198',
+    });
+
+    expect(container.querySelector('a')!.textContent).toBe('/lobe-team/task/T-198');
+  });
+
   it('opens acceptance links in the conversation portal', () => {
     const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => undefined);
 
@@ -218,6 +336,25 @@ describe('Link Render — internal entities', () => {
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
+  it('opens page links as the standalone page on mobile instead of the portal modal', () => {
+    vi.stubGlobal('__MOBILE__', true);
+
+    try {
+      const { getByRole } = renderLink({
+        linkHref: '/page/doc1',
+        linkKind: 'generic',
+        linkLabel: 'Meeting notes',
+      });
+
+      fireEvent.click(getByRole('link', { name: 'Meeting notes' }));
+
+      expect(mockNavigate).toHaveBeenCalledWith('/page/doc1');
+      expect(mockOpenDocument).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('opens tasks and agents in their portal views', () => {
     const task = renderLink({
       linkHref: '/task/T-198',
@@ -235,6 +372,39 @@ describe('Link Render — internal entities', () => {
     });
     fireEvent.click(agent.getByRole('link', { name: 'Research agent' }));
     expect(mockOpenAgentDetail).toHaveBeenCalledWith('agt_1');
+  });
+
+  it('shows a goal the CLI printed by its title and goal icon, and opens it beside the chat', () => {
+    // `lh goal create` prints the goal URL; agents paste it bare or label it with
+    // the id. Either way the link should read as the goal, not its id.
+    mockEntityPreview = { title: 'Vent 真信号修复' };
+
+    const { container, getByRole } = renderLink({
+      linkHref: '/goal/goal_abc',
+      linkKind: 'generic',
+      linkLabel: 'goal_abc',
+    });
+
+    const anchor = container.querySelector('a')!;
+    expect(anchor.textContent).toBe('Vent 真信号修复');
+    // The goal's own icon, not a status or progress glyph.
+    expect(anchor.querySelector('svg.lucide-target')).not.toBeNull();
+
+    fireEvent.click(getByRole('link', { name: 'Vent 真信号修复' }));
+    expect(mockOpenGoal).toHaveBeenCalledWith('goal_abc');
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('keeps authored text on a goal link', () => {
+    mockEntityPreview = { title: 'Resolved goal title' };
+
+    const { container } = renderLink({
+      linkHref: '/agent/agt_1/goal/goal_abc',
+      linkKind: 'generic',
+      linkLabel: '接续 goal',
+    });
+
+    expect(container.querySelector('a')!.textContent).toBe('接续 goal');
   });
 
   it('hard-navigates personal verify pages into the Workbench runtime', () => {
@@ -279,7 +449,7 @@ describe('Link Render — internal entities', () => {
   });
 
   it('takes over modifier-clicks on desktop, which has no new tab to open', () => {
-    mockIsDesktop = true;
+    mockConst.isDesktop = true;
 
     const { getByRole } = renderLink({
       linkHref: '/task/T-198',
@@ -331,9 +501,8 @@ describe('Link Render — open an external link in the side browser', () => {
       linkLabel: 'http://localhost:3022/observability/context',
     });
 
-  it('offers the side-browser action on desktop when the in-app browser is enabled', () => {
-    mockIsDesktop = true;
-    mockEnableInAppBrowser = true;
+  it('offers the side-browser action on desktop', () => {
+    mockConst.isDesktop = true;
 
     const { container } = renderExternal();
     const action = container.querySelector('[data-side-browser]')!;
@@ -347,8 +516,7 @@ describe('Link Render — open an external link in the side browser', () => {
   });
 
   it('keeps the action OUTSIDE the anchor, or the preload would swallow its click', () => {
-    mockIsDesktop = true;
-    mockEnableInAppBrowser = true;
+    mockConst.isDesktop = true;
 
     const { container } = renderExternal();
 
@@ -359,8 +527,7 @@ describe('Link Render — open an external link in the side browser', () => {
   });
 
   it('leaves the anchor itself untouched, so a plain click still opens the system browser', () => {
-    mockIsDesktop = true;
-    mockEnableInAppBrowser = true;
+    mockConst.isDesktop = true;
 
     const { container } = renderExternal();
     const anchor = container.querySelector('a')!;
@@ -372,22 +539,14 @@ describe('Link Render — open an external link in the side browser', () => {
     expect(mockOpenInBrowserTab).not.toHaveBeenCalled();
   });
 
-  it('hides the action on web, and on desktop with the lab flag off', () => {
-    mockIsDesktop = false;
-    mockEnableInAppBrowser = true;
+  it('hides the action on web', () => {
+    mockConst.isDesktop = false;
     const web = renderExternal();
     expect(web.container.querySelector('[data-side-browser]')).toBeNull();
-    web.unmount();
-
-    mockIsDesktop = true;
-    mockEnableInAppBrowser = false;
-    const flagOff = renderExternal();
-    expect(flagOff.container.querySelector('[data-side-browser]')).toBeNull();
   });
 
   it('hides the action for non-web links (mailto) and for portal-bound internal links', () => {
-    mockIsDesktop = true;
-    mockEnableInAppBrowser = true;
+    mockConst.isDesktop = true;
 
     const email = renderLink({
       linkHref: 'mailto:a@b.com',

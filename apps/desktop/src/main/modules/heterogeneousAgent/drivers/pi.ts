@@ -1,7 +1,7 @@
 import path from 'node:path';
 
 import type { HeterogeneousProviderBindingProtocol } from '@lobechat/heterogeneous-agents';
-import { PI_BASE_ARGS } from '@lobechat/heterogeneous-agents/spawn';
+import { formatServerDefaultHeterogeneousModel } from '@lobechat/types';
 
 import type { HeterogeneousAgentBuildPlanParams, HeterogeneousAgentDriver } from '../types';
 
@@ -58,24 +58,12 @@ const sanitizePiProviderBindingEnv = (source: Record<string, string> | undefined
   return env;
 };
 
+/** Pi uses RPC exclusively; the driver still owns managed provider profiles. */
 export const piDriver: HeterogeneousAgentDriver = {
-  async buildSpawnPlan({
-    args,
-    helpers,
-    promptInput,
-    resumeSessionId,
-  }: HeterogeneousAgentBuildPlanParams) {
-    const inputPlan = await helpers.buildAgentInput('pi', promptInput);
-
-    return {
-      args: [
-        ...PI_BASE_ARGS,
-        ...(resumeSessionId ? ['--session-id', resumeSessionId] : []),
-        ...args,
-        ...inputPlan.args,
-      ],
-      stdinPayload: inputPlan.stdin,
-    };
+  async buildSpawnPlan(_params: HeterogeneousAgentBuildPlanParams) {
+    throw new Error(
+      'pi runs over the RPC transport only — use PiRpcSession / createPiRpcAgentHandle, not the CLI spawn path',
+    );
   },
   prepareProviderBinding({ args, env, profileDir, resolution }) {
     if (!resolution.endpoint) throw new Error('Pi provider binding requires an API endpoint.');
@@ -123,6 +111,47 @@ export const piDriver: HeterogeneousAgentDriver = {
         [HOST_API_KEY_ENV]: apiKey,
         PI_CODING_AGENT_DIR: profileDir,
       },
+      profileFiles: [{ content: `${JSON.stringify(modelsConfig, null, 2)}\n`, path: MODELS_FILE }],
+    };
+  },
+  prepareServerDefaultBinding({ args, endpoint, env, model, profileDir }) {
+    const providerId = 'lobehub-server-default';
+    const requestModel = formatServerDefaultHeterogeneousModel(model);
+    const modelsConfig = {
+      providers: {
+        [providerId]: {
+          api: 'openai-responses',
+          apiKey: `$${HOST_API_KEY_ENV}`,
+          baseUrl: `${endpoint}/api/v1/openai/v1`,
+          models: [
+            {
+              contextWindow: DEFAULT_CONTEXT_WINDOW,
+              cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+              id: requestModel,
+              input: ['text'],
+              maxTokens: DEFAULT_MAX_TOKENS,
+              name: model,
+              reasoning: false,
+            },
+          ],
+          name: 'LobeHub Server Default',
+        },
+      },
+    };
+
+    return {
+      args: [
+        '--provider',
+        providerId,
+        '--model',
+        requestModel,
+        ...sanitizePiProviderBindingArgs(args),
+      ],
+      env: {
+        ...sanitizePiProviderBindingEnv(env),
+        PI_CODING_AGENT_DIR: profileDir,
+      },
+      operationTokenEnvKey: HOST_API_KEY_ENV,
       profileFiles: [{ content: `${JSON.stringify(modelsConfig, null, 2)}\n`, path: MODELS_FILE }],
     };
   },

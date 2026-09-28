@@ -31,23 +31,29 @@ const {
 }));
 
 vi.mock('@/database/models/asyncTask', () => ({
-  AsyncTaskModel: vi.fn(() => ({
-    create: mockAsyncTaskModelCreate,
-    update: mockAsyncTaskModelUpdate,
-  })),
+  AsyncTaskModel: vi.fn(function () {
+    return {
+      create: mockAsyncTaskModelCreate,
+      update: mockAsyncTaskModelUpdate,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/file', () => ({
-  FileModel: vi.fn(() => ({
-    findById: mockFileModelFindById,
-    update: mockFileModelUpdate,
-  })),
+  FileModel: vi.fn(function () {
+    return {
+      findById: mockFileModelFindById,
+      update: mockFileModelUpdate,
+    };
+  }),
 }));
 
 vi.mock('@/server/modules/ContentChunk', () => ({
-  ContentChunk: vi.fn(() => ({
-    chunkContent: mockChunkContent,
-  })),
+  ContentChunk: vi.fn(function () {
+    return {
+      chunkContent: mockChunkContent,
+    };
+  }),
 }));
 
 vi.mock('@/server/routers/async', () => ({
@@ -77,7 +83,7 @@ describe('ChunkService', () => {
     mockFileModelUpdate.mockResolvedValue(undefined);
     mockParseFileToChunks.mockResolvedValue(undefined);
 
-    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(function () {});
     service = new ChunkService(mockDb, userId);
   });
 
@@ -152,6 +158,29 @@ describe('ChunkService', () => {
 
       expect(mockAsyncTaskModelCreate).not.toHaveBeenCalled();
       expect(mockFileModelUpdate).not.toHaveBeenCalled();
+      expect(mockCreateAsyncCaller).not.toHaveBeenCalled();
+    });
+
+    it('should create an error task for files larger than the in-memory parser limit', async () => {
+      mockFileModelFindById.mockResolvedValue({
+        id: 'large-file',
+        size: 64 * 1024 * 1024 + 1,
+      });
+
+      await expect(service.asyncParseFileToChunks('large-file')).resolves.toBe('task-1');
+
+      expect(mockAsyncTaskModelCreate).toHaveBeenCalledWith({
+        status: AsyncTaskStatus.Error,
+        type: AsyncTaskType.Chunking,
+      });
+      expect(mockFileModelUpdate).toHaveBeenCalledWith('large-file', { chunkTaskId: 'task-1' });
+      expect(mockAsyncTaskModelUpdate).toHaveBeenCalledWith('task-1', {
+        error: new AsyncTaskError(
+          AsyncTaskErrorType.FileTooLargeToParse,
+          'Files larger than 67108864 bytes cannot be parsed in memory',
+        ),
+        status: AsyncTaskStatus.Error,
+      });
       expect(mockCreateAsyncCaller).not.toHaveBeenCalled();
     });
 

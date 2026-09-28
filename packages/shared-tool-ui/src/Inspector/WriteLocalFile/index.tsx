@@ -36,22 +36,29 @@ export const createWriteLocalFileInspector = (translationKey: string) => {
       if (isArgumentsStreaming) {
         if (!filePath)
           return (
-            <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-              <span>{t(translationKey as any)}</span>
+            <div className={inspectorTextStyles.root}>
+              <span className={shinyTextStyles.shinyText}>{t(translationKey as any)}</span>
             </div>
           );
 
         return (
-          <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-            <span style={{ marginInlineEnd: 6 }}>{t(translationKey as any)}:</span>
+          <div className={inspectorTextStyles.root}>
+            <span className={shinyTextStyles.shinyText} style={{ marginInlineEnd: 6 }}>
+              {t(translationKey as any)}:
+            </span>
             <FilePathDisplay filePath={filePath} />
           </div>
         );
       }
 
       return (
-        <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
-          <span style={{ marginInlineEnd: 6 }}>{t(translationKey as any)}:</span>
+        <div className={inspectorTextStyles.root}>
+          <span
+            className={cx(isLoading && shinyTextStyles.shinyText)}
+            style={{ marginInlineEnd: 6 }}
+          >
+            {t(translationKey as any)}:
+          </span>
           <FilePathDisplay filePath={filePath} />
           {!isLoading && lineCount && (
             <>

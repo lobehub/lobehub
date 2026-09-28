@@ -1,58 +1,110 @@
 import { describe, expect, it } from 'vitest';
 
-import { getGoalPresentation } from './goalPresentation';
+import {
+  formatSpan,
+  formatUsd,
+  goalManagerConversation,
+  goalStatusKey,
+  summarizeGoalBudget,
+} from './goalPresentation';
 
-describe('getGoalPresentation', () => {
-  it('maps the goal lifecycle state to the goal list vocabulary', () => {
+describe('goalStatusKey', () => {
+  it('maps every lifecycle state to a list-vocabulary key', () => {
+    expect(goalStatusKey('planning')).toBe('goalList.status.planning');
+    expect(goalStatusKey('running')).toBe('goalList.status.running');
+    expect(goalStatusKey('review')).toBe('goalList.status.review');
+    expect(goalStatusKey('achieved')).toBe('goalList.status.achieved');
+  });
+
+  it('reads a failed goal as needing attention rather than as an error state', () => {
+    expect(goalStatusKey('failed')).toBe('goalList.status.error');
+  });
+});
+
+describe('formatSpan', () => {
+  it('renders sub-hour spans as minutes and clamps to at least one minute', () => {
+    expect(formatSpan(4 * 60_000)).toBe('4m');
+    expect(formatSpan(10_000)).toBe('1m');
+  });
+
+  it('splits hour-plus spans into hours and minutes', () => {
+    expect(formatSpan(71 * 60_000)).toBe('1h 11m');
+  });
+});
+
+describe('formatUsd', () => {
+  it('reads a budget as money without trailing noise', () => {
+    expect(formatUsd(10)).toBe('$10');
+    expect(formatUsd(6.4)).toBe('$6.4');
+    expect(formatUsd(0)).toBe('$0');
+  });
+
+  it('rounds a long-tailed accumulation to cents', () => {
+    expect(formatUsd(6.437_912)).toBe('$6.44');
+  });
+});
+
+describe('summarizeGoalBudget', () => {
+  it('pairs spend with the cost cap so the header can state one fraction', () => {
     expect(
-      getGoalPresentation({
-        checks: [{ state: 'passed' }, { state: 'failed' }, { state: 'passed' }],
-        goalStatus: 'verifying',
-        rounds: 2,
+      summarizeGoalBudget({ maxRounds: 5, maxTotalCost: 10 }, { runs: 3, totalCost: 6.4 }),
+    ).toEqual({ cap: 10, kind: 'cost', spent: 6.4 });
+  });
+
+  it('switches to rounds when that is the unit the goal is actually capped in', () => {
+    // "$6.4 / 5 rounds" is two units pretending to be a ratio.
+    expect(
+      summarizeGoalBudget({ maxRounds: 5, maxTotalCost: null }, { runs: 3, totalCost: 6.4 }),
+    ).toEqual({ cap: 5, kind: 'rounds', runs: 3 });
+  });
+
+  it('states spend alone when nothing caps the goal', () => {
+    expect(
+      summarizeGoalBudget({ maxRounds: null, maxTotalCost: null }, { runs: 3, totalCost: 6.4 }),
+    ).toEqual({ kind: 'uncapped', spent: 6.4 });
+  });
+
+  it('reads an absent spend as zero rather than blanking the metric', () => {
+    expect(summarizeGoalBudget({ maxRounds: null, maxTotalCost: 10 })).toEqual({
+      cap: 10,
+      kind: 'cost',
+      spent: 0,
+    });
+  });
+});
+
+describe('goalManagerConversation', () => {
+  const consumedTurn = {
+    consumed: true,
+    snapshot: 'snapshot',
+    startedAt: '2026-09-09T00:00:00Z',
+    token: 'token',
+    topicId: 'persistent-topic',
+    turns: 6,
+  };
+
+  it('does not offer a empty conversation before the first planning run', () => {
+    expect(goalManagerConversation({ agentId: 'supervisor', config: null })).toBeUndefined();
+    expect(
+      goalManagerConversation({ agentId: 'supervisor', config: { manager: {} } }),
+    ).toBeUndefined();
+  });
+
+  it('keeps the goal agent conversation available after a planning turn is consumed', () => {
+    expect(
+      goalManagerConversation({
+        agentId: 'supervisor',
+        config: { manager: {}, managerState: consumedTurn, taskAgentId: 'executor' },
       }),
-    ).toMatchObject({
-      passed: 2,
-      progress: 67,
-      statusKey: 'goalList.status.verifying',
-      total: 3,
-    });
+    ).toEqual({ agentId: 'supervisor', topicId: 'persistent-topic' });
   });
 
-  it('shows achieved only when the goal state machine reached it', () => {
+  it('offers nothing for a goal without an agent to own the conversation', () => {
     expect(
-      getGoalPresentation({
-        checks: [{ state: 'passed' }],
-        goalStatus: 'achieved',
-        rounds: 3,
-      }).statusKey,
-    ).toBe('goalList.status.achieved');
-  });
-
-  it('reports rounds and budget without any checks yet', () => {
-    expect(getGoalPresentation({ goalStatus: 'running', maxRounds: 5, rounds: 2 })).toMatchObject({
-      maxRounds: 5,
-      passed: 0,
-      progress: 0,
-      rounds: 2,
-      statusKey: 'goalList.status.running',
-      total: 0,
-    });
-  });
-
-  it('maps every goal status to a goal list key', () => {
-    const cases: Array<[Parameters<typeof getGoalPresentation>[0]['goalStatus'], string]> = [
-      ['planning', 'goalList.status.planning'],
-      ['running', 'goalList.status.running'],
-      ['verifying', 'goalList.status.verifying'],
-      ['review', 'goalList.status.review'],
-      ['paused', 'goalList.status.paused'],
-      ['achieved', 'goalList.status.achieved'],
-      ['failed', 'goalList.status.error'],
-      ['canceled', 'goalList.status.canceled'],
-    ];
-
-    for (const [goalStatus, statusKey] of cases) {
-      expect(getGoalPresentation({ goalStatus, rounds: 0 }).statusKey).toBe(statusKey);
-    }
+      goalManagerConversation({
+        agentId: null,
+        config: { manager: {}, managerState: consumedTurn },
+      }),
+    ).toBeUndefined();
   });
 });

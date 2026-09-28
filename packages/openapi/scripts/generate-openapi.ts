@@ -27,9 +27,17 @@ const PKG_ROOT = path.join(import.meta.dirname, '..');
 const SPEC_PATH = path.join(PKG_ROOT, 'openapi.yml');
 const HTTP_METHODS = new Set(['DELETE', 'GET', 'PATCH', 'POST', 'PUT']);
 
-// Documentation-serving routes: real endpoints, deliberately not part of the
-// API surface described by the spec.
-const SPEC_EXEMPT = new Set(['GET /api/v1/docs', 'GET /api/v1/openapi.json']);
+// Real endpoints deliberately kept out of the API surface described by the
+// spec: the documentation routes themselves, plus the heterogeneous-agent
+// relays. The relays speak the Anthropic/OpenAI wire formats and are gated by
+// `requireHeteroModelInvocation` (operation JWT), so no API key holder can
+// call them and their schemas belong to the upstream vendors, not LobeHub.
+const SPEC_EXEMPT = new Set([
+  'GET /api/v1/docs',
+  'GET /api/v1/openapi.json',
+  'POST /api/v1/anthropic/v1/messages',
+  'POST /api/v1/openai/v1/responses',
+]);
 
 // Import after the env defaults above are in place.
 const { honoApp } = await import('../src/app');

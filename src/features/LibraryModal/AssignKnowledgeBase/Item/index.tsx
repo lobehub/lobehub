@@ -2,7 +2,7 @@ import { Flexbox, Icon } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { LockIcon } from 'lucide-react';
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 
 import KnowledgeIcon from '@/components/KnowledgeIcon';
 import { type KnowledgeItem } from '@/types/knowledgeBase';
@@ -27,8 +27,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const PluginItem = memo<KnowledgeItem>(
-  ({ id, fileType, name, type, description, enabled, memberRestricted, visibility }) => {
+interface PluginItemProps extends KnowledgeItem {
+  action?: ReactNode;
+}
+
+const PluginItem = memo<PluginItemProps>(
+  ({ action, id, fileType, name, type, description, enabled, memberRestricted, visibility }) => {
     return (
       <Flexbox
         horizontal
@@ -69,7 +73,7 @@ const PluginItem = memo<KnowledgeItem>(
             )}
           </Flexbox>
         </Flexbox>
-        <Actions enabled={enabled} id={id} type={type} />
+        {action === undefined ? <Actions enabled={enabled} id={id} type={type} /> : action}
       </Flexbox>
     );
   },

@@ -5,16 +5,12 @@ import type {
   VerifyCheckItem,
   VerifyCodingScope,
   VerifyEvidenceType,
-  VerifyInteractionCost,
-  VerifyInteractionCostOperators,
-  VerifyInteractionCostPhase,
   VerifyRunOrigin,
   VerifySurface,
   VerifyVerdict,
 } from '@lobechat/types';
-import { toRecord } from '@lobechat/utils/object';
 import { Block, Center, Empty, Flexbox, Icon, Image, Markdown } from '@lobehub/ui';
-import { Button, Drawer, Text } from '@lobehub/ui/base-ui';
+import { Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import type { TFunction } from 'i18next';
 import {
@@ -50,6 +46,7 @@ import Loading from '@/components/Loading/BrandTextLoading';
 import AudioPlayer from '@/features/AudioPlayer';
 import type { VerifyEvidenceWithUrl } from '@/services/verify';
 
+import { AcceptanceDrawer } from '../AcceptanceDrawer';
 import { useVerifyReportBundle } from '../hooks';
 import {
   buildCheckRows,
@@ -65,16 +62,16 @@ import {
   meaningfulEvidenceCaption,
   readEvidenceComparison,
 } from './EvidenceComparisonCard';
+import InteractionCostPanel, { readInteractionCost } from './InteractionCost';
 import {
   CollapsibleMarkdownEvidence,
   DocumentViewer,
   filenameFromUrl,
   markdownTextEvidenceTypes,
+  rendersAsMarkdown,
 } from './MarkdownEvidence';
 import { readVisualizationManifest } from './visualization';
 import { VisualizationRenderer } from './VisualizationRenderer';
-
-type Filter = 'all' | CheckState;
 
 const styles = createStaticStyles(({ css }) => ({
   scroll: css`
@@ -91,6 +88,12 @@ const styles = createStaticStyles(({ css }) => ({
     /* Start-aligned with the 46px gutter a check row's body sits at, so the hero
        prose and the expanded check prose share one text edge. */
     padding-inline: 46px 32px;
+
+    @media (width <= 767px) {
+      padding-block: 16px calc(24px + env(safe-area-inset-bottom));
+      padding-inline: 16px;
+      overflow-wrap: anywhere;
+    }
   `,
 
   /* hero */
@@ -156,189 +159,6 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorInfoBg};
   `,
-  interactionCost: css`
-    --klm-blue-1: color-mix(in srgb, ${cssVar.colorInfo} 70%, ${cssVar.colorBgContainer});
-    --klm-blue-2: ${cssVar.colorInfo};
-    --klm-blue-3: color-mix(in srgb, ${cssVar.colorInfo} 84%, ${cssVar.colorText});
-    --klm-blue-4: color-mix(in srgb, ${cssVar.colorInfo} 68%, ${cssVar.colorText});
-    --klm-blue-5: color-mix(in srgb, ${cssVar.colorInfo} 54%, ${cssVar.colorText});
-    --klm-blue-6: color-mix(in srgb, ${cssVar.colorInfo} 42%, ${cssVar.colorText});
-
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    width: 100%;
-  `,
-  interactionCostHeader: css`
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px 12px;
-    align-items: center;
-    justify-content: flex-end;
-  `,
-  interactionCostModel: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  interactionMetrics: css`
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 8px;
-
-    @media (width <= 520px) {
-      grid-template-columns: 1fr;
-    }
-  `,
-  interactionMetric: css`
-    min-width: 0;
-    padding-block: 9px;
-    padding-inline: 10px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusSM};
-  `,
-  interactionMetricLabel: css`
-    display: block;
-    margin-block-end: 4px;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  interactionMetricValue: css`
-    font-size: 18px;
-    font-weight: 650;
-    font-variant-numeric: tabular-nums;
-    line-height: 1.2;
-    color: ${cssVar.colorText};
-  `,
-  operatorList: css`
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px 14px;
-  `,
-  operatorChip: css`
-    --operator-color: ${cssVar.colorTextSecondary};
-
-    display: inline-flex;
-    gap: 5px;
-    align-items: baseline;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: color-mix(in srgb, var(--operator-color) 72%, ${cssVar.colorTextSecondary});
-
-    &::before {
-      content: '';
-
-      flex: 0 0 auto;
-
-      width: 6px;
-      height: 6px;
-      margin-block-start: 0.5em;
-      border-radius: 50%;
-
-      background: var(--operator-color);
-    }
-
-    b {
-      font-weight: 650;
-      color: var(--operator-color);
-    }
-
-    &[data-operator='K'] {
-      --operator-color: var(--klm-blue-1);
-    }
-
-    &[data-operator='P'] {
-      --operator-color: var(--klm-blue-2);
-    }
-
-    &[data-operator='M'] {
-      --operator-color: var(--klm-blue-3);
-    }
-
-    &[data-operator='H'] {
-      --operator-color: var(--klm-blue-4);
-    }
-
-    &[data-operator='T_chars'] {
-      --operator-color: var(--klm-blue-5);
-    }
-
-    &[data-operator='R_ms'] {
-      --operator-color: var(--klm-blue-6);
-    }
-  `,
-  phaseList: css`
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  `,
-  phaseRow: css`
-    display: grid;
-    grid-template-columns: minmax(120px, 1fr) minmax(140px, 1.6fr) auto;
-    gap: 10px;
-    align-items: center;
-
-    @media (width <= 640px) {
-      grid-template-columns: 1fr;
-      gap: 5px;
-    }
-  `,
-  phaseName: css`
-    overflow: hidden;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  phaseTrack: css`
-    overflow: hidden;
-    display: flex;
-
-    height: 8px;
-    border-radius: 999px;
-
-    background: transparent;
-    box-shadow: inset 0 0 0 1px ${cssVar.colorBorderSecondary};
-  `,
-  phaseSegment: css`
-    --operator-color: ${cssVar.colorTextSecondary};
-
-    flex: 0 0 auto;
-    min-width: 2px;
-    height: 100%;
-    background: var(--operator-color);
-
-    &[data-operator='K'] {
-      --operator-color: var(--klm-blue-1);
-    }
-
-    &[data-operator='P'] {
-      --operator-color: var(--klm-blue-2);
-    }
-
-    &[data-operator='M'] {
-      --operator-color: var(--klm-blue-3);
-    }
-
-    &[data-operator='H'] {
-      --operator-color: var(--klm-blue-4);
-    }
-
-    &[data-operator='T_chars'] {
-      --operator-color: var(--klm-blue-5);
-    }
-
-    &[data-operator='R_ms'] {
-      --operator-color: var(--klm-blue-6);
-    }
-  `,
-  phaseValue: css`
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextTertiary};
-  `,
   /* Provenance: where the code came from. Reference material the reader scans,
      so it stays visually subordinate to the verdict + summary above it. */
   codingScope: css`
@@ -375,7 +195,7 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     min-width: 0;
-    max-width: 360px;
+    max-width: min(360px, 100%);
 
     color: ${cssVar.colorTextTertiary};
 
@@ -549,79 +369,16 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
 
-  /* sticky filter chips */
-  stats: css`
-    position: sticky;
-    z-index: 10;
-    inset-block-start: 0;
-
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
-
-    margin-block: 20px 12px;
-    padding-block: 12px;
-
-    background: color-mix(in srgb, ${cssVar.colorBgContainer} 88%, transparent);
-    backdrop-filter: blur(8px);
-  `,
-  chip: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    gap: 7px;
-    align-items: center;
-
-    height: 28px;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 999px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: transparent;
-
-    transition: background 0.12s ease;
-
-    b {
-      font-weight: 600;
-      font-variant-numeric: tabular-nums;
-      color: ${cssVar.colorText};
-    }
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &[data-active='true'] {
-      border-color: ${cssVar.colorBorder};
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  dot: css`
-    width: 7px;
-    height: 7px;
-    border-radius: 999px;
-  `,
-  score: css`
-    cursor: default;
-    margin-inline-start: auto;
-    border-color: transparent;
-    color: ${cssVar.colorTextTertiary};
-
-    b {
-      color: ${cssVar.colorTextSecondary};
-    }
-  `,
-
   /* checks */
   checks: css`
+    /* The filter bar used to carry this gap in its own margin; without it the
+       hero and the first row collided. */
     overflow: hidden;
+
+    margin-block-start: 24px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
+
     background: ${cssVar.colorBgContainer};
   `,
   row: css`
@@ -651,6 +408,12 @@ const styles = createStaticStyles(({ css }) => ({
     &:hover {
       background: ${cssVar.colorFillQuaternary};
     }
+
+    @media (width <= 767px) {
+      grid-template-columns: 20px minmax(0, 1fr);
+      gap: 6px 8px;
+      padding: 12px;
+    }
   `,
   rowTitle: css`
     overflow: hidden;
@@ -663,11 +426,21 @@ const styles = createStaticStyles(({ css }) => ({
     &[data-failed='true'] {
       font-weight: 600;
     }
+
+    @media (width <= 767px) {
+      overflow-wrap: anywhere;
+      white-space: normal;
+    }
   `,
   rowSide: css`
     display: flex;
     gap: 8px;
     align-items: center;
+
+    @media (width <= 767px) {
+      grid-column: 2;
+      flex-wrap: wrap;
+    }
   `,
   softTag: css`
     padding-block: 1px;
@@ -694,6 +467,10 @@ const styles = createStaticStyles(({ css }) => ({
 
     padding-block: 2px 16px;
     padding-inline: 46px 16px;
+
+    @media (width <= 767px) {
+      padding-inline: 12px;
+    }
   `,
   reasoning: css`
     font-size: 13px;
@@ -718,6 +495,12 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: 13px;
     line-height: 1.6;
     color: ${cssVar.colorTextTertiary};
+
+    @media (width <= 767px) {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 4px;
+      color: ${cssVar.colorTextSecondary};
+    }
   `,
   planDetailLabel: css`
     color: ${cssVar.colorTextQuaternary};
@@ -872,11 +655,11 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   evidenceDoc: css`
     overflow: hidden;
+    display: flex;
+    flex: 1;
 
     width: 100%;
-    height: 320px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
+    min-height: 0;
   `,
 }));
 
@@ -969,137 +752,6 @@ const liveStatusLabelKey = {
   verifying: 'report.status.verifying',
 } as const;
 
-const OPERATOR_KEYS = ['K', 'P', 'M', 'H', 'T_chars', 'R_ms'] as const;
-type OperatorKey = (typeof OPERATOR_KEYS)[number];
-
-const OPERATOR_DEFAULT_SECONDS: Record<OperatorKey, number> = {
-  H: 0.4,
-  K: 0.2,
-  M: 1.35,
-  P: 1.1,
-  R_ms: 0.001,
-  T_chars: 0.2,
-};
-
-const finiteNumber = (value: unknown): number | undefined =>
-  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-
-const finiteString = (value: unknown): string | undefined =>
-  typeof value === 'string' && value.length > 0 ? value : undefined;
-
-const readOperators = (value: unknown): VerifyInteractionCostOperators => {
-  const record = toRecord(value);
-  if (!record) return {};
-
-  return {
-    H: finiteNumber(record.H),
-    K: finiteNumber(record.K),
-    M: finiteNumber(record.M),
-    P: finiteNumber(record.P),
-    R_ms: finiteNumber(record.R_ms),
-    T_chars: finiteNumber(record.T_chars),
-  };
-};
-
-const readTimingSeconds = (value: unknown): Record<string, number> | undefined => {
-  const record = toRecord(value);
-  if (!record) return undefined;
-
-  const entries = Object.entries(record).flatMap(([key, field]) => {
-    const seconds = finiteNumber(field);
-    return seconds === undefined ? [] : [[key, seconds] as const];
-  });
-
-  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
-};
-
-const readPhase = (value: unknown, index: number): VerifyInteractionCostPhase | null => {
-  const record = toRecord(value);
-  if (!record) return null;
-
-  const seconds = finiteNumber(record.seconds);
-  const activeSeconds = finiteNumber(record.activeSeconds);
-  const waitSeconds = finiteNumber(record.waitSeconds);
-  const hasTiming =
-    seconds !== undefined || activeSeconds !== undefined || waitSeconds !== undefined;
-  if (!hasTiming) return null;
-
-  return {
-    actionCount: finiteNumber(record.actionCount),
-    activeSeconds,
-    checkItemId: finiteString(record.checkItemId),
-    id: finiteString(record.id) ?? `phase-${index + 1}`,
-    label: finiteString(record.label),
-    operators: readOperators(record.operators),
-    seconds,
-    waitSeconds,
-  };
-};
-
-const readInteractionCost = (metadata: unknown): VerifyInteractionCost | null => {
-  const cost = toRecord(toRecord(metadata)?.interactionCost);
-  if (!cost) return null;
-
-  const totalSeconds = finiteNumber(cost.totalSeconds);
-  if (totalSeconds === undefined) return null;
-
-  return {
-    actionCount: finiteNumber(cost.actionCount),
-    activeSeconds: finiteNumber(cost.activeSeconds) ?? 0,
-    model: finiteString(cost.model) ?? 'goms-klm',
-    operators: readOperators(cost.operators),
-    phases: Array.isArray(cost.phases)
-      ? cost.phases
-          .map((phase, index) => readPhase(phase, index))
-          .filter((phase): phase is VerifyInteractionCostPhase => Boolean(phase))
-      : [],
-    scope: finiteString(cost.scope),
-    sourceTrace: finiteString(cost.sourceTrace),
-    timingSeconds: readTimingSeconds(cost.timingSeconds),
-    totalSeconds,
-    waitSeconds: finiteNumber(cost.waitSeconds) ?? 0,
-  };
-};
-
-const formatSeconds = (seconds: number): string =>
-  `${seconds >= 10 ? seconds.toFixed(1) : seconds.toFixed(2)}s`;
-
-const phaseSeconds = (phase: VerifyInteractionCostPhase): number =>
-  phase.seconds ?? (phase.activeSeconds ?? 0) + (phase.waitSeconds ?? 0);
-
-const operatorSeconds = (
-  key: OperatorKey,
-  value: number,
-  timingSeconds?: Record<string, number>,
-): number => {
-  if (key === 'R_ms') return value / 1000;
-  if (key === 'T_chars') {
-    return (
-      value * (timingSeconds?.T_chars ?? timingSeconds?.T_char ?? OPERATOR_DEFAULT_SECONDS[key])
-    );
-  }
-
-  return value * (timingSeconds?.[key] ?? OPERATOR_DEFAULT_SECONDS[key]);
-};
-
-const operatorValue = (key: OperatorKey, value: number): string => {
-  if (key === 'R_ms') return formatSeconds(value / 1000);
-  if (key === 'T_chars') return `${Math.round(value)} chars`;
-  return Number.isInteger(value) ? String(value) : value.toFixed(2);
-};
-
-const phaseOperatorSegments = (
-  phase: VerifyInteractionCostPhase,
-  timingSeconds?: Record<string, number>,
-): { key: OperatorKey; seconds: number; value: number }[] =>
-  OPERATOR_KEYS.flatMap((key) => {
-    const value = phase.operators?.[key];
-    if (value === undefined || value <= 0) return [];
-
-    const seconds = operatorSeconds(key, value, timingSeconds);
-    return seconds > 0 ? [{ key, seconds, value }] : [];
-  });
-
 const evidenceDisplayName = (
   evidence: VerifyEvidenceWithUrl,
   t: TFunction<'verify'>,
@@ -1118,109 +770,6 @@ const evidenceComparison = (evidence: VerifyEvidenceWithUrl): EvidenceComparison
   return readEvidenceComparison(evidence.metadata);
 };
 
-const InteractionCostPanel = memo<{ cost: VerifyInteractionCost }>(({ cost }) => {
-  const { t } = useTranslation('verify');
-  const phases = cost.phases ?? [];
-  const maxPhaseSeconds = Math.max(...phases.map(phaseSeconds), 0);
-  const metrics = [
-    {
-      label: t('report.interaction.total'),
-      value: formatSeconds(cost.totalSeconds),
-    },
-    {
-      label: t('report.interaction.active'),
-      value: formatSeconds(cost.activeSeconds),
-    },
-    {
-      label: t('report.interaction.wait'),
-      value: formatSeconds(cost.waitSeconds),
-    },
-  ];
-
-  return (
-    <section className={styles.interactionCost}>
-      <div className={styles.interactionCostHeader}>
-        <span className={styles.interactionCostModel}>{cost.model}</span>
-      </div>
-
-      <div className={styles.interactionMetrics}>
-        {metrics.map((metric) => (
-          <div className={styles.interactionMetric} key={metric.label}>
-            <span className={styles.interactionMetricLabel}>{metric.label}</span>
-            <span className={styles.interactionMetricValue}>{metric.value}</span>
-          </div>
-        ))}
-      </div>
-
-      <div className={styles.operatorList}>
-        {OPERATOR_KEYS.map((key) => {
-          const value = cost.operators[key];
-          if (value === undefined) return null;
-
-          return (
-            <span className={styles.operatorChip} data-operator={key} key={key}>
-              <span>{t(`report.interaction.operator.${key}`)}</span>
-              <b>{operatorValue(key, value)}</b>
-            </span>
-          );
-        })}
-      </div>
-
-      {phases.length > 0 && (
-        <div className={styles.phaseList}>
-          {phases.map((phase) => {
-            const seconds = phaseSeconds(phase);
-            const activeSeconds = phase.activeSeconds ?? 0;
-            const waitSeconds = phase.waitSeconds ?? 0;
-            const activeWidth = maxPhaseSeconds > 0 ? (activeSeconds / maxPhaseSeconds) * 100 : 0;
-            const waitWidth = maxPhaseSeconds > 0 ? (waitSeconds / maxPhaseSeconds) * 100 : 0;
-            const segments = phaseOperatorSegments(phase, cost.timingSeconds);
-
-            return (
-              <div className={styles.phaseRow} key={phase.id}>
-                <span className={styles.phaseName} title={phase.label ?? phase.id}>
-                  {phase.label ?? phase.id}
-                </span>
-                <span className={styles.phaseTrack}>
-                  {segments.length > 0 ? (
-                    segments.map((segment) => (
-                      <span
-                        className={styles.phaseSegment}
-                        data-operator={segment.key}
-                        key={segment.key}
-                        style={{
-                          width: `${
-                            maxPhaseSeconds > 0 ? (segment.seconds / maxPhaseSeconds) * 100 : 0
-                          }%`,
-                        }}
-                        title={`${t(`report.interaction.operator.${segment.key}`)} ${formatSeconds(
-                          segment.seconds,
-                        )}`}
-                      />
-                    ))
-                  ) : (
-                    <>
-                      <span className={styles.phaseSegment} style={{ width: `${activeWidth}%` }} />
-                      <span
-                        className={styles.phaseSegment}
-                        data-operator={'R_ms'}
-                        style={{ width: `${waitWidth}%` }}
-                      />
-                    </>
-                  )}
-                </span>
-                <span className={styles.phaseValue}>{formatSeconds(seconds)}</span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </section>
-  );
-});
-
-InteractionCostPanel.displayName = 'InteractionCostPanel';
-
 /** One evidence artifact rendered by its type: zoomable image/gif, video, doc, text. */
 const EvidenceItem = memo<{
   evidence: VerifyEvidenceWithUrl;
@@ -1234,18 +783,24 @@ const EvidenceItem = memo<{
   // Inline media (image/gif/video) speaks for itself — the raw filename header
   // is visual noise, so only keep a meaningful caption (description) for it.
   const isMedia = isInlineVisualEvidence(e);
+  const isDocument = Boolean(e.fileUrl) && !isMedia && e.type !== 'audio';
   const isInlineProse = Boolean(e.content) && markdownTextEvidenceTypes.has(e.type);
   const hideLabel =
-    isMedia || (markdownTextEvidenceTypes.has(e.type) && isFilenameLike(label)) || isInlineProse;
+    isDocument ||
+    isMedia ||
+    (markdownTextEvidenceTypes.has(e.type) && isFilenameLike(label)) ||
+    isInlineProse;
 
   return (
-    <Flexbox gap={6}>
+    <Flexbox gap={6} style={isDocument ? { flex: 1, minHeight: 0 } : undefined}>
       {!hideLabel && (
         <Text strong fontSize={13}>
           {label}
         </Text>
       )}
-      {description && !flat && (
+      {description && !flat && !isInlineProse && (
+        // Inline prose is excluded: its authored description becomes the fold
+        // row's title below, so a standalone line here would say it twice.
         <Text fontSize={13} type={'secondary'}>
           {description}
         </Text>
@@ -1276,14 +831,20 @@ const EvidenceItem = memo<{
         />
       ) : e.fileUrl ? (
         <div className={styles.evidenceDoc}>
-          <DocumentViewer
-            fileName={e.fileName}
-            markdown={markdownTextEvidenceTypes.has(e.type)}
-            url={e.fileUrl}
-          />
+          <DocumentViewer fileName={e.fileName} markdown={rendersAsMarkdown(e)} url={e.fileUrl} />
         </div>
       ) : e.content && markdownTextEvidenceTypes.has(e.type) ? (
-        <CollapsibleMarkdownEvidence>{e.content}</CollapsibleMarkdownEvidence>
+        // Same dialect as the acceptance viewer: an authored alt/description
+        // becomes the fold row's title, not a supplement line below it. The
+        // raw description, not the caption filter — with no fileName the label
+        // IS the description, and the filter would null it out.
+        <CollapsibleMarkdownEvidence
+          fileName={e.fileName}
+          markdown={rendersAsMarkdown(e)}
+          title={e.description?.trim() || e.fileName?.trim() || undefined}
+        >
+          {e.content}
+        </CollapsibleMarkdownEvidence>
       ) : e.content ? (
         <div className={styles.evidenceText}>{e.content}</div>
       ) : (
@@ -1330,7 +891,7 @@ const EvidenceDrawer = memo<{
   open: boolean;
   title: string;
 }>(({ evidence, onClose, open, title }) => (
-  <Drawer
+  <AcceptanceDrawer
     containerMaxWidth={'100%'}
     open={open}
     placement={'right'}
@@ -1357,7 +918,7 @@ const EvidenceDrawer = memo<{
         <EvidenceItem evidence={e} index={index + 1} key={e.id} />
       ))}
     </Flexbox>
-  </Drawer>
+  </AcceptanceDrawer>
 ));
 
 EvidenceItem.displayName = 'EvidenceItem';
@@ -1445,6 +1006,7 @@ const CheckRow = memo<{ defaultOpen: boolean; row: CheckRowData }>(({ defaultOpe
   return (
     <div className={styles.row}>
       <button
+        aria-expanded={hasBody ? open : undefined}
         className={styles.rowHead}
         type={'button'}
         onClick={() => hasBody && setOpen((o) => !o)}
@@ -1724,7 +1286,7 @@ const CodingScopeCard = memo<{
 CodingScopeCard.displayName = 'CodingScopeCard';
 
 /**
- * The report detail pane. Renders the verdict hero, a sticky verdict-filter bar,
+ * The report detail pane. Renders the verdict hero,
  * every check as a severity-ordered expandable row (failed rows open by default),
  * and the full narrative behind a collapsed disclosure. Addressed by `:runId`;
  * refreshes itself while the run is non-terminal.
@@ -1740,7 +1302,6 @@ const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
   // trailing punctuation onto the id — salvage the leading UUID.
   const verifyRunId = explicitRunId ?? extractUuid(routeRunId) ?? null;
   const { data, error, isLoading, mutate } = useVerifyReportBundle(verifyRunId);
-  const [filter, setFilter] = useState<Filter>('all');
 
   useEffect(() => {
     const status = data?.run.status;
@@ -1794,64 +1355,28 @@ const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
       ? (run.status as keyof typeof liveStatusLabelKey)
       : null;
 
-  const counts = ordered.reduce(
-    (acc, row) => {
-      acc[row.state] += 1;
-      return acc;
-    },
-    { failed: 0, not_executed: 0, passed: 0, uncertain: 0 } as Record<CheckState, number>,
-  );
-  // A chip's count is a promise about the rows behind it, so whenever there are
-  // rows they are the truth — the report's own stats count the cases it ingested
-  // and know nothing about a planned check that never produced one. Only an
-  // empty list falls back to them (a report can exist before any result does).
-  const hasRows = ordered.length > 0;
-  const total = hasRows ? ordered.length : (report?.totalChecks ?? 0);
-  const passed = hasRows ? counts.passed : (report?.passedChecks ?? 0);
-  const failed = hasRows ? counts.failed : (report?.failedChecks ?? 0);
-  const uncertain = hasRows ? counts.uncertain : (report?.uncertainChecks ?? 0);
   const verdict = (report?.verdict as VerifyVerdict | null) ?? null;
-  const visible = filter === 'all' ? ordered : ordered.filter((row) => row.state === filter);
+  // The verdict-filter bar is gone, so every row of the round renders. The
+  // per-verdict tallies went with it: they existed to label its chips, and the
+  // verdict pill above already states the round's outcome.
+  const visible = ordered;
   const isCodingReport = run.scenario === 'coding';
   const interactionCost = readInteractionCost(run.metadata);
   // The server strips `origin` for anyone but the author; `isOwner` keeps the
   // affordance off the page for a visitor even if that ever regressed.
   const origin = data.isOwner ? run.metadata?.origin : undefined;
 
-  const chips: { count: number; dot?: string; key: Filter; label: string }[] = [
-    { count: total, key: 'all', label: t('report.filter.all') },
-    { count: failed, dot: cssVar.colorError, key: 'failed', label: t('report.filter.failed') },
-    {
-      count: uncertain,
-      dot: cssVar.colorWarning,
-      key: 'uncertain',
-      label: t('report.filter.uncertain'),
-    },
-    // Only a report with a stored plan can have these, so the chip appears only
-    // when there is something to filter to.
-    ...(counts.not_executed > 0
-      ? [
-          {
-            count: counts.not_executed,
-            dot: cssVar.colorTextQuaternary,
-            key: 'not_executed' as const,
-            label: t('report.filter.notExecuted'),
-          },
-        ]
-      : []),
-    { count: passed, dot: cssVar.colorSuccess, key: 'passed', label: t('report.filter.passed') },
-  ];
-
   return (
     <div className={styles.scroll}>
       <div className={styles.page}>
         <main>
           <Flexbox gap={12}>
-            <div className={styles.heroLine}>
-              <Text as={'h1'} style={{ fontSize: 24, lineHeight: 1.3, margin: 0 }}>
-                {run.title || t('report.titleFallback')}
-              </Text>
-              {verdict && (
+            {/* Verdict above the title, not trailing it — the same order the
+                acceptance page uses. A badge parked after a long title wraps
+                to its own line anyway, and then reads as an afterthought
+                rather than as the report's headline state. */}
+            {verdict && (
+              <div className={styles.heroLine} style={{ marginBlockEnd: 2 }}>
                 <span
                   className={styles.pill}
                   style={{
@@ -1862,8 +1387,11 @@ const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
                   <Icon icon={VERDICT_META[verdict].icon} size={15} />
                   {t(`report.verdict.${verdict}`)}
                 </span>
-              )}
-            </div>
+              </div>
+            )}
+            <Text as={'h1'} style={{ fontSize: 24, lineHeight: 1.3, margin: 0 }}>
+              {run.title || t('report.titleFallback')}
+            </Text>
 
             {!isCodingReport && run.goal && <Text className={styles.summary}>{run.goal}</Text>}
             {report?.summary && <Text className={styles.summary}>{report.summary}</Text>}
@@ -1883,38 +1411,13 @@ const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
             )}
           </Flexbox>
 
-          <div className={styles.stats}>
-            {chips.map((c) => (
-              <button
-                className={styles.chip}
-                data-active={filter === c.key}
-                key={c.key}
-                type={'button'}
-                onClick={() => setFilter(c.key)}
-              >
-                {c.dot && <span className={styles.dot} style={{ background: c.dot }} />}
-                {c.label} <b>{c.count}</b>
-              </button>
-            ))}
-            {typeof report?.overallConfidence === 'number' && (
-              <span className={`${styles.chip} ${styles.score}`}>
-                {t('report.stats.confidence')} <b>{Math.round(report.overallConfidence * 100)}%</b>
-              </span>
-            )}
-          </div>
-
           {visible.length > 0 ? (
             <div className={styles.checks}>
               {visible.map((row) => (
-                <CheckRow
-                  key={row.id}
-                  row={row}
-                  defaultOpen={
-                    row.state === 'failed' ||
-                    row.state === 'not_executed' ||
-                    (row.result?.evidence ?? []).some(isInlineVisualEvidence)
-                  }
-                />
+                /* Every row opens. A report is read to see what was actually
+                   observed, and a page of collapsed titles makes the reader
+                   click N times to learn that. */
+                <CheckRow defaultOpen key={row.id} row={row} />
               ))}
             </div>
           ) : (

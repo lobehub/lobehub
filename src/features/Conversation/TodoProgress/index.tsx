@@ -75,7 +75,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   listContainer: css`
-    overflow: hidden;
+    overflow: hidden auto;
+    overscroll-behavior-y: contain;
 
     /* The rows are Base UI Checkbox labels, which are inline-flex. In a plain
        block container they lay out as INLINE boxes — two or three short todos

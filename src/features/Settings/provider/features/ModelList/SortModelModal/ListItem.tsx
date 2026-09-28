@@ -1,7 +1,8 @@
-import { ModelIcon } from '@lobehub/icons';
 import { Flexbox, SortableList } from '@lobehub/ui';
 import { type AiProviderModelListItem } from 'model-bank';
 import { memo } from 'react';
+
+import { ModelIcon } from '@/components/LobeIcons';
 
 interface ListItemProps extends AiProviderModelListItem {
   disabled?: boolean;

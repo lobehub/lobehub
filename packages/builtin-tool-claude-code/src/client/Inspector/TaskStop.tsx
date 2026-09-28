@@ -49,8 +49,10 @@ export const TaskStopInspector = memo<BuiltinInspectorProps<TaskStopArgs>>(
     }
 
     return (
-      <div className={cx(inspectorTextStyles.root, isShiny && shinyTextStyles.shinyText)}>
-        <span>{taskId ? `${label}:` : label}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={cx(isShiny && shinyTextStyles.shinyText)}>
+          {taskId ? `${label}:` : label}
+        </span>
         {taskId && <span className={styles.chip}>{taskId}</span>}
       </div>
     );

@@ -3,9 +3,8 @@
 import { validateVideoFileSize } from '@lobechat/utils/client';
 import type { IconProps } from '@lobehub/ui';
 import { Icon, Popover } from '@lobehub/ui';
-import { Tag, toast } from '@lobehub/ui/base-ui';
+import { toast, Upload } from '@lobehub/ui/base-ui';
 import { GlobeOffIcon, SkillsIcon } from '@lobehub/ui/icons';
-import { Upload } from 'antd';
 import { css, cssVar, cx } from 'antd-style';
 import {
   Brain,
@@ -47,6 +46,7 @@ import { labPreferSelectors, settingsSelectors } from '@/store/user/selectors';
 import { useAgentId } from '../../hooks/useAgentId';
 import { useChatInputResourceAccess } from '../../hooks/useChatInputResourceAccess';
 import { useEffectiveModel } from '../../hooks/useEffectiveModel';
+import { useLargeFileLocalPath } from '../../hooks/useLargeFileLocalPath';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 import { insertGoalTag } from '../../InputEditor/ActionTag/goalTag';
 import { useChatInputStore } from '../../store';
@@ -56,7 +56,6 @@ import { useDetailPopoverState } from '../components/useDetailPopoverState';
 import { useControls as useKnowledgeControls } from '../Knowledge/useControls';
 import { useMemoryEnabled } from '../Memory/useMemoryEnabled';
 import { useControls as useToolsControls } from '../Tools/useControls';
-import { useEffortMenuItem } from './useEffortMenuItem';
 
 const hotArea = css`
   &::before {
@@ -144,20 +143,6 @@ const countChip = css`
   color: ${cssVar.colorTextSecondary};
 
   background: ${cssVar.colorFillSecondary};
-`;
-
-const gatewayModeLabel = css`
-  display: inline-flex;
-  gap: 8px;
-  align-items: center;
-  min-width: 0;
-
-  .title {
-    overflow: hidden;
-    min-width: 0;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
 `;
 
 const gatewayModeInfoCard = css`
@@ -310,13 +295,14 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
 
   const { model, provider } = useEffectiveModel(agentId);
   const isAgentModeEnabled = useAgentStore(agentSelectors.isAgentModeEnabled);
-  const [showRightPanel, workingSidebarTab, setWorkingSidebarTab, toggleRightPanel] =
-    useGlobalStore((s) => [
+  const [showRightPanel, workingSidebarTab, openWorkingSidebar, toggleRightPanel] = useGlobalStore(
+    (s) => [
       systemStatusSelectors.showRightPanel(s),
       s.status.workingSidebarTab,
-      s.setWorkingSidebarTab,
+      s.openWorkingSidebar,
       s.toggleRightPanel,
-    ]);
+    ],
+  );
   const isParamsPanelActive = Boolean(showRightPanel) && workingSidebarTab === 'params';
   const skillActivateMode = useAgentStore((s) =>
     chatConfigByIdSelectors.getSkillActivateModeById(agentId)(s),
@@ -331,6 +317,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
   const isMemoryEnabled = useMemoryEnabled(agentId);
   const [showTypoBar, setShowTypoBar] = useChatInputStore((s) => [s.showTypoBar, s.setShowTypoBar]);
   const editor = useChatInputStore((s) => s.editor);
+  const routeLargeFilesToLocalPaths = useLargeFileLocalPath(agentId, editor);
   const { canUploadImage, canUploadVideo, canUploadAudio } = useMediaUploadAbility(
     model,
     provider,
@@ -399,17 +386,14 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
     [updateAgentChatConfig],
   );
 
-  const effortItem = useEffortMenuItem();
-
   const handleToggleParams = useCallback(() => {
     close();
     if (isParamsPanelActive) {
       toggleRightPanel(false);
       return;
     }
-    setWorkingSidebarTab('params');
-    toggleRightPanel(true);
-  }, [close, isParamsPanelActive, setWorkingSidebarTab, toggleRightPanel]);
+    openWorkingSidebar('params');
+  }, [close, isParamsPanelActive, openWorkingSidebar, toggleRightPanel]);
 
   const items = useMemo<ActionDropdownMenuItems>(() => {
     const renderActive = (label: string, active: boolean) =>
@@ -448,16 +432,6 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
         label
       );
 
-    const renderGatewayModeLabel = () => (
-      <span className={cx(gatewayModeLabel)}>
-        {/* Brand name — same in every language, so no i18n. */}
-        <span className="title">Agent Gateway</span>
-        <Tag color={'info'} size={'small'} variant={'filled'}>
-          {t('gatewayMode.beta')}
-        </Tag>
-      </span>
-    );
-
     const gatewayModeInfo = (
       <div className={cx(gatewayModeInfoCard)}>
         <img
@@ -491,8 +465,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
         label: (
           <Upload
             multiple
-            showUploadList={false}
-            beforeUpload={async (file) => {
+            beforeUpload={(file) => {
               if (file.type.startsWith('image') && !canUploadImage) return false;
               if (file.type.startsWith('video') && !canUploadVideo) return false;
               if (file.type.startsWith('audio') && !canUploadAudio) return false;
@@ -506,10 +479,13 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
                 );
                 return false;
               }
+              return true;
+            }}
+            onFiles={async (files) => {
               close();
               editor?.focus();
-              await upload([file], agentId);
-              return false;
+              const filesToUpload = routeLargeFilesToLocalPaths(files);
+              if (filesToUpload.length > 0) await upload(filesToUpload, agentId);
             }}
           >
             <div className={cx(hotArea)}>{t('upload.action.fileOrImageUpload')}</div>
@@ -557,9 +533,8 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
               checked: isGatewayModeEnabled,
               icon: Cloud,
               key: 'gateway-mode',
-              label: (
-                <PopoverLabel label={renderGatewayModeLabel()} popoverContent={gatewayModeInfo} />
-              ),
+              // Brand name — same in every language, so no i18n.
+              label: <PopoverLabel label={'Agent Gateway'} popoverContent={gatewayModeInfo} />,
               onCheckedChange: handleToggleGatewayMode,
               type: 'switch',
             } as ActionDropdownMenuItems[number],
@@ -663,10 +638,6 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
       },
       // Agent Gateway directly below the formatting toolbar.
       ...gatewayItem,
-      // Reasoning intensity — a personal per-model preference, so it is NOT
-      // gated on canConfigureResource; hidden only when the model has no
-      // reasoning extend params (the hook returns []).
-      ...effortItem,
       // Advanced parameter settings — only when resources can be configured.
       ...(canConfigureResource
         ? [
@@ -746,7 +717,6 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
     agentId,
     activeSearchOption,
     canConfigureResource,
-    effortItem,
     enableTopicAcceptance,
     canUploadImage,
     canUploadVideo,
@@ -781,6 +751,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
     skillMarketFooter,
     skillMarketHeader,
     upload,
+    routeLargeFilesToLocalPaths,
     close,
   ]);
 

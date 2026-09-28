@@ -10,11 +10,6 @@ vi.mock('@/features/NavHeader', () => ({
     React.createElement('header', undefined, children),
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Text: ({ children }: { children?: React.ReactNode }) =>
-    React.createElement(React.Fragment, undefined, children),
-}));
-
 vi.mock('./Container', () => ({
   default: ({ children }: { children?: React.ReactNode }) =>
     React.createElement('main', undefined, children),
@@ -39,6 +34,13 @@ vi.mock('./hooks/useCategory', () => ({
         { key: 'storage', label: 'Storage' },
         { key: 'usage', label: 'Usage' },
         { key: 'audit-log', label: 'Audit Log' },
+        { key: 'profile', label: 'Jane Doe' },
+        { key: 'appearance', label: 'Appearance' },
+        { key: 'hotkey', label: 'Hotkeys' },
+        { key: 'messenger', label: 'Messenger' },
+        { key: 'labs', label: 'Labs' },
+        { key: 'advanced', label: 'Advanced' },
+        { key: 'about', label: 'About' },
       ],
     },
   ],
@@ -69,15 +71,25 @@ describe('WorkspaceSettingsContentLayout', () => {
     ['statistics', 'Statistics'],
     ['storage', 'Storage'],
     ['usage', 'Usage'],
+    ['appearance', 'Appearance'],
+    ['hotkey', 'Hotkeys'],
+    ['messenger', 'Messenger'],
+    ['labs', 'Labs'],
+    ['about', 'About'],
+    // The Profile nav item is labelled with the user's name; the header keeps
+    // the generic page title.
+    ['profile', 'profile.title'],
   ])('renders the compact header for the %s tab', (tab, title) => {
     const html = renderLayout(tab);
 
-    expect(html).toContain(`<header>${title}</header>`);
+    expect(html).toMatch(
+      new RegExp(`<header>(?:(?!</header>).)*>${title}<(?:(?!<header>).)*</header>`),
+    );
     expect(html).toContain('<main><div>Page content</div></main>');
   });
 
-  it('keeps non-compact tabs on the existing content-only layout', () => {
-    const html = renderLayout('audit-log');
+  it.each(['audit-log', 'advanced'])('keeps the %s tab on the content-only layout', (tab) => {
+    const html = renderLayout(tab);
 
     expect(html).not.toContain('<header>');
     expect(html).toContain('<main><div>Page content</div></main>');

@@ -1,6 +1,7 @@
 import { type RawFile, REST } from '@discordjs/rest';
 import debug from 'debug';
 import {
+  type APIEmbed,
   ApplicationCommandOptionType,
   ApplicationCommandType,
   ButtonStyle,
@@ -11,6 +12,7 @@ import {
   type RESTGetAPIChannelMessagesResult,
   type RESTGetAPIChannelPinsResult,
   type RESTGetAPIChannelResult,
+  type RESTGetAPIChannelThreadMembersResult,
   type RESTGetAPIGuildChannelsResult,
   type RESTGetAPIGuildMemberResult,
   type RESTGetAPIGuildThreadsResult,
@@ -122,14 +124,23 @@ export class DiscordApi {
     channelId: string,
     content: string,
     files?: RawFile[],
+    embeds?: APIEmbed[],
   ): Promise<{ id: string }> {
-    log('createMessage: channel=%s, files=%d', channelId, files?.length ?? 0);
+    log(
+      'createMessage: channel=%s, files=%d, embeds=%d',
+      channelId,
+      files?.length ?? 0,
+      embeds?.length ?? 0,
+    );
     // When `files` is set, @discordjs/rest packs `body` into `payload_json`
     // and emits multipart/form-data automatically. Without files we keep the
     // application/json path because that's what the API rate-limit bucket
     // expects for plain messages.
     const data = (await this.rest.post(Routes.channelMessages(channelId), {
-      body: { content },
+      body: {
+        content,
+        ...(embeds && embeds.length > 0 ? { embeds } : {}),
+      },
       ...(files && files.length > 0 ? { files } : {}),
     })) as RESTPostAPIChannelMessageResult;
 
@@ -232,6 +243,13 @@ export class DiscordApi {
   async addThreadMember(threadId: string, userId: string): Promise<void> {
     log('addThreadMember: thread=%s, user=%s', threadId, userId);
     await this.rest.put(Routes.threadMembers(threadId, userId));
+  }
+
+  async listThreadMembers(threadId: string): Promise<RESTGetAPIChannelThreadMembersResult> {
+    log('listThreadMembers: thread=%s', threadId);
+    return (await this.rest.get(Routes.threadMembers(threadId), {
+      query: new URLSearchParams({ limit: '100', with_member: 'true' }),
+    })) as RESTGetAPIChannelThreadMembersResult;
   }
 
   // ==================== Message Operations ====================

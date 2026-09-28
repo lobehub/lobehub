@@ -76,6 +76,38 @@ describe('VideoGenerationTopicAction', () => {
     });
   });
 
+  describe('topic navigation', () => {
+    it('should clear the editing generation when switching topics', () => {
+      const { result } = renderHook(() => useVideoStore());
+
+      act(() => {
+        useVideoStore.setState({
+          activeGenerationTopicId: 'topic-1',
+          editingGenerationId: 'generation-1',
+        });
+        result.current.switchGenerationTopic('topic-2');
+      });
+
+      expect(result.current.activeGenerationTopicId).toBe('topic-2');
+      expect(result.current.editingGenerationId).toBeUndefined();
+    });
+
+    it('should clear the editing generation when opening a new topic', () => {
+      const { result } = renderHook(() => useVideoStore());
+
+      act(() => {
+        useVideoStore.setState({
+          activeGenerationTopicId: 'topic-1',
+          editingGenerationId: 'generation-1',
+        });
+        result.current.openNewGenerationTopic();
+      });
+
+      expect(result.current.activeGenerationTopicId).toBeNull();
+      expect(result.current.editingGenerationId).toBeUndefined();
+    });
+  });
+
   describe('internal_createGenerationTopic', () => {
     it('should create video topic with private visibility by default', async () => {
       const { result } = renderHook(() => useVideoStore());

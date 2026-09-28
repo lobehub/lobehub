@@ -10,15 +10,19 @@ import { cleanupTestUser, createTestAgent, createTestContext, createTestUser } f
 
 let testDB: LobeChatDatabase;
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => testDB),
+  getServerDB: vi.fn(function () {
+    return testDB;
+  }),
 }));
 
 vi.mock('@/server/services/skill/resource', () => ({
-  SkillResourceService: vi.fn().mockImplementation(() => ({
-    listResources: vi.fn().mockResolvedValue([]),
-    readResource: vi.fn().mockRejectedValue(new Error('Resource not found')),
-    storeResources: vi.fn().mockResolvedValue({}),
-  })),
+  SkillResourceService: vi.fn().mockImplementation(function () {
+    return {
+      listResources: vi.fn().mockResolvedValue([]),
+      readResource: vi.fn().mockRejectedValue(new Error('Resource not found')),
+      storeResources: vi.fn().mockResolvedValue({}),
+    };
+  }),
 }));
 
 describe('AgentDocument VFS Router Integration Tests', () => {

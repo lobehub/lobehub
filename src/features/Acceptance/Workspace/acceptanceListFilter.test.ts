@@ -1,54 +1,37 @@
 import { describe, expect, it } from 'vitest';
 
-import type { AcceptanceListItem } from '@/services/verify';
-
-import { filterAcceptanceList, normalizeAcceptanceListFilter } from './acceptanceListFilter';
-
-const item = (
-  id: string,
-  status: AcceptanceListItem['status'],
-  title: string,
-): AcceptanceListItem =>
-  ({
-    id,
-    status,
-    subject: { title },
-    subjectId: id,
-  }) as AcceptanceListItem;
-
-const acceptances = [
-  item('active', 'delivered', 'Needs review'),
-  item('completed', 'accepted', 'Signed off'),
-  item('closed', 'closed', 'No longer needed'),
-  item('failed', 'rejected', 'Needs repair'),
-];
-
-describe('filterAcceptanceList', () => {
-  it('hides completed acceptances by default', () => {
-    expect(filterAcceptanceList(acceptances, 'active', '').map(({ id }) => id)).toEqual([
-      'active',
-      'failed',
-    ]);
-  });
-
-  it('can show only completed acceptances', () => {
-    expect(filterAcceptanceList(acceptances, 'completed', '').map(({ id }) => id)).toEqual([
-      'completed',
-      'closed',
-    ]);
-  });
-
-  it('combines status filtering with title search', () => {
-    expect(filterAcceptanceList(acceptances, 'all', 'signed').map(({ id }) => id)).toEqual([
-      'completed',
-    ]);
-    expect(filterAcceptanceList(acceptances, 'active', 'signed')).toEqual([]);
-  });
-});
+import { acceptanceListEmptyVariant, normalizeAcceptanceListFilter } from './acceptanceListFilter';
 
 describe('normalizeAcceptanceListFilter', () => {
   it('falls back to the active filter for malformed persisted values', () => {
     expect(normalizeAcceptanceListFilter('unknown')).toBe('active');
     expect(normalizeAcceptanceListFilter(null)).toBe('active');
+  });
+});
+
+describe('acceptanceListEmptyVariant', () => {
+  it('shows the first-run empty state when the user owns nothing, even under the active filter', () => {
+    expect(
+      acceptanceListEmptyVariant({ allListEmpty: true, filter: 'active', searching: false }),
+    ).toBe('firstRun');
+    expect(
+      acceptanceListEmptyVariant({ allListEmpty: true, filter: 'active', searching: true }),
+    ).toBe('firstRun');
+  });
+
+  it('keeps the filtered escape hatch when other acceptances exist or the probe has not resolved', () => {
+    expect(
+      acceptanceListEmptyVariant({ allListEmpty: false, filter: 'active', searching: false }),
+    ).toBe('filtered');
+    expect(acceptanceListEmptyVariant({ filter: 'active', searching: false })).toBe('filtered');
+    expect(
+      acceptanceListEmptyVariant({ allListEmpty: false, filter: 'all', searching: true }),
+    ).toBe('filtered');
+  });
+
+  it('reads an unfiltered zero-result browse as first run', () => {
+    expect(
+      acceptanceListEmptyVariant({ allListEmpty: false, filter: 'all', searching: false }),
+    ).toBe('firstRun');
   });
 });

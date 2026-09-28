@@ -1,3 +1,4 @@
+import type { RecentItem } from '@lobechat/types';
 import { DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { ActionIcon } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
@@ -11,7 +12,6 @@ import NavItem from '@/features/NavPanel/components/NavItem';
 import { usePrefetchAgent } from '@/hooks/usePrefetchAgent';
 import { usePrefetchPage } from '@/hooks/usePrefetchPage';
 import { getPlatformIcon } from '@/routes/(main)/agent/channel/const';
-import { type RecentItem } from '@/server/routers/lambda/recent';
 
 import { useRecentItemDropdownMenu } from './useDropdownMenu';
 

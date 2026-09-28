@@ -3,18 +3,26 @@ import { RelationshipEnum } from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
 import { and, asc, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 
+import type { FtsSearchCandidateSource } from '../../repositories/ftsSearch';
 import type { NewUserMemoryIdentity, UserMemoryIdentity } from '../../schemas';
 import { userMemories, userMemoriesIdentities } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { normalizeBm25MatchQuery, SAFE_BM25_QUERY_OPTIONS } from '../../utils/bm25';
+import { inJsonStringArray } from '../../utils/inJsonStringArray';
 
 export class UserMemoryIdentityModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private ftsSearchCandidateSource?: FtsSearchCandidateSource;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    ftsSearchCandidateSource?: FtsSearchCandidateSource,
+  ) {
     this.userId = userId;
     this.db = db;
+    this.ftsSearchCandidateSource = ftsSearchCandidateSource;
   }
 
   private memoryWhere(table: { userId: any }) {
@@ -75,19 +83,37 @@ export class UserMemoryIdentityModel {
     const bm25MatchQuery = normalizedQuery
       ? normalizeBm25MatchQuery(normalizedQuery, SAFE_BM25_QUERY_OPTIONS)
       : '';
+    const resolvedRelationships =
+      relationships && relationships.length > 0 ? relationships : [RelationshipEnum.Self];
+    const candidateResult =
+      normalizedQuery && this.ftsSearchCandidateSource?.ftsSearchCandidateEnabled
+        ? await this.ftsSearchCandidateSource.ftsSearchCandidates({
+            entity: 'memoryIdentities',
+            filters: {
+              memoryRelationships: resolvedRelationships,
+              ...(tags?.length ? { memoryTagMatch: 'any' as const, memoryTags: tags } : {}),
+              ...(types?.length ? { memoryTypes: types } : {}),
+            },
+            pagination: {},
+            query: {
+              fields: ['parent_title', 'description', 'role'],
+              text: normalizedQuery,
+            },
+          })
+        : undefined;
+    const candidateIds = candidateResult?.candidates.map(({ id }) => id);
 
     // Build WHERE conditions
     const conditions: Array<SQL | undefined> = [
       this.memoryWhere(userMemoriesIdentities),
+      candidateIds ? inJsonStringArray(userMemoriesIdentities.id, candidateIds) : undefined,
       // Full-text search across title, description, role
-      normalizedQuery
+      normalizedQuery && !candidateIds
         ? sql`(${userMemories.id} @@@ paradedb.boolean(should => ARRAY[paradedb.match('title', ${bm25MatchQuery}, conjunction_mode => true)]) OR ${userMemoriesIdentities.id} @@@ paradedb.boolean(should => ARRAY[paradedb.match('description', ${bm25MatchQuery}, conjunction_mode => true), paradedb.match('role', ${bm25MatchQuery}, conjunction_mode => true)]))`
         : undefined,
       types && types.length > 0 ? inArray(userMemoriesIdentities.type, types) : undefined,
       // Default to 'self' relationship if not specified
-      relationships && relationships.length > 0
-        ? inArray(userMemoriesIdentities.relationship, relationships)
-        : eq(userMemoriesIdentities.relationship, RelationshipEnum.Self),
+      inArray(userMemoriesIdentities.relationship, resolvedRelationships),
       tags && tags.length > 0
         ? or(...tags.map((tag) => sql<boolean>`${tag} = ANY(${userMemoriesIdentities.tags})`))
         : undefined,

@@ -9,7 +9,6 @@ import * as m from 'motion/react-m';
 import { type ReactNode } from 'react';
 import { memo, useEffect, useMemo, useState } from 'react';
 
-import AntdStaticMethods from '@/components/AntdStaticMethods';
 import Link from '@/components/Link';
 import { genFontFamily, genFontFamilyCode } from '@/const/font';
 import { LOBE_THEME_NEUTRAL_COLOR, LOBE_THEME_PRIMARY_COLOR } from '@/const/theme';
@@ -29,7 +28,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   app: css`
     position: relative;
 
-    overscroll-behavior: none;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -160,42 +158,41 @@ const AppTheme = memo<AppThemeProps>(
     const currentAppearence = isDark ? 'dark' : 'light';
 
     return (
-      <ThemeProvider
-        appearance={currentAppearence}
-        className={cx(styles.app, styles.scrollbar, styles.scrollbarPolyfill)}
-        defaultAppearance={currentAppearence}
-        defaultThemeMode={currentAppearence}
-        customTheme={{
-          neutralColor: neutralColor ?? defaultNeutralColor,
-          primaryColor: primaryColor ?? defaultPrimaryColor,
-        }}
-        theme={{
-          cssVar: { key: 'lobe-vars' },
-          token: {
-            fontFamily,
-            fontFamilyCode,
-            motion: animationMode !== 'disabled',
-            motionUnit: animationMode === 'agile' ? 0.05 : 0.1,
-          },
+      <ConfigProvider
+        locale={uiLocale}
+        motion={m}
+        resources={uiResources}
+        config={{
+          aAs: Link,
+          imgAs: Image,
+          imgUnoptimized: true,
+          proxy: globalCDN ? 'unpkg' : undefined,
         }}
       >
-        {!!customFontURL && <FontLoader url={customFontURL} />}
-        <GlobalStyle />
-        <AntdStaticMethods />
-        <ConfigProvider
-          locale={uiLocale}
-          motion={m}
-          resources={uiResources}
-          config={{
-            aAs: Link,
-            imgAs: Image,
-            imgUnoptimized: true,
-            proxy: globalCDN ? 'unpkg' : undefined,
+        <ThemeProvider
+          appearance={currentAppearence}
+          className={cx(styles.app, styles.scrollbar, styles.scrollbarPolyfill)}
+          defaultAppearance={currentAppearence}
+          defaultThemeMode={currentAppearence}
+          customTheme={{
+            neutralColor: neutralColor ?? defaultNeutralColor,
+            primaryColor: primaryColor ?? defaultPrimaryColor,
+          }}
+          theme={{
+            cssVar: { key: 'lobe-vars' },
+            token: {
+              fontFamily,
+              fontFamilyCode,
+              motion: animationMode !== 'disabled',
+              motionUnit: animationMode === 'agile' ? 0.05 : 0.1,
+            },
           }}
         >
+          {!!customFontURL && <FontLoader url={customFontURL} />}
+          <GlobalStyle />
           {children}
-        </ConfigProvider>
-      </ThemeProvider>
+        </ThemeProvider>
+      </ConfigProvider>
     );
   },
 );

@@ -3,13 +3,12 @@
 import { AGENT_CHAT_URL, DEFAULT_INBOX_AVATAR } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
 import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Text, toast, useModalContext } from '@lobehub/ui/base-ui';
+import { Button, Spin, Text, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CircleCheck } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import AgentItem from '@/features/PageEditor/Copilot/AgentSelector/AgentItem';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -186,7 +185,7 @@ const MoveTopicsContent = memo<MoveTopicsContentProps>(({ onMoved, sourceAgentId
   if (step === 'moving') {
     return (
       <Flexbox align={'center'} gap={16} justify={'center'} padding={48}>
-        <NeuralNetworkLoading size={48} />
+        <Spin size="large" />
         <Text type={'secondary'}>{t('management.moveModal.moving')}</Text>
       </Flexbox>
     );

@@ -1,3 +1,4 @@
+import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
@@ -11,12 +12,13 @@ import {
 } from './deviceToolRegistry';
 
 describe('deviceToolRegistry', () => {
-  it('pins the device tool set to exactly local-system + remote-device + browser', () => {
+  it('pins the device tool set to local-system, AUV, remote-device, and browser', () => {
     expect([...DEVICE_TOOL_IDENTIFIERS].sort()).toEqual(
       [
         LocalSystemManifest.identifier,
         RemoteDeviceManifest.identifier,
         BrowserManifest.identifier,
+        AuvManifest.identifier,
       ].sort(),
     );
   });
@@ -25,14 +27,25 @@ describe('deviceToolRegistry', () => {
     expect(isDeviceToolIdentifier(LocalSystemManifest.identifier)).toBe(true);
     expect(isDeviceToolIdentifier(RemoteDeviceManifest.identifier)).toBe(true);
     expect(isDeviceToolIdentifier(BrowserManifest.identifier)).toBe(true);
+    expect(isDeviceToolIdentifier(AuvManifest.identifier)).toBe(true);
     expect(isDeviceToolIdentifier('web-browsing')).toBe(false);
     expect(isDeviceToolIdentifier('')).toBe(false);
   });
 
   describe('buildAllowedBuiltinTools', () => {
+    // https://github.com/lobehub/lobehub/pull/19051
+    it('hides Computer Use when a device does not report support', () => {
+      expect(
+        buildAllowedBuiltinTools({ canUseDevice: true, supportedDeviceTools: [] }).map(
+          (tool) => tool.identifier,
+        ),
+      ).not.toContain(AuvManifest.identifier);
+    });
+
     it('returns the full builtin list when canUseDevice=true and disableLocalSystem=false', () => {
       const result = buildAllowedBuiltinTools({
         canUseDevice: true,
+        supportedDeviceTools: [AuvManifest.identifier],
         disableLocalSystem: false,
       });
       expect(result.map((t) => t.identifier).sort()).toEqual(
@@ -47,18 +60,21 @@ describe('deviceToolRegistry', () => {
       });
       const ids = result.map((t) => t.identifier);
       expect(ids).not.toContain(LocalSystemManifest.identifier);
+      expect(ids).not.toContain(AuvManifest.identifier);
       expect(ids).not.toContain(RemoteDeviceManifest.identifier);
       // Non-device builtin tools are still present.
       expect(ids.length).toBeGreaterThan(0);
     });
 
-    it('strips only local-system when canUseDevice=true and disableLocalSystem=true', () => {
+    it('strips local-system and AUV when disableLocalSystem=true', () => {
       const result = buildAllowedBuiltinTools({
         canUseDevice: true,
+        supportedDeviceTools: [AuvManifest.identifier],
         disableLocalSystem: true,
       });
       const ids = result.map((t) => t.identifier);
       expect(ids).not.toContain(LocalSystemManifest.identifier);
+      expect(ids).not.toContain(AuvManifest.identifier);
       expect(ids).toContain(RemoteDeviceManifest.identifier);
     });
 
@@ -69,27 +85,37 @@ describe('deviceToolRegistry', () => {
       });
       const ids = result.map((t) => t.identifier);
       expect(ids).not.toContain(LocalSystemManifest.identifier);
+      expect(ids).not.toContain(AuvManifest.identifier);
       expect(ids).not.toContain(RemoteDeviceManifest.identifier);
     });
 
     it('treats omitted disableLocalSystem as false', () => {
-      const result = buildAllowedBuiltinTools({ canUseDevice: true });
+      const result = buildAllowedBuiltinTools({
+        canUseDevice: true,
+        supportedDeviceTools: [AuvManifest.identifier],
+      });
       const ids = result.map((t) => t.identifier);
       expect(ids).toContain(LocalSystemManifest.identifier);
+      expect(ids).toContain(AuvManifest.identifier);
     });
 
     it('strips only remote-device when deviceLocked=true — local-system stays for the routed device', () => {
       const result = buildAllowedBuiltinTools({
         canUseDevice: true,
+        supportedDeviceTools: [AuvManifest.identifier],
         deviceLocked: true,
       });
       const ids = result.map((t) => t.identifier);
       expect(ids).not.toContain(RemoteDeviceManifest.identifier);
       expect(ids).toContain(LocalSystemManifest.identifier);
+      expect(ids).toContain(AuvManifest.identifier);
     });
 
     it('keeps remote-device when deviceLocked is omitted', () => {
-      const result = buildAllowedBuiltinTools({ canUseDevice: true });
+      const result = buildAllowedBuiltinTools({
+        canUseDevice: true,
+        supportedDeviceTools: [AuvManifest.identifier],
+      });
       const ids = result.map((t) => t.identifier);
       expect(ids).toContain(RemoteDeviceManifest.identifier);
     });

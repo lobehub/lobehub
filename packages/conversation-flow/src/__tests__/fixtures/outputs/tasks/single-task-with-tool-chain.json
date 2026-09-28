@@ -115,7 +115,7 @@
         "ttft": 3163,
         "duration": 5611,
         "latency": 8774,
-        "tps": 31.55
+        "tps": 31.545179112457674
       },
       "usage": {
         "totalInputTokens": 12324,
@@ -215,7 +215,7 @@
         "ttft": 3135,
         "duration": 10399,
         "latency": 16321,
-        "tps": 51.254999999999995
+        "tps": 62.3136840080777
       },
       "usage": {
         "totalInputTokens": 26063,

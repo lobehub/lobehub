@@ -75,6 +75,11 @@ class AgentEvalService {
     return lambdaClient.agentEval.listDatasets.query({ benchmarkId });
   }
 
+  /** Every dataset, whether or not it belongs to a benchmark. */
+  async listAllDatasets() {
+    return lambdaClient.agentEval.listDatasets.query({});
+  }
+
   async getDataset(id: string) {
     return lambdaClient.agentEval.getDataset.query({ id });
   }
@@ -130,6 +135,10 @@ class AgentEvalService {
   }
 
   // ============ Test Case ============
+  async getTestCase(id: string) {
+    return lambdaClient.agentEval.getTestCase.query({ id });
+  }
+
   async listTestCases(params: { datasetId: string; limit?: number; offset?: number }) {
     return lambdaClient.agentEval.listTestCases.query(params);
   }
@@ -140,14 +149,21 @@ class AgentEvalService {
       choices?: string[];
       expected?: string;
       input: string;
+      /**
+       * Conversation replayed into the eval topic before `input` is sent. The
+       * router has always accepted it; this client had not exposed it.
+       */
+      messages?: Array<{
+        content: string;
+        id?: string;
+        parentId?: string;
+        role: 'assistant' | 'system' | 'user';
+      }>;
     };
     datasetId: string;
-    evalConfig?: { judgePrompt?: string };
+    evalConfig?: { criteria?: string; judgePrompt?: string };
     evalMode?: RubricType;
-    metadata?: {
-      difficulty?: 'easy' | 'medium' | 'hard';
-      tags?: string[];
-    };
+    metadata?: Record<string, unknown>;
   }) {
     return lambdaClient.agentEval.createTestCase.mutate(params);
   }
@@ -157,9 +173,9 @@ class AgentEvalService {
     content?: {
       category?: string;
       expected?: string;
-      input: string;
+      input?: string;
     };
-    evalConfig?: { judgePrompt?: string } | null;
+    evalConfig?: { criteria?: string; judgePrompt?: string } | null;
     evalMode?: RubricType | null;
     metadata?: Record<string, unknown>;
     sortOrder?: number;

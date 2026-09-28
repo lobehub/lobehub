@@ -3,13 +3,10 @@ import type { ActionKey, ActionKeys } from './config';
 const CHAT_ONLY_ACTIONS = new Set<ActionKey>([
   'agentMode',
   'clear',
-  // personal per-model reasoning preference, not resource configuration
-  'effort',
   'fileUpload',
   'history',
   'mention',
   'model',
-  'modelLabel',
   'plus',
   'promptTransform',
   'typo',
@@ -19,8 +16,8 @@ const CHAT_ONLY_ACTIONS = new Set<ActionKey>([
 /**
  * Chat-only members (no configuration access) keep runtime preferences,
  * attachments, formatting and chat operations while configuration actions are
- * hidden. `model` stays as the icon trigger — it is policy-aware and renders a
- * readonly icon when the member cannot pick a model.
+ * hidden. `model` stays as the text chip — it is policy-aware and renders an
+ * inert label when the member cannot pick a model.
  */
 export const filterChatOnlyActions = (actions: ActionKeys[]): ActionKeys[] => {
   const visibleActions: ActionKeys[] = [];

@@ -157,6 +157,7 @@ export const agentDocuments = pgTable(
   (table) => [
     index('agent_documents_workspace_id_idx').on(table.workspaceId),
     index('agent_documents_user_id_idx').on(table.userId),
+    index('agent_documents_deleted_by_user_id_idx').on(table.deletedByUserId),
     index('agent_documents_agent_id_idx').on(table.agentId),
     index('agent_documents_access_self_idx').on(table.accessSelf),
     index('agent_documents_access_shared_idx').on(table.accessShared),

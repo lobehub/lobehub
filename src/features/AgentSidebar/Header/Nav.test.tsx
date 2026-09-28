@@ -26,31 +26,6 @@ vi.mock('@/features/ResourcePermission/useResourceAccess', () => ({
   useResourceAccess: () => ({ canEditResource: true, isAccessResolved: true }),
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  Flexbox: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
-    <div {...props}>{children}</div>
-  ),
-}));
-
-vi.mock('@lobehub/ui/icons', () => ({
-  BotPromptIcon: () => null,
-}));
-
-vi.mock('lucide-react', () => ({
-  DnaIcon: () => null,
-  ListTodoIcon: () => null,
-  MessageSquarePlusIcon: () => null,
-  MessagesSquareIcon: () => null,
-  SearchIcon: () => null,
-  TargetIcon: () => null,
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
-}));
-
 vi.mock('react-router', async () => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   const actual = (await vi.importActual('react-router')) as typeof import('react-router');

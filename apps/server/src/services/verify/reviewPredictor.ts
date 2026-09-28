@@ -6,6 +6,8 @@ import {
   REVIEW_PREDICTION_JSON_SCHEMA,
 } from '@lobechat/prompts';
 import type { AcceptanceReviewAnnotation } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
+import { pickTrimmedString, toRecord } from '@lobechat/utils/object';
 import debug from 'debug';
 
 import { DocumentModel } from '@/database/models/document';
@@ -13,15 +15,25 @@ import { FileModel } from '@/database/models/file';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyEvidenceModel } from '@/database/models/verifyEvidence';
 import { VerifyReviewPredictionModel } from '@/database/models/verifyReviewPrediction';
-import type { VerifyCheckResultItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 import { FileService } from '@/server/services/file';
 
+import {
+  isInlineableFrameSize,
+  MAX_INLINE_REQUEST_BYTES,
+  resolveModelReadableFrameUrl,
+} from './modelFrames';
+import type { ReviewEvidenceRow } from './reviewEvidence';
+import { formatTextEvidence, TEXT_EVIDENCE_TYPES } from './reviewEvidence';
+import { describeWithheldEvidence } from './reviewInspection';
 import type { RawReviewPrediction } from './schema';
 import { ReviewPredictionSchema } from './schema';
 
 const log = debug('lobe-server:verify-review-predictor');
+
+/** Exactly what the model hands back, so the three readers cannot drift. */
+type CheckEvidenceRows = Awaited<ReturnType<VerifyEvidenceModel['listByCheckResult']>>;
 
 /** Media a still frame can actually carry a judgement about. */
 const VISUAL_EVIDENCE_TYPES = new Set(['screenshot', 'gif']);
@@ -33,6 +45,17 @@ const VISUAL_EVIDENCE_TYPES = new Set(['screenshot', 'gif']);
  * serve a long tail that barely exists.
  */
 const MAX_VISUALS = 3;
+
+/**
+ * Frame cap for a review that GATES a delivery (the Goal review) rather than
+ * proposing a card to a person. There, a withheld frame is not a cheaper
+ * opinion but a wrong outcome: the model rightly answers "I cannot see the
+ * screenshot this criterion asks for", which reads as unjudgeable and parks a
+ * passing delivery on a human. Builders routinely attach one frame per surface
+ * plus a recording and a tooltip shot, so three is well below an ordinary
+ * check; twelve covers that with room while still bounding the request.
+ */
+export const GATE_REVIEW_MAX_VISUALS = 12;
 
 /**
  * How many checks may be judged at once when a whole acceptance is requested.
@@ -47,8 +70,12 @@ export const REVIEW_PREDICT_CONCURRENCY = 4;
 export interface PredictReviewParams {
   /** The check result to re-judge. */
   checkResultId: string;
+  /** Goal reviews also inspect original nonvisual evidence. */
+  includeTextEvidence?: boolean;
   /** The check's detailed judging rubric, when the criterion links one. */
   instructionDocumentId?: string | null;
+  /** Frames attached per request; defaults to the shadow-lane cap. */
+  maxVisuals?: number;
   modelConfig: { model: string; provider: string };
   /** The acceptance's requirement, used as the scope test. */
   requirement?: string | null;
@@ -88,12 +115,14 @@ export const shouldSurfaceProposal = <
  * current model's row was cleared for re-judging.
  */
 export const isCurrentReviewPrediction = (
-  prediction: { model: string; promptVersion: string; provider: string },
+  prediction: { id?: string; model: string; promptVersion: string; provider: string },
   modelConfig: { model: string; provider: string },
+  automaticPredictionIds?: ReadonlySet<string>,
 ): boolean =>
-  prediction.provider === modelConfig.provider &&
-  prediction.model === modelConfig.model &&
-  prediction.promptVersion === REVIEW_PREDICT_PROMPT_VERSION;
+  Boolean(prediction.id && automaticPredictionIds?.has(prediction.id)) ||
+  (prediction.provider === modelConfig.provider &&
+    prediction.model === modelConfig.model &&
+    prediction.promptVersion === REVIEW_PREDICT_PROMPT_VERSION);
 
 /**
  * Produces an automated second opinion on a check the verifier already judged.
@@ -173,13 +202,33 @@ export class VerifyReviewPredictorService {
       return null;
     }
 
-    const visuals = await this.collectVisuals(result);
+    // One read of the check's evidence feeds all three decisions below — which
+    // frames to attach, which payloads to inline, and what the request had to
+    // hold back — so they cannot disagree about what the check carries.
+    const evidence = await this.evidenceModel.listByCheckResult(result.id);
+    const visuals = await this.resolveVisuals(evidence, params.maxVisuals ?? MAX_VISUALS);
     // Nothing to look at means nothing this reviewer can honestly say. A
     // text-only opinion here would be the model paraphrasing the verifier's own
     // reasoning back at the user, which is worse than silence.
-    if (visuals.length === 0) {
-      log('predict: %s has no visual evidence, skipping', checkResultId);
-      return this.record(params, 'skipped', 'no visual evidence to judge');
+    const collected = params.includeTextEvidence
+      ? await this.collectTextEvidence(evidence)
+      : undefined;
+    const textEvidence = collected?.text;
+    const withheldEvidence = describeWithheldEvidence({
+      attachedVisualIds: new Set(visuals.map((visual) => visual.evidenceId)),
+      evidence,
+      includedTextIds: collected?.includedIds ?? new Set(),
+      textLaneEnabled: Boolean(params.includeTextEvidence),
+    });
+    if (visuals.length === 0 && !textEvidence) {
+      log('predict: %s has no readable evidence, skipping', checkResultId);
+      return this.record(
+        params,
+        'skipped',
+        params.includeTextEvidence
+          ? 'no readable evidence (no frames and no text payload) to judge'
+          : 'no visual evidence to judge',
+      );
     }
 
     const instruction = params.instructionDocumentId
@@ -188,6 +237,7 @@ export class VerifyReviewPredictorService {
 
     const chain = chainVerifyReviewPrediction({
       instruction,
+      textEvidence,
       requirement: params.requirement ?? undefined,
       surface: params.surface ?? undefined,
       title: result.checkItemTitle ?? 'Acceptance check',
@@ -195,6 +245,7 @@ export class VerifyReviewPredictorService {
         { evidence?: string; reasoning?: string } | undefined,
       verdict: result.verdict ?? undefined,
       visuals,
+      withheldEvidence,
     });
 
     const startedAt = Date.now();
@@ -209,6 +260,7 @@ export class VerifyReviewPredictorService {
           schema: REVIEW_PREDICTION_JSON_SCHEMA,
         },
         {
+          metadata: { trigger: RequestTrigger.Verify },
           tracing: {
             promptVersion: REVIEW_PREDICT_PROMPT_VERSION,
             scenario: TRACING_SCENARIOS.ReviewPredict,
@@ -218,7 +270,16 @@ export class VerifyReviewPredictorService {
       );
     } catch (error) {
       log('predict: model call failed for %s — %O', checkResultId, error);
-      return this.record(params, 'errored', error instanceof Error ? error.message : String(error));
+      const detail = toRecord(error);
+      const message =
+        pickTrimmedString(detail?.message) ??
+        pickTrimmedString(toRecord(detail?.error)?.message) ??
+        pickTrimmedString(error);
+      const errorType = pickTrimmedString(detail?.errorType);
+      const reason =
+        message ??
+        `Review model ${modelConfig.provider}/${modelConfig.model} could not run${errorType ? ` (${errorType})` : ''}. Check the provider configuration and retry the review.`;
+      return this.record(params, 'errored', reason);
     }
 
     const parsed = ReviewPredictionSchema.safeParse(raw);
@@ -246,6 +307,10 @@ export class VerifyReviewPredictorService {
       promptVersion: REVIEW_PREDICT_PROMPT_VERSION,
       rationale: prediction.rationale ?? undefined,
       status: 'judged',
+      // Persisted on a judged row too: "rejected having seen everything" and
+      // "rejected while three frames were held back" are the same verdict in the
+      // agreement statistics unless the caveat is stored with it.
+      statusReason: withheldEvidence,
     });
   }
 
@@ -265,24 +330,69 @@ export class VerifyReviewPredictorService {
     });
   }
 
+  private async collectTextEvidence(evidence: CheckEvidenceRows) {
+    const rows: ReviewEvidenceRow[] = [];
+    for (const row of evidence) {
+      if (!TEXT_EVIDENCE_TYPES.has(row.type)) continue;
+      const content = await this.resolveEvidenceContent(row);
+      if (content) rows.push({ content, description: row.description, id: row.id, type: row.type });
+    }
+    return { includedIds: new Set(rows.map((row) => row.id)), text: formatTextEvidence(rows) };
+  }
+
+  /**
+   * The payload a text evidence row stands for, wherever it lives. A row that
+   * only names a path proves nothing, so an attachment is read rather than
+   * quoted: the size ceiling keeps one oversized artifact from being streamed
+   * into a prompt that could never hold it.
+   */
+  private async resolveEvidenceContent(row: {
+    content?: string | null;
+    documentId?: string | null;
+    fileId?: string | null;
+  }) {
+    if (row.content) return row.content;
+    if (row.documentId) {
+      const document = await this.documentModel.findById(row.documentId);
+      if (document?.content) return document.content;
+    }
+    if (row.fileId) {
+      const file = await this.fileModel.findById(row.fileId);
+      if (file && file.size <= 1_000_000) return this.fileService.getFileContent(file.url);
+    }
+    return null;
+  }
+
   /**
    * Evidence frames the model can actually read, resolved to model-readable
    * URLs. Order matters: `imageIndex` in the model's answer refers to a position
    * in this array, and that index is how a region gets bound back to the
    * evidence row it was drawn on.
    */
-  private async collectVisuals(result: VerifyCheckResultItem) {
-    const evidence = await this.evidenceModel.listByCheckResult(result.id);
+  private async resolveVisuals(evidence: CheckEvidenceRows, maxVisuals: number) {
     const visual = evidence
       .filter((row) => VISUAL_EVIDENCE_TYPES.has(row.type) && row.fileId)
-      .slice(0, MAX_VISUALS);
+      .slice(0, maxVisuals);
+
+    const files = await Promise.all(visual.map((row) => this.fileModel.findById(row.fileId!)));
+
+    // Spend the request's inline budget in evidence order; later frames are
+    // linked, so a many-frame check cannot push the body past provider limits.
+    let inlineBytes = 0;
+    const inline = files.map((file) => {
+      const size = file?.size;
+      if (!isInlineableFrameSize(size) || inlineBytes + size > MAX_INLINE_REQUEST_BYTES)
+        return false;
+      inlineBytes += size;
+      return true;
+    });
 
     const resolved = await Promise.all(
-      visual.map(async (row) => {
-        const file = await this.fileModel.findById(row.fileId!);
+      visual.map(async (row, index) => {
+        const file = files[index];
         if (!file) return null;
         return {
-          accessUrl: await this.fileService.getFileAccessUrl({ id: file.id, url: file.url }),
+          accessUrl: await resolveModelReadableFrameUrl(this.fileService, file, inline[index]),
           description: row.description,
           evidenceId: row.id,
         };

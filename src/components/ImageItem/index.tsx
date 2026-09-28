@@ -33,18 +33,40 @@ interface ImageItemProps {
   alwaysShowClose?: boolean;
   className?: string;
   editable?: boolean;
+  height?: number;
   loading?: boolean;
   onClick?: () => void;
   onRemove?: () => void;
   preview?: ImageProps['preview'];
+  ratio?: number;
   style?: CSSProperties;
   url?: string;
+  width?: number;
 }
 
 const ImageItem = memo<ImageItemProps>(
-  ({ className, style, editable, alt, onRemove, url, loading, alwaysShowClose, preview }) => {
+  ({
+    className,
+    style,
+    editable,
+    alt,
+    onRemove,
+    url,
+    loading,
+    alwaysShowClose,
+    preview,
+    ratio,
+    width,
+    height,
+  }) => {
     const IMAGE_SIZE = editable ? MIN_IMAGE_SIZE : '100%';
     const { isSafari } = usePlatform();
+    const aspectRatio =
+      ratio && ratio > 0
+        ? ratio
+        : width && width > 0 && height && height > 0
+          ? width / height
+          : undefined;
 
     return (
       <Image
@@ -56,7 +78,6 @@ const ImageItem = memo<ImageItemProps>(
         preview={preview}
         size={IMAGE_SIZE}
         src={url}
-        style={{ height: isSafari ? 'auto' : '100%', width: '100%', ...style }}
         actions={
           editable && (
             <ActionIcon
@@ -71,6 +92,12 @@ const ImageItem = memo<ImageItemProps>(
             />
           )
         }
+        style={{
+          aspectRatio,
+          height: aspectRatio || isSafari ? 'auto' : '100%',
+          width: '100%',
+          ...style,
+        }}
       />
     );
   },

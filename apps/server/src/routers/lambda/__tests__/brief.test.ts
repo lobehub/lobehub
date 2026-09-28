@@ -2,14 +2,18 @@
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => ({})),
+  getServerDB: vi.fn(function () {
+    return {};
+  }),
 }));
 
 // Surface the permission requested by the procedure so this test catches
 // invalid or task-router-inconsistent RBAC actions before they reach cloud.
 vi.mock('@/business/server/trpc-middlewares/rbacPermission', () => ({
-  withScopedPermission: vi.fn((code: string) => () => {
-    throw new Error(`GATE:${code}`);
+  withScopedPermission: vi.fn(function (code: string) {
+    return () => {
+      throw new Error(`GATE:${code}`);
+    };
   }),
 }));
 

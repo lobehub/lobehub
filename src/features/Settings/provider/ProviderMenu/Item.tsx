@@ -1,12 +1,11 @@
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
-import { ProviderIcon } from '@lobehub/icons';
 import { Center } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui/base-ui';
-import { Badge } from 'antd';
+import { Avatar, Badge } from '@lobehub/ui/base-ui';
 import { memo, useMemo } from 'react';
 import { useLocation } from 'react-router';
 
 import { ProductLogo } from '@/components/Branding/ProductLogo';
+import { ProviderIcon } from '@/components/LobeIcons';
 import { isCustomBranding } from '@/const/version';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { type AiProviderListItem } from '@/types/aiProvider';

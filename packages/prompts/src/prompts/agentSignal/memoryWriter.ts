@@ -30,7 +30,6 @@ Choose the correct memory API based on the feedback:
 - addPreferenceMemory for stable future-facing preferences
 - addIdentityMemory / updateIdentityMemory / removeIdentityMemory for enduring identity facts or corrections
 - addContextMemory for ongoing situations, environments, or projects
-- addExperienceMemory for reusable lessons from outcomes or workflows
 - addActivityMemory for notable concrete events worth remembering
 
 Do not use memory tools for requests to create, update, refine, merge, consolidate, or store reusable skills, procedures, workflows, playbooks, checklists, agent capabilities, agent prompts, or agent documents.

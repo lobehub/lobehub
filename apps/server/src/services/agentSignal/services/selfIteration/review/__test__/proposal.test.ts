@@ -6,6 +6,7 @@ import {
   buildSelfReviewProposalFromPlan,
   buildSelfReviewProposalKey,
   getNextProposalExpiry,
+  getSelfReviewProposalFromBriefMetadata,
   isSelfReviewProposalMetadata,
   refreshSelfReviewProposal,
   shouldRefreshSelfReviewProposal,
@@ -254,6 +255,39 @@ describe('self-review proposal metadata', () => {
       supersededBy: 'brief_new',
       updatedAt: '2026-05-10T00:00:00.000Z',
     });
+  });
+
+  /**
+   * @example
+   * getSelfReviewProposalFromBriefMetadata(metadata) returns the stored refine_prompt proposal.
+   */
+  it('accepts agent prompt base snapshots so refine_prompt proposals survive persistence', () => {
+    const promptProposal = validProposalMetadata({
+      actions: [
+        {
+          actionType: 'refine_prompt',
+          baseSnapshot: {
+            agentId: 'agt_1',
+            promptHash: 'sha256:prompt',
+            targetType: 'agent_prompt',
+          },
+          evidenceRefs: [{ id: 'topic_1', type: 'topic' }],
+          idempotencyKey: 'source:refine_prompt:agent:agt_1',
+          rationale: 'Refine the agent system prompt.',
+          risk: Risk.Medium,
+          target: { agentId: 'agt_1' },
+        },
+      ],
+      actionType: 'refine_prompt',
+      proposalKey: 'agt_1:refine_prompt:agent:agt_1',
+    });
+
+    expect(isSelfReviewProposalMetadata(promptProposal)).toBe(true);
+    expect(
+      getSelfReviewProposalFromBriefMetadata({
+        agentSignal: { nightlySelfReview: { selfReviewProposal: promptProposal } },
+      }),
+    ).toEqual(promptProposal);
   });
 
   /**

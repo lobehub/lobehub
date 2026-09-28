@@ -97,6 +97,10 @@ export interface ModelTokensUsage {
 
   // Output tokens breakdown
   outputTextTokens?: number;
+  /**
+   * Generated video tokens, billed through the `videoGeneration` pricing unit.
+   */
+  outputVideoTokens?: number;
   rejectedPredictionTokens?: number;
 
   // Total tokens
@@ -127,6 +131,7 @@ export const ModelUsageSchema = z.object({
   outputImageTokens: z.number().optional(),
   outputAudioTokens: z.number().optional(),
   outputReasoningTokens: z.number().optional(),
+  outputVideoTokens: z.number().optional(),
 
   // Prediction tokens
   acceptedPredictionTokens: z.number().optional(),
@@ -139,6 +144,9 @@ export const ModelUsageSchema = z.object({
 
   // Cost
   cost: z.number().optional(),
+
+  // Provider-native subscription credits (e.g. Qoder), separate from USD cost
+  credits: z.number().optional(),
 });
 
 export const ModelPerformanceSchema = z.object({
@@ -195,7 +203,62 @@ export interface AgentDispatchMetadata {
   visibility: 'internal';
 }
 
+/**
+ * Where a server-injected user turn came from when no human typed it: a
+ * provider event (GitHub CI failure, review feedback, …) that woke the
+ * agent. Rendered as a badge on the bubble and usable as a filter key.
+ */
+export interface ExternalOriginMetadata {
+  /** What happened, in the provider's event vocabulary (`ci_failed`, `review_changes_requested`, …). */
+  kind: string;
+  /** Human label of the resource, e.g. `lobehub/lobehub#19728`. */
+  label: string;
+  /** Provider id, e.g. `github`. */
+  provider: string;
+  /** LobeHub-side id of the tracked resource (`scm_change_requests.id`), for lookups. */
+  resourceId?: string;
+  /** Link to the provider resource. */
+  url?: string;
+}
+
+export const ExternalOriginMetadataSchema = z.object({
+  kind: z.string(),
+  label: z.string(),
+  provider: z.string(),
+  resourceId: z.string().optional(),
+  url: z.string().optional(),
+});
+
+export const BotSenderMetadataSchema = z.object({
+  avatar: z.string().optional(),
+  fullName: z.string().optional(),
+  id: z.string(),
+  platform: z.string(),
+  username: z.string().optional(),
+});
+
+/**
+ * The real platform author of a user message that arrived through a bot
+ * channel (Feishu, Discord, Slack, …). Such rows are inserted under the bot
+ * OWNER's `userId`, so the joined `sender` is the owner — this block carries
+ * the identity the UI should show instead.
+ */
+export interface BotSenderMetadata {
+  /** Absolute avatar URL when the platform exposes one. */
+  avatar?: string;
+  /** Platform display name / nickname. */
+  fullName?: string;
+  /** Platform user id (Feishu open_id, Discord snowflake, …). */
+  id: string;
+  /** Bot platform identifier, e.g. `feishu`, `discord`. */
+  platform: string;
+  /** Platform handle when distinct from the display name. */
+  username?: string;
+}
+
 export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSchema).extend({
+  botSender: BotSenderMetadataSchema.optional(),
+  externalOrigin: ExternalOriginMetadataSchema.optional(),
   agentDispatch: AgentDispatchMetadataSchema.optional(),
   collapsed: z.boolean().optional(),
   contextSelections: z.array(ContextSelectionSchema).optional(),
@@ -226,6 +289,7 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   scope: z.string().optional(),
   // External-signal lineage for Monitor-style callback turns ().
   signal: MessageSignalSchema.optional(),
+  steer: z.boolean().optional(),
   subAgentId: z.string().optional(),
   // role='taskCallback' card: which task delivered its handoff back to this
   // conversation, and the run outcome. The card header + jump link read this.
@@ -246,6 +310,12 @@ export interface ModelUsage extends ModelTokensUsage {
    * dollar
    */
   cost?: number;
+  /**
+   * Provider-native subscription credits consumed (e.g. Qoder), for runs whose
+   * CLI reports credits instead of token counts. Not USD — separate from
+   * `cost` so spend math never mixes units.
+   */
+  credits?: number;
 }
 
 export interface ModelPerformance {
@@ -290,6 +360,10 @@ export interface MessageMetadata {
    */
   agentDispatch?: AgentDispatchMetadata;
   /**
+   * Real platform author of a bot-channel user message; see `BotSenderMetadata`.
+   */
+  botSender?: BotSenderMetadata;
+  /**
    * Message collapse state
    * true: collapsed, false/undefined: expanded
    */
@@ -313,6 +387,11 @@ export interface MessageMetadata {
   cost?: number;
   /** @deprecated use `metadata.performance` instead */
   duration?: number;
+  /**
+   * The provider event that produced this server-injected user turn
+   * (GitHub CI failure, review feedback, …). See {@link ExternalOriginMetadata}.
+   */
+  externalOrigin?: ExternalOriginMetadata;
   finishType?: string;
   /** Operation owning the durable heterogeneous tool-state watermark. */
   heterogeneousToolStateOperationId?: string;
@@ -384,11 +463,11 @@ export interface MessageMetadata {
   isSupervisor?: boolean;
   /** @deprecated use `metadata.performance` instead */
   latency?: number;
+
   /**
    * Local-system tool snapshots materialized when the user sent @file mentions.
    */
   localSystemToolSnapshots?: LocalSystemToolSnapshot[];
-
   /**
    * Orchestration role of the message author within a group conversation.
    * `'supervisor'` = the group's coordinating agent, `'member'` = a delegated
@@ -456,6 +535,11 @@ export interface MessageMetadata {
    * `@lobechat/types` stays free of an adapter-package dependency.
    */
   signal?: MessageSignal;
+  /**
+   * User message sent from the input queue while the previous turn was still
+   * running. Renders as a continuation of that turn instead of a new one.
+   */
+  steer?: boolean;
   /**
    * Sub Agent ID - behavior depends on scope
    * - scope: 'sub_agent': conversation-flow will transform message.agentId to this value for display

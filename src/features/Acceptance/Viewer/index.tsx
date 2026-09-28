@@ -2,27 +2,36 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
+import { useState } from 'react';
 import { useParams } from 'react-router';
 
 import { extractUuid } from '../utils';
-import AcceptanceCheckInventory from './AcceptanceCheckInventory';
-import AcceptanceCheckOwnerToolbar from './AcceptanceCheckOwnerToolbar';
-import AcceptanceDecision from './AcceptanceDecision';
-import AcceptanceEnterFocus from './AcceptanceEnterFocus';
-import AcceptanceFocusWorkspace from './AcceptanceFocusWorkspace';
-import AcceptanceGoal from './AcceptanceGoal';
-import AcceptanceGoalEdit from './AcceptanceGoalEdit';
-import AcceptanceIdentity from './AcceptanceIdentity';
-import AcceptanceLedgerRail from './AcceptanceLedgerRail';
-import AcceptanceOriginTopic from './AcceptanceOriginTopic';
+import { AcceptanceOverview } from './AcceptanceOverview';
 import { AcceptanceBundleGate, AcceptanceScope } from './AcceptanceScope';
-import AcceptanceStatusControl from './AcceptanceStatusControl';
-import AcceptanceViewReportLink from './AcceptanceViewReportLink';
+import { FlowPanelHostContext } from './Flow/FlowPanelHost';
+import AcceptanceFocusWorkspace from './Focus/AcceptanceFocusWorkspace';
+import AcceptanceLedgerRail from './History/AcceptanceLedgerRail';
 import { acceptanceScrollLayout } from './layout';
 
 const styles = createStaticStyles(({ css }) => ({
   contentFrame: css`
     overflow: ${acceptanceScrollLayout.frameOverflow};
+  `,
+  flowPanel: css`
+    flex: none;
+    width: min(440px, 42%);
+    height: 100%;
+    min-height: 0;
+
+    &:empty {
+      display: none;
+    }
+
+    @media (width <= 767px) {
+      width: 100%;
+      height: 50%;
+      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+    }
   `,
   page: css`
     position: relative;
@@ -33,9 +42,12 @@ const styles = createStaticStyles(({ css }) => ({
     height: 100%;
 
     background: ${cssVar.colorBgContainer};
+
+    @media (width <= 767px) {
+      flex-direction: column;
+    }
   `,
 }));
-
 interface AcceptancePageProps {
   acceptanceId?: string;
   onDraftToComposer?: (text: string) => boolean;
@@ -47,6 +59,7 @@ const AcceptancePage = ({
 }: AcceptancePageProps) => {
   const params = useParams<{ acceptanceId: string; checkId: string }>();
   const acceptanceId = explicitAcceptanceId ?? extractUuid(params.acceptanceId);
+  const [flowPanelHost, setFlowPanelHostContext] = useState<HTMLDivElement | null>(null);
   const embedded = Boolean(explicitAcceptanceId);
   const focused = !embedded && Boolean(params.checkId);
 
@@ -55,41 +68,28 @@ const AcceptancePage = ({
   return (
     <AcceptanceScope acceptanceId={acceptanceId} embedded={embedded}>
       <AcceptanceBundleGate>
-        <Flexbox horizontal className={styles.page}>
-          <Flexbox className={styles.contentFrame} flex={1} style={{ minWidth: 0 }}>
+        <FlowPanelHostContext value={flowPanelHost}>
+          <Flexbox horizontal className={styles.page}>
             <Flexbox
-              flex={focused ? 1 : undefined}
-              gap={16}
-              paddingBlock={focused ? 0 : 20}
-              paddingInline={focused ? 0 : 24}
-              style={{
-                margin: focused ? 0 : '0 auto',
-                maxWidth: focused ? 'none' : 920,
-                minHeight: focused ? 0 : undefined,
-                width: '100%',
-              }}
+              horizontal
+              flex={1}
+              style={{ minHeight: 0, minWidth: 0, position: 'relative' }}
             >
-              {focused ? (
-                <AcceptanceFocusWorkspace />
-              ) : (
-                <>
-                  <AcceptanceIdentity
-                    statusSlot={<AcceptanceStatusControl />}
-                    topicSlot={<AcceptanceOriginTopic />}
-                  />
-                  <AcceptanceEnterFocus />
-                  <AcceptanceGoal
-                    editSlot={<AcceptanceGoalEdit />}
-                    reportSlot={<AcceptanceViewReportLink />}
-                  />
-                  <AcceptanceCheckInventory canReview toolbar={<AcceptanceCheckOwnerToolbar />} />
-                  <AcceptanceDecision onDraftToComposer={onDraftToComposer} />
-                </>
-              )}
+              <Flexbox className={styles.contentFrame} flex={1} style={{ minWidth: 0 }}>
+                <Flexbox
+                  flex={focused ? 1 : undefined}
+                  gap={16}
+                  style={{ minHeight: focused ? 0 : undefined, width: '100%' }}
+                >
+                  {focused ? <AcceptanceFocusWorkspace /> : null}
+                </Flexbox>
+                {!focused && <AcceptanceOverview onDraftToComposer={onDraftToComposer} />}
+              </Flexbox>
+              <AcceptanceLedgerRail />
             </Flexbox>
+            <div className={styles.flowPanel} ref={setFlowPanelHostContext} />
           </Flexbox>
-          <AcceptanceLedgerRail />
-        </Flexbox>
+        </FlowPanelHostContext>
       </AcceptanceBundleGate>
     </AcceptanceScope>
   );

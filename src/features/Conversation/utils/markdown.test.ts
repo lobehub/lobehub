@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { processWithArtifact } from './markdown';
+import { normalizeThinkTags, processWithArtifact } from './markdown';
 
 describe('processWithArtifact', () => {
   it('should removeLineBreaks with closed tag', () => {
@@ -610,5 +610,46 @@ This HTML document includes the temperature converter with the requested feature
 
       expect(output).toEqual(input);
     });
+  });
+});
+
+describe('normalizeThinkTags', () => {
+  it('should only parse a <think> tag at the start of the message', () => {
+    const input = `<think>用户想要一个训练方案。</think>以下是方案：`;
+    const output = normalizeThinkTags(input);
+
+    expect(output).toEqual('<think>\n\n用户想要一个训练方案。\n\n</think>\n\n以下是方案：');
+  });
+
+  it('should not touch a <think> tag in the middle of the message', () => {
+    const input = '基座默认先吐一段 `<think>` 标签，要额外 pin 参数才行。';
+    const output = normalizeThinkTags(input);
+
+    expect(output).toEqual(input);
+  });
+
+  it('should not touch a <think> tag appearing after body text', () => {
+    const input = `先说结论：可行。
+
+<think>推理过程</think>
+
+然后是正文。`;
+    const output = normalizeThinkTags(input);
+
+    expect(output).toEqual(input);
+  });
+
+  it('should normalize when the message starts with a leading-newline <think> tag', () => {
+    const input = '\n<think>思考</think>正文';
+    const output = normalizeThinkTags(input);
+
+    expect(output).toEqual('\n<think>\n\n思考\n\n</think>\n\n正文');
+  });
+
+  it('should only add the opening gap for an unclosed leading <think> tag', () => {
+    const input = '<think>还在思考';
+    const output = normalizeThinkTags(input);
+
+    expect(output).toEqual('<think>\n\n还在思考');
   });
 });

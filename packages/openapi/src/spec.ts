@@ -3,6 +3,8 @@ import { generateSpecs } from 'hono-openapi';
 
 import { API_KEY_SCOPES } from '@/const/apiKeyScope';
 
+import { evalResponseSchema } from './types/eval-response.type';
+
 const HTTP_METHODS = new Set(['DELETE', 'GET', 'PATCH', 'POST', 'PUT']);
 
 type GenerateSpecsApp = Parameters<typeof generateSpecs>[0];
@@ -47,6 +49,18 @@ const resourceSchemas: Record<string, SchemaObject> = {
       id: { type: 'string' },
       model: nullableString,
       params: nullableObject,
+      plugins: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            identifier: { type: 'string' },
+            mode: { type: 'string', enum: ['pinned', 'auto', 'disabled'] },
+          },
+          required: ['identifier', 'mode'],
+        },
+      },
       provider: nullableString,
       slug: nullableString,
       systemRole: nullableString,
@@ -481,21 +495,54 @@ const getSuccessSchema = (group: string, rest: string, method: string): SchemaOb
     return successEnvelope(ref('ChatResponse'));
   }
 
-  if (group === 'eval') {
-    if (rest.endsWith('/results')) {
-      return successEnvelope({
-        additionalProperties: false,
-        properties: {
-          results: { items: ref('EvalRunResult'), type: 'array' },
-          runId: { type: 'string' },
-          total: { minimum: 0, type: 'integer' },
+  if (group === 'eval') return successEnvelope(evalResponseSchema(method, rest));
+
+  if (group === 'topics' && rest.endsWith('/threads'))
+    return successEnvelope({
+      type: 'object',
+      properties: {
+        threads: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              id: { type: 'string' },
+              topicId: { type: 'string' },
+              title: nullableString,
+              type: { type: 'string' },
+              status: nullableString,
+              parentThreadId: nullableString,
+              createdAt: dateTime,
+              updatedAt: dateTime,
+            },
+          },
         },
-        required: ['runId', 'total', 'results'],
-        type: 'object',
-      });
-    }
-    return successEnvelope(ref('EvalRun'));
-  }
+        total: { type: 'integer' },
+      },
+      required: ['threads', 'total'],
+    });
+  if (group === 'plugins')
+    return successEnvelope({
+      type: 'object',
+      properties: {
+        plugins: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              identifier: { type: 'string' },
+              type: { type: 'string' },
+              createdAt: dateTime,
+              updatedAt: dateTime,
+            },
+          },
+        },
+        total: { type: 'integer' },
+      },
+      required: ['plugins', 'total'],
+    });
 
   const resource = groupResources[group];
   if (!resource) return successEnvelope({ additionalProperties: true, type: 'object' });
@@ -736,9 +783,11 @@ export const buildSpecDocument = async (app: GenerateSpecsApp) => {
       const successStatus =
         group === 'eval' && method === 'post' && rest === 'runs'
           ? 202
-          : ['agent-groups', 'api-keys', 'mcp-servers'].includes(group) &&
-              method === 'post' &&
-              rest === ''
+          : method === 'post' &&
+              ((['agent-groups', 'api-keys', 'mcp-servers'].includes(group) && rest === '') ||
+                (group === 'agents' && rest === '{id}/duplicate') ||
+                (group === 'eval' &&
+                  ['benchmarks', 'datasets', 'datasets/{datasetId}/test-cases'].includes(rest)))
             ? 201
             : 200;
       const currentSuccess = (op.responses[successStatus] ?? {}) as Record<string, unknown>;

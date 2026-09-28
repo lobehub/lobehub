@@ -46,6 +46,8 @@ export interface SelfReviewProposalApplyAdapters {
   checkGates: () => Promise<SelfReviewProposalApplyGateResult>;
   /** Clock injected for deterministic apply-attempt metadata. */
   now?: () => string;
+  /** Replaces an owned agent prompt after snapshot preflight. */
+  replaceAgentPrompt?: (input: { agentId: string; systemRole: string }) => Promise<void>;
   /** Safe shared write tools used for approve-time proposal application. */
   tools: Pick<ToolSet, 'createSkillIfAbsent' | 'replaceSkillContentCAS'>;
   /** Persists updated proposal metadata. */
@@ -144,6 +146,26 @@ const prepareToolAction = (
   input: ApplySelfReviewProposalInput,
   adapters: SelfReviewProposalApplyAdapters,
 ): SelfReviewProposalActionApplyResult | PreparedToolAction => {
+  if (action.actionType === 'refine_prompt') {
+    if (
+      action.operation?.domain !== 'agent' ||
+      action.operation.operation !== 'refine_prompt' ||
+      !adapters.replaceAgentPrompt
+    ) {
+      return buildUnsupportedResult(action);
+    }
+    const agentId = pickTrimmedString(action.operation.input.agentId);
+    const systemRole = pickTrimmedString(action.operation.input.systemRole);
+    if (!agentId || !systemRole) return buildUnsupportedResult(action);
+    return {
+      action,
+      apply: async () => {
+        await adapters.replaceAgentPrompt!({ agentId, systemRole });
+        return { resourceId: agentId, status: 'applied', summary: 'Refined agent prompt.' };
+      },
+    };
+  }
+
   if (action.actionType === 'consolidate_skill') {
     if (
       action.operation?.domain !== 'skill' ||

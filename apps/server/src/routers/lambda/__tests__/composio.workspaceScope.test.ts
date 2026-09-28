@@ -58,10 +58,18 @@ describe('composioRouter — workspace scoping (workspace-agent connector bug)',
     connectorToolModelMock = { deleteToolsNotIn: vi.fn(), upsertMany: vi.fn() };
     pluginModelMock = { create: vi.fn(), findById: vi.fn(), update: vi.fn() };
     agentModelMock = { existsOwnedById: vi.fn().mockResolvedValue(true) };
-    vi.mocked(ConnectorModel).mockImplementation(() => connectorModelMock);
-    vi.mocked(ConnectorToolModel).mockImplementation(() => connectorToolModelMock);
-    vi.mocked(PluginModel).mockImplementation(() => pluginModelMock);
-    vi.mocked(AgentModel).mockImplementation(() => agentModelMock);
+    vi.mocked(ConnectorModel).mockImplementation(function () {
+      return connectorModelMock;
+    });
+    vi.mocked(ConnectorToolModel).mockImplementation(function () {
+      return connectorToolModelMock;
+    });
+    vi.mocked(PluginModel).mockImplementation(function () {
+      return pluginModelMock;
+    });
+    vi.mocked(AgentModel).mockImplementation(function () {
+      return agentModelMock;
+    });
   });
 
   const callerFor = (workspaceId?: string) =>

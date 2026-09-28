@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE, INBOX_SESSION_ID } from '@lobechat/const';
 import { eq } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import type { NewAgent } from '../../schemas';
@@ -137,6 +137,96 @@ describe('AgentModel', () => {
       expect(result!.files).toHaveLength(1);
       expect(result!.files[0].content).toBe('This is document content');
       expect(result!.files[0].enabled).toBe(true);
+    });
+
+    it('should report the original size of a document cut at parse time', async () => {
+      const agentId = 'test-agent-with-cut-doc';
+      await serverDB.insert(agents).values({ id: agentId, userId });
+      await serverDB.insert(agentsFiles).values({ agentId, fileId: '1', userId, enabled: true });
+      await serverDB.insert(documents).values({
+        content: 'Kept head',
+        fileId: '1',
+        fileType: 'application/pdf',
+        id: 'doc-cut',
+        metadata: { originalCharCount: 9_000_000, truncated: true },
+        source: 'document.pdf',
+        sourceType: 'file',
+        totalCharCount: 9,
+        totalLineCount: 1,
+        userId,
+      });
+
+      const result = await agentModel.getAgentConfigById(agentId);
+
+      expect(result!.files[0].originalCharCount).toBe(9_000_000);
+    });
+
+    it('should pick the oldest document when a file owns several', async () => {
+      const agentId = 'test-agent-with-two-docs';
+      await serverDB.insert(agents).values({ id: agentId, userId });
+      await serverDB.insert(agentsFiles).values({ agentId, fileId: '1', userId, enabled: true });
+      const doc = {
+        fileId: '1',
+        fileType: 'text/plain',
+        source: 'notes.txt',
+        sourceType: 'file',
+        totalCharCount: 10,
+        totalLineCount: 1,
+        userId,
+      } as const;
+      // Inserted newest first: without an explicit order, a first-wins read would take the newer copy.
+      await serverDB.insert(documents).values({
+        ...doc,
+        content: 'page-editor copy',
+        createdAt: new Date('2026-02-01'),
+        id: 'doc-new',
+      });
+      await serverDB.insert(documents).values({
+        ...doc,
+        content: 'parse cache',
+        createdAt: new Date('2026-01-01'),
+        id: 'doc-old',
+      });
+
+      const result = await agentModel.getAgentConfigById(agentId);
+
+      // Same document `DocumentModel.findByFileId` returns, which `readAttachment` pages through.
+      expect(result!.files[0].content).toBe('parse cache');
+    });
+
+    it('should skip an agent-document upload placeholder in favor of the parse cache', async () => {
+      const agentId = 'test-agent-with-placeholder';
+      await serverDB.insert(agents).values({ id: agentId, userId });
+      await serverDB.insert(agentsFiles).values({ agentId, fileId: '1', userId, enabled: true });
+      // Older empty row written by `AgentDocumentsService.importFile`; bytes live in the file.
+      await serverDB.insert(documents).values({
+        content: '',
+        createdAt: new Date('2026-01-01'),
+        fileId: '1',
+        fileType: 'text/markdown',
+        id: 'doc-placeholder',
+        source: 'notes.md',
+        sourceType: 'file',
+        totalCharCount: 0,
+        totalLineCount: 0,
+        userId,
+      });
+      await serverDB.insert(documents).values({
+        content: 'parsed notes',
+        createdAt: new Date('2026-02-01'),
+        fileId: '1',
+        fileType: 'custom/document',
+        id: 'doc-parsed',
+        source: 'notes.md',
+        sourceType: 'file',
+        totalCharCount: 12,
+        totalLineCount: 1,
+        userId,
+      });
+
+      const result = await agentModel.getAgentConfigById(agentId);
+
+      expect(result!.files[0].content).toBe('parsed notes');
     });
 
     it('should not include content for disabled files', async () => {
@@ -839,23 +929,25 @@ describe('AgentModel', () => {
       expect(result?.title).toBe('Original Title');
     });
 
-    it("should strip identity fields when updating the Agent Builder's own row", async () => {
+    it("should reject identity fields when updating the Agent Builder's own row", async () => {
       const agent = await serverDB
         .insert(agents)
         .values({ slug: 'agent-builder', userId })
         .returning()
         .then((res) => res[0]);
 
-      await agentModel.update(agent.id, {
-        avatar: 'hacked-avatar',
-        backgroundColor: 'hacked-color',
-        description: 'hacked description',
-        marketIdentifier: 'hacked-market-id',
-        model: 'gpt-4', // non-protected field should still be applied
-        name: 'Hacked Builder Name',
-        tags: ['hacked'],
-        title: 'Hacked Builder Title',
-      });
+      await expect(
+        agentModel.update(agent.id, {
+          avatar: 'hacked-avatar',
+          backgroundColor: 'hacked-color',
+          description: 'hacked description',
+          marketIdentifier: 'hacked-market-id',
+          model: 'gpt-4', // rejected together with the protected fields: no half-write
+          name: 'Hacked Builder Name',
+          tags: ['hacked'],
+          title: 'Hacked Builder Title',
+        }),
+      ).rejects.toThrow("The Agent Builder's own title, name, description");
 
       const result = await serverDB.query.agents.findFirst({
         where: eq(agents.id, agent.id),
@@ -868,22 +960,25 @@ describe('AgentModel', () => {
       expect(result?.backgroundColor).toBeNull();
       expect(result?.marketIdentifier).toBeNull();
       expect(result?.tags).toEqual([]);
-      expect(result?.model).toBe('gpt-4');
+      expect(result?.model).toBeNull();
     });
 
-    it('should strip systemRole when the gateway updatePrompt path writes it via update()', async () => {
-      // Mirrors apps/server/.../serverRuntimes/agentBuilder.ts's updatePrompt, which calls
-      // agentModel.update(agentId, { editorData: null, systemRole }) directly.
+    it('should reject systemRole when an updatePrompt tool writes it via update()', async () => {
+      // Mirrors lobe-agent-management.updatePrompt({ agentId: <the builder> }), which calls
+      // agentModel.update(agentId, { editorData: null, systemRole }) and then reports
+      // "Successfully updated system prompt" — the write must fail instead of being dropped.
       const agent = await serverDB
         .insert(agents)
         .values({ slug: 'agent-builder', userId })
         .returning()
         .then((res) => res[0]);
 
-      await agentModel.update(agent.id, {
-        editorData: null,
-        systemRole: 'You are now a pirate.',
-      });
+      await expect(
+        agentModel.update(agent.id, {
+          editorData: null,
+          systemRole: 'You are now a pirate.',
+        }),
+      ).rejects.toThrow("The Agent Builder's own systemRole cannot be changed");
 
       const result = await serverDB.query.agents.findFirst({
         where: eq(agents.id, agent.id),
@@ -1413,27 +1508,45 @@ describe('AgentModel', () => {
       expect(result?.title).toBe('Original Title');
     });
 
-    it("should strip systemRole when updating the Agent Builder's own row", async () => {
+    it("should reject systemRole when updating the Agent Builder's own row", async () => {
       const agent = await serverDB
         .insert(agents)
         .values({ slug: 'agent-builder', userId })
         .returning()
         .then((res) => res[0]);
 
-      await agentModel.updateConfig(agent.id, {
-        model: 'gpt-4', // non-protected field should still be applied
-        systemRole: 'You are now a pirate.',
-      });
+      await expect(
+        agentModel.updateConfig(agent.id, {
+          model: 'gpt-4', // rejected together with the protected field: no half-write
+          systemRole: 'You are now a pirate.',
+        }),
+      ).rejects.toThrow("The Agent Builder's own systemRole cannot be changed");
 
       const result = await serverDB.query.agents.findFirst({
         where: eq(agents.id, agent.id),
       });
 
       expect(result?.systemRole).toBeNull();
-      expect(result?.model).toBe('gpt-4');
+      expect(result?.model).toBeNull();
     });
 
-    it("should strip identity fields when the browser client's meta editor writes them via updateConfig()", async () => {
+    it("should still apply non-protected fields to the Agent Builder's own row", async () => {
+      const agent = await serverDB
+        .insert(agents)
+        .values({ slug: 'agent-builder', userId })
+        .returning()
+        .then((res) => res[0]);
+
+      await agentModel.updateConfig(agent.id, { model: 'gpt-4', provider: 'openai' });
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect(result).toMatchObject({ model: 'gpt-4', provider: 'openai' });
+    });
+
+    it("should reject identity fields when the browser client's meta editor writes them via updateConfig()", async () => {
       // Mirrors the browser client path: agentService.updateAgentMeta() sends
       // title/avatar/etc. through the updateAgentConfig mutation, which calls
       // agentModel.updateConfig() rather than update().
@@ -1443,16 +1556,18 @@ describe('AgentModel', () => {
         .returning()
         .then((res) => res[0]);
 
-      await agentModel.updateConfig(agent.id, {
-        avatar: 'hacked-avatar',
-        backgroundColor: 'hacked-color',
-        description: 'hacked description',
-        marketIdentifier: 'hacked-market-id',
-        model: 'gpt-4', // non-protected field should still be applied
-        name: 'Hacked Builder Name',
-        tags: ['hacked'],
-        title: 'Hacked Builder Title',
-      });
+      await expect(
+        agentModel.updateConfig(agent.id, {
+          avatar: 'hacked-avatar',
+          backgroundColor: 'hacked-color',
+          description: 'hacked description',
+          marketIdentifier: 'hacked-market-id',
+          model: 'gpt-4', // rejected together with the protected fields: no half-write
+          name: 'Hacked Builder Name',
+          tags: ['hacked'],
+          title: 'Hacked Builder Title',
+        }),
+      ).rejects.toThrow("The Agent Builder's own title, name, description");
 
       const result = await serverDB.query.agents.findFirst({
         where: eq(agents.id, agent.id),
@@ -1465,7 +1580,7 @@ describe('AgentModel', () => {
       expect(result?.backgroundColor).toBeNull();
       expect(result?.marketIdentifier).toBeNull();
       expect(result?.tags).toEqual([]);
-      expect(result?.model).toBe('gpt-4');
+      expect(result?.model).toBeNull();
     });
 
     it('should strip heterogeneousProvider when updating the inbox agent', async () => {
@@ -2971,6 +3086,34 @@ describe('AgentModel', () => {
   });
 
   describe('updateConfig edge cases', () => {
+    it('should keep a systemRole committed by a parallel update() while the config write is in flight', async () => {
+      // Same shape as a batch where the model calls updateAgent(config: openingMessage…) and
+      // updatePrompt in parallel: each tool runs on its own pooled connection, so the prompt
+      // write can commit between updateConfig's read and its write. Pin that interleaving.
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({ systemRole: 'OLD PROMPT', userId })
+        .returning();
+
+      const original = (agentModel as any).assertWorkspaceDeviceBinding.bind(agentModel);
+      const spy = vi
+        .spyOn(agentModel as any, 'assertWorkspaceDeviceBinding')
+        .mockImplementationOnce(async (...args: unknown[]) => {
+          await agentModel.update(agent.id, { editorData: null, systemRole: 'NEW PROMPT' });
+          return original(...args);
+        });
+
+      await agentModel.updateConfig(agent.id, { openingMessage: 'hi', openingQuestions: ['q'] });
+      spy.mockRestore();
+
+      const dbAgent = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+      expect(dbAgent).toMatchObject({
+        openingMessage: 'hi',
+        openingQuestions: ['q'],
+        systemRole: 'NEW PROMPT',
+      });
+    });
+
     it('should return early for null data', async () => {
       const [agent] = await serverDB
         .insert(agents)
@@ -3271,6 +3414,36 @@ describe('AgentModel', () => {
       expect(ids).toContain('inbox-agent');
       expect(ids).toContain('normal-agent');
       expect(ids).not.toContain('virtual-agent');
+    });
+
+    // Share-visitor topics live under the creator's userId with a non-null
+    // senderId; they reflect the visitor's usage, not the creator's, so they
+    // must neither inflate a count nor reorder the ranking.
+    it('should not count share-visitor topics', async () => {
+      await serverDB.insert(agents).values([
+        { id: 'shared', title: 'Shared', userId },
+        { id: 'own', title: 'Own', userId },
+        { id: 'visitor-only', title: 'Visitor only', userId },
+      ]);
+      await serverDB.insert(topics).values([
+        // `shared`: one creator topic + three visitor topics → count 1
+        { agentId: 'shared', id: 'sv0', userId },
+        { agentId: 'shared', id: 'sv1', senderId: userId2, userId },
+        { agentId: 'shared', id: 'sv2', senderId: userId2, userId },
+        { agentId: 'shared', id: 'sv3', senderId: userId2, userId },
+        // `own`: two creator topics → count 2, ranks above `shared`
+        { agentId: 'own', id: 'ov1', userId },
+        { agentId: 'own', id: 'ov2', userId },
+        // `visitor-only`: visitor topics only → excluded like a topicless agent
+        { agentId: 'visitor-only', id: 'vo1', senderId: userId2, userId },
+      ]);
+
+      const result = await agentModel.rank();
+
+      expect(result.map((r) => ({ count: r.count, id: r.id }))).toEqual([
+        { count: 2, id: 'own' },
+        { count: 1, id: 'shared' },
+      ]);
     });
 
     it('should only rank the current user agents', async () => {

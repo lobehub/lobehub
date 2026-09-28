@@ -1,5 +1,19 @@
 import { z } from 'zod';
 
+/** Structured context for an unavailable logical device. */
+export interface DeviceUnavailableErrorData {
+  /** Stable machine-readable availability code. */
+  code: 'DEVICE_NOT_FOUND';
+  /** Logical device requested by the failed dispatch. */
+  deviceId: string;
+  /** Availability failures are safe for an outer caller to reconsider. */
+  retryable: true;
+  /** Principal pool in which presence was checked. */
+  scope: 'personal' | 'workspace';
+  /** Workspace principal, present only for workspace-scoped dispatch. */
+  workspaceId?: string;
+}
+
 export type ProjectSkillScope = 'device' | 'project';
 export type ProjectSkillSource = '.agents/skills' | '.claude/skills';
 
@@ -339,6 +353,7 @@ export interface DeviceEnroller {
 }
 
 export interface DeviceListItem {
+  architecture?: string | null;
   channels: DeviceChannel[];
   defaultCwd: string | null;
   deviceId: string;
@@ -357,6 +372,12 @@ export interface DeviceListItem {
   hostname: string | null;
   identitySource: string | null;
   lastSeen: string;
+  /**
+   * What the client reported about itself on its last connect — the desktop
+   * app sends `appVersion` (plus runtime versions), the CLI `cliVersion`.
+   * `undefined` for ghost rows.
+   */
+  metadata?: Record<string, string> | null;
   online: boolean;
   platform: string | null;
   registered: boolean;
@@ -381,6 +402,25 @@ export interface DeviceListItem {
    */
   visibility: DeviceVisibility | null;
   workingDirs: WorkingDirEntry[];
+}
+
+export interface DeviceDirectoryBrowseEntry {
+  isSymlink: boolean;
+  name: string;
+  /** Canonical absolute path on the execution device. */
+  path: string;
+  readable: boolean;
+}
+
+export interface DeviceDirectoryBrowseResult {
+  entries: DeviceDirectoryBrowseEntry[];
+  nextCursor?: string;
+  parentPath: string | null;
+  /** Canonical absolute directory currently being browsed. */
+  path: string;
+  pathSeparator: '/' | '\\';
+  roots: string[];
+  truncated: boolean;
 }
 
 /**
@@ -409,6 +449,116 @@ export interface DeviceGitLinkedPullRequestResult {
   status: DeviceGitLinkedPullRequestLookupStatus;
   /** Remote ref the lookup queried under — the PR's own head ref when one was found. */
   upstream?: DeviceGitUpstreamRef;
+}
+
+/** One CI check on a pull request, from `statusCheckRollup` (CheckRun or StatusContext). */
+export interface DeviceGitPullRequestCheck {
+  completedAt?: string;
+  detailsUrl?: string;
+  name: string;
+  required: boolean;
+  startedAt?: string;
+  status: 'cancelled' | 'failure' | 'neutral' | 'pending' | 'skipped' | 'success';
+}
+
+export interface DeviceGitPullRequestComment {
+  author: string;
+  body: string;
+  createdAt: string;
+  id: string;
+}
+
+export interface DeviceGitPullRequestReview {
+  author: string;
+  state: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED' | 'PENDING';
+  submittedAt: string;
+}
+
+export interface DeviceGitPullRequestCommit {
+  author: string;
+  committedAt: string;
+  message: string;
+  sha: string;
+}
+
+/**
+ * Full pull request detail returned by the `getPullRequestDetail` device RPC.
+ * Backs the Working Sidebar's Pull Request tab.
+ */
+export interface DeviceGitPullRequestDetail {
+  additions: number;
+  author: string;
+  autoMerge?: { method: 'merge' | 'rebase' | 'squash' } | null;
+  baseBehindBy: number;
+  baseRefName: string;
+  body: string;
+  changedFiles: number;
+  checks: DeviceGitPullRequestCheck[];
+  comments: DeviceGitPullRequestComment[];
+  commits: DeviceGitPullRequestCommit[];
+  deletions: number;
+  headRefName: string;
+  headRefOid: string;
+  isCrossRepository: boolean;
+  isDraft: boolean;
+  mergeable: 'CONFLICTING' | 'MERGEABLE' | 'UNKNOWN';
+  mergedAt?: string;
+  mergeStateStatus:
+    'BEHIND' | 'BLOCKED' | 'CLEAN' | 'DIRTY' | 'DRAFT' | 'HAS_HOOKS' | 'UNKNOWN' | 'UNSTABLE';
+  number: number;
+  repo: { name: string; owner: string };
+  reviewDecision: 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED' | null;
+  reviews: DeviceGitPullRequestReview[];
+  state: 'closed' | 'merged' | 'open';
+  title: string;
+  url: string;
+  viewerCanBypass: boolean;
+  viewerCanWrite: boolean;
+}
+
+/** Result of the `getPullRequestDetail` device RPC. */
+export type DeviceGitPullRequestActivity = Pick<
+  DeviceGitPullRequestDetail,
+  'comments' | 'commits' | 'reviews'
+>;
+
+export interface DeviceGitPullRequestDetailResult {
+  detail: DeviceGitPullRequestDetail | null;
+  status: DeviceGitLinkedPullRequestLookupStatus;
+}
+
+export type DeviceGitPullRequestMergeMethod = 'merge' | 'rebase' | 'squash';
+
+/** Result of the `getPullRequestMergeContext` device RPC. */
+export interface DeviceGitPullRequestMergeContext {
+  baseBehindBy: number;
+  requiredChecks: string[];
+  viewerCanBypass: boolean;
+  viewerCanWrite: boolean;
+}
+
+/** One `gh pr` mutation dispatched by the `runPullRequestAction` device RPC. */
+export type DeviceGitPullRequestAction =
+  | {
+      admin?: boolean;
+      deleteBranch?: boolean;
+      headRefOid: string;
+      method: DeviceGitPullRequestMergeMethod;
+      type: 'merge';
+    }
+  | { headRefOid: string; method: DeviceGitPullRequestMergeMethod; type: 'autoMerge' }
+  | { type: 'disableAutoMerge' }
+  | { method: 'merge' | 'rebase'; type: 'updateBranch' }
+  | { type: 'ready' }
+  | { body: string; type: 'comment' }
+  | { type: 'close' }
+  | { type: 'reopen' }
+  | { head: string; type: 'deleteBranch' }
+  | { base: string; type: 'changeBase' };
+
+export interface DeviceGitPullRequestActionResult {
+  error?: string;
+  success: boolean;
 }
 
 /**
@@ -604,6 +754,8 @@ export interface DeviceGitWorkingTreeFiles {
 
 /** One entry in a device's project file index. Mirrors `ProjectFileIndexEntry`. */
 export interface DeviceProjectFileIndexEntry {
+  /** Directory the index left unexpanded; children come from `listProjectDirectory`. */
+  collapsed?: boolean;
   /** Whether Git ignore rules match this file or directory. */
   gitIgnored?: boolean;
   isDirectory: boolean;
@@ -624,6 +776,15 @@ export interface DeviceProjectFileIndexResult {
   indexedAt: string;
   root: string;
   source: 'git' | 'glob';
+}
+
+/**
+ * Children of one directory on a remote device, returned by the
+ * `listProjectDirectory` device RPC. Fills in a subtree the index collapsed.
+ */
+export interface DeviceProjectDirectoryListResult {
+  entries: DeviceProjectFileIndexEntry[];
+  truncated: boolean;
 }
 
 export interface DeviceProjectFileSearchResult {
@@ -678,6 +839,18 @@ export interface DeviceLocalFilePreviewResult {
   success: boolean;
 }
 
+export interface DeviceCopyAssetForPublishResult {
+  error?: string;
+  success: boolean;
+}
+
+export interface DeviceExternalAssetForPublishResult {
+  base64?: string;
+  contentType?: string;
+  error?: string;
+  success: boolean;
+}
+
 /** One file/folder to move within a directory on a remote device. Mirrors `MoveLocalFileParams`. */
 export interface DeviceMoveProjectFileItem {
   newPath: string;
@@ -709,6 +882,40 @@ export interface DeviceRenameProjectFileResult {
  */
 export interface DeviceWriteProjectFileResult {
   error?: string;
+  success: boolean;
+}
+
+/**
+ * Result of the `createLocalFile` / `createLocalDirectory` device RPCs. Neither
+ * overwrites: an existing entry fails with `error`. Mirrors the desktop
+ * `CreateLocalEntryResult`.
+ */
+export interface DeviceCreateProjectEntryResult {
+  error?: string;
+  path: string;
+  success: boolean;
+}
+
+/**
+ * One item of a `copyLocalFiles` device RPC. Omitting `targetPath` duplicates
+ * the source next to itself under a Finder-style free name (`name copy.ext`).
+ */
+export interface DeviceCopyProjectFileItem {
+  sourcePath: string;
+  targetPath?: string;
+}
+
+/** Per-item result of the `copyLocalFiles` device RPC. Mirrors `LocalCopyFilesResultItem`. */
+export interface DeviceCopyProjectFileResultItem {
+  error?: string;
+  sourcePath: string;
+  success: boolean;
+  targetPath?: string;
+}
+
+/** Result of the `trashLocalFiles` device RPC. Mirrors the desktop `TrashLocalFilesResult`. */
+export interface DeviceTrashProjectFilesResult {
+  items: { error?: string; path: string; success: boolean }[];
   success: boolean;
 }
 
@@ -784,3 +991,54 @@ export const workingDirConfigSchema = z.object({
   path: z.string(),
   repoType: z.enum(['git', 'github']).optional(),
 });
+
+/** One TCP port a device is listening on that a tunnel can reach. */
+export interface DeviceListeningPort {
+  command?: string;
+  cwd?: string;
+  /** The listening process runs inside the requested project directory. */
+  inProject: boolean;
+  /** Which loopback address reaches it — `ipv6` means `::1` only. */
+  loopback: 'both' | 'ipv4' | 'ipv6';
+  pid?: number;
+  port: number;
+}
+
+/** Result of the `listListeningPorts` device RPC. */
+export interface DeviceListeningPortsResult {
+  ports: DeviceListeningPort[];
+  /** False when the device has no detector for its platform. */
+  supported: boolean;
+}
+
+// ─── Remote app update ───
+
+/** Mirrors `@lobechat/device-control`'s `AppUpdateStage`. */
+export type DeviceAppUpdateStage =
+  'checking' | 'downloaded' | 'downloading' | 'error' | 'idle' | 'latest' | 'unsupported';
+
+/** Where a device's desktop app update stands, as the device reports it. */
+export interface DeviceAppUpdateState {
+  currentVersion: string;
+  errorMessage?: string;
+  /** Download progress, 0–100, while `stage` is `downloading`. */
+  progress?: number;
+  stage: DeviceAppUpdateStage;
+  /** Version being downloaded or ready to install. */
+  targetVersion?: string;
+}
+
+/**
+ * Why a device couldn't take part in a remote update:
+ * - `unsupported` — the connected client can't update itself remotely (an
+ *   older desktop build, or the CLI answered in the desktop app's place).
+ * - `unavailable` — the device didn't answer (offline, restarting, timeout).
+ */
+export type DeviceAppUpdateFailure = 'unavailable' | 'unsupported';
+
+export type DeviceAppUpdateStateResult =
+  | { state: DeviceAppUpdateState; status: 'ok' }
+  | { message: string; status: DeviceAppUpdateFailure };
+
+export type DeviceAppUpdateInstallResult =
+  { status: 'ok'; targetVersion: string } | { message: string; status: DeviceAppUpdateFailure };

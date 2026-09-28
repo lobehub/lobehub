@@ -46,6 +46,7 @@ export interface QuotaLimitReading {
   /** ms epoch when this reading was captured. */
   capturedAt: number;
   isActive?: boolean;
+  limitName?: string | null;
   /** Raw `limits[].kind`, e.g. `session` / `weekly_all` / `weekly_scoped`. */
   limitType: string;
   /** True if a real 429 was observed at/around this reading. */
@@ -57,6 +58,8 @@ export interface QuotaLimitReading {
   severity?: string;
   /** Integer percent 0..100. */
   utilization: number;
+  /** Provider-reported duration/name, persisted in the snapshot raw payload. */
+  windowMinutes?: number;
 }
 
 /** A projected concrete window, keyed by (limitType, scopeKey, resetsAt). */

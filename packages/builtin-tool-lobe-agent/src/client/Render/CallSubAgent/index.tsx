@@ -1,16 +1,17 @@
 'use client';
 
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Flexbox, Markdown } from '@lobehub/ui';
+import { Flexbox, Icon, Markdown } from '@lobehub/ui';
 import { Button, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
-import { ListTree } from 'lucide-react';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { AlertTriangle, ListTree } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
 import { portalThreadSelectors, threadSelectors } from '@/store/chat/selectors';
 
+import { stripSubAgentReference } from '../../../subAgentReference';
 import type { CallSubAgentParams, CallSubAgentState } from '../../../types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -42,6 +43,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorBgContainer};
   `,
+  stoppedLabel: css`
+    font-size: 12px;
+    color: ${cssVar.colorWarning};
+  `,
+  stoppedResultBox: css`
+    border: 1px solid ${cssVar.colorWarningBorder};
+    background: ${cssVar.colorWarningBg};
+  `,
 }));
 
 /**
@@ -53,6 +62,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
  * is located by the `threadId` persisted in tool state; while the run is still
  * starting the lookup can return `undefined`, so the button is hidden rather
  * than rendered as a dead no-op.
+ *
+ * A run that stopped before finishing is marked with a warning, so its partial
+ * summary is not mistaken for a finished result.
  */
 export const CallSubAgentRender = memo<
   BuiltinRenderProps<CallSubAgentParams, CallSubAgentState, string>
@@ -60,8 +72,9 @@ export const CallSubAgentRender = memo<
   const { t } = useTranslation('plugin');
   const { t: tChat } = useTranslation('chat');
   const prompt = args?.instruction?.trim();
-  const result = typeof content === 'string' ? content.trim() : '';
+  const result = typeof content === 'string' ? stripSubAgentReference(content).trim() : '';
   const threadId = pluginState?.threadId;
+  const stopped = pluginState?.status === 'error';
 
   const subagentThread = useChatStore((s) =>
     threadId
@@ -109,7 +122,16 @@ export const CallSubAgentRender = memo<
             className={styles.labelRow}
             justify={'space-between'}
           >
-            <Text className={styles.label}>{t('builtins.lobe-claude-code.agent.result')}</Text>
+            {stopped ? (
+              <Flexbox horizontal align={'center'} gap={4}>
+                <Icon color={cssVar.colorWarning} icon={AlertTriangle} size={14} />
+                <Text className={styles.stoppedLabel}>
+                  {t('builtins.lobe-agent.subAgent.stopped')}
+                </Text>
+              </Flexbox>
+            ) : (
+              <Text className={styles.label}>{t('builtins.lobe-claude-code.agent.result')}</Text>
+            )}
             {subagentThread && (
               <Button
                 className={styles.openThread}
@@ -125,7 +147,7 @@ export const CallSubAgentRender = memo<
             )}
           </Flexbox>
           {result && (
-            <Flexbox className={styles.resultBox}>
+            <Flexbox className={cx(styles.resultBox, stopped && styles.stoppedResultBox)}>
               <Markdown style={{ maxHeight: 320, overflow: 'auto' }} variant={'chat'}>
                 {result}
               </Markdown>

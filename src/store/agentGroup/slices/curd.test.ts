@@ -49,6 +49,8 @@ const createMockChatGroup = (overrides: Partial<ChatGroupItem> = {}): ChatGroupI
   avatar: null,
   backgroundColor: null,
   clientId: null,
+  deletedAt: null,
+  isDeleted: null,
   config: null,
   content: null,
   createdAt: new Date(),

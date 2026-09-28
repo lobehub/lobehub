@@ -8,6 +8,7 @@ import { Outlet } from 'react-router';
 
 import ChatTerminalPanel from '@/features/ChatTerminal';
 import AgentWorkingSidebar from '@/features/Conversation/WorkingSidebar';
+import OverviewSlot from '@/features/Conversation/WorkingSidebar/OverviewSlot';
 import ChatHeader from '@/routes/(main)/agent/features/Conversation/Header';
 import Portal from '@/routes/(main)/agent/features/Portal';
 
@@ -32,27 +33,39 @@ const ChatLayout = memo(() => {
 
   return (
     <HeaderSlot.Provider>
-      <Flexbox flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }} width={'100%'}>
+      <OverviewSlot.Provider>
         <Flexbox
-          horizontal
           flex={1}
-          ref={rowRef}
-          style={{ minHeight: 0, overflow: 'hidden', position: 'relative' }}
+          height={'100%'}
+          style={{ minHeight: 0, overflow: 'hidden' }}
           width={'100%'}
         >
           <Flexbox
-            className={styles.conversationColumn}
+            horizontal
             flex={1}
-            style={{ minHeight: 0, minWidth: 0 }}
+            ref={rowRef}
+            style={{ minHeight: 0, overflow: 'hidden', position: 'relative' }}
+            width={'100%'}
           >
-            <ChatHeader />
-            <Outlet />
+            <Flexbox
+              className={styles.conversationColumn}
+              flex={1}
+              style={{ minHeight: 0, minWidth: 0 }}
+            >
+              <ChatHeader />
+              <Flexbox horizontal flex={1} style={{ minHeight: 0, minWidth: 0 }}>
+                <Flexbox flex={1} style={{ minHeight: 0, minWidth: 0 }}>
+                  <Outlet />
+                </Flexbox>
+                <OverviewSlot.Outlet />
+              </Flexbox>
+            </Flexbox>
+            <Portal />
+            <AgentWorkingSidebar availableWidth={rowSize?.width} />
           </Flexbox>
-          <Portal />
-          <AgentWorkingSidebar availableWidth={rowSize?.width} />
+          <ChatTerminalPanel />
         </Flexbox>
-        <ChatTerminalPanel />
-      </Flexbox>
+      </OverviewSlot.Provider>
     </HeaderSlot.Provider>
   );
 });

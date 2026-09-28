@@ -1,4 +1,5 @@
 import { KIMI_CODE_BASE_ARGS } from '@lobechat/heterogeneous-agents/spawn';
+import { formatServerDefaultHeterogeneousModel } from '@lobechat/types';
 
 import { startProviderBindingProxy } from '../providerBindingProxy';
 import type { HeterogeneousAgentBuildPlanParams, HeterogeneousAgentDriver } from '../types';
@@ -93,6 +94,20 @@ export const kimiCodeDriver: HeterogeneousAgentDriver = {
         KIMI_MODEL_NAME: resolution.apiConfig.model,
         KIMI_MODEL_PROVIDER_TYPE: providerType,
       },
+    };
+  },
+  prepareServerDefaultBinding({ args, endpoint, env, model, profileDir }) {
+    const requestModel = formatServerDefaultHeterogeneousModel(model);
+    return {
+      args: sanitizeKimiCodeProviderBindingArgs(args),
+      env: {
+        ...sanitizeKimiCodeProviderBindingEnv(env),
+        KIMI_CODE_HOME: profileDir,
+        KIMI_MODEL_BASE_URL: `${endpoint}/api/v1/anthropic`,
+        KIMI_MODEL_NAME: requestModel,
+        KIMI_MODEL_PROVIDER_TYPE: 'anthropic',
+      },
+      operationTokenEnvKey: 'KIMI_MODEL_API_KEY',
     };
   },
 };

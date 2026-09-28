@@ -1,21 +1,12 @@
 import type { DataSyncConfig } from '@lobechat/electron-client-ipc';
 import { BrowserWindow, shell } from 'electron';
+import type { Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
 
 import AuthCtr from '../AuthCtr';
 import RemoteServerConfigCtr from '../RemoteServerConfigCtr';
-
-// Mock logger
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  }),
-}));
 
 const { ipcMainHandleMock } = vi.hoisted(() => ({
   ipcMainHandleMock: vi.fn(),
@@ -112,7 +103,7 @@ const mockApp = {
 
 describe('AuthCtr', () => {
   let authCtr: AuthCtr;
-  let mockFetch: ReturnType<typeof vi.fn>;
+  let mockFetch: Mock<(...args: any[]) => Promise<any>>;
   let mockWindow: any;
 
   beforeEach(() => {

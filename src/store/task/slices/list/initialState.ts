@@ -13,7 +13,7 @@ export type TaskGroupItem = Awaited<ReturnType<typeof taskService.groupList>>['d
  * Personal mode hides the chip and treats every entry as 'all'.
  */
 export type TaskListVisibilityFilter = 'all' | 'private' | 'workspace';
-export type TaskKanbanGroupBy = 'assignee' | 'priority' | 'status';
+export type TaskKanbanGroupBy = 'assignee' | 'member' | 'priority' | 'status';
 
 export interface TaskListSliceState {
   groupListQueryAutomated?: boolean;
@@ -32,6 +32,13 @@ export interface TaskListSliceState {
    * surface's filter.
    */
   listQueryAutomated?: boolean;
+  /**
+   * Whether the data in `tasks` is the complete list (every page walked) or
+   * a single server page. Tracked for the same scope-reset reason as
+   * `listQueryAutomated`: flipping list ↔ kanban must not render the other
+   * variant's rows under the new variant's expectations.
+   */
+  listQueryComplete?: boolean;
   /**
    * Status narrowing of the data in `tasks`, as an order-insensitive signature
    * (sorted, comma-joined) — undefined when the query is unnarrowed. Tracked
@@ -53,6 +60,7 @@ export const initialTaskListSliceState: TaskListSliceState = {
   isTaskGroupListInit: false,
   isTaskListInit: false,
   listGroupBy: 'status',
+  listQueryComplete: false,
   listQueryVisibility: 'all',
   listVisibility: 'all',
   taskGroups: [],

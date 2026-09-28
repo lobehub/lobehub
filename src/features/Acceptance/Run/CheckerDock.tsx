@@ -1,5 +1,5 @@
 import type { VerifyCheckItem } from '@lobechat/types';
-import { Flexbox, Icon, Input, TextArea } from '@lobehub/ui';
+import { Flexbox, Icon, Input } from '@lobehub/ui';
 import { ActionIcon, Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx, useThemeMode } from 'antd-style';
 import {
@@ -144,8 +144,7 @@ interface CheckerDockProps {
 /**
  * The delivery checker dock — replaces the chat composer during a run. Mirrors
  * the reference mock: a collapsible card driving the plan state machine
- * (draft → verifying → failed/repairing → passed) with confirm / edit / skip
- * and a failure feedback panel.
+ * (draft → verifying → failed/repairing → passed) with confirm / edit / skip.
  */
 const CheckerDock = memo<CheckerDockProps>(({ operationId, embedded }) => {
   const { isDarkMode } = useThemeMode();
@@ -157,7 +156,6 @@ const CheckerDock = memo<CheckerDockProps>(({ operationId, embedded }) => {
   const [expanded, setExpanded] = useState(true);
   const [editing, setEditing] = useState(false);
   const [draftItems, setDraftItems] = useState<VerifyCheckItem[]>([]);
-  const [inputText, setInputText] = useState('');
   const [busy, setBusy] = useState(false);
 
   const plan = state?.verifyPlan ?? [];
@@ -179,8 +177,6 @@ const CheckerDock = memo<CheckerDockProps>(({ operationId, embedded }) => {
 
   const onConfirm = () => run(() => verifyService.confirmPlan(operationId));
   const onSkip = () => run(() => verifyService.skipPlan(operationId));
-  const onForceDeliver = () => run(() => verifyService.skipPlan(operationId));
-
   const startEdit = () => {
     setDraftItems(plan.map((i) => ({ ...i })));
     setEditing(true);
@@ -315,31 +311,6 @@ const CheckerDock = memo<CheckerDockProps>(({ operationId, embedded }) => {
             {t('dock.skip')}
           </Button>
         </Flexbox>
-      );
-    if (phase === 'failed')
-      return (
-        <>
-          <div className={styles.inputPanel}>
-            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>{t('input.label')}</div>
-            <TextArea
-              placeholder={t('input.placeholder')}
-              rows={2}
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-            />
-            <div className={styles.desc} style={{ marginTop: 6 }}>
-              {t('input.hint')}
-            </div>
-          </div>
-          <Flexbox horizontal gap={8} style={{ flexWrap: 'wrap', marginTop: 12 }}>
-            <Button size="small" onClick={startEdit}>
-              {t('dock.edit')}
-            </Button>
-            <Button danger loading={busy} size="small" onClick={onForceDeliver}>
-              {t('dock.forceDeliver')}
-            </Button>
-          </Flexbox>
-        </>
       );
     if (phase === 'repairing')
       return (

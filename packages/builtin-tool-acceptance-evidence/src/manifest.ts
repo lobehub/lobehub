@@ -9,12 +9,18 @@ export const AcceptanceEvidenceManifest: BuiltinToolManifest = {
   api: [
     {
       description:
-        'Submit evidence produced by your completed work for one Acceptance criterion. This records evidence only; it does not decide the verdict.',
+        'List the Acceptance criteria of the run you are working in, with the evidence already recorded for each. Call this first: criterion ids are minted when the run starts, so they cannot be named in your instructions.',
+      name: AcceptanceEvidenceApiName.listCriteria,
+      parameters: { properties: {}, type: 'object' },
+    },
+    {
+      description:
+        'Submit evidence produced by your work for one Acceptance criterion. This records evidence only; it does not decide the verdict.',
       name: AcceptanceEvidenceApiName.submitEvidence,
       parameters: {
         properties: {
           checkItemId: {
-            description: 'The exact criterion id from the evidence-submission instruction.',
+            description: 'A criterion id returned by listCriteria.',
             type: 'string',
           },
           evidence: {
@@ -22,7 +28,11 @@ export const AcceptanceEvidenceManifest: BuiltinToolManifest = {
             items: {
               properties: {
                 content: { description: 'Inline evidence content.', type: 'string' },
-                description: { description: 'What this evidence demonstrates.', type: 'string' },
+                description: {
+                  description:
+                    'Required for file artifacts, including file contents submitted inline. A non-empty, reviewer-facing sentence explaining what the artifact contains and what it demonstrates for this criterion. A filename, path, id, or generic label alone is insufficient.',
+                  type: 'string',
+                },
                 documentId: {
                   description:
                     'An existing LobeHub document id from documents.id. Do not use an agent_documents.id binding id.',

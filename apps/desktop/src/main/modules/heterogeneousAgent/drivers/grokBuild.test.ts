@@ -50,6 +50,29 @@ const bindingContext = (
 });
 
 describe('grokBuildDriver provider binding', () => {
+  it('writes a secret-free server-default Responses profile', async () => {
+    const plan = await grokBuildDriver.prepareServerDefaultBinding!({
+      args: ['--model', 'stale-model', '--effort', 'high'],
+      endpoint: 'https://app.example.com/',
+      env: { LOBEHUB_GROK_API_KEY: 'stale-token' },
+      model: 'kimi-k2.6',
+      profileDir: '/managed/grok',
+    });
+    const config = plan.profileFiles?.[0]?.content ?? '';
+    const alias = plan.args.at(-1);
+
+    expect(plan.args).toEqual(['--effort', 'high', '--model', alias]);
+    expect(alias).toMatch(/^lobehub-provider-[\da-f]{16}$/);
+    expect(plan.env).toMatchObject({ GROK_HOME: '/managed/grok' });
+    expect(plan.env.LOBEHUB_GROK_API_KEY).toBeUndefined();
+    expect(plan.operationTokenEnvKey).toBe('LOBEHUB_GROK_API_KEY');
+    expect(config).toContain('model = "lobehub/kimi-k2.6"');
+    expect(config).toContain('base_url = "https://app.example.com/api/v1/openai/v1"');
+    expect(config).toContain('api_backend = "responses"');
+    expect(config).toContain('auth_scheme = "bearer"');
+    expect(config).not.toContain('stale-token');
+  });
+
   it.each([
     [
       'openai-chat-completions',

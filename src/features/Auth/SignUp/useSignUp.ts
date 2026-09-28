@@ -8,10 +8,10 @@ import type { BusinessSignupFomData } from '@/business/client/hooks/useBusinessS
 import { useBusinessSignup } from '@/business/client/hooks/useBusinessSignup';
 import type { AuthFetchOptions } from '@/features/Auth/utils/authFetchOptions';
 import { withCaptchaToken } from '@/features/Auth/utils/authFetchOptions';
-import { useAuthServerConfigStore } from '@/features/AuthShell';
+import { useAuthServerConfigStore } from '@/features/AuthShell/AuthServerConfigProvider';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
 import { signUp } from '@/libs/better-auth/auth-client';
-import { buildOnboardingRedirectUrl } from '@/utils/onboardingRedirect';
+import { buildOnboardingRedirectUrl, toAbsoluteAuthCallbackUrl } from '@/utils/onboardingRedirect';
 
 import type { BaseSignUpFormValues } from './types';
 
@@ -61,7 +61,7 @@ export const useSignUp = () => {
 
       const submit = async (nextFetchOptions?: AuthFetchOptions) =>
         signUp.email({
-          callbackURL: redirectUrl,
+          callbackURL: toAbsoluteAuthCallbackUrl(redirectUrl, window.location.origin),
           email: values.email,
           fetchOptions: nextFetchOptions,
           name: username,

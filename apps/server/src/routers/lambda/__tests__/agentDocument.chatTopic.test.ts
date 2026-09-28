@@ -31,16 +31,20 @@ vi.mock('@/database/models/agentDocuments', async (importOriginal) => {
 });
 
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn().mockImplementation(() => ({
-    create: mocks.createTopic,
-    findByAgentAndDocumentTrigger: mocks.findByAgentAndDocumentTrigger,
-  })),
+  TopicModel: vi.fn().mockImplementation(function () {
+    return {
+      create: mocks.createTopic,
+      findByAgentAndDocumentTrigger: mocks.findByAgentAndDocumentTrigger,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/topicDocument', () => ({
-  TopicDocumentModel: vi.fn().mockImplementation(() => ({
-    associate: mocks.associate,
-  })),
+  TopicDocumentModel: vi.fn().mockImplementation(function () {
+    return {
+      associate: mocks.associate,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/agentDocuments', () => ({
@@ -62,10 +66,9 @@ describe('agentDocumentRouter.getOrCreateChatTopic', () => {
     vi.clearAllMocks();
     mocks.getServerDB.mockResolvedValue({ kind: 'server-db' });
 
-    vi.mocked(AgentDocumentsService).mockImplementation(
-      () =>
-        ({ findRowByDocumentId: mocks.findRowByDocumentId }) as unknown as AgentDocumentsService,
-    );
+    vi.mocked(AgentDocumentsService).mockImplementation(function () {
+      return { findRowByDocumentId: mocks.findRowByDocumentId } as unknown as AgentDocumentsService;
+    });
   });
 
   it('returns the existing topic when a doc-anchored row is already linked', async () => {
@@ -150,9 +153,9 @@ describe('agentDocumentRouter.getReaderDocument', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getServerDB.mockResolvedValue({ kind: 'server-db' });
-    vi.mocked(AgentDocumentsService).mockImplementation(
-      () => ({ getReaderDocument: mocks.getReaderDocument }) as unknown as AgentDocumentsService,
-    );
+    vi.mocked(AgentDocumentsService).mockImplementation(function () {
+      return { getReaderDocument: mocks.getReaderDocument } as unknown as AgentDocumentsService;
+    });
   });
 
   it('returns only the read-only page fields for an agent-bound document', async () => {

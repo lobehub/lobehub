@@ -3,16 +3,18 @@ import { act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { messageService } from '@/services/message';
+import { topicService } from '@/services/topic';
 import { agentSelectors } from '@/store/agent/selectors';
 import * as agentDispatcher from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
 import * as heterogeneousAgentExecutor from '@/store/chat/slices/agentRun/actions/transports/hetero/heterogeneousAgentExecutor';
 import { INPUT_LOADING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
-import { useUserStore } from '@/store/user';
 
 import { type ConversationContext, type ConversationHooks } from '../../../types';
 import { createStore } from '../../index';
 import { MAX_HETERO_AUTO_RETRIES } from './heteroRetryConfig';
+
+vi.mock('@/services/topic', () => ({ topicService: { cancelRateLimitContinuation: vi.fn() } }));
 
 // Mock useChatStore
 const mockCancelOperations = vi.fn();
@@ -30,6 +32,12 @@ const mockFailOperation = vi.fn();
 const mockExecuteClientAgent = vi.fn();
 const mockIsGatewayModeEnabled = vi.fn(() => false);
 const mockExecuteGatewayAgent = vi.fn();
+const mockUpdateTopicMetadata = vi.fn();
+const mockUpdateTopicStatus = vi.fn();
+const mockSourceTopic = {
+  status: 'scheduled',
+  metadata: { scheduledRun: { kind: 'resume_after_rate_limit' } },
+};
 
 vi.mock('@/store/chat', () => ({
   useChatStore: {
@@ -40,6 +48,8 @@ vi.mock('@/store/chat', () => ({
           { id: 'msg-2', role: 'assistant', content: 'Hi there', parentId: 'msg-1' },
         ],
       },
+      topicDataMap: {},
+      topicDetailMap: { 'source-topic': mockSourceTopic },
       operations: {},
       operationsByMessage: {},
 
@@ -58,6 +68,9 @@ vi.mock('@/store/chat', () => ({
       executeClientAgent: mockExecuteClientAgent,
       isGatewayModeEnabled: mockIsGatewayModeEnabled,
       executeGatewayAgent: mockExecuteGatewayAgent,
+      internal_dispatchTopic: vi.fn(),
+      updateTopicMetadata: mockUpdateTopicMetadata,
+      updateTopicStatus: mockUpdateTopicStatus,
     })),
     setState: vi.fn(),
   },
@@ -66,10 +79,46 @@ vi.mock('@/store/chat', () => ({
 describe('Generation Actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSourceTopic.status = 'scheduled';
   });
 
   afterEach(() => {
     vi.clearAllTimers();
+  });
+
+  describe('cancelHeteroContinuation', () => {
+    it('does not overwrite a source topic that has already started running', async () => {
+      mockSourceTopic.status = 'running';
+      const store = createStore({
+        context: { agentId: 'target-agent', topicId: 'target-topic', threadId: null },
+      });
+      await store.getState().cancelHeteroContinuation('source-topic');
+      expect(mockUpdateTopicStatus).not.toHaveBeenCalled();
+      expect(mockUpdateTopicMetadata).not.toHaveBeenCalled();
+    });
+
+    it('propagates cancellation failure instead of clearing metadata separately', async () => {
+      vi.mocked(topicService.cancelRateLimitContinuation).mockRejectedValueOnce(
+        new Error('database failed'),
+      );
+      const store = createStore({
+        context: { agentId: 'agent', topicId: 'source-topic', threadId: null },
+      });
+      await expect(store.getState().cancelHeteroContinuation()).rejects.toThrow('database failed');
+      expect(mockUpdateTopicMetadata).not.toHaveBeenCalled();
+    });
+
+    it('cancels the captured source topic after navigation changes the conversation context', async () => {
+      const store = createStore({
+        context: { agentId: 'target-agent', threadId: null, topicId: 'target-topic' },
+      });
+
+      await store.getState().cancelHeteroContinuation('source-topic');
+
+      expect(topicService.cancelRateLimitContinuation).toHaveBeenCalledWith('source-topic');
+      expect(mockUpdateTopicStatus).not.toHaveBeenCalled();
+      expect(mockUpdateTopicMetadata).not.toHaveBeenCalled();
+    });
   });
 
   describe('stopGenerating', () => {
@@ -212,6 +261,7 @@ describe('Generation Actions', () => {
         messagesMap: {},
         operations: {},
         operationsByMessage: {},
+        topicDataMap: {},
         startOperation: mockStartOperation,
         associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
@@ -273,6 +323,7 @@ describe('Generation Actions', () => {
         messagesMap: {},
         operations: {},
         operationsByMessage: {},
+        topicDataMap: {},
         startOperation: mockStartOperation,
         associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
@@ -311,6 +362,7 @@ describe('Generation Actions', () => {
         messagesMap: {},
         operations: {},
         operationsByMessage: {},
+        topicDataMap: {},
         startOperation: mockStartOperation,
         associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
@@ -351,6 +403,7 @@ describe('Generation Actions', () => {
         messagesMap: {},
         operations: {},
         operationsByMessage: {},
+        topicDataMap: {},
         startOperation: mockStartOperation,
         associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
@@ -399,6 +452,7 @@ describe('Generation Actions', () => {
         messagesMap: {},
         operations: {},
         operationsByMessage: {},
+        topicDataMap: {},
         startOperation: mockStartOperation,
         associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
@@ -445,6 +499,7 @@ describe('Generation Actions', () => {
         messagesMap: {},
         operations: {},
         operationsByMessage: {},
+        topicDataMap: {},
         startOperation: mockStartOperation,
         associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
@@ -496,6 +551,7 @@ describe('Generation Actions', () => {
         dbMessagesMap: {},
         operations: {},
         operationsByMessage: {},
+        topicDataMap: {},
         deleteMessage: mockDeleteMessage,
         switchMessageBranch: mockSwitchMessageBranch,
         startOperation: mockStartOperation,
@@ -679,6 +735,7 @@ describe('Generation Actions', () => {
         messagesMap: {},
         operations: {},
         operationsByMessage: {},
+        topicDataMap: {},
 
         cancelOperations: mockCancelOperations,
         cancelOperation: mockCancelOperation,
@@ -745,6 +802,7 @@ describe('Generation Actions', () => {
         messagesMap: {},
         operations: {},
         operationsByMessage: {},
+        topicDataMap: {},
 
         cancelOperations: mockCancelOperations,
         cancelOperation: mockCancelOperation,
@@ -816,6 +874,7 @@ describe('Generation Actions', () => {
         messagesMap: {},
         operations: {},
         operationsByMessage: {},
+        topicDataMap: {},
 
         startOperation: mockStartOperation,
         associateMessageWithOperation: mockAssociateMessageWithOperation,
@@ -861,6 +920,7 @@ describe('Generation Actions', () => {
         messagesMap: {},
         operations: {},
         operationsByMessage: {},
+        topicDataMap: {},
         cancelOperations: mockCancelOperations,
         cancelOperation: mockCancelOperation,
         switchMessageBranch: mockSwitchMessageBranch,
@@ -950,6 +1010,7 @@ describe('Generation Actions', () => {
         messagesMap: { [oldContextKey]: [oldUserMessage, oldAssistantMessage] },
         operations: {},
         operationsByMessage: {},
+        topicDataMap: {},
         cancelOperations: mockCancelOperations,
         cancelOperation: mockCancelOperation,
         completeOperation: mockCompleteOperation,
@@ -1011,6 +1072,7 @@ describe('Generation Actions', () => {
         messagesMap: {},
         operations: {},
         operationsByMessage: {},
+        topicDataMap: {},
         cancelOperations: mockCancelOperations,
         cancelOperation: mockCancelOperation,
         deleteMessage: vi.fn().mockResolvedValue(undefined),
@@ -1066,6 +1128,7 @@ describe('Generation Actions', () => {
         messagesMap: {},
         operations: {},
         operationsByMessage: {},
+        topicDataMap: {},
 
         cancelOperations: mockCancelOperations,
         cancelOperation: mockCancelOperation,
@@ -1120,6 +1183,7 @@ describe('Generation Actions', () => {
         messagesMap: {},
         operations: {},
         operationsByMessage: {},
+        topicDataMap: {},
 
         cancelOperations: mockCancelOperations,
         cancelOperation: mockCancelOperation,
@@ -1179,6 +1243,7 @@ describe('Generation Actions', () => {
         messagesMap: {},
         operations: {},
         operationsByMessage: {},
+        topicDataMap: {},
 
         cancelOperations: mockCancelOperations,
         cancelOperation: mockCancelOperation,
@@ -1231,6 +1296,7 @@ describe('Generation Actions', () => {
         // has already flipped the interim regenerate op to 'cancelled'.
         operations: { 'test-op-id': { id: 'test-op-id', status: 'cancelled' } },
         operationsByMessage: {},
+        topicDataMap: {},
 
         cancelOperations: mockCancelOperations,
         cancelOperation: mockCancelOperation,
@@ -1281,6 +1347,7 @@ describe('Generation Actions', () => {
         messagesMap: {},
         operations: { 'test-op-id': { id: 'test-op-id', status: 'running' } },
         operationsByMessage: {},
+        topicDataMap: {},
         dbMessages: [],
         cancelOperations: mockCancelOperations,
         cancelOperation: mockCancelOperation,
@@ -1329,6 +1396,7 @@ describe('Generation Actions', () => {
         messagesMap: {},
         operations: {},
         operationsByMessage: {},
+        topicDataMap: {},
 
         cancelOperations: mockCancelOperations,
         cancelOperation: mockCancelOperation,
@@ -1403,6 +1471,7 @@ describe('Generation Actions', () => {
         messagesMap: {},
         operations: {},
         operationsByMessage: {},
+        topicDataMap: {},
 
         startOperation: mockStartOperation,
         associateMessageWithOperation: mockAssociateMessageWithOperation,
@@ -1474,6 +1543,7 @@ describe('Generation Actions', () => {
         messagesMap: {},
         operations: {},
         operationsByMessage: {},
+        topicDataMap: {},
 
         startOperation: mockStartOperation,
         associateMessageWithOperation: mockAssociateMessageWithOperation,
@@ -1518,6 +1588,7 @@ describe('Generation Actions', () => {
         messagesMap: {},
         operations: {},
         operationsByMessage: {},
+        topicDataMap: {},
 
         startOperation: mockStartOperation,
         associateMessageWithOperation: mockAssociateMessageWithOperation,
@@ -1756,8 +1827,12 @@ describe('Generation Actions', () => {
         }),
       );
 
-      // Store is refreshed so the loading bubble shows while the CLI streams.
-      expect(mockRefreshMessages).toHaveBeenCalled();
+      // Store is refreshed so the loading bubble shows while the CLI streams —
+      // scoped to the run's own context, not whatever topic happens to be
+      // active (restart recovery runs this for background topics).
+      expect(mockRefreshMessages).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId: 'session-1', topicId: 'topic-1' }),
+      );
 
       // The executor receives the new assistant row id, the original user
       // message's images, the original prompt, and the child hetero op id.
@@ -1803,14 +1878,7 @@ describe('Generation Actions', () => {
       );
     });
 
-    it('preserves a legacy subscription resume when the Provider Binding Lab is enabled', async () => {
-      const previousLab = useUserStore.getState().preference.lab;
-      useUserStore.setState((state) => ({
-        preference: {
-          ...state.preference,
-          lab: { ...state.preference.lab, enableAgentProviderBinding: true },
-        },
-      }));
+    it('preserves a legacy subscription resume', async () => {
       await setupHeteroChatStore({
         topicDataMap: {
           test: {
@@ -1837,22 +1905,16 @@ describe('Generation Actions', () => {
         displayMessages: [{ content: 'Retry me', id: 'msg-1', role: 'user' }],
       } as any);
 
-      try {
-        await store.getState().regenerateUserMessage('msg-1');
+      await store.getState().regenerateUserMessage('msg-1');
 
-        expect(executeHeterogeneousAgentSpy).toHaveBeenCalledWith(
-          expect.any(Function),
-          expect.objectContaining({
-            resumeBindingKey: undefined,
-            resumeSessionId: 'legacy-session',
-            workingDirectory: '/repo',
-          }),
-        );
-      } finally {
-        useUserStore.setState((state) => ({
-          preference: { ...state.preference, lab: previousLab },
-        }));
-      }
+      expect(executeHeterogeneousAgentSpy).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.objectContaining({
+          resumeBindingKey: undefined,
+          resumeSessionId: 'legacy-session',
+          workingDirectory: '/repo',
+        }),
+      );
     });
 
     it('creates the child execHeterogeneousAgent op as a child of the parent regenerate op', async () => {
@@ -1956,6 +2018,7 @@ describe('Generation Actions', () => {
         messagesMap: {},
         operations: {},
         operationsByMessage: {},
+        topicDataMap: {},
         startOperation: mockStartOperation,
         associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,

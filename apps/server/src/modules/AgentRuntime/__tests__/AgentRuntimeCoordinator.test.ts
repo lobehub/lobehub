@@ -28,7 +28,11 @@ describe('AgentRuntimeCoordinator', () => {
       getExecutionHistory: vi.fn(),
       getOperationMetadata: vi.fn(),
       getStats: vi.fn(),
+      isInterrupted: vi.fn(),
       loadAgentState: vi.fn(),
+      markInterrupted: vi.fn(),
+      hasQueuedMessages: vi.fn(),
+      setQueuedMessages: vi.fn(),
       saveAgentState: vi.fn(),
       saveStepResult: vi.fn(),
     };
@@ -665,6 +669,33 @@ describe('AgentRuntimeCoordinator', () => {
         reason: 'done',
         stepIndex: 4,
         uiMessages,
+      });
+    });
+
+    it('marks a protocol-v2 patched terminal event with its expected revision', async () => {
+      const coordinatorWithResolver = new AgentRuntimeCoordinator({
+        messagePatchModeResolver: vi.fn().mockResolvedValue(true),
+        stateManager: mockStateManager,
+        streamEventManager: mockStreamManager,
+        uiMessagesResolver: vi.fn().mockResolvedValue(undefined),
+      });
+      const stepResult = {
+        executionTime: 100,
+        newState: { status: 'done', stepCount: 4 },
+        stepIndex: 4,
+      };
+      mockStateManager.loadAgentState.mockResolvedValue({ status: 'running', stepCount: 3 });
+
+      await coordinatorWithResolver.saveStepResult('op-patch', stepResult as any);
+
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith({
+        finalState: stepResult.newState,
+        messagePatchMode: true,
+        messageRevision: 5,
+        operationId: 'op-patch',
+        reason: 'done',
+        stepIndex: 4,
+        uiMessages: undefined,
       });
     });
 

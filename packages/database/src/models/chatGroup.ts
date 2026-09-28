@@ -12,6 +12,7 @@ import {
   agentBotProviders,
   agentCronJobs,
   agents,
+  agentShares,
   chatGroups,
   chatGroupsAgents,
   projectAgents,
@@ -38,6 +39,7 @@ import {
 } from '../utils/groupMembership';
 import { normalizeInboxAgentAvatar } from '../utils/inboxAgent';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+import { AGENT_SHARED_TRANSFER_BLOCKED } from './agent';
 import { AGENT_COPY_IN_PROGRESS, AgentCopyJobModel } from './agentCopyJob';
 import { AGENT_TRANSFER_IN_PROGRESS, AgentTransferJobModel } from './agentTransferJob';
 
@@ -899,6 +901,18 @@ export class ChatGroupModel {
         .where(inArray(agents.id, agentIds))
         .orderBy(asc(agents.id))
         .for('update');
+    }
+
+    // A share row keeps the agent bound to its current owner and workspace,
+    // including when the share is paused. Check only owned members: referenced
+    // standalone agents remain with their owner and do not move with the group.
+    if (ownedAgentIds.length > 0) {
+      const [existingShare] = await trx
+        .select({ id: agentShares.id })
+        .from(agentShares)
+        .where(inArray(agentShares.agentId, ownedAgentIds))
+        .limit(1);
+      if (existingShare) throw new Error(AGENT_SHARED_TRANSFER_BLOCKED);
     }
 
     // A REFERENCED member that is private to someone other than the recipient

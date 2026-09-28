@@ -32,9 +32,19 @@ const currentResponseLanguage = (s: UserStore): Locales => {
   return normalizeLocale(getSystemLanguage());
 };
 const telemetry = (s: UserStore) => generalConfig(s).telemetry;
+const timezone = (s: UserStore) => generalConfig(s).timezone;
+/** The user's timezone setting, falling back to the browser's. */
+const currentTimezone = (s: UserStore): string | undefined =>
+  timezone(s) ||
+  (typeof Intl === 'undefined' ? undefined : Intl.DateTimeFormat().resolvedOptions().timeZone);
 const enableAutoScrollOnStreaming = (s: UserStore) =>
   generalConfig(s).enableAutoScrollOnStreaming ?? true;
 const enableMessageLinkIcon = (s: UserStore) => generalConfig(s).enableMessageLinkIcon ?? true;
+/** The setting is a boolean: either the live tool list is open or it is a
+ *  summary row. "Open" means the full list — the height-capped middle level
+ *  just hid part of what the user asked to see. */
+const workflowStreamingExpandLevel = (s: UserStore) =>
+  generalConfig(s).expandWorkflowWhileStreaming ? 'full' : 'collapsed';
 
 export const userGeneralSettingsSelectors = {
   animationMode,
@@ -48,7 +58,10 @@ export const userGeneralSettingsSelectors = {
   neutralColor,
   primaryColor,
   currentResponseLanguage,
+  currentTimezone,
   responseLanguage,
   telemetry,
+  timezone,
   transitionMode,
+  workflowStreamingExpandLevel,
 };

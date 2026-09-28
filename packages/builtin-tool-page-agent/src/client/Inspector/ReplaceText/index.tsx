@@ -38,8 +38,10 @@ export const ReplaceTextInspector = memo<BuiltinInspectorProps<ReplaceTextArgs, 
     // During streaming without searchText yet, show init message
     if (isArgumentsStreaming && !from) {
       return (
-        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-          <span>{t('builtins.lobe-page-agent.apiName.replaceText.init')}</span>
+        <div className={inspectorTextStyles.root}>
+          <span className={shinyTextStyles.shinyText}>
+            {t('builtins.lobe-page-agent.apiName.replaceText.init')}
+          </span>
         </div>
       );
     }
@@ -48,10 +50,10 @@ export const ReplaceTextInspector = memo<BuiltinInspectorProps<ReplaceTextArgs, 
     const hasResult = from && to !== undefined;
 
     return (
-      <div
-        className={cx(inspectorTextStyles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}
-      >
-        <span className={styles.title}>{t('builtins.lobe-page-agent.apiName.replaceText')}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={cx(styles.title, isArgumentsStreaming && shinyTextStyles.shinyText)}>
+          {t('builtins.lobe-page-agent.apiName.replaceText')}
+        </span>
         {hasResult && (
           <>
             <span className={styles.from}>{from}</span>

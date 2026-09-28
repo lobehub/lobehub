@@ -1,5 +1,6 @@
 export * from './branches';
 export * from './info';
+export * from './pullRequest';
 export * from './repoType';
 export * from './types';
 export * from './upstream';

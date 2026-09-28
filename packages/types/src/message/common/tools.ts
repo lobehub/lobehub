@@ -81,6 +81,13 @@ export interface ChatToolPayload {
  */
 export interface ChatToolResult {
   content: string | null;
+  /**
+   * Length of the STORED result body, carried when the read path replaced
+   * `content` with a render-facing view model. Anything deciding "did this tool
+   * produce a result" must consult it — see `hasToolResultBody`; a bare
+   * `!!content` test reads a projected result as still running.
+   */
+  contentLength?: number;
   error?: any;
   id: string;
   state?: any;

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { formatCost, formatNumber, outputJson, printBoxTable } from './format';
+import { formatCost, formatNumber, outputJson, printBoxTable, timeUntil } from './format';
 
 describe('formatNumber', () => {
   it('should format numbers with commas', () => {
@@ -162,5 +162,22 @@ describe('printBoxTable', () => {
     expect(output.join('\n')).toMatchSnapshot();
 
     vi.restoreAllMocks();
+  });
+});
+
+describe('timeUntil', () => {
+  // `timeAgo` only formats the past; an invitation expiry is in the future and
+  // rendered "-604800s ago" through it.
+  it('counts down to a future deadline', () => {
+    expect(timeUntil(new Date(Date.now() + 3 * 86_400_000 + 60_000))).toBe('in 3d');
+    expect(timeUntil(new Date(Date.now() + 90 * 60_000 + 1000))).toBe('in 1h');
+  });
+
+  it('reads a past deadline as expired', () => {
+    expect(timeUntil(new Date(Date.now() - 1000))).toBe('expired');
+  });
+
+  it('degrades an unparseable date to a placeholder', () => {
+    expect(timeUntil('not a date')).toBe('-');
   });
 });

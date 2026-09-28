@@ -9,7 +9,6 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useFileBatchTransferActions } from '@/business/client/hooks/useFileBatchTransferActions';
-import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner';
 import NavHeader from '@/features/NavHeader';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { getExplorerSelectedCount } from '@/features/ResourceManager/store/selectors';
@@ -52,7 +51,6 @@ const Header = memo(() => {
     s.selectionTotal,
     s.viewMode,
   ]);
-  const isWorkspaceOwner = useIsWorkspaceOwner();
   const { allowed: canEditResources, reason } = usePermission('edit_own_content');
   const total = useFileStore((s) => s.total);
   const selectCount = getExplorerSelectedCount({
@@ -62,7 +60,6 @@ const Header = memo(() => {
   });
   const hasSelected = selectAllState === 'all' || selectCount > 0;
   const isWorkspaceDeleteAll = !!activeWorkspaceId && selectAllState === 'all';
-  const isWorkspaceOwnerDeleteAll = isWorkspaceDeleteAll && isWorkspaceOwner;
   const batchTransferActions = useFileBatchTransferActions(selectCount);
 
   // If no libraryId, show category name or "Resource" for All
@@ -122,16 +119,9 @@ const Header = memo(() => {
         icon={Trash2Icon}
         title={
           canEditResources
-            ? t(
-                isWorkspaceOwnerDeleteAll
-                  ? 'FileManager.actions.deleteAll'
-                  : isWorkspaceDeleteAll
-                    ? 'FileManager.actions.deleteAllOwn'
-                    : 'delete',
-                {
-                  ns: isWorkspaceDeleteAll ? 'components' : 'common',
-                },
-              )
+            ? t(isWorkspaceDeleteAll ? 'FileManager.actions.deleteAll' : 'delete', {
+                ns: isWorkspaceDeleteAll ? 'components' : 'common',
+              })
             : reason
         }
         onClick={() => {
@@ -142,7 +132,7 @@ const Header = memo(() => {
             toast.success(t('FileManager.actions.deleteSuccess'));
           };
 
-          if (isWorkspaceOwnerDeleteAll) {
+          if (isWorkspaceDeleteAll) {
             openWorkspaceDeleteAllModal({
               acknowledgeText: t('FileManager.actions.confirmDeleteAllWorkspaceAcknowledge'),
               cancelText: t('cancel', { ns: 'common' }),
@@ -158,9 +148,7 @@ const Header = memo(() => {
             cancelText: t('cancel', { ns: 'common' }),
             content: t(
               selectAllState === 'all'
-                ? isWorkspaceDeleteAll
-                  ? 'FileManager.actions.confirmDeleteAllOwnFiles'
-                  : 'FileManager.actions.confirmDeleteAllFiles'
+                ? 'FileManager.actions.confirmDeleteAllFiles'
                 : 'FileManager.actions.confirmDeleteMultiFiles',
               { count: selectCount },
             ),

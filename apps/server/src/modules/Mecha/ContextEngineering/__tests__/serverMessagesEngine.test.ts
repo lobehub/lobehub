@@ -32,11 +32,78 @@ describe('serverMessagesEngine', () => {
     } as UIChatMessage,
   ];
 
+  /**
+   * These cover the wrapper→engine seam rather than the injectors themselves.
+   * The injectors had unit tests and still shipped dead: `serverMessagesEngine`
+   * destructures a fixed parameter list, so a field it does not name is
+   * dropped, and the call site passes an intermediate object, which disables
+   * excess-property checking. Nothing but a test at this boundary catches it.
+   */
+  describe('system-message context forwarded to the engine', () => {
+    it('forwards project instructions', async () => {
+      const { messages: result } = await serverMessagesEngine({
+        messages: createBasicMessages(),
+        model: 'gpt-4',
+        projectInstructions: [{ content: 'Use bun, not npm.', source: 'AGENTS.md' }],
+        provider: 'openai',
+        systemRole: 'You are helpful.',
+      });
+
+      const system = result.find((message) => message.role === 'system')?.content;
+      expect(system).toContain('<project_instructions source="AGENTS.md">');
+      expect(system).toContain('Use bun, not npm.');
+    });
+
+    it('forwards the connector ownership note', async () => {
+      const { messages: result } = await serverMessagesEngine({
+        connectorOwnershipNote: 'Gmail runs on Alice’s account.',
+        messages: createBasicMessages(),
+        model: 'gpt-4',
+        provider: 'openai',
+        systemRole: 'You are helpful.',
+      });
+
+      expect(result.find((message) => message.role === 'system')?.content).toContain(
+        'Gmail runs on Alice’s account.',
+      );
+    });
+
+    it('keeps the connector note ahead of the project instructions', async () => {
+      const { messages: result } = await serverMessagesEngine({
+        connectorOwnershipNote: 'CONNECTOR-NOTE',
+        messages: createBasicMessages(),
+        model: 'gpt-4',
+        projectInstructions: [{ content: 'PROJECT-RULE', source: 'AGENTS.md' }],
+        provider: 'openai',
+        systemRole: 'You are helpful.',
+      });
+
+      // `discoverTools` runs before `prepareOperation`, so this is the order the
+      // old string appends produced; reversing it changes which block the model
+      // reads last.
+      const system = String(result.find((message) => message.role === 'system')?.content ?? '');
+      expect(system.indexOf('CONNECTOR-NOTE')).toBeGreaterThan(-1);
+      expect(system.indexOf('CONNECTOR-NOTE')).toBeLessThan(system.indexOf('PROJECT-RULE'));
+    });
+
+    it('leaves the system message alone when a run has neither', async () => {
+      const { messages: result } = await serverMessagesEngine({
+        messages: createBasicMessages(),
+        model: 'gpt-4',
+        provider: 'openai',
+        systemRole: 'You are helpful.',
+      });
+
+      const system = String(result.find((message) => message.role === 'system')?.content ?? '');
+      expect(system).not.toContain('<project_instructions');
+    });
+  });
+
   describe('TODO context', () => {
     const items = [{ status: 'processing' as const, text: 'Keep server context in sync' }];
 
     it('forwards non-empty planTodo state to MessagesEngine', async () => {
-      const result = await serverMessagesEngine({
+      const { messages: result } = await serverMessagesEngine({
         messages: createBasicMessages(),
         model: 'gpt-4',
         planTodo: { enabled: true, todos: { items, updatedAt: 'now' } },
@@ -49,7 +116,7 @@ describe('serverMessagesEngine', () => {
     });
 
     it('does not inject an empty TODO state', async () => {
-      const result = await serverMessagesEngine({
+      const { messages: result } = await serverMessagesEngine({
         messages: createBasicMessages(),
         model: 'gpt-4',
         planTodo: { enabled: true, todos: { items: [], updatedAt: 'canonical-clear' } },
@@ -70,7 +137,7 @@ describe('serverMessagesEngine', () => {
         provider: 'openai',
         stepContext: { todos },
       }).process();
-      const serverResult = await serverMessagesEngine({
+      const { messages: serverResult } = await serverMessagesEngine({
         messages: createBasicMessages(),
         model: 'gpt-4',
         planTodo: { enabled: true, todos },
@@ -87,7 +154,7 @@ describe('serverMessagesEngine', () => {
     it('should process messages with required parameters', async () => {
       const messages = createBasicMessages();
 
-      const result = await serverMessagesEngine({
+      const { messages: result } = await serverMessagesEngine({
         messages,
         model: 'gpt-4',
         provider: 'openai',
@@ -110,7 +177,7 @@ describe('serverMessagesEngine', () => {
       const messages = createBasicMessages();
       const systemRole = 'You are a helpful assistant';
 
-      const result = await serverMessagesEngine({
+      const { messages: result } = await serverMessagesEngine({
         messages,
         model: 'gpt-4',
         provider: 'openai',
@@ -127,7 +194,7 @@ describe('serverMessagesEngine', () => {
 
       // No additionalVariables — e.g. a web-originated device run whose bound cwd
       // could not be resolved. The literal must never survive into the prompt.
-      const fallback = await serverMessagesEngine({
+      const { messages: fallback } = await serverMessagesEngine({
         messages,
         model: 'gpt-4',
         provider: 'openai',
@@ -137,7 +204,7 @@ describe('serverMessagesEngine', () => {
       expect(fallback[0].content).toContain('(not specified, use user Home directory as default)');
 
       // A resolved cwd (deviceSystemInfo.workingDirectory) overrides the fallback.
-      const resolved = await serverMessagesEngine({
+      const { messages: resolved } = await serverMessagesEngine({
         additionalVariables: { workingDirectory: '/Users/tj/project' },
         messages,
         model: 'gpt-4',
@@ -157,7 +224,7 @@ describe('serverMessagesEngine', () => {
         'Minute: {{minute}} Second: {{second}} Month: {{month}} Year: {{year}} ' +
         'ISO: {{iso}} Timestamp: {{timestamp}} Locale: {{locale}}';
 
-      const result = await serverMessagesEngine({
+      const { messages: result } = await serverMessagesEngine({
         messages,
         model: 'gpt-4',
         provider: 'openai',
@@ -177,7 +244,7 @@ describe('serverMessagesEngine', () => {
     it('lets additionalVariables override the locale fallback', async () => {
       const messages = createBasicMessages();
 
-      const result = await serverMessagesEngine({
+      const { messages: result } = await serverMessagesEngine({
         additionalVariables: { locale: 'zh-CN' },
         messages,
         model: 'gpt-4',
@@ -194,7 +261,7 @@ describe('serverMessagesEngine', () => {
 
       // Kiritimati is UTC+14 — always a different hour (and often day) than UTC,
       // so a UTC-based rendering cannot accidentally pass.
-      const result = await serverMessagesEngine({
+      const { messages: result } = await serverMessagesEngine({
         messages,
         model: 'gpt-4',
         provider: 'openai',
@@ -217,7 +284,7 @@ describe('serverMessagesEngine', () => {
     it('should inject model knowledge cutoff when provided', async () => {
       const messages = createBasicMessages();
 
-      const result = await serverMessagesEngine({
+      const { messages: result } = await serverMessagesEngine({
         messages,
         model: 'gpt-4',
         modelKnowledgeCutoff: '2024-06',
@@ -236,7 +303,7 @@ describe('serverMessagesEngine', () => {
     it('should inject model name and id when displayName is provided', async () => {
       const messages = createBasicMessages();
 
-      const result = await serverMessagesEngine({
+      const { messages: result } = await serverMessagesEngine({
         messages,
         model: 'claude-fable-5',
         modelDisplayName: 'Fable 5',
@@ -254,7 +321,7 @@ describe('serverMessagesEngine', () => {
     });
 
     it('should handle empty messages', async () => {
-      const result = await serverMessagesEngine({
+      const { messages: result } = await serverMessagesEngine({
         messages: [],
         model: 'gpt-4',
         provider: 'openai',
@@ -265,7 +332,7 @@ describe('serverMessagesEngine', () => {
     });
 
     it('should include file URLs in server-side file context', async () => {
-      const result = await serverMessagesEngine({
+      const { messages: result } = await serverMessagesEngine({
         messages: [
           {
             content: 'Read this',
@@ -295,7 +362,7 @@ describe('serverMessagesEngine', () => {
     });
 
     it('should pass active topic document initial context into MessagesEngine', async () => {
-      const result = await serverMessagesEngine({
+      const { messages: result } = await serverMessagesEngine({
         initialContext: {
           activeTopicDocument: {
             agentDocumentId: 'agd_1',
@@ -327,7 +394,7 @@ describe('serverMessagesEngine', () => {
     it('should inject file contents', async () => {
       const messages = createBasicMessages();
 
-      const result = await serverMessagesEngine({
+      const { messages: result } = await serverMessagesEngine({
         knowledge: {
           fileContents: [
             {
@@ -351,7 +418,7 @@ describe('serverMessagesEngine', () => {
     it('should inject knowledge bases', async () => {
       const messages = createBasicMessages();
 
-      const result = await serverMessagesEngine({
+      const { messages: result } = await serverMessagesEngine({
         knowledge: {
           knowledgeBases: [
             {
@@ -390,7 +457,7 @@ describe('serverMessagesEngine', () => {
         },
       ];
 
-      const result = await serverMessagesEngine({
+      const { messages: result } = await serverMessagesEngine({
         capabilities: { isCanUseFC: () => true },
         messages,
         model: 'gpt-4',
@@ -411,7 +478,7 @@ describe('serverMessagesEngine', () => {
     it('should skip tool system role when no manifests', async () => {
       const messages = createBasicMessages();
 
-      const result = await serverMessagesEngine({
+      const { messages: result } = await serverMessagesEngine({
         messages,
         model: 'gpt-4',
         provider: 'openai',
@@ -451,7 +518,7 @@ describe('serverMessagesEngine', () => {
       const messages = createBasicMessages();
 
       // Should not throw
-      const result = await serverMessagesEngine({
+      const { messages: result } = await serverMessagesEngine({
         messages,
         model: 'gpt-4',
         provider: 'openai',
@@ -461,11 +528,109 @@ describe('serverMessagesEngine', () => {
     });
   });
 
+  describe('stale tool result trimming', () => {
+    const READ_CONTENT = 'x'.repeat(120_000);
+
+    // A readFile result superseded by a later write to the same path, outside
+    // the default recency window and past the default size gate, so the trim
+    // fires unless the switch disables it. No createdAt → cold cache.
+    const supersededReadMessages = (): UIChatMessage[] =>
+      [
+        {
+          content: '',
+          id: 'a1',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'readFile',
+              arguments: JSON.stringify({ path: '/a.ts' }),
+              id: 'call-readFile',
+              identifier: 'lobe-local-system',
+              type: 'builtin',
+            },
+          ],
+        },
+        {
+          content: READ_CONTENT,
+          id: 't1',
+          plugin: {
+            apiName: 'readFile',
+            arguments: JSON.stringify({ path: '/a.ts' }),
+            identifier: 'lobe-local-system',
+          },
+          pluginState: { loc: [0, 200], path: '/a.ts' },
+          role: 'tool',
+          tool_call_id: 'call-readFile',
+        },
+        {
+          content: '',
+          id: 'a2',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'writeFile',
+              arguments: JSON.stringify({ path: '/a.ts' }),
+              id: 'call-writeFile',
+              identifier: 'lobe-local-system',
+              type: 'builtin',
+            },
+          ],
+        },
+        {
+          content: 'Successfully wrote to /a.ts',
+          id: 't2',
+          plugin: {
+            apiName: 'writeFile',
+            arguments: JSON.stringify({ path: '/a.ts' }),
+            identifier: 'lobe-local-system',
+          },
+          pluginState: { path: '/a.ts', success: true },
+          role: 'tool',
+          tool_call_id: 'call-writeFile',
+        },
+        ...Array.from({ length: 21 }, (_, i) => ({
+          content: `recent ${i}`,
+          id: `pad-${i}`,
+          role: 'assistant',
+        })),
+      ] as unknown as UIChatMessage[];
+
+    const payloadText = (messages: any[]) =>
+      messages
+        .map((m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)))
+        .join('\n');
+
+    it('trims stale tool results by default', async () => {
+      const { messages: result } = await serverMessagesEngine({
+        messages: supersededReadMessages(),
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const payload = payloadText(result);
+      expect(payload).not.toContain(READ_CONTENT);
+      expect(payload).toContain('superseded by a later write');
+    });
+
+    it('forwards enableStaleToolResultTrim: false to the engine', async () => {
+      const { messages: result } = await serverMessagesEngine({
+        enableStaleToolResultTrim: false,
+        messages: supersededReadMessages(),
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const payload = payloadText(result);
+      expect(payload).toContain(READ_CONTENT);
+      expect(payload).not.toContain('superseded by a later write');
+    });
+  });
+
   describe('user memory injection', () => {
     it('should inject user memories when provided', async () => {
       const messages = createBasicMessages();
 
-      const result = await serverMessagesEngine({
+      const { messages: result } = await serverMessagesEngine({
         messages,
         model: 'gpt-4',
         provider: 'openai',
@@ -497,7 +662,7 @@ describe('serverMessagesEngine', () => {
     it('should skip user memory when memories is undefined', async () => {
       const messages = createBasicMessages();
 
-      const result = await serverMessagesEngine({
+      const { messages: result } = await serverMessagesEngine({
         messages,
         model: 'gpt-4',
         provider: 'openai',
@@ -516,7 +681,7 @@ describe('serverMessagesEngine', () => {
     it('should inject Agent Builder context when provided', async () => {
       const messages = createBasicMessages();
 
-      const result = await serverMessagesEngine({
+      const { messages: result } = await serverMessagesEngine({
         agentBuilderContext: {
           config: { model: 'gpt-4', systemRole: 'Test role' },
           meta: { description: 'Test agent', title: 'Test' },
@@ -532,7 +697,7 @@ describe('serverMessagesEngine', () => {
     it('should inject Page Editor context when provided', async () => {
       const messages = createBasicMessages();
 
-      const result = await serverMessagesEngine({
+      const { messages: result } = await serverMessagesEngine({
         messages,
         model: 'gpt-4',
         pageContentContext: {
@@ -563,7 +728,7 @@ describe('serverMessagesEngine', () => {
         } as UIChatMessage,
       ];
 
-      const result = await serverMessagesEngine({
+      const { messages: result } = await serverMessagesEngine({
         inputTemplate: 'Please respond to: {{text}}',
         messages,
         model: 'gpt-4',
@@ -580,7 +745,7 @@ describe('serverMessagesEngine', () => {
       const messages = createBasicMessages();
       const historySummary = 'Previous conversation about AI';
 
-      const result = await serverMessagesEngine({
+      const { messages: result } = await serverMessagesEngine({
         historySummary,
         messages,
         model: 'gpt-4',
@@ -642,7 +807,7 @@ describe('serverMessagesEngine', () => {
         } as UIChatMessage,
       ];
 
-      const result = await serverMessagesEngine({
+      const { messages: result } = await serverMessagesEngine({
         inputTemplate: '{{text}} (tz: {{timezone}})',
         messages,
         model: 'gpt-4',
@@ -667,7 +832,7 @@ describe('serverMessagesEngine', () => {
         } as UIChatMessage,
       ];
 
-      const result = await serverMessagesEngine({
+      const { messages: result } = await serverMessagesEngine({
         additionalVariables: {
           customVar: 'custom-value',
         },
@@ -684,7 +849,7 @@ describe('serverMessagesEngine', () => {
     it('should handle empty additionalVariables', async () => {
       const messages = createBasicMessages();
 
-      const result = await serverMessagesEngine({
+      const { messages: result } = await serverMessagesEngine({
         additionalVariables: {},
         messages,
         model: 'gpt-4',
@@ -700,7 +865,7 @@ describe('serverMessagesEngine', () => {
     it('should forward discordContext when provided', async () => {
       const messages = createBasicMessages();
 
-      const result = await serverMessagesEngine({
+      const { messages: result } = await serverMessagesEngine({
         discordContext: {
           channel: { id: 'ch-1', name: 'general' },
           guild: { id: 'guild-1', name: 'Test Guild' },
@@ -716,7 +881,7 @@ describe('serverMessagesEngine', () => {
     it('should forward evalContext when provided', async () => {
       const messages = createBasicMessages();
 
-      const result = await serverMessagesEngine({
+      const { messages: result } = await serverMessagesEngine({
         evalContext: {
           envPrompt: 'This is an evaluation environment',
         },
@@ -731,7 +896,7 @@ describe('serverMessagesEngine', () => {
     it('should forward agentManagementContext when provided', async () => {
       const messages = createBasicMessages();
 
-      const result = await serverMessagesEngine({
+      const { messages: result } = await serverMessagesEngine({
         agentManagementContext: {
           availablePlugins: [
             { identifier: 'web-browsing', name: 'Web Browsing', type: 'builtin' as const },
@@ -748,7 +913,7 @@ describe('serverMessagesEngine', () => {
     it('should handle multiple extended contexts simultaneously', async () => {
       const messages = createBasicMessages();
 
-      const result = await serverMessagesEngine({
+      const { messages: result } = await serverMessagesEngine({
         agentBuilderContext: {
           config: { model: 'gpt-4', systemRole: 'Test role' },
           meta: { description: 'Test agent', title: 'Test' },

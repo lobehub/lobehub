@@ -7,6 +7,7 @@ import AgentTaskManager from '@/features/AgentTaskManager';
 import MobilePortal from '@/features/Portal/Mobile';
 import { useIsMobile } from '@/hooks/useIsMobile';
 
+import { useCanonicalTaskSlug } from '../shared/useCanonicalTaskSlug';
 import TaskDetailPage from './TaskDetailPage';
 
 interface AgentScopedTaskDetailPageProps {
@@ -16,6 +17,10 @@ interface AgentScopedTaskDetailPageProps {
 
 const AgentScopedTaskDetailPage = memo<AgentScopedTaskDetailPageProps>(({ agentId, taskId }) => {
   const isMobile = useIsMobile();
+
+  // This component is a route entry, so it owns the address bar and keeps the
+  // readable slug tail in step with the title.
+  useCanonicalTaskSlug(taskId);
 
   return (
     <Flexbox horizontal flex={1} height={'100%'} style={{ minHeight: 0 }} width={'100%'}>

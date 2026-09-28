@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { describeRoute } from 'hono-openapi';
 
 import { getAllScopePermissions, getScopePermissions } from '@/utils/rbac';
 
@@ -10,6 +11,7 @@ import { PaginationQuerySchema } from '../types';
 import {
   AgentIdParamSchema,
   CreateAgentRequestSchema,
+  DuplicateAgentSchema,
   UpdateAgentRequestSchema,
 } from '../types/agent.type';
 
@@ -110,6 +112,16 @@ AgentRoutes.delete(
     const controller = new AgentController();
     return await controller.deleteAgent(c);
   },
+);
+
+AgentRoutes.post(
+  '/:id/duplicate',
+  describeRoute({ summary: 'Duplicate agent', tags: ['agents'] }),
+  requireAuth,
+  requireAnyPermission(getAllScopePermissions('AGENT_FORK')),
+  zValidator('param', AgentIdParamSchema),
+  zValidator('json', DuplicateAgentSchema),
+  async (c) => new AgentController().duplicateAgent(c),
 );
 
 export default AgentRoutes;

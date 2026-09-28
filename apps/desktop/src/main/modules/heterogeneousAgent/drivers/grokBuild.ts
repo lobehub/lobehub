@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 
 import type { HeterogeneousProviderBindingProtocol } from '@lobechat/heterogeneous-agents';
 import { buildGrokAcpArgs } from '@lobechat/heterogeneous-agents/spawn';
+import { formatServerDefaultHeterogeneousModel } from '@lobechat/types';
 
 import type { HeterogeneousAgentDriver } from '../types';
 
@@ -170,6 +171,33 @@ export const grokBuildDriver: HeterogeneousAgentDriver = {
         GROK_HOME: profileDir,
         [HOST_API_KEY_ENV]: apiKey,
       },
+      profileFiles: [{ content: config, path: 'config.toml' }],
+    };
+  },
+  prepareServerDefaultBinding({ args, endpoint, env, model, profileDir }) {
+    const requestModel = formatServerDefaultHeterogeneousModel(model);
+    const alias = buildModelAlias(['server-default', endpoint, model].join('\0'));
+    const config = [
+      `[model.${alias}]`,
+      `name = ${tomlString('LobeHub Server Default')}`,
+      `model = ${tomlString(requestModel)}`,
+      `base_url = ${tomlString(`${stripTrailingSlashes(endpoint)}/api/v1/openai/v1`)}`,
+      `env_key = ${tomlString(HOST_API_KEY_ENV)}`,
+      'api_backend = "responses"',
+      'auth_scheme = "bearer"',
+      '',
+      '[models]',
+      `default = ${tomlString(alias)}`,
+      '',
+    ].join('\n');
+
+    return {
+      args: [...sanitizeGrokProviderBindingArgs(args), '--model', alias],
+      env: {
+        ...sanitizeGrokProviderBindingEnv(env),
+        GROK_HOME: profileDir,
+      },
+      operationTokenEnvKey: HOST_API_KEY_ENV,
       profileFiles: [{ content: config, path: 'config.toml' }],
     };
   },

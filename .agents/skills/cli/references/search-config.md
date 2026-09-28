@@ -2,20 +2,34 @@
 
 ## Global Search (`lh search`)
 
-Search across all LobeHub resource types.
+Search across local resources, or the web with `--web`.
 
 **Source**: `apps/cli/src/commands/search.ts`
 
-### `lh search <query>`
+### `lh search`
+
+`-q, --query` is not a positional argument — it's an option. If omitted, the command prints help
+and exits instead of erroring.
 
 ```bash
-lh search "meeting notes" [-t [-L [--json [fields]] < type > ] < n > ]
+lh search -q <query> [-w] [-t <type>] [-L <n>] [-e <engines>] [-c <categories>] [-T <range>] [--json [fields]]
 ```
 
-| Option              | Description             | Default   |
-| ------------------- | ----------------------- | --------- |
-| `-t, --type <type>` | Filter by resource type | All types |
-| `-L, --limit <n>`   | Results per type        | `10`      |
+```bash
+lh search -q "meeting notes"
+lh search -q "latest AI news" --web
+```
+
+| Option                          | Description                                                       | Default   |
+| ------------------------------- | ----------------------------------------------------------------- | --------- |
+| `-q, --query <query>`           | Search query (required)                                           | -         |
+| `-w, --web`                     | Search the web instead of local resources                         | `false`   |
+| `-t, --type <type>`             | Filter by resource type (local search only)                       | All types |
+| `-L, --limit <n>`               | Results per type (local search only)                              | `10`      |
+| `-e, --engines <engines>`       | Web search engines (comma-separated, requires `--web`)            | -         |
+| `-c, --categories <categories>` | Web search categories (comma-separated, requires `--web`)         | -         |
+| `-T, --time-range <range>`      | Time range filter (e.g. day, week, month, year, requires `--web`) | -         |
+| `--json [fields]`               | JSON output, optionally selecting fields                          | -         |
 
 ### Searchable Types
 
@@ -33,7 +47,24 @@ lh search "meeting notes" [-t [-L [--json [fields]] < type > ] < n > ]
 | `communityAgent` | Community marketplace agents |
 | `knowledgeBase`  | Knowledge bases              |
 
-**Output**: Results grouped by type, showing ID, title/name, description.
+**Output**: Local search results grouped by type, showing ID, title/name, description. Web search
+results are printed as a table of TITLE, URL, SCORE, CONTENT.
+
+### `lh search view <target>`
+
+View details of a single result: a URL crawls the page (web result); `type:id` (e.g.
+`agent:abc123`) looks up a local resource.
+
+```bash
+lh search view <target> [-i <impls>] [--json [fields]]
+```
+
+| Option               | Description                                                                                                          |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `-i, --impl <impls>` | Crawler implementations for web URLs (comma-separated: browserless, exa, firecrawl, jina, naive, search1api, tavily) |
+
+**Local view support**: only `agent`, `file`, and `knowledgeBase` types are implemented; other
+`type:id` values error with "View not supported for type".
 
 ---
 
@@ -56,15 +87,64 @@ lh whoami [--json [fields]]
 Display usage statistics.
 
 ```bash
-lh usage [--month [--daily] [--json [fields]] < YYYY-MM > ]
+lh usage [--month <YYYY-MM>] [--agent-id <id>] [--daily] [--json [fields]]
 ```
 
-| Option              | Description    | Default                 |
-| ------------------- | -------------- | ----------------------- |
-| `--month <YYYY-MM>` | Month to query | Current month           |
-| `--daily`           | Group by day   | `false` (monthly total) |
+| Option              | Description               | Default                 |
+| ------------------- | ------------------------- | ----------------------- |
+| `--month <YYYY-MM>` | Month to query            | Current month           |
+| `--agent-id <id>`   | Filter usage to one agent | All agents              |
+| `--daily`           | Group by day              | `false` (monthly total) |
 
 **Output**: Token usage, costs, and model breakdown for the specified period.
+
+---
+
+## Workspace (`lh workspace`)
+
+Aliased `lh ws`. Workspace membership is a cloud feature; on an open-source
+deployment these procedures answer empty or `NOT_IMPLEMENTED`.
+
+### Scope
+
+| Command                       | Description                                            |
+| ----------------------------- | ------------------------------------------------------ |
+| `lh workspace current`        | Which scope commands run under, and where it came from |
+| `lh workspace use <id\|slug>` | Persist the scope for subsequent commands              |
+| `lh workspace use --personal` | Drop back to personal content                          |
+
+Resolution order is `--workspace` → `LOBEHUB_WORKSPACE_ID` → the persisted scope
+→ personal. Setting the persisted scope while `LOBEHUB_WORKSPACE_ID` is exported
+prints a warning, because the env var still wins.
+
+The persisted scope lives in `~/.lobehub/active-workspace` together with the
+account (`sub` claim) and server URL it was chosen under. Switching account or
+server invalidates it; `lh logout` deletes it. API-key auth has no local account
+identity, so `workspace use` refuses to save under it — use the env var.
+
+### Reads
+
+| Command                    | Description                                           |
+| -------------------------- | ----------------------------------------------------- |
+| `lh workspace list`        | Workspaces you belong to; `*` marks the effective one |
+| `lh workspace view [id]`   | Workspace detail                                      |
+| `lh workspace settings`    | The workspace settings blob                           |
+| `lh workspace stats`       | Content totals — admin only; `--mine` for your own    |
+| `lh workspace usage`       | Credit spend by type for the billing window           |
+| `lh workspace members`     | Members with role and email                           |
+| `lh workspace invitations` | Pending invitations (admin)                           |
+| `lh workspace audit-log`   | Audit entries (admin, Business plan)                  |
+
+### Writes
+
+| Command                             | Description                                     |
+| ----------------------------------- | ----------------------------------------------- |
+| `lh workspace create <name> --slug` | Create a workspace; `--use` switches into it    |
+| `lh workspace update`               | Name / slug / description / avatar (admin)      |
+| `lh workspace invite <email>`       | Invite a member, `--role admin\|member\|viewer` |
+
+Slugs are 3–32 chars, lowercase alphanumerics with inner hyphens. Deleting a
+workspace and removing members are deliberately not exposed here.
 
 ---
 

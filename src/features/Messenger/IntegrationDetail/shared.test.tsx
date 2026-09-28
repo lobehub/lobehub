@@ -16,54 +16,10 @@ const userState = {
   },
 };
 
-vi.mock('@lobehub/ui', () => ({
-  Avatar: ({ avatar }: { avatar?: string }) => <span data-avatar={avatar} />,
-  Block: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Button: ({ children, onClick }: { children?: ReactNode; onClick?: () => void }) => (
-    <button onClick={onClick}>{children}</button>
-  ),
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Icon: () => <span />,
-  Skeleton: () => <span />,
-  Tag: ({ children }: { children?: ReactNode }) => (
-    <span data-testid="personal-tag">{children}</span>
-  ),
-  Text: ({
-    children,
-    ellipsis,
-  }: {
-    children?: ReactNode;
-    ellipsis?: boolean | { tooltip?: boolean | string };
-  }) => (
-    <span
-      title={
-        typeof ellipsis === 'object' && typeof ellipsis.tooltip === 'string'
-          ? ellipsis.tooltip
-          : undefined
-      }
-    >
-      {children}
-    </span>
-  ),
-}));
-
 const mockConfirmModal = vi.fn();
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Avatar: ({ avatar }: { avatar?: string }) => <span data-avatar={avatar} />,
-  Button: ({
-    children,
-    disabled,
-    onClick,
-  }: {
-    children?: ReactNode;
-    disabled?: boolean;
-    onClick?: () => void;
-  }) => (
-    <button disabled={disabled} type="button" onClick={onClick}>
-      {children}
-    </button>
-  ),
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   Select: ({
     classNames,
     options,
@@ -102,13 +58,8 @@ vi.mock('@lobehub/ui/base-ui', () => ({
   confirmModal: (...args: unknown[]) => mockConfirmModal(...args),
 }));
 
-vi.mock('antd', () => ({
-  App: {
-    useApp: () => ({ message: { error: vi.fn(), success: vi.fn() } }),
-  },
-}));
-
-vi.mock('antd-style', () => ({
+vi.mock('antd-style', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   createStaticStyles: () => ({
     backButton: 'backButton',
     card: 'card',
@@ -143,10 +94,6 @@ vi.mock('swr', () => ({
         : undefined,
     isLoading: false,
   }),
-}));
-
-vi.mock('@/hooks/usePermission', () => ({
-  usePermission: () => ({ allowed: true }),
 }));
 
 vi.mock('@/services/messenger', () => ({

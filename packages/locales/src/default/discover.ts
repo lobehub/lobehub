@@ -391,6 +391,8 @@ export default {
 
   'mcp.details.schema.mode.docs': 'Documentation',
 
+  'mcp.details.schema.prompts.argsCount': '{{count}} argument',
+  'mcp.details.schema.prompts.argsCount_other': '{{count}} arguments',
   'mcp.details.schema.prompts.arguments': 'Parameter Configuration',
 
   'mcp.details.schema.prompts.desc': 'Interactive templates triggered by user selection',
@@ -430,6 +432,8 @@ export default {
 
   'mcp.details.schema.tools.inputSchema': 'Input Description',
 
+  'mcp.details.schema.tools.paramsCount': '{{count}} param',
+  'mcp.details.schema.tools.paramsCount_other': '{{count}} params',
   'mcp.details.schema.tools.instructions': 'Instruction Description',
 
   'mcp.details.schema.tools.table.description': 'Description',

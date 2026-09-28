@@ -2,7 +2,7 @@
 
 import { type VerifierType, verifierTypes } from '@lobechat/const/verify';
 import { Flexbox, Input, TextArea } from '@lobehub/ui';
-import { Button, Select, Switch, Text } from '@lobehub/ui/base-ui';
+import { Button, Select, Switch, Text, toast } from '@lobehub/ui/base-ui';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -25,7 +25,7 @@ export interface CriterionEditorProps {
   onClose: () => void;
   /** Omitted when the criterion is brand-new and not yet committed. */
   onDelete?: () => void;
-  onSubmit: (next: VerifyCriterionDraft) => void;
+  onSubmit: (next: VerifyCriterionDraft) => void | Promise<void>;
 }
 
 /**
@@ -43,6 +43,7 @@ export const CriterionEditor = ({
 }: CriterionEditorProps) => {
   const { t } = useTranslation('verify');
   const [draft, setDraft] = useState<VerifyCriterionDraft>(initial);
+  const [saving, setSaving] = useState(false);
   const verifierType = draft.verifierType ?? 'llm';
   const isProgram = verifierType === 'program';
   const instructionLinked = hasLinkedInstruction(initial);
@@ -59,18 +60,25 @@ export const CriterionEditor = ({
     [t],
   );
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const title = draft.title.trim();
-    if (!title) return;
-    onSubmit({
-      ...draft,
-      description: draft.description?.trim() || undefined,
-      // Empty means "not overridden": criteria whose rubric lives in a linked
-      // document keep the documentId instead of gaining a blank inline rule.
-      instruction: draft.instruction?.trim() ? draft.instruction : undefined,
-      title,
-    });
-    onClose();
+    if (!title || saving) return;
+    setSaving(true);
+    try {
+      await onSubmit({
+        ...draft,
+        description: draft.description?.trim() || undefined,
+        // Empty means "not overridden": criteria whose rubric lives in a linked
+        // document keep the documentId instead of gaining a blank inline rule.
+        instruction: draft.instruction?.trim() ? draft.instruction : undefined,
+        title,
+      });
+      onClose();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t('acceptance.actionError'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -170,7 +178,12 @@ export const CriterionEditor = ({
         )}
         <Flexbox horizontal gap={8}>
           <Button onClick={onClose}>{t('criterion.cancel')}</Button>
-          <Button disabled={!draft.title.trim()} type={'primary'} onClick={handleSave}>
+          <Button
+            disabled={!draft.title.trim()}
+            loading={saving}
+            type={'primary'}
+            onClick={handleSave}
+          >
             {t(isNew ? 'criterion.add' : 'criterion.save')}
           </Button>
         </Flexbox>

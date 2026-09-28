@@ -15,6 +15,11 @@ const swrState = vi.hoisted(() => ({
   mutate: vi.fn(),
 }));
 
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ...(await import('~base-ui-stubs')).baseUiStubs,
+}));
+
 vi.mock('@/services/resourcePermission', () => ({
   resourcePermissionService: serviceMocks,
 }));
@@ -25,8 +30,6 @@ vi.mock('@/libs/swr', () => ({
     return { data: swrState.data, error: undefined, isLoading: false, mutate: swrState.mutate };
   },
 }));
-
-vi.mock('@lobehub/ui/base-ui', () => ({ toast: { error: vi.fn() } }));
 
 describe('useResourceCollaborators', () => {
   beforeEach(() => {

@@ -1,11 +1,15 @@
 import { Hono } from 'hono';
+import { describeRoute } from 'hono-openapi';
+import { z } from 'zod';
 
 import { getAllScopePermissions } from '@/utils/rbac';
 
 import { zValidator } from '../common/validator';
 import { TopicController } from '../controllers';
+import { EvalContextController } from '../controllers/eval-context.controller';
 import { requireAuth } from '../middleware';
 import { requireAnyPermission } from '../middleware/permission-check';
+import { EvalPaginationSchema } from '../types/eval-resource.type';
 import {
   TopicCreateRequestSchema,
   TopicDeleteParamSchema,
@@ -92,6 +96,16 @@ TopicsRoutes.delete(
     const controller = new TopicController();
     return controller.handleDeleteTopic(c);
   },
+);
+
+TopicsRoutes.get(
+  '/:topicId/threads',
+  describeRoute({ summary: 'List topic threads', tags: ['topics'] }),
+  requireAuth,
+  requireAnyPermission(getAllScopePermissions('MESSAGE_READ')),
+  zValidator('param', z.object({ topicId: z.string().min(1) })),
+  zValidator('query', EvalPaginationSchema),
+  async (c) => new EvalContextController().listThreads(c),
 );
 
 export default TopicsRoutes;

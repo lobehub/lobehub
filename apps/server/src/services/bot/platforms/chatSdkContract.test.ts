@@ -1,7 +1,9 @@
 import { createDiscordAdapter } from '@chat-adapter/discord';
-import { Chat } from 'chat';
+import { Chat, Message } from 'chat';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { buildReplayMessages, getSourceMessages, mergeBotMessages } from '../mergeMessages';
+import { patchSenderBatches } from '../patchSenderBatches';
 import { patchDiscordForwardedInteractions } from './discord/patch';
 
 /**
@@ -33,18 +35,28 @@ const APPLICATION_ID = '111111111111111111';
 const DM_CHANNEL_ID = '333333333333333333';
 const USER_ID = '222222222222222222';
 
-/** Minimal in-memory `StateAdapter`; production wires ioredis instead. */
-const createMemoryState = () => {
+/**
+ * Minimal in-memory `StateAdapter`; production wires ioredis instead.
+ *
+ * `exclusiveLocks` is off by default so the older tests keep dispatching every
+ * event straight through. The concurrency tests turn it on, because a lock that
+ * never reports contention would let each message open its own burst window
+ * instead of joining the one already collecting.
+ */
+const createMemoryState = ({ exclusiveLocks = false }: { exclusiveLocks?: boolean } = {}) => {
+  const heldLocks = new Set<string>();
   const values = new Map<string, unknown>();
   const lists = new Map<string, unknown[]>();
   const subscribed = new Set<string>();
   const queues = new Map<string, unknown[]>();
   return {
-    acquireLock: async (threadId: string) => ({
-      expiresAt: Number.MAX_SAFE_INTEGER,
-      threadId,
-      token: 'token',
-    }),
+    acquireLock: async (threadId: string) => {
+      if (exclusiveLocks) {
+        if (heldLocks.has(threadId)) return null;
+        heldLocks.add(threadId);
+      }
+      return { expiresAt: Number.MAX_SAFE_INTEGER, threadId, token: 'token' };
+    },
     appendToList: async (key: string, value: unknown) => {
       lists.set(key, [...(lists.get(key) ?? []), value]);
     },
@@ -56,7 +68,9 @@ const createMemoryState = () => {
     disconnect: async () => {},
     enqueue: async (threadId: string, entry: unknown) => {
       const queue = queues.get(threadId) ?? [];
-      queue.push(entry);
+      // Redis stores JSON; structuredClone would preserve fields that Message.toJSON drops.
+      // eslint-disable-next-line unicorn/prefer-structured-clone
+      queue.push(JSON.parse(JSON.stringify(entry)));
       queues.set(threadId, queue);
       return queue.length;
     },
@@ -66,7 +80,9 @@ const createMemoryState = () => {
     getList: async (key: string) => lists.get(key) ?? [],
     isSubscribed: async (threadId: string) => subscribed.has(threadId),
     queueDepth: async (threadId: string) => queues.get(threadId)?.length ?? 0,
-    releaseLock: async () => {},
+    releaseLock: async (lock?: { threadId: string }) => {
+      if (lock) heldLocks.delete(lock.threadId);
+    },
     set: async (key: string, value: unknown) => {
       values.set(key, value);
     },
@@ -84,7 +100,11 @@ const createMemoryState = () => {
   };
 };
 
-const createRealBot = ({ patch = true }: { patch?: boolean } = {}) => {
+const createRealBot = ({
+  concurrency,
+  isCommand,
+  patch = true,
+}: { concurrency?: unknown; isCommand?: (message: Message) => boolean; patch?: boolean } = {}) => {
   const chatBot = new Chat({
     adapters: {
       discord: createDiscordAdapter({
@@ -93,10 +113,12 @@ const createRealBot = ({ patch = true }: { patch?: boolean } = {}) => {
         publicKey: 'a'.repeat(64),
       }),
     },
-    state: createMemoryState(),
+    ...(concurrency ? { concurrency } : {}),
+    state: createMemoryState({ exclusiveLocks: !!concurrency }),
     userName: 'lobehub',
   } as any);
 
+  patchSenderBatches(chatBot, isCommand);
   if (patch) patchDiscordForwardedInteractions(chatBot);
   return chatBot;
 };
@@ -306,5 +328,187 @@ describe('chat-sdk contract · Discord thread recovery', () => {
     const adapter = (chatBot as any).adapters.get('discord');
 
     await expect(adapter.createDiscordThread(DM_CHANNEL_ID, 'message-1')).rejects.toThrow();
+  });
+});
+
+describe('chat-sdk contract · overlapping-message strategies', () => {
+  // WeChat delivers one logical turn as several messages: an image, then the
+  // sentence about it, a few hundred ms apart. `burst` is what folds them into
+  // a single agent turn, and it is the WeChat channel default in
+  // `wechat/schema.ts`. `debounce` looks similar but is documented to keep only
+  // the final message of the window. The difference is invisible to tsgo and
+  // decides whether a user's picture reaches the model, so pin it here.
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 200 })));
+  });
+
+  const collectTurn = async (strategy: 'burst' | 'debounce') => {
+    const chatBot = createRealBot({ concurrency: { debounceMs: 80, strategy } });
+    const calls: { skipped: string[]; text: string }[] = [];
+    chatBot.onNewMention(async (_thread, message, context) => {
+      calls.push({
+        skipped: (context?.skipped ?? []).map((m) => m.text),
+        text: message.text,
+      });
+    });
+    await chatBot.initialize();
+
+    const adapter = (chatBot as any).adapters.get('discord');
+    // Not awaited in order: the window has to still be open when the second
+    // message lands, which is exactly how the two WeChat webhooks arrive.
+    const first = adapter.handleForwardedGatewayEvent(dmMessageEvent('这是一张图'));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const second = adapter.handleForwardedGatewayEvent(dmMessageEvent('参考这个风格说话'));
+    await Promise.all([first, second]);
+
+    return calls;
+  };
+
+  it('preserves all deferred raw media through a serialized burst queue', async () => {
+    const bot = createRealBot({ concurrency: { debounceMs: 80, strategy: 'burst' } });
+    const received: unknown[][] = [];
+    bot.onNewMention(async (_thread, message, context) => {
+      received.push(
+        getSourceMessages(mergeBotMessages(message, context?.skipped)).map((source) => source.raw),
+      );
+    });
+    await bot.initialize();
+    const adapter = (bot as any).adapters.get('discord');
+    const threadId = `discord:@me:${DM_CHANNEL_ID}`;
+    const entries = ['image', 'text'].map((kind, index) =>
+      new Message({
+        attachments: [],
+        author: {
+          fullName: 'Example user',
+          isBot: false,
+          isMe: false,
+          userId: USER_ID,
+          userName: 'example',
+        },
+        formatted: { type: 'root', children: [] },
+        id: `deferred-${index}`,
+        metadata: { dateSent: new Date(), edited: false },
+        raw: { kind },
+        text: kind === 'text' ? 'describe the image' : '',
+        threadId,
+      }).toJSON(),
+    );
+
+    await Promise.all(
+      buildReplayMessages(entries).map((message) => bot.processMessage(adapter, threadId, message)),
+    );
+
+    expect(received).toEqual([[{ kind: 'image' }, { kind: 'text' }]]);
+  });
+
+  it.each(['burst', 'debounce', 'queue'])(
+    'keeps commands separate from neighboring content through real %s dispatch',
+    async (strategy) => {
+      const bot = createRealBot({
+        concurrency: { debounceMs: 80, strategy },
+        isCommand: (message) => /^\/new(?:\s|$)/.test(message.text),
+      });
+      const received: string[] = [];
+      bot.onNewMention(async (_thread, message, context) => {
+        received.push(mergeBotMessages(message, context?.skipped).text);
+      });
+      await bot.initialize();
+      const adapter = (bot as any).adapters.get('discord');
+      const threadId = `discord:@me:${DM_CHANNEL_ID}`;
+      const texts = ['before', '/new', 'after', '/new', 'last'];
+      const messages = texts.map(
+        (text, index) =>
+          new Message({
+            attachments: [],
+            author: {
+              fullName: 'user',
+              isBot: false,
+              isMe: false,
+              userId: USER_ID,
+              userName: 'user',
+            },
+            formatted: { type: 'root', children: [] },
+            id: `command-${index}`,
+            metadata: { dateSent: new Date(), edited: false },
+            raw: {},
+            text,
+            threadId,
+          }),
+      );
+      await Promise.all(messages.map((message) => bot.processMessage(adapter, threadId, message)));
+      expect(received).toEqual(texts);
+    },
+  );
+
+  it.each(['burst', 'debounce', 'queue'])(
+    'preserves each sender through %s dispatch',
+    async (strategy) => {
+      const bot = createRealBot({ concurrency: { debounceMs: 80, strategy } });
+      const received: { sender: string; sourceIds: string[]; authors: string[] }[] = [];
+      bot.onNewMention(async (_thread, message, context) => {
+        const sources = getSourceMessages(mergeBotMessages(message, context?.skipped));
+        received.push({
+          sender: message.author.userId,
+          sourceIds: sources.map((m) => m.id),
+          authors: sources.map((m) => m.author.userId),
+        });
+      });
+      await bot.initialize();
+      const adapter = (bot as any).adapters.get('discord');
+      const threadId = `discord:@me:${DM_CHANNEL_ID}`;
+      const messages = ['alice', 'alice', 'bob', 'alice'].map(
+        (sender, index) =>
+          new Message({
+            attachments: [],
+            author: {
+              fullName: sender,
+              isBot: false,
+              isMe: false,
+              userId: sender,
+              userName: sender,
+            },
+            formatted: { type: 'root', children: [] },
+            id: `sender-${index}`,
+            metadata: { dateSent: new Date(), edited: false },
+            raw: { kind: index === 0 ? 'image' : 'text' },
+            text: index === 0 ? '' : `message ${index}`,
+            threadId,
+          }),
+      );
+      await Promise.all(messages.map((message) => bot.processMessage(adapter, threadId, message)));
+      expect(received.flatMap((call) => call.sourceIds)).toEqual(
+        messages.map((message) => message.id),
+      );
+      for (const call of received)
+        expect(call.authors.every((author) => author === call.sender)).toBe(true);
+      expect(received.map((call) => call.sender)).toContain('bob');
+    },
+  );
+
+  it('collects a burst into ONE handler call carrying the earlier message', async () => {
+    const calls = await collectTurn('burst');
+
+    // One turn, not two: without this the bot answers the bare image first and
+    // the question separately.
+    expect(calls).toHaveLength(1);
+    expect(calls[0].text).toBe('参考这个风格说话');
+    // The image message survives as context, which is what
+    // `mergeSkippedMessages` folds back in so its media still reaches the agent.
+    expect(calls[0].skipped).toEqual(['这是一张图']);
+  });
+
+  it('hands over the earlier message under debounce too, which its own docs deny', async () => {
+    const calls = await collectTurn('debounce');
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].text).toBe('参考这个风格说话');
+    // chat 4.38.1 passes the earlier message exactly like `burst`, while
+    // `docs/concurrency.mdx` documents debounce as keeping "only the final
+    // message in the burst window". WeChat stays on `burst` regardless: that is
+    // the documented contract for collecting a turn, and it also drains
+    // messages that arrive while the handler is running. If this assertion ever
+    // flips to `[]` the implementation has caught up with its docs — which is
+    // the exact moment a debounce-configured channel starts losing images.
+    expect(calls[0].skipped).toEqual(['这是一张图']);
   });
 });

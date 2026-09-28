@@ -16,10 +16,6 @@ vi.mock('@/hooks/usePermission', () => ({
   usePermission: (action: string) => mocks.permissions[action],
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
 vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: (state: unknown) => unknown) => selector({ agentMap: mocks.agentMap }),
 }));

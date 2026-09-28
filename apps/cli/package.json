@@ -1,11 +1,11 @@
 {
   "name": "@lobehub/cli",
-  "version": "0.0.49",
+  "version": "0.0.59",
   "type": "module",
   "bin": {
-    "lh": "./dist/index.js",
-    "lobe": "./dist/index.js",
-    "lobehub": "./dist/index.js"
+    "lh": "dist/index.js",
+    "lobe": "dist/index.js",
+    "lobehub": "dist/index.js"
   },
   "man": [
     "./man/man1/lh.1",
@@ -17,7 +17,7 @@
     "man"
   ],
   "scripts": {
-    "build": "tsdown",
+    "build": "bun scripts/ensureWorkspaceLinks.ts && tsdown",
     "cli:link": "bun link",
     "cli:unlink": "bun unlink",
     "dev": "LOBEHUB_CLI_HOME=.lobehub-dev bun src/index.ts",
@@ -25,6 +25,7 @@
     "prepublishOnly": "npm run build && npm run man:generate",
     "test": "bunx vitest run --config vitest.config.mts --silent='passed-only'",
     "test:coverage": "bunx vitest run --config vitest.config.mts --coverage",
+    "test:e2e": "bunx vitest run --config vitest.e2e.config.mts --silent='passed-only'",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
@@ -32,11 +33,14 @@
   },
   "devDependencies": {
     "@lobechat/agent-gateway-client": "workspace:*",
+    "@lobechat/agent-tracing": "workspace:*",
     "@lobechat/const": "workspace:*",
     "@lobechat/device-control": "workspace:*",
     "@lobechat/device-gateway-client": "workspace:*",
     "@lobechat/device-identity": "workspace:*",
+    "@lobechat/eval-rubric": "workspace:*",
     "@lobechat/heterogeneous-agents": "workspace:*",
+    "@lobechat/html-artifact": "workspace:*",
     "@lobechat/local-file-shell": "workspace:*",
     "@lobechat/tool-runtime": "workspace:*",
     "@lobechat/types": "workspace:*",
@@ -54,18 +58,18 @@
     "picocolors": "^1.1.1",
     "semver": "^7.8.5",
     "superjson": "^2.2.6",
+    "tinyexec": "^1.3.0",
     "tree-kill": "^1.2.2",
     "tsdown": "^0.21.10",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "url-join": "^5.0.0",
+    "vitest": "5.0.0"
+  },
+  "engines": {
+    "node": ">=22.15"
   },
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org"
-  },
-  "pnpm": {
-    "overrides": {
-      "@types/react": "19.2.13",
-      "antd": "6.3.5"
-    }
   }
 }

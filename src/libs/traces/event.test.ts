@@ -5,6 +5,10 @@ import { describe, expect, it } from 'vitest';
 
 import { EventScore, TraceEventClient } from './event';
 
+vi.mock('diff', () => ({
+  diffChars: vi.fn().mockReturnValue([{ added: true, count: 1, value: 'a' }]),
+}));
+
 describe('TraceEventClient', () => {
   it('should correctly initialize with a LangfuseTraceClient instance', () => {
     // 准备
@@ -121,10 +125,6 @@ describe('TraceEventClient', () => {
         observationId: 'obs789',
         traceId: 'trace321',
       };
-
-      vi.mock('diff', () => ({
-        diffChars: vi.fn().mockReturnValue([{ added: true, count: 1, value: 'a' }]),
-      }));
 
       await client.modifyMessage(params as any);
 

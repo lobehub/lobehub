@@ -35,7 +35,17 @@ export class ServerOperationStore implements OperationStore {
   async clearRunningMark(): Promise<void> {
     if (!this.topicId || !this.userId) return;
     try {
-      const topicModel = new TopicModel(this.serverDB, this.userId, this.workspaceId);
+      // Agent-share visitor runs execute under the CREATOR's userId on a topic
+      // whose `senderId` is the visitor. The default topic scope hides those
+      // rows, so without the opt-in `findById` returned nothing here, the
+      // early return below treated it as "already cleared", and every visitor
+      // topic kept its `runningOperation` marker forever — each later open
+      // reconnected to a finished run and froze the visitor's message list.
+      // Widening is safe: the compare-and-clear below still requires the mark
+      // to name this very operation.
+      const topicModel = new TopicModel(this.serverDB, this.userId, this.workspaceId, undefined, {
+        includeShareVisitor: true,
+      });
       const topic = await topicModel.findById(this.topicId);
       const marker = topic?.metadata?.runningOperation;
       const markedOperationId = marker?.operationId;

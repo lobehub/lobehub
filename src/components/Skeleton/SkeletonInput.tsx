@@ -1,5 +1,5 @@
 'use client';
 
-import { Skeleton } from '@lobehub/ui';
+import { Skeleton } from '@lobehub/ui/base-ui';
 
-export const SkeletonInput = () => <Skeleton.Button active block />;
+export const SkeletonInput = () => <Skeleton height={36} />;

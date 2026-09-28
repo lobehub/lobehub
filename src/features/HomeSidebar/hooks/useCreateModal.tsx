@@ -29,7 +29,7 @@ import {
   trackCreateAgentModalSkillSuggestionAction,
 } from './createAgentModalAnalytics';
 
-const LEFT_ACTIONS: ActionKeys[] = ['model'];
+const RIGHT_ACTIONS: ActionKeys[] = ['model'];
 const CREATE_MODAL_WIDTH = 'min(90vw, 760px)';
 const INSTALLED_SKILL_MODAL_WIDTH = 'min(90vw, 560px)';
 
@@ -563,7 +563,7 @@ export const CreateAgentModal = memo<CreateAgentModalProps>(
             <ChatInputProvider
               agentId={agentId}
               allowExpand={false}
-              leftActions={LEFT_ACTIONS}
+              rightActions={RIGHT_ACTIONS}
               sendButtonProps={sendButtonProps}
               chatInputEditorRef={(instance) => {
                 if (instance) editorRef.current = instance;

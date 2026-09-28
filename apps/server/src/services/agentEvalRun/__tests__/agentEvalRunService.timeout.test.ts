@@ -13,9 +13,11 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
 }));
 
 vi.mock('@/server/services/agentRuntime/AgentRuntimeService', () => ({
-  AgentRuntimeService: vi.fn().mockImplementation(() => ({
-    interruptOperation: vi.fn().mockResolvedValue(true),
-  })),
+  AgentRuntimeService: vi.fn().mockImplementation(function () {
+    return {
+      interruptOperation: vi.fn().mockResolvedValue(true),
+    };
+  }),
 }));
 
 beforeEach(cleanupDB);
@@ -351,12 +353,11 @@ describe('AgentEvalRunService', () => {
 
       // Make interruptOperation throw
       vi.mocked(AgentRuntimeService).mockClear();
-      vi.mocked(AgentRuntimeService).mockImplementationOnce(
-        () =>
-          ({
-            interruptOperation: vi.fn().mockRejectedValue(new Error('Redis connection failed')),
-          }) as any,
-      );
+      vi.mocked(AgentRuntimeService).mockImplementationOnce(function () {
+        return {
+          interruptOperation: vi.fn().mockRejectedValue(new Error('Redis connection failed')),
+        } as any;
+      });
 
       const freshRun = await runModel.findById(run.id);
       const service = new AgentEvalRunService(serverDB, userId);

@@ -6,27 +6,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const analyticsTrack = vi.fn();
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  ActionIcon: ({
-    onClick,
-    title,
-    ...rest
-  }: {
-    onClick?: (e: any) => void;
-    title?: string;
-    [key: string]: unknown;
-  }) => (
-    <button
-      aria-label={(rest as any)['aria-label'] ?? title}
-      title={title}
-      type="button"
-      onClick={onClick}
-    >
-      {title}
-    </button>
-  ),
-}));
-
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     i18n: { language: 'en-US' },
@@ -91,7 +70,7 @@ const renderFooter = async ({
       analytics: { track: analyticsTrack },
     };
   }
-  vi.doMock('@lobehub/analytics/react', () => ({
+  vi.doMock('@/libs/analytics/client', () => ({
     useAnalytics: createAnalyticsApi,
   }));
   vi.doMock('@/components/ChangelogModal', () => ({
@@ -170,7 +149,7 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.doUnmock('@lobechat/const');
-  vi.doUnmock('@lobehub/analytics/react');
+  vi.doUnmock('@/libs/analytics/client');
   vi.doUnmock('@/components/ChangelogModal');
   vi.doUnmock('@/components/FeedbackModal');
   vi.doUnmock('@/features/Billboard');

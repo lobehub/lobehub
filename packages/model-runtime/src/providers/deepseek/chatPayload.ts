@@ -1,13 +1,14 @@
 import type Anthropic from '@anthropic-ai/sdk';
-import { deepseek as deepseekChatModels, ModelProvider } from 'model-bank';
+import { ModelProvider } from 'model-bank';
 import type OpenAI from 'openai';
 
 import { buildDefaultAnthropicPayload } from '../../core/anthropicCompatibleFactory';
 import type { ChatStreamPayload } from '../../types';
 import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
 import { isDeepSeekV4FamilyModel } from '../../utils/modelParse';
-import { resolveSafeMaxTokens } from '../../utils/resolveSafeMaxTokens';
+import { assertContextWithinWindow, resolveSafeMaxTokens } from '../../utils/resolveSafeMaxTokens';
 import { sanitizeAnthropicThinkingParts } from '../../utils/sanitizeAnthropicThinkingParts';
+import { deepseekRuntimeModels } from './runtimeModels';
 import { sanitizeDeepSeekJsonPayload } from './sanitizePayload';
 
 export const isDeepSeekV4Model = (model: string | undefined) => isDeepSeekV4FamilyModel(model);
@@ -127,6 +128,12 @@ export const buildDeepSeekAnthropicPayload = async (
     shouldEnableDeepSeekThinking(payload),
   );
 
+  // resolveSafeMaxTokens skips explicit completion budgets, but the input must
+  // still fit the model's context window before the upstream request is sent.
+  if (payload.max_tokens !== undefined) {
+    assertContextWithinWindow({ ...payload, messages: anthropicMessages }, deepseekRuntimeModels);
+  }
+
   const resolvedMaxTokens =
     payload.max_tokens ??
     // Cap the completion budget against the actual input size instead of always
@@ -140,7 +147,7 @@ export const buildDeepSeekAnthropicPayload = async (
     // is more actionable (fork_topic / larger-ctx suggestions) than either a
     // doomed upstream 400 or a truncated stub completion. Estimate against the
     // messages we actually send (anthropic-normalized).
-    resolveSafeMaxTokens({ ...payload, messages: anthropicMessages }, deepseekChatModels) ??
+    resolveSafeMaxTokens({ ...payload, messages: anthropicMessages }, deepseekRuntimeModels) ??
     (await getModelPropertyWithFallback<number | undefined>(
       payload.model,
       'maxOutput',

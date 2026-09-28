@@ -98,7 +98,7 @@ const getFormattedUnitPrice = (
   };
 };
 
-const getPrice = (pricing: Pricing, isCreditPricing: boolean): TextPriceSummary => {
+export const getPrice = (pricing: Pricing, isCreditPricing: boolean): TextPriceSummary => {
   return {
     cachedInput: getFormattedUnitPrice(pricing, 'textInput_cacheRead', isCreditPricing),
     input: getFormattedUnitPrice(pricing, 'textInput', isCreditPricing),

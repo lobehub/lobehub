@@ -81,7 +81,7 @@ export const createBaseUiStubs = () => ({
   toast: Object.assign(vi.fn(), {
     error: vi.fn(),
     info: vi.fn(),
-    loading: vi.fn(),
+    loading: vi.fn(() => ({ close: vi.fn(), update: vi.fn() })),
     promise: vi.fn(),
     success: vi.fn(),
     warning: vi.fn(),

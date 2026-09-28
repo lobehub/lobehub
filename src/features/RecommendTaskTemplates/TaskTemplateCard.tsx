@@ -15,7 +15,6 @@ import { RECOMMENDATION_ICON_SIZE } from '@/features/Recommendations/iconSize';
 import { ConnectorAuthRow } from './ConnectorAuthRow';
 import { resolveTemplateIcon } from './resolveTemplateIcon';
 import { styles } from './style';
-import { createTaskTemplateDetailModal } from './TaskTemplateDetailModal';
 import { INTEREST_ICON_MAP, TemplateBriefIcon } from './TemplateBriefIcon';
 import { useScheduleText } from './useScheduleText';
 import { useTaskTemplateCreate } from './useTaskTemplateCreate';
@@ -60,7 +59,9 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
     );
 
     const handleOpenDetail = useCallback(() => {
-      createTaskTemplateDetailModal({ onCreated, template });
+      void import('./TaskTemplateDetailModal').then(({ createTaskTemplateDetailModal }) =>
+        createTaskTemplateDetailModal({ onCreated, template }),
+      );
     }, [onCreated, template]);
 
     const handlePrimaryClick = useCallback(

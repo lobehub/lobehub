@@ -22,13 +22,12 @@ export const TodoWriteInspector = memo<BuiltinInspectorProps<TodoWriteArgs>>(
     }
 
     return (
-      <div
-        className={cx(
-          inspectorTextStyles.root,
-          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-        )}
-      >
-        <TodoInspectorSummary label={label} summary={summary} />
+      <div className={inspectorTextStyles.root}>
+        <TodoInspectorSummary
+          label={label}
+          shiny={isArgumentsStreaming || isLoading}
+          summary={summary}
+        />
       </div>
     );
   },

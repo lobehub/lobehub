@@ -4,6 +4,7 @@ import pc from 'picocolors';
 import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printTable, truncate } from '../utils/format';
 import { log } from '../utils/logger';
+import { resolveAppUrlBuilder } from './task/url';
 
 export function registerAgentGroupCommand(program: Command) {
   const agentGroup = program.command('agent-group').description('Manage agent groups');
@@ -86,19 +87,23 @@ export function registerAgentGroupCommand(program: Command) {
     .option('--json', 'Output JSON')
     .action(async (options: { description?: string; json?: boolean; title: string }) => {
       const client = await getTrpcClient();
+      const buildUrl = await resolveAppUrlBuilder(client);
 
       const input: Record<string, any> = { title: options.title };
       if (options.description) input.description = options.description;
 
       const result = await client.group.createGroup.mutate(input as any);
+      const r = result as any;
+      const groupId = r.group?.id;
+      const url = buildUrl(`/group/${encodeURIComponent(groupId)}`);
 
       if (options.json) {
-        console.log(JSON.stringify(result, null, 2));
+        console.log(JSON.stringify({ ...result, url }, null, 2));
         return;
       }
 
-      const r = result as any;
-      console.log(`${pc.green('✓')} Created agent group ${pc.bold(r.group?.id || '')}`);
+      console.log(`${pc.green('✓')} Created agent group ${pc.bold(groupId || '')}`);
+      console.log(`${pc.bold('group')}: ${url}`);
     });
 
   // ── edit ───────────────────────────────────────────────

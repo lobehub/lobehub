@@ -14,8 +14,6 @@ import { withSWR } from '~test-utils';
 import { useFileStore as useStore } from '../../store';
 import * as resourceHooks from '../resource/hooks';
 
-vi.mock('zustand/traditional');
-
 // Mock i18next translation function
 vi.mock('i18next', () => ({
   t: (key: string, options?: any) => {
@@ -28,13 +26,6 @@ vi.mock('i18next', () => ({
 }));
 
 // Mock message
-vi.mock('@/components/AntdStaticMethods', () => ({
-  message: {
-    info: vi.fn(),
-    warning: vi.fn(),
-  },
-}));
-
 // Mock unzipFile
 vi.mock('@/utils/unzipFile', () => ({
   unzipFile: vi.fn(),

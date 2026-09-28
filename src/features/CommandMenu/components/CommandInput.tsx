@@ -15,7 +15,12 @@ import { styles } from '../styles';
 import { useCommandMenu } from '../useCommandMenu';
 import { type ValidSearchType } from '../utils/queryParser';
 
-const CommandInput = memo(() => {
+interface CommandInputProps {
+  onInputChange: (value: string) => void;
+  onTypeFilterChange: () => void;
+}
+
+const CommandInput = memo<CommandInputProps>(({ onInputChange, onTypeFilterChange }) => {
   const { t } = useTranslation('common');
 
   const { handleBack } = useCommandMenu();
@@ -84,7 +89,10 @@ const CommandInput = memo(() => {
             <Tag
               className={styles.backTag}
               icon={<X size={12} />}
-              onClick={() => setTypeFilter(undefined)}
+              onClick={() => {
+                onTypeFilterChange();
+                setTypeFilter(undefined);
+              }}
             >
               {getTypeLabel(typeFilter)}
             </Tag>
@@ -117,7 +125,10 @@ const CommandInput = memo(() => {
           maxLength={500}
           placeholder={getPlaceholder()}
           value={search}
-          onValueChange={setSearch}
+          onValueChange={(value) => {
+            onInputChange(value);
+            setSearch(value);
+          }}
         />
         {page !== 'ask-ai' && !hasSelectedAgent && search.trim() ? (
           <>

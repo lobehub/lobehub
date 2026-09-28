@@ -7,8 +7,6 @@ import { SkillSorts } from '@/types/discover';
 
 import { useDiscoverStore as useStore } from '../../store';
 
-vi.mock('zustand/traditional');
-
 beforeEach(() => {
   vi.clearAllMocks();
 });

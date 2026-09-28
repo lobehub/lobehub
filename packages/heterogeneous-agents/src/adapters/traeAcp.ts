@@ -1,10 +1,14 @@
+import { isRecord } from '@lobechat/utils/object';
+
 import type {
   AgentEventAdapter,
   HeterogeneousAgentEvent,
+  StepCompleteData,
   StreamChunkData,
   ToolCallPayload,
   ToolResultData,
   ToolStateChunkData,
+  UsageData,
 } from '../types';
 import { AcpStreamLifecycle } from './acpCommon';
 
@@ -21,9 +25,10 @@ export interface AcpSessionAdapterOptions {
   provider?: string;
 }
 
-interface TraeAcpPayload {
+export interface TraeAcpPayload {
   [key: string]: unknown;
   content?: unknown;
+  cost?: unknown;
   input?: unknown;
   kind?: unknown;
   message?: unknown;
@@ -35,11 +40,14 @@ interface TraeAcpPayload {
   rawOutput?: unknown;
   sessionId?: unknown;
   sessionUpdate?: unknown;
+  size?: unknown;
   status?: unknown;
   stopReason?: unknown;
   title?: unknown;
   toolCallId?: unknown;
   type?: unknown;
+  usage?: unknown;
+  used?: unknown;
 }
 
 interface TraeAcpToolContent {
@@ -56,6 +64,15 @@ interface TraeAcpToolResultState {
   output?: unknown;
   rawOutput?: unknown;
 }
+
+const toFiniteNumber = (value: unknown): number | undefined => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return;
+};
 
 const stringify = (value: unknown): string => {
   if (typeof value === 'string') return value;
@@ -99,10 +116,12 @@ export class TraeAcpAdapter implements AgentEventAdapter {
   private readonly eventPrefix: string;
   private readonly provider: string;
   private completedTools = new Set<string>();
+  protected lastCostUsd?: number;
+  protected lastUsage?: UsageData;
   private model?: string;
   private pendingTools = new Set<string>();
   private snapshotSeq = new Map<string, number>();
-  private readonly stream = new AcpStreamLifecycle((stepIndex) => ({
+  protected readonly stream = new AcpStreamLifecycle((stepIndex) => ({
     ...(this.model ? { model: this.model } : {}),
     ...(stepIndex > 0 ? { newStep: true } : {}),
     provider: this.provider,
@@ -128,12 +147,23 @@ export class TraeAcpAdapter implements AgentEventAdapter {
       if (typeof raw.model === 'string') this.model = raw.model;
       return [];
     }
-    if (raw.type === `${this.eventPrefix}_prompt_completed`) return this.complete(raw.stopReason);
+    if (raw.type === `${this.eventPrefix}_prompt_completed`) {
+      const usage = this.toUsageData(raw.usage) ?? this.lastUsage;
+      const costUsd = this.toCostUsd(raw.cost) ?? this.lastCostUsd;
+      return this.complete(raw.stopReason, usage, costUsd);
+    }
     if (raw.type === `${this.eventPrefix}_error`) {
       return this.fail(stringify(raw.message) || `${this.provider} ACP failed`);
     }
 
     switch (raw.sessionUpdate) {
+      case 'usage_update': {
+        const usage = this.extractUsageFromUsageUpdate(raw);
+        if (usage) this.lastUsage = usage;
+        const costUsd = this.toCostUsd(raw.cost);
+        if (costUsd !== undefined) this.lastCostUsd = costUsd;
+        return [];
+      }
       case 'agent_message_chunk': {
         const text = (raw.content as { text?: unknown } | null)?.text;
         return typeof text === 'string' && text
@@ -172,7 +202,7 @@ export class TraeAcpAdapter implements AgentEventAdapter {
 
   flush(): HeterogeneousAgentEvent[] {
     if (this.terminal) return [];
-    return this.complete('end_turn');
+    return this.complete('end_turn', this.lastUsage, this.lastCostUsd);
   }
 
   private updateTool(raw: TraeAcpPayload): HeterogeneousAgentEvent[] {
@@ -268,17 +298,101 @@ export class TraeAcpAdapter implements AgentEventAdapter {
     return events;
   }
 
-  private complete(stopReason: unknown): HeterogeneousAgentEvent[] {
+  protected complete(
+    stopReason: unknown,
+    usage?: UsageData,
+    costUsd?: number,
+  ): HeterogeneousAgentEvent[] {
     if (this.terminal) return [];
     this.terminal = true;
     const runtimeEndData =
       stopReason === 'cancelled' ? { reason: 'interrupted', stopReason } : { stopReason };
-    return [
+
+    const result: HeterogeneousAgentEvent[] = [
       ...this.closePending(),
       ...this.stream.closeStream({ stopReason }),
       this.stream.event('visible_output_end', {}),
-      this.stream.event('agent_runtime_end', runtimeEndData),
     ];
+
+    if (usage) {
+      if (costUsd !== undefined) usage.cost = costUsd;
+      const stepCompleteData: StepCompleteData = {
+        model: this.model,
+        phase: 'turn_metadata',
+        provider: this.provider,
+        usage,
+      };
+      result.push(this.stream.event('step_complete', stepCompleteData));
+    }
+
+    result.push(this.stream.event('agent_runtime_end', runtimeEndData));
+    return result;
+  }
+
+  /**
+   * Convert an ACP experimental `Usage` shape into the shared `UsageData`.
+   * Returns `undefined` when required fields are missing or invalid.
+   */
+  protected toUsageData(usage: unknown): UsageData | undefined {
+    if (!isRecord(usage)) return;
+
+    const total = toFiniteNumber(usage.totalTokens) ?? toFiniteNumber(usage.total_tokens);
+    const input = toFiniteNumber(usage.inputTokens) ?? toFiniteNumber(usage.input_tokens);
+    const output = toFiniteNumber(usage.outputTokens) ?? toFiniteNumber(usage.output_tokens);
+    if (typeof input !== 'number' || typeof output !== 'number' || input < 0 || output < 0) return;
+
+    const cachedRead =
+      toFiniteNumber(usage.cachedReadTokens) ??
+      toFiniteNumber(usage.cached_read_tokens) ??
+      toFiniteNumber(usage.cacheReadTokens) ??
+      toFiniteNumber(usage.cache_read_tokens) ??
+      0;
+    const cachedWrite =
+      toFiniteNumber(usage.cachedWriteTokens) ??
+      toFiniteNumber(usage.cached_write_tokens) ??
+      toFiniteNumber(usage.cacheWriteTokens) ??
+      toFiniteNumber(usage.cache_write_tokens) ??
+      0;
+    const thought =
+      toFiniteNumber(usage.thoughtTokens) ??
+      toFiniteNumber(usage.thought_tokens) ??
+      toFiniteNumber(usage.reasoningTokens) ??
+      toFiniteNumber(usage.reasoning_tokens) ??
+      0;
+
+    const inputCacheMiss = Math.max(0, input - cachedRead);
+    const outputText = Math.max(0, output - thought);
+    const totalTokens = total ?? input + output + cachedWrite;
+
+    return {
+      inputCachedTokens: cachedRead || undefined,
+      inputCacheMissTokens: inputCacheMiss,
+      inputWriteCacheTokens: cachedWrite || undefined,
+      outputReasoningTokens: thought || undefined,
+      outputTextTokens: outputText,
+      totalInputTokens: input + cachedWrite,
+      totalOutputTokens: output,
+      totalTokens,
+    };
+  }
+
+  /**
+   * Extract token usage from a `usage_update` notification.
+   * The ACP spec only requires `used`/`size`/`cost`; per-turn token breakdown
+   * lives in `_meta` as vendor extensions. Subclasses may override this to
+   * parse provider-specific `_meta` keys (e.g. `cognition.ai/*Tokens`).
+   */
+  protected extractUsageFromUsageUpdate(_raw: TraeAcpPayload): UsageData | undefined {
+    return;
+  }
+
+  /** Extract a USD cost amount from an ACP `cost` object. */
+  private toCostUsd(cost: unknown): number | undefined {
+    if (!isRecord(cost)) return;
+    if (cost.currency !== 'USD') return;
+    const amount = toFiniteNumber(cost.amount);
+    if (amount === undefined || amount <= 0) return;
+    return amount;
   }
 
   private fail(message: string): HeterogeneousAgentEvent[] {

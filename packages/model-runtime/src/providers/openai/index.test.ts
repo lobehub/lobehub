@@ -353,6 +353,20 @@ describe('LobeOpenAI', () => {
       expect(createCall.model).toBe('gpt-5.6-sol');
     });
 
+    it('should use responses API for GPT-6 family models', async () => {
+      const payload = {
+        messages: [{ content: 'Hello', role: 'user' as const }],
+        model: 'gpt-6-astra',
+        temperature: 0.7,
+      };
+
+      await instance.chat(payload);
+
+      expect(instance['client'].responses.create).toHaveBeenCalled();
+      const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
+      expect(createCall.model).toBe('gpt-6-astra');
+    });
+
     it('should prune sampling parameters for Codex-prefixed GPT-5.6 models', async () => {
       const payload = {
         frequency_penalty: 0.5,
@@ -459,6 +473,27 @@ describe('LobeOpenAI', () => {
       expect(createCall.frequency_penalty).toBeUndefined();
       expect(createCall.presence_penalty).toBeUndefined();
       expect(createCall.temperature).toBeUndefined();
+      expect(createCall.top_p).toBeUndefined();
+    });
+
+    it('should prune the params GPT-6 Astra rejects and keep xhigh reasoning effort', async () => {
+      const payload = {
+        messages: [{ content: 'Hello', role: 'user' as const }],
+        model: 'gpt-6-astra',
+        reasoning_effort: 'xhigh' as const,
+        temperature: 0.7,
+        top_p: 0.9,
+      };
+
+      await instance.chat(payload);
+
+      const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
+      expect(createCall).toMatchObject({
+        model: 'gpt-6-astra',
+        reasoning: { effort: 'xhigh', summary: 'auto' },
+      });
+      expect(createCall.temperature).toBeUndefined();
+      expect(createCall.top_logprobs).toBeUndefined();
       expect(createCall.top_p).toBeUndefined();
     });
 

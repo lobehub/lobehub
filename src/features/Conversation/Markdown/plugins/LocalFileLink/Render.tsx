@@ -21,6 +21,12 @@ interface LocalFileLinkProperties {
 }
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  reference: css`
+    display: inline-flex;
+    gap: 4px;
+    align-items: center;
+    vertical-align: -0.16em;
+  `,
   icon: css`
     display: inline-flex;
     flex-shrink: 0;
@@ -78,7 +84,8 @@ const Render = memo<MarkdownElementProps<LocalFileLinkProperties>>(({ node }) =>
   const { linkHref, linkLabel } = node?.properties || {};
   const openLocalFile = useChatStore((s) => s.openLocalFile);
   const workingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
-  const parsed = isDesktop ? parseLocalFileHref(linkHref, { workingDirectory }) : null;
+  const parsed = parseLocalFileHref(linkHref, { workingDirectory });
+  const canPreview = isDesktop && !!parsed?.workingDirectory;
   const allowExternalFilePreview =
     !!parsed && (!workingDirectory || parsed.workingDirectory !== workingDirectory);
   const label = linkLabel || parsed?.filePath || linkHref || '';
@@ -87,9 +94,7 @@ const Render = memo<MarkdownElementProps<LocalFileLinkProperties>>(({ node }) =>
 
   const handleClick = useCallback(
     (event: MouseEvent<HTMLAnchorElement>) => {
-      // `parsed` is only non-null on desktop, where a local path has no meaningful
-      // modifier-click behaviour — always take over the click.
-      if (!parsed) return;
+      if (!parsed || !canPreview) return;
       if (event.button !== 0) return;
 
       event.preventDefault();
@@ -99,8 +104,21 @@ const Render = memo<MarkdownElementProps<LocalFileLinkProperties>>(({ node }) =>
         workingDirectory: parsed.workingDirectory,
       });
     },
-    [allowExternalFilePreview, openLocalFile, parsed],
+    [allowExternalFilePreview, canPreview, openLocalFile, parsed],
   );
+
+  if (!canPreview) {
+    return (
+      <Tooltip mouseEnterDelay={0.1} placement={'topLeft'} title={title}>
+        <span className={styles.reference} data-file-path={parsed?.filePath}>
+          <span aria-hidden className={styles.icon}>
+            <FileIcon fileName={iconFileName} size={16} variant={'raw'} />
+          </span>
+          <span>{label}</span>
+        </span>
+      </Tooltip>
+    );
+  }
 
   return (
     <Tooltip mouseEnterDelay={0.1} placement={'topLeft'} title={title}>

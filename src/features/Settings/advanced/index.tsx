@@ -2,11 +2,10 @@
 
 import { isDesktop } from '@lobechat/const';
 import { type FormGroupItemType, type FormItemProps } from '@lobehub/ui';
-import { Form, Icon, Skeleton } from '@lobehub/ui';
-import { Select, Switch } from '@lobehub/ui/base-ui';
+import { Form } from '@lobehub/ui';
+import { Select, Skeleton, Spin, Switch } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { Loader2Icon } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -83,7 +82,7 @@ const Page = memo(() => {
           onRetry={() => refreshUserState()}
         />
       );
-    return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
+    return <Skeleton.Text rows={5} />;
   }
 
   const advancedGroup: FormGroupItemType = {
@@ -121,7 +120,7 @@ const Page = memo(() => {
           ]
         : []),
     ],
-    extra: loading && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />,
+    extra: loading && <Spin size="small" style={{ opacity: 0.5 }} />,
     title: t('tab.advanced.toolsAndDiagnostics.title'),
   };
 

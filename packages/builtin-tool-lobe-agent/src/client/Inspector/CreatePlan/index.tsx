@@ -17,8 +17,10 @@ export const CreatePlanInspector = memo<BuiltinInspectorProps<CreatePlanParams, 
 
     if (isArgumentsStreaming && !goal) {
       return (
-        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-          <span>{t('builtins.lobe-agent.apiName.createPlan')}</span>
+        <div className={inspectorTextStyles.root}>
+          <span className={shinyTextStyles.shinyText}>
+            {t('builtins.lobe-agent.apiName.createPlan')}
+          </span>
         </div>
       );
     }

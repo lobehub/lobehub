@@ -18,19 +18,17 @@ export {
 export { default as ReportViewer } from './Report/ReportViewer';
 export { default as CheckerDock } from './Run/CheckerDock';
 export { default as RunResult } from './Run/RunResult';
-export { countResults, isDraftUnconfirmed, phaseFromStatus } from './utils';
+export { checkDisplayTitle, countResults, isDraftUnconfirmed, phaseFromStatus } from './utils';
 export { default as AcceptanceViewer } from './Viewer';
-export type { AcceptanceCheck, CheckReviewInput } from './Viewer/CheckList';
-export {
-  checkHeadMeta,
-  FocusedCheckDetails,
-  groupChecks,
-  shouldGroupChecks,
-} from './Viewer/CheckList';
+export { AcceptanceCheckRow } from './Viewer/Checks/CheckRow';
+export { groupChecks, shouldGroupChecks } from './Viewer/Checks/checkState';
+export { checkHeadMeta } from './Viewer/Checks/checkStatus';
+export type { AcceptanceCheck, CheckReviewInput } from './Viewer/Checks/types';
 export {
   OriginConversationProvider,
   type OriginConversationSlot,
   type OriginTopicPanelProps,
-} from './Viewer/originConversation';
+} from './Viewer/Conversation/originConversation';
+export { FocusedCheckDetails } from './Viewer/Focus/FocusedCheckDetails';
 export { default as AcceptanceWorkspace } from './Workspace';
 export { default as AcceptanceEmptyDetail } from './Workspace/EmptyDetail';

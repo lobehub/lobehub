@@ -27,10 +27,6 @@ vi.mock('@/features/ResourcePermission/useResourceAccess', () => ({
   useResourceAccess: (...args: unknown[]) => mocks.useResourceAccess(...(args as [])),
 }));
 
-vi.mock('@/hooks/usePermission', () => ({
-  usePermission: () => ({ allowed: true }),
-}));
-
 vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: (state: typeof mocks.agentState) => unknown) =>
     selector(mocks.agentState),

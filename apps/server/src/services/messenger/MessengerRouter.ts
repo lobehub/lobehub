@@ -1,12 +1,7 @@
 import { createIoRedisState } from '@chat-adapter/state-ioredis';
 import { agentDisplayName } from '@lobechat/types';
-import {
-  Chat,
-  ConsoleLogger,
-  type Message,
-  type MessageContext,
-  type SlashCommandEvent,
-} from 'chat';
+import type { Message, MessageContext, SlashCommandEvent, WebhookOptions } from 'chat';
+import { Chat, ConsoleLogger } from 'chat';
 import debug from 'debug';
 
 import { getBotFeatureAccessState } from '@/business/server/bot/featureAccess';
@@ -24,9 +19,19 @@ import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis'
 import { AiAgentService } from '@/server/services/aiAgent';
 import { AgentBridgeService } from '@/server/services/bot/AgentBridgeService';
 import { buildBotContext } from '@/server/services/bot/buildBotContext';
+import { replayDeferredBotMessages } from '@/server/services/bot/deferredMessages';
 import { submitBotFeedback } from '@/server/services/bot/feedbackSubmit';
+import {
+  buildReplayMessages,
+  getSameSenderMessages,
+  mergeBotMessages,
+} from '@/server/services/bot/mergeMessages';
+import { patchSenderBatches } from '@/server/services/bot/patchSenderBatches';
 import type { PlatformClient } from '@/server/services/bot/platforms';
 import { getBotReplyLocale } from '@/server/services/bot/platforms/const';
+// Leaf module, not the `./platforms` barrel: the barrel instantiates every
+// platform definition (and its ClientFactory) at import time.
+import { resolveBotConcurrency } from '@/server/services/bot/platforms/utils';
 import {
   renderCommandReply,
   renderFeedbackSubmitted,
@@ -58,6 +63,8 @@ const PERSONAL_SCOPE_ID = 'personal';
 const WECHAT_UNSUPPORTED_COMMANDS = new Set(['start']);
 
 interface RegisteredMessengerBot {
+  /** Chat SDK adapters keyed by platform id, as passed to the `Chat` config. */
+  adapters: Record<string, any>;
   binder: MessengerPlatformBinder;
   chatBot: Chat<any>;
   client: PlatformClient;
@@ -103,6 +110,8 @@ interface MessengerCommandContext {
    *  follow-up webhook, otherwise Discord shows "Thinking..." indefinitely
    *  and eventually flips to "The application did not respond". */
   interaction?: { applicationId: string; token: string };
+  /** Whether this invocation can receive a follow-up interactive picker. */
+  interactiveReplies: boolean;
   /** True when the command was invoked from a 1:1 DM. Commands that surface
    *  user-private UI (e.g. `/agents` picker) widen private replies into
    *  ephemerals when this is false so the channel doesn't see them. */
@@ -275,8 +284,10 @@ export class MessengerRouter {
    *      that chat-sdk doesn't surface
    *   6. Otherwise hand the (reconstructed) request to chat-sdk's webhook handler
    */
-  getWebhookHandler(platform: string): (req: Request) => Promise<Response> {
-    return async (req: Request) => {
+  getWebhookHandler(
+    platform: string,
+  ): (req: Request, options?: WebhookOptions) => Promise<Response> {
+    return async (req: Request, options?: WebhookOptions) => {
       const definition = messengerPlatformRegistry.getPlatform(platform);
       if (!definition) {
         return new Response(`Unknown messenger platform: ${platform}`, { status: 404 });
@@ -346,7 +357,7 @@ export class MessengerRouter {
       if (!handler) {
         return new Response(`Messenger ${platform} webhook unavailable`, { status: 500 });
       }
-      return handler(reconstructRequest(req, rawBody));
+      return handler(reconstructRequest(req, rawBody), options);
     };
   }
 
@@ -419,17 +430,53 @@ export class MessengerRouter {
         );
     }
 
-    const registered: RegisteredMessengerBot = { binder, chatBot, client, creds };
+    const registered: RegisteredMessengerBot = { adapters, binder, chatBot, client, creds };
     this.bots.set(creds.installationKey, registered);
 
     log('loadBot: registered messenger %s bot', creds.installationKey);
     return registered;
   }
 
+  /**
+   * Re-dispatch the messages `AgentBridgeService` parked while the thread's
+   * topic was still running (see `BotMessageRouter.replayDeferredMessages`).
+   * `applicationId` is the synthetic per-install id the bridge used when
+   * deferring (`messenger-<platform>[-<tenant>]`).
+   */
+  async replayDeferredMessages(
+    installationKey: string,
+    applicationId: string,
+    platformThreadId: string,
+  ): Promise<void> {
+    await replayDeferredBotMessages(applicationId, platformThreadId, async (entries) => {
+      const platform = installationKey.split(':')[0] as MessengerPlatform;
+      const store = getInstallationStore(platform);
+      const creds = await store?.resolveByKey(installationKey);
+      const bot = creds ? await this.getOrCreateBot(creds) : null;
+      const adapter = bot?.adapters[platform];
+      if (!bot || !adapter) throw new Error(`Messenger adapter unavailable for ${platform}`);
+      const results = await Promise.allSettled(
+        buildReplayMessages(entries).map((message) =>
+          bot.chatBot.processMessage(adapter, platformThreadId, message),
+        ),
+      );
+      const failure = results.find((result) => result.status === 'rejected');
+      if (failure?.status === 'rejected') throw failure.reason;
+    });
+  }
+
   private createChatBot(adapters: Record<string, any>, creds: InstallationCredentials): Chat<any> {
     const config: any = {
       adapters,
-      concurrency: 'queue',
+      // Messenger installs carry no per-channel settings, so this is purely the
+      // platform's own answer: WeChat collects a burst window because it splits
+      // one turn across several messages, everything else keeps the plain queue.
+      // Shared with `BotMessageRouter` so both paths agree on which platforms
+      // need collecting.
+      concurrency: (() => {
+        const { debounceMs, strategy } = resolveBotConcurrency(creds.platform, undefined);
+        return strategy === 'queue' ? 'queue' : { debounceMs, strategy };
+      })(),
       // Per-install Chat SDK identity so the queue / state / debounce keys
       // never overlap across workspaces.
       userName: `messenger-bot-${creds.installationKey}`,
@@ -445,7 +492,13 @@ export class MessengerRouter {
       });
     }
 
-    return new Chat(config);
+    const bot = new Chat(config);
+    const commands = this.getCommandsForPlatform(creds.platform);
+    patchSenderBatches(bot, (message) => {
+      const parsed = parseCommand(message.text);
+      return !!parsed && commands.some((command) => command.name === parsed.name);
+    });
+    return bot;
   }
 
   private registerHandlers(
@@ -482,7 +535,14 @@ export class MessengerRouter {
       // which the binder splits when posting in-thread.
       const isChannelMention = thread.isDM === false;
       const channelThreadTs = isChannelMention ? String(thread.id).split(':')[2] : undefined;
+      const isOneShotMessage = binder.isOneShotMessage?.(message) === true;
+      let oneShotReplySent = false;
       const replyToSender = (text: string): Promise<void> => {
+        if (isOneShotMessage && binder.replyToMessage) {
+          if (oneShotReplySent) return Promise.resolve();
+          oneShotReplySent = true;
+          return binder.replyToMessage(message, text);
+        }
         if (isChannelMention && binder.replyEphemeral) {
           return binder.replyEphemeral({
             channelId: chatId,
@@ -519,6 +579,7 @@ export class MessengerRouter {
               authorUserName: message.author.userName,
               binder,
               chatId,
+              interactiveReplies: !isOneShotMessage,
               isDM: !isChannelMention,
               link,
               message,
@@ -690,17 +751,30 @@ export class MessengerRouter {
       return { count: participants.length + 1, isNewParticipant: true };
     };
 
-    bot.onSubscribedMessage(async (thread, message, _context?: MessageContext) => {
+    bot.onSubscribedMessage(async (thread, message, context?: MessageContext) => {
       log('onSubscribedMessage: install=%s, msgId=%s', creds.installationKey, (message as any).id);
+
+      // Fold in whatever the SDK collected while the previous handler ran (or
+      // during a `burst` window) so the agent sees the whole user turn — text
+      // and media alike — instead of only its last message.
+      const merged = mergeBotMessages(message, context?.skipped);
 
       // DM short-circuit — always 1:1 with the bot, no participant gating.
       if (thread.isDM) {
-        await handle(thread, message, 'handleSubscribedMessage');
+        await handle(thread, merged, 'handleSubscribedMessage');
         return;
       }
 
-      const isMention = message.isMention === true;
-      const { count } = await trackThreadParticipant(thread, message);
+      // A mention anywhere in the collected turn addresses the bot; the last
+      // message of a burst often carries the question without the `@`.
+      const isMention =
+        message.isMention === true ||
+        getSameSenderMessages(message, context?.skipped).some((m) => m.isMention === true) === true;
+      let count = 0;
+      for (const source of [...(context?.skipped ?? []), message]) {
+        const participant = await trackThreadParticipant(thread, source);
+        count = Math.max(count, participant.count);
+      }
 
       // Single-human thread → respond without `@`. Multi-human thread →
       // only @mention triggers a reply, so the bot doesn't insert itself
@@ -732,7 +806,7 @@ export class MessengerRouter {
       // subscribed channel thread). `handleSubscribedMessage` reads the
       // cached topicId from chat-sdk thread state and continues that topic;
       // it falls back to `handleMention` internally if no topicId is cached.
-      await handle(thread, message, 'handleSubscribedMessage');
+      await handle(thread, merged, 'handleSubscribedMessage');
     });
 
     // First-touch entry point for any non-subscribed conversation:
@@ -743,19 +817,22 @@ export class MessengerRouter {
     // thread state, and (for subscribable platforms / threads — see
     // `client.shouldSubscribe`) subscribes the thread so subsequent
     // messages route through `onSubscribedMessage` and continue the topic.
-    bot.onNewMention(async (thread, message, _context?: MessageContext) => {
+    bot.onNewMention(async (thread, message, context?: MessageContext) => {
       log(
         'onNewMention: install=%s, msgId=%s, threadId=%s',
         creds.installationKey,
         (message as any).id,
         thread.id,
       );
+      const merged = mergeBotMessages(message, context?.skipped);
       // Record the original @mentioner so the participant count starts at 1
       // (not 0) when their first follow-up lands in `onSubscribedMessage`.
       // Without this the follow-up looks like a "new participant" instead
       // of the same person continuing.
-      await trackThreadParticipant(thread, message);
-      await handle(thread, message, 'handleMention');
+      for (const source of [...(context?.skipped ?? []), message]) {
+        await trackThreadParticipant(thread, source);
+      }
+      await handle(thread, merged, 'handleMention');
     });
 
     // Native slash commands. chat-adapter routes a leading `/command` to the
@@ -864,7 +941,7 @@ export class MessengerRouter {
           // Only nudge the user toward DM when the link actually went there.
           // For the Slack ephemeral path the prompt is already inline, a
           // second "check your DM" would be misleading.
-          if (!ctx.isDM && !canEphemeralInChannel) {
+          if (!ctx.isDM && !canEphemeralInChannel && ctx.interactiveReplies) {
             await ctx.reply(strings.checkDirectMessage);
           }
         },
@@ -976,7 +1053,11 @@ export class MessengerRouter {
             // channel text mention resolves the CHANNEL thread — picker taps
             // would write the DM while this channel's next run reads its own
             // state — so it gets the text status instead.
-            if (ctx.binder.sendAgentPicker && (ctx.isDM || ctx.source === 'slash')) {
+            if (
+              ctx.interactiveReplies &&
+              ctx.binder.sendAgentPicker &&
+              (ctx.isDM || ctx.source === 'slash')
+            ) {
               await ctx.binder.sendAgentPicker(ctx.chatId, {
                 action: 'mode',
                 entries: MessengerRouter.modePickerEntries(current, strings),
@@ -1215,6 +1296,7 @@ export class MessengerRouter {
         binder,
         chatId: replyChatId,
         interaction,
+        interactiveReplies: true,
         // `isDM` lets handlers like `/agents` keep the picker public in
         // DMs (so it stays in history) and widen to an ephemeral when
         // the slash was typed from a public channel.
@@ -1242,10 +1324,33 @@ export class MessengerRouter {
    * active one — on platforms that implement `sendAgentPicker` the bot replies
    * with a tap-to-switch keyboard. Platforms without keyboard support fall
    * back to a numbered text list + `/agents <n>` syntax for switching.
+   *
+   * Use when:
+   * - A registered /agents text or slash command reaches the router.
+   *
+   * Expects:
+   * - The context identifies whether Telegram can send interactive replies.
+   *
+   * Returns:
+   * - A private selection response, or a safe DM instruction for Guest Mode.
+   *
+   * Triggering workflow / Call stack:
+   *
+   * {@link registerHandlers} / {@link handleSlashCommand}
+   *   -> {@link buildCommands} (`/agents`)
+   *     -> {@link runAgentsCommand}
+   *       -> {@link MessengerCommandContext.reply} / {@link MessengerPlatformBinder.sendAgentPicker}
    */
   private async runAgentsCommand(ctx: MessengerCommandContext): Promise<void> {
     const { binder, chatId, link, serverDB } = ctx;
     const strings = getMessengerSystemStrings(ctx.platform);
+
+    // Telegram Guest replies are visible in the originating chat. Redirect
+    // before fetching personal data or switching state, including /agents <n>.
+    if (ctx.platform === 'telegram' && !ctx.interactiveReplies) {
+      await ctx.reply(strings.agentsDirectMessageOnly);
+      return;
+    }
 
     if (!link) {
       await ctx.reply(strings.needLink);
@@ -1261,7 +1366,7 @@ export class MessengerRouter {
     // Text-fallback path: `/agents 2` switches without needing the keyboard,
     // for platforms (or clients) where tap-buttons aren't available.
     const args = ctx.args.trim();
-    if (args && !binder.sendAgentPicker) {
+    if (args && (!binder.sendAgentPicker || !ctx.interactiveReplies)) {
       const index = Number.parseInt(args, 10);
       if (!Number.isInteger(index) || index < 1 || index > userAgents.length) {
         await ctx.reply(strings.agentsUsage(userAgents.length));
@@ -1277,7 +1382,7 @@ export class MessengerRouter {
       return;
     }
 
-    if (binder.sendAgentPicker) {
+    if (binder.sendAgentPicker && ctx.interactiveReplies) {
       await binder.sendAgentPicker(chatId, {
         entries: this.toPickerEntries(userAgents, link.activeAgentId, strings),
         // Channel invocation → render ephemeral so only the invoker sees
@@ -1348,10 +1453,33 @@ export class MessengerRouter {
    * replies with a tap-to-switch keyboard (buttons emit `messenger:scope:<id>`
    * so the callback path can tell them apart from agent switches). Platforms
    * without keyboard support fall back to a numbered text list + `/switch <n>`.
+   *
+   * Use when:
+   * - A registered /switch text or slash command reaches the router.
+   *
+   * Expects:
+   * - The context identifies whether Telegram can send interactive replies.
+   *
+   * Returns:
+   * - A private selection response, or a safe DM instruction for Guest Mode.
+   *
+   * Triggering workflow / Call stack:
+   *
+   * {@link registerHandlers} / {@link handleSlashCommand}
+   *   -> {@link buildCommands} (`/switch`)
+   *     -> {@link runSwitchCommand}
+   *       -> {@link MessengerCommandContext.reply} / {@link MessengerPlatformBinder.sendAgentPicker}
    */
   private async runSwitchCommand(ctx: MessengerCommandContext): Promise<void> {
     const { binder, chatId, link, serverDB } = ctx;
     const strings = getMessengerSystemStrings(ctx.platform);
+
+    // Telegram Guest replies are visible in the originating chat. Redirect
+    // before fetching personal data or switching state, including /switch <n>.
+    if (ctx.platform === 'telegram' && !ctx.interactiveReplies) {
+      await ctx.reply(strings.switchDirectMessageOnly);
+      return;
+    }
     if (!link) {
       await ctx.reply(strings.needLink);
       return;
@@ -1362,7 +1490,7 @@ export class MessengerRouter {
     // Text-fallback path: `/switch 2` switches without needing the keyboard,
     // for platforms (or clients) where tap-buttons aren't available.
     const arg = ctx.args.trim();
-    if (arg && !binder.sendAgentPicker) {
+    if (arg && (!binder.sendAgentPicker || !ctx.interactiveReplies)) {
       const index = Number.parseInt(arg, 10);
       if (!Number.isInteger(index) || index < 1 || index > scopes.length) {
         await ctx.reply(strings.scopesUsage(scopes.length));
@@ -1378,7 +1506,7 @@ export class MessengerRouter {
       return;
     }
 
-    if (binder.sendAgentPicker) {
+    if (binder.sendAgentPicker && ctx.interactiveReplies) {
       await binder.sendAgentPicker(chatId, {
         action: 'scope',
         entries: this.toScopeEntries(scopes, link.workspaceId ?? null),

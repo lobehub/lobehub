@@ -46,7 +46,9 @@ describe('ResourcePermissionModel', () => {
   it.each([
     ['agent', 'edit'],
     ['agentGroup', 'edit'],
-    ['document', 'view'],
+    // Regression: documents used to fall back to `view`, which left every
+    // workspace page read-only for anyone but its creator.
+    ['document', 'edit'],
   ] as const)(
     'falls back to %s-specific default %s without a row',
     async (resourceType, expected) => {

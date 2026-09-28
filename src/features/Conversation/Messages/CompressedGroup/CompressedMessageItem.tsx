@@ -13,7 +13,7 @@ import { userProfileSelectors } from '@/store/user/selectors';
 import { useAgentMeta } from '../../hooks';
 import ContentBlock from '../AssistantGroup/components/ContentBlock';
 import UserMessageContent from '../User/components/MessageContent';
-import { resolveSenderIdentity } from '../User/resolveSenderIdentity';
+import { getBotSender, resolveSenderIdentity } from '../User/resolveSenderIdentity';
 
 interface CompressedMessageItemProps {
   message: UIChatMessage;
@@ -35,6 +35,7 @@ const CompressedMessageItem = memo<CompressedMessageItemProps>(({ message }) => 
     // A shared (workspace) topic's compressed history may hold messages from
     // other members — render the sender's identity, not the viewer's.
     const { avatar, title } = resolveSenderIdentity({
+      botSender: getBotSender(message),
       currentUserId,
       selfAvatar: userAvatar,
       sender,

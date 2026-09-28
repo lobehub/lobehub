@@ -25,11 +25,21 @@ export interface TopicListItem extends ChatTopic {
   agentId?: string | null;
   lastAssistantMessage?: string | null;
   /**
+   * Visibility of the owning agent/group. `'private'` conversations stay out of
+   * team listings even when the viewer created them; null for legacy rows with
+   * no resolvable parent.
+   */
+  parentVisibility?: 'private' | 'public' | null;
+  /**
    * Start time of the topic's current run (latest top-level running
    * `agent_operations` row). Only set for `running` topics; null when the run
    * never wrote an operation row (e.g. client-mode) — keep a fallback.
+   *
+   * Type widens {@link ChatTopic.runStartedAt}: over-the-wire values arrive as
+   * ISO strings, so a narrowed `Date` here contradicts the base and breaks
+   * assignment in both directions.
    */
-  runStartedAt?: Date | null;
+  runStartedAt?: ChatTopic['runStartedAt'];
 }
 
 export type TopicBatchDeleteScope = 'own' | 'workspace';
@@ -41,6 +51,9 @@ type UpdateTopicMetadataInput = Omit<Partial<ChatTopicMetadata>, 'onboardingSess
 };
 
 export class TopicService {
+  cancelRateLimitContinuation = (id: string) =>
+    lambdaClient.topic.cancelRateLimitContinuation.mutate({ id });
+
   createTopic = (params: CreateTopicParams): Promise<string> => {
     return lambdaClient.topic.createTopic.mutate({
       ...params,
@@ -153,6 +166,17 @@ export class TopicService {
 
   updateTopic = (id: string, data: Partial<ChatTopic>) => {
     return lambdaClient.topic.updateTopic.mutate({ id, value: data });
+  };
+
+  updateTopicModel = (
+    id: string,
+    value: {
+      metadata?: Pick<ChatTopicMetadata, 'heteroEffort' | 'reasoningConfig'>;
+      model: string;
+      provider: string;
+    },
+  ) => {
+    return lambdaClient.topic.updateTopicModel.mutate({ id, ...value });
   };
 
   updateTopicMetadata = (id: string, metadata: UpdateTopicMetadataInput) => {

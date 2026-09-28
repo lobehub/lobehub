@@ -285,6 +285,7 @@ export const createNightlyReviewSourceHandler = (
           () =>
             deps.collectContext({
               agentId: payload.agentId,
+              localDate: payload.localDate,
               reviewWindowEnd: payload.reviewWindowEnd,
               reviewWindowStart: payload.reviewWindowStart,
               userId: payload.userId,

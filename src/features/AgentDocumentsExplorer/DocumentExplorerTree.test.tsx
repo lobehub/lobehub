@@ -22,29 +22,6 @@ const modalConfirm = vi.hoisted(() => vi.fn());
 const openDocumentMock = vi.hoisted(() => vi.fn());
 const removeDocumentMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@lobehub/ui', () => ({
-  ActionIcon: ({
-    icon,
-    onClick,
-    title,
-  }: {
-    icon?: { displayName?: string; name?: string };
-    onClick?: () => void;
-    title?: string;
-  }) => (
-    <button aria-label={title} data-icon={icon?.displayName ?? icon?.name} onClick={onClick}>
-      {title}
-    </button>
-  ),
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Icon: () => <span />,
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-}));
-
-vi.mock('@lobehub/ui/icons', () => ({
-  SkillsIcon: () => null,
-}));
-
 vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
   ActionIcon: ({
@@ -66,20 +43,23 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
     items,
   }: {
     children: ReactNode;
-    items: { key: string; label: string; onClick: () => void }[];
+    items: { key?: string; label?: string; onClick?: () => void; type?: string }[];
   }) => (
     <div>
       {children}
-      {items.map((item) => (
-        <button data-testid={`create-menu-${item.key}`} key={item.key} onClick={item.onClick}>
-          {item.label}
-        </button>
-      ))}
+      {items
+        .filter((item) => item.type !== 'divider' && item.key)
+        .map((item) => (
+          <button data-testid={`create-menu-${item.key}`} key={item.key} onClick={item.onClick}>
+            {item.label}
+          </button>
+        ))}
     </div>
   ),
 }));
 
-vi.mock('antd', () => ({
+vi.mock('antd', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   App: {
     useApp: () => ({
       message: { error: messageError, success: messageSuccess, warning: messageWarning },
@@ -96,12 +76,6 @@ vi.mock('@/services/agentDocument', () => ({
 
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => navigateMock,
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
 }));
 
 vi.mock('@/features/ExplorerTree', () => {
@@ -261,6 +235,28 @@ describe('DocumentExplorerTree', () => {
     expect(screen.getByTestId('create-menu-new-folder')).toHaveTextContent(
       'workingPanel.resources.tree.newFolder',
     );
+    expect(screen.getByTestId('create-menu-upload-file')).toHaveTextContent(
+      'workingPanel.resources.tree.uploadFile',
+    );
+  });
+
+  it('offers upload on a folder context menu', () => {
+    const data = [
+      createDocument({
+        documentId: 'folder-doc',
+        fileType: CUSTOM_FOLDER_FILE_TYPE,
+        filename: 'Notes',
+        id: 'folder-row',
+        isFolder: true,
+        title: 'Notes',
+      }),
+    ];
+
+    render(<DocumentExplorerTree agentId="agent-1" data={data} mutate={vi.fn()} />, {
+      wrapper: MemoryRouter,
+    });
+
+    expect(screen.getByTestId('tree-menu-folder-row-upload-file')).toBeInTheDocument();
   });
 
   it('renders managed skill bundle as a folder with SKILL.md underneath', () => {
