@@ -59,9 +59,9 @@ export const resolveClaudeThinkingConfig = ({
     }
 
     case 'disabled': {
-      // Fable 5 / Mythos 5 reject `disabled` with a 400. Omitting the config is the documented
-      // fallback: they think regardless, and their `omitted` display default already keeps the
-      // reasoning text out of the response, which is what turning the switch off asks for.
+      // Fable 5 / Mythos 5 / Opus 5.5 reject `disabled` with a 400. Omitting the config is the
+      // documented fallback: they think regardless, and their `omitted` display default already
+      // keeps the reasoning text out of the response, which is what turning the switch off asks for.
       if (isAlwaysThinkingClaudeModel(model)) return undefined;
 
       // `display` is invalid alongside `disabled` — there is nothing to display — so any caller

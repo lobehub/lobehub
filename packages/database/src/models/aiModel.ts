@@ -247,6 +247,31 @@ export class AiModelModel {
   };
 
   /**
+   * Bulk counterpart of getModelReasoningConfig (same personal scope): every
+   * saved reasoning default, keyed by `${providerId}/${modelId}`. Lets the
+   * client seed all model-list rows with one read instead of one per model.
+   */
+  getAllModelReasoningConfigs = async (): Promise<Record<string, AiModelReasoningConfig>> => {
+    const rows = await this.db
+      .select({ config: aiModels.config, id: aiModels.id, providerId: aiModels.providerId })
+      .from(aiModels)
+      .where(
+        and(
+          this.personalScopeWhere(),
+          sql`COALESCE(jsonb_exists(${aiModels.config}, 'chatConfig'), false)`,
+        ),
+      );
+
+    const configs: Record<string, AiModelReasoningConfig> = {};
+    for (const row of rows) {
+      const chatConfig = (row.config as AiModelConfig | null)?.chatConfig;
+      if (chatConfig) configs[`${row.providerId}/${row.id}`] = chatConfig;
+    }
+
+    return configs;
+  };
+
+  /**
    * Personal-scope partial update of `config.chatConfig` (see
    * getModelReasoningConfig for the scoping rationale).
    */
@@ -296,7 +321,12 @@ export class AiModelModel {
       workspaceId: this.workspaceId ?? null,
     } as typeof aiModels.$inferInsert;
 
-    if (value.type) insertValues.type = normalizeAiModelType(value.type);
+    // A toggle without a type (CLI, API) must not let the column default turn a builtin
+    // non-chat model (e.g. a speech-to-text card) into a `chat` row, which would leak it into
+    // chat pickers. Only the inserted row takes the builtin type; an existing row keeps its own.
+    const type =
+      value.type ?? (await this.#resolveDefaultModelTypes(value.providerId, [value.id])).get(value.id);
+    if (type) insertValues.type = normalizeAiModelType(type);
 
     const updateValues: Partial<typeof aiModels.$inferInsert> = {
       enabled: value.enabled,
@@ -482,6 +512,26 @@ export class AiModelModel {
       .returning();
   };
 
+  /**
+   * Types of builtin model cards, keyed by model id. Prefers the card under the same provider and
+   * falls back to a same-id card from another provider (e.g. a custom provider serving a builtin id).
+   */
+  #resolveDefaultModelTypes = async (providerId: string, modelIds: string[]) => {
+    const { loadModels } = await import('@lobechat/business-model-bank/model-config');
+    const defaultModels = await loadModels();
+    const defaultModelMap = new Map(defaultModels.map((m) => [`${m.providerId}:${m.id}`, m]));
+
+    const types = new Map<string, NonNullable<typeof aiModels.$inferInsert.type>>();
+    for (const modelId of modelIds) {
+      const defaultModel =
+        defaultModelMap.get(`${providerId}:${modelId}`) ??
+        defaultModels.find((model) => model.id === modelId);
+      if (defaultModel?.type) types.set(modelId, defaultModel.type);
+    }
+
+    return types;
+  };
+
   batchToggleAiModels = async (providerId: string, models: string[], enabled: boolean) => {
     // Early return if models array is empty to prevent database insertion error
     if (this.isEmptyArray(models)) {
@@ -489,15 +539,11 @@ export class AiModelModel {
     }
 
     // Get default model list to preserve type information
-    const { loadModels } = await import('@lobechat/business-model-bank/model-config');
-    const defaultModels = await loadModels();
-    const defaultModelMap = new Map(defaultModels.map((m) => [`${m.providerId}:${m.id}`, m]));
+    const defaultTypes = await this.#resolveDefaultModelTypes(providerId, models);
 
     // Prepare all records for batch upsert
     const allRecords = models.map((modelId) => {
-      const defaultModel =
-        defaultModelMap.get(`${providerId}:${modelId}`) ??
-        defaultModels.find((model) => model.id === modelId);
+      const defaultType = defaultTypes.get(modelId);
       const record: typeof aiModels.$inferInsert = this.values({
         enabled,
         id: modelId,
@@ -508,9 +554,7 @@ export class AiModelModel {
       });
 
       // Preserve type if available from default model list
-      if (defaultModel?.type) {
-        record.type = defaultModel.type;
-      }
+      if (defaultType) record.type = defaultType;
 
       return record;
     });

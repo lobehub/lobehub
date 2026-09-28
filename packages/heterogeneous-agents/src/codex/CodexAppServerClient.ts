@@ -1,7 +1,7 @@
 import type { ChildProcess } from 'node:child_process';
-import { spawn } from 'node:child_process';
 import path from 'node:path';
 
+import { spawnManaged } from '@lobechat/utils/managedProcess';
 import { isRecord, pickString } from '@lobechat/utils/object';
 
 import { resolveCliSpawnPlan } from '../spawn/cliSpawn';
@@ -358,7 +358,7 @@ export class CodexAppServerClient {
       );
     }
 
-    const child = spawn(spawnPlan.command, spawnPlan.args, {
+    const child = spawnManaged(spawnPlan.command, spawnPlan.args, {
       cwd: this.options.cwd,
       detached: process.platform !== 'win32',
       env: this.options.env,

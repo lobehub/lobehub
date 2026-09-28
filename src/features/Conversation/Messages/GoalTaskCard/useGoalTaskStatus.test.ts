@@ -81,4 +81,28 @@ describe('useGoalTaskStatus', () => {
 
     expect(result.current.progress.phase).toBe('waiting');
   });
+
+  it('exposes the task nodes as steps in graph creation order', () => {
+    const task = (id: string, status: string, createdAt: string, title: string) => ({
+      createdAt: new Date(createdAt),
+      id,
+      kind: 'task',
+      status,
+      title,
+    });
+    mocks.goalGraphById['goal-1'] = snapshot({
+      nodes: [
+        task('w2', 'active', '2026-08-14T08:05:00.000Z', 'Fix the parser'),
+        task('w1', 'resolved', '2026-08-14T08:00:00.000Z', 'Reproduce'),
+        { id: 'f1', kind: 'finding', status: 'resolved', title: 'Root cause' },
+      ] as never,
+    });
+
+    const { result } = renderHook(() => useGoalTaskStatus({ goalId: 'goal-1' }));
+
+    expect(result.current.steps).toEqual([
+      { status: 'resolved', title: 'Reproduce' },
+      { status: 'active', title: 'Fix the parser' },
+    ]);
+  });
 });

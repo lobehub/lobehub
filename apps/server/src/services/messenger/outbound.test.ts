@@ -160,7 +160,7 @@ describe('sendOutboundDirectMessage', () => {
 
   describe('attachments', () => {
     it('delivers Telegram attachments with the text as caption, no extra message', async () => {
-      mocks.sendTelegramAttachments.mockResolvedValueOnce(1);
+      mocks.sendTelegramAttachments.mockResolvedValueOnce({ delivered: 1, failures: [] });
 
       await sendOutboundDirectMessage({
         attachments: [fileAttachment],
@@ -179,7 +179,7 @@ describe('sendOutboundDirectMessage', () => {
     });
 
     it('falls back to a plain Telegram message when every attachment fails', async () => {
-      mocks.sendTelegramAttachments.mockResolvedValueOnce(0);
+      mocks.sendTelegramAttachments.mockResolvedValueOnce({ delivered: 0, failures: [] });
 
       await sendOutboundDirectMessage({
         attachments: [fileAttachment],
@@ -192,7 +192,7 @@ describe('sendOutboundDirectMessage', () => {
     });
 
     it('throws when Telegram attachments fail and there is no text leg', async () => {
-      mocks.sendTelegramAttachments.mockResolvedValueOnce(0);
+      mocks.sendTelegramAttachments.mockResolvedValueOnce({ delivered: 0, failures: [] });
 
       await expect(
         sendOutboundDirectMessage({
@@ -205,7 +205,10 @@ describe('sendOutboundDirectMessage', () => {
 
     it('sends Discord attachments in batches, text on the first batch only', async () => {
       const rawFiles = [{ name: 'a' }, { name: 'b' }];
-      mocks.materializeAttachmentsForDiscord.mockResolvedValueOnce(rawFiles);
+      mocks.materializeAttachmentsForDiscord.mockResolvedValueOnce({
+        failures: [],
+        files: rawFiles,
+      });
       mocks.batchDiscordFiles.mockReturnValueOnce([[rawFiles[0]], [rawFiles[1]]]);
 
       await sendOutboundDirectMessage({
@@ -222,7 +225,7 @@ describe('sendOutboundDirectMessage', () => {
     });
 
     it('opens the Slack DM conversation and uploads via the v2 flow', async () => {
-      mocks.sendSlackAttachments.mockResolvedValueOnce(1);
+      mocks.sendSlackAttachments.mockResolvedValueOnce({ delivered: 1, failures: [] });
 
       await sendOutboundDirectMessage({
         attachments: [fileAttachment],
@@ -241,7 +244,7 @@ describe('sendOutboundDirectMessage', () => {
     });
 
     it('falls back to a plain Slack message when every upload fails', async () => {
-      mocks.sendSlackAttachments.mockResolvedValueOnce(0);
+      mocks.sendSlackAttachments.mockResolvedValueOnce({ delivered: 0, failures: [] });
 
       await sendOutboundDirectMessage({
         attachments: [fileAttachment],
@@ -296,7 +299,10 @@ describe('sendOutboundDirectMessage', () => {
 
     it('sends Discord in-budget files and over-budget links in the same push', async () => {
       const rawFiles = [{ name: 'report.pdf' }];
-      mocks.materializeAttachmentsForDiscord.mockResolvedValueOnce(rawFiles);
+      mocks.materializeAttachmentsForDiscord.mockResolvedValueOnce({
+        failures: [],
+        files: rawFiles,
+      });
       mocks.batchDiscordFiles.mockReturnValueOnce([rawFiles]);
 
       await sendOutboundDirectMessage({

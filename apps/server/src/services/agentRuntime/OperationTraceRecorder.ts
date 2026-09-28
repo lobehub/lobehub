@@ -25,8 +25,12 @@ export interface AppendStepParams {
    * Context: agent-runtime state blob was hitting Upstash Redis 10MB limit
    * because ~97% of each step payload was tracing-only fields. Routing CE
    * via tracingContextEngine keeps it in trace only, keeping Redis state lean.
+   *
+   * `metadata` carries the pipeline's per-request decisions (trim stats,
+   * cache-warmth gate inputs/outputs, truncation counts) — small scalar
+   * records, safe to store every step.
    */
-  contextEngine?: { input?: unknown; output?: unknown };
+  contextEngine?: { input?: unknown; metadata?: unknown; output?: unknown };
   currentContext?: { payload?: unknown; phase?: string; stepContext?: unknown };
   externalRetryCount: number;
   presentation: StepPresentationData;
@@ -302,14 +306,16 @@ export class OperationTraceRecorder {
   }
 
   /**
-   * Strip `contextEngine` input/output fields that are identical to the most-recently
-   * stored values in previous steps. The viewer reconstructs the full snapshot by
-   * walking back through the step list (same pattern as messagesBaseline + messagesDelta).
+   * Strip `contextEngine` input/output/metadata fields that are identical to the
+   * most-recently stored values in previous steps. The viewer reconstructs the
+   * full snapshot by walking back through the step list (same pattern as
+   * messagesBaseline + messagesDelta).
    */
   private deduplicateCeSnapshot(step: StepSnapshot, prevSteps: StepSnapshot[]): void {
     if (!step.contextEngine) return;
 
     let lastInputJson: string | undefined;
+    let lastMetadataJson: string | undefined;
     let lastOutputJson: string | undefined;
 
     for (let i = prevSteps.length - 1; i >= 0; i--) {
@@ -318,19 +324,32 @@ export class OperationTraceRecorder {
       if (lastInputJson === undefined && prev.contextEngine.input !== undefined) {
         lastInputJson = JSON.stringify(prev.contextEngine.input);
       }
+      if (lastMetadataJson === undefined && prev.contextEngine.metadata !== undefined) {
+        lastMetadataJson = JSON.stringify(prev.contextEngine.metadata);
+      }
       if (lastOutputJson === undefined && prev.contextEngine.output !== undefined) {
         lastOutputJson = JSON.stringify(prev.contextEngine.output);
       }
-      if (lastInputJson !== undefined && lastOutputJson !== undefined) break;
+      if (
+        lastInputJson !== undefined &&
+        lastMetadataJson !== undefined &&
+        lastOutputJson !== undefined
+      )
+        break;
     }
 
     const storeInput =
       lastInputJson === undefined || JSON.stringify(step.contextEngine.input) !== lastInputJson;
+    const storeMetadata =
+      step.contextEngine.metadata !== undefined &&
+      (lastMetadataJson === undefined ||
+        JSON.stringify(step.contextEngine.metadata) !== lastMetadataJson);
     const storeOutput =
       lastOutputJson === undefined || JSON.stringify(step.contextEngine.output) !== lastOutputJson;
 
     step.contextEngine = {
       ...(storeInput ? { input: step.contextEngine.input } : {}),
+      ...(storeMetadata ? { metadata: step.contextEngine.metadata } : {}),
       ...(storeOutput ? { output: step.contextEngine.output } : {}),
     };
   }
@@ -371,7 +390,7 @@ export class OperationTraceRecorder {
     // RuntimeExecutorContext.tracingContextEngine). Uses the same delta
     // pattern as messagesBaseline/messagesDelta.
     const contextEngine: StepSnapshot['contextEngine'] = ceInput
-      ? { input: ceInput.input, output: ceInput.output }
+      ? { input: ceInput.input, metadata: ceInput.metadata, output: ceInput.output }
       : undefined;
 
     // Strip heavy/redundant data from events before persisting to snapshot.

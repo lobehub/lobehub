@@ -22,7 +22,7 @@ export interface ResolveStaleModelStateContext {
   builtinAiModelList: LobeDefaultAiModelListItem[];
   enabledList: EnabledProviderWithModels[];
   modelRedirects?: Record<string, string>;
-  modelType: 'chat' | 'embedding';
+  modelType: 'asr' | 'chat' | 'embedding';
 }
 
 /**

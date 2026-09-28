@@ -23,6 +23,44 @@ export type WorkVersionChangeType = 'created' | 'updated';
 export type WorkDisplayField =
   'content' | 'description' | 'identifier' | 'status' | 'title' | 'url';
 
+/**
+ * Server-written Agent Share provenance on a `works` row. Mirrors the
+ * document/file provenance: a Work registered by a share visitor's run stays
+ * owned by the CREATOR (the run executes under their account) but is fenced
+ * off from the creator's ordinary Work surfaces and served back only to the
+ * visitor's own share topic.
+ */
+export interface AgentShareWorkProvenance {
+  shareId: string;
+  topicId: string;
+  visitorUserId: string;
+}
+
+export interface WorkMetadata {
+  agentShare?: AgentShareWorkProvenance;
+}
+
+/**
+ * Explicit read/write boundary for the Work registry, same shape as
+ * `DocumentAccessScope`: `ordinary` sees only rows WITHOUT share provenance;
+ * `agentShare` sees only rows stamped with exactly this share/topic/visitor.
+ */
+export type WorkAccessScope =
+  ({ type: 'agentShare' } & AgentShareWorkProvenance) | { type: 'ordinary' };
+
+export const ordinaryWorkAccessScope = {
+  type: 'ordinary',
+} as const satisfies WorkAccessScope;
+
+export const agentShareWorkAccessScope = (
+  provenance: AgentShareWorkProvenance,
+): WorkAccessScope => ({
+  shareId: provenance.shareId,
+  topicId: provenance.topicId,
+  type: 'agentShare',
+  visitorUserId: provenance.visitorUserId,
+});
+
 export interface WorkVersionMetadata {
   agentDocumentId?: string;
   /**

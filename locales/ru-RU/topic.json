@@ -24,6 +24,8 @@
   "actions.copyLinkSuccess": "Ссылка скопирована",
   "actions.copySessionId": "Копировать ID сессии",
   "actions.copySessionIdSuccess": "ID сессии скопирован",
+  "actions.copyTopicPrompt": "Скопировать запрос темы",
+  "actions.copyTopicPromptSuccess": "Запрос темы скопирован",
   "actions.copyWorkingDirectory": "Копировать рабочий каталог",
   "actions.copyWorkingDirectorySuccess": "Рабочий каталог скопирован",
   "actions.diagnose": "Проверить цепочку сообщений",

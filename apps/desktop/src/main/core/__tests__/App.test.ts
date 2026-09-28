@@ -1,3 +1,4 @@
+import * as managedProcess from '@lobechat/utils/managedProcess';
 import { app as electronApp, ipcMain } from 'electron';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -25,6 +26,7 @@ vi.mock('electron', () => ({
       setIcon: vi.fn(),
     },
     exit: vi.fn(),
+    quit: vi.fn(),
   },
   ipcMain: {
     handle: vi.fn(),
@@ -223,17 +225,34 @@ describe('App', () => {
       );
     });
 
-    it('destroys registered services before quitting', () => {
+    it('waits for managed processes before destroying services and completing quit', async () => {
+      let finish!: () => void;
+      vi.spyOn(managedProcess, 'shutdownManagedProcesses').mockReturnValue(
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+      );
       appInstance = new App();
       const databaseService = appInstance.getService(LocalDatabaseService);
       const destroy = vi.spyOn(databaseService, 'destroy');
       const beforeQuitHandler = vi
         .mocked(electronApp.on)
-        .mock.calls.findLast(([event]) => (event as string) === 'before-quit')?.[1] as () => void;
+        .mock.calls.findLast(([event]) => (event as string) === 'before-quit')?.[1] as (event: {
+        preventDefault: () => void;
+      }) => void;
 
-      beforeQuitHandler();
-
-      expect(destroy).toHaveBeenCalledOnce();
+      const event = { preventDefault: vi.fn() };
+      beforeQuitHandler(event);
+      beforeQuitHandler(event);
+      expect(event.preventDefault).toHaveBeenCalledTimes(2);
+      expect(destroy).not.toHaveBeenCalled();
+      expect(managedProcess.shutdownManagedProcesses).toHaveBeenCalledOnce();
+      finish();
+      await vi.waitFor(() => expect(destroy).toHaveBeenCalledOnce());
+      expect(electronApp.quit).toHaveBeenCalledOnce();
+      event.preventDefault.mockClear();
+      beforeQuitHandler(event);
+      expect(event.preventDefault).not.toHaveBeenCalled();
     });
 
     it('prewarms the local database after browser initialization yields to the event loop', async () => {

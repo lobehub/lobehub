@@ -1,9 +1,8 @@
 'use client';
 
-import { LoadingOutlined } from '@ant-design/icons';
 import { Flexbox } from '@lobehub/ui';
-import { Button, createModal } from '@lobehub/ui/base-ui';
-import { Input, Spin } from 'antd';
+import { Button, createModal, Spin } from '@lobehub/ui/base-ui';
+import { Input } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { ChevronLeft, ChevronRight, Expand, FileText } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -260,7 +259,7 @@ const PdfPreview = memo<PdfPreviewProps>(({ loading, pdfData, onGeneratePdf }) =
         style={{ padding: 12 }}
       >
         <div className={localStyles.loadingState}>
-          <Spin indicator={<LoadingOutlined spin style={{ fontSize: 24 }} />} />
+          <Spin size={24} />
           <div className={localStyles.loadingText}>{t('shareModal.generatingPdf')}</div>
         </div>
       </div>

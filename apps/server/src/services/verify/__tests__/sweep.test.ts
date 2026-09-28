@@ -5,6 +5,7 @@ import { VERIFY_ABANDONED_MS, VERIFY_ROLLUP_GRACE_MS } from '../staleness';
 import { sweepStuckVerifyRuns } from '../sweep';
 
 const {
+  settleFailedRepair,
   claimVerifying,
   findStuckVerifying,
   operationFindById,
@@ -13,6 +14,7 @@ const {
   upsertByCheckItem,
   finalizeVerifyRun,
 } = vi.hoisted(() => ({
+  settleFailedRepair: vi.fn(),
   claimVerifying: vi.fn(),
   finalizeVerifyRun: vi.fn(),
   findStuckVerifying: vi.fn(),
@@ -45,6 +47,7 @@ vi.mock('../statusService', () => ({
     return { claimVerifying, recompute };
   }),
 }));
+vi.mock('../repairTerminal', () => ({ settleFailedRepair }));
 vi.mock('../settle', () => ({ finalizeVerifyRun }));
 
 const db = {} as any;
@@ -71,6 +74,7 @@ const singlePage = (runs: unknown[]) => {
 describe('sweepStuckVerifyRuns', () => {
   beforeEach(() => {
     [
+      settleFailedRepair,
       claimVerifying,
       finalizeVerifyRun,
       findStuckVerifying,
@@ -290,5 +294,12 @@ describe('sweepStuckVerifyRuns', () => {
     });
     expect(outcome.skipped).toBe(1);
     expect(outcome.settled).toEqual(['run-newer']);
+  });
+  it('recovers a planned repair whose operation died before judging began', async () => {
+    singlePage([stuckRun({ status: 'planned' })]);
+    settleFailedRepair.mockResolvedValue(true);
+    expect((await sweepStuckVerifyRuns(db, { now: NOW })).abandoned).toEqual(['run-1']);
+    expect(settleFailedRepair).toHaveBeenCalledWith(db, 'u1', 'op-1', undefined);
+    expect(finalizeVerifyRun).not.toHaveBeenCalled();
   });
 });

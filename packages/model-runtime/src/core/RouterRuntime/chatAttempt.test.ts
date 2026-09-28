@@ -180,6 +180,62 @@ describe('observeChatAttempt', () => {
     expect(finished).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'completed' }));
   });
 
+  it.each([
+    ['refusal', 'ModelRefusalError'],
+    ['sensitive', 'ModelRefusalError'],
+    ['end_turn', 'ModelEmptyError'],
+  ] as const)(
+    'reports an empty completion stopped by %s as %s',
+    async (finishReason, errorName) => {
+      const finished = vi.fn();
+      const attemptRun = observeChatAttempt(
+        async ({ callback }) => {
+          await callback?.onFinal?.({ finishReason, text: '' });
+          return new Response(null);
+        },
+        undefined,
+        attempt,
+        true,
+        finished,
+      );
+
+      await expect(attemptRun).rejects.toMatchObject({ name: errorName });
+      expect(finished).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: expect.objectContaining({
+            diagnostics: expect.objectContaining({ finishReason }),
+          }),
+          outcome: 'empty',
+        }),
+      );
+    },
+  );
+
+  it('reports a reasoning-only refusal as a refusal', async () => {
+    const finished = vi.fn();
+    const attemptRun = observeChatAttempt(
+      async ({ callback }) => {
+        await callback?.onReasoningPart?.({ content: 'reason', partType: 'text' });
+        await callback?.onFinal?.({ finishReason: 'refusal', text: '' });
+        return new Response(null);
+      },
+      undefined,
+      attempt,
+      true,
+      finished,
+    );
+
+    await expect(attemptRun).rejects.toMatchObject({ name: 'ModelRefusalError' });
+    expect(finished).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.objectContaining({
+          diagnostics: expect.objectContaining({ reasoningLength: 6 }),
+        }),
+        outcome: 'empty',
+      }),
+    );
+  });
+
   it('adds attempt identity without replacing provider performance', async () => {
     let now = 1000;
     vi.spyOn(Date, 'now').mockImplementation(() => now);
@@ -293,6 +349,34 @@ describe('observeChatAttempt', () => {
       expect(finished.mock.calls[0][0].outcome).toBe(data.error ? 'interrupted' : 'cancelled');
     }
   });
+
+  it.each([
+    { expectedOutcome: 'completed', text: 'I cannot help with that.' },
+    { expectedOutcome: 'empty', text: '' },
+  ])(
+    'reports the provider finish reason on a $expectedOutcome attempt',
+    async ({ expectedOutcome, text }) => {
+      const finished = vi.fn();
+      const response = await observeChatAttempt(
+        async ({ callback }) => {
+          if (text) await callback?.onText?.(text);
+          await callback?.onFinal?.({ finishReason: 'refusal', text });
+          return new Response('done');
+        },
+        undefined,
+        attempt,
+        true,
+        finished,
+      );
+      await response.text().catch(() => {});
+
+      expect(finished).toHaveBeenCalledTimes(1);
+      expect(finished.mock.calls[0][0]).toMatchObject({
+        finishReason: 'refusal',
+        outcome: expectedOutcome,
+      });
+    },
+  );
 
   it('keeps concurrent attempt identities isolated even with shared options', async () => {
     const finals: OnFinishData[] = [];

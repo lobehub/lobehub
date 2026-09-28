@@ -20,7 +20,7 @@ export interface OperationClientOptions {
 
 /**
  * Structurally compatible with the store's
- * `Pick<AgentStreamClient, 'connect' | 'disconnect' | 'on' | 'reconnect' | 'sendInterrupt' | 'sendToolResult' | 'updateToken'>`.
+ * `Pick<AgentStreamClient, 'connect' | 'disconnect' | 'on' | 'reconnect' | 'sendToolResult' | 'updateToken'>`.
  */
 export interface OperationClient {
   /** Subscribe this operation on the shared socket (idempotent while active). */
@@ -28,13 +28,17 @@ export interface OperationClient {
   readonly connectionStatus: ConnectionStatus;
   /** Unsubscribe; emits `disconnected` like v1. */
   disconnect: () => void;
+  /**
+   * Highest event id applied so far — the cursor another transport must resume
+   * from if this operation moves off the shared socket.
+   */
+  readonly lastEventId: string;
   on: <K extends keyof OperationClientEvents>(
     event: K,
     listener: OperationClientEvents[K],
   ) => () => void;
   /** Unsubscribe + resubscribe from the last applied event id. */
   reconnect: () => Promise<void>;
-  sendInterrupt: () => void;
   sendToolResult: (result: ToolResultPayload) => boolean;
   /** No-op: the mux fetches a fresh token via `getToken` on every dial. */
   updateToken: (token: string) => void;
@@ -133,6 +137,9 @@ export const createOperationClient = (
     get connectionStatus() {
       return status;
     },
+    get lastEventId() {
+      return subscription?.lastEventId || lastEventId;
+    },
     connect,
     disconnect: () => {
       release();
@@ -156,9 +163,6 @@ export const createOperationClient = (
     reconnect: async () => {
       release();
       connect();
-    },
-    sendInterrupt: () => {
-      subscription?.sendInterrupt();
     },
     sendToolResult: (result) => subscription?.sendToolResult(result) ?? false,
     updateToken: () => {},

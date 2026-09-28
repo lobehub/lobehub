@@ -24,7 +24,6 @@ const MarkdownRender = memo<{ children?: string }>(({ children }) => {
 
   return (
     <Markdown
-      allowHtml
       enableImageGallery={false}
       enableLatex={false}
       components={{

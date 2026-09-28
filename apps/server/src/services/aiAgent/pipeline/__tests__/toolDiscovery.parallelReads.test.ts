@@ -2,6 +2,8 @@ import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
+
 import { AiAgentService } from '../../index';
 
 // The share-gate filter now runs at the top of `discoverTools`, before
@@ -328,5 +330,44 @@ describe('discoverTools - independent reads run together', () => {
       code: SpanStatusCode.ERROR,
       message: 'composio down',
     });
+  }, 15_000);
+
+  // A Composio connection that never finished OAuth (or expired) still has a
+  // plugin row with the app's full manifest. Only `getComposioManifests`
+  // (ACTIVE-gated, source `composio`) may expose it — letting the raw row
+  // through advertises every Gmail API to the model while each call fails as
+  // `Builtin tool "gmail" is not implemented`.
+  it('does not expose a non-ACTIVE Composio plugin row as an installed plugin', async () => {
+    const gmailManifest = {
+      api: [{ description: 'Fetch emails', name: 'GMAIL_FETCH_EMAILS', parameters: {} }],
+      identifier: 'gmail',
+      meta: { title: 'Gmail' },
+      type: 'default',
+    };
+    reads.plugins.mockImplementationOnce(async () => {
+      reads.started.push('plugins');
+      return [
+        {
+          customParams: { composio: { connectedAccountId: 'ca_pending', status: 'PENDING' } },
+          identifier: 'gmail',
+          manifest: gmailManifest,
+          type: 'plugin',
+        },
+        {
+          customParams: {},
+          identifier: 'some-plugin',
+          manifest: { api: [], identifier: 'some-plugin', meta: {}, type: 'default' },
+          type: 'plugin',
+        },
+      ];
+    });
+
+    const result = await service.execAgent({ agentId: 'agent-1', prompt: 'Read my inbox' });
+
+    expect(result.success).toBe(true);
+    const toolsContext = vi.mocked(createServerAgentToolsEngine).mock.calls.at(-1)![0];
+    const installedIds = toolsContext.installedPlugins.map((p: any) => p.identifier);
+    expect(installedIds).toContain('some-plugin');
+    expect(installedIds).not.toContain('gmail');
   }, 15_000);
 });

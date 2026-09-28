@@ -1,8 +1,5 @@
 import type { MessagePlatformType } from '@lobechat/builtin-tool-message';
 import type { MessageRuntimeService } from '@lobechat/builtin-tool-message/executionRuntime';
-import { LarkApiClient } from '@lobechat/chat-adapter-feishu';
-import { QQApiClient } from '@lobechat/chat-adapter-qq';
-import { WechatApiClient } from '@lobechat/chat-adapter-wechat';
 import {
   DEFAULT_BOT_HISTORY_LIMIT,
   MAX_BOT_HISTORY_LIMIT,
@@ -13,25 +10,14 @@ import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
-import { getMessengerTelegramConfig } from '@/config/messenger';
-import type { DecryptedBotProvider } from '@/database/models/agentBotProvider';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
-import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLink';
-import { MessengerInstallationModel } from '@/database/models/messengerInstallation';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { mergeWithDefaults, platformRegistry } from '@/server/services/bot/platforms';
-import { DiscordApi } from '@/server/services/bot/platforms/discord/api';
-import { DiscordMessageService } from '@/server/services/bot/platforms/discord/service';
-import { FeishuMessageService } from '@/server/services/bot/platforms/feishu/service';
-import { QQMessageService } from '@/server/services/bot/platforms/qq/service';
-import { SlackApi } from '@/server/services/bot/platforms/slack/api';
-import { SlackMessageService } from '@/server/services/bot/platforms/slack/service';
-import { TelegramApi } from '@/server/services/bot/platforms/telegram/api';
-import { TelegramMessageService } from '@/server/services/bot/platforms/telegram/service';
-import { WechatMessageService } from '@/server/services/bot/platforms/wechat/service';
-import { TELEGRAM_INSTALLATION_KEY } from '@/server/services/messenger/installations/telegram';
+import {
+  resolveBotMessageTarget,
+  resolveMessengerInstallTarget,
+} from '@/server/services/bot/messageTarget';
 
 // ── Middleware ────────────────────────────────────────────
 
@@ -92,193 +78,10 @@ const embedsInputSchema = z.array(
     .passthrough(),
 );
 
-// ── Service Factory ──────────────────────────────────────
-
-/**
- * Build a `MessageRuntimeService` from raw platform + applicationId +
- * credentials. Shared between two resolution sources:
- *
- * 1. Per-agent bot channels (`agent_bot_providers` row) — `resolveBot`
- * 2. System Bot messenger installs (`messenger_installations` row) —
- *    `resolveMessengerInstall`
- *
- * Both paths produce the same underlying outbound API client, so the
- * downstream `MessageRuntimeService` behavior (attachments included) is
- * identical regardless of where the credentials came from.
- */
-const createServiceForCredentials = (
-  platform: string,
-  applicationId: string,
-  credentials: Record<string, any>,
-): MessageRuntimeService => {
-  switch (platform) {
-    case 'discord': {
-      return new DiscordMessageService(new DiscordApi(credentials.botToken));
-    }
-    case 'slack': {
-      return new SlackMessageService(new SlackApi(credentials.botToken));
-    }
-    case 'telegram': {
-      return new TelegramMessageService(new TelegramApi(credentials.botToken));
-    }
-    case 'feishu': {
-      return new FeishuMessageService(
-        new LarkApiClient(applicationId, credentials.appSecret, 'feishu'),
-        'feishu',
-      );
-    }
-    case 'lark': {
-      return new FeishuMessageService(
-        new LarkApiClient(applicationId, credentials.appSecret, 'lark'),
-        'lark',
-      );
-    }
-    case 'qq': {
-      return new QQMessageService(new QQApiClient(applicationId, credentials.appSecret));
-    }
-    case 'wechat': {
-      return new WechatMessageService(
-        // `baseUrl` is issued during QR confirmation and must be honored when
-        // it differs from the default endpoint (see wechat/protocol-spec.md).
-        new WechatApiClient(credentials.botToken, credentials.botId, credentials.baseUrl),
-        applicationId,
-      );
-    }
-    default: {
-      throw new TRPCError({
-        code: 'BAD_REQUEST',
-        message: `Unsupported platform: ${platform}`,
-      });
-    }
-  }
-};
-
-const createServiceForBot = (provider: DecryptedBotProvider): MessageRuntimeService =>
-  createServiceForCredentials(
-    provider.platform,
-    provider.applicationId,
-    provider.credentials as Record<string, any>,
-  );
-
-const resolveBot = async (
-  model: AgentBotProviderModel,
-  botId: string,
-): Promise<{
-  platform: MessagePlatformType;
-  service: MessageRuntimeService;
-  settings: Record<string, unknown>;
-}> => {
-  const provider = await model.findById(botId);
-  if (!provider) {
-    throw new TRPCError({ code: 'NOT_FOUND', message: `Bot not found: ${botId}` });
-  }
-  if (!provider.enabled) {
-    throw new TRPCError({ code: 'BAD_REQUEST', message: `Bot is disabled: ${botId}` });
-  }
-  const definition = platformRegistry.getPlatform(provider.platform);
-  const settings = definition
-    ? mergeWithDefaults(definition.schema, provider.settings as Record<string, unknown> | undefined)
-    : ((provider.settings as Record<string, unknown>) ?? {});
-  return {
-    platform: provider.platform as MessagePlatformType,
-    service: createServiceForBot(provider),
-    settings,
-  };
-};
-
-/** Resolve a user-owned System Bot connection into a runnable service. */
-const resolveMessengerInstall = async (
-  ctx: { serverDB: any; userId: string },
-  installationId: string,
-): Promise<{
-  platform: MessagePlatformType;
-  service: MessageRuntimeService;
-  settings: Record<string, unknown>;
-}> => {
-  // Telegram is env-backed and never lives in `messenger_installations`. The
-  // synthetic id surfaced by `listMessengers` would 404 on `findById`, so
-  // short-circuit here: pull the bot token from env config and gate on the
-  // caller having an account link (analogue of the per-row ownership check).
-  if (installationId === TELEGRAM_INSTALLATION_KEY) {
-    const telegramConfig = await getMessengerTelegramConfig();
-    if (!telegramConfig) {
-      throw new TRPCError({
-        code: 'BAD_REQUEST',
-        message: 'Telegram messenger is not configured on this deployment',
-      });
-    }
-    const link = await new MessengerAccountLinkModel(ctx.serverDB, ctx.userId).findByPlatform(
-      'telegram',
-    );
-    if (!link) {
-      throw new TRPCError({
-        code: 'FORBIDDEN',
-        message:
-          'You can only send through Telegram after linking your account. ' +
-          'Open the Telegram bot and run /start to create the link.',
-      });
-    }
-    return {
-      platform: 'telegram',
-      service: createServiceForCredentials('telegram', TELEGRAM_INSTALLATION_KEY, {
-        botToken: telegramConfig.botToken,
-      }),
-      settings: {},
-    };
-  }
-
-  const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey().catch(() => undefined);
-  const wechatLink = await new MessengerAccountLinkModel(
-    ctx.serverDB,
-    ctx.userId,
-  ).findByIdWithCredentials(installationId, 'wechat', gateKeeper);
-  if (wechatLink) {
-    if (!wechatLink.applicationId || typeof wechatLink.credentials.botToken !== 'string') {
-      throw new TRPCError({
-        code: 'BAD_REQUEST',
-        message: `WeChat connection credentials are unavailable: ${installationId}`,
-      });
-    }
-    return {
-      platform: 'wechat',
-      service: createServiceForCredentials(
-        'wechat',
-        wechatLink.applicationId,
-        wechatLink.credentials,
-      ),
-      settings: {},
-    };
-  }
-
-  const row = await MessengerInstallationModel.findById(ctx.serverDB, installationId, gateKeeper);
-  if (!row) {
-    throw new TRPCError({
-      code: 'NOT_FOUND',
-      message: `Messenger installation not found: ${installationId}`,
-    });
-  }
-  if (row.revokedAt) {
-    throw new TRPCError({
-      code: 'BAD_REQUEST',
-      message: `Messenger installation has been revoked: ${installationId}`,
-    });
-  }
-  if (row.installedByUserId !== ctx.userId) {
-    throw new TRPCError({
-      code: 'FORBIDDEN',
-      message: 'You can only send through messenger installs you initiated',
-    });
-  }
-  return {
-    platform: row.platform as MessagePlatformType,
-    service: createServiceForCredentials(
-      row.platform,
-      row.applicationId,
-      row.credentials as Record<string, any>,
-    ),
-    settings: {},
-  };
-};
+// ── Target resolution ────────────────────────────────────
+// Credential → service resolution lives in `@/server/services/bot/messageTarget`
+// so the server tool runtime routes `botId` / `messengerInstallationId`
+// exactly like these procedures do.
 
 /**
  * Common dispatcher: either a per-agent `botId` or a system-bot
@@ -294,9 +97,9 @@ const resolveSendTarget = async (
   service: MessageRuntimeService;
   settings: Record<string, unknown>;
 }> => {
-  if (input.botId) return resolveBot(ctx.agentBotProviderModel, input.botId);
+  if (input.botId) return resolveBotMessageTarget(ctx.agentBotProviderModel, input.botId);
   if (input.messengerInstallationId)
-    return resolveMessengerInstall(
+    return resolveMessengerInstallTarget(
       { serverDB: ctx.serverDB, userId: ctx.userId },
       input.messengerInstallationId,
     );
@@ -393,7 +196,7 @@ export const botMessageRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      const { service, platform, settings } = await resolveBot(
+      const { service, platform, settings } = await resolveBotMessageTarget(
         ctx.agentBotProviderModel,
         input.botId,
       );
@@ -423,7 +226,10 @@ export const botMessageRouter = router({
         }),
     )
     .query(async ({ input, ctx }) => {
-      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      const { service, platform } = await resolveBotMessageTarget(
+        ctx.agentBotProviderModel,
+        input.botId,
+      );
       if (!service.readDocument) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
@@ -447,7 +253,10 @@ export const botMessageRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      const { service, platform } = await resolveBotMessageTarget(
+        ctx.agentBotProviderModel,
+        input.botId,
+      );
       return service.editMessage({
         channelId: input.channelId,
         content: input.content,
@@ -465,7 +274,10 @@ export const botMessageRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      const { service, platform } = await resolveBotMessageTarget(
+        ctx.agentBotProviderModel,
+        input.botId,
+      );
       return service.deleteMessage({
         channelId: input.channelId,
         messageId: input.messageId,
@@ -484,7 +296,10 @@ export const botMessageRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      const { service, platform } = await resolveBotMessageTarget(
+        ctx.agentBotProviderModel,
+        input.botId,
+      );
       return service.searchMessages({
         authorId: input.authorId,
         channelId: input.channelId,
@@ -506,7 +321,10 @@ export const botMessageRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      const { service, platform } = await resolveBotMessageTarget(
+        ctx.agentBotProviderModel,
+        input.botId,
+      );
       return service.reactToMessage({
         channelId: input.channelId,
         emoji: input.emoji,
@@ -524,7 +342,10 @@ export const botMessageRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      const { service, platform } = await resolveBotMessageTarget(
+        ctx.agentBotProviderModel,
+        input.botId,
+      );
       return service.getReactions({
         channelId: input.channelId,
         messageId: input.messageId,
@@ -543,7 +364,10 @@ export const botMessageRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      const { service, platform } = await resolveBotMessageTarget(
+        ctx.agentBotProviderModel,
+        input.botId,
+      );
       return service.pinMessage({
         channelId: input.channelId,
         messageId: input.messageId,
@@ -560,7 +384,10 @@ export const botMessageRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      const { service, platform } = await resolveBotMessageTarget(
+        ctx.agentBotProviderModel,
+        input.botId,
+      );
       return service.unpinMessage({
         channelId: input.channelId,
         messageId: input.messageId,
@@ -576,7 +403,10 @@ export const botMessageRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      const { service, platform } = await resolveBotMessageTarget(
+        ctx.agentBotProviderModel,
+        input.botId,
+      );
       return service.listPins({
         channelId: input.channelId,
         platform,
@@ -593,7 +423,10 @@ export const botMessageRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      const { service, platform } = await resolveBotMessageTarget(
+        ctx.agentBotProviderModel,
+        input.botId,
+      );
       return service.getChannelInfo({
         channelId: input.channelId,
         platform,
@@ -609,7 +442,10 @@ export const botMessageRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      const { service, platform } = await resolveBotMessageTarget(
+        ctx.agentBotProviderModel,
+        input.botId,
+      );
       return service.listChannels({
         filter: input.filter,
         platform,
@@ -628,7 +464,10 @@ export const botMessageRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      const { service, platform } = await resolveBotMessageTarget(
+        ctx.agentBotProviderModel,
+        input.botId,
+      );
       return service.getMemberInfo({
         memberId: input.memberId,
         platform,
@@ -649,7 +488,10 @@ export const botMessageRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      const { service, platform } = await resolveBotMessageTarget(
+        ctx.agentBotProviderModel,
+        input.botId,
+      );
       return service.createThread({
         channelId: input.channelId,
         content: input.content,
@@ -667,7 +509,10 @@ export const botMessageRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      const { service, platform } = await resolveBotMessageTarget(
+        ctx.agentBotProviderModel,
+        input.botId,
+      );
       return service.listThreads({
         channelId: input.channelId,
         platform,
@@ -714,7 +559,10 @@ export const botMessageRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      const { service, platform } = await resolveBotMessageTarget(
+        ctx.agentBotProviderModel,
+        input.botId,
+      );
       return service.createPoll({
         channelId: input.channelId,
         duration: input.duration,

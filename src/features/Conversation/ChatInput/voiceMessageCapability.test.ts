@@ -161,6 +161,96 @@ describe('canSendVoiceMessage', () => {
   });
 });
 
+describe('heterogeneous agents', () => {
+  const agentId = 'hetero-voice-agent';
+  const textModel = {
+    abilities: {},
+    enabled: true,
+    id: 'text-only',
+    providerId: ModelProvider.Google,
+    type: 'chat',
+  } as const;
+
+  const setAgent = (heterogeneous: boolean) =>
+    useAgentStore.setState({
+      agentMap: {
+        [agentId]: {
+          ...(heterogeneous
+            ? { agencyConfig: { heterogeneousProvider: { type: 'claude-code' } } }
+            : {}),
+          chatConfig: {},
+          model: textModel.id,
+          provider: ModelProvider.Google,
+        },
+      },
+    } as any);
+
+  const setAsr = (asr: { model: string; provider: string }) =>
+    useUserStore.setState({
+      settings: { systemAgent: { asr } },
+      workspaceUserPreference: {},
+    } as any);
+
+  const openaiProvider = { id: 'openai', name: 'OpenAI', source: 'builtin' } as const;
+  const setEnabledProviders = (providers: (typeof openaiProvider)[]) =>
+    useAiInfraStore.setState({
+      enabledAiModels: [textModel],
+      enabledAiProviders: providers,
+    } as any);
+  const clearUserAsr = () =>
+    useUserStore.setState({ settings: {}, workspaceUserPreference: {} } as any);
+
+  it('allows voice messages without an audio-capable model once the STT provider is enabled', () => {
+    setEnabledProviders([openaiProvider]);
+
+    setAgent(false);
+    setAsr({ model: 'whisper-1', provider: 'openai' });
+    expect(canSendVoiceMessage({ agentId })).toBe(false);
+
+    setAgent(true);
+    expect(canSendVoiceMessage({ agentId })).toBe(true);
+  });
+
+  it('uses the default STT model only when its provider is enabled', () => {
+    setAgent(true);
+    clearUserAsr();
+
+    setEnabledProviders([]);
+    expect(canSendVoiceMessage({ agentId })).toBe(false);
+
+    setEnabledProviders([openaiProvider]);
+    expect(canSendVoiceMessage({ agentId })).toBe(true);
+  });
+
+  it('stays unavailable after the STT model is cleared', () => {
+    setEnabledProviders([openaiProvider]);
+    setAgent(true);
+    setAsr({ model: '', provider: '' });
+
+    expect(canSendVoiceMessage({ agentId })).toBe(false);
+  });
+
+  it('shows the recorder for a heterogeneous agent only once the STT provider is enabled', () => {
+    act(() => {
+      setEnabledProviders([]);
+      setAgent(true);
+      setAsr({ model: 'whisper-1', provider: 'openai' });
+    });
+
+    const { result } = renderHook(() => useCanSendVoiceMessage({ agentId }), {
+      wrapper: ServerConfigWrapper,
+    });
+
+    expect(result.current).toBe(false);
+
+    act(() => {
+      setEnabledProviders([openaiProvider]);
+    });
+
+    expect(result.current).toBe(true);
+  });
+});
+
 describe('useCanSendVoiceMessage', () => {
   it('reacts to Agent mode when voice requires the multimodal fallback tool', () => {
     const agentId = 'fallback-voice-agent';

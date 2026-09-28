@@ -50,6 +50,7 @@ import { composioRouter } from './composio';
 import { configRouter } from './config';
 import { connectorRouter } from './connector';
 import { deviceRouter } from './device';
+import { deviceMetricRouter } from './deviceMetric';
 import { documentRouter } from './document';
 import { documentCommentRouter } from './documentComment';
 import { documentLikeRouter } from './documentLike';
@@ -83,6 +84,7 @@ import { ragEvalRouter } from './ragEval';
 import { recentRouter } from './recent';
 import { resourcePermissionRouter } from './resourcePermission';
 import { resourceTransferRequestRouter } from './resourceTransferRequest';
+import { scmRouter } from './scm';
 import { searchRouter } from './search';
 import { sessionRouter } from './session';
 import { sessionGroupRouter } from './sessionGroup';
@@ -133,6 +135,7 @@ export const lambdaRouter = router({
   config: configRouter,
   connector: connectorRouter,
   device: deviceRouter,
+  deviceMetric: deviceMetricRouter,
   document: documentRouter,
   documentComment: documentCommentRouter,
   documentLike: documentLikeRouter,
@@ -170,6 +173,7 @@ export const lambdaRouter = router({
   resourcePermission: resourcePermissionRouter,
   resourceTransferRequest: resourceTransferRequestRouter,
   search: searchRouter,
+  scm: scmRouter,
   session: sessionRouter,
   sessionGroup: sessionGroupRouter,
   share: shareRouter,

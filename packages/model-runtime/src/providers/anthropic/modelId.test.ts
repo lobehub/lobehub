@@ -160,6 +160,13 @@ describe('isAlwaysThinkingClaudeModel', () => {
     expect(isAlwaysThinkingClaudeModel('global.anthropic.claude-fable-5')).toBe(true);
   });
 
+  it('should return true for Opus 5.5 and later', () => {
+    expect(isAlwaysThinkingClaudeModel('claude-opus-5-5')).toBe(true);
+    expect(isAlwaysThinkingClaudeModel('global.anthropic.claude-opus-5-5')).toBe(true);
+    expect(isAlwaysThinkingClaudeModel('anthropic/claude-opus-5.5')).toBe(true);
+    expect(isAlwaysThinkingClaudeModel('claude-opus-6')).toBe(true);
+  });
+
   it('should return false for models that accept disabled thinking', () => {
     expect(isAlwaysThinkingClaudeModel('claude-opus-5')).toBe(false);
     expect(isAlwaysThinkingClaudeModel('claude-sonnet-5')).toBe(false);
@@ -213,6 +220,13 @@ describe('rejectsForcedToolChoice', () => {
     expect(rejectsForcedToolChoice('claude-mythos-5-1')).toBe(true);
     expect(rejectsForcedToolChoice('global.anthropic.claude-fable-5-1')).toBe(true);
     expect(rejectsForcedToolChoice('anthropic/claude-fable-5-1')).toBe(true);
+  });
+
+  it('should reject forced tool_choice on Opus 5.5 and later', () => {
+    expect(rejectsForcedToolChoice('claude-opus-5-5')).toBe(true);
+    expect(rejectsForcedToolChoice('global.anthropic.claude-opus-5-5')).toBe(true);
+    expect(rejectsForcedToolChoice('anthropic/claude-opus-5.5')).toBe(true);
+    expect(rejectsForcedToolChoice('claude-opus-6')).toBe(true);
   });
 
   it('should keep forced tool_choice valid on Fable 5 / Mythos 5 and other families', () => {

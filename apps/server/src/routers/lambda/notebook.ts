@@ -7,6 +7,7 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { DocumentModel } from '@/database/models/document';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
+import { TopicModel } from '@/database/models/topic';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
 import { WorkModel } from '@/database/models/work';
 import { router } from '@/libs/trpc/lambda';
@@ -35,11 +36,34 @@ const notebookProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts)
         workspaceId: wsId,
       }),
       topicDocumentModel: new TopicDocumentModel(ctx.serverDB, ctx.userId, wsId),
+      topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
 
 export const notebookRouter = router({
+  /**
+   * Attach an existing document to a topic without copying it.
+   *
+   * `createDocument` always writes a new row, so linking through it duplicated
+   * the document (and, inside an agent run, registered the copy as a second
+   * produced Work). This only writes the `(documentId, topicId)` pair, which is
+   * idempotent.
+   */
+  associateDocument: notebookProcedure
+    .use(withScopedPermission('document:update'))
+    .input(z.object({ documentId: z.string(), topicId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const [document, topic] = await Promise.all([
+        ctx.documentModel.findById(input.documentId),
+        ctx.topicModel.findById(input.topicId),
+      ]);
+      if (!document) throw new TRPCError({ code: 'NOT_FOUND', message: 'Document not found' });
+      if (!topic) throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic not found' });
+
+      return ctx.topicDocumentModel.associate(input);
+    }),
+
   createDocument: notebookProcedure
     .use(withScopedPermission('document:create'))
     .input(

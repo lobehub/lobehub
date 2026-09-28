@@ -1,51 +1,32 @@
+import {
+  formatTextWindowAttributes,
+  formatTextWindowNotice,
+  type TextWindowRange,
+} from '../../textWindow';
+
 /**
  * Line window a file's `content` was cut to. Present only when the caller
  * sliced the file (see `readKnowledge`), so callers that still pass whole
  * files render exactly as before.
  */
-export interface FileContentRange {
-  /** Present when the window's only line was cut to fit the per-call cap. */
-  cutLine?: { keptChars: number; line: number; totalChars: number };
-  /** 1-based, inclusive. `0` when the window is empty. */
-  endLine: number;
-  /** 1-based, inclusive. */
-  startLine: number;
-  totalCharCount: number;
-  totalLineCount: number;
-  /** True when lines after `endLine` exist and the model should page. */
-  truncated: boolean;
-}
+export type FileContentRange = TextWindowRange;
 
 export interface FileContent {
   content: string;
   error?: string;
   fileId: string;
   filename: string;
+  /**
+   * Character count of the original file when its stored text was cut at parse time, so the
+   * model learns the text it pages through is not the whole file.
+   */
+  originalChars?: number;
   range?: FileContentRange;
 }
 
-const formatRangeAttributes = (range: FileContentRange): string =>
-  ` lines="${range.startLine}-${range.endLine}" totalLines="${range.totalLineCount}" totalChars="${range.totalCharCount}" truncated="${range.truncated}"`;
-
-const formatRangeNotice = (range: FileContentRange): string => {
-  if (range.endLine === 0) {
-    return `\n[offset ${range.startLine} is past the end of this ${range.totalLineCount}-line file; nothing returned. The file is not empty.]`;
-  }
-
-  if (range.cutLine) {
-    const { keptChars, line, totalChars } = range.cutLine;
-    const rest =
-      line < range.totalLineCount
-        ? ` Call readKnowledge again with offset=${line + 1} to continue with the next line.`
-        : '';
-
-    return `\n[Line ${line} is ${totalChars} characters long and was cut at ${keptChars}; the rest of that line cannot be paged.${rest}]`;
-  }
-
-  if (!range.truncated) return '';
-
-  return `\n[Showing lines ${range.startLine}-${range.endLine} of ${range.totalLineCount}. Call readKnowledge again with offset=${range.endLine + 1} to continue.]`;
-};
+/** The exact readKnowledge call that continues reading `fileId` from a 1-based line. */
+export const readKnowledgeContinuation = (fileId: string) => (line: number) =>
+  `call readKnowledge with fileIds=["${fileId}"] and offset=${line}`;
 
 /**
  * Formats a single file content with XML tags
@@ -55,8 +36,13 @@ const formatFileContent = (file: FileContent): string => {
     return `<file id="${file.fileId}" name="${file.filename}" error="${file.error}" />`;
   }
 
-  const rangeAttributes = file.range ? formatRangeAttributes(file.range) : '';
-  const rangeNotice = file.range ? formatRangeNotice(file.range) : '';
+  const options = {
+    continueFrom: readKnowledgeContinuation(file.fileId),
+    originalChars: file.originalChars,
+  };
+  const rangeAttributes = file.range ? formatTextWindowAttributes(file.range, options) : '';
+  const notice = file.range ? formatTextWindowNotice(file.range, options) : '';
+  const rangeNotice = notice ? `\n${notice}` : '';
 
   return `<file id="${file.fileId}" name="${file.filename}"${rangeAttributes}>
 ${file.content}${rangeNotice}

@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
+
 import type { BotCallbackBody } from '../BotCallbackService';
 import { BotCallbackService } from '../BotCallbackService';
 
@@ -1054,6 +1056,92 @@ describe('BotCallbackService', () => {
 
       expect(mockEditMessage).toHaveBeenCalledTimes(1);
       expect(mockCreateMessage).toHaveBeenCalled();
+    });
+  });
+
+  // ==================== Reaction mode ====================
+
+  describe('reactionMode', () => {
+    const stepBody = () =>
+      makeBody({
+        shouldContinue: true,
+        stepType: 'call_llm',
+        toolsCalling: [{ apiName: 'search', arguments: '{}', identifier: 'web' }],
+        type: 'step',
+        userMessageId: 'user-msg-1',
+      });
+
+    const completionBody = () =>
+      makeBody({
+        lastAssistantContent: 'Done.',
+        reason: 'completed',
+        type: 'completion',
+        userMessageId: 'user-msg-1',
+      });
+
+    it('defaults to minimal: no per-step swap, but still clears on completion', async () => {
+      setupCredentials(FAKE_CREDENTIALS, { settings: { displayToolCalls: true } });
+
+      await service.handleCallback(stepBody());
+      expect(mockReplaceReaction).not.toHaveBeenCalled();
+
+      await service.handleCallback(completionBody());
+      expect(mockReplaceReaction).toHaveBeenCalledTimes(1);
+      expect(mockReplaceReaction).toHaveBeenCalledWith('user-msg-1', '👀', null);
+    });
+
+    it('swaps to the working emoji on each step under full mode', async () => {
+      setupCredentials(FAKE_CREDENTIALS, {
+        settings: { displayToolCalls: true, reactionMode: 'full' },
+      });
+
+      await service.handleCallback(stepBody());
+
+      expect(mockReplaceReaction).toHaveBeenCalledWith('user-msg-1', null, '⚡');
+    });
+
+    it('never touches reactions under none, including completion cleanup', async () => {
+      setupCredentials(FAKE_CREDENTIALS, {
+        settings: { displayToolCalls: true, reactionMode: 'none' },
+      });
+
+      await service.handleCallback(stepBody());
+      await service.handleCallback(completionBody());
+
+      expect(mockReplaceReaction).not.toHaveBeenCalled();
+      expect(mockRemoveReaction).not.toHaveBeenCalled();
+    });
+
+    it('still clears a tracked reaction after the bot is switched to none mid-run', async () => {
+      const redis = {
+        del: vi.fn(),
+        get: vi
+          .fn()
+          .mockResolvedValue(JSON.stringify({ emoji: '🤔', reactionThreadId: 'thread-a' })),
+      };
+      vi.mocked(getAgentRuntimeRedisClient).mockReturnValue(redis as any);
+      try {
+        setupCredentials(FAKE_CREDENTIALS, {
+          settings: { displayToolCalls: true, reactionMode: 'none' },
+        });
+
+        await service.handleCallback(completionBody());
+
+        expect(mockReplaceReaction).toHaveBeenCalledWith('user-msg-1', '🤔', null);
+        expect(redis.del).toHaveBeenCalled();
+      } finally {
+        vi.mocked(getAgentRuntimeRedisClient).mockReturnValue(null);
+      }
+    });
+
+    it('treats an unknown persisted value as the default (minimal)', async () => {
+      setupCredentials(FAKE_CREDENTIALS, {
+        settings: { displayToolCalls: true, reactionMode: 'verbose' },
+      });
+
+      await service.handleCallback(stepBody());
+
+      expect(mockReplaceReaction).not.toHaveBeenCalled();
     });
   });
 

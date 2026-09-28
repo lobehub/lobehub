@@ -160,17 +160,57 @@ export abstract class ComputerRuntime {
         startLine: args.startLine,
         totalCharCount: r.totalCharCount,
         totalLines: r.totalLineCount ?? r.totalLines,
+        truncated: r.truncated === true ? true : undefined,
       };
 
-      const lineRange: [number, number] | undefined =
-        args.startLine !== undefined && args.endLine !== undefined
-          ? [args.startLine, args.endLine]
+      // Number every returned line (1-based gutter) and, when the window
+      // stops before EOF, append the shared window notice with the next call. Rendering
+      // only the caller-supplied args here meant a default-window read looked
+      // identical to a full read, and the model had to burn extra turns
+      // discovering the file was truncated.
+      const hasLoc = Array.isArray(r.loc) && r.loc.length === 2;
+      // The loc-less fallback is the cloud sandbox path (local reads always
+      // return `loc`): its `startLine`/`endLine` args are 1-based inclusive
+      // and independently optional, so normalize to the 0-based
+      // end-exclusive window the formatter computes with — passing [1, 200]
+      // through raw would label a full 200-line read as "(lines 1-199 of
+      // ...)". An endLine-only read stops mid-file and needs the marker; a
+      // startLine-only read runs to EOF (window end = totalLines).
+      const fallbackEnd = args.endLine ?? r.totalLineCount ?? r.totalLines;
+      const lineRange: [number, number] | undefined = hasLoc
+        ? [r.loc[0], r.loc[1]]
+        : (args.startLine !== undefined || args.endLine !== undefined) && fallbackEnd !== undefined
+          ? [Math.max((args.startLine ?? 1) - 1, 0), fallbackEnd]
           : undefined;
+
+      // `loc` is 0-based end-exclusive while the cloud sandbox's
+      // `startLine`/`endLine` args are 1-based inclusive; either way the first
+      // returned line's 1-based number is loc[0] + 1 or startLine.
+      const firstLineNumber = hasLoc ? r.loc[0] + 1 : (args.startLine ?? 1);
+
+      // Name the next call in the argument shape this tool takes: local reads
+      // page with a 0-based end-exclusive `loc` of the same span; cloud sandbox
+      // reads with 1-based `startLine`/`endLine`.
+      const span = lineRange ? Math.max(lineRange[1] - lineRange[0], 1) : undefined;
+      const continueFrom = hasLoc
+        ? (line: number) =>
+            `call readFile again with path="${args.path}" and loc=[${line - 1}, ${line - 1 + span!}]`
+        : (line: number) =>
+            args.endLine === undefined
+              ? `call readFile again with path="${args.path}" and startLine=${line}`
+              : `call readFile again with path="${args.path}", startLine=${line} and endLine=${line + span! - 1}`;
 
       const content = formatFileContent({
         content: fileContent,
+        continueFrom,
+        firstLineNumber,
         lineRange,
-        path: args.path,
+        totalChars: r.totalCharCount,
+        totalLines: r.totalLineCount ?? r.totalLines,
+        // When the service cut the content at its char cap, the window's tail
+        // was never delivered — a "(lines 1-1000 of N)" marker would claim
+        // coverage the payload doesn't have, so it is suppressed.
+        truncated: r.truncated === true,
       });
 
       return { content, state, success: true };
@@ -616,12 +656,14 @@ export abstract class ComputerRuntime {
     //   2. JSON.stringify(result.error) (non-Error error objects)
     //   3. state.stderr (e.g. git commit failure — exit ≠ 0, error in stderr)
     //   4. state.error (runtime-level error message)
-    //   5. [UNKNOWN_EXEC_ERROR] Tool execution failed (last-resort fallback)
+    //   5. state.stdout (CLIs that print their failure on stdout and exit ≠ 0)
+    //   6. [UNKNOWN_EXEC_ERROR] Tool execution failed (last-resort fallback)
     const errorText =
       result.error?.message ||
       (result.error !== undefined ? JSON.stringify(result.error) : undefined) ||
       (typeof state?.stderr === 'string' ? state.stderr : undefined) ||
       (typeof state?.error === 'string' ? state.error : undefined) ||
+      (typeof state?.stdout === 'string' ? state.stdout : undefined) ||
       '[UNKNOWN_EXEC_ERROR] Tool execution failed';
 
     return {

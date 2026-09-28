@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { type LobeChatDatabase } from '@lobechat/database';
-import { agents, messagePlugins, messages, topics } from '@lobechat/database/schemas';
+import { agents, messagePlugins, messages, topics, userSettings } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import { eq } from 'drizzle-orm';
@@ -817,6 +817,8 @@ describe('aiAgentRouter — remote Human-in-the-loop', () => {
           taskId: 'task-runtime',
         }),
         taskId: 'task-runtime',
+        // The continuation must keep the chat trigger so its LLM calls are not logged as unknown.
+        trigger: 'chat',
       }),
     );
     expect(aiAgentService.repairInterventionContinuationTopicAnchor).toHaveBeenCalledWith(
@@ -873,10 +875,206 @@ describe('aiAgentRouter — remote Human-in-the-loop', () => {
     ).rejects.toThrow('durable completion failed');
 
     expect(aiAgentService.execAgent).toHaveBeenCalledTimes(1);
+    expect(aiAgentService.execAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ trigger: 'chat' }),
+    );
     // Runtime dispatch already happened; releasing the claim here could let a
     // second actor execute it again. The idempotent published hook is retried
     // under the same resolutionRequestId instead.
     expect(businessV2.rollbackAgentInterventionResolution).not.toHaveBeenCalled();
+  });
+
+  describe('continuation approval mode', () => {
+    const execution = {
+      autoStarted: true,
+      messageId: 'assistant-continuation',
+      operationId: 'operation-continuation',
+      success: true,
+    };
+
+    const resolveToolResult = async (params: {
+      resolutionRequestId: string;
+      sourceOperationId: string;
+    }) => {
+      await insertPendingTool({
+        batchId: `batch-${params.sourceOperationId}`,
+        messageId: 'assistant-runtime',
+        operationId: params.sourceOperationId,
+        toolCallId: 'tool-runtime',
+      });
+      businessV2.resolveAgentIntervention.mockResolvedValueOnce({
+        claimId: `claim-${params.sourceOperationId}`,
+        contractVersion: 2,
+        handled: true,
+        ownerUserId: userId,
+        resolutionRequestId: params.resolutionRequestId,
+        runtimeAction: {
+          agentId: 'agent-runtime',
+          appContext: { topicId: 'topic-runtime' },
+          content: '{"answer":"A"}',
+          operationId: params.sourceOperationId,
+          outcome: 'submitted',
+          parentMessageId: 'assistant-runtime',
+          toolCallId: 'tool-runtime',
+          type: 'resume_tool_result',
+        },
+        state: 'claimed',
+      });
+      aiAgentService.execAgent.mockResolvedValueOnce(execution);
+
+      await userCaller().resolveAgentIntervention({
+        action: { itemId: 'item-runtime', type: 'skip_interaction' },
+        expectedBatchVersion: 1,
+        expectedRequestRevisions: {
+          'item-runtime': { hash: 'c'.repeat(64), version: 1 },
+        },
+        resolutionRequestId: params.resolutionRequestId,
+        reviewToken: 'g'.repeat(43),
+      });
+    };
+
+    const stateFor = (sourceOperationId: string, state: unknown) =>
+      aiAgentService.loadInterventionContinuationState.mockImplementation(async (id: string) =>
+        id === sourceOperationId ? state : null,
+      );
+
+    it('inherits the interactive approval mode of the answered run for a tool-result continuation', async () => {
+      const sourceOperationId = 'operation-interactive-source';
+      stateFor(sourceOperationId, {
+        operationId: sourceOperationId,
+        principal: {
+          policy: {
+            userIntervention: { allowList: ['lobe-web-browsing'], approvalMode: 'manual' },
+          },
+        },
+        status: 'waiting_for_human',
+      });
+
+      await resolveToolResult({
+        resolutionRequestId: '018fbd8e-7baf-7c6d-8000-000000000041',
+        sourceOperationId,
+      });
+
+      // A follow-up askUserQuestion in the continuation must be able to wait for
+      // the user again instead of being blocked as a headless run.
+      expect(aiAgentService.execAgent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userInterventionConfig: { allowList: ['lobe-web-browsing'], approvalMode: 'manual' },
+        }),
+      );
+    });
+
+    it('carries a just-remembered tool approval into the continuation allow list', async () => {
+      const sourceOperationId = 'operation-remember-source';
+      stateFor(sourceOperationId, {
+        operationId: sourceOperationId,
+        principal: {
+          policy: {
+            userIntervention: { allowList: ['lobe-web-browsing'], approvalMode: 'allow-list' },
+          },
+        },
+        status: 'waiting_for_human',
+      });
+      // "Approve, and don't ask again" persisted this key before dispatch; the
+      // parked run's snapshot does not have it yet.
+      await serverDB
+        .insert(userSettings)
+        .values({
+          id: userId,
+          tool: {
+            humanIntervention: {
+              allowList: ['lobe-web-browsing', 'lobe-local-system____runCommand'],
+              approvalMode: 'allow-list',
+            },
+          },
+        })
+        .onConflictDoUpdate({
+          set: {
+            tool: {
+              humanIntervention: {
+                allowList: ['lobe-web-browsing', 'lobe-local-system____runCommand'],
+                approvalMode: 'allow-list',
+              },
+            },
+          },
+          target: userSettings.id,
+        });
+
+      await resolveToolResult({
+        resolutionRequestId: '018fbd8e-7baf-7c6d-8000-000000000044',
+        sourceOperationId,
+      });
+
+      expect(aiAgentService.execAgent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userInterventionConfig: {
+            allowList: ['lobe-web-browsing', 'lobe-local-system____runCommand'],
+            approvalMode: 'allow-list',
+          },
+        }),
+      );
+    });
+
+    it("falls back to the owner's interactive preference when the answered run state is gone", async () => {
+      const reviewToken = 'h'.repeat(43);
+      const resolutionRequestId = '018fbd8e-7baf-7c6d-8000-000000000042';
+      await insertPendingTool({
+        batchId: 'batch-expired-source',
+        messageId: 'assistant-runtime',
+        operationId: 'operation-expired-source',
+        toolCallId: 'tool-1',
+      });
+      businessV2.resolveAgentIntervention.mockResolvedValueOnce({
+        claimId: 'claim-expired-source',
+        contractVersion: 2,
+        handled: true,
+        ownerUserId: userId,
+        resolutionRequestId,
+        runtimeAction: {
+          agentId: 'agent-runtime',
+          appContext: { topicId: 'topic-runtime' },
+          decisions: [
+            { decision: 'approved', parentMessageId: 'assistant-runtime', toolCallId: 'tool-1' },
+          ],
+          operationId: 'operation-expired-source',
+          parentMessageId: 'assistant-runtime',
+          type: 'resume_approval',
+        },
+        state: 'claimed',
+      });
+      aiAgentService.execAgent.mockResolvedValueOnce(execution);
+
+      await userCaller().resolveAgentIntervention({
+        action: { itemIds: ['item-runtime'], scope: 'once', type: 'approve_tool' },
+        expectedBatchVersion: 1,
+        expectedRequestRevisions: {
+          'item-runtime': { hash: 'b'.repeat(64), version: 1 },
+        },
+        resolutionRequestId,
+        reviewToken,
+      });
+
+      const [params] = aiAgentService.execAgent.mock.calls[0];
+      expect(params.userInterventionConfig).toEqual({ allowList: [], approvalMode: 'manual' });
+    });
+
+    it('keeps a continuation headless when the answered run was headless', async () => {
+      const sourceOperationId = 'operation-headless-source';
+      stateFor(sourceOperationId, {
+        operationId: sourceOperationId,
+        principal: { policy: { userIntervention: { approvalMode: 'headless' } } },
+        status: 'waiting_for_human',
+      });
+
+      await resolveToolResult({
+        resolutionRequestId: '018fbd8e-7baf-7c6d-8000-000000000043',
+        sourceOperationId,
+      });
+
+      expect(aiAgentService.execAgent).toHaveBeenCalledWith(
+        expect.objectContaining({ userInterventionConfig: { approvalMode: 'headless' } }),
+      );
+    });
   });
 
   it('retries only the published transition after runtime dispatch already settled the source', async () => {

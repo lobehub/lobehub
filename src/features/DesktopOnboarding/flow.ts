@@ -16,11 +16,13 @@ const getDesktopOnboardingFlow = (isMac: boolean) =>
         DesktopOnboardingScreen.Welcome,
         DesktopOnboardingScreen.Login,
         DesktopOnboardingScreen.Permissions,
+        DesktopOnboardingScreen.KeepAwake,
         DesktopOnboardingScreen.DataMode,
       ]
     : [
         DesktopOnboardingScreen.Welcome,
         DesktopOnboardingScreen.Login,
+        DesktopOnboardingScreen.KeepAwake,
         DesktopOnboardingScreen.DataMode,
       ];
 

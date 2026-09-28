@@ -1,57 +1,46 @@
 import { agentDisplayName } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Avatar } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
-import { t } from 'i18next';
-import { XIcon } from 'lucide-react';
+import { Avatar, Text } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { DEFAULT_AVATAR } from '@/const/meta';
-import NavHeader from '@/features/NavHeader';
+import PortalHeader from '@/features/Portal/components/Header';
 import { useAgentGroupStore } from '@/store/agentGroup';
-import { useChatStore } from '@/store/chat';
 import { useSessionStore } from '@/store/session';
 import { sessionSelectors } from '@/store/session/selectors';
 
-const Header = memo(() => {
-  const clearPortalStack = useChatStore((s) => s.clearPortalStack);
-  const close = () => {
-    useAgentGroupStore.setState({ activeThreadAgentId: '' });
-    clearPortalStack();
-  };
+import { useGroupThreadClose } from './useClose';
+
+const Header = memo<{ onClose?: () => void }>(({ onClose }) => {
+  const { t } = useTranslation('common');
   const activeThreadAgentId = useAgentGroupStore((s) => s.activeThreadAgentId);
 
   const agents = useSessionStore(sessionSelectors.currentGroupAgents);
   const currentAgent = agents?.find((agent) => agent.id === activeThreadAgentId);
 
+  const close = useGroupThreadClose(onClose);
+
   return (
-    <NavHeader
-      paddingBlock={6}
-      paddingInline={8}
-      showTogglePanelButton={false}
-      left={
-        <Flexbox horizontal align={'center'} gap={8}>
+    <PortalHeader
+      title={
+        <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
           <Avatar
             avatar={currentAgent?.avatar || DEFAULT_AVATAR}
             background={currentAgent?.backgroundColor ?? undefined}
             shape={'square'}
             size={20}
           />
-          <div style={{ fontWeight: 600 }}>
-            {agentDisplayName(currentAgent, t('defaultSession', { ns: 'common' }))}
-          </div>
+          <Text ellipsis weight={600}>
+            {agentDisplayName(currentAgent, t('defaultSession'))}
+          </Text>
         </Flexbox>
       }
-      right={
-        <Flexbox horizontal gap={4}>
-          <ActionIcon icon={XIcon} size={'small'} onClick={close} />
-        </Flexbox>
-      }
-      style={{
-        background: cssVar.colorBgContainer,
-      }}
+      onClose={close}
     />
   );
 });
+
+Header.displayName = 'PortalGroupThreadHeader';
 
 export default Header;

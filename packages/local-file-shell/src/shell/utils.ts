@@ -419,9 +419,17 @@ export const getShellConfig = async (command: string): Promise<{ args: string[];
     // streams) and $OutputEncoding (used when piping into native commands) to
     // UTF-8 before the user command runs. The [Console] setter can throw when
     // no console is attached, hence the try/catch.
+    //
+    // Progress records are silenced too. With stderr redirected, Windows
+    // PowerShell serializes every progress update (e.g. the "Preparing modules
+    // for first use." that module auto-loading emits) into the stderr log as a
+    // CLIXML block. The inline preview decodes CLIXML, but the saved log the
+    // result points the model to does not, so reading it back returned raw XML
+    // in a mis-decoded code page. There is no progress bar to show here anyway.
     const encodingPreamble =
       'try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}' +
-      '\n$OutputEncoding = [System.Text.Encoding]::UTF8\n';
+      '\n$OutputEncoding = [System.Text.Encoding]::UTF8' +
+      "\n$ProgressPreference = 'SilentlyContinue'\n";
     const exitGuard =
       '\n$__lobeExecOk = $?' +
       '\nif (-not $__lobeExecOk) {' +

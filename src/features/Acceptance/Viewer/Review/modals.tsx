@@ -103,11 +103,14 @@ export const openAcceptModal = (options: AcceptContentProps): ModalInstance =>
   });
 
 interface RejectContentProps {
-  /** Perform the reject with the reason; resolve true to close. */
+  /** The rounds name an authoring agent — the server sends the reject back to
+      it. Without one the dialog promises no next round: it copies the prompt. */
+  dispatchAvailable: boolean;
+  /** Perform the reject with an optional reason; resolve true to close. */
   onConfirm: (comment: string) => Promise<boolean>;
 }
 
-const RejectContent = memo<RejectContentProps>(({ onConfirm }) => {
+const RejectContent = memo<RejectContentProps>(({ dispatchAvailable, onConfirm }) => {
   const { t: translate } = useTranslation('verify');
   const { close } = useModalContext();
   const [comment, setComment] = useState('');
@@ -115,7 +118,6 @@ const RejectContent = memo<RejectContentProps>(({ onConfirm }) => {
 
   const handleConfirm = async () => {
     const trimmed = comment.trim();
-    if (!trimmed) return;
     setLoading(true);
     try {
       if (await onConfirm(trimmed)) close();
@@ -127,7 +129,9 @@ const RejectContent = memo<RejectContentProps>(({ onConfirm }) => {
   return (
     <Flexbox gap={16}>
       <Text fontSize={13} type={'secondary'}>
-        {translate('acceptance.reject.description')}
+        {translate(
+          dispatchAvailable ? 'acceptance.reject.description' : 'acceptance.reject.descriptionCopy',
+        )}
       </Text>
       <TextArea
         autoSize={{ maxRows: 6, minRows: 3 }}
@@ -139,13 +143,12 @@ const RejectContent = memo<RejectContentProps>(({ onConfirm }) => {
         <Button disabled={loading} onClick={close}>
           {translate('acceptance.actions.cancel')}
         </Button>
-        <Button
-          disabled={!comment.trim()}
-          loading={loading}
-          type={'primary'}
-          onClick={handleConfirm}
-        >
-          {translate('acceptance.actions.confirmReject')}
+        <Button loading={loading} type={'primary'} onClick={handleConfirm}>
+          {translate(
+            dispatchAvailable
+              ? 'acceptance.actions.confirmReject'
+              : 'acceptance.actions.confirmRejectCopy',
+          )}
         </Button>
       </Flexbox>
     </Flexbox>
@@ -154,7 +157,7 @@ const RejectContent = memo<RejectContentProps>(({ onConfirm }) => {
 
 RejectContent.displayName = 'AcceptanceRejectContent';
 
-/** Reject dialog — the reason is required: it is the next round's input, not a note. */
+/** Reject dialog — an optional reason adds context for the next repair round. */
 export const openRejectModal = (options: RejectContentProps): ModalInstance =>
   createModal({
     content: <RejectContent {...options} />,

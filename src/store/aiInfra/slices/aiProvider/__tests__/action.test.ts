@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   filterEnabledProvidersByModelType,
   filterHiddenBuiltinModels,
+  getAsrModelList,
   getChatModelList,
   getEmbeddingModelList,
   getImageModelList,
@@ -374,6 +375,27 @@ describe('aiProvider action helpers', () => {
 
       expect(result.map((model) => model.id)).toEqual(['text-embedding-3-small']);
       expect(result[0].displayName).toBe('Text Embedding 3 Small');
+    });
+  });
+
+  describe('getAsrModelList', () => {
+    it('collects only visible speech-to-text models for a provider', async () => {
+      const result = await getAsrModelList(
+        [
+          createChatModel({ id: 'gpt-4o', providerId: 'openai' }),
+          createEmbeddingModel({ id: 'whisper-1', providerId: 'openai', type: 'asr' }),
+          createEmbeddingModel({
+            id: 'hidden-asr',
+            providerId: 'openai',
+            type: 'asr',
+            visible: false,
+          }),
+          createEmbeddingModel({ id: 'other-asr', providerId: 'groq', type: 'asr' }),
+        ],
+        'openai',
+      );
+
+      expect(result.map((model) => model.id)).toEqual(['whisper-1']);
     });
   });
 

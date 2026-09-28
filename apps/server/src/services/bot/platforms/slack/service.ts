@@ -40,6 +40,8 @@ import { DEFAULT_BOT_HISTORY_LIMIT } from '@lobechat/const';
 import type { MessageRuntimeService } from '@/server/services/toolExecution/serverRuntimes/message/adapters/types';
 import { PlatformUnsupportedError } from '@/server/services/toolExecution/serverRuntimes/message/PlatformUnsupportedError';
 
+import type { AttachmentSendResult } from '../attachmentDelivery';
+import { attachmentDeliveryState, warnAttachmentFailures } from '../attachmentDelivery';
 import type { SlackApi } from './api';
 import { MAX_SLACK_HISTORY_LIMIT } from './const';
 import { sendSlackAttachments } from './sendAttachments';
@@ -62,8 +64,9 @@ export class SlackMessageService implements MessageRuntimeService {
   // ==================== Core Message Operations ====================
 
   sendMessage = async (params: SendMessageParams): Promise<SendMessageState> => {
+    let attachments: AttachmentSendResult | undefined;
     if (params.attachments?.length) {
-      const delivered = await sendSlackAttachments(this.api, {
+      attachments = await sendSlackAttachments(this.api, {
         attachments: params.attachments,
         channelId: params.channelId,
         initialComment: params.content,
@@ -71,12 +74,22 @@ export class SlackMessageService implements MessageRuntimeService {
         // The agent-reply path goes through `SlackGatewayClient.getMessenger`
         // which DOES carry thread_ts and uses `sendSlackAttachments` directly.
       });
-      if (delivered > 0) {
-        return { channelId: params.channelId, platform: 'slack' };
+      warnAttachmentFailures('bot-platform:slack:sendMessage', attachments.failures);
+      if (attachments.delivered > 0) {
+        return {
+          channelId: params.channelId,
+          platform: 'slack',
+          ...attachmentDeliveryState(attachments),
+        };
       }
     }
     const result = await this.api.postMessage(params.channelId, params.content);
-    return { channelId: params.channelId, messageId: result.ts, platform: 'slack' };
+    return {
+      channelId: params.channelId,
+      messageId: result.ts,
+      platform: 'slack',
+      ...attachmentDeliveryState(attachments),
+    };
   };
 
   readMessages = async (params: ReadMessagesParams): Promise<ReadMessagesState> => {

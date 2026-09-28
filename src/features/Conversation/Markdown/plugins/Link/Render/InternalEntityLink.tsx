@@ -10,6 +10,7 @@ import {
   CheckCircleIcon,
   CheckSquareIcon,
   FileTextIcon,
+  TargetIcon,
 } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { memo, useCallback } from 'react';
@@ -22,7 +23,7 @@ import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocu
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 
-import { type InternalLinkReference, isBareLinkLabel } from '../internalLink';
+import { type InternalLinkReference, isBareLinkLabel, isEntityIdLabel } from '../internalLink';
 import {
   getPreviewData,
   InternalEntityPreview,
@@ -70,6 +71,7 @@ const ENTITY_ICONS = {
   acceptance: BadgeCheckIcon,
   agent: BotIcon,
   document: FileTextIcon,
+  goal: TargetIcon,
   task: CheckSquareIcon,
   verify: CheckCircleIcon,
 } as const;
@@ -84,14 +86,21 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
   const { t } = useTranslation('chat');
   const navigate = useWorkspaceAwareNavigate();
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
-  const [openAcceptance, openAgentDetail, openDocument, openTaskDetail, openVerifyReport] =
-    useChatStore((s) => [
-      s.openAcceptance,
-      s.openAgentDetail,
-      s.openDocument,
-      s.openTaskDetail,
-      s.openVerifyReport,
-    ]);
+  const [
+    openAcceptance,
+    openAgentDetail,
+    openDocument,
+    openGoal,
+    openTaskDetail,
+    openVerifyReport,
+  ] = useChatStore((s) => [
+    s.openAcceptance,
+    s.openAgentDetail,
+    s.openDocument,
+    s.openGoal,
+    s.openTaskDetail,
+    s.openVerifyReport,
+  ]);
   // A pasted URL says nothing about what it points to, so resolve the entity's
   // own title and show that instead — the same read the hover preview makes,
   // under the same key, so the eager fetch also makes the hover card instant.
@@ -101,7 +110,9 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
   // workspace-unique id like T-198 can name a different entity entirely.
   // Authored link text is never replaced; a failed read just leaves the URL.
   const shouldResolveTitle =
-    reference.type !== 'route' && !reference.workspaceSlug && isBareLinkLabel(label, href);
+    reference.type !== 'route' &&
+    !reference.workspaceSlug &&
+    (isBareLinkLabel(label, href) || isEntityIdLabel(label, reference));
   const { data: entity } = useClientDataSWR(
     shouldResolveTitle ? internalEntityPreviewKey(reference) : null,
     () => getPreviewData(reference, t),
@@ -159,6 +170,13 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
         return;
       }
 
+      // The mobile portal is a modal over the chat, too cramped to read or edit
+      // a page in — open the standalone page route instead, so back returns here.
+      if (reference.type === 'document' && typeof __MOBILE__ !== 'undefined' && __MOBILE__) {
+        navigate(reference.pathname);
+        return;
+      }
+
       switch (reference.type) {
         case 'acceptance': {
           // The conversation is the working surface — the acceptance opens
@@ -169,6 +187,10 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
         }
         case 'agent': {
           openAgentDetail(reference.agentId);
+          break;
+        }
+        case 'goal': {
+          openGoal(reference.goalId);
           break;
         }
         case 'document': {
@@ -203,6 +225,7 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
       openAcceptance,
       openAgentDetail,
       openDocument,
+      openGoal,
       openTaskDetail,
       openVerifyReport,
       reference,

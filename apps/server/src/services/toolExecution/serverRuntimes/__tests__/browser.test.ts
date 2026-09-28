@@ -9,6 +9,11 @@ vi.mock('@/server/services/deviceGateway/authorizedToolCall', () => ({
     mockExecuteToolCall(...args),
 }));
 
+const mockQueryDeviceList = vi.fn();
+vi.mock('@/server/services/deviceGateway', () => ({
+  deviceGateway: { queryDeviceList: (...args: unknown[]) => mockQueryDeviceList(...args) },
+}));
+
 const mockUploadBase64 = vi.fn();
 vi.mock('@/server/services/file', () => ({
   FileService: vi.fn(function () {
@@ -22,6 +27,89 @@ const { browserRuntime } = await import('../browser');
 describe('browserRuntime', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockQueryDeviceList.mockResolvedValue([]);
+  });
+
+  describe('device client kind', () => {
+    const context = {
+      activeDeviceId: 'vm-cli',
+      agentId: 'agt-1',
+      operationId: 'op-1',
+      serverDB: {} as any,
+      toolManifestMap: {},
+      topicId: 'tpc-1',
+      userId: 'user-1',
+    } as ToolExecutionContext;
+
+    // Only the desktop app hosts the browser panel. `lh connect` answers every
+    // browser api with `Unknown tool API: navigate`, which left agents retrying
+    // blind after activating a CLI-only device (agent vent reports).
+    it('does not dispatch to a device whose only live connection is the CLI', async () => {
+      mockQueryDeviceList.mockResolvedValue([
+        {
+          channels: [{ channel: 'cli', connectedAt: 1, connectionId: 'c1' }],
+          deviceId: 'vm-cli',
+          hostname: 'VM-6-135-ubuntu',
+          platform: 'linux',
+        },
+      ]);
+
+      const runtime = browserRuntime.factory(context);
+      const result = await runtime.navigate({ url: 'https://example.com' });
+
+      expect(mockExecuteToolCall).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect(result.error.code).toBe('BROWSER_DEVICE_UNSUPPORTED');
+      expect(result.content).toContain('lh connect');
+      // lobe-web-browsing is not in this run's tool set, so it must not be offered.
+      expect(result.content).not.toContain('lobe-web-browsing');
+    });
+
+    it('points at lobe-web-browsing only when the run can call it', async () => {
+      mockQueryDeviceList.mockResolvedValue([
+        { channels: [{ channel: 'cli', connectedAt: 1, connectionId: 'c1' }], deviceId: 'vm-cli' },
+      ]);
+
+      const runtime = browserRuntime.factory({
+        ...context,
+        toolManifestMap: { 'lobe-web-browsing': {} as any },
+      });
+      const result = await runtime.navigate({ url: 'https://example.com' });
+
+      expect(result.error.code).toBe('BROWSER_DEVICE_UNSUPPORTED');
+      expect(result.content).toContain('use lobe-web-browsing (search / crawl) instead');
+    });
+
+    it('dispatches when the device also has a desktop connection', async () => {
+      mockQueryDeviceList.mockResolvedValue([
+        {
+          channels: [
+            { channel: 'cli', connectedAt: 1, connectionId: 'c1' },
+            { channel: 'desktop', connectedAt: 2, connectionId: 'd1' },
+          ],
+          deviceId: 'vm-cli',
+          hostname: 'mac',
+          platform: 'darwin',
+        },
+      ]);
+      mockExecuteToolCall.mockResolvedValue({ content: 'ok', success: true });
+
+      const runtime = browserRuntime.factory(context);
+      const result = await runtime.navigate({ url: 'https://example.com' });
+
+      expect(mockExecuteToolCall).toHaveBeenCalledTimes(1);
+      expect(result.success).toBe(true);
+    });
+
+    it('keeps dispatching when the device presence is unknown', async () => {
+      mockQueryDeviceList.mockRejectedValue(new Error('gateway down'));
+      mockExecuteToolCall.mockResolvedValue({ content: 'ok', success: true });
+
+      const runtime = browserRuntime.factory(context);
+      await runtime.navigate({ url: 'https://example.com' });
+
+      expect(mockExecuteToolCall).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('screenshot', () => {

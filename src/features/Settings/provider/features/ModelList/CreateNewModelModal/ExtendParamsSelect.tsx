@@ -21,6 +21,7 @@ import { GPT56ReasoningEffortSlider } from '@/features/ModelSwitchPanel/componen
 import Grok43ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Grok43ReasoningEffortSlider';
 import Grok45ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Grok45ReasoningEffortSlider';
 import Grok46ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Grok46ReasoningEffortSlider';
+import Grok47ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Grok47ReasoningEffortSlider';
 import Grok420ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Grok420ReasoningEffortSlider';
 import Hy3ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Hy3ReasoningEffortSlider';
 import ImageAspectRatio2Select from '@/features/ModelSwitchPanel/components/ControlsForm/ImageAspectRatio2Select';
@@ -157,6 +158,10 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
     key: 'grok4_6ReasoningEffort',
   },
   {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.grok4_7ReasoningEffort.hint',
+    key: 'grok4_7ReasoningEffort',
+  },
+  {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.hy3ReasoningEffort.hint',
     key: 'hy3ReasoningEffort',
   },
@@ -244,6 +249,7 @@ const TITLE_KEY_ALIASES: Partial<Record<ExtendParamsType, ExtendParamsType>> = {
   grok4_3ReasoningEffort: 'reasoningEffort',
   grok4_5ReasoningEffort: 'reasoningEffort',
   grok4_6ReasoningEffort: 'reasoningEffort',
+  grok4_7ReasoningEffort: 'reasoningEffort',
   hy3ReasoningEffort: 'reasoningEffort',
   kimiK3ReasoningEffort: 'reasoningEffort',
   qwen38ReasoningEffort: 'reasoningEffort',
@@ -324,6 +330,11 @@ const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
   },
   grok4_6ReasoningEffort: {
     labelSuffix: ' (Grok 4.6)',
+    previewWidth: 300,
+    tag: 'reasoning_effort',
+  },
+  grok4_7ReasoningEffort: {
+    labelSuffix: ' (Grok 4.7)',
     previewWidth: 300,
     tag: 'reasoning_effort',
   },
@@ -510,6 +521,7 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
       grok4_3ReasoningEffort: <Grok43ReasoningEffortSlider value="low" />,
       grok4_5ReasoningEffort: <Grok45ReasoningEffortSlider value="high" />,
       grok4_6ReasoningEffort: <Grok46ReasoningEffortSlider value="high" />,
+      grok4_7ReasoningEffort: <Grok47ReasoningEffortSlider value="high" />,
       hy3ReasoningEffort: <Hy3ReasoningEffortSlider value="high" />,
       kimiK3ReasoningEffort: <KimiK3ReasoningEffortSlider value="max" />,
       ring2_6ReasoningEffort: <Ring26ReasoningEffortSlider value="high" />,

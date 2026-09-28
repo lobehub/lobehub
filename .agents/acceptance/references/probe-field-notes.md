@@ -404,8 +404,8 @@ executionTarget: 'local'` in `agencyConfig`) + one message per case asking CC to
   `WebContentsView`s (not renderer `<webview>` guests — that is E16/D15, a different shape).
 - **Doesn't work**: assuming any tool that "just connects to the CDP port" lands on the app.
   Every live page shows up in `/json/list` as its own `type: page` target, so both
-  `agent-browser` and `scripts/cdp-screenshot.sh` can silently attach to a _web page the app
-  is hosting_ instead of the app itself. Measured: `cdp-screenshot.sh` reported
+  `agent-browser` and `bash .agents/skills/acceptance/scripts/cdp-screenshot.sh` can silently
+  attach to a _web page the app is hosting_ instead of the app itself. Measured: `cdp-screenshot.sh` reported
   `targetUrl: https://example.com/` and wrote that page's pixels while the intended evidence
   was the app window; an `agent-browser get url` on the same port hung.
 - **Works — pin the target by URL prefix.** Raw CDP, pick the target whose `url` starts with

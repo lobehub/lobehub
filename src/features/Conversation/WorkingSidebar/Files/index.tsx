@@ -1,44 +1,39 @@
 'use client';
 
 import type { ProjectFileIndexEntry } from '@lobechat/electron-client-ipc';
-import { Center, copyToClipboard, Empty, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
-import { ActionIcon, Button, DropdownMenu, Input, toast } from '@lobehub/ui/base-ui';
+import { Center, Empty, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
+import { ActionIcon, Button, DropdownMenu, Input, Spin } from '@lobehub/ui/base-ui';
 import type { GitStatusEntry } from '@pierre/trees';
 import { createStaticStyles } from 'antd-style';
 import {
   CheckIcon,
   ChevronDownIcon,
+  EllipsisIcon,
   FileIcon,
+  FilePlusIcon,
+  FolderPlusIcon,
   FolderTreeIcon,
   FoldVerticalIcon,
   GitCompareArrowsIcon,
-  ListFilterIcon,
+  RotateCwIcon,
   SearchIcon,
   XIcon,
 } from 'lucide-react';
-import type { DragEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
-import { startWorkspaceFileDrag } from '@/features/ChatInput/InputEditor/workspaceFileDragData';
 import type { ExplorerTreeNode } from '@/features/ExplorerTree';
-import {
-  ExplorerTree,
-  FOLDER_ICON_CSS,
-  getExplorerTreeStyleVars,
-  HIDE_POINTER_FOCUS_RING_CSS,
-} from '@/features/ExplorerTree';
+import { ExplorerTree, getExplorerTreeStyleVars } from '@/features/ExplorerTree';
 import type { ExplorerTreeHandle } from '@/features/ExplorerTree/types';
-import { usePublishWorkspaceHtmlFromFile } from '@/features/Portal/LocalFile/usePublishWorkspaceHtmlFromFile';
-import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
-import { localFileService } from '@/services/electron/localFileService';
 import { projectFileService } from '@/services/projectFile';
-import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 
 import { filterProjectFileEntries, mergeMissingDeletedEntries } from './fileFilter';
+import { FILE_TREE_UNSAFE_CSS } from './fileTreeStyle';
 import { isExcludedProjectFileEntry } from './fileVisibility';
+import { getAncestorIds, getParentRelativePath, PROJECT_ROOT_NODE_ID } from './treePaths';
+import { useCollapsedDirectoryChildren } from './useCollapsedDirectoryChildren';
+import { useFileTreeActions } from './useFileTreeActions';
 import { buildGitStatusEntries, useGitWorkingTreeFiles } from './useGitWorkingTreeFiles';
 import { useProjectFiles } from './useProjectFiles';
 
@@ -83,41 +78,26 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     flex: 1;
     min-width: 0;
   `,
+  truncated: css`
+    flex-shrink: 0;
+
+    padding-block: 4px;
+    padding-inline: 12px;
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+
+    font-size: 11px;
+    color: ${cssVar.colorTextTertiary};
+  `,
 }));
 
-const stripTrailingSlash = (value: string) => (value.endsWith('/') ? value.slice(0, -1) : value);
-
-const IGNORED_FILE_OPACITY_CSS = `
-[data-item-git-status='ignored'] > :where(
-  [data-item-section='icon'],
-  [data-item-section='content'],
-  [data-item-section='decoration'],
-  [data-item-section='git']
-) {
-  opacity: 0.7;
-}`;
-const FILE_TREE_UNSAFE_CSS = [
-  FOLDER_ICON_CSS,
-  HIDE_POINTER_FOCUS_RING_CSS,
-  IGNORED_FILE_OPACITY_CSS,
-].join('\n');
 const FILE_SEARCH_DEBOUNCE_MS = 180;
 const PROJECT_FILE_TREE_SEARCH_LIMIT = 200;
-// Relative file paths cannot contain NUL, so this synthetic id cannot collide with an indexed entry.
-const PROJECT_ROOT_NODE_ID = '\0project-root';
 
 type FileViewMode = 'project' | 'changes';
 
 const getProjectRootName = (root: string) => {
   const normalizedRoot = root.replace(/[\\/]+$/, '');
   return normalizedRoot.split(/[\\/]/).pop() || root;
-};
-
-const getParentRelativePath = (relativePath: string): string | null => {
-  const cleaned = stripTrailingSlash(relativePath);
-  const idx = cleaned.lastIndexOf('/');
-  if (idx < 0) return null;
-  return `${cleaned.slice(0, idx)}/`;
 };
 
 const buildTreeNodes = (
@@ -156,15 +136,6 @@ const buildIgnoredGitStatusEntries = (entries: ProjectFileIndexEntry[]): GitStat
 
 const prefixGitStatusPaths = (entries: GitStatusEntry[], rootName: string): GitStatusEntry[] =>
   entries.map((entry) => ({ ...entry, path: `${rootName}/${entry.path}` }));
-
-const getAncestorIds = (filePath: string): string[] => {
-  const segments = filePath.split('/');
-  const ancestors: string[] = [];
-  for (let i = 1; i < segments.length; i++) {
-    ancestors.push(segments.slice(0, i).join('/') + '/');
-  }
-  return ancestors;
-};
 
 interface FilesSearchBarProps {
   onClose: () => void;
@@ -221,7 +192,6 @@ FilesSearchBar.displayName = 'FilesSearchBar';
 
 const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
   const { t } = useTranslation('chat');
-  const isRemote = !!deviceId;
   const { data, isLoading } = useProjectFiles(deviceId, workingDirectory);
   const { data: gitFiles } = useGitWorkingTreeFiles(
     deviceId,
@@ -238,6 +208,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [searchEntries, setSearchEntries] = useState<ProjectFileIndexEntry[] | undefined>();
   const [isSearching, setIsSearching] = useState(false);
+  const [expandedIds, setExpandedIds] = useState<string[]>([]);
   const projectRootName = getProjectRootName(projectRoot);
   const normalizedDebouncedQuery = debouncedQuery.trim();
   const isFiltering = normalizedDebouncedQuery.length > 0;
@@ -248,8 +219,20 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
     () => new Set(workingTreeGitStatus.map((entry) => entry.path)),
     [workingTreeGitStatus],
   );
+  // The index delivers fully git-ignored folders as childless collapsed rows;
+  // their children stream in here as the user expands them.
+  const {
+    children: collapsedChildren,
+    invalidate: invalidateCollapsedChildren,
+    truncatedCount,
+  } = useCollapsedDirectoryChildren({
+    deviceId,
+    entries,
+    expandedIds,
+    projectRoot,
+  });
   const displayEntries = useMemo(() => {
-    const indexedEntries = isFiltering ? (searchEntries ?? []) : entries;
+    const indexedEntries = isFiltering ? (searchEntries ?? []) : [...entries, ...collapsedChildren];
     const entriesWithDeleted = mergeMissingDeletedEntries(
       indexedEntries,
       isFiltering ? [] : (gitFiles?.deleted ?? []),
@@ -263,6 +246,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
     });
   }, [
     changedOnly,
+    collapsedChildren,
     dirtyFilePaths,
     entries,
     gitFiles?.deleted,
@@ -299,8 +283,6 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
     () => getExplorerTreeStyleVars({ reserveChevronSlot: nodes.some((node) => node.isFolder) }),
     [nodes],
   );
-
-  const [expandedIds, setExpandedIds] = useState<string[]>([]);
 
   useEffect(() => {
     setViewMode('project');
@@ -387,26 +369,12 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
     [data?.source, t, viewMode],
   );
 
-  const filterItems = useMemo(
-    () => [
-      {
-        checked: hideIgnored,
-        key: 'hide-ignored',
-        label: t('workingPanel.files.filters.hideIgnored'),
-        onCheckedChange: setHideIgnored,
-        type: 'checkbox' as const,
-      },
-    ],
-    [hideIgnored, t],
-  );
-
   useEffect(() => {
     if (!isFiltering) return;
     treeRef.current?.setExpanded(defaultExpandedIds);
   }, [defaultExpandedIds, isFiltering]);
 
   const revealRequest = useGlobalStore((s) => s.status.workingSidebarRevealRequest);
-  const openWorkingSidebar = useGlobalStore((s) => s.openWorkingSidebar);
 
   useEffect(() => {
     if (!revealRequest) return;
@@ -423,125 +391,67 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revealRequest?.nonce, nodes]);
 
-  const openLocalFile = useChatStore((s) => s.openLocalFile);
-  const { canOfferFile, publishFile } = usePublishWorkspaceHtmlFromFile({
+  const clearDisplayFilter = useCallback(() => {
+    setSearchExpanded(false);
+    setDebouncedQuery('');
+    setViewMode('project');
+    setHideIgnored(false);
+  }, []);
+  const knownEntries = useMemo(
+    () => [...entries, ...collapsedChildren],
+    [collapsedChildren, entries],
+  );
+  const deletedPaths = useMemo(() => new Set(gitFiles?.deleted ?? []), [gitFiles?.deleted]);
+  const actions = useFileTreeActions({
+    deletedPaths,
     deviceId,
-    workingDirectory: projectRoot,
+    dirtyFilePaths,
+    expandedIds,
+    hasDisplayFilter,
+    invalidateCollapsedChildren,
+    knownEntries,
+    nodes,
+    onClearDisplayFilter: clearDisplayFilter,
+    onCollapseAll: handleCollapseAll,
+    projectRoot,
+    treeRef,
+    workingDirectory,
   });
 
-  const openNode = useCallback(
-    (node: ExplorerTreeNode<ProjectFileIndexEntry>) => {
-      if (!node.data) return;
-      if (node.isFolder) {
-        if (isRemote) return;
-
-        void localFileService.openLocalFileOrFolder(node.data.path, true);
-        return;
-      }
-      openLocalFile({ deviceId, filePath: node.data.path, workingDirectory: projectRoot });
-    },
-    [deviceId, isRemote, openLocalFile, projectRoot],
-  );
-
-  const handleNodeClick = useCallback(
-    (node: ExplorerTreeNode<ProjectFileIndexEntry>) => {
-      // Folders expand via the tree; files open in the preview panel.
-      if (node.isFolder) return;
-      openNode(node);
-    },
-    [openNode],
-  );
-
-  // Dragging a row into the chat input inserts a `<localFile />` mention instead
-  // of uploading it. We stamp a custom MIME on dragstart; the input's
-  // useWorkspaceFileDrop reads it. The panel has no onMove, so overriding the
-  // drag effect here can't disturb any internal reorder behaviour.
-  const handleNodeDragStart = useCallback(
-    (node: ExplorerTreeNode<ProjectFileIndexEntry>, event: DragEvent<HTMLElement>) => {
-      if (!node.data) return;
-      startWorkspaceFileDrag(event, {
-        isDirectory: !!node.isFolder,
-        name: node.data.name,
-        path: node.data.path,
-      });
-    },
-    [],
-  );
-
-  const getContextMenuItems = useCallback(
-    (node: ExplorerTreeNode<ProjectFileIndexEntry>): NativeContextMenuItem[] => {
-      if (!node.data) return [];
-
-      const { path, relativePath } = node.data;
-      const isDirty = dirtyFilePaths.has(relativePath);
-      const items: NativeContextMenuItem[] = [];
-
-      if (!isRemote) {
-        items.push({
-          key: 'open',
-          label: t('workingPanel.files.open'),
-          onClick: () => openNode(node),
-        });
-      }
-
-      if (canOfferFile(path, !!node.isFolder)) {
-        items.push({
-          key: 'publish',
-          label: t('workingPanel.localFile.publish.action'),
-          sfSymbol: 'square.and.arrow.up',
-          onClick: () => {
-            void publishFile(path);
-          },
-        });
-      }
-
-      if (!isRemote) {
-        items.push(
-          { key: 'divider-reveal', type: 'divider' as const },
-          {
-            key: 'show-in-system',
-            label: t('workingPanel.files.showInSystem'),
-            onClick: () => void localFileService.openFileFolder(path),
-          },
-        );
-      }
-
-      if (isDirty) {
-        items.push({
-          key: 'show-in-review',
-          label: t('workingPanel.files.showInReview'),
-          onClick: () => openWorkingSidebar('review'),
-        });
-      }
-
-      if (items.length > 0) {
-        items.push({ key: 'divider-copy', type: 'divider' as const });
-      }
-
-      items.push(
-        {
-          key: 'copy-absolute-path',
-          label: t('workingPanel.files.copyAbsolutePath'),
-          onClick: async () => {
-            await copyToClipboard(path);
-            toast.success(t('workingPanel.review.copied'));
-          },
-          sfSymbol: 'doc.on.doc',
-        },
-        {
-          key: 'copy-relative-path',
-          label: t('workingPanel.files.copyRelativePath'),
-          onClick: async () => {
-            await copyToClipboard(relativePath);
-            toast.success(t('workingPanel.review.copied'));
-          },
-          sfSymbol: 'doc.on.doc',
-        },
-      );
-
-      return items;
-    },
-    [canOfferFile, dirtyFilePaths, isRemote, openNode, openWorkingSidebar, publishFile, t],
+  // Tree-level actions live behind "…" so the header keeps room: creating at
+  // the project root, refresh, then the ignored-files filter.
+  const moreItems = useMemo(
+    () => [
+      {
+        icon: <FilePlusIcon size={14} />,
+        key: 'new-file',
+        label: t('workingPanel.files.actions.newFile'),
+        onClick: () => actions.startCreateFromHeader('file'),
+      },
+      {
+        icon: <FolderPlusIcon size={14} />,
+        key: 'new-folder',
+        label: t('workingPanel.files.actions.newFolder'),
+        onClick: () => actions.startCreateFromHeader('folder'),
+      },
+      { key: 'divider-refresh', type: 'divider' as const },
+      {
+        disabled: actions.refreshing,
+        icon: <RotateCwIcon size={14} />,
+        key: 'refresh',
+        label: t('workingPanel.files.actions.refresh'),
+        onClick: () => void actions.refresh(),
+      },
+      { key: 'divider-filters', type: 'divider' as const },
+      {
+        checked: hideIgnored,
+        key: 'hide-ignored',
+        label: t('workingPanel.files.filters.hideIgnored'),
+        onCheckedChange: setHideIgnored,
+        type: 'checkbox' as const,
+      },
+    ],
+    [actions, hideIgnored, t],
   );
 
   const isEmpty = displayEntries.length === 0;
@@ -549,7 +459,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
   if (!data && isLoading) {
     return (
       <Center flex={1}>
-        <NeuralNetworkLoading size={48} />
+        <Spin size="large" />
       </Center>
     );
   }
@@ -593,14 +503,6 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
             onClick={() => setSearchExpanded(true)}
           />
         )}
-        <DropdownMenu items={filterItems} placement={'bottomRight'}>
-          <ActionIcon
-            active={hideIgnored}
-            icon={ListFilterIcon}
-            size={'small'}
-            title={t('workingPanel.files.filters.title')}
-          />
-        </DropdownMenu>
         <ActionIcon
           disabled={nodes.length === 0}
           icon={FoldVerticalIcon}
@@ -608,12 +510,21 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
           title={t('workingPanel.files.collapseAll')}
           onClick={handleCollapseAll}
         />
+        <DropdownMenu items={moreItems} placement={'bottomRight'}>
+          <ActionIcon
+            active={hideIgnored}
+            icon={EllipsisIcon}
+            loading={actions.refreshing}
+            size={'small'}
+            title={t('workingPanel.files.actions.more')}
+          />
+        </DropdownMenu>
       </div>
       {isEmpty && isFiltering && isSearching ? (
         <Center flex={1}>
-          <NeuralNetworkLoading size={32} />
+          <Spin size="large" />
         </Center>
-      ) : isEmpty ? (
+      ) : isEmpty && !actions.pendingCreate ? (
         <Center flex={1} gap={8} paddingBlock={24}>
           <Empty
             icon={FileIcon}
@@ -626,19 +537,31 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
         <div className={styles.tree} style={treeStyleVars}>
           <ExplorerTree<ProjectFileIndexEntry>
             iconsColored
+            canDrag={actions.canDrag}
+            canDrop={actions.canDrop}
+            canRename={actions.canRename}
             defaultExpandedIds={defaultExpandedIds}
-            getContextMenuItems={getContextMenuItems}
+            getBlankContextMenuItems={actions.getBlankContextMenuItems}
+            getContextMenuItems={actions.getContextMenuItems}
             gitStatus={gitStatus}
             iconSet="complete"
             nodes={nodes}
             ref={treeRef}
             style={{ height: '100%' }}
             unsafeCSS={FILE_TREE_UNSAFE_CSS}
+            validateName={actions.validateName}
+            onCommitCreate={actions.onCommitCreate}
+            onCommitRename={actions.onCommitRename}
             onExpandedChange={setExpandedIds}
-            onNodeClick={handleNodeClick}
-            onNodeDragStart={handleNodeDragStart}
+            onMove={actions.onMove}
+            onNodeClick={actions.handleNodeClick}
+            onNodeDragStart={actions.handleNodeDragStart}
+            onTreeKeyDown={actions.handleTreeKeyDown}
           />
         </div>
+      )}
+      {truncatedCount > 0 && (
+        <div className={styles.truncated}>{t('workingPanel.files.truncatedNotice')}</div>
       )}
     </Flexbox>
   );

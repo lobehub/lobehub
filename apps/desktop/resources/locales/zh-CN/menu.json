@@ -58,6 +58,7 @@
   "help.openConfigDir": "配置目录",
   "help.openHeteroAgentDir": "打开 HeteroAgent 目录",
   "help.openLogsDir": "打开日志目录",
+  "help.processExplorer": "打开进程管理器",
   "help.reportIssue": "反馈问题",
   "help.title": "帮助",
   "help.toggleHeteroTracing": "记录 Agent CLI 调试日志",

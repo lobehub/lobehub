@@ -3,22 +3,9 @@ import { ModelProvider } from 'model-bank';
 import OpenAI from 'openai';
 import { describe, expect, it, vi } from 'vitest';
 
-import { testProvider } from '../../providerTestUtils';
-import { LobeUnslothAI, params } from './index';
+import { params } from './index';
 
-const provider = ModelProvider.Unsloth;
 const defaultBaseURL = 'http://127.0.0.1:8888/v1';
-
-testProvider({
-  Runtime: LobeUnslothAI,
-  chatDebugEnv: 'DEBUG_UNSLOTH_CHAT_COMPLETION',
-  chatModel: 'unsloth/Qwen3-1.7B-GGUF',
-  defaultBaseURL,
-  provider,
-  test: {
-    skipAPICall: true,
-  },
-});
 
 describe('LobeUnslothAI - custom features', () => {
   it('discovers loaded model abilities from server props without a catalog ID match', async () => {

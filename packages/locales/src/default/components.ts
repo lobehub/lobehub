@@ -259,7 +259,13 @@ export default {
   'ModelSwitchPanel.detail.releasedAt': 'Released {{date}}',
   'ModelSwitchPanel.emptyModel': 'No enabled model. Please go to settings to enable.',
   'ModelSwitchPanel.emptyProvider': 'No enabled providers. Please go to settings to enable one.',
+  'ModelSwitchPanel.free': 'Free',
   'ModelSwitchPanel.goToSettings': 'Go to settings',
+  'ModelSwitchPanel.meta.price': 'Relative price {{multiplier}}× (1× = $1 per 1M input tokens)',
+  'ModelSwitchPanel.meta.price.credits':
+    'Relative price {{multiplier}}× (1× = 1M credits per 1M input tokens)',
+  'ModelSwitchPanel.meta.rating':
+    '{{dimension}} score {{score}}/100 (relative to the top-rated model)',
   'ModelSwitchPanel.manageProvider': 'Manage Provider',
   'ModelSwitchPanel.provider': 'Provider',
   'ModelSwitchPanel.searchPlaceholder': 'Search models...',

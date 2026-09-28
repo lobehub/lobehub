@@ -18,7 +18,7 @@ import { resolveVerifyModelConfig } from './modelConfig';
 import { finalizeVerifyRun } from './settle';
 import { VERIFY_ABANDONED_MS } from './staleness';
 import { VerifyStatusService } from './statusService';
-import { resolveTaskAcceptance } from './taskAcceptance';
+import { attachTaskRunToAcceptance, resolveTaskAcceptance } from './taskAcceptance';
 
 const log = debug('lobe-server:verify-lifecycle');
 const MAX_TASK_DOCUMENT_CHARS = 80_000;
@@ -89,18 +89,45 @@ const executeVerifyLifecycle = async (
   throwOnError = false,
 ): Promise<void> => {
   try {
-    const run = await new VerifyRunModel(db, userId, workspaceId).findByOperation(
+    const confirmedRun = await new VerifyRunModel(db, userId, workspaceId).findByOperation(
       params.operationId,
     );
 
     // Opt-in gate: only runs with a confirmed plan.
-    if (!run?.plan?.length || !run.planConfirmedAt) return;
+    if (!confirmedRun?.plan?.length || !confirmedRun.planConfirmedAt) return;
 
     const op = await new AgentOperationModel(db, userId, workspaceId).findById(params.operationId);
     if (!op) {
       log('op %s missing, cannot run verify', params.operationId);
       return;
     }
+
+    // Resolved once here, before any of the branches below can return: it both
+    // binds this round to the Task's Acceptance (a builder that planned the round
+    // itself leaves it unattached) and pins which agent verifies. Non-task runs
+    // keep an undefined verifier → builtin fallback.
+    //
+    // A throw is left to the outer catch on purpose. Only a resolved "this Task has
+    // no Acceptance" may fall back to the builtin verifier; swallowing a transient
+    // failure here would hand a Task that pins its own verifier to a different one
+    // and settle it on that verdict.
+    const resolvedAcceptance = op.taskId
+      ? await resolveTaskAcceptance(db, userId, op.taskId, workspaceId)
+      : undefined;
+    // Attaching can fold this round into a draft round of the acceptance, which
+    // deletes the row we read above, so the rest of the lifecycle follows the row
+    // the attach settled on.
+    const run = resolvedAcceptance
+      ? await attachTaskRunToAcceptance(
+          db,
+          userId,
+          { acceptanceId: resolvedAcceptance.acceptance.id, run: confirmedRun },
+          workspaceId,
+        )
+      : confirmedRun;
+    // A fold merges both plans onto the surviving row; anything else keeps the plan
+    // the opt-in gate above already accepted.
+    const plan = run.plan?.length ? run.plan : confirmedRun.plan;
 
     // The builder now captures Acceptance evidence inside the main run. When it
     // covered the whole plan, the post-run evidence turn has nothing left to
@@ -123,7 +150,7 @@ const executeVerifyLifecycle = async (
         byCheckItem.set(row.checkItemId, types);
       }
 
-      const uncovered = run.plan.filter((item) => {
+      const uncovered = plan.filter((item) => {
         if (item.required === false) return false;
         const captured = byCheckItem.get(item.id);
         if (!captured?.size) return true;
@@ -166,7 +193,7 @@ const executeVerifyLifecycle = async (
               db,
               deliverable: params.deliverable,
               operation: op,
-              plan: run.plan,
+              plan,
               userId,
               workspaceId,
             });
@@ -177,7 +204,7 @@ const executeVerifyLifecycle = async (
               deliverable: params.deliverable,
               goal: params.goal,
               operation: op,
-              plan: run.plan,
+              plan,
               userId,
               workspaceId,
             });
@@ -206,13 +233,7 @@ const executeVerifyLifecycle = async (
       return;
     }
 
-    // Task-bound runs may pin which agent verifies through its Acceptance policy.
-    // Non-task runs leave it undefined → builtin fallback.
-    let verifierAgentId: string | undefined;
-    if (op.taskId) {
-      const resolvedAcceptance = await resolveTaskAcceptance(db, userId, op.taskId, workspaceId);
-      verifierAgentId = resolvedAcceptance?.config.verifierAgentId ?? undefined;
-    }
+    const verifierAgentId = resolvedAcceptance?.config.verifierAgentId ?? undefined;
 
     const modelConfig = await resolveVerifyModelConfig(
       db,

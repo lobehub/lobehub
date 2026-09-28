@@ -8,6 +8,12 @@ const currentSystemAgent = (s: UserStore) =>
   merge(DEFAULT_SYSTEM_AGENT_CONFIG, currentSettings(s).systemAgent);
 
 const translation = (s: UserStore) => currentSystemAgent(s).translation;
+const asr = (s: UserStore) => currentSystemAgent(s).asr;
+const isAsrConfigured = (s: UserStore) => {
+  const { model, provider } = asr(s);
+
+  return !!model && !!provider;
+};
 const topic = (s: UserStore) => currentSystemAgent(s).topic;
 const topicAutoSummary = (s: UserStore) => currentSystemAgent(s).topicAutoSummary;
 const thread = (s: UserStore) => currentSystemAgent(s).thread;
@@ -20,10 +26,12 @@ const followUpAction = (s: UserStore) => currentSystemAgent(s).followUpAction;
 
 export const systemAgentSelectors = {
   agentMeta,
+  asr,
   followUpAction,
   generationTopic,
   historyCompress,
   inputCompletion,
+  isAsrConfigured,
   promptRewrite,
   thread,
   topic,

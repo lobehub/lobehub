@@ -61,9 +61,49 @@ describe('heterogeneous direct invocation protocol', () => {
     vi.clearAllMocks();
   });
 
+  it.each([
+    { expected: 131_072, maxOutput: 131_072, requested: 262_144 },
+    { expected: 65_536, maxOutput: 65_536, requested: 262_144 },
+    { expected: 4096, maxOutput: 65_536, requested: 4096 },
+    { expected: 65_536, maxOutput: 65_536, requested: 65_536 },
+    { expected: 65_536, maxOutput: 65_536, requested: undefined },
+    { expected: 262_144, maxOutput: undefined, requested: 262_144 },
+  ])('bounds Kimi output by the selected model: $requested / $maxOutput', async (testCase) => {
+    const chat = vi.fn().mockResolvedValue(new Response('stream'));
+    vi.mocked(resolveServerDefaultHeterogeneousModel).mockResolvedValue({
+      deploymentName: 'deployed-model',
+      maxOutput: testCase.maxOutput,
+      model: 'catalog-model',
+      provider: 'lobehub',
+      supportsAdaptiveThinking: false,
+    });
+    vi.mocked(initModelRuntimeFromServerConfig).mockResolvedValue({
+      chat,
+    } as unknown as Awaited<ReturnType<typeof initModelRuntimeFromServerConfig>>);
+    const payload = normalizeAnthropicRequest(
+      { max_tokens: testCase.requested, messages: [{ content: 'hello', role: 'user' }] },
+      'lobehub-default',
+    );
+
+    await invokeServerDefaultModel({
+      agentType: 'kimi-code',
+      model: 'catalog-model',
+      payload,
+      signal: new AbortController().signal,
+      userId: 'user-1',
+    });
+
+    expect(chat.mock.calls[0][0]).toMatchObject({
+      max_tokens: testCase.expected,
+      model: 'deployed-model',
+    });
+    expect(payload.max_tokens).toBe(testCase.requested);
+  });
+
   it('preserves adaptive thinking through the Anthropic relay for a compatible model', async () => {
     const chat = vi.fn().mockResolvedValue(new Response('stream'));
     vi.mocked(resolveServerDefaultHeterogeneousModel).mockResolvedValue({
+      maxOutput: 8192,
       model: 'claude-sonnet-4-6',
       provider: 'lobehub',
       supportsAdaptiveThinking: true,
@@ -77,6 +117,7 @@ describe('heterogeneous direct invocation protocol', () => {
       model: 'claude-sonnet-4-6',
       payload: normalizeAnthropicRequest(
         {
+          max_tokens: 16_384,
           messages: [],
           model: 'lobehub-default',
           stream: true,
@@ -95,6 +136,7 @@ describe('heterogeneous direct invocation protocol', () => {
     );
     expect(chat).toHaveBeenCalledWith(
       expect.objectContaining({
+        max_tokens: 16_384,
         messages: [],
         model: 'claude-sonnet-4-6',
         stream: true,
@@ -1076,6 +1118,94 @@ describe('heterogeneous direct invocation protocol', () => {
  * `API Error: 500 status code (no body)`, retried for 98 seconds.
  */
 describe('describeRelayFailure', () => {
+  it.each([
+    [{ errorType: 403, error: 'Access denied' }, 403, false],
+    [{ errorType: 'InvalidProviderAPIKey', error: { message: 'Key disabled' } }, 401, false],
+    [{ errorType: 'InvalidRequestFormat', error: { message: 'Bad input' } }, 400, false],
+    [
+      { errorType: 'ProviderBizError', error: { message: '400 max_tokens out of range' } },
+      400,
+      false,
+    ],
+    [{ errorType: 'ProviderBizError', error: { message: 'Field required' } }, 400, false],
+    [{ errorType: 'ProviderBizError', error: { status: 403, message: 'Denied' } }, 403, false],
+    [
+      {
+        errorType: 'ProviderBizError',
+        provider: 'google',
+        error: {
+          statusCode: 400,
+          message: 'Opaque rejection',
+          statusCodeText: '[400 Bad Request]',
+        },
+      },
+      400,
+      false,
+    ],
+    [
+      {
+        errorType: 'ProviderBizError',
+        provider: 'bedrock',
+        error: { body: { httpStatusCode: 422 }, message: 'Opaque rejection', type: 'Error' },
+      },
+      422,
+      false,
+    ],
+    [
+      {
+        errorType: 'ProviderBizError',
+        error: { body: { statusCode: 409 }, message: 'Opaque conflict' },
+      },
+      409,
+      true,
+    ],
+    [{ errorType: 'RateLimitExceeded', error: 'Slow down' }, 429, true],
+    [{ errorType: 'InsufficientQuota', error: 'Balance exhausted' }, 429, false],
+    [
+      { errorType: 'ProviderBizError', error: { status: 429, message: 'Insufficient quota' } },
+      429,
+      false,
+    ],
+    [
+      {
+        errorType: 'InvalidRequestFormat',
+        error: { status: 429, message: 'text content blocks must be non-empty' },
+      },
+      429,
+      false,
+    ],
+    [{ errorType: 'ProviderServiceUnavailable', error: 'Overloaded' }, 503, true],
+    [{ errorType: 'DatabasePersistError', error: 'Query failed' }, 500, false],
+    [{ errorType: 'AgentRuntimeError', error: 'Failed query: select 1' }, 500, false],
+    [{ errorType: 'ProviderBizError', error: 'Unrecognized upstream failure' }, 502, true],
+    [new Error('socket hang up'), 502, true],
+  ])('preserves status and retry semantics for %j', (error, status, retryable) => {
+    expect(describeRelayFailure(error)).toMatchObject({ retryable, status });
+  });
+
+  it.each([408, 409])('keeps coarse HTTP %s failures retryable', (status) => {
+    for (const error of [
+      { status, message: 'No details' },
+      { message: `${status} status code (no body)` },
+    ]) {
+      expect(describeRelayFailure({ error, errorType: 'ProviderBizError' })).toMatchObject({
+        retryable: true,
+        status,
+      });
+    }
+  });
+
+  it.each([408, 409, 429, 503])('prioritizes HTTP %s over inferred request errors', (status) => {
+    for (const errorType of ['ProviderBizError', 'UpstreamHttpError']) {
+      expect(
+        describeRelayFailure({
+          error: { status, message: 'text content blocks must be non-empty' },
+          errorType,
+        }),
+      ).toMatchObject({ retryable: true, status });
+    }
+  });
+
   it('carries the provider’s own words out of a runtime rejection', () => {
     expect(
       describeRelayFailure({
@@ -1089,6 +1219,7 @@ describe('describeRelayFailure', () => {
     ).toEqual({
       message:
         '[volcengine] ProviderBizError: The parameter `type` specified in the request are not valid: invalid value adaptive.',
+      retryable: true,
       status: 502,
     });
   });
@@ -1106,6 +1237,7 @@ describe('describeRelayFailure', () => {
   it('still says something for a plain Error', () => {
     expect(describeRelayFailure(new Error('socket hang up'))).toEqual({
       message: 'socket hang up',
+      retryable: true,
       status: 502,
     });
   });

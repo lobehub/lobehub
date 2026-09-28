@@ -52,8 +52,10 @@ app.post('/v1/responses', requireHeteroModelInvocation('openai-responses'), asyn
     });
     body = response.body;
   } catch (error) {
-    const { message, status } = describeRelayFailure(error);
-    return c.json({ error: { message, type: 'api_error' } }, status);
+    const { message, retryable, status } = describeRelayFailure(error);
+    return c.json({ error: { message, type: 'api_error' } }, status, {
+      'x-should-retry': String(retryable),
+    });
   }
   if (!body) {
     return c.json({ error: { message: 'Upstream returned no stream', type: 'api_error' } }, 502);

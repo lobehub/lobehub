@@ -17,7 +17,9 @@ import {
   isParkedStatus,
 } from '@lobechat/agent-runtime';
 import type { ISnapshotStore } from '@lobechat/agent-tracing';
+import { appendSubAgentReference, isCallSubAgentCall } from '@lobechat/builtin-tool-lobe-agent';
 import { dynamicInterventionAudits } from '@lobechat/builtin-tools/dynamicInterventionAudits';
+import { ABANDONED_OPERATION_ERROR_PREFIX } from '@lobechat/const/goal';
 import { parse } from '@lobechat/conversation-flow';
 import { getModelPropertyWithFallback } from '@lobechat/model-runtime';
 import {
@@ -41,7 +43,7 @@ import {
   type ExecVirtualSubAgentParams,
   type UIChatMessage,
 } from '@lobechat/types';
-import { RequestTrigger } from '@lobechat/types';
+import { ChatErrorType, RequestTrigger } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import debug from 'debug';
 import urlJoin from 'url-join';
@@ -55,6 +57,7 @@ import { MessageModel } from '@/database/models/message';
 import { UserModel } from '@/database/models/user';
 import { type LobeChatDatabase } from '@/database/type';
 import { appEnv } from '@/envs/app';
+import { isDeviceCapablePlan, isDeviceLockedPlan } from '@/helpers/executionTarget';
 import { type AgentRuntimeCoordinatorOptions } from '@/server/modules/AgentRuntime';
 import { AgentRuntimeCoordinator, createStreamEventManager } from '@/server/modules/AgentRuntime';
 import { runMayUseDevice } from '@/server/modules/AgentRuntime/executors/resolveRunActiveDeviceId';
@@ -162,6 +165,12 @@ const LEGACY_INTERRUPT_STATE_POLL_INTERVAL_MS = 30_000;
 const STEP_ABORT_POLL_MAX_BACKOFF = 8;
 const STEP_LOCK_HEARTBEAT_MS = 30_000;
 const DURABLE_LEASE_HEARTBEAT_EVERY_TICKS = 3;
+/**
+ * How long a `running` operation's durable lease may go unrefreshed, with its
+ * runtime state gone, before a stop request treats it as dead. Far above the
+ * heartbeat cadence (STEP_LOCK_HEARTBEAT_MS × DURABLE_LEASE_HEARTBEAT_EVERY_TICKS).
+ */
+const DEAD_OPERATION_LEASE_MS = 10 * 60 * 1000;
 const EVAL_TOOL_FORWARDING_HOOK_ID = 'eval-tool-forwarding';
 const INTERVENTION_LIFECYCLE_CHECKPOINT_KEY = '_agentInterventionLifecycle';
 
@@ -294,6 +303,60 @@ const formatErrorForMetadata = (error: unknown): Record<string, any> | undefined
   return { message: String(error) };
 };
 
+const SUB_AGENT_CREDIT_ERROR_TYPES = new Set<string>([
+  ChatErrorType.FreePlanLimit,
+  ChatErrorType.InsufficientBudgetForModel,
+  ChatErrorType.SubscriptionPlanLimit,
+]);
+
+/**
+ * A child stopped by the cost-admission gate fails with the bare message
+ * "Budget exceeded", which reads like a per-sub-agent allowance. The parent
+ * then retries or fans out more sub-agents against the same limit. Say which
+ * limit it is and who can lift it.
+ *
+ * Mirrors the bot reply copy (`bot/replyTemplate.ts`): the payer is not
+ * addressed as "you" and figures are never quoted, because a bot run is billed
+ * to its owner while the parent's reply may reach a shared channel.
+ */
+const formatSubAgentCreditErrorReason = (error: unknown): string | undefined => {
+  if (!error || typeof error !== 'object') return;
+  const { body, errorType, type } = error as {
+    body?: { budget?: { budgetTypeAtError?: unknown } };
+    errorType?: unknown;
+    type?: unknown;
+  };
+  const creditType = [type, errorType].find(
+    (value): value is string =>
+      typeof value === 'string' && SUB_AGENT_CREDIT_ERROR_TYPES.has(value),
+  );
+  if (!creditType) return;
+
+  const budgetType = body?.budget?.budgetTypeAtError;
+  // InsufficientBudgetForModel means the allowance still has credits, just not
+  // enough for this model's estimated cost — a cheaper model may still fit, so
+  // the no-retry claim only holds for the same model (bot/replyTemplate gives
+  // the same "switch to a less expensive model" advice).
+  const modelCostShortfall = creditType === ChatErrorType.InsufficientBudgetForModel;
+  const shortfall = modelCostShortfall ? "can't cover this model's estimated cost" : 'are used up';
+  const limit =
+    budgetType === 'workspace'
+      ? `the workspace's shared LobeHub credits ${shortfall}; a workspace admin has to add credits`
+      : budgetType === 'workspace_member'
+        ? `this member's workspace credit allowance ${modelCostShortfall ? shortfall : 'is used up'}; a workspace admin has to raise it`
+        : modelCostShortfall
+          ? "the account's LobeHub credits are too low for this model; the account owner has to top up or upgrade"
+          : "the account's LobeHub plan limit was reached or the plan does not cover this model; the account owner has to upgrade the plan";
+
+  const advice = modelCostShortfall
+    ? 'This limit is shared by every sub-agent and by this conversation, so retrying or dispatching more sub-agents on the same model will not get past it; a sub-agent that runs on a less expensive model may still fit. ' +
+      'Otherwise finish with what you already have and tell the user about the limit.'
+    : 'This limit is shared by every sub-agent and by this conversation, so retrying or dispatching more sub-agents will not get past it. ' +
+      'Finish with what you already have and tell the user about the limit.';
+
+  return `stopped by a LobeHub billing limit (${creditType}): ${limit}. ${advice}`;
+};
+
 /**
  * Extract a short, human-readable reason string from a failed operation's
  * `state.error`, for inlining into the tool-result `content` a parent agent
@@ -304,10 +367,22 @@ const formatErrorForMetadata = (error: unknown): Record<string, any> | undefined
  * error still rides on `pluginError`; this is just the readable summary.
  */
 const formatSubAgentErrorReason = (error: unknown): string | undefined => {
+  const creditReason = formatSubAgentCreditErrorReason(error);
+  if (creditReason) return creditReason;
+
   const message = formatErrorForMetadata(error)?.message;
   if (typeof message !== 'string') return undefined;
   const trimmed = message.trim();
   if (!trimmed) return undefined;
+  // "Operation abandoned: inactivity_watchdog" names an internal mechanism;
+  // the parent needs to know the child went silent and that its work survives.
+  if (trimmed.startsWith(ABANDONED_OPERATION_ERROR_PREFIX)) {
+    const cause = trimmed.slice(ABANDONED_OPERATION_ERROR_PREFIX.length).trim();
+    return (
+      `the sub-agent stopped making progress and the platform ended it (${cause || 'abandoned'}). ` +
+      'Anything it already did (searches, pages read, documents written) is kept in its thread.'
+    );
+  }
   // Keep the tool result compact — a runaway provider error body would otherwise
   // bloat the parent's LLM context.
   return trimmed.length > 300 ? `${trimmed.slice(0, 300)}…` : trimmed;
@@ -496,11 +571,13 @@ export class AgentRuntimeService {
         new UserModel(db, userId)
           .getUserPreference()
           .then((preference) => preference?.lab?.enableGatewayMux === true));
-    // Use factory function to auto-select Redis or InMemory implementation
+    // Use factory function to auto-select Redis or InMemory implementation.
+    // Gateway pushes are deferred off the step path: every point where this
+    // invocation can stop or hand the run over calls `drainPushes` first.
     this.streamManager =
       options?.streamEventManager ??
       options?.coordinatorOptions?.streamEventManager ??
-      createStreamEventManager();
+      createStreamEventManager({ deferPushes: true });
     this.coordinator = new AgentRuntimeCoordinator({
       ...options?.coordinatorOptions,
       messagePatchModeResolver: (state) => this.usesGatewayMessagePatch(state),
@@ -624,9 +701,26 @@ export class AgentRuntimeService {
       // Absence alone is not proof of exit (e.g. another in-memory worker owns
       // the run). Only an owned, durably terminal operation can acknowledge it.
       const operation = await this.agentOperationModel.findById(operationId);
-      return (
-        !!operation && ['done', 'error', 'interrupted', 'abandoned'].includes(operation.status)
-      );
+      if (!operation) return false;
+      if (['done', 'error', 'interrupted', 'abandoned'].includes(operation.status)) return true;
+
+      // A `running` row with no runtime state whose durable lease stopped
+      // refreshing long ago has nothing executing it: the step heartbeat moves
+      // `updatedAt` every few minutes while a step is live. Without this, the
+      // row stays `running` forever and every stop request on its task is
+      // refused as unconfirmed. Retire it atomically — a concurrent heartbeat
+      // moves `updatedAt` past the cutoff and wins, keeping a live run alive.
+      if (
+        operation.status === 'running' &&
+        operation.updatedAt &&
+        new Date(operation.updatedAt).getTime() < Date.now() - DEAD_OPERATION_LEASE_MS
+      ) {
+        return this.agentOperationModel.settleStaleRunning(
+          operationId,
+          new Date(Date.now() - DEAD_OPERATION_LEASE_MS),
+        );
+      }
+      return false;
     }
 
     if (state.status === 'done' || state.status === 'error' || state.status === 'interrupted') {
@@ -977,6 +1071,7 @@ export class AgentRuntimeService {
       appContext: {
         defaultTaskAssigneeAgentId: appContext?.defaultTaskAssigneeAgentId,
         documentId: appContext?.documentId,
+        editingAgentId: appContext?.editingAgentId,
         groupId: appContext?.groupId,
         scope: appContext?.scope,
         sessionId: appContext?.sessionId,
@@ -1094,6 +1189,8 @@ export class AgentRuntimeService {
           continuation: interventionResolution,
           defaultTaskAssigneeAgentId: appContext?.defaultTaskAssigneeAgentId,
           documentId: appContext?.documentId ?? undefined,
+          editingAgentId: appContext?.editingAgentId,
+          editingGroupId: appContext?.editingGroupId,
           groupId: appContext?.groupId ?? undefined,
           lineage: {
             isSubAgent: appContext?.isSubAgent,
@@ -1259,6 +1356,8 @@ export class AgentRuntimeService {
         }
         onInterventionPrepared?.();
       }
+
+      await params.onOperationCreated?.(operationId);
 
       throwIfAborted(signal, 'Agent execution aborted before first step scheduling');
 
@@ -1914,7 +2013,8 @@ export class AgentRuntimeService {
         // Context: contextEngine.input (agentDocuments) was ~2.7MB/step,
         // hitting Upstash Redis 10MB limit. Bypassing events keeps the heavy
         // payload in trace only, reducing per-step Redis state by ~500x.
-        let contextEnginePayload: { input: unknown; output: unknown } | undefined;
+        let contextEnginePayload:
+          { input: unknown; metadata?: unknown; output: unknown } | undefined;
 
         // Create Agent and Runtime instances
         // Use agentState.metadata which contains the full app context (topicId, agentId, etc.)
@@ -1973,8 +2073,8 @@ export class AgentRuntimeService {
           agentState,
           operationId,
           stepIndex,
-          tracingContextEngine: (input, output) => {
-            contextEnginePayload = { input, output };
+          tracingContextEngine: (input, output, metadata) => {
+            contextEnginePayload = { input, metadata, output };
           },
         });
 
@@ -2015,8 +2115,17 @@ export class AgentRuntimeService {
           // not this one. Drop ours rather than render a list that predates it.
           currentState.operationCredentials = undefined;
           currentState.lastModified = new Date().toISOString();
+          // A resume op (e.g. approving a callSubAgent) seeds its assistant
+          // placeholder before running the tool; when that tool is deferred the
+          // op parks with the seed unclaimed. Fill it now — creating another
+          // assistant leaves the seed as an empty "…" sibling branch that hides
+          // the real answer.
+          const seededAssistantMessageId = currentState.pendingAssistantMessageId;
           currentContext = {
-            payload: { parentMessageId: resumeParentMessageId },
+            payload: {
+              ...(seededAssistantMessageId && { assistantMessageId: seededAssistantMessageId }),
+              parentMessageId: resumeParentMessageId,
+            },
             phase: 'user_input',
           } as AgentRuntimeContext;
           log(
@@ -2057,7 +2166,21 @@ export class AgentRuntimeService {
         // id through the same gate, so binding one here for a forbidden run buys
         // nothing and puts the device's working directory and system info into
         // the prompt variables (`serverCallLlmContextBuilder`).
-        if (!currentState.binding?.device?.id && runMayUseDevice(currentState)) {
+        //
+        // A run whose plan still leaves the device open (unrouted, not locked)
+        // keeps the remote-device picker for its whole lifetime, so it must keep
+        // following it: re-read on every step and let the latest activation win.
+        // Binding only once made every later `activateDevice` report success
+        // while local tools stayed on the first device.
+        const executionPlan = currentState.plan?.execution;
+        const deviceStillSelectable =
+          !!executionPlan &&
+          isDeviceCapablePlan(executionPlan) &&
+          !isDeviceLockedPlan(executionPlan);
+        if (
+          (!currentState.binding?.device?.id || deviceStillSelectable) &&
+          runMayUseDevice(currentState)
+        ) {
           // Interventions and async resumes can change tool rows after the
           // entry snapshot. Those paths still need a fresh device read.
           const canReuseEntryMessages =
@@ -2070,7 +2193,7 @@ export class AgentRuntimeService {
             currentState,
             canReuseEntryMessages ? stepEntryMessages : undefined,
           );
-          if (deviceContext) {
+          if (deviceContext && deviceContext.activeDeviceId !== currentState.binding?.device?.id) {
             currentState.binding = {
               ...currentState.binding,
               device: {
@@ -2472,8 +2595,11 @@ export class AgentRuntimeService {
             log('[%s][%d] Next step %d deferred to caller', operationId, stepIndex, nextStepIndex);
           } else {
             // The next step runs in another invocation, which rebuilds the
-            // partial from the store — it has to see this step.
+            // partial from the store — it has to see this step. The gateway
+            // pushes this invocation issued have to land for the same reason:
+            // nothing carries them once it stops running.
             await this.traceRecorder.flushPartial();
+            await this.streamManager.drainPushes?.(operationId);
             await this.queueService.scheduleMessage({ ...next, endpoint: `${this.baseURL}/run` });
             nextStepScheduled = true;
             logToolCallPc(operationId, stepIndex, 'post.next_step_scheduled', () => ({
@@ -2715,7 +2841,12 @@ export class AgentRuntimeService {
       // Parked runs (human input, async tools) and finished ones are read back
       // by a different invocation, so the partial cannot stay in memory only.
       // An inline hand-off keeps it: the next step runs on this recorder.
-      if (!handedOffInline) await this.traceRecorder.flushPartial();
+      if (!handedOffInline) {
+        await this.traceRecorder.flushPartial();
+        // Same boundary for the stream: an issued push is only guaranteed to
+        // reach the gateway while this invocation is still running.
+        await this.streamManager.drainPushes?.(operationId);
+      }
       // The inline step loop keeps the lock across step boundaries — releasing
       // here would open a window for a stale redelivery to claim it mid-run.
       // Its caller releases once, in a `finally`, for the whole invocation.
@@ -2738,8 +2869,10 @@ export class AgentRuntimeService {
     }
 
     // The steps this invocation inlined are still only in memory — the
-    // invocation that picks the run up reads the partial from the store.
+    // invocation that picks the run up reads the partial from the store, and
+    // the gateway pushes it issued have nothing else to carry them.
     await this.traceRecorder.flushPartial();
+    await this.streamManager.drainPushes?.(continuation.operationId);
 
     await this.queueService.scheduleMessage({
       ...continuation,
@@ -3451,16 +3584,26 @@ export class AgentRuntimeService {
         );
       }
     }
-    const errorReason = failed ? formatSubAgentErrorReason(finalState?.error) : undefined;
-    const content = failed
+    const errorReason = failed
+      ? formatSubAgentErrorReason(finalState?.error ?? params.errorMessage)
+      : undefined;
+    const resultContent = failed
       ? errorReason
         ? `Sub-agent did not complete (${reason}): ${errorReason}`
         : `Sub-agent did not complete (${reason}).`
       : lastAssistantContent || 'Sub-agent completed without a textual answer.';
+    // callSubAgent results carry the sub-agent id so the parent can later send
+    // this same sub-agent a follow-up (`callSubAgent({ subAgentId })`) — e.g.
+    // to hand over what it gathered before failing — instead of redoing it.
+    const content = (await this.isCallSubAgentToolMessage(toolMessageId, threadId))
+      ? appendSubAgentReference(resultContent, threadId)
+      : resultContent;
 
     const backfill = await this.messageModel.updateToolMessage(toolMessageId, {
       content,
-      pluginError: failed ? formatErrorForMetadata(finalState?.error) : undefined,
+      pluginError: failed
+        ? formatErrorForMetadata(finalState?.error ?? params.errorMessage)
+        : undefined,
       pluginState: {
         model: finalState?.modelRuntimeConfig?.model,
         status: failed ? 'error' : 'completed',
@@ -3490,6 +3633,24 @@ export class AgentRuntimeService {
       { parentOperationId },
       { knownFulfilledMessageId: toolMessageId, scheduleVerifyOnHold: true },
     );
+  }
+
+  /**
+   * Whether the bridged placeholder belongs to `lobe-agent.callSubAgent` (the
+   * same bridge also serves `callAgent`, whose children cannot be continued).
+   * Best-effort: a failed lookup only drops the id trailer, never the bridge.
+   */
+  private async isCallSubAgentToolMessage(
+    toolMessageId: string,
+    threadId: string | undefined,
+  ): Promise<boolean> {
+    if (!threadId) return false;
+    try {
+      return isCallSubAgentCall(await this.messageModel.findMessagePlugin(toolMessageId));
+    } catch (error) {
+      log('[%s] sub-agent bridge: failed to read tool plugin: %O', toolMessageId, error);
+      return false;
+    }
   }
 
   /**
@@ -4067,7 +4228,7 @@ export class AgentRuntimeService {
     agentState?: any;
     operationId: string;
     stepIndex: number;
-    tracingContextEngine?: (input: unknown, output: unknown) => void;
+    tracingContextEngine?: (input: unknown, output: unknown, metadata?: unknown) => void;
   }) {
     const state = agentState as AgentState | undefined;
     const modelRuntimeConfig = state?.modelRuntimeConfig;

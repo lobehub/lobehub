@@ -191,6 +191,35 @@ describe('MessageModel Create Tests', () => {
       expect(pluginResult[0].identifier).toBe('plugin1');
     });
 
+    it('should persist pluginError when creating a failed tool message', async () => {
+      // agent-runtime's createToolMessage passes the tool failure as pluginError
+      // together with an empty content; dropping it leaves the model with an
+      // `<empty_content>` tool result and no clue why the call failed.
+      const result = await messageModel.create({
+        content: undefined as unknown as string,
+        plugin: {
+          apiName: 'analyzeMedia',
+          arguments: '{}',
+          identifier: 'lobe-agent',
+          type: 'builtin',
+        },
+        pluginError: {
+          errorType: 'InsufficientBudgetForModel',
+          kind: 'stop',
+          message: 'budget exceeded',
+        },
+        role: 'tool',
+        sessionId: '1',
+        tool_call_id: 'call_budget',
+      });
+
+      const [row] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, result.id));
+      expect(row.error).toMatchObject({ errorType: 'InsufficientBudgetForModel' });
+    });
+
     it('should clamp oversized plugin identifiers when creating a tool message', async () => {
       const oversizedApiName = `api-${'a'.repeat(40_000)}`;
       const oversizedIdentifier = `plugin-${'i'.repeat(40_000)}`;

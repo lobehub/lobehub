@@ -1,8 +1,8 @@
 /**
  * @vitest-environment happy-dom
  *
- * LOBE-14032: after a run ends, a reload briefly repainted the topic row with
- * the running spinner before it vanished again.
+ * After a run ends, a reload briefly repainted the topic row with the running
+ * spinner before it vanished again.
  *
  * The chain under test is the real one: `useFetchTopics` → tiered SWR provider
  * → IndexedDB → "reload" (fresh provider) → first paint before the network

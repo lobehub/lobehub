@@ -33,9 +33,9 @@ export interface InitDocumentParams {
   documentId: string;
   editor: IEditor;
   editorData?: unknown;
-
   sourceType: DocumentSourceType;
   topicId?: string;
+  updatedAt?: Date | string | null;
 }
 
 /**
@@ -75,6 +75,10 @@ export class DocumentActionImpl {
     this.#get = get;
   }
 
+  cancelDebouncedSave = (documentId: string): void => {
+    this.#debouncedSaves.get(documentId)?.cancel();
+  };
+
   #getOrCreateDebouncedSave = (documentId: string) => {
     if (!this.#debouncedSaves.has(documentId)) {
       const debouncedFn = debounce(
@@ -112,15 +116,17 @@ export class DocumentActionImpl {
       this.#cleanupDebouncedSave(documentId);
     }
 
-    const { activeDocumentId, internal_dispatchDocument } = this.#get();
-
-    // Delete document via reducer
-    internal_dispatchDocument({ id: documentId, type: 'deleteDocument' });
+    const { activeDocumentId, internal_dispatchDocument, getPendingSave } = this.#get();
 
     // Update activeDocumentId if needed
     if (activeDocumentId === documentId) {
       this.#set({ activeDocumentId: undefined }, false, n('closeDocument:clearActive'));
     }
+
+    const remove = () => internal_dispatchDocument({ id: documentId, type: 'deleteDocument' });
+    const pending = getPendingSave(documentId);
+    if (pending) void pending.then(remove, remove);
+    else remove();
   };
 
   /**
@@ -148,6 +154,7 @@ export class DocumentActionImpl {
       editorData,
       sourceType,
       topicId,
+      updatedAt,
     } = params;
 
     const { internal_dispatchDocument } = this.#get();
@@ -171,25 +178,33 @@ export class DocumentActionImpl {
         sourceType,
         skillFrontmatter,
         topicId,
+        ...(updatedAt
+          ? {
+              lastUpdatedTime: updatedAt instanceof Date ? updatedAt : new Date(updatedAt),
+            }
+          : {}),
       },
     });
 
     // Update activeDocumentId and editor
     this.#set(
-      {
-        activeDocumentId: documentId,
-        editor,
-        ...(sourceType === 'notebook' && topicId
-          ? {
-              lastActiveTopicDocumentIdByTopicId: {
-                ...this.#get().lastActiveTopicDocumentIdByTopicId,
-                [topicId]: documentId,
-              },
-            }
-          : {}),
-      },
+      { activeDocumentId: documentId, editor },
       false,
       n('initDocumentWithEditor:setActive'),
+    );
+    if (sourceType === 'notebook' && topicId) this.#rememberTopicDocument(topicId, documentId);
+  };
+
+  #rememberTopicDocument = (topicId: string, documentId: string) => {
+    this.#set(
+      {
+        lastActiveTopicDocumentIdByTopicId: {
+          ...this.#get().lastActiveTopicDocumentIdByTopicId,
+          [topicId]: documentId,
+        },
+      },
+      false,
+      n('rememberTopicDocument'),
     );
   };
 
@@ -238,7 +253,17 @@ export class DocumentActionImpl {
             return;
           }
 
-          // Initialize document with editor
+          if (this.#get().documents[documentId]) {
+            this.#get().reconcileRemote(documentId, document);
+            if (sourceType === 'notebook' && topicId) {
+              this.#rememberTopicDocument(topicId, documentId);
+            }
+            if (sourceType === 'page') {
+              usePageStore.getState().upsertDocument(document);
+            }
+            return;
+          }
+
           this.#get().initDocumentWithEditor({
             autoSave,
             content: document.content,
@@ -246,9 +271,9 @@ export class DocumentActionImpl {
             documentId,
             editor,
             editorData: document.editorData,
-
             sourceType,
             topicId: topicId ?? undefined,
+            updatedAt: document.updatedAt,
           });
 
           // Mirror page metadata (title/emoji) into pageStore so PageExplorer

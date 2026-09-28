@@ -48,6 +48,13 @@ export interface MessageToolCall {
 export interface Message {
   [key: string]: any;
   content: string | any[];
+  /**
+   * Set when a role conversion folded a tool result into another role's content
+   * (see GroupRoleTransformProcessor). The message is no longer `role: 'tool'`,
+   * but its content is still a verbatim record of what a tool returned, so
+   * processors that key off the tool role must keep treating it as one.
+   */
+  foldedToolResult?: { apiName?: string; identifier?: string };
   role: string;
 }
 
@@ -136,11 +143,7 @@ export enum ProcessorType {
 
 /** Legacy processor type - kept for backward compatibility */
 export type ProcessorTypeLegacy =
-  | 'injector'
-  | 'transformer'
-  | 'validator'
-  | 'optimizer'
-  | 'processor';
+  'injector' | 'transformer' | 'validator' | 'optimizer' | 'processor';
 
 /**
  * Token counter interface

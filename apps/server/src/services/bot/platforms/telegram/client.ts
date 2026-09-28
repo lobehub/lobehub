@@ -8,6 +8,7 @@ import {
   updateBotRuntimeStatus,
 } from '@/server/services/gateway/runtimeStatus';
 
+import { warnAttachmentFailures } from '../attachmentDelivery';
 import {
   type BotPlatformRuntimeContext,
   type BotProviderConfig,
@@ -280,8 +281,9 @@ class TelegramWebhookClient implements PlatformClient {
         const text = messengerContentText(content);
         const attachments = typeof content === 'string' ? undefined : content.attachments;
         if (attachments?.length) {
-          const delivered = await sendTelegramAttachments(telegram, chatId, attachments, text);
-          if (delivered > 0) return;
+          const sent = await sendTelegramAttachments(telegram, chatId, attachments, text);
+          warnAttachmentFailures('bot-platform:telegram:reply', sent.failures);
+          if (sent.delivered > 0) return;
           // All attachments failed → fall through to text-only so the reply
           // still reaches the user.
         }

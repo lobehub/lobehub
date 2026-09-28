@@ -19,10 +19,12 @@ import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import RepoIcon from '@/components/LibIcon';
 import { useSendToMessengerMenuItem } from '@/features/Messenger/PushResourceModal/useSendToMessengerMenuItem';
 import { useKnowledgeBaseListContext } from '@/features/ResourceManager/components/KnowledgeBaseListProvider';
 import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
+import { buildPagePath } from '@/features/ResourceManager/utils/resourcePath';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { usePermission } from '@/hooks/usePermission';
@@ -110,6 +112,7 @@ export const useFileItemDropdown = ({
   const { allowed: canEditResources } = usePermission('edit_own_content');
   const currentUserId = useUserStore(userProfileSelectors.userId);
   const activeWorkspaceId = useActiveWorkspaceId();
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
 
   const {
     deleteResource,
@@ -362,14 +365,13 @@ export const useFileItemDropdown = ({
           onClick: async ({ domEvent }) => {
             domEvent.stopPropagation();
 
-            // For pages, use the route path instead of the storage URL
+            // For pages, use the route path instead of the storage URL. Workspace
+            // routes are mounted under `/:workspaceSlug`, so the shared link must
+            // carry the active slug or recipients land in the personal scope
+            // where the page does not resolve.
             let urlToCopy = url;
             if (isPage) {
-              if (libraryId) {
-                urlToCopy = `${appOrigin}/resource/library/${libraryId}?file=${id}`;
-              } else {
-                urlToCopy = `${appOrigin}/resource?file=${id}`;
-              }
+              urlToCopy = `${appOrigin}${buildPagePath(id, activeWorkspaceSlug, libraryId)}`;
             }
 
             await copyToClipboard(urlToCopy);
@@ -503,6 +505,7 @@ export const useFileItemDropdown = ({
     addFilesToKnowledgeBase,
     appOrigin,
     activeWorkspaceId,
+    activeWorkspaceSlug,
     canEditResources,
     currentUserId,
     deleteResource,

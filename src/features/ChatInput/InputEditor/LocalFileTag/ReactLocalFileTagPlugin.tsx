@@ -1,5 +1,8 @@
+import { isDesktop } from '@lobechat/const';
 import { useLexicalComposerContext } from '@lobehub/editor';
 import { type FC, useLayoutEffect } from 'react';
+
+import { localFileService } from '@/services/electron/localFileService';
 
 import { LocalFileTag } from './LocalFileTag';
 import { LocalFileTagPlugin } from './LocalFileTagPlugin';
@@ -22,6 +25,10 @@ const ReactLocalFileTagPlugin: FC = () => {
           />
         );
       },
+      // Only the desktop app can stat a path on this machine; elsewhere tags keep name/path only.
+      resolveFileStats: isDesktop
+        ? (path) => localFileService.getLocalFileStats({ path })
+        : undefined,
     });
   }, [editor]);
 

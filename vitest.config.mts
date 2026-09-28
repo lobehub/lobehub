@@ -78,7 +78,7 @@ export default defineConfig({
     include: ['@lobehub/tts'],
   },
   plugins: [
-    tsconfigPaths({ projects: ['.'] }),
+    tsconfigPaths({ projects: ['.', './apps/workbench'] }),
     // Let `.md` imports resolve to their raw text content so Rollup/Vitest
     // doesn't try to parse Markdown as JavaScript.
     {

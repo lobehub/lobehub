@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Empty } from 'antd';
+import { Empty, Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';

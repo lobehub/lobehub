@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Fragment, memo } from 'react';
+import React, { Fragment, memo, useMemo } from 'react';
 
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
@@ -11,6 +11,7 @@ import { AcceptanceCheck } from './AcceptanceCheck';
 import { AgentDetail } from './AgentDetail';
 import { Artifacts } from './Artifacts';
 import Header from './components/Header';
+import { PortalMoreMenuProvider } from './components/PortalMoreMenu/context';
 import { Document } from './Document';
 import { FilePreview } from './FilePreview';
 import { Goal } from './Goal';
@@ -89,15 +90,22 @@ export const PortalContent = memo<PortalContentProps>(
     const Title = ViewImpl?.Title || HomeTitle;
 
     const headerContent = CustomHeader ? (
-      <CustomHeader />
+      <CustomHeader onClose={onClose} />
     ) : (
       <Header title={<Title />} onClose={onClose} />
     );
     const bodyContent = <Body />;
+    const moreMenuSource = useMemo(
+      () =>
+        ViewImpl?.useMoreMenu
+          ? { key: viewType ?? 'home', useMoreMenu: ViewImpl.useMoreMenu }
+          : null,
+      [ViewImpl, viewType],
+    );
 
     return (
       <Wrapper>
-        {headerContent}
+        <PortalMoreMenuProvider value={moreMenuSource}>{headerContent}</PortalMoreMenuProvider>
         {renderBody ? renderBody(bodyContent) : bodyContent}
       </Wrapper>
     );

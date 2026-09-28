@@ -252,7 +252,9 @@ const Header = memo(() => {
   );
 
   const { visible: shareVisible } = useAgentShareSupported(activeAgentId);
-  const canShareAgent = shareVisible === true && canConfigure;
+  // External sharing is stronger than General Access `edit`: only the Agent
+  // creator or a Workspace admin (`canManageResource`) may manage the link.
+  const canShareAgent = shareVisible === true && canManage;
 
   const showMarketSubmission = !!config && !isBuiltinAgent && !isHeterogeneous;
   const canSubmitToMarket = showMarketSubmission && canManage && !lockedByOther && !lockPending;

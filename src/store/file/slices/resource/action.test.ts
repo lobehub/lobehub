@@ -4,16 +4,32 @@ import { initialState } from '@/store/file/initialState';
 import { useFileStore } from '@/store/file/store';
 import type { CreateDocumentParams, ResourceItem } from '@/types/resource';
 
-const { mockCreateResource, mockMoveResource } = vi.hoisted(() => ({
-  mockCreateResource: vi.fn(),
-  mockMoveResource: vi.fn(),
-}));
+const { activeWorkspace, mockApplyMoveToCaches, mockCreateResource, mockMoveResource, treeState } =
+  vi.hoisted(() => ({
+    activeWorkspace: { id: null as string | null },
+    mockApplyMoveToCaches: vi.fn(),
+    mockCreateResource: vi.fn(),
+    mockMoveResource: vi.fn(),
+    treeState: { children: {} as Record<string, any[]> },
+  }));
 
 vi.mock('@/services/resource', () => ({
   resourceService: {
     createResource: mockCreateResource,
     moveResource: mockMoveResource,
   },
+}));
+
+vi.mock('./hooks', () => ({
+  applyResourceMoveToListCaches: mockApplyMoveToCaches,
+}));
+
+vi.mock('@/store/tree', () => ({
+  useTreeStore: { getState: () => treeState },
+}));
+
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  getActiveWorkspaceId: () => activeWorkspace.id,
 }));
 
 const createResource = (overrides: Partial<ResourceItem> = {}): ResourceItem => ({
@@ -32,6 +48,8 @@ const createResource = (overrides: Partial<ResourceItem> = {}): ResourceItem => 
 describe('resource actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    activeWorkspace.id = null;
+    treeState.children = {};
     useFileStore.setState(initialState);
   });
 
@@ -100,6 +118,179 @@ describe('resource actions', () => {
 
     expect(resourceList).toEqual([]);
     expect(resourceMap.has(rootResource.id)).toBe(false);
+  });
+
+  it('should patch the destination and source folder-list caches once a move lands', async () => {
+    // Explorer is inside `2026.09` (URL slug), dragging a row onto the sibling
+    // folder row `W37`: the drop target only knows the folder id.
+    const targetFolder = createResource({
+      fileType: 'custom/folder',
+      id: 'folder-w37-id',
+      name: '2026.09.W37',
+      parentId: 'folder-2026-09-id',
+      slug: 'w37-slug',
+    });
+    const doc = createResource({ id: 'doc-1', name: 'Weekly', parentId: 'folder-2026-09-id' });
+    const movedDoc = { ...doc, parentId: targetFolder.id };
+    mockMoveResource.mockResolvedValue(movedDoc);
+    treeState.children = {
+      'folder-2026-09-id': [
+        { id: targetFolder.id, isFolder: true, name: targetFolder.name, slug: 'w37-slug' },
+      ],
+      'root': [{ id: 'folder-2026-09-id', isFolder: true, name: '2026.09', slug: '2026-09-slug' }],
+    };
+
+    useFileStore.setState({
+      currentFolderId: 'folder-2026-09-id',
+      queryParams: { parentId: '2026-09-slug' },
+      resourceList: [doc, targetFolder],
+      resourceMap: new Map([
+        [doc.id, doc],
+        [targetFolder.id, targetFolder],
+      ]),
+    });
+
+    await useFileStore.getState().moveResource(doc.id, targetFolder.id);
+
+    expect(mockApplyMoveToCaches).toHaveBeenCalledTimes(1);
+    const [resource, patch] = mockApplyMoveToCaches.mock.calls[0];
+    expect(resource).toEqual(movedDoc);
+    expect(new Set(patch.fromParentKeys)).toEqual(new Set(['folder-2026-09-id', '2026-09-slug']));
+    expect(new Set(patch.toParentKeys)).toEqual(new Set(['folder-w37-id', 'w37-slug']));
+    expect(patch.scope).toEqual({ libraryId: undefined, workspaceId: null });
+  });
+
+  it('should resolve folder aliases before the request so a scope switch cannot hide them', async () => {
+    const targetFolder = createResource({
+      fileType: 'custom/folder',
+      id: 'folder-w37-id',
+      name: 'W37',
+      parentId: null,
+      slug: 'w37-slug',
+    });
+    const doc = createResource({ id: 'doc-1', parentId: null });
+    mockMoveResource.mockImplementation(async () => {
+      // The user opened another library meanwhile: the old rows are gone.
+      useFileStore.setState({
+        queryParams: { libraryId: 'kb-2', parentId: null },
+        resourceList: [],
+        resourceMap: new Map(),
+      });
+      treeState.children = {};
+      return { ...doc, parentId: targetFolder.id };
+    });
+    useFileStore.setState({
+      queryParams: { parentId: null },
+      resourceList: [doc, targetFolder],
+      resourceMap: new Map([
+        [doc.id, doc],
+        [targetFolder.id, targetFolder],
+      ]),
+    });
+
+    await useFileStore.getState().moveResource(doc.id, targetFolder.id);
+
+    const [, patch] = mockApplyMoveToCaches.mock.calls[0];
+    expect(new Set(patch.toParentKeys)).toEqual(new Set(['folder-w37-id', 'w37-slug']));
+  });
+
+  it('should patch the caches of the workspace and library the move started in', async () => {
+    // The user switches workspace and library while the request is in flight;
+    // the caches that listed the row belong to the scope captured beforehand.
+    const doc = createResource({ id: 'doc-1', parentId: null });
+    activeWorkspace.id = 'workspace-1';
+    mockMoveResource.mockImplementation(async () => {
+      activeWorkspace.id = 'workspace-2';
+      useFileStore.setState({ queryParams: { libraryId: 'kb-2', parentId: null } });
+      return { ...doc, parentId: 'folder-a' };
+    });
+
+    useFileStore.setState({
+      queryParams: { libraryId: 'kb-1', parentId: null },
+      resourceList: [doc],
+      resourceMap: new Map([[doc.id, doc]]),
+    });
+
+    await useFileStore.getState().moveResource(doc.id, 'folder-a');
+
+    const [, patch] = mockApplyMoveToCaches.mock.calls[0];
+    expect(patch.scope).toEqual({ libraryId: 'kb-1', workspaceId: 'workspace-1' });
+  });
+
+  it('should address the root with a null parent key when moving out of a folder', async () => {
+    const doc = createResource({ id: 'doc-1', parentId: 'folder-a' });
+    mockMoveResource.mockResolvedValue({ ...doc, parentId: null });
+
+    useFileStore.setState({
+      queryParams: { parentId: 'folder-a' },
+      resourceList: [doc],
+      resourceMap: new Map([[doc.id, doc]]),
+    });
+
+    await useFileStore.getState().moveResource(doc.id, null);
+
+    const [, patch] = mockApplyMoveToCaches.mock.calls[0];
+    expect(patch.toParentKeys).toEqual([null]);
+    expect(patch.fromParentKeys).toContain('folder-a');
+  });
+
+  it('should treat the current folder as the source when the row omits parentId', async () => {
+    // `queryResources` rows carry no `parentId`; the row is in the current list,
+    // so the current query's parent (a URL slug) is the folder it leaves.
+    const doc = createResource({ id: 'doc-1', parentId: undefined });
+    mockMoveResource.mockResolvedValue({ ...doc, parentId: 'folder-w37-id' });
+
+    useFileStore.setState({
+      queryParams: { parentId: '2026-09-slug' },
+      resourceList: [doc],
+      resourceMap: new Map([[doc.id, doc]]),
+    });
+
+    await useFileStore.getState().moveResource(doc.id, 'folder-w37-id');
+
+    expect(mockMoveResource).toHaveBeenCalledWith(
+      doc.id,
+      'folder-w37-id',
+      expect.objectContaining({ id: doc.id }),
+    );
+    const [, patch] = mockApplyMoveToCaches.mock.calls[0];
+    expect(patch.fromParentKeys).toContain('2026-09-slug');
+    expect(patch.fromParentKeys).not.toContain(null);
+    expect(patch.toParentKeys).toEqual(['folder-w37-id']);
+  });
+
+  it('should still call the API when the row omits parentId and the target is the root', async () => {
+    const doc = createResource({ id: 'doc-1', parentId: undefined });
+    mockMoveResource.mockResolvedValue({ ...doc, parentId: null });
+
+    useFileStore.setState({
+      queryParams: { parentId: 'folder-a' },
+      resourceList: [doc],
+      resourceMap: new Map([[doc.id, doc]]),
+    });
+
+    await useFileStore.getState().moveResource(doc.id, null);
+
+    expect(mockMoveResource).toHaveBeenCalledWith(
+      doc.id,
+      null,
+      expect.objectContaining({ id: doc.id }),
+    );
+  });
+
+  it('should not touch the caches when the move is rejected', async () => {
+    const doc = createResource({ id: 'doc-1', parentId: null });
+    mockMoveResource.mockRejectedValue(new Error('nope'));
+
+    useFileStore.setState({
+      queryParams: { parentId: null },
+      resourceList: [doc],
+      resourceMap: new Map([[doc.id, doc]]),
+    });
+
+    await expect(useFileStore.getState().moveResource(doc.id, 'folder-a')).rejects.toThrow();
+
+    expect(mockApplyMoveToCaches).not.toHaveBeenCalled();
   });
 
   it('should patch a file-backed document resource with statuses returned by file id', () => {

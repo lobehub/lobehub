@@ -11,9 +11,10 @@ vi.mock('node:fs/promises', () => ({
 
 const spawnMock = vi.hoisted(() => vi.fn());
 
-vi.mock('node:child_process', () => ({
-  spawn: spawnMock,
-}));
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return { ...actual, spawn: spawnMock };
+});
 
 class RpcChild extends EventEmitter {
   stderr = new EventEmitter();

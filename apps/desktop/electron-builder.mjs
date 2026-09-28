@@ -6,10 +6,8 @@ import { fileURLToPath } from 'node:url';
 
 import dotenv from 'dotenv';
 
-import {
-  copyExternalRuntimeModulesToSource,
-  getExternalRuntimeModulesFilesConfig,
-} from './external-runtime-deps.config.mjs';
+import { copyExternalRuntimeModulesToSource } from './external-runtime-deps.config.mjs';
+import { getModuleFilesConfig } from './module-deps.config.mjs';
 import {
   buildFirstPartyNativeAddons,
   copyNativeModulesToSource,
@@ -145,7 +143,7 @@ const config = {
    * BeforePack hook to resolve pnpm symlinks for native modules.
    * This ensures native modules are properly included in the asar archive.
    */
-  beforePack: async () => {
+  beforePack: async (context) => {
     buildFirstPartyNativeAddons();
 
     await copyNativeModulesToSource();
@@ -166,26 +164,20 @@ const config = {
     // lazily downloads it on first use into the per-user cache dir. See
     // apps/desktop/src/main/modules/binaries/agentBrowserBinaries.ts.
 
-    // Build and copy CLI bundle for embedding
     console.info('📦 Building CLI for embedding...');
     execSync('npm run build:cli', { stdio: 'inherit', cwd: __dirname });
-    const cliSrc = path.resolve(__dirname, '../cli/dist/index.js');
-    const cliDest = path.resolve(__dirname, 'resources/bin/lobe-cli.js');
-    await fs.mkdir(path.dirname(cliDest), { recursive: true });
-    await fs.copyFile(cliSrc, cliDest);
 
-    // Write a minimal package.json next to the CLI bundle so that
-    // createRequire('../package.json') resolves correctly in the packaged app.
-    // The CLI script lives at Resources/bin/lobe-cli.js, so '../package.json'
-    // resolves to Resources/package.json.
-    const cliPkg = JSON.parse(
-      await fs.readFile(path.resolve(__dirname, '../cli/package.json'), 'utf8'),
+    execSync('node scripts/shellAbi.mjs --write', { stdio: 'inherit', cwd: __dirname });
+    const { shellAbi } = JSON.parse(
+      await fs.readFile(path.join(__dirname, 'shell/abi.json'), 'utf8'),
     );
-    await fs.writeFile(
-      path.resolve(__dirname, 'resources/cli-package.json'),
-      JSON.stringify({ name: cliPkg.name, type: 'module', version: cliPkg.version }),
+    const corePlatform =
+      context.electronPlatformName === 'mas' ? 'darwin' : context.electronPlatformName;
+    execSync('node scripts/assembleCore.mjs', { stdio: 'inherit', cwd: __dirname });
+    execSync(
+      `node scripts/buildCoreManifest.mjs --core=core-dist --platform=${corePlatform} --channel=${channel || 'stable'} --version=${packageJSON.version} --seq=${process.env.CORE_SEQ || 0} --shell-abi=${shellAbi}`,
+      { stdio: 'inherit', cwd: __dirname },
     );
-    console.info('✅ CLI bundle copied to resources/bin/lobe-cli.js');
   },
   /**
    * AfterPack hook for copying Liquid Glass Assets.car on macOS 26+.
@@ -263,24 +255,15 @@ const config = {
   electronLanguages: ['en', 'en_GB', 'en_US', 'en-GB', 'en-US'],
 
   files: [
-    'dist',
-    'resources',
-    'dist/renderer/**/*',
-    '!resources/locales',
-    '!resources/dmg.png',
-    // NOTICE:
-    // AUV must execute from the external bin directory, so its ASAR copy is unnecessary.
-    // The resources glob otherwise duplicates the binary copied by extraResources below.
-    // Source: PR #19051 ASAR Size Gate; resources/bin is staged in beforePack above.
-    // Remove these exclusions only if AUV no longer ships through extraResources.
-    '!resources/bin/auv',
-    '!resources/bin/auv.exe',
+    'shell/**',
+    '!shell/__tests__',
+    'package.json',
     // Exclude all node_modules first
     '!node_modules',
     // Then explicitly include native modules using object form (handles pnpm symlinks)
     ...getNativeModulesFilesConfig(),
-    // Include non-native runtime modules that are intentionally externalized from Vite.
-    ...getExternalRuntimeModulesFilesConfig(),
+    // electron-log ships in the core (assembleCore), a shell copy would shadow it via the resolver shim
+    ...getModuleFilesConfig(['font-list']),
   ],
   generateUpdatesFilesForAllChannels: true,
   linux: {
@@ -360,7 +343,9 @@ const config = {
 
   extraResources: [
     { from: 'resources/bin', to: 'bin' },
-    { from: 'resources/cli-package.json', to: 'package.json' },
+    { from: 'core-dist', to: 'core' },
+    // electron-builder's copy filter drops a top-level `node_modules` dir from any `from`, so it needs its own entry
+    { from: 'core-dist/node_modules', to: 'core/node_modules' },
     // Local Sandbox helper binaries. The sandbox spawns these by path, so they
     // must be real files — not entries inside app.asar, and not something the
     // user is expected to install separately.
