@@ -22,6 +22,7 @@ import {
 import { nanoid } from '@lobechat/utils';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import { resolveAgentInterventionBySource } from '@/business/server/agent-run/agentInterventionReview';
@@ -1181,8 +1182,10 @@ export const shareChatRouter = router({
         visitorUserId: ctx.userId,
       });
 
-      const stopPlugins = await Promise.all(
-        input.toolMessageIds.map((id) => messageModel.findMessagePlugin(id)),
+      const stopPlugins = await pMap(
+        input.toolMessageIds,
+        (id) => messageModel.findMessagePlugin(id),
+        { concurrency: 5 },
       );
       const hasGenericSource = stopPlugins.every(
         (plugin) =>

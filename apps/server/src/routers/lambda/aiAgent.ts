@@ -1398,10 +1398,10 @@ export const bridgeLegacyResumeToSourceIntervention = async (
       : []),
   ];
   if (legacyResumeTargets.length > 0) {
-    const plugins = await Promise.all(
-      legacyResumeTargets.map(({ parentMessageId }) =>
-        messageModel.findMessagePlugin(parentMessageId),
-      ),
+    const plugins = await pMap(
+      legacyResumeTargets,
+      ({ parentMessageId }) => messageModel.findMessagePlugin(parentMessageId),
+      { concurrency: 5 },
     );
     const firstIntervention = plugins[0]?.intervention;
     const hasGenericSource = Boolean(
