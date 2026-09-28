@@ -1,6 +1,7 @@
 import { GOAL_REPORT_TASK_TITLE } from '@lobechat/const/goal';
 import type {
   AcceptanceStatus,
+  GoalChangeRequest,
   GoalGraphDecision,
   GoalReportChapter,
   GoalReportMetadata,
@@ -86,6 +87,21 @@ export const findGoalAcceptanceGate = (
   return { decision: decided, kind: retrying ? 'retrying' : 'decided', subject };
 };
 
+/** Goal statuses in which an owner's change request is still being worked. */
+const REWORKING_GOAL_STATUSES = new Set(['paused', 'review', 'running']);
+
+/**
+ * The owner's 提出修改 the Goal was reopened for, while it is still open. The
+ * request stays on the Goal after the rework lands; once the Goal is achieved
+ * (or stopped) again it no longer describes where the result stands.
+ */
+export const findOpenChangeRequest = (
+  graph: Pick<GoalGraphView, 'goal'>,
+): GoalChangeRequest | undefined => {
+  const request = graph.goal.config?.changeRequest;
+  return request && REWORKING_GOAL_STATUSES.has(graph.goal.status) ? request : undefined;
+};
+
 /** Anything the Goal left behind that a partial result page can show. */
 export const hasGoalOutput = (
   graph: Pick<GoalGraphView, 'artifacts' | 'findings' | 'report'>,
@@ -100,6 +116,8 @@ export const hasGoalResult = (
   graph.goal.status === 'achieved' ||
   !!findFinalAcceptanceView(graph) ||
   !!findGoalAcceptanceGate(graph) ||
+  // Sent back for changes: the delivery being reworked is still the result.
+  !!findOpenChangeRequest(graph) ||
   (STOPPED_GOAL_STATUSES.has(graph.goal.status) && hasGoalOutput(graph));
 
 /**
@@ -107,8 +125,8 @@ export const hasGoalResult = (
  *
  * - `awaitingDecision` — the Goal-level acceptance ended unmet and its gate
  *                      waits on the owner: retry, or fail the Goal.
- * - `revising`       — the owner chose retry; the Goal is being reworked and
- *                      accepted again.
+ * - `revising`       — the owner chose retry, or sent the delivery back for
+ *                      changes; the Goal is being reworked and accepted again.
  * - `partial`        — the Goal stopped (failed / canceled), or its acceptance
  *                      judged a criterion unmet: what exists is a partial result.
  * - `signedOff`      — the owner accepted the delivery.
@@ -119,11 +137,14 @@ export type GoalResultStatus =
 
 export const deriveGoalResultStatus = ({
   acceptanceStatus,
+  changesRequested,
   gate,
   goalStatus,
   unmetCriteria,
 }: {
   acceptanceStatus?: AcceptanceStatus;
+  /** An open change request, from {@link findOpenChangeRequest}. */
+  changesRequested?: boolean;
   /** The Goal-acceptance gate's state, from {@link findGoalAcceptanceGate}. */
   gate?: GoalAcceptanceGate['kind'];
   goalStatus: string;
@@ -133,7 +154,7 @@ export const deriveGoalResultStatus = ({
   if (acceptanceStatus === 'accepted') return 'signedOff';
   if (STOPPED_GOAL_STATUSES.has(goalStatus)) return 'partial';
   if (gate === 'pending') return 'awaitingDecision';
-  if (gate === 'retrying' && goalStatus !== 'achieved') return 'revising';
+  if ((gate === 'retrying' || changesRequested) && goalStatus !== 'achieved') return 'revising';
   if (goalStatus !== 'achieved' && unmetCriteria > 0) return 'partial';
   return 'awaitingSignOff';
 };

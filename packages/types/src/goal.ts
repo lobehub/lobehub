@@ -263,8 +263,25 @@ export interface GoalManagerState {
   turns: number;
 }
 
+/**
+ * The owner's 提出修改 on a delivered Goal: rejecting the Goal-level acceptance
+ * reopens the Goal, and this is what the rework answers to.
+ */
+export interface GoalChangeRequest {
+  /** The owner's feedback, which also reaches the next attempt's prompt. */
+  comment?: string;
+  requestedAt: string;
+  /** The Goal-level acceptance Task sent back for rework. */
+  taskId: string;
+}
+
 export interface GoalConfig {
   acceptance?: GoalAcceptancePolicy;
+  /**
+   * The owner's latest request for changes. Kept after the rework lands: the
+   * result page reads it as 修改中 only while the Goal is open again.
+   */
+  changeRequest?: GoalChangeRequest;
 
   exploration?: GoalExplorationConfig;
   manager?: GoalManagerPolicy;

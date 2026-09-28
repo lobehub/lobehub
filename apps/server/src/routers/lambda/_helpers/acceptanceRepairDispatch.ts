@@ -6,6 +6,8 @@ import { GoalModel } from '@/database/models/goal';
 import { TopicModel } from '@/database/models/topic';
 import type { AcceptanceItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
+import { GoalService } from '@/server/services/goal';
+import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
 import type { AcceptanceService } from '@/server/services/verify';
 
 import { agentNotifyRouter } from '../agentNotify';
@@ -66,12 +68,27 @@ export const dispatchAcceptanceRepair = async (
   // rejected round through the prompt builder and claims the task. A plain
   // run in the old topic would race it into a second, unaccounted attempt.
   if (acceptance.subjectType === 'task') {
-    const goal = await new GoalModel(
-      ctx.serverDB,
-      acceptance.userId,
-      acceptance.workspaceId ?? undefined,
-    ).findByGraphTask(acceptance.subjectId);
-    if (goal) return { dispatched: false, reason: 'goal_coordinator' };
+    const workspaceId = acceptance.workspaceId ?? undefined;
+    const goal = await new GoalModel(ctx.serverDB, acceptance.userId, workspaceId).findByGraphTask(
+      acceptance.subjectId,
+    );
+    if (goal) {
+      // The Goal-level acceptance passing is what ended the Goal: sending it
+      // back reopens the Goal so the coordinator has a next attempt to start.
+      const reopened = await new GoalService(
+        ctx.serverDB,
+        acceptance.userId,
+        workspaceId,
+      ).reopenForChanges(acceptance.subjectId, rejectComment);
+      if (reopened)
+        await scheduleGoalAdvance({
+          goalId: reopened,
+          trigger: 'decide',
+          userId: acceptance.userId,
+          workspaceId,
+        });
+      return { dispatched: false, reason: 'goal_coordinator' };
+    }
   }
 
   const origin = await service.findRepairOrigin(acceptance.id);

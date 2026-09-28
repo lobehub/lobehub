@@ -106,6 +106,14 @@ const REASON_PATTERNS: Array<{
     pattern:
       /^Automatic recovery could not (start the next attempt|restart an abandoned operation)$/,
   },
+  {
+    // A run that failed outright leaves its runtime error type as the reason
+    // (e.g. `InvalidProviderAPIKey`). The code stays visible for support; the
+    // sentence around it is the user's language.
+    key: 'goalProcess.gate.reason.runError',
+    param: 'code',
+    pattern: /^([A-Z][a-z0-9]+[A-Z][A-Za-z0-9]*)$/,
+  },
 ];
 
 export const coordinatorReasonCopy = (reason?: string | null): LocalizedCopyRef | undefined => {

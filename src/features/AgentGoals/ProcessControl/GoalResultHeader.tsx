@@ -30,6 +30,7 @@ import {
   deriveGoalResultStatus,
   deriveSignOffState,
   findGoalAcceptanceGate,
+  findOpenChangeRequest,
   type GoalAcceptanceGate,
   type GoalResultStatus,
   type GoalSignOffState,
@@ -264,8 +265,10 @@ const GoalResultHeader = ({ data, graph, onContinue }: GoalResultHeaderProps) =>
   const { outcomes } = data;
   const met = outcomes.filter((outcome) => outcome.state === 'passed').length;
   const gate = findGoalAcceptanceGate(graph);
+  const changeRequest = findOpenChangeRequest(graph);
   const status = deriveGoalResultStatus({
     acceptanceStatus: data.acceptanceStatus,
+    changesRequested: !!changeRequest,
     gate: gate?.kind,
     goalStatus: goal.status,
     unmetCriteria: outcomes.filter((outcome) => outcome.state === 'failed').length,
@@ -319,8 +322,24 @@ const GoalResultHeader = ({ data, graph, onContinue }: GoalResultHeaderProps) =>
           onDecided={data.mutateAcceptance}
         />
       ) : status === 'revising' ? (
-        <Flexbox className={styles.strip} data-sign-off-state={'revising'}>
-          <Text type={'secondary'}>{t('goalProcess.result.gate.revising')}</Text>
+        // Nothing to sign while the rework runs: the strip says what the Agent
+        // is answering to instead of offering accept / request changes again.
+        <Flexbox className={styles.strip} data-sign-off-state={'revising'} gap={6}>
+          <Text type={'secondary'}>
+            {t(
+              changeRequest
+                ? 'goalProcess.result.changes.revising'
+                : 'goalProcess.result.gate.revising',
+            )}
+          </Text>
+          {changeRequest?.comment && (
+            <Flexbox data-goal-change-request gap={2}>
+              <Text fontSize={12} type={'secondary'} weight={500}>
+                {t('goalProcess.result.changes.comment')}
+              </Text>
+              <Text style={{ whiteSpace: 'pre-wrap' }}>{changeRequest.comment}</Text>
+            </Flexbox>
+          )}
         </Flexbox>
       ) : (
         <SignOffStrip

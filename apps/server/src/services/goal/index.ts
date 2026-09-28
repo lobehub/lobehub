@@ -93,6 +93,8 @@ const REPORT_CHECK_OUTCOMES = new Set<GoalTickResult['outcome']>([
   'failed',
   'waiting_human',
 ]);
+/** A Goal whose delivery the owner can still send back for rework. */
+const REOPENABLE_GOAL_STATUSES = new Set(['achieved', 'running']);
 const TASK_DESCRIPTION_MAX_LENGTH = 255;
 /** Advisory-lock namespace for goal dispatch. `0x676f_6469` is ASCII `godi`. */
 const GOAL_DISPATCH_LOCK_NAMESPACE = 0x67_6f_64_69;
@@ -1464,6 +1466,48 @@ export class GoalService {
       `decision "${decision.question}" resolved: ${optionId}`,
     );
     return resolved;
+  };
+
+  /**
+   * The owner sent the Goal's delivery back (提出修改 on the Goal-level
+   * acceptance). The acceptance passing is what ended the Goal, so without a
+   * reopen the coordinator reads it as still achieved and nothing reworks it.
+   * The acceptance Task goes back to the queue — its next attempt reads the
+   * rejected round's comment through the prompt builder — and the Goal runs
+   * again. When that attempt is accepted the Goal is achieved anew, and the
+   * wrap-up writes a new report version for the new result.
+   *
+   * Returns the reopened Goal id, or undefined when `taskId` is not a settled
+   * Goal-level acceptance of a Goal that can still be reworked; a stopped Goal
+   * is continued from its result, not reopened by a sign-off.
+   */
+  reopenForChanges = async (taskId: string, comment?: string): Promise<string | undefined> => {
+    const goal = await this.goalModel.findByGraphTask(taskId);
+    if (!goal || !REOPENABLE_GOAL_STATUSES.has(goal.status)) return undefined;
+    const graph = await this.requireGraph(goal.id);
+    const node = graph.nodes.find(
+      (candidate) =>
+        candidate.kind === 'task' &&
+        candidate.taskId === taskId &&
+        candidate.title === GOAL_ACCEPTANCE_TASK_TITLE,
+    );
+    if (node?.status !== 'resolved') return undefined;
+
+    const reason = comment ? `Changes requested: ${comment}` : 'Changes requested';
+    await this.taskModel.updateStatus(taskId, 'backlog', { error: null });
+    await this.graphModel.updateNodeStatus(goal.id, node.id, 'active', reason);
+    await this.goalModel.update(goal.id, {
+      config: {
+        ...graph.goal.config,
+        changeRequest: {
+          ...(comment ? { comment } : {}),
+          requestedAt: new Date().toISOString(),
+          taskId,
+        },
+      },
+    });
+    await this.transitionStatus(graph.goal, 'running', reason, 'user');
+    return goal.id;
   };
 
   /**

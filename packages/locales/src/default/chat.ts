@@ -2097,6 +2097,7 @@ export default {
   'goalProcess.gate.reason.attemptBudgetExhausted': 'The attempt budget for this work is used up',
   'goalProcess.gate.reason.costBudgetExhausted': 'The goal cost budget is used up',
   'goalProcess.gate.reason.recoveryFailed': 'Automatic recovery could not start the next attempt',
+  'goalProcess.gate.reason.runError': 'The run stopped with an error ({{code}})',
   'goalProcess.gate.recommended': 'recommended',
   'goalProcess.gate.noteLabel': 'Extra guidance',
   'goalProcess.gate.notePlaceholder': 'Optional — goes into the next attempt instructions',
@@ -2122,6 +2123,9 @@ export default {
   'goalProcess.linked.open': 'Open goal progress',
   'goalProcess.portal.openPage': 'Open goal page',
   'goalProcess.portal.title': 'Goal',
+  'goalProcess.result.changes.comment': 'Your feedback',
+  'goalProcess.result.changes.revising':
+    'You asked for changes. The Agent is reworking the delivery and will send it for acceptance again.',
   'goalProcess.result.continueSeed.deliverable': 'Delivered: {{title}}',
   'goalProcess.result.continueSeed.intro': 'Continue from the result of the Goal "{{title}}".',
   'goalProcess.result.continueSeed.open': 'Still open:',

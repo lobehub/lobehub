@@ -51,8 +51,12 @@ const resolveGoalLoopContext = async (
     const last = runs.at(-1);
     if (!last) return context;
 
-    if (last.userDecision === 'reject') {
-      const comment = (last.decisionDetail as { comment?: string } | null)?.comment;
+    // The owner's latest verdict is the instruction until they give another.
+    // A rework's own rounds carry no decision, so a retry after its first
+    // attempt failed must still read the comment the owner sent it back with.
+    const decided = runs.findLast((run) => !!run.userDecision);
+    if (decided?.userDecision === 'reject') {
+      const comment = (decided.decisionDetail as { comment?: string } | null)?.comment;
       if (comment) context.rejectComment = comment;
     }
 

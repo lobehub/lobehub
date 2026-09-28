@@ -14,6 +14,7 @@ import {
   deriveSignOffState,
   findFinalAcceptanceView,
   findGoalAcceptanceGate,
+  findOpenChangeRequest,
   hasGoalResult,
   latestRoundRunId,
   resultTrailSource,
@@ -73,6 +74,74 @@ const gateDecision = (
   recommendedOptionId: 'retry',
   status: resolvedOptionId ? 'resolved' : 'pending',
   ...(resolvedOptionId ? { resolvedAt, resolvedByUserId: 'u1', resolvedOptionId } : {}),
+});
+
+/** A Goal the owner sent back for changes: reopened, its acceptance node active again. */
+const reopened = (goalStatus: string) =>
+  ({
+    ...graph(goalStatus, [node('active')]),
+    goal: {
+      config: {
+        changeRequest: {
+          comment: 'Add a day-one agenda',
+          requestedAt: '2026-09-29T00:00:00.000Z',
+          taskId: 'task-acc',
+        },
+      },
+      status: goalStatus,
+    },
+  }) as unknown as GoalGraphView;
+
+describe('owner change request', () => {
+  it('keeps the result page on a Goal reopened for changes', () => {
+    expect(hasGoalResult(reopened('running'))).toBe(true);
+    expect(findOpenChangeRequest(reopened('running'))?.comment).toBe('Add a day-one agenda');
+  });
+
+  it('reads 修改中 while the rework runs, not 等你验收', () => {
+    expect(
+      deriveGoalResultStatus({
+        acceptanceStatus: 'rejected',
+        changesRequested: !!findOpenChangeRequest(reopened('running')),
+        goalStatus: 'running',
+        unmetCriteria: 0,
+      }),
+    ).toBe('revising');
+    // The rework's new round delivered, the Goal not yet re-achieved.
+    expect(
+      deriveGoalResultStatus({
+        acceptanceStatus: 'delivered',
+        changesRequested: true,
+        goalStatus: 'running',
+        unmetCriteria: 0,
+      }),
+    ).toBe('revising');
+  });
+
+  it('waits on sign-off again once the rework is achieved', () => {
+    const achieved = reopened('achieved');
+    expect(findOpenChangeRequest(achieved)).toBeUndefined();
+    expect(
+      deriveGoalResultStatus({
+        acceptanceStatus: 'delivered',
+        changesRequested: !!findOpenChangeRequest(achieved),
+        goalStatus: 'achieved',
+        unmetCriteria: 0,
+      }),
+    ).toBe('awaitingSignOff');
+  });
+
+  it('lets a gate the rework opened take over from 修改中', () => {
+    expect(
+      deriveGoalResultStatus({
+        acceptanceStatus: 'delivered',
+        changesRequested: true,
+        gate: 'pending',
+        goalStatus: 'review',
+        unmetCriteria: 1,
+      }),
+    ).toBe('awaitingDecision');
+  });
 });
 
 describe('hasGoalResult', () => {

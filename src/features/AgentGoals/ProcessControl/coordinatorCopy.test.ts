@@ -99,6 +99,14 @@ describe('coordinatorReasonCopy', () => {
     });
   });
 
+  it('wraps a bare runtime error type in a localized sentence', () => {
+    expect(coordinatorReasonCopy('InvalidProviderAPIKey')).toEqual({
+      key: 'goalProcess.gate.reason.runError',
+      params: { code: 'InvalidProviderAPIKey' },
+    });
+    expect(coordinatorReasonCopy('Timeout')).toBeUndefined();
+  });
+
   it('passes unknown reasons through as undefined so the raw text renders', () => {
     expect(coordinatorReasonCopy('some future reason')).toBeUndefined();
     expect(coordinatorReasonCopy(undefined)).toBeUndefined();
