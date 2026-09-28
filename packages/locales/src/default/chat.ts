@@ -2169,6 +2169,11 @@ export default {
   'goalProcess.result.deliverables.viewAll': 'Review all {{count}}',
   'goalProcess.result.decisions.empty': 'Nothing on this Goal needed your call.',
   'goalProcess.result.decisions.title': 'Decisions you made',
+  'goalProcess.result.gate.error': 'Could not save the decision. Try again.',
+  'goalProcess.result.gate.prompt':
+    'Check which criteria were not met below, then retry or end the Goal.',
+  'goalProcess.result.gate.revising':
+    'You chose to retry. The Agent is revising the result; it will be accepted again when done.',
   'goalProcess.result.requirement': 'Original requirement',
   'goalProcess.result.scale.cost': 'Spent {{cost}}',
   'goalProcess.result.scale.criteria': '{{met}}/{{total}} criteria met',
@@ -2198,8 +2203,10 @@ export default {
   'goalProcess.result.signOff.stopped':
     'The Goal stopped before it was done — this is what it left behind. Pick it up from here.',
   'goalProcess.result.signOff.unavailable': 'There is no Goal-level acceptance to sign off.',
+  'goalProcess.result.status.awaitingDecision': 'Acceptance not passed · your call',
   'goalProcess.result.status.awaitingSignOff': 'Achieved · awaiting your sign-off',
   'goalProcess.result.status.partial': 'Not achieved · partial result',
+  'goalProcess.result.status.revising': 'Revising',
   'goalProcess.result.status.signedOff': 'Signed off',
   'goalProcess.result.unfinished.abandoned': 'Dropped tasks',
   'goalProcess.result.unfinished.continue': 'Continue from this result',

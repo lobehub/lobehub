@@ -18,7 +18,10 @@ import type { GoalArtifactView, GoalGraphView, GoalNodeView } from './goalGraphV
  *
  * A finished Goal: its final acceptance Task resolved (the result waits on the
  * owner's sign-off, whatever the Goal's own status says), or the Goal was
- * marked achieved without one. A Goal that failed or was canceled still hands
+ * marked achieved without one. A Goal-level acceptance that ended unmet has an
+ * outcome too: the gate it opens asks the owner to retry or give up, and the
+ * criteria it judged unmet are what that call is made from — so the tab shows
+ * while the gate waits, and stays through the retry it may start. A Goal that failed or was canceled still hands
  * over whatever it produced — the partial result is what the owner decides the
  * next step from — so it earns the tab too, as long as something came out. A
  * running Goal keeps the single process view: a result tab there would show a
@@ -41,6 +44,47 @@ export const findGoalAcceptanceView = (
   graph.nodes.findLast((view) => isGoalAcceptanceTask(view) && !!view.acceptance);
 
 const STOPPED_GOAL_STATUSES = new Set(['canceled', 'failed']);
+const TERMINAL_ACCEPTANCE_NODE_STATUSES = new Set(['resolved', 'rejected', 'retired']);
+
+/**
+ * The decision gate the coordinator opened after the Goal-level acceptance
+ * ended unmet, as the result page reads it:
+ *
+ * - `pending`  — the gate waits on the owner (retry / fail the Goal).
+ * - `retrying` — the owner chose retry and the acceptance is running again.
+ * - `decided`  — the owner closed the gate some other way (the Goal was
+ *                failed, or the acceptance has since passed).
+ */
+export type GoalAcceptanceGate =
+  | { decision: GoalGraphDecision; kind: 'pending'; subject: GoalNodeView }
+  | { decision: GoalGraphDecision; kind: 'decided' | 'retrying'; subject: GoalNodeView };
+
+export const findGoalAcceptanceGate = (
+  graph: Pick<GoalGraphView, 'byId' | 'decisions'>,
+): GoalAcceptanceGate | undefined => {
+  const subjectOf = (decision: GoalGraphDecision) => {
+    const subjectId = graph.byId[decision.nodeId]?.gateSubjectId;
+    const subject = subjectId ? graph.byId[subjectId] : undefined;
+    return subject && isGoalAcceptanceTask(subject) ? subject : undefined;
+  };
+
+  const pending = graph.decisions.findLast(
+    (decision) => decision.status === 'pending' && !!subjectOf(decision),
+  );
+  if (pending) return { decision: pending, kind: 'pending', subject: subjectOf(pending)! };
+
+  const decided = graph.decisions
+    .filter((decision) => decision.status === 'resolved' && !!subjectOf(decision))
+    .sort((a, b) => (a.resolvedAt?.getTime() ?? 0) - (b.resolvedAt?.getTime() ?? 0))
+    .at(-1);
+  if (!decided) return undefined;
+
+  const subject = subjectOf(decided)!;
+  const retrying =
+    decided.resolvedOptionId === 'retry' &&
+    !TERMINAL_ACCEPTANCE_NODE_STATUSES.has(subject.node.status);
+  return { decision: decided, kind: retrying ? 'retrying' : 'decided', subject };
+};
 
 /** Anything the Goal left behind that a partial result page can show. */
 export const hasGoalOutput = (
@@ -48,34 +92,48 @@ export const hasGoalOutput = (
 ): boolean => graph.artifacts.length > 0 || graph.findings.length > 0 || !!graph.report?.latest;
 
 export const hasGoalResult = (
-  graph: Pick<GoalGraphView, 'artifacts' | 'findings' | 'goal' | 'nodes' | 'report'>,
+  graph: Pick<
+    GoalGraphView,
+    'artifacts' | 'byId' | 'decisions' | 'findings' | 'goal' | 'nodes' | 'report'
+  >,
 ): boolean =>
   graph.goal.status === 'achieved' ||
   !!findFinalAcceptanceView(graph) ||
+  !!findGoalAcceptanceGate(graph) ||
   (STOPPED_GOAL_STATUSES.has(graph.goal.status) && hasGoalOutput(graph));
 
 /**
  * Where the result stands for its owner, as the first screen says it:
  *
+ * - `awaitingDecision` — the Goal-level acceptance ended unmet and its gate
+ *                      waits on the owner: retry, or fail the Goal.
+ * - `revising`       — the owner chose retry; the Goal is being reworked and
+ *                      accepted again.
  * - `partial`        — the Goal stopped (failed / canceled), or its acceptance
  *                      judged a criterion unmet: what exists is a partial result.
  * - `signedOff`      — the owner accepted the delivery.
  * - `awaitingSignOff` — achieved, and the owner has not signed yet.
  */
-export type GoalResultStatus = 'awaitingSignOff' | 'partial' | 'signedOff';
+export type GoalResultStatus =
+  'awaitingDecision' | 'awaitingSignOff' | 'partial' | 'revising' | 'signedOff';
 
 export const deriveGoalResultStatus = ({
   acceptanceStatus,
+  gate,
   goalStatus,
   unmetCriteria,
 }: {
   acceptanceStatus?: AcceptanceStatus;
+  /** The Goal-acceptance gate's state, from {@link findGoalAcceptanceGate}. */
+  gate?: GoalAcceptanceGate['kind'];
   goalStatus: string;
   /** Criteria the latest acceptance round judged unmet. */
   unmetCriteria: number;
 }): GoalResultStatus => {
   if (acceptanceStatus === 'accepted') return 'signedOff';
   if (STOPPED_GOAL_STATUSES.has(goalStatus)) return 'partial';
+  if (gate === 'pending') return 'awaitingDecision';
+  if (gate === 'retrying' && goalStatus !== 'achieved') return 'revising';
   if (goalStatus !== 'achieved' && unmetCriteria > 0) return 'partial';
   return 'awaitingSignOff';
 };

@@ -13,6 +13,7 @@ import {
   deriveGoalResultStatus,
   deriveSignOffState,
   findFinalAcceptanceView,
+  findGoalAcceptanceGate,
   hasGoalResult,
   latestRoundRunId,
   resultTrailSource,
@@ -30,8 +31,47 @@ const node = (
 const graph = (
   goalStatus: string,
   nodes: GoalNodeView[],
-  { artifacts = [] as unknown[], findings = [] as unknown[] } = {},
-) => ({ artifacts, findings, goal: { status: goalStatus }, nodes }) as unknown as GoalGraphView;
+  {
+    artifacts = [] as unknown[],
+    decisions = [] as unknown[],
+    findings = [] as unknown[],
+    gates = [] as GoalNodeView[],
+  } = {},
+) =>
+  ({
+    artifacts,
+    byId: Object.fromEntries([...nodes, ...gates].map((view) => [view.node.id, view])),
+    decisions,
+    findings,
+    goal: { status: goalStatus },
+    nodes: [...nodes, ...gates],
+  }) as unknown as GoalGraphView;
+
+/** The gate node the coordinator opens (via `leads_to`) on a failed Task. */
+const gateNode = (subject: GoalNodeView, id = 'gate-1') =>
+  ({
+    gateSubjectId: subject.node.id,
+    node: { id, kind: 'decision', status: 'waiting', title: 'Choose how to recover failed task' },
+  }) as unknown as GoalNodeView;
+
+const gateDecision = (
+  gate: GoalNodeView,
+  {
+    resolvedAt = undefined as Date | undefined,
+    resolvedOptionId = undefined as string | undefined,
+  } = {},
+) => ({
+  id: `d-${gate.node.id}-${resolvedOptionId ?? 'pending'}`,
+  nodeId: gate.node.id,
+  options: [
+    { id: 'retry', label: 'Retry goal acceptance' },
+    { id: 'fail', label: 'Fail goal' },
+  ],
+  question: 'Goal-level acceptance did not pass. Retry Goal acceptance or fail this Goal?',
+  recommendedOptionId: 'retry',
+  status: resolvedOptionId ? 'resolved' : 'pending',
+  ...(resolvedOptionId ? { resolvedAt, resolvedByUserId: 'u1', resolvedOptionId } : {}),
+});
 
 describe('hasGoalResult', () => {
   /**
@@ -75,7 +115,108 @@ describe('hasGoalResult for a Goal that stopped', () => {
   });
 });
 
+describe('hasGoalResult for a Goal acceptance that ended unmet', () => {
+  /**
+   * Regression (acceptance b92f4920): the Goal-level acceptance failed and the
+   * coordinator parked the Goal in `review` behind a retry / fail gate. The
+   * acceptance node is `waiting`, not `resolved`, so no result tab showed and
+   * the owner was asked to decide without seeing which criteria failed.
+   */
+  it('offers a result while the acceptance gate waits on the owner', () => {
+    const acceptance = node('waiting');
+    const gate = gateNode(acceptance);
+    const view = graph('review', [acceptance], {
+      decisions: [gateDecision(gate)],
+      gates: [gate],
+    });
+
+    expect(hasGoalResult(view)).toBe(true);
+    expect(findGoalAcceptanceGate(view)).toMatchObject({ kind: 'pending' });
+  });
+
+  it('keeps the result through the retry the owner chose', () => {
+    const acceptance = node('active');
+    const gate = gateNode(acceptance);
+    const view = graph('running', [acceptance], {
+      decisions: [gateDecision(gate, { resolvedAt: new Date(1), resolvedOptionId: 'retry' })],
+      gates: [gate],
+    });
+
+    expect(hasGoalResult(view)).toBe(true);
+    expect(findGoalAcceptanceGate(view)?.kind).toBe('retrying');
+  });
+
+  it('keeps the result after the owner failed the Goal, even with no output', () => {
+    const acceptance = node('retired');
+    const gate = gateNode(acceptance);
+    const view = graph('failed', [acceptance], {
+      decisions: [gateDecision(gate, { resolvedAt: new Date(1), resolvedOptionId: 'fail' })],
+      gates: [gate],
+    });
+
+    expect(hasGoalResult(view)).toBe(true);
+    expect(findGoalAcceptanceGate(view)?.kind).toBe('decided');
+  });
+
+  it('reads the newest gate when a retried acceptance failed again', () => {
+    const acceptance = node('waiting');
+    const first = gateNode(acceptance, 'gate-1');
+    const second = gateNode(acceptance, 'gate-2');
+    const view = graph('review', [acceptance], {
+      decisions: [
+        gateDecision(first, { resolvedAt: new Date(1), resolvedOptionId: 'retry' }),
+        gateDecision(second),
+      ],
+      gates: [first, second],
+    });
+
+    expect(findGoalAcceptanceGate(view)).toMatchObject({
+      decision: { nodeId: 'gate-2' },
+      kind: 'pending',
+    });
+  });
+
+  it('ignores gates opened on ordinary Tasks', () => {
+    const task = node('waiting', { title: 'Write the draft' });
+    const gate = gateNode(task);
+    const view = graph('review', [task], { decisions: [gateDecision(gate)], gates: [gate] });
+
+    expect(findGoalAcceptanceGate(view)).toBeUndefined();
+    expect(hasGoalResult(view)).toBe(false);
+  });
+});
+
 describe('deriveGoalResultStatus', () => {
+  it('reads a pending Goal-acceptance gate as waiting on the owner’s call', () => {
+    expect(
+      deriveGoalResultStatus({
+        acceptanceStatus: 'errored',
+        gate: 'pending',
+        goalStatus: 'review',
+        unmetCriteria: 2,
+      }),
+    ).toBe('awaitingDecision');
+  });
+
+  it('moves to revising after retry, and to partial after the owner fails the Goal', () => {
+    expect(
+      deriveGoalResultStatus({
+        acceptanceStatus: 'verifying',
+        gate: 'retrying',
+        goalStatus: 'running',
+        unmetCriteria: 2,
+      }),
+    ).toBe('revising');
+    expect(
+      deriveGoalResultStatus({
+        acceptanceStatus: 'rejected',
+        gate: 'decided',
+        goalStatus: 'failed',
+        unmetCriteria: 2,
+      }),
+    ).toBe('partial');
+  });
+
   it('reads an achieved, unsigned Goal as waiting on the owner', () => {
     expect(
       deriveGoalResultStatus({

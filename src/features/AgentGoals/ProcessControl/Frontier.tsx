@@ -125,7 +125,7 @@ interface FrontierProps {
 }
 
 /** Server option ids are stable; their labels are English strings from the coordinator. */
-const useOptionLabel = () => {
+export const useGateOptionLabel = () => {
   const { t } = useTranslation('chat');
   return (option: GoalDecisionOption) => {
     switch (option.id) {
@@ -341,7 +341,7 @@ const FrontierRow = memo<{
   subject?: GoalNodeView;
 }>(({ actions, canEdit, item, numbers, onSelect, subject }) => {
   const { t } = useTranslation('chat');
-  const optionLabel = useOptionLabel();
+  const optionLabel = useGateOptionLabel();
   const [note, setNote] = useState('');
   const { view } = item;
   const { node } = view;
