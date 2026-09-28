@@ -130,6 +130,29 @@ hetero = "./packages/heterogeneous-agents/alint/rules"
 [config.group.rules]
 "hetero/agent-layering" = "error"
 
+# Heterogeneous agents: a host capability (CLI credentials, process-failure
+# classification, quota sampling, spawn setup) sits behind a Node-only entry
+# even when it is pure; the fix is moving it, never a browser-portable rewrite.
+# Scoped to the files the browser entries own. Per file the model cannot see
+# who imports a symbol, so it reports only what the file itself proves.
+[[config.group]]
+files = [
+  "packages/heterogeneous-agents/src/*.ts",
+  "packages/heterogeneous-agents/src/client/**/*.ts",
+  "packages/heterogeneous-agents/src/client/**/*.tsx",
+  "packages/heterogeneous-agents/src/errors/**/*.ts",
+  "packages/heterogeneous-agents/src/quota/**/*.ts",
+  "packages/heterogeneous-agents/src/utils/**/*.ts",
+]
+# Barrels are left out: a re-export's browser consumers are not visible from the barrel.
+ignores = [ "**/*.test.ts", "**/__tests__/**", "**/generated.ts", "**/index.ts" ]
+
+[config.group.plugins]
+hetero = "./packages/heterogeneous-agents/alint/rules"
+
+[config.group.rules]
+"hetero/host-capability-placement" = "warn"
+
 # Calibration fixtures: one group per rule so a fixture only meets its own rule.
 [[config.group]]
 files = [ "packages/alint/fixtures/pmap-over-promise-all/**" ]
@@ -179,3 +202,10 @@ files = [ "packages/heterogeneous-agents/alint/fixtures/agent-layering/**" ]
 hetero = "./packages/heterogeneous-agents/alint/rules"
 [config.group.rules]
 "hetero/agent-layering" = "warn"
+
+[[config.group]]
+files = [ "packages/heterogeneous-agents/alint/fixtures/host-capability-placement/**" ]
+[config.group.plugins]
+hetero = "./packages/heterogeneous-agents/alint/rules"
+[config.group.rules]
+"hetero/host-capability-placement" = "warn"

@@ -23,7 +23,7 @@ Report only these violations:
 5. In `spawn/agentStreamPipeline.ts` or `spawn/spawnAgent.ts` only: per-agent parsing or event mapping written inline, instead of a lookup keyed by agent type (like `spawn/postRunUsage.ts`) or a call into the adapter.
 6. `index.ts`, `client/**`, `errors/**` or `quota/**` re-exporting a Node-only capability; a Node-only capability gets its own subpath entry in `package.json` `exports` that is not listed in `browser-entries.json`.
 
-Anchor on the import or re-export line that crosses the boundary, or on the first line of the offending code for rules 2, 3 and 5. In the message, name the file's layer and what crosses the boundary. In the suggestion, name where the code should live (the agent's directory split into a pure module and a Node-only module, a reader keyed by agent type in `spawn/`, a new subpath entry) or the portable replacement (for example `atob` instead of `Buffer` for base64).
+Anchor on the import or re-export line that crosses the boundary, or on the first line of the offending code for rules 2, 3 and 5. In the message, name the file's layer and what crosses the boundary. In the suggestion, name where the code should live (the agent's directory split into a pure module and a Node-only module, a reader keyed by agent type in `spawn/`, a new subpath entry). Do not suggest a browser-portable rewrite (for example `atob` in place of `Buffer`): code that needs Node belongs in the Node-only layer, and moving it is the fix.
 
 Do not report:
 - anything in a Node-only-layer file, including its Node imports and any per-agent logic it holds;

@@ -2,11 +2,11 @@ import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { type ISnapshotStore, parseOperationId } from '@lobechat/agent-tracing';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { type LocalHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
+import { normalizeHeterogeneousMessageError } from '@lobechat/heterogeneous-agents/errors';
 import {
   classifyHeteroProcessFailure,
   isHeteroStatusGuideErrorData,
-  normalizeHeterogeneousMessageError,
-} from '@lobechat/heterogeneous-agents/errors';
+} from '@lobechat/heterogeneous-agents/processFailure';
 import { ThreadStatus } from '@lobechat/types';
 import debug from 'debug';
 

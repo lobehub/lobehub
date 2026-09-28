@@ -2,12 +2,6 @@ export type { CliQuotaClassification } from './cliQuota';
 export { classifyCliQuotaMessage } from './cliQuota';
 export { isEchoedErrorText } from './echo';
 export { normalizeHeterogeneousMessageError, readHeterogeneousErrorContext } from './messageError';
-export type { ClassifyHeteroProcessFailureParams } from './processFailure';
-export {
-  classifyHeteroProcessFailure,
-  HETERO_WORKING_DIRECTORY_NOT_FOUND,
-  isHeteroStatusGuideErrorData,
-} from './processFailure';
 export type { HeteroErrorKind, HeteroErrorSpec } from './specs';
 export {
   formatHeteroErrorId,

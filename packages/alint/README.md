@@ -17,9 +17,12 @@ This is Phase 0: the rule set is a private workspace package (`@lobechat/alint`)
 
 Package-level rules, kept next to the package they describe:
 
-| Rule                    | Severity | Scope                                                                        | Lives in                                    |
-| ----------------------- | -------- | ---------------------------------------------------------------------------- | ------------------------------------------- |
-| `hetero/agent-layering` | error    | the browser-reachable layer of `heterogeneous-agents` and its spawn pipeline | `packages/heterogeneous-agents/alint/rules` |
+| Rule                               | Severity | Scope                                                                        | Lives in                                    |
+| ---------------------------------- | -------- | ---------------------------------------------------------------------------- | ------------------------------------------- |
+| `hetero/agent-layering`            | error    | the browser-reachable layer of `heterogeneous-agents` and its spawn pipeline | `packages/heterogeneous-agents/alint/rules` |
+| `hetero/host-capability-placement` | warn     | files owned by the browser entries of `heterogeneous-agents` (not barrels)   | `packages/heterogeneous-agents/alint/rules` |
+
+`hetero/host-capability-placement` encodes two review rejections: code that only one Node host uses (the quota sampler, `lh hetero exec`, the desktop main process) moves behind a Node-only entry even when it is pure, and it is never made browser-portable to stay where it is. It reads one file, so it cannot see who imports a symbol; it reports only a host the file names itself, and misses host-only code whose docs do not say so.
 
 `error` is reserved for rules measured at zero false positives on real PRs; an error turns the ALint check red. A rule starts at `warn` and is promoted only after its findings have been read on real PRs. A rule whose findings are mostly true but not worth acting on per PR does not belong here: `test-the-exit-not-the-entry` was removed after five days because it produced 92% of all findings and drowned out the rest.
 
