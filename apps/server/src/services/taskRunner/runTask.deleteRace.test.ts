@@ -126,6 +126,19 @@ describe('TaskRunnerService.runTask vs. a concurrent delete', () => {
     expect(taskTopicModel.add).not.toHaveBeenCalled();
   });
 
+  it('stops the run it just dispatched when its claim was withdrawn meanwhile', async () => {
+    // Closing or restarting a goal puts a claimed Task whose run is not yet
+    // recorded back to `backlog`; the run must not be recorded over that.
+    taskModel.findById.mockResolvedValue({ ...task, status: 'backlog' });
+
+    await expect(new TaskRunnerService(db, 'user-1').runTask({ taskId: 'T-1' })).rejects.toThrow(
+      'The task was withdrawn while its run was starting',
+    );
+
+    expect(mocks.interruptTask).toHaveBeenCalledWith({ operationId: 'op-new' });
+    expect(taskTopicModel.add).not.toHaveBeenCalled();
+  });
+
   it.each([{ success: false }, { deviceCancellationConfirmed: false, success: true }])(
     'does not claim the orphaned run stopped when the stop is unconfirmed (%j)',
     async (stop) => {

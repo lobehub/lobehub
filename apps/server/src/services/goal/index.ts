@@ -1704,6 +1704,27 @@ export class GoalService {
         : [],
     );
     if (unfinishedTaskIds.length > 0) {
+      // Withdraw claims whose run is still starting. `dispatchWork` marks the
+      // Task `running` before `runTask` records the topic, so the scan below
+      // cannot see that run yet. Under the task row lock that recording also
+      // takes: with no recorded run, back to `backlog`, and the recording will
+      // find it withdrawn and stop its own run; with one, the scan cancels it.
+      for (const taskId of unfinishedTaskIds) {
+        await this.db.transaction(async (tx) => {
+          const taskModel = new TaskModel(tx, this.userId, this.workspaceId);
+          if (!(await taskModel.lockForUpdate(taskId))) return;
+          const task = await taskModel.findById(taskId);
+          if (task?.status !== 'running') return;
+          const recorded = await new TaskTopicModel(
+            tx,
+            this.userId,
+            this.workspaceId,
+          ).findRunningByTaskIds([taskId]);
+          if (recorded.length === 0)
+            await taskModel.updateStatusIfCurrent(taskId, 'running', 'backlog', { error: null });
+        });
+      }
+
       const runningTopics = await this.taskTopicModel.findRunningByTaskIds(unfinishedTaskIds);
       for (const topic of runningTopics) {
         if (!topic.topicId) continue;

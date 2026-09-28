@@ -381,13 +381,15 @@ export class TaskRunnerService {
         // node — while this run was being dispatched, whoever did it found no
         // topic to stop yet. Nobody else will stop it, so stop it here instead
         // of recording an operation that keeps running behind the cancellation.
+        // A claim withdrawn mid-startup is the same case: closing or restarting
+        // a goal puts a claimed Task with no recorded run back to `backlog`.
         const recorded = await this.db.transaction(async (tx) => {
           const taskModel = new TaskModel(tx, this.userId, this.workspaceId);
           const taskTopicModel = new TaskTopicModel(tx, this.userId, this.workspaceId);
           if (!(await taskModel.lockForUpdate(task.id))) return 'deleted' as const;
-          if ((await taskModel.findById(task.id))?.status === 'canceled') {
-            return 'canceled' as const;
-          }
+          const current = await taskModel.findById(task.id);
+          if (current?.status === 'canceled') return 'canceled' as const;
+          if (current?.status === 'backlog') return 'withdrawn' as const;
           if (continueTopicId) {
             await taskTopicModel.updateStatus(task.id, continueTopicId, 'running');
             await taskTopicModel.updateOperationId(task.id, continueTopicId, result.operationId);

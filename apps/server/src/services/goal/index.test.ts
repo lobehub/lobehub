@@ -1279,6 +1279,24 @@ describe('GoalService', () => {
     expect(statusDuringCancel).toEqual(['paused']);
   });
 
+  it('withdraws a claim whose run has not been recorded yet when closing', async () => {
+    // `dispatchWork` marks the Task running before `runTask` records the
+    // topic, so the close scan finds no run to cancel. The claim is withdrawn
+    // instead; the recording then sees `backlog` and stops its own run.
+    const cancelSpy = vi.spyOn(TaskService.prototype, 'cancelTopic').mockResolvedValue();
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ tasks: ['Starting'], title: 'Claimed, not recorded' });
+    const created = await service.tick(graph.goal.id);
+    await new TaskModel(serverDB, userId).update(created.taskId!, { status: 'running' });
+
+    expect((await service.close(graph.goal.id, 'canceled')).status).toBe('canceled');
+
+    expect(cancelSpy).not.toHaveBeenCalled();
+    expect((await new TaskModel(serverDB, userId).findById(created.taskId!))?.status).toBe(
+      'backlog',
+    );
+  });
+
   it('refuses to end a goal someone resumed while its runs were being interrupted', async () => {
     const service = new GoalService(serverDB, userId);
     const graph = await service.create({ tasks: ['Runs'], title: 'Resumed mid-close' });
