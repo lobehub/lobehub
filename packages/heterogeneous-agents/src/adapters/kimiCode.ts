@@ -7,7 +7,6 @@ import type {
   ToolCallPayload,
   ToolResultData,
 } from '../types';
-import { readKimiCodeSessionUsage } from '../utils/kimiCodeUsage';
 
 const KIMI_CODE_IDENTIFIER = 'kimi-code';
 
@@ -110,6 +109,10 @@ export class KimiCodeAdapter implements AgentEventAdapter {
    */
   async collectPostRunUsage(options?: PostRunUsageOptions): Promise<HeterogeneousAgentEvent[]> {
     try {
+      // Loaded on demand: adapters are also bundled for the browser, and this
+      // reader needs `node:fs`. A static import put it in the SPA's module graph,
+      // where Vite's externalized stub throws on first access and blanks the app.
+      const { readKimiCodeSessionUsage } = await import('../utils/kimiCodeUsage');
       const result = await readKimiCodeSessionUsage(this.sessionId, { env: options?.env });
       if (!result) return [];
       return [
