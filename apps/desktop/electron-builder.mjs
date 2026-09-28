@@ -223,7 +223,7 @@ const config = {
   afterSign: verifyFontListSignature,
   appId: macAppId,
   appImage: {
-    artifactName: '${productName}-${version}.${ext}',
+    artifactName: '${productName}-${version}-${arch}.${ext}',
   },
 
   // Only explicitly selected native binaries should live outside app.asar.
