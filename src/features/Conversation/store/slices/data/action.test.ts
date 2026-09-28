@@ -31,13 +31,18 @@ vi.mock('@lobechat/conversation-flow', () => ({
 }));
 
 // Mock messageService
-vi.mock('@/services/message', () => ({
-  messageService: {
-    getEarlierMessages: vi.fn(),
-    getMessages: vi.fn(),
-    updateMessageMetadata: vi.fn().mockResolvedValue({ success: true, messages: [] }),
-  },
-}));
+vi.mock('@/services/message', () => {
+  const getMessages = vi.fn();
+  return {
+    messageService: {
+      getEarlierMessages: vi.fn(),
+      // The list cache reads pages; tests stub the plain list underneath.
+      getMessageListPage: vi.fn((params) => getMessages(params)),
+      getMessages,
+      updateMessageMetadata: vi.fn().mockResolvedValue({ success: true, messages: [] }),
+    },
+  };
+});
 
 // Mock SWR
 vi.mock('@/libs/swr', () => ({
@@ -269,13 +274,13 @@ describe('DataSlice', () => {
         context: { agentId: 'agent-earlier', topicId: 'topic-earlier-1', threadId: null },
       });
       store.getState().replaceMessages(windowMessages);
-      vi.mocked(messageService.getEarlierMessages).mockResolvedValueOnce(earlierPage);
+      vi.mocked(messageService.getEarlierMessages).mockResolvedValueOnce({ messages: earlierPage });
 
       await store.getState().loadEarlierMessages();
 
       expect(messageService.getEarlierMessages).toHaveBeenCalledWith(
         expect.objectContaining({ agentId: 'agent-earlier', topicId: 'topic-earlier-1' }),
-        { createdAt: new Date(1000), id: 'u2' },
+        { createdAt: new Date(1000).toISOString(), id: 'u2' },
       );
       expect(store.getState().dbMessages.map((m) => m.id)).toEqual(['u1', 'a1', 'u2', 'a2']);
       expect(store.getState().isLoadingEarlierMessages).toBe(false);
@@ -286,7 +291,7 @@ describe('DataSlice', () => {
         context: { agentId: 'agent-earlier', topicId: 'topic-earlier-2', threadId: null },
       });
       store.getState().replaceMessages(windowMessages);
-      vi.mocked(messageService.getEarlierMessages).mockResolvedValue([]);
+      vi.mocked(messageService.getEarlierMessages).mockResolvedValue({ messages: [] });
 
       await store.getState().loadEarlierMessages();
       await store.getState().loadEarlierMessages();
@@ -306,7 +311,7 @@ describe('DataSlice', () => {
           ...createEphemeralResetState(),
           context: { agentId: 'agent-earlier', topicId: 'topic-earlier-other', threadId: null },
         } as any);
-        return earlierPage;
+        return { messages: earlierPage };
       });
 
       await store.getState().loadEarlierMessages();
@@ -323,7 +328,7 @@ describe('DataSlice', () => {
       const failure = new Error('network down');
       vi.mocked(messageService.getEarlierMessages)
         .mockRejectedValueOnce(failure)
-        .mockResolvedValueOnce(earlierPage);
+        .mockResolvedValueOnce({ messages: earlierPage });
 
       await expect(store.getState().loadEarlierMessages()).resolves.toBeUndefined();
       expect(store.getState().isLoadingEarlierMessages).toBe(false);
@@ -379,7 +384,7 @@ describe('DataSlice', () => {
       vi.mocked(messageService.getEarlierMessages).mockImplementationOnce(async () => {
         // Same conversation keeps updating: an edit/stream and a new message.
         store.getState().replaceMessages([windowMessages[0], streamed, appended]);
-        return earlierPage;
+        return { messages: earlierPage };
       });
 
       await store.getState().loadEarlierMessages();
@@ -401,7 +406,7 @@ describe('DataSlice', () => {
         } as any);
         // The next conversation starts its own page load while ours is in flight.
         store.setState({ isLoadingEarlierMessages: true });
-        return earlierPage;
+        return { messages: earlierPage };
       });
 
       await store.getState().loadEarlierMessages();

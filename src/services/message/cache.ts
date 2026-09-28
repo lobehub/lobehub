@@ -31,6 +31,47 @@ interface MessageListClientState {
 const messageListClientStates = new Map<string, MessageListClientState>();
 
 /**
+ * Round cursor for paging older history: the `(createdAt, id)` of the oldest
+ * loaded round's start. `createdAt` is the server's lossless microsecond ISO
+ * string, so a page boundary never drops rows sharing a millisecond.
+ */
+export interface MessageRoundCursor {
+  createdAt: string;
+  id: string;
+}
+
+/**
+ * One page of a conversation. `olderCursor` points at the next older page;
+ * `null` means the topic start is already loaded, and `undefined` means the
+ * read path cannot tell (it has no round cursor).
+ */
+export interface MessageListPage {
+  messages: UIChatMessage[];
+  olderCursor?: MessageRoundCursor | null;
+}
+
+/**
+ * The older-history cursor each identity's newest window came back with. Kept
+ * apart from `messageListClientStates`, which is dropped once its verification
+ * window lapses, while the rendered window (and so its cursor) stays valid.
+ * Entries are two short strings, so the cap matches the client-state cap.
+ */
+const windowOlderCursors = new Map<string, MessageRoundCursor | null>();
+
+const recordWindowOlderCursor = (
+  identity: string,
+  cursor: MessageRoundCursor | null | undefined,
+) => {
+  windowOlderCursors.delete(identity);
+  if (cursor === undefined) return;
+  windowOlderCursors.set(identity, cursor);
+  if (windowOlderCursors.size > MAX_MESSAGE_LIST_CLIENT_STATES) {
+    const oldest = windowOlderCursors.keys().next().value;
+    if (oldest !== undefined) windowOlderCursors.delete(oldest);
+  }
+};
+
+/**
  * Client-held pages of history OLDER than the server's newest-first window
  * (LOBE-13716). The chat read path only ever fetches the newest round-aligned
  * page; when the user walks back past it, the older pages are fetched once via
@@ -47,11 +88,13 @@ interface EarlierHistoryState {
   anchorId: string;
   cacheScope: string;
   context: CanonicalMessageListContext;
-  /** A `before` page came back empty: the very beginning has been reached. */
+  /** The topic start has been loaded: nothing older remains to fetch. */
   exhausted: boolean;
   loading: boolean;
   /** Ascending rows strictly older than `anchorId`. */
   messages: UIChatMessage[];
+  /** Cursor for the page older than `messages`; `undefined` until a page reports one. */
+  olderCursor?: MessageRoundCursor;
 }
 
 const earlierHistoryStates = new Map<string, EarlierHistoryState>();
@@ -106,9 +149,24 @@ const mergeEarlierHistory = (identity: string, fresh: UIChatMessage[]): UIChatMe
   return [...prefix, ...fresh].sort(byCreatedAtAscending);
 };
 
+/**
+ * Where the next older page starts: the last loaded page's cursor once history
+ * was extended, otherwise the window's. `null` → the start is loaded;
+ * `undefined` → unknown, derive it from the oldest loaded row.
+ */
+const resolveOlderCursor = (
+  identity: string,
+  state: EarlierHistoryState | undefined,
+): MessageRoundCursor | null | undefined =>
+  state && state.messages.length > 0 ? state.olderCursor : windowOlderCursors.get(identity);
+
 export const getEarlierHistoryStatus = (context: MessageListQueryContext) => {
-  const state = earlierHistoryStates.get(getMessageListCacheIdentity(context));
-  return { exhausted: state?.exhausted ?? false, loading: state?.loading ?? false };
+  const identity = getMessageListCacheIdentity(context);
+  const state = earlierHistoryStates.get(identity);
+  return {
+    exhausted: (state?.exhausted ?? false) || resolveOlderCursor(identity, state) === null,
+    loading: state?.loading ?? false,
+  };
 };
 
 /**
@@ -127,17 +185,27 @@ export const getEarlierHistoryStatus = (context: MessageListQueryContext) => {
 export const loadEarlierMessagePage = async (
   context: MessageListQueryContext,
   getCurrentMessages: () => UIChatMessage[] | undefined,
-  fetcher: (before: { createdAt: Date; id: string }) => Promise<UIChatMessage[]>,
+  fetcher: (cursor: MessageRoundCursor) => Promise<MessageListPage>,
 ): Promise<UIChatMessage[] | undefined> => {
   const identity = getMessageListCacheIdentity(context);
   const existing = earlierHistoryStates.get(identity);
   if (existing?.exhausted || existing?.loading) return undefined;
 
-  const cursor = getCurrentMessages()?.find((message) => !isSyntheticGroupNode(message));
-  if (!cursor) return undefined;
+  const knownCursor = resolveOlderCursor(identity, existing);
+  // The window (or the last page) already reached the topic start.
+  if (knownCursor === null) return undefined;
+
+  const oldest = getCurrentMessages()?.find((message) => !isSyntheticGroupNode(message));
+  if (!oldest) return undefined;
+
+  // A read path without round cursors: page from the oldest loaded row.
+  const cursor = knownCursor ?? {
+    createdAt: new Date(oldest.createdAt).toISOString(),
+    id: oldest.id,
+  };
 
   const state: EarlierHistoryState = existing ?? {
-    anchorId: cursor.id,
+    anchorId: oldest.id,
     cacheScope: getCacheScope(),
     context: normalizeMessageListQueryContext(context),
     exhausted: false,
@@ -149,18 +217,18 @@ export const loadEarlierMessagePage = async (
   pruneEarlierHistoryStates();
 
   try {
-    const page = await fetcher({ createdAt: new Date(cursor.createdAt), id: cursor.id });
+    const { messages: page, olderCursor } = await fetcher(cursor);
 
     // An invalidation (edit/delete refresh) dropped this identity while the
     // page was in flight: its rows may be exactly what changed, so discard it.
     if (earlierHistoryStates.get(identity) !== state) return undefined;
 
-    if (page.length === 0) {
-      // `length < pageSize` is NOT a reliable end signal — the round-start trim
-      // legitimately shortens full pages — so only an empty page marks the top.
-      state.exhausted = true;
-      return undefined;
-    }
+    // Without a reported cursor, `length < pageSize` is NOT a reliable end
+    // signal — the round-start trim legitimately shortens full pages — so only
+    // an empty page marks the top.
+    if (page.length === 0 || olderCursor === null) state.exhausted = true;
+    state.olderCursor = olderCursor ?? undefined;
+    if (page.length === 0) return undefined;
 
     const pageIds = new Set(page.map((message) => message.id));
     state.messages = [
@@ -246,7 +314,9 @@ export const getMessageListFetchPolicy = (context: MessageListQueryContext) => (
   revalidateIfStale: !isMessageListServerVerified(context),
 });
 
-type MessageListQuery = (context: CanonicalMessageListContext) => Promise<UIChatMessage[]>;
+type MessageListQuery = (
+  context: CanonicalMessageListContext,
+) => Promise<MessageListPage | UIChatMessage[]>;
 
 const startCurrentGenerationQuery = (
   state: MessageListClientState,
@@ -269,9 +339,9 @@ const startCurrentGenerationQuery = (
 
   const request: Promise<UIChatMessage[]> = Promise.resolve()
     .then(async () => {
-      let messages: UIChatMessage[];
+      let result: MessageListPage | UIChatMessage[];
       try {
-        messages = await query(state.context);
+        result = await query(state.context);
       } catch (error) {
         if (state.generation !== requestGeneration) {
           return startCurrentGenerationQuery(state, query, true);
@@ -285,6 +355,9 @@ const startCurrentGenerationQuery = (
       if (state.generation !== requestGeneration) {
         return startCurrentGenerationQuery(state, query, true);
       }
+
+      const { messages, olderCursor } = Array.isArray(result) ? { messages: result } : result;
+      recordWindowOlderCursor(state.identity, olderCursor);
 
       state.verifiedAt = Date.now();
       touchState(state);
@@ -352,4 +425,5 @@ export const invalidateMessageListClientState = (
 export const clearMessageListClientCacheState = () => {
   messageListClientStates.clear();
   earlierHistoryStates.clear();
+  windowOlderCursors.clear();
 };

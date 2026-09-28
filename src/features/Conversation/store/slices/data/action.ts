@@ -223,7 +223,7 @@ export const dataSlice: StateCreator<
         // or edit may have changed it meanwhile. A conversation switch yields
         // `undefined` so the other conversation's rows are never merged.
         () => (isSameConversationContext(context, get().context) ? get().dbMessages : undefined),
-        (before) =>
+        (cursor) =>
           messageService.getEarlierMessages(
             {
               agentId: context.agentId,
@@ -233,7 +233,7 @@ export const dataSlice: StateCreator<
               topicId: context.topicId,
               topicShareId: context.topicShareId,
             },
-            before,
+            cursor,
           ),
       );
       // `undefined` → nothing to prepend (no cursor, already loading, the
@@ -340,7 +340,7 @@ export const dataSlice: StateCreator<
     return useClientDataSWRWithSync<UIChatMessage[]>(
       shouldFetch ? messageListKey(context) : null,
 
-      () => runMessageListQuery(context, messageService.getMessages),
+      () => runMessageListQuery(context, messageService.getMessageListPage),
       {
         ...getMessageListFetchPolicy(context),
         ...(revalidateOnFocus !== undefined && { revalidateOnFocus }),
