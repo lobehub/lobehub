@@ -52,9 +52,11 @@ export async function resumeAbandonedParent(
   };
 
   if (process.env.QSTASH_TOKEN) {
+    // `streamOwnerUserId` lets the callback keep visitor rows visible when the
+    // child's coordinator metadata (its usual source) is already gone.
     await deliverWebhook(
       { delivery: 'qstash', fallback: 'none', url: '/api/agent/webhooks/subagent-callback' },
-      bridgeBody,
+      { ...bridgeBody, streamOwnerUserId },
     );
     log('[%s] queued durable parent-resume for %s', operationId, parentOperationId);
     return;
