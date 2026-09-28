@@ -4,7 +4,7 @@ import {
   type PageAgentInvocationContext,
   type PageAgentRuntimeService,
 } from '@lobechat/builtin-tool-page-agent/executionRuntime';
-import { EditorRuntime } from '@lobechat/editor-runtime';
+import { EditorRuntime, formatModifyNodesResult } from '@lobechat/editor-runtime';
 import { createHeadlessEditor, type HeadlessEditor } from '@lobehub/editor/headless';
 import type { SerializedEditorState, SerializedLexicalNode } from 'lexical';
 
@@ -345,21 +345,8 @@ const buildService = (
     modifyNodes: (args, ctx) =>
       withEditor(serviceCtx, 'modifyNodes', ctx, async ({ runtime }) => {
         const result = await runtime.modifyNodes(args);
-        const operations = Array.isArray(args.operations)
-          ? args.operations
-          : args.operations
-            ? [args.operations]
-            : [];
-        const actionSummary = operations.reduce<Record<string, number>>((acc, op) => {
-          if (!op) return acc;
-          acc[op.action] = (acc[op.action] || 0) + 1;
-          return acc;
-        }, {});
-        const summary = Object.entries(actionSummary)
-          .map(([action, count]) => `${count} ${action}${count > 1 ? 's' : ''}`)
-          .join(', ');
         return {
-          content: `Successfully executed ${summary} (${result.successCount}/${result.totalCount} operations succeeded).`,
+          content: formatModifyNodesResult(result),
           state: {
             results: result.results,
             successCount: result.successCount,

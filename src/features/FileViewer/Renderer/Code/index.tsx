@@ -1,13 +1,15 @@
 'use client';
 
 import { Center, Flexbox, Highlighter } from '@lobehub/ui';
+import { Spin } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
+import AsyncError from '@/components/AsyncError';
 import { getLanguageFromFilename } from '@/utils/fileLanguage';
 
 import { useTextFileLoader } from '../../hooks/useTextFileLoader';
+import NotSupport from '../../NotSupport';
 
 const styles = createStaticStyles(({ css }) => ({
   page: css`
@@ -24,18 +26,26 @@ interface CodeViewerProps {
 }
 
 const CodeViewer = memo<CodeViewerProps>(({ url, fileName }) => {
-  const { fileData, loading } = useTextFileLoader(url);
+  const { error, fileData, loading, tooLarge } = useTextFileLoader(url);
   const language = getLanguageFromFilename(fileName);
+
+  if (!loading && fileData === null)
+    return (
+      <Flexbox>
+        {error && <AsyncError error={error} variant={'block'} />}
+        <NotSupport fileName={fileName} tooLarge={tooLarge} url={url} />
+      </Flexbox>
+    );
 
   return (
     <Flexbox className={styles.page}>
-      {!loading && fileData ? (
+      {!loading && fileData !== null ? (
         <Highlighter language={language} showLanguage={false} variant={'borderless'}>
           {fileData}
         </Highlighter>
       ) : (
         <Center height={'100%'}>
-          <NeuralNetworkLoading size={36} />
+          <Spin size="large" />
         </Center>
       )}
     </Flexbox>

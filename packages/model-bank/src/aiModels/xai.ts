@@ -12,6 +12,62 @@ const xaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 500_000,
     description:
+      'Grok 4.7 is more reliable than Grok 4.6 on long-running coding and knowledge work, at the same price and speed, with a 500K context window.',
+    displayName: 'Grok 4.7',
+    enabled: true,
+    id: 'grok-4.7',
+    /** @see https://docs.x.ai/developers/models/grok-4.7 */
+    pricing: {
+      units: [
+        {
+          name: 'textInput_cacheRead',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.5, upTo: 199_999 },
+            { rate: 1, upTo: 'infinity' },
+          ],
+        },
+        {
+          name: 'textInput',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 2, upTo: 199_999 },
+            { rate: 4, upTo: 'infinity' },
+          ],
+        },
+        {
+          name: 'textOutput',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 6, upTo: 199_999 },
+            { rate: 12, upTo: 'infinity' },
+          ],
+        },
+      ],
+    },
+    releasedAt: '2026-09-21',
+    settings: {
+      extendParams: ['grok4_7ReasoningEffort'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+    family: 'grok',
+    generation: 'grok-4.7',
+    knowledgeCutoff: '2026-05',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      vision: true,
+      structuredOutput: true,
+    },
+    contextWindowTokens: 500_000,
+    description:
       'Grok 4.6 is a frontier model for coding, long-running agents, and knowledge work with a 500K context window.',
     displayName: 'Grok 4.6',
     enabled: true,

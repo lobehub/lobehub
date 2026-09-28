@@ -4,8 +4,10 @@ import { ChatErrorType, RequestTrigger } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { NotifyAgentInterventionRequiredParams } from '@/business/server/agent-run/agentInterventionReview';
+import { WorkModel } from '@/database/models/work';
 import * as agentSignalService from '@/server/services/agentSignal';
 import * as verifyServices from '@/server/services/verify';
+import type * as WorkRegistrationModule from '@/server/services/workRegistration';
 import { registerWorksForOperation } from '@/server/services/workRegistration';
 
 import {
@@ -51,7 +53,10 @@ vi.mock('../agentInterventionNotification', () => ({
   buildRuntimeInterventionNotification: mockBuildRuntimeInterventionNotification,
 }));
 
-vi.mock('@/server/services/workRegistration', () => ({
+vi.mock('@/server/services/workRegistration', async (importOriginal) => ({
+  // Keep the real scope resolver: it is pure, and the share-visitor test below
+  // asserts the scope it derives reaches both the scan and the anchor lookup.
+  ...(await importOriginal<typeof WorkRegistrationModule>()),
   registerWorksForOperation: vi.fn(),
 }));
 
@@ -170,6 +175,78 @@ describe('CompletionLifecycle.extractErrorMessage', () => {
 describe('CompletionLifecycle.buildLifecycleEvent', () => {
   const callBuild = (state: unknown, reason = 'completed') =>
     (buildLifecycle() as any).buildLifecycleEvent('op-1', state, reason);
+
+  it('attaches Markdown images explicitly included in the final reply without changing its text', () => {
+    const url = 'https://cdn.example.com/f/file_image';
+    const content = `Here is the result: ![Result](${url})`;
+    const { event } = callBuild({ messages: [{ role: 'assistant', content }] });
+    expect(event.attachments).toEqual([{ fetchUrl: url, type: 'image' }]);
+    expect(event.lastAssistantContent).toBe(content);
+  });
+
+  it('preserves the order of distinct final-reply images', () => {
+    const { event } = callBuild({
+      messages: [
+        {
+          role: 'assistant',
+          content:
+            '![Before](https://cdn.example.com/before.png) ![After](https://cdn.example.com/after.png)',
+        },
+      ],
+    });
+    expect(event.attachments?.map((attachment: any) => attachment.fetchUrl)).toEqual([
+      'https://cdn.example.com/before.png',
+      'https://cdn.example.com/after.png',
+    ]);
+  });
+
+  it('parses reference images in final text parts and deduplicates structured images', () => {
+    const url = 'https://cdn.example.com/result.png';
+    const { event } = callBuild({
+      messages: [
+        {
+          role: 'assistant',
+          content: [
+            { type: 'text', text: `![one][result] ![two](${url})\n\n[result]: ${url}` },
+            { type: 'image_url', image_url: { url } },
+          ],
+        },
+      ],
+    });
+    expect(event.attachments).toEqual([{ fetchUrl: url, type: 'image' }]);
+  });
+
+  it('does not promote tool state, tool Markdown, or an earlier reply to final attachments', () => {
+    const url = 'https://cdn.example.com/intermediate.png';
+    const { event } = callBuild({
+      messages: [
+        { role: 'assistant', content: `![earlier](${url})` },
+        { role: 'user', content: 'Analyze the result without sending an image.' },
+        { role: 'assistant', content: '', tools: [{ id: 'call-image' }] },
+        {
+          role: 'tool',
+          content: `![tool result](${url})`,
+          state: { generations: [{ asset: { url, type: 'image' } }] },
+        },
+        { role: 'assistant', content: 'The composition is balanced.' },
+      ],
+    });
+    expect(event.attachments).toBeUndefined();
+  });
+
+  it('does not treat ordinary links, code, escaped syntax or unsafe schemes as images', () => {
+    const content = [
+      'https://cdn.example.com/plain.png',
+      '[download](https://cdn.example.com/download.png)',
+      '`![inline](https://cdn.example.com/inline.png)`',
+      '```md\n![fenced](https://cdn.example.com/fenced.png)\n```',
+      '\\![escaped](https://cdn.example.com/escaped.png)',
+      '![unsafe](file:///tmp/image.png)',
+      '![unsafe](javascript:alert)',
+    ].join('\n\n');
+    const { event } = callBuild({ messages: [{ role: 'assistant', content }] });
+    expect(event.attachments).toBeUndefined();
+  });
 
   it('extracts text content from a plain-string final assistant turn', () => {
     const state = {
@@ -644,6 +721,50 @@ describe('CompletionLifecycle.dispatchHooks — error persistence', () => {
 
     expect(dispatch).not.toHaveBeenCalled();
   });
+
+  describe('a row the caller already retired as abandoned', () => {
+    // Mirrors `recordCompletion`'s guard: a row the stale-lease CAS moved to
+    // `abandoned` only accepts a write that keeps that status.
+    const retiredRowModel = () => ({
+      findById: vi.fn(async () => ({ id: 'op-stale', status: 'abandoned' })),
+      recordCompletion: vi.fn(async (_id: string, params: { status: string }) => {
+        return params.status === 'abandoned';
+      }),
+      sumChildUsage: vi.fn(async () => undefined),
+    });
+
+    it('persists onto the abandoned status and still fires the hooks', async () => {
+      const lifecycle = buildLifecycle();
+      const model = retiredRowModel();
+      (lifecycle as any).agentOperationModel = model;
+      const dispatch = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+      vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
+
+      await lifecycle.dispatchHooks('op-stale', { host: { hooks: [] }, status: 'error' }, 'error', {
+        settledAsAbandoned: true,
+        skipErrorMessageWrite: true,
+      });
+
+      expect(model.recordCompletion).toHaveBeenCalledWith(
+        'op-stale',
+        expect.objectContaining({ completionReason: 'lease_expired', status: 'abandoned' }),
+      );
+      expect(dispatch).toHaveBeenCalled();
+    });
+
+    it('is refused as a conflicting owner without the flag, so no hooks fire', async () => {
+      const lifecycle = buildLifecycle();
+      (lifecycle as any).agentOperationModel = retiredRowModel();
+      const dispatch = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+      vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
+
+      await lifecycle.dispatchHooks('op-stale', { host: { hooks: [] }, status: 'error' }, 'error', {
+        skipErrorMessageWrite: true,
+      });
+
+      expect(dispatch).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe('CompletionLifecycle.dispatchHooks — verify plan race', () => {
@@ -723,7 +844,12 @@ describe('CompletionLifecycle.dispatchHooks — async-tool park', () => {
 
     await lifecycle.dispatchHooks('op-1', parkedState, 'waiting_for_async_tool');
 
-    expect(persistSpy).toHaveBeenCalledWith('op-1', parkedState, 'waiting_for_async_tool');
+    expect(persistSpy).toHaveBeenCalledWith(
+      'op-1',
+      parkedState,
+      'waiting_for_async_tool',
+      undefined,
+    );
     expect(dispatchSpy).not.toHaveBeenCalled();
     expect(unregisterSpy).not.toHaveBeenCalled();
   });
@@ -1239,6 +1365,27 @@ describe('CompletionLifecycle.dispatchHooks — lastAssistantContent DB recovery
     );
   });
 
+  it('extracts final Markdown images when the reply is recovered from the database', async () => {
+    const lifecycle = buildLifecycle();
+    const dispatchSpy = setupSpies(lifecycle);
+    const content = '![Result](https://cdn.example.com/recovered.png)';
+    (lifecycle as any).messageModel = {
+      findById: vi.fn().mockResolvedValue({ content, id: 'msg-assistant' }),
+    };
+
+    await lifecycle.dispatchHooks('op-1', buildDoneState(''), 'done');
+
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      'op-1',
+      'onComplete',
+      expect.objectContaining({
+        attachments: [{ fetchUrl: 'https://cdn.example.com/recovered.png', type: 'image' }],
+        lastAssistantContent: content,
+      }),
+      [],
+    );
+  });
+
   it('recovers by the final assistantGroup child id when grouped state carries no text', async () => {
     const lifecycle = buildLifecycle();
     const dispatchSpy = setupSpies(lifecycle);
@@ -1690,5 +1837,53 @@ describe('CompletionLifecycle.registerFileWorks', () => {
 
     await expect(lifecycle.registerFileWorks('op-1', {} as any)).resolves.toBeUndefined();
     expect(mockRegister).toHaveBeenCalledTimes(1);
+  });
+
+  it('registers and anchors a share visitor run under its visitor-topic share scope', async () => {
+    mockRegister.mockClear();
+    vi.mocked(WorkModel).mockClear();
+    mockRegister.mockResolvedValue({ attempted: 1, failed: 0 });
+    mockListWorks.mockResolvedValue([{ id: 'visitor-file-work' }]);
+    const lifecycle = buildLifecycle();
+    const update = vi
+      .spyOn(lifecycle['messageModel'], 'update')
+      .mockResolvedValue({ success: true });
+    const shareVisitor = { agentId: 'agt_1', shareId: 'share-1', visitorUserId: 'visitor-1' };
+    const state = {
+      metadata: { workAssistantMessageId: 'final-assistant' },
+      origin: { sourceMessageId: 'source-user', topicId: 'tpc_visitor', userId: 'user-1' },
+      principal: { actor: { shareVisitor } },
+    };
+
+    await lifecycle.registerFileWorks('op-1', state);
+
+    expect(mockRegister).toHaveBeenCalledWith(
+      expect.objectContaining({ agentShareVisitor: shareVisitor, operationId: 'op-1' }),
+    );
+    // The anchor lookup must read through the SAME scope the scan wrote under,
+    // or the visitor's Work is never found and the chip never renders.
+    expect(vi.mocked(WorkModel)).toHaveBeenCalledWith(expect.anything(), 'user-1', undefined, {
+      shareId: 'share-1',
+      topicId: 'tpc_visitor',
+      type: 'agentShare',
+      visitorUserId: 'visitor-1',
+    });
+    expect(update).toHaveBeenCalledWith('final-assistant', {
+      metadata: { work: { rootOperationId: 'op-1', userMessageId: 'source-user' } },
+    });
+  });
+
+  it('skips a share visitor run that has no topic instead of registering unscoped', async () => {
+    mockRegister.mockClear();
+    const lifecycle = buildLifecycle();
+    const state = {
+      metadata: {},
+      origin: { userId: 'user-1' },
+      principal: { actor: { shareVisitor: { shareId: 'share-1', visitorUserId: 'visitor-1' } } },
+    };
+
+    await expect(lifecycle.registerFileWorks('op-1', state)).resolves.toBeUndefined();
+    expect(mockRegister).not.toHaveBeenCalled();
+    expect(state.metadata).not.toHaveProperty('_fileWorksRegistered');
   });
 });

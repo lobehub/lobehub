@@ -8,6 +8,7 @@ import {
   agents,
   chatGroups,
   messages,
+  projects,
   sessions,
   topics,
   users,
@@ -633,6 +634,36 @@ describe('TopicModel', () => {
       });
 
       expect(item.runningOperation).toBeNull();
+    });
+
+    it('never leaks the creator project binding ids when the topic joins a project', async () => {
+      await serverDB.insert(agents).values([
+        { id: 'agent-share-project', userId },
+        { id: 'agent-coordinator', userId },
+      ]);
+      await serverDB.insert(projects).values({
+        coordinatorAgentId: 'agent-coordinator',
+        id: 'project-creator-only',
+        identifier: 'CRE',
+        name: 'Creator project',
+        userId,
+      });
+      await serverDB.insert(topics).values({
+        agentId: 'agent-share-project',
+        id: 't-visitor-project',
+        projectId: 'project-creator-only',
+        senderId: 'visitor-user-project',
+        title: 'project',
+        userId,
+      });
+
+      const [item] = await topicModel.queryBySender({
+        agentId: 'agent-share-project',
+        senderId: 'visitor-user-project',
+      });
+
+      expect(item).not.toHaveProperty('projectId');
+      expect(item).not.toHaveProperty('projectWorkingDirectoryId');
     });
   });
 

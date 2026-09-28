@@ -1,7 +1,7 @@
 'use client';
 
 import type { AcceptanceCommentItem } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { BadgeCheck, GitCommitHorizontal } from 'lucide-react';
@@ -9,7 +9,6 @@ import { nanoid } from 'nanoid';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useActivityTime } from '@/hooks/useActivityTime';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
 import { buildAuthReturnUrl, currentReturnPath } from '@/utils/authReturnUrl';
@@ -23,6 +22,7 @@ import type { DiscussionEntry } from './discussionTimeline';
 import { buildDiscussionTimeline } from './discussionTimeline';
 import { useAcceptanceComments } from './hooks';
 import { styles, TIMELINE_NODE } from './styles';
+import TimelineEvent from './TimelineEvent';
 
 /** Enough room to start writing without the box dominating the column. */
 const COMPOSER_MIN_HEIGHT = 80;
@@ -71,36 +71,9 @@ const local = createStaticStyles(({ css }) => ({
   `,
 }));
 
-/** A round landing or an approval — a dot on the rail and one line of text. */
-const TimelineEvent = memo<{ at: Date; icon: typeof BadgeCheck; text: string }>(
-  ({ at, icon, text }) => {
-    const time = useActivityTime(at);
-    return (
-      <Flexbox
-        horizontal
-        align={'center'}
-        className={cx(styles.timelineEntry, styles.eventEntry)}
-        gap={12}
-      >
-        <span className={styles.eventDot}>
-          <Icon icon={icon} size={12} />
-        </span>
-        <Flexbox horizontal align={'center'} className={styles.event} gap={8} wrap={'wrap'}>
-          <span>{text}</span>
-          <span className={styles.meta} title={time.title}>
-            {time.text}
-          </span>
-        </Flexbox>
-      </Flexbox>
-    );
-  },
-);
-
-TimelineEvent.displayName = 'AcceptanceTimelineEvent';
-
 /**
  * A round. With a note it IS the agent's turn: one entry whose header says
- * "<agent> completed round N" and whose body is what they wrote. The landing
+ * "<agent> submitted round N for review" and whose body is what they wrote. The landing
  * and the author are the same sentence, so neither an event row above the note
  * nor a second author line is needed. Without a note it stays the plain event.
  */
@@ -183,12 +156,6 @@ const TimelineMessage = memo<{
 ));
 
 TimelineMessage.displayName = 'AcceptanceTimelineMessage';
-
-/*
- * The rail runs inside the boxes rather than under the avatars, so nothing here
- * needs to sit above the line: the opaque boxes cover it, the event dots stand
- * on it, and the gaps between turns are where it shows.
- */
 
 /**
  * The delivery's chat: one message per turn, strung on a rail with the rounds
@@ -282,11 +249,11 @@ const AcceptanceDiscussion = memo(() => {
       {timeline.length === 0 && (
         <span className={local.empty}>{t('acceptance.comments.empty')}</span>
       )}
-      {timeline.map((entry) => renderEntry(entry))}
+      <Flexbox className={styles.timeline}>{timeline.map((entry) => renderEntry(entry))}</Flexbox>
 
       {/* Last, like GitHub's Conversation: you read the thread, then answer it. */}
       {canComment ? (
-        <Flexbox className={cx(styles.timelineEntry, styles.nodelessEntry, styles.tailEntry)}>
+        <Flexbox className={styles.nodelessEntry}>
           <Flexbox className={styles.composerBlock}>
             <CommentComposer
               minHeight={COMPOSER_MIN_HEIGHT}

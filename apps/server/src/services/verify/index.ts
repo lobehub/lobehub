@@ -45,6 +45,7 @@ export {
   type RepairSpawner,
   VerifyRepairService,
 } from './repairService';
+export { settleFailedRepair } from './repairTerminal';
 export { type GenerateReportParams, VerifyReporterService } from './reporter';
 export {
   isCurrentReviewPrediction,

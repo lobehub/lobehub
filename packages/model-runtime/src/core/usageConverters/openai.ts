@@ -230,3 +230,47 @@ export const convertOpenAIImageUsage = (
 
   return withUsageCost(data as ModelUsage, pricing);
 };
+
+/**
+ * Token usage of `POST /audio/transcriptions` for token-billed models such as
+ * `gpt-4o-transcribe`. Duration-billed models (`whisper-1`) report
+ * `{ type: 'duration', seconds }` instead and yield no token usage.
+ */
+interface OpenAITranscriptionTokenUsage {
+  input_token_details?: { audio_tokens?: number; text_tokens?: number };
+  input_tokens?: number;
+  output_tokens?: number;
+  total_tokens?: number;
+}
+
+export const convertOpenAITranscriptionUsage = (
+  usage: unknown,
+  pricing?: Pricing,
+): ModelUsage | undefined => {
+  if (!usage || typeof usage !== 'object') return;
+
+  const { input_token_details, input_tokens, output_tokens, total_tokens } =
+    usage as OpenAITranscriptionTokenUsage;
+  if (typeof input_tokens !== 'number') return;
+
+  const inputTextTokens = input_token_details?.text_tokens ?? 0;
+  // Some OpenAI-compatible gateways (e.g. OpenRouter) omit the modality split. The
+  // input of a transcription is the audio itself (the text prompt is optional), so
+  // bill the unsplit remainder as audio rather than at the cheaper text rate.
+  const inputAudioTokens =
+    input_token_details?.audio_tokens ?? Math.max(0, input_tokens - inputTextTokens);
+  const outputTextTokens = output_tokens ?? 0;
+
+  const data = {
+    inputAudioTokens,
+    inputTextTokens,
+    outputTextTokens,
+    totalInputTokens: input_tokens,
+    totalOutputTokens: outputTextTokens,
+    totalTokens: total_tokens ?? input_tokens + outputTextTokens,
+  } satisfies ModelTokensUsage;
+
+  log('convertOpenAITranscriptionUsage data: %O', data);
+
+  return withUsageCost(data, pricing);
+};

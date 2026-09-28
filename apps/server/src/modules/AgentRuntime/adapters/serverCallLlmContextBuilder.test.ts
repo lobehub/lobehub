@@ -92,7 +92,7 @@ beforeEach(() => {
   getUserSettingsMock.mockResolvedValue({});
   marketCredsListMock.mockResolvedValue({ data: [] });
   workspaceFindByIdMock.mockResolvedValue(undefined);
-  serverMessagesEngineMock.mockResolvedValue([]);
+  serverMessagesEngineMock.mockResolvedValue({ messages: [], metadata: {} });
   resolveServerCallLlmContextHintsMock.mockResolvedValue({
     capabilities: {
       isCanUseAudio: () => false,

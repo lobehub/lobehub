@@ -5,6 +5,7 @@ import { runVerifyAfterEvidenceSubmission, runVerifyOnCompletion } from '../life
 import { VERIFY_ABANDONED_MS } from '../staleness';
 
 const {
+  attachTaskRunToAcceptance,
   claimEvidenceCollection,
   claimVerifying,
   execute,
@@ -13,9 +14,11 @@ const {
   operationFindById,
   finalizeVerifyRun,
   recordHeterogeneousDeliverableEvidence,
+  resolveTaskAcceptance,
   startEvidenceSubmission,
   updateStatus,
 } = vi.hoisted(() => ({
+  attachTaskRunToAcceptance: vi.fn(),
   claimEvidenceCollection: vi.fn(),
   claimVerifying: vi.fn(),
   evidenceListByRun: vi.fn(),
@@ -24,6 +27,7 @@ const {
   findByOperation: vi.fn(),
   operationFindById: vi.fn(),
   recordHeterogeneousDeliverableEvidence: vi.fn(),
+  resolveTaskAcceptance: vi.fn(),
   startEvidenceSubmission: vi.fn(),
   updateStatus: vi.fn(),
 }));
@@ -83,9 +87,7 @@ vi.mock('../evidenceSubmission', () => ({
   recordHeterogeneousDeliverableEvidence,
   startEvidenceSubmission,
 }));
-vi.mock('../taskAcceptance', () => ({
-  resolveTaskAcceptance: vi.fn().mockResolvedValue({ config: { enabled: true } }),
-}));
+vi.mock('../taskAcceptance', () => ({ attachTaskRunToAcceptance, resolveTaskAcceptance }));
 
 const db = {} as any;
 const params = { deliverable: 'done', goal: 'ship it', operationId: 'op-1' };
@@ -100,6 +102,7 @@ const confirmedRun = {
 describe('runVerifyOnCompletion — verification claim', () => {
   beforeEach(() => {
     [
+      attachTaskRunToAcceptance,
       claimEvidenceCollection,
       claimVerifying,
       evidenceListByRun,
@@ -108,9 +111,19 @@ describe('runVerifyOnCompletion — verification claim', () => {
       findByOperation,
       operationFindById,
       recordHeterogeneousDeliverableEvidence,
+      resolveTaskAcceptance,
       startEvidenceSubmission,
       updateStatus,
     ].forEach((m) => m.mockReset());
+    resolveTaskAcceptance.mockResolvedValue({
+      acceptance: { id: 'acceptance-1' },
+      config: { enabled: true },
+    });
+    // The real helper hands back the row the round ended up in; by default that is
+    // the row it was given.
+    attachTaskRunToAcceptance.mockImplementation(
+      async (_db: unknown, _userId: string, { run }: { run: unknown }) => run,
+    );
     findByOperation.mockResolvedValue(confirmedRun);
     operationFindById.mockResolvedValue({ id: 'op-1', model: 'm', provider: 'p', taskId: null });
     claimVerifying.mockResolvedValue(true);
@@ -169,6 +182,98 @@ describe('runVerifyOnCompletion — verification claim', () => {
     await runVerifyOnCompletion(db, 'u1', params);
 
     expect(startEvidenceSubmission).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * Regression: attaching onto an acceptance whose newest round is still a draft
+   * folds this run into it and deletes the source row, moving the operation id
+   * across. Keeping the id we came in with meant claiming and reading a row that
+   * no longer exists, and the completion path returned without judging anything.
+   */
+  it('follows the row the attach settled on when the round is folded', async () => {
+    findByOperation.mockResolvedValue({ ...confirmedRun, acceptanceId: null });
+    // Shaped like a real fold: a different row, still claimable. That the survivor
+    // keeps the live status is guaranteed by `VerifyRunModel.foldIntoRound`'s own
+    // test against the database.
+    attachTaskRunToAcceptance.mockResolvedValue({
+      ...confirmedRun,
+      acceptanceId: 'acceptance-1',
+      id: 'folded-run',
+      status: 'planned',
+    });
+    operationFindById.mockResolvedValue({
+      agentId: 'builder',
+      id: 'op-1',
+      model: 'm',
+      provider: 'p',
+      taskId: 'task-1',
+      topicId: 'topic-1',
+    });
+    evidenceListByRun.mockResolvedValue([{ checkItemId: 'c1', type: 'text' }]);
+
+    await runVerifyOnCompletion(db, 'u1', params);
+
+    expect(evidenceListByRun).toHaveBeenCalledWith('folded-run');
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * Regression: swallowing a failed Acceptance resolution left `verifierAgentId`
+   * undefined, which is also how "this Task has no Acceptance" reads. A transient
+   * failure would hand a Task that pins its own verifier to the builtin one and
+   * settle the Task on that verdict, where before the error stopped the run.
+   */
+  it('stops instead of judging with the fallback verifier when resolution fails', async () => {
+    resolveTaskAcceptance.mockRejectedValue(new Error('connection terminated'));
+    operationFindById.mockResolvedValue({
+      agentId: 'builder',
+      id: 'op-1',
+      model: 'm',
+      provider: 'p',
+      taskId: 'task-1',
+      topicId: 'topic-1',
+    });
+    evidenceListByRun.mockResolvedValue([{ checkItemId: 'c1', type: 'text' }]);
+
+    await runVerifyOnCompletion(db, 'u1', params);
+
+    expect(claimVerifying).not.toHaveBeenCalled();
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Regression: only the plan this pipeline creates itself was bound to the Task's
+   * Acceptance. A builder that authored its own plan through the CLI produced a
+   * round with no acceptance, which passed verification and then failed the Goal
+   * review with "no Acceptance" — parking a complete delivery on a person.
+   */
+  it('binds a task-bound round to its Acceptance before judging it', async () => {
+    const orphan = { ...confirmedRun, acceptanceId: null };
+    findByOperation.mockResolvedValue(orphan);
+    operationFindById.mockResolvedValue({
+      agentId: 'builder',
+      id: 'op-1',
+      model: 'm',
+      provider: 'p',
+      taskId: 'task-1',
+      topicId: 'topic-1',
+    });
+    evidenceListByRun.mockResolvedValue([{ checkItemId: 'c1', type: 'text' }]);
+
+    await runVerifyOnCompletion(db, 'u1', params);
+
+    expect(attachTaskRunToAcceptance).toHaveBeenCalledWith(
+      db,
+      'u1',
+      { acceptanceId: 'acceptance-1', run: orphan },
+      undefined,
+    );
+  });
+
+  it('leaves a run with no task out of the Acceptance binding', async () => {
+    await runVerifyOnCompletion(db, 'u1', params);
+
+    expect(attachTaskRunToAcceptance).not.toHaveBeenCalled();
   });
 
   it('judges directly when the builder already submitted evidence inside the Task run', async () => {

@@ -1,5 +1,5 @@
 import { type LobeChatDatabase, type Transaction } from '@lobechat/database';
-import type { FileAccessScope } from '@lobechat/types';
+import type { FileAccessScope, FileSource } from '@lobechat/types';
 import { ordinaryFileAccessScope } from '@lobechat/types';
 import { inferContentTypeFromImageUrl, nanoid, uuid } from '@lobechat/utils';
 import { TRPCError } from '@trpc/server';
@@ -47,6 +47,33 @@ export class FileService {
    */
   public async deleteFile(key: string) {
     return this.impl.deleteFile(key);
+  }
+
+  /**
+   * Reclaims an unreferenced upload and its exclusively owned stored object.
+   *
+   * Use when:
+   * - An import fails or its final owning document is permanently deleted.
+   *
+   * Expects:
+   * - The file is in the caller's scope and matches the requested upload source.
+   *
+   * Returns:
+   * - Void; referenced files and shared objects remain intact.
+   *
+   * Call stack:
+   * AgentDocumentsService.importFile / AgentDocumentVfsService.deletePermanently
+   *   -> {@link FileService.removeUnreferencedFile}
+   *     -> {@link FileModel.deleteUnreferenced}
+   *     -> {@link FileService.deleteFile}
+   */
+  public async removeUnreferencedFile(id: string, source: FileSource): Promise<void> {
+    const file = await this.fileModel.deleteUnreferenced(id, {
+      removeGlobalFile: serverDBEnv.REMOVE_GLOBAL_FILE,
+      source,
+    });
+    // The model returns an object key only after its final file reference is removed.
+    if (file) await this.deleteFile(file.url);
   }
 
   /**

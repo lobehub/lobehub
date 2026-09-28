@@ -7,10 +7,13 @@ import { PlaceholderVariablesProcessor } from '../PlaceholderVariables';
  * Regression for placeholder approach.
  *
  * Confirms that PlaceholderVariablesProcessor does substitute `{{...}}` tokens
- * inside `role: 'tool'` messages. If this test ever fails, it means the
- * processor is silently skipping tool messages and the lobehub skill identity
- * placeholders won't be filled in after the model calls
+ * inside the `role: 'tool'` results of the *activation* tools. If this test ever
+ * fails, it means the processor is silently skipping them and the lobehub skill
+ * identity placeholders won't be filled in after the model calls
  * `lobe-activator.activateSkill('lobehub')`.
+ *
+ * The complementary half of the contract — every other tool result is passed
+ * through verbatim — lives in `PlaceholderVariables.toolResultPassthrough.test.ts`.
  */
 describe('PlaceholderVariablesProcessor — tool message substitution', () => {
   const buildContext = (messages: any[]): PipelineContext => ({
@@ -72,7 +75,12 @@ describe('PlaceholderVariablesProcessor — tool message substitution', () => {
     });
 
     const ctx = buildContext([
-      { role: 'tool', tool_call_id: 't1', name: 'foo', content: 'agent={{agent_id}}' },
+      {
+        role: 'tool',
+        tool_call_id: 't1',
+        name: 'lobe-skills____activateSkill',
+        content: 'agent={{agent_id}}',
+      },
     ]);
 
     const result = await processor.process(ctx);
@@ -118,7 +126,12 @@ describe('PlaceholderVariablesProcessor — tool message substitution', () => {
     });
 
     const ctx = buildContext([
-      { role: 'tool', tool_call_id: 't1', name: 'foo', content: 'agent=[{{agent_id}}]' },
+      {
+        role: 'tool',
+        tool_call_id: 't1',
+        name: 'lobe-skills____activateSkill',
+        content: 'agent=[{{agent_id}}]',
+      },
     ]);
 
     const result = await processor.process(ctx);

@@ -11,14 +11,17 @@ import {
   CheckCircleIcon,
   CheckSquareIcon,
   FileTextIcon,
+  TargetIcon,
 } from 'lucide-react';
 import { memo, type PropsWithChildren, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ArticleSkeleton } from '@/components/Skeleton';
+import { goalStatusKey } from '@/features/AgentGoals/goalPresentation';
 import { useClientDataSWR } from '@/libs/swr';
 import { agentService } from '@/services/agent';
 import { documentService } from '@/services/document';
+import { goalService } from '@/services/goal';
 import { taskService } from '@/services/task';
 import { verifyService } from '@/services/verify';
 
@@ -158,6 +161,23 @@ export const getPreviewData = async (
           }
         : null;
     }
+    case 'goal': {
+      const { decisions, goal, nodes } = await goalService.getGraph(reference.goalId);
+      const tasks = nodes.filter((node) => node.kind === 'task');
+      const done = tasks.filter((node) =>
+        ['rejected', 'resolved', 'retired'].includes(node.status),
+      ).length;
+      const pending = decisions.filter((decision) => decision.status === 'pending').length;
+
+      return {
+        description: goal.requirement,
+        meta: [
+          pending > 0 ? t('goalList.needsYou', { count: pending }) : t(goalStatusKey(goal.status)),
+          t('goalList.taskProgress', { done, total: tasks.length }),
+        ].join(' · '),
+        title: goal.title,
+      };
+    }
     case 'task': {
       const result = await taskService.getDetail(reference.taskId);
       const task = result.data;
@@ -225,11 +245,13 @@ export const InternalEntityPreview = memo<InternalEntityPreviewProps>(
         ? BadgeCheckIcon
         : reference.type === 'agent'
           ? BotIcon
-          : reference.type === 'task'
-            ? CheckSquareIcon
-            : reference.type === 'verify'
-              ? CheckCircleIcon
-              : FileTextIcon;
+          : reference.type === 'goal'
+            ? TargetIcon
+            : reference.type === 'task'
+              ? CheckSquareIcon
+              : reference.type === 'verify'
+                ? CheckCircleIcon
+                : FileTextIcon;
     const typeLabel = t(`internalLink.preview.${reference.type}`);
 
     const content = isLoading ? (

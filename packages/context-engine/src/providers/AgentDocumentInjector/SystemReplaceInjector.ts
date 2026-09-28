@@ -3,7 +3,7 @@ import debug from 'debug';
 import { BaseProcessor } from '../../base/BaseProcessor';
 import type { PipelineContext, ProcessorOptions } from '../../types';
 import type { AgentContextDocument, AgentDocumentFilterContext } from './shared';
-import { combineDocuments, getDocumentsForPositions } from './shared';
+import { combineDocuments, getDocumentsForPositions, withRunStartedAt } from './shared';
 
 declare module '../../types' {
   interface PipelineContextMetadataOverrides {
@@ -55,7 +55,7 @@ export class AgentDocumentSystemReplaceInjector extends BaseProcessor {
     if (docs.length === 0) return this.markAsExecuted(context);
 
     const clonedContext = this.cloneContext(context);
-    const content = combineDocuments(docs, this.config);
+    const content = combineDocuments(docs, withRunStartedAt(this.config, context.messages));
     const now = Date.now();
     const message = {
       content,

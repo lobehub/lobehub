@@ -6,11 +6,56 @@ import type { ToolExecutionContext } from '../../types';
 // ==================== Mocks ====================
 
 const mockQuery = vi.fn();
+const mockProviderFindById = vi.fn();
+const mockFindEnabledByApplicationId = vi.fn();
 
 vi.mock('@/database/models/agentBotProvider', () => ({
   AgentBotProviderModel: vi.fn().mockImplementation(function () {
     return {
+      findById: mockProviderFindById,
+      findEnabledByApplicationId: mockFindEnabledByApplicationId,
       query: mockQuery,
+    };
+  }),
+}));
+
+// The topic carries the inbound IM context (`metadata.bot`) the runtime
+// routes current-conversation sends through.
+const mockTopicFindById = vi.fn();
+
+vi.mock('@/database/models/topic', () => ({
+  TopicModel: vi.fn().mockImplementation(function () {
+    return { findById: mockTopicFindById };
+  }),
+}));
+
+// Messenger install store — resolves the inbound `messengerInstallationKey`.
+const mockResolveByKey = vi.fn();
+
+vi.mock('@/server/services/messenger/installations', () => ({
+  getInstallationStore: vi.fn(() => ({ resolveByKey: mockResolveByKey })),
+}));
+
+// Per-bot runtime status, so the failed-bot skip can be exercised.
+const mockGetBotRuntimeStatus = vi.fn();
+
+vi.mock('@/server/services/gateway/runtimeStatus', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getBotRuntimeStatus: mockGetBotRuntimeStatus,
+}));
+
+// WeChat client — records which bot token each send went out through.
+const mockWechatSendMessage = vi.fn();
+const wechatClientTokens: string[] = [];
+
+vi.mock('@lobechat/chat-adapter-wechat', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  WechatApiClient: vi.fn().mockImplementation(function (botToken: string) {
+    return {
+      sendMessage: async (...args: unknown[]) => {
+        wechatClientTokens.push(botToken);
+        return mockWechatSendMessage(...args);
+      },
     };
   }),
 }));
@@ -38,6 +83,7 @@ const mockLinkDelete = vi.fn();
 const mockLinkDeleteByPlatform = vi.fn();
 const mockLinkFindById = vi.fn();
 const mockLinkFindByPlatform = vi.fn();
+const mockLinkFindByIdWithCredentials = vi.fn();
 
 vi.mock('@/database/models/messengerAccountLink', () => ({
   MessengerAccountLinkModel: vi.fn().mockImplementation(function () {
@@ -45,6 +91,7 @@ vi.mock('@/database/models/messengerAccountLink', () => ({
       delete: mockLinkDelete,
       deleteByPlatform: mockLinkDeleteByPlatform,
       findById: mockLinkFindById,
+      findByIdWithCredentials: mockLinkFindByIdWithCredentials,
       findByPlatform: mockLinkFindByPlatform,
       list: mockLinkList,
       setActiveAgent: mockLinkSetActiveAgent,
@@ -256,6 +303,24 @@ const mockProviderFor = (platform: string, credentials: Record<string, string>) 
     return [];
   });
 };
+
+beforeEach(() => {
+  mockGetBotRuntimeStatus.mockReset();
+  mockGetBotRuntimeStatus.mockImplementation(async (platform: string, applicationId: string) => ({
+    applicationId,
+    platform,
+    status: 'connected',
+    updatedAt: 0,
+  }));
+  mockTopicFindById.mockReset();
+  mockResolveByKey.mockReset();
+  mockProviderFindById.mockReset();
+  mockFindEnabledByApplicationId.mockReset();
+  mockLinkFindByIdWithCredentials.mockReset();
+  mockWechatSendMessage.mockReset();
+  mockWechatSendMessage.mockResolvedValue({});
+  wechatClientTokens.length = 0;
+});
 
 // ==================== Tests ====================
 
@@ -554,6 +619,220 @@ describe('messageRuntime', () => {
 
       expect(result.success).toBe(false);
       expect(result.content).toContain('No message service configured for platform');
+    });
+  });
+
+  // ==================== Connection routing ====================
+  // A WeChat account can hold both a per-agent bot integration and a System
+  // Bot connection. Sends must go out through the connection the caller
+  // named, or — for the conversation the run is replying in — through the one
+  // it arrived on; never through an arbitrary (possibly failed) bot.
+  describe('connection routing', () => {
+    const failedBot = {
+      applicationId: 'stale@im.bot',
+      credentials: { botToken: 'stale-bot-token' },
+      enabled: true,
+      id: 'bot-stale',
+      platform: 'wechat',
+      workspaceId: null,
+    };
+
+    const messengerLink = {
+      applicationId: 'fresh@im.bot',
+      credentials: { botToken: 'messenger-token' },
+      id: 'link-1',
+      platform: 'wechat',
+      tenantId: 'wx-user@im.wechat',
+    };
+
+    beforeEach(() => {
+      mockQuery.mockImplementation(async (params?: { platform?: string }) =>
+        params?.platform === 'wechat' ? [failedBot] : [],
+      );
+      mockGetBotRuntimeStatus.mockImplementation(
+        async (platform: string, applicationId: string) => ({
+          applicationId,
+          platform,
+          status: applicationId === failedBot.applicationId ? 'failed' : 'connected',
+          updatedAt: 0,
+        }),
+      );
+    });
+
+    it('sends through the System Bot connection the conversation arrived on, not a per-agent bot', async () => {
+      mockTopicFindById.mockResolvedValue({
+        metadata: {
+          bot: {
+            applicationId: 'messenger-wechat-wx-user@im.wechat',
+            messengerInstallationKey: 'wechat:wx-user@im.wechat',
+            platform: 'wechat',
+            platformThreadId: 'wechat:dm:wx-user@im.wechat',
+          },
+        },
+      });
+      mockResolveByKey.mockResolvedValue({
+        applicationId: 'fresh@im.bot',
+        botToken: 'messenger-token',
+        installationKey: 'wechat:wx-user@im.wechat',
+        metadata: {},
+        platform: 'wechat',
+        tenantId: 'wx-user@im.wechat',
+      });
+
+      const runtime = await messageRuntime.factory({ ...validContext, topicId: 'topic-1' });
+      const result = await runtime.sendMessage({
+        channelId: 'wx-user@im.wechat',
+        content: 'here is your file',
+        platform: 'wechat',
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockResolveByKey).toHaveBeenCalledWith('wechat:wx-user@im.wechat');
+      expect(wechatClientTokens).toEqual(['messenger-token']);
+    });
+
+    it('sends through the per-agent bot the conversation arrived on', async () => {
+      mockTopicFindById.mockResolvedValue({
+        metadata: {
+          bot: {
+            applicationId: 'agent-bot@im.bot',
+            platform: 'wechat',
+            platformThreadId: 'wechat:dm:wx-user@im.wechat',
+          },
+        },
+      });
+      mockFindEnabledByApplicationId.mockResolvedValue({
+        applicationId: 'agent-bot@im.bot',
+        credentials: { botToken: 'agent-bot-token' },
+        enabled: true,
+        platform: 'wechat',
+        workspaceId: null,
+      });
+
+      const runtime = await messageRuntime.factory({ ...validContext, topicId: 'topic-1' });
+      await runtime.sendMessage({
+        channelId: 'wx-user@im.wechat',
+        content: 'hi',
+        platform: 'wechat',
+      });
+
+      expect(mockFindEnabledByApplicationId).toHaveBeenCalledWith('wechat', 'agent-bot@im.bot');
+      expect(wechatClientTokens).toEqual(['agent-bot-token']);
+    });
+
+    it('honors an explicit messengerInstallationId instead of routing by platform', async () => {
+      mockLinkFindByIdWithCredentials.mockResolvedValue(messengerLink);
+
+      const runtime = await messageRuntime.factory(validContext);
+      const result = await runtime.sendMessage({
+        channelId: 'wx-user@im.wechat',
+        content: 'hi',
+        messengerInstallationId: 'link-1',
+        platform: 'wechat',
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockLinkFindByIdWithCredentials).toHaveBeenCalledWith('link-1', 'wechat', {});
+      expect(wechatClientTokens).toEqual(['messenger-token']);
+      expect(mockWechatSendMessage).toHaveBeenCalledWith('wx-user@im.wechat', 'hi', '');
+    });
+
+    it('honors an explicit botId even when it is not the platform default', async () => {
+      mockProviderFindById.mockResolvedValue({
+        applicationId: 'other@im.bot',
+        credentials: { botToken: 'explicit-bot-token' },
+        enabled: true,
+        platform: 'wechat',
+        workspaceId: null,
+      });
+
+      const runtime = await messageRuntime.factory(validContext);
+      await runtime.sendMessage({
+        botId: 'bot-other',
+        channelId: 'wx-user@im.wechat',
+        content: 'hi',
+        platform: 'wechat',
+      });
+
+      expect(mockProviderFindById).toHaveBeenCalledWith('bot-other');
+      expect(wechatClientTokens).toEqual(['explicit-bot-token']);
+    });
+
+    it('rejects a botId that belongs to a different platform', async () => {
+      mockProviderFindById.mockResolvedValue({
+        applicationId: 'discord-app',
+        credentials: { botToken: 'discord-token' },
+        enabled: true,
+        platform: 'discord',
+        workspaceId: null,
+      });
+
+      const runtime = await messageRuntime.factory(validContext);
+      const result = await runtime.sendMessage({
+        botId: 'bot-discord',
+        channelId: 'wx-user@im.wechat',
+        content: 'hi',
+        platform: 'wechat',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('is a discord connection, but the call targets wechat');
+    });
+
+    it('never auto-picks a failed bot, falling back to the WeChat System Bot connection', async () => {
+      mockLinkFindByPlatform.mockResolvedValue({ id: 'link-1', platform: 'wechat' });
+      mockLinkFindByIdWithCredentials.mockResolvedValue(messengerLink);
+
+      const runtime = await messageRuntime.factory(validContext);
+      const result = await runtime.sendMessage({
+        channelId: 'wx-user@im.wechat',
+        content: 'hi',
+        platform: 'wechat',
+      });
+
+      expect(result.success).toBe(true);
+      expect(wechatClientTokens).toEqual(['messenger-token']);
+    });
+
+    it('names the failed bot when there is nothing usable to fall back to', async () => {
+      mockLinkFindByPlatform.mockResolvedValue(undefined);
+
+      const runtime = await messageRuntime.factory(validContext);
+      const result = await runtime.sendMessage({
+        channelId: 'wx-user@im.wechat',
+        content: 'hi',
+        platform: 'wechat',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('Every enabled wechat bot is in a failed state');
+      expect(result.content).toContain('stale@im.bot');
+      expect(wechatClientTokens).toEqual([]);
+    });
+
+    it('keeps platform routing for a platform other than the conversation’s', async () => {
+      mockTopicFindById.mockResolvedValue({
+        metadata: {
+          bot: {
+            applicationId: 'messenger-wechat-wx-user@im.wechat',
+            messengerInstallationKey: 'wechat:wx-user@im.wechat',
+            platform: 'wechat',
+            platformThreadId: 'wechat:dm:wx-user@im.wechat',
+          },
+        },
+      });
+      mockProviderFor('discord', { botToken: 'discord-token' });
+      mockDiscordCreateMessage.mockResolvedValue({ id: 'msg-9' });
+
+      const runtime = await messageRuntime.factory({ ...validContext, topicId: 'topic-1' });
+      const result = await runtime.sendMessage({
+        channelId: 'ch-1',
+        content: 'cross-post',
+        platform: 'discord',
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockResolveByKey).not.toHaveBeenCalled();
     });
   });
 

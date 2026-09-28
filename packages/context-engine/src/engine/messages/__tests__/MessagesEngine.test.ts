@@ -682,6 +682,79 @@ describe('MessagesEngine', () => {
 
       expect(content[0].text).toContain('url="https://files.example.com/test.txt"');
     });
+
+    describe('oversized attachment previews', () => {
+      const oversizedParams = (overrides?: Partial<MessagesEngineParams>) =>
+        createBasicParams({
+          knowledge: {
+            fileContents: [
+              { content: 'agent,row\n'.repeat(20_000), fileId: 'agent-file', filename: 'a.csv' },
+            ],
+          },
+          messages: [
+            {
+              content: 'Summarize this',
+              createdAt: Date.now(),
+              fileList: [
+                {
+                  content: 'row,value\n'.repeat(20_000),
+                  fileType: 'text/csv',
+                  id: 'big-file',
+                  name: 'big.csv',
+                  size: 200_000,
+                  url: 'https://files.example.com/big.csv',
+                },
+              ],
+              id: 'msg-1',
+              role: 'user',
+              updatedAt: Date.now(),
+            } as UIChatMessage,
+          ],
+          ...overrides,
+        });
+
+      const userText = async (params: MessagesEngineParams) => {
+        const result = await new MessagesEngine(params).process();
+        return result.messages
+          .filter((message) => message.role === 'user')
+          .flatMap((message) =>
+            typeof message.content === 'string'
+              ? [message.content]
+              : (message.content as any[]).map((part) => part.text ?? ''),
+          )
+          .join('\n');
+      };
+
+      it('names readAttachment when the final tool set carries it', async () => {
+        const text = await userText(
+          oversizedParams({ toolsConfig: { tools: ['lobe-attachments'] } }),
+        );
+
+        expect(text).toContain('call readAttachment with fileId="big-file" and offset=401');
+        expect(text).toContain('call readAttachment with fileId="agent-file" and offset=401');
+      });
+
+      it('does not promise readAttachment when the tool is not enabled', async () => {
+        // Custom / exclusive tool modes, share visitors and legacy clients never enable it.
+        const text = await userText(
+          oversizedParams({ toolsConfig: { tools: ['lobe-web-browsing'] } }),
+        );
+
+        expect(text).toContain('no tool to read the rest is available here');
+        expect(text).not.toContain('readAttachment');
+      });
+
+      it('does not promise readAttachment when the model cannot call tools', async () => {
+        const text = await userText(
+          oversizedParams({
+            capabilities: { isCanUseFC: () => false },
+            toolsConfig: { tools: ['lobe-attachments'] },
+          }),
+        );
+
+        expect(text).not.toContain('readAttachment');
+      });
+    });
   });
 
   describe('tools config', () => {
@@ -1047,6 +1120,78 @@ Document content here.
         filteredAssistantMessages: 1,
         filteredToolCalls: 1,
       });
+    });
+  });
+
+  describe('Provider-reused tool_call ids', () => {
+    it('should send each step its own stored result when every step reuses `<tool>:0`', async () => {
+      // Stored shape of a Kimi (zeabur / nvidia / moonshot) run: every step's
+      // call id is `lobe-local-system____runCommand:0`, and every step succeeded.
+      const reusedId = 'lobe-local-system____runCommand:0';
+      const step = (n: number): UIChatMessage[] => [
+        {
+          content: '',
+          createdAt: Date.now(),
+          id: `assistant-${n}`,
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'runCommand',
+              arguments: `{"command":"echo ok-${n}"}`,
+              id: reusedId,
+              identifier: 'lobe-local-system',
+              type: 'builtin',
+            },
+          ],
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+        {
+          content: `Command completed successfully.\n\nStdout: ok-${n}`,
+          createdAt: Date.now(),
+          id: `tool-${n}`,
+          plugin: {
+            apiName: 'runCommand',
+            arguments: `{"command":"echo ok-${n}"}`,
+            identifier: 'lobe-local-system',
+            type: 'builtin',
+          },
+          role: 'tool',
+          tool_call_id: reusedId,
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+      ];
+
+      const engine = new MessagesEngine(
+        createBasicParams({
+          messages: [
+            {
+              content: 'run three commands',
+              createdAt: Date.now(),
+              id: 'user-1',
+              role: 'user',
+              updatedAt: Date.now(),
+            } as UIChatMessage,
+            ...step(1),
+            ...step(2),
+            ...step(3),
+          ],
+        }),
+      );
+
+      const result = await engine.process();
+      const toolMessages = result.messages.filter((m) => m.role === 'tool');
+      const callIds = result.messages
+        .filter((m) => m.role === 'assistant')
+        .flatMap((m) => (m as any).tool_calls.map((call: { id: string }) => call.id));
+
+      expect(toolMessages.map((m) => m.content)).toEqual([
+        'Command completed successfully.\n\nStdout: ok-1',
+        'Command completed successfully.\n\nStdout: ok-2',
+        'Command completed successfully.\n\nStdout: ok-3',
+      ]);
+      expect(new Set(callIds).size).toBe(3);
+      expect(toolMessages.map((m) => (m as any).tool_call_id)).toEqual(callIds);
+      expect(result.metadata.toolMessageReorder?.removedInvalidTools).toBe(0);
     });
   });
 

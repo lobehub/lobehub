@@ -14,7 +14,6 @@ import type {
   HeterogeneousTopicPin,
   LobeAgentAgencyConfig,
   RequestTrigger,
-  WorkingDirConfig,
 } from '@lobechat/types';
 import {
   applyTopicModelToHeterogeneousProvider,
@@ -47,23 +46,24 @@ import { buildRemoteDeviceHeteroContext } from '@/server/services/heterogeneousA
 import type { MarketService } from '@/server/services/market';
 
 import {
+  type DeviceDispatchRoute,
   getHeterogeneousAgentTitle,
   humanizeHeteroDispatchError,
   resolveHeteroDispatchErrorType,
   supportsCloudHeterogeneousSandbox,
 } from '../helpers/heteroErrors';
 import { resolveDeviceWorkingDirectoryConfig } from '../resolveDeviceWorkingDirectory';
-import type { ExecRunContext } from '../types';
+import type {
+  BindTopicWorkingDirectoryParams,
+  ExecRunContext,
+  InternalExecAgentParams,
+} from '../types';
 import { heteroOperationCapabilities } from './heteroOperationCapabilities';
 
 const log = debug('lobe-server:ai-agent-service');
 
 export interface HeteroDispatchDeps {
-  bindTopicWorkingDirectory: (params: {
-    config?: WorkingDirConfig;
-    currentWorkingDirectory?: string;
-    topicId: string;
-  }) => Promise<void>;
+  bindTopicWorkingDirectory: (params: BindTopicWorkingDirectoryParams) => Promise<void>;
   db: LobeChatDatabase;
   getMarketService: () => Promise<MarketService>;
   messageModel: MessageModel;
@@ -104,6 +104,8 @@ const finalizeHeteroDispatchError = async (
     agentId?: string;
     assistantMessageId: string;
     detail: string;
+    /** The device this dispatch was routed to, when it was a device dispatch. */
+    deviceRoute?: DeviceDispatchRoute;
     errorData?: DeviceUnavailableErrorData;
     /**
      * Client error type. Defaults to the generic `ServerAgentRuntimeError`; pass a
@@ -120,6 +122,7 @@ const finalizeHeteroDispatchError = async (
     agentId,
     assistantMessageId,
     detail,
+    deviceRoute,
     errorData,
     errorType = ChatErrorType.ServerAgentRuntimeError,
     message,
@@ -150,7 +153,7 @@ const finalizeHeteroDispatchError = async (
     {
       agentId,
       assistantMessageId,
-      error: { message, type: errorType },
+      error: { message, type: errorType, ...(deviceRoute && { deviceRoute }) },
       operationId,
       serializedHooks: hookDispatcher.getSerializedHooks(operationId),
       topicId,
@@ -270,6 +273,7 @@ export interface HeteroDispatchInput {
   localDeviceId?: string;
   maxSteps?: number;
   memberDeviceOverride?: Pick<LobeAgentAgencyConfig, 'boundDeviceId' | 'executionTarget'>;
+  onOperationCreated?: InternalExecAgentParams['onOperationCreated'];
   operationTaskId?: string;
   parentOperationId?: string;
   pinnedHeterogeneousTopicModel?: HeterogeneousTopicPin;
@@ -376,6 +380,8 @@ export const dispatchHeteroAgent = async (
     hookDispatcher.unregister(operationId);
     throw new Error('Failed to persist heterogeneous agent operation');
   }
+
+  await input.onOperationCreated?.(operationId);
 
   // Read resume session id for next-turn continuity.
   const heteroService = new HeterogeneousAgentService(deps.db, deps.userId, {
@@ -855,6 +861,13 @@ export const dispatchHeteroAgent = async (
         agentId: resolvedAgentId,
         assistantMessageId,
         detail: result.error ?? 'Device dispatch failed',
+        deviceRoute: remoteDeviceId
+          ? {
+              deviceId: remoteDeviceId,
+              userId: remoteDeviceUserId,
+              ...(remoteDeviceWorkspaceId ? { workspaceId: remoteDeviceWorkspaceId } : {}),
+            }
+          : undefined,
         errorData: result.errorData,
         errorType: resolveHeteroDispatchErrorType(result.error),
         message: humanizeHeteroDispatchError(result.error),
@@ -973,8 +986,10 @@ export const dispatchHeteroAgent = async (
       const deviceCwdConfig = resolveDeviceWorkingDirectoryConfig({
         deviceDefaultCwd: boundDevice?.defaultCwd,
         deviceId: dispatchDeviceId,
+        devicePlatform: boundDevice?.platform,
         initialWorkingDirectory: appContext?.initialTopicMetadata?.workingDirectory,
         initialWorkingDirectoryConfig: appContext?.initialTopicMetadata?.workingDirectoryConfig,
+        topicDeviceId: topic?.metadata?.boundDeviceId,
         topicWorkingDirectory: topic?.metadata?.workingDirectory,
         topicWorkingDirectoryConfig: topic?.metadata?.workingDirectoryConfig,
         workingDirByDevice: agentConfig.agencyConfig?.workingDirByDevice,
@@ -987,7 +1002,9 @@ export const dispatchHeteroAgent = async (
       // under the right project and the next turn reuses the same directory.
       await deps.bindTopicWorkingDirectory({
         config: deviceCwdConfig,
+        currentDeviceId: topic?.metadata?.boundDeviceId,
         currentWorkingDirectory: topic?.metadata?.workingDirectory,
+        deviceId: dispatchDeviceId,
         topicId,
       });
 
@@ -1016,6 +1033,7 @@ export const dispatchHeteroAgent = async (
         ? { error: 'DEVICE_NOT_FOUND', errorData: authorizationError, success: false }
         : await deviceGateway.dispatchAgentRun({
             ...heteroParams,
+            agentId: resolvedAgentId,
             args: heteroExecArgs,
             cwd: deviceCwd,
             deviceId: dispatchDeviceId,
@@ -1035,6 +1053,11 @@ export const dispatchHeteroAgent = async (
           agentId: resolvedAgentId,
           assistantMessageId,
           detail: result.error ?? 'Device dispatch failed',
+          deviceRoute: {
+            deviceId: dispatchDeviceId,
+            userId: deps.userId,
+            ...(dispatchWorkspaceId ? { workspaceId: dispatchWorkspaceId } : {}),
+          },
           errorData: result.errorData,
           errorType: resolveHeteroDispatchErrorType(result.error),
           message: humanizeHeteroDispatchError(result.error),

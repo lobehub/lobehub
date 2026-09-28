@@ -11,6 +11,7 @@ import {
   loadOrCreateConnectionId,
   loadSettings,
   normalizeUrl,
+  resolveDeviceMetricsBacklogPath,
   resolveServerUrl,
   saveActiveWorkspace,
   saveSettings,
@@ -151,5 +152,13 @@ describe('settings', () => {
 
     expect(fs.existsSync(settingsFile)).toBe(false);
     expect(loadOrCreateConnectionId()).toBe(id);
+  });
+});
+
+describe('resolveDeviceMetricsBacklogPath', () => {
+  it('keeps custom device ids that differ only in punctuation in separate backlogs', () => {
+    expect(resolveDeviceMetricsBacklogPath('prod/api')).not.toBe(
+      resolveDeviceMetricsBacklogPath('prod:api'),
+    );
   });
 });

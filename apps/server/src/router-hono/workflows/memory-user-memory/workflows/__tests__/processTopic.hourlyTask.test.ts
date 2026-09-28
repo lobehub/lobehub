@@ -1,4 +1,4 @@
-import { MemorySourceType } from '@lobechat/types';
+import { LayersEnum, MemorySourceType } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createStepRunner } from '@/server/workflows/testing/stepContext';
@@ -101,6 +101,59 @@ describe('processTopicHandler hourly task behavior', () => {
 
     expect(mocks.isHourlyMemoryExtractionCancellationRequested).toHaveBeenCalledTimes(2);
     expect(mocks.extractTopic).toHaveBeenCalledTimes(2);
+  });
+
+  it('never asks the extractor for the retired experience layer', async () => {
+    /**
+     * @example
+     * Experience extraction is retired; neither the default layer set nor an explicit
+     * request may reach the extractor with LayersEnum.Experience.
+     */
+    const explicit = createContext({
+      baseUrl: 'https://app.example.com',
+      layers: [LayersEnum.Experience, LayersEnum.Context, LayersEnum.Identity],
+      sources: [MemorySourceType.ChatTopic],
+      topicIds: ['t1'],
+      userIds: ['u1'],
+    });
+    await processTopicHandler(explicit as never);
+
+    const implicit = createContext({
+      baseUrl: 'https://app.example.com',
+      sources: [MemorySourceType.ChatTopic],
+      topicIds: ['t1'],
+      userIds: ['u1'],
+    });
+    await processTopicHandler(implicit as never);
+
+    expect(mocks.extractTopic).toHaveBeenCalledTimes(4);
+    for (const [call] of mocks.extractTopic.mock.calls) {
+      expect(call.layers).not.toContain(LayersEnum.Experience);
+    }
+    expect(mocks.extractTopic.mock.calls[2][0].layers).toEqual([
+      LayersEnum.Context,
+      LayersEnum.Preference,
+      LayersEnum.Activity,
+    ]);
+  });
+
+  it('skips both extraction blocks for a request that names only the retired experience layer', async () => {
+    /**
+     * @example
+     * The executor treats an empty layer list as unrestricted, so an Experience-only request
+     * must not reach it at all — neither the CEPA block nor the identity block runs.
+     */
+    const context = createContext({
+      baseUrl: 'https://app.example.com',
+      layers: [LayersEnum.Experience],
+      sources: [MemorySourceType.ChatTopic],
+      topicIds: ['t1'],
+      userIds: ['u1'],
+    });
+
+    await processTopicHandler(context as never);
+
+    expect(mocks.extractTopic).not.toHaveBeenCalled();
   });
 
   it('skips CEPA extraction when the hourly task is cancelled before heavy work', async () => {

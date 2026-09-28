@@ -395,7 +395,8 @@ const DeviceManager = memo<DeviceManagerProps>((props) => {
           <Flexbox
             className={styles.listScroll}
             gap={2}
-            paddingBlock={4}
+            // The personal page's card already insets the rows evenly.
+            paddingBlock={isWorkspace ? 4 : 0}
             paddingInline={isWorkspace ? 4 : 0}
           >
             {devices.map((device) => (
@@ -404,6 +405,9 @@ const DeviceManager = memo<DeviceManagerProps>((props) => {
                 isCurrent={isCurrent(device.deviceId)}
                 key={device.deviceId}
                 selected={device.deviceId === selectedId}
+                // The row preview stands in for the detail panel; once a panel is
+                // open the narrowed rows give that width back to the name.
+                showHealthPreview={!selectedId}
                 onSelect={() =>
                   setSelectedId(selectedId === device.deviceId ? undefined : device.deviceId)
                 }

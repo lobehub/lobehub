@@ -30,17 +30,22 @@ interface RejectedResponseProps {
    * rejecting the tool call — render a neutral note, not a warning.
    */
   skipped?: boolean;
+  /**
+   * The producer stopped waiting before anyone answered. Neutral like a skip:
+   * nothing went wrong and nobody made a choice.
+   */
+  timedOut?: boolean;
 }
 
-const RejectedResponse = memo<RejectedResponseProps>(({ apiName, reason, skipped }) => {
+const RejectedResponse = memo<RejectedResponseProps>(({ apiName, reason, skipped, timedOut }) => {
   const { t } = useTranslation('chat');
 
-  const copyKey = resolveRejectedCopyKey({ apiName, reason, skipped });
+  const copyKey = resolveRejectedCopyKey({ apiName, reason, skipped, timedOut });
 
   return (
     <Flexbox className={styles.container} gap={8}>
       <Flexbox horizontal align={'center'} gap={8}>
-        {skipped ? (
+        {skipped || timedOut ? (
           <Icon color={cssVar.colorTextTertiary} icon={CornerUpRight} size={16} />
         ) : (
           <Icon color={cssVar.colorWarning} icon={AlertTriangle} size={16} />

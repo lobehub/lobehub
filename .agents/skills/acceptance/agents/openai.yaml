@@ -1,0 +1,4 @@
+interface:
+  display_name: "Acceptance"
+  short_description: "Verify deliveries and collect evidence for review"
+  default_prompt: "Use $acceptance to verify this delivery against its requirements, collect product evidence, and publish the results for review."

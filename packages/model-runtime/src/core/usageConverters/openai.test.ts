@@ -2,7 +2,12 @@ import type { Pricing } from 'model-bank';
 import type OpenAI from 'openai';
 import { describe, expect, it, vi } from 'vitest';
 
-import { convertOpenAIImageUsage, convertOpenAIResponseUsage, convertOpenAIUsage } from './openai';
+import {
+  convertOpenAIImageUsage,
+  convertOpenAIResponseUsage,
+  convertOpenAITranscriptionUsage,
+  convertOpenAIUsage,
+} from './openai';
 
 describe('convertUsage', () => {
   it('distinguishes an explicit zero cache read from missing cache usage', () => {
@@ -808,5 +813,49 @@ describe('convertOpenAIImageUsage', () => {
       totalTokens: 4174,
       cost: 0.16647, // Based on pricing: 14 * 5/1M + 0 * 10/1M + 4160 * 40/1M = 0.00007 + 0 + 0.1664 = 0.16647
     });
+  });
+});
+
+describe('convertOpenAITranscriptionUsage', () => {
+  const pricing: Pricing = {
+    units: [
+      { name: 'textInput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
+      { name: 'audioInput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
+      { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
+    ],
+  };
+
+  it('prices audio and text input separately when the modality split is reported', () => {
+    const usage = convertOpenAITranscriptionUsage(
+      {
+        input_token_details: { audio_tokens: 50, text_tokens: 9 },
+        input_tokens: 59,
+        output_tokens: 21,
+        total_tokens: 80,
+        type: 'tokens',
+      },
+      pricing,
+    );
+
+    expect(usage).toMatchObject({ inputAudioTokens: 50, inputTextTokens: 9, outputTextTokens: 21 });
+    // (50 * 6 + 9 * 2.5 + 21 * 10) / 1M = 0.0005325, rounded to 6 decimals by computeChatCost
+    expect(usage?.cost).toBe(0.000_533);
+  });
+
+  it('bills unsplit gateway input as audio', () => {
+    const usage = convertOpenAITranscriptionUsage(
+      { input_tokens: 151, output_tokens: 0, total_tokens: 151 },
+      pricing,
+    );
+
+    expect(usage).toMatchObject({ inputAudioTokens: 151, inputTextTokens: 0 });
+    expect(usage?.cost).toBe(0.000_906);
+  });
+
+  it('returns undefined for duration-billed usage', () => {
+    expect(convertOpenAITranscriptionUsage({ seconds: 6, type: 'duration' }, pricing)).toBe(
+      undefined,
+    );
+    expect(convertOpenAITranscriptionUsage(undefined, pricing)).toBe(undefined);
   });
 });

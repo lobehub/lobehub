@@ -2,13 +2,12 @@
 
 import { type AssistantContentBlock, type UIChatMessage } from '@lobechat/types';
 import { Block, Flexbox, Icon, Markdown } from '@lobehub/ui';
-import { Accordion, Text } from '@lobehub/ui/base-ui';
+import { Accordion, Spin, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ScrollText, Workflow } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useAutoScroll } from '@/hooks/useAutoScroll';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
@@ -175,7 +174,7 @@ const ProcessingView = memo<{
           variant="outlined"
           width={24}
         >
-          <NeuralNetworkLoading size={16} />
+          <Spin size="small" variant="network" />
         </Block>
         <Flexbox horizontal align="center" gap={4}>
           <Text as="span" type="secondary" weight={500}>

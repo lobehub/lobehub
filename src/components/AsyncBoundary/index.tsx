@@ -1,9 +1,8 @@
 'use client';
 
 import { Center, Flexbox } from '@lobehub/ui';
+import { Spin } from '@lobehub/ui/base-ui';
 import { memo, type ReactNode } from 'react';
-
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 
 import AsyncError, { type AsyncErrorVariant } from '../AsyncError';
 
@@ -83,7 +82,7 @@ const AsyncBoundary = memo<AsyncBoundaryProps>(
       return (
         loading ?? (
           <Center flex={1} padding={48} width={'100%'}>
-            <NeuralNetworkLoading size={24} />
+            <Spin size="middle" />
           </Center>
         )
       );

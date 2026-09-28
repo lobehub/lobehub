@@ -17,6 +17,7 @@ import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
 import { createCodexQuotaReader } from '@/services/codexQuota';
 import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
 
+import QuotaAccountSwitcher from './QuotaAccountSwitcher';
 import type { QuotaMenuHelpers, QuotaWindowItem } from './QuotaMenu';
 import QuotaMenu, { createQuotaSourceKey } from './QuotaMenu';
 
@@ -464,6 +465,9 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, deviceId, env }) =>
       sourceKey={sourceKey}
       title={t('heteroAgent.codexQuota.title')}
       tooltip={t('heteroAgent.codexQuota.tooltip')}
+      renderHeader={(quota) => (
+        <QuotaAccountSwitcher placement="top" provider="codex" snapshot={quota} />
+      )}
     />
   );
 });

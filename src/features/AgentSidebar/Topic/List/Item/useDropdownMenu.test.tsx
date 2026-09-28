@@ -4,6 +4,7 @@
 import { renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { buildTopicPrompt } from './buildTopicPrompt';
 import { useTopicItemDropdownMenu } from './useDropdownMenu';
 
 const permissionMock = vi.hoisted(() => ({
@@ -11,6 +12,7 @@ const permissionMock = vi.hoisted(() => ({
   edit_own_content: true,
 }));
 const versionMock = vi.hoisted(() => ({ isDesktop: false }));
+const workspaceMock = vi.hoisted(() => ({ id: null as string | null }));
 
 vi.mock('antd', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -24,6 +26,10 @@ vi.mock('antd', async (importOriginal) => ({
       },
     }),
   },
+}));
+
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  useActiveWorkspaceId: () => workspaceMock.id,
 }));
 
 vi.mock('@/components/RenameModal', () => ({
@@ -99,6 +105,7 @@ describe('useTopicItemDropdownMenu', () => {
     permissionMock.create_content = true;
     permissionMock.edit_own_content = true;
     versionMock.isDesktop = false;
+    workspaceMock.id = null;
   });
 
   afterEach(() => {
@@ -109,6 +116,7 @@ describe('useTopicItemDropdownMenu', () => {
   it.each([
     ['copySessionId', 'topic-1'],
     ['copyLink', 'https://example.com/agent/agent-1/topic-1'],
+    ['copyTopicPrompt', buildTopicPrompt({ id: 'topic-1', title: 'Topic 1' })],
   ])('copies %s when the Clipboard API is unavailable', async (key, expected) => {
     vi.spyOn(navigator, 'clipboard', 'get').mockReturnValue(undefined as never);
     let copiedText: string | undefined;
@@ -128,6 +136,24 @@ describe('useTopicItemDropdownMenu', () => {
     expect(copy).toHaveBeenCalledWith('copy');
     expect(copiedText).toBe(expected);
     expect(document.querySelector('textarea')).toBeNull();
+  });
+
+  it('scopes the copied topic prompt to the active workspace', async () => {
+    workspaceMock.id = 'ws_1';
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(navigator, 'clipboard', 'get').mockReturnValue({ writeText } as never);
+    const { result } = renderHook(() =>
+      useTopicItemDropdownMenu({ id: 'topic-1', title: 'Topic 1' }),
+    );
+    const item = getMenuItem(result.current.dropdownMenu(), 'copyTopicPrompt');
+    if (!item || !('onClick' in item)) throw new Error('Expected copy action');
+
+    await item.onClick?.({} as never);
+
+    expect(writeText).toHaveBeenCalledWith(
+      buildTopicPrompt({ id: 'topic-1', title: 'Topic 1', workspaceId: 'ws_1' }),
+    );
+    expect(writeText.mock.calls[0][0]).toContain('lh topic view topic-1 -L 500 --workspace ws_1');
   });
 
   it('groups desktop topic actions by intent', () => {
@@ -152,6 +178,7 @@ describe('useTopicItemDropdownMenu', () => {
       'divider',
       'copySessionId',
       'copyLink',
+      'copyTopicPrompt',
       'divider',
       'duplicate',
       'forwardToAgent',
@@ -188,5 +215,6 @@ describe('useTopicItemDropdownMenu', () => {
 
     expect(getMenuItem(items, 'copySessionId')).not.toMatchObject({ disabled: true });
     expect(getMenuItem(items, 'copyLink')).not.toMatchObject({ disabled: true });
+    expect(getMenuItem(items, 'copyTopicPrompt')).not.toMatchObject({ disabled: true });
   });
 });

@@ -33,4 +33,11 @@ describe('taskTemplate constants', () => {
       type: RecommendedSkillType.Builtin,
     });
   });
+
+  it('keeps video generation default-installed as a recommended builtin', () => {
+    expect(RECOMMENDED_SKILLS).toContainEqual({
+      id: 'lobe-video-generation',
+      type: RecommendedSkillType.Builtin,
+    });
+  });
 });

@@ -34,7 +34,7 @@ import MarkdownImage from './MarkdownImage';
 import PreviewToolbar, { ToolbarActionButton } from './PreviewToolbar';
 
 // Deferred: pulls in react-pdf, only needed once a binary document is opened.
-const DocumentPreview = lazy(() => import('./DocumentPreview'));
+const DocumentPreview = lazy(() => import('@/features/FileViewer/Renderer/Document'));
 
 interface ImagePreviewProps {
   blob: Blob;

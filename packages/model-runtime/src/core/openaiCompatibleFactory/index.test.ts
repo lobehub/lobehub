@@ -17,6 +17,7 @@ import {
   createSignatureScope,
   serializeScopedSignature,
 } from '../../utils/signatureScope';
+import { createVideoWithCompletionMode } from '../../utils/videoCompletionMode';
 import * as openaiHelpers from '../contextBuilders/openai';
 import { createOpenAICompatibleRuntime } from './index';
 
@@ -4525,7 +4526,112 @@ describe('LobeOpenAICompatibleFactory', () => {
     });
   });
 
+  describe('createVideo completion mode', () => {
+    it('should default to polling and strip callback URLs', async () => {
+      const createVideo = vi.fn().mockResolvedValue({ inferenceId: 'video-1' });
+      const Runtime = createOpenAICompatibleRuntime({
+        createVideo,
+        provider: 'video-provider',
+      });
+      const runtime = new Runtime({ apiKey: 'test' });
+
+      await expect(
+        createVideoWithCompletionMode(
+          runtime,
+          {
+            callbackUrl: 'https://example.com/webhook',
+            model: 'video-model',
+            params: { prompt: 'A cat' },
+          },
+          { preferredCompletionMode: 'webhook' },
+        ),
+      ).resolves.toEqual({
+        completionMode: 'polling',
+        inferenceId: 'video-1',
+      });
+      expect(createVideo).toHaveBeenCalledWith(
+        {
+          model: 'video-model',
+          params: { prompt: 'A cat' },
+        },
+        expect.any(Object),
+      );
+    });
+
+    it('should use webhook mode for a webhook-only runtime', async () => {
+      const createVideo = vi.fn().mockResolvedValue({ inferenceId: 'video-2' });
+      const Runtime = createOpenAICompatibleRuntime({
+        createVideo,
+        provider: 'webhook-video-provider',
+        videoGenerationCapabilities: { completionModes: ['webhook'] },
+      });
+      const runtime = new Runtime({ apiKey: 'test' });
+      const payload = {
+        callbackUrl: 'https://example.com/webhook',
+        model: 'video-model',
+        params: { prompt: 'A cat' },
+      };
+
+      await expect(createVideoWithCompletionMode(runtime, payload)).resolves.toEqual({
+        completionMode: 'webhook',
+        inferenceId: 'video-2',
+      });
+      expect(createVideo).toHaveBeenCalledWith(payload, expect.any(Object));
+    });
+
+    it('should resolve model capabilities using the mapped upstream model', async () => {
+      const createVideo = vi.fn().mockResolvedValue({ inferenceId: 'video-3' });
+      const resolveCapabilities = vi
+        .fn()
+        .mockReturnValue({ completionModes: ['polling'] as const });
+      const Runtime = createOpenAICompatibleRuntime({
+        createVideo,
+        provider: 'mapped-video-provider',
+        videoGenerationCapabilities: resolveCapabilities,
+      });
+      const runtime = new Runtime({
+        apiKey: 'test',
+        modelIdMapping: { 'logical-video-model': 'upstream-video-model' },
+      });
+
+      await createVideoWithCompletionMode(runtime, {
+        model: 'logical-video-model',
+        params: { prompt: 'A cat' },
+      });
+
+      expect(resolveCapabilities).toHaveBeenCalledWith('upstream-video-model');
+    });
+  });
+
   describe('transcribe', () => {
+    it('should report token usage of token-billed transcription models', async () => {
+      vi.spyOn(instance['client'].audio.transcriptions, 'create').mockResolvedValue({
+        text: 'hello world',
+        usage: { input_tokens: 151, output_tokens: 0, total_tokens: 151 },
+      } as any);
+      const onUsage = vi.fn();
+
+      const file = new File([new Uint8Array([1, 2, 3])], 'speech.m4a', { type: 'audio/mp4' });
+      await instance.transcribe!({ file, model: 'gpt-4o-transcribe' }, { onUsage });
+
+      expect(onUsage).toHaveBeenCalledWith(
+        expect.objectContaining({ inputAudioTokens: 151, totalInputTokens: 151 }),
+      );
+    });
+
+    it('should not report usage for duration-billed transcription models', async () => {
+      vi.spyOn(instance['client'].audio.transcriptions, 'create').mockResolvedValue({
+        text: 'hello world',
+        usage: { seconds: 6, type: 'duration' },
+      } as any);
+      const onUsage = vi.fn();
+
+      const file = new File([new Uint8Array([1, 2, 3])], 'speech.m4a', { type: 'audio/mp4' });
+      await instance.transcribe!({ file, model: 'whisper-1' }, { onUsage });
+
+      expect(onUsage).not.toHaveBeenCalled();
+    });
+
     it('should transcribe audio and return the text', async () => {
       const transcribeMock = vi
         .spyOn(instance['client'].audio.transcriptions, 'create')

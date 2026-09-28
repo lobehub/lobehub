@@ -141,6 +141,7 @@ export const loadFile = async (
   let pages: DocumentPage[];
   let aggregatedContent = '';
   let loaderError: string | undefined;
+  let pageError: string | undefined;
   let aggregationError: string | undefined;
   let metadataError: string | undefined;
   let loaderSpecificMetadata: any | undefined;
@@ -157,6 +158,14 @@ export const loadFile = async (
       log('Loading pages with loader:', LoaderClass.name, 'for file:', filePath);
       pages = await loaderInstance.loadPages(filePath);
       log('Pages loaded successfully, count:', pages.length);
+
+      // Loaders report a whole-file failure as error pages instead of throwing.
+      // Surface it at the document level, where callers look, so a failed load
+      // is not mistaken for an empty file. A mix of good and failed pages (a
+      // PDF with one broken page) still counts as a successful load.
+      if (pages.length > 0 && pages.every((page) => page.metadata?.error)) {
+        pageError = [...new Set(pages.map((page) => page.metadata.error))].join('; ');
+      }
 
       try {
         // 2. Aggregate content using the instance
@@ -231,7 +240,8 @@ export const loadFile = async (
 
   // Combine all potential errors
   const combinedError =
-    [fsError, loaderError, aggregationError, metadataError].filter(Boolean).join('; ') || undefined;
+    [fsError, loaderError, pageError, aggregationError, metadataError].filter(Boolean).join('; ') ||
+    undefined;
   if (combinedError) log('Combined errors:', combinedError);
 
   // Construct the final FileDocument

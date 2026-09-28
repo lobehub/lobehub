@@ -2,6 +2,7 @@ import { createMediaFileRef } from '@lobechat/const/mediaRef';
 import type { ChatAudioItem, ChatFileItem, ChatImageItem, ChatVideoItem } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
+import { FILE_INLINE_MAX_CHARS, FILE_PREVIEW_CHARS } from './file';
 import { filesPrompts } from './index';
 
 describe('filesPrompts', () => {
@@ -381,6 +382,85 @@ describe('filesPrompts', () => {
       const result = filesPrompts({});
 
       expect(result).toEqual('');
+    });
+  });
+
+  describe('large attachments', () => {
+    it('inlines content up to the limit unchanged', () => {
+      const content = 'a'.repeat(FILE_INLINE_MAX_CHARS);
+      const result = filesPrompts({ addUrl: false, fileList: [{ ...mockFile, content }] });
+
+      expect(result).toContain(`size="1024">${content}</file>`);
+      expect(result).not.toContain('truncated="true"');
+    });
+
+    it('replaces oversized content with a marked preview', () => {
+      const content = `${'a'.repeat(FILE_PREVIEW_CHARS)}${'b'.repeat(FILE_INLINE_MAX_CHARS)}`;
+      const result = filesPrompts({ addUrl: true, fileList: [{ ...mockFile, content }] });
+
+      expect(result).toContain(
+        `url="https://example.com/test.pdf" lines="1-1" total_lines="1" total_chars="${content.length}" truncated="true">${'a'.repeat(FILE_PREVIEW_CHARS)}\n[This is a preview, not the complete file`,
+      );
+      expect(result).toContain(
+        `Line 1 is ${content.length} characters long and was cut at ${FILE_PREVIEW_CHARS}`,
+      );
+      expect(result).not.toContain('bbbb');
+    });
+
+    it('previews whole lines and names the readAttachment call for the next window', () => {
+      const content = 'row,value\n'.repeat(FILE_INLINE_MAX_CHARS / 10 + 1);
+      const result = filesPrompts({
+        addUrl: false,
+        canReadAttachment: true,
+        fileList: [{ ...mockFile, content }],
+      });
+
+      expect(result).toContain(`lines="1-400" total_lines="${FILE_INLINE_MAX_CHARS / 10 + 2}"`);
+      expect(result).toContain(
+        `To continue, call readAttachment with fileId="${mockFile.id}" and offset=401.`,
+      );
+    });
+
+    it('does not promise readAttachment when the request does not carry the tool', () => {
+      const content = 'row,value\n'.repeat(FILE_INLINE_MAX_CHARS / 10 + 1);
+      const result = filesPrompts({ addUrl: false, fileList: [{ ...mockFile, content }] });
+
+      expect(result).toContain(`lines="1-400" total_lines="${FILE_INLINE_MAX_CHARS / 10 + 2}"`);
+      expect(result).toContain('no tool to read the rest is available here');
+      expect(result).toContain(`Lines 401-${FILE_INLINE_MAX_CHARS / 10 + 2} were left out.`);
+      expect(result).not.toContain('readAttachment');
+    });
+
+    it('re-reads a long first line in full when readAttachment can hold it', () => {
+      // One line longer than the preview but within one readAttachment window.
+      const content = `${'a'.repeat(6000)}\n${'row,value\n'.repeat(FILE_INLINE_MAX_CHARS / 10)}`;
+      const result = filesPrompts({
+        addUrl: false,
+        canReadAttachment: true,
+        fileList: [{ ...mockFile, content }],
+      });
+
+      expect(result).toContain(
+        `Line 1 is 6000 characters long and was cut at ${FILE_PREVIEW_CHARS}. To read it in full and continue, call readAttachment with fileId="${mockFile.id}" and offset=1.`,
+      );
+      expect(result).not.toContain('cannot be paged');
+    });
+
+    it('marks stored text that was cut at parse time even when it is short', () => {
+      const result = filesPrompts({
+        addUrl: false,
+        fileList: [{ ...mockFile, content: 'head', originalCharCount: 9_000_000 }],
+      });
+
+      expect(result).toContain('truncated="true" original_chars="9000000"');
+      expect(result).toContain('only the first 4 of the original 9000000 characters were kept');
+    });
+
+    it('counts lines of oversized content', () => {
+      const content = 'line\n'.repeat(FILE_INLINE_MAX_CHARS / 5 + 1);
+      const result = filesPrompts({ addUrl: false, fileList: [{ ...mockFile, content }] });
+
+      expect(result).toContain(`total_lines="${FILE_INLINE_MAX_CHARS / 5 + 2}"`);
     });
   });
 });

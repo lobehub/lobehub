@@ -6,6 +6,8 @@ const mockDownloadMediaFromRawMessage = vi.hoisted(() => vi.fn());
 const mockGetTenantAccessToken = vi.hoisted(() => vi.fn().mockResolvedValue('tok'));
 const mockAddReaction = vi.hoisted(() => vi.fn());
 const mockRemoveReaction = vi.hoisted(() => vi.fn());
+const mockGetMessage = vi.hoisted(() => vi.fn());
+const mockGetUserInfo = vi.hoisted(() => vi.fn());
 
 vi.mock('@lobechat/chat-adapter-feishu', async (importOriginal) => ({
   // Keep the real `decodeLarkThreadId` — the messenger decodes the threadId
@@ -53,7 +55,7 @@ vi.mock('./gateway', () => ({
   }),
 }));
 
-const { FeishuClientFactory } = await import('./client');
+const { FeishuClientFactory, classifyLarkAuthError } = await import('./client');
 
 describe('FeishuWebhookClient.extractFiles', () => {
   // Verifies the post-Redis re-download path: when Feishu messages
@@ -302,6 +304,203 @@ describe('FeishuWebhookClient.extractFiles', () => {
   });
 });
 
+describe('FeishuWebhookClient.extractFiles — quoted (parent) message', () => {
+  // A Feishu reply only carries `parent_id`; the quoted message's text and
+  // attachments must be fetched with `GET /im/v1/messages/:id` and merged in,
+  // otherwise "@bot, put this customer into the pipeline sheet" while quoting
+  // a PDF gives the model nothing but the sentence.
+
+  const createClient = () => {
+    const client = new FeishuClientFactory().createClient(
+      {
+        applicationId: 'cli_test_app',
+        credentials: { appSecret: 'sec', encryptKey: 'enc' },
+        platform: 'feishu',
+        settings: {},
+      },
+      { appUrl: 'https://example.com' },
+    );
+    // Inject the API surface directly — the module-level `LarkApiClient`
+    // constructor mock is reset by `vi.restoreAllMocks()` in earlier suites.
+    (client as any)._api = { getMessage: mockGetMessage, getUserInfo: mockGetUserInfo };
+    return client;
+  };
+
+  const makeMessage = (raw: Record<string, unknown>, id = 'om_reply') =>
+    ({ id, attachments: [], raw, text: '' }) as any;
+
+  const replyRaw = () => ({
+    chat_id: 'oc_test',
+    content: JSON.stringify({ text: '@_user_1 能把这个客户落到我们的商机表里面吗？' }),
+    create_time: '1700000000000',
+    message_id: 'om_reply',
+    message_type: 'text',
+    parent_id: 'om_parent',
+    root_id: 'om_parent',
+  });
+
+  const parentFileItem = () => ({
+    body: { content: JSON.stringify({ file_key: 'file_v1', file_name: '深度调研.pdf' }) },
+    chat_id: 'oc_test',
+    create_time: '1699999990000',
+    message_id: 'om_parent',
+    msg_type: 'file',
+    sender: { id: 'ou_luken', id_type: 'open_id', sender_type: 'user' },
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockDownloadMediaFromRawMessage.mockReset();
+    mockGetMessage.mockReset();
+    mockGetUserInfo.mockReset();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('does not fetch anything extra when the message is not a reply', async () => {
+    mockDownloadMediaFromRawMessage.mockResolvedValue([]);
+    const client = createClient();
+    const raw = { ...replyRaw(), parent_id: undefined, root_id: undefined };
+
+    const result = await client.extractFiles!(makeMessage(raw));
+
+    expect(mockGetMessage).not.toHaveBeenCalled();
+    expect(result).toBeUndefined();
+    expect((raw as any).referenced_message).toBeUndefined();
+  });
+
+  it('downloads the quoted file with the parent message id and surfaces its text', async () => {
+    const buffer = Buffer.from('pdf-bytes');
+    mockGetMessage.mockResolvedValue({ items: [parentFileItem()] });
+    mockGetUserInfo.mockResolvedValue({ name: '陆肯' });
+    mockDownloadMediaFromRawMessage.mockImplementation(async (_api: any, raw: any) =>
+      raw.message_type === 'file'
+        ? [
+            {
+              buffer,
+              mimeType: 'application/octet-stream',
+              name: '深度调研.pdf',
+              type: 'file',
+            },
+          ]
+        : [],
+    );
+
+    const client = createClient();
+    const raw = replyRaw();
+    const result = await client.extractFiles!(makeMessage(raw));
+
+    expect(mockGetMessage).toHaveBeenCalledWith('om_parent');
+    // Second download call is for the normalized parent message: the
+    // resource API is keyed by the message that owns the file.
+    expect(mockDownloadMediaFromRawMessage).toHaveBeenCalledTimes(2);
+    expect(mockDownloadMediaFromRawMessage.mock.calls[1][1]).toEqual(
+      expect.objectContaining({
+        content: parentFileItem().body.content,
+        message_id: 'om_parent',
+        message_type: 'file',
+      }),
+    );
+    expect(result).toEqual([
+      { buffer, mimeType: 'application/octet-stream', name: '深度调研.pdf', size: undefined },
+    ]);
+    // The quoted text is handed to `formatPrompt` through the same
+    // `referenced_message` shape Discord uses.
+    expect((raw as any).referenced_message).toEqual({
+      author: { username: '陆肯' },
+      content: '[file] 深度调研.pdf',
+    });
+  });
+
+  it('merges quoted attachments after the direct ones', async () => {
+    const direct = Buffer.from('direct-image');
+    const quoted = Buffer.from('quoted-file');
+    mockGetMessage.mockResolvedValue({ items: [parentFileItem()] });
+    mockGetUserInfo.mockResolvedValue({ name: '陆肯' });
+    mockDownloadMediaFromRawMessage.mockImplementation(async (_api: any, raw: any) =>
+      raw.message_id === 'om_parent'
+        ? [{ buffer: quoted, mimeType: 'application/octet-stream', name: 'q.pdf', type: 'file' }]
+        : [{ buffer: direct, mimeType: 'image/jpeg', name: 'image.jpg', type: 'image' }],
+    );
+
+    const client = createClient();
+    const result = await client.extractFiles!(
+      makeMessage({
+        ...replyRaw(),
+        content: JSON.stringify({ image_key: 'img_1' }),
+        message_type: 'image',
+      }),
+    );
+
+    expect(result).toEqual([
+      expect.objectContaining({ name: 'image.jpg' }),
+      expect.objectContaining({ name: 'q.pdf' }),
+    ]);
+  });
+
+  it('falls back to the sender open_id when the contact API is unavailable', async () => {
+    mockGetMessage.mockResolvedValue({
+      items: [
+        {
+          ...parentFileItem(),
+          body: { content: JSON.stringify({ text: '客户：康诺亚，对接人：张三' }) },
+          msg_type: 'text',
+        },
+      ],
+    });
+    mockGetUserInfo.mockRejectedValue(new Error('99991672 Access denied'));
+    mockDownloadMediaFromRawMessage.mockResolvedValue([]);
+
+    const client = createClient();
+    const raw = replyRaw();
+    const result = await client.extractFiles!(makeMessage(raw));
+
+    expect(result).toBeUndefined();
+    expect((raw as any).referenced_message).toEqual({
+      author: { username: 'ou_luken' },
+      content: '客户：康诺亚，对接人：张三',
+    });
+  });
+
+  it('keeps the direct attachments when the parent message cannot be fetched', async () => {
+    const direct = Buffer.from('direct-image');
+    mockGetMessage.mockRejectedValue(new Error('230011 no permission'));
+    mockDownloadMediaFromRawMessage.mockResolvedValue([
+      { buffer: direct, mimeType: 'image/jpeg', name: 'image.jpg', type: 'image' },
+    ]);
+    const warn = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const client = createClient();
+    const raw = {
+      ...replyRaw(),
+      content: JSON.stringify({ image_key: 'k' }),
+      message_type: 'image',
+    };
+    const result = await client.extractFiles!(makeMessage(raw));
+
+    expect(result).toEqual([
+      { buffer: direct, mimeType: 'image/jpeg', name: 'image.jpg', size: undefined },
+    ]);
+    expect((raw as any).referenced_message).toBeUndefined();
+    expect(warn).toHaveBeenCalled();
+  });
+
+  it('ignores a recalled parent message', async () => {
+    mockGetMessage.mockResolvedValue({ items: [{ ...parentFileItem(), deleted: true }] });
+    mockDownloadMediaFromRawMessage.mockResolvedValue([]);
+
+    const client = createClient();
+    const raw = replyRaw();
+    const result = await client.extractFiles!(makeMessage(raw));
+
+    expect(mockDownloadMediaFromRawMessage).toHaveBeenCalledTimes(1);
+    expect(result).toBeUndefined();
+    expect((raw as any).referenced_message).toBeUndefined();
+  });
+});
+
 describe('Feishu messenger reactions', () => {
   const messenger = (platform: 'feishu' | 'lark' = 'lark') =>
     new FeishuClientFactory()
@@ -443,5 +642,88 @@ describe('Feishu messenger reactions', () => {
     mockAddReaction.mockResolvedValueOnce({ reactionId: 'rct_thinking' });
     await m.replaceReaction!('om_1', '\u{1F440}', '\u{1F914}');
     expect(mockRemoveReaction).toHaveBeenCalledWith('om_1', 'rct_received');
+  });
+});
+
+describe('FeishuClientFactory.validateCredentials', () => {
+  beforeEach(() => {
+    mockGetTenantAccessToken.mockReset();
+  });
+
+  it('passes when a tenant access token can be issued', async () => {
+    mockGetTenantAccessToken.mockResolvedValueOnce('tok');
+
+    await expect(
+      new FeishuClientFactory().validateCredentials({ appSecret: 's' }, {}, 'cli_x', 'feishu'),
+    ).resolves.toEqual({ valid: true });
+  });
+
+  it('surfaces the platform error instead of a bare authentication failure', async () => {
+    mockGetTenantAccessToken.mockRejectedValueOnce(
+      new Error('Lark auth error: 10003 invalid app_secret'),
+    );
+
+    const result = await new FeishuClientFactory().validateCredentials(
+      { appSecret: 'wrong' },
+      {},
+      'cli_x',
+      'feishu',
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toEqual([
+      {
+        code: 'invalid_credentials',
+        field: 'credentials',
+        message:
+          'Failed to authenticate with Feishu API: Lark auth error: 10003 invalid app_secret',
+      },
+    ]);
+  });
+
+  it('leaves the code out when the platform error is not recognized', async () => {
+    mockGetTenantAccessToken.mockRejectedValueOnce(new Error('Lark auth error: 424242 weird'));
+
+    const result = await new FeishuClientFactory().validateCredentials(
+      { appSecret: 's' },
+      {},
+      'cli_x',
+      'feishu',
+    );
+
+    expect(result.errors?.[0]).toEqual({
+      code: undefined,
+      field: 'credentials',
+      message: 'Failed to authenticate with Feishu API: Lark auth error: 424242 weird',
+    });
+  });
+
+  it('reports missing fields before calling the API', async () => {
+    const result = await new FeishuClientFactory().validateCredentials({}, {}, undefined, 'feishu');
+
+    expect(result.valid).toBe(false);
+    expect(result.errors?.map((e) => e.field)).toEqual(['applicationId', 'appSecret']);
+    expect(result.errors?.every((e) => e.code === 'missing_credentials')).toBe(true);
+    expect(mockGetTenantAccessToken).not.toHaveBeenCalled();
+  });
+});
+
+describe('classifyLarkAuthError', () => {
+  it.each([
+    ['Lark auth error: 10003 invalid param', 'invalid_credentials'],
+    ['Lark auth error: 10015 wrong app secret', 'invalid_credentials'],
+    ['Lark auth error: 20002 app_id and app_secret did not match', 'invalid_credentials'],
+    ['Lark auth error: 10014 app unauthorized', 'permission_denied'],
+    ['Lark auth error: 99991401 ip 1.2.3.4 is denied by app setting', 'permission_denied'],
+    ['Lark auth error: 11209 app not exist', 'application_not_found'],
+    ['Lark auth error: 99991400 request trigger frequency limit', 'rate_limited'],
+    ['Lark auth failed: 429 slow down', 'rate_limited'],
+    ['Lark auth failed: 503 <html>', 'upstream_unavailable'],
+    ['fetch failed', 'upstream_unavailable'],
+    ['Lark auth error: 424242 weird', undefined],
+    ['Lark auth failed: 400 bad', undefined],
+    [undefined, undefined],
+  ])('%s -> %s', (detail, code) => {
+    expect(classifyLarkAuthError(detail)).toBe(code);
   });
 });

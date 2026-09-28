@@ -335,6 +335,18 @@ export const ERROR_CODE_SPECS: SpecMap = {
     countAsFailure: false,
     description: 'Upstream rejected the serialized request body as too large.',
   },
+  [AgentRuntimeErrorType.ExceededImageLimit]: {
+    code: AgentRuntimeErrorType.ExceededImageLimit,
+    numericId: 4007,
+    category: 'request',
+    severity: 'info',
+    attribution: 'user',
+    httpStatus: 400,
+    retryable: false,
+    routeFallback: true,
+    countAsFailure: false,
+    description: 'Upstream rejected the request for exceeding its per-request image count limit.',
+  },
   // —— Cloud-only (tier 9) ——
   [ChatErrorType.LobeHubModelDeprecated]: {
     code: ChatErrorType.LobeHubModelDeprecated,
