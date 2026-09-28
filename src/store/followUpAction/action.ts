@@ -170,9 +170,9 @@ export class FollowUpActionImpl {
   };
 
   /**
-   * Fire a `negative` dismissal for a chip set the user saw but never clicked —
-   * the suggestions weren't compelling. Together with `followup_clicked` this
-   * makes chip click-through-rate computable per prompt version. No-op unless
+   * Fire a `negative` dismissal when an unclicked chip set is cleared or replaced.
+   * Leaving the conversation does not produce a dismissal, so these signals
+   * alone do not measure click-through rate across all impressions. No-op unless
    * the slot was actually shown (`ready`), carries a tracingId, and hasn't
    * already produced a click signal.
    */
