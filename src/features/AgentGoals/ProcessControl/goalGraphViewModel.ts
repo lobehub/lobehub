@@ -484,7 +484,9 @@ export const buildGoalGraphView = (
       continue;
     }
     if (node.kind !== 'task') continue;
-    if (node.status === 'active' && !goalClosed) {
+    if (node.status === 'active') {
+      // Stopped by the goal ending: nothing can advance it until a reopen.
+      if (goalClosed) continue;
       frontier.push({
         key: node.id,
         kind: view.isStale ? 'stale' : view.isVerifying ? 'verifying' : 'running',

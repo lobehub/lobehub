@@ -1279,6 +1279,66 @@ describe('GoalService', () => {
     expect(statusDuringCancel).toEqual(['paused']);
   });
 
+  it('refuses to end a goal someone resumed while its runs were being interrupted', async () => {
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ tasks: ['Runs'], title: 'Resumed mid-close' });
+    const created = await service.tick(graph.goal.id);
+    await new TaskModel(serverDB, userId).update(created.taskId!, { status: 'running' });
+    await serverDB.insert(topics).values({ id: 'tpc_race', userId });
+    await new TaskTopicModel(serverDB, userId).add(created.taskId!, 'tpc_race', { seq: 1 });
+    await new TaskTopicModel(serverDB, userId).updateStatus(created.taskId!, 'tpc_race', 'running');
+    // Another tab resumes the goal while the interruption pass is running.
+    vi.spyOn(TaskService.prototype, 'cancelTopic').mockImplementation(async () => {
+      await new GoalService(serverDB, userId).resume(graph.goal.id);
+    });
+
+    await expect(service.close(graph.goal.id, 'canceled')).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
+    expect((await new GoalModel(serverDB, userId).findById(graph.goal.id))?.status).toBe('running');
+  });
+
+  it('keeps runs already stopped reopenable when a later interruption fails', async () => {
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const topicModel = new TaskTopicModel(serverDB, userId);
+    const graph = await service.create({ tasks: ['First', 'Second'], title: 'Partial close' });
+    const [first, second] = graph.nodes.filter((node) => node.kind === 'task');
+    const taskIds: string[] = [];
+    for (const [index, node] of [first, second].entries()) {
+      const task = await new TaskService(serverDB, userId).createTask({
+        instruction: node.title,
+        name: node.title,
+      });
+      await new GoalGraphModel(serverDB, userId).bindTask(graph.goal.id, node.id, task.id);
+      await taskModel.update(task.id, { status: 'running' });
+      const topicId = `tpc_partial_${index}`;
+      await serverDB.insert(topics).values({ id: topicId, userId });
+      await topicModel.add(task.id, topicId, { seq: 1 });
+      await topicModel.updateStatus(task.id, topicId, 'running');
+      taskIds.push(task.id);
+    }
+    // The first interruption lands (the task reads `paused`, as cancelTopic
+    // leaves it); the second is unreachable.
+    let calls = 0;
+    vi.spyOn(TaskService.prototype, 'cancelTopic').mockImplementation(async (topicId) => {
+      calls += 1;
+      if (calls > 1) throw new Error('run unreachable');
+      const index = Number(topicId.at(-1));
+      await taskModel.update(taskIds[index], { status: 'paused' });
+      await topicModel.updateStatus(taskIds[index], topicId, 'canceled');
+    });
+
+    await expect(service.close(graph.goal.id, 'canceled')).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+    });
+    const stopped = (await taskModel.findByIds(taskIds)).filter(
+      (task) => task.status !== 'running',
+    );
+    expect(stopped).toHaveLength(1);
+    expect(stopped[0].status).toBe('backlog');
+  });
+
   describe('closing a goal with a main Agent turn in flight', () => {
     const managedGoal = async (title: string) => {
       const service = new GoalService(serverDB, userId);

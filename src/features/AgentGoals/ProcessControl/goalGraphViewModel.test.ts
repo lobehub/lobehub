@@ -316,7 +316,7 @@ describe('buildGoalGraphView', () => {
         NOW,
       );
 
-      expect(view.frontier[0]).toMatchObject({ kind: 'ready' });
+      expect(view.frontier).toHaveLength(0);
       expect(isRunningNode(view.byId.w1)).toBe(false);
       expect(view.byId.w1.startedAt).toBeUndefined();
       expect(view.byId.w1.attempts.at(-1)).toMatchObject({ endedAt: at(118), outcome: 'retired' });
