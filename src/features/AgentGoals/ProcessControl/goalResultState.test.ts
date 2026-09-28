@@ -1,4 +1,5 @@
-import { GOAL_ACCEPTANCE_TASK_TITLE } from '@lobechat/const/goal';
+import { GOAL_ACCEPTANCE_TASK_TITLE, GOAL_REPORT_TASK_TITLE } from '@lobechat/const/goal';
+import type { GoalReportState } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import type { GoalGraphView, GoalNodeView } from './goalGraphViewModel';
@@ -6,6 +7,7 @@ import {
   buildAbandonedNodes,
   buildCriterionOutcomes,
   buildResultTrail,
+  buildStoryChapters,
   buildUserDecisions,
   type CheckLike,
   deriveGoalResultStatus,
@@ -13,6 +15,7 @@ import {
   findFinalAcceptanceView,
   hasGoalResult,
   latestRoundRunId,
+  resultTrailSource,
 } from './goalResultState';
 
 const node = (
@@ -381,5 +384,159 @@ describe('buildResultTrail', () => {
     expect(trail[1].findings).toEqual([findingA]);
     expect(trail[2].findings).toEqual([orphan]);
     expect(trail[2].view).toBeUndefined();
+  });
+});
+
+describe('buildResultTrail without the wrap-up Task', () => {
+  const at = (minutes: number) => new Date(Date.UTC(2026, 8, 28, 0, minutes));
+  const task = (id: string, title: string, minutes: number) =>
+    ({
+      node: { createdAt: at(minutes), id, kind: 'task', resolvedAt: at(minutes), title },
+    }) as unknown as GoalNodeView;
+
+  /**
+   * Regression: the wrap-up Task that writes the Goal report showed up in the
+   * derived trail as the last step of the work it describes.
+   */
+  it('leaves the wrap-up Task and its output out of the derived trail', () => {
+    const work = task('task-a', 'Collect sources', 1);
+    const wrapUp = task('wrap', GOAL_REPORT_TASK_TITLE, 9);
+    const finding = {
+      node: { createdAt: at(10), id: 'f-wrap', kind: 'finding', resolvedAt: at(10), title: 'x' },
+      producedBy: { id: 'wrap' },
+    } as unknown as GoalNodeView;
+
+    const trail = buildResultTrail({
+      artifacts: [
+        { createdAt: at(2), nodeId: 'task-a', workVersionId: 'v-a' } as any,
+        { createdAt: at(9), nodeId: 'wrap', workVersionId: 'v-wrap' } as any,
+      ],
+      byId: { 'task': work, 'task-a': work, 'wrap': wrapUp },
+      findings: [finding],
+    });
+
+    expect(trail.map((step) => step.key)).toEqual(['task-a']);
+  });
+});
+
+describe('resultTrailSource', () => {
+  const metadata = {
+    chapters: [
+      {
+        detours: [],
+        findingIds: [],
+        narrative: 'We started from the brief.',
+        nodeIds: ['task-a'],
+        title: 'Reading the brief',
+        workVersionIds: [],
+      },
+    ],
+    graphCursor: 'evt-1',
+    headline: 'Shipped the report',
+    nextSteps: [],
+  };
+  const latest = {
+    content: '# Report',
+    createdAt: new Date(),
+    metadata,
+    version: 1,
+    workId: 'wk-report',
+    workVersionId: 'v-report',
+  };
+  const report = (state: Partial<GoalReportState>) => ({
+    report: {
+      dispatch: { acceptanceKey: 'k', dispatchedAt: '', nodeId: 'wrap', trigger: 'accepted' },
+      status: 'completed',
+      ...state,
+    } as GoalReportState,
+  });
+
+  /**
+   * The section switches between three states as the wrap-up run moves: it
+   * says the storyline is being written, then shows it, and falls back to the
+   * derived trail whenever there is no storyline to show.
+   */
+  it('shows the organizing state while the wrap-up run is in flight', () => {
+    expect(resultTrailSource(report({ status: 'running' })).kind).toBe('pending');
+    // A report from an earlier acceptance result is being rewritten: not current.
+    expect(resultTrailSource(report({ latest, status: 'running' })).kind).toBe('pending');
+  });
+
+  it('shows the storyline once the report is submitted', () => {
+    const source = resultTrailSource(report({ latest, status: 'completed' }));
+    expect(source.kind).toBe('story');
+    expect(source.kind === 'story' && source.metadata.headline).toBe('Shipped the report');
+  });
+
+  it('falls back to the derived trail without a report or when the run failed', () => {
+    expect(resultTrailSource({}).kind).toBe('derived');
+    expect(resultTrailSource(report({ status: 'failed' })).kind).toBe('derived');
+    expect(resultTrailSource(report({ latest, status: 'failed' })).kind).toBe('derived');
+    expect(resultTrailSource(report({ status: 'completed' })).kind).toBe('derived');
+  });
+
+  it('falls back when the stored storyline does not parse', () => {
+    const broken = { ...latest, metadata: { headline: 'x' } as any };
+    expect(resultTrailSource(report({ latest: broken, status: 'completed' })).kind).toBe('derived');
+  });
+});
+
+describe('buildStoryChapters', () => {
+  const view = (id: string, kind: string) =>
+    ({ node: { id, kind, title: id } }) as unknown as GoalNodeView;
+
+  it('resolves each chapter against the graph, in report order, with its detours', () => {
+    const byId = {
+      'dead': view('dead', 'task'),
+      'f-1': view('f-1', 'finding'),
+      'task-a': view('task-a', 'task'),
+      'task-b': view('task-b', 'task'),
+    };
+    const chapters = buildStoryChapters(
+      {
+        artifacts: [{ nodeId: 'task-b', workVersionId: 'v-1' } as any],
+        byId,
+      },
+      {
+        chapters: [
+          {
+            detours: [
+              {
+                kind: 'dead_end',
+                lesson: 'Check the API first',
+                nodeIds: ['dead', 'gone'],
+                reason: 'The API was retired',
+                title: 'Scraping the old API',
+              },
+            ],
+            findingIds: ['f-1', 'task-a', 'missing'],
+            narrative: 'First',
+            nodeIds: ['task-a'],
+            title: 'Find the source',
+            workVersionIds: [],
+          },
+          {
+            detours: [],
+            findingIds: [],
+            narrative: 'Then',
+            nodeIds: ['task-b'],
+            title: 'Write it up',
+            workVersionIds: ['v-1', 'v-gone'],
+          },
+        ],
+      },
+    );
+
+    expect(chapters.map((chapter) => chapter.chapter.title)).toEqual([
+      'Find the source',
+      'Write it up',
+    ]);
+    // Only findings that exist and are findings become list items.
+    expect(chapters[0].findings.map((item) => item.node.id)).toEqual(['f-1']);
+    // The local map: main path plus detour nodes still on the graph.
+    expect(chapters[0].mapNodeIds).toEqual(['task-a', 'dead']);
+    expect(chapters[0].detourNodeIds).toEqual(['dead']);
+    expect(chapters[1].artifacts.map((item) => item.workVersionId)).toEqual(['v-1']);
+    expect(chapters[1].detourNodeIds).toEqual([]);
   });
 });

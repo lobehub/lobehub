@@ -6,6 +6,7 @@ import type {
   GoalGraphSnapshot,
   GoalItem,
   GoalNodeAcceptance,
+  GoalNodeWorkVersionRelation,
   GoalReportState,
   GoalSpend,
   WorkType,
@@ -59,9 +60,21 @@ export interface GoalArtifactView {
    */
   agentDocumentId?: string;
   createdAt: Date;
+  /** `file` Work only — its file-store id, which acceptance evidence cites. */
+  fileId?: string;
+  /** `file` Work only — size in bytes. */
+  fileSize?: number;
   identifier: string | null;
+  /** `file` Work only — MIME type. */
+  mimeType?: string;
   /** The task node that produced it — the goal-level list has no other owner. */
   nodeId: string;
+  /**
+   * How the node relates to the version: `produced` it, or took it as `input`.
+   * One version can be linked to several nodes; its producer is the one that
+   * owns it on a goal-level list.
+   */
+  relation?: GoalNodeWorkVersionRelation;
   /** Canonical resource identity; the document id an in-app link addresses. */
   resourceId: string | null;
   title: string | null;
@@ -339,14 +352,17 @@ export const buildGoalGraphView = (
 
   // Only Works that were named by the read-time join can be shown, and the
   // responsible task's own `task` Work is execution bookkeeping rather than a
-  // deliverable — it would otherwise head every task's list with itself.
+  // deliverable — it would otherwise head every task's list with itself. The
+  // wrap-up `goal_report` describes the result rather than being part of it;
+  // the page reads it from `report`, never as a deliverable.
   const artifactsByNode = new Map<string, GoalArtifactView[]>();
   for (const link of workVersions) {
-    if (!link.work || link.work.type === 'task') continue;
+    if (!link.work || link.work.type === 'task' || link.work.type === 'goal_report') continue;
     const artifact: GoalArtifactView = {
       createdAt: link.createdAt,
       identifier: link.work.identifier,
       nodeId: link.nodeId,
+      relation: link.relation,
       resourceId: link.work.resourceId,
       title: link.work.title,
       type: link.work.type,
@@ -355,6 +371,9 @@ export const buildGoalGraphView = (
       workId: link.work.workId,
       workVersionId: link.workVersionId,
       ...(link.work.agentDocumentId ? { agentDocumentId: link.work.agentDocumentId } : {}),
+      ...(link.work.fileId ? { fileId: link.work.fileId } : {}),
+      ...(link.work.fileSize !== undefined ? { fileSize: link.work.fileSize } : {}),
+      ...(link.work.mimeType ? { mimeType: link.work.mimeType } : {}),
     };
     artifactsByNode.set(link.nodeId, [...(artifactsByNode.get(link.nodeId) ?? []), artifact]);
   }
@@ -499,6 +518,25 @@ export const buildGoalGraphView = (
     spend,
   };
 };
+
+/**
+ * The same graph narrowed to a set of nodes: edges, frontier and blocked rows
+ * keep only what stays inside. `edges` overrides the edge set for a host that
+ * already projected its own (the experiment scope).
+ */
+export const scopeGraphView = (
+  graph: GoalGraphView,
+  nodeIds: ReadonlySet<string>,
+  edges?: GoalGraphEdge[],
+): GoalGraphView => ({
+  ...graph,
+  blocked: graph.blocked.filter((view) => nodeIds.has(view.node.id)),
+  edges:
+    edges ??
+    graph.edges.filter((edge) => nodeIds.has(edge.sourceNodeId) && nodeIds.has(edge.targetNodeId)),
+  frontier: graph.frontier.filter((item) => nodeIds.has(item.view.node.id)),
+  nodes: graph.nodes.filter((view) => nodeIds.has(view.node.id)),
+});
 
 const resolvedTime = (node: GoalGraphNode) =>
   (node.resolvedAt ?? node.updatedAt ?? node.createdAt).getTime();

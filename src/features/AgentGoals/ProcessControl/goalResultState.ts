@@ -1,5 +1,13 @@
 import { GOAL_REPORT_TASK_TITLE } from '@lobechat/const/goal';
-import type { AcceptanceStatus, GoalGraphDecision, ToulminVerdict } from '@lobechat/types';
+import type {
+  AcceptanceStatus,
+  GoalGraphDecision,
+  GoalReportChapter,
+  GoalReportMetadata,
+  GoalReportVersion,
+  ToulminVerdict,
+} from '@lobechat/types';
+import { GoalReportMetadataSchema } from '@lobechat/types';
 
 import { isGoalAcceptanceTask } from './coordinatorCopy';
 import type { GoalArtifactView, GoalGraphView, GoalNodeView } from './goalGraphViewModel';
@@ -299,6 +307,10 @@ export const countGoalTasks = (graph: Pick<GoalGraphView, 'nodes'>): number =>
       view.node.title !== GOAL_REPORT_TASK_TITLE,
   ).length;
 
+/** The coordinator's wrap-up Task, which writes the report about the Goal. */
+export const isGoalReportTaskView = (view: Pick<GoalNodeView, 'node'>): boolean =>
+  view.node.kind === 'task' && view.node.title === GOAL_REPORT_TASK_TITLE;
+
 /**
  * One step of the result's audit trail: the work that ran, what it concluded,
  * and what it produced. `view` is absent for conclusions no task claims.
@@ -340,6 +352,7 @@ export const buildResultTrail = (
 
   for (const finding of graph.findings) {
     const producer = finding.producedBy && graph.byId[finding.producedBy.id];
+    if (producer && isGoalReportTaskView(producer)) continue;
     if (producer) stepOf(producer.node.id).findings.push(finding);
     else orphans.push(finding);
   }
@@ -348,7 +361,8 @@ export const buildResultTrail = (
   }
 
   const ordered = [...steps.values()]
-    .filter((step) => step.view)
+    // The wrap-up Task describes the result; it is not a step toward it.
+    .filter((step) => step.view && !isGoalReportTaskView(step.view))
     .sort((a, b) => settledAt(a.view!) - settledAt(b.view!));
   for (const step of ordered) {
     step.findings.sort((a, b) => settledAt(a) - settledAt(b));
@@ -362,4 +376,82 @@ export const buildResultTrail = (
       key: 'unattributed',
     });
   return ordered;
+};
+
+// ---------------------------------------------------------------------------
+// 探索过程 — the wrap-up storyline, or the derived trail
+// ---------------------------------------------------------------------------
+
+/**
+ * Where the 探索过程 section reads from:
+ *
+ * - `pending` — the wrap-up agent is writing the storyline right now; the
+ *               graph poll swaps it in when it lands.
+ * - `story`   — the storyline submitted for the latest acceptance result.
+ * - `derived` — no report, the run failed, or its metadata does not parse:
+ *               the trail {@link buildResultTrail} derives from the graph.
+ */
+export type ResultTrailSource =
+  | { kind: 'derived' }
+  | { kind: 'pending' }
+  | { kind: 'story'; metadata: GoalReportMetadata; report: GoalReportVersion };
+
+export const resultTrailSource = (graph: Pick<GoalGraphView, 'report'>): ResultTrailSource => {
+  const { report } = graph;
+  if (report?.status === 'running') return { kind: 'pending' };
+  if (report?.status !== 'completed' || !report.latest) return { kind: 'derived' };
+
+  // Stored metadata went through the same schema on submit; re-checking here
+  // keeps a row written by an older schema from breaking the page.
+  const parsed = GoalReportMetadataSchema.safeParse(report.latest.metadata);
+  if (!parsed.success) return { kind: 'derived' };
+  return { kind: 'story', metadata: parsed.data, report: report.latest };
+};
+
+export interface StoryChapterView {
+  artifacts: GoalArtifactView[];
+  chapter: GoalReportChapter;
+  /** Detour nodes still on the graph, called out on the chapter's local map. */
+  detourNodeIds: string[];
+  findings: GoalNodeView[];
+  index: number;
+  /** Main-path nodes plus detour nodes — what the chapter's local map shows. */
+  mapNodeIds: string[];
+}
+
+const unique = (ids: string[]) => [...new Set(ids)];
+
+/**
+ * The storyline's chapters, in the order the report wrote them, with their
+ * references resolved against the live graph. A reference the graph no longer
+ * carries is dropped rather than rendered as an empty row.
+ */
+export const buildStoryChapters = (
+  graph: Pick<GoalGraphView, 'artifacts' | 'byId'>,
+  metadata: Pick<GoalReportMetadata, 'chapters'>,
+): StoryChapterView[] => {
+  const artifactByVersion = new Map(
+    graph.artifacts.map((artifact) => [artifact.workVersionId, artifact]),
+  );
+  const onGraph = (id: string) => !!graph.byId[id];
+
+  return metadata.chapters.map((chapter, index) => {
+    const detourNodeIds = unique(chapter.detours.flatMap((detour) => detour.nodeIds)).filter(
+      onGraph,
+    );
+    return {
+      artifacts: unique(chapter.workVersionIds).flatMap((id) => {
+        const artifact = artifactByVersion.get(id);
+        return artifact ? [artifact] : [];
+      }),
+      chapter,
+      detourNodeIds,
+      findings: unique(chapter.findingIds).flatMap((id) => {
+        const view = graph.byId[id];
+        return view?.node.kind === 'finding' ? [view] : [];
+      }),
+      index,
+      mapNodeIds: unique([...chapter.nodeIds.filter(onGraph), ...detourNodeIds]),
+    };
+  });
 };

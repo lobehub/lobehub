@@ -169,8 +169,13 @@ export class GoalActionImpl {
           'useFetchGoalGraph/success',
         );
       },
+      // The wrap-up report is written after the Goal settles, so a finished
+      // Goal keeps polling until its report run ends and the storyline lands.
       refreshInterval: (graph) =>
-        graph && SERVER_ADVANCING_STATUSES.has(graph.goal.status) ? GOAL_GRAPH_POLL_INTERVAL : 0,
+        graph &&
+        (SERVER_ADVANCING_STATUSES.has(graph.goal.status) || graph.report?.status === 'running')
+          ? GOAL_GRAPH_POLL_INTERVAL
+          : 0,
       revalidateOnFocus: true,
     });
 

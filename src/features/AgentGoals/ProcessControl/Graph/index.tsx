@@ -32,7 +32,12 @@ import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
 import { type GoalGraphNodeKind, graphNodeKind, graphNodeLabel } from '../../Experiments/model';
-import { type GoalGraphView, type GoalNodeView, isRunningNode } from '../goalGraphViewModel';
+import {
+  type GoalGraphView,
+  type GoalNodeView,
+  isRunningNode,
+  scopeGraphView,
+} from '../goalGraphViewModel';
 import { KindDot } from '../shared';
 import { edgeDirection } from './edgeRouting';
 import ExperimentGroup, { type ExperimentGroupData } from './ExperimentGroup';
@@ -192,6 +197,8 @@ interface GraphProps {
    */
   fullscreen?: boolean;
   graph: GoalGraphView;
+  /** Nodes to call out on the map — a chapter's detours in the report's local map. */
+  highlightedIds?: ReadonlySet<string>;
   onFullscreenChange?: (fullscreen: boolean) => void;
   onSelect: (nodeId: string) => void;
   /** The coordinator is still decomposing: show ghost task cards under the problem. */
@@ -287,7 +294,7 @@ const GHOST_RANK_GAP = 56;
 const GHOST_HEIGHT = 88;
 
 const Canvas = memo<
-  Pick<GraphProps, 'graph' | 'onSelect' | 'planning' | 'selectedId'> & {
+  Pick<GraphProps, 'graph' | 'highlightedIds' | 'onSelect' | 'planning' | 'selectedId'> & {
     className: string;
     fullscreen: boolean;
     hiddenKinds: ReadonlySet<GoalGraphNodeKind>;
@@ -305,6 +312,7 @@ const Canvas = memo<
     fullscreen,
     graph,
     hiddenKinds,
+    highlightedIds,
     onSelect,
     planning,
     refitKey,
@@ -429,6 +437,7 @@ const Canvas = memo<
             const data: GraphNodeData = {
               // Not started and still blocked — it is context, not the story.
               dim: item.node.status === 'proposed' && item.blockers.length > 0,
+              highlighted: highlightedIds?.has(item.node.id) ?? false,
               isGate,
               memberCount: experimentMembers(
                 { nodes: graph.nodes.map((view) => view.node), edges: graph.edges },
@@ -481,6 +490,7 @@ const Canvas = memo<
       [
         graph,
         baseNodes,
+        highlightedIds,
         visibleIds,
         positions,
         selectedId,
@@ -688,13 +698,7 @@ const Graph = memo<GraphProps>(({ extra, fullscreen = false, onFullscreenChange,
   const { collapsed, scopeId } = navigation;
   const scopeIds = new Set(navigation.nodes.map((node) => node.id));
   const scopedGraph: GoalGraphView = scopeId
-    ? {
-        ...props.graph,
-        nodes: props.graph.nodes.filter((item) => scopeIds.has(item.node.id)),
-        edges: navigation.edges,
-        frontier: props.graph.frontier.filter((item) => scopeIds.has(item.view.node.id)),
-        blocked: props.graph.blocked.filter((item) => scopeIds.has(item.node.id)),
-      }
+    ? scopeGraphView(props.graph, scopeIds, navigation.edges)
     : props.graph;
   const openNode = useChatStore((s) => s.openGoalNode);
   const [preferredView, setView] = useState<GraphViewMode>('stage');

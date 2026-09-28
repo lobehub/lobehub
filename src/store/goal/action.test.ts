@@ -55,6 +55,23 @@ describe('GoalAction', () => {
       },
     );
 
+    it('keeps polling a finished goal while its wrap-up report is being written', () => {
+      useGoalStore.getState().useFetchGoalGraph('goal-1');
+      const options = vi.mocked(useClientDataSWR).mock.calls.at(-1)?.[2] as {
+        refreshInterval: (graph?: unknown) => number;
+      };
+
+      expect(
+        options.refreshInterval({ goal: { status: 'achieved' }, report: { status: 'running' } }),
+      ).toBeGreaterThan(0);
+      expect(
+        options.refreshInterval({ goal: { status: 'achieved' }, report: { status: 'completed' } }),
+      ).toBe(0);
+      expect(
+        options.refreshInterval({ goal: { status: 'failed' }, report: { status: 'failed' } }),
+      ).toBe(0);
+    });
+
     it('does not poll before the first snapshot arrives', () => {
       useGoalStore.getState().useFetchGoalGraph('goal-1');
       const options = vi.mocked(useClientDataSWR).mock.calls.at(-1)?.[2] as {

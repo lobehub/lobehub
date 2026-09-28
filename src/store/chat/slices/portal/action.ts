@@ -728,6 +728,16 @@ export class ChatPortalActionImpl {
     );
   };
 
+  /** The wrap-up report's full text, read beside the result page. */
+  openGoalReport = (goalId: string): void => {
+    this.#get().pushPortalView({ goalId, type: PortalViewType.GoalReport });
+  };
+
+  /** One storyline chapter's local map: its main path and the detours off it. */
+  openGoalReportChapter = (goalId: string, chapterIndex: number): void => {
+    this.#get().pushPortalView({ chapterIndex, goalId, type: PortalViewType.GoalReportChapter });
+  };
+
   openGoalMetric = (goalId: string, metric: GoalMetricKind): void => {
     this.#get().pushPortalView({ goalId, metric, type: PortalViewType.GoalMetric });
   };
