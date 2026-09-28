@@ -176,16 +176,21 @@ export class ToolMessageReorder extends BaseProcessor {
         continue;
       }
 
-      const unanswered = callers.filter(
-        (callerIndex) => !toolMessages.has(resultKey(callerIndex, message.tool_call_id)),
-      );
-      // The nearest call before the result; a result stored ahead of its call
-      // (out-of-order rows) answers the next unanswered one.
+      const isAnswered = (callerIndex: number) =>
+        toolMessages.has(resultKey(callerIndex, message.tool_call_id));
+      // A result answers the nearest call before it; once that call has one,
+      // this row is a duplicate. Only a result stored ahead of every call
+      // (out-of-order rows) falls forward to the first unanswered one.
+      const precedingCaller = callers.findLast((callerIndex) => callerIndex < index);
       const callerIndex =
-        unanswered.findLast((callerIndex) => callerIndex < index) ?? unanswered[0];
+        precedingCaller === undefined
+          ? callers.find((callerIndex) => !isAnswered(callerIndex))
+          : isAnswered(precedingCaller)
+            ? undefined
+            : precedingCaller;
 
       if (callerIndex === undefined) {
-        // Every call with this id already has a result
+        // Duplicate of a result the call already has
         removedInvalidTools++;
         continue;
       }

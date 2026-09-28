@@ -346,6 +346,22 @@ describe('ToolMessageReorder', () => {
       ]);
     });
 
+    it('should drop a duplicate result instead of handing it to a later call with the same id', async () => {
+      const proc = new ToolMessageReorder();
+      const [a1, t1] = step(1, 'ok-1');
+      const ctx = createContext([
+        a1,
+        t1,
+        { id: 't1-dup', role: 'tool', content: 'ok-1-dup', tool_call_id: REUSED_ID },
+        ...step(2, 'ok-2'),
+      ]);
+
+      const result = await proc.process(ctx);
+
+      expect(toolResults(result.messages)).toEqual(['ok-1', 'ok-2']);
+      expect(result.metadata.toolMessageReorder?.removedInvalidTools).toBe(1);
+    });
+
     it('should not append a reused id suffix that collides with a real id', async () => {
       const proc = new ToolMessageReorder();
       const ctx = createContext([
