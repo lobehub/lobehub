@@ -44,7 +44,7 @@ describe('browserRuntime', () => {
       activeDeviceId: 'vm-cli',
       agentId: 'agt-1',
       operationId: 'op-1',
-      serverDB: {} as any,
+      serverDB: personalAgentServerDB,
       toolManifestMap: {},
       topicId: 'tpc-1',
       userId: 'user-1',
