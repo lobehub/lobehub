@@ -1,3 +1,6 @@
+import { GOAL_REPORT_TASK_TITLE } from '@lobechat/const/goal';
+import type { AcceptanceStatus, GoalGraphDecision, ToulminVerdict } from '@lobechat/types';
+
 import { isGoalAcceptanceTask } from './coordinatorCopy';
 import type { GoalArtifactView, GoalGraphView, GoalNodeView } from './goalGraphViewModel';
 
@@ -5,10 +8,13 @@ import type { GoalArtifactView, GoalGraphView, GoalNodeView } from './goalGraphV
  * Whether a Goal has an outcome to hand over, which is what earns it the
  * 结果交付 tab.
  *
- * Only a finished Goal: its final acceptance Task resolved (the result waits on
- * the owner's sign-off, whatever the Goal's own status says), or the Goal was
- * marked achieved without one. A running Goal keeps the single process view —
- * a result tab there would show a draft as if it were the delivery.
+ * A finished Goal: its final acceptance Task resolved (the result waits on the
+ * owner's sign-off, whatever the Goal's own status says), or the Goal was
+ * marked achieved without one. A Goal that failed or was canceled still hands
+ * over whatever it produced — the partial result is what the owner decides the
+ * next step from — so it earns the tab too, as long as something came out. A
+ * running Goal keeps the single process view: a result tab there would show a
+ * draft as if it were the delivery.
  */
 
 /** The Goal's resolved final acceptance Task, when there is one. */
@@ -19,8 +25,279 @@ export const findFinalAcceptanceView = (
     (view) => isGoalAcceptanceTask(view) && view.node.status === 'resolved' && !!view.acceptance,
   );
 
-export const hasGoalResult = (graph: Pick<GoalGraphView, 'goal' | 'nodes'>): boolean =>
-  graph.goal.status === 'achieved' || !!findFinalAcceptanceView(graph);
+/** The Goal-level acceptance, settled or not — the one sign-off acts on. */
+export const findGoalAcceptanceView = (
+  graph: Pick<GoalGraphView, 'nodes'>,
+): GoalNodeView | undefined =>
+  findFinalAcceptanceView(graph) ??
+  graph.nodes.findLast((view) => isGoalAcceptanceTask(view) && !!view.acceptance);
+
+const STOPPED_GOAL_STATUSES = new Set(['canceled', 'failed']);
+
+/** Anything the Goal left behind that a partial result page can show. */
+export const hasGoalOutput = (
+  graph: Pick<GoalGraphView, 'artifacts' | 'findings' | 'report'>,
+): boolean => graph.artifacts.length > 0 || graph.findings.length > 0 || !!graph.report?.latest;
+
+export const hasGoalResult = (
+  graph: Pick<GoalGraphView, 'artifacts' | 'findings' | 'goal' | 'nodes' | 'report'>,
+): boolean =>
+  graph.goal.status === 'achieved' ||
+  !!findFinalAcceptanceView(graph) ||
+  (STOPPED_GOAL_STATUSES.has(graph.goal.status) && hasGoalOutput(graph));
+
+/**
+ * Where the result stands for its owner, as the first screen says it:
+ *
+ * - `partial`        — the Goal stopped (failed / canceled), or its acceptance
+ *                      judged a criterion unmet: what exists is a partial result.
+ * - `signedOff`      — the owner accepted the delivery.
+ * - `awaitingSignOff` — achieved, and the owner has not signed yet.
+ */
+export type GoalResultStatus = 'awaitingSignOff' | 'partial' | 'signedOff';
+
+export const deriveGoalResultStatus = ({
+  acceptanceStatus,
+  goalStatus,
+  unmetCriteria,
+}: {
+  acceptanceStatus?: AcceptanceStatus;
+  goalStatus: string;
+  /** Criteria the latest acceptance round judged unmet. */
+  unmetCriteria: number;
+}): GoalResultStatus => {
+  if (acceptanceStatus === 'accepted') return 'signedOff';
+  if (STOPPED_GOAL_STATUSES.has(goalStatus)) return 'partial';
+  if (goalStatus !== 'achieved' && unmetCriteria > 0) return 'partial';
+  return 'awaitingSignOff';
+};
+
+/**
+ * What the sign-off strip can do right now. Only a settled acceptance waits on
+ * the owner (`delivered`, or `errored` — the server takes a decision on both);
+ * an accepted one is closed, and one rejected on a live Goal is back with the
+ * Agent. A Goal that stopped (failed / canceled) with nothing left to sign has
+ * ended: its way forward is to continue from what it left, not a sign-off.
+ */
+export type GoalSignOffState = 'accepted' | 'changesRequested' | 'open' | 'stopped' | 'unavailable';
+
+export const deriveSignOffState = (
+  acceptanceStatus: AcceptanceStatus | undefined,
+  goalStatus: string,
+): GoalSignOffState => {
+  if (acceptanceStatus === 'accepted') return 'accepted';
+  if (acceptanceStatus === 'delivered' || acceptanceStatus === 'errored') return 'open';
+  if (STOPPED_GOAL_STATUSES.has(goalStatus)) return 'stopped';
+  if (acceptanceStatus === 'rejected' || acceptanceStatus === 'repairing')
+    return 'changesRequested';
+  return 'unavailable';
+};
+
+// ---------------------------------------------------------------------------
+// 验收标准 × 结果
+// ---------------------------------------------------------------------------
+
+export interface CriterionLike {
+  description?: string | null;
+  id: string;
+  title: string;
+}
+
+export interface CheckResultLike {
+  id: string;
+  sourceCriterionId: string | null;
+  status: string;
+  suggestion?: string | null;
+  toulmin?: ToulminVerdict | null;
+  verdict?: string | null;
+  verifyRunId: string | null;
+}
+
+export interface EvidenceLike {
+  content?: string | null;
+  description?: string | null;
+  documentId?: string | null;
+  fileName?: string | null;
+  fileUrl?: string | null;
+  id: string;
+  type: string;
+}
+
+export interface CheckLike {
+  evidence: EvidenceLike[];
+  /** The union row id — `sourceCriterionId ?? checkItemId`. */
+  id: string;
+  result?: CheckResultLike;
+}
+
+export type CriterionOutcomeState = 'failed' | 'passed' | 'unjudged';
+
+export interface CriterionOutcome {
+  criterion: CriterionLike;
+  evidence: EvidenceLike[];
+  /** Why it is unmet (or undecided); absent for a met criterion. */
+  reason?: string;
+  resultId?: string;
+  state: CriterionOutcomeState;
+  /** One line of what the evidence showed. */
+  summary?: string;
+}
+
+/** First meaningful line of a prose field, stripped of markdown lead-ins. */
+export const firstLine = (text?: string | null): string | undefined =>
+  text
+    ?.split('\n')
+    .map((line) => line.replace(/^[#>*\-\s]+/, '').trim())
+    .find(Boolean);
+
+const outcomeState = (result: CheckResultLike): CriterionOutcomeState => {
+  if (result.verdict === 'passed' || (!result.verdict && result.status === 'passed'))
+    return 'passed';
+  if (result.verdict === 'failed' || (!result.verdict && result.status === 'failed'))
+    return 'failed';
+  return 'unjudged';
+};
+
+/**
+ * Each acceptance criterion of the Goal against what the latest Goal-level
+ * acceptance round found.
+ *
+ * Criteria come in `goal.config.acceptance.criteriaIds` order. Only results of
+ * the latest round count: an earlier round's verdict is history, and showing it
+ * beside the current one would say the Goal met a bar it has since failed (or
+ * the reverse). A result is matched on the criterion it was planned from
+ * (`sourceCriterionId`), falling back to the union row id, which is the same
+ * value for criterion-sourced checks. A criterion the round never judged stays
+ * on the list as undecided rather than disappearing.
+ */
+export const buildCriterionOutcomes = ({
+  checks,
+  criteria,
+  criteriaIds,
+  latestRunId,
+}: {
+  checks: CheckLike[];
+  criteria: CriterionLike[];
+  criteriaIds: string[];
+  latestRunId?: string;
+}): CriterionOutcome[] => {
+  const criterionById = new Map(criteria.map((criterion) => [criterion.id, criterion]));
+  const latest = checks.filter(
+    (check) => !!check.result && !!latestRunId && check.result.verifyRunId === latestRunId,
+  );
+  const checkFor = (criterionId: string) =>
+    latest.find((check) => check.result!.sourceCriterionId === criterionId) ??
+    latest.find((check) => !check.result!.sourceCriterionId && check.id === criterionId);
+
+  return criteriaIds.flatMap((id): CriterionOutcome[] => {
+    const criterion = criterionById.get(id);
+    if (!criterion) return [];
+    const check = checkFor(id);
+    if (!check?.result) return [{ criterion, evidence: [], state: 'unjudged' }];
+
+    const { result } = check;
+    const state = outcomeState(result);
+    const toulmin = result.toulmin ?? undefined;
+    const summary =
+      firstLine(toulmin?.evidence) ??
+      firstLine(check.evidence.find((item) => item.description)?.description);
+    const reason =
+      state === 'passed'
+        ? undefined
+        : (firstLine(toulmin?.counterEvidence) ??
+          firstLine(toulmin?.reasoning) ??
+          firstLine(result.suggestion));
+
+    return [
+      {
+        criterion,
+        evidence: check.evidence,
+        ...(reason ? { reason } : {}),
+        resultId: result.id,
+        state,
+        ...(summary ? { summary } : {}),
+      },
+    ];
+  });
+};
+
+/** The newest round of an acceptance, by its round index. */
+export const latestRoundRunId = (
+  rounds: { run: { id: string; roundIndex: number | null } }[],
+): string | undefined =>
+  rounds.reduce<{ id: string; roundIndex: number } | undefined>((latest, { run }) => {
+    const roundIndex = run.roundIndex ?? 0;
+    return !latest || roundIndex >= latest.roundIndex ? { id: run.id, roundIndex } : latest;
+  }, undefined)?.id;
+
+// ---------------------------------------------------------------------------
+// 你做过的决定 / 没有完成
+// ---------------------------------------------------------------------------
+
+export interface UserDecisionView {
+  /** The option label the owner picked, or their free-text resolution. */
+  choice?: string;
+  decision: GoalGraphDecision;
+  question: string;
+  resolvedAt?: Date;
+}
+
+/**
+ * Decisions a person made on this Goal, oldest first. An agent resolving a
+ * gate by itself is not the owner's decision, and a canceled gate decided
+ * nothing — neither belongs on "what you decided".
+ */
+export const buildUserDecisions = (decisions: GoalGraphDecision[]): UserDecisionView[] =>
+  decisions
+    .filter((decision) => decision.status === 'resolved' && !!decision.resolvedByUserId)
+    .map((decision) => {
+      const option = decision.options?.find((item) => item.id === decision.resolvedOptionId);
+      const choice = option?.label ?? decision.resolution?.trim() ?? undefined;
+      return {
+        ...(choice ? { choice } : {}),
+        decision,
+        question: decision.question,
+        ...(decision.resolvedAt ? { resolvedAt: decision.resolvedAt } : {}),
+      };
+    })
+    .sort((a, b) => (a.resolvedAt?.getTime() ?? 0) - (b.resolvedAt?.getTime() ?? 0));
+
+export interface AbandonedNodeView {
+  reason?: string;
+  view: GoalNodeView;
+}
+
+/**
+ * Task nodes the Goal gave up on — rejected or retired — with the reason
+ * recorded when it closed them, falling back to the attempt that ended it.
+ */
+export const buildAbandonedNodes = (graph: Pick<GoalGraphView, 'nodes'>): AbandonedNodeView[] =>
+  graph.nodes
+    .filter(
+      (view) =>
+        view.node.kind === 'task' &&
+        (view.node.status === 'rejected' || view.node.status === 'retired'),
+    )
+    .map((view) => {
+      const reason = firstLine(
+        view.closedReason ??
+          view.attempts.findLast((attempt) => attempt.outcome !== 'running' && attempt.reason)
+            ?.reason,
+      );
+      return { ...(reason ? { reason } : {}), view };
+    });
+
+/**
+ * Work Tasks the Goal ran, for the scale line. The coordinator's own acceptance
+ * and wrap-up Tasks check and describe the work; they are not part of it.
+ */
+export const countGoalTasks = (graph: Pick<GoalGraphView, 'nodes'>): number =>
+  graph.nodes.filter(
+    (view) =>
+      view.node.kind === 'task' &&
+      !isGoalAcceptanceTask(view) &&
+      view.node.title !== GOAL_REPORT_TASK_TITLE,
+  ).length;
 
 /**
  * One step of the result's audit trail: the work that ran, what it concluded,

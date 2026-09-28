@@ -9,18 +9,24 @@ import { portalKeys } from '@/libs/swr/keys';
 import { documentService } from '@/services/document';
 
 import { pickFinalDeliverable } from './goalAcceptanceReport';
+import GoalCriteriaResults from './GoalCriteriaResults';
 import type { GoalGraphView } from './goalGraphViewModel';
+import { GoalDecisionsMade, GoalUnfinished, useContinueFromResult } from './GoalResultFollowUps';
+import GoalResultHeader from './GoalResultHeader';
 import { findFinalAcceptanceView } from './goalResultState';
 import ResultTrail from './ResultTrail';
+import { useGoalResultData } from './useGoalResultData';
 
 /**
  * 结果交付 — what a finished Goal hands over, on its own tab.
  *
- * Layered for a reviewer who reads top-down: the document the work wrote comes
- * first, read like a page rather than a card, with nothing competing for
- * attention around it. Under it, the trail of how that result was reached —
- * each step's conclusions and files together, each opening one level deeper.
- * How the Goal ran (tasks, map, activity, sign-off) lives on the 执行过程 tab.
+ * Layered for a reviewer who reads top-down: the first screen says where the
+ * result stands, what was asked, how big the run was, and carries the sign-off.
+ * Then each acceptance criterion against what the latest acceptance round
+ * found, the decisions the owner made along the way, and what is still open.
+ * The document the work wrote follows, read like a page rather than a card,
+ * and under it the trail of how that result was reached. How the Goal ran
+ * (tasks, map, activity) lives on the 执行过程 tab.
  */
 
 const FinalDocument = ({ documentId }: { documentId: string }) => {
@@ -51,9 +57,18 @@ interface GoalResultProps {
 const GoalResult = ({ graph, onSelect }: GoalResultProps) => {
   const acceptanceNodeId = findFinalAcceptanceView(graph)?.node.id ?? '';
   const deliverable = pickFinalDeliverable(graph.artifacts, acceptanceNodeId);
+  const data = useGoalResultData(graph);
+  const continueFromResult = useContinueFromResult(graph, data.outcomes);
 
   return (
     <Flexbox gap={8}>
+      <Flexbox gap={32}>
+        <GoalResultHeader data={data} graph={graph} onContinue={continueFromResult} />
+        <GoalCriteriaResults loading={data.isLoading} outcomes={data.outcomes} />
+        <GoalDecisionsMade graph={graph} />
+        <GoalUnfinished graph={graph} outcomes={data.outcomes} onContinue={continueFromResult} />
+      </Flexbox>
+      <Divider style={{ marginBlock: 24 }} />
       {deliverable && (
         <>
           <FinalDocument documentId={deliverable.documentId} />

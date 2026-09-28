@@ -124,6 +124,33 @@ describe('buildGoalGraphView', () => {
     expect(view.byId.p1.seq).toBeUndefined();
   });
 
+  /**
+   * Regression: a task retired before any attempt started had no attempt to
+   * carry the reason, so the result page listed it as dropped with no why.
+   */
+  it('records why a node was given up, even without an attempt', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        events: [
+          event('w1', 'updated', 5, 'Store API rate-limited twice'),
+          event('w1', 'retired', 10, 'Switched to public reviews'),
+          event('w2', 'updated', 5, 'Discount data has no public source'),
+          event('w2', 'rejected', 10),
+        ],
+        nodes: [
+          node('w1', { status: 'retired', updatedAt: at(10) }),
+          node('w2', { status: 'rejected', updatedAt: at(10) }),
+          node('w3', { status: 'resolved', updatedAt: at(10) }),
+        ],
+      }),
+      NOW,
+    );
+
+    expect(view.byId.w1.closedReason).toBe('Switched to public reviews');
+    expect(view.byId.w2.closedReason).toBe('Discount data has no public source');
+    expect(view.byId.w3.closedReason).toBeUndefined();
+  });
+
   it('builds the attempt ledger from the event trail', () => {
     const view = buildGoalGraphView(
       snapshot({

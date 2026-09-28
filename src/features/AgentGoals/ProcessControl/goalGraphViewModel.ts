@@ -6,6 +6,8 @@ import type {
   GoalGraphSnapshot,
   GoalItem,
   GoalNodeAcceptance,
+  GoalReportState,
+  GoalSpend,
   WorkType,
 } from '@lobechat/types';
 import { experimentMembers } from '@lobechat/utils/goalGraph';
@@ -81,6 +83,12 @@ export interface GoalNodeView {
   attempts: GoalAttempt[];
   /** Unresolved `depends_on` targets — why this node cannot start. */
   blockers: GoalGraphNode[];
+  /**
+   * Why a rejected / retired node was given up: the reason on its closing
+   * event, else the last note recorded before it. Read off the trail directly
+   * so a node closed without ever starting an attempt still says why.
+   */
+  closedReason?: string;
   /** Pending user decision opened on this node. */
   decision?: GoalGraphDecision;
   dependsOn: string[];
@@ -188,6 +196,10 @@ export interface GoalGraphView {
   needsYou: number;
   /** Views in graph creation order. */
   nodes: GoalNodeView[];
+  /** The wrap-up report, once the Goal-level acceptance has ended. */
+  report?: GoalReportState;
+  /** Runs and dollars spent so far; absent on write-path snapshots. */
+  spend?: GoalSpend;
 }
 
 const leaseTimeoutMs = (goal: GoalItem) =>
@@ -273,6 +285,15 @@ const buildAttempts = (node: GoalGraphNode, events: GoalGraphEvent[]): GoalAttem
   return attempts;
 };
 
+const closedReasonOf = (node: GoalGraphNode, events: GoalGraphEvent[]): string | undefined => {
+  if (node.status !== 'rejected' && node.status !== 'retired') return undefined;
+  const own = events.filter(
+    (e) => e.entityType === 'node' && e.entityId === node.id && !!e.reason?.trim(),
+  );
+  const closing = own.findLast((e) => e.eventType === 'rejected' || e.eventType === 'retired');
+  return (closing ?? own.findLast((e) => e.eventType === 'updated'))?.reason?.trim();
+};
+
 export const buildGoalGraphView = (
   snapshot: GoalGraphSnapshot,
   now: number = Date.now(),
@@ -286,7 +307,9 @@ export const buildGoalGraphView = (
     events,
     goal,
     nodes,
+    report,
     runHeartbeats,
+    spend,
     workVersions,
   } = snapshot;
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
@@ -352,6 +375,7 @@ export const buildGoalGraphView = (
       node.kind === 'experiment' ? experimentMembers(snapshot, node.id) : new Set<string>();
     const nodeDecisions = decisionsByNode.get(node.id) ?? [];
     const attempts = buildAttempts(node, events);
+    const closedReason = closedReasonOf(node, events);
     const open = attempts.at(-1);
     const isRunningAttempt = node.status === 'active' && open?.outcome === 'running';
     // Liveness = the newer of the node row (moves on observations / status
@@ -389,6 +413,7 @@ export const buildGoalGraphView = (
       ...(acceptances?.[node.id] ? { acceptance: acceptances[node.id] } : {}),
       ...(assignees?.[node.id] ? { assigneeAgentId: assignees[node.id] } : {}),
       attempts,
+      ...(closedReason ? { closedReason } : {}),
       blockers: (dependsOn.get(node.id) ?? [])
         .map((id) => nodeById.get(id))
         .filter((dep): dep is GoalGraphNode => !!dep && !TERMINAL_NODE_STATUSES.has(dep.status)),
@@ -470,6 +495,8 @@ export const buildGoalGraphView = (
     goal,
     needsYou: frontier.filter((item) => item.rank === 0).length,
     nodes: views,
+    report,
+    spend,
   };
 };
 
