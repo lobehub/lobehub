@@ -9,7 +9,7 @@ class AgentRuntimeService {
    * Handle human intervention
    */
   async handleHumanIntervention(request: HumanInterventionRequest): Promise<any> {
-    return await lambdaClient.aiAgent.processHumanIntervention.mutate({
+    return lambdaClient.aiAgent.processHumanIntervention.mutate({
       action: request.action,
       data: request.data,
       operationId: request.operationId,

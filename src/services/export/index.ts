@@ -3,7 +3,7 @@ import { type ExportDatabaseData } from '@/types/export';
 
 class ExportService {
   exportData = async (): Promise<ExportDatabaseData> => {
-    return await lambdaClient.exporter.exportData.mutate();
+    return lambdaClient.exporter.exportData.mutate();
   };
 }
 
