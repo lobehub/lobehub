@@ -16,6 +16,7 @@
 
 /** What caused this advance. `unknown` covers traces written before a caller was labelled. */
 export type GoalAdvanceTrigger =
+  | 'wake'
   | 'create'
   | 'decide'
   | 'settle'

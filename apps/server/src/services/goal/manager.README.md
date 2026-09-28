@@ -153,3 +153,37 @@ main-Agent handoff context. This keeps document corrections and evidence notes
 available to both the first delivery and repair attempts. The original Goal
 requirement remains authoritative; handoff assertions are not acceptance evidence
 or permission to weaken its criteria.
+
+## Durable waits and measured continuation
+
+The main Agent may submit `{"action":"wait","reason":"Await external evidence",
+"until":"2026-12-01T00:00:00Z","event":{"type":"external.result","key":"job-123"}}`.
+`until` must be in the future; it is always a fallback check, including when an
+event is declared. All existing task nodes must be settled before waiting. The
+Goal remains running, but no new model turn runs before the deadline or event.
+The submitting operation must exit before a successor starts.
+
+An authenticated producer delivers a result using `lh goal wake <id> --token <managerState.token> --event <delivery-id> --type external.result --key job-123 --reference <evidence-reference> --summary <short-observation> --json`. Type,
+key and the current turn token must match; the first wake wins. Repeated or late
+deliveries cannot wake a later wait. Events are evidence to reconsider, not proof
+that the Goal succeeded. Store large datasets separately and pass references.
+
+The server-owned manager receipt persists the wait across restarts. Queue
+callbacks re-read it; the sweep includes elapsed waits and excludes quiet future
+waits. In local scheduler mode, restart recovery requires the sweep. User pauses,
+terminal states and pending human decisions prevent continuation. A stopped Goal
+rejects events; redeliver after explicit resume or rely on the fallback deadline.
+Events arriving before the wait commits are unmatched. This is not an event inbox
+or an automatic webhook subscription service.
+
+`goal.recordObservation` emits `metric.observed` with the metric key. Historical
+observations predating the waiting turn are ignored; fresh below-target values
+still wake an explicit observation wait. Direct generic metric writes do not emit
+this event. Unmet measured acceptance on managed Goals returns the same contract
+to another bounded planning turn, including when exploration normally leads.
+Unmanaged Goals retain their measured-pause behavior. Goal budgets and manager
+turn limits still apply; waiting does not itself spend another model turn.
+
+Deploy wait-capable coordinators before enabling wait-producing prompts. Old
+coordinators do not understand the new receipt; pause active waiting Goals before
+rolling back. Final delivery-verification repair remains a separate lifecycle.
