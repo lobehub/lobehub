@@ -10,7 +10,7 @@ Discord, Slack, Telegram, Lark, Feishu
 
 - \`lh bot list [-a <agentId>] [--platform <p>]\` - List bot integrations
 - \`lh bot view <botId>\` - View bot details
-- \`lh bot add -a <agentId> --platform <p> [--bot-token <t>] [--app-id <id>]\` - Add bot to agent
+- \`lh bot add -a <agentId> --platform <p> --app-id <id> [--bot-token <t>]\` - Add bot to agent
 - \`lh bot update <botId> [--bot-token <t>] [--platform <p>]\` - Update bot credentials
 - \`lh bot remove <botId> [--yes]\` - Remove bot integration
 - \`lh bot enable <botId>\` - Enable bot

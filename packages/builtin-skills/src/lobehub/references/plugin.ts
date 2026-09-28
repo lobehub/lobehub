@@ -5,7 +5,7 @@ Manage installed plugins (external tool integrations).
 ## Subcommands
 
 - \`lh plugin list\` - List installed plugins
-- \`lh plugin install -i <identifier> [--manifest <json>] [--type <type>] [--settings <json>]\` - Install plugin
+- \`lh plugin install -i <identifier> --manifest <json> [--type <type>] [--settings <json>]\` - Install plugin
 - \`lh plugin uninstall <id> [--yes]\` - Uninstall plugin
 - \`lh plugin update <id> [--manifest <url>] [--settings <json>]\` - Update plugin
 

@@ -94,13 +94,22 @@ const checkSnippet = (snippet: string): string[] => {
   const rest = tokens.slice(consumed).filter(Boolean);
   if (rest.length === 0) return problems;
 
-  const used = new Set(
-    [...snippet.matchAll(/(?<![\w-])(--?[a-z][\w-]*)/gi)].map((match) => match[1]),
-  );
+  // Keep bracket context: a mandatory flag written as `[--flag <v>]` tells the
+  // model it may be omitted, which commander then rejects.
+  const used = new Set<string>();
+  const bracketed = new Set<string>();
+  for (const match of snippet.matchAll(/(?<![\w-])(--?[a-z][\w-]*)/gi)) {
+    const before = snippet.slice(0, match.index);
+    const depth = (before.match(/\[/g) ?? []).length - (before.match(/\]/g) ?? []).length;
+    (depth > 0 ? bracketed : used).add(match[1]);
+  }
   for (const option of cmd.options) {
-    if (option.mandatory && !used.has(option.long!) && !used.has(option.short!)) {
-      problems.push(`missing required option ${option.long} on "lh ${commandPath.join(' ')}"`);
-    }
+    if (!option.mandatory || used.has(option.long!) || used.has(option.short!)) continue;
+    problems.push(
+      bracketed.has(option.long!) || bracketed.has(option.short!)
+        ? `required option ${option.long} on "lh ${commandPath.join(' ')}" is shown as optional`
+        : `missing required option ${option.long} on "lh ${commandPath.join(' ')}"`,
+    );
   }
 
   // Count positionals outside `[...]` groups, skipping flags and their values.
@@ -163,6 +172,11 @@ describe('model-facing lh CLI docs', () => {
     expect(checkSnippet('lh kb upload <kbId> [--parent <folderId>]')).toEqual([
       'missing required argument on "lh kb upload" (expects 2, got 1)',
     ]);
+    // A mandatory flag inside `[...]` reads as optional to the model.
+    expect(checkSnippet('lh plugin install -i <identifier> [--manifest <json>]')).toEqual([
+      'required option --manifest on "lh plugin install" is shown as optional',
+    ]);
+    expect(checkSnippet('lh plugin install -i <identifier> --manifest <json>')).toEqual([]);
     // A bare command name in prose is a reference, not an invocation.
     expect(checkSnippet('lh kb view')).toEqual([]);
   });
