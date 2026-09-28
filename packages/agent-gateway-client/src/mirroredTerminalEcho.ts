@@ -46,9 +46,15 @@ export class MirroredTerminalEchoGuard {
    * order, not wall-clock time: a suspended tab or renderer delivers the echo
    * late but still in order. Only the signal that will actually arrive is owed,
    * so nothing stays armed to swallow the owner's own end. An owner event proves
-   * the owner alive and clears it; so does a new resume.
+   * the owner alive and clears it. A v1 resume clears it; a v2 resume carries it
+   * into the replay (echoes are sequenced, so one sent after the last event this
+   * client saw is replayed) and drops what the replay did not deliver.
    */
   private pendingEchoes = new Map<string, number>();
+  /** The status the latest foreign terminal left, while its echoes are owed. */
+  private owedForeignStatus: SessionStatus | undefined;
+  /** A v2 resume replay is in flight (between `beginReplay` and `endReplay`). */
+  private replaying = false;
   /**
    * The session status another operation's `agent_runtime_end` REPLAYED BY THE
    * CURRENT RESUME would have left on this channel's DO, while no terminal of
@@ -80,6 +86,7 @@ export class MirroredTerminalEchoGuard {
       for (const key of echoKeysOf(this.protocol, status)) {
         this.pendingEchoes.set(key, (this.pendingEchoes.get(key) ?? 0) + 1);
       }
+      this.owedForeignStatus = status;
       this.replayForeignStatus = status;
     }
   }
@@ -87,7 +94,24 @@ export class MirroredTerminalEchoGuard {
   /** A resume / (re)subscribe is starting: only what it replays counts from here. */
   beginReplay(): void {
     this.replayForeignStatus = undefined;
-    // An echo not yet received on the old connection is not owed on this one.
+    if (this.protocol === 'v1') {
+      // v1 echoes are not replayed: one not received on the old connection is
+      // not owed on this one.
+      this.clearPendingEchoes();
+      return;
+    }
+    // v2 echoes are sequenced: a member terminal acknowledged just before the
+    // socket dropped leaves its echo to this replay. Keep owing it.
+    this.replaying = true;
+  }
+
+  /**
+   * The v2 resume replay is over (`resume_complete`, not `pending`). An echo it
+   * did not deliver is not coming, so stop owing it.
+   */
+  endReplay(): void {
+    if (!this.replaying) return;
+    this.replaying = false;
     this.clearPendingEchoes();
   }
 
@@ -98,11 +122,12 @@ export class MirroredTerminalEchoGuard {
    * after a member ended reads the supervisor as finished while it still runs —
    * even when supervisor events were replayed after the member's end.
    *
-   * Only trusted when this resume replayed that member terminal and nothing was
-   * dropped (`gap`): the buffer only loses its oldest events, so the member's
-   * terminal still being there means any later owner terminal would be too.
-   * Without that provenance — an empty replay after hibernation, a gapped
-   * replay, a member terminal only seen before the disconnect — the DO's
+   * Only trusted when this resume replayed that member terminal (or, on v2, an
+   * echo still owed for it) and nothing was dropped (`gap`): the buffer only
+   * loses its oldest events, so the member's terminal or its echo still being
+   * there means any later owner terminal would be too. Without that
+   * provenance — an empty replay after hibernation, a gapped replay, a member
+   * terminal and its echo only seen before the disconnect — the DO's
    * authoritative status wins. So does any other status (a watchdog's `error`).
    */
   isStaleResumeStatus(status: SessionStatus | undefined, options?: { gap?: boolean }): boolean {
@@ -121,10 +146,16 @@ export class MirroredTerminalEchoGuard {
     if (owed === 0) return false;
     if (owed === 1) this.pendingEchoes.delete(key);
     else this.pendingEchoes.set(key, owed - 1);
+    // An echo replayed after the member terminal proves the buffer from there on
+    // is intact, just as the replayed terminal itself would.
+    if (this.replaying && this.owedForeignStatus !== undefined) {
+      this.replayForeignStatus = this.owedForeignStatus;
+    }
     return true;
   }
 
   private clearPendingEchoes(): void {
     this.pendingEchoes.clear();
+    this.owedForeignStatus = undefined;
   }
 }

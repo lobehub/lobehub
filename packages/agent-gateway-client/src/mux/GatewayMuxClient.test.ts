@@ -760,6 +760,97 @@ describe('GatewayMuxClient', () => {
       expect(onComplete).toHaveBeenCalledWith({ source: 'resume_status', status: 'completed' });
     });
 
+    // Codex P1 on #20102 (round 2): the member terminal was acknowledged before
+    // the socket dropped, so the resubscribe replays only its sequenced echo.
+    describe('carries an owed echo across a reconnect (G-02)', () => {
+      const memberEnd = (reason: string): MuxServerMessage => ({
+        event: {
+          data: { reason },
+          operationId: 'op-member',
+          stepIndex: 0,
+          timestamp: 1,
+          type: 'agent_runtime_end',
+        } as any,
+        id: '1',
+        operationId: 'op-1',
+        type: 'agent_event',
+      });
+
+      const reconnectAfterMemberEnd = async (reason: string) => {
+        const { mux } = createMux();
+        const sub = mux.subscribe('op-1');
+        const ws = await connectAndReady(mux);
+        const onComplete = vi.fn();
+        sub.on('session_complete', onComplete);
+        ws.simulateMessage(memberEnd(reason));
+
+        ws.simulateClose();
+        await vi.advanceTimersByTimeAsync(500);
+        const ws2 = await settle();
+        ws2.simulateMessage(READY);
+        return { onComplete, sub, ws2 };
+      };
+
+      it('reads a replayed session_complete echo and its stamped status as the member end', async () => {
+        const { onComplete, sub, ws2 } = await reconnectAfterMemberEnd('done');
+
+        ws2.simulateMessage({ id: '2', operationId: 'op-1', type: 'session_complete' } as any);
+        ws2.simulateMessage({
+          gap: false,
+          operationId: 'op-1',
+          status: 'completed',
+          type: 'resume_complete',
+        });
+
+        expect(onComplete).not.toHaveBeenCalled();
+        expect(sub.active).toBe(true);
+
+        ws2.simulateMessage(agentEvent('op-1', '3', 'agent_runtime_end'));
+        expect(onComplete).toHaveBeenCalledOnce();
+        expect(sub.active).toBe(false);
+      });
+
+      it('reads a replayed terminal status_change echo as the member end', async () => {
+        const { onComplete, sub, ws2 } = await reconnectAfterMemberEnd('error');
+
+        ws2.simulateMessage({
+          id: '2',
+          operationId: 'op-1',
+          status: 'error',
+          type: 'status_change',
+        });
+        ws2.simulateMessage({
+          gap: false,
+          operationId: 'op-1',
+          status: 'error',
+          type: 'resume_complete',
+        });
+
+        expect(onComplete).not.toHaveBeenCalled();
+        expect(sub.active).toBe(true);
+      });
+
+      it('stops owing an echo the replay did not deliver', async () => {
+        const { onComplete, ws2 } = await reconnectAfterMemberEnd('error');
+
+        ws2.simulateMessage({
+          gap: false,
+          operationId: 'op-1',
+          status: 'running',
+          type: 'resume_complete',
+        });
+        // A later watchdog error is the supervisor's genuine end.
+        ws2.simulateMessage({
+          id: '2',
+          operationId: 'op-1',
+          status: 'error',
+          type: 'status_change',
+        });
+
+        expect(onComplete).toHaveBeenCalledWith({ source: 'status_change', status: 'error' });
+      });
+    });
+
     // Codex P2 on #20102: echoes are counted by order, not by a time window.
     it('reads late echoes as the member terminal and honors the next end (G-02)', async () => {
       const { mux } = createMux();

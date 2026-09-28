@@ -267,7 +267,9 @@ class OperationSubscriptionImpl implements OperationSubscription {
           !this.terminalEchoGuard.isStaleResumeStatus(message.status, { gap: message.gap })
         ) {
           this.finish({ source: 'resume_status', status: message.status });
+          break;
         }
+        if (!message.pending) this.terminalEchoGuard.endReplay();
         break;
       }
 
