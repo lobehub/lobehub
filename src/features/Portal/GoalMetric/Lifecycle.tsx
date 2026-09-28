@@ -12,7 +12,6 @@ import {
   Pencil,
   Play,
   Plus,
-  Settings2,
   Unlink,
   X,
 } from 'lucide-react';
@@ -27,7 +26,10 @@ import type {
 import { KIND_ICON } from '@/features/AgentGoals/ProcessControl/shared';
 import { useGoalNodeSelect } from '@/features/AgentGoals/ProcessControl/useGoalProcessActions';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
+import UserAvatar from '@/features/User/UserAvatar';
 import { goalSelectors, useGoalStore } from '@/store/goal';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 /**
  * The goal's history as a timeline, newest first and grouped by day. Each event
@@ -247,19 +249,45 @@ const AgentActor = memo<{ agentId: string }>(({ agentId }) => {
 
 AgentActor.displayName = 'GoalMetricLifecycleAgentActor';
 
-const Actor = memo<{ event: GoalGraphEvent }>(({ event }) => {
+const UserActor = memo<{ userId?: string | null }>(({ userId }) => {
   const { t } = useTranslation('chat');
-  if (event.actorType === 'agent' && event.actorId) return <AgentActor agentId={event.actorId} />;
+  const [currentUserId, nickName] = useUserStore((s) => [
+    userProfileSelectors.userId(s),
+    userProfileSelectors.nickName(s),
+  ]);
+
+  // Only the signed-in user can be shown by face; someone else's event keeps
+  // the generic label rather than borrowing this user's identity.
+  if (userId && userId !== currentUserId)
+    return (
+      <Text fontSize={13} style={{ flex: 'none' }} weight={500}>
+        {t('goalProcess.actor.user')}
+      </Text>
+    );
 
   return (
     <Flexbox horizontal align={'center'} flex={'none'} gap={6}>
-      {event.actorType === 'system' && (
-        <Icon color={cssVar.colorTextTertiary} icon={Settings2} size={14} />
-      )}
-      <Text fontSize={13} weight={500}>
-        {t(`goalProcess.actor.${event.actorType}` as const)}
+      <UserAvatar size={16} />
+      <Text ellipsis fontSize={13} style={{ maxWidth: 120 }} weight={500}>
+        {nickName || t('goalProcess.actor.user')}
       </Text>
     </Flexbox>
+  );
+});
+
+UserActor.displayName = 'GoalMetricLifecycleUserActor';
+
+const Actor = memo<{ event: GoalGraphEvent }>(({ event }) => {
+  const { t } = useTranslation('chat');
+  if (event.actorType === 'agent' && event.actorId) return <AgentActor agentId={event.actorId} />;
+  if (event.actorType === 'user') return <UserActor userId={event.actorId} />;
+
+  // Automatic steps read as part of the sentence, not as someone acting — no
+  // glyph, no emphasis, so the people and agents stand out.
+  return (
+    <Text fontSize={13} style={{ flex: 'none' }} type={'secondary'}>
+      {t(`goalProcess.actor.${event.actorType}` as const)}
+    </Text>
   );
 });
 

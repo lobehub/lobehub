@@ -2144,7 +2144,7 @@ export default {
   'goalProcess.node.unanswered': 'Unanswered',
   'goalProcess.metrics.status': 'Status',
   'goalProcess.actor.agent': 'Agent',
-  'goalProcess.actor.system': 'System',
+  'goalProcess.actor.system': 'Auto',
   'goalProcess.actor.user': 'You',
   'goalProcess.lifecycle.action.activated': 'started {{kind}}',
   'goalProcess.lifecycle.action.created': 'created {{kind}}',
@@ -2183,7 +2183,7 @@ export default {
   'goalProcess.metricDetail.duration.total': 'Total runtime',
   'goalProcess.metricDetail.findings.title': 'All findings',
   'goalProcess.metricDetail.lifecycle.empty': 'No events recorded yet',
-  'goalProcess.metricDetail.lifecycle.title': 'Lifecycle',
+  'goalProcess.metricDetail.lifecycle.title': 'Activity timeline',
   'goalProcess.metricDetail.liveness.driver':
     'The goal advances on its own: each finished task triggers the next move, and a recovery sweep rescues anything that stalls or loses its device. Nothing here waits for you unless a decision gate is open.',
   'goalProcess.metricDetail.liveness.latest': 'Last activity',
