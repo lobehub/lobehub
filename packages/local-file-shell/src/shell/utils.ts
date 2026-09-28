@@ -310,14 +310,25 @@ export const getShellInfo = async (): Promise<ShellInfo> =>
  * untouched.
  */
 /**
+ * A completed PowerShell expression token after which `#` opens a comment
+ * (`$x = 1# …`, `$x = $y# …`), optionally preceded by operator characters
+ * (`$x =1# …`): a numeric literal (decimal, hex, exponent, type suffix and
+ * multiplier like `1.5e3`, `0xFF`, `10kb`) or a variable (`$name`,
+ * `$env:NAME`, `${any name}`).
+ */
+const COMPLETED_EXPRESSION_TOKEN =
+  /^[-+*/%=!<>]*(?:(?:0x[\da-f]+|(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?)(?:u?[lsy]|[dnu])?(?:kb|mb|gb|tb|pb)?|\$(?:\{[^}]*\}|[\w?:]+))$/i;
+
+/**
  * Whether a `#` at `index` begins a PowerShell comment, i.e. sits at the start
- * of a token rather than inside a bare word (see the call site).
+ * of a token or right after a completed expression token, rather than inside a
+ * bare word (see the call site).
  */
 const startsPowerShellComment = (script: string, index: number): boolean => {
   let j = index - 1;
   while (j >= 0 && !/[\s;|&(){},]/.test(script[j])) j -= 1;
   const run = script.slice(j + 1, index);
-  return run === '' || /^[-+*/%=!<>]+$/.test(run);
+  return run === '' || /^[-+*/%=!<>]+$/.test(run) || COMPLETED_EXPRESSION_TOKEN.test(run);
 };
 
 const findPowerShellLiteralRanges = (script: string): Array<[number, number]> => {
@@ -344,6 +355,35 @@ const findPowerShellLiteralRanges = (script: string): Array<[number, number]> =>
   };
 
   /**
+   * Scan a `@"..."@` here-string whose body starts at `bodyStart`; returns the
+   * index after the closing `"@`. The body text is literal, but its `$( ... )`
+   * subexpressions are executed, so they are lexed as code and left out of the
+   * literal ranges.
+   */
+  const scanExpandableHereString = (openerStart: number, bodyStart: number): number => {
+    let segmentStart = openerStart;
+    let i = bodyStart;
+    while (i < length) {
+      const char = script[i];
+      if (char === '\n' && script[i + 1] === '"' && script[i + 2] === '@') {
+        ranges.push([segmentStart, i + 3]);
+        return i + 3;
+      }
+      if (char === '`') {
+        i += 2;
+      } else if (char === '$' && script[i + 1] === '(') {
+        ranges.push([segmentStart, i + 2]);
+        i = scanCode(i + 2, true);
+        segmentStart = i;
+      } else {
+        i += 1;
+      }
+    }
+    ranges.push([segmentStart, length]);
+    return length;
+  };
+
+  /**
    * Scan code from `i`. Inside a subexpression, stops after the `)` that
    * closes it; returns the index where scanning ended.
    */
@@ -366,6 +406,10 @@ const findPowerShellLiteralRanges = (script: string): Array<[number, number]> =>
         const quote = script[i + 1];
         const opener = /^[\t ]*\r?\n/.exec(script.slice(i + 2));
         if (opener) {
+          if (quote === '"') {
+            i = scanExpandableHereString(i, i + 2 + opener[0].length);
+            continue;
+          }
           const close = script.indexOf(`\n${quote}@`, i + 2 + opener[0].length - 1);
           const end = close === -1 ? length : close + 3;
           ranges.push([i, end]);

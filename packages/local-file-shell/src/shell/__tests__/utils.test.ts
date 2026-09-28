@@ -292,6 +292,21 @@ describe('normalizeEnvVarRefs', () => {
       );
     });
 
+    it('should lex $( ) subexpressions inside a double-quoted here-string as code', () => {
+      // The here-string body is literal, but `$( ... )` inside it is executed.
+      expect(
+        normalizeEnvVarRefs(
+          '$s = @"\nset PATH=%PATH%\nvalue: $(Write-Output %PATH%)\n"@\necho %PATH%',
+          env,
+          'pwsh',
+        ),
+      ).toBe('$s = @"\nset PATH=%PATH%\nvalue: $(Write-Output ${env:PATH})\n"@\necho ${env:PATH}');
+      // Literals inside the subexpression still stay verbatim.
+      expect(normalizeEnvVarRefs(`$s = @"\n$('%PATH%' + "%PATH%") %PATH%\n"@`, env, 'pwsh')).toBe(
+        `$s = @"\n$('%PATH%' + "\${env:PATH}") %PATH%\n"@`,
+      );
+    });
+
     it("should leave %VAR% inside single-quoted strings verbatim ('' is an escaped quote)", () => {
       expect(normalizeEnvVarRefs("Write-Output '%PATH%'", env, 'pwsh')).toBe(
         "Write-Output '%PATH%'",
@@ -333,6 +348,27 @@ describe('normalizeEnvVarRefs', () => {
         );
       },
     );
+
+    it.each(['1', '0xFF', '1.5e3', '10kb', '$y', '$env:PATH', '${my var}', '=1'])(
+      'should recognize a comment right after the completed expression token %s',
+      (token) => {
+        // `$x = 1# …` is a number followed by a comment: the apostrophe in the
+        // comment must not open a string that swallows the following lines.
+        expect(
+          normalizeEnvVarRefs(
+            `$x = ${token}# don't expand %PATH%\nWrite-Output %PATH%`,
+            env,
+            'pwsh',
+          ),
+        ).toBe(`$x = ${token}# don't expand %PATH%\nWrite-Output \${env:PATH}`);
+      },
+    );
+
+    it('should keep # inside a bare word that contains digits', () => {
+      expect(normalizeEnvVarRefs('tool v1#b a1#b %PATH%', env, 'pwsh')).toBe(
+        'tool v1#b a1#b ${env:PATH}',
+      );
+    });
 
     it('should keep # inside a bare argument that already started, even after punctuation', () => {
       // Verified in pwsh: `key=#literal`, `a+#b`, `x:#y` print as one word each.
