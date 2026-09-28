@@ -2536,7 +2536,9 @@ export class GoalService {
           // The user's answers are authoritative; a planner failure after the
           // clarification round must not start the work without them.
           instruction: [
-            problem?.description ?? requirement,
+            // After a clarification round, scope the work by the original request
+            // plus the answers — never by a summary a planner wrote earlier.
+            clarifications.length > 0 ? requirement : (problem?.description ?? requirement),
             clarifications.length > 0
               ? `Answered clarifications (authoritative):\n${clarifications
                   .map((item) => `- Q: ${item.question}\n  A: ${item.answer}`)
@@ -2577,13 +2579,16 @@ export class GoalService {
           return undefined;
         const committedEffects: GoalAdvanceEffect[] = [];
 
+        const asking = Boolean(understanding?.ask.length && currentProblem);
         if (plan && currentProblem) {
           // The node's description becomes the planner's own words for the core
-          // question — not the acceptance boilerplate the goal row keeps.
+          // question — not the acceptance boilerplate the goal row keeps. A plan
+          // that stops to ask commits no tasks, so it keeps the user's own words:
+          // the re-plan, or its fallback, must still read the original request.
           await writer.updateNodeDescription(
             goalId,
             currentProblem.id,
-            plan.problemStatement,
+            asking ? (currentProblem.description ?? plan.problemStatement) : plan.problemStatement,
             understanding && UNDERSTANDING_CONFIDENCE[understanding.level],
           );
         }
@@ -2599,7 +2604,7 @@ export class GoalService {
         // Tasks planned on a wrong reading of the goal are the most expensive
         // way to find out. No Task is created, so the next plan — made with the
         // answers — starts from the same empty graph.
-        if (understanding?.ask.length && currentProblem) {
+        if (asking && understanding && currentProblem) {
           for (const question of understanding.ask) {
             const node = await writer.createNode(goalId, {
               description: question.impact,

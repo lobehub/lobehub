@@ -1477,8 +1477,16 @@ describe('GoalService', () => {
         tasks: [{ dependsOn: [], hypothesis: null, instruction: '写', title: '撰写' }],
       });
     const service = new GoalService(serverDB, userId);
-    const graph = await service.create({ title: 'Release notes' });
+    const graph = await service.create({
+      problemDescription: '写一份发布说明，必须附上迁移指南',
+      requirement: '写一份发布说明，必须附上迁移指南',
+      title: 'Release notes',
+    });
     await service.tick(graph.goal.id);
+    // Asking commits no tasks, so the user's own words stay on the problem.
+    expect(
+      (await service.graph(graph.goal.id)).nodes.find((n) => n.kind === 'problem')!.description,
+    ).toBe('写一份发布说明，必须附上迁移指南');
     const [{ questions }] = await service.pendingClarifications();
     await service.answerClarifications(graph.goal.id, [
       { decisionId: questions[0].decisionId, optionId: 'option-2', resolution: '只关心 SDK' },
@@ -1488,6 +1496,8 @@ describe('GoalService', () => {
     await service.tick(graph.goal.id);
 
     const task = (await service.graph(graph.goal.id)).nodes.find((n) => n.kind === 'task');
+    // The original request's constraint survives, not the planner's summary.
+    expect(task!.description).toContain('必须附上迁移指南');
     expect(task!.description).toContain('Q: 给谁看？');
     expect(task!.description).toContain('A: 开发者 (只关心 SDK)');
   });
