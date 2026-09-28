@@ -1,14 +1,18 @@
 import type { GoalEventType, GoalGraphEvent, GoalNodeKind } from '@lobechat/types';
 import { Empty, Flexbox, Icon } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import {
   Archive,
+  ArrowUpRight,
+  Ban,
   Check,
   History,
   Link2,
   type LucideIcon,
+  PackageCheck,
+  Pause,
   Pencil,
   Play,
   Plus,
@@ -58,6 +62,43 @@ const BADGE = 20;
 const PANEL_PADDING = 16;
 
 const styles = createStaticStyles(({ css }) => ({
+  artifact: css`
+    margin: 0;
+    padding-block: 8px;
+    padding-inline: 10px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadius};
+
+    font: inherit;
+    color: ${cssVar.colorText};
+    text-align: start;
+
+    background: ${cssVar.colorBgContainer};
+  `,
+  artifactIcon: css`
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+
+    width: 32px;
+    height: 32px;
+    border-radius: ${cssVar.borderRadiusSM};
+
+    background: ${cssVar.colorFillTertiary};
+  `,
+  artifactOpenable: css`
+    cursor: pointer;
+
+    &:hover {
+      background: ${cssVar.colorFillQuaternary};
+    }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimaryBorder};
+      outline-offset: 1px;
+    }
+  `,
   badge: css`
     display: flex;
     flex: none;
@@ -89,6 +130,12 @@ const styles = createStaticStyles(({ css }) => ({
   item: css`
     position: relative;
     padding-block-end: 14px;
+
+    /* The next day's header reaches ${PANEL_PADDING}px up above it; the last
+       row leaves that much room so a card's bottom edge is never covered. */
+    &:last-child {
+      padding-block-end: ${PANEL_PADDING}px;
+    }
 
     /* The rail: runs from under this badge to the next one. */
     &:not(:last-child)::before {
@@ -183,6 +230,13 @@ const EVENT_VISUAL: Record<GoalEventType, { icon: LucideIcon; tone: Tone }> = {
   updated: { icon: Pencil, tone: NEUTRAL },
 };
 
+const ACTION_ICON: Record<string, LucideIcon> = {
+  paused: Pause,
+  resumed: Play,
+  taskCanceled: Ban,
+  work: PackageCheck,
+};
+
 /**
  * The node an event is about. Events carry the id of whatever row they touched,
  * so a decision or task event is walked back to the graph node that owns it.
@@ -252,33 +306,55 @@ const Subject = memo<{ onSelect: (nodeId: string) => void; view: GoalNodeView }>
 
 Subject.displayName = 'GoalMetricLifecycleSubject';
 
-/** A deliverable the event attached, opened where it lives. */
-const ArtifactSubject = memo<{ artifact: GoalArtifactView }>(({ artifact }) => {
+const hostOf = (url: string | null) => {
+  if (!url) return null;
+  try {
+    return new URL(url).host;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * A deliverable the event attached, as a card on its own line: the row names
+ * the task that produced it, the card is the thing itself, opened where it
+ * lives.
+ */
+const ArtifactCard = memo<{ artifact: GoalArtifactView }>(({ artifact }) => {
   const { t } = useTranslation('chat');
   const open = useOpenGoalArtifact();
+  const openable = !!openTargetOf(artifact);
   const label = artifact.title || artifact.identifier || t('goalProcess.deliverables.untitled');
-  const content = (
-    <>
-      <Icon color={cssVar.colorTextTertiary} icon={artifactIconOf(artifact.type)} size={13} />
-      <span className={styles.subjectTitle}>{label}</span>
-    </>
-  );
-
-  if (!openTargetOf(artifact))
-    return (
-      <span className={styles.subject} style={{ cursor: 'default' }}>
-        {content}
-      </span>
-    );
+  const host = artifact.type === 'document' ? null : hostOf(artifact.url);
 
   return (
-    <button className={styles.subject} type={'button'} onClick={() => open(artifact)}>
-      {content}
-    </button>
+    <Flexbox
+      horizontal
+      align={'center'}
+      as={openable ? 'button' : 'div'}
+      className={cx(styles.artifact, openable && styles.artifactOpenable)}
+      gap={10}
+      {...(openable ? { onClick: () => open(artifact), type: 'button' as const } : {})}
+    >
+      <span className={styles.artifactIcon}>
+        <Icon color={cssVar.colorTextSecondary} icon={artifactIconOf(artifact.type)} size={16} />
+      </span>
+      <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
+        <Text ellipsis fontSize={13} weight={500}>
+          {label}
+        </Text>
+        {host && (
+          <Text ellipsis fontSize={12} type={'secondary'}>
+            {host}
+          </Text>
+        )}
+      </Flexbox>
+      {openable && <Icon color={cssVar.colorTextQuaternary} icon={ArrowUpRight} size={14} />}
+    </Flexbox>
   );
 });
 
-ArtifactSubject.displayName = 'GoalMetricLifecycleArtifact';
+ArtifactCard.displayName = 'GoalMetricLifecycleArtifact';
 
 const AgentActor = memo<{ agentId: string }>(({ agentId }) => {
   const { t } = useTranslation('chat');
@@ -357,10 +433,11 @@ const EventItem = memo<{
   presentation: Exclude<LifecyclePresentation, { hidden: true }>;
 }>(({ event, graph, onSelect, presentation }) => {
   const { t } = useTranslation('chat');
-  const { icon, tone } = EVENT_VISUAL[event.eventType] ?? {
-    icon: History,
-    tone: NEUTRAL,
-  };
+  const visual = EVENT_VISUAL[event.eventType] ?? { icon: History, tone: NEUTRAL };
+  const tone = visual.tone;
+  // A recognised event names what happened more precisely than its raw type:
+  // a canceled task or a delivered Work is not an "edit".
+  const icon = (presentation.action && ACTION_ICON[presentation.action.split('.')[0]]) || visual.icon;
   const subjects = subjectNodes(event, graph);
   const kind = eventKind(event, subjects);
   const phrase = `${event.eventType}.${kind}`;
@@ -403,14 +480,6 @@ const EventItem = memo<{
               <Subject view={view} onSelect={onSelect} />
             </Flexbox>
           ))}
-          {artifact && (
-            <Flexbox horizontal align={'center'} gap={2} style={{ flexShrink: 1, minWidth: 0 }}>
-              <Text fontSize={12} style={{ flex: 'none' }} type={'secondary'}>
-                →
-              </Text>
-              <ArtifactSubject artifact={artifact} />
-            </Flexbox>
-          )}
           <Text
             className={styles.mono}
             fontSize={12}
@@ -421,6 +490,7 @@ const EventItem = memo<{
             {dayjs(event.createdAt).format('HH:mm')}
           </Text>
         </Flexbox>
+        {artifact && <ArtifactCard artifact={artifact} />}
         {note && (
           <div className={styles.reason} title={note}>
             {note}
@@ -487,7 +557,7 @@ const Lifecycle = memo<{ goalId: string; graph: GoalGraphView }>(({ goalId, grap
   return (
     <Flexbox gap={0}>
       {days.map(({ day, rows }) => (
-        <Flexbox gap={4} key={day.valueOf()}>
+        <Flexbox gap={2} key={day.valueOf()}>
           <div className={styles.day}>{dayLabel(day)}</div>
           <Flexbox gap={0}>
             {rows.map(({ event, presentation }) => (
