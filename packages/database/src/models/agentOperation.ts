@@ -396,6 +396,22 @@ export class AgentOperationModel {
     return Boolean(row);
   }
 
+  /**
+   * Shallow-merge top-level keys into the run's durable `metadata`, leaving
+   * every other key intact. Not gated on status: diagnostic records may land on
+   * a run that has already settled.
+   */
+  async mergeMetadata(operationId: string, patch: Record<string, unknown>): Promise<boolean> {
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({
+        metadata: sql`coalesce(${agentOperations.metadata}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`,
+      })
+      .where(and(eq(agentOperations.id, operationId), this.ownership()))
+      .returning({ id: agentOperations.id });
+    return Boolean(row);
+  }
+
   /** Refresh the durable liveness lease while an operation owns an execution step. */
   async touchRunning(operationId: string): Promise<boolean> {
     const [row] = await this.db

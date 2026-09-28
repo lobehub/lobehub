@@ -37,6 +37,7 @@ import {
 import { trackProductUsageEvent } from '@/libs/analytics/productUsageEvent';
 import {
   aiAgentService,
+  type ClientOperationSnapshot,
   type ResumeApprovalParam,
   type ResumeToolResultParam,
 } from '@/services/aiAgent';
@@ -806,6 +807,8 @@ export class GatewayActionImpl {
     precreatedResult?: ExecAgentResult;
     /** Server operation whose visible output ended before this fresh turn. */
     replacesOperationId?: string;
+    /** Diagnostic snapshot of the conversation's server runs, see `ExecAgentTaskParams`. */
+    clientOperations?: ClientOperationSnapshot[];
     /**
      * Caller-owned operation that should be completed once the gateway side
      * has finished phase-1 init (network round-trip + child
@@ -862,6 +865,7 @@ export class GatewayActionImpl {
   }): Promise<ExecAgentResult> => {
     const {
       clientIds,
+      clientOperations,
       context: executionContext,
       fileIds,
       message,
@@ -1029,6 +1033,7 @@ export class GatewayActionImpl {
                 viewedGoal: executionContext.viewedGoal,
               },
               ...desktopDeviceHints,
+              clientOperations,
               fileIds,
               replacesOperationId,
               mentionedAgents,

@@ -421,6 +421,33 @@ describe('AgentOperationModel', () => {
     });
   });
 
+  describe('mergeMetadata', () => {
+    it('merges keys into existing metadata and is scoped to the owner', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-merge-metadata';
+      await model.recordStart({ operationId });
+      await serverDB
+        .update(agentOperations)
+        .set({ metadata: { existing: 1 } })
+        .where(eq(agentOperations.id, operationId));
+
+      expect(await model.mergeMetadata(operationId, { supersede: { kind: 'client_missed' } })).toBe(
+        true,
+      );
+      expect((await model.findById(operationId))!.metadata).toEqual({
+        existing: 1,
+        supersede: { kind: 'client_missed' },
+      });
+
+      expect(
+        await new AgentOperationModel(serverDB, otherUserId).mergeMetadata(operationId, {
+          foreign: true,
+        }),
+      ).toBe(false);
+      expect((await model.findById(operationId))!.metadata).not.toHaveProperty('foreign');
+    });
+  });
+
   describe('operation lease', () => {
     it('answers whether a run is still live on a given topic', async () => {
       // The ingest path falls back to this when a topic loses its

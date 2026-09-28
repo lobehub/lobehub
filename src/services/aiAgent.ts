@@ -96,6 +96,16 @@ export interface GetAgentInterventionReviewBySourceParams {
   targets: Array<{ toolCallId: string; toolMessageId: string }>;
 }
 
+/** Must not exceed the server's `ExecAgentSchema.clientOperations` bound. */
+export const MAX_CLIENT_OPERATION_SNAPSHOT = 10;
+
+export interface ClientOperationSnapshot {
+  isAborting?: boolean;
+  operationId: string;
+  status: string;
+  visibleLoadingDone?: boolean;
+}
+
 export interface ExecAgentTaskParams {
   agentId?: string;
   appContext?: ExecAgentAppContext;
@@ -107,6 +117,12 @@ export interface ExecAgentTaskParams {
    * sends only; resume / regeneration must not replay them.
    */
   clientIds?: { assistantMessageId?: string; topicId?: string; userMessageId?: string };
+  /**
+   * Server runs the composer tracked on this conversation at send time. The
+   * server records them only when this send has to stop a run the client left
+   * live, to tell whether the client never saw it or its stop never landed.
+   */
+  clientOperations?: ClientOperationSnapshot[];
   deviceId?: string;
   existingMessageIds?: string[];
   /** File IDs of already-uploaded attachments to attach to the new user message */

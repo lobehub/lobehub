@@ -622,6 +622,51 @@ describe('ConversationLifecycle actions', () => {
         expect(sendMessageOperation?.metadata.inputSendErrorMsg).toBeUndefined();
       });
 
+      it('should send a snapshot of the tracked server runs with a gateway send', async () => {
+        const context = { ...createTestContext(), topicId: TEST_IDS.TOPIC_ID };
+        const contextKey = messageMapKey(context);
+        const executeGatewayAgent = vi.fn().mockResolvedValue({ operationId: 'srv-new' });
+        useChatStore.setState({
+          executeGatewayAgent,
+          isGatewayModeEnabled: () => true,
+          operations: {
+            'op-finished-output': {
+              childOperationIds: [],
+              context,
+              id: 'op-finished-output',
+              metadata: { serverOperationId: 'srv-live', visibleLoadingDone: true },
+              status: 'running',
+              type: 'execServerAgentRuntime',
+            },
+            'op-not-started': {
+              childOperationIds: [],
+              context,
+              id: 'op-not-started',
+              metadata: { isAborting: true },
+              status: 'running',
+              type: 'execServerAgentRuntime',
+            },
+          } as any,
+          operationsByContext: { [contextKey]: ['op-finished-output', 'op-not-started'] },
+        });
+
+        await useChatStore.getState().sendMessage({ context, message: 'next turn' });
+
+        expect(executeGatewayAgent).toHaveBeenCalledWith(
+          expect.objectContaining({
+            // Only runs that reached the server are useful to diagnose.
+            clientOperations: [
+              {
+                isAborting: undefined,
+                operationId: 'srv-live',
+                status: 'running',
+                visibleLoadingDone: true,
+              },
+            ],
+          }),
+        );
+      });
+
       it('should restore the pre-send editor snapshot when a hetero send fails', async () => {
         // Same silent-discard shape as the gateway branch above: persistence
         // throws, the temp rows are cleaned up, and the typed text is gone.

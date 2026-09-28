@@ -6,6 +6,8 @@ import { AiAgentService } from '../index';
 const {
   mockFindOperationById,
   mockFindTopicById,
+  mockIsOperationInterrupted,
+  mockMergeMetadata,
   mockGetLatestNonToolMessageId,
   mockGetLatestSpineMessageId,
   mockMessageCreate,
@@ -14,6 +16,8 @@ const {
 } = vi.hoisted(() => ({
   mockFindOperationById: vi.fn(),
   mockFindTopicById: vi.fn(),
+  mockIsOperationInterrupted: vi.fn(),
+  mockMergeMetadata: vi.fn(),
   mockGetLatestNonToolMessageId: vi.fn(),
   mockGetLatestSpineMessageId: vi.fn(),
   mockMessageCreate: vi.fn(),
@@ -96,7 +100,7 @@ vi.mock('@/database/models/topic', () => ({
 
 vi.mock('@/database/models/agentOperation', () => ({
   AgentOperationModel: vi.fn().mockImplementation(function () {
-    return { findById: mockFindOperationById };
+    return { findById: mockFindOperationById, mergeMetadata: mockMergeMetadata };
   }),
 }));
 
@@ -128,6 +132,7 @@ vi.mock('@/server/services/agentRuntime', () => ({
         operationId: 'op-123',
         success: true,
       }),
+      isOperationInterrupted: mockIsOperationInterrupted,
     };
   }),
 }));
@@ -216,6 +221,8 @@ describe('AiAgentService.execAgent - supersede running foreground operation', ()
     mockReleaseReservation.mockResolvedValue(undefined);
     mockFindTopicById.mockResolvedValue(topicWithMarker('op-live'));
     mockFindOperationById.mockResolvedValue({ id: 'op-live', status: 'running', trigger: 'chat' });
+    mockIsOperationInterrupted.mockResolvedValue(false);
+    mockMergeMetadata.mockResolvedValue(true);
 
     service = new AiAgentService({} as any, 'test-user-id');
     interruptTask = vi.spyOn(service, 'interruptTask').mockResolvedValue({ success: true });
@@ -309,6 +316,86 @@ describe('AiAgentService.execAgent - supersede running foreground operation', ()
     });
 
     expect(interruptTask).not.toHaveBeenCalled();
+  });
+
+  it('records a client_missed supersede with the client snapshot on the new run', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const clientRunSnapshot = {
+      operations: [{ operationId: 'op-old', status: 'success' }],
+      replacesOperationId: 'op-stopping',
+    };
+
+    const result = await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      clientRunSnapshot,
+      interactiveStart: true,
+      prompt: 'please hurry',
+    });
+
+    expect(mockMergeMetadata).toHaveBeenCalledWith(result.operationId, {
+      supersede: {
+        client: clientRunSnapshot,
+        kind: 'client_missed',
+        supersededAt: expect.any(String),
+        supersededOperationId: 'op-live',
+      },
+    });
+    expect(warn).toHaveBeenCalledWith(
+      '[execAgent] client missed a running foreground operation',
+      expect.objectContaining({ supersededOperationId: 'op-live', topicId: 'topic-1' }),
+    );
+    warn.mockRestore();
+  });
+
+  it('records an already_stopping supersede without warning', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mockIsOperationInterrupted.mockResolvedValue(true);
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      interactiveStart: true,
+      prompt: 'please hurry',
+    });
+
+    expect(mockMergeMetadata).toHaveBeenCalledWith(expect.any(String), {
+      supersede: expect.objectContaining({ kind: 'already_stopping' }),
+    });
+    expect(warn).not.toHaveBeenCalledWith(
+      '[execAgent] client missed a running foreground operation',
+      expect.anything(),
+    );
+    warn.mockRestore();
+  });
+
+  it('does not fail the send when recording the supersede fails', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mockMergeMetadata.mockRejectedValue(new Error('db down'));
+
+    const result = await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      interactiveStart: true,
+      prompt: 'please hurry',
+    });
+
+    expect(result.success).toBe(true);
+    error.mockRestore();
+  });
+
+  it('records nothing when no run was superseded', async () => {
+    mockFindOperationById.mockResolvedValue({ id: 'op-live', status: 'done', trigger: 'chat' });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      interactiveStart: true,
+      prompt: 'please hurry',
+    });
+
+    expect(mockMergeMetadata).not.toHaveBeenCalled();
   });
 
   it('keeps non-interactive starts on the existing path', async () => {

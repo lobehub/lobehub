@@ -23,12 +23,18 @@ vi.mock('../AbandonOperationService', () => ({
   }),
 }));
 
-/** Minimal drizzle select chain returning `rows`. */
-const buildDb = (rows: any[]) =>
+/**
+ * Minimal drizzle select chains: the stale-candidate query (`orderBy`) returns
+ * `rows`, the concurrent-foreground patrol (`groupBy`) returns `overlapRows`.
+ */
+const buildDb = (rows: any[], overlapRows: any[] = []) =>
   ({
     select: () => ({
       from: () => ({
         where: () => ({
+          groupBy: () => ({
+            having: () => ({ limit: vi.fn().mockResolvedValue(overlapRows) }),
+          }),
           orderBy: () => ({ limit: vi.fn().mockResolvedValue(rows) }),
         }),
       }),
@@ -263,5 +269,42 @@ describe('StaleOperationReaper', () => {
     const [, staleBefore, maxAttempts] = claimStaleRedriveMock.mock.calls[0];
     expect(maxAttempts).toBe(3);
     expect(staleBefore.getTime()).toBeLessThanOrEqual(before - 60_000 + 5);
+  });
+
+  it('reports topics with more than one foreground run live', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const overlap = { operationIds: ['op_a', 'op_b'], topicId: 'tpc_x' };
+    const reaper = new StaleOperationReaper(buildDb([], [overlap]), {
+      coordinator: buildCoordinator(null) as any,
+      queueService: buildQueue() as any,
+    });
+
+    const result = await reaper.sweep();
+
+    expect(result.concurrentForegroundTopics).toBe(1);
+    expect(warn).toHaveBeenCalledWith(
+      '[StaleOperationReaper] concurrent foreground operations on one topic',
+      overlap,
+    );
+    warn.mockRestore();
+  });
+
+  it('still reports recovery results when the patrol query fails', async () => {
+    const db = buildDb([candidate()]);
+    const select = db.select;
+    let calls = 0;
+    db.select = () => {
+      calls += 1;
+      if (calls === 1) return select();
+      throw new Error('db down');
+    };
+    const reaper = new StaleOperationReaper(db, {
+      coordinator: buildCoordinator(runningState(), historyFor(6)) as any,
+      queueService: buildQueue() as any,
+    });
+
+    const result = await reaper.sweep();
+
+    expect(result).toMatchObject({ concurrentForegroundTopics: 0, redriven: 1 });
   });
 });

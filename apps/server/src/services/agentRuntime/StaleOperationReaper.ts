@@ -1,6 +1,6 @@
 import type { AgentRuntimeContext, AgentState } from '@lobechat/agent-runtime';
 import debug from 'debug';
-import { and, asc, eq, isNull, lt, or } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, isNull, lt, notInArray, or, sql } from 'drizzle-orm';
 import urlJoin from 'url-join';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -10,6 +10,7 @@ import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime/AgentRunt
 import { QueueService } from '@/server/services/queue';
 
 import { AbandonOperationService } from './AbandonOperationService';
+import { BACKGROUND_OPERATION_TRIGGERS } from './foregroundOperation';
 
 const log = debug('lobe-server:stale-operation-reaper');
 
@@ -37,6 +38,9 @@ const DEFAULT_MAX_REDRIVE_ATTEMPTS = 3;
 /** Bound the work of a single cron tick so one sweep cannot run long. */
 const DEFAULT_LIMIT = 50;
 
+/** Bound how many overlapping topics one sweep reports. */
+const CONCURRENT_FOREGROUND_REPORT_LIMIT = 20;
+
 export interface ReapStaleOperationsParams {
   limit?: number;
   maxRedriveAttempts?: number;
@@ -48,6 +52,13 @@ export interface ReapStaleOperationsResult {
   abandoned: number;
   /** Candidates whose lease was refreshed between select and claim. */
   alive: number;
+  /**
+   * Topics with two or more foreground runs `running` at once. Composer sends
+   * supersede the previous run, so any overlap here means a start path slipped
+   * past that and both runs are spending on the same conversation (LOBE-14448).
+   * Detection only: nothing is interrupted.
+   */
+  concurrentForegroundTopics: number;
   examined: number;
   /**
    * Candidates whose recovery threw (Redis, database or queue failure). Reported
@@ -115,6 +126,7 @@ export class StaleOperationReaper {
     const result: ReapStaleOperationsResult = {
       abandoned: 0,
       alive: 0,
+      concurrentForegroundTopics: 0,
       examined: candidates.length,
       failed: 0,
       redriven: 0,
@@ -132,8 +144,51 @@ export class StaleOperationReaper {
       }
     }
 
+    try {
+      result.concurrentForegroundTopics = await this.reportConcurrentForegroundRuns();
+    } catch (e) {
+      log('concurrent foreground patrol failed: %O', e);
+    }
+
     log('sweep done: %O', result);
     return result;
+  }
+
+  /**
+   * Warn about topics where more than one foreground run is live. Top-level
+   * runs only: sub-agent children (`parentOperationId`) and thread runs
+   * (`threadId`) legitimately run beside the topic's main run.
+   */
+  private async reportConcurrentForegroundRuns(): Promise<number> {
+    const rows = await this.db
+      .select({
+        operationIds: sql<
+          string[]
+        >`array_agg(${agentOperations.id} order by ${agentOperations.createdAt})`,
+        topicId: agentOperations.topicId,
+      })
+      .from(agentOperations)
+      .where(
+        and(
+          eq(agentOperations.status, 'running'),
+          isNotNull(agentOperations.topicId),
+          isNull(agentOperations.threadId),
+          isNull(agentOperations.parentOperationId),
+          or(
+            isNull(agentOperations.trigger),
+            notInArray(agentOperations.trigger, [...BACKGROUND_OPERATION_TRIGGERS]),
+          ),
+        ),
+      )
+      .groupBy(agentOperations.topicId)
+      .having(sql`count(*) > 1`)
+      .limit(CONCURRENT_FOREGROUND_REPORT_LIMIT);
+
+    for (const row of rows) {
+      console.warn('[StaleOperationReaper] concurrent foreground operations on one topic', row);
+    }
+
+    return rows.length;
   }
 
   /**

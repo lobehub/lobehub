@@ -44,6 +44,12 @@ import type {
 } from '@/server/services/agentRuntime';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { getAbortError, throwIfAborted } from '@/server/services/agentRuntime/abort';
+// Imported from the module itself: tests mock the `agentRuntime` barrel.
+import {
+  isForegroundOperationTrigger,
+  type SupersedeKind,
+  type SupersedeRecord,
+} from '@/server/services/agentRuntime/foregroundOperation';
 import type {
   ExecGroupMemberParams,
   ExecGroupMemberResult,
@@ -76,28 +82,6 @@ import type {
 } from './types';
 
 const log = debug('lobe-server:ai-agent-service');
-
-/**
- * Triggers of runs started by a producer other than the composer. A composer
- * send never supersedes these; any other trigger (chat, onboarding, …, or a
- * legacy row without one) counts as a foreground run.
- */
-const BACKGROUND_OPERATION_TRIGGERS = new Set<string>([
-  RequestTrigger.AgentShare,
-  RequestTrigger.AgentSignal,
-  RequestTrigger.Api,
-  RequestTrigger.Bot,
-  RequestTrigger.Cli,
-  RequestTrigger.Cron,
-  RequestTrigger.Eval,
-  RequestTrigger.Goal,
-  RequestTrigger.Notify,
-  RequestTrigger.Openapi,
-  RequestTrigger.Scheduled,
-  RequestTrigger.Scm,
-  RequestTrigger.Task,
-  RequestTrigger.Verify,
-]);
 
 /**
  * AI Agent Service
@@ -607,13 +591,18 @@ export class AiAgentService {
     }
 
     try {
-      if (params.interactiveStart && !isInterventionThreadStart) {
-        await this.supersedeRunningForegroundOperation(topicId, [
-          params.replacesOperationId,
-          params.topicStartOwnerOperationId,
-        ]);
+      const superseded =
+        params.interactiveStart && !isInterventionThreadStart
+          ? await this.supersedeRunningForegroundOperation(topicId, [
+              params.replacesOperationId,
+              params.topicStartOwnerOperationId,
+            ])
+          : undefined;
+      const result = await this.execAgentWithApprovalRollback(params);
+      if (superseded) {
+        await this.recordSupersede(topicId, result.operationId, superseded, params);
       }
-      return withCreatedThread(await this.execAgentWithApprovalRollback(params));
+      return withCreatedThread(result);
     } finally {
       await this.topicModel.releaseTaskCallbackReservation(topicId, reservationId);
     }
@@ -623,29 +612,30 @@ export class AiAgentService {
    * Retire the foreground run that still owns the topic's `runningOperation`
    * before an interactive send starts the next one.
    *
-   * The client queues sends behind a visibly running turn and names at most one
-   * run as `replacesOperationId`. When several runs overlap (a replaced run is
-   * still stopping while the user sends again), it can name the older one and
-   * leave the live marker holder running. `startOperation` then overwrites the
-   * marker, so nothing ever stops that run: both runs keep reading the same
-   * topic, interleave writes, and invalidate each other's prompt cache
-   * (LOBE-14448 — one topic spent ~$900 in two hours this way).
+   * The client is expected to stop a live run before sending (Stop / Send now)
+   * or to queue the send until the run yields. When it misses one, nothing else
+   * stops that run: `startOperation` overwrites the marker, and both runs keep
+   * reading the same topic, interleave writes, and invalidate each other's
+   * prompt cache (LOBE-14448 — one topic spent ~$900 in two hours this way).
    *
    * Runs inside the topic-start reservation so two fast sends cannot both read
    * the same stale holder. Only a `running` foreground run is retired; these
    * keep the existing behavior:
    * - a parked run (`waiting_for_human` etc.) — the send may be its answer;
    * - a background producer's run (task, cron, bot, …), see
-   *   {@link BACKGROUND_OPERATION_TRIGGERS};
+   *   `BACKGROUND_OPERATION_TRIGGERS` in `agentRuntime/foregroundOperation`;
    * - a device-hosted Claude Code / Codex run: cancelling it waits up to 10s
    *   for the device, far past the reservation's ~3s retry budget, so a
-   *   concurrent send would fail. Those still go through `replacesOperationId`,
-   *   which settles the device process before reserving.
+   *   concurrent send would fail. Those settle through `replacesOperationId`
+   *   before reserving.
+   *
+   * @returns the retired run and whether it had already been asked to stop, so
+   * the caller can record the overlap on the new run.
    */
   private async supersedeRunningForegroundOperation(
     topicId: string,
     alreadyHandledOperationIds: (string | undefined)[],
-  ): Promise<void> {
+  ): Promise<{ holderId: string; kind: SupersedeKind } | undefined> {
     const topic = await this.topicModel.findById(topicId);
     const marker = topic?.metadata?.runningOperation;
     const holderId = marker?.operationId;
@@ -653,10 +643,56 @@ export class AiAgentService {
 
     const holder = await this.agentOperationModel.findById(holderId);
     if (holder?.status !== 'running') return;
-    if (holder.trigger && BACKGROUND_OPERATION_TRIGGERS.has(holder.trigger)) return;
+    if (!isForegroundOperationTrigger(holder.trigger)) return;
 
-    log('execAgent: superseding running foreground operation %s on topic %s', holderId, topicId);
+    // Read before interrupting: afterwards the sentinel is always set.
+    const kind: SupersedeKind = (await this.agentRuntimeService.isOperationInterrupted(holderId))
+      ? 'already_stopping'
+      : 'client_missed';
+
+    log(
+      'execAgent: superseding running foreground operation %s on topic %s (%s)',
+      holderId,
+      topicId,
+      kind,
+    );
     await this.interruptTask({ operationId: holderId, topicId });
+    return { holderId, kind };
+  }
+
+  /**
+   * Persist the supersede on the new run's `metadata.supersede`, with the
+   * client's view of its runs at send time. A `client_missed` supersede means
+   * the client let a live run keep going — the case to investigate — so it is
+   * also warned. Diagnostic only: a failure here never fails the send.
+   */
+  private async recordSupersede(
+    topicId: string,
+    operationId: string,
+    superseded: { holderId: string; kind: SupersedeKind },
+    params: InternalExecAgentParams,
+  ): Promise<void> {
+    const record: SupersedeRecord = {
+      client: params.clientRunSnapshot,
+      kind: superseded.kind,
+      supersededAt: new Date().toISOString(),
+      supersededOperationId: superseded.holderId,
+    };
+
+    if (superseded.kind === 'client_missed') {
+      console.warn('[execAgent] client missed a running foreground operation', {
+        client: params.clientRunSnapshot,
+        operationId,
+        supersededOperationId: superseded.holderId,
+        topicId,
+      });
+    }
+
+    try {
+      await this.agentOperationModel.mergeMetadata(operationId, { supersede: record });
+    } catch (error) {
+      console.error('[execAgent] failed to record supersede on %s:', operationId, error);
+    }
   }
 
   /**
