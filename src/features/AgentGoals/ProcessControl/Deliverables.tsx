@@ -140,11 +140,11 @@ const DeliverableRow = memo<{
 
 DeliverableRow.displayName = 'GoalDeliverableRow';
 
-const Deliverables = memo<{ graph: GoalGraphView }>(({ graph }) => {
-  const { t } = useTranslation('chat');
+/** Opens a deliverable wherever it lives — see {@link openTargetOf}. */
+export const useOpenArtifact = () => {
   const openDocument = useChatStore((s) => s.openDocument);
 
-  const open = (artifact: GoalArtifactView) => {
+  return (artifact: GoalArtifactView) => {
     const target = openTargetOf(artifact);
     if (!target) return;
     // `openDocument` takes the DOCUMENT id, not the agent-document binding id:
@@ -158,6 +158,11 @@ const Deliverables = memo<{ graph: GoalGraphView }>(({ graph }) => {
     // knowledge-base item, so an ordinary exported file loads forever in it.
     window.open(target.url, '_blank', 'noopener,noreferrer');
   };
+};
+
+const Deliverables = memo<{ graph: GoalGraphView }>(({ graph }) => {
+  const { t } = useTranslation('chat');
+  const open = useOpenArtifact();
 
   if (graph.artifacts.length === 0)
     return (
