@@ -22,6 +22,7 @@ import { lambdaClient } from '@/libs/trpc/client';
 
 import { abortableRequest } from '../utils/abortableRequest';
 import type { MessageListPage, MessageRoundCursor } from './cache';
+import { supportsRoundCursor } from './cache';
 
 /**
  * Query context for message operations
@@ -56,13 +57,6 @@ interface MessageReadQueryContext {
  * matching the newest-first window `getMessages` serves.
  */
 const MESSAGE_PAGE_ROW_BUDGET = 1000;
-
-/**
- * A topic's mainline conversation pages by round cursor. Threads and agent-share
- * visitor topics stay on `getMessages` — neither has a round-cursor read.
- */
-const supportsRoundCursor = (params: MessageReadQueryContext) =>
-  !!params.topicId && !params.threadId && !params.agentShareId;
 
 export type MessageBatchOperation =
   | {

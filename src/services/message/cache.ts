@@ -51,6 +51,13 @@ export interface MessageListPage {
 }
 
 /**
+ * A topic's mainline conversation pages by round cursor. Threads and agent-share
+ * visitor topics stay on `getMessages` — neither has a round-cursor read.
+ */
+export const supportsRoundCursor = (context: MessageListQueryContext) =>
+  !!context.topicId && !context.threadId && !context.agentShareId;
+
+/**
  * The older-history cursor each identity's newest window came back with. Kept
  * apart from `messageListClientStates`, which is dropped once its verification
  * window lapses, while the rendered window (and so its cursor) stays valid.
@@ -194,6 +201,12 @@ export const loadEarlierMessagePage = async (
   const knownCursor = resolveOlderCursor(identity, existing);
   // The window (or the last page) already reached the topic start.
   if (knownCursor === null) return undefined;
+  // A cursor-paged conversation shown from the persisted cache before its
+  // revalidation lands has no server cursor yet. A cursor rebuilt from the
+  // oldest row's millisecond `createdAt` would skip older rows sharing that
+  // millisecond, so wait for the window's lossless cursor instead; the next
+  // upward gesture after revalidation pages normally.
+  if (knownCursor === undefined && supportsRoundCursor(context)) return undefined;
 
   const oldest = getCurrentMessages()?.find((message) => !isSyntheticGroupNode(message));
   if (!oldest) return undefined;
