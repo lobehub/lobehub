@@ -1431,13 +1431,52 @@ export class GoalService {
   /**
    * A person ends the goal themselves — declaring it achieved or dropping it.
    *
-   * The terminal status alone already stops the coordinator from dispatching,
-   * but runs still in flight would keep spending on a goal nobody wants moved
-   * any more, so they are interrupted the same way `restart` interrupts them.
-   * Reopening goes through `resume`, which accepts any status.
+   * Everything still spending on the goal is interrupted first — the main
+   * Agent's planning turn, the supervisor's diagnosis and every Task run — the
+   * same way `delete` does, because a terminal status alone only stops the
+   * coordinator from dispatching more. Reopening goes through `resume`, which
+   * accepts any status.
    */
   close = async (goalId: string, to: 'achieved' | 'canceled') => {
+    // Fence new claims before scanning: `dispatchWork` claims under this row
+    // lock and only while the goal reads `running`, so an advance overlapping
+    // the close cannot start a Task after the scan below. The pause is the
+    // person's, so no measurement lifts it if the close is refused later on.
+    await this.db.transaction(async (db) => {
+      const model = new GoalModel(db, this.userId, this.workspaceId);
+      const current = await model.lockById(goalId);
+      // Only a goal that can still dispatch needs fencing.
+      if (!current || ['paused', 'achieved', 'failed', 'canceled'].includes(current.status)) return;
+      await model.updateStatus(goalId, 'paused');
+      await model.updatePauseReason(goalId, 'user');
+      await new GoalGraphModel(db, this.userId, this.workspaceId).recordGoalStatus(
+        goalId,
+        current.status,
+        'paused',
+        'Stopping Goal before closing',
+      );
+    });
     const graph = await this.requireGraph(goalId);
+
+    // Deliberately not swallowed, as in `delete`: an operation whose exit is
+    // unconfirmed keeps spending, and a goal reading "ended" would hide it. The
+    // goal stays paused so nothing new starts, and the person can retry.
+    const notClosed = (error: unknown) =>
+      new TRPCError({
+        cause: error,
+        code: 'PRECONDITION_FAILED',
+        message:
+          'Could not stop the work still running for this goal, so it was not closed. Try again once the run is reachable.',
+      });
+    try {
+      if (graph.goal.config?.manager)
+        await new GoalManagerService(this.db, this.userId, this.workspaceId).stop(graph);
+      if (graph.goal.config?.supervision?.enabled || graph.goal.config?.supervisorState)
+        await new GoalSupervisorService(this.db, this.userId, this.workspaceId).stop(graph);
+    } catch (error) {
+      throw notClosed(error);
+    }
+
     const unfinishedTaskIds = graph.nodes.flatMap((node) =>
       node.kind === 'task' && node.taskId && !TERMINAL_NODE_STATUSES.has(node.status)
         ? [node.taskId]
@@ -1446,7 +1485,12 @@ export class GoalService {
     if (unfinishedTaskIds.length > 0) {
       const runningTopics = await this.taskTopicModel.findRunningByTaskIds(unfinishedTaskIds);
       for (const topic of runningTopics) {
-        if (topic.topicId) await this.taskService.cancelTopic(topic.topicId);
+        if (!topic.topicId) continue;
+        try {
+          await this.taskService.cancelTopic(topic.topicId);
+        } catch (error) {
+          throw notClosed(error);
+        }
       }
       // An interrupted Task goes back to `backlog`, as in `restart`: left
       // `paused` it would read as parked on a person, and a reopened goal would
