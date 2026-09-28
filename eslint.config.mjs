@@ -104,18 +104,74 @@ const runtimeRestrictedImportPatterns = [
   },
 ];
 
-const createRestrictedImportRule = ({ paths = [], patterns } = {}) => [
+// Browser runtime boundary for the SPA and the Electron renderer: server code,
+// database access and Node built-ins never run there. Vite stubs a Node
+// built-in with a module that throws on first access, and a server import
+// drags its whole graph (database drivers, env) into the bundle. Type imports
+// are erased and stay allowed. Server-side trees under src/ (Next.js shells,
+// src/libs, instrumentation, proxy) opt out with `serverSide: true`.
+// Whether a third-party package needs Node is a judgement call; the alint
+// rule `lobehub/no-node-in-browser` covers that part.
+const NODE_BUILTINS = [
+  'child_process',
+  'cluster',
+  'dgram',
+  'dns',
+  'fs',
+  'fs/promises',
+  'http',
+  'http2',
+  'https',
+  'module',
+  'net',
+  'os',
+  'path',
+  'readline',
+  'stream',
+  'tls',
+  'v8',
+  'vm',
+  'worker_threads',
+  'zlib',
+];
+const browserRuntimeRestrictedImportPaths = NODE_BUILTINS.flatMap((name) => [
+  name,
+  `node:${name}`,
+]).map((name) => ({
+  allowTypeImports: true,
+  message:
+    'Node built-ins do not exist in the browser. Move the work behind a server endpoint or an Electron IPC call; type imports are fine.',
+  name,
+}));
+const browserRuntimeRestrictedImportPatterns = [
+  {
+    allowTypeImports: true,
+    message:
+      'Server code does not run in the browser. Call it through a TRPC service, or move a pure helper into a shared package; type imports are fine.',
+    regex: String.raw`^@/(server|app/\(backend\))/`,
+  },
+  {
+    allowTypeImports: true,
+    message:
+      'Database models, repositories and clients are server-only. Read through a TRPC service; schemas and type imports are fine.',
+    regex: '^(@/database|@lobechat/database)/(models|repositories|server|core)(/|$)',
+  },
+];
+
+const createRestrictedImportRule = ({ paths = [], patterns, serverSide = false } = {}) => [
   'error',
   {
     ...baseRestrictedImportOptions,
     paths: [
       ...(baseRestrictedImportOptions.paths ?? []),
       ...performanceRestrictedImportPaths,
+      ...(serverSide ? [] : browserRuntimeRestrictedImportPaths),
       ...paths,
     ],
     patterns: [
       ...(baseRestrictedImportOptions.patterns ?? []),
       ...runtimeRestrictedImportPatterns,
+      ...(serverSide ? [] : browserRuntimeRestrictedImportPatterns),
       ...(patterns ?? []),
     ],
   },
@@ -219,6 +275,20 @@ export default eslint(
     files: ['src/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': createRestrictedImportRule(),
+    },
+  },
+  {
+    // Server-side trees under src/: Next.js shells and route handlers, server
+    // helpers, instrumentation and the proxy may import server code.
+    files: [
+      'src/app/**/*.{ts,tsx}',
+      'src/libs/**/*.{ts,tsx}',
+      'src/scripts/**/*.{ts,tsx}',
+      'src/*.{ts,tsx}',
+      'src/**/*.server.{ts,tsx}',
+    ],
+    rules: {
+      'no-restricted-imports': createRestrictedImportRule({ serverSide: true }),
     },
   },
   {

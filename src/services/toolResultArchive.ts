@@ -1,5 +1,6 @@
+import { ARCHIVE_BYPASS_IDENTIFIERS, truncateToolResult } from '@lobechat/prompts/toolResult';
+
 import { lambdaClient } from '@/libs/trpc/client';
-import { ARCHIVE_BYPASS_IDENTIFIERS, truncateToolResult } from '@/server/utils/truncateToolResult';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { getAgentStoreState } from '@/store/agent/store';
 

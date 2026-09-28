@@ -1,8 +1,4 @@
-import {
-  appendTextWindowNotice,
-  sliceTextWindow,
-  type TextWindow,
-} from '@lobechat/prompts/textWindow';
+import { appendTextWindowNotice, sliceTextWindow, type TextWindow } from '../textWindow';
 
 /**
  * Shared utility for truncating tool execution results

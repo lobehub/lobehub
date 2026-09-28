@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 
-import { truncateToolResult, truncateToolResultWithState } from '../truncateToolResult';
+import { truncateToolResult, truncateToolResultWithState } from './index';
 
 const validEmoji = '\uD83D\uDC1B';
 const familyEmoji = '\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67\u200D\uD83D\uDC66';
