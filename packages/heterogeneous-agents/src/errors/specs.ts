@@ -73,7 +73,7 @@ export interface HeteroErrorSpec {
  *   1. Add it to `HeteroErrorKind` above.
  *   2. Add a spec entry here with the next free `numericId` in its category.
  *   3. Teach a classifier to produce it (`../adapters/*.ts` for in-stream
- *      failures, `../spawn/classifyProcessFailure.ts` for pre-stream ones).
+ *      failures, `./processFailure.ts` for pre-stream ones).
  *   4. If it needs a dedicated card, give it a `guideCode` AND register that
  *      code in the two status-guide sets named in `./taxonomy`.
  */

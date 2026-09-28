@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { eslint } from '@lobehub/lint';
@@ -80,6 +81,26 @@ const shellRouterRestrictedPaths = [
   },
 ];
 
+// Runtime boundary of @lobechat/heterogeneous-agents: browser code may import
+// values only from the entries listed in browser-entries.json; every other
+// subpath is Node-only (spawn, rpc, quota-sampler, ...). New entries are
+// Node-only until listed there, and the package's runtimeBoundary test keeps
+// the listed entries free of Node code.
+const heteroBrowserEntries = JSON.parse(
+  readFileSync(new URL('packages/heterogeneous-agents/browser-entries.json', import.meta.url), 'utf8'),
+);
+const heteroBrowserSubpaths = heteroBrowserEntries
+  .filter((entry) => entry !== '.')
+  .map((entry) => entry.slice(2));
+const runtimeRestrictedImportPatterns = [
+  {
+    allowTypeImports: true,
+    message:
+      'This @lobechat/heterogeneous-agents entry is Node-only. Browser code may import values only from the entries in packages/heterogeneous-agents/browser-entries.json; type imports are fine.',
+    regex: `^@lobechat/heterogeneous-agents/(?!(?:${heteroBrowserSubpaths.join('|')})$)`,
+  },
+];
+
 const createRestrictedImportRule = ({ paths = [], patterns } = {}) => [
   'error',
   {
@@ -89,9 +110,11 @@ const createRestrictedImportRule = ({ paths = [], patterns } = {}) => [
       ...performanceRestrictedImportPaths,
       ...paths,
     ],
-    ...(patterns?.length
-      ? { patterns: [...(baseRestrictedImportOptions.patterns ?? []), ...patterns] }
-      : {}),
+    patterns: [
+      ...(baseRestrictedImportOptions.patterns ?? []),
+      ...runtimeRestrictedImportPatterns,
+      ...(patterns ?? []),
+    ],
   },
 ];
 

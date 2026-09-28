@@ -104,7 +104,7 @@ lobehub = "./packages/alint/rules"
 # next to the code it describes in packages/heterogeneous-agents/alint/rules.
 # Scoped to the browser-reachable layer plus the spawn pipeline: Node-only
 # files are free to use Node, and sending them only buys "no violation" noise.
-# The import graph itself is guarded deterministically by browserSafeRoot.test.ts.
+# The import graph itself is guarded deterministically by runtimeBoundary.test.ts and the eslint runtime-boundary pattern.
 [[config.group]]
 files = [
   "packages/heterogeneous-agents/src/*.ts",

@@ -75,6 +75,10 @@ export {
   HETERO_ERROR_SPECS,
   isUserSideHeteroError,
 } from './errors';
+export {
+  classifyHeteroProcessFailure,
+  isHeteroStatusGuideErrorData,
+} from './errors/processFailure';
 export { getHeterogeneousTypeLabel, HETEROGENEOUS_TYPE_LABELS } from './labels';
 export type {
   CreateAssistantIntent,
@@ -124,10 +128,6 @@ export {
 } from './providerBinding';
 export { createAdapter, listAgentTypes, listLocalAgentTypes } from './registry';
 export type { HeterogeneousAgentScanMap, HeterogeneousAgentScanStatus } from './scan/types';
-export {
-  classifyHeteroProcessFailure,
-  isHeteroStatusGuideErrorData,
-} from './spawn/classifyProcessFailure';
 export type {
   CreateMessageIntent,
   CreateThreadIntent,

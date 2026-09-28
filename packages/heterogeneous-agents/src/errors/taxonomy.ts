@@ -58,7 +58,7 @@ export type HeteroErrorAttribution = 'user' | 'provider' | 'harness' | 'system';
  *
  * Must stay in sync with `HETEROGENEOUS_AGENT_STATUS_GUIDE_ERROR_CODES`
  * (`src/features/Conversation/Error/heterogeneous.ts`) and
- * `STATUS_GUIDE_ERROR_CODES` (`../spawn/classifyProcessFailure.ts`).
+ * `STATUS_GUIDE_ERROR_CODES` (`./processFailure.ts`).
  */
 export type HeteroGuideCode =
   'auth_required' | 'cli_not_found' | 'overloaded' | 'rate_limit' | 'working_directory_not_found';

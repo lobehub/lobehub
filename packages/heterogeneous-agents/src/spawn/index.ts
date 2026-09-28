@@ -25,6 +25,12 @@ export {
   getCodexAppServerUnsupportedArgs,
   isCodexAppServerCompatibilityError,
 } from '../codex';
+export {
+  classifyHeteroProcessFailure,
+  type ClassifyHeteroProcessFailureParams,
+  HETERO_WORKING_DIRECTORY_NOT_FOUND,
+  isHeteroStatusGuideErrorData,
+} from '../errors/processFailure';
 export type { UsageData } from '../types';
 export {
   ACP_PROTOCOL_VERSION,
@@ -48,12 +54,6 @@ export {
   type AgentStreamPipelineOptions,
   type UploadHeterogeneousImage,
 } from './agentStreamPipeline';
-export {
-  classifyHeteroProcessFailure,
-  type ClassifyHeteroProcessFailureParams,
-  HETERO_WORKING_DIRECTORY_NOT_FOUND,
-  isHeteroStatusGuideErrorData,
-} from './classifyProcessFailure';
 export {
   buildClaudeSdkUserMessageFromStreamJson,
   ClaudeAgentSdkSession,

@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  classifyHeteroProcessFailure,
-  isHeteroStatusGuideErrorData,
-} from './classifyProcessFailure';
+import { classifyHeteroProcessFailure, isHeteroStatusGuideErrorData } from './processFailure';
 
 describe('isHeteroStatusGuideErrorData', () => {
   it('accepts an adapter-classified terminal error carrying agentType + code', () => {

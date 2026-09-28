@@ -5,8 +5,8 @@ import {
   isHeterogeneousAgentAuthRequired,
   isLocalHeterogeneousType,
 } from '../config';
-import { classifyCliQuotaMessage } from '../errors/cliQuota';
 import type { HeterogeneousTerminalErrorData } from '../types';
+import { classifyCliQuotaMessage } from './cliQuota';
 
 /**
  * Process-level failure classification for `lh hetero exec` runs.

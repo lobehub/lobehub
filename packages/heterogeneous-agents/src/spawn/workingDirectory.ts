@@ -1,7 +1,7 @@
 import { type Stats, statSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 
-import { HETERO_WORKING_DIRECTORY_NOT_FOUND } from './classifyProcessFailure';
+import { HETERO_WORKING_DIRECTORY_NOT_FOUND } from '../errors/processFailure';
 
 /**
  * Working-directory checks shared by every heterogeneous-agent spawn site
